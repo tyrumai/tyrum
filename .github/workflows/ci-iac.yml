@@ -1,0 +1,114 @@
+name: ci-iac
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  iac:
+    name: Infrastructure validation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect infrastructure assets
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform_files=$(git ls-files '*.tf' '*.tfvars' 2>/dev/null || true)
+          compose_files=$(git ls-files '*docker-compose*.yml' '*docker-compose*.yaml' 'docker-compose.yml' 2>/dev/null || true)
+          kube_files=$(git ls-files 2>/dev/null | grep -E '(^infra/.*\.ya?ml$|/k8s/.*\.ya?ml$|/manifests/.*\.ya?ml$)' || true)
+
+          if [ -n "$terraform_files" ]; then
+            echo "has-terraform=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "has-terraform=false" >>"$GITHUB_OUTPUT"
+          fi
+
+          if [ -n "$compose_files" ]; then
+            echo "has-compose=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "has-compose=false" >>"$GITHUB_OUTPUT"
+          fi
+
+          if [ -n "$kube_files" ]; then
+            echo "has-kube=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "has-kube=false" >>"$GITHUB_OUTPUT"
+          fi
+
+          if [ -n "$terraform_files" ] || [ -n "$compose_files" ] || [ -n "$kube_files" ]; then
+            echo "should-run=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "should-run=false" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: No IaC assets detected
+        if: steps.detect.outputs.should-run != 'true'
+        run: echo "No IaC sources detected; skipping infrastructure validation." >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Setup Terraform
+        if: steps.detect.outputs.has-terraform == 'true'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.6
+
+      - name: Setup TFLint
+        if: steps.detect.outputs.has-terraform == 'true'
+        uses: terraform-linters/setup-tflint@v3
+        with:
+          tflint_version: latest
+
+      - name: Terraform fmt & validate
+        if: steps.detect.outputs.has-terraform == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform fmt -check -recursive
+
+          mapfile -t terraform_dirs < <(git ls-files '*.tf' '*.tfvars' | xargs -r -n1 dirname | sort -u)
+          for dir in "${terraform_dirs[@]}"; do
+            echo "Validating Terraform module: $dir"
+            (cd "$dir" && terraform init -backend=false -input=false >/dev/null && terraform validate)
+            (cd "$dir" && tflint --init >/dev/null && tflint)
+          done
+
+      - name: docker compose config
+        if: steps.detect.outputs.has-compose == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t compose_files < <(git ls-files '*docker-compose*.yml' '*docker-compose*.yaml' 'docker-compose.yml')
+          for compose_file in "${compose_files[@]}"; do
+            echo "Validating $compose_file"
+            docker compose -f "$compose_file" config >/dev/null
+          done
+
+      - name: Install kubeconform
+        if: steps.detect.outputs.has-kube == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sSL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar -xz
+          sudo mv kubeconform /usr/local/bin/
+
+      - name: kubeconform manifests
+        if: steps.detect.outputs.has-kube == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t kube_files < <(git ls-files 2>/dev/null | grep -E '(^infra/.*\.ya?ml$|/k8s/.*\.ya?ml$|/manifests/.*\.ya?ml$)' || true)
+          if [ "${#kube_files[@]}" -eq 0 ]; then
+            echo "No Kubernetes manifests found after detection."
+            exit 0
+          fi
+          kubeconform --strict "${kube_files[@]}"
