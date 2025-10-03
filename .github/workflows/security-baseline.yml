@@ -46,6 +46,11 @@ jobs:
           node_manifests=$(git ls-files 2>/dev/null | grep -E 'package\.json$' || true)
           if [ -n "$node_manifests" ]; then
             node_manifests=$(printf '%s\n' "$node_manifests" | sort -u)
+            {
+              echo "node_manifests<<EOF"
+              printf '%s\n' "$node_manifests"
+              echo "EOF"
+            } >>"$GITHUB_OUTPUT"
             node_dirs=$(NODE_MANIFESTS="$node_manifests" python3 <<'PY'
 import os
 
@@ -62,6 +67,7 @@ PY
             } >>"$GITHUB_OUTPUT"
           else
             echo "has-node=false" >>"$GITHUB_OUTPUT"
+            echo "node_manifests=" >>"$GITHUB_OUTPUT"
             echo "node_dirs=" >>"$GITHUB_OUTPUT"
           fi
 
@@ -98,7 +104,7 @@ PY
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: ${{ steps.detect.outputs.node_lockfiles }}
+          cache-dependency-path: ${{ steps.detect.outputs.node_lockfiles || steps.detect.outputs.node_manifests }}
 
       - name: Prepare npm dependencies
         if: steps.detect.outputs.has-node == 'true'
