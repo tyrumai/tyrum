@@ -318,8 +318,22 @@ fn describe_legal_flags(flags: &[LegalFlag]) -> String {
 }
 
 fn format_money(amount_minor: u64, currency: &str) -> String {
-    let major = amount_minor as f64 / 100.0;
-    format!("{} {:.2}", currency, major)
+    let decimals = currency_minor_units(currency).unwrap_or(2);
+    let divisor = 10u64.saturating_pow(decimals);
+    let major = amount_minor as f64 / divisor as f64;
+    format!("{} {:.*}", currency, decimals as usize, major)
+}
+
+fn currency_minor_units(currency: &str) -> Option<u32> {
+    match currency.to_ascii_uppercase().as_str() {
+        // Zero-decimal ISO-4217 currencies
+        "BIF" | "CLP" | "DJF" | "GNF" | "JPY" | "KMF" | "KRW" | "MGA" | "PYG" | "RWF" | "UGX"
+        | "VND" | "VUV" | "XAF" | "XOF" | "XPF" => Some(0),
+        // Three-decimal currencies
+        "BHD" | "IQD" | "JOD" | "KWD" | "LYD" | "OMR" | "TND" => Some(3),
+        // Common two-decimal currencies
+        _ => Some(2),
+    }
 }
 
 #[cfg(test)]
@@ -519,5 +533,15 @@ mod tests {
         let bytes = response.into_body().collect().await.unwrap().to_bytes();
         let payload: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(payload, json!({"status": "ok"}));
+    }
+
+    #[test]
+    fn format_money_respects_zero_decimal_currency() {
+        assert_eq!(format_money(1_234, "JPY"), "JPY 1234");
+    }
+
+    #[test]
+    fn format_money_respects_three_decimal_currency() {
+        assert_eq!(format_money(12_345, "BHD"), "BHD 12.345");
     }
 }
