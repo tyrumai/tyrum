@@ -111,6 +111,17 @@ flowchart LR
 **Discovery:** First attempt **MCP**, then structured API hints, else fall back to generic Web/Android/CLI.
 **Events/Watchers:** Generic events + predicates + reactions (no fixed watcher types).
 
+### Technology Stack (initial)
+- **Containers first:** Build OCI images with Docker/BuildKit; local orchestration via `docker compose`, production scheduling on Kubernetes for isolation and autoscaling.
+- **Core services:** Rust 2024 (async via `tokio` + `axum`) for planner/orchestrator, policy gate, memory, and executor control planes; sidecars for policy/audit enforcement share the same toolchain.
+- **Web portal:** Next.js 15.5 + React 19.2 with Server Components/Actions for the admin console and live activity feed; Tailwind or design system TBD.
+- **Data tier:** PostgreSQL 16 with `pgvector` for embeddings + RLS policies; hydrated via Rust and ingestion pipelines.
+- **Eventing & jobs:** NATS JetStream for the event bus/watchers, with Rust consumers handling parallel execution; lightweight cron via Kubernetes Jobs.
+- **Caching & rate limits:** Redis 7 (cluster mode) for low-latency session state, policy throttles, and short-lived planner memory.
+- **LLM runtime:** vLLM (containerized) fronted by an internal gateway; supports multi-model routing and token accounting.
+- **Observability:** OpenTelemetry instrumentation exported to Prometheus/Grafana + Tempo/Loki stack; audit evidence streamed to S3-compatible storage.
+- **Infra as code:** Terraform + Helm charts managing cluster bootstrap, secrets, runners, and CD pipelines.
+
 ---
 
 ## 6) Capability Discovery (no skills list)
@@ -323,30 +334,80 @@ Use a minimal set of **universal action primitives** to enable auditability, ret
 Milestones are cumulative; later milestones build on earlier ones.
 
 ### M0 — Foundations & Guardrails
-- Core repo, environments, CI/CD and release versioning.
-- Policy Gate skeleton enforcing the constitution (#9); consent UX stubs (#4).
-- Event‑sourced audit log + OpenTelemetry; idempotency and replay protection (#13, #15 Non‑negotiables).
-- Memory v0: Facts/Episodic; schemas for PVP/PAM (#8, Appendix B).
-- Planner/Orchestrator scaffolding with neutral action primitives (#5, #7, Appendix A).
-- Web portal shell for account linking + export/delete (#15.1).
+- **Local container dev environment**
+  - `docker compose up` boots Rust API, Next.js portal, Postgres, Redis, and mock LLM locally inside containers within 5 minutes.
+- **GitHub repo policies & docs**
+  - Branch protections, CODEOWNERS, required reviews, and status checks enforced in GitHub.
+  - CONTRIBUTING guide documents dev container workflow, env variables, and expected local smoke tests.
+- **Work tracking scaffolding**
+  - GitHub Issues templates (bug, feature, chore), default labels, and a project board seeded with M0 backlog items.
+- **Rust + web CI workflows**
+  - `ci-rust` (fmt, clippy, test) and `ci-web` (lint, test, build) Actions run on PRs and block merges on failure.
+- **IaC validation workflow**
+  - `ci-iac` runs `terraform fmt -check`, `terraform validate`, `tflint`, `docker compose config`, and `kubeconform` on manifests.
+- **Container build smoke workflow**
+  - `ci-containers` builds core Docker images with BuildKit and executes `docker run --rm` health checks on main merges.
+- **Security baseline workflow**
+  - Scheduled `security-baseline` job executes `cargo audit`, `pnpm audit --audit-level high`, `tfsec`, and `trivy config` against the repo, alerting on failures.
+- **Policy check service skeleton**
+  - Rust 2024 service exposes `POST /policy/check` with static spend/PII/legal rules returning structured decisions and unit tests for approve/deny/escalate.
+- **Consent UX stub**
+  - Minimal chat prompt + approval button in Next.js wired to mocked policy responses with snapshot test coverage.
+- **Event log foundation**
+  - Planner writes append-only action traces with replayable IDs and dedupe guard to Postgres.
+- **Telemetry pipeline**
+  - OpenTelemetry collector container exports traces/metrics/logs to local Prometheus, Grafana, Tempo/Loki dashboards.
+- **Audit replay demo**
+  - `make audit-demo` executes a sample plan and verifies replayability via scripted assertion and dashboard screenshot artifact.
+- **Memory schema & pgvector base**
+  - Migrations create `facts`, `episodic_events`, `vector_embeddings` tables with row-level security placeholders and enable `pgvector`.
+- **Memory access tooling**
+  - Rust DAL with CRUD coverage and CLI tool to insert/retrieve sample entries backed by unit tests.
+- **Planner core crate**
+  - Defines action primitive schema, state machine, and documentation for success/failure events.
+- **Planner integration harness**
+  - Integration test runs mock “book call” plan via generic executors and stores audit + memory artifacts.
+- **Planner error propagation**
+  - Error handling paths propagate policy denials and executor failures with structured logs and regression tests.
+- **Landing page skeleton**
+  - Next.js `/` route renders hero/value props with CTA button following design stub.
+- **Waitlist capture & analytics**
+  - CTA persists email to Postgres waitlist table and emits Plausible/Segment stub events with campaign params.
+- **Performance & accessibility baseline**
+  - Page scores ≥90 for performance/accessibility/best practices in Lighthouse desktop/mobile runs.
+- **Portal auth guard**
+  - Next.js middleware validates session cookie; unauthenticated users redirected to onboarding CTA.
+- **Portal linking surface**
+  - Account linking page shows placeholder integration cards and writes preference toggles to Postgres.
+- **Portal export/delete stubs**
+  - Export/delete buttons enqueue mocked audit tasks, display toast status, and return deterministic API responses.
+- **Terraform baseline**
+  - `terraform plan/apply` stands up staging VPC, Kubernetes cluster, and secrets store without manual steps.
+- **Helm chart deployment**
+  - Helm releases deploy core services with health checks, config maps, and HPA defaults; `helm test` passes.
+- **Infra runbook**
+  - Runbook covers `terraform apply`, `helm upgrade`, rollback, and secret rotation procedures with links to dashboards.
 
-### M1 — Telegram MVP (text‑first)
+### M1 — Telegram MVP (text-first)
 - Telegram ingress → normalized `Message/Thread` (#4, #5).
-- Planner end‑to‑end with Policy checks and audit trace (#5, #13).
+- Planner end-to-end with Policy checks and audit trace, running as Rust 2024 (`tokio`/`axum`) services (#5, #13).
 - Discovery pipeline baseline: `try_mcp → try_structured_api → try_generic_http → web/android/cli` (#6, #15.2).
 - Generic executors: Web (Playwright), Android emulator, HTTP, CLI with mandatory postconditions (#5, #7, #15.3).
-- Memory v1: Facts/Episodic/Vector/PAM/PVP; capability memory write‑through (#8, #15.4).
-- Wallet integration: virtual card, spend caps, in‑chat 3DS (#10, #15.5).
-- Watchers: calendar conflicts, VIP email follow‑ups, delivery ETA slips (#11, #15.6).
-- Policy Gate enforcing constitution + per‑user PAM (#9, #15.7).
-- Timeline/audit console v1; human‑readable confirmations and reasons (#13, #15.8, #15 Non‑negotiables).
+- Memory v1: Facts/Episodic/Vector/PAM/PVP; capability memory write-through (#8, #15.4).
+- Wallet integration: virtual card, spend caps, in-chat 3DS (#10, #15.5).
+- Watchers via NATS JetStream: calendar conflicts, VIP email follow-ups, delivery ETA slips (#11, #15.6).
+- Policy Gate enforcing constitution + per-user PAM (#9, #15.7).
+- Timeline/audit console v1; human-readable confirmations and reasons (#13, #15.8, #15 Non-negotiables).
+- LLM runtime: containerized vLLM behind internal gateway with token accounting (#5, #13).
+- New-user onboarding funnel: marketing CTA → account signup + verification → initial consent checklist → 90-second calibration kick-off (#4, #12, Appendix E).
 
 ### M2 — Reliability & Capability Memory
 - Capability Memory read/write: selectors, flows, success/failure patterns; reuse on subsequent runs (#8).
-- UI drift handling: semantic selectors, retries/backoff; teach‑back and acceptance of dead‑ends (#16).
-- Tool Directory top‑k retrieval and caching (#5, #6).
-- Cost controls: cache schemas/flows; small local models for classification/risk (Appendix G, #16).
+- UI drift handling: semantic selectors, retries/backoff; teach-back and acceptance of dead-ends (#16).
+- Tool Directory top-k retrieval and caching (#5, #6).
+- Cost controls: cache schemas/flows in Redis 7; small local models for classification/risk (Appendix G, #16).
 - Postcondition libraries for common actions; replay sandbox (#13).
+- Kubernetes rollout strategies and autoscaling for Rust services and Next.js portal; Redis 7 clustering for session/state resilience (#5, #16).
 
 ### M3 — Persona & Voice
 - PVP editor (tone, verbosity, initiative, consent style) with on‑the‑fly tweaks (#12, Appendix B).
