@@ -12,7 +12,10 @@ on:
 jobs:
   containers:
     name: Container builds
-    runs-on: ubuntu-latest
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
     permissions:
       contents: read
     env:
@@ -26,7 +29,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t dockerfiles < <(git ls-files '*Dockerfile' '*dockerfile' 2>/dev/null)
+          mapfile -t dockerfiles < <(git ls-files '*Dockerfile' '*dockerfile' '*Dockerfile.*' '*dockerfile.*' 2>/dev/null)
           if [ "${#dockerfiles[@]}" -eq 0 ]; then
             echo "has-dockerfiles=false" >>"$GITHUB_OUTPUT"
           else
@@ -49,7 +52,11 @@ jobs:
           set -euo pipefail
           while read -r dockerfile; do
             context="$(dirname "$dockerfile")"
-            image="ghcr.io/virtunetbv/tyrum-ci-$(echo "$context" | tr '/.' '-'):${GITHUB_SHA}"
+            sanitized="$(echo "$context" | tr '/.' '-' | sed 's/^-*//' | sed 's/-*$//')"
+            if [ -z "$sanitized" ]; then
+              sanitized="root"
+            fi
+            image="ghcr.io/virtunetbv/tyrum-ci-${sanitized}:${GITHUB_SHA}"
             echo "Building $dockerfile (context: $context)"
             docker buildx build --load --file "$dockerfile" --tag "$image" "$context"
             echo "$image" >> built-images.txt

@@ -1,0 +1,88 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile.api
+    image: tyrum/api:local
+    environment:
+      RUST_LOG: info
+      API_BIND_ADDR: 0.0.0.0:8080
+      DATABASE_URL: postgres://tyrum:tyrum_dev_password@postgres:5432/tyrum_dev
+      REDIS_URL: redis://redis:6379/0
+      MOCK_LLM_URL: http://mock-llm:8085
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      mock-llm:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:8080/healthz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  web:
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+    image: tyrum/web:local
+    environment:
+      NEXT_TELEMETRY_DISABLED: "1"
+      API_BASE_URL: http://api:8080
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "3000:3000"
+
+  mock-llm:
+    build:
+      context: ../services/mock_llm
+      dockerfile: Dockerfile
+    image: tyrum/mock-llm:local
+    ports:
+      - "8085:8085"
+    healthcheck:
+      test:
+        ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8085/healthz')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: tyrum
+      POSTGRES_PASSWORD: tyrum_dev_password
+      POSTGRES_DB: tyrum_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  postgres_data:

@@ -46,7 +46,7 @@ repos:
         name: docker compose config
         entry: scripts/pre-commit/docker_compose.sh
         language: script
-        files: '(?i)(docker-)?compose\\.ya?ml$'
+        files: '(?i)(docker-)?compose(\\.ya?ml)?$'
       - id: kubernetes-lint
         name: kubernetes manifest validation
         entry: scripts/pre-commit/kubernetes.sh

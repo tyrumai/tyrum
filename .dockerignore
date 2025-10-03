@@ -1,0 +1,11 @@
+.git
+.target
+**/target
+node_modules
+web/node_modules
+infra/postgres_data
+config/local.env
+.env*
+.dockerignore
+Dockerfile.api
+Dockerfile
