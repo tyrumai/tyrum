@@ -31,16 +31,16 @@ jobs:
             echo "has-cargo-lock=false" >>"$GITHUB_OUTPUT"
           fi
 
-          pnpm_lockfiles=$(git ls-files 2>/dev/null | grep 'pnpm-lock\.yaml$' || true)
-          if [ -n "$pnpm_lockfiles" ]; then
-            pnpm_lockfiles=$(printf '%s\n' "$pnpm_lockfiles" | sort -u)
+          node_lockfiles=$(git ls-files 2>/dev/null | grep 'package-lock\.json$' || true)
+          if [ -n "$node_lockfiles" ]; then
+            node_lockfiles=$(printf '%s\n' "$node_lockfiles" | sort -u)
             {
-              echo "pnpm_lockfiles<<EOF"
-              printf '%s\n' "$pnpm_lockfiles"
+              echo "node_lockfiles<<EOF"
+              printf '%s\n' "$node_lockfiles"
               echo "EOF"
             } >>"$GITHUB_OUTPUT"
           else
-            echo "pnpm_lockfiles=" >>"$GITHUB_OUTPUT"
+            echo "node_lockfiles=" >>"$GITHUB_OUTPUT"
           fi
 
           node_manifests=$(git ls-files 2>/dev/null | grep -E 'package\.json$' || true)
@@ -97,17 +97,10 @@ PY
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: pnpm
-          cache-dependency-path: ${{ steps.detect.outputs.pnpm_lockfiles }}
+          cache: npm
+          cache-dependency-path: ${{ steps.detect.outputs.node_lockfiles }}
 
-      - name: Enable pnpm
-        if: steps.detect.outputs.has-node == 'true'
-        run: |
-          set -euo pipefail
-          corepack enable
-          corepack prepare pnpm@latest --activate
-
-      - name: pnpm install
+      - name: Prepare npm dependencies
         if: steps.detect.outputs.has-node == 'true'
         shell: bash
         run: |
@@ -117,17 +110,16 @@ PY
             echo "No Node projects detected; skipping install." >>"$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          printf '%s\\n' "$node_dirs" | while IFS= read -r dir; do
+          printf '%s\n' "$node_dirs" | while IFS= read -r dir; do
             [ -n "$dir" ] || continue
             echo "Preparing dependencies for $dir"
-            if [ -f "$dir/pnpm-lock.yaml" ]; then
-              pnpm --dir "$dir" install --frozen-lockfile
-            else
-              pnpm --dir "$dir" install --lockfile-only --ignore-scripts
+            if [ ! -f "$dir/package-lock.json" ]; then
+              npm --prefix "$dir" install --package-lock-only --ignore-scripts
             fi
+            npm --prefix "$dir" ci --ignore-scripts
           done
 
-      - name: pnpm audit --audit-level high
+      - name: npm audit --audit-level high
         if: steps.detect.outputs.has-node == 'true'
         shell: bash
         run: |
@@ -137,10 +129,10 @@ PY
             echo "No Node projects detected; skipping audit." >>"$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          printf '%s\\n' "$node_dirs" | while IFS= read -r dir; do
+          printf '%s\n' "$node_dirs" | while IFS= read -r dir; do
             [ -n "$dir" ] || continue
-            echo "Running pnpm audit in $dir"
-            pnpm --dir "$dir" audit --audit-level high
+            echo "Running npm audit in $dir"
+            npm --prefix "$dir" audit --audit-level high
           done
 
       - name: Install tfsec
