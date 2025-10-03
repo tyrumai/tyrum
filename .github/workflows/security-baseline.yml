@@ -1,0 +1,106 @@
+name: security-baseline
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  baseline:
+    name: Security baseline
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect dependency manifests
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f Cargo.lock ]; then
+            echo "has-cargo-lock=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "has-cargo-lock=false" >>"$GITHUB_OUTPUT"
+          fi
+
+          if [ -f pnpm-lock.yaml ]; then
+            echo "has-pnpm-lock=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "has-pnpm-lock=false" >>"$GITHUB_OUTPUT"
+          fi
+
+          if [ -n "$(git ls-files '*.tf' '*.tfvars')" ]; then
+            echo "has-terraform=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "has-terraform=false" >>"$GITHUB_OUTPUT"
+          fi
+
+          if [ -n "$(git ls-files '*Dockerfile' '*dockerfile' 'infra/**/*.ya?ml' '*k8s/**/*.ya?ml' '*manifests/**/*.ya?ml')" ]; then
+            echo "has-iac=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "has-iac=false" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Rust
+        if: steps.detect.outputs.has-cargo-lock == 'true'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        if: steps.detect.outputs.has-cargo-lock == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo install cargo-audit --locked --force
+
+      - name: cargo audit
+        if: steps.detect.outputs.has-cargo-lock == 'true'
+        run: cargo audit
+
+      - name: Setup Node.js
+        if: steps.detect.outputs.has-pnpm-lock == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Enable pnpm
+        if: steps.detect.outputs.has-pnpm-lock == 'true'
+        run: corepack enable
+
+      - name: pnpm install
+        if: steps.detect.outputs.has-pnpm-lock == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: pnpm audit --audit-level high
+        if: steps.detect.outputs.has-pnpm-lock == 'true'
+        run: pnpm audit --audit-level high
+
+      - name: Install tfsec
+        if: steps.detect.outputs.has-terraform == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sSL https://github.com/aquasecurity/tfsec/releases/latest/download/tfsec-linux-amd64.tar.gz | tar -xz
+          sudo mv tfsec /usr/local/bin/
+
+      - name: tfsec scan
+        if: steps.detect.outputs.has-terraform == 'true'
+        run: tfsec .
+
+      - name: Setup Trivy
+        if: steps.detect.outputs.has-iac == 'true'
+        uses: aquasecurity/setup-trivy@v0
+
+      - name: trivy config .
+        if: steps.detect.outputs.has-iac == 'true'
+        run: trivy config .
+
+      - name: Security baseline summary
+        if: steps.detect.outputs.has-cargo-lock != 'true' && steps.detect.outputs.has-pnpm-lock != 'true' && steps.detect.outputs.has-terraform != 'true' && steps.detect.outputs.has-iac != 'true'
+        run: echo "No manifests detected; security baseline skipped." >>"$GITHUB_STEP_SUMMARY"
