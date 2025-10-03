@@ -1,0 +1,156 @@
+name: security-baseline
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  baseline:
+    name: Security baseline
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect dependency manifests
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f Cargo.lock ]; then
+            echo "has-cargo-lock=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "has-cargo-lock=false" >>"$GITHUB_OUTPUT"
+          fi
+
+          pnpm_lockfiles=$(git ls-files 2>/dev/null | grep 'pnpm-lock\.yaml$' || true)
+          pnpm_lockfiles=$(printf '%s\n' "$pnpm_lockfiles" | grep -v '^$' | sort -u)
+          if [ -n "$pnpm_lockfiles" ]; then
+            echo "has-pnpm-lock=true" >>"$GITHUB_OUTPUT"
+            {
+              echo "pnpm_lockfiles<<EOF"
+              printf '%s\n' "$pnpm_lockfiles"
+              echo "EOF"
+            } >>"$GITHUB_OUTPUT"
+            pnpm_dirs=$(PNPM_LOCKFILES="$pnpm_lockfiles" python3 <<'PY'
+import os
+
+paths = [line for line in os.environ.get("PNPM_LOCKFILES", "").splitlines() if line]
+dirs = sorted({os.path.dirname(path) or '.' for path in paths})
+print("\n".join(dirs))
+PY
+)
+            {
+              echo "pnpm_dirs<<EOF"
+              printf '%s\n' "$pnpm_dirs"
+              echo "EOF"
+            } >>"$GITHUB_OUTPUT"
+          else
+            echo "has-pnpm-lock=false" >>"$GITHUB_OUTPUT"
+            echo "pnpm_lockfiles=" >>"$GITHUB_OUTPUT"
+            echo "pnpm_dirs=" >>"$GITHUB_OUTPUT"
+          fi
+
+          if [ -n "$(git ls-files '*.tf' '*.tfvars')" ]; then
+            echo "has-terraform=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "has-terraform=false" >>"$GITHUB_OUTPUT"
+          fi
+
+          if git ls-files 2>/dev/null | grep -Eq '(^infra/.*\.ya?ml$|/k8s/.*\.ya?ml$|/manifests/.*\.ya?ml$)'; then
+            echo "has-iac=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "has-iac=false" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Rust
+        if: steps.detect.outputs.has-cargo-lock == 'true'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        if: steps.detect.outputs.has-cargo-lock == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo install cargo-audit --locked --force
+
+      - name: cargo audit
+        if: steps.detect.outputs.has-cargo-lock == 'true'
+        run: cargo audit
+
+      - name: Setup Node.js
+        if: steps.detect.outputs.has-pnpm-lock == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: ${{ steps.detect.outputs.pnpm_lockfiles }}
+
+      - name: Enable pnpm
+        if: steps.detect.outputs.has-pnpm-lock == 'true'
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@latest --activate
+
+      - name: pnpm install
+        if: steps.detect.outputs.has-pnpm-lock == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm_dirs="${{ steps.detect.outputs.pnpm_dirs }}"
+          if [ -z "$pnpm_dirs" ]; then
+            echo "No pnpm project directories detected; skipping install."
+            exit 0
+          fi
+          printf '%s\n' "$pnpm_dirs" | while IFS= read -r dir; do
+            [ -n "$dir" ] || continue
+            echo "Installing dependencies for $dir"
+            pnpm --dir "$dir" install --frozen-lockfile
+          done
+
+      - name: pnpm audit --audit-level high
+        if: steps.detect.outputs.has-pnpm-lock == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm_dirs="${{ steps.detect.outputs.pnpm_dirs }}"
+          if [ -z "$pnpm_dirs" ]; then
+            echo "No pnpm project directories detected; skipping audit."
+            exit 0
+          fi
+          printf '%s\n' "$pnpm_dirs" | while IFS= read -r dir; do
+            [ -n "$dir" ] || continue
+            echo "Running pnpm audit in $dir"
+            pnpm --dir "$dir" audit --audit-level high
+          done
+
+      - name: Install tfsec
+        if: steps.detect.outputs.has-terraform == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sSL https://github.com/aquasecurity/tfsec/releases/latest/download/tfsec-linux-amd64.tar.gz | tar -xz
+          sudo mv tfsec /usr/local/bin/
+
+      - name: tfsec scan
+        if: steps.detect.outputs.has-terraform == 'true'
+        run: tfsec .
+
+      - name: Setup Trivy
+        if: steps.detect.outputs.has-iac == 'true'
+        uses: aquasecurity/setup-trivy@v0
+
+      - name: trivy config .
+        if: steps.detect.outputs.has-iac == 'true'
+        run: trivy config .
+
+      - name: Security baseline summary
+        if: steps.detect.outputs.has-cargo-lock != 'true' && steps.detect.outputs.has-pnpm-lock != 'true' && steps.detect.outputs.has-terraform != 'true' && steps.detect.outputs.has-iac != 'true'
+        run: echo "No manifests detected; security baseline skipped." >>"$GITHUB_STEP_SUMMARY"

@@ -50,10 +50,11 @@ M0 tasks are broken into single-day issues (1 developer each) and tracked in Git
 ## Getting Started
 1. **Read the concept:** Start with `docs/product_concept_v1.md` to understand goals, architecture, and milestones.
 2. **Review the working agreements:** `docs/working_agreements.md` defines Definition of Ready, Definition of Done, and acceptance-criteria expectations.
-3. **Set up tooling:** Install Docker, Rust 1.78+, Node 20+, `pnpm`, and Terraform 1.6+. Local development will rely on `docker compose` once the services land.
-4. **Clone & branch:** Fork/clone the repo, create branches as `<issue-number>-<slug>` (e.g., `issue-18-landing-page`).
-5. **Follow CI workflows:** Run the same commands locally that GitHub Actions enforces (`cargo fmt/clippy/test`, `pnpm lint/test/build`, Terraform/Compose/Kubernetes validations).
-6. **Open PRs:** Reference the issue, list validation steps, attach screenshots/logs, ensure all Actions workflows succeed.
+3. **Review contributor workflow:** `CONTRIBUTING.md` covers the dev container setup, required environment files, and smoke tests expected before PRs.
+4. **Set up tooling:** Install Docker, Rust 1.78+, Node 20+, `pnpm`, and Terraform 1.6+. Local development will rely on `docker compose` once the services land.
+5. **Clone & branch:** Fork/clone the repo, create branches as `<issue-number>-<slug>` (e.g., `issue-18-landing-page`).
+6. **Follow CI workflows:** Run the same commands locally that GitHub Actions enforces (`cargo fmt/clippy/test`, `pnpm lint/test/build`, Terraform/Compose/Kubernetes validations).
+7. **Open PRs:** Reference the issue, list validation steps, attach screenshots/logs, ensure all Actions workflows succeed.
 
 ## Key Documents
 - [Product Concept v1](docs/product_concept_v1.md)
@@ -63,4 +64,3 @@ M0 tasks are broken into single-day issues (1 developer each) and tracked in Git
 ## Contact & Support
 - Discussion and planning live in GitHub Issues and the Tyrum project board.
 - For urgent questions, mention the relevant owner in Issues/PRs; long-term decisions belong in `docs/` (ADRs) or in the working agreements.
-
