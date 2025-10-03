@@ -3,20 +3,20 @@ repos:
     hooks:
       - id: cargo-fmt
         name: cargo fmt
-        entry: cargo fmt --all -- --check
-        language: system
+        entry: scripts/pre-commit/cargo-fmt.sh
+        language: script
         pass_filenames: false
         files: '(Cargo|rust-toolchain).*|\\.rs$'
       - id: cargo-clippy
         name: cargo clippy
-        entry: cargo clippy --all-targets --all-features -- -D warnings
-        language: system
+        entry: scripts/pre-commit/cargo-clippy.sh
+        language: script
         pass_filenames: false
         files: '\\.(rs|toml)$'
       - id: cargo-test
         name: cargo test
-        entry: cargo test --all --all-targets
-        language: system
+        entry: scripts/pre-commit/cargo-test.sh
+        language: script
         pass_filenames: false
         files: '\\.(rs|toml)$'
       - id: npm-lint

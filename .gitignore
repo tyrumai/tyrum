@@ -32,6 +32,7 @@ advisory-db-*/
 .env.development.local
 .env.test.local
 .env.production.local
+config/local.env
 
 # OS generated files
 .DS_Store

@@ -1,0 +1,93 @@
+name: ci-web
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  web:
+    name: Web checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect web project root
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f web/package.json ]; then
+            echo "project=web" >>"$GITHUB_OUTPUT"
+          elif [ -f package.json ]; then
+            echo "project=." >>"$GITHUB_OUTPUT"
+          else
+            echo "project=" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: No frontend project detected
+        if: steps.detect.outputs.project == ''
+        run: echo "No Next.js/React project detected; skipping web CI." >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Setup Node.js
+        if: steps.detect.outputs.project != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ${{ steps.detect.outputs.project }}/package-lock.json
+
+      - name: Install dependencies
+        if: steps.detect.outputs.project != ''
+        shell: bash
+        working-directory: ${{ steps.detect.outputs.project }}
+        run: |
+          set -euo pipefail
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: npm run lint
+        if: steps.detect.outputs.project != ''
+        shell: bash
+        working-directory: ${{ steps.detect.outputs.project }}
+        run: |
+          set -euo pipefail
+          if node -e "const scripts = require('./package.json').scripts || {}; process.exit(scripts.lint ? 0 : 1);"; then
+            npm run lint
+          else
+            echo "No lint script declared; skipping lint." >>"$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: npm run test -- --watch=false
+        if: steps.detect.outputs.project != ''
+        shell: bash
+        working-directory: ${{ steps.detect.outputs.project }}
+        run: |
+          set -euo pipefail
+          if node -e "const scripts = require('./package.json').scripts || {}; process.exit(scripts.test ? 0 : 1);"; then
+            npm run test -- --watch=false
+          else
+            echo "No test script declared; skipping web tests." >>"$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: npm run build
+        if: steps.detect.outputs.project != ''
+        shell: bash
+        working-directory: ${{ steps.detect.outputs.project }}
+        run: |
+          set -euo pipefail
+          if node -e "const scripts = require('./package.json').scripts || {}; process.exit(scripts.build ? 0 : 1);"; then
+            npm run build
+          else
+            echo "No build script declared; skipping web build." >>"$GITHUB_STEP_SUMMARY"
+          fi

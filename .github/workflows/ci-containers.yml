@@ -1,0 +1,78 @@
+name: ci-containers
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  containers:
+    name: Container builds
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      DOCKER_BUILDKIT: "1"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect Dockerfiles
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t dockerfiles < <(git ls-files '*Dockerfile' '*dockerfile' 2>/dev/null)
+          if [ "${#dockerfiles[@]}" -eq 0 ]; then
+            echo "has-dockerfiles=false" >>"$GITHUB_OUTPUT"
+          else
+            printf '%s\n' "${dockerfiles[@]}" >> dockerfiles.txt
+            echo "has-dockerfiles=true" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: No Dockerfiles detected
+        if: steps.detect.outputs.has-dockerfiles != 'true'
+        run: echo "No container definitions found; skipping container build smoke tests." >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Setup Docker Buildx
+        if: steps.detect.outputs.has-dockerfiles == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build images
+        if: steps.detect.outputs.has-dockerfiles == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          while read -r dockerfile; do
+            context="$(dirname "$dockerfile")"
+            image="ghcr.io/virtunetbv/tyrum-ci-$(echo "$context" | tr '/.' '-'):${GITHUB_SHA}"
+            echo "Building $dockerfile (context: $context)"
+            docker buildx build --load --file "$dockerfile" --tag "$image" "$context"
+            echo "$image" >> built-images.txt
+          done < dockerfiles.txt
+
+      - name: Smoke test built images
+        if: steps.detect.outputs.has-dockerfiles == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          while read -r image; do
+            echo "Smoke testing $image"
+            docker run --rm --entrypoint /bin/sh "$image" -c 'exit 0' || {
+              echo "Container smoke test failed for $image" >&2
+              exit 1
+            }
+          done < built-images.txt
+
+      - name: Cleanup images
+        if: steps.detect.outputs.has-dockerfiles == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          while read -r image; do
+            docker image rm "$image" >/dev/null 2>&1 || true
+          done < built-images.txt
