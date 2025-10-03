@@ -29,13 +29,13 @@ jobs:
           - id: web
             title: Web
             context: web
-            dockerfile: Dockerfile
+            dockerfile: web/Dockerfile
             port: 3000
             endpoint: /
           - id: mock-llm
             title: Mock LLM
             context: services/mock_llm
-            dockerfile: Dockerfile
+            dockerfile: services/mock_llm/Dockerfile
             port: 8085
             endpoint: /healthz
     permissions:
