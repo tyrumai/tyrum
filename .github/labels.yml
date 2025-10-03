@@ -34,3 +34,6 @@
 - name: "area: portal"
   color: "0366d6"
   description: "Web portal, landing page, or frontend experiences."
+- name: "ops: security-baseline"
+  color: "0b7285"
+  description: "Automated alert for the scheduled security baseline workflow failures."
