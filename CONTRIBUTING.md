@@ -3,7 +3,7 @@
 Thanks for helping build the Tyrum assistant platform. This document captures the day-zero workflow for contributors and complements the repository guidelines in `AGENTS.md` plus the working agreements in `docs/working_agreements.md`.
 
 ## 1. Getting Started
-- Install Docker, Git, Node.js 20+, Rust 1.89+, Terraform 1.6+, and Python 3.11+ on your host.
+- Install Docker, Git, Node.js 20+, Rust 1.89+, Terraform 1.13+, and Python 3.13+ on your host.
 - Clone the repository and create branches as `<issue-number>-<slug>` (for example `issue-12-memory-schema`).
 - Install the shared hooks with `pre-commit install` so every commit runs the same validations enforced in CI.
 
@@ -12,7 +12,7 @@ We ship a fully provisioned VS Code dev container under `.devcontainer/devcontai
 
 1. Install the **Dev Containers** VS Code extension (or `devcontainer` CLI).
 2. Run **Dev Containers: Reopen in Container** from the command palette after opening the repo root.
-3. The container installs Rust (with `rustfmt`/`clippy`), Node 24 with npm 10, Terraform 1.6, Docker CLI access, and bootstraps `pre-commit` hooks.
+3. The container installs Rust (with `rustfmt`/`clippy`), Node 24 with npm 10, Terraform 1.13, Docker CLI access, and bootstraps `pre-commit` hooks.
 4. Use the mounted Docker socket to exercise `docker compose -f infra/docker-compose.yml up --build` without leaving the container.
 
 ## 3. Environment Configuration

@@ -51,7 +51,7 @@ M0 tasks are broken into single-day issues (1 developer each) and tracked in Git
 1. **Read the concept:** Start with `docs/product_concept_v1.md` to understand goals, architecture, and milestones.
 2. **Review the working agreements:** `docs/working_agreements.md` defines Definition of Ready, Definition of Done, and acceptance-criteria expectations.
 3. **Review contributor workflow:** `CONTRIBUTING.md` covers the dev container setup, required environment files, and smoke tests expected before PRs.
-4. **Set up tooling:** Install Docker, Rust 1.89+, Node 24+ (with npm 10+), and Terraform 1.6+. Local development will rely on `docker compose` once the services land.
+4. **Set up tooling:** Install Docker, Rust 1.89+, Node 24+ (with npm 10+), Terraform 1.13+, and Python 3.13+. Local development will rely on `docker compose` once the services land.
 5. **Clone & branch:** Fork/clone the repo, create branches as `<issue-number>-<slug>` (e.g., `issue-18-landing-page`).
 6. **Follow CI workflows:** Run the same commands locally that GitHub Actions enforces (`cargo fmt/clippy/test`, `npm run lint/test/build`, Terraform/Compose/Kubernetes validations).
 7. **Open PRs:** Reference the issue, list validation steps, attach screenshots/logs, ensure all Actions workflows succeed.
