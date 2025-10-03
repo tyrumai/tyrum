@@ -23,6 +23,12 @@ jobs:
             dockerfile: Dockerfile.api
             port: 8080
             endpoint: /healthz
+          - id: policy
+            title: Policy
+            context: .
+            dockerfile: Dockerfile.policy
+            port: 8081
+            endpoint: /healthz
           - id: web
             title: Web
             context: web
