@@ -13,7 +13,7 @@ Container-native personal AI assistant platform focusing on proactive planning, 
 
 ## Initial Technology Stack
 - **Language & Runtime:** Rust 2024 (`tokio`, `axum`) for planner, policy gate, memory, and executors control planes.
-- **Frontend:** Next.js 15.5 with React 19.2 (Server Components/Actions) for admin console, onboarding, and marketing surfaces.
+- **Frontend:** Next.js 15.5+ with React 19.2 (Server Components/Actions) for admin console, onboarding, and marketing surfaces.
 - **Data & Storage:** PostgreSQL 16 with `pgvector` for structured + vector workloads, Redis 7 for session/cache, NATS JetStream for events/jobs.
 - **LLM Runtime:** Containerized vLLM behind an internal gateway with multi-model routing and token accounting.
 - **Container Orchestration:** Docker/BuildKit for local builds, Kubernetes + Helm for staging/production deploys.
@@ -51,7 +51,7 @@ M0 tasks are broken into single-day issues (1 developer each) and tracked in Git
 1. **Read the concept:** Start with `docs/product_concept_v1.md` to understand goals, architecture, and milestones.
 2. **Review the working agreements:** `docs/working_agreements.md` defines Definition of Ready, Definition of Done, and acceptance-criteria expectations.
 3. **Review contributor workflow:** `CONTRIBUTING.md` covers the dev container setup, required environment files, and smoke tests expected before PRs.
-4. **Set up tooling:** Install Docker, Rust 1.89+, Node 24+ (with npm 10+), Terraform 1.13+, and Python 3.13+. Local development will rely on `docker compose` once the services land.
+4. **Set up tooling:** Install Docker, Rust 1.89+, Node 24+ (with npm 11.6+), Terraform 1.13+, and Python 3.13+. Local development will rely on `docker compose` once the services land.
 5. **Clone & branch:** Fork/clone the repo, create branches as `<issue-number>-<slug>` (e.g., `issue-18-landing-page`).
 6. **Follow CI workflows:** Run the same commands locally that GitHub Actions enforces (`cargo fmt/clippy/test`, `npm run lint/test/build`, Terraform/Compose/Kubernetes validations).
 7. **Open PRs:** Reference the issue, list validation steps, attach screenshots/logs, ensure all Actions workflows succeed.
