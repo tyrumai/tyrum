@@ -63,6 +63,7 @@ jobs:
             fi
           else
             echo "has-terraform=false" >>"$GITHUB_OUTPUT"
+            echo "terraform_files=" >>"$GITHUB_OUTPUT"
             echo "terraform_dirs=" >>"$GITHUB_OUTPUT"
           fi
 
