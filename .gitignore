@@ -71,3 +71,7 @@ coverage/
 *.log
 
 tmp/
+web/node_modules/
+web/.next/
+web/out/
+web/.turbo/

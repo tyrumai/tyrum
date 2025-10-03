@@ -13,7 +13,7 @@ We ship a fully provisioned VS Code dev container under `.devcontainer/devcontai
 1. Install the **Dev Containers** VS Code extension (or `devcontainer` CLI).
 2. Run **Dev Containers: Reopen in Container** from the command palette after opening the repo root.
 3. The container installs Rust (with `rustfmt`/`clippy`), Node 24 with `pnpm`, Terraform 1.6, Docker CLI access, and bootstraps `pre-commit` hooks.
-4. Use the mounted Docker socket to exercise `docker compose up --build` without leaving the container.
+4. Use the mounted Docker socket to exercise `docker compose -f infra/docker-compose.yml up --build` without leaving the container.
 
 ## 3. Environment Configuration
 Tyrum services expect explicit environment files so production secrets never land in git.
@@ -34,7 +34,7 @@ Run these commands before opening a pull request. They mirror the required GitHu
 | Rust workspace | `cargo fmt --all`, `cargo clippy --all-targets --all-features`, `cargo test --all --all-targets` |
 | Web portal | `pnpm install --frozen-lockfile` (first run) then `pnpm run lint` and `pnpm run test -- --watch=false` from the portal root |
 | Infrastructure | `terraform fmt -check`, `terraform validate`, `tflint`, `docker compose config`, `kubeconform ./infra` |
-| Containers | `docker compose up --build` (ensure planner, executors, policy gate, and Postgres boot) |
+| Containers | `docker compose -f infra/docker-compose.yml up --build` (ensure planner, executors, policy gate, and Postgres boot) |
 | Security baseline | `cargo audit`, `pnpm audit --audit-level high`, `tfsec`, `trivy config .` |
 
 Document the commands you executed in your pull-request description, along with any manual verification (screenshots, logs, trace IDs) required by the Definition of Done.

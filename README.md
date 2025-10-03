@@ -64,3 +64,16 @@ M0 tasks are broken into single-day issues (1 developer each) and tracked in Git
 ## Contact & Support
 - Discussion and planning live in GitHub Issues and the Tyrum project board.
 - For urgent questions, mention the relevant owner in Issues/PRs; long-term decisions belong in `docs/` (ADRs) or in the working agreements.
+
+## Local Container Development
+1. Copy `config/local.env.example` to `config/local.env` if you want CLI access to the services from the host.
+2. From the repo root run `docker compose -f infra/docker-compose.yml up --build` (or `cd infra && docker compose up --build`).
+3. Once the stack has converged you should see:
+   - Rust API on http://localhost:8080 with `/healthz` returning `{ "status": "ok" }`
+   - Next.js portal on http://localhost:3000
+   - PostgreSQL on `localhost:5432` (`tyrum`/`tyrum_dev_password`)
+   - Redis on `localhost:6379`
+   - Mock LLM on http://localhost:8085/v1/completions echoing prompts
+4. Tear the stack down with `docker compose -f infra/docker-compose.yml down --volumes` when finished.
+
+The Docker Compose definition lives in `infra/docker-compose.yml` and mirrors how the future GitHub Actions container smoke tests will exercise the stack.
