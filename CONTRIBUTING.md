@@ -32,7 +32,7 @@ Run these commands before opening a pull request. They mirror the required GitHu
 | --- | --- |
 | Repository hygiene | `pre-commit run --all-files` |
 | Rust workspace | `cargo fmt --all`, `cargo clippy --all-targets --all-features`, `cargo test --all --all-targets` |
-| Web portal | `npm install` (first run) then `npm run lint` and `npm run test -- --watch=false` from the portal root |
+| Web portal | `pnpm install --frozen-lockfile` (first run) then `pnpm run lint` and `pnpm run test -- --watch=false` from the portal root |
 | Infrastructure | `terraform fmt -check`, `terraform validate`, `tflint`, `docker compose config`, `kubeconform ./infra` |
 | Containers | `docker compose up --build` (ensure planner, executors, policy gate, and Postgres boot) |
 | Security baseline | `cargo audit`, `pnpm audit --audit-level high`, `tfsec`, `trivy config .` |
