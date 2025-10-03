@@ -26,7 +26,7 @@ jobs:
           set -euo pipefail
           terraform_files=$(git ls-files '*.tf' '*.tfvars' 2>/dev/null || true)
           compose_files=$(git ls-files '*docker-compose*.yml' '*docker-compose*.yaml' 'docker-compose.yml' 2>/dev/null || true)
-          kube_files=$(git ls-files 'infra/**/*.ya?ml' '*k8s/**/*.ya?ml' '*manifests/**/*.ya?ml' 2>/dev/null || true)
+          kube_files=$(git ls-files 2>/dev/null | grep -E '(^infra/.*\.ya?ml$|/k8s/.*\.ya?ml$|/manifests/.*\.ya?ml$)' || true)
 
           if [ -n "$terraform_files" ]; then
             echo "has-terraform=true" >>"$GITHUB_OUTPUT"
@@ -106,5 +106,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t kube_files < <(git ls-files 'infra/**/*.ya?ml' '*k8s/**/*.ya?ml' '*manifests/**/*.ya?ml')
+          mapfile -t kube_files < <(git ls-files 2>/dev/null | grep -E '(^infra/.*\.ya?ml$|/k8s/.*\.ya?ml$|/manifests/.*\.ya?ml$)' || true)
+          if [ "${#kube_files[@]}" -eq 0 ]; then
+            echo "No Kubernetes manifests found after detection."
+            exit 0
+          fi
           kubeconform --strict "${kube_files[@]}"

@@ -31,7 +31,8 @@ fi
 run_with_pnpm() {
   if ! command -v pnpm >/dev/null 2>&1; then
     if command -v corepack >/dev/null 2>&1; then
-      corepack enable pnpm >/dev/null 2>&1 || true
+      corepack enable >/dev/null 2>&1 || true
+      corepack prepare pnpm@latest --activate >/dev/null 2>&1 || true
     fi
   fi
 

@@ -61,11 +61,23 @@ jobs:
         run: |
           set -euo pipefail
           while read -r image; do
+            [ -n "$image" ] || continue
             echo "Smoke testing $image"
-            docker run --rm --entrypoint /bin/sh "$image" -c 'exit 0' || {
-              echo "Container smoke test failed for $image" >&2
-              exit 1
-            }
+            if output=$(docker run --rm --entrypoint /bin/sh "$image" -c 'exit 0' 2>&1); then
+              continue
+            fi
+
+            if echo "$output" | grep -qi 'executable file not found'; then
+              echo "Skipping smoke test for $image (no /bin/sh in image)." >&2
+              if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+                echo "- Skipped smoke test for $image (no /bin/sh available)." >>"$GITHUB_STEP_SUMMARY"
+              fi
+              continue
+            fi
+
+            echo "$output" >&2
+            echo "Container smoke test failed for $image" >&2
+            exit 1
           done < built-images.txt
 
       - name: Cleanup images

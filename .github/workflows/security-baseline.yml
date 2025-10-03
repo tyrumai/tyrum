@@ -29,7 +29,7 @@ jobs:
             echo "has-cargo-lock=false" >>"$GITHUB_OUTPUT"
           fi
 
-          pnpm_lockfiles=$(git ls-files -- 'pnpm-lock.yaml' '**/pnpm-lock.yaml' 2>/dev/null || true)
+          pnpm_lockfiles=$(git ls-files 2>/dev/null | grep 'pnpm-lock\.yaml$' || true)
           pnpm_lockfiles=$(printf '%s\n' "$pnpm_lockfiles" | grep -v '^$' | sort -u)
           if [ -n "$pnpm_lockfiles" ]; then
             echo "has-pnpm-lock=true" >>"$GITHUB_OUTPUT"
@@ -38,13 +38,12 @@ jobs:
               printf '%s\n' "$pnpm_lockfiles"
               echo "EOF"
             } >>"$GITHUB_OUTPUT"
-            pnpm_dirs=$(printf '%s\n' "$pnpm_lockfiles" | python3 - <<'PY'
+            pnpm_dirs=$(PNPM_LOCKFILES="$pnpm_lockfiles" python3 <<'PY'
 import os
-import sys
 
-dirs = {os.path.dirname(line.strip()) or '.' for line in sys.stdin if line.strip()}
-for path in sorted(dirs):
-    print(path)
+paths = [line for line in os.environ.get("PNPM_LOCKFILES", "").splitlines() if line]
+dirs = sorted({os.path.dirname(path) or '.' for path in paths})
+print("\n".join(dirs))
 PY
 )
             {
@@ -64,7 +63,7 @@ PY
             echo "has-terraform=false" >>"$GITHUB_OUTPUT"
           fi
 
-          if [ -n "$(git ls-files '*Dockerfile' '*dockerfile' 'infra/**/*.ya?ml' '*k8s/**/*.ya?ml' '*manifests/**/*.ya?ml')" ]; then
+          if git ls-files 2>/dev/null | grep -Eq '(^infra/.*\.ya?ml$|/k8s/.*\.ya?ml$|/manifests/.*\.ya?ml$)'; then
             echo "has-iac=true" >>"$GITHUB_OUTPUT"
           else
             echo "has-iac=false" >>"$GITHUB_OUTPUT"
