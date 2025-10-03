@@ -14,6 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      issues: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -23,38 +24,51 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           if [ -f Cargo.lock ]; then
             echo "has-cargo-lock=true" >>"$GITHUB_OUTPUT"
           else
             echo "has-cargo-lock=false" >>"$GITHUB_OUTPUT"
           fi
 
-          pnpm_lockfiles=$(git ls-files 2>/dev/null | grep 'pnpm-lock\.yaml$' || true)
-          pnpm_lockfiles=$(printf '%s\n' "$pnpm_lockfiles" | grep -v '^$' | sort -u)
-          if [ -n "$pnpm_lockfiles" ]; then
-            echo "has-pnpm-lock=true" >>"$GITHUB_OUTPUT"
+          node_lockfiles=$(git ls-files 2>/dev/null | grep 'package-lock\.json$' || true)
+          if [ -n "$node_lockfiles" ]; then
+            node_lockfiles=$(printf '%s\n' "$node_lockfiles" | sort -u)
             {
-              echo "pnpm_lockfiles<<EOF"
-              printf '%s\n' "$pnpm_lockfiles"
+              echo "node_lockfiles<<EOF"
+              printf '%s\n' "$node_lockfiles"
               echo "EOF"
             } >>"$GITHUB_OUTPUT"
-            pnpm_dirs=$(PNPM_LOCKFILES="$pnpm_lockfiles" python3 <<'PY'
+          else
+            echo "node_lockfiles=" >>"$GITHUB_OUTPUT"
+          fi
+
+          node_manifests=$(git ls-files 2>/dev/null | grep -E 'package\.json$' || true)
+          if [ -n "$node_manifests" ]; then
+            node_manifests=$(printf '%s\n' "$node_manifests" | sort -u)
+            {
+              echo "node_manifests<<EOF"
+              printf '%s\n' "$node_manifests"
+              echo "EOF"
+            } >>"$GITHUB_OUTPUT"
+            node_dirs=$(NODE_MANIFESTS="$node_manifests" python3 <<'PY'
 import os
 
-paths = [line for line in os.environ.get("PNPM_LOCKFILES", "").splitlines() if line]
+paths = [line for line in os.environ.get("NODE_MANIFESTS", "").splitlines() if line]
 dirs = sorted({os.path.dirname(path) or '.' for path in paths})
 print("\n".join(dirs))
 PY
 )
+            echo "has-node=true" >>"$GITHUB_OUTPUT"
             {
-              echo "pnpm_dirs<<EOF"
-              printf '%s\n' "$pnpm_dirs"
+              echo "node_dirs<<EOF"
+              printf '%s\n' "$node_dirs"
               echo "EOF"
             } >>"$GITHUB_OUTPUT"
           else
-            echo "has-pnpm-lock=false" >>"$GITHUB_OUTPUT"
-            echo "pnpm_lockfiles=" >>"$GITHUB_OUTPUT"
-            echo "pnpm_dirs=" >>"$GITHUB_OUTPUT"
+            echo "has-node=false" >>"$GITHUB_OUTPUT"
+            echo "node_manifests=" >>"$GITHUB_OUTPUT"
+            echo "node_dirs=" >>"$GITHUB_OUTPUT"
           fi
 
           if [ -n "$(git ls-files '*.tf' '*.tfvars')" ]; then
@@ -85,50 +99,46 @@ PY
         run: cargo audit
 
       - name: Setup Node.js
-        if: steps.detect.outputs.has-pnpm-lock == 'true'
+        if: steps.detect.outputs.has-node == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: pnpm
-          cache-dependency-path: ${{ steps.detect.outputs.pnpm_lockfiles }}
+          cache: npm
+          cache-dependency-path: ${{ steps.detect.outputs.node_lockfiles || steps.detect.outputs.node_manifests }}
 
-      - name: Enable pnpm
-        if: steps.detect.outputs.has-pnpm-lock == 'true'
-        run: |
-          set -euo pipefail
-          corepack enable
-          corepack prepare pnpm@latest --activate
-
-      - name: pnpm install
-        if: steps.detect.outputs.has-pnpm-lock == 'true'
+      - name: Prepare npm dependencies
+        if: steps.detect.outputs.has-node == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          pnpm_dirs="${{ steps.detect.outputs.pnpm_dirs }}"
-          if [ -z "$pnpm_dirs" ]; then
-            echo "No pnpm project directories detected; skipping install."
+          node_dirs="${{ steps.detect.outputs.node_dirs }}"
+          if [ -z "$node_dirs" ]; then
+            echo "No Node projects detected; skipping install." >>"$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          printf '%s\n' "$pnpm_dirs" | while IFS= read -r dir; do
+          printf '%s\n' "$node_dirs" | while IFS= read -r dir; do
             [ -n "$dir" ] || continue
-            echo "Installing dependencies for $dir"
-            pnpm --dir "$dir" install --frozen-lockfile
+            echo "Preparing dependencies for $dir"
+            if [ ! -f "$dir/package-lock.json" ]; then
+              npm --prefix "$dir" install --package-lock-only --ignore-scripts
+            fi
+            npm --prefix "$dir" ci --ignore-scripts
           done
 
-      - name: pnpm audit --audit-level high
-        if: steps.detect.outputs.has-pnpm-lock == 'true'
+      - name: npm audit --audit-level high
+        if: steps.detect.outputs.has-node == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          pnpm_dirs="${{ steps.detect.outputs.pnpm_dirs }}"
-          if [ -z "$pnpm_dirs" ]; then
-            echo "No pnpm project directories detected; skipping audit."
+          node_dirs="${{ steps.detect.outputs.node_dirs }}"
+          if [ -z "$node_dirs" ]; then
+            echo "No Node projects detected; skipping audit." >>"$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          printf '%s\n' "$pnpm_dirs" | while IFS= read -r dir; do
+          printf '%s\n' "$node_dirs" | while IFS= read -r dir; do
             [ -n "$dir" ] || continue
-            echo "Running pnpm audit in $dir"
-            pnpm --dir "$dir" audit --audit-level high
+            echo "Running npm audit in $dir"
+            npm --prefix "$dir" audit --audit-level high
           done
 
       - name: Install tfsec
@@ -152,5 +162,52 @@ PY
         run: trivy config .
 
       - name: Security baseline summary
-        if: steps.detect.outputs.has-cargo-lock != 'true' && steps.detect.outputs.has-pnpm-lock != 'true' && steps.detect.outputs.has-terraform != 'true' && steps.detect.outputs.has-iac != 'true'
+        if: steps.detect.outputs.has-cargo-lock != 'true' && steps.detect.outputs.has-node != 'true' && steps.detect.outputs.has-terraform != 'true' && steps.detect.outputs.has-iac != 'true'
         run: echo "No manifests detected; security baseline skipped." >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Report failure for triage
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const {owner, repo} = context.repo;
+            const label = 'ops: security-baseline';
+            const issueTitle = 'Security baseline failure';
+            const runUrl = `https://github.com/${owner}/${repo}/actions/runs/${context.runId}`;
+            const body = [
+              'The scheduled `security-baseline` workflow failed.',
+              '',
+              `- Run: ${runUrl}`,
+              `- Ref: ${context.ref}`,
+              `- SHA: ${context.sha}`,
+              '',
+              'Please triage and close this issue once the failure has been addressed.'
+            ].join('\n');
+
+            const openIssues = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              state: 'open',
+              labels: label,
+              per_page: 100,
+            });
+
+            const existing = openIssues.data.find((issue) => issue.title === issueTitle);
+
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: existing.number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner,
+                repo,
+                title: issueTitle,
+                body,
+                labels: ['type: chore', 'priority: now', 'area: infra', label],
+              });
+            }
