@@ -12,7 +12,7 @@ on:
 jobs:
   containers:
     name: Build and smoke test ${{ matrix.title }} image
-    runs-on: ubuntu-latest-l
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
