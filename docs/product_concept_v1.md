@@ -348,7 +348,7 @@ Milestones are cumulative; later milestones build on earlier ones.
 - **Container build smoke workflow**
   - `ci-containers` builds core Docker images with BuildKit and executes `docker run --rm` health checks on main merges.
 - **Security baseline workflow**
-  - Scheduled `security-baseline` job executes `cargo audit`, `pnpm audit --audit-level high`, `tfsec`, and `trivy config` against the repo, alerting on failures.
+  - Scheduled `security-baseline` job executes `cargo audit`, `npm audit --audit-level high`, `tfsec`, and `trivy config` against the repo, alerting on failures.
 - **Policy check service skeleton**
   - Rust 2024 service exposes `POST /policy/check` with static spend/PII/legal rules returning structured decisions and unit tests for approve/deny/escalate.
 - **Consent UX stub**
