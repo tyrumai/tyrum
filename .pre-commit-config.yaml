@@ -1,0 +1,59 @@
+repos:
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt --all -- --check
+        language: system
+        pass_filenames: false
+        files: '(Cargo|rust-toolchain).*|\\.rs$'
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: cargo clippy --all-targets --all-features -- -D warnings
+        language: system
+        pass_filenames: false
+        files: '\\.(rs|toml)$'
+      - id: cargo-test
+        name: cargo test
+        entry: cargo test --all --all-targets
+        language: system
+        pass_filenames: false
+        files: '\\.(rs|toml)$'
+      - id: npm-lint
+        name: nextjs lint
+        entry: scripts/pre-commit/npm-lint.sh
+        language: script
+        pass_filenames: false
+        files: '\\.(ts|tsx|js|jsx|css|scss|json|mdx)$'
+      - id: npm-test
+        name: nextjs test
+        entry: scripts/pre-commit/npm-test.sh
+        language: script
+        pass_filenames: false
+        files: '\\.(ts|tsx|js|jsx|css|scss|json|mdx)$'
+      - id: actionlint
+        name: github actions lint
+        entry: scripts/pre-commit/actionlint.sh
+        language: script
+        pass_filenames: false
+        files: '^\\.github/workflows/.*\\.ya?ml$'
+      - id: terraform-fmt-validate
+        name: terraform fmt+validate
+        entry: scripts/pre-commit/terraform.sh
+        language: script
+        files: '\\.(tf|tfvars)$'
+      - id: docker-compose-config
+        name: docker compose config
+        entry: scripts/pre-commit/docker_compose.sh
+        language: script
+        files: '(?i)(docker-)?compose\\.ya?ml$'
+      - id: kubernetes-lint
+        name: kubernetes manifest validation
+        entry: scripts/pre-commit/kubernetes.sh
+        language: script
+        files: '(infra/)?k8s/.*\\.ya?ml$|.*/manifests/.*\\.ya?ml$'
+      - id: helm-lint
+        name: helm lint
+        entry: scripts/pre-commit/helm.sh
+        language: script
+        files: 'Chart\\.ya?ml$|.*/templates/.*\\.ya?ml$'
