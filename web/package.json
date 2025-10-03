@@ -11,7 +11,7 @@
     "test": "node ./scripts/run-tests.mjs"
   },
   "dependencies": {
-    "next": "15.0.3",
+    "next": "15.4.7",
     "react": "18.2.0",
     "react-dom": "18.2.0"
   },
