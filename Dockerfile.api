@@ -5,6 +5,8 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY services/api/Cargo.toml services/api/Cargo.toml
 COPY services/api/src services/api/src
+COPY services/policy/Cargo.toml services/policy/Cargo.toml
+COPY services/policy/src services/policy/src
 
 RUN cargo build --locked --release --package tyrum-api
 
