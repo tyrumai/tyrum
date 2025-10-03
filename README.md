@@ -60,6 +60,7 @@ M0 tasks are broken into single-day issues (1 developer each) and tracked in Git
 - [Product Concept v1](docs/product_concept_v1.md)
 - [Working Agreements (DoR/DoD)](docs/working_agreements.md)
 - [Repository Guidelines](AGENTS.md)
+- [Policy Check Service Skeleton](docs/policy_service.md)
 
 ## Contact & Support
 - Discussion and planning live in GitHub Issues and the Tyrum project board.
@@ -69,6 +70,7 @@ M0 tasks are broken into single-day issues (1 developer each) and tracked in Git
 1. Copy `config/local.env.example` to `config/local.env` if you want CLI access to the services from the host.
 2. From the repo root run `docker compose -f infra/docker-compose.yml up --build` (or `cd infra && docker compose up --build`).
 3. Once the stack has converged you should see:
+   - Policy check service on http://localhost:8081 with `/healthz` returning `{ "status": "ok" }` and `POST /policy/check` evaluating spend/PII/legal guardrails
    - Rust API on http://localhost:8080 with `/healthz` returning `{ "status": "ok" }`
    - Next.js portal on http://localhost:3000
    - PostgreSQL on `localhost:5432` (`tyrum`/`tyrum_dev_password`)
