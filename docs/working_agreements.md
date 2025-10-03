@@ -31,7 +31,7 @@ An issue reaches **Done** only when all criteria below are satisfied:
 - **Manual QA (if required):** High-risk flows (auth, payments, policy enforcement) include manual test notes or screen recordings.
 - **Documentation Updated:** README, `docs/`, API docs, and runbooks reflect new behaviour, flags, or operational steps. Changelog entries are added when externally visible.
 - **Observability Wired:** Metrics, logs, and traces are instrumented or updated. Dashboards/alerts referenced in acceptance criteria are validated.
-- **Security Compliance:** Secrets remain managed via approved vaults; dependency updates pass `cargo audit`, `pnpm audit`, `tfsec`, and `trivy`. Threat considerations are documented for data-sensitive work.
+- **Security Compliance:** Secrets remain managed via approved vaults; dependency updates pass `cargo audit`, `npm audit`, `tfsec`, and `trivy`. Threat considerations are documented for data-sensitive work.
 - **Backwards Compatibility:** Migration scripts are tested with up/down paths; fallback strategies are documented. Feature flags include rollback instructions.
 - **Peer Review Completed:** At least one reviewer signs off. Review conversations are resolved or tracked for follow-up.
 - **Merge & Cleanup:** Feature branches are merged to `main`, stale branches are removed, and the linked GitHub Issue is closed with a completion note.
@@ -40,7 +40,7 @@ An issue reaches **Done** only when all criteria below are satisfied:
 ## 4. Acceptance Criteria Guidelines
 - Write acceptance criteria as bullet points beginning with observable outcomes (e.g., “Given… When… Then…” or “Script X outputs status Y”).
 - Include success AND failure behaviours. Specify expected errors, policy escalations, and retry behaviour.
-- Reference the exact command(s) or endpoints to validate the change (e.g., `cargo test -p planner`, `pnpm test --runInBand`, `terraform plan`).
+- Reference the exact command(s) or endpoints to validate the change (e.g., `cargo test -p planner`, `npm run test -- --runInBand`, `terraform plan`).
 - Quantify non-functional requirements (latency, throughput, Lighthouse score, token usage, cost ceiling).
 - Attach verification artifacts (screenshots, trace IDs, log snippets) to issues or link to the relevant dashboard panel.
 - Update or extend acceptance criteria whenever scope changes during implementation; the issue owner is responsible for keeping them current.
