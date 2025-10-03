@@ -2,7 +2,12 @@
 
 ## 1. Process Overview
 - We track all work in GitHub Issues using the Tyrum project board. Every issue is scoped to roughly one developer day and includes links to the source of truth (e.g., `docs/product_concept_v1.md`).
+- The project board lives at https://github.com/orgs/VirtunetBV/projects/4 and is preloaded with the M0 backlog.
 - Issues move left-to-right through the following default columns: Backlog → Ready → In Progress → Review → Done. "Blocked" is available as a swim lane; blocked items must note the dependency in the issue description.
+- Default labels follow this taxonomy:
+  `type:*` (bug, feature, chore), `priority:*` (now, next, later),
+  `status:*` (blocked, needs grooming), and `area:*` (infra, planner,
+  policy, portal).
 - Implementation happens in short-lived branches named `<issue-number>-<slug>` (for example `issue-12-memory-schema`). Each branch is merged through a pull request linked to its issue.
 - All work executes inside containers. Local development uses `docker compose` and GitHub Actions mirrors the same images for CI and security workflows.
 - GitHub Actions gates (`ci-rust`, `ci-web`, `ci-iac`, `ci-containers`, `security-baseline`) must be green before a pull request is eligible for review or merge.
@@ -49,4 +54,3 @@ An issue reaches **Done** only when all criteria below are satisfied:
 ## 6. Continuous Improvement
 - Retrospectives capture gaps in DoR/DoD or acceptance criteria. Adjust this document when the team evolves the process.
 - Any deviation from the defined process must be explicitly called out in the issue/PR, along with a plan to realign or improve the working agreement.
-
