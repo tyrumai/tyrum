@@ -29,10 +29,33 @@ jobs:
             echo "has-cargo-lock=false" >>"$GITHUB_OUTPUT"
           fi
 
-          if [ -f pnpm-lock.yaml ]; then
+          pnpm_lockfiles=$(git ls-files -- 'pnpm-lock.yaml' '**/pnpm-lock.yaml' 2>/dev/null || true)
+          pnpm_lockfiles=$(printf '%s\n' "$pnpm_lockfiles" | grep -v '^$' | sort -u)
+          if [ -n "$pnpm_lockfiles" ]; then
             echo "has-pnpm-lock=true" >>"$GITHUB_OUTPUT"
+            {
+              echo "pnpm_lockfiles<<EOF"
+              printf '%s\n' "$pnpm_lockfiles"
+              echo "EOF"
+            } >>"$GITHUB_OUTPUT"
+            pnpm_dirs=$(printf '%s\n' "$pnpm_lockfiles" | python3 - <<'PY'
+import os
+import sys
+
+dirs = {os.path.dirname(line.strip()) or '.' for line in sys.stdin if line.strip()}
+for path in sorted(dirs):
+    print(path)
+PY
+)
+            {
+              echo "pnpm_dirs<<EOF"
+              printf '%s\n' "$pnpm_dirs"
+              echo "EOF"
+            } >>"$GITHUB_OUTPUT"
           else
             echo "has-pnpm-lock=false" >>"$GITHUB_OUTPUT"
+            echo "pnpm_lockfiles=" >>"$GITHUB_OUTPUT"
+            echo "pnpm_dirs=" >>"$GITHUB_OUTPUT"
           fi
 
           if [ -n "$(git ls-files '*.tf' '*.tfvars')" ]; then
@@ -68,18 +91,46 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+          cache-dependency-path: ${{ steps.detect.outputs.pnpm_lockfiles }}
 
       - name: Enable pnpm
         if: steps.detect.outputs.has-pnpm-lock == 'true'
-        run: corepack enable
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@latest --activate
 
       - name: pnpm install
         if: steps.detect.outputs.has-pnpm-lock == 'true'
-        run: pnpm install --frozen-lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm_dirs="${{ steps.detect.outputs.pnpm_dirs }}"
+          if [ -z "$pnpm_dirs" ]; then
+            echo "No pnpm project directories detected; skipping install."
+            exit 0
+          fi
+          printf '%s\n' "$pnpm_dirs" | while IFS= read -r dir; do
+            [ -n "$dir" ] || continue
+            echo "Installing dependencies for $dir"
+            pnpm --dir "$dir" install --frozen-lockfile
+          done
 
       - name: pnpm audit --audit-level high
         if: steps.detect.outputs.has-pnpm-lock == 'true'
-        run: pnpm audit --audit-level high
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm_dirs="${{ steps.detect.outputs.pnpm_dirs }}"
+          if [ -z "$pnpm_dirs" ]; then
+            echo "No pnpm project directories detected; skipping audit."
+            exit 0
+          fi
+          printf '%s\n' "$pnpm_dirs" | while IFS= read -r dir; do
+            [ -n "$dir" ] || continue
+            echo "Running pnpm audit in $dir"
+            pnpm --dir "$dir" audit --audit-level high
+          done
 
       - name: Install tfsec
         if: steps.detect.outputs.has-terraform == 'true'
