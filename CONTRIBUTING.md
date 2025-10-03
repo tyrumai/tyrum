@@ -12,7 +12,7 @@ We ship a fully provisioned VS Code dev container under `.devcontainer/devcontai
 
 1. Install the **Dev Containers** VS Code extension (or `devcontainer` CLI).
 2. Run **Dev Containers: Reopen in Container** from the command palette after opening the repo root.
-3. The container installs Rust (with `rustfmt`/`clippy`), Node 20 with `pnpm`, Terraform 1.6, Docker CLI access, and bootstraps `pre-commit` hooks.
+3. The container installs Rust (with `rustfmt`/`clippy`), Node 24 with `pnpm`, Terraform 1.6, Docker CLI access, and bootstraps `pre-commit` hooks.
 4. Use the mounted Docker socket to exercise `docker compose up --build` without leaving the container.
 
 ## 3. Environment Configuration
