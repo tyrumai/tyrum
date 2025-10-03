@@ -3,7 +3,7 @@
 Thanks for helping build the Tyrum assistant platform. This document captures the day-zero workflow for contributors and complements the repository guidelines in `AGENTS.md` plus the working agreements in `docs/working_agreements.md`.
 
 ## 1. Getting Started
-- Install Docker, Git, Node.js 20+, Rust 1.78+, Terraform 1.6+, and Python 3.11+ on your host.
+- Install Docker, Git, Node.js 20+, Rust 1.89+, Terraform 1.6+, and Python 3.11+ on your host.
 - Clone the repository and create branches as `<issue-number>-<slug>` (for example `issue-12-memory-schema`).
 - Install the shared hooks with `pre-commit install` so every commit runs the same validations enforced in CI.
 
