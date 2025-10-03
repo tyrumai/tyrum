@@ -1,0 +1,479 @@
+# Personal AI Assistant — Product Concept v1
+
+**Date:** 2025‑10‑03
+**Owner:** Ron Hernaus
+**Working Title:** (TBD)
+
+---
+
+## 1) Summary
+A chat/voice‑native Personal Assistant (PA) that hides all backend complexity. Users interact only via messaging (Telegram first), voice, or short video. The PA proactively manages life and work by reasoning over goals, learning preferences from interactions (not hard‑coded skills), and acting through **generic execution surfaces** (Web, Android emulator, CLI/VM, generic HTTP). When available, it **opportunistically discovers structured interfaces** (MCP, OpenAPI, GraphQL) to increase reliability—without exposing any of this to the user.
+
+A minimal set of **constitutional guardrails** (spend/PII/legal/explainability) is enforced by an external policy gate; everything else is learned from the user or asked at runtime and persisted in memory. Every action is auditable, reproducible, and explainable.
+
+---
+
+## 2) Differentiation
+- **No hard‑coded “skills.”** The system composes actions from generic primitives and learned memory.
+- **Proactive by design.** Watches events and nudges/acts within user‑defined (and learned) boundaries.
+- **Invisible backend.** Users never see “flows” or connectors—only outcomes and short confirmations.
+- **Learned autonomy.** The PA quickly adapts consent, tone, voice, and spending behavior per user.
+
+---
+
+## 3) Core Principles
+1. **Guardrails are wide but real.** A tiny constitution enforced *outside* the LLM:
+   - No asset movement/commitments without recent consent or within explicit limits.
+   - No new‑party PII sharing without consent.
+   - Respect legal/channel rules.
+   - Every action must be explainable in a human‑readable audit trail.
+2. **Generic executors first.** Prefer Web, Android, CLI/VM, and generic HTTP; auto‑prefer structured APIs when discovered.
+3. **Memory over code.** Preferences, flows, selectors, budgets, and vendor quirks are **remembered**, not coded.
+4. **Ask when unsure.** Low‑confidence autonomy → concise confirmation; teach‑back → persist preference.
+5. **Tool minimization.** The model sees only a small, retrieved set of affordances relevant to the goal (no huge tool lists in prompts).
+
+---
+
+## 4) User Experience
+- **Interfaces:** Telegram (MVP), then WhatsApp Business/iMessage (subject to policy), voice calls (SIP/WebRTC), voice notes.
+- **Modality:** text, voice, and short video prompts; PA replies in the preferred persona/voice.
+- **Proactivity:** Calendar conflicts, travel changes, bills due, delivery slippage, follow‑up nudges, etc.
+- **Consent UX:** One‑tap approvals with clear cost/impact; “ask once per vendor” and budget caps supported; controls mirror the live activity feed so users can pause or escalate any plan.
+- **Live activity feed:** Real-time timeline showing planner intents, policy checks, and executions with pause/hold controls for each step.
+- **Editable permissions:** User-facing console to adjust watchers, spend caps, data scopes, and executor access at any time.
+- **Rapid undo:** Single-tap reversal window for recent actions, triggering automated rollback instructions or cancellations.
+- **Explainability:** “I ordered from Place X because no public API was found; last two flows succeeded; total €27, 3DS approved at 18:12.”
+
+---
+
+## 5) Architecture (high level)
+```mermaid
+flowchart LR
+  subgraph Channels
+    TG[Telegram]
+    EM[Email]
+    VO[Voice]
+  end
+  TG --> ING
+  EM --> ING
+  VO --> ING
+
+  subgraph Ingestion & Normalization
+    ING[Ingress: normalize to Message/Thread]
+  end
+
+  ING --> ORC
+
+  subgraph Core
+    ORC[Planner/Orchestrator]
+    DIR[Tool Directory]
+    POL[Policy Gate]
+    MEM[Memory Layer]
+    OBS[Observability/Audit]
+  end
+
+  ORC <--> DIR
+  ORC <--> MEM
+  ORC --> POL
+  POL --> ORC
+  ORC --> EXE
+
+  subgraph Execution Surfaces
+    EXE[Generic Executors]
+    WEB[Web (Playwright)]
+    AND[Android Emulator]
+    CLI[CLI/VM]
+    HTTP[Generic HTTP]
+  end
+  EXE --> WEB
+  EXE --> AND
+  EXE --> CLI
+  EXE --> HTTP
+
+  subgraph Discovery
+    MCP[MCP Probe]
+    API[OpenAPI/GraphQL Discovery]
+  end
+  DIR <-- Probe results --> MCP
+  DIR <-- Probe results --> API
+
+  subgraph Events
+    BUS[Event Bus]
+    WAT[Watcher Store]
+  end
+  BUS --> ORC
+  ORC <--> WAT
+  ORC --> OBS
+```
+
+**Planner/Orchestrator:** LLM‑guided planning that emits small, neutral **action primitives** (see Appendix A). Plans are checked by Policy, executed by generic surfaces, and logged in detail.
+**Tool Directory:** Returns only the **top‑k** relevant affordances (e.g., “Web”, “Android”, a discovered OpenAPI) to avoid prompt bloat.
+**Discovery:** First attempt **MCP**, then structured API hints, else fall back to generic Web/Android/CLI.
+**Events/Watchers:** Generic events + predicates + reactions (no fixed watcher types).
+
+---
+
+## 6) Capability Discovery (no skills list)
+**Order:** `try_mcp() → try_structured_api() → try_generic_http() → web/android/cli`
+- **MCP:** probe user‑linked endpoints / local hub; treat as untrusted until scopes are granted; cache success.
+- **Structured APIs:** look for OpenAPI/GraphQL/CalDAV/IMAP via headers, sitemaps, manifests, `.well-known` hints.
+- **Generic HTTP:** authenticated basic calls if discovered (schemas generated on the fly).
+- **Automation fallback:** robust Web/App automation using accessibility roles and explicit postconditions.
+
+All successful paths are stored as **capability memory** (what worked, known costs, selectors, anti‑bot quirks) and reused.
+
+---
+
+## 7) Planner: neutral plan/trace (not domain skills)
+Use a minimal set of **universal action primitives** to enable auditability, retries, and consents without introducing domain APIs.
+
+**Primitives (examples):**
+- `Research(query|url) → observations`
+- `Decide(options|policy|memory) → choice`
+- `Web(action[, postcondition])`
+- `Android(action[, postcondition])`
+- `CLI(action[, postcondition])`
+- `HTTP(request[, postcondition])`
+- `Message(send|draft)`
+- `Pay(amount, merchant, instrument, postcondition)`
+- `Store(memory_update)`
+- `Watch(event_source, predicate, reaction_plan)`
+- `Confirm(summary, cost, risk)`
+
+**Postconditions are mandatory** on state‑changing steps to avoid silent failure.
+
+---
+
+## 8) Memory System
+- **Facts Store:** canonical truths (names, addresses, IDs, vendor prefs, budgets).
+- **Episodic Store:** messages, attempts, outcomes; event‑sourced.
+- **Vector Store:** semantic recall for unstructured content (docs/threads).
+- **Capability Memory:** selectors, flows, success/failure patterns per site/app.
+- **Policy/Autonomy Model (PAM):** learned consents, quiet hours, escalation style, spending behavior with confidence scores; if low → ask.
+- **Persona & Voice Profile (PVP):** tone, verbosity, initiative, emoji tolerance, language rules, voice params (pace/pitch/warmth), and pronunciation dictionary. (See Appendix B.)
+
+---
+
+## 9) Policy & Guardrails
+- **External Policy Gate** (not prompt‑only) enforces:
+  1) No asset movement or commitments without explicit consent or within user‑set limits.
+  2) No PII to new parties without consent.
+  3) Respect legal/channel ToS (e.g., WhatsApp 24‑hour windows, GDPR export/delete).
+  4) Explainability: every action must have a human‑readable why/what/source.
+- **Everything else is learned** (PAM) or asked once, then remembered.
+
+---
+
+## 10) Payments & Commitments
+- **User-provisioned virtual card:** Users generate a virtual card with their bank/issuer and securely share the card details; the PA stores it in Vault and uses it on their behalf within explicit spend limits. Tyrum never issues cards directly.
+- **SCA/3DS** handled in-chat; OTP approvals flow through the user’s channel.
+- **Budget rules** in PAM (e.g., “auto food < €40 in home city”). Unknown → `Confirm(...)`.
+- Prefer vendor APIs; fallback to Web/App checkout with strong postconditions (order #, email receipt).
+
+---
+
+## 11) Watchers & Proactivity (without types)
+- **Event sources:** email, messages, calls, calendar, files, webhooks (delivery/order), custom signals.
+- **Predicate:** natural‑language or DSL compiled to a check (e.g., overlaps ≥ 15 min, ETA slip ≥ 20 min, unanswered VIP email ≥ 24 h).
+- **Reaction:** a small plan built from the same primitives (notify, rebook, reschedule).
+- The PA proposes/updates rules; user can tweak or disable any watcher.
+
+---
+
+## 12) Persona & Voice
+- **PVP is editable anytime.** Sliders for tone, verbosity, initiative; per‑context adapters (work vs family).
+- **Voice:** selectable TTS/clone (with explicit consent), pace/pitch/warmth; per‑contact pronunciation dictionary.
+- **90‑second calibration** at onboarding (Appendix E).
+- **Safety:** voice cloning only with consent; easy rollback to prior versions.
+
+---
+
+## 13) Auditability & Observability
+- **Event‑sourced audit log:** `Message → Plan → Policy Checks → Actions → Observations → Outcome → Cost`.
+- **Why‑trace:** short rationales attached to steps (facts/sources only).
+- **Metrics & traces:** OpenTelemetry; SLOs for latency (< 2.0 s for text replies when possible), success rate, consent prompts avoided, proactive save events.
+- **Repro:** keep selectors/requests to replay flows in a sandbox.
+
+---
+
+## 14) Security & Privacy
+- **Secrets:** Vault; per‑user encryption; least‑privilege scopes; signed webhooks.
+- **Data subject rights:** export/delete self‑serve; memory redaction and “forget this” commands.
+- **KYC/AML:** for wallet issuance; transaction monitoring within limits.
+- **Isolation:** Android emulator/VM network egress policies; browser fingerprint rotation where allowed.
+
+---
+
+## 15) MVP Cut (Telegram‑first)
+**Scope**
+1) Telegram bot + minimal web portal (account linking, export/delete).
+2) Discovery pipeline (MCP → Structured → HTTP → Web/Android).
+3) Generic executors (Web, Android, CLI, HTTP) with postconditions.
+4) Memory (Facts/Episodic/Vector/PAM/PVP + Capability Memory).
+5) Wallet integration (virtual card) with spend caps and in‑chat 3DS.
+6) Watchers: calendar conflicts, VIP email follow‑ups, delivery ETA slips.
+7) Policy gate enforcing constitution + per‑user PAM.
+8) Full audit log + timeline console.
+
+**Non‑negotiables**
+- Idempotent actions with replay protection.
+- Human‑readable confirmations and reasons.
+- Cost controls (routing to small models for classification/risk).
+
+---
+
+## 16) Risks & Mitigations
+- **UI drift/anti‑bot:** prefer APIs; semantic selectors; retry/relearn; accept some dead‑ends.
+- **Latency/cost:** cache schemas/flows; retrieve top‑k tools only; distill routine classifiers to small local models.
+- **Legal/ToS:** channel policy packs; user opt‑in for automation; provide API linking when automation is risky.
+- **Cold‑start autonomy:** short calibration; default to ask‑first with sensible caps; learn rapidly from approvals.
+
+---
+
+## 17) Success Metrics (examples)
+- Time‑to‑first‑value < 5 minutes.
+- Confirmation rate decreases over time (learned autonomy).
+- Proactive saves per user per month (conflict avoided, rebooking, bill avoided).
+- Flow reliability (postcondition pass rate) > 97%.
+- Net cost per successful task within target (€).
+
+---
+
+## 18) Data Entities (sketch)
+`User, Identity(Channel, Handle), Credential(Provider, Scopes), Consent(Scope, Confidence), Thread, Message, Plan, Step, ToolCall, Observation, Artifact, Memory(Fact|Episodic|Vector|Capability|PAM|PVP), Trigger(EventSource, Predicate, Reaction), Transaction, AuditEvent`.
+
+
+---
+
+## 19) Branding & Naming — Tyrum
+
+**Primary tagline:** **The end of to-do.**
+**Lockline (pair with tagline):** *No lists. Just outcomes—captured, handled, and proven.*
+
+### 19.1 Brand proposition
+- **Platform brand:** Tyrum (site, docs, billing).
+- **Assistant identity:** user-chosen name (stored in PVP). Present as **“<AssistantName>, by Tyrum.”**
+- **Why this architecture:** maximizes personal attachment while keeping a stable platform brand and domain.
+
+### 19.2 Messaging hierarchy (website/ads)
+- **H1 (Hero):** *The end of to-do.*
+- **Lockline:** *No lists. Just outcomes—captured, handled, and proven.*
+- **Proof bullets (support the claim):**
+  - Always-on capture from email, messages, calendar, files.
+  - Learned autonomy with a PA-managed wallet and safe limits.
+  - Generic executors (Web, Android, CLI/HTTP) → works anywhere; structured APIs when discovered.
+  - Mandatory postconditions on actions → proof of done.
+  - Commitments ledger (not tasks) → two states: handled or needs a decision.
+  - Daily brief + tiny decision queue.
+
+**Secondary lines (rotate as subheads):**
+- *Intent in. Outcome out.*
+- *Outcomes, not apps.*
+- *From chat to action.*
+
+**Dutch variants:**
+- *Einde aan je takenlijst.*
+- *Geen apps. Alleen resultaat.*
+- *Zeg het. Klaar.*
+
+### 19.3 Voice & tone (brand)
+- **Personality:** calm, confident, minimal; never cutesy.
+- **Writing:** short sentences, plain language, outcome-first.
+- **Honesty line:** avoid hype; state what’s proven and show evidence (receipts, confirmations, diffs).
+- **Style toggles by context:** more formal for work surfaces; warmer for consumer channels.
+
+### 19.4 Naming policy (assistants)
+- Users can name their PA; rename anytime (PVP).
+- **Channels:**
+  - Telegram/WhatsApp: global bot handle is fixed; introduce yourself in-chat as the chosen name.
+  - Phone/SIP: set CNAM/display name to the chosen name; provide a vCard.
+  - Email: optional alias `name@tyrum.com` per user.
+
+### 19.5 Domain & handles
+- **Primary:** tyrum.com.
+- **Helpful adjacents:** tyrum.ai, tyrum.app (optional).
+- **Patterns:** `hey<name>.tyrum.com`, `ask<name>.tyrum.com`; consider `hey<name>.com` if available later.
+- Keep social/bot handles clean: `@tyrum` (brand), `@Hey<AssistantName>` (assistants).
+
+### 19.6 Visual identity starters
+- **Logo direction:** geometric **T** monogram + wordmark; avoid alcohol connotations.
+- **Palette:** cool blue + graphite base; a single bright accent for confirmations (“Done”).
+- **Type:** modern sans (e.g., Inter/Plus Jakarta) for product; serif or high-contrast sans for headlines if desired.
+- **Motion:** subtle; emphasize “quietly on it”.
+
+### 19.7 Tagline usage & disclaimers
+- Always pair the tagline with a supporting lockline or proof bullets.
+- Microcopy for honesty: *“Autonomy within your limits. Asks when uncertain. Every action is explainable.”*
+
+### 19.8 Sample hero section copy
+**H1:** The end of to-do.
+**Deck:** No lists. Just outcomes—captured, handled, and proven.
+**CTA:** *Try Tyrum*  •  *See how it works*
+**Trust row:** icons for “Wallet limits”, “Explainable actions”, “Privacy by default”.
+
+### 19.9 Pronunciation & guardrails
+- **Pronunciation:** *Tyrum* = **TIE-rum** (note once on early pages).
+- Avoid alcohol imagery; keep tech-forward cues.
+- Respect legal/channel policies in all brand copy.
+
+---
+
+## 20) Milestones & Roadmap
+
+Milestones are cumulative; later milestones build on earlier ones.
+
+### M0 — Foundations & Guardrails
+- Core repo, environments, CI/CD and release versioning.
+- Policy Gate skeleton enforcing the constitution (#9); consent UX stubs (#4).
+- Event‑sourced audit log + OpenTelemetry; idempotency and replay protection (#13, #15 Non‑negotiables).
+- Memory v0: Facts/Episodic; schemas for PVP/PAM (#8, Appendix B).
+- Planner/Orchestrator scaffolding with neutral action primitives (#5, #7, Appendix A).
+- Web portal shell for account linking + export/delete (#15.1).
+
+### M1 — Telegram MVP (text‑first)
+- Telegram ingress → normalized `Message/Thread` (#4, #5).
+- Planner end‑to‑end with Policy checks and audit trace (#5, #13).
+- Discovery pipeline baseline: `try_mcp → try_structured_api → try_generic_http → web/android/cli` (#6, #15.2).
+- Generic executors: Web (Playwright), Android emulator, HTTP, CLI with mandatory postconditions (#5, #7, #15.3).
+- Memory v1: Facts/Episodic/Vector/PAM/PVP; capability memory write‑through (#8, #15.4).
+- Wallet integration: virtual card, spend caps, in‑chat 3DS (#10, #15.5).
+- Watchers: calendar conflicts, VIP email follow‑ups, delivery ETA slips (#11, #15.6).
+- Policy Gate enforcing constitution + per‑user PAM (#9, #15.7).
+- Timeline/audit console v1; human‑readable confirmations and reasons (#13, #15.8, #15 Non‑negotiables).
+
+### M2 — Reliability & Capability Memory
+- Capability Memory read/write: selectors, flows, success/failure patterns; reuse on subsequent runs (#8).
+- UI drift handling: semantic selectors, retries/backoff; teach‑back and acceptance of dead‑ends (#16).
+- Tool Directory top‑k retrieval and caching (#5, #6).
+- Cost controls: cache schemas/flows; small local models for classification/risk (Appendix G, #16).
+- Postcondition libraries for common actions; replay sandbox (#13).
+
+### M3 — Persona & Voice
+- PVP editor (tone, verbosity, initiative, consent style) with on‑the‑fly tweaks (#12, Appendix B).
+- 90‑second calibration in onboarding (Telegram) (#12, Appendix E).
+- Voice notes + TTS; per‑contact pronunciation dictionary (#12).
+- Explainability in voice: concise rationales tied to audit events (#13).
+
+### M4 — Structured Integrations & MCP
+- MCP discovery and scope granting per policy (Appendix C).
+- OpenAPI/GraphQL discovery via headers/manifests/.well‑known; schema cache (#6).
+- Prefer structured APIs; fall back to generic executors when needed (#6).
+- Per‑vendor capability memories including known costs and anti‑bot quirks (#8, #16).
+
+### M5 — Portal, Privacy & Admin
+- Web portal expansion: account linking, export/delete, memory redaction, “forget this” (#14, #15.1).
+- Audit timeline console with replay and evidence artifacts (#13).
+- Per‑user spend/compute quotas; graceful degradation (Appendix G).
+- KYC/AML for wallet issuance; transaction monitoring within limits (#14, #10).
+- Secrets management, least‑privilege scopes, signed webhooks (#14).
+
+### M6 — Multichannel & GA Readiness
+- WhatsApp Business/iMessage (policy permitting), email, and voice calls (SIP/WebRTC) (#4).
+- Daily brief and tiny decision queue surfaced in chat and portal (#19.2).
+- Branding, domains/handles, and basic marketing site content (#19).
+- SLOs met (latency, reliability, cost); multi‑tenant hardening; Android/VM isolation and egress policies (#13, #14, #17).
+- GA checklist: legal/ToS packs, support, billing, analytics and growth instrumentation.
+
+---
+
+## Appendix A — Action Primitive Schema (minimal)
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ActionPrimitive",
+  "type": "object",
+  "properties": {
+    "type": {"type": "string", "enum": [
+      "Research","Decide","Web","Android","CLI","HTTP","Message","Pay","Store","Watch","Confirm"
+    ]},
+    "args": {"type": "object"},
+    "postcondition": {"type": ["object","null"]},
+    "idempotency_key": {"type": "string"}
+  },
+  "required": ["type","args"],
+  "additionalProperties": false
+}
+```
+
+**Postcondition examples:** DOM/text assertion, HTTP status/body predicate, email receipt detected, calendar diff exists.
+
+---
+
+## Appendix B — Persona & Voice Profile (PVP) Schema (example)
+```json
+{
+  "tone": {"type": "string", "description": "calm|energetic|witty|formal|playful"},
+  "verbosity": {"type": "string", "description": "terse|balanced|thorough"},
+  "initiative": {"type": "string", "description": "low|medium|high"},
+  "consent_style": {"type": "string", "description": "ask_first|ask_once_per_vendor|act_within_limits"},
+  "emoji_gifs": {"type": "string", "description": "never|sometimes|often"},
+  "language": {"type": "string"},
+  "context_rules": [{"context": "work|family|friends", "overrides": {}}],
+  "voice": {
+    "voice_id": "string",
+    "pace": "number",
+    "pitch": "number",
+    "warmth": "number",
+    "pronunciation_dict": [{"token": "string", "pronounce": "string"}]
+  }
+}
+```
+
+---
+
+## Appendix C — MCP Discovery (minimal spec)
+1) Try linked endpoints from user accounts or `.well-known/mcp`.
+2) If found, fetch capability list, auth methods, scopes, rate limits, and side‑effects.
+3) Present to policy gate for scope grant; cache on success.
+4) If not found or denied, silently continue down the discovery chain.
+
+---
+
+## Appendix D — Watchers (examples)
+- **Calendar overlap:** `predicate: overlaps(event_a, event_b) >= 15m` → `reaction: propose new slots; if under limit, reschedule`.
+- **VIP email idle:** `predicate: from in VIP && no_reply >= 24h` → `reaction: draft reply + notify`.
+- **Delivery slip:** `predicate: eta_slip >= 20m` → `reaction: contact vendor + notify`.
+
+---
+
+## Appendix E — 90‑Second Calibration Script (Telegram)
+1) *Tone check:* “Prefer more upbeat or more neutral?”
+2) *Verbosity:* “Short and crisp, or thorough by default?”
+3) *Initiative:* “Ask before acting, ask once per vendor, or act under limits?”
+4) *Quiet hours:* “When should I avoid non‑urgent messages?”
+5) *Spending:* “Safe to auto‑approve everyday buys under €X in your area?”
+6) *Voice sample:* send two short audio styles → “Which do you prefer?”
+7) Store PVP + PAM; confirm: “Change anytime: *‘be more concise’*, *‘use fewer emojis’*, *‘stop auto approvals’*.”
+
+---
+
+## Appendix F — Sample Audit Event
+```json
+{
+  "trace_id": "a1b2c3",
+  "user_id": "u_123",
+  "message_id": "m_456",
+  "plan": [{"type":"Web","args":{"navigate":"https://placex.com"},"postcondition":{"contains_text":"Menu"}}],
+  "policy_checks": [{"rule":"spend_limit","result":"ok","limit":40,"amount":27.8}],
+  "actions": [{"executor":"Web","result":"ok","evidence":{"screenshot":"s3://..."}}],
+  "outcome": {"status":"success","summary":"Ordered two bowls, €27.80"},
+  "cost": {"llm_tokens": 1432, "exec_time_ms": 4120},
+  "timestamp": "2025-10-03T18:12:44Z"
+}
+```
+
+---
+
+## Appendix G — Cost Controls
+- Route intent/risk classification to small local models.
+- Cache API schemas and successful flows.
+- Retrieve only top‑k tools per task.
+- Batch background enrichment and summarization.
+- Enforce per‑user spend/compute quotas with graceful degradation.
+
+---
+
+**End of Document**
+
+**Brand:** Tyrum
+**Tagline:** The end of to-do
