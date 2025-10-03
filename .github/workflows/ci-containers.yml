@@ -11,11 +11,33 @@ on:
 
 jobs:
   containers:
-    name: Container builds
+    name: Build and smoke test ${{ matrix.title }} image
     runs-on:
       - self-hosted
       - linux
       - x64
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: api
+            title: API
+            context: .
+            dockerfile: Dockerfile.api
+            port: 8080
+            endpoint: /healthz
+          - id: web
+            title: Web
+            context: web
+            dockerfile: web/Dockerfile
+            port: 3000
+            endpoint: /
+          - id: mock-llm
+            title: Mock LLM
+            context: services/mock_llm
+            dockerfile: services/mock_llm/Dockerfile
+            port: 8085
+            endpoint: /healthz
     permissions:
       contents: read
     env:
@@ -24,74 +46,69 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Detect Dockerfiles
-        id: detect
-        shell: bash
-        run: |
-          set -euo pipefail
-          mapfile -t dockerfiles < <(git ls-files '*Dockerfile' '*dockerfile' '*Dockerfile.*' '*dockerfile.*' 2>/dev/null)
-          if [ "${#dockerfiles[@]}" -eq 0 ]; then
-            echo "has-dockerfiles=false" >>"$GITHUB_OUTPUT"
-          else
-            printf '%s\n' "${dockerfiles[@]}" >> dockerfiles.txt
-            echo "has-dockerfiles=true" >>"$GITHUB_OUTPUT"
-          fi
-
-      - name: No Dockerfiles detected
-        if: steps.detect.outputs.has-dockerfiles != 'true'
-        run: echo "No container definitions found; skipping container build smoke tests." >>"$GITHUB_STEP_SUMMARY"
-
       - name: Setup Docker Buildx
-        if: steps.detect.outputs.has-dockerfiles == 'true'
         uses: docker/setup-buildx-action@v3
 
-      - name: Build images
-        if: steps.detect.outputs.has-dockerfiles == 'true'
+      - name: Build ${{ matrix.title }} image
         shell: bash
         run: |
           set -euo pipefail
-          while read -r dockerfile; do
-            context="$(dirname "$dockerfile")"
-            sanitized="$(echo "$context" | tr '/.' '-' | sed 's/^-*//' | sed 's/-*$//')"
-            if [ -z "$sanitized" ]; then
-              sanitized="root"
-            fi
-            image="ghcr.io/virtunetbv/tyrum-ci-${sanitized}:${GITHUB_SHA}"
-            echo "Building $dockerfile (context: $context)"
-            docker buildx build --load --file "$dockerfile" --tag "$image" "$context"
-            echo "$image" >> built-images.txt
-          done < dockerfiles.txt
+          image="ghcr.io/virtunetbv/tyrum-ci-${{ matrix.id }}:${GITHUB_SHA}"
+          docker buildx build --progress plain --load \
+            --file "${{ matrix.dockerfile }}" \
+            --tag "$image" \
+            "${{ matrix.context }}"
+          echo "BUILT_IMAGE=$image" >>"$GITHUB_ENV"
 
-      - name: Smoke test built images
-        if: steps.detect.outputs.has-dockerfiles == 'true'
+      - name: Smoke test ${{ matrix.title }} image
         shell: bash
         run: |
           set -euo pipefail
-          while read -r image; do
-            [ -n "$image" ] || continue
-            echo "Smoke testing $image"
-            if output=$(docker run --rm --entrypoint /bin/sh "$image" -c 'exit 0' 2>&1); then
-              continue
+          image="${BUILT_IMAGE:?missing image tag}"
+          container_id="$(docker run --rm -d -p 0:${{ matrix.port }} "$image")"
+          cleanup() {
+            docker rm -f "$container_id" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          host_port=""
+          ready=0
+          for attempt in $(seq 1 40); do
+            if ! docker ps --no-trunc --format '{{.ID}}' | grep -q -F "$container_id"; then
+              echo "Container exited before becoming ready" >&2
+              docker logs "$container_id" || true
+              exit 1
             fi
 
-            if echo "$output" | grep -qi 'executable file not found'; then
-              echo "Skipping smoke test for $image (no /bin/sh in image)." >&2
-              if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
-                echo "- Skipped smoke test for $image (no /bin/sh available)." >>"$GITHUB_STEP_SUMMARY"
+            mapping="$(docker port "$container_id" ${{ matrix.port }} 2>/dev/null | head -n1 || true)"
+            if [ -n "$mapping" ]; then
+              host_port="${mapping##*:}"
+            fi
+
+            if [ -n "$host_port" ]; then
+              if curl --fail --silent --show-error --max-time 5 "http://127.0.0.1:${host_port}${{ matrix.endpoint }}" >/dev/null; then
+                ready=1
+                break
               fi
-              continue
             fi
 
-            echo "$output" >&2
-            echo "Container smoke test failed for $image" >&2
-            exit 1
-          done < built-images.txt
+            sleep 3
+          done
 
-      - name: Cleanup images
-        if: steps.detect.outputs.has-dockerfiles == 'true'
+          if [ "$ready" -ne 1 ]; then
+            echo "Service did not respond on http://127.0.0.1:${host_port:-unknown}${{ matrix.endpoint }}" >&2
+            docker logs "$container_id" || true
+            exit 1
+          fi
+
+          if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+            printf -- "- %s image responded at %s\n" "${{ matrix.title }}" "${{ matrix.endpoint }}" >>"$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Remove ${{ matrix.title }} image
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
-          while read -r image; do
-            docker image rm "$image" >/dev/null 2>&1 || true
-          done < built-images.txt
+          image="${BUILT_IMAGE:?missing image tag}"
+          docker image rm "$image" >/dev/null 2>&1 || true
