@@ -114,7 +114,7 @@ flowchart LR
 ### Technology Stack (initial)
 - **Containers first:** Build OCI images with Docker/BuildKit; local orchestration via `docker compose`, production scheduling on Kubernetes for isolation and autoscaling.
 - **Core services:** Rust 2024 (async via `tokio` + `axum`) for planner/orchestrator, policy gate, memory, and executor control planes; sidecars for policy/audit enforcement share the same toolchain.
-- **Web portal:** Next.js 15.5 + React 19.2 with Server Components/Actions for the admin console and live activity feed; Tailwind or design system TBD.
+- **Web portal:** Next.js 15.5+ + React 19.2 with Server Components/Actions for the admin console and live activity feed; Tailwind or design system TBD.
 - **Data tier:** PostgreSQL 16 with `pgvector` for embeddings + RLS policies; hydrated via Rust and ingestion pipelines.
 - **Eventing & jobs:** NATS JetStream for the event bus/watchers, with Rust consumers handling parallel execution; lightweight cron via Kubernetes Jobs.
 - **Caching & rate limits:** Redis 7 (cluster mode) for low-latency session state, policy throttles, and short-lived planner memory.
