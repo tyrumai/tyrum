@@ -51,14 +51,7 @@ jobs:
               printf '%s\n' "$node_manifests"
               echo "EOF"
             } >>"$GITHUB_OUTPUT"
-            node_dirs=$(NODE_MANIFESTS="$node_manifests" python3 <<'PY'
-import os
-
-paths = [line for line in os.environ.get("NODE_MANIFESTS", "").splitlines() if line]
-dirs = sorted({os.path.dirname(path) or '.' for path in paths})
-print("\n".join(dirs))
-PY
-)
+            node_dirs=$(NODE_MANIFESTS="$node_manifests" python3 -c 'import os; paths=[line for line in os.environ.get("NODE_MANIFESTS", "").splitlines() if line]; dirs=sorted({os.path.dirname(path) or "." for path in paths}); print("\n".join(dirs))')
             echo "has-node=true" >>"$GITHUB_OUTPUT"
             {
               echo "node_dirs<<EOF"
