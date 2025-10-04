@@ -1,19 +1,23 @@
-use std::{env, net::SocketAddr};
+use std::{collections::HashMap, env, net::SocketAddr};
 
-use crate::waitlist::{NewWaitlistSignup, WaitlistError, WaitlistRepository};
+use crate::{
+    account_linking::AccountLinkingRepository,
+    waitlist::{NewWaitlistSignup, WaitlistError, WaitlistRepository},
+};
 
 use axum::{
     Json, Router,
-    extract::State,
+    extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{get, post, put},
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use telemetry::TelemetryGuard;
 use validator::Validate;
 
+mod account_linking;
 mod metrics;
 mod telemetry;
 mod waitlist;
@@ -21,10 +25,39 @@ mod waitlist;
 const DEFAULT_BIND_ADDR: &str = "0.0.0.0:8080";
 const DEFAULT_DATABASE_URL: &str = "postgres://tyrum:tyrum_dev_password@localhost:5432/tyrum_dev";
 const WAITLIST_ROUTE: &str = "/waitlist";
+const ACCOUNT_LINKING_ROUTE: &str = "/account-linking/preferences";
+const ACCOUNT_LINKING_TOGGLE_ROUTE: &str = "/account-linking/preferences/:integration_slug";
+const PORTAL_ACCOUNT_ID: &str = "demo-account";
+
+#[derive(Clone, Copy)]
+struct IntegrationDefinition {
+    slug: &'static str,
+    name: &'static str,
+    description: &'static str,
+}
+
+const PLACEHOLDER_INTEGRATIONS: &[IntegrationDefinition] = &[
+    IntegrationDefinition {
+        slug: "calendar-suite",
+        name: "Calendar Suite",
+        description: "Sync meetings and hold buffers across Google and Outlook calendars.",
+    },
+    IntegrationDefinition {
+        slug: "expense-forwarders",
+        name: "Expense Forwarders",
+        description: "Route receipts and approvals into the planner's spend controls.",
+    },
+    IntegrationDefinition {
+        slug: "travel-briefings",
+        name: "Travel Briefings",
+        description: "Share itineraries and alert windows for concierge follow-ups.",
+    },
+];
 
 #[derive(Clone)]
 struct AppState {
     waitlist: WaitlistRepository,
+    account_linking: AccountLinkingRepository,
 }
 
 #[derive(Clone, Serialize)]
@@ -35,6 +68,55 @@ struct HealthResponse {
 #[derive(Clone, Serialize)]
 struct WelcomeResponse {
     message: &'static str,
+}
+
+#[derive(Debug, Serialize)]
+struct IntegrationPreferenceResponse {
+    slug: String,
+    name: &'static str,
+    description: &'static str,
+    enabled: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct AccountLinkingListResponse {
+    account_id: &'static str,
+    integrations: Vec<IntegrationPreferenceResponse>,
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdatePreferenceRequest {
+    enabled: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct UpdatePreferenceResponse {
+    status: &'static str,
+    integration: IntegrationPreferenceResponse,
+}
+
+fn normalize_integration_slug(raw: &str) -> String {
+    raw.trim().to_ascii_lowercase()
+}
+
+fn integration_definition(slug: &str) -> Option<&'static IntegrationDefinition> {
+    PLACEHOLDER_INTEGRATIONS
+        .iter()
+        .find(|definition| definition.slug == slug)
+}
+
+fn assemble_integration_responses(
+    toggles: &HashMap<String, bool>,
+) -> Vec<IntegrationPreferenceResponse> {
+    PLACEHOLDER_INTEGRATIONS
+        .iter()
+        .map(|definition| IntegrationPreferenceResponse {
+            slug: definition.slug.to_string(),
+            name: definition.name,
+            description: definition.description,
+            enabled: toggles.get(definition.slug).copied().unwrap_or(false),
+        })
+        .collect()
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -75,6 +157,11 @@ fn build_router(state: AppState) -> Router {
         .route("/", get(index))
         .route("/healthz", get(health))
         .route(WAITLIST_ROUTE, post(create_waitlist_signup))
+        .route(ACCOUNT_LINKING_ROUTE, get(list_account_link_preferences))
+        .route(
+            ACCOUNT_LINKING_TOGGLE_ROUTE,
+            put(update_account_link_preference),
+        )
         .with_state(state)
 }
 
@@ -95,6 +182,136 @@ async fn health() -> Response {
     let response = Json(HealthResponse { status: "ok" }).into_response();
 
     metrics::record_http_request("GET", "/healthz", response.status().as_u16());
+
+    response
+}
+
+#[tracing::instrument(name = "api.account_linking.list", skip_all)]
+async fn list_account_link_preferences(State(state): State<AppState>) -> Response {
+    let response = match state
+        .account_linking
+        .list_for_account(PORTAL_ACCOUNT_ID)
+        .await
+    {
+        Ok(records) => {
+            let mut toggles = HashMap::new();
+            for preference in records {
+                toggles.insert(preference.integration_slug, preference.enabled);
+            }
+
+            Json(AccountLinkingListResponse {
+                account_id: PORTAL_ACCOUNT_ID,
+                integrations: assemble_integration_responses(&toggles),
+            })
+            .into_response()
+        }
+        Err(error) => {
+            tracing::error!("failed to load account linking preferences: {error}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "server_error",
+                    message: "Unable to load linking preferences".into(),
+                }),
+            )
+                .into_response()
+        }
+    };
+
+    metrics::record_http_request("GET", ACCOUNT_LINKING_ROUTE, response.status().as_u16());
+
+    response
+}
+
+#[tracing::instrument(
+    name = "api.account_linking.update",
+    skip_all,
+    fields(integration_slug = %integration_slug)
+)]
+async fn update_account_link_preference(
+    State(state): State<AppState>,
+    Path(integration_slug): Path<String>,
+    Json(payload): Json<UpdatePreferenceRequest>,
+) -> Response {
+    let normalized_slug = normalize_integration_slug(&integration_slug);
+
+    if normalized_slug.is_empty() {
+        tracing::warn!("received empty integration slug");
+        let response = (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid_slug",
+                message: "Integration slug must be provided.".into(),
+            }),
+        )
+            .into_response();
+        metrics::record_http_request(
+            "PUT",
+            ACCOUNT_LINKING_TOGGLE_ROUTE,
+            response.status().as_u16(),
+        );
+        return response;
+    }
+
+    let Some(definition) = integration_definition(&normalized_slug) else {
+        tracing::warn!(slug = %normalized_slug, "unknown integration slug supplied");
+        let response = (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "unknown_integration",
+                message: format!("Integration {normalized_slug} is not supported."),
+            }),
+        )
+            .into_response();
+        metrics::record_http_request(
+            "PUT",
+            ACCOUNT_LINKING_TOGGLE_ROUTE,
+            response.status().as_u16(),
+        );
+        return response;
+    };
+
+    let response = match state
+        .account_linking
+        .upsert_preference(PORTAL_ACCOUNT_ID, &normalized_slug, payload.enabled)
+        .await
+    {
+        Ok(preference) => {
+            tracing::info!(
+                slug = %preference.integration_slug,
+                enabled = preference.enabled,
+                "stored linking preference"
+            );
+
+            Json(UpdatePreferenceResponse {
+                status: "updated",
+                integration: IntegrationPreferenceResponse {
+                    slug: definition.slug.to_string(),
+                    name: definition.name,
+                    description: definition.description,
+                    enabled: preference.enabled,
+                },
+            })
+            .into_response()
+        }
+        Err(error) => {
+            tracing::error!("failed to persist account linking preference: {error}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "server_error",
+                    message: "Unable to persist linking preference".into(),
+                }),
+            )
+                .into_response()
+        }
+    };
+
+    metrics::record_http_request(
+        "PUT",
+        ACCOUNT_LINKING_TOGGLE_ROUTE,
+        response.status().as_u16(),
+    );
 
     response
 }
@@ -206,7 +423,12 @@ async fn main() {
         .await
         .expect("failed to run waitlist migrations");
 
-    let app = build_router(AppState { waitlist });
+    let account_linking = AccountLinkingRepository::new(waitlist.pool().clone());
+
+    let app = build_router(AppState {
+        waitlist,
+        account_linking,
+    });
 
     tracing::info!("listening on {}", bind_addr);
     axum::serve(tokio::net::TcpListener::bind(bind_addr).await.unwrap(), app)
@@ -216,8 +438,14 @@ async fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{AppState, WAITLIST_ROUTE, build_router, sanitize_opt};
-    use crate::waitlist::{NewWaitlistSignup, WaitlistError, WaitlistRepository};
+    use super::{
+        ACCOUNT_LINKING_ROUTE, AppState, PLACEHOLDER_INTEGRATIONS, PORTAL_ACCOUNT_ID,
+        WAITLIST_ROUTE, build_router, sanitize_opt,
+    };
+    use crate::{
+        account_linking::AccountLinkingRepository,
+        waitlist::{NewWaitlistSignup, WaitlistError, WaitlistRepository},
+    };
     use axum::{body::Body, http::Request};
     use http_body_util::BodyExt;
     use serde_json::{Value, json};
@@ -257,7 +485,8 @@ mod tests {
         #[allow(dead_code)]
         container: ContainerAsync<GenericImage>,
         router: axum::Router,
-        repository: WaitlistRepository,
+        waitlist: WaitlistRepository,
+        account_linking: AccountLinkingRepository,
     }
 
     impl TestContext {
@@ -284,17 +513,21 @@ mod tests {
                 POSTGRES_USER, POSTGRES_PASSWORD, host_port, POSTGRES_DB
             );
 
-            let repository = connect_with_retry(&database_url).await;
-            repository.migrate().await.expect("run waitlist migrations");
+            let waitlist = connect_with_retry(&database_url).await;
+            waitlist.migrate().await.expect("run waitlist migrations");
+
+            let account_linking = AccountLinkingRepository::new(waitlist.pool().clone());
 
             let router = build_router(AppState {
-                waitlist: repository.clone(),
+                waitlist: waitlist.clone(),
+                account_linking: account_linking.clone(),
             });
 
             Self {
                 container,
                 router,
-                repository,
+                waitlist,
+                account_linking,
             }
         }
     }
@@ -304,8 +537,11 @@ mod tests {
         let pool = PgPoolOptions::new()
             .connect_lazy("postgres://postgres:postgres@localhost:5432/postgres")
             .expect("create lazy pool");
+        let waitlist = WaitlistRepository::from_pool(pool.clone());
+        let account_linking = AccountLinkingRepository::new(pool);
         let state = AppState {
-            waitlist: WaitlistRepository::from_pool(pool),
+            waitlist,
+            account_linking,
         };
         let app = build_router(state);
 
@@ -353,7 +589,7 @@ mod tests {
 
         let row =
             sqlx::query("SELECT email, utm_source, utm_medium, utm_campaign FROM waitlist_signups")
-                .fetch_one(ctx.repository.pool())
+                .fetch_one(ctx.waitlist.pool())
                 .await
                 .expect("fetch waitlist signup");
         assert_eq!(
@@ -378,7 +614,7 @@ mod tests {
     async fn waitlist_signup_rejects_duplicates() {
         let ctx = TestContext::new().await;
         let first = NewWaitlistSignup::new("duplicate@example.com".into());
-        ctx.repository
+        ctx.waitlist
             .insert(first)
             .await
             .expect("seed waitlist record");
@@ -399,6 +635,97 @@ mod tests {
         let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
         let value: Value = serde_json::from_slice(&body_bytes).unwrap();
         assert_eq!(value["error"], "duplicate");
+    }
+
+    #[tokio::test]
+    async fn account_linking_list_returns_defaults() {
+        let ctx = TestContext::new().await;
+        let app = ctx.router.clone();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(ACCOUNT_LINKING_ROUTE)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 200);
+
+        let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let value: Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert_eq!(value["account_id"], PORTAL_ACCOUNT_ID);
+        let integrations = value["integrations"]
+            .as_array()
+            .expect("integrations array");
+        assert_eq!(integrations.len(), PLACEHOLDER_INTEGRATIONS.len());
+        assert!(
+            integrations
+                .iter()
+                .all(|entry| entry["enabled"] == Value::Bool(false))
+        );
+    }
+
+    #[tokio::test]
+    async fn account_linking_update_persists_toggle() {
+        let ctx = TestContext::new().await;
+        let slug = PLACEHOLDER_INTEGRATIONS[0].slug;
+        let app = ctx.router.clone();
+        let payload = json!({ "enabled": true });
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri(format!("{}/{}", ACCOUNT_LINKING_ROUTE, slug))
+                    .header("content-type", "application/json")
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 200);
+        let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let value: Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert_eq!(value["status"], "updated");
+        assert_eq!(value["integration"]["slug"], slug);
+        assert_eq!(value["integration"]["enabled"], Value::Bool(true));
+
+        let stored = ctx
+            .account_linking
+            .list_for_account(PORTAL_ACCOUNT_ID)
+            .await
+            .expect("fetch stored preferences");
+        assert!(
+            stored
+                .iter()
+                .any(|entry| entry.integration_slug == slug && entry.enabled)
+        );
+
+        let verify = ctx.router.clone();
+        let refreshed = verify
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(ACCOUNT_LINKING_ROUTE)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(refreshed.status(), 200);
+        let refreshed_body = refreshed.into_body().collect().await.unwrap().to_bytes();
+        let refreshed_value: Value = serde_json::from_slice(&refreshed_body).unwrap();
+        let updated_entry = refreshed_value["integrations"]
+            .as_array()
+            .expect("integrations array")
+            .iter()
+            .find(|entry| entry["slug"] == slug)
+            .cloned()
+            .expect("integration row present");
+        assert_eq!(updated_entry["enabled"], Value::Bool(true));
     }
 
     #[test]

@@ -102,7 +102,6 @@ impl WaitlistRepository {
         Ok(Self { pool })
     }
 
-    #[cfg(test)]
     pub fn pool(&self) -> &PgPool {
         &self.pool
     }
