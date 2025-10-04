@@ -14,7 +14,7 @@ use tyrum_memory::{
 };
 use uuid::Uuid;
 
-static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("../planner/migrations");
+static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 
 const POSTGRES_IMAGE: &str = "pgvector/pgvector";
 const POSTGRES_TAG: &str = "pg16";
@@ -112,7 +112,7 @@ async fn fact_crud_roundtrip() {
     assert!(missing.is_none());
 
     let err = ctx.dal.delete_fact(created.id).await.unwrap_err();
-    matches!(err, MemoryError::NotFound { .. });
+    assert!(matches!(err, MemoryError::NotFound { .. }));
 }
 
 #[tokio::test]
@@ -165,7 +165,7 @@ async fn episodic_event_crud_roundtrip() {
         .expect("delete event");
 
     let err = ctx.dal.delete_episodic_event(event_id).await.unwrap_err();
-    matches!(err, MemoryError::NotFound { .. });
+    assert!(matches!(err, MemoryError::NotFound { .. }));
 }
 
 #[tokio::test]
@@ -221,7 +221,7 @@ async fn vector_embedding_crud_roundtrip() {
         .delete_vector_embedding(embedding_id)
         .await
         .unwrap_err();
-    matches!(err, MemoryError::NotFound { .. });
+    assert!(matches!(err, MemoryError::NotFound { .. }));
 }
 
 async fn connect_with_retry(database_url: &str) -> Result<PgPool, sqlx::Error> {

@@ -5,6 +5,10 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY services/api/Cargo.toml services/api/Cargo.toml
 COPY services/api/src services/api/src
+COPY services/memory/Cargo.toml services/memory/Cargo.toml
+COPY services/memory/src services/memory/src
+COPY services/memory/tests services/memory/tests
+COPY services/memory/migrations services/memory/migrations
 COPY services/policy/Cargo.toml services/policy/Cargo.toml
 COPY services/policy/src services/policy/src
 COPY services/planner/Cargo.toml services/planner/Cargo.toml
