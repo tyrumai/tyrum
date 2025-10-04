@@ -11,9 +11,9 @@ async function readJsonBody(request: NextRequest) {
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { slug: string } },
+  context: { params: { slug: string } },
 ) {
-  const slug = params.slug?.trim();
+  const slug = context.params?.slug?.trim();
   if (!slug) {
     return NextResponse.json(
       {
