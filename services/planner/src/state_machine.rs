@@ -1,3 +1,5 @@
+use std::fmt;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -70,7 +72,7 @@ pub struct PlanFailure {
 
 /// Categorised failure reason for telemetry and retry logic.
 #[allow(clippy::exhaustive_enums)]
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PlanFailureReason {
     PolicyDenied,
     UserDeclined,
@@ -251,6 +253,8 @@ impl PlanStateMachine {
             }
         }
 
+        self.emit_failure_log(&event);
+
         Ok(&self.status)
     }
 
@@ -266,11 +270,138 @@ impl PlanStateMachine {
             };
         }
     }
+
+    fn emit_failure_log(&self, event: &PlanEvent) {
+        use tracing::{error, warn};
+
+        let PlanStatus::Failed(failure) = &self.status else {
+            return;
+        };
+
+        let detail = failure.detail.as_deref().unwrap_or("");
+        let step_index = failure.step_index.map(|idx| idx as i64).unwrap_or(-1);
+        let step_index_known = failure.step_index.is_some();
+        let executed_steps = self.executed_steps;
+        let total_steps = self.total_steps;
+        let reason = failure.reason;
+
+        match reason {
+            PlanFailureReason::PolicyDenied => warn!(
+                target: "tyrum::planner",
+                %reason,
+                step_index,
+                step_index_known,
+                executed_steps,
+                total_steps,
+                event = ?event,
+                detail,
+                "plan aborted due to policy denial"
+            ),
+            PlanFailureReason::ExecutorFailed => error!(
+                target: "tyrum::planner",
+                %reason,
+                step_index,
+                step_index_known,
+                executed_steps,
+                total_steps,
+                event = ?event,
+                detail,
+                "plan aborted due to executor failure"
+            ),
+            _ => {}
+        }
+    }
+}
+
+impl fmt::Display for PlanFailureReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let label = match self {
+            Self::PolicyDenied => "policy_denied",
+            Self::UserDeclined => "user_declined",
+            Self::PostconditionFailed => "postcondition_failed",
+            Self::ExecutorFailed => "executor_failed",
+            Self::Cancelled => "cancelled",
+        };
+        f.write_str(label)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::Value;
+    use std::{
+        io,
+        sync::{Arc, Mutex},
+    };
+    use tracing_subscriber::{fmt, layer::SubscriberExt, registry::Registry};
+
+    #[derive(Clone, Default)]
+    struct JsonLogSink {
+        buffer: Arc<Mutex<Vec<u8>>>,
+    }
+
+    impl JsonLogSink {
+        fn take(&self) -> Vec<Value> {
+            let mut guard = self.buffer.lock().expect("acquire log buffer");
+            let bytes = std::mem::take(&mut *guard);
+            drop(guard);
+
+            if bytes.is_empty() {
+                return Vec::new();
+            }
+
+            let content = String::from_utf8(bytes).expect("logs utf8");
+            content
+                .lines()
+                .filter(|line| !line.trim().is_empty())
+                .map(|line| serde_json::from_str(line).expect("json log line"))
+                .collect()
+        }
+    }
+
+    struct JsonLogWriter {
+        buffer: Arc<Mutex<Vec<u8>>>,
+    }
+
+    impl<'a> fmt::MakeWriter<'a> for JsonLogSink {
+        type Writer = JsonLogWriter;
+
+        fn make_writer(&'a self) -> Self::Writer {
+            JsonLogWriter {
+                buffer: Arc::clone(&self.buffer),
+            }
+        }
+    }
+
+    impl io::Write for JsonLogWriter {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            let mut guard = self.buffer.lock().expect("acquire writer buffer");
+            guard.extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    fn collect_failure_logs<F>(operation: F) -> Vec<Value>
+    where
+        F: FnOnce(),
+    {
+        let sink = JsonLogSink::default();
+        let layer = fmt::layer()
+            .json()
+            .with_ansi(false)
+            .without_time()
+            .with_writer(sink.clone());
+        let subscriber = Registry::default().with(layer);
+
+        tracing::subscriber::with_default(subscriber, operation);
+
+        sink.take()
+    }
 
     #[test]
     fn happy_path_through_execution() {
@@ -391,5 +522,78 @@ mod tests {
             }
             other => panic!("expected failure, saw {other:?}"),
         }
+    }
+
+    #[test]
+    fn policy_denial_emits_structured_log() {
+        let logs = collect_failure_logs(|| {
+            let mut machine = PlanStateMachine::new(1);
+            machine
+                .apply(PlanEvent::SubmittedForPolicy)
+                .expect("policy submission");
+            machine
+                .apply(PlanEvent::PolicyDenied {
+                    detail: "missing consent".into(),
+                })
+                .expect("policy rejection");
+        });
+
+        let entry = logs
+            .iter()
+            .find(|log| log["fields"]["reason"] == "policy_denied")
+            .expect("policy denial log emitted");
+
+        assert_eq!(entry["level"], "WARN");
+        assert_eq!(entry["fields"]["detail"], "missing consent");
+        assert_eq!(entry["fields"]["total_steps"], 1);
+        assert_eq!(entry["fields"]["executed_steps"], 0);
+        assert_eq!(entry["fields"]["step_index"], -1);
+        assert_eq!(entry["fields"]["step_index_known"], false);
+        assert!(
+            entry["fields"]["event"]
+                .as_str()
+                .unwrap()
+                .contains("PolicyDenied")
+        );
+    }
+
+    #[test]
+    fn executor_failure_emits_structured_log() {
+        let logs = collect_failure_logs(|| {
+            let mut machine = PlanStateMachine::new(1);
+            machine
+                .apply(PlanEvent::SubmittedForPolicy)
+                .expect("policy submission");
+            machine
+                .apply(PlanEvent::PolicyApproved)
+                .expect("policy approval");
+            machine
+                .apply(PlanEvent::StepDispatched { step_index: 0 })
+                .expect("dispatch step");
+            machine
+                .apply(PlanEvent::ExecutorFailed {
+                    step_index: 0,
+                    detail: "playwright crashed".into(),
+                })
+                .expect("executor failure");
+        });
+
+        let entry = logs
+            .iter()
+            .find(|log| log["fields"]["reason"] == "executor_failed")
+            .expect("executor failure log emitted");
+
+        assert_eq!(entry["level"], "ERROR");
+        assert_eq!(entry["fields"]["detail"], "playwright crashed");
+        assert_eq!(entry["fields"]["step_index"], 0);
+        assert_eq!(entry["fields"]["step_index_known"], true);
+        assert_eq!(entry["fields"]["total_steps"], 1);
+        assert_eq!(entry["fields"]["executed_steps"], 0);
+        assert!(
+            entry["fields"]["event"]
+                .as_str()
+                .unwrap()
+                .contains("ExecutorFailed")
+        );
     }
 }
