@@ -11,9 +11,10 @@ async function readJsonBody(request: NextRequest) {
 
 export async function PUT(
   request: NextRequest,
-  context: { params: { slug: string } },
+  context: { params: Record<string, string | string[]> },
 ) {
-  const slug = context.params?.slug?.trim();
+  const rawSlug = context.params?.slug;
+  const slug = (Array.isArray(rawSlug) ? rawSlug[0] : rawSlug)?.trim();
   if (!slug) {
     return NextResponse.json(
       {
