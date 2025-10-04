@@ -1,4 +1,5 @@
 import React from "react";
+import type { UnsafeUnwrappedSearchParams } from "next/server";
 import WaitlistCta from "./waitlist-cta";
 import {
   CTA_FROM_PARAM,
@@ -29,9 +30,27 @@ const trustSignals = [
   "Privacy by default",
 ];
 
+type SearchParamRecord = Record<string, string | string[] | undefined>;
+
 type HomeProps = {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<SearchParamRecord>;
 };
+
+function unwrapSearchParams(
+  searchParams: HomeProps["searchParams"],
+): SearchParamRecord {
+  if (!searchParams) {
+    return {};
+  }
+
+  if (typeof (searchParams as { then?: unknown }).then !== "function") {
+    return searchParams as unknown as SearchParamRecord;
+  }
+
+  return searchParams as unknown as UnsafeUnwrappedSearchParams<
+    Promise<SearchParamRecord>
+  >;
+}
 
 function extractParamValue(
   value: string | string[] | undefined,
@@ -44,7 +63,7 @@ function extractParamValue(
 }
 
 export default function Home({ searchParams }: HomeProps) {
-  const params = searchParams ?? {};
+  const params = unwrapSearchParams(searchParams);
   const redirectReason = extractParamValue(params[CTA_REDIRECT_PARAM]);
   const redirectedFromRaw = extractParamValue(params[CTA_FROM_PARAM]);
   const redirectedFrom =

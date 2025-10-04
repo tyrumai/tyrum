@@ -7,9 +7,15 @@ import {
   CTA_REDIRECT_REASON,
 } from "./lib/portal-auth";
 
+type SearchParamRecord = Record<string, string | string[] | undefined>;
+
+function createSearchParams(values: SearchParamRecord) {
+  return Object.assign(Promise.resolve(values), values) as Promise<SearchParamRecord>;
+}
+
 describe("Home", () => {
   it("renders the hero copy", () => {
-    render(<Home searchParams={{}} />);
+    render(<Home searchParams={createSearchParams({})} />);
 
     expect(
       screen.getByRole("heading", { level: 1, name: "The end of to-do." }),
@@ -21,7 +27,7 @@ describe("Home", () => {
   });
 
   it("shows the waitlist capture form", () => {
-    render(<Home searchParams={{}} />);
+    render(<Home searchParams={createSearchParams({})} />);
 
     expect(screen.getByLabelText("Email address")).toBeVisible();
     expect(
@@ -30,7 +36,7 @@ describe("Home", () => {
   });
 
   it("retains the secondary call to action", () => {
-    render(<Home searchParams={{}} />);
+    render(<Home searchParams={createSearchParams({})} />);
 
     expect(screen.getByRole("link", { name: "See how it works" })).toHaveAttribute(
       "href",
@@ -39,7 +45,7 @@ describe("Home", () => {
   });
 
   it("lists all value propositions", () => {
-    render(<Home searchParams={{}} />);
+    render(<Home searchParams={createSearchParams({})} />);
 
     const items = screen.getAllByRole("heading", { level: 3 });
     expect(items).toHaveLength(3);
@@ -48,10 +54,10 @@ describe("Home", () => {
   it("surfaces a portal auth redirect notice when onboarding is required", () => {
     render(
       <Home
-        searchParams={{
+        searchParams={createSearchParams({
           [CTA_REDIRECT_PARAM]: CTA_REDIRECT_REASON,
           [CTA_FROM_PARAM]: "/portal/inbox",
-        }}
+        })}
       />,
     );
 
@@ -70,9 +76,9 @@ describe("Home", () => {
   it("provides a generic notice when the redirect source is absent", () => {
     render(
       <Home
-        searchParams={{
+        searchParams={createSearchParams({
           [CTA_REDIRECT_PARAM]: CTA_REDIRECT_REASON,
-        }}
+        })}
       />,
     );
 
