@@ -41,11 +41,10 @@ M0 tasks are broken into single-day issues (1 developer each) and tracked in Git
 ## Repository Structure
 - `docs/` – Product concept (`product_concept_v1.md`), working agreements, and future architecture references.
 - `AGENTS.md` – High-level repository guidance: planned directory layout, build/test commands, coding style, and security tips.
-- Future directories:
-  - `services/` – Rust workspaces for planner, policy gate, executors, memory.
-  - `web/` – Next.js/React portal and marketing site.
-  - `infra/` – Terraform, Docker Compose, Kubernetes manifests/Helm charts.
-  - `shared/` – Interface contracts (OpenAPI, protobuf, policy schemas).
+- `services/` – Rust workspaces for planner, policy gate, and memory tooling.
+- `web/` – Next.js/React portal and marketing site.
+- `infra/` – Terraform, Docker Compose, Kubernetes manifests/Helm charts.
+- `shared/` – Interface contracts (OpenAPI, protobuf, policy schemas).
 
 ## Getting Started
 1. **Read the concept:** Start with `docs/product_concept_v1.md` to understand goals, architecture, and milestones.
@@ -61,6 +60,12 @@ M0 tasks are broken into single-day issues (1 developer each) and tracked in Git
 - [Working Agreements (DoR/DoD)](docs/working_agreements.md)
 - [Repository Guidelines](AGENTS.md)
 - [Policy Check Service Skeleton](docs/policy_service.md)
+
+## Memory Tooling
+- `tyrum-memory` crate exposes a Postgres-backed data access layer for facts, episodic events, and vector embeddings.
+- Seed sample data for manual smoke tests with `cargo run -p tyrum-memory -- insert-sample --subject <uuid>` (subject optional).
+- Inspect memory for a subject via `cargo run -p tyrum-memory -- show-subject --subject <uuid> [--json]`.
+- Integration tests exercise CRUD coverage against the shared migrations (`cargo test -p tyrum-memory`).
 
 ## Contact & Support
 - Discussion and planning live in GitHub Issues and the Tyrum project board.
