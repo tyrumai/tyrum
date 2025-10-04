@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { parseUpstreamResponse, resolveApiBaseUrl } from "../shared";
 
-async function readJsonBody(request: Request) {
+async function readJsonBody(request: NextRequest) {
   try {
     return await request.json();
   } catch (error) {
@@ -10,10 +10,15 @@ async function readJsonBody(request: Request) {
 }
 
 export async function PUT(
-  request: Request,
-  { params }: { params: { slug: string } },
+  request: NextRequest,
+  context: { params: Promise<any> },
 ) {
-  const slug = params.slug?.trim();
+  const resolvedParams = ((await context.params) ?? {}) as Record<
+    string,
+    string | string[] | undefined
+  >;
+  const slugValue = resolvedParams?.slug;
+  const slug = Array.isArray(slugValue) ? slugValue[0]?.trim() : slugValue?.trim();
   if (!slug) {
     return NextResponse.json(
       {
