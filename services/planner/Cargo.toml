@@ -24,6 +24,7 @@ tracing = "0.1"
 uuid = { version = "1", features = ["serde", "v4"] }
 
 [dev-dependencies]
+anyhow = "1"
 serde_json = "1"
 sqlx = { version = "0.7", default-features = false, features = [
   "runtime-tokio",
@@ -36,6 +37,7 @@ sqlx = { version = "0.7", default-features = false, features = [
 ] }
 testcontainers = "0.18"
 tokio = { version = "1.43", features = ["macros", "rt", "rt-multi-thread", "time"] }
+tyrum-memory = { path = "../memory" }
 
 [lints]
 workspace = true
