@@ -106,3 +106,15 @@ jobs:
           else
             echo "No build script declared; skipping web build." >>"$GITHUB_STEP_SUMMARY"
           fi
+
+      - name: npm run lighthouse:ci
+        if: steps.detect.outputs.project != ''
+        shell: bash
+        working-directory: ${{ steps.detect.outputs.project }}
+        run: |
+          set -euo pipefail
+          if node -e "const scripts = require('./package.json').scripts || {}; process.exit(scripts['lighthouse:ci'] ? 0 : 1);"; then
+            npm run lighthouse:ci
+          else
+            echo "No Lighthouse CI script declared; skipping audit." >>"$GITHUB_STEP_SUMMARY"
+          fi
