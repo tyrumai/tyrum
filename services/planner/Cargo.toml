@@ -38,6 +38,7 @@ sqlx = { version = "0.7", default-features = false, features = [
 testcontainers = "0.18"
 tokio = { version = "1.43", features = ["macros", "rt", "rt-multi-thread", "time"] }
 tyrum-memory = { path = "../memory" }
+tracing-subscriber = { version = "0.3", features = ["fmt", "json"] }
 
 [lints]
 workspace = true
