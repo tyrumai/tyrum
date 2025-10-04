@@ -61,6 +61,11 @@ M0 tasks are broken into single-day issues (1 developer each) and tracked in Git
 - [Repository Guidelines](AGENTS.md)
 - [Policy Check Service Skeleton](docs/policy_service.md)
 
+## Audit Replay Demo
+- Run `make audit-demo` to execute the scripted book-call plan end-to-end. The command spins up an ephemeral Postgres (via Testcontainers), runs the planner state machine, and asserts that every step is auditable and replayable.
+- On success the run writes `artifacts/audit-demo/trace.json` (full payloads) and `artifacts/audit-demo/trace.md` (table view) so reviewers can inspect the trace without rerunning the demo.
+- The script exits non-zero if any assertion fails (missing events, postcondition mismatch, replay drift) to keep CI-friendly behaviour. Docker must be available locally.
+
 ## Memory Tooling
 - `tyrum-memory` crate exposes a Postgres-backed data access layer for facts, episodic events, and vector embeddings.
 - Seed sample data for manual smoke tests with `cargo run -p tyrum-memory -- insert-sample --subject <uuid>` (subject optional).
