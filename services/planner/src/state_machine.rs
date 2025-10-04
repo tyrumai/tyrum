@@ -219,12 +219,23 @@ impl PlanStateMachine {
                     detail: Some(detail.clone()),
                 });
             }
-            (
-                S::Ready { .. }
-                | S::AwaitingPostcondition { .. }
-                | S::AwaitingHumanConfirmation { .. },
-                E::Cancelled { detail },
-            ) => {
+            (S::AwaitingPostcondition { step_index }, E::Cancelled { detail }) => {
+                self.status = S::Failed(PlanFailure {
+                    occurred_at: Utc::now(),
+                    step_index: Some(*step_index),
+                    reason: Failure::Cancelled,
+                    detail: detail.clone(),
+                });
+            }
+            (S::AwaitingHumanConfirmation { step_index }, E::Cancelled { detail }) => {
+                self.status = S::Failed(PlanFailure {
+                    occurred_at: Utc::now(),
+                    step_index: Some(*step_index),
+                    reason: Failure::Cancelled,
+                    detail: detail.clone(),
+                });
+            }
+            (S::Ready { .. }, E::Cancelled { detail }) => {
                 self.status = S::Failed(PlanFailure {
                     occurred_at: Utc::now(),
                     step_index: None,
@@ -328,5 +339,57 @@ mod tests {
             .expect_err("transition should fail");
         assert!(matches!(err.state, PlanStatus::Draft));
         assert!(matches!(err.event, PlanEvent::PolicyApproved));
+    }
+
+    #[test]
+    fn cancellation_preserves_active_step_index() {
+        let mut machine = PlanStateMachine::new(1);
+        machine
+            .apply(PlanEvent::SubmittedForPolicy)
+            .expect("policy submission");
+        machine
+            .apply(PlanEvent::PolicyApproved)
+            .expect("policy approval");
+        machine
+            .apply(PlanEvent::StepDispatched { step_index: 0 })
+            .expect("dispatch step");
+
+        machine
+            .apply(PlanEvent::Cancelled {
+                detail: Some("user stopped".into()),
+            })
+            .expect("cancelled plan");
+
+        match machine.status() {
+            PlanStatus::Failed(failure) => {
+                assert_eq!(failure.step_index, Some(0));
+                assert_eq!(failure.detail.as_deref(), Some("user stopped"));
+                assert!(matches!(failure.reason, PlanFailureReason::Cancelled));
+            }
+            other => panic!("expected failure, saw {other:?}"),
+        }
+    }
+
+    #[test]
+    fn cancellation_from_ready_has_no_step_index() {
+        let mut machine = PlanStateMachine::new(2);
+        machine
+            .apply(PlanEvent::SubmittedForPolicy)
+            .expect("policy submission");
+        machine
+            .apply(PlanEvent::PolicyApproved)
+            .expect("policy approval");
+
+        machine
+            .apply(PlanEvent::Cancelled { detail: None })
+            .expect("cancel plan");
+
+        match machine.status() {
+            PlanStatus::Failed(failure) => {
+                assert_eq!(failure.step_index, None);
+                assert!(matches!(failure.reason, PlanFailureReason::Cancelled));
+            }
+            other => panic!("expected failure, saw {other:?}"),
+        }
     }
 }
