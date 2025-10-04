@@ -2,7 +2,10 @@ use std::{env, net::SocketAddr};
 
 use axum::{Json, Router, routing::get};
 use serde::Serialize;
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
+use telemetry::TelemetryGuard;
+
+mod metrics;
+mod telemetry;
 
 const DEFAULT_BIND_ADDR: &str = "0.0.0.0:8080";
 
@@ -22,28 +25,23 @@ fn build_router() -> Router {
         .route("/healthz", get(health))
 }
 
+#[tracing::instrument(name = "api.index", skip_all)]
 async fn index() -> Json<WelcomeResponse> {
+    metrics::record_http_request("GET", "/", 200);
     Json(WelcomeResponse {
         message: "Tyrum API skeleton is running",
     })
 }
 
+#[tracing::instrument(name = "api.health", skip_all)]
 async fn health() -> Json<HealthResponse> {
+    metrics::record_http_request("GET", "/healthz", 200);
     Json(HealthResponse { status: "ok" })
-}
-
-fn init_tracing() {
-    let env_filter =
-        tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
-    tracing_subscriber::registry()
-        .with(env_filter)
-        .with(fmt::layer())
-        .init();
 }
 
 #[tokio::main]
 async fn main() {
-    init_tracing();
+    let _telemetry = TelemetryGuard::install("tyrum-api").expect("failed to initialize telemetry");
 
     let bind_addr: SocketAddr = env::var("API_BIND_ADDR")
         .unwrap_or_else(|_| DEFAULT_BIND_ADDR.to_string())

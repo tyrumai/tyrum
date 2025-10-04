@@ -4,6 +4,8 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
+pub mod telemetry;
+
 pub const DEFAULT_BIND_ADDR: &str = "0.0.0.0:8081";
 const AUTO_APPROVE_LIMIT_MINOR: u64 = 10_000;
 const HARD_DENY_LIMIT_MINOR: u64 = 50_000;
@@ -101,6 +103,7 @@ pub enum LegalFlag {
     Other,
 }
 
+#[tracing::instrument(skip(payload), name = "policy.check")]
 async fn policy_check(Json(payload): Json<PolicyCheckRequest>) -> Json<PolicyDecision> {
     let spend_decision = evaluate_spend(payload.spend.as_ref());
     let pii_decision = evaluate_pii(payload.pii.as_ref());
@@ -109,9 +112,12 @@ async fn policy_check(Json(payload): Json<PolicyCheckRequest>) -> Json<PolicyDec
     let rules = vec![spend_decision, pii_decision, legal_decision];
     let decision = overall_decision(&rules);
 
+    telemetry::record_policy_decision(decision);
+
     Json(PolicyDecision { decision, rules })
 }
 
+#[tracing::instrument(name = "policy.health", skip_all)]
 async fn health() -> Json<HealthResponse> {
     Json(HealthResponse { status: "ok" })
 }

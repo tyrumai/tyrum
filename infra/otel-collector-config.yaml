@@ -1,0 +1,52 @@
+extensions:
+  health_check: {}
+
+receivers:
+  otlp:
+    protocols:
+      grpc: {}
+      http: {}
+
+processors:
+  resource/service:
+    attributes:
+      - key: service.name
+        action: upsert
+        value: unknown-service
+  batch:
+    timeout: 5s
+
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:9464
+    resource_to_telemetry_conversion:
+      enabled: true
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+  loki:
+    endpoint: http://loki:3100/loki/api/v1/push
+    tls:
+      insecure: true
+    labels:
+      resource:
+        service.name: service_name
+      attributes:
+        severity_text: level
+
+service:
+  extensions: [health_check]
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [resource/service, batch]
+      exporters: [prometheus]
+    traces:
+      receivers: [otlp]
+      processors: [resource/service, batch]
+      exporters: [otlp/tempo]
+    logs:
+      receivers: [otlp]
+      processors: [resource/service, batch]
+      exporters: [loki]

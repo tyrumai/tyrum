@@ -1,21 +1,11 @@
 use std::{env, net::SocketAddr};
 
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
-
-use tyrum_policy::{DEFAULT_BIND_ADDR, build_router};
-
-fn init_tracing() {
-    let env_filter =
-        tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
-    tracing_subscriber::registry()
-        .with(env_filter)
-        .with(fmt::layer())
-        .init();
-}
+use tyrum_policy::{DEFAULT_BIND_ADDR, build_router, telemetry::TelemetryGuard};
 
 #[tokio::main]
 async fn main() {
-    init_tracing();
+    let _telemetry =
+        TelemetryGuard::install("tyrum-policy").expect("failed to initialize telemetry");
 
     let bind_addr: SocketAddr = env::var("POLICY_BIND_ADDR")
         .unwrap_or_else(|_| DEFAULT_BIND_ADDR.to_string())
