@@ -156,7 +156,7 @@ impl EventLog {
             r#"
             INSERT INTO planner_events (replay_id, plan_id, step_index, occurred_at, action)
             VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (replay_id) DO NOTHING
+            ON CONFLICT DO NOTHING
             RETURNING replay_id, plan_id, step_index, occurred_at, created_at, action
             "#,
         )
@@ -325,6 +325,28 @@ mod tests {
         ));
         assert!(matches!(
             event_log.append(event.clone()).await.unwrap(),
+            AppendOutcome::Duplicate
+        ));
+
+        let events = event_log.events_for_plan(plan_id).await.unwrap();
+        assert_eq!(events.len(), 1);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn duplicate_plan_step_returns_duplicate() {
+        let (container, event_log) = setup().await;
+        let _container = container;
+        let plan_id = Uuid::new_v4();
+
+        let first = new_event(plan_id, 2);
+        assert!(matches!(
+            event_log.append(first).await.unwrap(),
+            AppendOutcome::Inserted(_)
+        ));
+
+        let second = new_event(plan_id, 2);
+        assert!(matches!(
+            event_log.append(second).await.unwrap(),
             AppendOutcome::Duplicate
         ));
 
