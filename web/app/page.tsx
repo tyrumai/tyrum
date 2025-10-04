@@ -1,14 +1,17 @@
 import Link from "next/link";
 import React from "react";
+import WaitlistCta from "./waitlist-cta";
 
 const valueProps = [
   {
     title: "Wallet limits respected",
-    copy: "Freeze spend ceilings once and let Tyrum enforce them with audit logs you can replay.",
+    copy:
+      "Freeze spend ceilings once and let Tyrum enforce them with audit logs you can replay.",
   },
   {
     title: "Explainable actions",
-    copy: "Every step is justified before and after execution so you can approve with confidence.",
+    copy:
+      "Every step is justified before and after execution so you can approve with confidence.",
   },
   {
     title: "Privacy by default",
@@ -33,9 +36,7 @@ export default function Home() {
             No lists. Just outcomes—captured, handled, and proven.
           </p>
           <div className="hero__cta">
-            <Link className="cta cta--primary" href="/consent">
-              Try Tyrum
-            </Link>
+            <WaitlistCta />
             <a className="cta cta--secondary" href="#value-props">
               See how it works
             </a>
@@ -55,8 +56,7 @@ export default function Home() {
             <span className="preview-card__status">Quietly on it</span>
             <h2 className="preview-card__title">Handle the visa renewal</h2>
             <p className="preview-card__body">
-              Planner coordinating a legal concierge, calendar holds, and spend caps
-              within policy guardrails.
+              Planner coordinating a legal concierge, calendar holds, and spend caps within policy guardrails.
             </p>
             <div className="preview-card__tasks">
               <span className="preview-pill">Policy gate ✓</span>

@@ -76,6 +76,75 @@ main.landing {
   gap: 0.75rem;
 }
 
+
+.waitlist-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: min(22rem, 100%);
+}
+
+.waitlist-form__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.waitlist-form__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.waitlist-form__input {
+  flex: 1 1 16rem;
+  min-width: 12rem;
+  padding: 0.85rem 1.1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(99, 123, 188, 0.55);
+  background: rgba(9, 13, 28, 0.9);
+  color: #f5f7ff;
+  outline: none;
+  transition: border 0.15s ease, box-shadow 0.15s ease;
+}
+
+.waitlist-form__input:focus {
+  border-color: rgba(96, 165, 250, 0.8);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+}
+
+.waitlist-form__input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.waitlist-form__submit {
+  min-width: 10rem;
+}
+
+.waitlist-form__message {
+  margin: 0;
+  font-size: 0.9rem;
+  color: rgba(200, 216, 255, 0.7);
+  min-height: 1.5rem;
+}
+
+.waitlist-form__message--success {
+  color: #34d399;
+}
+
+.waitlist-form__message--error,
+.waitlist-form__message--invalid,
+.waitlist-form__message--network_error {
+  color: #fca5a5;
+}
 .cta {
   padding: 0.9rem 1.6rem;
   border-radius: 999px;
