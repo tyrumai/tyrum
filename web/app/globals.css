@@ -84,6 +84,7 @@ main.landing {
   min-width: min(22rem, 100%);
 }
 
+.visually-hidden,
 .waitlist-form__label {
   position: absolute;
   width: 1px;

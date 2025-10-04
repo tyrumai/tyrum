@@ -1,4 +1,3 @@
-import Link from "next/link";
 import React from "react";
 import WaitlistCta from "./waitlist-cta";
 
@@ -66,7 +65,14 @@ export default function Home() {
           </div>
         </div>
       </section>
-      <section className="value-props" id="value-props" aria-label="Value propositions">
+      <section
+        aria-labelledby="value-props-heading"
+        className="value-props"
+        id="value-props"
+      >
+        <h2 className="visually-hidden" id="value-props-heading">
+          Value propositions
+        </h2>
         <ul className="value-props__list">
           {valueProps.map(({ title, copy }) => (
             <li className="value-props__item" key={title}>
