@@ -68,9 +68,51 @@ jobs:
         run: |
           set -euo pipefail
           image="${BUILT_IMAGE:?missing image tag}"
-          container_id="$(docker run --rm -d -p 0:${{ matrix.port }} "$image")"
+          network=""
+          db_container=""
+
+          if [ "${{ matrix.id }}" = "api" ]; then
+            network="smoke-net-${GITHUB_SHA}-${RANDOM}"
+            docker network create "$network" >/dev/null
+
+            db_container="smoke-postgres-${GITHUB_SHA}-${RANDOM}"
+            docker run -d \
+              --name "$db_container" \
+              --network "$network" \
+              -e POSTGRES_USER=tyrum \
+              -e POSTGRES_PASSWORD=tyrum_dev_password \
+              -e POSTGRES_DB=tyrum_dev \
+              pgvector/pgvector:pg16 >/dev/null
+
+            for attempt in $(seq 1 40); do
+              if docker exec "$db_container" pg_isready -U tyrum -d tyrum_dev >/dev/null 2>&1; then
+                break
+              fi
+              if [ "$attempt" -eq 40 ]; then
+                echo "Postgres container did not become ready" >&2
+                docker logs "$db_container" || true
+                exit 1
+              fi
+              sleep 2
+            done
+
+            database_url="postgres://tyrum:tyrum_dev_password@$db_container:5432/tyrum_dev"
+            container_id="$(docker run -d \
+              --network "$network" \
+              -e DATABASE_URL="$database_url" \
+              -p 0:${{ matrix.port }} "$image")"
+          else
+            container_id="$(docker run -d -p 0:${{ matrix.port }} "$image")"
+          fi
+
           cleanup() {
             docker rm -f "$container_id" >/dev/null 2>&1 || true
+            if [ -n "$db_container" ]; then
+              docker rm -f "$db_container" >/dev/null 2>&1 || true
+            fi
+            if [ -n "$network" ]; then
+              docker network rm "$network" >/dev/null 2>&1 || true
+            fi
           }
           trap cleanup EXIT
 

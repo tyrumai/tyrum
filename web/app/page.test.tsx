@@ -15,12 +15,21 @@ describe("Home", () => {
     ).toBeVisible();
   });
 
-  it("shows the primary call to action", () => {
+  it("shows the waitlist capture form", () => {
     render(<Home />);
 
-    expect(screen.getByRole("link", { name: "Try Tyrum" })).toHaveAttribute(
+    expect(screen.getByLabelText("Email address")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: /Join the waitlist/i }),
+    ).toBeEnabled();
+  });
+
+  it("retains the secondary call to action", () => {
+    render(<Home />);
+
+    expect(screen.getByRole("link", { name: "See how it works" })).toHaveAttribute(
       "href",
-      "/consent",
+      "#value-props",
     );
   });
 
