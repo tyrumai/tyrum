@@ -71,6 +71,7 @@ coverage/
 *.log
 
 tmp/
+artifacts/
 web/node_modules/
 web/.next/
 web/out/
