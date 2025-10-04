@@ -116,7 +116,7 @@ services:
     image: otel/opentelemetry-collector-contrib:0.100.0
     command: ["--config=/etc/otelcol/config.yaml"]
     volumes:
-      - ./otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
+      - ../config/observability/otel-collector.yaml:/etc/otelcol/config.yaml:ro
     ports:
       - "4317:4317"
       - "4318:4318"
@@ -131,7 +131,7 @@ services:
     image: prom/prometheus:v2.54.1
     command: ["--config.file=/etc/prometheus/prometheus.yml"]
     volumes:
-      - ./prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+      - ../config/observability/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
     ports:
       - "9090:9090"
 
@@ -139,7 +139,7 @@ services:
     image: grafana/tempo:2.6.1
     command: ["-config.file=/etc/tempo.yaml"]
     volumes:
-      - ./tempo.yaml:/etc/tempo.yaml:ro
+      - ../config/observability/tempo.yaml:/etc/tempo.yaml:ro
       - tempo_data:/var/tempo
     ports:
       - "3200:3200"
@@ -148,7 +148,7 @@ services:
     image: grafana/loki:2.9.4
     command: ["-config.file=/etc/loki/config.yaml"]
     volumes:
-      - ./loki-config.yaml:/etc/loki/config.yaml:ro
+      - ../config/observability/loki-config.yaml:/etc/loki/config.yaml:ro
       - loki_data:/var/loki
     ports:
       - "3100:3100"
@@ -160,7 +160,7 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: tyrum
     volumes:
       - grafana_storage:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../config/observability/grafana/provisioning:/etc/grafana/provisioning:ro
     ports:
       - "3001:3000"
     depends_on:

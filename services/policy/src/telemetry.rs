@@ -71,7 +71,7 @@ impl TelemetryGuard {
             .with_periodic_exporter(metric_exporter)
             .build();
 
-        let _ = global::set_meter_provider(meter_provider.clone());
+        global::set_meter_provider(meter_provider.clone());
 
         let log_exporter = opentelemetry_otlp::LogExporter::builder()
             .with_tonic()
