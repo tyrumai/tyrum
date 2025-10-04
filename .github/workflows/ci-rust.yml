@@ -12,10 +12,7 @@ on:
 jobs:
   rust:
     name: Rust checks
-    runs-on:
-      - self-hosted
-      - linux
-      - x64
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:

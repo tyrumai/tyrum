@@ -12,10 +12,7 @@ on:
 jobs:
   containers:
     name: Build and smoke test ${{ matrix.title }} image
-    runs-on:
-      - self-hosted
-      - linux
-      - x64
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -25,6 +22,12 @@ jobs:
             context: .
             dockerfile: Dockerfile.api
             port: 8080
+            endpoint: /healthz
+          - id: policy
+            title: Policy
+            context: .
+            dockerfile: Dockerfile.policy
+            port: 8081
             endpoint: /healthz
           - id: web
             title: Web

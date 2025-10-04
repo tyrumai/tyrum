@@ -8,7 +8,7 @@ COPY services/api/src services/api/src
 COPY services/policy/Cargo.toml services/policy/Cargo.toml
 COPY services/policy/src services/policy/src
 
-RUN cargo build --locked --release --package tyrum-api
+RUN cargo build --locked --release --package tyrum-policy
 
 FROM debian:bookworm-slim AS runtime
 RUN useradd --create-home --shell /usr/sbin/nologin appuser \
@@ -16,8 +16,8 @@ RUN useradd --create-home --shell /usr/sbin/nologin appuser \
     && apt-get install --yes --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY --from=builder /app/target/release/tyrum-api /usr/local/bin/tyrum-api
-ENV API_BIND_ADDR=0.0.0.0:8080
-EXPOSE 8080
+COPY --from=builder /app/target/release/tyrum-policy /usr/local/bin/tyrum-policy
+ENV POLICY_BIND_ADDR=0.0.0.0:8081
+EXPOSE 8081
 USER appuser
-ENTRYPOINT ["/usr/local/bin/tyrum-api"]
+ENTRYPOINT ["/usr/local/bin/tyrum-policy"]

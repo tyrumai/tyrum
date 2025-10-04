@@ -1,6 +1,6 @@
 use std::{env, net::SocketAddr};
 
-use axum::{routing::get, Json, Router};
+use axum::{Json, Router, routing::get};
 use serde::Serialize;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 

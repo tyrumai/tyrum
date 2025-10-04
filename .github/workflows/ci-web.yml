@@ -55,6 +55,10 @@ jobs:
           cache: npm
           cache-dependency-path: ${{ steps.detect.outputs.lockfile }}
 
+      - name: Ensure npm 11.6
+        if: steps.detect.outputs.project != ''
+        run: npm install -g npm@11.6.0
+
       - name: Install dependencies
         if: steps.detect.outputs.project != ''
         shell: bash
