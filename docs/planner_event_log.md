@@ -3,6 +3,9 @@
 The planner emits every action trace into Postgres so that we can reconstruct plans, replay
 execution, and satisfy audit requirements.
 
+See also [`docs/planner_state_machine.md`](planner_state_machine.md) for the lifecycle and terminal
+success/failure envelopes that pair with each logged action.
+
 ## Storage Model
 - **Table:** `planner_events`
 - **Append-only:** There are no update or delete paths; the API only issues `INSERT` statements.
