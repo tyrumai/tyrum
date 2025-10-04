@@ -224,8 +224,8 @@ mod tests {
     };
     use tokio::time::sleep;
 
-    const POSTGRES_IMAGE: &str = "postgres";
-    const POSTGRES_TAG: &str = "16-alpine";
+    const POSTGRES_IMAGE: &str = "pgvector/pgvector";
+    const POSTGRES_TAG: &str = "pg16";
     const POSTGRES_USER: &str = "tyrum";
     const POSTGRES_PASSWORD: &str = "tyrum_dev_password";
     const POSTGRES_DB: &str = "tyrum_dev";
