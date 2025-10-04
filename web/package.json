@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node ./scripts/run-tests.mjs"
+    "test": "node ./scripts/run-tests.mjs",
+    "lighthouse:ci": "lhci autorun --config=./lighthouserc.mobile.json && lhci autorun --config=./lighthouserc.desktop.json"
   },
   "dependencies": {
     "next": "15.4.7",
@@ -16,6 +17,7 @@
     "react-dom": "18.2.0"
   },
   "devDependencies": {
+    "@lhci/cli": "^0.15.1",
     "@testing-library/jest-dom": "6.5.0",
     "@testing-library/react": "16.1.0",
     "@testing-library/user-event": "14.5.1",

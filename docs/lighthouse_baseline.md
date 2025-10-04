@@ -5,17 +5,13 @@ This document captures the repeatable workflow for validating the `/` route meet
 ## Prerequisites
 - Node.js v24.9.0 (other 20+ LTS releases are expected to work).
 - Dependencies installed: `cd web && npm install`.
-- Lighthouse CLI available via `npx lighthouse` (auto-installed by npm when absent).
+- Lighthouse CLI tooling is bundled via `@lhci/cli`; GitHub Actions also invokes `npm run lighthouse:ci` as part of `ci-web`.
 
 ## Test Procedure
 1. `cd web`
 2. Build the production bundle: `npm run build`
-3. In a separate shell, start the server: `PORT=3000 npm run start`
-4. In your original shell, execute the mobile profile:
-   - `npx lighthouse http://localhost:3000 --output=json --output-path=./artifacts/lighthouse-mobile.json --quiet`
-5. Execute the desktop profile:
-   - `npx lighthouse http://localhost:3000 --preset=desktop --output=json --output-path=./artifacts/lighthouse-desktop.json --quiet`
-6. Stop the Next.js server once the runs finish.
+3. Run the CI-equivalent audit locally with `npm run lighthouse:ci` (spawns Next.js in production mode twice to capture mobile and desktop runs).
+4. Raw Lighthouse JSON dumps land under `../artifacts/lighthouse-{mobile,desktop}` for further inspection.
 
 > Tip: create the `artifacts/` directory (gitignored) beforehand so Lighthouse can persist the JSON reports for auditing.
 
