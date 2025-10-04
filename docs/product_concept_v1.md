@@ -357,6 +357,7 @@ Milestones are cumulative; later milestones build on earlier ones.
   - Planner writes append-only action traces with replayable IDs and dedupe guard to Postgres. See `docs/planner_event_log.md` for the schema and API surface.
 - **Telemetry pipeline**
   - OpenTelemetry collector container exports traces/metrics/logs to local Prometheus, Grafana, Tempo/Loki dashboards.
+  - Developer endpoints and credentials documented in `docs/telemetry_pipeline.md`.
 - **Audit replay demo**
   - `make audit-demo` executes a sample plan and verifies replayability via scripted assertion and dashboard screenshot artifact.
 - **Memory schema & pgvector base**
