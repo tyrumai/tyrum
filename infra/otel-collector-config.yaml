@@ -8,11 +8,6 @@ receivers:
       http: {}
 
 processors:
-  resource/service:
-    attributes:
-      - key: service.name
-        action: upsert
-        value: unknown-service
   batch:
     timeout: 5s
 
@@ -40,13 +35,13 @@ service:
   pipelines:
     metrics:
       receivers: [otlp]
-      processors: [resource/service, batch]
+      processors: [batch]
       exporters: [prometheus]
     traces:
       receivers: [otlp]
-      processors: [resource/service, batch]
+      processors: [batch]
       exporters: [otlp/tempo]
     logs:
       receivers: [otlp]
-      processors: [resource/service, batch]
+      processors: [batch]
       exporters: [loki]
