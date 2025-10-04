@@ -7,6 +7,9 @@ COPY services/api/Cargo.toml services/api/Cargo.toml
 COPY services/api/src services/api/src
 COPY services/policy/Cargo.toml services/policy/Cargo.toml
 COPY services/policy/src services/policy/src
+COPY services/planner/Cargo.toml services/planner/Cargo.toml
+COPY services/planner/migrations services/planner/migrations
+COPY services/planner/src services/planner/src
 
 RUN cargo build --locked --release --package tyrum-policy
 
