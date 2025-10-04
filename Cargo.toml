@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "services/api",
+    "services/planner",
     "services/policy"
 ]
 resolver = "2"

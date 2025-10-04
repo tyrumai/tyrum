@@ -354,7 +354,7 @@ Milestones are cumulative; later milestones build on earlier ones.
 - **Consent UX stub**
   - Minimal chat prompt + approval button in Next.js wired to mocked policy responses with snapshot test coverage.
 - **Event log foundation**
-  - Planner writes append-only action traces with replayable IDs and dedupe guard to Postgres.
+  - Planner writes append-only action traces with replayable IDs and dedupe guard to Postgres. See `docs/planner_event_log.md` for the schema and API surface.
 - **Telemetry pipeline**
   - OpenTelemetry collector container exports traces/metrics/logs to local Prometheus, Grafana, Tempo/Loki dashboards.
 - **Audit replay demo**
