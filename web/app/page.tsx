@@ -1,5 +1,10 @@
 import React from "react";
 import WaitlistCta from "./waitlist-cta";
+import {
+  CTA_FROM_PARAM,
+  CTA_REDIRECT_PARAM,
+  CTA_REDIRECT_REASON,
+} from "./lib/portal-auth";
 
 const valueProps = [
   {
@@ -24,7 +29,30 @@ const trustSignals = [
   "Privacy by default",
 ];
 
-export default function Home() {
+type HomeProps = {
+  searchParams?: Record<string, string | string[] | undefined>;
+};
+
+function extractParamValue(
+  value: string | string[] | undefined,
+): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default function Home({ searchParams }: HomeProps) {
+  const params = searchParams ?? {};
+  const redirectReason = extractParamValue(params[CTA_REDIRECT_PARAM]);
+  const redirectedFromRaw = extractParamValue(params[CTA_FROM_PARAM]);
+  const redirectedFrom =
+    redirectedFromRaw && redirectedFromRaw.startsWith("/")
+      ? redirectedFromRaw
+      : undefined;
+  const showPortalRedirect = redirectReason === CTA_REDIRECT_REASON;
+
   return (
     <main className="landing" aria-labelledby="hero-heading">
       <section className="hero">
@@ -34,6 +62,18 @@ export default function Home() {
           <p className="hero__deck">
             No lists. Just outcomes—captured, handled, and proven.
           </p>
+          {showPortalRedirect ? (
+            <p className="hero__notice" role="status" aria-live="polite">
+              {redirectedFrom ? (
+                <>
+                  Access to <span className="hero__notice-path">{redirectedFrom}</span> requires an
+                  active session. Complete onboarding below to continue.
+                </>
+              ) : (
+                <>Portal access requires an active session. Complete onboarding below to continue.</>
+              )}
+            </p>
+          ) : null}
           <div className="hero__cta">
             <WaitlistCta />
             <a className="cta cta--secondary" href="#value-props">

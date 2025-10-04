@@ -1,10 +1,15 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import Home from "./page";
+import {
+  CTA_FROM_PARAM,
+  CTA_REDIRECT_PARAM,
+  CTA_REDIRECT_REASON,
+} from "./lib/portal-auth";
 
 describe("Home", () => {
   it("renders the hero copy", () => {
-    render(<Home />);
+    render(<Home searchParams={{}} />);
 
     expect(
       screen.getByRole("heading", { level: 1, name: "The end of to-do." }),
@@ -16,7 +21,7 @@ describe("Home", () => {
   });
 
   it("shows the waitlist capture form", () => {
-    render(<Home />);
+    render(<Home searchParams={{}} />);
 
     expect(screen.getByLabelText("Email address")).toBeVisible();
     expect(
@@ -25,7 +30,7 @@ describe("Home", () => {
   });
 
   it("retains the secondary call to action", () => {
-    render(<Home />);
+    render(<Home searchParams={{}} />);
 
     expect(screen.getByRole("link", { name: "See how it works" })).toHaveAttribute(
       "href",
@@ -34,9 +39,52 @@ describe("Home", () => {
   });
 
   it("lists all value propositions", () => {
-    render(<Home />);
+    render(<Home searchParams={{}} />);
 
     const items = screen.getAllByRole("heading", { level: 3 });
     expect(items).toHaveLength(3);
+  });
+
+  it("surfaces a portal auth redirect notice when onboarding is required", () => {
+    render(
+      <Home
+        searchParams={{
+          [CTA_REDIRECT_PARAM]: CTA_REDIRECT_REASON,
+          [CTA_FROM_PARAM]: "/portal/inbox",
+        }}
+      />,
+    );
+
+    const notice = screen
+      .getAllByRole("status")
+      .find((element) =>
+        element.textContent?.includes("Access to /portal/inbox requires an active session."),
+      );
+
+    expect(notice).toBeDefined();
+    expect(notice).toHaveTextContent(
+      "Access to /portal/inbox requires an active session. Complete onboarding below to continue.",
+    );
+  });
+
+  it("provides a generic notice when the redirect source is absent", () => {
+    render(
+      <Home
+        searchParams={{
+          [CTA_REDIRECT_PARAM]: CTA_REDIRECT_REASON,
+        }}
+      />,
+    );
+
+    const notice = screen
+      .getAllByRole("status")
+      .find((element) =>
+        element.textContent?.includes("Portal access requires an active session."),
+      );
+
+    expect(notice).toBeDefined();
+    expect(notice).toHaveTextContent(
+      "Portal access requires an active session. Complete onboarding below to continue.",
+    );
   });
 });
