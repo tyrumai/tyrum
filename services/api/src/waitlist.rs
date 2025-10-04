@@ -73,10 +73,10 @@ pub enum WaitlistError {
 
 impl From<sqlx::Error> for WaitlistError {
     fn from(error: sqlx::Error) -> Self {
-        if let sqlx::Error::Database(db_err) = &error {
-            if db_err.constraint() == Some("waitlist_signups_email_unique") {
-                return WaitlistError::AlreadyRegistered;
-            }
+        if let sqlx::Error::Database(db_err) = &error
+            && db_err.constraint() == Some("waitlist_signups_email_unique")
+        {
+            return WaitlistError::AlreadyRegistered;
         }
         WaitlistError::Database(error)
     }
@@ -89,6 +89,7 @@ pub struct WaitlistRepository {
 }
 
 impl WaitlistRepository {
+    #[cfg(test)]
     pub fn from_pool(pool: PgPool) -> Self {
         Self { pool }
     }
@@ -101,6 +102,7 @@ impl WaitlistRepository {
         Ok(Self { pool })
     }
 
+    #[cfg(test)]
     pub fn pool(&self) -> &PgPool {
         &self.pool
     }
