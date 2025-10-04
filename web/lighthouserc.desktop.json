@@ -2,7 +2,7 @@
   "ci": {
     "collect": {
       "url": ["http://127.0.0.1:3000/"],
-      "numberOfRuns": 1,
+      "numberOfRuns": 3,
       "startServerCommand": "npm run start -- --hostname 127.0.0.1 --port 3000",
       "startServerReadyPattern": "Local:",
       "startServerReadyTimeout": 120000,
