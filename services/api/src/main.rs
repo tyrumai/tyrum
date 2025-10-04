@@ -1,6 +1,10 @@
 use std::{env, net::SocketAddr};
 
-use axum::{Json, Router, routing::get};
+use axum::{
+    Json, Router,
+    response::{IntoResponse, Response},
+    routing::get,
+};
 use serde::Serialize;
 use telemetry::TelemetryGuard;
 
@@ -26,17 +30,24 @@ fn build_router() -> Router {
 }
 
 #[tracing::instrument(name = "api.index", skip_all)]
-async fn index() -> Json<WelcomeResponse> {
-    metrics::record_http_request("GET", "/", 200);
-    Json(WelcomeResponse {
+async fn index() -> Response {
+    let response = Json(WelcomeResponse {
         message: "Tyrum API skeleton is running",
     })
+    .into_response();
+
+    metrics::record_http_request("GET", "/", response.status().as_u16());
+
+    response
 }
 
 #[tracing::instrument(name = "api.health", skip_all)]
-async fn health() -> Json<HealthResponse> {
-    metrics::record_http_request("GET", "/healthz", 200);
-    Json(HealthResponse { status: "ok" })
+async fn health() -> Response {
+    let response = Json(HealthResponse { status: "ok" }).into_response();
+
+    metrics::record_http_request("GET", "/healthz", response.status().as_u16());
+
+    response
 }
 
 #[tokio::main]
