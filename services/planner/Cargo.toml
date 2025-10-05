@@ -36,6 +36,7 @@ tokio = { version = "1.43", features = ["macros", "rt", "rt-multi-thread", "time
 testcontainers = { version = "0.18", optional = true }
 tyrum-memory = { path = "../memory", optional = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+tyrum-shared = { path = "../../shared/tyrum-shared" }
 
 [dev-dependencies]
 anyhow = "1"

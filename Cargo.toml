@@ -3,7 +3,8 @@ members = [
     "services/api",
     "services/memory",
     "services/planner",
-    "services/policy"
+    "services/policy",
+    "shared/tyrum-shared"
 ]
 resolver = "2"
 
