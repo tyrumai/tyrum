@@ -176,8 +176,9 @@ fn extract_content(
     }
 
     if let Some(caption) = &message.caption {
-        return Ok(MessageContent::Text {
-            text: caption.clone(),
+        return Ok(MessageContent::MediaPlaceholder {
+            media_kind: MediaKind::Unknown,
+            caption: Some(caption.clone()),
         });
     }
 
@@ -311,6 +312,30 @@ mod telegram_normalization {
             } => {
                 assert_eq!(media_kind, MediaKind::Photo);
                 assert_eq!(caption.as_deref(), Some("Check this out"));
+            }
+            other => panic!("unexpected content: {other:?}"),
+        }
+
+        assert!(
+            update
+                .message
+                .pii_fields
+                .contains(&PiiField::MessageCaption)
+        );
+    }
+
+    #[test]
+    fn normalizes_unknown_media_with_caption() {
+        let payload = include_bytes!("../../tests/fixtures/telegram/unknown_media_caption.json");
+        let update = normalize_update(payload).expect("normalize unknown media");
+
+        match update.message.content {
+            MessageContent::MediaPlaceholder {
+                media_kind,
+                caption,
+            } => {
+                assert_eq!(media_kind, MediaKind::Unknown);
+                assert_eq!(caption.as_deref(), Some("Future media caption"));
             }
             other => panic!("unexpected content: {other:?}"),
         }
