@@ -155,6 +155,36 @@ cluster by the Helm chart.
 6. Confirm rotation by checking that pods now reference the latest secret
    resource version (`kubectl describe pod … | grep platform-config`).
 
+### Telegram bot credentials
+- Telegram tokens and webhook URLs live in AWS Secrets Manager under
+  `tyrum-staging/integrations/telegram`. The secret stores `bot_token` and
+  `webhook_url` keys used by the ingestion service.
+- Rotate the token through BotFather, then update Secrets Manager:
+  ```bash
+  aws secretsmanager put-secret-value \
+    --secret-id tyrum-staging/integrations/telegram \
+    --secret-string '{"bot_token":"<new-token>","webhook_url":"https://staging.tyrum.run/api/telegram/webhook"}'
+  ```
+  Never log the raw token; confirm CLI output is redacted before sharing.
+- Sync the Kubernetes secret projecting these values (update the key names if
+  the deployment uses different literals):
+  ```bash
+  SECRET_STRING=$(aws secretsmanager get-secret-value \
+    --secret-id tyrum-staging/integrations/telegram \
+    --query 'SecretString' \
+    --output text)
+
+  kubectl create secret generic tyrum-telegram-ingestor \
+    --namespace tyrum-core \
+    --from-literal=TELEGRAM_BOT_TOKEN="$(jq -r '.bot_token' <<<"$SECRET_STRING")" \
+    --from-literal=TELEGRAM_WEBHOOK_URL="$(jq -r '.webhook_url' <<<"$SECRET_STRING")" \
+    --dry-run=client -o yaml | kubectl apply -f -
+  ```
+- Update GitHub Actions environment secrets (`Settings → Environments → Staging`)
+  for `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_URL` so CI jobs can run smoke
+  checks without leaking credentials. GitHub masks their values automatically;
+  avoid echoing the token in workflows or logs.
+
 ## Observability & Alerting Links
 - Grafana (Control Plane Overview):
   https://grafana.staging.tyrum.run/d/tyrum-control-plane/overview?var-environment=staging
