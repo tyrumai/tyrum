@@ -12,7 +12,7 @@ on:
 jobs:
   web:
     name: Web checks
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     permissions:
       contents: read
     steps:

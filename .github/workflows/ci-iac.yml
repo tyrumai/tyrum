@@ -12,7 +12,7 @@ on:
 jobs:
   iac:
     name: Infrastructure validation
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     permissions:
       contents: read
     env:
