@@ -404,6 +404,28 @@ Milestones are cumulative; later milestones build on earlier ones.
 - **Onboarding funnel**: Wire landing to onboarding start (#91); build consent checklist UI (#92); implement verification/session stub (#93).
 - **Runbooks**: Update staging runbook for Telegram ingress (#94).
 
+#### Ingress — Telegram Webhook
+- `POST /telegram/webhook` lives on the `tyrum-api` service and simply returns `200 OK` when the request is authentic.
+- Requests are accepted only when both headers are present and valid:
+  - `X-Telegram-Bot-Api-Secret-Token`: exact match with the BotFather `secret_token` configured during `/setwebhook`.
+  - `X-Telegram-Bot-Api-Signature`: `sha256=` prefix followed by the lowercase hex HMAC-SHA256 digest of the raw request body using the same secret token.
+- Invalid or missing headers are rejected with `401 Unauthorized`; nothing is persisted until signature validation succeeds.
+- Local smoke example (replace the placeholder secret and payload):
+
+```bash
+payload='{"update_id":123,"message":{"message_id":1}}'
+secret_token='replace-with-webhook-secret'
+signature=$(printf '%s' "$payload" \
+  | openssl dgst -binary -sha256 -hmac "$secret_token" \
+  | xxd -p -c 256)
+
+curl -X POST http://localhost:8080/telegram/webhook \
+  -H "Content-Type: application/json" \
+  -H "X-Telegram-Bot-Api-Secret-Token: $secret_token" \
+  -H "X-Telegram-Bot-Api-Signature: sha256=$signature" \
+  -d "$payload"
+```
+
 ### M2 — Reliability & Capability Memory
 - Capability Memory read/write: selectors, flows, success/failure patterns; reuse on subsequent runs (#8).
 - UI drift handling: semantic selectors, retries/backoff; teach-back and acceptance of dead-ends (#16).

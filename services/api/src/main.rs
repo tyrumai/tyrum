@@ -7,8 +7,9 @@ use crate::{
 
 use axum::{
     Json, Router,
+    body::Bytes,
     extract::{Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post, put},
 };
@@ -19,6 +20,7 @@ use validator::Validate;
 
 mod account_linking;
 mod metrics;
+mod telegram;
 mod telemetry;
 mod waitlist;
 
@@ -27,6 +29,7 @@ const DEFAULT_DATABASE_URL: &str = "postgres://tyrum:tyrum_dev_password@localhos
 const WAITLIST_ROUTE: &str = "/waitlist";
 const ACCOUNT_LINKING_ROUTE: &str = "/account-linking/preferences";
 const ACCOUNT_LINKING_TOGGLE_ROUTE: &str = "/account-linking/preferences/:integration_slug";
+const TELEGRAM_WEBHOOK_ROUTE: &str = "/telegram/webhook";
 const PORTAL_ACCOUNT_ID: &str = "demo-account";
 
 #[derive(Clone, Copy)]
@@ -58,6 +61,7 @@ const PLACEHOLDER_INTEGRATIONS: &[IntegrationDefinition] = &[
 struct AppState {
     waitlist: WaitlistRepository,
     account_linking: AccountLinkingRepository,
+    telegram: telegram::TelegramWebhookVerifier,
 }
 
 #[derive(Clone, Serialize)]
@@ -162,6 +166,7 @@ fn build_router(state: AppState) -> Router {
             ACCOUNT_LINKING_TOGGLE_ROUTE,
             put(update_account_link_preference),
         )
+        .route(TELEGRAM_WEBHOOK_ROUTE, post(telegram_webhook))
         .with_state(state)
 }
 
@@ -316,6 +321,36 @@ async fn update_account_link_preference(
     response
 }
 
+#[tracing::instrument(name = "api.telegram.webhook", skip_all)]
+async fn telegram_webhook(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    match state.telegram.verify(&headers, &body) {
+        Ok(()) => {
+            metrics::record_http_request("POST", TELEGRAM_WEBHOOK_ROUTE, StatusCode::OK.as_u16());
+            StatusCode::OK.into_response()
+        }
+        Err(error) => {
+            tracing::warn!(reason = %error, "telegram webhook signature validation failed");
+            metrics::record_http_request(
+                "POST",
+                TELEGRAM_WEBHOOK_ROUTE,
+                StatusCode::UNAUTHORIZED.as_u16(),
+            );
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(ErrorResponse {
+                    error: "invalid_signature",
+                    message: "Telegram webhook signature validation failed".into(),
+                }),
+            )
+                .into_response()
+        }
+    }
+}
+
 #[tracing::instrument(name = "api.waitlist.create", skip_all)]
 async fn create_waitlist_signup(
     State(state): State<AppState>,
@@ -425,9 +460,15 @@ async fn main() {
 
     let account_linking = AccountLinkingRepository::new(waitlist.pool().clone());
 
+    let telegram_secret =
+        env::var("TELEGRAM_WEBHOOK_SECRET").expect("TELEGRAM_WEBHOOK_SECRET must be set");
+    let telegram = telegram::TelegramWebhookVerifier::new(telegram_secret)
+        .expect("invalid telegram webhook secret");
+
     let app = build_router(AppState {
         waitlist,
         account_linking,
+        telegram,
     });
 
     tracing::info!("listening on {}", bind_addr);
@@ -440,13 +481,17 @@ async fn main() {
 mod tests {
     use super::{
         ACCOUNT_LINKING_ROUTE, AppState, PLACEHOLDER_INTEGRATIONS, PORTAL_ACCOUNT_ID,
-        WAITLIST_ROUTE, build_router, sanitize_opt,
+        TELEGRAM_WEBHOOK_ROUTE, WAITLIST_ROUTE, build_router, sanitize_opt,
     };
     use crate::{
         account_linking::AccountLinkingRepository,
+        telegram::TelegramWebhookVerifier,
         waitlist::{NewWaitlistSignup, WaitlistError, WaitlistRepository},
     };
-    use axum::{body::Body, http::Request};
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
     use http_body_util::BodyExt;
     use serde_json::{Value, json};
     use sqlx::{Row, postgres::PgPoolOptions};
@@ -481,12 +526,15 @@ mod tests {
         }
     }
 
+    const TELEGRAM_SECRET: &str = "test-telegram-secret";
+
     struct TestContext {
         #[allow(dead_code)]
         container: ContainerAsync<GenericImage>,
         router: axum::Router,
         waitlist: WaitlistRepository,
         account_linking: AccountLinkingRepository,
+        telegram: TelegramWebhookVerifier,
     }
 
     impl TestContext {
@@ -517,10 +565,13 @@ mod tests {
             waitlist.migrate().await.expect("run waitlist migrations");
 
             let account_linking = AccountLinkingRepository::new(waitlist.pool().clone());
+            let telegram =
+                TelegramWebhookVerifier::new(TELEGRAM_SECRET).expect("construct telegram verifier");
 
             let router = build_router(AppState {
                 waitlist: waitlist.clone(),
                 account_linking: account_linking.clone(),
+                telegram: telegram.clone(),
             });
 
             Self {
@@ -528,6 +579,7 @@ mod tests {
                 router,
                 waitlist,
                 account_linking,
+                telegram,
             }
         }
     }
@@ -539,9 +591,12 @@ mod tests {
             .expect("create lazy pool");
         let waitlist = WaitlistRepository::from_pool(pool.clone());
         let account_linking = AccountLinkingRepository::new(pool);
+        let telegram =
+            TelegramWebhookVerifier::new(TELEGRAM_SECRET).expect("construct telegram verifier");
         let state = AppState {
             waitlist,
             account_linking,
+            telegram,
         };
         let app = build_router(state);
 
@@ -726,6 +781,53 @@ mod tests {
             .cloned()
             .expect("integration row present");
         assert_eq!(updated_entry["enabled"], Value::Bool(true));
+    }
+
+    #[tokio::test]
+    async fn telegram_webhook_accepts_valid_signature() {
+        let ctx = TestContext::new().await;
+        let app = ctx.router.clone();
+        let payload = r#"{"update_id":123}"#;
+        let signature = ctx.telegram.expected_signature_header(payload.as_bytes());
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(TELEGRAM_WEBHOOK_ROUTE)
+                    .header("content-type", "application/json")
+                    .header("X-Telegram-Bot-Api-Secret-Token", TELEGRAM_SECRET)
+                    .header("X-Telegram-Bot-Api-Signature", signature)
+                    .body(Body::from(payload))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn telegram_webhook_rejects_invalid_signature() {
+        let ctx = TestContext::new().await;
+        let app = ctx.router.clone();
+        let payload = r#"{"update_id":123}"#;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(TELEGRAM_WEBHOOK_ROUTE)
+                    .header("content-type", "application/json")
+                    .header("X-Telegram-Bot-Api-Secret-Token", TELEGRAM_SECRET)
+                    .header("X-Telegram-Bot-Api-Signature", "sha256=deadbeef")
+                    .body(Body::from(payload))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[test]
