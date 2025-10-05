@@ -1,0 +1,9 @@
+# Exclude VCS, editor swap files, and local artifacts when packaging the chart
+.git/
+.svn/
+.hg/
+*.swp
+*.tmp
+.DS_Store
+node_modules/
+target/

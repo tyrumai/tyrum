@@ -1,5 +1,15 @@
 # syntax=docker/dockerfile:1.7
 FROM python:3.12-slim AS base
+
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ENV HTTP_PROXY=$HTTP_PROXY \
+    http_proxy=$HTTP_PROXY \
+    HTTPS_PROXY=$HTTPS_PROXY \
+    https_proxy=$HTTPS_PROXY \
+    NO_PROXY=$NO_PROXY \
+    no_proxy=$NO_PROXY
 WORKDIR /app
 
 COPY requirements.txt .

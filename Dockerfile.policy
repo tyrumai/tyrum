@@ -1,5 +1,15 @@
 # syntax=docker/dockerfile:1.7
 FROM rust:1.89 AS builder
+
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ENV HTTP_PROXY=$HTTP_PROXY \
+    http_proxy=$HTTP_PROXY \
+    HTTPS_PROXY=$HTTPS_PROXY \
+    https_proxy=$HTTPS_PROXY \
+    NO_PROXY=$NO_PROXY \
+    no_proxy=$NO_PROXY
 WORKDIR /app
 
 COPY Cargo.toml Cargo.lock ./
@@ -18,6 +28,16 @@ COPY services/planner/src services/planner/src
 RUN cargo build --locked --release --package tyrum-policy
 
 FROM debian:bookworm-slim AS runtime
+
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ENV HTTP_PROXY=$HTTP_PROXY \
+    http_proxy=$HTTP_PROXY \
+    HTTPS_PROXY=$HTTPS_PROXY \
+    https_proxy=$HTTPS_PROXY \
+    NO_PROXY=$NO_PROXY \
+    no_proxy=$NO_PROXY
 RUN set -eux; \
     printf 'Acquire::ForceIPv4 "true";\n' >/etc/apt/apt.conf.d/99force-ipv4; \
     useradd --create-home --shell /usr/sbin/nologin appuser; \

@@ -33,7 +33,8 @@ jobs:
           compose_files=$(git ls-files '*docker-compose*.yml' '*docker-compose*.yaml' 'docker-compose.yml' 2>/dev/null || true)
           kube_files=$(git ls-files 2>/dev/null \
             | grep -E '(^infra/.*\.ya?ml$|/k8s/.*\.ya?ml$|/manifests/.*\.ya?ml$)' \
-            | grep -Ev '^infra/docker-compose\.ya?ml$' || true)
+            | grep -Ev '^infra/docker-compose\.ya?ml$' \
+            | grep -Ev '^infra/helm/' || true)
 
           if [ -n "$terraform_files" ]; then
             echo "has-terraform=true" >>"$GITHUB_OUTPUT"
