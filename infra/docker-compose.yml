@@ -34,6 +34,7 @@ services:
       MOCK_LLM_URL: http://mock-llm:8085
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-local-telegram-secret}
     depends_on:
       policy:
         condition: service_healthy
