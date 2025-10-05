@@ -123,6 +123,10 @@ jobs:
         if: steps.detect.outputs.project != ''
         shell: bash
         working-directory: ${{ steps.detect.outputs.project }}
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+          LHCI_CHROME_PATH: /usr/bin/google-chrome
+          LHCI_CHROME_FLAGS: --no-sandbox --disable-dev-shm-usage --headless=new
         run: |
           set -euo pipefail
           if node -e "const scripts = require('./package.json').scripts || {}; process.exit(scripts['lighthouse:ci'] ? 0 : 1);"; then
