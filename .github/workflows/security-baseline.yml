@@ -76,6 +76,12 @@ jobs:
             echo "has-iac=false" >>"$GITHUB_OUTPUT"
           fi
 
+      - name: Install system dependencies
+        if: steps.detect.outputs.has-cargo-lock == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes pkg-config libssl-dev
+
       - name: Setup Rust
         if: steps.detect.outputs.has-cargo-lock == 'true'
         uses: dtolnay/rust-toolchain@stable
