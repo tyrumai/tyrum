@@ -11,7 +11,7 @@ on:
 jobs:
   baseline:
     name: Security baseline
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     permissions:
       contents: read
       issues: write
@@ -75,6 +75,12 @@ jobs:
           else
             echo "has-iac=false" >>"$GITHUB_OUTPUT"
           fi
+
+      - name: Install system dependencies
+        if: steps.detect.outputs.has-cargo-lock == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes pkg-config libssl-dev
 
       - name: Setup Rust
         if: steps.detect.outputs.has-cargo-lock == 'true'
