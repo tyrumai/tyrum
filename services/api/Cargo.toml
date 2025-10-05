@@ -22,6 +22,9 @@ tracing = "0.1"
 tracing-opentelemetry = "0.32"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "registry"] }
 validator = { version = "0.18", features = ["derive"] }
+hex = "0.4"
+hmac = "0.12"
+sha2 = "0.10"
 
 [dev-dependencies]
 axum = { version = "0.7", features = ["json"] }
