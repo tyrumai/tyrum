@@ -13,6 +13,8 @@ ENV HTTP_PROXY=$HTTP_PROXY \
 WORKDIR /app
 
 COPY Cargo.toml Cargo.lock ./
+COPY shared/tyrum-shared/Cargo.toml shared/tyrum-shared/Cargo.toml
+COPY shared/tyrum-shared/src shared/tyrum-shared/src
 COPY services/api/Cargo.toml services/api/Cargo.toml
 COPY services/api/src services/api/src
 COPY services/api/migrations services/api/migrations
