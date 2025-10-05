@@ -1,0 +1,322 @@
+nameOverride: ""
+fullnameOverride: ""
+
+imagePullSecrets: []
+
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+# Test utilities shared across service hooks
+helmTest:
+  image: curlimages/curl:8.11.1
+  timeoutSeconds: 10
+
+services:
+  policy:
+    replicaCount: 1
+    image:
+      repository: tyrum/policy
+      tag: local
+      pullPolicy: IfNotPresent
+    service:
+      enabled: true
+      type: ClusterIP
+      port: 8081
+      portName: http
+    podAnnotations: {}
+    podLabels: {}
+    config:
+      RUST_LOG: info
+      POLICY_BIND_ADDR: 0.0.0.0:8081
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+    secrets: {}
+    ports:
+      - name: http
+        containerPort: 8081
+    probes:
+      liveness:
+        httpGet:
+          path: /healthz
+          port: http
+        initialDelaySeconds: 5
+        periodSeconds: 10
+      readiness:
+        httpGet:
+          path: /healthz
+          port: http
+        initialDelaySeconds: 5
+        periodSeconds: 10
+    hpa:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 3
+      targetCPUUtilizationPercentage: 60
+    resources: {}
+    env: []
+    envFrom: []
+    volumeMounts: []
+    volumes: []
+    test:
+      path: /healthz
+
+  api:
+    replicaCount: 1
+    image:
+      repository: tyrum/api
+      tag: local
+      pullPolicy: IfNotPresent
+    service:
+      enabled: true
+      type: ClusterIP
+      port: 8080
+      portName: http
+    podAnnotations: {}
+    podLabels: {}
+    config:
+      RUST_LOG: info
+      API_BIND_ADDR: 0.0.0.0:8080
+      REDIS_URL: >-
+        redis://{{ include "tyrum-core.serviceHostname" (dict "root" . "name" "redis") }}:6379/0
+      MOCK_LLM_URL: >-
+        http://{{ include "tyrum-core.serviceHostname" (dict "root" . "name" "mock-llm") }}:8085
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+    secrets:
+      DATABASE_URL: >-
+        postgres://tyrum:tyrum_dev_password@{{ include "tyrum-core.serviceHostname" (dict "root" . "name" "postgres") }}:5432/tyrum_dev
+    ports:
+      - name: http
+        containerPort: 8080
+    probes:
+      liveness:
+        httpGet:
+          path: /healthz
+          port: http
+        initialDelaySeconds: 10
+        periodSeconds: 10
+      readiness:
+        httpGet:
+          path: /healthz
+          port: http
+        initialDelaySeconds: 10
+        periodSeconds: 10
+    hpa:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 3
+      targetCPUUtilizationPercentage: 60
+    resources: {}
+    env: []
+    envFrom: []
+    volumeMounts: []
+    volumes: []
+    test:
+      path: /healthz
+
+  web:
+    replicaCount: 1
+    image:
+      repository: tyrum/web
+      tag: local
+      pullPolicy: IfNotPresent
+    service:
+      enabled: true
+      type: ClusterIP
+      port: 3000
+      portName: http
+    podAnnotations: {}
+    podLabels: {}
+    config:
+      NEXT_TELEMETRY_DISABLED: "1"
+      API_BASE_URL: >-
+        http://{{ include "tyrum-core.serviceHostname" (dict "root" . "name" "api") }}:8080
+    secrets: {}
+    ports:
+      - name: http
+        containerPort: 3000
+    probes:
+      liveness:
+        httpGet:
+          path: /
+          port: http
+        initialDelaySeconds: 15
+        periodSeconds: 10
+      readiness:
+        httpGet:
+          path: /
+          port: http
+        initialDelaySeconds: 5
+        periodSeconds: 10
+    hpa:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 3
+      targetCPUUtilizationPercentage: 60
+    resources: {}
+    env: []
+    envFrom: []
+    volumeMounts: []
+    volumes: []
+    test:
+      path: /
+
+  mock-llm:
+    replicaCount: 1
+    image:
+      repository: tyrum/mock-llm
+      tag: local
+      pullPolicy: IfNotPresent
+    service:
+      enabled: true
+      type: ClusterIP
+      port: 8085
+      portName: http
+    podAnnotations: {}
+    podLabels: {}
+    config: {}
+    secrets: {}
+    ports:
+      - name: http
+        containerPort: 8085
+    probes:
+      liveness:
+        httpGet:
+          path: /healthz
+          port: http
+        initialDelaySeconds: 5
+        periodSeconds: 10
+      readiness:
+        httpGet:
+          path: /healthz
+          port: http
+        initialDelaySeconds: 5
+        periodSeconds: 10
+    hpa:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 2
+      targetCPUUtilizationPercentage: 60
+    resources: {}
+    env: []
+    envFrom: []
+    volumeMounts: []
+    volumes: []
+    test:
+      path: /healthz
+
+  postgres:
+    replicaCount: 1
+    strategy:
+      type: Recreate
+    image:
+      repository: pgvector/pgvector
+      tag: pg16
+      pullPolicy: IfNotPresent
+    service:
+      enabled: true
+      type: ClusterIP
+      port: 5432
+      portName: tcp
+    podAnnotations: {}
+    podLabels: {}
+    config:
+      POSTGRES_DB: tyrum_dev
+      POSTGRES_USER: tyrum
+    secrets:
+      POSTGRES_PASSWORD: tyrum_dev_password
+    ports:
+      - name: tcp
+        containerPort: 5432
+    probes:
+      liveness:
+        exec:
+          command:
+            - /bin/sh
+            - -c
+            - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+        initialDelaySeconds: 20
+        periodSeconds: 10
+      readiness:
+        exec:
+          command:
+            - /bin/sh
+            - -c
+            - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+        initialDelaySeconds: 10
+        periodSeconds: 10
+    hpa:
+      enabled: false
+    resources: {}
+    env: []
+    envFrom: []
+    volumeMounts:
+      - name: data
+        mountPath: /var/lib/postgresql/data
+    volumes:
+      - name: data
+        emptyDir: {}
+    test:
+      image: postgres:16-alpine
+      command:
+        - /bin/sh
+        - -c
+        - "pg_isready -h {{ include \"tyrum-core.serviceHostname\" (dict \"root\" . \"name\" \"postgres\") }} -U tyrum -d tyrum_dev"
+
+  redis:
+    replicaCount: 1
+    image:
+      repository: redis
+      tag: 7-alpine
+      pullPolicy: IfNotPresent
+    service:
+      enabled: true
+      type: ClusterIP
+      port: 6379
+      portName: tcp
+    podAnnotations: {}
+    podLabels: {}
+    config: {}
+    secrets: {}
+    command:
+      - redis-server
+      - --appendonly
+      - "no"
+    ports:
+      - name: tcp
+        containerPort: 6379
+    probes:
+      liveness:
+        exec:
+          command:
+            - redis-cli
+            - ping
+        initialDelaySeconds: 5
+        periodSeconds: 10
+      readiness:
+        exec:
+          command:
+            - redis-cli
+            - ping
+        initialDelaySeconds: 5
+        periodSeconds: 10
+    hpa:
+      enabled: false
+    resources: {}
+    env: []
+    envFrom: []
+    volumeMounts: []
+    volumes: []
+    test:
+      image: redis:7-alpine
+      command:
+        - redis-cli
+        - -h
+        - "{{ include \"tyrum-core.serviceHostname\" (dict \"root\" . \"name\" \"redis\") }}"
+        - ping

@@ -43,7 +43,7 @@ All resources are tagged with `Environment=staging`, `Project=tyrum`, and `Manag
 
 ## Post-Apply Verification
 1. Confirm `terraform output` surfaces VPC IDs, subnet IDs, cluster endpoint, and secrets ARNs. Attach the output to the issue when capturing evidence.
-2. Use `aws eks update-kubeconfig --name tyrum-staging-eks --region eu-west-1` to obtain kubeconfig credentials, then deploy the baseline namespaces/Helm charts from the M0 follow-up issues.
+2. Use `aws eks update-kubeconfig --name tyrum-staging-eks --region eu-west-1` to obtain kubeconfig credentials, then deploy the baseline namespaces/Helm charts from the M0 follow-up issues (see `docs/infra/helm.md` for the deployment runbook).
 3. Manage additional cluster access either via IAM identity mappings in the `aws-auth` ConfigMap or EKS access entries; capture those mappings in follow-up issues to keep drift visible.
 
 ## State & Access Notes
