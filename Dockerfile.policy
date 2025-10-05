@@ -18,10 +18,12 @@ COPY services/planner/src services/planner/src
 RUN cargo build --locked --release --package tyrum-policy
 
 FROM debian:bookworm-slim AS runtime
-RUN useradd --create-home --shell /usr/sbin/nologin appuser \
-    && apt-get update \
-    && apt-get install --yes --no-install-recommends ca-certificates curl \
-    && rm -rf /var/lib/apt/lists/*
+RUN set -eux; \
+    printf 'Acquire::ForceIPv4 "true";\n' >/etc/apt/apt.conf.d/99force-ipv4; \
+    useradd --create-home --shell /usr/sbin/nologin appuser; \
+    apt-get update; \
+    apt-get install --yes --no-install-recommends ca-certificates curl; \
+    rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /app/target/release/tyrum-policy /usr/local/bin/tyrum-policy
 ENV POLICY_BIND_ADDR=0.0.0.0:8081
