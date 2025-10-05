@@ -107,6 +107,7 @@ jobs:
             container_id="$(docker run -d \
               --network "$network" \
               -e DATABASE_URL="$database_url" \
+              -e TELEGRAM_WEBHOOK_SECRET=ci-telegram-webhook-secret \
               -p 0:${{ matrix.port }} "$image")"
           else
             container_id="$(docker run -d -p 0:${{ matrix.port }} "$image")"
