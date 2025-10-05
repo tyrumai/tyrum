@@ -84,7 +84,7 @@ impl TelegramWebhookVerifier {
             .ok_or(VerificationError::MissingPrefix)?;
 
         if signature.is_empty() {
-            return Err(VerificationError::MissingPrefix);
+            return Err(VerificationError::SignatureMismatch);
         }
 
         let expected = self.compute_signature(body);
@@ -166,8 +166,8 @@ mod tests {
         headers.insert("X-Telegram-Bot-Api-Signature", "sha256=".parse().unwrap());
         let error = verifier
             .verify(&headers, PAYLOAD.as_bytes())
-            .expect_err("expected prefix failure");
-        assert!(matches!(error, VerificationError::MissingPrefix));
+            .expect_err("expected mismatch");
+        assert!(matches!(error, VerificationError::SignatureMismatch));
     }
 
     #[test]
