@@ -11,7 +11,7 @@ on:
 jobs:
   baseline:
     name: Security baseline
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     permissions:
       contents: read
       issues: write
