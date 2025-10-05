@@ -60,6 +60,7 @@ M0 tasks are broken into single-day issues (1 developer each) and tracked in Git
 - [Working Agreements (DoR/DoD)](docs/working_agreements.md)
 - [Repository Guidelines](AGENTS.md)
 - [Policy Check Service Skeleton](docs/policy_service.md)
+- [Terraform Baseline](docs/terraform_baseline.md)
 
 ## Audit Replay Demo
 - Run `make audit-demo` to execute the scripted book-call plan end-to-end. The command spins up an ephemeral Postgres (via Testcontainers), runs the planner state machine, and asserts that every step is auditable and replayable.

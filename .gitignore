@@ -1,3 +1,9 @@
+# Terraform artifacts
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfstate
+terraform.tfstate.backup
 target/
 **/*.rs.bk
 
