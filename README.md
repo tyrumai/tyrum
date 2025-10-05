@@ -55,6 +55,33 @@ M0 tasks are broken into single-day issues (1 developer each) and tracked in Git
 6. **Follow CI workflows:** Run the same commands locally that GitHub Actions enforces (`cargo fmt/clippy/test`, `npm run lint/test/build`, Terraform/Compose/Kubernetes validations).
 7. **Open PRs:** Reference the issue, list validation steps, attach screenshots/logs, ensure all Actions workflows succeed.
 
+## Telegram Bot Setup
+Follow these steps to provision the Telegram channel safely across local and staging environments.
+
+### 1. Create the bot via BotFather
+- Chat with [@BotFather](https://t.me/BotFather) and run `/newbot` to name the assistant and choose a unique handle.
+- Copy the API token BotFather returns; treat it as a secret and never paste it in chat or commit history.
+- Store the token in your local secrets file (`config/local.env`) and the relevant Secrets Manager envelope for staging/production. See the runbook below for rotation guidance.
+
+### 2. Set the webhook endpoint
+- Staging uses a fixed HTTPS endpoint exposed by the ingestion service (e.g. `https://staging.tyrum.run/api/telegram/webhook`). Set the webhook from BotFather with `/setwebhook` once the service is deployed.
+- For local development, expose your planner ingress over TLS using `ngrok`. Example:
+  ```bash
+  ngrok http http://localhost:8080
+  curl "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
+    --data-urlencode "url=https://<subdomain>.ngrok.app/api/telegram/webhook"
+  ```
+  Replace `<subdomain>` with the forwarding host printed by `ngrok`. Repeat the command whenever the tunnel URL changes.
+
+### 3. Wire credentials into applications
+- Copy `config/local.env.example` to `config/local.env` and populate the placeholders for `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_URL` with your BotFather token and the ngrok/staging URL respectively.
+- Next.js code that needs to reference the public webhook can read from `.env.local`:
+  ```dotenv
+  # web/.env.local
+  NEXT_PUBLIC_TELEGRAM_WEBHOOK_URL="https://<subdomain>.ngrok.app/api/telegram/webhook"
+  ```
+- GitHub Actions stores channel credentials in environment-specific secrets (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_URL`). Tokens must remain masked in CI logs and be rotated through AWS Secrets Manager; document rotation events in the staging runbook.
+
 ## Key Documents
 - [Product Concept v1](docs/product_concept_v1.md)
 - [Working Agreements (DoR/DoD)](docs/working_agreements.md)
