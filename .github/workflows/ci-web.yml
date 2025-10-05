@@ -12,7 +12,7 @@ on:
 jobs:
   web:
     name: Web checks
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     permissions:
       contents: read
     steps:
@@ -107,10 +107,26 @@ jobs:
             echo "No build script declared; skipping web build." >>"$GITHUB_STEP_SUMMARY"
           fi
 
+      - name: Install Google Chrome
+        if: steps.detect.outputs.project != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes wget gnupg
+          wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/google.gpg
+          echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list >/dev/null
+          sudo apt-get update
+          sudo apt-get install --yes google-chrome-stable
+
       - name: npm run lighthouse:ci
         if: steps.detect.outputs.project != ''
         shell: bash
         working-directory: ${{ steps.detect.outputs.project }}
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+          LHCI_CHROME_PATH: /usr/bin/google-chrome
+          LHCI_CHROME_FLAGS: --no-sandbox --disable-dev-shm-usage --headless=new
         run: |
           set -euo pipefail
           if node -e "const scripts = require('./package.json').scripts || {}; process.exit(scripts['lighthouse:ci'] ? 0 : 1);"; then
