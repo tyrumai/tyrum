@@ -382,6 +382,7 @@ Milestones are cumulative; later milestones build on earlier ones.
   - Account linking page shows placeholder integration cards and writes preference toggles to Postgres.
 - **Portal export/delete stubs**
   - Export/delete buttons enqueue mocked audit tasks, display toast status, and return deterministic API responses.
+  - Next.js portal route `/portal/settings` surfaces export and deletion controls with `/api/account/export` and `/api/account/delete` stubs returning deterministic audit references.
 - **Terraform baseline**
   - `terraform plan/apply` stands up staging VPC, Kubernetes cluster, and secrets store without manual steps.
 - **Helm chart deployment**
