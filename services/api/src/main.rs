@@ -460,9 +460,8 @@ async fn main() {
 
     let account_linking = AccountLinkingRepository::new(waitlist.pool().clone());
 
-    let telegram_secret = env::var("TELEGRAM_WEBHOOK_SECRET")
-        .or_else(|_| env::var("TELEGRAM_BOT_TOKEN"))
-        .expect("TELEGRAM_WEBHOOK_SECRET or TELEGRAM_BOT_TOKEN must be set");
+    let telegram_secret =
+        env::var("TELEGRAM_WEBHOOK_SECRET").expect("TELEGRAM_WEBHOOK_SECRET must be set");
     let telegram = telegram::TelegramWebhookVerifier::new(telegram_secret)
         .expect("invalid telegram webhook secret");
 
