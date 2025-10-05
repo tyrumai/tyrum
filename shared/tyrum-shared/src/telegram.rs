@@ -175,14 +175,10 @@ fn extract_content(
         });
     }
 
-    if let Some(caption) = &message.caption {
-        return Ok(MessageContent::MediaPlaceholder {
-            media_kind: MediaKind::Unknown,
-            caption: Some(caption.clone()),
-        });
-    }
-
-    Err(TelegramNormalizationError::UnsupportedContent)
+    Ok(MessageContent::MediaPlaceholder {
+        media_kind: MediaKind::Unknown,
+        caption: message.caption.clone(),
+    })
 }
 
 fn infer_media_kind(message: &TelegramMessage) -> Option<MediaKind> {
@@ -345,6 +341,37 @@ mod telegram_normalization {
                 .message
                 .pii_fields
                 .contains(&PiiField::MessageCaption)
+        );
+    }
+
+    #[test]
+    fn normalizes_unknown_payload_without_caption() {
+        let payload = include_bytes!("../../tests/fixtures/telegram/contact_message.json");
+        let update = normalize_update(payload).expect("normalize contact payload");
+
+        match update.message.content {
+            MessageContent::MediaPlaceholder {
+                media_kind,
+                caption,
+            } => {
+                assert_eq!(media_kind, MediaKind::Unknown);
+                assert!(caption.is_none());
+            }
+            other => panic!("unexpected content: {other:?}"),
+        }
+
+        assert_eq!(update.message.pii_fields.len(), 2);
+        assert!(
+            update
+                .message
+                .pii_fields
+                .contains(&PiiField::SenderFirstName)
+        );
+        assert!(
+            update
+                .message
+                .pii_fields
+                .contains(&PiiField::SenderLastName)
         );
     }
 
