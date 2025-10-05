@@ -391,17 +391,18 @@ Milestones are cumulative; later milestones build on earlier ones.
   - Runbook covers `terraform apply`, `helm upgrade`, rollback, and secret rotation procedures with links to dashboards.
 
 ### M1 — Telegram MVP (text-first)
-- Telegram ingress → normalized `Message/Thread` (#4, #5).
-- Planner end-to-end with Policy checks and audit trace, running as Rust 2024 (`tokio`/`axum`) services (#5, #13).
-- Discovery pipeline baseline: `try_mcp → try_structured_api → try_generic_http → web/android/cli` (#6, #15.2).
-- Generic executors: Web (Playwright), Android emulator, HTTP, CLI with mandatory postconditions (#5, #7, #15.3).
-- Memory v1: Facts/Episodic/Vector/PAM/PVP; capability memory write-through (#8, #15.4).
-- Wallet integration: virtual card, spend caps, in-chat 3DS (#10, #15.5).
-- Watchers via NATS JetStream: calendar conflicts, VIP email follow-ups, delivery ETA slips (#11, #15.6).
-- Policy Gate enforcing constitution + per-user PAM (#9, #15.7).
-- Timeline/audit console v1; human-readable confirmations and reasons (#13, #15.8, #15 Non-negotiables).
-- LLM runtime: containerized vLLM behind internal gateway with token accounting (#5, #13).
-- New-user onboarding funnel: marketing CTA → account signup + verification → initial consent checklist → 90-second calibration kick-off (#4, #12, Appendix E).
+- **Telegram ingestion**: Document bot setup & secrets (#58); expose webhook endpoint (#59); normalize updates into shared schemas (#60); persist threads/messages with migrations (#61); add end-to-end webhook test (#62).
+- **Planner service**: Define plan request/response contract (#63); stand up planner HTTP surface (#64); integrate policy client (#65); append planner events to audit log (#66); cover policy denial regression (#67).
+- **Discovery pipeline**: Create pipeline module (#68); instrument telemetry (#69); hook into planner fallback chain (#70).
+- **Executors**: Scaffold Playwright executor (#71); implement navigate/form action (#72); add retries & telemetry (#73); scaffold HTTP executor (#74); deliver CLI sandbox executor (#75); ship Android emulator boot service (#76); implement Android primitive handler (#77).
+- **Capability memory**: Extend schema for capability entries (#78); write through planner successes (#79).
+- **Wallet integration**: Ship virtual card stub service (#80); call wallet from planner and surface outcomes (#81).
+- **Watchers**: Configure JetStream client (#82); expose watcher registration API (#83); implement watcher processor worker (#84).
+- **Policy guardrails**: Enrich policy with per-user fields (#85); ensure planner error propagation coverage (#86).
+- **Audit console**: Add plan timeline API (#87); build portal timeline view (#88).
+- **LLM runtime**: Package vLLM container (#89); deliver Rust gateway shim (#90).
+- **Onboarding funnel**: Wire landing to onboarding start (#91); build consent checklist UI (#92); implement verification/session stub (#93).
+- **Runbooks**: Update staging runbook for Telegram ingress (#94).
 
 ### M2 — Reliability & Capability Memory
 - Capability Memory read/write: selectors, flows, success/failure patterns; reuse on subsequent runs (#8).
