@@ -1,0 +1,113 @@
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+use once_cell::sync::OnceCell;
+use opentelemetry::{
+    KeyValue, global,
+    metrics::{Counter, Histogram},
+};
+use tracing::{field, info_span};
+
+use crate::pipeline::{DiscoveryOutcome, DiscoveryStrategy};
+
+const METER_NAME: &str = "tyrum-discovery";
+const DURATION_METRIC_NAME: &str = "tyrum_discovery_attempt_duration_seconds";
+const COUNT_METRIC_NAME: &str = "tyrum_discovery_attempt_total";
+
+#[derive(Clone)]
+struct MetricsInstruments {
+    duration: Histogram<f64>,
+    count: Counter<u64>,
+}
+
+#[derive(Default)]
+struct MetricsCache {
+    provider: Option<Arc<dyn opentelemetry::metrics::MeterProvider + Send + Sync>>,
+    instruments: Option<MetricsInstruments>,
+}
+
+static METRICS: OnceCell<Mutex<MetricsCache>> = OnceCell::new();
+
+pub(crate) fn record_step<F>(
+    strategy: DiscoveryStrategy,
+    subject: &str,
+    attempt: F,
+) -> DiscoveryOutcome
+where
+    F: FnOnce() -> DiscoveryOutcome,
+{
+    let span = info_span!(
+        "discovery.step",
+        strategy = strategy.as_str(),
+        subject,
+        outcome = field::Empty,
+        retry_after_ms = field::Empty,
+    );
+    let _guard = span.enter();
+    let start = Instant::now();
+
+    let outcome = attempt();
+    let elapsed = start.elapsed();
+
+    let outcome_label = outcome.label();
+    span.record("outcome", outcome_label);
+
+    if let DiscoveryOutcome::RetryLater {
+        retry_after: Some(delay),
+    } = &outcome
+    {
+        let millis = delay.as_millis().min(i64::MAX as u128) as i64;
+        span.record("retry_after_ms", millis);
+    }
+
+    record_metrics(strategy, &outcome, elapsed);
+
+    outcome
+}
+
+fn record_metrics(strategy: DiscoveryStrategy, outcome: &DiscoveryOutcome, duration: Duration) {
+    let instruments = metrics_instruments();
+
+    let attributes = [
+        KeyValue::new("discovery.strategy", strategy.as_str()),
+        KeyValue::new("discovery.outcome", outcome.label()),
+    ];
+
+    instruments
+        .duration
+        .record(duration.as_secs_f64(), &attributes);
+    instruments.count.add(1, &attributes);
+}
+
+fn metrics_instruments() -> MetricsInstruments {
+    let provider = global::meter_provider();
+    let cache = METRICS.get_or_init(|| Mutex::new(MetricsCache::default()));
+    let mut guard = cache.lock().expect("metrics cache poisoned");
+
+    if guard
+        .provider
+        .as_ref()
+        .is_some_and(|current| Arc::ptr_eq(current, &provider))
+        && let Some(instruments) = &guard.instruments
+    {
+        return instruments.clone();
+    }
+
+    let meter = provider.meter(METER_NAME);
+    let instruments = MetricsInstruments {
+        duration: meter
+            .f64_histogram(DURATION_METRIC_NAME)
+            .with_unit("s")
+            .with_description("Duration of discovery attempts by strategy and outcome")
+            .build(),
+        count: meter
+            .u64_counter(COUNT_METRIC_NAME)
+            .with_description("Count of discovery attempts by strategy and outcome")
+            .build(),
+    };
+
+    guard.provider = Some(provider);
+    guard.instruments = Some(instruments.clone());
+
+    instruments
+}

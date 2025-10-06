@@ -1,5 +1,7 @@
 //! Discovery pipeline interfaces and default stub implementation.
 
+mod telemetry;
+
 pub mod pipeline;
 
 pub use pipeline::{

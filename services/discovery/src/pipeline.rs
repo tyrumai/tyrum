@@ -2,6 +2,8 @@ use std::time::Duration;
 
 use tracing::debug;
 
+use crate::telemetry;
+
 /// Request envelope supplied to discovery strategies.
 ///
 /// The `subject` should be a sanitized descriptor such as a domain, MCP
@@ -42,6 +44,14 @@ impl DiscoveryOutcome {
     fn continues(&self) -> bool {
         matches!(self, DiscoveryOutcome::NotFound)
     }
+
+    pub(crate) fn label(&self) -> &'static str {
+        match self {
+            DiscoveryOutcome::Found(_) => "found",
+            DiscoveryOutcome::NotFound => "not_found",
+            DiscoveryOutcome::RetryLater { .. } => "retry_later",
+        }
+    }
 }
 
 /// Connector metadata surfaced back to executors.
@@ -65,6 +75,16 @@ pub enum DiscoveryStrategy {
     GenericHttp,
 }
 
+impl DiscoveryStrategy {
+    pub(crate) fn as_str(&self) -> &'static str {
+        match self {
+            DiscoveryStrategy::Mcp => "mcp",
+            DiscoveryStrategy::StructuredApi => "structured_api",
+            DiscoveryStrategy::GenericHttp => "generic_http",
+        }
+    }
+}
+
 /// Defines the contract for executing discovery strategies in a fixed order.
 pub trait DiscoveryPipeline {
     fn try_mcp(&self, request: &DiscoveryRequest) -> DiscoveryOutcome;
@@ -78,66 +98,21 @@ pub trait DiscoveryPipeline {
     fn discover(&self, request: &DiscoveryRequest) -> DiscoveryOutcome {
         debug!(subject = %request.sanitized_subject(), "Starting discovery");
 
-        debug!(
-            subject = %request.sanitized_subject(),
-            strategy = ?DiscoveryStrategy::Mcp,
-            "Running discovery step",
-        );
-        match self.try_mcp(request) {
-            DiscoveryOutcome::NotFound => {
-                debug!(strategy = ?DiscoveryStrategy::Mcp, "Strategy returned NotFound");
-            }
-            outcome => {
-                debug!(
-                    strategy = ?DiscoveryStrategy::Mcp,
-                    outcome = ?outcome,
-                    "Strategy resolved",
-                );
-                return outcome;
-            }
+        let outcome = execute_step(request, DiscoveryStrategy::Mcp, || self.try_mcp(request));
+        if !outcome.continues() {
+            return outcome;
         }
 
-        debug!(
-            subject = %request.sanitized_subject(),
-            strategy = ?DiscoveryStrategy::StructuredApi,
-            "Running discovery step",
-        );
-        match self.try_structured_api(request) {
-            DiscoveryOutcome::NotFound => {
-                debug!(
-                    strategy = ?DiscoveryStrategy::StructuredApi,
-                    "Strategy returned NotFound",
-                );
-            }
-            outcome => {
-                debug!(
-                    strategy = ?DiscoveryStrategy::StructuredApi,
-                    outcome = ?outcome,
-                    "Strategy resolved",
-                );
-                return outcome;
-            }
+        let outcome = execute_step(request, DiscoveryStrategy::StructuredApi, || {
+            self.try_structured_api(request)
+        });
+        if !outcome.continues() {
+            return outcome;
         }
 
-        debug!(
-            subject = %request.sanitized_subject(),
-            strategy = ?DiscoveryStrategy::GenericHttp,
-            "Running discovery step",
-        );
-        let outcome = self.try_generic_http(request);
-        if outcome.continues() {
-            debug!(
-                strategy = ?DiscoveryStrategy::GenericHttp,
-                "Strategy returned NotFound",
-            );
-        } else {
-            debug!(
-                strategy = ?DiscoveryStrategy::GenericHttp,
-                outcome = ?outcome,
-                "Strategy resolved",
-            );
-        }
-        outcome
+        execute_step(request, DiscoveryStrategy::GenericHttp, || {
+            self.try_generic_http(request)
+        })
     }
 }
 
@@ -168,10 +143,54 @@ impl DiscoveryPipeline for DefaultDiscoveryPipeline {
     }
 }
 
+fn execute_step<F>(
+    request: &DiscoveryRequest,
+    strategy: DiscoveryStrategy,
+    attempt: F,
+) -> DiscoveryOutcome
+where
+    F: FnOnce() -> DiscoveryOutcome,
+{
+    debug!(
+        subject = %request.sanitized_subject(),
+        strategy = strategy.as_str(),
+        "Running discovery step",
+    );
+
+    let outcome = telemetry::record_step(strategy, request.sanitized_subject(), attempt);
+
+    if outcome.continues() {
+        debug!(strategy = strategy.as_str(), "Strategy returned NotFound");
+    } else {
+        debug!(strategy = strategy.as_str(), outcome = ?outcome, "Strategy resolved");
+    }
+
+    outcome
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::cell::RefCell;
+    use std::fmt;
+    use std::sync::{Arc, Mutex};
+
+    use once_cell::sync::Lazy;
+    use opentelemetry::{Value, global};
+    use opentelemetry_sdk::metrics::{
+        InMemoryMetricExporter, PeriodicReader, SdkMeterProvider,
+        data::{AggregatedMetrics, HistogramDataPoint, MetricData, SumDataPoint},
+    };
+    use tracing::subscriber::with_default;
+    use tracing::{
+        Id, Subscriber,
+        field::{Field, Visit},
+    };
+    use tracing_subscriber::{
+        Layer, Registry, layer::Context, layer::SubscriberExt, registry::LookupSpan,
+    };
+
+    static TELEMETRY_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
     struct ScriptedPipeline {
         calls: RefCell<Vec<DiscoveryStrategy>>,
@@ -224,6 +243,85 @@ mod tests {
         }
     }
 
+    #[derive(Clone, Debug, Default)]
+    struct CapturedSpan {
+        name: String,
+        strategy: Option<String>,
+        subject: Option<String>,
+        outcome: Option<String>,
+    }
+
+    struct RecordingLayer {
+        spans: Arc<Mutex<Vec<CapturedSpan>>>,
+    }
+
+    impl RecordingLayer {
+        fn new(spans: Arc<Mutex<Vec<CapturedSpan>>>) -> Self {
+            Self { spans }
+        }
+
+        fn push_span(&self, span: CapturedSpan) {
+            self.spans.lock().unwrap().push(span);
+        }
+    }
+
+    struct FieldVisitor<'a> {
+        span: &'a mut CapturedSpan,
+    }
+
+    impl<'a> FieldVisitor<'a> {
+        fn record_value(&mut self, field: &Field, value: &str) {
+            match field.name() {
+                "strategy" => self.span.strategy = Some(value.to_owned()),
+                "subject" => self.span.subject = Some(value.to_owned()),
+                "outcome" => self.span.outcome = Some(value.to_owned()),
+                _ => {}
+            }
+        }
+    }
+
+    impl<'a> Visit for FieldVisitor<'a> {
+        fn record_str(&mut self, field: &Field, value: &str) {
+            self.record_value(field, value);
+        }
+
+        fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+            self.record_value(field, &format!("{value:?}"));
+        }
+    }
+
+    impl<S> Layer<S> for RecordingLayer
+    where
+        S: Subscriber + for<'lookup> LookupSpan<'lookup>,
+    {
+        fn on_new_span(&self, attrs: &tracing::span::Attributes<'_>, id: &Id, ctx: Context<'_, S>) {
+            if let Some(span) = ctx.span(id) {
+                let mut data = CapturedSpan {
+                    name: attrs.metadata().name().to_string(),
+                    ..CapturedSpan::default()
+                };
+                attrs.record(&mut FieldVisitor { span: &mut data });
+                span.extensions_mut().insert(data);
+            }
+        }
+
+        fn on_record(&self, id: &Id, values: &tracing::span::Record<'_>, ctx: Context<'_, S>) {
+            if let Some(span) = ctx.span(id)
+                && let Some(data) = span.extensions_mut().get_mut::<CapturedSpan>()
+            {
+                values.record(&mut FieldVisitor { span: data });
+            }
+        }
+
+        fn on_close(&self, id: Id, ctx: Context<'_, S>) {
+            if let Some(span) = ctx.span(&id)
+                && let Some(data) = span.extensions_mut().remove::<CapturedSpan>()
+            {
+                self.push_span(data);
+            }
+        }
+    }
+
     #[test]
     fn runs_strategies_in_order_when_not_found() {
         let pipeline = ScriptedPipeline::new(
@@ -267,5 +365,193 @@ mod tests {
             pipeline.calls(),
             vec![DiscoveryStrategy::Mcp, DiscoveryStrategy::StructuredApi],
         );
+    }
+
+    #[test]
+    fn telemetry_records_spans_for_each_attempt() {
+        let _lock = TELEMETRY_GUARD.lock().unwrap();
+        let spans = Arc::new(Mutex::new(Vec::new()));
+        let subscriber = Registry::default().with(RecordingLayer::new(spans.clone()));
+
+        let pipeline = ScriptedPipeline::new(
+            DiscoveryOutcome::NotFound,
+            DiscoveryOutcome::NotFound,
+            DiscoveryOutcome::RetryLater {
+                retry_after: Some(Duration::from_secs(5)),
+            },
+        );
+
+        with_default(subscriber, || {
+            let _ = pipeline.discover(&request());
+        });
+
+        let captured = spans.lock().unwrap().clone();
+        assert_eq!(captured.len(), 3);
+
+        let strategies: Vec<_> = captured
+            .iter()
+            .map(|span| span.strategy.as_deref().unwrap_or_default())
+            .collect();
+        assert_eq!(strategies, vec!["mcp", "structured_api", "generic_http"]);
+
+        let outcomes: Vec<_> = captured
+            .iter()
+            .map(|span| span.outcome.as_deref().unwrap_or_default())
+            .collect();
+        assert_eq!(outcomes, vec!["not_found", "not_found", "retry_later"]);
+
+        for span in captured {
+            assert_eq!(span.name, "discovery.step");
+            assert_eq!(span.subject.as_deref(), Some("calendar:events"));
+        }
+    }
+
+    #[test]
+    fn telemetry_records_metrics_for_each_attempt() {
+        let _lock = TELEMETRY_GUARD.lock().unwrap();
+        let exporter = InMemoryMetricExporter::default();
+        let reader = PeriodicReader::builder(exporter.clone()).build();
+        let meter_provider = SdkMeterProvider::builder().with_reader(reader).build();
+
+        global::set_meter_provider(meter_provider.clone());
+
+        let connector = DiscoveryConnector {
+            strategy: DiscoveryStrategy::StructuredApi,
+            locator: "structured://crm.accounts".into(),
+        };
+        let pipeline = ScriptedPipeline::new(
+            DiscoveryOutcome::NotFound,
+            DiscoveryOutcome::Found(connector),
+            DiscoveryOutcome::Found(DiscoveryConnector {
+                strategy: DiscoveryStrategy::GenericHttp,
+                locator: "https://example.com".into(),
+            }),
+        );
+
+        let outcome = pipeline.discover(&request());
+        assert!(matches!(outcome, DiscoveryOutcome::Found(_)));
+
+        meter_provider.force_flush().expect("force flush metrics");
+        meter_provider.shutdown().expect("shutdown meter provider");
+        global::set_meter_provider(SdkMeterProvider::builder().build());
+
+        let metrics = exporter.get_finished_metrics().expect("metrics available");
+
+        let mcp_hist = find_histogram_point(
+            &metrics,
+            "tyrum_discovery_attempt_duration_seconds",
+            "mcp",
+            "not_found",
+        )
+        .expect("mcp histogram present");
+        assert_eq!(mcp_hist.count(), 1);
+
+        let structured_hist = find_histogram_point(
+            &metrics,
+            "tyrum_discovery_attempt_duration_seconds",
+            "structured_api",
+            "found",
+        )
+        .expect("structured histogram present");
+        assert_eq!(structured_hist.count(), 1);
+
+        let mcp_sum = find_sum_point(
+            &metrics,
+            "tyrum_discovery_attempt_total",
+            "mcp",
+            "not_found",
+        )
+        .expect("mcp counter present");
+        assert_eq!(mcp_sum.value(), 1);
+
+        let structured_sum = find_sum_point(
+            &metrics,
+            "tyrum_discovery_attempt_total",
+            "structured_api",
+            "found",
+        )
+        .expect("structured counter present");
+        assert_eq!(structured_sum.value(), 1);
+
+        assert!(
+            find_sum_point(
+                &metrics,
+                "tyrum_discovery_attempt_total",
+                "generic_http",
+                "found",
+            )
+            .is_none()
+        );
+    }
+
+    fn find_histogram_point<'a>(
+        metrics: &'a [opentelemetry_sdk::metrics::data::ResourceMetrics],
+        metric_name: &str,
+        strategy: &str,
+        outcome: &str,
+    ) -> Option<&'a HistogramDataPoint<f64>> {
+        metrics
+            .iter()
+            .flat_map(|resource| resource.scope_metrics())
+            .flat_map(|scope| scope.metrics())
+            .find_map(|metric| {
+                if metric.name() != metric_name {
+                    return None;
+                }
+
+                match metric.data() {
+                    AggregatedMetrics::F64(MetricData::Histogram(hist)) => hist
+                        .data_points()
+                        .find(|point| matches_attr(point.attributes(), strategy, outcome)),
+                    _ => None,
+                }
+            })
+    }
+
+    fn find_sum_point<'a>(
+        metrics: &'a [opentelemetry_sdk::metrics::data::ResourceMetrics],
+        metric_name: &str,
+        strategy: &str,
+        outcome: &str,
+    ) -> Option<&'a SumDataPoint<u64>> {
+        metrics
+            .iter()
+            .flat_map(|resource| resource.scope_metrics())
+            .flat_map(|scope| scope.metrics())
+            .find_map(|metric| {
+                if metric.name() != metric_name {
+                    return None;
+                }
+
+                match metric.data() {
+                    AggregatedMetrics::U64(MetricData::Sum(sum)) => sum
+                        .data_points()
+                        .find(|point| matches_attr(point.attributes(), strategy, outcome)),
+                    _ => None,
+                }
+            })
+    }
+
+    fn matches_attr<'a>(
+        attrs: impl Iterator<Item = &'a opentelemetry::KeyValue>,
+        strategy: &str,
+        outcome: &str,
+    ) -> bool {
+        let mut strategy_match = false;
+        let mut outcome_match = false;
+
+        for kv in attrs {
+            if kv.key.as_str() == "discovery.strategy" {
+                if let Value::String(ref value) = kv.value {
+                    strategy_match = value.as_ref() == strategy;
+                }
+            } else if kv.key.as_str() == "discovery.outcome"
+                && let Value::String(ref value) = kv.value
+            {
+                outcome_match = value.as_ref() == outcome;
+            }
+        }
+
+        strategy_match && outcome_match
     }
 }

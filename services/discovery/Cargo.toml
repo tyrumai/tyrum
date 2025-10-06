@@ -11,7 +11,13 @@ name = "tyrum_discovery"
 path = "src/lib.rs"
 
 [dependencies]
+once_cell = "1.19"
+opentelemetry = { version = "0.31", features = ["metrics"] }
 tracing = { version = "0.1", default-features = false, features = ["std"] }
+
+[dev-dependencies]
+opentelemetry_sdk = { version = "0.31", features = ["metrics", "testing"] }
+tracing-subscriber = { version = "0.3", features = ["registry"] }
 
 [lints]
 workspace = true

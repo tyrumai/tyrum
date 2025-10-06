@@ -3610,7 +3610,11 @@ dependencies = [
 name = "tyrum-discovery"
 version = "0.1.0"
 dependencies = [
+ "once_cell",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
