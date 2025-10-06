@@ -157,20 +157,15 @@ pub async fn execute_web_action(action: &ActionPrimitive) -> Result<WebActionOut
 
     page.goto_builder(target.as_str()).goto().await?;
 
-    let auto_redacted = identify_sensitive_fields(&page, &options.fields).await?;
+    let mut auto_redacted = identify_sensitive_fields(&page, &options.fields).await?;
 
     fill_fields(&page, &options.fields).await?;
     if let Some(submit) = options.submit.as_ref() {
         submit_form(&page, submit).await?;
+        wait_for_post_submit(&page, submit).await?;
     }
 
-    if let Some(wait_ms) = options
-        .submit
-        .as_ref()
-        .and_then(|submit| submit.wait_after_ms)
-    {
-        page.wait_for_timeout(wait_ms as f64).await;
-    }
+    auto_redacted.extend(identify_sensitive_fields(&page, &options.fields).await?);
 
     let title = page.title().await?;
     let current_url: String = page.eval("() => window.location.href").await?;
@@ -397,17 +392,33 @@ async fn submit_form(page: &Page, submit: &SubmitActionSpec) -> Result<()> {
     Ok(())
 }
 
+async fn wait_for_post_submit(page: &Page, submit: &SubmitActionSpec) -> Result<()> {
+    let _ = page
+        .wait_for_function_builder("() => document.readyState === 'complete'")
+        .wait_for_function()
+        .await?;
+
+    if let Some(wait_ms) = submit.wait_after_ms {
+        page.wait_for_timeout(wait_ms as f64).await;
+    }
+
+    Ok(())
+}
+
 async fn capture_dom_excerpt(page: &Page, options: &WebActionOptions) -> Result<DomExcerpt> {
-    let mut selector = options
-        .snapshot_selector
-        .as_deref()
-        .unwrap_or("#confirmation");
+    let mut selector = options.snapshot_selector.as_deref().unwrap_or("body");
 
     let redacted_selectors = redact_selectors(options);
     let mut html = snapshot_with_selector(page, selector, redacted_selectors.clone()).await;
 
-    if let Err(err) = html.as_ref() {
-        tracing::warn!(selector = selector, %err, "snapshot selector failed; falling back to body");
+    if selector != "body"
+        && let Err(err) = html.as_ref()
+    {
+        tracing::warn!(
+            selector = selector,
+            %err,
+            "snapshot selector failed; falling back to body"
+        );
         selector = "body";
         html = snapshot_with_selector(page, selector, redacted_selectors).await;
     }
