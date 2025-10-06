@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "services/api",
+    "services/discovery",
     "services/memory",
     "services/planner",
     "services/policy",
