@@ -7,7 +7,7 @@
 //! primitives (form interactions, postcondition enforcement) will extend this
 //! surface in follow-up issues per the product concept (§15-16).
 
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use playwright::{
     Playwright,
@@ -157,6 +157,8 @@ pub async fn execute_web_action(action: &ActionPrimitive) -> Result<WebActionOut
 
     page.goto_builder(target.as_str()).goto().await?;
 
+    let auto_redacted = identify_sensitive_fields(&page, &options.fields).await?;
+
     fill_fields(&page, &options.fields).await?;
     submit_form(&page, &options.submit).await?;
 
@@ -167,7 +169,7 @@ pub async fn execute_web_action(action: &ActionPrimitive) -> Result<WebActionOut
     let title = page.title().await?;
     let current_url: String = page.eval("() => window.location.href").await?;
     let dom_excerpt = capture_dom_excerpt(&page, &options).await?;
-    let submitted_fields = summarize_fields(&options.fields);
+    let submitted_fields = summarize_fields(&options.fields, &auto_redacted);
 
     // Close context and browser to keep future test runs predictable. Ignore
     // errors during teardown since the main navigation already succeeded.
@@ -485,19 +487,76 @@ async fn snapshot_with_selector(
     Ok(html)
 }
 
-fn summarize_fields(fields: &[FormFieldSpec]) -> Vec<SubmittedFieldSummary> {
+fn summarize_fields(
+    fields: &[FormFieldSpec],
+    auto_redacted: &HashSet<String>,
+) -> Vec<SubmittedFieldSummary> {
     fields
         .iter()
         .map(|field| SubmittedFieldSummary {
             selector: field.selector.clone(),
-            value: if field.redact {
+            value: if field.redact || auto_redacted.contains(&field.selector) {
                 REDACTED_VALUE.to_string()
             } else {
                 field.value.clone()
             },
-            redacted: field.redact,
+            redacted: field.redact || auto_redacted.contains(&field.selector),
         })
         .collect()
+}
+
+async fn identify_sensitive_fields(
+    page: &Page,
+    fields: &[FormFieldSpec],
+) -> Result<HashSet<String>> {
+    if fields.is_empty() {
+        return Ok(HashSet::new());
+    }
+
+    #[derive(Serialize)]
+    struct Args<'a> {
+        selectors: Vec<&'a str>,
+    }
+
+    let args = Args {
+        selectors: fields.iter().map(|field| field.selector.as_str()).collect(),
+    };
+
+    let sensitive: Vec<String> = page
+        .evaluate(
+            "(config) => {
+                const sensitive = [];
+                for (const selector of config.selectors) {
+                    let element;
+                    try {
+                        element = document.querySelector(selector);
+                    } catch (_) {
+                        element = null;
+                    }
+
+                    if (!element) {
+                        continue;
+                    }
+
+                    const typeAttr = (element.getAttribute('type') || '').toLowerCase();
+                    if (typeAttr === 'password') {
+                        sensitive.push(selector);
+                        continue;
+                    }
+
+                    const autocomplete = (element.getAttribute('autocomplete') || '').toLowerCase();
+                    if (autocomplete === 'current-password' || autocomplete === 'new-password') {
+                        sensitive.push(selector);
+                    }
+                }
+
+                return sensitive;
+            }",
+            args,
+        )
+        .await?;
+
+    Ok(sensitive.into_iter().collect())
 }
 
 #[cfg(test)]
