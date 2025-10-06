@@ -251,13 +251,13 @@ fn build_policy_failure(decision: &PolicyDecision) -> PlanError {
     let detail = if relevant_rules.is_empty() {
         None
     } else {
-        Some(
-            relevant_rules
-                .iter()
-                .map(|rule| format!("{:?}: {}", rule.rule, rule.detail))
-                .collect::<Vec<_>>()
-                .join("\n"),
-        )
+        let summary = relevant_rules
+            .iter()
+            .map(|rule| format!("{:?}: {}", rule.rule, sanitize_detail(&rule.detail)))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        (!summary.is_empty()).then_some(summary)
     };
 
     PlanError {
@@ -374,11 +374,7 @@ impl PolicyAudit {
         let rules = decision
             .rules
             .iter()
-            .map(|rule| PolicyRuleAudit {
-                rule: format!("{:?}", rule.rule),
-                outcome: format!("{:?}", rule.outcome),
-                detail: rule.detail.clone(),
-            })
+            .map(PolicyRuleAudit::from_rule)
             .collect();
 
         Self::Evaluated {
@@ -399,6 +395,16 @@ struct PolicyRuleAudit {
     detail: String,
 }
 
+impl PolicyRuleAudit {
+    fn from_rule(rule: &PolicyRuleDecision) -> Self {
+        Self {
+            rule: format!("{:?}", rule.rule),
+            outcome: format!("{:?}", rule.outcome),
+            detail: sanitize_detail(&rule.detail),
+        }
+    }
+}
+
 #[derive(Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 enum PlanOutcomeAudit {
@@ -416,7 +422,7 @@ enum PlanOutcomeAudit {
     Failure {
         code: PlanErrorCode,
         retryable: bool,
-        detail_present: bool,
+        detail: Option<String>,
     },
 }
 
@@ -447,7 +453,11 @@ impl From<&PlanOutcome> for PlanOutcomeAudit {
             PlanOutcome::Failure { error } => PlanOutcomeAudit::Failure {
                 code: error.code,
                 retryable: error.retryable,
-                detail_present: error.detail.as_ref().is_some_and(|value| !value.is_empty()),
+                detail: error
+                    .detail
+                    .as_ref()
+                    .map(|value| sanitize_detail(value))
+                    .filter(|value| !value.is_empty()),
             },
         }
     }
@@ -472,4 +482,18 @@ impl LoggedStep {
             has_idempotency_key: step.idempotency_key.is_some(),
         }
     }
+}
+
+fn sanitize_detail(detail: &str) -> String {
+    // Replace numeric characters to avoid leaking precise spend thresholds in audit logs.
+    detail
+        .chars()
+        .map(|character| {
+            if character.is_ascii_digit() {
+                '*'
+            } else {
+                character
+            }
+        })
+        .collect()
 }

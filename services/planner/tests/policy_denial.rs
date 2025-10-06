@@ -8,7 +8,7 @@ use serde_json::json;
 use sqlx::Row;
 use tower::ServiceExt;
 use tyrum_planner::{
-    EventLog, PlanOutcome, PlanRequest, PlanResponse,
+    EventLog, PlanErrorCode, PlanOutcome, PlanRequest, PlanResponse,
     http::{PlannerState, build_router},
 };
 use tyrum_shared::{
@@ -18,25 +18,21 @@ use tyrum_shared::{
 use uuid::Uuid;
 
 #[tokio::test]
-async fn planner_appends_audit_event_with_redacted_payload() {
+async fn policy_denial_is_logged_and_sanitized() {
     let postgres = TestPostgres::start().await.expect("start postgres fixture");
     let pool = postgres.pool().clone();
 
     let event_log = EventLog::from_pool(pool.clone());
     event_log.migrate().await.expect("migrate planner schema");
 
+    let denial_detail = "Amount €123.45 exceeds hard limit €500.00.";
     let (policy_client, server) = mock_policy(json!({
-        "decision": "approve",
+        "decision": "deny",
         "rules": [
             {
                 "rule": "spend_limit",
-                "outcome": "approve",
-                "detail": "No spend requested",
-            },
-            {
-                "rule": "pii_guardrail",
-                "outcome": "approve",
-                "detail": "PII safe",
+                "outcome": "deny",
+                "detail": denial_detail,
             }
         ],
     }))
@@ -62,10 +58,27 @@ async fn planner_appends_audit_event_with_redacted_payload() {
         .await
         .expect("receive response");
 
-    server.abort();
-
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
     let plan: PlanResponse = serde_json::from_slice(&bytes).expect("decode plan response");
+    server.abort();
+
+    let failure = match plan.outcome {
+        PlanOutcome::Failure { error } => {
+            assert_eq!(error.code, PlanErrorCode::PolicyDenied);
+            assert!(!error.retryable, "policy denials should not be retryable");
+            let detail = error.detail.expect("denial reason present");
+            assert!(
+                detail.contains("SpendLimit"),
+                "detail should reference the triggering rule"
+            );
+            assert!(
+                !detail.chars().any(|character| character.is_ascii_digit()),
+                "detail should be sanitized: {detail}"
+            );
+            detail
+        }
+        other => panic!("expected policy failure outcome, got {other:?}"),
+    };
 
     let plan_uuid = plan
         .plan_id
@@ -78,87 +91,91 @@ async fn planner_appends_audit_event_with_redacted_payload() {
         .await
         .expect("fetch planner events");
 
-    assert_eq!(rows.len(), 1);
+    assert_eq!(rows.len(), 1, "expected a single audit event");
     let row = &rows[0];
     let stored_plan: Uuid = row.try_get("plan_id").expect("plan_id");
     let step_index: i32 = row.try_get("step_index").expect("step_index");
-    let action: serde_json::Value = row.try_get("action").expect("action payload");
-
     assert_eq!(stored_plan, plan_uuid);
     assert_eq!(step_index, i32::MAX);
 
+    let action: serde_json::Value = row.try_get("action").expect("action payload");
+
+    let policy = action
+        .get("policy")
+        .and_then(|value| value.as_object())
+        .expect("policy audit block present");
     assert_eq!(
-        action.get("plan_id").and_then(|value| value.as_str()),
-        Some(plan.plan_id.as_str())
+        policy.get("status").and_then(|value| value.as_str()),
+        Some("evaluated")
     );
-    let recorded_plan_uuid = action
-        .get("plan_uuid")
+    assert_eq!(
+        policy.get("decision").and_then(|value| value.as_str()),
+        Some("Deny")
+    );
+
+    let rules = policy
+        .get("rules")
+        .and_then(|value| value.as_array())
+        .expect("policy rule audit present");
+    assert_eq!(rules.len(), 1);
+    let rule_detail = rules[0]
+        .get("detail")
         .and_then(|value| value.as_str())
-        .expect("plan_uuid in audit payload");
-    assert_eq!(recorded_plan_uuid, plan_uuid.to_string());
-
-    // Ensure audit payload excludes message/thread PII while keeping traceable metadata.
-    let request_json = action
-        .get("request")
-        .and_then(|value| value.as_object())
-        .expect("request audit payload");
-    let trigger = request_json
-        .get("trigger")
-        .and_then(|value| value.as_object())
-        .expect("trigger audit payload");
-
-    assert_eq!(trigger.get("thread_id").unwrap().as_str(), Some("thread-1"));
-    assert_eq!(trigger.get("message_id").unwrap().as_str(), Some("msg-1"));
+        .expect("rule detail recorded");
+    assert!(rule_detail.contains("Amount"));
     assert!(
-        trigger
-            .get("thread_pii_fields")
-            .unwrap()
-            .to_string()
-            .contains("thread_username")
-    );
-    assert!(
-        trigger
-            .get("message_pii_fields")
-            .unwrap()
-            .to_string()
-            .contains("message_text")
+        !rule_detail
+            .chars()
+            .any(|character| character.is_ascii_digit()),
+        "rule detail should be sanitized: {rule_detail}"
     );
 
-    let payload_text = action.to_string();
-    assert!(!payload_text.contains("alex"));
-    assert!(!payload_text.contains("Plan espresso tasting"));
-
-    match plan.outcome {
-        PlanOutcome::Success { .. } => {}
-        other => panic!("expected success outcome, got {other:?}"),
-    }
+    let outcome = action
+        .get("outcome")
+        .and_then(|value| value.as_object())
+        .expect("outcome audit block present");
+    assert_eq!(
+        outcome.get("status").and_then(|value| value.as_str()),
+        Some("failure")
+    );
+    let audit_detail = outcome
+        .get("detail")
+        .and_then(|value| value.as_str())
+        .expect("failure reason stored");
+    assert_eq!(audit_detail, failure);
+    assert!(
+        !audit_detail
+            .chars()
+            .any(|character| character.is_ascii_digit()),
+        "audit reason should be sanitized: {audit_detail}"
+    );
 }
 
 fn sample_request() -> PlanRequest {
     PlanRequest {
-        request_id: "req-123".into(),
-        subject_id: "subject-456".into(),
+        request_id: "req-321".into(),
+        subject_id: "subject-999".into(),
         trigger: NormalizedThreadMessage {
             thread: NormalizedThread {
-                id: "thread-1".into(),
+                id: "thread-2".into(),
                 kind: ThreadKind::Private,
                 title: None,
-                username: Some("alex".into()),
+                username: Some("harper".into()),
                 pii_fields: vec![PiiField::ThreadUsername],
             },
             message: NormalizedMessage {
-                id: "msg-1".into(),
-                thread_id: "thread-1".into(),
+                id: "msg-2".into(),
+                thread_id: "thread-2".into(),
                 source: MessageSource::Telegram,
                 content: MessageContent::Text {
-                    text: "Plan espresso tasting".into(),
+                    text: "Book a tasting menu".into(),
                 },
                 sender: Some(SenderMetadata {
-                    id: "sender-9".into(),
+                    id: "sender-10".into(),
                     is_bot: false,
-                    first_name: Some("Alex".into()),
+                    first_name: Some("Harper".into()),
                     last_name: None,
-                    username: Some("alex".into()),
+                    username: Some("harper".into()),
                     language_code: Some("en".into()),
                 }),
                 timestamp: Utc::now(),
@@ -167,7 +184,7 @@ fn sample_request() -> PlanRequest {
             },
         },
         locale: Some("en-US".into()),
-        timezone: Some("America/Los_Angeles".into()),
+        timezone: Some("Europe/Amsterdam".into()),
         tags: vec!["telegram".into()],
     }
 }
