@@ -1,7 +1,7 @@
 use std::{
     env,
     future::Future,
-    sync::{Arc, Mutex},
+    sync::Mutex,
     time::{Duration, Instant},
 };
 
@@ -95,7 +95,6 @@ struct MetricsInstruments {
 
 #[derive(Default)]
 struct MetricsCache {
-    provider: Option<Arc<dyn opentelemetry::metrics::MeterProvider + Send + Sync>>,
     instruments: Option<MetricsInstruments>,
 }
 
@@ -120,12 +119,7 @@ fn metrics_instruments() -> MetricsInstruments {
     let cache = METRICS.get_or_init(|| Mutex::new(MetricsCache::default()));
     let mut guard = cache.lock().expect("metrics cache poisoned");
 
-    if guard
-        .provider
-        .as_ref()
-        .is_some_and(|current| Arc::ptr_eq(current, &provider))
-        && let Some(instruments) = &guard.instruments
-    {
+    if let Some(instruments) = &guard.instruments {
         return instruments.clone();
     }
 
@@ -142,7 +136,6 @@ fn metrics_instruments() -> MetricsInstruments {
             .build(),
     };
 
-    guard.provider = Some(provider);
     guard.instruments = Some(instruments.clone());
 
     instruments
