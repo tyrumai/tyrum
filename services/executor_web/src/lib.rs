@@ -321,19 +321,13 @@ fn parse_web_action_options(action: &ActionPrimitive) -> Result<WebActionOptions
         });
     }
 
-    let snapshot_selector = action
-        .args
-        .get("snapshot_selector")
-        .or_else(|| action.args.get("result_selector"))
-        .map(|value| {
-            serde_json::from_value::<String>(value.clone()).map_err(|source| {
-                WebExecutorError::InvalidArgument {
-                    argument: "snapshot_selector",
-                    source,
-                }
-            })
-        })
-        .transpose()?;
+    let snapshot_selector = if let Some(value) = action.args.get("snapshot_selector") {
+        Some(parse_selector_argument(value, "snapshot_selector")?)
+    } else if let Some(value) = action.args.get("result_selector") {
+        Some(parse_selector_argument(value, "result_selector")?)
+    } else {
+        None
+    };
 
     Ok(WebActionOptions {
         fields,
@@ -349,6 +343,11 @@ async fn fill_fields(page: &Page, fields: &[FormFieldSpec]) -> Result<()> {
             .await?;
     }
     Ok(())
+}
+
+fn parse_selector_argument(value: &serde_json::Value, argument: &'static str) -> Result<String> {
+    serde_json::from_value::<String>(value.clone())
+        .map_err(|source| WebExecutorError::InvalidArgument { argument, source })
 }
 
 async fn submit_form(page: &Page, submit: &SubmitActionSpec) -> Result<()> {
