@@ -18,6 +18,8 @@ COPY shared/tyrum-shared/src shared/tyrum-shared/src
 COPY services/api/Cargo.toml services/api/Cargo.toml
 COPY services/api/src services/api/src
 COPY services/api/migrations services/api/migrations
+COPY services/discovery/Cargo.toml services/discovery/Cargo.toml
+COPY services/discovery/src services/discovery/src
 COPY services/memory/Cargo.toml services/memory/Cargo.toml
 COPY services/memory/src services/memory/src
 COPY services/memory/tests services/memory/tests
