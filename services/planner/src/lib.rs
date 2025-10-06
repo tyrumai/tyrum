@@ -1,6 +1,7 @@
 //! Core primitives shared between the planner service and its dependants.
 
 pub mod event_log;
+pub mod http;
 pub mod state_machine;
 
 pub use event_log::{
