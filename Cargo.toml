@@ -3,6 +3,7 @@ members = [
     "services/api",
     "services/discovery",
     "services/memory",
+    "services/executor_http",
     "services/executor_web",
     "services/planner",
     "services/policy",

@@ -1,0 +1,54 @@
+# syntax=docker/dockerfile:1.7
+FROM rust:1.89 AS builder
+
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ENV HTTP_PROXY=$HTTP_PROXY \
+    http_proxy=$HTTP_PROXY \
+    HTTPS_PROXY=$HTTPS_PROXY \
+    https_proxy=$HTTPS_PROXY \
+    NO_PROXY=$NO_PROXY \
+    no_proxy=$NO_PROXY
+
+WORKDIR /app
+
+COPY Cargo.toml Cargo.lock ./
+COPY shared/tyrum-shared/Cargo.toml shared/tyrum-shared/Cargo.toml
+COPY shared/tyrum-shared/src shared/tyrum-shared/src
+COPY services/executor_http/Cargo.toml services/executor_http/Cargo.toml
+COPY services/executor_http/src services/executor_http/src
+COPY services/executor_http/tests services/executor_http/tests
+
+RUN cargo build --locked --release --package tyrum-executor-http
+
+FROM debian:bookworm-slim AS runtime
+
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ENV HTTP_PROXY=$HTTP_PROXY \
+    http_proxy=$HTTP_PROXY \
+    HTTPS_PROXY=$HTTPS_PROXY \
+    https_proxy=$HTTPS_PROXY \
+    NO_PROXY=$NO_PROXY \
+    no_proxy=$NO_PROXY \
+    HTTP_EXECUTOR_BIND_ADDR=0.0.0.0:8092
+
+RUN set -eux; \
+    printf 'Acquire::ForceIPv4 "true";\n' >/etc/apt/apt.conf.d/99force-ipv4; \
+    useradd --create-home --shell /usr/sbin/nologin appuser; \
+    printf '%s\n' \
+      'deb http://ftp.nl.debian.org/debian bookworm main' \
+      'deb http://ftp.nl.debian.org/debian bookworm-updates main' \
+      'deb http://security.debian.org/debian-security bookworm-security main' \
+      >/etc/apt/sources.list; \
+    apt-get update; \
+    apt-get install --yes --no-install-recommends ca-certificates curl; \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY --from=builder /app/target/release/http_executor /usr/local/bin/http_executor
+EXPOSE 8092
+USER appuser
+ENTRYPOINT ["/usr/local/bin/http_executor"]
