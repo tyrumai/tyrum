@@ -153,6 +153,129 @@ Use a minimal set of **universal action primitives** to enable auditability, ret
 
 **Postconditions are mandatory** on state‑changing steps to avoid silent failure.
 
+### Planner request/response contract
+Planner clients exchange the shared `PlanRequest` and `PlanResponse` types from `tyrum-shared::planner`
+to keep policy, planner, and API services aligned on envelopes and error handling.
+
+**Request Example (`PlanRequest`):**
+```json
+{
+  "request_id": "req-8f5080c4",
+  "subject_id": "user-d2a7",
+  "trigger": {
+    "thread": {
+      "id": "219901",
+      "kind": "private",
+      "title": null,
+      "username": "alex",
+      "pii_fields": ["thread_username"]
+    },
+    "message": {
+      "id": "77881",
+      "thread_id": "219901",
+      "source": "telegram",
+      "content": {
+        "kind": "text",
+        "text": "Can you book a tasting at EspressoExpress for next Friday?"
+      },
+      "sender": {
+        "id": "8722",
+        "is_bot": false,
+        "first_name": "Alex",
+        "last_name": null,
+        "username": "alex",
+        "language_code": "en"
+      },
+      "timestamp": "2025-10-05T15:59:42Z",
+      "edited_timestamp": null,
+      "pii_fields": ["message_text", "sender_first_name", "sender_username"]
+    }
+  },
+  "locale": "en-US",
+  "timezone": "America/Los_Angeles",
+  "tags": ["telegram", "pilot"]
+}
+```
+
+**Response Example — Success (`PlanResponse`):**
+```json
+{
+  "plan_id": "plan-e0c44e4f",
+  "request_id": "req-8f5080c4",
+  "created_at": "2025-10-05T16:31:09Z",
+  "trace_id": "trace-bee4",
+  "status": "success",
+  "steps": [
+    {
+      "type": "Research",
+      "args": {
+        "intent": "look_up_availability",
+        "query": "EspressoExpress Friday tastings"
+      }
+    },
+    {
+      "type": "Message",
+      "args": {
+        "channel": "email",
+        "recipient": "reservations@espressoexpress.example",
+        "body": "Please confirm a tasting for Friday at 18:00."
+      },
+      "postcondition": {
+        "status": "delivered"
+      }
+    }
+  ],
+  "summary": {
+    "step_count": 2,
+    "synopsis": "Gather options and send a confirmation email"
+  }
+}
+```
+
+**Response Example — Escalate (`PlanResponse`):**
+```json
+{
+  "plan_id": "plan-7c52d8a1",
+  "request_id": "req-8f5080c4",
+  "created_at": "2025-10-05T16:31:09Z",
+  "status": "escalate",
+  "escalation": {
+    "step_index": 1,
+    "action": {
+      "type": "Confirm",
+      "args": {
+        "prompt": "Approve €85 tasting fee at EspressoExpress?",
+        "context": {
+          "merchant": "EspressoExpress",
+          "amount": {
+            "currency": "EUR",
+            "value": 85
+          }
+        }
+      }
+    },
+    "rationale": "Spend cap requires explicit approval",
+    "expires_at": "2025-10-06T12:00:00Z"
+  }
+}
+```
+
+**Response Example — Failure (`PlanResponse`):**
+```json
+{
+  "plan_id": "plan-36d940c7",
+  "request_id": "req-8f5080c4",
+  "created_at": "2025-10-05T16:31:09Z",
+  "status": "failure",
+  "error": {
+    "code": "policy_denied",
+    "message": "Payment exceeds approved budget",
+    "detail": "Wallet tyrum: monthly dining cap of €200 would be exceeded",
+    "retryable": false
+  }
+}
+```
+
 ---
 
 ## 8) Memory System
