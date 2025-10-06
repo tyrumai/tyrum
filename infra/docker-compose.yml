@@ -21,6 +21,19 @@ services:
       retries: 5
       start_period: 10s
 
+  api-migrations:
+    build:
+      context: ..
+      dockerfile: Dockerfile.api
+    image: tyrum/api:local
+    environment:
+      RUST_LOG: info
+      DATABASE_URL: postgres://tyrum:tyrum_dev_password@postgres:5432/tyrum_dev
+      RUN_MIGRATIONS_ONLY: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     build:
       context: ..
@@ -36,6 +49,8 @@ services:
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-local-telegram-secret}
     depends_on:
+      api-migrations:
+        condition: service_completed_successfully
       policy:
         condition: service_healthy
       postgres:

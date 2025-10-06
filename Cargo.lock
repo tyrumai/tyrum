@@ -3502,6 +3502,7 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
+ "tyrum-shared",
  "validator",
 ]
 

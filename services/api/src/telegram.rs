@@ -99,7 +99,6 @@ impl TelegramWebhookVerifier {
         }
     }
 
-    #[cfg(test)]
     pub fn expected_signature_header(&self, body: &[u8]) -> String {
         format!(
             "{SIGNATURE_PREFIX}{}",
