@@ -133,7 +133,8 @@ pub enum PlanOutcome {
     Success {
         /// Ordered list of action primitives comprising the plan.
         steps: Vec<ActionPrimitive>,
-        /// Summary metadata for audit and client display.
+        /// Summary metadata for audit and client display. Clients should derive the
+        /// step count from `steps.len()` to avoid mismatches.
         summary: PlanSummary,
     },
     /// Planner requires human input before proceeding.
@@ -151,8 +152,6 @@ pub enum PlanOutcome {
 /// Success metadata summarising the generated plan.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlanSummary {
-    /// Total number of steps contained in the plan.
-    pub step_count: usize,
     /// Optional natural-language synopsis of the proposed plan.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub synopsis: Option<String>,
@@ -276,7 +275,6 @@ mod tests {
             outcome: PlanOutcome::Success {
                 steps: vec![step.clone()],
                 summary: PlanSummary {
-                    step_count: 1,
                     synopsis: Some("Research best espresso options".into()),
                 },
             },
@@ -285,7 +283,6 @@ mod tests {
         let json = serde_json::to_value(&response).expect("serialize plan response");
         assert_eq!(json["status"], "success");
         assert_eq!(json["steps"].as_array().unwrap().len(), 1);
-        assert_eq!(json["summary"]["step_count"], 1);
 
         let round_trip: PlanResponse = serde_json::from_value(json).expect("deserialize");
         assert_eq!(round_trip, response);

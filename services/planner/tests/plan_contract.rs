@@ -25,7 +25,6 @@ fn sample_success_response() -> PlanResponse {
         outcome: PlanOutcome::Success {
             steps: vec![research],
             summary: PlanSummary {
-                step_count: 1,
                 synopsis: Some("Research espresso tasting slots".into()),
             },
         },

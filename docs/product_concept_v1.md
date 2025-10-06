@@ -155,7 +155,8 @@ Use a minimal set of **universal action primitives** to enable auditability, ret
 
 ### Planner request/response contract
 Planner clients exchange the shared `PlanRequest` and `PlanResponse` types from `tyrum-shared::planner`
-to keep policy, planner, and API services aligned on envelopes and error handling.
+to keep policy, planner, and API services aligned on envelopes and error handling. Optional hints such as
+`locale` or `timezone` may be omitted when the caller has no preference.
 
 **Request Example (`PlanRequest`):**
 ```json
@@ -226,7 +227,6 @@ to keep policy, planner, and API services aligned on envelopes and error handlin
     }
   ],
   "summary": {
-    "step_count": 2,
     "synopsis": "Gather options and send a confirmation email"
   }
 }
