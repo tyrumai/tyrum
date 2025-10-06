@@ -160,9 +160,15 @@ pub async fn execute_web_action(action: &ActionPrimitive) -> Result<WebActionOut
     let auto_redacted = identify_sensitive_fields(&page, &options.fields).await?;
 
     fill_fields(&page, &options.fields).await?;
-    submit_form(&page, &options.submit).await?;
+    if let Some(submit) = options.submit.as_ref() {
+        submit_form(&page, submit).await?;
+    }
 
-    if let Some(wait_ms) = options.submit.wait_after_ms {
+    if let Some(wait_ms) = options
+        .submit
+        .as_ref()
+        .and_then(|submit| submit.wait_after_ms)
+    {
         page.wait_for_timeout(wait_ms as f64).await;
     }
 
@@ -255,7 +261,7 @@ const REDACTED_VALUE: &str = "REDACTED";
 #[derive(Debug)]
 struct WebActionOptions {
     fields: Vec<FormFieldSpec>,
-    submit: SubmitActionSpec,
+    submit: Option<SubmitActionSpec>,
     snapshot_selector: Option<String>,
 }
 
@@ -304,19 +310,23 @@ fn parse_web_action_options(action: &ActionPrimitive) -> Result<WebActionOptions
         .transpose()? // Option<Result<..>> -> Result<Option<..>>
         .unwrap_or_default();
 
-    let submit_value = action
+    let submit = action
         .args
         .get("submit")
-        .ok_or(WebExecutorError::MissingArgument("submit"))?;
-    let submit: SubmitActionSpec =
-        serde_json::from_value(submit_value.clone()).map_err(|source| {
-            WebExecutorError::InvalidArgument {
-                argument: "submit",
-                source,
-            }
-        })?;
+        .map(|value| {
+            serde_json::from_value::<SubmitActionSpec>(value.clone()).map_err(|source| {
+                WebExecutorError::InvalidArgument {
+                    argument: "submit",
+                    source,
+                }
+            })
+        })
+        .transpose()?;
 
-    if submit.selector.trim().is_empty() {
+    if submit
+        .as_ref()
+        .is_some_and(|submit| submit.selector.trim().is_empty())
+    {
         return Err(WebExecutorError::InvalidArgumentValue {
             argument: "submit.selector",
             reason: "selector must not be empty",
@@ -376,10 +386,7 @@ async fn submit_form(page: &Page, submit: &SubmitActionSpec) -> Result<()> {
                             return true;
                         }
 
-                        element.dispatchEvent(
-                            new Event('submit', { bubbles: true, cancelable: true })
-                        );
-                        return true;
+                        throw new Error('submit selector is not associated with a form');
                     }",
                 Option::<()>::None,
             )
@@ -596,13 +603,25 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn errors_on_missing_submit_configuration() {
-        let args =
-            ActionArguments::from_iter([(String::from("url"), json!("https://example.test"))]);
+    async fn errors_on_empty_submit_selector() {
+        let args = ActionArguments::from_iter([
+            (String::from("url"), json!("https://example.test")),
+            (
+                String::from("submit"),
+                json!({
+                    "selector": "   ",
+                    "kind": "click"
+                }),
+            ),
+        ]);
         let primitive = ActionPrimitive::new(ActionPrimitiveKind::Web, args);
         let err = execute_web_action(&primitive)
             .await
-            .expect_err("missing submit configuration");
-        assert!(matches!(err, WebExecutorError::MissingArgument("submit")));
+            .expect_err("empty submit selector");
+        assert!(matches!(
+            err,
+            WebExecutorError::InvalidArgumentValue { argument, .. }
+            if argument == "submit.selector"
+        ));
     }
 }
