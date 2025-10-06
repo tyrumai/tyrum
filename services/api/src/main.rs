@@ -1,6 +1,6 @@
 use std::{collections::HashMap, env, net::SocketAddr};
 
-use crate::{
+use tyrum_api::{
     account_linking::AccountLinkingRepository,
     waitlist::{NewWaitlistSignup, WaitlistError, WaitlistRepository},
 };
@@ -15,14 +15,10 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use telemetry::TelemetryGuard;
+use tyrum_api::telemetry::TelemetryGuard;
 use validator::Validate;
 
-mod account_linking;
-mod metrics;
-mod telegram;
-mod telemetry;
-mod waitlist;
+use tyrum_api::{metrics, telegram};
 
 const DEFAULT_BIND_ADDR: &str = "0.0.0.0:8080";
 const DEFAULT_DATABASE_URL: &str = "postgres://tyrum:tyrum_dev_password@localhost:5432/tyrum_dev";
@@ -458,6 +454,14 @@ async fn main() {
         .await
         .expect("failed to run waitlist migrations");
 
+    if matches!(
+        env::var("RUN_MIGRATIONS_ONLY"),
+        Ok(value) if matches!(value.as_str(), "1" | "true" | "TRUE" | "True")
+    ) {
+        tracing::info!("database migrations completed; exiting early per RUN_MIGRATIONS_ONLY");
+        return;
+    }
+
     let account_linking = AccountLinkingRepository::new(waitlist.pool().clone());
 
     let telegram_secret =
@@ -483,11 +487,6 @@ mod tests {
         ACCOUNT_LINKING_ROUTE, AppState, PLACEHOLDER_INTEGRATIONS, PORTAL_ACCOUNT_ID,
         TELEGRAM_WEBHOOK_ROUTE, WAITLIST_ROUTE, build_router, sanitize_opt,
     };
-    use crate::{
-        account_linking::AccountLinkingRepository,
-        telegram::TelegramWebhookVerifier,
-        waitlist::{NewWaitlistSignup, WaitlistError, WaitlistRepository},
-    };
     use axum::{
         body::Body,
         http::{Request, StatusCode},
@@ -503,6 +502,11 @@ mod tests {
     };
     use tokio::time::sleep;
     use tower::ServiceExt;
+    use tyrum_api::{
+        account_linking::AccountLinkingRepository,
+        telegram::TelegramWebhookVerifier,
+        waitlist::{NewWaitlistSignup, WaitlistError, WaitlistRepository},
+    };
 
     const POSTGRES_IMAGE: &str = "pgvector/pgvector";
     const POSTGRES_TAG: &str = "pg16";

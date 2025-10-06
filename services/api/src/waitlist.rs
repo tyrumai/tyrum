@@ -89,7 +89,6 @@ pub struct WaitlistRepository {
 }
 
 impl WaitlistRepository {
-    #[cfg(test)]
     pub fn from_pool(pool: PgPool) -> Self {
         Self { pool }
     }
