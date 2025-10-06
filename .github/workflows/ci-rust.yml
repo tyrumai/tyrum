@@ -69,3 +69,7 @@ jobs:
       - name: cargo test
         if: steps.detect.outputs.has-workspace == 'true'
         run: cargo test --workspace --all-targets
+
+      - name: cargo test (telegram webhook e2e)
+        if: steps.detect.outputs.has-workspace == 'true'
+        run: cargo test -p tyrum-api -- --ignored telegram_webhook_e2e

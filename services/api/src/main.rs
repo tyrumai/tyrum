@@ -2,6 +2,7 @@ use std::{collections::HashMap, env, net::SocketAddr};
 
 use tyrum_api::{
     account_linking::AccountLinkingRepository,
+    ingress::{IngressRepository, IngressRepositoryError},
     waitlist::{NewWaitlistSignup, WaitlistError, WaitlistRepository},
 };
 
@@ -19,6 +20,7 @@ use tyrum_api::telemetry::TelemetryGuard;
 use validator::Validate;
 
 use tyrum_api::{metrics, telegram};
+use tyrum_shared::telegram::{TelegramNormalizationError, normalize_update};
 
 const DEFAULT_BIND_ADDR: &str = "0.0.0.0:8080";
 const DEFAULT_DATABASE_URL: &str = "postgres://tyrum:tyrum_dev_password@localhost:5432/tyrum_dev";
@@ -57,6 +59,7 @@ const PLACEHOLDER_INTEGRATIONS: &[IntegrationDefinition] = &[
 struct AppState {
     waitlist: WaitlistRepository,
     account_linking: AccountLinkingRepository,
+    ingress: IngressRepository,
     telegram: telegram::TelegramWebhookVerifier,
 }
 
@@ -323,18 +326,9 @@ async fn telegram_webhook(
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    match state.telegram.verify(&headers, &body) {
-        Ok(()) => {
-            metrics::record_http_request("POST", TELEGRAM_WEBHOOK_ROUTE, StatusCode::OK.as_u16());
-            StatusCode::OK.into_response()
-        }
+    let response = match state.telegram.verify(&headers, &body) {
         Err(error) => {
             tracing::warn!(reason = %error, "telegram webhook signature validation failed");
-            metrics::record_http_request(
-                "POST",
-                TELEGRAM_WEBHOOK_ROUTE,
-                StatusCode::UNAUTHORIZED.as_u16(),
-            );
             (
                 StatusCode::UNAUTHORIZED,
                 Json(ErrorResponse {
@@ -344,7 +338,72 @@ async fn telegram_webhook(
             )
                 .into_response()
         }
-    }
+        Ok(()) => match normalize_update(body.as_ref()) {
+            Ok(normalized) => {
+                let source = normalized.message.source;
+                if let Err(error) = state
+                    .ingress
+                    .upsert_thread(source, &normalized.thread)
+                    .await
+                {
+                    tracing::error!(reason = %error, "failed to persist ingress thread");
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorResponse {
+                            error: "server_error",
+                            message: "Unable to persist thread for Telegram payload".into(),
+                        }),
+                    )
+                        .into_response()
+                } else {
+                    match state.ingress.insert_message(&normalized.message).await {
+                        Ok(()) => StatusCode::OK.into_response(),
+                        Err(IngressRepositoryError::MessageAlreadyExists) => {
+                            tracing::info!(
+                                "telegram message already persisted; treating as idempotent"
+                            );
+                            StatusCode::OK.into_response()
+                        }
+                        Err(error) => {
+                            tracing::error!(reason = %error, "failed to persist ingress message");
+                            (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                Json(ErrorResponse {
+                                    error: "server_error",
+                                    message: "Unable to persist Telegram message".into(),
+                                }),
+                            )
+                                .into_response()
+                        }
+                    }
+                }
+            }
+            Err(error) => {
+                tracing::warn!(reason = %error, "failed to normalize telegram update");
+                let message = match error {
+                    TelegramNormalizationError::InvalidPayload(_) => {
+                        "Telegram payload could not be parsed"
+                    }
+                    TelegramNormalizationError::MissingMessage => {
+                        "Telegram payload did not include a message"
+                    }
+                    _ => "Telegram payload could not be normalized",
+                };
+                (
+                    StatusCode::BAD_REQUEST,
+                    Json(ErrorResponse {
+                        error: "invalid_payload",
+                        message: message.into(),
+                    }),
+                )
+                    .into_response()
+            }
+        },
+    };
+
+    metrics::record_http_request("POST", TELEGRAM_WEBHOOK_ROUTE, response.status().as_u16());
+
+    response
 }
 
 #[tracing::instrument(name = "api.waitlist.create", skip_all)]
@@ -463,6 +522,7 @@ async fn main() {
     }
 
     let account_linking = AccountLinkingRepository::new(waitlist.pool().clone());
+    let ingress = IngressRepository::new(waitlist.pool().clone());
 
     let telegram_secret =
         env::var("TELEGRAM_WEBHOOK_SECRET").expect("TELEGRAM_WEBHOOK_SECRET must be set");
@@ -472,6 +532,7 @@ async fn main() {
     let app = build_router(AppState {
         waitlist,
         account_linking,
+        ingress,
         telegram,
     });
 
@@ -504,6 +565,7 @@ mod tests {
     use tower::ServiceExt;
     use tyrum_api::{
         account_linking::AccountLinkingRepository,
+        ingress::IngressRepository,
         telegram::TelegramWebhookVerifier,
         waitlist::{NewWaitlistSignup, WaitlistError, WaitlistRepository},
     };
@@ -538,6 +600,7 @@ mod tests {
         router: axum::Router,
         waitlist: WaitlistRepository,
         account_linking: AccountLinkingRepository,
+        ingress: IngressRepository,
         telegram: TelegramWebhookVerifier,
     }
 
@@ -569,12 +632,14 @@ mod tests {
             waitlist.migrate().await.expect("run waitlist migrations");
 
             let account_linking = AccountLinkingRepository::new(waitlist.pool().clone());
+            let ingress = IngressRepository::new(waitlist.pool().clone());
             let telegram =
                 TelegramWebhookVerifier::new(TELEGRAM_SECRET).expect("construct telegram verifier");
 
             let router = build_router(AppState {
                 waitlist: waitlist.clone(),
                 account_linking: account_linking.clone(),
+                ingress: ingress.clone(),
                 telegram: telegram.clone(),
             });
 
@@ -583,6 +648,7 @@ mod tests {
                 router,
                 waitlist,
                 account_linking,
+                ingress,
                 telegram,
             }
         }
@@ -594,12 +660,14 @@ mod tests {
             .connect_lazy("postgres://postgres:postgres@localhost:5432/postgres")
             .expect("create lazy pool");
         let waitlist = WaitlistRepository::from_pool(pool.clone());
+        let ingress = IngressRepository::new(pool.clone());
         let account_linking = AccountLinkingRepository::new(pool);
         let telegram =
             TelegramWebhookVerifier::new(TELEGRAM_SECRET).expect("construct telegram verifier");
         let state = AppState {
             waitlist,
             account_linking,
+            ingress,
             telegram,
         };
         let app = build_router(state);
@@ -791,7 +859,7 @@ mod tests {
     async fn telegram_webhook_accepts_valid_signature() {
         let ctx = TestContext::new().await;
         let app = ctx.router.clone();
-        let payload = r#"{"update_id":123}"#;
+        let payload = r#"{"update_id":123,"message":{"message_id":7,"date":1710000000,"chat":{"id":42,"type":"private"},"text":"ping"}}"#;
         let signature = ctx.telegram.expected_signature_header(payload.as_bytes());
 
         let response = app
@@ -832,6 +900,101 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    #[ignore = "requires docker"]
+    async fn telegram_webhook_e2e() {
+        let ctx = TestContext::new().await;
+        let app = ctx.router.clone();
+        let payload = include_str!("../../../shared/tests/fixtures/telegram/text_message.json");
+        let signature = ctx.telegram.expected_signature_header(payload.as_bytes());
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(TELEGRAM_WEBHOOK_ROUTE)
+                    .header("content-type", "application/json")
+                    .header("X-Telegram-Bot-Api-Secret-Token", TELEGRAM_SECRET)
+                    .header("X-Telegram-Bot-Api-Signature", signature)
+                    .body(Body::from(payload))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let thread_row = sqlx::query(
+            r#"
+            SELECT kind, title, username, pii_fields
+            FROM ingress_threads
+            WHERE source = $1 AND thread_id = $2
+            "#,
+        )
+        .bind("telegram")
+        .bind("987654321")
+        .fetch_one(ctx.ingress.pool())
+        .await
+        .expect("fetch persisted thread");
+
+        assert_eq!(thread_row.try_get::<String, _>("kind").unwrap(), "private");
+        assert!(
+            thread_row
+                .try_get::<Option<String>, _>("title")
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            thread_row
+                .try_get::<Option<String>, _>("username")
+                .unwrap()
+                .is_none()
+        );
+        let thread_pii: Vec<String> = thread_row.try_get("pii_fields").unwrap();
+        assert!(thread_pii.is_empty());
+
+        let message_row = sqlx::query(
+            r#"
+            SELECT message_id, content, sender, pii_fields
+            FROM ingress_messages
+            WHERE source = $1 AND thread_id = $2 AND message_id = $3
+            "#,
+        )
+        .bind("telegram")
+        .bind("987654321")
+        .bind("111")
+        .fetch_one(ctx.ingress.pool())
+        .await
+        .expect("fetch persisted message");
+
+        assert_eq!(
+            message_row.try_get::<String, _>("message_id").unwrap(),
+            "111"
+        );
+        let content: Value = message_row.try_get("content").unwrap();
+        assert_eq!(content["kind"], "text");
+        assert_eq!(content["text"], "Hello planner");
+
+        let sender: Value = message_row
+            .try_get::<Option<Value>, _>("sender")
+            .unwrap()
+            .expect("sender metadata stored");
+        assert_eq!(sender["id"], "555555");
+        assert_eq!(sender["username"], "rons");
+
+        let message_pii: Vec<String> = message_row.try_get("pii_fields").unwrap();
+        assert_eq!(
+            message_pii,
+            vec![
+                "message_text",
+                "sender_first_name",
+                "sender_last_name",
+                "sender_username",
+                "sender_language_code"
+            ]
+        );
     }
 
     #[test]
