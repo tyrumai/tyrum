@@ -11,11 +11,11 @@ default = []
 audit-demo = [
     "dep:anyhow",
     "dep:testcontainers",
-    "dep:tokio",
     "dep:tyrum-memory"
 ]
 
 [dependencies]
+axum = { version = "0.7", features = ["json"] }
 chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -32,11 +32,12 @@ thiserror = "1"
 tracing = "0.1"
 uuid = { version = "1", features = ["serde", "v4"] }
 anyhow = { version = "1", optional = true }
-tokio = { version = "1.43", features = ["macros", "rt", "rt-multi-thread", "time"], optional = true }
+tokio = { version = "1.43", features = ["macros", "net", "rt", "rt-multi-thread", "signal", "time"] }
 testcontainers = { version = "0.18", optional = true }
 tyrum-memory = { path = "../memory", optional = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
 tyrum-shared = { path = "../../shared/tyrum-shared" }
+tower-http = { version = "0.5", features = ["limit"] }
 
 [dev-dependencies]
 anyhow = "1"
@@ -53,11 +54,17 @@ sqlx = { version = "0.7", default-features = false, features = [
 testcontainers = "0.18"
 tokio = { version = "1.43", features = ["macros", "rt", "rt-multi-thread", "time"] }
 tyrum-memory = { path = "../memory" }
+tower = "0.5"
+http-body-util = "0.1"
 
 [[bin]]
 name = "audit_demo"
 path = "src/bin/audit_demo.rs"
 required-features = ["audit-demo"]
+
+[[bin]]
+name = "planner_http"
+path = "src/bin/http_server.rs"
 
 [lints]
 workspace = true
