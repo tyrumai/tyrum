@@ -10,7 +10,7 @@ use serde_json::{Map as JsonMap, Value, json};
 use tower_http::limit::RequestBodyLimitLayer;
 use uuid::Uuid;
 
-use crate::policy::{PolicyClient, PolicyDecision, PolicyDecisionKind};
+use crate::policy::{PolicyClient, PolicyDecision, PolicyDecisionKind, PolicyRuleDecision};
 use crate::{
     ActionArguments, ActionPrimitive, ActionPrimitiveKind, PlanError, PlanErrorCode,
     PlanEscalation, PlanOutcome, PlanRequest, PlanResponse, PlanSummary,
@@ -172,13 +172,17 @@ fn handle_policy_decision(
 }
 
 fn build_policy_escalation(decision: &PolicyDecision) -> PlanEscalation {
-    let blocking_rules: Vec<_> = decision
+    let mut relevant_rules: Vec<&PolicyRuleDecision> = decision
         .rules
         .iter()
         .filter(|rule| matches!(rule.outcome, PolicyDecisionKind::Escalate))
         .collect();
 
-    let rationale_text = blocking_rules
+    if relevant_rules.is_empty() {
+        relevant_rules = decision.rules.iter().collect();
+    }
+
+    let rationale_text = relevant_rules
         .iter()
         .map(|rule| format!("{:?}: {}", rule.rule, rule.detail))
         .collect::<Vec<_>>()
@@ -192,8 +196,8 @@ fn build_policy_escalation(decision: &PolicyDecision) -> PlanEscalation {
 
     let context = json!({
         "decision": "escalate",
-        "rules": blocking_rules
-            .into_iter()
+        "rules": relevant_rules
+            .iter()
             .map(|rule| json!({
                 "rule": format!("{:?}", rule.rule),
                 "detail": rule.detail,
@@ -220,17 +224,21 @@ fn build_policy_escalation(decision: &PolicyDecision) -> PlanEscalation {
 }
 
 fn build_policy_failure(decision: &PolicyDecision) -> PlanError {
-    let denied_rules: Vec<_> = decision
+    let mut relevant_rules: Vec<&PolicyRuleDecision> = decision
         .rules
         .iter()
         .filter(|rule| matches!(rule.outcome, PolicyDecisionKind::Deny))
         .collect();
 
-    let detail = if denied_rules.is_empty() {
+    if relevant_rules.is_empty() {
+        relevant_rules = decision.rules.iter().collect();
+    }
+
+    let detail = if relevant_rules.is_empty() {
         None
     } else {
         Some(
-            denied_rules
+            relevant_rules
                 .iter()
                 .map(|rule| format!("{:?}: {}", rule.rule, rule.detail))
                 .collect::<Vec<_>>()

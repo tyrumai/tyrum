@@ -235,6 +235,90 @@ async fn plan_returns_failure_on_policy_denial() {
     }
 }
 
+#[tokio::test]
+async fn plan_escalation_includes_context_when_rules_do_not_match() {
+    let payload = sample_request();
+    let body = serde_json::to_vec(&payload).expect("serialize plan request");
+
+    let (policy_client, server) = mock_policy(serde_json::json!({
+        "decision": "escalate",
+        "rules": [
+            {
+                "rule": "legal_compliance",
+                "outcome": "approve",
+                "detail": "Policy service defaulted to escalation",
+            }
+        ],
+    }))
+    .await;
+
+    let response = build_router(PlannerState { policy_client })
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/plan")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .expect("construct request"),
+        )
+        .await
+        .expect("receive response");
+
+    server.abort();
+
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let plan: PlanResponse = serde_json::from_slice(&bytes).expect("decode plan response");
+
+    match plan.outcome {
+        PlanOutcome::Escalate { escalation } => {
+            assert!(escalation.rationale.is_some());
+        }
+        outcome => panic!("expected escalation, got {:?}", outcome),
+    }
+}
+
+#[tokio::test]
+async fn plan_failure_includes_details_when_rules_do_not_match() {
+    let payload = sample_request();
+    let body = serde_json::to_vec(&payload).expect("serialize plan request");
+
+    let (policy_client, server) = mock_policy(serde_json::json!({
+        "decision": "deny",
+        "rules": [
+            {
+                "rule": "spend_limit",
+                "outcome": "escalate",
+                "detail": "Escalation escalated to deny",
+            }
+        ],
+    }))
+    .await;
+
+    let response = build_router(PlannerState { policy_client })
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/plan")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .expect("construct request"),
+        )
+        .await
+        .expect("receive response");
+
+    server.abort();
+
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let plan: PlanResponse = serde_json::from_slice(&bytes).expect("decode plan response");
+
+    match plan.outcome {
+        PlanOutcome::Failure { error } => {
+            assert!(error.detail.is_some());
+        }
+        outcome => panic!("expected failure, got {:?}", outcome),
+    }
+}
+
 async fn mock_policy(response: serde_json::Value) -> (PolicyClient, JoinHandle<()>) {
     let body = response;
     let app = Router::new().route(
