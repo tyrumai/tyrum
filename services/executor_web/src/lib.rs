@@ -157,15 +157,13 @@ pub async fn execute_web_action(action: &ActionPrimitive) -> Result<WebActionOut
 
     page.goto_builder(target.as_str()).goto().await?;
 
-    let mut auto_redacted = identify_sensitive_fields(&page, &options.fields).await?;
+    let auto_redacted = identify_sensitive_fields(&page, &options.fields).await?;
 
     fill_fields(&page, &options.fields).await?;
     if let Some(submit) = options.submit.as_ref() {
         submit_form(&page, submit).await?;
         wait_for_post_submit(&page, submit).await?;
     }
-
-    auto_redacted.extend(identify_sensitive_fields(&page, &options.fields).await?);
 
     let title = page.title().await?;
     let current_url: String = page.eval("() => window.location.href").await?;
