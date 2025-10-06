@@ -1,5 +1,7 @@
 mod common;
 
+use std::sync::Arc;
+
 use axum::{body::Body, http::Request};
 use chrono::Utc;
 use common::{policy::mock_policy, postgres::TestPostgres};
@@ -7,6 +9,7 @@ use http_body_util::BodyExt;
 use serde_json::json;
 use sqlx::Row;
 use tower::ServiceExt;
+use tyrum_discovery::DefaultDiscoveryPipeline;
 use tyrum_planner::{
     EventLog, PlanOutcome, PlanRequest, PlanResponse,
     http::{PlannerState, build_router},
@@ -45,6 +48,7 @@ async fn planner_appends_audit_event_with_redacted_payload() {
     let state = PlannerState {
         policy_client,
         event_log: event_log.clone(),
+        discovery: Arc::new(DefaultDiscoveryPipeline::new()),
     };
 
     let request = sample_request();
@@ -122,6 +126,16 @@ async fn planner_appends_audit_event_with_redacted_payload() {
             .unwrap()
             .to_string()
             .contains("message_text")
+    );
+
+    let discovery = action
+        .get("discovery")
+        .and_then(|value| value.as_object())
+        .expect("discovery audit block present");
+    assert_eq!(
+        discovery.get("status").and_then(|value| value.as_str()),
+        Some("not_found"),
+        "default pipeline should record not_found discovery"
     );
 
     let payload_text = action.to_string();

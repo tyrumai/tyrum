@@ -1,3 +1,5 @@
+use std::{convert::TryFrom, sync::Arc};
+
 use axum::{
     Json, Router,
     extract::State,
@@ -14,6 +16,9 @@ use crate::policy::{PolicyClient, PolicyDecision, PolicyDecisionKind, PolicyRule
 use crate::{
     ActionArguments, ActionPrimitive, ActionPrimitiveKind, EventLog, NewPlannerEvent, PlanError,
     PlanErrorCode, PlanEscalation, PlanOutcome, PlanRequest, PlanResponse, PlanSummary,
+};
+use tyrum_discovery::{
+    DiscoveryConnector, DiscoveryOutcome, DiscoveryPipeline, DiscoveryRequest, DiscoveryStrategy,
 };
 use tyrum_shared::{MessageSource, PiiField, ThreadKind};
 
@@ -35,6 +40,7 @@ struct ValidationError {
 pub struct PlannerState {
     pub policy_client: PolicyClient,
     pub event_log: EventLog,
+    pub discovery: Arc<dyn DiscoveryPipeline + Send + Sync>,
 }
 
 pub fn build_router(state: PlannerState) -> Router {
@@ -65,9 +71,8 @@ async fn plan(
     let plan_uuid = Uuid::new_v4();
     let policy_result = state.policy_client.check(&payload).await;
 
-    let (outcome, policy_audit) = match policy_result {
+    let (outcome, policy_audit, discovery_audit) = match policy_result {
         Ok(decision) => {
-            let outcome = build_outcome_for_decision(&payload, &decision);
             let rule_outcomes: Vec<String> = decision
                 .rules
                 .iter()
@@ -78,7 +83,15 @@ async fn plan(
                 rules = ?rule_outcomes,
                 "policy decision received"
             );
-            (outcome, PolicyAudit::from_decision(&decision))
+
+            let (outcome, discovery_audit) =
+                build_outcome_for_decision(&payload, &decision, state.discovery.as_ref());
+
+            (
+                outcome,
+                PolicyAudit::from_decision(&decision),
+                discovery_audit,
+            )
         }
         Err(error) => {
             tracing::warn!(error = %error, "policy check failed");
@@ -91,13 +104,23 @@ async fn plan(
                     retryable: true,
                 },
             };
-            (outcome, PolicyAudit::unavailable(reason))
+            (
+                outcome,
+                PolicyAudit::unavailable(reason),
+                DiscoveryAudit::skipped(),
+            )
         }
     };
 
     let plan_id = format_plan_id(plan_uuid);
-    let audit_event =
-        PlannerDecisionAudit::new(plan_uuid, &plan_id, &payload, policy_audit, &outcome);
+    let audit_event = PlannerDecisionAudit::new(
+        plan_uuid,
+        &plan_id,
+        &payload,
+        policy_audit,
+        discovery_audit,
+        &outcome,
+    );
 
     match NewPlannerEvent::from_payload(
         Uuid::new_v4(),
@@ -130,31 +153,6 @@ async fn plan(
 #[tracing::instrument(name = "planner.health", skip_all)]
 async fn health() -> Json<HealthResponse> {
     Json(HealthResponse { status: "ok" })
-}
-
-fn stub_steps() -> Vec<ActionPrimitive> {
-    let mut research_args = JsonMap::new();
-    research_args.insert(
-        "intent".to_string(),
-        Value::String("collect_clarifying_details".into()),
-    );
-    research_args.insert(
-        "notes".to_string(),
-        Value::String("Review memory and prior commitments".into()),
-    );
-
-    let mut message_args = JsonMap::new();
-    message_args.insert("channel".to_string(), Value::String("internal".into()));
-    message_args.insert(
-        "body".to_string(),
-        Value::String("Queue operator follow-up for confirmation".into()),
-    );
-
-    let research = ActionPrimitive::new(ActionPrimitiveKind::Research, research_args);
-    let follow_up = ActionPrimitive::new(ActionPrimitiveKind::Message, message_args)
-        .with_postcondition(json!({ "status": "queued" }));
-
-    vec![research, follow_up]
 }
 
 fn bad_request(message: impl Into<String>) -> (StatusCode, Json<ValidationError>) {
@@ -268,20 +266,216 @@ fn build_policy_failure(decision: &PolicyDecision) -> PlanError {
     }
 }
 
-fn build_outcome_for_decision(request: &PlanRequest, decision: &PolicyDecision) -> PlanOutcome {
+fn build_outcome_for_decision(
+    request: &PlanRequest,
+    decision: &PolicyDecision,
+    discovery: &dyn DiscoveryPipeline,
+) -> (PlanOutcome, DiscoveryAudit) {
     match decision.decision {
-        PolicyDecisionKind::Approve => PlanOutcome::Success {
-            steps: stub_steps(),
-            summary: PlanSummary {
-                synopsis: Some(format!("Stub plan prepared for {}", request.subject_id)),
+        PolicyDecisionKind::Approve => {
+            let discovery_request = discovery_request_for(request);
+            let outcome = discovery.discover(&discovery_request);
+            log_discovery_outcome(&discovery_request, &outcome);
+
+            match &outcome {
+                DiscoveryOutcome::RetryLater { retry_after } => {
+                    let (detail, retry_after_ms) = match retry_after {
+                        Some(duration) => {
+                            let millis = duration.as_millis();
+                            let capped = u64::try_from(millis).unwrap_or(u64::MAX);
+                            (Some(format!("retry_after_ms={capped}")), Some(capped))
+                        }
+                        None => (None, None),
+                    };
+
+                    let error = PlanError {
+                        code: PlanErrorCode::ExecutorUnavailable,
+                        message: "Discovery pipeline requested retry".into(),
+                        detail,
+                        retryable: true,
+                    };
+
+                    (
+                        PlanOutcome::Failure { error },
+                        DiscoveryAudit::deferred(retry_after_ms),
+                    )
+                }
+                _ => (
+                    PlanOutcome::Success {
+                        steps: build_plan_steps(request, &outcome),
+                        summary: plan_summary_for(request, &outcome),
+                    },
+                    DiscoveryAudit::from_outcome(&outcome),
+                ),
+            }
+        }
+        PolicyDecisionKind::Escalate => (
+            PlanOutcome::Escalate {
+                escalation: build_policy_escalation(decision),
             },
-        },
-        PolicyDecisionKind::Escalate => PlanOutcome::Escalate {
-            escalation: build_policy_escalation(decision),
-        },
-        PolicyDecisionKind::Deny => PlanOutcome::Failure {
-            error: build_policy_failure(decision),
-        },
+            DiscoveryAudit::skipped(),
+        ),
+        PolicyDecisionKind::Deny => (
+            PlanOutcome::Failure {
+                error: build_policy_failure(decision),
+            },
+            DiscoveryAudit::skipped(),
+        ),
+    }
+}
+
+fn discovery_request_for(request: &PlanRequest) -> DiscoveryRequest {
+    DiscoveryRequest {
+        subject: request.subject_id.clone(),
+    }
+}
+
+fn log_discovery_outcome(request: &DiscoveryRequest, outcome: &DiscoveryOutcome) {
+    let subject = request.sanitized_subject();
+    match outcome {
+        DiscoveryOutcome::Found(connector) => {
+            tracing::info!(
+                target: "tyrum::planner",
+                subject,
+                strategy = strategy_label(connector.strategy),
+                locator = connector.locator.as_str(),
+                "discovery resolved connector"
+            );
+        }
+        DiscoveryOutcome::NotFound => {
+            tracing::info!(
+                target: "tyrum::planner",
+                subject,
+                "discovery returned no connector"
+            );
+        }
+        DiscoveryOutcome::RetryLater { retry_after } => {
+            let retry_ms = retry_after.map(|duration| duration.as_millis());
+            tracing::warn!(
+                target: "tyrum::planner",
+                subject,
+                retry_after_ms = retry_ms,
+                "discovery requested retry"
+            );
+        }
+    }
+}
+
+fn build_plan_steps(request: &PlanRequest, outcome: &DiscoveryOutcome) -> Vec<ActionPrimitive> {
+    let mut steps = Vec::new();
+    steps.push(research_step());
+
+    match outcome {
+        DiscoveryOutcome::Found(connector) => {
+            steps.push(discovered_execution_step(connector));
+        }
+        DiscoveryOutcome::NotFound => {
+            steps.push(fallback_execution_step());
+        }
+        DiscoveryOutcome::RetryLater { .. } => {}
+    }
+
+    steps.push(follow_up_step(request));
+
+    steps
+}
+
+fn plan_summary_for(request: &PlanRequest, outcome: &DiscoveryOutcome) -> PlanSummary {
+    let synopsis = match outcome {
+        DiscoveryOutcome::Found(connector) => format!(
+            "Discovered {} capability for {}",
+            strategy_label(connector.strategy),
+            request.subject_id
+        ),
+        DiscoveryOutcome::NotFound => {
+            format!("Falling back to automation for {}", request.subject_id)
+        }
+        DiscoveryOutcome::RetryLater { .. } => "Discovery deferred".to_string(),
+    };
+
+    PlanSummary {
+        synopsis: Some(synopsis),
+    }
+}
+
+fn research_step() -> ActionPrimitive {
+    let mut research_args = JsonMap::new();
+    research_args.insert(
+        "intent".to_string(),
+        Value::String("collect_clarifying_details".into()),
+    );
+    research_args.insert(
+        "notes".to_string(),
+        Value::String("Review memory and prior commitments".into()),
+    );
+
+    ActionPrimitive::new(ActionPrimitiveKind::Research, research_args)
+}
+
+fn discovered_execution_step(connector: &DiscoveryConnector) -> ActionPrimitive {
+    let mut args = JsonMap::new();
+    args.insert(
+        "executor".to_string(),
+        Value::String(executor_label(connector.strategy).into()),
+    );
+    args.insert(
+        "locator".to_string(),
+        Value::String(connector.locator.clone()),
+    );
+    args.insert(
+        "intent".to_string(),
+        Value::String("execute_discovered_capability".into()),
+    );
+
+    ActionPrimitive::new(ActionPrimitiveKind::Http, args).with_postcondition(json!({
+        "status": "completed",
+        "strategy": strategy_label(connector.strategy),
+    }))
+}
+
+fn fallback_execution_step() -> ActionPrimitive {
+    let mut args = JsonMap::new();
+    args.insert("executor".to_string(), Value::String("generic-web".into()));
+    args.insert(
+        "intent".to_string(),
+        Value::String("fallback_automation".into()),
+    );
+
+    ActionPrimitive::new(ActionPrimitiveKind::Web, args).with_postcondition(json!({
+        "status": "completed",
+        "executor": "generic-web",
+    }))
+}
+
+fn follow_up_step(request: &PlanRequest) -> ActionPrimitive {
+    let mut message_args = JsonMap::new();
+    message_args.insert("channel".to_string(), Value::String("internal".into()));
+    message_args.insert(
+        "body".to_string(),
+        Value::String(format!(
+            "Summarize discovery path for subject {}",
+            request.subject_id
+        )),
+    );
+
+    ActionPrimitive::new(ActionPrimitiveKind::Message, message_args).with_postcondition(json!({
+        "status": "queued"
+    }))
+}
+
+fn strategy_label(strategy: DiscoveryStrategy) -> &'static str {
+    match strategy {
+        DiscoveryStrategy::Mcp => "mcp",
+        DiscoveryStrategy::StructuredApi => "structured_api",
+        DiscoveryStrategy::GenericHttp => "generic_http",
+    }
+}
+
+fn executor_label(strategy: DiscoveryStrategy) -> &'static str {
+    match strategy {
+        DiscoveryStrategy::Mcp => "discovered-mcp",
+        DiscoveryStrategy::StructuredApi => "discovered-structured",
+        DiscoveryStrategy::GenericHttp => "generic-http",
     }
 }
 
@@ -291,6 +485,7 @@ struct PlannerDecisionAudit {
     plan_uuid: Uuid,
     request: RedactedRequest,
     policy: PolicyAudit,
+    discovery: DiscoveryAudit,
     outcome: PlanOutcomeAudit,
 }
 
@@ -300,6 +495,7 @@ impl PlannerDecisionAudit {
         plan_id: &str,
         request: &PlanRequest,
         policy: PolicyAudit,
+        discovery: DiscoveryAudit,
         outcome: &PlanOutcome,
     ) -> Self {
         Self {
@@ -307,6 +503,7 @@ impl PlannerDecisionAudit {
             plan_uuid,
             request: RedactedRequest::from_plan_request(request),
             policy,
+            discovery,
             outcome: PlanOutcomeAudit::from(outcome),
         }
     }
@@ -385,6 +582,39 @@ impl PolicyAudit {
 
     fn unavailable(reason: String) -> Self {
         Self::Unavailable { reason }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+enum DiscoveryAudit {
+    Resolved { strategy: String, locator: String },
+    NotFound,
+    Deferred { retry_after_ms: Option<u64> },
+    Skipped,
+}
+
+impl DiscoveryAudit {
+    fn from_outcome(outcome: &DiscoveryOutcome) -> Self {
+        match outcome {
+            DiscoveryOutcome::Found(connector) => Self::Resolved {
+                strategy: strategy_label(connector.strategy).into(),
+                locator: connector.locator.clone(),
+            },
+            DiscoveryOutcome::NotFound => Self::NotFound,
+            DiscoveryOutcome::RetryLater { retry_after } => Self::Deferred {
+                retry_after_ms: retry_after
+                    .map(|duration| u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)),
+            },
+        }
+    }
+
+    fn deferred(retry_after_ms: Option<u64>) -> Self {
+        Self::Deferred { retry_after_ms }
+    }
+
+    fn skipped() -> Self {
+        Self::Skipped
     }
 }
 

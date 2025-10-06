@@ -1,5 +1,7 @@
 mod common;
 
+use std::sync::Arc;
+
 use axum::{body::Body, http::Request};
 use chrono::Utc;
 use common::{policy::mock_policy, postgres::TestPostgres};
@@ -7,6 +9,7 @@ use http_body_util::BodyExt;
 use serde_json::json;
 use sqlx::Row;
 use tower::ServiceExt;
+use tyrum_discovery::DefaultDiscoveryPipeline;
 use tyrum_planner::{
     EventLog, PlanErrorCode, PlanOutcome, PlanRequest, PlanResponse,
     http::{PlannerState, build_router},
@@ -41,6 +44,7 @@ async fn policy_denial_is_logged_and_sanitized() {
     let state = PlannerState {
         policy_client,
         event_log: event_log.clone(),
+        discovery: Arc::new(DefaultDiscoveryPipeline::new()),
     };
 
     let request = sample_request();
@@ -128,6 +132,16 @@ async fn policy_denial_is_logged_and_sanitized() {
             .chars()
             .any(|character| character.is_ascii_digit()),
         "rule detail should be sanitized: {rule_detail}"
+    );
+
+    let discovery = action
+        .get("discovery")
+        .and_then(|value| value.as_object())
+        .expect("discovery audit block present");
+    assert_eq!(
+        discovery.get("status").and_then(|value| value.as_str()),
+        Some("skipped"),
+        "discovery should be skipped for policy denials"
     );
 
     let outcome = action
