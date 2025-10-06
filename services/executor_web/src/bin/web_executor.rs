@@ -4,13 +4,13 @@ use anyhow::Context;
 use axum::{Json, Router, routing::get};
 use tokio::signal;
 use tracing::info;
-use tyrum_executor_web::sandbox_constraints;
+use tyrum_executor_web::{sandbox_constraints, telemetry::TelemetryGuard};
 
 const DEFAULT_BIND_ADDR: &str = "0.0.0.0:8091";
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    init_tracing();
+    let _telemetry = TelemetryGuard::install("tyrum-executor-web").context("install telemetry")?;
 
     let bind_addr = resolve_bind_addr()?;
     let listener = tokio::net::TcpListener::bind(bind_addr)
@@ -27,18 +27,6 @@ async fn main() -> anyhow::Result<()> {
         .with_graceful_shutdown(shutdown_signal())
         .await
         .context("serve web executor")
-}
-
-fn init_tracing() {
-    use tracing_subscriber::{EnvFilter, fmt, prelude::*};
-
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-    fmt()
-        .with_env_filter(filter)
-        .with_target(false)
-        .compact()
-        .finish()
-        .init();
 }
 
 fn resolve_bind_addr() -> anyhow::Result<SocketAddr> {

@@ -7,16 +7,25 @@
 //! primitives (form interactions, postcondition enforcement) will extend this
 //! surface in follow-up issues per the product concept (§15-16).
 
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, sync::Arc, time::Duration};
 
+use crate::telemetry::AttemptContext;
 use playwright::{
     Playwright,
     api::{browser::Browser, page::Page},
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tokio::time::sleep;
 use tyrum_shared::planner::{ActionPrimitive, ActionPrimitiveKind};
 use url::Url;
+
+pub mod telemetry;
+
+const MAX_ATTEMPTS: u32 = 3;
+const INITIAL_BACKOFF_MS: u64 = 200;
+const MAX_BACKOFF_MS: u64 = 2_000;
+const BACKOFF_MULTIPLIER: u32 = 2;
 
 /// Result alias for executor operations.
 pub type Result<T> = std::result::Result<T, WebExecutorError>;
@@ -118,6 +127,10 @@ pub enum WebExecutorError {
     /// None of the supported browser engines could be launched.
     #[error("unable to launch supported browser: {details}")]
     BrowserUnavailable { details: String },
+    /// Test-only helper variant to simulate transient failures.
+    #[cfg(test)]
+    #[error("transient test failure: {0}")]
+    TestTransient(&'static str),
 }
 
 /// Enumerates the browser engines supported by the executor.
@@ -149,7 +162,82 @@ pub async fn execute_web_action(action: &ActionPrimitive) -> Result<WebActionOut
     ensure_web_primitive(action)?;
     let target = extract_url(action)?;
     let options = parse_web_action_options(action)?;
+    let telemetry_context = AttemptContext::from_url(&target);
 
+    execute_with_retry(&telemetry_context, move |_attempt| {
+        let target = target.clone();
+        let options = options.clone();
+        async move { run_single_attempt(target, options).await }
+    })
+    .await
+}
+
+async fn execute_with_retry<F, Fut, T>(context: &AttemptContext, mut operation: F) -> Result<T>
+where
+    F: FnMut(u32) -> Fut,
+    Fut: std::future::Future<Output = Result<T>>,
+{
+    let mut attempt = 1;
+    let mut backoff = Duration::from_millis(INITIAL_BACKOFF_MS);
+
+    loop {
+        let future = operation(attempt);
+        let (result, _) =
+            crate::telemetry::record_attempt(context, attempt, MAX_ATTEMPTS, future).await;
+
+        match result {
+            Ok(value) => return Ok(value),
+            Err(err) => {
+                if attempt >= MAX_ATTEMPTS || !is_transient(&err) {
+                    tracing::error!(
+                        attempt,
+                        max_attempts = MAX_ATTEMPTS,
+                        error = %err,
+                        "web executor attempt failed"
+                    );
+                    return Err(err);
+                }
+
+                tracing::warn!(
+                    attempt,
+                    backoff_ms = backoff.as_millis() as i64,
+                    error = %err,
+                    "transient failure during Playwright execution; retrying"
+                );
+
+                sleep(backoff).await;
+                attempt += 1;
+                backoff = next_backoff(backoff);
+            }
+        }
+    }
+}
+
+fn next_backoff(current: Duration) -> Duration {
+    let multiplied = current
+        .as_millis()
+        .saturating_mul(BACKOFF_MULTIPLIER as u128)
+        .min(MAX_BACKOFF_MS as u128);
+    Duration::from_millis(multiplied as u64)
+}
+
+fn is_transient(err: &WebExecutorError) -> bool {
+    matches!(
+        err,
+        WebExecutorError::Playwright(_) | WebExecutorError::PlaywrightDriver(_)
+    ) || {
+        #[cfg(test)]
+        {
+            matches!(err, WebExecutorError::TestTransient(_))
+        }
+        #[cfg(not(test))]
+        {
+            false
+        }
+    }
+}
+
+async fn run_single_attempt(target: Url, options: WebActionOptions) -> Result<WebActionOutcome> {
     let playwright = Playwright::initialize().await?;
     let (browser, browser_flavor) = launch_browser(&playwright).await?;
     let context = browser.context_builder().build().await?;
@@ -170,8 +258,6 @@ pub async fn execute_web_action(action: &ActionPrimitive) -> Result<WebActionOut
     let dom_excerpt = capture_dom_excerpt(&page, &options).await?;
     let submitted_fields = summarize_fields(&options.fields, &auto_redacted);
 
-    // Close context and browser to keep future test runs predictable. Ignore
-    // errors during teardown since the main navigation already succeeded.
     let _ = page.close(None).await;
     let _ = context.close().await;
     let _ = browser.close().await;
@@ -251,7 +337,7 @@ async fn launch_browser(playwright: &Playwright) -> Result<(Browser, BrowserFlav
 
 const REDACTED_VALUE: &str = "REDACTED";
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct WebActionOptions {
     fields: Vec<FormFieldSpec>,
     submit: Option<SubmitActionSpec>,
@@ -585,8 +671,115 @@ async fn identify_sensitive_fields(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use once_cell::sync::Lazy;
+    use opentelemetry::{Value, global};
+    use opentelemetry_sdk::metrics::{
+        InMemoryMetricExporter, PeriodicReader, SdkMeterProvider,
+        data::{AggregatedMetrics, HistogramDataPoint, MetricData, SumDataPoint},
+    };
     use serde_json::json;
+    use std::{
+        fmt,
+        sync::{Arc, Mutex as StdMutex},
+    };
+    use tokio::sync::Mutex as AsyncMutex;
+    use tracing::subscriber::set_default;
+    use tracing::{
+        Id, Subscriber,
+        field::{Field, Visit},
+    };
+    use tracing_subscriber::{
+        Layer, Registry, layer::Context, layer::SubscriberExt, registry::LookupSpan,
+    };
     use tyrum_shared::planner::ActionArguments;
+
+    static TELEMETRY_GUARD: Lazy<AsyncMutex<()>> = Lazy::new(|| AsyncMutex::new(()));
+
+    #[derive(Clone, Debug, Default)]
+    struct CapturedSpan {
+        attempt: Option<i64>,
+        outcome: Option<String>,
+        host: Option<String>,
+    }
+
+    struct RecordingLayer {
+        spans: Arc<StdMutex<Vec<CapturedSpan>>>,
+    }
+
+    impl RecordingLayer {
+        fn new(spans: Arc<StdMutex<Vec<CapturedSpan>>>) -> Self {
+            Self { spans }
+        }
+
+        fn push(&self, span: CapturedSpan) {
+            self.spans.lock().unwrap().push(span);
+        }
+    }
+
+    struct FieldVisitor<'a> {
+        span: &'a mut CapturedSpan,
+    }
+
+    impl<'a> FieldVisitor<'a> {
+        fn record_str(&mut self, field: &Field, value: &str) {
+            match field.name() {
+                "outcome" => self.span.outcome = Some(value.to_owned()),
+                "target_host" => self.span.host = Some(value.to_owned()),
+                _ => {}
+            }
+        }
+    }
+
+    impl<'a> Visit for FieldVisitor<'a> {
+        fn record_str(&mut self, field: &Field, value: &str) {
+            self.record_str(field, value);
+        }
+
+        fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+            self.record_str(field, &format!("{value:?}"));
+        }
+
+        fn record_i64(&mut self, field: &Field, value: i64) {
+            if field.name() == "attempt" {
+                self.span.attempt = Some(value);
+            }
+        }
+
+        fn record_u64(&mut self, field: &Field, value: u64) {
+            if field.name() == "attempt" {
+                self.span.attempt = Some(value as i64);
+            }
+        }
+    }
+
+    impl<S> Layer<S> for RecordingLayer
+    where
+        S: Subscriber + for<'lookup> LookupSpan<'lookup>,
+    {
+        fn on_new_span(&self, attrs: &tracing::span::Attributes<'_>, id: &Id, ctx: Context<'_, S>) {
+            if let Some(span) = ctx.span(id) {
+                let mut data = CapturedSpan::default();
+                attrs.record(&mut FieldVisitor { span: &mut data });
+                span.extensions_mut().insert(data);
+            }
+        }
+
+        fn on_record(&self, id: &Id, values: &tracing::span::Record<'_>, ctx: Context<'_, S>) {
+            if let Some(span) = ctx.span(id)
+                && let Some(data) = span.extensions_mut().get_mut::<CapturedSpan>()
+            {
+                values.record(&mut FieldVisitor { span: data });
+            }
+        }
+
+        fn on_close(&self, id: Id, ctx: Context<'_, S>) {
+            if let Some(span) = ctx.span(&id)
+                && let Some(data) = span.extensions_mut().remove::<CapturedSpan>()
+            {
+                self.push(data);
+            }
+        }
+    }
 
     #[tokio::test]
     async fn rejects_non_web_primitives() {
@@ -639,5 +832,157 @@ mod tests {
             WebExecutorError::InvalidArgumentValue { argument, .. }
             if argument == "submit.selector"
         ));
+    }
+
+    #[tokio::test]
+    async fn retries_transient_failure_and_records_telemetry() {
+        let _lock = TELEMETRY_GUARD.lock().await;
+
+        let exporter = InMemoryMetricExporter::default();
+        let reader = PeriodicReader::builder(exporter.clone()).build();
+        let meter_provider = SdkMeterProvider::builder().with_reader(reader).build();
+        global::set_meter_provider(meter_provider.clone());
+
+        let spans = Arc::new(StdMutex::new(Vec::new()));
+        let subscriber = Registry::default().with(RecordingLayer::new(spans.clone()));
+        let guard = set_default(subscriber);
+
+        let attempts = Arc::new(StdMutex::new(Vec::new()));
+        let attempts_for_closure = attempts.clone();
+
+        let context = AttemptContext::from_url(&Url::parse("https://example.test/login").unwrap());
+        let result = execute_with_retry(&context, move |attempt| {
+            let attempts = attempts_for_closure.clone();
+            async move {
+                attempts.lock().unwrap().push(attempt);
+                if attempt == 1 {
+                    Err(WebExecutorError::TestTransient("flaky"))
+                } else {
+                    Ok(())
+                }
+            }
+        })
+        .await;
+
+        drop(guard);
+
+        assert!(result.is_ok(), "expected retry to succeed");
+        assert_eq!(*attempts.lock().unwrap(), vec![1, 2]);
+
+        meter_provider.force_flush().expect("force flush metrics");
+        meter_provider.shutdown().expect("shutdown meter provider");
+        global::set_meter_provider(SdkMeterProvider::builder().build());
+
+        let span_records = spans.lock().unwrap().clone();
+        assert_eq!(span_records.len(), 2);
+        let outcomes: Vec<_> = span_records
+            .iter()
+            .map(|span| span.outcome.clone().unwrap_or_default())
+            .collect();
+        assert_eq!(outcomes, vec!["error", "success"]);
+        let attempts_recorded: Vec<_> = span_records
+            .iter()
+            .map(|span| span.attempt.unwrap_or_default())
+            .collect();
+        assert_eq!(attempts_recorded, vec![1, 2]);
+
+        let metrics = exporter.get_finished_metrics().expect("metrics available");
+
+        let first_hist = find_histogram_point(
+            &metrics,
+            "tyrum_executor_web_attempt_duration_seconds",
+            "error",
+            1,
+        )
+        .expect("first attempt histogram");
+        assert_eq!(first_hist.count(), 1);
+
+        let second_hist = find_histogram_point(
+            &metrics,
+            "tyrum_executor_web_attempt_duration_seconds",
+            "success",
+            2,
+        )
+        .expect("second attempt histogram");
+        assert_eq!(second_hist.count(), 1);
+
+        let first_sum = find_sum_point(&metrics, "tyrum_executor_web_attempt_total", "error", 1)
+            .expect("first attempt counter");
+        assert_eq!(first_sum.value(), 1);
+
+        let second_sum = find_sum_point(&metrics, "tyrum_executor_web_attempt_total", "success", 2)
+            .expect("second attempt counter");
+        assert_eq!(second_sum.value(), 1);
+    }
+
+    fn find_histogram_point<'a>(
+        metrics: &'a [opentelemetry_sdk::metrics::data::ResourceMetrics],
+        metric_name: &str,
+        outcome: &str,
+        attempt: i64,
+    ) -> Option<&'a HistogramDataPoint<f64>> {
+        metrics
+            .iter()
+            .flat_map(|resource| resource.scope_metrics())
+            .flat_map(|scope| scope.metrics())
+            .find_map(|metric| {
+                if metric.name() != metric_name {
+                    return None;
+                }
+
+                match metric.data() {
+                    AggregatedMetrics::F64(MetricData::Histogram(hist)) => hist
+                        .data_points()
+                        .find(|point| matches_attr(point.attributes(), outcome, attempt)),
+                    _ => None,
+                }
+            })
+    }
+
+    fn find_sum_point<'a>(
+        metrics: &'a [opentelemetry_sdk::metrics::data::ResourceMetrics],
+        metric_name: &str,
+        outcome: &str,
+        attempt: i64,
+    ) -> Option<&'a SumDataPoint<u64>> {
+        metrics
+            .iter()
+            .flat_map(|resource| resource.scope_metrics())
+            .flat_map(|scope| scope.metrics())
+            .find_map(|metric| {
+                if metric.name() != metric_name {
+                    return None;
+                }
+
+                match metric.data() {
+                    AggregatedMetrics::U64(MetricData::Sum(sum)) => sum
+                        .data_points()
+                        .find(|point| matches_attr(point.attributes(), outcome, attempt)),
+                    _ => None,
+                }
+            })
+    }
+
+    fn matches_attr<'a>(
+        attrs: impl Iterator<Item = &'a opentelemetry::KeyValue>,
+        outcome: &str,
+        attempt: i64,
+    ) -> bool {
+        let mut outcome_match = false;
+        let mut attempt_match = false;
+
+        for kv in attrs {
+            if kv.key.as_str() == "executor.web.outcome" {
+                if let Value::String(ref value) = kv.value {
+                    outcome_match = value.as_ref() == outcome;
+                }
+            } else if kv.key.as_str() == "executor.web.attempt_number"
+                && let Value::I64(value) = kv.value
+            {
+                attempt_match = value == attempt;
+            }
+        }
+
+        outcome_match && attempt_match
     }
 }
