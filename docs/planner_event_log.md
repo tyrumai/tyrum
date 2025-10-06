@@ -45,3 +45,12 @@ replay.
 Unit tests spin up an ephemeral Postgres container to assert insertion, dedupe, ordering, and
 validation of step indices. They run as part of `cargo test --all --all-targets` via the
 `pre-commit` hook.
+
+## Troubleshooting Policy Denials
+- Negative policy decisions land in the event log as a `failure` outcome with a sanitized
+  `detail` string that describes the triggering rule (for example, `SpendLimit`) without exposing
+  raw spend thresholds.
+- The `policy.rules[].detail` fields are scrubbed of digits before persisting so audit trails stay
+  actionable while avoiding leakage of configurable caps.
+- Use `cargo test -p tyrum-planner policy_denial` to run the regression harness that exercises the
+  denial flow and ensures both the planner response and audit payloads include the reason string.
