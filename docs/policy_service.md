@@ -6,6 +6,8 @@ The policy check service provides the constitutional guardrails described in `do
 - `POST /policy/check` – Evaluates a request across spend, PII, and legal guardrails and returns structured rule decisions plus an overall outcome.
 - `GET /healthz` – Returns `{ "status": "ok" }` for container health checks.
 
+The planner service consumes `POST /policy/check` via its async client. Configure the planner with `POLICY_GATE_URL` (defaults provided by `docker-compose.yml`) so it can locate the deployed policy service.
+
 ## Request Schema
 ```jsonc
 {

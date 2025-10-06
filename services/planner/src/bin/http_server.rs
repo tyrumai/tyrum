@@ -1,9 +1,11 @@
 use std::{env, net::SocketAddr};
 
+use reqwest::Url;
 use tokio::net::TcpListener;
 use tracing_subscriber::{EnvFilter, fmt};
 
-use tyrum_planner::http::{DEFAULT_BIND_ADDR, build_router};
+use tyrum_planner::http::{DEFAULT_BIND_ADDR, PlannerState, build_router};
+use tyrum_planner::policy::PolicyClient;
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
@@ -14,7 +16,11 @@ async fn main() {
         .parse()
         .expect("invalid PLANNER_BIND_ADDR");
 
-    let app = build_router();
+    let policy_url = env::var("POLICY_GATE_URL").expect("POLICY_GATE_URL must be set");
+    let policy_client =
+        PolicyClient::new(Url::parse(&policy_url).expect("invalid POLICY_GATE_URL"));
+
+    let app = build_router(PlannerState { policy_client });
     let listener = TcpListener::bind(bind_addr)
         .await
         .expect("bind planner socket");

@@ -38,6 +38,8 @@ tyrum-memory = { path = "../memory", optional = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
 tyrum-shared = { path = "../../shared/tyrum-shared" }
 tower-http = { version = "0.5", features = ["limit"] }
+reqwest = { version = "0.12.23", default-features = false, features = ["json", "rustls-tls"] }
+url = "2"
 
 [dev-dependencies]
 anyhow = "1"
