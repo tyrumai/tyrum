@@ -6,6 +6,9 @@ use tracing_subscriber::{EnvFilter, fmt};
 
 use tyrum_planner::http::{DEFAULT_BIND_ADDR, PlannerState, build_router};
 use tyrum_planner::policy::PolicyClient;
+use tyrum_planner::{EventLog, EventLogSettings};
+
+const EVENT_LOG_URL_ENV: &str = "PLANNER_EVENT_LOG_URL";
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
@@ -20,7 +23,17 @@ async fn main() {
     let policy_client =
         PolicyClient::new(Url::parse(&policy_url).expect("invalid POLICY_GATE_URL"));
 
-    let app = build_router(PlannerState { policy_client });
+    let event_log_url =
+        env::var(EVENT_LOG_URL_ENV).unwrap_or_else(|_| panic!("{} must be set", EVENT_LOG_URL_ENV));
+    let event_log = EventLog::connect(EventLogSettings::new(event_log_url))
+        .await
+        .expect("connect planner event log");
+    event_log.migrate().await.expect("run planner migrations");
+
+    let app = build_router(PlannerState {
+        policy_client,
+        event_log,
+    });
     let listener = TcpListener::bind(bind_addr)
         .await
         .expect("bind planner socket");
