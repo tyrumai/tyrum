@@ -403,12 +403,19 @@ async fn capture_dom_excerpt(page: &Page, options: &WebActionOptions) -> Result<
         .as_deref()
         .unwrap_or("#confirmation");
 
-    let mut html = snapshot_with_selector(page, selector, redact_selectors(options)).await?;
+    let redacted_selectors = redact_selectors(options);
+    let mut html = snapshot_with_selector(page, selector, redacted_selectors.clone()).await;
 
-    if html.is_none() {
+    if let Err(err) = html.as_ref() {
+        tracing::warn!(selector = selector, %err, "snapshot selector failed; falling back to body");
         selector = "body";
-        html = snapshot_with_selector(page, selector, redact_selectors(options)).await?;
+        html = snapshot_with_selector(page, selector, redacted_selectors).await;
     }
+
+    let html = html.unwrap_or_else(|err| {
+        tracing::warn!(%err, "body snapshot failed; returning empty excerpt");
+        None
+    });
 
     Ok(DomExcerpt {
         selector: selector.to_string(),
