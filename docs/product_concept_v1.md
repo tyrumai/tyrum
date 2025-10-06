@@ -344,15 +344,20 @@ to keep policy, planner, and API services aligned on envelopes and error handlin
 2) Discovery pipeline (MCP → Structured → HTTP → Web/Android).
 3) Generic executors (Web, Android, CLI, HTTP) with postconditions.
 4) Memory (Facts/Episodic/Vector/PAM/PVP + Capability Memory).
-5) Wallet integration (virtual card) with spend caps and in‑chat 3DS.
+5) Wallet integration (virtual card) with spend caps and in-chat 3DS.
 6) Watchers: calendar conflicts, VIP email follow‑ups, delivery ETA slips.
 7) Policy gate enforcing constitution + per‑user PAM.
 8) Full audit log + timeline console.
 
-**Non‑negotiables**
+**Non-negotiables**
 - Idempotent actions with replay protection.
-- Human‑readable confirmations and reasons.
+- Human-readable confirmations and reasons.
 - Cost controls (routing to small models for classification/risk).
+
+### 15.1 CLI executor sandbox (initial cut)
+- Runs commands inside an isolated `/sandbox` volume with directory traversal blocked at the boundary. The container launches under a non-root user and refuses to operate if that contract is broken.
+- Outbound network access is disabled. Any future allowlist must be reviewed with policy to document domains, rate limits, and audit implications before enabling.
+- Planner must surface postconditions that rely solely on stdout/stderr artifacts so we can store diffs without leaking filesystem state outside the sandbox.
 
 ---
 

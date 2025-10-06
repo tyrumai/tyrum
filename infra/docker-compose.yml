@@ -81,6 +81,29 @@ services:
       retries: 5
       start_period: 10s
 
+  executor-cli:
+    build:
+      context: ..
+      dockerfile: Dockerfile.executor-cli
+    image: tyrum/executor-cli:local
+    environment:
+      RUST_LOG: info
+      CLI_EXECUTOR_BIND_ADDR: 0.0.0.0:8093
+      CLI_EXECUTOR_SANDBOX_DIR: /sandbox
+    depends_on:
+      planner:
+        condition: service_started
+    ports:
+      - "8093:8093"
+    volumes:
+      - ../artifacts/cli_sandbox:/sandbox
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:8093/healthz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
   api-migrations:
     build:
       context: ..
