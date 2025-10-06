@@ -28,7 +28,8 @@ All other application services automatically depend on the collector and export 
 3. Open Grafana (`http://localhost:3001`, `admin` / `tyrum`):
    - **Explore → Tempo** to view spans `api.index`, `api.health`, and `policy.check` grouped by `service.name`.
    - **Explore → Loki** to see structured logs from the `tyrum-api` and `tyrum-policy` services.
-   - **Explore → Prometheus** or the Prometheus UI to query `tyrum_api_http_requests_total` and `tyrum_policy_decisions_total` metrics.
+   - **Explore → Prometheus** or the Prometheus UI to query `tyrum_api_http_requests_total`, `tyrum_policy_decisions_total`, `tyrum_discovery_attempt_duration_seconds`, and `tyrum_discovery_attempt_total` metrics.
+   - **Explore → Tempo** to inspect the `discovery.step` spans emitted per capability probe; each span records the `strategy`, `subject`, and `outcome` attributes so retry chains are easy to trace.
 
 ## Notes
 - The collector configuration lives at `config/observability/otel-collector.yaml`; adjust exporters here if additional backends are required.
