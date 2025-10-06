@@ -411,11 +411,11 @@ Milestones are cumulative; later milestones build on earlier ones.
   - `X-Telegram-Bot-Api-Signature`: `sha256=` prefix followed by the lowercase hex HMAC-SHA256 digest of the raw request body using the same secret token.
 - Invalid or missing headers are rejected with `401 Unauthorized`; nothing is persisted until signature validation succeeds.
 - Normalized payloads are persisted in `ingress_threads` and `ingress_messages`, capturing `pii_fields` so downstream services can redact or encrypt sensitive columns. Field-level encryption is tracked as a follow-up once the policy gate accepts per-column keys.
-- Local smoke example (replace the placeholder secret and payload):
+- Local smoke example (run with the API + Postgres stack online and substitute any payload values you need for manual QA):
 
 ```bash
 payload='{"update_id":123,"message":{"message_id":1}}'
-secret_token='replace-with-webhook-secret'
+secret_token='***redacted***'
 signature=$(printf '%s' "$payload" \
   | openssl dgst -binary -sha256 -hmac "$secret_token" \
   | xxd -p -c 256)
@@ -426,6 +426,13 @@ curl -X POST http://localhost:8080/telegram/webhook \
   -H "X-Telegram-Bot-Api-Signature: sha256=$signature" \
   -d "$payload"
 ```
+
+ ```bash
+ psql "$DATABASE_URL" <<'SQL'
+ SELECT thread_id, kind, pii_fields FROM ingress_threads WHERE source = 'telegram';
+ SELECT thread_id, message_id, pii_fields FROM ingress_messages WHERE source = 'telegram';
+ SQL
+ ```
 
 ### M2 — Reliability & Capability Memory
 - Capability Memory read/write: selectors, flows, success/failure patterns; reuse on subsequent runs (#8).
