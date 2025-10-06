@@ -61,6 +61,26 @@ services:
     ports:
       - "8091:8091"
 
+  executor-http:
+    build:
+      context: ..
+      dockerfile: Dockerfile.executor-http
+    image: tyrum/executor-http:local
+    environment:
+      RUST_LOG: info
+      HTTP_EXECUTOR_BIND_ADDR: 0.0.0.0:8092
+    depends_on:
+      planner:
+        condition: service_started
+    ports:
+      - "8092:8092"
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:8092/healthz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
   api-migrations:
     build:
       context: ..

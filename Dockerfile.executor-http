@@ -10,33 +10,17 @@ ENV HTTP_PROXY=$HTTP_PROXY \
     https_proxy=$HTTPS_PROXY \
     NO_PROXY=$NO_PROXY \
     no_proxy=$NO_PROXY
+
 WORKDIR /app
 
 COPY Cargo.toml Cargo.lock ./
 COPY shared/tyrum-shared/Cargo.toml shared/tyrum-shared/Cargo.toml
 COPY shared/tyrum-shared/src shared/tyrum-shared/src
-COPY services/api/Cargo.toml services/api/Cargo.toml
-COPY services/api/src services/api/src
-COPY services/api/migrations services/api/migrations
-COPY services/discovery/Cargo.toml services/discovery/Cargo.toml
-COPY services/discovery/src services/discovery/src
-COPY services/memory/Cargo.toml services/memory/Cargo.toml
-COPY services/memory/src services/memory/src
-COPY services/memory/tests services/memory/tests
-COPY services/memory/migrations services/memory/migrations
-COPY services/executor_web/Cargo.toml services/executor_web/Cargo.toml
-COPY services/executor_web/src services/executor_web/src
-COPY services/executor_web/tests services/executor_web/tests
 COPY services/executor_http/Cargo.toml services/executor_http/Cargo.toml
 COPY services/executor_http/src services/executor_http/src
 COPY services/executor_http/tests services/executor_http/tests
-COPY services/policy/Cargo.toml services/policy/Cargo.toml
-COPY services/policy/src services/policy/src
-COPY services/planner/Cargo.toml services/planner/Cargo.toml
-COPY services/planner/migrations services/planner/migrations
-COPY services/planner/src services/planner/src
 
-RUN cargo build --locked --release --package tyrum-api
+RUN cargo build --locked --release --package tyrum-executor-http
 
 FROM debian:bookworm-slim AS runtime
 
@@ -48,7 +32,9 @@ ENV HTTP_PROXY=$HTTP_PROXY \
     HTTPS_PROXY=$HTTPS_PROXY \
     https_proxy=$HTTPS_PROXY \
     NO_PROXY=$NO_PROXY \
-    no_proxy=$NO_PROXY
+    no_proxy=$NO_PROXY \
+    HTTP_EXECUTOR_BIND_ADDR=0.0.0.0:8092
+
 RUN set -eux; \
     printf 'Acquire::ForceIPv4 "true";\n' >/etc/apt/apt.conf.d/99force-ipv4; \
     useradd --create-home --shell /usr/sbin/nologin appuser; \
@@ -60,9 +46,9 @@ RUN set -eux; \
     apt-get update; \
     apt-get install --yes --no-install-recommends ca-certificates curl; \
     rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
-COPY --from=builder /app/target/release/tyrum-api /usr/local/bin/tyrum-api
-ENV API_BIND_ADDR=0.0.0.0:8080
-EXPOSE 8080
+COPY --from=builder /app/target/release/http_executor /usr/local/bin/http_executor
+EXPOSE 8092
 USER appuser
-ENTRYPOINT ["/usr/local/bin/tyrum-api"]
+ENTRYPOINT ["/usr/local/bin/http_executor"]
