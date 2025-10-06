@@ -1,3 +1,5 @@
+mod common;
+
 use axum::{
     Json, Router,
     body::Body,
@@ -5,12 +7,13 @@ use axum::{
     routing::post,
 };
 use chrono::Utc;
+use common::postgres::TestPostgres;
 use http_body_util::BodyExt;
 use reqwest::Url;
 use tokio::{net::TcpListener, task::JoinHandle};
 use tower::ServiceExt;
 use tyrum_planner::{
-    PlanOutcome, PlanRequest, PlanResponse,
+    EventLog, PlanOutcome, PlanRequest, PlanResponse,
     http::{MAX_PLAN_REQUEST_BYTES, PlannerState, build_router},
     policy::PolicyClient,
 };
@@ -62,7 +65,7 @@ async fn plan_returns_stub_response() {
     let payload = sample_request();
     let body = serde_json::to_vec(&payload).expect("serialize plan request");
 
-    let (policy_client, server) = mock_policy(serde_json::json!({
+    let (state, server, _postgres) = planner_state(serde_json::json!({
         "decision": "approve",
         "rules": [
             {
@@ -84,7 +87,7 @@ async fn plan_returns_stub_response() {
     }))
     .await;
 
-    let response = build_router(PlannerState { policy_client })
+    let response = build_router(state)
         .oneshot(
             Request::builder()
                 .method("POST")
@@ -123,13 +126,13 @@ async fn plan_rejects_oversized_payloads() {
 
     let body = serde_json::to_vec(&payload).expect("serialize oversized request");
 
-    let (policy_client, server) = mock_policy(serde_json::json!({
+    let (state, server, _postgres) = planner_state(serde_json::json!({
         "decision": "approve",
         "rules": [],
     }))
     .await;
 
-    let response = build_router(PlannerState { policy_client })
+    let response = build_router(state)
         .oneshot(
             Request::builder()
                 .method("POST")
@@ -151,7 +154,7 @@ async fn plan_escalates_on_policy_escalation() {
     let payload = sample_request();
     let body = serde_json::to_vec(&payload).expect("serialize plan request");
 
-    let (policy_client, server) = mock_policy(serde_json::json!({
+    let (state, server, _postgres) = planner_state(serde_json::json!({
         "decision": "escalate",
         "rules": [
             {
@@ -163,7 +166,7 @@ async fn plan_escalates_on_policy_escalation() {
     }))
     .await;
 
-    let response = build_router(PlannerState { policy_client })
+    let response = build_router(state)
         .oneshot(
             Request::builder()
                 .method("POST")
@@ -195,7 +198,7 @@ async fn plan_returns_failure_on_policy_denial() {
     let payload = sample_request();
     let body = serde_json::to_vec(&payload).expect("serialize plan request");
 
-    let (policy_client, server) = mock_policy(serde_json::json!({
+    let (state, server, _postgres) = planner_state(serde_json::json!({
         "decision": "deny",
         "rules": [
             {
@@ -207,7 +210,7 @@ async fn plan_returns_failure_on_policy_denial() {
     }))
     .await;
 
-    let response = build_router(PlannerState { policy_client })
+    let response = build_router(state)
         .oneshot(
             Request::builder()
                 .method("POST")
@@ -240,7 +243,7 @@ async fn plan_escalation_includes_context_when_rules_do_not_match() {
     let payload = sample_request();
     let body = serde_json::to_vec(&payload).expect("serialize plan request");
 
-    let (policy_client, server) = mock_policy(serde_json::json!({
+    let (state, server, _postgres) = planner_state(serde_json::json!({
         "decision": "escalate",
         "rules": [
             {
@@ -252,7 +255,7 @@ async fn plan_escalation_includes_context_when_rules_do_not_match() {
     }))
     .await;
 
-    let response = build_router(PlannerState { policy_client })
+    let response = build_router(state)
         .oneshot(
             Request::builder()
                 .method("POST")
@@ -282,7 +285,7 @@ async fn plan_failure_includes_details_when_rules_do_not_match() {
     let payload = sample_request();
     let body = serde_json::to_vec(&payload).expect("serialize plan request");
 
-    let (policy_client, server) = mock_policy(serde_json::json!({
+    let (state, server, _postgres) = planner_state(serde_json::json!({
         "decision": "deny",
         "rules": [
             {
@@ -294,7 +297,7 @@ async fn plan_failure_includes_details_when_rules_do_not_match() {
     }))
     .await;
 
-    let response = build_router(PlannerState { policy_client })
+    let response = build_router(state)
         .oneshot(
             Request::builder()
                 .method("POST")
@@ -343,4 +346,22 @@ async fn mock_policy(response: serde_json::Value) -> (PolicyClient, JoinHandle<(
 
     let client = PolicyClient::new(url);
     (client, server)
+}
+
+async fn planner_state(
+    policy_response: serde_json::Value,
+) -> (PlannerState, JoinHandle<()>, TestPostgres) {
+    let (policy_client, server) = mock_policy(policy_response).await;
+    let postgres = TestPostgres::start().await.expect("start postgres fixture");
+    let event_log = EventLog::from_pool(postgres.pool().clone());
+    event_log.migrate().await.expect("migrate planner schema");
+
+    (
+        PlannerState {
+            policy_client,
+            event_log,
+        },
+        server,
+        postgres,
+    )
 }

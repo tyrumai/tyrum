@@ -12,9 +12,10 @@ use uuid::Uuid;
 
 use crate::policy::{PolicyClient, PolicyDecision, PolicyDecisionKind, PolicyRuleDecision};
 use crate::{
-    ActionArguments, ActionPrimitive, ActionPrimitiveKind, PlanError, PlanErrorCode,
-    PlanEscalation, PlanOutcome, PlanRequest, PlanResponse, PlanSummary,
+    ActionArguments, ActionPrimitive, ActionPrimitiveKind, EventLog, NewPlannerEvent, PlanError,
+    PlanErrorCode, PlanEscalation, PlanOutcome, PlanRequest, PlanResponse, PlanSummary,
 };
+use tyrum_shared::{MessageSource, PiiField, ThreadKind};
 
 pub const DEFAULT_BIND_ADDR: &str = "0.0.0.0:8083";
 pub const MAX_PLAN_REQUEST_BYTES: usize = 256 * 1024; // 256 KiB safety rail for ingress payloads.
@@ -33,6 +34,7 @@ struct ValidationError {
 #[derive(Clone)]
 pub struct PlannerState {
     pub policy_client: PolicyClient,
+    pub event_log: EventLog,
 }
 
 pub fn build_router(state: PlannerState) -> Router {
@@ -42,6 +44,8 @@ pub fn build_router(state: PlannerState) -> Router {
         .layer(RequestBodyLimitLayer::new(MAX_PLAN_REQUEST_BYTES))
         .with_state(state)
 }
+
+const DECISION_AUDIT_STEP_INDEX: i32 = i32::MAX;
 
 #[tracing::instrument(skip_all)]
 async fn plan(
@@ -58,25 +62,69 @@ async fn plan(
         return Err(bad_request("subject_id must not be empty"));
     }
 
+    let plan_uuid = Uuid::new_v4();
     let policy_result = state.policy_client.check(&payload).await;
 
-    match policy_result {
-        Ok(decision) => handle_policy_decision(&payload, decision),
+    let (outcome, policy_audit) = match policy_result {
+        Ok(decision) => {
+            let outcome = build_outcome_for_decision(&payload, &decision);
+            let rule_outcomes: Vec<String> = decision
+                .rules
+                .iter()
+                .map(|rule| format!("{:?}:{:?}", rule.rule, rule.outcome))
+                .collect();
+            tracing::info!(
+                decision = ?decision.decision,
+                rules = ?rule_outcomes,
+                "policy decision received"
+            );
+            (outcome, PolicyAudit::from_decision(&decision))
+        }
         Err(error) => {
             tracing::warn!(error = %error, "policy check failed");
-            Ok(Json(make_plan_response(
-                &payload,
-                PlanOutcome::Failure {
-                    error: PlanError {
-                        code: PlanErrorCode::Internal,
-                        message: "Policy gate unavailable".into(),
-                        detail: Some(error.to_string()),
-                        retryable: true,
-                    },
+            let reason = error.to_string();
+            let outcome = PlanOutcome::Failure {
+                error: PlanError {
+                    code: PlanErrorCode::Internal,
+                    message: "Policy gate unavailable".into(),
+                    detail: Some(reason.clone()),
+                    retryable: true,
                 },
-            )))
+            };
+            (outcome, PolicyAudit::unavailable(reason))
+        }
+    };
+
+    let plan_id = format_plan_id(plan_uuid);
+    let audit_event =
+        PlannerDecisionAudit::new(plan_uuid, &plan_id, &payload, policy_audit, &outcome);
+
+    match NewPlannerEvent::from_payload(
+        Uuid::new_v4(),
+        plan_uuid,
+        DECISION_AUDIT_STEP_INDEX,
+        Utc::now(),
+        &audit_event,
+    ) {
+        Ok(event) => {
+            if let Err(error) = state.event_log.append(event).await {
+                tracing::error!(
+                    plan_id = plan_id.as_str(),
+                    %error,
+                    "failed to append planner audit event"
+                );
+            }
+        }
+        Err(error) => {
+            tracing::error!(
+                plan_id = plan_id.as_str(),
+                %error,
+                "failed to encode planner audit payload"
+            );
         }
     }
+
+    Ok(Json(make_plan_response(plan_id, &payload, outcome)))
 }
 
 #[tracing::instrument(name = "planner.health", skip_all)]
@@ -119,9 +167,13 @@ fn bad_request(message: impl Into<String>) -> (StatusCode, Json<ValidationError>
     )
 }
 
-fn make_plan_response(request: &PlanRequest, outcome: PlanOutcome) -> PlanResponse {
+fn make_plan_response(
+    plan_id: String,
+    request: &PlanRequest,
+    outcome: PlanOutcome,
+) -> PlanResponse {
     PlanResponse {
-        plan_id: format!("plan-{}", Uuid::new_v4().simple()),
+        plan_id,
         request_id: request.request_id.clone(),
         created_at: Utc::now(),
         trace_id: Some(Uuid::new_v4().to_string()),
@@ -129,46 +181,8 @@ fn make_plan_response(request: &PlanRequest, outcome: PlanOutcome) -> PlanRespon
     }
 }
 
-fn handle_policy_decision(
-    request: &PlanRequest,
-    decision: PolicyDecision,
-) -> Result<Json<PlanResponse>, (StatusCode, Json<ValidationError>)> {
-    let rule_outcomes: Vec<String> = decision
-        .rules
-        .iter()
-        .map(|rule| format!("{:?}:{:?}", rule.rule, rule.outcome))
-        .collect();
-    tracing::info!(
-        decision = ?decision.decision,
-        rules = ?rule_outcomes,
-        "policy decision received"
-    );
-
-    let response = match decision.decision {
-        PolicyDecisionKind::Approve => make_plan_response(
-            request,
-            PlanOutcome::Success {
-                steps: stub_steps(),
-                summary: PlanSummary {
-                    synopsis: Some(format!("Stub plan prepared for {}", request.subject_id)),
-                },
-            },
-        ),
-        PolicyDecisionKind::Escalate => make_plan_response(
-            request,
-            PlanOutcome::Escalate {
-                escalation: build_policy_escalation(&decision),
-            },
-        ),
-        PolicyDecisionKind::Deny => make_plan_response(
-            request,
-            PlanOutcome::Failure {
-                error: build_policy_failure(&decision),
-            },
-        ),
-    };
-
-    Ok(Json(response))
+fn format_plan_id(plan_uuid: Uuid) -> String {
+    format!("plan-{}", plan_uuid.simple())
 }
 
 fn build_policy_escalation(decision: &PolicyDecision) -> PlanEscalation {
@@ -251,5 +265,211 @@ fn build_policy_failure(decision: &PolicyDecision) -> PlanError {
         message: "Policy gate denied the plan".into(),
         detail,
         retryable: false,
+    }
+}
+
+fn build_outcome_for_decision(request: &PlanRequest, decision: &PolicyDecision) -> PlanOutcome {
+    match decision.decision {
+        PolicyDecisionKind::Approve => PlanOutcome::Success {
+            steps: stub_steps(),
+            summary: PlanSummary {
+                synopsis: Some(format!("Stub plan prepared for {}", request.subject_id)),
+            },
+        },
+        PolicyDecisionKind::Escalate => PlanOutcome::Escalate {
+            escalation: build_policy_escalation(decision),
+        },
+        PolicyDecisionKind::Deny => PlanOutcome::Failure {
+            error: build_policy_failure(decision),
+        },
+    }
+}
+
+#[derive(Serialize)]
+struct PlannerDecisionAudit {
+    plan_id: String,
+    plan_uuid: Uuid,
+    request: RedactedRequest,
+    policy: PolicyAudit,
+    outcome: PlanOutcomeAudit,
+}
+
+impl PlannerDecisionAudit {
+    fn new(
+        plan_uuid: Uuid,
+        plan_id: &str,
+        request: &PlanRequest,
+        policy: PolicyAudit,
+        outcome: &PlanOutcome,
+    ) -> Self {
+        Self {
+            plan_id: plan_id.to_owned(),
+            plan_uuid,
+            request: RedactedRequest::from_plan_request(request),
+            policy,
+            outcome: PlanOutcomeAudit::from(outcome),
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct RedactedRequest {
+    request_id: String,
+    subject_id: String,
+    tags: Vec<String>,
+    trigger: RedactedTrigger,
+}
+
+impl RedactedRequest {
+    fn from_plan_request(request: &PlanRequest) -> Self {
+        Self {
+            request_id: request.request_id.clone(),
+            subject_id: request.subject_id.clone(),
+            tags: request.tags.clone(),
+            trigger: RedactedTrigger::from_trigger(&request.trigger),
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct RedactedTrigger {
+    thread_id: String,
+    thread_kind: ThreadKind,
+    message_id: String,
+    message_source: MessageSource,
+    thread_pii_fields: Vec<PiiField>,
+    message_pii_fields: Vec<PiiField>,
+}
+
+impl RedactedTrigger {
+    fn from_trigger(trigger: &tyrum_shared::NormalizedThreadMessage) -> Self {
+        // We intentionally omit thread/message fields flagged as PII and record only
+        // identifiers plus declared PII categories so audit trails remain traceable
+        // without storing personal data verbatim.
+        Self {
+            thread_id: trigger.thread.id.clone(),
+            thread_kind: trigger.thread.kind,
+            message_id: trigger.message.id.clone(),
+            message_source: trigger.message.source,
+            thread_pii_fields: trigger.thread.pii_fields.clone(),
+            message_pii_fields: trigger.message.pii_fields.clone(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+enum PolicyAudit {
+    Evaluated {
+        decision: String,
+        rules: Vec<PolicyRuleAudit>,
+    },
+    Unavailable {
+        reason: String,
+    },
+}
+
+impl PolicyAudit {
+    fn from_decision(decision: &PolicyDecision) -> Self {
+        let rules = decision
+            .rules
+            .iter()
+            .map(|rule| PolicyRuleAudit {
+                rule: format!("{:?}", rule.rule),
+                outcome: format!("{:?}", rule.outcome),
+                detail: rule.detail.clone(),
+            })
+            .collect();
+
+        Self::Evaluated {
+            decision: format!("{:?}", decision.decision),
+            rules,
+        }
+    }
+
+    fn unavailable(reason: String) -> Self {
+        Self::Unavailable { reason }
+    }
+}
+
+#[derive(Serialize)]
+struct PolicyRuleAudit {
+    rule: String,
+    outcome: String,
+    detail: String,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+enum PlanOutcomeAudit {
+    Success {
+        step_count: usize,
+        steps: Vec<LoggedStep>,
+        summary_present: bool,
+    },
+    Escalate {
+        step_index: usize,
+        action_kind: ActionPrimitiveKind,
+        arg_keys: Vec<String>,
+        rationale_present: bool,
+    },
+    Failure {
+        code: PlanErrorCode,
+        retryable: bool,
+        detail_present: bool,
+    },
+}
+
+impl From<&PlanOutcome> for PlanOutcomeAudit {
+    fn from(outcome: &PlanOutcome) -> Self {
+        match outcome {
+            PlanOutcome::Success { steps, summary } => PlanOutcomeAudit::Success {
+                step_count: steps.len(),
+                steps: steps
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, step)| LoggedStep::from_step(idx, step))
+                    .collect(),
+                summary_present: summary
+                    .synopsis
+                    .as_ref()
+                    .is_some_and(|synopsis| !synopsis.is_empty()),
+            },
+            PlanOutcome::Escalate { escalation } => PlanOutcomeAudit::Escalate {
+                step_index: escalation.step_index,
+                action_kind: escalation.action.kind,
+                arg_keys: escalation.action.args.keys().cloned().collect(),
+                rationale_present: escalation
+                    .rationale
+                    .as_ref()
+                    .is_some_and(|value| !value.is_empty()),
+            },
+            PlanOutcome::Failure { error } => PlanOutcomeAudit::Failure {
+                code: error.code,
+                retryable: error.retryable,
+                detail_present: error.detail.as_ref().is_some_and(|value| !value.is_empty()),
+            },
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct LoggedStep {
+    step_index: usize,
+    kind: ActionPrimitiveKind,
+    arg_keys: Vec<String>,
+    has_postcondition: bool,
+    has_idempotency_key: bool,
+}
+
+impl LoggedStep {
+    fn from_step(index: usize, step: &ActionPrimitive) -> Self {
+        Self {
+            step_index: index,
+            kind: step.kind,
+            arg_keys: step.args.keys().cloned().collect(),
+            has_postcondition: step.postcondition.is_some(),
+            has_idempotency_key: step.idempotency_key.is_some(),
+        }
     }
 }
