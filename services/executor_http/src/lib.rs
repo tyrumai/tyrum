@@ -6,11 +6,12 @@ use once_cell::sync::OnceCell;
 use reqwest::{
     Client, Method,
     header::{CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue},
+    redirect,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
-use tracing::info;
+use tracing::{info, warn};
 use tyrum_shared::planner::{ActionArguments, ActionPrimitive, ActionPrimitiveKind};
 use url::Url;
 
@@ -174,16 +175,16 @@ pub async fn execute_http_action(action: &ActionPrimitive) -> Result<HttpActionO
         let headers = sanitise_header_map(response.headers());
         let body: Value = response.json().await?;
 
-        if let Some(schema) = &schema_for_request {
-            validate_schema(schema, &body)?;
-        }
-
         if !status.is_success() {
             return Err(HttpExecutorError::HttpFailure {
                 status: status.as_u16(),
                 headers,
                 body,
             });
+        }
+
+        if let Some(schema) = &schema_for_request {
+            validate_schema(schema, &body)?;
         }
 
         Ok(HttpActionOutcome {
@@ -314,6 +315,18 @@ fn http_client() -> &'static Client {
             .user_agent(USER_AGENT)
             .pool_idle_timeout(Duration::from_secs(POOL_IDLE_TIMEOUT_SECS))
             .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
+            .redirect(redirect::Policy::custom(|attempt| {
+                if attempt
+                    .url()
+                    .host_str()
+                    .is_some_and(host_allowed)
+                {
+                    attempt.follow()
+                } else {
+                    warn!(target: "tyrum::executor_http", redirect = %attempt.url(), "blocked redirect to disallowed host");
+                    attempt.stop()
+                }
+            }))
             .build()
             .expect("failed to build http client")
     })
@@ -331,25 +344,30 @@ fn build_header_map(entries: &[(HeaderName, HeaderValue)], body: Option<&Value>)
 }
 
 fn enforce_allowlist(url: &Url) -> Result<()> {
-    let host = url.host_str().unwrap_or("");
-    if host.is_empty() {
-        return Err(HttpExecutorError::InvalidUrl {
+    let host = url
+        .host_str()
+        .ok_or_else(|| HttpExecutorError::InvalidUrl {
             source: url::ParseError::EmptyHost,
             value: url.to_string(),
-        });
-    }
+        })?;
 
-    let allowed = HOST_ALLOWLIST.get_or_init(load_allowed_hosts);
-    if allowed
+    if host_allowed(host) {
+        Ok(())
+    } else {
+        Err(HttpExecutorError::DisallowedHost {
+            host: host.to_string(),
+        })
+    }
+}
+
+fn allowed_hosts() -> &'static Vec<String> {
+    HOST_ALLOWLIST.get_or_init(load_allowed_hosts)
+}
+
+fn host_allowed(host: &str) -> bool {
+    allowed_hosts()
         .iter()
         .any(|candidate| candidate.eq_ignore_ascii_case(host))
-    {
-        return Ok(());
-    }
-
-    Err(HttpExecutorError::DisallowedHost {
-        host: host.to_string(),
-    })
 }
 
 fn load_allowed_hosts() -> Vec<String> {
@@ -408,14 +426,12 @@ fn validate_schema(schema: &Value, body: &Value) -> Result<()> {
     let validator = jsonschema::validator_for(schema)
         .map_err(|err| HttpExecutorError::InvalidSchema(err.to_string()))?;
 
-    if validator.validate(body).is_err() {
-        let mut iter = validator.iter_errors(body);
-        if let Some(first) = iter.next() {
-            let mut messages = vec![first.to_string()];
-            messages.extend(iter.map(|error| error.to_string()));
-            let joined = messages.join("; ");
-            return Err(HttpExecutorError::SchemaValidationFailed(joined));
-        }
+    let mut errors = validator.iter_errors(body);
+    if let Some(first) = errors.next() {
+        let mut messages = vec![first.to_string()];
+        messages.extend(errors.map(|error| error.to_string()));
+        let joined = messages.join("; ");
+        return Err(HttpExecutorError::SchemaValidationFailed(joined));
     }
 
     Ok(())

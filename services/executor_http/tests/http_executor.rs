@@ -150,6 +150,42 @@ async fn non_success_status_returns_failure_context() -> anyhow::Result<()> {
 
     Ok(())
 }
+#[tokio::test(flavor = "multi_thread")]
+async fn redirects_to_disallowed_host_are_not_followed() -> anyhow::Result<()> {
+    let (addr, server) = start_mock_server().await?;
+    let url = format!("http://{addr}/redirect");
+
+    let primitive = ActionPrimitive::new(
+        ActionPrimitiveKind::Http,
+        into_args(json!({
+            "method": "GET",
+            "url": url
+        })),
+    );
+
+    let err = execute_http_action(&primitive)
+        .await
+        .expect_err("redirect to disallowed host should fail");
+
+    match err {
+        HttpExecutorError::HttpFailure {
+            status, headers, ..
+        } => {
+            assert_eq!(status, StatusCode::TEMPORARY_REDIRECT.as_u16());
+            let location = headers
+                .iter()
+                .find(|header| header.name == "location")
+                .expect("location header present");
+            assert_eq!(location.value, "http://example.com/blocked");
+        }
+        other => panic!("unexpected error: {:?}", other),
+    }
+
+    server.abort();
+    let _ = server.await;
+
+    Ok(())
+}
 
 fn into_args(value: Value) -> ActionArguments {
     value
@@ -161,7 +197,8 @@ fn into_args(value: Value) -> ActionArguments {
 async fn start_mock_server() -> anyhow::Result<(SocketAddr, JoinHandle<()>)> {
     let app = Router::new()
         .route("/echo", post(handle_echo))
-        .route("/fail", get(handle_failure));
+        .route("/fail", get(handle_failure))
+        .route("/redirect", get(handle_redirect));
 
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
         .await
@@ -207,6 +244,14 @@ async fn handle_failure() -> impl axum::response::IntoResponse {
     )];
     let body = json!({ "error": "bad request" });
     (StatusCode::BAD_REQUEST, headers, Json(body))
+}
+
+async fn handle_redirect() -> impl axum::response::IntoResponse {
+    let headers = [(
+        HeaderName::from_static("location"),
+        HeaderValue::from_static("http://example.com/blocked"),
+    )];
+    (StatusCode::TEMPORARY_REDIRECT, headers, Json(json!({})))
 }
 
 fn assert_redacted(outcome: &HttpActionOutcome) {
