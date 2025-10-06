@@ -479,9 +479,8 @@ mod tests {
 
     #[test]
     fn allowed_hosts_default_to_local() {
-        HOST_ALLOWLIST.get();
-        let hosts = load_allowed_hosts();
-        assert!(hosts.contains(&"localhost".to_string()));
+        let hosts = allowed_hosts();
+        assert!(hosts.iter().any(|host| host == "localhost"));
     }
 
     #[test]
