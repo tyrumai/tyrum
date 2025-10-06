@@ -1,0 +1,50 @@
+# syntax=docker/dockerfile:1.7
+FROM rust:1.89 AS builder
+
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ENV HTTP_PROXY=$HTTP_PROXY \
+    http_proxy=$HTTP_PROXY \
+    HTTPS_PROXY=$HTTPS_PROXY \
+    https_proxy=$HTTPS_PROXY \
+    NO_PROXY=$NO_PROXY \
+    no_proxy=$NO_PROXY
+
+WORKDIR /app
+
+# Workspace manifests
+COPY Cargo.toml Cargo.lock ./
+COPY shared/tyrum-shared/Cargo.toml shared/tyrum-shared/Cargo.toml
+COPY shared/tyrum-shared/src shared/tyrum-shared/src
+COPY services/executor_web/Cargo.toml services/executor_web/Cargo.toml
+COPY services/executor_web/src services/executor_web/src
+COPY services/executor_web/tests services/executor_web/tests
+
+RUN cargo build --locked --release --package tyrum-executor-web
+
+FROM mcr.microsoft.com/playwright:v1.48.0-jammy AS runtime
+
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ENV HTTP_PROXY=$HTTP_PROXY \
+    http_proxy=$HTTP_PROXY \
+    HTTPS_PROXY=$HTTPS_PROXY \
+    https_proxy=$HTTPS_PROXY \
+    NO_PROXY=$NO_PROXY \
+    no_proxy=$NO_PROXY \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    WEB_EXECUTOR_BIND_ADDR=0.0.0.0:8091
+
+# The base image provides a non-root user `pwuser` with browser sandbox
+# privileges configured. Ensure directories exist when the binary caches
+# Playwright assets.
+RUN mkdir -p /home/pwuser/.cache && chown -R pwuser:pwuser /home/pwuser/.cache
+
+WORKDIR /app
+COPY --from=builder /app/target/release/web_executor /usr/local/bin/web_executor
+
+USER pwuser
+EXPOSE 8091
+ENTRYPOINT ["/usr/local/bin/web_executor"]

@@ -23,6 +23,9 @@ COPY services/memory/Cargo.toml services/memory/Cargo.toml
 COPY services/memory/src services/memory/src
 COPY services/memory/tests services/memory/tests
 COPY services/memory/migrations services/memory/migrations
+COPY services/executor_web/Cargo.toml services/executor_web/Cargo.toml
+COPY services/executor_web/src services/executor_web/src
+COPY services/executor_web/tests services/executor_web/tests
 COPY services/policy/Cargo.toml services/policy/Cargo.toml
 COPY services/policy/src services/policy/src
 COPY services/planner/Cargo.toml services/planner/Cargo.toml

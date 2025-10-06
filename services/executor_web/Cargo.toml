@@ -1,0 +1,32 @@
+[package]
+name = "tyrum-executor-web"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors = ["VirtunetBV <oss@virtunet.example>"]
+description = "Generic web executor runtime for Tyrum"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "web_executor"
+path = "src/bin/web_executor.rs"
+
+[dependencies]
+anyhow = "1"
+axum = { version = "0.7", features = ["json", "macros"] }
+playwright = "0.0.20"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+tokio = { version = "1.43", features = ["macros", "rt-multi-thread", "signal", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tyrum-shared = { path = "../../shared/tyrum-shared" }
+url = { version = "2", features = ["serde"] }
+
+[dev-dependencies]
+anyhow = "1"
+serde_json = "1"
+tokio = { version = "1.43", features = ["macros", "rt-multi-thread", "time"] }

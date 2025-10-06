@@ -47,6 +47,20 @@ services:
       retries: 5
       start_period: 10s
 
+  executor-web:
+    build:
+      context: ..
+      dockerfile: Dockerfile.executor-web
+    image: tyrum/executor-web:local
+    environment:
+      RUST_LOG: info
+      WEB_EXECUTOR_BIND_ADDR: 0.0.0.0:8091
+    depends_on:
+      planner:
+        condition: service_started
+    ports:
+      - "8091:8091"
+
   api-migrations:
     build:
       context: ..
