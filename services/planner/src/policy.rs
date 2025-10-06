@@ -90,18 +90,19 @@ impl PolicyCheckPayload {
             }
         }
 
-        let pii = Some(PiiContext {
-            categories: pii_categories.into_iter().collect(),
-        });
-
-        let spend_context = SpendContext::default_for_plan();
-        let legal_context = Some(LegalContext::default());
+        let pii = if pii_categories.is_empty() {
+            None
+        } else {
+            Some(PiiContext {
+                categories: pii_categories.iter().copied().collect(),
+            })
+        };
 
         Self {
             request_id: Some(request.request_id.clone()),
-            spend: Some(spend_context),
+            spend: None,
             pii,
-            legal: legal_context,
+            legal: None,
         }
     }
 }
@@ -112,16 +113,6 @@ struct SpendContext {
     currency: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     user_limit_minor_units: Option<u64>,
-}
-
-impl SpendContext {
-    fn default_for_plan() -> Self {
-        Self {
-            amount_minor_units: 0,
-            currency: "USD".into(),
-            user_limit_minor_units: None,
-        }
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Default)]
@@ -263,12 +254,8 @@ mod tests {
         assert!(pii.categories.contains(&PiiCategory::BasicContact));
         assert!(pii.categories.contains(&PiiCategory::Other));
 
-        let spend = payload.spend.expect("spend context");
-        assert_eq!(spend.amount_minor_units, 0);
-        assert_eq!(spend.currency, "USD");
-
-        let legal = payload.legal.expect("legal context");
-        assert!(legal.flags.is_empty());
+        assert!(payload.spend.is_none());
+        assert!(payload.legal.is_none());
     }
 
     #[tokio::test]
