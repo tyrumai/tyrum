@@ -1,9 +1,10 @@
-use std::{env, net::SocketAddr};
+use std::{env, net::SocketAddr, sync::Arc};
 
 use reqwest::Url;
 use tokio::net::TcpListener;
 use tracing_subscriber::{EnvFilter, fmt};
 
+use tyrum_discovery::DefaultDiscoveryPipeline;
 use tyrum_planner::http::{DEFAULT_BIND_ADDR, PlannerState, build_router};
 use tyrum_planner::policy::PolicyClient;
 use tyrum_planner::{EventLog, EventLogSettings};
@@ -33,6 +34,7 @@ async fn main() {
     let app = build_router(PlannerState {
         policy_client,
         event_log,
+        discovery: Arc::new(DefaultDiscoveryPipeline::new()),
     });
     let listener = TcpListener::bind(bind_addr)
         .await

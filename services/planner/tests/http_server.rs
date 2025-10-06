@@ -1,5 +1,7 @@
 mod common;
 
+use std::sync::{Arc, Mutex};
+
 use axum::{
     Json, Router,
     body::Body,
@@ -12,8 +14,12 @@ use http_body_util::BodyExt;
 use reqwest::Url;
 use tokio::{net::TcpListener, task::JoinHandle};
 use tower::ServiceExt;
+use tyrum_discovery::{
+    DefaultDiscoveryPipeline, DiscoveryConnector, DiscoveryOutcome, DiscoveryPipeline,
+    DiscoveryRequest, DiscoveryStrategy,
+};
 use tyrum_planner::{
-    EventLog, PlanOutcome, PlanRequest, PlanResponse,
+    ActionPrimitiveKind, EventLog, PlanOutcome, PlanRequest, PlanResponse,
     http::{MAX_PLAN_REQUEST_BYTES, PlannerState, build_router},
     policy::PolicyClient,
 };
@@ -60,12 +66,8 @@ fn sample_request() -> PlanRequest {
     }
 }
 
-#[tokio::test]
-async fn plan_returns_stub_response() {
-    let payload = sample_request();
-    let body = serde_json::to_vec(&payload).expect("serialize plan request");
-
-    let (state, server, _postgres) = planner_state(serde_json::json!({
+fn approving_policy_payload() -> serde_json::Value {
+    serde_json::json!({
         "decision": "approve",
         "rules": [
             {
@@ -84,8 +86,78 @@ async fn plan_returns_stub_response() {
                 "detail": "No legal flags",
             },
         ],
-    }))
-    .await;
+    })
+}
+
+fn found_connector(strategy: DiscoveryStrategy, locator: &str) -> DiscoveryOutcome {
+    DiscoveryOutcome::Found(DiscoveryConnector {
+        strategy,
+        locator: locator.to_string(),
+    })
+}
+
+struct MockDiscoveryPipeline {
+    calls: Mutex<Vec<DiscoveryStrategy>>,
+    mcp: DiscoveryOutcome,
+    structured: DiscoveryOutcome,
+    generic: DiscoveryOutcome,
+}
+
+impl MockDiscoveryPipeline {
+    fn new(mcp: DiscoveryOutcome, structured: DiscoveryOutcome, generic: DiscoveryOutcome) -> Self {
+        Self {
+            calls: Mutex::new(Vec::new()),
+            mcp,
+            structured,
+            generic,
+        }
+    }
+
+    fn record(&self, strategy: DiscoveryStrategy) {
+        let mut guard = self.calls.lock().expect("record discovery call");
+        guard.push(strategy);
+    }
+
+    fn calls(&self) -> Vec<DiscoveryStrategy> {
+        self.calls.lock().expect("read discovery calls").clone()
+    }
+}
+
+impl DiscoveryPipeline for MockDiscoveryPipeline {
+    fn try_mcp(&self, request: &DiscoveryRequest) -> DiscoveryOutcome {
+        assert!(
+            !request.sanitized_subject().is_empty(),
+            "subject should be sanitized"
+        );
+        self.record(DiscoveryStrategy::Mcp);
+        self.mcp.clone()
+    }
+
+    fn try_structured_api(&self, request: &DiscoveryRequest) -> DiscoveryOutcome {
+        assert!(
+            !request.sanitized_subject().is_empty(),
+            "subject should be sanitized"
+        );
+        self.record(DiscoveryStrategy::StructuredApi);
+        self.structured.clone()
+    }
+
+    fn try_generic_http(&self, request: &DiscoveryRequest) -> DiscoveryOutcome {
+        assert!(
+            !request.sanitized_subject().is_empty(),
+            "subject should be sanitized"
+        );
+        self.record(DiscoveryStrategy::GenericHttp);
+        self.generic.clone()
+    }
+}
+
+#[tokio::test]
+async fn plan_returns_stub_response() {
+    let payload = sample_request();
+    let body = serde_json::to_vec(&payload).expect("serialize plan request");
+
+    let (state, server, _postgres) = planner_state(approving_policy_payload()).await;
 
     let response = build_router(state)
         .oneshot(
@@ -110,11 +182,211 @@ async fn plan_returns_stub_response() {
     assert_eq!(plan.request_id, payload.request_id);
     match plan.outcome {
         PlanOutcome::Success { steps, summary } => {
-            assert!(steps.len() >= 2);
-            assert!(summary.synopsis.is_some());
+            assert_eq!(
+                steps.len(),
+                3,
+                "planner should emit research, executor, follow-up steps"
+            );
+
+            let executor_step = &steps[1];
+            assert_eq!(executor_step.kind, ActionPrimitiveKind::Web);
+            assert_eq!(
+                executor_step
+                    .args
+                    .get("executor")
+                    .and_then(|value| value.as_str()),
+                Some("generic-web"),
+                "fallback should target generic web executor"
+            );
+
+            let synopsis = summary.synopsis.expect("summary present");
+            assert!(synopsis.contains("Falling back to automation"));
         }
         outcome => panic!("expected success outcome, got {:?}", outcome),
     }
+}
+
+#[tokio::test]
+async fn discovery_pipeline_uses_mcp_capability() {
+    let pipeline = Arc::new(MockDiscoveryPipeline::new(
+        found_connector(DiscoveryStrategy::Mcp, "mcp://capability"),
+        DiscoveryOutcome::NotFound,
+        DiscoveryOutcome::NotFound,
+    ));
+    let pipeline_trait: Arc<dyn DiscoveryPipeline + Send + Sync> = pipeline.clone();
+
+    let payload = sample_request();
+    let body = serde_json::to_vec(&payload).expect("serialize plan request");
+
+    let (state, server, _postgres) =
+        planner_state_with_pipeline(approving_policy_payload(), pipeline_trait).await;
+
+    let response = build_router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/plan")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .expect("construct request"),
+        )
+        .await
+        .expect("receive response");
+
+    server.abort();
+
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let plan: PlanResponse = serde_json::from_slice(&bytes).expect("decode plan response");
+
+    let (steps, summary) = match plan.outcome {
+        PlanOutcome::Success { steps, summary } => (steps, summary),
+        other => panic!("expected success, got {other:?}"),
+    };
+
+    assert_eq!(steps[1].kind, ActionPrimitiveKind::Http);
+    assert_eq!(
+        steps[1]
+            .args
+            .get("executor")
+            .and_then(|value| value.as_str()),
+        Some("discovered-mcp")
+    );
+    assert_eq!(
+        steps[1]
+            .args
+            .get("locator")
+            .and_then(|value| value.as_str()),
+        Some("mcp://capability")
+    );
+    assert!(
+        summary
+            .synopsis
+            .as_ref()
+            .is_some_and(|text| text.contains("Discovered mcp capability"))
+    );
+
+    assert_eq!(pipeline.calls(), vec![DiscoveryStrategy::Mcp]);
+}
+
+#[tokio::test]
+async fn discovery_pipeline_uses_structured_api_capability() {
+    let pipeline = Arc::new(MockDiscoveryPipeline::new(
+        DiscoveryOutcome::NotFound,
+        found_connector(DiscoveryStrategy::StructuredApi, "https://api.example.com"),
+        DiscoveryOutcome::NotFound,
+    ));
+    let pipeline_trait: Arc<dyn DiscoveryPipeline + Send + Sync> = pipeline.clone();
+
+    let payload = sample_request();
+    let body = serde_json::to_vec(&payload).expect("serialize plan request");
+
+    let (state, server, _postgres) =
+        planner_state_with_pipeline(approving_policy_payload(), pipeline_trait).await;
+
+    let response = build_router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/plan")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .expect("construct request"),
+        )
+        .await
+        .expect("receive response");
+
+    server.abort();
+
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let plan: PlanResponse = serde_json::from_slice(&bytes).expect("decode plan response");
+
+    let (steps, summary) = match plan.outcome {
+        PlanOutcome::Success { steps, summary } => (steps, summary),
+        other => panic!("expected success, got {other:?}"),
+    };
+
+    assert_eq!(steps[1].kind, ActionPrimitiveKind::Http);
+    assert_eq!(
+        steps[1]
+            .args
+            .get("executor")
+            .and_then(|value| value.as_str()),
+        Some("discovered-structured")
+    );
+    assert_eq!(
+        pipeline.calls(),
+        vec![DiscoveryStrategy::Mcp, DiscoveryStrategy::StructuredApi]
+    );
+    assert!(
+        summary
+            .synopsis
+            .as_ref()
+            .is_some_and(|text| text.contains("Discovered structured_api capability"))
+    );
+}
+
+#[tokio::test]
+async fn discovery_pipeline_uses_generic_http_capability() {
+    let pipeline = Arc::new(MockDiscoveryPipeline::new(
+        DiscoveryOutcome::NotFound,
+        DiscoveryOutcome::NotFound,
+        found_connector(
+            DiscoveryStrategy::GenericHttp,
+            "https://fallback.example.com",
+        ),
+    ));
+    let pipeline_trait: Arc<dyn DiscoveryPipeline + Send + Sync> = pipeline.clone();
+
+    let payload = sample_request();
+    let body = serde_json::to_vec(&payload).expect("serialize plan request");
+
+    let (state, server, _postgres) =
+        planner_state_with_pipeline(approving_policy_payload(), pipeline_trait).await;
+
+    let response = build_router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/plan")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .expect("construct request"),
+        )
+        .await
+        .expect("receive response");
+
+    server.abort();
+
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let plan: PlanResponse = serde_json::from_slice(&bytes).expect("decode plan response");
+
+    let (steps, summary) = match plan.outcome {
+        PlanOutcome::Success { steps, summary } => (steps, summary),
+        other => panic!("expected success, got {other:?}"),
+    };
+
+    assert_eq!(steps[1].kind, ActionPrimitiveKind::Http);
+    assert_eq!(
+        steps[1]
+            .args
+            .get("executor")
+            .and_then(|value| value.as_str()),
+        Some("generic-http")
+    );
+    assert_eq!(
+        pipeline.calls(),
+        vec![
+            DiscoveryStrategy::Mcp,
+            DiscoveryStrategy::StructuredApi,
+            DiscoveryStrategy::GenericHttp,
+        ]
+    );
+    assert!(
+        summary
+            .synopsis
+            .as_ref()
+            .is_some_and(|text| text.contains("Discovered generic_http capability"))
+    );
 }
 
 #[tokio::test]
@@ -351,6 +623,13 @@ async fn mock_policy(response: serde_json::Value) -> (PolicyClient, JoinHandle<(
 async fn planner_state(
     policy_response: serde_json::Value,
 ) -> (PlannerState, JoinHandle<()>, TestPostgres) {
+    planner_state_with_pipeline(policy_response, Arc::new(DefaultDiscoveryPipeline::new())).await
+}
+
+async fn planner_state_with_pipeline(
+    policy_response: serde_json::Value,
+    discovery: Arc<dyn DiscoveryPipeline + Send + Sync>,
+) -> (PlannerState, JoinHandle<()>, TestPostgres) {
     let (policy_client, server) = mock_policy(policy_response).await;
     let postgres = TestPostgres::start().await.expect("start postgres fixture");
     let event_log = EventLog::from_pool(postgres.pool().clone());
@@ -360,6 +639,7 @@ async fn planner_state(
         PlannerState {
             policy_client,
             event_log,
+            discovery,
         },
         server,
         postgres,
