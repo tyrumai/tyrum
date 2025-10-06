@@ -29,6 +29,7 @@ services:
     environment:
       RUST_LOG: info
       PLANNER_BIND_ADDR: 0.0.0.0:8083
+      POLICY_GATE_URL: http://policy:8081
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
     depends_on:

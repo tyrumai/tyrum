@@ -2,12 +2,14 @@
 
 pub mod event_log;
 pub mod http;
+pub mod policy;
 pub mod state_machine;
 
 pub use event_log::{
     AppendOutcome, EventLog, EventLogError, EventLogSettings, NewPlannerEvent,
     PersistedPlannerEvent,
 };
+pub use policy::{PolicyClient, PolicyDecision, PolicyDecisionKind, PolicyRuleDecision};
 pub use state_machine::{
     PlanEvent, PlanFailure, PlanFailureReason, PlanStateMachine, PlanStatus, PlanSuccess,
 };
