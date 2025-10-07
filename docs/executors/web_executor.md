@@ -28,6 +28,8 @@ The executor accepts the planner payload described in
 - `fields` – array of `{ selector, value, redact? }` entries that are
   filled via Playwright’s `locator.fill` equivalent. When `redact` is set,
   the summary and DOM excerpt replace the value with `REDACTED`.
+  Selectors that get promoted into `capability_memories.selectors` must strip or
+  hash literal PII (emails, account numbers) before persistence.
 - `submit` – `{ selector, kind?, wait_after_ms? }`. The default `kind` is
   `click`; `submit` triggers `requestSubmit` on the referenced form element.
 - `snapshot_selector` (optional) – CSS selector used to capture a sanitised
