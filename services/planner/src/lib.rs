@@ -6,8 +6,8 @@ pub mod policy;
 pub mod state_machine;
 
 pub use event_log::{
-    AppendOutcome, EventLog, EventLogError, EventLogSettings, NewPlannerEvent,
-    PersistedPlannerEvent,
+    AppendOutcome, CapabilityMemoryResult, CapabilityMemorySkipReason, EventLog, EventLogError,
+    EventLogSettings, NewPlannerEvent, PersistedPlannerEvent,
 };
 pub use policy::{PolicyClient, PolicyDecision, PolicyDecisionKind, PolicyRuleDecision};
 pub use state_machine::{

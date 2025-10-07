@@ -6,8 +6,8 @@ use common::postgres::TestPostgres;
 use serde_json::{Value, json};
 use tyrum_memory::{MemoryDal, NewEpisodicEvent, NewFact};
 use tyrum_planner::{
-    ActionArguments, ActionPrimitive, ActionPrimitiveKind, AppendOutcome, EventLog,
-    NewPlannerEvent, PlanEvent, PlanStateMachine, PlanStatus,
+    ActionArguments, ActionPrimitive, ActionPrimitiveKind, AppendOutcome, CapabilityMemoryResult,
+    EventLog, NewPlannerEvent, PlanEvent, PlanStateMachine, PlanStatus,
 };
 use uuid::Uuid;
 
@@ -49,6 +49,17 @@ async fn mock_book_call_plan_creates_audit_and_memory_artifacts() -> Result<()> 
                 "intent": "book_call",
                 "url": "https://calendar.example.com/slots",
                 "slot": call_slot.clone(),
+                "selector_hints": {
+                    "login_button": "#login",
+                    "email_input": {
+                        "selector": "input[type=\"email\"]",
+                        "prefill": "alex@example.com"
+                    },
+                    "otp_field": {
+                        "selector": "[data-test=\"otp\"]",
+                        "value": "123456"
+                    }
+                }
             })),
         )
         .with_postcondition(json!({
@@ -129,6 +140,7 @@ async fn mock_book_call_plan_creates_audit_and_memory_artifacts() -> Result<()> 
             bail!("expected postcondition for non-confirm primitive at step {step_index}");
         }
 
+        let occurred_at = Utc::now();
         let audit_payload = json!({
             "primitive": primitive,
             "executor": outcome.executor,
@@ -139,7 +151,7 @@ async fn mock_book_call_plan_creates_audit_and_memory_artifacts() -> Result<()> 
             Uuid::new_v4(),
             plan_id,
             step_number,
-            Utc::now(),
+            occurred_at,
             &audit_payload,
         )?;
         assert!(matches!(
@@ -148,6 +160,25 @@ async fn mock_book_call_plan_creates_audit_and_memory_artifacts() -> Result<()> 
         ));
 
         machine.apply(PlanEvent::PostconditionSatisfied { step_index })?;
+
+        let memory_outcome = event_log
+            .record_capability_memory(
+                subject_id,
+                primitive,
+                outcome.executor,
+                &outcome.postcondition,
+                occurred_at,
+            )
+            .await?;
+
+        if primitive.kind == ActionPrimitiveKind::Web {
+            assert!(matches!(
+                memory_outcome,
+                CapabilityMemoryResult::Inserted { success_count: 1 }
+            ));
+        } else {
+            assert!(matches!(memory_outcome, CapabilityMemoryResult::Skipped(_)));
+        }
     }
 
     let success = match machine.status() {
@@ -210,6 +241,35 @@ async fn mock_book_call_plan_creates_audit_and_memory_artifacts() -> Result<()> 
         .find(|event| event.event_type == "message.sent")
         .expect("message event stored");
     assert_eq!(message_event.channel, "email");
+
+    let capability_memories = memory
+        .list_capability_memories_for_subject(subject_id)
+        .await
+        .context("read capability memories")?;
+    assert_eq!(capability_memories.len(), 1);
+
+    let capability = &capability_memories[0];
+    assert_eq!(capability.capability_type, "web");
+    assert_eq!(capability.capability_identifier, "calendar.example.com");
+    assert_eq!(capability.executor_kind, "generic-web");
+    assert_eq!(capability.success_count, 1);
+    assert_eq!(
+        capability.result_summary.as_deref(),
+        Some("generic-web satisfied intent book_call")
+    );
+
+    let selectors = capability.selectors.as_ref().expect("selectors captured");
+    assert_eq!(selectors["login_button"], "#login");
+    assert_eq!(
+        selectors["email_input"]["prefill"],
+        Value::String("[redacted]".into())
+    );
+    assert_eq!(selectors["otp_field"], Value::String("[redacted]".into()));
+
+    assert_eq!(
+        capability.outcome_metadata["postcondition"]["appointment"]["status"],
+        "booked"
+    );
 
     Ok(())
 }

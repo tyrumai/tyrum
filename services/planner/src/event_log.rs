@@ -2,11 +2,14 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
-use serde_json::Value;
+use serde_json::{Map as JsonMap, Value};
 use sqlx::{PgPool, Row, migrate::MigrateError, postgres::PgPoolOptions};
 use thiserror::Error;
-use tracing::instrument;
+use tracing::{debug, info, instrument, warn};
+use url::Url;
 use uuid::Uuid;
+
+use crate::{ActionPrimitive, ActionPrimitiveKind};
 
 static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 
@@ -37,6 +40,290 @@ impl EventLogSettings {
         self
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CapabilityMemoryResult {
+    Inserted { success_count: i32 },
+    Updated { success_count: i32 },
+    Skipped(CapabilityMemorySkipReason),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CapabilityMemorySkipReason {
+    NonMutatingPrimitive,
+    MissingIdentifier,
+}
+
+impl EventLog {
+    #[instrument(skip_all, fields(subject_id = %subject_id, executor_kind = %executor_kind))]
+    pub async fn record_capability_memory(
+        &self,
+        subject_id: Uuid,
+        primitive: &ActionPrimitive,
+        executor_kind: &str,
+        outcome: &Value,
+        occurred_at: DateTime<Utc>,
+    ) -> Result<CapabilityMemoryResult, EventLogError> {
+        if !primitive.kind.requires_postcondition() {
+            debug!(
+                primitive_kind = ?primitive.kind,
+                "skipping capability memory: primitive is non-mutating"
+            );
+            return Ok(CapabilityMemoryResult::Skipped(
+                CapabilityMemorySkipReason::NonMutatingPrimitive,
+            ));
+        }
+
+        let capability_type = capability_type_label(primitive.kind);
+        let Some(capability_identifier) = derive_capability_identifier(primitive) else {
+            warn!(
+                primitive_kind = ?primitive.kind,
+                "skipping capability memory: missing capability identifier"
+            );
+            return Ok(CapabilityMemoryResult::Skipped(
+                CapabilityMemorySkipReason::MissingIdentifier,
+            ));
+        };
+
+        let selectors = extract_selectors(primitive, outcome).map(|value| sanitize_value(&value));
+        let outcome_metadata = build_outcome_metadata(primitive, outcome);
+        let summary = build_result_summary(&capability_identifier, executor_kind, primitive);
+
+        let row = sqlx::query(
+            r#"
+            INSERT INTO capability_memories (
+                subject_id,
+                capability_type,
+                capability_identifier,
+                executor_kind,
+                selectors,
+                outcome_metadata,
+                result_summary,
+                success_count,
+                last_success_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, 1, $8)
+            ON CONFLICT (subject_id, capability_type, capability_identifier, executor_kind)
+            DO UPDATE SET
+                selectors = EXCLUDED.selectors,
+                outcome_metadata = EXCLUDED.outcome_metadata,
+                result_summary = EXCLUDED.result_summary,
+                success_count = capability_memories.success_count + 1,
+                last_success_at = EXCLUDED.last_success_at,
+                updated_at = NOW()
+            RETURNING success_count
+            "#,
+        )
+        .bind(subject_id)
+        .bind(capability_type)
+        .bind(&capability_identifier)
+        .bind(executor_kind)
+        .bind(selectors.clone())
+        .bind(outcome_metadata.clone())
+        .bind(summary.clone())
+        .bind(occurred_at)
+        .fetch_one(&self.pool)
+        .await?;
+
+        let success_count: i32 = row.try_get("success_count")?;
+        let inserted = success_count == 1;
+
+        let selector_keys = selectors
+            .as_ref()
+            .and_then(|value| value.as_object())
+            .map(|object| object.keys().cloned().collect::<Vec<_>>());
+
+        info!(
+            capability_type,
+            capability_identifier,
+            %subject_id,
+            executor_kind,
+            success_count,
+            inserted,
+            selector_keys = ?selector_keys,
+            "capability memory upserted"
+        );
+
+        let result = if inserted {
+            CapabilityMemoryResult::Inserted { success_count }
+        } else {
+            CapabilityMemoryResult::Updated { success_count }
+        };
+
+        Ok(result)
+    }
+}
+
+fn capability_type_label(kind: ActionPrimitiveKind) -> &'static str {
+    match kind {
+        ActionPrimitiveKind::Web => "web",
+        ActionPrimitiveKind::Android => "android",
+        ActionPrimitiveKind::Cli => "cli",
+        ActionPrimitiveKind::Http => "http",
+        ActionPrimitiveKind::Message => "message",
+        ActionPrimitiveKind::Pay => "pay",
+        ActionPrimitiveKind::Store => "store",
+        ActionPrimitiveKind::Watch => "watch",
+        ActionPrimitiveKind::Research => "research",
+        ActionPrimitiveKind::Decide => "decide",
+        ActionPrimitiveKind::Confirm => "confirm",
+    }
+}
+
+fn derive_capability_identifier(primitive: &ActionPrimitive) -> Option<String> {
+    if let Some(identifier) = primitive
+        .args
+        .get("capability_identifier")
+        .and_then(Value::as_str)
+    {
+        return Some(identifier.to_string());
+    }
+
+    if let Some(vendor) = primitive.args.get("vendor").and_then(Value::as_str) {
+        return Some(vendor.to_string());
+    }
+
+    if let Some(url_value) = primitive.args.get("url").and_then(Value::as_str)
+        && let Ok(parsed) = Url::parse(url_value)
+        && let Some(host) = parsed.host_str()
+    {
+        return Some(host.to_string());
+    }
+
+    if let Some(intent) = primitive.args.get("intent").and_then(Value::as_str) {
+        return Some(intent.to_string());
+    }
+
+    None
+}
+
+fn extract_selectors(primitive: &ActionPrimitive, outcome: &Value) -> Option<Value> {
+    const SELECTOR_KEYS: &[&str] = &["selectors", "selector_hints", "flow_hints"];
+    for key in SELECTOR_KEYS {
+        if let Some(value) = primitive.args.get(*key) {
+            return Some(value.clone());
+        }
+    }
+
+    outcome.get("selectors").cloned()
+}
+
+fn build_outcome_metadata(primitive: &ActionPrimitive, outcome: &Value) -> Value {
+    let mut metadata = JsonMap::new();
+    metadata.insert("postcondition".into(), sanitize_value(outcome));
+
+    if let Some(intent) = primitive.args.get("intent").and_then(Value::as_str) {
+        metadata.insert("intent".into(), Value::String(intent.to_string()));
+    }
+
+    if let Some(url) = primitive.args.get("url").and_then(Value::as_str)
+        && let Some(url_metadata) = sanitize_url(url)
+    {
+        metadata.insert("url".into(), url_metadata);
+    }
+
+    Value::Object(metadata)
+}
+
+fn build_result_summary(
+    capability_identifier: &str,
+    executor_kind: &str,
+    primitive: &ActionPrimitive,
+) -> Option<String> {
+    if let Some(intent) = primitive.args.get("intent").and_then(Value::as_str) {
+        return Some(format!("{executor_kind} satisfied intent {intent}"));
+    }
+    Some(format!(
+        "{executor_kind} succeeded for {capability_identifier}"
+    ))
+}
+
+fn sanitize_url(raw: &str) -> Option<Value> {
+    let parsed = Url::parse(raw).ok()?;
+    let mut map = JsonMap::new();
+    if let Some(host) = parsed.host_str() {
+        map.insert("host".into(), Value::String(host.to_string()));
+    }
+    let path = parsed.path();
+    if !path.is_empty() && path != "/" {
+        map.insert("path".into(), Value::String(path.to_string()));
+    }
+    if map.is_empty() {
+        None
+    } else {
+        Some(Value::Object(map))
+    }
+}
+
+fn sanitize_value(value: &Value) -> Value {
+    match value {
+        Value::Null | Value::Bool(_) | Value::Number(_) => value.clone(),
+        Value::String(text) => Value::String(sanitize_string(text)),
+        Value::Array(items) => Value::Array(items.iter().map(sanitize_value).collect::<Vec<_>>()),
+        Value::Object(map) => {
+            let mut sanitized = JsonMap::new();
+            for (key, val) in map {
+                let lower_key = key.to_ascii_lowercase();
+                if ALWAYS_REDACT_KEYS
+                    .iter()
+                    .any(|flag| lower_key.contains(flag))
+                {
+                    sanitized.insert(key.clone(), Value::String("[redacted]".into()));
+                } else {
+                    sanitized.insert(key.clone(), sanitize_value(val));
+                }
+            }
+            Value::Object(sanitized)
+        }
+    }
+}
+
+fn sanitize_string(value: &str) -> String {
+    if looks_sensitive(value) {
+        "[redacted]".into()
+    } else {
+        value.to_string()
+    }
+}
+
+fn looks_sensitive(value: &str) -> bool {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+
+    if trimmed.len() > 128 {
+        return true;
+    }
+
+    if trimmed.contains('@') {
+        return true;
+    }
+
+    let digits_only = trimmed.chars().all(|ch| ch.is_ascii_digit());
+    if digits_only && trimmed.len() >= 6 {
+        return true;
+    }
+
+    let lowercase = trimmed.to_ascii_lowercase();
+    if lowercase.starts_with("bearer ") || lowercase.starts_with("basic ") {
+        return true;
+    }
+
+    false
+}
+
+const ALWAYS_REDACT_KEYS: &[&str] = &[
+    "password",
+    "passcode",
+    "secret",
+    "token",
+    "otp",
+    "auth",
+    "credential",
+    "cvv",
+    "prefill",
+];
 
 /// Planner-facing representation of a new action trace entry.
 #[derive(Clone, Debug, PartialEq)]
@@ -217,12 +504,45 @@ impl EventLog {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::Value;
+    use std::sync::OnceLock;
     use testcontainers::{
         ContainerAsync, GenericImage, ImageExt,
         core::{IntoContainerPort, WaitFor},
         runners::AsyncRunner,
     };
-    use tokio::time::sleep;
+    use tokio::{sync::Mutex, time::sleep};
+
+    static DB_GUARD: OnceLock<Mutex<()>> = OnceLock::new();
+
+    #[test]
+    fn derive_identifier_falls_back_for_hostless_url() {
+        let mut args = JsonMap::new();
+        args.insert(
+            "url".into(),
+            Value::String("mailto:alex@example.com".into()),
+        );
+        args.insert("intent".into(), Value::String("book_call".into()));
+
+        let primitive = ActionPrimitive::new(ActionPrimitiveKind::Web, args);
+        assert_eq!(
+            derive_capability_identifier(&primitive),
+            Some("book_call".to_string())
+        );
+    }
+
+    #[test]
+    fn derive_identifier_falls_back_when_url_invalid() {
+        let mut args = JsonMap::new();
+        args.insert("url".into(), Value::String("/relative/path".into()));
+        args.insert("intent".into(), Value::String("book_call".into()));
+
+        let primitive = ActionPrimitive::new(ActionPrimitiveKind::Web, args);
+        assert_eq!(
+            derive_capability_identifier(&primitive),
+            Some("book_call".to_string())
+        );
+    }
 
     const POSTGRES_IMAGE: &str = "pgvector/pgvector";
     const POSTGRES_TAG: &str = "pg16";
@@ -294,6 +614,7 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn append_inserts_event() {
+        let _guard = DB_GUARD.get_or_init(|| Mutex::new(())).lock().await;
         let (container, event_log) = setup().await;
         let _container = container;
         let plan_id = Uuid::new_v4();
@@ -315,6 +636,7 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn append_is_idempotent() {
+        let _guard = DB_GUARD.get_or_init(|| Mutex::new(())).lock().await;
         let (container, event_log) = setup().await;
         let _container = container;
         let plan_id = Uuid::new_v4();
@@ -334,6 +656,7 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn duplicate_plan_step_returns_duplicate() {
+        let _guard = DB_GUARD.get_or_init(|| Mutex::new(())).lock().await;
         let (container, event_log) = setup().await;
         let _container = container;
         let plan_id = Uuid::new_v4();
@@ -356,6 +679,7 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn events_are_ordered_by_step() {
+        let _guard = DB_GUARD.get_or_init(|| Mutex::new(())).lock().await;
         let (container, event_log) = setup().await;
         let _container = container;
         let plan_id = Uuid::new_v4();
@@ -376,6 +700,7 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn reject_negative_steps() {
+        let _guard = DB_GUARD.get_or_init(|| Mutex::new(())).lock().await;
         let (container, event_log) = setup().await;
         let _container = container;
         let plan_id = Uuid::new_v4();
