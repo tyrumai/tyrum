@@ -35,7 +35,8 @@ ENV HTTP_PROXY=$HTTP_PROXY \
 
 RUN set -eux; \
     printf 'Acquire::ForceIPv4 "true";\n' >/etc/apt/apt.conf.d/99force-ipv4; \
-    useradd --create-home --shell /usr/sbin/nologin appuser; \
+    groupadd --gid 1000 appuser; \
+    useradd --uid 1000 --gid 1000 --create-home --shell /usr/sbin/nologin appuser; \
     printf '%s\n' \
       'deb http://ftp.nl.debian.org/debian bookworm main' \
       'deb http://ftp.nl.debian.org/debian bookworm-updates main' \

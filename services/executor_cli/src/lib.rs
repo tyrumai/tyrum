@@ -4,7 +4,7 @@
 use std::os::unix::fs::PermissionsExt;
 use std::{
     env, fs,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     process::ExitStatus,
 };
 
@@ -141,29 +141,25 @@ async fn execute_cli_action_in_sandbox(
     let args = parse_cli_args(&action.args)?;
     let sandbox_root = sandbox.to_path_buf();
     let working_dir = resolve_working_directory(&sandbox_root, args.cwd.as_deref())?;
-    let command_spec = args.command.clone();
-    let initial_executable = resolve_executable(&command_spec, &working_dir, &sandbox_root)?;
+    let command_label = args.command.clone();
+    let executable = resolve_executable(&command_label, &working_dir, &sandbox_root)?;
 
-    let command_display = initial_executable.display().to_string();
-    let telemetry_name = initial_executable
+    let command_display = executable.display().to_string();
+    let telemetry_name = executable
         .file_name()
         .and_then(|value| value.to_str())
         .map(|value| value.to_string())
         .unwrap_or_else(|| command_display.clone());
     let arguments = args.args.clone();
     let working_dir_for_spawn = working_dir.clone();
-    let sandbox_for_spawn = sandbox_root.clone();
-    let command_for_spawn = command_spec.clone();
+    let command_for_spawn = executable.clone();
+    let command_label_for_spawn = command_label.clone();
 
     let context = telemetry::AttemptContext::new(&telemetry_name, &working_dir);
 
     let (result, _) = telemetry::record_attempt(&context, async move {
-        let executable = resolve_executable(
-            &command_for_spawn,
-            &working_dir_for_spawn,
-            &sandbox_for_spawn,
-        )?;
-        let mut command = Command::new(&executable);
+        ensure_executable(&command_for_spawn, &command_label_for_spawn)?;
+        let mut command = Command::new(&command_for_spawn);
 
         command.current_dir(&working_dir_for_spawn);
 
@@ -301,12 +297,11 @@ fn resolve_working_directory(sandbox: &Path, requested: Option<&str>) -> Result<
     match requested {
         None => Ok(sandbox.to_path_buf()),
         Some(value) => {
-            let requested_path = Path::new(value);
-            let candidate = if requested_path.is_absolute() {
-                requested_path.to_path_buf()
-            } else {
-                sandbox.join(requested_path)
-            };
+            let candidate = join_relative(sandbox, value).map_err(|_| {
+                CliExecutorError::WorkingDirectoryEscapesSandbox {
+                    requested: value.to_string(),
+                }
+            })?;
 
             let metadata = fs::metadata(&candidate).map_err(|_| {
                 CliExecutorError::WorkingDirectoryNotFound {
@@ -337,12 +332,10 @@ fn resolve_working_directory(sandbox: &Path, requested: Option<&str>) -> Result<
 }
 
 fn resolve_executable(command: &str, cwd: &Path, sandbox: &Path) -> Result<PathBuf> {
-    let requested_path = Path::new(command);
-    let candidate = if requested_path.is_absolute() {
-        requested_path.to_path_buf()
-    } else {
-        cwd.join(requested_path)
-    };
+    let candidate =
+        join_relative(cwd, command).map_err(|_| CliExecutorError::CommandEscapesSandbox {
+            command: command.to_string(),
+        })?;
 
     let canonical =
         fs::canonicalize(&candidate).map_err(|_| CliExecutorError::CommandNotFound {
@@ -398,6 +391,26 @@ fn exit_code(status: &ExitStatus) -> i32 {
     })
 }
 
+fn join_relative(base: &Path, requested: &str) -> std::result::Result<PathBuf, ()> {
+    let path = Path::new(requested);
+
+    if path.is_absolute() {
+        return Err(());
+    }
+
+    let mut candidate = PathBuf::from(base);
+
+    for component in path.components() {
+        match component {
+            Component::Normal(segment) => candidate.push(segment),
+            Component::CurDir => {}
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => return Err(()),
+        }
+    }
+
+    Ok(candidate)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -431,7 +444,7 @@ mod tests {
         let sandbox = TempDir::new()?;
         let sandbox_root = fs::canonicalize(sandbox.path())?;
 
-        write_script(&sandbox_root, "echo.sh", "echo \"hello tyrum\"")?;
+        write_script(&sandbox_root, "echo.sh", "printf '%s %s\\n' \"$1\" \"$2\"")?;
 
         let primitive = ActionPrimitive::new(
             ActionPrimitiveKind::Cli,

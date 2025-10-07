@@ -95,8 +95,8 @@ services:
         condition: service_started
     ports:
       - "8093:8093"
-    volumes:
-      - ../artifacts/cli_sandbox:/sandbox
+    tmpfs:
+      - /sandbox:uid=1000,gid=1000,mode=700
     healthcheck:
       test: ["CMD-SHELL", "curl --fail http://localhost:8093/healthz || exit 1"]
       interval: 10s
