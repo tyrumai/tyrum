@@ -1,0 +1,11 @@
+{
+  "request_id": "req-escalate",
+  "card_id": "virtual-card-001",
+  "amount_minor_units": 25000,
+  "currency": "EUR",
+  "merchant": {
+    "name": "Example Merchant",
+    "mcc": "5732",
+    "country": "NL"
+  }
+}

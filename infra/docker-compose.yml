@@ -21,6 +21,30 @@ services:
       retries: 5
       start_period: 10s
 
+  wallet:
+    build:
+      context: ..
+      dockerfile: Dockerfile.wallet
+    image: tyrum/wallet:local
+    environment:
+      RUST_LOG: info
+      WALLET_BIND_ADDR: 0.0.0.0:8084
+      WALLET_AUTO_APPROVE_LIMIT_MINOR: 10000
+      WALLET_HARD_DENY_LIMIT_MINOR: 50000
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+    depends_on:
+      otel-collector:
+        condition: service_started
+    ports:
+      - "8084:8084"
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:8084/healthz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
   planner:
     build:
       context: ..

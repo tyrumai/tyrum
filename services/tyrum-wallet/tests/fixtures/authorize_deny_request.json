@@ -1,0 +1,11 @@
+{
+  "request_id": "req-deny",
+  "card_id": "virtual-card-002",
+  "amount_minor_units": 75000,
+  "currency": "EUR",
+  "merchant": {
+    "name": "High Roller",
+    "mcc": "7999",
+    "country": "NL"
+  }
+}

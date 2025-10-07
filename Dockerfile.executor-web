@@ -23,6 +23,9 @@ COPY services/executor_web/tests services/executor_web/tests
 COPY services/executor_http/Cargo.toml services/executor_http/Cargo.toml
 COPY services/executor_http/src services/executor_http/src
 COPY services/executor_http/tests services/executor_http/tests
+COPY services/tyrum-wallet/Cargo.toml services/tyrum-wallet/Cargo.toml
+COPY services/tyrum-wallet/src services/tyrum-wallet/src
+COPY services/tyrum-wallet/tests services/tyrum-wallet/tests
 
 RUN cargo build --locked --release --package tyrum-executor-web
 
