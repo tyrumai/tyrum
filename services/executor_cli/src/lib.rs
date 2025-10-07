@@ -398,17 +398,22 @@ fn join_relative(base: &Path, requested: &str) -> std::result::Result<PathBuf, (
         return Err(());
     }
 
-    let mut candidate = PathBuf::from(base);
+    let mut relative = PathBuf::new();
 
     for component in path.components() {
         match component {
-            Component::Normal(segment) => candidate.push(segment),
+            Component::Normal(segment) => relative.push(segment),
             Component::CurDir => {}
-            Component::ParentDir | Component::RootDir | Component::Prefix(_) => return Err(()),
+            Component::ParentDir => {
+                if !relative.pop() {
+                    return Err(());
+                }
+            }
+            Component::RootDir | Component::Prefix(_) => return Err(()),
         }
     }
 
-    Ok(candidate)
+    Ok(base.join(relative))
 }
 
 #[cfg(test)]
