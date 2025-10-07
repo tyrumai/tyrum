@@ -1,5 +1,7 @@
 //! Sandboxed CLI executor implementation for Tyrum.
 
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -102,6 +104,12 @@ pub enum CliExecutorError {
         /// Original command string supplied by the planner.
         command: String,
     },
+    /// Resolved command exists but lacks executable permissions or is not a file.
+    #[error("command '{command}' is not executable")]
+    CommandNotExecutable {
+        /// Original command string supplied by the planner.
+        command: String,
+    },
     /// Executor detected it is running as root, which violates sandbox policy.
     #[error("cli executor must run as a non-root user")]
     RootUserNotAllowed,
@@ -131,23 +139,31 @@ async fn execute_cli_action_in_sandbox(
     ensure_non_root()?;
 
     let args = parse_cli_args(&action.args)?;
-    let working_dir = resolve_working_directory(sandbox, args.cwd.as_deref())?;
-    let executable = resolve_executable(&args.command, &working_dir, sandbox)?;
+    let sandbox_root = sandbox.to_path_buf();
+    let working_dir = resolve_working_directory(&sandbox_root, args.cwd.as_deref())?;
+    let command_spec = args.command.clone();
+    let initial_executable = resolve_executable(&command_spec, &working_dir, &sandbox_root)?;
 
-    let command_display = executable.display().to_string();
-    let telemetry_name = executable
+    let command_display = initial_executable.display().to_string();
+    let telemetry_name = initial_executable
         .file_name()
         .and_then(|value| value.to_str())
         .map(|value| value.to_string())
         .unwrap_or_else(|| command_display.clone());
     let arguments = args.args.clone();
     let working_dir_for_spawn = working_dir.clone();
-    let command_for_spawn = executable.clone();
+    let sandbox_for_spawn = sandbox_root.clone();
+    let command_for_spawn = command_spec.clone();
 
     let context = telemetry::AttemptContext::new(&telemetry_name, &working_dir);
 
     let (result, _) = telemetry::record_attempt(&context, async move {
-        let mut command = Command::new(&command_for_spawn);
+        let executable = resolve_executable(
+            &command_for_spawn,
+            &working_dir_for_spawn,
+            &sandbox_for_spawn,
+        )?;
+        let mut command = Command::new(&executable);
 
         command.current_dir(&working_dir_for_spawn);
 
@@ -339,7 +355,32 @@ fn resolve_executable(command: &str, cwd: &Path, sandbox: &Path) -> Result<PathB
         });
     }
 
+    ensure_executable(&canonical, command)?;
+
     Ok(canonical)
+}
+
+fn ensure_executable(path: &Path, command: &str) -> Result<()> {
+    let metadata = fs::metadata(path).map_err(|_| CliExecutorError::CommandNotFound {
+        command: command.to_string(),
+    })?;
+
+    if !metadata.is_file() {
+        return Err(CliExecutorError::CommandNotExecutable {
+            command: command.to_string(),
+        });
+    }
+
+    #[cfg(unix)]
+    {
+        if metadata.permissions().mode() & 0o111 == 0 {
+            return Err(CliExecutorError::CommandNotExecutable {
+                command: command.to_string(),
+            });
+        }
+    }
+
+    Ok(())
 }
 
 fn exit_code(status: &ExitStatus) -> i32 {
@@ -429,7 +470,7 @@ mod tests {
             super::execute_cli_action_in_sandbox(&primitive, sandbox_root.as_path()).await?;
 
         assert_eq!(outcome.status, CliExecutionStatus::Failure);
-        assert_ne!(outcome.exit_code, 0);
+        assert_eq!(outcome.exit_code, 42);
 
         Ok(())
     }
