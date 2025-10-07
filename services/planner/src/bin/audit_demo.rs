@@ -135,8 +135,15 @@ impl DemoRuntime {
                 self.handle_confirm_step(&mut machine, plan_id, subject_id, step_index, primitive)
                     .await?;
             } else {
-                self.handle_executor_step(&mut machine, plan_id, step_index, primitive, &executors)
-                    .await?;
+                self.handle_executor_step(
+                    &mut machine,
+                    plan_id,
+                    subject_id,
+                    step_index,
+                    primitive,
+                    &executors,
+                )
+                .await?;
             }
         }
 
@@ -205,6 +212,7 @@ impl DemoRuntime {
         &self,
         machine: &mut PlanStateMachine,
         plan_id: Uuid,
+        subject_id: Uuid,
         step_index: usize,
         primitive: &ActionPrimitive,
         executors: &MockGenericExecutors,
@@ -212,14 +220,14 @@ impl DemoRuntime {
         let step_number = step_index as i32;
         machine.apply(PlanEvent::StepDispatched { step_index })?;
 
-        let outcome = executors
+        let executor_outcome = executors
             .execute(primitive)
             .await
             .with_context(|| format!("execute plan step {step_index}"))?;
 
         if let Some(expected) = primitive.postcondition.as_ref() {
             ensure!(
-                expected == &outcome.postcondition,
+                expected == &executor_outcome.postcondition,
                 "postcondition mismatch at step {step_index}"
             );
         } else {
@@ -228,24 +236,37 @@ impl DemoRuntime {
 
         let audit_payload = json!({
             "primitive": primitive,
-            "executor": outcome.executor,
-            "result": outcome.postcondition.clone(),
+            "executor": executor_outcome.executor.as_str(),
+            "result": executor_outcome.postcondition.clone(),
         });
 
+        let occurred_at = Utc::now();
         let event = NewPlannerEvent::from_payload(
             Uuid::new_v4(),
             plan_id,
             step_number,
-            Utc::now(),
+            occurred_at,
             &audit_payload,
         )?;
-        let outcome = self.event_log.append(event).await?;
+        let append_outcome = self.event_log.append(event).await?;
         ensure!(
-            matches!(outcome, AppendOutcome::Inserted(_)),
+            matches!(append_outcome, AppendOutcome::Inserted(_)),
             "executor step should append audit event"
         );
 
         machine.apply(PlanEvent::PostconditionSatisfied { step_index })?;
+
+        let _ = self
+            .event_log
+            .record_capability_memory(
+                subject_id,
+                primitive,
+                executor_outcome.executor.as_str(),
+                &executor_outcome.postcondition,
+                occurred_at,
+            )
+            .await
+            .context("record capability memory")?;
         Ok(())
     }
 
