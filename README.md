@@ -85,6 +85,7 @@ Follow these steps to provision the Telegram channel safely across local and sta
 ## Key Documents
 - [Product Concept v1](docs/product_concept_v1.md)
 - [Working Agreements (DoR/DoD)](docs/working_agreements.md)
+- [Android Emulator Executor](docs/android_emulator_executor.md)
 - [Repository Guidelines](AGENTS.md)
 - [Policy Check Service Skeleton](docs/policy_service.md)
 - [Terraform Baseline](docs/terraform_baseline.md)
@@ -114,6 +115,7 @@ Follow these steps to provision the Telegram channel safely across local and sta
    - PostgreSQL on `localhost:5432` (`tyrum`/`tyrum_dev_password`)
    - Redis on `localhost:6379`
    - Mock LLM on http://localhost:8085/v1/completions echoing prompts
+   - Android executor emulator reachable via adb on localhost:5555 (gRPC stream on 8554)
 4. Tear the stack down with `docker compose -f infra/docker-compose.yml down --volumes` when finished.
 
 The Docker Compose definition lives in `infra/docker-compose.yml` and mirrors how the future GitHub Actions container smoke tests will exercise the stack.
