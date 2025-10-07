@@ -117,31 +117,6 @@ struct CliActionArgs {
     cwd: Option<String>,
 }
 
-#[derive(Clone, Debug)]
-enum CommandTarget {
-    Bare(String),
-    Resolved(PathBuf),
-}
-
-impl CommandTarget {
-    fn display(&self) -> String {
-        match self {
-            Self::Bare(program) => program.clone(),
-            Self::Resolved(path) => path.display().to_string(),
-        }
-    }
-
-    fn telemetry_name(&self) -> String {
-        match self {
-            Self::Bare(program) => program.clone(),
-            Self::Resolved(path) => path
-                .file_name()
-                .and_then(|value| value.to_str())
-                .map_or_else(|| path.display().to_string(), |value| value.to_string()),
-        }
-    }
-}
-
 /// Execute a CLI primitive and capture its stdout/stderr + exit code.
 pub async fn execute_cli_action(action: &ActionPrimitive) -> Result<CliActionOutcome> {
     let sandbox = sandbox_root()?;
@@ -157,21 +132,22 @@ async fn execute_cli_action_in_sandbox(
 
     let args = parse_cli_args(&action.args)?;
     let working_dir = resolve_working_directory(sandbox, args.cwd.as_deref())?;
-    let command_target = resolve_executable(&args.command, &working_dir, sandbox)?;
+    let executable = resolve_executable(&args.command, &working_dir, sandbox)?;
 
-    let command_display = command_target.display();
-    let telemetry_name = command_target.telemetry_name();
+    let command_display = executable.display().to_string();
+    let telemetry_name = executable
+        .file_name()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| command_display.clone());
     let arguments = args.args.clone();
     let working_dir_for_spawn = working_dir.clone();
-    let command_for_spawn = command_target.clone();
+    let command_for_spawn = executable.clone();
 
     let context = telemetry::AttemptContext::new(&telemetry_name, &working_dir);
 
     let (result, _) = telemetry::record_attempt(&context, async move {
-        let mut command = match command_for_spawn {
-            CommandTarget::Bare(program) => Command::new(program),
-            CommandTarget::Resolved(path) => Command::new(path),
-        };
+        let mut command = Command::new(&command_for_spawn);
 
         command.current_dir(&working_dir_for_spawn);
 
@@ -344,11 +320,7 @@ fn resolve_working_directory(sandbox: &Path, requested: Option<&str>) -> Result<
     }
 }
 
-fn resolve_executable(command: &str, cwd: &Path, sandbox: &Path) -> Result<CommandTarget> {
-    if is_bare_command(command) {
-        return Ok(CommandTarget::Bare(command.to_string()));
-    }
-
+fn resolve_executable(command: &str, cwd: &Path, sandbox: &Path) -> Result<PathBuf> {
     let requested_path = Path::new(command);
     let candidate = if requested_path.is_absolute() {
         requested_path.to_path_buf()
@@ -367,14 +339,7 @@ fn resolve_executable(command: &str, cwd: &Path, sandbox: &Path) -> Result<Comma
         });
     }
 
-    Ok(CommandTarget::Resolved(canonical))
-}
-
-fn is_bare_command(command: &str) -> bool {
-    use std::path::Component;
-
-    let mut components = Path::new(command).components();
-    matches!(components.next(), Some(Component::Normal(_))) && components.next().is_none()
+    Ok(canonical)
 }
 
 fn exit_code(status: &ExitStatus) -> i32 {
@@ -396,6 +361,10 @@ fn exit_code(status: &ExitStatus) -> i32 {
 mod tests {
     use super::*;
     use serde_json::{Value, json};
+    use std::{
+        fs,
+        path::{Path, PathBuf},
+    };
     use tempfile::TempDir;
 
     fn into_args(value: Value) -> ActionArguments {
@@ -405,28 +374,34 @@ mod tests {
             .clone()
     }
 
-    #[test]
-    fn bare_command_detection() {
-        assert!(is_bare_command("echo"));
-        assert!(is_bare_command("false"));
-        assert!(!is_bare_command("./script.sh"));
-        assert!(!is_bare_command("/bin/ls"));
-        assert!(!is_bare_command("../escape"));
+    fn write_script(dir: &Path, name: &str, body: &str) -> anyhow::Result<PathBuf> {
+        let path = dir.join(name);
+        fs::write(&path, format!("#!/bin/sh\n{body}\n"))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o755))?;
+        }
+        Ok(path)
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn command_success_captures_output() -> anyhow::Result<()> {
         let sandbox = TempDir::new()?;
+        let sandbox_root = fs::canonicalize(sandbox.path())?;
+
+        write_script(&sandbox_root, "echo.sh", "echo \"hello tyrum\"")?;
 
         let primitive = ActionPrimitive::new(
             ActionPrimitiveKind::Cli,
             into_args(json!({
-                "command": "echo",
+                "command": "./echo.sh",
                 "args": ["hello", "tyrum"]
             })),
         );
 
-        let outcome = super::execute_cli_action_in_sandbox(&primitive, sandbox.path()).await?;
+        let outcome =
+            super::execute_cli_action_in_sandbox(&primitive, sandbox_root.as_path()).await?;
 
         assert_eq!(outcome.status, CliExecutionStatus::Success);
         assert_eq!(outcome.exit_code, 0);
@@ -439,15 +414,19 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn command_failure_reports_exit_code() -> anyhow::Result<()> {
         let sandbox = TempDir::new()?;
+        let sandbox_root = fs::canonicalize(sandbox.path())?;
+
+        write_script(&sandbox_root, "fail.sh", "exit 42")?;
 
         let primitive = ActionPrimitive::new(
             ActionPrimitiveKind::Cli,
             into_args(json!({
-                "command": "false"
+                "command": "./fail.sh"
             })),
         );
 
-        let outcome = super::execute_cli_action_in_sandbox(&primitive, sandbox.path()).await?;
+        let outcome =
+            super::execute_cli_action_in_sandbox(&primitive, sandbox_root.as_path()).await?;
 
         assert_eq!(outcome.status, CliExecutionStatus::Failure);
         assert_ne!(outcome.exit_code, 0);
@@ -458,25 +437,27 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn rejects_working_directory_escape() -> anyhow::Result<()> {
         let sandbox = TempDir::new()?;
+        let sandbox_root = fs::canonicalize(sandbox.path())?;
+
+        write_script(&sandbox_root, "noop.sh", "echo noop")?;
 
         // Ensure a sibling directory exists so canonicalisation succeeds outside the sandbox.
-        let outside = sandbox
-            .path()
+        let outside = sandbox_root
             .parent()
             .map(|parent| parent.join("outside"))
             .expect("sandbox path has parent");
-        std::fs::create_dir_all(&outside)?;
+        fs::create_dir_all(&outside)?;
 
         let primitive = ActionPrimitive::new(
             ActionPrimitiveKind::Cli,
             into_args(json!({
-                "command": "echo",
+                "command": "./noop.sh",
                 "cwd": "../outside",
                 "args": ["noop"]
             })),
         );
 
-        let err = super::execute_cli_action_in_sandbox(&primitive, sandbox.path())
+        let err = super::execute_cli_action_in_sandbox(&primitive, sandbox_root.as_path())
             .await
             .expect_err("directory traversal should be blocked");
 
