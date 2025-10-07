@@ -262,6 +262,185 @@ impl MemoryDal {
         Ok(())
     }
 
+    // --- Capability memory operations -------------------------------------
+
+    pub async fn create_capability_memory(
+        &self,
+        new_memory: NewCapabilityMemory,
+    ) -> Result<CapabilityMemory, MemoryError> {
+        let record = sqlx::query_as::<_, CapabilityMemory>(
+            r#"
+            INSERT INTO capability_memories (
+                subject_id,
+                capability_type,
+                capability_identifier,
+                executor_kind,
+                selectors,
+                outcome_metadata,
+                result_summary,
+                success_count,
+                last_success_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING id, subject_id, capability_type, capability_identifier,
+                executor_kind, selectors, outcome_metadata, result_summary,
+                success_count, last_success_at, created_at, updated_at
+            "#,
+        )
+        .bind(new_memory.subject_id)
+        .bind(new_memory.capability_type)
+        .bind(new_memory.capability_identifier)
+        .bind(new_memory.executor_kind)
+        .bind(new_memory.selectors)
+        .bind(new_memory.outcome_metadata)
+        .bind(new_memory.result_summary)
+        .bind(new_memory.success_count)
+        .bind(new_memory.last_success_at)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(record)
+    }
+
+    pub async fn get_capability_memory(
+        &self,
+        memory_id: i64,
+    ) -> Result<Option<CapabilityMemory>, MemoryError> {
+        let record = sqlx::query_as::<_, CapabilityMemory>(
+            r#"
+            SELECT id, subject_id, capability_type, capability_identifier,
+                executor_kind, selectors, outcome_metadata, result_summary,
+                success_count, last_success_at, created_at, updated_at
+            FROM capability_memories
+            WHERE id = $1
+            "#,
+        )
+        .bind(memory_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(record)
+    }
+
+    pub async fn get_capability_memory_for_flow(
+        &self,
+        subject_id: Uuid,
+        capability_type: &str,
+        capability_identifier: &str,
+        executor_kind: &str,
+    ) -> Result<Option<CapabilityMemory>, MemoryError> {
+        let record = sqlx::query_as::<_, CapabilityMemory>(
+            r#"
+            SELECT id, subject_id, capability_type, capability_identifier,
+                executor_kind, selectors, outcome_metadata, result_summary,
+                success_count, last_success_at, created_at, updated_at
+            FROM capability_memories
+            WHERE subject_id = $1
+                AND capability_type = $2
+                AND capability_identifier = $3
+                AND executor_kind = $4
+            "#,
+        )
+        .bind(subject_id)
+        .bind(capability_type)
+        .bind(capability_identifier)
+        .bind(executor_kind)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(record)
+    }
+
+    pub async fn list_capability_memories_for_subject(
+        &self,
+        subject_id: Uuid,
+    ) -> Result<Vec<CapabilityMemory>, MemoryError> {
+        let records = sqlx::query_as::<_, CapabilityMemory>(
+            r#"
+            SELECT id, subject_id, capability_type, capability_identifier,
+                executor_kind, selectors, outcome_metadata, result_summary,
+                success_count, last_success_at, created_at, updated_at
+            FROM capability_memories
+            WHERE subject_id = $1
+            ORDER BY last_success_at DESC, id DESC
+            "#,
+        )
+        .bind(subject_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(records)
+    }
+
+    pub async fn list_capability_memories_for_subject_and_type(
+        &self,
+        subject_id: Uuid,
+        capability_type: &str,
+    ) -> Result<Vec<CapabilityMemory>, MemoryError> {
+        let records = sqlx::query_as::<_, CapabilityMemory>(
+            r#"
+            SELECT id, subject_id, capability_type, capability_identifier,
+                executor_kind, selectors, outcome_metadata, result_summary,
+                success_count, last_success_at, created_at, updated_at
+            FROM capability_memories
+            WHERE subject_id = $1
+                AND capability_type = $2
+            ORDER BY last_success_at DESC, id DESC
+            "#,
+        )
+        .bind(subject_id)
+        .bind(capability_type)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(records)
+    }
+
+    pub async fn update_capability_memory(
+        &self,
+        memory_id: i64,
+        changes: CapabilityMemoryChanges,
+    ) -> Result<CapabilityMemory, MemoryError> {
+        let record = sqlx::query_as::<_, CapabilityMemory>(
+            r#"
+            UPDATE capability_memories
+            SET selectors = $1,
+                outcome_metadata = $2,
+                result_summary = $3,
+                success_count = $4,
+                last_success_at = $5,
+                updated_at = NOW()
+            WHERE id = $6
+            RETURNING id, subject_id, capability_type, capability_identifier,
+                executor_kind, selectors, outcome_metadata, result_summary,
+                success_count, last_success_at, created_at, updated_at
+            "#,
+        )
+        .bind(changes.selectors)
+        .bind(changes.outcome_metadata)
+        .bind(changes.result_summary)
+        .bind(changes.success_count)
+        .bind(changes.last_success_at)
+        .bind(memory_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        record.ok_or_else(|| MemoryError::not_found("capability_memory", memory_id))
+    }
+
+    pub async fn delete_capability_memory(&self, memory_id: i64) -> Result<(), MemoryError> {
+        let rows = sqlx::query("DELETE FROM capability_memories WHERE id = $1")
+            .bind(memory_id)
+            .execute(&self.pool)
+            .await?;
+
+        if rows.rows_affected() == 0 {
+            return Err(MemoryError::not_found("capability_memory", memory_id));
+        }
+
+        Ok(())
+    }
+
     // --- Vector embedding operations --------------------------------------
 
     pub async fn create_vector_embedding(
@@ -468,6 +647,44 @@ pub struct VectorEmbeddingChanges {
     pub embedding_model: String,
     pub label: Option<String>,
     pub metadata: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, PartialEq)]
+pub struct CapabilityMemory {
+    pub id: i64,
+    pub subject_id: Uuid,
+    pub capability_type: String,
+    pub capability_identifier: String,
+    pub executor_kind: String,
+    pub selectors: Option<serde_json::Value>,
+    pub outcome_metadata: serde_json::Value,
+    pub result_summary: Option<String>,
+    pub success_count: i32,
+    pub last_success_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone)]
+pub struct NewCapabilityMemory {
+    pub subject_id: Uuid,
+    pub capability_type: String,
+    pub capability_identifier: String,
+    pub executor_kind: String,
+    pub selectors: Option<serde_json::Value>,
+    pub outcome_metadata: serde_json::Value,
+    pub result_summary: Option<String>,
+    pub success_count: i32,
+    pub last_success_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CapabilityMemoryChanges {
+    pub selectors: Option<serde_json::Value>,
+    pub outcome_metadata: serde_json::Value,
+    pub result_summary: Option<String>,
+    pub success_count: i32,
+    pub last_success_at: DateTime<Utc>,
 }
 
 impl<'r> sqlx::FromRow<'r, PgRow> for VectorEmbedding {

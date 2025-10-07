@@ -286,6 +286,26 @@ to keep policy, planner, and API services aligned on envelopes and error handlin
 - **Policy/Autonomy Model (PAM):** learned consents, quiet hours, escalation style, spending behavior with confidence scores; if low → ask.
 - **Persona & Voice Profile (PVP):** tone, verbosity, initiative, emoji tolerance, language rules, voice params (pace/pitch/warmth), and pronunciation dictionary. (See Appendix B.)
 
+### Capability memory schema & usage
+- Table: `capability_memories` (primary key `id`) keyed by the unique tuple
+  `(subject_id, capability_type, capability_identifier, executor_kind)`. Each
+  row captures the selectors, executor wiring, and outcome metadata for a
+  successful run so the planner can rehydrate a known-good flow.
+- Indexes: `(subject_id, capability_type)` for lookups during planning, plus a
+  timestamp-ordered `(subject_id, last_success_at DESC)` index to promote
+  freshest memories.
+- Fields:
+  - `selectors` – JSON blob with DOM/API selector hints. Treat this as PII‑adjacent:
+    redact literal handles, emails, or account numbers before persisting and only
+    store hashed or templated selectors that the executor can safely reuse.
+  - `outcome_metadata` – structured JSON storing postconditions, costs, receipts,
+    or other artifacts that prove the run succeeded.
+  - `success_count`, `last_success_at`, `result_summary` – track reliability and
+    provide operator context when reviewing audit trails.
+- RLS is enabled (policy TODO) so access stays scoped per subject once authz
+  lands. Planner/Executor integrations must respect the redaction rule above when
+  writing through to this table.
+
 ---
 
 ## 9) Policy & Guardrails
