@@ -14,10 +14,8 @@ ENV HTTP_PROXY=$HTTP_PROXY \
 WORKDIR /app
 
 COPY Cargo.toml Cargo.lock ./
-COPY shared/tyrum-shared/Cargo.toml shared/tyrum-shared/Cargo.toml
-COPY shared/tyrum-shared/src shared/tyrum-shared/src
-COPY services/executor_cli/Cargo.toml services/executor_cli/Cargo.toml
-COPY services/executor_cli/src services/executor_cli/src
+COPY shared shared
+COPY services services
 
 RUN cargo build --locked --release --package tyrum-executor-cli
 
