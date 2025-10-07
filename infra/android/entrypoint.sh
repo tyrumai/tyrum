@@ -11,13 +11,22 @@ AVD_DEVICE_ID=${ANDROID_AVD_DEVICE_ID:-pixel_6}
 AVD_ABI=${ANDROID_AVD_ABI:-x86_64}
 AVDMANAGER_BIN=${AVDMANAGER_BIN:-/opt/android-sdk/cmdline-tools/latest/bin/avdmanager}
 RUNTIME_PARENT=${ANDROID_RUNTIME_PARENT:-/tmp/android-runtime}
-ADB_DEVICE_SERIAL=${ADB_DEVICE_SERIAL:-emulator-5554}
 EMULATOR_CONSOLE_PORT=${EMULATOR_CONSOLE_PORT:-5554}
-EMULATOR_ADB_PORT=${EMULATOR_ADB_PORT:-5555}
+EMULATOR_ADB_PORT=${EMULATOR_ADB_PORT:-$((EMULATOR_CONSOLE_PORT + 1))}
+DEFAULT_INTERNAL_CONSOLE=$((EMULATOR_CONSOLE_PORT + 100))
+if (( DEFAULT_INTERNAL_CONSOLE > 5682 || DEFAULT_INTERNAL_CONSOLE < 5554 )); then
+  DEFAULT_INTERNAL_CONSOLE=$EMULATOR_CONSOLE_PORT
+fi
+EMULATOR_CONSOLE_PORT_INTERNAL=${EMULATOR_CONSOLE_PORT_INTERNAL:-$DEFAULT_INTERNAL_CONSOLE}
+if (( EMULATOR_CONSOLE_PORT_INTERNAL % 2 == 1 )); then
+  EMULATOR_CONSOLE_PORT_INTERNAL=$((EMULATOR_CONSOLE_PORT_INTERNAL - 1))
+fi
+EMULATOR_ADB_PORT_INTERNAL=${EMULATOR_ADB_PORT_INTERNAL:-$((EMULATOR_CONSOLE_PORT_INTERNAL + 1))}
 EMULATOR_GRPC_PORT=${EMULATOR_GRPC_PORT:-8554}
 BOOT_TIMEOUT_SECONDS=${ANDROID_BOOT_TIMEOUT_SECONDS:-240}
 DATA_PARTITION_MB=${ANDROID_DATA_PARTITION_MB:-2048}
 SDK_ROOT=${ANDROID_SDK_ROOT:-/opt/android-sdk}
+ADB_DEVICE_SERIAL=${ADB_DEVICE_SERIAL:-emulator-${EMULATOR_CONSOLE_PORT_INTERNAL}}
 mkdir -p "$RUNTIME_PARENT"
 RUNTIME_HOME=$(mktemp -d "${RUNTIME_PARENT}/home.XXXXXX")
 
@@ -69,6 +78,23 @@ configure_avd_profile() {
   fi
 }
 
+declare -a PORT_FORWARD_PIDS=()
+
+start_port_proxy() {
+  local listen_port=$1
+  local target_port=$2
+  if [[ $listen_port -eq $target_port ]]; then
+    return
+  fi
+  if ! command -v socat >/dev/null 2>&1; then
+    log "socat not available; cannot forward port $listen_port"
+    return
+  fi
+  log "Forwarding 0.0.0.0:$listen_port -> 127.0.0.1:$target_port"
+  socat TCP-LISTEN:"$listen_port",reuseaddr,fork TCP:127.0.0.1:"$target_port" &
+  PORT_FORWARD_PIDS+=($!)
+}
+
 cleanup() {
   local exit_code=$?
   if [[ -n "${LOGGER_PID:-}" ]] && kill -0 "$LOGGER_PID" 2>/dev/null; then
@@ -81,6 +107,14 @@ cleanup() {
     wait "$EMULATOR_PID" 2>/dev/null || true
   fi
   adb kill-server >/dev/null 2>&1 || true
+  if ((${#PORT_FORWARD_PIDS[@]})); then
+    for pid in "${PORT_FORWARD_PIDS[@]}"; do
+      if kill -0 "$pid" 2>/dev/null; then
+        kill "$pid" 2>/dev/null || true
+        wait "$pid" 2>/dev/null || true
+      fi
+    done
+  fi
   rm -rf "$RUNTIME_HOME"
   log "Shutdown complete"
   exit "$exit_code"
@@ -100,9 +134,12 @@ mkdir -p "$ANDROID_USER_HOME" "$ANDROID_AVD_HOME" "$ANDROID_TMPDIR"
 touch "$ANDROID_USER_HOME/repositories.cfg"
 ensure_runtime_avd
 
+start_port_proxy "$EMULATOR_CONSOLE_PORT" "$EMULATOR_CONSOLE_PORT_INTERNAL"
+start_port_proxy "$EMULATOR_ADB_PORT" "$EMULATOR_ADB_PORT_INTERNAL"
+
 EMULATOR_ARGS=(
   -avd "$AVD_NAME"
-  -port "$EMULATOR_CONSOLE_PORT"
+  -ports "${EMULATOR_CONSOLE_PORT_INTERNAL},${EMULATOR_ADB_PORT_INTERNAL}"
   -grpc 0.0.0.0:"$EMULATOR_GRPC_PORT"
   -no-window
   -no-snapshot
@@ -137,11 +174,12 @@ adb start-server >/dev/null 2>&1 || true
 
 log "Waiting for emulator $ADB_DEVICE_SERIAL to report device state"
 start_ts=$SECONDS
+deadline=$((start_ts + BOOT_TIMEOUT_SECONDS))
 while true; do
   if adb devices 2>/dev/null | awk -v serial="$ADB_DEVICE_SERIAL" '$1 == serial && $2 == "device" {found=1} END {exit(!found)}'; then
     break
   fi
-  if (( SECONDS - start_ts >= BOOT_TIMEOUT_SECONDS )); then
+  if (( SECONDS >= deadline )); then
     log "Timed out waiting for $ADB_DEVICE_SERIAL to become ready"
     log "Recent emulator log output:"
     tail -n 200 "$RUNTIME_HOME/emulator.log" 2>/dev/null || true
@@ -153,12 +191,11 @@ while true; do
 done
 
 log "Emulator reported as ready; verifying boot completion"
-BOOT_DEADLINE=$((SECONDS + BOOT_TIMEOUT_SECONDS))
 while true; do
   if adb -s "$ADB_DEVICE_SERIAL" shell getprop sys.boot_completed 2>/dev/null | grep -q '1'; then
     break
   fi
-  if (( SECONDS >= BOOT_DEADLINE )); then
+  if (( SECONDS >= deadline )); then
     log "Timed out waiting for Android system boot"
     log "Recent emulator log output:"
     tail -n 200 "$RUNTIME_HOME/emulator.log" 2>/dev/null || true

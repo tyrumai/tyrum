@@ -39,6 +39,7 @@ RUN apt-get update && apt-get install --yes --no-install-recommends \
     libxrender1 \
     libvulkan1 \
     mesa-vulkan-drivers \
+    socat \
     openjdk-17-jre-headless \
     procps \
     unzip \

@@ -113,6 +113,8 @@ services:
     environment:
       AVD_NAME: tyrum-android-executor
       ANDROID_BOOT_TIMEOUT_SECONDS: 480
+      EMULATOR_CONSOLE_PORT_INTERNAL: 5654
+      EMULATOR_ADB_PORT_INTERNAL: 5655
     ports:
       - "8554:8554"
       - "5554:5554"

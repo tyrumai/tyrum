@@ -39,4 +39,5 @@ The script fails fast if the service is not running or the device state is anyth
 ## Design Notes
 - The base image installs the Android 34 `google_apis;x86_64` system image. This keeps CI fast while still running ARM APKs via Android’s built-in translation layer.
 - The entrypoint recreates the AVD in a tmpfs for every boot, guaranteeing disposable state and avoiding credential persistence.
+- Ports `5554`/`5555` are proxied to the emulator’s loopback listeners via `socat`, so `adb connect localhost:5555` works from the host even though the emulator itself binds to `127.0.0.1` internally.
 - Health is reported when the emulator reports `sys.boot_completed=1`. Compose polls `adb devices` to keep the UI simple.
