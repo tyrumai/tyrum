@@ -32,6 +32,8 @@ COPY services/executor_http/src services/executor_http/src
 COPY services/executor_http/tests services/executor_http/tests
 COPY services/executor_cli/Cargo.toml services/executor_cli/Cargo.toml
 COPY services/executor_cli/src services/executor_cli/src
+COPY services/executor_android/Cargo.toml services/executor_android/Cargo.toml
+COPY services/executor_android/src services/executor_android/src
 COPY services/policy/Cargo.toml services/policy/Cargo.toml
 COPY services/policy/src services/policy/src
 COPY services/planner/Cargo.toml services/planner/Cargo.toml

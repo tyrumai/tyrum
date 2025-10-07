@@ -6,6 +6,7 @@ members = [
     "services/executor_http",
     "services/executor_cli",
     "services/executor_web",
+    "services/executor_android",
     "services/planner",
     "services/policy",
     "shared/tyrum-shared"
