@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-use tyrum_memory::{MemoryDal, NewEpisodicEvent, NewFact, NewVectorEmbedding};
+use tyrum_memory::{MemoryDal, NewCapabilityMemory, NewEpisodicEvent, NewFact, NewVectorEmbedding};
 
 #[derive(Debug, Parser)]
 #[command(name = "tyrum-memory", about = "CLI helpers for Tyrum memory stores")]
@@ -99,6 +99,25 @@ async fn insert_sample(
     })
     .await?;
 
+    dal.create_capability_memory(NewCapabilityMemory {
+        subject_id,
+        capability_type: "web".into(),
+        capability_identifier: "example.com.checkout".into(),
+        executor_kind: "executor_web".into(),
+        selectors: Some(json!({
+            "login_button": "#login",
+            "submit_order": "button[data-test=\"submit\"]"
+        })),
+        outcome_metadata: json!({
+            "postconditions": ["order confirmation #12345"],
+            "estimated_cost": "€29.95"
+        }),
+        result_summary: Some("Successful checkout via sample flow".into()),
+        success_count: 1,
+        last_success_at: Utc::now(),
+    })
+    .await?;
+
     Ok(())
 }
 
@@ -110,6 +129,7 @@ async fn show_subject(
     let facts = dal.list_facts_for_subject(subject_id).await?;
     let events = dal.list_episodic_events_for_subject(subject_id).await?;
     let vectors = dal.list_vector_embeddings_for_subject(subject_id).await?;
+    let capability_memories = dal.list_capability_memories_for_subject(subject_id).await?;
 
     if emit_json {
         let payload = json!({
@@ -117,6 +137,7 @@ async fn show_subject(
             "facts": facts,
             "episodic_events": events,
             "vector_embeddings": vectors,
+            "capability_memories": capability_memories,
         });
         println!("{}", serde_json::to_string_pretty(&payload)?);
         return Ok(());
@@ -159,6 +180,22 @@ async fn show_subject(
             println!(
                 "    - {} model={} label={:?}",
                 embedding.embedding_id, embedding.embedding_model, embedding.label
+            );
+        }
+    }
+
+    if capability_memories.is_empty() {
+        println!("  Capability memories: none");
+    } else {
+        println!("  Capability memories:");
+        for memory in capability_memories {
+            println!(
+                "    - [{}] {} ({}) successes={} last_success_at={}",
+                memory.capability_type,
+                memory.capability_identifier,
+                memory.executor_kind,
+                memory.success_count,
+                memory.last_success_at
             );
         }
     }

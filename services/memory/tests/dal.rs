@@ -9,8 +9,8 @@ use testcontainers::{
     runners::AsyncRunner,
 };
 use tyrum_memory::{
-    EpisodicEventChanges, MemoryDal, MemoryError, NewEpisodicEvent, NewFact, NewVectorEmbedding,
-    VectorEmbeddingChanges,
+    CapabilityMemoryChanges, EpisodicEventChanges, MemoryDal, MemoryError, NewCapabilityMemory,
+    NewEpisodicEvent, NewFact, NewVectorEmbedding, VectorEmbeddingChanges,
 };
 use uuid::Uuid;
 
@@ -165,6 +165,104 @@ async fn episodic_event_crud_roundtrip() {
         .expect("delete event");
 
     let err = ctx.dal.delete_episodic_event(event_id).await.unwrap_err();
+    assert!(matches!(err, MemoryError::NotFound { .. }));
+}
+
+#[tokio::test]
+async fn capability_memory_crud_roundtrip() {
+    let ctx = TestContext::new().await;
+    let subject_id = Uuid::new_v4();
+
+    let created = ctx
+        .dal
+        .create_capability_memory(NewCapabilityMemory {
+            subject_id,
+            capability_type: "web".into(),
+            capability_identifier: "example.com.checkout".into(),
+            executor_kind: "executor_web".into(),
+            selectors: Some(json!({ "login_button": "#login" })),
+            outcome_metadata: json!({
+                "postconditions": ["order confirmation"],
+                "cost_eur": 29.95
+            }),
+            result_summary: Some("Initial success".into()),
+            success_count: 1,
+            last_success_at: Utc::now(),
+        })
+        .await
+        .expect("create capability memory");
+    assert_eq!(created.capability_type, "web");
+
+    let fetched = ctx
+        .dal
+        .get_capability_memory(created.id)
+        .await
+        .expect("fetch capability memory")
+        .expect("memory present");
+    assert_eq!(fetched.capability_identifier, "example.com.checkout");
+
+    let lookup = ctx
+        .dal
+        .get_capability_memory_for_flow(subject_id, "web", "example.com.checkout", "executor_web")
+        .await
+        .expect("lookup capability memory")
+        .expect("flow present");
+    assert_eq!(lookup.id, created.id);
+
+    let listed_all = ctx
+        .dal
+        .list_capability_memories_for_subject(subject_id)
+        .await
+        .expect("list capability memories");
+    assert_eq!(listed_all.len(), 1);
+
+    let listed_type = ctx
+        .dal
+        .list_capability_memories_for_subject_and_type(subject_id, "web")
+        .await
+        .expect("list capability memories by type");
+    assert_eq!(listed_type.len(), 1);
+
+    let updated = ctx
+        .dal
+        .update_capability_memory(
+            created.id,
+            CapabilityMemoryChanges {
+                selectors: Some(json!({ "checkout_button": ".checkout" })),
+                outcome_metadata: json!({
+                    "postconditions": ["order confirmation", "receipt artifact"],
+                    "cost_eur": 24.99
+                }),
+                result_summary: Some("Updated flow with cached selectors".into()),
+                success_count: 3,
+                last_success_at: Utc::now(),
+            },
+        )
+        .await
+        .expect("update capability memory");
+    assert_eq!(updated.success_count, 3);
+    assert_eq!(
+        updated.result_summary.as_deref(),
+        Some("Updated flow with cached selectors")
+    );
+
+    ctx.dal
+        .delete_capability_memory(created.id)
+        .await
+        .expect("delete capability memory");
+
+    let missing = ctx
+        .dal
+        .get_capability_memory(created.id)
+        .await
+        .expect("fetch deleted capability memory");
+    assert!(missing.is_none());
+
+    let err = ctx
+        .dal
+        .delete_capability_memory(created.id)
+        .await
+        .unwrap_err();
     assert!(matches!(err, MemoryError::NotFound { .. }));
 }
 
