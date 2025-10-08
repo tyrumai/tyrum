@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf, time::Duration};
+use std::{convert::TryFrom, fs, path::PathBuf, time::Duration};
 
 use anyhow::{Context, Result, bail, ensure};
 use chrono::Utc;
@@ -168,7 +168,7 @@ impl DemoRuntime {
         step_index: usize,
         primitive: &ActionPrimitive,
     ) -> Result<()> {
-        let step_number = step_index as i32;
+        let step_number = i32::try_from(step_index).context("plan step index overflow")?;
         machine.apply(PlanEvent::RequiresHumanConfirmation { step_index })?;
 
         let confirm_payload = json!({ "decision": "approved" });
@@ -217,7 +217,7 @@ impl DemoRuntime {
         primitive: &ActionPrimitive,
         executors: &MockGenericExecutors,
     ) -> Result<()> {
-        let step_number = step_index as i32;
+        let step_number = i32::try_from(step_index).context("plan step index overflow")?;
         machine.apply(PlanEvent::StepDispatched { step_index })?;
 
         let executor_outcome = executors
@@ -290,8 +290,10 @@ impl DemoRuntime {
 
         let mut steps = Vec::with_capacity(events.len());
         for (index, event) in events.iter().enumerate() {
+            let event_index = usize::try_from(event.step_index)
+                .context("event step index must be non-negative")?;
             ensure!(
-                event.step_index == index as i32,
+                event_index == index,
                 "event step index mismatch: {} vs {index}",
                 event.step_index
             );

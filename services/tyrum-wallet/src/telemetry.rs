@@ -38,6 +38,11 @@ pub struct TelemetryGuard {
 }
 
 impl TelemetryGuard {
+    /// Install OpenTelemetry exporters and return a guard that flushes on drop.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any OpenTelemetry exporter fails to initialize.
     pub fn install(
         service_name: &'static str,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {

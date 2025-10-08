@@ -21,6 +21,11 @@ pub struct WalletClient {
 
 impl WalletClient {
     /// Construct a wallet client targeting the provided base URL.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the underlying HTTP client cannot be constructed.
+    #[must_use]
     pub fn new(base_url: Url) -> Self {
         let http = match Client::builder().user_agent("tyrum-planner").build() {
             Ok(client) => client,
@@ -31,6 +36,11 @@ impl WalletClient {
     }
 
     /// Execute an authorization call against the wallet service.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`WalletClientError`] when URL construction, transport, or decoding fails or
+    /// when the wallet returns a non-success HTTP status.
     pub async fn authorize(
         &self,
         payload: &SpendAuthorization,

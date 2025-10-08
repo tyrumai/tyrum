@@ -6,6 +6,7 @@ use anyhow::{Context, Result, bail};
 use chrono::Utc;
 use common::postgres::TestPostgres;
 use serde_json::{Value, json};
+use std::convert::TryFrom;
 use tyrum_memory::{MemoryDal, NewEpisodicEvent, NewFact};
 use tyrum_planner::{
     ActionArguments, ActionPrimitive, ActionPrimitiveKind, AppendOutcome, CapabilityMemoryResult,
@@ -91,7 +92,7 @@ async fn mock_book_call_plan_creates_audit_and_memory_artifacts() -> Result<()> 
     let executors = MockGenericExecutors::new(memory.clone(), subject_id);
 
     for (step_index, primitive) in plan_steps.iter().enumerate() {
-        let step_number = step_index as i32;
+        let step_number = i32::try_from(step_index).context("plan step index overflow")?;
 
         if primitive.kind == ActionPrimitiveKind::Confirm {
             machine.apply(PlanEvent::RequiresHumanConfirmation { step_index })?;
@@ -196,7 +197,8 @@ async fn mock_book_call_plan_creates_audit_and_memory_artifacts() -> Result<()> 
     assert_eq!(events.len(), plan_steps.len());
 
     for (idx, (event, primitive)) in events.iter().zip(plan_steps.iter()).enumerate() {
-        assert_eq!(event.step_index as usize, idx);
+        let recorded_index = usize::try_from(event.step_index).expect("event step is non-negative");
+        assert_eq!(recorded_index, idx);
 
         let recorded: ActionPrimitive = serde_json::from_value(event.action["primitive"].clone())?;
         assert_eq!(recorded, *primitive);

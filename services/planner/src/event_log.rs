@@ -22,6 +22,7 @@ pub struct EventLogSettings {
 }
 
 impl EventLogSettings {
+    #[must_use]
     pub fn new(database_url: impl Into<String>) -> Self {
         Self {
             database_url: database_url.into(),
@@ -30,11 +31,13 @@ impl EventLogSettings {
         }
     }
 
+    #[must_use]
     pub fn with_max_connections(mut self, max_connections: u32) -> Self {
         self.max_connections = max_connections.max(1);
         self
     }
 
+    #[must_use]
     pub fn with_connect_timeout(mut self, timeout: Duration) -> Self {
         self.connect_timeout = timeout;
         self
@@ -55,6 +58,11 @@ pub enum CapabilityMemorySkipReason {
 }
 
 impl EventLog {
+    /// Upsert capability memory details for a completed primitive.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EventLogError::Database`] if the upsert query fails.
     #[instrument(skip_all, fields(subject_id = %subject_id, executor_kind = %executor_kind))]
     pub async fn record_capability_memory(
         &self,
@@ -336,6 +344,7 @@ pub struct NewPlannerEvent {
 }
 
 impl NewPlannerEvent {
+    #[must_use]
     pub fn new(
         replay_id: Uuid,
         plan_id: Uuid,
@@ -352,6 +361,11 @@ impl NewPlannerEvent {
         }
     }
 
+    /// Create a planner event from an arbitrary payload.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EventLogError::Payload`] if the payload cannot be serialized to JSON.
     pub fn from_payload<T: Serialize>(
         replay_id: Uuid,
         plan_id: Uuid,
@@ -410,6 +424,11 @@ pub struct EventLog {
 }
 
 impl EventLog {
+    /// Establish a pooled connection to the event log database.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EventLogError::Database`] if the connection cannot be established.
     pub async fn connect(settings: EventLogSettings) -> Result<Self, EventLogError> {
         let pool = PgPoolOptions::new()
             .max_connections(settings.max_connections)
@@ -419,21 +438,35 @@ impl EventLog {
         Ok(Self { pool })
     }
 
+    #[must_use]
     pub fn from_pool(pool: PgPool) -> Self {
         Self { pool }
     }
 
+    #[must_use]
     pub fn pool(&self) -> &PgPool {
         &self.pool
     }
 
     #[instrument(skip_all)]
+    /// Apply any pending schema migrations for the event log database.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EventLogError::Migration`] if migrations fail.
+    /// Returns [`EventLogError::Database`] if the connection cannot run migrations.
     pub async fn migrate(&self) -> Result<(), EventLogError> {
         MIGRATOR.run(&self.pool).await?;
         Ok(())
     }
 
     #[instrument(skip_all, fields(replay_id = %event.replay_id, plan_id = %event.plan_id, step_index = event.step_index))]
+    /// Append a planner event if the (plan, step) tuple has not yet been recorded.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EventLogError::InvalidStepIndex`] if the event has a negative step.
+    /// Returns [`EventLogError::Database`] if the insert query fails.
     pub async fn append(&self, event: NewPlannerEvent) -> Result<AppendOutcome, EventLogError> {
         if event.step_index < 0 {
             return Err(EventLogError::InvalidStepIndex(event.step_index));
@@ -469,6 +502,11 @@ impl EventLog {
     }
 
     #[instrument(skip_all, fields(plan_id = %plan_id))]
+    /// Fetch events for a plan ordered by ascending step index.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EventLogError::Database`] if the select query fails or any row cannot be decoded.
     pub async fn events_for_plan(
         &self,
         plan_id: Uuid,
@@ -507,6 +545,7 @@ mod tests {
 
     use super::*;
     use serde_json::Value;
+    use std::convert::TryFrom;
     use std::sync::OnceLock;
     use testcontainers::{
         ContainerAsync, GenericImage, ImageExt,
@@ -696,7 +735,8 @@ mod tests {
         let events = event_log.events_for_plan(plan_id).await.unwrap();
         assert_eq!(events.len(), 3);
         for (expected_step, event) in events.iter().enumerate() {
-            assert_eq!(event.step_index, expected_step as i32);
+            let expected_step_i32 = i32::try_from(expected_step).expect("step index fits in i32");
+            assert_eq!(event.step_index, expected_step_i32);
         }
     }
 

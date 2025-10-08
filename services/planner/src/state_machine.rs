@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{convert::TryFrom, fmt};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -99,6 +99,7 @@ pub struct PlanStateMachine {
 
 impl PlanStateMachine {
     /// Initialise a new plan machine for a plan consisting of `total_steps` primitives.
+    #[must_use]
     pub fn new(total_steps: usize) -> Self {
         Self {
             total_steps,
@@ -108,21 +109,28 @@ impl PlanStateMachine {
     }
 
     /// Returns the current plan status.
+    #[must_use]
     pub fn status(&self) -> &PlanStatus {
         &self.status
     }
 
     /// Total steps contained in the plan.
+    #[must_use]
     pub fn total_steps(&self) -> usize {
         self.total_steps
     }
 
     /// Steps executed so far.
+    #[must_use]
     pub fn executed_steps(&self) -> usize {
         self.executed_steps
     }
 
     /// Applies a planner event and returns the updated status on success.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PlanTransitionError`] when the event is incompatible with the current state.
     pub fn apply(&mut self, event: PlanEvent) -> Result<&PlanStatus, PlanTransitionError> {
         use PlanEvent as E;
         use PlanFailureReason as Failure;
@@ -280,8 +288,9 @@ impl PlanStateMachine {
         };
 
         let detail = failure.detail.as_deref().unwrap_or("");
-        let step_index = failure.step_index.map(|idx| idx as i64).unwrap_or(-1);
-        let step_index_known = failure.step_index.is_some();
+        let step_index_converted = failure.step_index.and_then(|idx| i64::try_from(idx).ok());
+        let step_index = step_index_converted.unwrap_or(-1);
+        let step_index_known = step_index_converted.is_some();
         let executed_steps = self.executed_steps;
         let total_steps = self.total_steps;
         let reason = failure.reason;
