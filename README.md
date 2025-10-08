@@ -109,7 +109,7 @@ Follow these steps to provision the Telegram channel safely across local and sta
 1. Copy `config/local.env.example` to `config/local.env` if you want CLI access to the services from the host.
 2. From the repo root run `docker compose -f infra/docker-compose.yml up --build` (or `cd infra && docker compose up --build`).
 3. Once the stack has converged you should see:
-   - Policy check service on http://localhost:8081 with `/healthz` returning `{ "status": "ok" }` and `POST /policy/check` evaluating spend/PII/legal guardrails
+   - Policy check service on http://localhost:8081 with `/healthz` returning `{ "status": "ok" }` and `POST /policy/check` evaluating spend/PII/legal guardrails. Planner requests now include a per-user payload (`user_id` plus optional `pam_profile`); when no explicit user context is supplied the client falls back to `PlanRequest.subject_id` so guardrails remain individualized.
    - Rust API on http://localhost:8080 with `/healthz` returning `{ "status": "ok" }`
    - Next.js portal on http://localhost:3000
    - PostgreSQL on `localhost:5432` (`tyrum`/`tyrum_dev_password`)
