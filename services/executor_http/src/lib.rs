@@ -156,7 +156,7 @@ pub async fn execute_http_action(action: &ActionPrimitive) -> Result<HttpActionO
     let request_headers_for_logging = sanitise_header_pairs(&header_entries);
     let header_map = build_header_map(&header_entries, body.as_ref());
 
-    let client = http_client().clone();
+    let client = http_client();
     let method_for_request = method.clone();
     let url_for_request = url.clone();
     let body_for_request = body.clone();
@@ -194,7 +194,7 @@ pub async fn execute_http_action(action: &ActionPrimitive) -> Result<HttpActionO
 }
 
 async fn perform_http_request(
-    client: Client,
+    client: &Client,
     method: Method,
     url: Url,
     headers: HeaderMap,
