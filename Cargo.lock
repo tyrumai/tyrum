@@ -4345,6 +4345,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "tyrum-wallet"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "http-body-util",
+ "once_cell",
+ "opentelemetry",
+ "opentelemetry-appender-tracing",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "unicode-bidi"
 version = "0.3.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"

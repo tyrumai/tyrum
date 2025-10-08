@@ -9,6 +9,7 @@ members = [
     "services/executor_android",
     "services/planner",
     "services/policy",
+    "services/tyrum-wallet",
     "shared/tyrum-shared"
 ]
 resolver = "2"

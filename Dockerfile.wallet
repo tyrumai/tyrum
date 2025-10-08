@@ -17,6 +17,7 @@ COPY shared/tyrum-shared/Cargo.toml shared/tyrum-shared/Cargo.toml
 COPY shared/tyrum-shared/src shared/tyrum-shared/src
 COPY services/api/Cargo.toml services/api/Cargo.toml
 COPY services/api/src services/api/src
+COPY services/api/migrations services/api/migrations
 COPY services/discovery/Cargo.toml services/discovery/Cargo.toml
 COPY services/discovery/src services/discovery/src
 COPY services/memory/Cargo.toml services/memory/Cargo.toml
@@ -35,14 +36,14 @@ COPY services/executor_android/Cargo.toml services/executor_android/Cargo.toml
 COPY services/executor_android/src services/executor_android/src
 COPY services/policy/Cargo.toml services/policy/Cargo.toml
 COPY services/policy/src services/policy/src
-COPY services/tyrum-wallet/Cargo.toml services/tyrum-wallet/Cargo.toml
-COPY services/tyrum-wallet/src services/tyrum-wallet/src
-COPY services/tyrum-wallet/tests services/tyrum-wallet/tests
 COPY services/planner/Cargo.toml services/planner/Cargo.toml
 COPY services/planner/migrations services/planner/migrations
 COPY services/planner/src services/planner/src
+COPY services/tyrum-wallet/Cargo.toml services/tyrum-wallet/Cargo.toml
+COPY services/tyrum-wallet/src services/tyrum-wallet/src
+COPY services/tyrum-wallet/tests services/tyrum-wallet/tests
 
-RUN cargo build --locked --release --package tyrum-policy
+RUN cargo build --locked --release --package tyrum-wallet
 
 FROM debian:bookworm-slim AS runtime
 
@@ -67,8 +68,8 @@ RUN set -eux; \
     apt-get install --yes --no-install-recommends ca-certificates curl; \
     rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY --from=builder /app/target/release/tyrum-policy /usr/local/bin/tyrum-policy
-ENV POLICY_BIND_ADDR=0.0.0.0:8081
-EXPOSE 8081
+COPY --from=builder /app/target/release/tyrum-wallet /usr/local/bin/tyrum-wallet
+ENV WALLET_BIND_ADDR=0.0.0.0:8084
+EXPOSE 8084
 USER appuser
-ENTRYPOINT ["/usr/local/bin/tyrum-policy"]
+ENTRYPOINT ["/usr/local/bin/tyrum-wallet"]

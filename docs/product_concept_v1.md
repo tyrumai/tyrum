@@ -544,7 +544,10 @@ Milestones are cumulative; later milestones build on earlier ones.
 - **Discovery pipeline**: Create pipeline module (#68); instrument telemetry (#69); hook into planner fallback chain (#70).
 - **Executors**: Scaffold Playwright executor (#71); implement navigate/form action (#72); add retries & telemetry (#73); scaffold HTTP executor (#74); deliver CLI sandbox executor (#75); ship Android emulator boot service (#76); implement Android primitive handler (#77).
 - **Capability memory**: Extend schema for capability entries (#78); write through planner successes (#79).
-- **Wallet integration**: Ship virtual card stub service (#80); call wallet from planner and surface outcomes (#81).
+- **Wallet integration**:
+  - Ship virtual card stub service (#80); call wallet from planner and surface outcomes (#81).
+  - `tyrum-wallet` listens on `:8084` and deterministically returns approve/escalate/deny responses using spend thresholds.
+  - Stub handles synthetic virtual card payloads only; once live rails land we add encryption-at-rest and vault-backed key management for card data.
 - **Watchers**: Configure JetStream client (#82); expose watcher registration API (#83); implement watcher processor worker (#84).
 - **Policy guardrails**: Enrich policy with per-user fields (#85); ensure planner error propagation coverage (#86).
 - **Audit console**: Add plan timeline API (#87); build portal timeline view (#88).

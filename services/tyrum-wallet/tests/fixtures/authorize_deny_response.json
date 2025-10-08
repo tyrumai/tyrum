@@ -1,0 +1,9 @@
+{
+  "request_id": "req-deny",
+  "decision": "deny",
+  "reason": "Amount EUR 750.00 exceeds hard limit EUR 500.00.",
+  "limits": {
+    "auto_approve_minor_units": 10000,
+    "hard_deny_minor_units": 50000
+  }
+}
