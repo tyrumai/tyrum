@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map as JsonMap, Value};
 
 use crate::NormalizedThreadMessage;
@@ -95,6 +95,9 @@ pub struct PlanRequest {
     pub request_id: String,
     /// Stable subject identifier for memory, policy, and wallet lookups.
     pub subject_id: String,
+    /// Optional user context containing PII-safe identifiers and guardrail metadata.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user: Option<PlanUserContext>,
     /// Triggering ingress event (thread + message) that the plan responds to.
     pub trigger: NormalizedThreadMessage,
     /// Optional BCP-47 locale hint to shape prompts and output tone.
@@ -106,6 +109,32 @@ pub struct PlanRequest {
     /// Arbitrary caller-provided tags applied to the resulting plan for analytics.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
+}
+
+/// Identifiers and guardrail metadata scoped to the requesting user.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlanUserContext {
+    /// Stable user identifier shared with downstream guardrail services.
+    #[serde(deserialize_with = "deserialize_trimmed_string")]
+    pub user_id: String,
+    /// Optional Policy/Autonomy Model profile providing learned limits.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pam_profile: Option<PamProfileRef>,
+}
+
+/// Reference to a Policy/Autonomy Model profile.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PamProfileRef {
+    /// Canonical profile identifier (e.g., "pam-default").
+    #[serde(deserialize_with = "deserialize_trimmed_string")]
+    pub profile_id: String,
+    /// Optional semantic version or hash to help downstream caches.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_trimmed_option_string"
+    )]
+    pub version: Option<String>,
 }
 
 /// Planner response envelope surfaced to upstream services.
@@ -196,6 +225,22 @@ pub enum PlanErrorCode {
     PolicyDenied,
     ExecutorUnavailable,
     Internal,
+}
+
+fn deserialize_trimmed_string<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = String::deserialize(deserializer)?;
+    Ok(value.trim().to_owned())
+}
+
+fn deserialize_trimmed_option_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let option = Option::<String>::deserialize(deserializer)?;
+    Ok(option.map(|value| value.trim().to_owned()))
 }
 
 #[cfg(test)]

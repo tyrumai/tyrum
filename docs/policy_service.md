@@ -12,6 +12,11 @@ The planner service consumes `POST /policy/check` via its async client. Configur
 ```jsonc
 {
   "request_id": "optional identifier",
+  "user_id": "stable subject identifier",
+  "pam_profile": {
+    "profile_id": "pam-default",
+    "version": "v1"
+  },
   "spend": {
     "amount_minor_units": 15000,
     "currency": "USD",
@@ -30,7 +35,12 @@ The planner service consumes `POST /policy/check` via its async client. Configur
 }
 ```
 
-All sections are optional; when context is missing the service escalates the corresponding rule so that planners can request confirmation from the user.
+All sections other than `user_id` are optional; when context is missing the service escalates the corresponding rule so that planners can request confirmation from the user. The planner client falls back to the `PlanRequest.subject_id` when no explicit user context is provided.
+
+- `user_id` – Required; trimmed ASCII string up to 128 characters using `[A-Za-z0-9._-]`. Logged only in aggregate metrics to respect PII guidance.
+- `pam_profile.profile_id` – Optional; same character set as `user_id`, up to 64 characters.
+- `pam_profile.version` – Optional semantic version/hint (32 characters max) to help policy caches select the right profile revision.
+- `pam_profile` may be omitted entirely when no learned policy is available; the planner continues to supply `user_id` so guardrails remain per-user.
 
 ## Static Rule Set
 - **Spend:**
@@ -48,11 +58,19 @@ All sections are optional; when context is missing the service escalates the cor
 
 The overall `decision` is `deny` if any rule denies, `escalate` if any rule escalates, and `approve` otherwise.
 
+## Validation & PII Handling
+- Requests lacking a `user_id` are rejected with `400 missing_user_id`. The planner defaults to `PlanRequest.subject_id`, so local testing continues to work even without an explicit user payload.
+- `user_id`, `pam_profile.profile_id`, and `pam_profile.version` must be trimmed ASCII strings limited to the lengths noted above; invalid characters trigger a `400` response with an explicit error code.
+- Identifiers are excluded from request traces and only surface in aggregate metrics to respect PII guardrails.
+- JSON fixtures that cover both shapes live in `services/policy/tests/fixtures/` and can be reused for integration smoke tests.
+
 ## Sample Interaction
 ```json
 // Request
 {
   "request_id": "example-123",
+  "user_id": "subject-123",
+  "pam_profile": { "profile_id": "pam-default", "version": "v1" },
   "spend": { "amount_minor_units": 8750, "currency": "EUR" },
   "pii": { "categories": ["basic_contact"] },
   "legal": { "flags": [] }

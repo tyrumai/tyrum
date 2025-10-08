@@ -4,8 +4,9 @@ pub mod telegram;
 mod schema;
 
 pub use planner::{
-    ActionArguments, ActionPostcondition, ActionPrimitive, ActionPrimitiveKind, PlanError,
-    PlanErrorCode, PlanEscalation, PlanOutcome, PlanRequest, PlanResponse, PlanSummary,
+    ActionArguments, ActionPostcondition, ActionPrimitive, ActionPrimitiveKind, PamProfileRef,
+    PlanError, PlanErrorCode, PlanEscalation, PlanOutcome, PlanRequest, PlanResponse, PlanSummary,
+    PlanUserContext,
 };
 
 pub use schema::{
