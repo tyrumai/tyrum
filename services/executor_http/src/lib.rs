@@ -154,13 +154,12 @@ pub async fn execute_http_action(action: &ActionPrimitive) -> Result<HttpActionO
 
     let context = telemetry::AttemptContext::new(&method, &url);
     let request_headers_for_logging = sanitise_header_pairs(&header_entries);
-    let header_map = build_header_map(&header_entries, body.as_ref());
-
     let client = http_client();
     let method_for_request = method.clone();
     let url_for_request = url.clone();
     let body_for_request = body.clone();
     let schema_for_request = schema.clone();
+    let header_map = build_header_map(&header_entries, body_for_request.as_ref());
 
     let (result, elapsed) = telemetry::record_attempt(&context, async move {
         perform_http_request(

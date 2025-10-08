@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use axum::http::HeaderMap;
 use hex::FromHex;
-use hmac::digest::InvalidLength;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use thiserror::Error;
@@ -44,8 +43,6 @@ pub enum VerificationError {
     SignatureMismatch,
     #[error("signature header missing sha256 prefix")]
     MissingPrefix,
-    #[error("failed to compute telegram signature")]
-    SignatureComputationFailed(#[source] InvalidLength),
 }
 
 impl TelegramWebhookVerifier {
@@ -93,7 +90,7 @@ impl TelegramWebhookVerifier {
             return Err(VerificationError::MalformedSignature);
         }
 
-        let expected = self.compute_signature(body)?;
+        let expected = self.compute_signature(body);
 
         if constant_time_eq(&provided, &expected) {
             Ok(())
@@ -102,16 +99,20 @@ impl TelegramWebhookVerifier {
         }
     }
 
-    pub fn expected_signature_header(&self, body: &[u8]) -> Result<String, VerificationError> {
-        let signature = self.compute_signature(body)?;
-        Ok(format!("{SIGNATURE_PREFIX}{}", hex::encode(signature)))
+    pub fn expected_signature_header(&self, body: &[u8]) -> String {
+        format!(
+            "{SIGNATURE_PREFIX}{}",
+            hex::encode(self.compute_signature(body))
+        )
     }
 
-    fn compute_signature(&self, body: &[u8]) -> Result<Vec<u8>, VerificationError> {
-        let mut mac = Hmac::<Sha256>::new_from_slice(&self.inner.secret_bytes)
-            .map_err(VerificationError::SignatureComputationFailed)?;
+    fn compute_signature(&self, body: &[u8]) -> Vec<u8> {
+        let mut mac = match Hmac::<Sha256>::new_from_slice(&self.inner.secret_bytes) {
+            Ok(mac) => mac,
+            Err(_) => unreachable!("secret validated during construction"),
+        };
         mac.update(body);
-        Ok(mac.finalize().into_bytes().to_vec())
+        mac.finalize().into_bytes().to_vec()
     }
 }
 
@@ -160,10 +161,7 @@ mod tests {
     #[test]
     fn verifier_accepts_valid_signature() {
         let verifier = verifier();
-        let signature = match verifier.expected_signature_header(PAYLOAD.as_bytes()) {
-            Ok(value) => value,
-            Err(err) => panic!("expected signature header: {err}"),
-        };
+        let signature = verifier.expected_signature_header(PAYLOAD.as_bytes());
         let headers = headers(&signature);
 
         assert!(verifier.verify(&headers, PAYLOAD.as_bytes()).is_ok());
@@ -191,10 +189,7 @@ mod tests {
     #[test]
     fn verifier_rejects_secret_mismatch() {
         let verifier = verifier();
-        let signature = match verifier.expected_signature_header(PAYLOAD.as_bytes()) {
-            Ok(value) => value,
-            Err(err) => panic!("expected signature header: {err}"),
-        };
+        let signature = verifier.expected_signature_header(PAYLOAD.as_bytes());
         let mut headers = headers(&signature);
         headers.insert("X-Telegram-Bot-Api-Secret-Token", header_value("wrong"));
 
@@ -208,10 +203,7 @@ mod tests {
     #[test]
     fn verifier_accepts_uppercase_signature() {
         let verifier = verifier();
-        let signature = match verifier.expected_signature_header(PAYLOAD.as_bytes()) {
-            Ok(value) => value,
-            Err(err) => panic!("expected signature header: {err}"),
-        };
+        let signature = verifier.expected_signature_header(PAYLOAD.as_bytes());
         let digest_upper = signature[SIGNATURE_PREFIX.len()..].to_uppercase();
         let uppercase = format!("{SIGNATURE_PREFIX}{digest_upper}");
         let headers = headers(&uppercase);
