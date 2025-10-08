@@ -4308,6 +4308,7 @@ dependencies = [
  "tyrum-discovery",
  "tyrum-memory",
  "tyrum-shared",
+ "tyrum-wallet",
  "url",
  "uuid",
 ]

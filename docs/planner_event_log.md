@@ -52,5 +52,8 @@ validation of step indices. They run as part of `cargo test --all --all-targets`
   raw spend thresholds.
 - The `policy.rules[].detail` fields are scrubbed of digits before persisting so audit trails stay
   actionable while avoiding leakage of configurable caps.
+- Wallet authorizations record a `wallet` audit block with sanitized reasons and append the
+  `Spend guardrail enforced by wallet authorization.` note so reviewers can trace guardrail
+  enforcement without revealing raw spend amounts or card metadata.
 - Use `cargo test -p tyrum-planner policy_denial` to run the regression harness that exercises the
   denial flow and ensures both the planner response and audit payloads include the reason string.

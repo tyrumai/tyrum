@@ -63,7 +63,7 @@ fn read_limit(var: &str, default: u64) -> u64 {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SpendAuthorizeRequest {
     #[serde(default)]
     pub request_id: Option<String>,
@@ -75,7 +75,7 @@ pub struct SpendAuthorizeRequest {
     pub merchant: Option<MerchantContext>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct MerchantContext {
     pub name: Option<String>,

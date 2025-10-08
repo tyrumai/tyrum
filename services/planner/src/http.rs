@@ -13,6 +13,7 @@ use tower_http::limit::RequestBodyLimitLayer;
 use uuid::Uuid;
 
 use crate::policy::{PolicyClient, PolicyDecision, PolicyDecisionKind, PolicyRuleDecision};
+use crate::wallet::{AuthorizationDecision, SpendAuthorization, WalletClient};
 use crate::{
     ActionArguments, ActionPrimitive, ActionPrimitiveKind, EventLog, NewPlannerEvent, PlanError,
     PlanErrorCode, PlanEscalation, PlanOutcome, PlanRequest, PlanResponse, PlanSummary,
@@ -41,6 +42,7 @@ pub struct PlannerState {
     pub policy_client: PolicyClient,
     pub event_log: EventLog,
     pub discovery: Arc<dyn DiscoveryPipeline + Send + Sync>,
+    pub wallet_client: WalletClient,
 }
 
 pub fn build_router(state: PlannerState) -> Router {
@@ -52,6 +54,7 @@ pub fn build_router(state: PlannerState) -> Router {
 }
 
 const DECISION_AUDIT_STEP_INDEX: i32 = i32::MAX;
+const WALLET_GUARDRAIL_NOTE: &str = "Spend guardrail enforced by wallet authorization.";
 
 #[tracing::instrument(skip_all)]
 async fn plan(
@@ -69,9 +72,11 @@ async fn plan(
     }
 
     let plan_uuid = Uuid::new_v4();
+    let plan_id = format_plan_id(plan_uuid);
+    let spend_directive = extract_spend_directive(&payload);
     let policy_result = state.policy_client.check(&payload).await;
 
-    let (outcome, policy_audit, discovery_audit) = match policy_result {
+    let (outcome, policy_audit, discovery_audit, wallet_audit) = match policy_result {
         Ok(decision) => {
             let rule_outcomes: Vec<String> = decision
                 .rules
@@ -84,13 +89,76 @@ async fn plan(
                 "policy decision received"
             );
 
-            let (outcome, discovery_audit) =
-                build_outcome_for_decision(&payload, &decision, state.discovery.as_ref());
+            let (mut outcome, discovery_audit) = build_outcome_for_decision(
+                &payload,
+                &decision,
+                state.discovery.as_ref(),
+                spend_directive.as_ref(),
+            );
+
+            let mut wallet_audit = WalletAudit::skipped();
+
+            if let PlanOutcome::Success { steps, .. } = &mut outcome {
+                if let Some(spend) = first_spend_request(steps) {
+                    let authorization = SpendAuthorization {
+                        request_id: Some(plan_id.clone()),
+                        amount_minor_units: spend.amount_minor_units,
+                        currency: spend.currency.clone(),
+                        merchant_name: spend.merchant.clone(),
+                    };
+
+                    match state.wallet_client.authorize(&authorization).await {
+                        Ok(response) => {
+                            let sanitized_reason = sanitize_detail(&response.reason);
+                            let decision = response.decision;
+                            wallet_audit =
+                                WalletAudit::evaluated(decision, sanitized_reason.clone());
+
+                            match decision {
+                                AuthorizationDecision::Approve => {
+                                    tracing::info!("wallet approved spend");
+                                }
+                                AuthorizationDecision::Escalate => {
+                                    tracing::info!("wallet escalated spend");
+                                    outcome = PlanOutcome::Escalate {
+                                        escalation: build_wallet_escalation(
+                                            spend.step_index,
+                                            &sanitized_reason,
+                                        ),
+                                    };
+                                }
+                                AuthorizationDecision::Deny => {
+                                    tracing::info!("wallet denied spend");
+                                    outcome = PlanOutcome::Failure {
+                                        error: build_wallet_denial_error(&sanitized_reason),
+                                    };
+                                }
+                            }
+                        }
+                        Err(error) => {
+                            tracing::warn!(%error, "wallet authorization failed");
+                            let detail = sanitize_detail(&error.to_string());
+                            wallet_audit = WalletAudit::errored(detail.clone());
+                            outcome = PlanOutcome::Failure {
+                                error: PlanError {
+                                    code: PlanErrorCode::Internal,
+                                    message: "Wallet service unavailable".into(),
+                                    detail: Some(detail),
+                                    retryable: true,
+                                },
+                            };
+                        }
+                    }
+                } else {
+                    wallet_audit = WalletAudit::skipped();
+                }
+            }
 
             (
                 outcome,
                 PolicyAudit::from_decision(&decision),
                 discovery_audit,
+                wallet_audit,
             )
         }
         Err(error) => {
@@ -108,17 +176,18 @@ async fn plan(
                 outcome,
                 PolicyAudit::unavailable(reason),
                 DiscoveryAudit::skipped(),
+                WalletAudit::skipped(),
             )
         }
     };
 
-    let plan_id = format_plan_id(plan_uuid);
     let audit_event = PlannerDecisionAudit::new(
         plan_uuid,
         &plan_id,
         &payload,
         policy_audit,
         discovery_audit,
+        wallet_audit,
         &outcome,
     );
 
@@ -270,6 +339,7 @@ fn build_outcome_for_decision(
     request: &PlanRequest,
     decision: &PolicyDecision,
     discovery: &dyn DiscoveryPipeline,
+    spend_directive: Option<&SpendDirective>,
 ) -> (PlanOutcome, DiscoveryAudit) {
     match decision.decision {
         PolicyDecisionKind::Approve => {
@@ -302,8 +372,8 @@ fn build_outcome_for_decision(
                 }
                 _ => (
                     PlanOutcome::Success {
-                        steps: build_plan_steps(request, &outcome),
-                        summary: plan_summary_for(request, &outcome),
+                        steps: build_plan_steps(request, &outcome, spend_directive),
+                        summary: plan_summary_for(request, &outcome, spend_directive),
                     },
                     DiscoveryAudit::from_outcome(&outcome),
                 ),
@@ -361,7 +431,11 @@ fn log_discovery_outcome(request: &DiscoveryRequest, outcome: &DiscoveryOutcome)
     }
 }
 
-fn build_plan_steps(request: &PlanRequest, outcome: &DiscoveryOutcome) -> Vec<ActionPrimitive> {
+fn build_plan_steps(
+    request: &PlanRequest,
+    outcome: &DiscoveryOutcome,
+    spend_directive: Option<&SpendDirective>,
+) -> Vec<ActionPrimitive> {
     let mut steps = Vec::new();
     steps.push(research_step());
 
@@ -375,12 +449,20 @@ fn build_plan_steps(request: &PlanRequest, outcome: &DiscoveryOutcome) -> Vec<Ac
         DiscoveryOutcome::RetryLater { .. } => {}
     }
 
+    if let Some(spend) = spend_directive {
+        steps.push(wallet_pay_step(spend));
+    }
+
     steps.push(follow_up_step(request));
 
     steps
 }
 
-fn plan_summary_for(request: &PlanRequest, outcome: &DiscoveryOutcome) -> PlanSummary {
+fn plan_summary_for(
+    request: &PlanRequest,
+    outcome: &DiscoveryOutcome,
+    spend_directive: Option<&SpendDirective>,
+) -> PlanSummary {
     let synopsis = match outcome {
         DiscoveryOutcome::Found(connector) => format!(
             "Discovered {} capability for {}",
@@ -391,6 +473,12 @@ fn plan_summary_for(request: &PlanRequest, outcome: &DiscoveryOutcome) -> PlanSu
             format!("Falling back to automation for {}", request.subject_id)
         }
         DiscoveryOutcome::RetryLater { .. } => "Discovery deferred".to_string(),
+    };
+
+    let synopsis = if let Some(spend) = spend_directive {
+        format!("{synopsis}; collect authorized spend in {}", spend.currency)
+    } else {
+        synopsis
     };
 
     PlanSummary {
@@ -463,6 +551,136 @@ fn follow_up_step(request: &PlanRequest) -> ActionPrimitive {
     }))
 }
 
+#[derive(Clone, Debug)]
+struct SpendDirective {
+    amount_minor_units: u64,
+    currency: String,
+    merchant: Option<String>,
+}
+
+fn extract_spend_directive(request: &PlanRequest) -> Option<SpendDirective> {
+    request
+        .tags
+        .iter()
+        .find_map(|tag| parse_spend_tag(tag.as_str()))
+}
+
+fn parse_spend_tag(tag: &str) -> Option<SpendDirective> {
+    let remainder = tag.strip_prefix("spend:")?;
+    let mut parts = remainder.split(':');
+
+    let amount_str = parts.next()?;
+    let currency = parts.next()?.to_uppercase();
+    let amount_minor_units = amount_str.parse::<u64>().ok()?;
+    let merchant_raw = parts.next();
+    let merchant = merchant_raw
+        .map(|value| value.replace('_', " "))
+        .filter(|value| !value.is_empty());
+
+    Some(SpendDirective {
+        amount_minor_units,
+        currency,
+        merchant,
+    })
+}
+
+fn wallet_pay_step(directive: &SpendDirective) -> ActionPrimitive {
+    let mut args = JsonMap::new();
+    args.insert(
+        "amount_minor_units".to_string(),
+        json!(directive.amount_minor_units),
+    );
+    args.insert("currency".to_string(), json!(directive.currency));
+
+    if let Some(merchant) = &directive.merchant {
+        args.insert("merchant".to_string(), json!(merchant));
+    }
+
+    ActionPrimitive::new(ActionPrimitiveKind::Pay, args).with_postcondition(json!({
+        "status": "authorized",
+        "provider": "wallet_stub",
+    }))
+}
+
+#[derive(Clone, Debug)]
+struct SpendRequest {
+    step_index: usize,
+    amount_minor_units: u64,
+    currency: String,
+    merchant: Option<String>,
+}
+
+fn first_spend_request(steps: &[ActionPrimitive]) -> Option<SpendRequest> {
+    steps.iter().enumerate().find_map(|(idx, step)| {
+        if step.kind != ActionPrimitiveKind::Pay {
+            return None;
+        }
+
+        let amount_minor_units = step
+            .args
+            .get("amount_minor_units")
+            .and_then(Value::as_u64)?;
+        let currency = step
+            .args
+            .get("currency")
+            .and_then(Value::as_str)?
+            .to_string();
+        let merchant = step
+            .args
+            .get("merchant")
+            .and_then(Value::as_str)
+            .map(|value| value.to_string());
+
+        Some(SpendRequest {
+            step_index: idx,
+            amount_minor_units,
+            currency,
+            merchant,
+        })
+    })
+}
+
+fn guardrail_message(reason: &str) -> String {
+    if reason.is_empty() {
+        WALLET_GUARDRAIL_NOTE.to_string()
+    } else {
+        format!("{reason}\n{WALLET_GUARDRAIL_NOTE}")
+    }
+}
+
+fn build_wallet_escalation(step_index: usize, sanitized_reason: &str) -> PlanEscalation {
+    let rationale = guardrail_message(sanitized_reason);
+    let context = json!({
+        "decision": "escalate",
+        "reason": sanitized_reason,
+        "note": WALLET_GUARDRAIL_NOTE,
+    });
+
+    let args = ActionArguments::from_iter([
+        (
+            "prompt".into(),
+            json!("Confirm wallet spend before continuing execution."),
+        ),
+        ("context".into(), context),
+    ]);
+
+    PlanEscalation {
+        step_index,
+        action: ActionPrimitive::new(ActionPrimitiveKind::Confirm, args),
+        rationale: Some(rationale),
+        expires_at: None,
+    }
+}
+
+fn build_wallet_denial_error(sanitized_reason: &str) -> PlanError {
+    PlanError {
+        code: PlanErrorCode::PolicyDenied,
+        message: "Wallet authorization denied".into(),
+        detail: Some(guardrail_message(sanitized_reason)),
+        retryable: false,
+    }
+}
+
 fn strategy_label(strategy: DiscoveryStrategy) -> &'static str {
     match strategy {
         DiscoveryStrategy::Mcp => "mcp",
@@ -486,6 +704,7 @@ struct PlannerDecisionAudit {
     request: RedactedRequest,
     policy: PolicyAudit,
     discovery: DiscoveryAudit,
+    wallet: WalletAudit,
     outcome: PlanOutcomeAudit,
 }
 
@@ -496,6 +715,7 @@ impl PlannerDecisionAudit {
         request: &PlanRequest,
         policy: PolicyAudit,
         discovery: DiscoveryAudit,
+        wallet: WalletAudit,
         outcome: &PlanOutcome,
     ) -> Self {
         Self {
@@ -504,6 +724,7 @@ impl PlannerDecisionAudit {
             request: RedactedRequest::from_plan_request(request),
             policy,
             discovery,
+            wallet,
             outcome: PlanOutcomeAudit::from(outcome),
         }
     }
@@ -631,6 +852,40 @@ impl PolicyRuleAudit {
             rule: format!("{:?}", rule.rule),
             outcome: format!("{:?}", rule.outcome),
             detail: sanitize_detail(&rule.detail),
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+enum WalletAudit {
+    Evaluated {
+        decision: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        reason: Option<String>,
+    },
+    Errored {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+    },
+    Skipped,
+}
+
+impl WalletAudit {
+    fn skipped() -> Self {
+        Self::Skipped
+    }
+
+    fn evaluated(decision: AuthorizationDecision, reason: String) -> Self {
+        Self::Evaluated {
+            decision: format!("{decision:?}"),
+            reason: (!reason.is_empty()).then_some(reason),
+        }
+    }
+
+    fn errored(error: String) -> Self {
+        Self::Errored {
+            error: (!error.is_empty()).then_some(error),
         }
     }
 }

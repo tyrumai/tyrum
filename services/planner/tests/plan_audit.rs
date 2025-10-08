@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use axum::{body::Body, http::Request};
 use chrono::Utc;
-use common::{policy::mock_policy, postgres::TestPostgres};
+use common::{policy::mock_policy, postgres::TestPostgres, wallet::start_wallet_stub};
 use http_body_util::BodyExt;
 use serde_json::json;
 use sqlx::Row;
@@ -18,6 +18,7 @@ use tyrum_shared::{
     MessageContent, MessageSource, NormalizedMessage, NormalizedThread, NormalizedThreadMessage,
     PiiField, SenderMetadata, ThreadKind,
 };
+use tyrum_wallet::Thresholds;
 use uuid::Uuid;
 
 #[tokio::test]
@@ -28,7 +29,7 @@ async fn planner_appends_audit_event_with_redacted_payload() {
     let event_log = EventLog::from_pool(pool.clone());
     event_log.migrate().await.expect("migrate planner schema");
 
-    let (policy_client, server) = mock_policy(json!({
+    let (policy_client, policy_server) = mock_policy(json!({
         "decision": "approve",
         "rules": [
             {
@@ -45,10 +46,17 @@ async fn planner_appends_audit_event_with_redacted_payload() {
     }))
     .await;
 
+    let (wallet_client, wallet_server) = start_wallet_stub(Thresholds {
+        auto_approve_minor_units: 10_000,
+        hard_deny_minor_units: 50_000,
+    })
+    .await;
+
     let state = PlannerState {
         policy_client,
         event_log: event_log.clone(),
         discovery: Arc::new(DefaultDiscoveryPipeline::new()),
+        wallet_client,
     };
 
     let request = sample_request();
@@ -66,7 +74,8 @@ async fn planner_appends_audit_event_with_redacted_payload() {
         .await
         .expect("receive response");
 
-    server.abort();
+    policy_server.abort();
+    wallet_server.abort();
 
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
     let plan: PlanResponse = serde_json::from_slice(&bytes).expect("decode plan response");
@@ -136,6 +145,16 @@ async fn planner_appends_audit_event_with_redacted_payload() {
         discovery.get("status").and_then(|value| value.as_str()),
         Some("not_found"),
         "default pipeline should record not_found discovery"
+    );
+
+    let wallet = action
+        .get("wallet")
+        .and_then(|value| value.as_object())
+        .expect("wallet audit block present");
+    assert_eq!(
+        wallet.get("status").and_then(|value| value.as_str()),
+        Some("skipped"),
+        "wallet audit should be skipped when no spend directive is present"
     );
 
     let payload_text = action.to_string();

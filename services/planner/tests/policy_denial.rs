@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use axum::{body::Body, http::Request};
 use chrono::Utc;
-use common::{policy::mock_policy, postgres::TestPostgres};
+use common::{policy::mock_policy, postgres::TestPostgres, wallet::start_wallet_stub};
 use http_body_util::BodyExt;
 use serde_json::json;
 use sqlx::Row;
@@ -18,6 +18,7 @@ use tyrum_shared::{
     MessageContent, MessageSource, NormalizedMessage, NormalizedThread, NormalizedThreadMessage,
     PiiField, SenderMetadata, ThreadKind,
 };
+use tyrum_wallet::Thresholds;
 use uuid::Uuid;
 
 #[tokio::test]
@@ -29,7 +30,7 @@ async fn policy_denial_is_logged_and_sanitized() {
     event_log.migrate().await.expect("migrate planner schema");
 
     let denial_detail = "Amount €123.45 exceeds hard limit €500.00.";
-    let (policy_client, server) = mock_policy(json!({
+    let (policy_client, policy_server) = mock_policy(json!({
         "decision": "deny",
         "rules": [
             {
@@ -41,10 +42,17 @@ async fn policy_denial_is_logged_and_sanitized() {
     }))
     .await;
 
+    let (wallet_client, wallet_server) = start_wallet_stub(Thresholds {
+        auto_approve_minor_units: 10_000,
+        hard_deny_minor_units: 50_000,
+    })
+    .await;
+
     let state = PlannerState {
         policy_client,
         event_log: event_log.clone(),
         discovery: Arc::new(DefaultDiscoveryPipeline::new()),
+        wallet_client,
     };
 
     let request = sample_request();
@@ -64,7 +72,8 @@ async fn policy_denial_is_logged_and_sanitized() {
 
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
     let plan: PlanResponse = serde_json::from_slice(&bytes).expect("decode plan response");
-    server.abort();
+    policy_server.abort();
+    wallet_server.abort();
 
     let failure = match plan.outcome {
         PlanOutcome::Failure { error } => {
@@ -142,6 +151,16 @@ async fn policy_denial_is_logged_and_sanitized() {
         discovery.get("status").and_then(|value| value.as_str()),
         Some("skipped"),
         "discovery should be skipped for policy denials"
+    );
+
+    let wallet = action
+        .get("wallet")
+        .and_then(|value| value.as_object())
+        .expect("wallet audit block present");
+    assert_eq!(
+        wallet.get("status").and_then(|value| value.as_str()),
+        Some("skipped"),
+        "wallet audit should be skipped when no spend directive is present"
     );
 
     let outcome = action

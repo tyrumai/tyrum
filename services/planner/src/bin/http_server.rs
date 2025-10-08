@@ -7,9 +7,10 @@ use tracing_subscriber::{EnvFilter, fmt};
 use tyrum_discovery::DefaultDiscoveryPipeline;
 use tyrum_planner::http::{DEFAULT_BIND_ADDR, PlannerState, build_router};
 use tyrum_planner::policy::PolicyClient;
-use tyrum_planner::{EventLog, EventLogSettings};
+use tyrum_planner::{EventLog, EventLogSettings, WalletClient};
 
 const EVENT_LOG_URL_ENV: &str = "PLANNER_EVENT_LOG_URL";
+const WALLET_GATE_URL_ENV: &str = "WALLET_GATE_URL";
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
@@ -24,6 +25,11 @@ async fn main() {
     let policy_client =
         PolicyClient::new(Url::parse(&policy_url).expect("invalid POLICY_GATE_URL"));
 
+    let wallet_url = env::var(WALLET_GATE_URL_ENV)
+        .unwrap_or_else(|_| panic!("{} must be set", WALLET_GATE_URL_ENV));
+    let wallet_client =
+        WalletClient::new(Url::parse(&wallet_url).expect("invalid WALLET_GATE_URL"));
+
     let event_log_url =
         env::var(EVENT_LOG_URL_ENV).unwrap_or_else(|_| panic!("{} must be set", EVENT_LOG_URL_ENV));
     let event_log = EventLog::connect(EventLogSettings::new(event_log_url))
@@ -35,6 +41,7 @@ async fn main() {
         policy_client,
         event_log,
         discovery: Arc::new(DefaultDiscoveryPipeline::new()),
+        wallet_client,
     });
     let listener = TcpListener::bind(bind_addr)
         .await
