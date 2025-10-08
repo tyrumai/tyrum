@@ -1,14 +1,20 @@
 use axum::{
     Json, Router,
+    http::StatusCode,
     routing::{get, post},
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+use thiserror::Error;
+use tyrum_shared::PamProfileRef;
 
 pub mod telemetry;
 
 pub const DEFAULT_BIND_ADDR: &str = "0.0.0.0:8081";
 const AUTO_APPROVE_LIMIT_MINOR: u64 = 10_000;
 const HARD_DENY_LIMIT_MINOR: u64 = 50_000;
+const MAX_USER_IDENTIFIER_LEN: usize = 128;
+const MAX_PAM_PROFILE_LEN: usize = 64;
+const MAX_PAM_VERSION_LEN: usize = 32;
 
 pub fn build_router() -> Router {
     Router::new()
@@ -54,9 +60,40 @@ struct HealthResponse {
 #[serde(default)]
 pub struct PolicyCheckRequest {
     pub request_id: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_trimmed_option_string")]
+    pub user_id: Option<String>,
+    #[serde(default)]
+    pub pam_profile: Option<PamProfileRef>,
     pub spend: Option<SpendContext>,
     pub pii: Option<PiiContext>,
     pub legal: Option<LegalContext>,
+}
+
+impl PolicyCheckRequest {
+    fn validate(&self) -> Result<(), RequestValidationError> {
+        let user_id = match self.user_id.as_ref().filter(|value| !value.is_empty()) {
+            Some(value) => value,
+            None => return Err(RequestValidationError::MissingUserId),
+        };
+
+        if !is_valid_identifier(user_id, MAX_USER_IDENTIFIER_LEN) {
+            return Err(RequestValidationError::UserId);
+        }
+
+        if let Some(profile) = &self.pam_profile {
+            if !is_valid_identifier(&profile.profile_id, MAX_PAM_PROFILE_LEN) {
+                return Err(RequestValidationError::PamProfileId);
+            }
+
+            if let Some(version) = profile.version.as_ref()
+                && !is_valid_identifier(version, MAX_PAM_VERSION_LEN)
+            {
+                return Err(RequestValidationError::PamProfileVersion);
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -103,8 +140,78 @@ pub enum LegalFlag {
     Other,
 }
 
+#[derive(Debug, Error, PartialEq, Eq)]
+enum RequestValidationError {
+    #[error("user_id is required for policy evaluation")]
+    MissingUserId,
+    #[error("user_id must contain 1-128 ASCII alphanumeric, hyphen, underscore, or dot characters")]
+    UserId,
+    #[error(
+        "pam_profile.profile_id must contain 1-64 ASCII alphanumeric, hyphen, underscore, or dot characters"
+    )]
+    PamProfileId,
+    #[error(
+        "pam_profile.version must contain 1-32 ASCII alphanumeric, hyphen, underscore, or dot characters"
+    )]
+    PamProfileVersion,
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+struct ValidationErrorResponse {
+    error: &'static str,
+    message: &'static str,
+}
+
+impl From<RequestValidationError> for ValidationErrorResponse {
+    fn from(error: RequestValidationError) -> Self {
+        match error {
+            RequestValidationError::MissingUserId => Self {
+                error: "missing_user_id",
+                message: "user_id is required for policy evaluation",
+            },
+            RequestValidationError::UserId => Self {
+                error: "invalid_user_id",
+                message: "user_id must contain 1-128 ASCII alphanumeric, hyphen, underscore, or dot characters",
+            },
+            RequestValidationError::PamProfileId => Self {
+                error: "invalid_pam_profile_id",
+                message: "pam_profile.profile_id must contain 1-64 ASCII alphanumeric, hyphen, underscore, or dot characters",
+            },
+            RequestValidationError::PamProfileVersion => Self {
+                error: "invalid_pam_profile_version",
+                message: "pam_profile.version must contain 1-32 ASCII alphanumeric, hyphen, underscore, or dot characters",
+            },
+        }
+    }
+}
+
+fn deserialize_trimmed_option_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let option = Option::<String>::deserialize(deserializer)?;
+    Ok(option.map(|value| value.trim().to_owned()))
+}
+
+fn is_valid_identifier(value: &str, max_len: usize) -> bool {
+    if value.is_empty() || value.len() > max_len {
+        return false;
+    }
+
+    value
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.'))
+}
+
 #[tracing::instrument(skip(payload), name = "policy.check")]
-async fn policy_check(Json(payload): Json<PolicyCheckRequest>) -> Json<PolicyDecision> {
+async fn policy_check(
+    Json(payload): Json<PolicyCheckRequest>,
+) -> Result<Json<PolicyDecision>, (StatusCode, Json<ValidationErrorResponse>)> {
+    if let Err(error) = payload.validate() {
+        tracing::warn!(%error, "rejecting policy request due to invalid user context");
+        return Err((StatusCode::BAD_REQUEST, Json(error.into())));
+    }
+
     let spend_decision = evaluate_spend(payload.spend.as_ref());
     let pii_decision = evaluate_pii(payload.pii.as_ref());
     let legal_decision = evaluate_legal(payload.legal.as_ref());
@@ -114,7 +221,7 @@ async fn policy_check(Json(payload): Json<PolicyCheckRequest>) -> Json<PolicyDec
 
     telemetry::record_policy_decision(decision);
 
-    Json(PolicyDecision { decision, rules })
+    Ok(Json(PolicyDecision { decision, rules }))
 }
 
 #[tracing::instrument(name = "policy.health", skip_all)]
@@ -352,6 +459,42 @@ mod tests {
     use serde_json::json;
     use tower::ServiceExt;
 
+    const WITH_USER_FIXTURE: &str = include_str!("../tests/fixtures/policy_check_with_user.json");
+    const WITHOUT_USER_FIXTURE: &str =
+        include_str!("../tests/fixtures/policy_check_without_user.json");
+
+    #[test]
+    fn fixture_with_user_context_parses_and_validates() {
+        let request: PolicyCheckRequest =
+            serde_json::from_str(WITH_USER_FIXTURE).expect("parse fixture");
+        assert_eq!(request.user_id.as_deref(), Some("subject-123"));
+        let profile = request.pam_profile.as_ref().expect("pam profile");
+        assert_eq!(profile.profile_id, "pam-default");
+        assert_eq!(profile.version.as_deref(), Some("v1"));
+        request.validate().expect("fixture validates");
+    }
+
+    #[test]
+    fn fixture_without_user_context_fails_validation() {
+        let request: PolicyCheckRequest =
+            serde_json::from_str(WITHOUT_USER_FIXTURE).expect("parse fixture");
+        assert!(request.user_id.is_none());
+        assert!(request.pam_profile.is_none());
+        let error = request.validate().expect_err("validation should fail");
+        assert_eq!(error, RequestValidationError::MissingUserId);
+    }
+
+    #[test]
+    fn validation_rejects_blank_user_id() {
+        let request: PolicyCheckRequest = serde_json::from_value(json!({
+            "user_id": "   ",
+        }))
+        .expect("parse payload");
+
+        let error = request.validate().expect_err("blank user id rejected");
+        assert_eq!(error, RequestValidationError::MissingUserId);
+    }
+
     #[test]
     fn spend_rule_auto_approves_within_limit() {
         let decision = evaluate_spend(Some(&SpendContext {
@@ -429,9 +572,122 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn policy_check_rejects_invalid_user_id() {
+        let app = build_router();
+        let payload = json!({
+            "user_id": "subject invalid",
+            "pam_profile": {
+                "profile_id": "pam-default"
+            }
+        });
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/policy/check")
+                    .header("content-type", "application/json")
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(body["error"], "invalid_user_id");
+    }
+
+    #[tokio::test]
+    async fn policy_check_rejects_invalid_pam_profile() {
+        let app = build_router();
+        let payload = json!({
+            "user_id": "subject-987",
+            "pam_profile": {
+                "profile_id": "pam default",
+                "version": "v1"
+            }
+        });
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/policy/check")
+                    .header("content-type", "application/json")
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(body["error"], "invalid_pam_profile_id");
+    }
+
+    #[tokio::test]
+    async fn policy_check_rejects_blank_user_id() {
+        let app = build_router();
+        let payload = json!({
+            "user_id": "  ",
+            "pam_profile": {
+                "profile_id": "pam-default"
+            }
+        });
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/policy/check")
+                    .header("content-type", "application/json")
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(body["error"], "missing_user_id");
+    }
+
+    #[tokio::test]
+    async fn policy_check_rejects_missing_user_id() {
+        let app = build_router();
+        let payload = json!({
+            "pam_profile": {
+                "profile_id": "pam-default"
+            }
+        });
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/policy/check")
+                    .header("content-type", "application/json")
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(body["error"], "missing_user_id");
+    }
+
+    #[tokio::test]
     async fn endpoint_returns_overall_approval() {
         let app = build_router();
         let payload = json!({
+            "user_id": "subject-approval",
             "request_id": "req-1",
             "spend": {
                 "amount_minor_units": 8_000,
@@ -465,6 +721,7 @@ mod tests {
     async fn endpoint_returns_overall_escalation_when_any_rule_escalates() {
         let app = build_router();
         let payload = json!({
+            "user_id": "subject-escalate",
             "spend": {
                 "amount_minor_units": 15_000,
                 "currency": "USD",
@@ -497,6 +754,7 @@ mod tests {
     async fn endpoint_returns_overall_denial_when_any_rule_denies() {
         let app = build_router();
         let payload = json!({
+            "user_id": "subject-deny",
             "spend": {
                 "amount_minor_units": 5_000,
                 "currency": "USD"

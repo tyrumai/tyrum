@@ -18,7 +18,7 @@ use tyrum_planner::{
 };
 use tyrum_shared::{
     MessageContent, MessageSource, NormalizedMessage, NormalizedThread, NormalizedThreadMessage,
-    PiiField, SenderMetadata, ThreadKind,
+    PamProfileRef, PiiField, PlanUserContext, SenderMetadata, ThreadKind,
 };
 use tyrum_wallet::Thresholds;
 use uuid::Uuid;
@@ -173,6 +173,13 @@ fn sample_request() -> PlanRequest {
     PlanRequest {
         request_id: "req-123".into(),
         subject_id: "subject-456".into(),
+        user: Some(PlanUserContext {
+            user_id: "subject-456".into(),
+            pam_profile: Some(PamProfileRef {
+                profile_id: "pam-default".into(),
+                version: Some("v1".into()),
+            }),
+        }),
         trigger: NormalizedThreadMessage {
             thread: NormalizedThread {
                 id: "thread-1".into(),

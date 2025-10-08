@@ -77,6 +77,10 @@ pub enum PolicyClientError {
 #[derive(Clone, Debug, Serialize, Default)]
 struct PolicyCheckPayload {
     request_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    user_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pam_profile: Option<tyrum_shared::planner::PamProfileRef>,
     spend: Option<SpendContext>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pii: Option<PiiContext>,
@@ -108,8 +112,15 @@ impl PolicyCheckPayload {
             })
         };
 
+        let (user_id, pam_profile) = match request.user.as_ref() {
+            Some(context) => (Some(context.user_id.clone()), context.pam_profile.clone()),
+            None => (Some(request.subject_id.clone()), None),
+        };
+
         Self {
             request_id: Some(request.request_id.clone()),
+            user_id,
+            pam_profile,
             spend: None,
             pii,
             legal: None,
@@ -217,13 +228,21 @@ mod tests {
     use tokio::{net::TcpListener, task::JoinHandle};
     use tyrum_shared::{
         MessageContent, MessageSource, NormalizedMessage, NormalizedThread,
-        NormalizedThreadMessage, PiiField, SenderMetadata, ThreadKind,
+        NormalizedThreadMessage, PamProfileRef, PiiField, PlanUserContext, SenderMetadata,
+        ThreadKind,
     };
 
     fn sample_plan_request() -> PlanRequest {
         PlanRequest {
             request_id: "req-42".into(),
             subject_id: "subject-17".into(),
+            user: Some(PlanUserContext {
+                user_id: "subject-17".into(),
+                pam_profile: Some(PamProfileRef {
+                    profile_id: "pam-default".into(),
+                    version: Some("v1".into()),
+                }),
+            }),
             trigger: NormalizedThreadMessage {
                 thread: NormalizedThread {
                     id: "thread-1".into(),
@@ -265,9 +284,23 @@ mod tests {
         let pii = payload.pii.expect("pii context");
         assert!(pii.categories.contains(&PiiCategory::BasicContact));
         assert!(pii.categories.contains(&PiiCategory::Other));
+        assert_eq!(payload.user_id.as_deref(), Some("subject-17"));
+        let pam_profile = payload.pam_profile.expect("pam profile");
+        assert_eq!(pam_profile.profile_id, "pam-default");
+        assert_eq!(pam_profile.version.as_deref(), Some("v1"));
 
         assert!(payload.spend.is_none());
         assert!(payload.legal.is_none());
+    }
+
+    #[test]
+    fn payload_defaults_user_id_when_user_context_missing() {
+        let mut request = sample_plan_request();
+        request.user = None;
+
+        let payload = PolicyCheckPayload::from_plan_request(&request);
+        assert_eq!(payload.user_id.as_deref(), Some("subject-17"));
+        assert!(payload.pam_profile.is_none());
     }
 
     #[tokio::test]

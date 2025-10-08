@@ -16,7 +16,8 @@ use tokio::{
 };
 use tyrum_shared::{
     MessageContent, MessageSource, NormalizedMessage, NormalizedThread, NormalizedThreadMessage,
-    PlanOutcome, PlanRequest, PlanResponse, PlanSummary, ThreadKind,
+    PamProfileRef, PlanOutcome, PlanRequest, PlanResponse, PlanSummary, PlanUserContext,
+    ThreadKind,
 };
 use tyrum_watchers::{
     JetStreamClient, JetStreamConfig, PlannerClient, RecordedWatcherOutcome, WatcherEvent,
@@ -119,6 +120,13 @@ fn sample_plan_request() -> PlanRequest {
     PlanRequest {
         request_id: "req-789".into(),
         subject_id: "subject-1".into(),
+        user: Some(PlanUserContext {
+            user_id: "subject-1".into(),
+            pam_profile: Some(PamProfileRef {
+                profile_id: "pam-default".into(),
+                version: Some("v1".into()),
+            }),
+        }),
         trigger: NormalizedThreadMessage {
             thread: NormalizedThread {
                 id: thread_id.clone(),
