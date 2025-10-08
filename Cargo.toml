@@ -10,7 +10,8 @@ members = [
     "services/planner",
     "services/policy",
     "services/tyrum-wallet",
-    "shared/tyrum-shared"
+    "shared/tyrum-shared",
+    "services/tyrum-watchers",
 ]
 resolver = "2"
 
