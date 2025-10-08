@@ -173,6 +173,16 @@ async fn policy_denial_is_logged_and_sanitized() {
         outcome.get("status").and_then(|value| value.as_str()),
         Some("failure")
     );
+    assert_eq!(
+        outcome.get("code").and_then(|value| value.as_str()),
+        Some("policy_denied"),
+        "failure audit should include policy_denied code"
+    );
+    assert_eq!(
+        outcome.get("retryable").and_then(|value| value.as_bool()),
+        Some(false),
+        "policy denials should not be retryable"
+    );
     let audit_detail = outcome
         .get("detail")
         .and_then(|value| value.as_str())

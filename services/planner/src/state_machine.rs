@@ -462,7 +462,7 @@ mod tests {
     }
 
     #[test]
-    fn policy_denial_short_circuits_plan() {
+    fn policy_denial_failure_propagation_short_circuits_plan() {
         let mut machine = PlanStateMachine::new(1);
         machine
             .apply(PlanEvent::SubmittedForPolicy)
@@ -477,6 +477,7 @@ mod tests {
             PlanStatus::Failed(failure) => {
                 assert!(matches!(failure.reason, PlanFailureReason::PolicyDenied));
                 assert_eq!(failure.detail.as_deref(), Some("missing consent"));
+                assert_eq!(failure.step_index, None);
             }
             other => panic!("expected failure, saw {other:?}"),
         }
@@ -575,6 +576,36 @@ mod tests {
                 .unwrap()
                 .contains("PolicyDenied")
         );
+    }
+
+    #[test]
+    fn executor_failure_propagation_reports_step_index_and_detail() {
+        let mut machine = PlanStateMachine::new(1);
+        machine
+            .apply(PlanEvent::SubmittedForPolicy)
+            .expect("policy submission");
+        machine
+            .apply(PlanEvent::PolicyApproved)
+            .expect("policy approval");
+        machine
+            .apply(PlanEvent::StepDispatched { step_index: 0 })
+            .expect("dispatch step 0");
+
+        machine
+            .apply(PlanEvent::ExecutorFailed {
+                step_index: 0,
+                detail: "playwright crashed".into(),
+            })
+            .expect("executor failure");
+
+        match machine.status() {
+            PlanStatus::Failed(failure) => {
+                assert!(matches!(failure.reason, PlanFailureReason::ExecutorFailed));
+                assert_eq!(failure.step_index, Some(0));
+                assert_eq!(failure.detail.as_deref(), Some("playwright crashed"));
+            }
+            other => panic!("expected executor failure, saw {other:?}"),
+        }
     }
 
     #[test]
