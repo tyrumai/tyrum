@@ -10,6 +10,7 @@ use axum::{
 };
 use chrono::Utc;
 use common::postgres::TestPostgres;
+use common::wallet::start_wallet_stub;
 use http_body_util::BodyExt;
 use reqwest::Url;
 use tokio::{net::TcpListener, task::JoinHandle};
@@ -27,6 +28,7 @@ use tyrum_shared::{
     MessageContent, MessageSource, NormalizedMessage, NormalizedThread, NormalizedThreadMessage,
     PiiField, SenderMetadata, ThreadKind,
 };
+use tyrum_wallet::Thresholds;
 
 fn sample_request() -> PlanRequest {
     PlanRequest {
@@ -157,7 +159,8 @@ async fn plan_returns_stub_response() {
     let payload = sample_request();
     let body = serde_json::to_vec(&payload).expect("serialize plan request");
 
-    let (state, server, _postgres) = planner_state(approving_policy_payload()).await;
+    let (state, policy_server, wallet_server, _postgres) =
+        planner_state(approving_policy_payload()).await;
 
     let response = build_router(state)
         .oneshot(
@@ -171,7 +174,8 @@ async fn plan_returns_stub_response() {
         .await
         .expect("receive response");
 
-    server.abort();
+    policy_server.abort();
+    wallet_server.abort();
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -218,7 +222,7 @@ async fn discovery_pipeline_uses_mcp_capability() {
     let payload = sample_request();
     let body = serde_json::to_vec(&payload).expect("serialize plan request");
 
-    let (state, server, _postgres) =
+    let (state, policy_server, wallet_server, _postgres) =
         planner_state_with_pipeline(approving_policy_payload(), pipeline_trait).await;
 
     let response = build_router(state)
@@ -233,7 +237,8 @@ async fn discovery_pipeline_uses_mcp_capability() {
         .await
         .expect("receive response");
 
-    server.abort();
+    policy_server.abort();
+    wallet_server.abort();
 
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
     let plan: PlanResponse = serde_json::from_slice(&bytes).expect("decode plan response");
@@ -280,7 +285,7 @@ async fn discovery_pipeline_uses_structured_api_capability() {
     let payload = sample_request();
     let body = serde_json::to_vec(&payload).expect("serialize plan request");
 
-    let (state, server, _postgres) =
+    let (state, policy_server, wallet_server, _postgres) =
         planner_state_with_pipeline(approving_policy_payload(), pipeline_trait).await;
 
     let response = build_router(state)
@@ -295,7 +300,8 @@ async fn discovery_pipeline_uses_structured_api_capability() {
         .await
         .expect("receive response");
 
-    server.abort();
+    policy_server.abort();
+    wallet_server.abort();
 
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
     let plan: PlanResponse = serde_json::from_slice(&bytes).expect("decode plan response");
@@ -340,7 +346,7 @@ async fn discovery_pipeline_uses_generic_http_capability() {
     let payload = sample_request();
     let body = serde_json::to_vec(&payload).expect("serialize plan request");
 
-    let (state, server, _postgres) =
+    let (state, policy_server, wallet_server, _postgres) =
         planner_state_with_pipeline(approving_policy_payload(), pipeline_trait).await;
 
     let response = build_router(state)
@@ -355,7 +361,8 @@ async fn discovery_pipeline_uses_generic_http_capability() {
         .await
         .expect("receive response");
 
-    server.abort();
+    policy_server.abort();
+    wallet_server.abort();
 
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
     let plan: PlanResponse = serde_json::from_slice(&bytes).expect("decode plan response");
@@ -398,7 +405,7 @@ async fn plan_rejects_oversized_payloads() {
 
     let body = serde_json::to_vec(&payload).expect("serialize oversized request");
 
-    let (state, server, _postgres) = planner_state(serde_json::json!({
+    let (state, policy_server, wallet_server, _postgres) = planner_state(serde_json::json!({
         "decision": "approve",
         "rules": [],
     }))
@@ -416,7 +423,8 @@ async fn plan_rejects_oversized_payloads() {
         .await
         .expect("receive response");
 
-    server.abort();
+    policy_server.abort();
+    wallet_server.abort();
 
     assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
 }
@@ -426,7 +434,7 @@ async fn plan_escalates_on_policy_escalation() {
     let payload = sample_request();
     let body = serde_json::to_vec(&payload).expect("serialize plan request");
 
-    let (state, server, _postgres) = planner_state(serde_json::json!({
+    let (state, policy_server, wallet_server, _postgres) = planner_state(serde_json::json!({
         "decision": "escalate",
         "rules": [
             {
@@ -450,7 +458,8 @@ async fn plan_escalates_on_policy_escalation() {
         .await
         .expect("receive response");
 
-    server.abort();
+    policy_server.abort();
+    wallet_server.abort();
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -470,7 +479,7 @@ async fn plan_returns_failure_on_policy_denial() {
     let payload = sample_request();
     let body = serde_json::to_vec(&payload).expect("serialize plan request");
 
-    let (state, server, _postgres) = planner_state(serde_json::json!({
+    let (state, policy_server, wallet_server, _postgres) = planner_state(serde_json::json!({
         "decision": "deny",
         "rules": [
             {
@@ -494,7 +503,8 @@ async fn plan_returns_failure_on_policy_denial() {
         .await
         .expect("receive response");
 
-    server.abort();
+    policy_server.abort();
+    wallet_server.abort();
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -515,7 +525,7 @@ async fn plan_escalation_includes_context_when_rules_do_not_match() {
     let payload = sample_request();
     let body = serde_json::to_vec(&payload).expect("serialize plan request");
 
-    let (state, server, _postgres) = planner_state(serde_json::json!({
+    let (state, policy_server, wallet_server, _postgres) = planner_state(serde_json::json!({
         "decision": "escalate",
         "rules": [
             {
@@ -539,7 +549,8 @@ async fn plan_escalation_includes_context_when_rules_do_not_match() {
         .await
         .expect("receive response");
 
-    server.abort();
+    policy_server.abort();
+    wallet_server.abort();
 
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
     let plan: PlanResponse = serde_json::from_slice(&bytes).expect("decode plan response");
@@ -557,7 +568,7 @@ async fn plan_failure_includes_details_when_rules_do_not_match() {
     let payload = sample_request();
     let body = serde_json::to_vec(&payload).expect("serialize plan request");
 
-    let (state, server, _postgres) = planner_state(serde_json::json!({
+    let (state, policy_server, wallet_server, _postgres) = planner_state(serde_json::json!({
         "decision": "deny",
         "rules": [
             {
@@ -581,7 +592,8 @@ async fn plan_failure_includes_details_when_rules_do_not_match() {
         .await
         .expect("receive response");
 
-    server.abort();
+    policy_server.abort();
+    wallet_server.abort();
 
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
     let plan: PlanResponse = serde_json::from_slice(&bytes).expect("decode plan response");
@@ -622,15 +634,20 @@ async fn mock_policy(response: serde_json::Value) -> (PolicyClient, JoinHandle<(
 
 async fn planner_state(
     policy_response: serde_json::Value,
-) -> (PlannerState, JoinHandle<()>, TestPostgres) {
+) -> (PlannerState, JoinHandle<()>, JoinHandle<()>, TestPostgres) {
     planner_state_with_pipeline(policy_response, Arc::new(DefaultDiscoveryPipeline::new())).await
 }
 
 async fn planner_state_with_pipeline(
     policy_response: serde_json::Value,
     discovery: Arc<dyn DiscoveryPipeline + Send + Sync>,
-) -> (PlannerState, JoinHandle<()>, TestPostgres) {
+) -> (PlannerState, JoinHandle<()>, JoinHandle<()>, TestPostgres) {
     let (policy_client, server) = mock_policy(policy_response).await;
+    let thresholds = Thresholds {
+        auto_approve_minor_units: 10_000,
+        hard_deny_minor_units: 50_000,
+    };
+    let (wallet_client, wallet_server) = start_wallet_stub(thresholds).await;
     let postgres = TestPostgres::start().await.expect("start postgres fixture");
     let event_log = EventLog::from_pool(postgres.pool().clone());
     event_log.migrate().await.expect("migrate planner schema");
@@ -640,8 +657,10 @@ async fn planner_state_with_pipeline(
             policy_client,
             event_log,
             discovery,
+            wallet_client,
         },
         server,
+        wallet_server,
         postgres,
     )
 }
