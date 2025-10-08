@@ -870,7 +870,10 @@ mod tests {
         let ctx = TestContext::new().await;
         let app = ctx.router.clone();
         let payload = r#"{"update_id":123,"message":{"message_id":7,"date":1710000000,"chat":{"id":42,"type":"private"},"text":"ping"}}"#;
-        let signature = ctx.telegram.expected_signature_header(payload.as_bytes());
+        let signature = match ctx.telegram.expected_signature_header(payload.as_bytes()) {
+            Ok(value) => value,
+            Err(err) => panic!("derive telegram signature header: {err}"),
+        };
 
         let response = app
             .oneshot(
@@ -918,7 +921,10 @@ mod tests {
         let ctx = TestContext::new().await;
         let app = ctx.router.clone();
         let payload = include_str!("../../../shared/tests/fixtures/telegram/text_message.json");
-        let signature = ctx.telegram.expected_signature_header(payload.as_bytes());
+        let signature = match ctx.telegram.expected_signature_header(payload.as_bytes()) {
+            Ok(value) => value,
+            Err(err) => panic!("derive telegram signature header: {err}"),
+        };
 
         let response = app
             .oneshot(
