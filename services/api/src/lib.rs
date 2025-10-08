@@ -1,4 +1,5 @@
 pub mod account_linking;
+pub mod audit;
 pub mod ingress;
 pub mod metrics;
 pub mod telegram;

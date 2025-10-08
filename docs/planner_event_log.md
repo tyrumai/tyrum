@@ -6,6 +6,47 @@ execution, and satisfy audit requirements.
 See also [`docs/planner_state_machine.md`](planner_state_machine.md) for the lifecycle and terminal
 success/failure envelopes that pair with each logged action.
 
+## API Access
+
+The API service surfaces the audit timeline through `GET /audit/plan/{plan_id}`. The handler reads
+from the `planner_events` table, returns events ordered by `step_index`, and annotates any redacted
+fields so the portal can flag sanitized values.
+
+```http
+GET /audit/plan/3a1c9f77-2f6b-4f2f-a1a3-bc9471d8e852 HTTP/1.1
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "plan_id": "3a1c9f77-2f6b-4f2f-a1a3-bc9471d8e852",
+  "generated_at": "2025-10-08T18:00:12.142Z",
+  "event_count": 2,
+  "has_redactions": true,
+  "events": [
+    {
+      "replay_id": "b91a7a90-239a-4f6e-9ad4-2a089dfb67d8",
+      "step_index": 0,
+      "occurred_at": "2025-10-08T17:58:54.327Z",
+      "recorded_at": "2025-10-08T17:58:54.521Z",
+      "action": {
+        "kind": "executor_result",
+        "result": {
+          "status": "success",
+          "detail": "[redacted]"
+        }
+      },
+      "redactions": ["/action/result/detail"]
+    }
+  ]
+}
+```
+
+When a plan has no recorded events, the endpoint responds with `404` to mirror the planner audit
+contract. Payloads never expose raw PII: values detected as sensitive are replaced with `[redacted]`
+before they are persisted, and the response surfaces corresponding JSON pointer paths so the UI can
+display redaction badges without reading the sanitized fields.
+
 ## Storage Model
 - **Table:** `planner_events`
 - **Append-only:** There are no update or delete paths; the API only issues `INSERT` statements.

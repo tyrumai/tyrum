@@ -4,6 +4,7 @@ use anyhow::{Context, Result, anyhow};
 
 use tyrum_api::{
     account_linking::AccountLinkingRepository,
+    audit::{AuditTimelineError, AuditTimelineRepository},
     ingress::{IngressRepository, IngressRepositoryError},
     metrics, telegram,
     telemetry::TelemetryGuard,
@@ -25,6 +26,7 @@ use axum::{
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use tyrum_shared::telegram::{TelegramNormalizationError, normalize_update};
+use uuid::Uuid;
 use validator::Validate;
 
 const DEFAULT_BIND_ADDR: &str = "0.0.0.0:8080";
@@ -32,6 +34,7 @@ const DEFAULT_DATABASE_URL: &str = "postgres://tyrum:tyrum_dev_password@localhos
 const WAITLIST_ROUTE: &str = "/waitlist";
 const ACCOUNT_LINKING_ROUTE: &str = "/account-linking/preferences";
 const ACCOUNT_LINKING_TOGGLE_ROUTE: &str = "/account-linking/preferences/:integration_slug";
+const AUDIT_PLAN_TIMELINE_ROUTE: &str = "/audit/plan/:plan_id";
 const TELEGRAM_WEBHOOK_ROUTE: &str = "/telegram/webhook";
 const PORTAL_ACCOUNT_ID: &str = "demo-account";
 
@@ -65,6 +68,7 @@ struct AppState {
     waitlist: WaitlistRepository,
     account_linking: AccountLinkingRepository,
     ingress: IngressRepository,
+    audit: AuditTimelineRepository,
     watchers: WatcherRepository,
     telegram: telegram::TelegramWebhookVerifier,
 }
@@ -166,6 +170,7 @@ fn build_router(state: AppState) -> Router {
         .route("/", get(index))
         .route("/healthz", get(health))
         .route(WAITLIST_ROUTE, post(create_waitlist_signup))
+        .route(AUDIT_PLAN_TIMELINE_ROUTE, get(get_plan_timeline))
         .route(ACCOUNT_LINKING_ROUTE, get(list_account_link_preferences))
         .route(
             ACCOUNT_LINKING_TOGGLE_ROUTE,
@@ -193,6 +198,36 @@ async fn health() -> Response {
     let response = Json(HealthResponse { status: "ok" }).into_response();
 
     metrics::record_http_request("GET", "/healthz", response.status().as_u16());
+
+    response
+}
+
+#[tracing::instrument(name = "api.audit.timeline", skip_all, fields(plan_id = %plan_id))]
+async fn get_plan_timeline(State(state): State<AppState>, Path(plan_id): Path<Uuid>) -> Response {
+    let response = match state.audit.fetch_plan_timeline(plan_id).await {
+        Ok(timeline) => Json(timeline).into_response(),
+        Err(AuditTimelineError::NotFound(_)) => (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "plan_not_found",
+                message: format!("Plan {plan_id} was not found in the audit log."),
+            }),
+        )
+            .into_response(),
+        Err(AuditTimelineError::Database(error)) => {
+            tracing::error!(%plan_id, reason = %error, "failed to load plan timeline");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "server_error",
+                    message: "Unable to load plan timeline".into(),
+                }),
+            )
+                .into_response()
+        }
+    };
+
+    metrics::record_http_request("GET", AUDIT_PLAN_TIMELINE_ROUTE, response.status().as_u16());
 
     response
 }
@@ -599,6 +634,7 @@ async fn main() -> Result<()> {
 
     let account_linking = AccountLinkingRepository::new(waitlist.pool().clone());
     let ingress = IngressRepository::new(waitlist.pool().clone());
+    let audit = AuditTimelineRepository::new(waitlist.pool().clone());
     let watchers = WatcherRepository::new(waitlist.pool().clone());
 
     let telegram_secret =
@@ -610,6 +646,7 @@ async fn main() -> Result<()> {
         waitlist,
         account_linking,
         ingress,
+        audit,
         watchers,
         telegram,
     });
@@ -630,17 +667,18 @@ mod tests {
     #![allow(clippy::expect_used, clippy::unwrap_used)]
 
     use super::{
-        ACCOUNT_LINKING_ROUTE, AppState, PLACEHOLDER_INTEGRATIONS, PORTAL_ACCOUNT_ID,
-        TELEGRAM_WEBHOOK_ROUTE, WAITLIST_ROUTE, build_router, sanitize_opt,
+        ACCOUNT_LINKING_ROUTE, AppState, AuditTimelineRepository, PLACEHOLDER_INTEGRATIONS,
+        PORTAL_ACCOUNT_ID, TELEGRAM_WEBHOOK_ROUTE, WAITLIST_ROUTE, build_router, sanitize_opt,
     };
     use axum::{
         body::Body,
         http::{Request, StatusCode},
     };
+    use chrono::Utc;
     use http_body_util::BodyExt;
     use serde_json::{Value, json};
-    use sqlx::{Row, postgres::PgPoolOptions};
-    use std::time::Duration;
+    use sqlx::{PgPool, Row, postgres::PgPoolOptions};
+    use std::{path::Path, time::Duration};
     use testcontainers::{
         ContainerAsync, GenericImage, ImageExt,
         core::{IntoContainerPort, WaitFor},
@@ -655,12 +693,67 @@ mod tests {
         waitlist::{NewWaitlistSignup, WaitlistError, WaitlistRepository},
         watchers::WatcherRepository,
     };
+    use tyrum_planner::{AppendOutcome, EventLog, NewPlannerEvent};
+    use uuid::Uuid;
 
     const POSTGRES_IMAGE: &str = "pgvector/pgvector";
     const POSTGRES_TAG: &str = "pg16";
     const POSTGRES_USER: &str = "tyrum";
     const POSTGRES_PASSWORD: &str = "tyrum_dev_password";
     const POSTGRES_DB: &str = "tyrum_dev";
+
+    async fn ensure_planner_event_log_schema(pool: &PgPool) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS planner_events (
+                id BIGSERIAL PRIMARY KEY,
+                replay_id UUID NOT NULL,
+                plan_id UUID NOT NULL,
+                step_index INTEGER NOT NULL CHECK (step_index >= 0),
+                occurred_at TIMESTAMPTZ NOT NULL,
+                action JSONB NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+            "#,
+        )
+        .execute(pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE UNIQUE INDEX IF NOT EXISTS planner_events_replay_id_idx
+            ON planner_events (replay_id)
+            "#,
+        )
+        .execute(pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE UNIQUE INDEX IF NOT EXISTS planner_events_plan_step_idx
+            ON planner_events (plan_id, step_index)
+            "#,
+        )
+        .execute(pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE INDEX IF NOT EXISTS planner_events_plan_created_idx
+            ON planner_events (plan_id, created_at)
+            "#,
+        )
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
+
+    fn docker_available() -> bool {
+        std::env::var("DOCKER_HOST").is_ok()
+            || std::env::var("TESTCONTAINERS_HOST_OVERRIDE").is_ok()
+            || Path::new("/var/run/docker.sock").exists()
+    }
 
     async fn connect_with_retry(database_url: &str) -> WaitlistRepository {
         let mut attempts = 0;
@@ -720,6 +813,9 @@ mod tests {
             let account_linking = AccountLinkingRepository::new(waitlist.pool().clone());
             let ingress = IngressRepository::new(waitlist.pool().clone());
             let watchers = WatcherRepository::new(waitlist.pool().clone());
+            ensure_planner_event_log_schema(waitlist.pool())
+                .await
+                .expect("seed planner event log schema");
             let telegram =
                 TelegramWebhookVerifier::new(TELEGRAM_SECRET).expect("construct telegram verifier");
 
@@ -727,6 +823,7 @@ mod tests {
                 waitlist: waitlist.clone(),
                 account_linking: account_linking.clone(),
                 ingress: ingress.clone(),
+                audit: AuditTimelineRepository::new(waitlist.pool().clone()),
                 watchers: watchers.clone(),
                 telegram: telegram.clone(),
             });
@@ -751,12 +848,17 @@ mod tests {
         let ingress = IngressRepository::new(pool.clone());
         let account_linking = AccountLinkingRepository::new(pool);
         let watchers = WatcherRepository::new(waitlist.pool().clone());
+        if let Err(error) = ensure_planner_event_log_schema(waitlist.pool()).await {
+            eprintln!("skipping planner event log schema for health test: {error}");
+        }
+        let audit = AuditTimelineRepository::new(waitlist.pool().clone());
         let telegram =
             TelegramWebhookVerifier::new(TELEGRAM_SECRET).expect("construct telegram verifier");
         let state = AppState {
             waitlist,
             account_linking,
             ingress,
+            audit,
             watchers,
             telegram,
         };
@@ -778,7 +880,153 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn audit_timeline_endpoint_returns_ordered_events_with_redactions() {
+        if !docker_available() {
+            eprintln!(
+                "skipping audit_timeline_endpoint_returns_ordered_events_with_redactions: docker unavailable"
+            );
+            return;
+        }
+        let ctx = TestContext::new().await;
+        let app = ctx.router.clone();
+
+        let plan_id = Uuid::new_v4();
+        let replay_redacted = Uuid::new_v4();
+        let replay_clean = Uuid::new_v4();
+        let event_log = EventLog::from_pool(ctx.waitlist.pool().clone());
+        let occurred_at = Utc::now();
+
+        let redacted_action = json!({
+            "kind": "executor_result",
+            "result": {
+                "detail": "[redacted]",
+                "status": "success"
+            }
+        });
+
+        let clean_action = json!({
+            "kind": "plan_summary",
+            "result": {
+                "status": "success",
+                "notes": "Completed"
+            }
+        });
+
+        let outcome_one = event_log
+            .append(NewPlannerEvent::new(
+                replay_redacted,
+                plan_id,
+                0,
+                occurred_at,
+                redacted_action,
+            ))
+            .await
+            .expect("append first audit event");
+        assert!(matches!(outcome_one, AppendOutcome::Inserted(_)));
+
+        let outcome_two = event_log
+            .append(NewPlannerEvent::new(
+                replay_clean,
+                plan_id,
+                1,
+                occurred_at,
+                clean_action,
+            ))
+            .await
+            .expect("append second audit event");
+        assert!(matches!(outcome_two, AppendOutcome::Inserted(_)));
+
+        let path = format!("/audit/plan/{plan_id}");
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(&path)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let payload: Value = serde_json::from_slice(&body).unwrap();
+
+        let expected_plan_id = plan_id.to_string();
+        assert_eq!(
+            payload.get("plan_id").and_then(Value::as_str),
+            Some(expected_plan_id.as_str())
+        );
+        assert_eq!(payload.get("event_count").and_then(Value::as_u64), Some(2));
+        assert_eq!(
+            payload.get("has_redactions").and_then(Value::as_bool),
+            Some(true)
+        );
+
+        let events = payload
+            .get("events")
+            .and_then(Value::as_array)
+            .expect("timeline events array");
+        assert_eq!(events.len(), 2);
+
+        let first = &events[0];
+        assert_eq!(first.get("step_index").and_then(Value::as_i64), Some(0));
+        let redactions = first
+            .get("redactions")
+            .and_then(Value::as_array)
+            .expect("redactions for first event");
+        assert!(
+            redactions
+                .iter()
+                .any(|val| val.as_str() == Some("/action/result/detail"))
+        );
+
+        let second = &events[1];
+        assert_eq!(second.get("step_index").and_then(Value::as_i64), Some(1));
+        assert!(second.get("redactions").is_none());
+    }
+
+    #[tokio::test]
+    async fn audit_timeline_endpoint_returns_404_for_missing_plan() {
+        if !docker_available() {
+            eprintln!(
+                "skipping audit_timeline_endpoint_returns_404_for_missing_plan: docker unavailable"
+            );
+            return;
+        }
+        let ctx = TestContext::new().await;
+        let app = ctx.router.clone();
+
+        let plan_id = Uuid::new_v4();
+        let path = format!("/audit/plan/{plan_id}");
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(&path)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let payload: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            payload.get("error").and_then(Value::as_str),
+            Some("plan_not_found")
+        );
+    }
+
+    #[tokio::test]
     async fn waitlist_signup_persists_email() {
+        if !docker_available() {
+            eprintln!("skipping waitlist_signup_persists_email: docker unavailable");
+            return;
+        }
         let ctx = TestContext::new().await;
         let app = ctx.router.clone();
         let payload = json!({
@@ -829,6 +1077,10 @@ mod tests {
 
     #[tokio::test]
     async fn waitlist_signup_rejects_duplicates() {
+        if !docker_available() {
+            eprintln!("skipping waitlist_signup_rejects_duplicates: docker unavailable");
+            return;
+        }
         let ctx = TestContext::new().await;
         let first = NewWaitlistSignup::new("duplicate@example.com".into());
         ctx.waitlist
@@ -856,6 +1108,10 @@ mod tests {
 
     #[tokio::test]
     async fn account_linking_list_returns_defaults() {
+        if !docker_available() {
+            eprintln!("skipping account_linking_list_returns_defaults: docker unavailable");
+            return;
+        }
         let ctx = TestContext::new().await;
         let app = ctx.router.clone();
 
@@ -887,6 +1143,10 @@ mod tests {
 
     #[tokio::test]
     async fn account_linking_update_persists_toggle() {
+        if !docker_available() {
+            eprintln!("skipping account_linking_update_persists_toggle: docker unavailable");
+            return;
+        }
         let ctx = TestContext::new().await;
         let slug = PLACEHOLDER_INTEGRATIONS[0].slug;
         let app = ctx.router.clone();
@@ -947,6 +1207,10 @@ mod tests {
 
     #[tokio::test]
     async fn telegram_webhook_accepts_valid_signature() {
+        if !docker_available() {
+            eprintln!("skipping telegram_webhook_accepts_valid_signature: docker unavailable");
+            return;
+        }
         let ctx = TestContext::new().await;
         let app = ctx.router.clone();
         let payload = r#"{"update_id":123,"message":{"message_id":7,"date":1710000000,"chat":{"id":42,"type":"private"},"text":"ping"}}"#;
@@ -971,6 +1235,10 @@ mod tests {
 
     #[tokio::test]
     async fn telegram_webhook_rejects_invalid_signature() {
+        if !docker_available() {
+            eprintln!("skipping telegram_webhook_rejects_invalid_signature: docker unavailable");
+            return;
+        }
         let ctx = TestContext::new().await;
         let app = ctx.router.clone();
         let payload = r#"{"update_id":123}"#;
@@ -995,6 +1263,10 @@ mod tests {
     #[tokio::test]
     #[ignore = "requires docker"]
     async fn telegram_webhook_e2e() {
+        if !docker_available() {
+            eprintln!("skipping telegram_webhook_e2e: docker unavailable");
+            return;
+        }
         let ctx = TestContext::new().await;
         let app = ctx.router.clone();
         let payload = include_str!("../../../shared/tests/fixtures/telegram/text_message.json");

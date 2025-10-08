@@ -16,6 +16,12 @@ const POSTGRES_USER: &str = "tyrum";
 const POSTGRES_PASSWORD: &str = "tyrum_dev_password";
 const POSTGRES_DB: &str = "tyrum_dev";
 
+pub fn docker_available() -> bool {
+    std::env::var("DOCKER_HOST").is_ok()
+        || std::env::var("TESTCONTAINERS_HOST_OVERRIDE").is_ok()
+        || std::path::Path::new("/var/run/docker.sock").exists()
+}
+
 pub struct TestPostgres {
     _container: ContainerAsync<GenericImage>,
     pool: PgPool,

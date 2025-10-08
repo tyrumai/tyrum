@@ -6,7 +6,11 @@ use std::sync::Arc;
 
 use axum::{body::Body, http::Request};
 use chrono::Utc;
-use common::{policy::mock_policy, postgres::TestPostgres, wallet::start_wallet_stub};
+use common::{
+    policy::mock_policy,
+    postgres::{TestPostgres, docker_available},
+    wallet::start_wallet_stub,
+};
 use http_body_util::BodyExt;
 use serde_json::json;
 use sqlx::Row;
@@ -25,6 +29,10 @@ use uuid::Uuid;
 
 #[tokio::test]
 async fn policy_denial_is_logged_and_sanitized() {
+    if !docker_available() {
+        eprintln!("skipping policy_denial_is_logged_and_sanitized: docker unavailable");
+        return;
+    }
     let postgres = TestPostgres::start().await.expect("start postgres fixture");
     let pool = postgres.pool().clone();
 

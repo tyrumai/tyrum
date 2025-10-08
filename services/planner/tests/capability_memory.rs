@@ -4,7 +4,7 @@ mod common;
 
 use anyhow::{Context, Result, bail};
 use chrono::Utc;
-use common::postgres::TestPostgres;
+use common::postgres::{TestPostgres, docker_available};
 use serde_json::{Value, json};
 use std::convert::TryFrom;
 use tyrum_memory::{MemoryDal, NewEpisodicEvent, NewFact};
@@ -16,6 +16,12 @@ use uuid::Uuid;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn mock_book_call_plan_creates_audit_and_memory_artifacts() -> Result<()> {
+    if !docker_available() {
+        eprintln!(
+            "skipping mock_book_call_plan_creates_audit_and_memory_artifacts: docker unavailable"
+        );
+        return Ok(());
+    }
     let postgres = TestPostgres::start()
         .await
         .context("start postgres fixture")?;

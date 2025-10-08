@@ -21,7 +21,11 @@ use tyrum_shared::{
 };
 use tyrum_wallet::Thresholds;
 
-use common::{policy::mock_policy, postgres::TestPostgres, wallet::start_wallet_stub};
+use common::{
+    policy::mock_policy,
+    postgres::{TestPostgres, docker_available},
+    wallet::start_wallet_stub,
+};
 
 fn spend_request(amount_minor_units: u64) -> PlanRequest {
     PlanRequest {
@@ -122,6 +126,10 @@ async fn planner_state() -> (
 
 #[tokio::test]
 async fn wallet_authorization_approve_returns_success() {
+    if !docker_available() {
+        eprintln!("skipping wallet_authorization_approve_returns_success: docker unavailable");
+        return;
+    }
     let (state, policy_server, wallet_server, postgres) = planner_state().await;
 
     let request = spend_request(7_500);
@@ -182,6 +190,10 @@ async fn wallet_authorization_approve_returns_success() {
 
 #[tokio::test]
 async fn wallet_authorization_escalates_plan() {
+    if !docker_available() {
+        eprintln!("skipping wallet_authorization_escalates_plan: docker unavailable");
+        return;
+    }
     let (state, policy_server, wallet_server, postgres) = planner_state().await;
 
     let request = spend_request(20_000);
@@ -247,6 +259,10 @@ async fn wallet_authorization_escalates_plan() {
 
 #[tokio::test]
 async fn wallet_authorization_denies_plan() {
+    if !docker_available() {
+        eprintln!("skipping wallet_authorization_denies_plan: docker unavailable");
+        return;
+    }
     let (state, policy_server, wallet_server, postgres) = planner_state().await;
 
     let request = spend_request(60_000);
