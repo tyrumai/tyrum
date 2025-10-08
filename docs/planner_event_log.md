@@ -57,3 +57,14 @@ validation of step indices. They run as part of `cargo test --all --all-targets`
   enforcement without revealing raw spend amounts or card metadata.
 - Use `cargo test -p tyrum-planner policy_denial` to run the regression harness that exercises the
   denial flow and ensures both the planner response and audit payloads include the reason string.
+
+## Troubleshooting Executor Failures
+- Executor and postcondition faults raise `PlanFailureReason::ExecutorFailed` with the failing
+  `step_index` so responders can identify which primitive stalled.
+- Planner responses surface the same detail string, while the event log writes a `failure` outcome
+  block containing the error `code`, sanitized `detail`, and `retryable` flag for downstream replay.
+- Inspect the audit row with `SELECT outcome FROM planner_events WHERE plan_id = ?` to confirm the
+  failure metadata propagated end-to-end; the `code` should match the wire error (`internal` or
+  `executor_unavailable`).
+- Run `cargo test -p tyrum-planner failure_propagation` to exercise the regression harness that asserts
+  executor failures keep the `step_index` and detail intact across planner surfaces.
