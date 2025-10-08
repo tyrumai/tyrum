@@ -74,9 +74,14 @@ impl WatcherProcessorConfig {
     }
 
     /// Overrides the maximum number of messages fetched per batch.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `max_batch` is zero.
     #[must_use]
     pub fn with_max_batch(mut self, max_batch: usize) -> Self {
-        self.max_batch = max_batch.max(1);
+        assert!(max_batch > 0, "max_batch must be greater than zero");
+        self.max_batch = max_batch;
         self
     }
 
