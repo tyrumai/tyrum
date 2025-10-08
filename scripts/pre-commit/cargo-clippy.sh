@@ -26,4 +26,4 @@ if grep -Eq '"packages"[[:space:]]*:[[:space:]]*\[[[:space:]]*\]' "$temp_metadat
   exit 0
 fi
 
-cargo clippy --all-targets --all-features -- -D warnings
+cargo clippy --all-targets --all-features -- -D warnings -D clippy::cognitive_complexity -D clippy::unwrap_used -D clippy::expect_used

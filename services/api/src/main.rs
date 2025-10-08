@@ -1,5 +1,7 @@
 use std::{collections::HashMap, env, net::SocketAddr};
 
+use anyhow::{Context, Result, anyhow};
+
 use tyrum_api::{
     account_linking::AccountLinkingRepository,
     ingress::{IngressRepository, IngressRepositoryError},
@@ -494,40 +496,41 @@ fn sanitize_opt(value: Option<String>) -> Option<String> {
 }
 
 #[tokio::main]
-async fn main() {
-    let _telemetry = TelemetryGuard::install("tyrum-api").expect("failed to initialize telemetry");
+async fn main() -> Result<()> {
+    let _telemetry = TelemetryGuard::install("tyrum-api")
+        .map_err(|err| anyhow!("failed to initialize telemetry: {err}"))?;
 
     let bind_addr: SocketAddr = env::var("API_BIND_ADDR")
         .unwrap_or_else(|_| DEFAULT_BIND_ADDR.to_string())
         .parse()
-        .expect("invalid API_BIND_ADDR");
+        .context("invalid API_BIND_ADDR")?;
 
     let database_url =
         env::var("DATABASE_URL").unwrap_or_else(|_| DEFAULT_DATABASE_URL.to_string());
 
     let waitlist = WaitlistRepository::connect(&database_url)
         .await
-        .expect("failed to connect to Postgres");
+        .context("failed to connect to Postgres")?;
     waitlist
         .migrate()
         .await
-        .expect("failed to run waitlist migrations");
+        .context("failed to run waitlist migrations")?;
 
     if matches!(
         env::var("RUN_MIGRATIONS_ONLY"),
         Ok(value) if matches!(value.as_str(), "1" | "true" | "TRUE" | "True")
     ) {
         tracing::info!("database migrations completed; exiting early per RUN_MIGRATIONS_ONLY");
-        return;
+        return Ok(());
     }
 
     let account_linking = AccountLinkingRepository::new(waitlist.pool().clone());
     let ingress = IngressRepository::new(waitlist.pool().clone());
 
     let telegram_secret =
-        env::var("TELEGRAM_WEBHOOK_SECRET").expect("TELEGRAM_WEBHOOK_SECRET must be set");
+        env::var("TELEGRAM_WEBHOOK_SECRET").context("TELEGRAM_WEBHOOK_SECRET must be set")?;
     let telegram = telegram::TelegramWebhookVerifier::new(telegram_secret)
-        .expect("invalid telegram webhook secret");
+        .context("invalid telegram webhook secret")?;
 
     let app = build_router(AppState {
         waitlist,
@@ -537,13 +540,20 @@ async fn main() {
     });
 
     tracing::info!("listening on {}", bind_addr);
-    axum::serve(tokio::net::TcpListener::bind(bind_addr).await.unwrap(), app)
+    let listener = tokio::net::TcpListener::bind(bind_addr)
         .await
-        .expect("server exited unexpectedly");
+        .context("failed to bind API socket")?;
+    axum::serve(listener, app)
+        .await
+        .context("server exited unexpectedly")?;
+
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::expect_used, clippy::unwrap_used)]
+
     use super::{
         ACCOUNT_LINKING_ROUTE, AppState, PLACEHOLDER_INTEGRATIONS, PORTAL_ACCOUNT_ID,
         TELEGRAM_WEBHOOK_ROUTE, WAITLIST_ROUTE, build_router, sanitize_opt,

@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+
 use std::{env, path::Path, process::Stdio};
 
 use serde_json::{Map as JsonMap, Value, json};

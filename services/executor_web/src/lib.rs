@@ -172,6 +172,7 @@ pub async fn execute_web_action(action: &ActionPrimitive) -> Result<WebActionOut
     .await
 }
 
+#[allow(clippy::cognitive_complexity)]
 async fn execute_with_retry<F, Fut, T>(context: &AttemptContext, mut operation: F) -> Result<T>
 where
     F: FnMut(u32) -> Fut,
@@ -237,6 +238,7 @@ fn is_transient(err: &WebExecutorError) -> bool {
     }
 }
 
+#[allow(clippy::cognitive_complexity)]
 async fn run_single_attempt(target: Url, options: WebActionOptions) -> Result<WebActionOutcome> {
     let playwright = Playwright::initialize().await?;
     let (browser, browser_flavor) = launch_browser(&playwright).await?;
@@ -670,6 +672,8 @@ async fn identify_sensitive_fields(
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::expect_used, clippy::unwrap_used)]
+
     use super::*;
     use once_cell::sync::Lazy;
     use opentelemetry::{Value, global};

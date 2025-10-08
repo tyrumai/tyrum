@@ -400,6 +400,7 @@ fn discovery_request_for(request: &PlanRequest) -> DiscoveryRequest {
     }
 }
 
+#[allow(clippy::cognitive_complexity)]
 fn log_discovery_outcome(request: &DiscoveryRequest, outcome: &DiscoveryOutcome) {
     let subject = request.sanitized_subject();
     match outcome {

@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use serde_json::Value;
 use sqlx::{PgPool, Row, postgres::PgPoolOptions};

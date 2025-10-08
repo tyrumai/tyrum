@@ -17,6 +17,7 @@ tokio = { version = "1.43", features = ["full"] }
 tracing = "0.1"
 tracing-opentelemetry = "0.32"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "registry"] }
+anyhow = "1"
 
 [dev-dependencies]
 axum = { version = "0.7", features = ["json"] }

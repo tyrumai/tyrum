@@ -200,6 +200,8 @@ pub enum PlanErrorCode {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::expect_used, clippy::unwrap_used)]
+
     use super::*;
 
     use chrono::Utc;
@@ -280,11 +282,21 @@ mod tests {
             },
         };
 
-        let json = serde_json::to_value(&response).expect("serialize plan response");
+        let json = match serde_json::to_value(&response) {
+            Ok(value) => value,
+            Err(err) => panic!("serialize plan response failed: {err}"),
+        };
         assert_eq!(json["status"], "success");
-        assert_eq!(json["steps"].as_array().unwrap().len(), 1);
+        let step_count = match json["steps"].as_array() {
+            Some(steps) => steps.len(),
+            None => panic!("steps array missing"),
+        };
+        assert_eq!(step_count, 1);
 
-        let round_trip: PlanResponse = serde_json::from_value(json).expect("deserialize");
+        let round_trip: PlanResponse = match serde_json::from_value(json) {
+            Ok(response) => response,
+            Err(err) => panic!("deserialize plan response failed: {err}"),
+        };
         assert_eq!(round_trip, response);
     }
 
@@ -313,12 +325,18 @@ mod tests {
             },
         };
 
-        let json = serde_json::to_value(&response).expect("serialize plan response");
+        let json = match serde_json::to_value(&response) {
+            Ok(value) => value,
+            Err(err) => panic!("serialize plan response failed: {err}"),
+        };
         assert_eq!(json["status"], "escalate");
         assert_eq!(json["escalation"]["step_index"], 2);
         assert_eq!(json["escalation"]["action"]["type"], "Confirm");
 
-        let round_trip: PlanResponse = serde_json::from_value(json).expect("deserialize");
+        let round_trip: PlanResponse = match serde_json::from_value(json) {
+            Ok(response) => response,
+            Err(err) => panic!("deserialize plan response failed: {err}"),
+        };
         assert_eq!(round_trip, response);
     }
 
@@ -339,12 +357,18 @@ mod tests {
             },
         };
 
-        let json = serde_json::to_value(&response).expect("serialize plan response");
+        let json = match serde_json::to_value(&response) {
+            Ok(value) => value,
+            Err(err) => panic!("serialize plan response failed: {err}"),
+        };
         assert_eq!(json["status"], "failure");
         assert_eq!(json["error"]["code"], "policy_denied");
         assert_eq!(json["error"]["retryable"], false);
 
-        let round_trip: PlanResponse = serde_json::from_value(json).expect("deserialize");
+        let round_trip: PlanResponse = match serde_json::from_value(json) {
+            Ok(response) => response,
+            Err(err) => panic!("deserialize plan response failed: {err}"),
+        };
         assert_eq!(round_trip, response);
     }
 }

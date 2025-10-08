@@ -1,21 +1,27 @@
 use std::{env, net::SocketAddr};
 
+use anyhow::{Context, Result, anyhow};
 use tyrum_policy::{DEFAULT_BIND_ADDR, build_router, telemetry::TelemetryGuard};
 
 #[tokio::main]
-async fn main() {
-    let _telemetry =
-        TelemetryGuard::install("tyrum-policy").expect("failed to initialize telemetry");
+async fn main() -> Result<()> {
+    let _telemetry = TelemetryGuard::install("tyrum-policy")
+        .map_err(|err| anyhow!("failed to initialize telemetry: {err}"))?;
 
     let bind_addr: SocketAddr = env::var("POLICY_BIND_ADDR")
         .unwrap_or_else(|_| DEFAULT_BIND_ADDR.to_string())
         .parse()
-        .expect("invalid POLICY_BIND_ADDR");
+        .context("invalid POLICY_BIND_ADDR")?;
 
     let app = build_router();
 
     tracing::info!("policy service listening on {}", bind_addr);
-    axum::serve(tokio::net::TcpListener::bind(bind_addr).await.unwrap(), app)
+    let listener = tokio::net::TcpListener::bind(bind_addr)
         .await
-        .expect("policy server exited unexpectedly");
+        .context("failed to bind policy listener")?;
+    axum::serve(listener, app)
+        .await
+        .context("policy server exited unexpectedly")?;
+
+    Ok(())
 }

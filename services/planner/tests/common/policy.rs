@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+
 use axum::{Json, Router, routing::post};
 use reqwest::Url;
 use tokio::{net::TcpListener, task::JoinHandle};

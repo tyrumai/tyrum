@@ -231,13 +231,27 @@ fn to_datetime(timestamp: i64) -> Result<DateTime<Utc>, TelegramNormalizationErr
 #[cfg(test)]
 mod telegram_normalization {
     use super::*;
-    use chrono::{TimeZone, Utc};
+    use chrono::{DateTime, TimeZone, Utc};
     use pretty_assertions::assert_eq;
+
+    fn normalized(payload: &[u8]) -> NormalizedThreadMessage {
+        match normalize_update(payload) {
+            Ok(update) => update,
+            Err(err) => panic!("expected successful normalization: {err}"),
+        }
+    }
+
+    fn timestamp_from_parts(seconds: i64) -> DateTime<Utc> {
+        match Utc.timestamp_opt(seconds, 0).single() {
+            Some(timestamp) => timestamp,
+            None => panic!("timestamp {seconds} produced invalid datetime"),
+        }
+    }
 
     #[test]
     fn normalizes_text_message() {
         let payload = include_bytes!("../../tests/fixtures/telegram/text_message.json");
-        let update = normalize_update(payload).expect("normalize text message");
+        let update = normalized(payload);
 
         let expected_thread = NormalizedThread {
             id: "987654321".into(),
@@ -263,7 +277,7 @@ mod telegram_normalization {
                 username: Some("rons".into()),
                 language_code: Some("en".into()),
             }),
-            timestamp: Utc.timestamp_opt(1_710_000_000, 0).single().unwrap(),
+            timestamp: timestamp_from_parts(1_710_000_000),
             edited_timestamp: None,
             pii_fields: vec![
                 PiiField::MessageText,
@@ -280,11 +294,11 @@ mod telegram_normalization {
     #[test]
     fn normalizes_edited_message() {
         let payload = include_bytes!("../../tests/fixtures/telegram/edited_message.json");
-        let update = normalize_update(payload).expect("normalize edited message");
+        let update = normalized(payload);
 
         assert_eq!(
             update.message.edited_timestamp,
-            Some(Utc.timestamp_opt(1_710_000_600, 0).single().unwrap())
+            Some(timestamp_from_parts(1_710_000_600))
         );
         assert!(matches!(
             update.message.content,
@@ -296,7 +310,7 @@ mod telegram_normalization {
     #[test]
     fn normalizes_media_message() {
         let payload = include_bytes!("../../tests/fixtures/telegram/media_message.json");
-        let update = normalize_update(payload).expect("normalize media message");
+        let update = normalized(payload);
 
         assert_eq!(update.thread.kind, ThreadKind::Supergroup);
         assert!(update.thread.pii_fields.contains(&PiiField::ThreadTitle));
@@ -323,7 +337,7 @@ mod telegram_normalization {
     #[test]
     fn normalizes_unknown_media_with_caption() {
         let payload = include_bytes!("../../tests/fixtures/telegram/unknown_media_caption.json");
-        let update = normalize_update(payload).expect("normalize unknown media");
+        let update = normalized(payload);
 
         match update.message.content {
             MessageContent::MediaPlaceholder {
@@ -347,7 +361,7 @@ mod telegram_normalization {
     #[test]
     fn normalizes_unknown_payload_without_caption() {
         let payload = include_bytes!("../../tests/fixtures/telegram/contact_message.json");
-        let update = normalize_update(payload).expect("normalize contact payload");
+        let update = normalized(payload);
 
         match update.message.content {
             MessageContent::MediaPlaceholder {
@@ -378,7 +392,10 @@ mod telegram_normalization {
     #[test]
     fn rejects_unknown_payload() {
         let payload = br#"{"update_id": 1}"#;
-        let err = normalize_update(payload).expect_err("unsupported payload");
+        let err = match normalize_update(payload) {
+            Ok(_) => panic!("expected unsupported payload"),
+            Err(err) => err,
+        };
         assert!(matches!(err, TelegramNormalizationError::MissingMessage));
     }
 }

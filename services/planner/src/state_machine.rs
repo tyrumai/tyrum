@@ -271,6 +271,7 @@ impl PlanStateMachine {
         }
     }
 
+    #[allow(clippy::cognitive_complexity)]
     fn emit_failure_log(&self, event: &PlanEvent) {
         use tracing::{error, warn};
 
@@ -328,6 +329,8 @@ impl fmt::Display for PlanFailureReason {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::expect_used, clippy::unwrap_used)]
+
     use super::*;
     use serde_json::Value;
     use std::{
