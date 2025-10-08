@@ -14,6 +14,11 @@ pub struct PolicyClient {
 
 impl PolicyClient {
     /// Construct a policy client targeting the provided base URL.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the underlying HTTP client cannot be constructed.
+    #[must_use]
     pub fn new(base_url: Url) -> Self {
         let http = match Client::builder().user_agent("tyrum-planner").build() {
             Ok(client) => client,
@@ -24,6 +29,11 @@ impl PolicyClient {
     }
 
     /// Execute a policy check for the supplied plan request.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`PolicyClientError`] when URL construction, transport, or decoding fails or
+    /// when the policy gate returns a non-success HTTP status.
     pub async fn check(&self, request: &PlanRequest) -> Result<PolicyDecision, PolicyClientError> {
         let payload = PolicyCheckPayload::from_plan_request(request);
         let url = self

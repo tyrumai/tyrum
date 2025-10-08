@@ -20,7 +20,7 @@ pub enum MemoryError {
 
 impl MemoryError {
     fn not_found(entity: &'static str, id: impl fmt::Display) -> Self {
-        MemoryError::NotFound {
+        Self::NotFound {
             entity,
             id: id.to_string(),
         }
@@ -35,6 +35,10 @@ pub struct MemoryDal {
 
 impl MemoryDal {
     /// Establish a new connection pool and wrap it in a [`MemoryDal`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MemoryError::Database`] if establishing the connection pool fails.
     pub async fn connect(database_url: &str) -> Result<Self, MemoryError> {
         let pool = PgPoolOptions::new()
             .max_connections(5)
@@ -44,17 +48,24 @@ impl MemoryDal {
     }
 
     /// Construct a DAL from an existing [`PgPool`].
+    #[must_use]
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 
     /// Access the underlying [`PgPool`].
+    #[must_use]
     pub fn pool(&self) -> &PgPool {
         &self.pool
     }
 
     // --- Fact operations ---------------------------------------------------
 
+    /// Persist a new fact for the provided subject.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MemoryError::Database`] if the insert query fails.
     pub async fn create_fact(&self, new_fact: NewFact) -> Result<Fact, MemoryError> {
         let record = sqlx::query_as::<_, Fact>(
             r#"
@@ -82,6 +93,11 @@ impl MemoryDal {
         Ok(record)
     }
 
+    /// Fetch a fact by identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MemoryError::Database`] if the select query fails.
     pub async fn get_fact(&self, fact_id: i64) -> Result<Option<Fact>, MemoryError> {
         let record = sqlx::query_as::<_, Fact>(
             r#"
@@ -97,6 +113,11 @@ impl MemoryDal {
         Ok(record)
     }
 
+    /// List facts for the given subject ordered by recency.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MemoryError::Database`] if the select query fails.
     pub async fn list_facts_for_subject(&self, subject_id: Uuid) -> Result<Vec<Fact>, MemoryError> {
         let records = sqlx::query_as::<_, Fact>(
             r#"
@@ -113,6 +134,12 @@ impl MemoryDal {
         Ok(records)
     }
 
+    /// Update an existing fact.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MemoryError::Database`] if the update query fails or [`MemoryError::NotFound`]
+    /// if no fact with the provided identifier exists.
     pub async fn update_fact(
         &self,
         fact_id: i64,
@@ -140,6 +167,12 @@ impl MemoryDal {
         record.ok_or_else(|| MemoryError::not_found("fact", fact_id))
     }
 
+    /// Delete a fact by identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MemoryError::Database`] if the delete query fails or [`MemoryError::NotFound`]
+    /// if no fact with the provided identifier exists.
     pub async fn delete_fact(&self, fact_id: i64) -> Result<(), MemoryError> {
         let rows = sqlx::query("DELETE FROM facts WHERE id = $1")
             .bind(fact_id)
@@ -155,6 +188,11 @@ impl MemoryDal {
 
     // --- Episodic event operations ----------------------------------------
 
+    /// Persist a new episodic event for the provided subject.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MemoryError::Database`] if the insert query fails.
     pub async fn create_episodic_event(
         &self,
         new_event: NewEpisodicEvent,
@@ -185,6 +223,11 @@ impl MemoryDal {
         Ok(record)
     }
 
+    /// Fetch an episodic event by its stable identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MemoryError::Database`] if the select query fails.
     pub async fn get_episodic_event(
         &self,
         event_id: Uuid,
@@ -203,6 +246,11 @@ impl MemoryDal {
         Ok(record)
     }
 
+    /// List episodic events for the given subject ordered by recency.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MemoryError::Database`] if the select query fails.
     pub async fn list_episodic_events_for_subject(
         &self,
         subject_id: Uuid,
@@ -222,6 +270,12 @@ impl MemoryDal {
         Ok(records)
     }
 
+    /// Update an existing episodic event.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MemoryError::Database`] if the update query fails or
+    /// [`MemoryError::NotFound`] if no event with the provided identifier exists.
     pub async fn update_episodic_event(
         &self,
         event_id: Uuid,
@@ -249,6 +303,12 @@ impl MemoryDal {
         record.ok_or_else(|| MemoryError::not_found("episodic_event", event_id))
     }
 
+    /// Delete an episodic event by identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MemoryError::Database`] if the delete query fails or
+    /// [`MemoryError::NotFound`] if no event with the provided identifier exists.
     pub async fn delete_episodic_event(&self, event_id: Uuid) -> Result<(), MemoryError> {
         let rows = sqlx::query("DELETE FROM episodic_events WHERE event_id = $1")
             .bind(event_id)
@@ -264,6 +324,11 @@ impl MemoryDal {
 
     // --- Capability memory operations -------------------------------------
 
+    /// Persist a new capability memory record.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MemoryError::Database`] if the insert query fails.
     pub async fn create_capability_memory(
         &self,
         new_memory: NewCapabilityMemory,
@@ -302,6 +367,11 @@ impl MemoryDal {
         Ok(record)
     }
 
+    /// Fetch a capability memory by its numeric identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MemoryError::Database`] if the select query fails.
     pub async fn get_capability_memory(
         &self,
         memory_id: i64,
@@ -322,6 +392,11 @@ impl MemoryDal {
         Ok(record)
     }
 
+    /// Fetch the most recent capability memory for a specific planner flow.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MemoryError::Database`] if the select query fails.
     pub async fn get_capability_memory_for_flow(
         &self,
         subject_id: Uuid,
@@ -351,6 +426,11 @@ impl MemoryDal {
         Ok(record)
     }
 
+    /// List capability memories for a subject ordered by recency.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MemoryError::Database`] if the select query fails.
     pub async fn list_capability_memories_for_subject(
         &self,
         subject_id: Uuid,
@@ -372,6 +452,11 @@ impl MemoryDal {
         Ok(records)
     }
 
+    /// List capability memories for a subject filtered by capability type.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MemoryError::Database`] if the select query fails.
     pub async fn list_capability_memories_for_subject_and_type(
         &self,
         subject_id: Uuid,
@@ -396,6 +481,12 @@ impl MemoryDal {
         Ok(records)
     }
 
+    /// Update capability memory metadata.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MemoryError::Database`] if the update query fails or
+    /// [`MemoryError::NotFound`] if no capability memory with the provided identifier exists.
     pub async fn update_capability_memory(
         &self,
         memory_id: i64,
@@ -428,6 +519,12 @@ impl MemoryDal {
         record.ok_or_else(|| MemoryError::not_found("capability_memory", memory_id))
     }
 
+    /// Delete a capability memory by identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MemoryError::Database`] if the delete query fails or
+    /// [`MemoryError::NotFound`] if no capability memory with the provided identifier exists.
     pub async fn delete_capability_memory(&self, memory_id: i64) -> Result<(), MemoryError> {
         let rows = sqlx::query("DELETE FROM capability_memories WHERE id = $1")
             .bind(memory_id)
@@ -443,6 +540,11 @@ impl MemoryDal {
 
     // --- Vector embedding operations --------------------------------------
 
+    /// Persist a new vector embedding for a subject.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MemoryError::Database`] if the insert query fails.
     pub async fn create_vector_embedding(
         &self,
         new_embedding: NewVectorEmbedding,
@@ -475,6 +577,11 @@ impl MemoryDal {
         Ok(record)
     }
 
+    /// Fetch a vector embedding by identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MemoryError::Database`] if the select query fails.
     pub async fn get_vector_embedding(
         &self,
         embedding_id: Uuid,
@@ -495,6 +602,11 @@ impl MemoryDal {
         Ok(record)
     }
 
+    /// List vector embeddings for the given subject ordered by recency.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MemoryError::Database`] if the select query fails.
     pub async fn list_vector_embeddings_for_subject(
         &self,
         subject_id: Uuid,
@@ -516,6 +628,12 @@ impl MemoryDal {
         Ok(records)
     }
 
+    /// Update an existing vector embedding.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MemoryError::Database`] if the update query fails or
+    /// [`MemoryError::NotFound`] if no embedding with the provided identifier exists.
     pub async fn update_vector_embedding(
         &self,
         embedding_id: Uuid,
@@ -545,6 +663,12 @@ impl MemoryDal {
         record.ok_or_else(|| MemoryError::not_found("vector_embedding", embedding_id))
     }
 
+    /// Delete a vector embedding by identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MemoryError::Database`] if the delete query fails or
+    /// [`MemoryError::NotFound`] if no embedding with the provided identifier exists.
     pub async fn delete_vector_embedding(&self, embedding_id: Uuid) -> Result<(), MemoryError> {
         let rows = sqlx::query("DELETE FROM vector_embeddings WHERE embedding_id = $1")
             .bind(embedding_id)

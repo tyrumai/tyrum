@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -56,7 +57,10 @@ where
         retry_after: Some(delay),
     } = &outcome
     {
-        let millis = delay.as_millis().min(i64::MAX as u128) as i64;
+        let millis = match i64::try_from(delay.as_millis()) {
+            Ok(value) => value,
+            Err(_) => i64::MAX,
+        };
         span.record("retry_after_ms", millis);
     }
 

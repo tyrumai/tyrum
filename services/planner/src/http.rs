@@ -915,7 +915,7 @@ enum PlanOutcomeAudit {
 impl From<&PlanOutcome> for PlanOutcomeAudit {
     fn from(outcome: &PlanOutcome) -> Self {
         match outcome {
-            PlanOutcome::Success { steps, summary } => PlanOutcomeAudit::Success {
+            PlanOutcome::Success { steps, summary } => Self::Success {
                 step_count: steps.len(),
                 steps: steps
                     .iter()
@@ -927,7 +927,7 @@ impl From<&PlanOutcome> for PlanOutcomeAudit {
                     .as_ref()
                     .is_some_and(|synopsis| !synopsis.is_empty()),
             },
-            PlanOutcome::Escalate { escalation } => PlanOutcomeAudit::Escalate {
+            PlanOutcome::Escalate { escalation } => Self::Escalate {
                 step_index: escalation.step_index,
                 action_kind: escalation.action.kind,
                 arg_keys: escalation.action.args.keys().cloned().collect(),
@@ -936,7 +936,7 @@ impl From<&PlanOutcome> for PlanOutcomeAudit {
                     .as_ref()
                     .is_some_and(|value| !value.is_empty()),
             },
-            PlanOutcome::Failure { error } => PlanOutcomeAudit::Failure {
+            PlanOutcome::Failure { error } => Self::Failure {
                 code: error.code,
                 retryable: error.retryable,
                 detail: error

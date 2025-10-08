@@ -17,6 +17,7 @@ pub struct DiscoveryRequest {
 
 impl DiscoveryRequest {
     /// Returns a human-readable but sanitized subject for logging.
+    #[must_use]
     pub fn sanitized_subject(&self) -> &str {
         &self.subject
     }
@@ -42,14 +43,14 @@ pub enum DiscoveryOutcome {
 
 impl DiscoveryOutcome {
     fn continues(&self) -> bool {
-        matches!(self, DiscoveryOutcome::NotFound)
+        matches!(self, Self::NotFound)
     }
 
     pub(crate) fn label(&self) -> &'static str {
         match self {
-            DiscoveryOutcome::Found(_) => "found",
-            DiscoveryOutcome::NotFound => "not_found",
-            DiscoveryOutcome::RetryLater { .. } => "retry_later",
+            Self::Found(_) => "found",
+            Self::NotFound => "not_found",
+            Self::RetryLater { .. } => "retry_later",
         }
     }
 }
@@ -78,9 +79,9 @@ pub enum DiscoveryStrategy {
 impl DiscoveryStrategy {
     pub(crate) fn as_str(&self) -> &'static str {
         match self {
-            DiscoveryStrategy::Mcp => "mcp",
-            DiscoveryStrategy::StructuredApi => "structured_api",
-            DiscoveryStrategy::GenericHttp => "generic_http",
+            Self::Mcp => "mcp",
+            Self::StructuredApi => "structured_api",
+            Self::GenericHttp => "generic_http",
         }
     }
 }
@@ -123,6 +124,7 @@ pub struct DefaultDiscoveryPipeline;
 impl DefaultDiscoveryPipeline {
     /// Creates a pipeline stub useful for tests or planner scaffolding. All
     /// strategies currently return `NotFound` while the executor wiring lands.
+    #[must_use]
     pub fn new() -> Self {
         Self
     }

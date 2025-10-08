@@ -119,6 +119,7 @@ pub fn build_router(thresholds: Thresholds) -> Router<()> {
         .with_state::<()>(Arc::new(thresholds))
 }
 
+#[must_use]
 pub fn authorize_with_thresholds(
     payload: SpendAuthorizeRequest,
     thresholds: Thresholds,
