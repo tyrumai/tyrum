@@ -14,6 +14,9 @@ use crate::{config::JetStreamConfig, error::JetStreamError};
 
 type JetStreamStream = JetStream<StreamInfo>;
 
+const DEFAULT_MAX_MESSAGES_PER_SUBJECT: i64 = 512;
+const DEFAULT_STREAM_MAX_AGE_SECS: u64 = 3_600;
+
 /// Handles JetStream connectivity and sample publish/consume flows for watchers.
 #[derive(Clone)]
 pub struct JetStreamClient {
@@ -112,6 +115,35 @@ impl JetStreamClient {
         Ok(())
     }
 
+    /// Publishes a payload to an arbitrary watcher subject.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`JetStreamError::Stream`] if the watcher stream cannot be created
+    /// or [`JetStreamError::Publish`] when JetStream rejects or fails to acknowledge the message.
+    pub async fn publish(
+        &self,
+        subject: impl Into<String>,
+        payload: &[u8],
+    ) -> Result<(), JetStreamError> {
+        self.ensure_stream().await?;
+
+        let subject = subject.into();
+        let ack = self
+            .context
+            .publish(subject.clone(), payload.to_vec().into())
+            .await
+            .map_err(|source| JetStreamError::Publish {
+                subject: subject.clone(),
+                source,
+            })?;
+
+        ack.await
+            .map_err(|source| JetStreamError::Publish { subject, source })?;
+
+        Ok(())
+    }
+
     /// Attempts to consume one sample event, acknowledging it back to JetStream when received.
     ///
     /// # Errors
@@ -162,9 +194,25 @@ impl JetStreamClient {
     }
 
     async fn ensure_sample_consumer(&self) -> Result<PullConsumer, JetStreamError> {
-        let stream = self.stream().await?;
         let consumer_name = self.config.sample_consumer().to_string();
         let subject = self.config.sample_subject().to_string();
+        self.pull_consumer(consumer_name, subject).await
+    }
+
+    /// Creates or retrieves the configured pull consumer with the supplied durable name and subject filter.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`JetStreamError::Stream`] when the watcher stream cannot be provisioned
+    /// or [`JetStreamError::Consumer`] if the durable consumer cannot be created.
+    pub async fn pull_consumer(
+        &self,
+        durable_name: impl Into<String>,
+        filter_subject: impl Into<String>,
+    ) -> Result<PullConsumer, JetStreamError> {
+        let stream = self.stream().await?;
+        let consumer_name = durable_name.into();
+        let subject = filter_subject.into();
 
         stream
             .get_or_create_consumer(
@@ -183,16 +231,32 @@ impl JetStreamClient {
             })
     }
 
+    /// Returns the immutable JetStream configuration backing this client.
+    #[must_use]
+    pub fn config(&self) -> &JetStreamConfig {
+        self.config.as_ref()
+    }
+
     async fn stream(&self) -> Result<JetStreamStream, JetStreamError> {
         let stream_name = self.config.stream_name().to_string();
         let subjects = vec![format!("{}.*", self.config.subject_prefix())];
 
+        let mut config = StreamConfig {
+            name: stream_name.clone(),
+            subjects,
+            ..StreamConfig::default()
+        };
+
+        if config.max_messages_per_subject == 0 {
+            config.max_messages_per_subject = DEFAULT_MAX_MESSAGES_PER_SUBJECT;
+        }
+
+        if config.max_age.is_zero() {
+            config.max_age = Duration::from_secs(DEFAULT_STREAM_MAX_AGE_SECS);
+        }
+
         self.context
-            .get_or_create_stream(StreamConfig {
-                name: stream_name.clone(),
-                subjects,
-                ..StreamConfig::default()
-            })
+            .get_or_create_stream(config)
             .await
             .map_err(|source| JetStreamError::Stream {
                 stream: stream_name,

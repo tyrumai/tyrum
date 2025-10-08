@@ -102,3 +102,63 @@ pub enum JetStreamError {
         source: async_nats::jetstream::context::AccountError,
     },
 }
+
+/// Errors encountered when invoking the planner service.
+#[derive(Debug, Error)]
+pub enum PlannerClientError {
+    /// The configured planner endpoint could not be parsed.
+    #[error("invalid planner endpoint `{endpoint}`: {reason}")]
+    InvalidUrl {
+        /// Planner endpoint that failed validation.
+        endpoint: String,
+        /// Cause describing why the URL was rejected.
+        reason: String,
+    },
+    /// Making an HTTP request to the planner failed.
+    #[error("planner request failed")]
+    Request {
+        /// Underlying reqwest error.
+        #[source]
+        source: reqwest::Error,
+    },
+    /// Constructing the planner HTTP client failed.
+    #[error("failed to construct planner HTTP client")]
+    BuildClient {
+        /// Underlying reqwest error.
+        #[source]
+        source: reqwest::Error,
+    },
+    /// Planner responded with a non-success status code.
+    #[error("planner returned unexpected status {status}: {body}")]
+    UnexpectedStatus {
+        /// HTTP status reported by the planner.
+        status: reqwest::StatusCode,
+        /// Body returned in the unexpected response.
+        body: String,
+    },
+    /// Decoding the planner response payload failed.
+    #[error("failed to decode planner response")]
+    Decode {
+        /// Underlying decode error.
+        #[source]
+        source: reqwest::Error,
+    },
+}
+
+/// Errors surfaced while processing watcher events.
+#[derive(Debug, Error)]
+pub enum WatcherProcessorError {
+    /// JetStream operations failed for the watcher processor.
+    #[error(transparent)]
+    JetStream(#[from] JetStreamError),
+    /// Payload parsing failed when deserializing a watcher event.
+    #[error("failed to deserialize watcher event payload")]
+    Deserialize {
+        /// Serde error describing the parse failure.
+        #[source]
+        source: serde_json::Error,
+    },
+    /// Planner invocation failed.
+    #[error(transparent)]
+    Planner(#[from] PlannerClientError),
+}

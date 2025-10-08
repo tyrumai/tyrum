@@ -92,6 +92,25 @@ services:
       retries: 5
       start_period: 10s
 
+  watchers-processor:
+    build:
+      context: ..
+      dockerfile: Dockerfile.watchers
+    image: tyrum/watchers:local
+    environment:
+      RUST_LOG: info,tyrum_watchers=info
+      WATCHERS_JETSTREAM_URL: nats://nats:4222
+      WATCHERS_JETSTREAM_STREAM: watchers_events
+      WATCHERS_JETSTREAM_SUBJECT_PREFIX: watchers.events
+      WATCHERS_JETSTREAM_PROCESSOR_CONSUMER: watchers_local_processor
+      WATCHERS_PLANNER_URL: http://planner:8083/plan
+      WATCHERS_PROCESSOR_FETCH_TIMEOUT_MS: 500
+    depends_on:
+      nats:
+        condition: service_healthy
+      planner:
+        condition: service_healthy
+
   executor-web:
     build:
       context: ..

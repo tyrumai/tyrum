@@ -10,12 +10,15 @@ pub const STREAM_ENV: &str = "WATCHERS_JETSTREAM_STREAM";
 pub const SUBJECT_PREFIX_ENV: &str = "WATCHERS_JETSTREAM_SUBJECT_PREFIX";
 /// Environment variable overriding the durable consumer used by sample logic.
 pub const SAMPLE_CONSUMER_ENV: &str = "WATCHERS_JETSTREAM_SAMPLE_CONSUMER";
+/// Environment variable overriding the durable consumer used by the watcher processor.
+pub const PROCESSOR_CONSUMER_ENV: &str = "WATCHERS_JETSTREAM_PROCESSOR_CONSUMER";
 /// Environment variable overriding the client name reported to NATS.
 pub const CLIENT_NAME_ENV: &str = "WATCHERS_JETSTREAM_CLIENT_NAME";
 
 const DEFAULT_STREAM_NAME: &str = "watchers_events";
 const DEFAULT_SUBJECT_PREFIX: &str = "watchers.events";
 const DEFAULT_SAMPLE_CONSUMER: &str = "watchers_sample_consumer";
+const DEFAULT_PROCESSOR_CONSUMER: &str = "watchers_processor";
 const DEFAULT_CLIENT_NAME: &str = "tyrum-watchers";
 
 /// Runtime configuration required to connect to JetStream.
@@ -26,6 +29,7 @@ pub struct JetStreamConfig {
     pub(crate) subject_prefix: String,
     pub(crate) sample_subject: String,
     pub(crate) sample_consumer: String,
+    pub(crate) processor_consumer: String,
     pub(crate) client_name: String,
 }
 
@@ -41,6 +45,7 @@ impl JetStreamConfig {
         stream_name: impl Into<String>,
         subject_prefix: impl Into<String>,
         sample_consumer: impl Into<String>,
+        processor_consumer: impl Into<String>,
         client_name: impl Into<String>,
     ) -> Result<Self, JetStreamError> {
         let nats_url = nats_url.into();
@@ -53,6 +58,9 @@ impl JetStreamConfig {
         let sample_consumer = sample_consumer.into();
         validate_consumer_name(&sample_consumer)?;
 
+        let processor_consumer = processor_consumer.into();
+        validate_consumer_name(&processor_consumer)?;
+
         let client_name = client_name.into();
         let sample_subject = format!("{subject_prefix}.sample");
 
@@ -62,6 +70,7 @@ impl JetStreamConfig {
             subject_prefix,
             sample_subject,
             sample_consumer,
+            processor_consumer,
             client_name,
         })
     }
@@ -89,6 +98,10 @@ impl JetStreamConfig {
             env::var(SAMPLE_CONSUMER_ENV).unwrap_or_else(|_| DEFAULT_SAMPLE_CONSUMER.to_string());
         validate_consumer_name(&sample_consumer)?;
 
+        let processor_consumer = env::var(PROCESSOR_CONSUMER_ENV)
+            .unwrap_or_else(|_| DEFAULT_PROCESSOR_CONSUMER.to_string());
+        validate_consumer_name(&processor_consumer)?;
+
         let client_name =
             env::var(CLIENT_NAME_ENV).unwrap_or_else(|_| DEFAULT_CLIENT_NAME.to_string());
 
@@ -97,6 +110,7 @@ impl JetStreamConfig {
             stream_name,
             subject_prefix,
             sample_consumer,
+            processor_consumer,
             client_name,
         )
     }
@@ -129,6 +143,12 @@ impl JetStreamConfig {
     #[must_use]
     pub fn sample_consumer(&self) -> &str {
         &self.sample_consumer
+    }
+
+    /// Returns the durable consumer name used by the watcher processor.
+    #[must_use]
+    pub fn processor_consumer(&self) -> &str {
+        &self.processor_consumer
     }
 
     /// Returns the NATS client name that will be announced to the server.
