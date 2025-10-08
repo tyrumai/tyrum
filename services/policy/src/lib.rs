@@ -344,6 +344,8 @@ fn currency_minor_units(currency: &str) -> Option<u32> {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::expect_used, clippy::unwrap_used)]
+
     use super::*;
     use axum::{body::Body, http::Request};
     use http_body_util::BodyExt;

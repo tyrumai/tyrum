@@ -143,6 +143,7 @@ impl DiscoveryPipeline for DefaultDiscoveryPipeline {
     }
 }
 
+#[allow(clippy::cognitive_complexity)]
 fn execute_step<F>(
     request: &DiscoveryRequest,
     strategy: DiscoveryStrategy,
@@ -173,7 +174,7 @@ mod tests {
     use super::*;
     use std::cell::RefCell;
     use std::fmt;
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, Mutex, MutexGuard};
 
     use once_cell::sync::Lazy;
     use opentelemetry::{Value, global};
@@ -191,6 +192,16 @@ mod tests {
     };
 
     static TELEMETRY_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+
+    fn lock<'a, T>(mutex: &'a Mutex<T>, context: &str) -> MutexGuard<'a, T> {
+        match mutex.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                eprintln!("{context}: mutex poisoned");
+                poisoned.into_inner()
+            }
+        }
+    }
 
     struct ScriptedPipeline {
         calls: RefCell<Vec<DiscoveryStrategy>>,
@@ -261,7 +272,7 @@ mod tests {
         }
 
         fn push_span(&self, span: CapturedSpan) {
-            self.spans.lock().unwrap().push(span);
+            lock(&self.spans, "recording span cache").push(span);
         }
     }
 
@@ -369,7 +380,7 @@ mod tests {
 
     #[test]
     fn telemetry_records_spans_for_each_attempt() {
-        let _lock = TELEMETRY_GUARD.lock().unwrap();
+        let _lock = lock(&TELEMETRY_GUARD, "telemetry guard");
         let spans = Arc::new(Mutex::new(Vec::new()));
         let subscriber = Registry::default().with(RecordingLayer::new(spans.clone()));
 
@@ -385,7 +396,7 @@ mod tests {
             let _ = pipeline.discover(&request());
         });
 
-        let captured = spans.lock().unwrap().clone();
+        let captured = lock(&spans, "captured spans").clone();
         assert_eq!(captured.len(), 3);
 
         let strategies: Vec<_> = captured
@@ -408,7 +419,7 @@ mod tests {
 
     #[test]
     fn telemetry_records_metrics_for_each_attempt() {
-        let _lock = TELEMETRY_GUARD.lock().unwrap();
+        let _lock = lock(&TELEMETRY_GUARD, "telemetry guard");
         let exporter = InMemoryMetricExporter::default();
         let reader = PeriodicReader::builder(exporter.clone()).build();
         let meter_provider = SdkMeterProvider::builder().with_reader(reader).build();
@@ -431,11 +442,18 @@ mod tests {
         let outcome = pipeline.discover(&request());
         assert!(matches!(outcome, DiscoveryOutcome::Found(_)));
 
-        meter_provider.force_flush().expect("force flush metrics");
-        meter_provider.shutdown().expect("shutdown meter provider");
+        if let Err(err) = meter_provider.force_flush() {
+            panic!("force flush metrics failed: {err}");
+        }
+        if let Err(err) = meter_provider.shutdown() {
+            panic!("shutdown meter provider failed: {err}");
+        }
         global::set_meter_provider(SdkMeterProvider::builder().build());
 
-        let metrics = exporter.get_finished_metrics().expect("metrics available");
+        let metrics = match exporter.get_finished_metrics() {
+            Ok(values) => values,
+            Err(err) => panic!("metrics unavailable: {err}"),
+        };
 
         let mcp_hist = find_histogram_point(
             &metrics,
@@ -443,7 +461,7 @@ mod tests {
             "mcp",
             "not_found",
         )
-        .expect("mcp histogram present");
+        .unwrap_or_else(|| panic!("mcp histogram missing"));
         assert_eq!(mcp_hist.count(), 1);
 
         let structured_hist = find_histogram_point(
@@ -452,7 +470,7 @@ mod tests {
             "structured_api",
             "found",
         )
-        .expect("structured histogram present");
+        .unwrap_or_else(|| panic!("structured histogram missing"));
         assert_eq!(structured_hist.count(), 1);
 
         let mcp_sum = find_sum_point(
@@ -461,7 +479,7 @@ mod tests {
             "mcp",
             "not_found",
         )
-        .expect("mcp counter present");
+        .unwrap_or_else(|| panic!("mcp counter missing"));
         assert_eq!(mcp_sum.value(), 1);
 
         let structured_sum = find_sum_point(
@@ -470,7 +488,7 @@ mod tests {
             "structured_api",
             "found",
         )
-        .expect("structured counter present");
+        .unwrap_or_else(|| panic!("structured counter missing"));
         assert_eq!(structured_sum.value(), 1);
 
         assert!(

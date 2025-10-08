@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+
 use chrono::{DateTime, Utc};
 use serde_json::json;
 use tyrum_planner::{

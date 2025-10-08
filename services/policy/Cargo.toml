@@ -19,6 +19,7 @@ opentelemetry-appender-tracing = "0.31.1"
 opentelemetry-otlp = { version = "0.31", features = ["grpc-tonic", "metrics", "logs"] }
 opentelemetry_sdk = { version = "0.31", features = ["metrics", "logs", "trace", "rt-tokio"] }
 tracing-opentelemetry = "0.32"
+anyhow = "1"
 
 [dev-dependencies]
 axum = { version = "0.7", features = ["json"] }

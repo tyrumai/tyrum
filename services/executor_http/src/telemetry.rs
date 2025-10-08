@@ -18,7 +18,7 @@ use opentelemetry_sdk::{
     propagation::TraceContextPropagator, trace::SdkTracerProvider,
 };
 use reqwest::Method;
-use tracing::{field, info_span};
+use tracing::{field, info_span, warn};
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use url::Url;
@@ -117,7 +117,13 @@ fn record_metrics(context: &AttemptContext, outcome: &str, duration: Duration) {
 fn metrics_instruments() -> MetricsInstruments {
     let provider = global::meter_provider();
     let cache = METRICS.get_or_init(|| Mutex::new(MetricsCache::default()));
-    let mut guard = cache.lock().expect("metrics cache poisoned");
+    let mut guard = match cache.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            warn!("metrics cache lock poisoned; continuing with cached instruments");
+            poisoned.into_inner()
+        }
+    };
 
     if let Some(instruments) = &guard.instruments {
         return instruments.clone();

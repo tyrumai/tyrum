@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+
 use serde_json::{self, Value};
 use tyrum_wallet::{
     SpendAuthorizeRequest, SpendAuthorizeResponse, Thresholds, authorize_with_thresholds,

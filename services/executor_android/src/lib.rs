@@ -393,11 +393,30 @@ impl AndroidExecutor {
         self.spawn_and_wait(label, args).await
     }
 
+    #[allow(clippy::cognitive_complexity)]
     async fn spawn_and_wait(&self, label: &str, args: Vec<String>) -> Result<CommandOutput> {
         let adb_path = self.config.adb_path();
         let command_display = format!("{} {}", adb_path.display(), args.join(" "));
         trace!(command = %command_display, "spawning adb command");
 
+        let output = self
+            .run_adb_command(adb_path, args, &command_display)
+            .await?;
+        self.ensure_success(&command_display, &output)?;
+
+        debug!(command = %command_display, label, "adb command completed");
+        Ok(CommandOutput {
+            stdout: output.stdout,
+            stderr: output.stderr,
+        })
+    }
+
+    async fn run_adb_command(
+        &self,
+        adb_path: &Path,
+        args: Vec<String>,
+        command_display: &str,
+    ) -> Result<std::process::Output> {
         let mut command = Command::new(adb_path);
         command.args(&args);
         command.stdin(std::process::Stdio::null());
@@ -408,29 +427,29 @@ impl AndroidExecutor {
         let output = timeout(timeout_duration, command.output())
             .await
             .map_err(|_| AndroidExecutorError::AdbCommandTimedOut {
-                command: command_display.clone(),
+                command: command_display.to_string(),
                 timeout_secs: timeout_duration.as_secs(),
             })??;
 
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-            warn!(
-                command = %command_display,
-                status = output.status.code(),
-                stderr = %stderr,
-                "adb command failed"
-            );
-            return Err(AndroidExecutorError::AdbCommandFailed {
-                command: command_display,
-                status: output.status.code(),
-                stderr,
-            });
+        Ok(output)
+    }
+
+    fn ensure_success(&self, command_display: &str, output: &std::process::Output) -> Result<()> {
+        if output.status.success() {
+            return Ok(());
         }
 
-        debug!(command = %command_display, label, "adb command completed");
-        Ok(CommandOutput {
-            stdout: output.stdout,
-            stderr: output.stderr,
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        warn!(
+            command = %command_display,
+            status = output.status.code(),
+            stderr = %stderr,
+            "adb command failed"
+        );
+        Err(AndroidExecutorError::AdbCommandFailed {
+            command: command_display.to_string(),
+            status: output.status.code(),
+            stderr,
         })
     }
 }
@@ -757,8 +776,17 @@ pub fn sandbox_summary(config: &AndroidExecutorConfig) -> AndroidSandboxSummary 
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::expect_used, clippy::unwrap_used)]
+
     use super::*;
     use serde_json::json;
+
+    fn json_object(value: Value) -> JsonMap<String, Value> {
+        match value.as_object() {
+            Some(map) => map.clone(),
+            None => panic!("expected JSON object"),
+        }
+    }
 
     #[test]
     fn compose_component_handles_relative_activity() {
@@ -774,17 +802,17 @@ mod tests {
 
     #[test]
     fn parse_android_action_launch_app() {
-        let args = json!({
+        let args = json_object(json!({
             "operation": "launch_app",
             "package": "com.demo.app",
             "activity": ".Main",
             "wait_ms": 750
-        })
-        .as_object()
-        .cloned()
-        .unwrap();
+        }));
 
-        let action = parse_android_action(&args).expect("parse launch_app");
+        let action = match parse_android_action(&args) {
+            Ok(action) => action,
+            Err(err) => panic!("parse launch_app failed: {err}"),
+        };
         match action {
             AndroidAction::LaunchApp(spec) => {
                 assert_eq!(spec.package, "com.demo.app");
@@ -797,15 +825,15 @@ mod tests {
 
     #[test]
     fn parse_android_action_tap_coordinates() {
-        let args = json!({
+        let args = json_object(json!({
             "operation": "tap",
             "coordinates": {"x": 120, "y": 640}
-        })
-        .as_object()
-        .cloned()
-        .unwrap();
+        }));
 
-        let action = parse_android_action(&args).expect("parse tap");
+        let action = match parse_android_action(&args) {
+            Ok(action) => action,
+            Err(err) => panic!("parse tap action failed: {err}"),
+        };
         match action {
             AndroidAction::Tap(spec) => match spec.target {
                 TapTarget::Coordinates { x, y } => {
@@ -820,7 +848,10 @@ mod tests {
 
     #[test]
     fn parse_bounds_returns_center() {
-        let (x, y) = parse_bounds("[0,100][200,300]").expect("parse bounds");
+        let (x, y) = match parse_bounds("[0,100][200,300]") {
+            Ok(result) => result,
+            Err(err) => panic!("parse bounds failed: {err}"),
+        };
         assert_eq!(x, 100);
         assert_eq!(y, 200);
     }
@@ -836,7 +867,10 @@ mod tests {
                 password="false" selected="false" bounds="[50,400][250,500]" />
         </hierarchy>"#;
 
-        let (x, y) = locate_accessibility_node(xml, "login").expect("locate node");
+        let (x, y) = match locate_accessibility_node(xml, "login") {
+            Ok(result) => result,
+            Err(err) => panic!("locate node failed: {err}"),
+        };
         assert_eq!(x, 150);
         assert_eq!(y, 450);
     }

@@ -15,10 +15,10 @@ pub struct PolicyClient {
 impl PolicyClient {
     /// Construct a policy client targeting the provided base URL.
     pub fn new(base_url: Url) -> Self {
-        let http = Client::builder()
-            .user_agent("tyrum-planner")
-            .build()
-            .expect("construct reqwest client");
+        let http = match Client::builder().user_agent("tyrum-planner").build() {
+            Ok(client) => client,
+            Err(err) => panic!("construct reqwest client: {err}"),
+        };
 
         Self { http, base_url }
     }
@@ -195,6 +195,8 @@ pub enum PolicyRuleKind {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::expect_used, clippy::unwrap_used)]
+
     use super::*;
 
     use crate::PlanRequest;

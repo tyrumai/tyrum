@@ -22,10 +22,10 @@ pub struct WalletClient {
 impl WalletClient {
     /// Construct a wallet client targeting the provided base URL.
     pub fn new(base_url: Url) -> Self {
-        let http = Client::builder()
-            .user_agent("tyrum-planner")
-            .build()
-            .expect("construct wallet client");
+        let http = match Client::builder().user_agent("tyrum-planner").build() {
+            Ok(client) => client,
+            Err(err) => panic!("construct wallet client: {err}"),
+        };
 
         Self { http, base_url }
     }

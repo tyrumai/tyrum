@@ -3,7 +3,7 @@ use std::{env, net::SocketAddr};
 use anyhow::Context;
 use axum::{Json, Router, routing::get};
 use tokio::signal;
-use tracing::info;
+use tracing::{info, warn};
 use tyrum_executor_cli::{sandbox_summary, telemetry::TelemetryGuard};
 
 const DEFAULT_BIND_ADDR: &str = "0.0.0.0:8093";
@@ -37,7 +37,9 @@ fn resolve_bind_addr() -> anyhow::Result<SocketAddr> {
 
 async fn shutdown_signal() {
     let ctrl_c = async {
-        signal::ctrl_c().await.expect("install Ctrl+C handler");
+        if let Err(err) = signal::ctrl_c().await {
+            warn!(error = %err, "Ctrl+C handler not available");
+        }
     };
 
     #[cfg(unix)]

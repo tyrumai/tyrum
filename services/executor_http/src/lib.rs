@@ -154,83 +154,123 @@ pub async fn execute_http_action(action: &ActionPrimitive) -> Result<HttpActionO
 
     let context = telemetry::AttemptContext::new(&method, &url);
     let request_headers_for_logging = sanitise_header_pairs(&header_entries);
+    let header_map = build_header_map(&header_entries, body.as_ref());
 
-    let client = http_client();
+    let client = http_client().clone();
     let method_for_request = method.clone();
     let url_for_request = url.clone();
-    let schema_for_request = schema.clone();
-    let header_map = build_header_map(&header_entries, body.as_ref());
     let body_for_request = body.clone();
+    let schema_for_request = schema.clone();
 
     let (result, elapsed) = telemetry::record_attempt(&context, async move {
-        let mut request = client.request(method_for_request.clone(), url_for_request.clone());
-        request = request.headers(header_map.clone());
-
-        if let Some(body) = &body_for_request {
-            request = request.json(body);
-        }
-
-        let response = request.send().await?;
-        let status = response.status();
-        let headers = sanitise_header_map(response.headers());
-        let body: Value = response.json().await?;
-
-        if !status.is_success() {
-            return Err(HttpExecutorError::HttpFailure {
-                status: status.as_u16(),
-                headers,
-                body,
-            });
-        }
-
-        if let Some(schema) = &schema_for_request {
-            validate_schema(schema, &body)?;
-        }
-
-        Ok(HttpActionOutcome {
-            status: status.as_u16(),
-            headers,
-            body,
-        })
+        perform_http_request(
+            client,
+            method_for_request,
+            url_for_request,
+            header_map,
+            body_for_request,
+            schema_for_request,
+        )
+        .await
     })
     .await;
 
     match result {
         Ok(outcome) => {
-            info!(
-                method = %method,
-                url = %url,
-                status = outcome.status,
-                duration_ms = elapsed.as_millis(),
-                request_headers = ?request_headers_for_logging,
-                response_headers = ?outcome.headers,
-                "http executor request completed"
+            log_http_success(
+                &method,
+                &url,
+                elapsed,
+                &request_headers_for_logging,
+                &outcome,
             );
             Ok(outcome)
         }
         Err(err) => {
-            match &err {
-                HttpExecutorError::HttpFailure { headers, .. } => info!(
-                    method = %method,
-                    url = %url,
-                    duration_ms = elapsed.as_millis(),
-                    request_headers = ?request_headers_for_logging,
-                    response_headers = ?headers,
-                    error = %err,
-                    "http executor request failed"
-                ),
-                _ => info!(
-                    method = %method,
-                    url = %url,
-                    duration_ms = elapsed.as_millis(),
-                    request_headers = ?request_headers_for_logging,
-                    error = %err,
-                    "http executor request failed"
-                ),
-            };
+            log_http_failure(&method, &url, elapsed, &request_headers_for_logging, &err);
             Err(err)
         }
     }
+}
+
+async fn perform_http_request(
+    client: Client,
+    method: Method,
+    url: Url,
+    headers: HeaderMap,
+    body: Option<Value>,
+    schema: Option<Value>,
+) -> Result<HttpActionOutcome> {
+    let mut request = client.request(method, url);
+    request = request.headers(headers);
+
+    if let Some(payload) = body.as_ref() {
+        request = request.json(payload);
+    }
+
+    let response = request.send().await?;
+    let status = response.status();
+    let headers = sanitise_header_map(response.headers());
+    let body_json: Value = response.json().await?;
+
+    if !status.is_success() {
+        return Err(HttpExecutorError::HttpFailure {
+            status: status.as_u16(),
+            headers,
+            body: body_json,
+        });
+    }
+
+    if let Some(schema) = schema.as_ref() {
+        validate_schema(schema, &body_json)?;
+    }
+
+    Ok(HttpActionOutcome {
+        status: status.as_u16(),
+        headers,
+        body: body_json,
+    })
+}
+
+fn log_http_success(
+    method: &Method,
+    url: &Url,
+    duration: Duration,
+    request_headers: &[(String, String)],
+    outcome: &HttpActionOutcome,
+) {
+    info!(
+        method = %method,
+        url = %url,
+        status = outcome.status,
+        duration_ms = duration.as_millis(),
+        request_headers = ?request_headers,
+        response_headers = ?outcome.headers,
+        "http executor request completed"
+    );
+}
+
+fn log_http_failure(
+    method: &Method,
+    url: &Url,
+    duration: Duration,
+    request_headers: &[(String, String)],
+    err: &HttpExecutorError,
+) {
+    let response_headers = match err {
+        HttpExecutorError::HttpFailure { headers, .. } => Some(headers),
+        _ => None,
+    };
+
+    info!(
+        method = %method,
+        url = %url,
+        duration_ms = duration.as_millis(),
+        request_headers = ?request_headers,
+        response_headers = ?response_headers,
+        error = %err,
+        "http executor request failed"
+    );
 }
 
 fn ensure_http_primitive(action: &ActionPrimitive) -> Result<()> {
@@ -310,26 +350,31 @@ fn extract_schema(args: &ActionArguments) -> Option<Value> {
 }
 
 fn http_client() -> &'static Client {
-    HTTP_CLIENT.get_or_init(|| {
-        Client::builder()
-            .user_agent(USER_AGENT)
-            .pool_idle_timeout(Duration::from_secs(POOL_IDLE_TIMEOUT_SECS))
-            .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
-            .redirect(redirect::Policy::custom(|attempt| {
-                if attempt
-                    .url()
-                    .host_str()
-                    .is_some_and(host_allowed)
-                {
-                    attempt.follow()
-                } else {
-                    warn!(target: "tyrum::executor_http", redirect = %attempt.url(), "blocked redirect to disallowed host");
-                    attempt.stop()
-                }
-            }))
-            .build()
-            .expect("failed to build http client")
-    })
+    HTTP_CLIENT.get_or_init(build_http_client)
+}
+
+fn build_http_client() -> Client {
+    let builder = Client::builder()
+        .user_agent(USER_AGENT)
+        .pool_idle_timeout(Duration::from_secs(POOL_IDLE_TIMEOUT_SECS))
+        .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
+        .redirect(redirect::Policy::custom(|attempt| {
+            if attempt
+                .url()
+                .host_str()
+                .is_some_and(host_allowed)
+            {
+                attempt.follow()
+            } else {
+                warn!(target: "tyrum::executor_http", redirect = %attempt.url(), "blocked redirect to disallowed host");
+                attempt.stop()
+            }
+        }));
+
+    match builder.build() {
+        Ok(client) => client,
+        Err(err) => panic!("failed to build http client: {err}"),
+    }
 }
 
 fn build_header_map(entries: &[(HeaderName, HeaderValue)], body: Option<&Value>) -> HeaderMap {
@@ -454,10 +499,11 @@ mod tests {
     use serde_json::json;
 
     fn primitive_with_args(args: Value) -> ActionPrimitive {
-        ActionPrimitive::new(
-            ActionPrimitiveKind::Http,
-            args.as_object().expect("object args").clone(),
-        )
+        let map = match args.as_object() {
+            Some(object) => object.clone(),
+            None => panic!("http primitive args must be an object"),
+        };
+        ActionPrimitive::new(ActionPrimitiveKind::Http, map)
     }
 
     #[test]
@@ -489,7 +535,10 @@ mod tests {
             "method": "INVALID",
             "url": "http://localhost:8080"
         }));
-        let err = parse_method(&primitive.args).unwrap_err();
+        let err = match parse_method(&primitive.args) {
+            Err(err) => err,
+            Ok(_) => panic!("expected invalid method error"),
+        };
         assert!(matches!(err, HttpExecutorError::InvalidMethod(method) if method == "INVALID"));
     }
 }

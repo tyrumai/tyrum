@@ -6,7 +6,7 @@ use opentelemetry::{
     KeyValue, global,
     metrics::{Counter, Histogram},
 };
-use tracing::{field, info_span};
+use tracing::{field, info_span, warn};
 
 use crate::pipeline::{DiscoveryOutcome, DiscoveryStrategy};
 
@@ -82,7 +82,13 @@ fn record_metrics(strategy: DiscoveryStrategy, outcome: &DiscoveryOutcome, durat
 fn metrics_instruments() -> MetricsInstruments {
     let provider = global::meter_provider();
     let cache = METRICS.get_or_init(|| Mutex::new(MetricsCache::default()));
-    let mut guard = cache.lock().expect("metrics cache poisoned");
+    let mut guard = match cache.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            warn!("metrics cache lock poisoned; continuing with cached instruments");
+            poisoned.into_inner()
+        }
+    };
 
     if guard
         .provider

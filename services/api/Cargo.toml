@@ -25,6 +25,7 @@ validator = { version = "0.18", features = ["derive"] }
 hex = "0.4"
 hmac = "0.12"
 sha2 = "0.10"
+anyhow = "1"
 tyrum-shared = { path = "../../shared/tyrum-shared" }
 
 [dev-dependencies]

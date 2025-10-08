@@ -3,7 +3,7 @@ use std::{env, net::SocketAddr, sync::Arc};
 use anyhow::Context;
 use axum::{Json, Router, extract::State, routing::get};
 use tokio::signal;
-use tracing::info;
+use tracing::{info, warn};
 use tyrum_executor_android::{
     AndroidExecutorConfig, AndroidSandboxSummary, sandbox_summary, telemetry::TelemetryGuard,
 };
@@ -55,7 +55,9 @@ async fn sandbox(State(state): State<AppState>) -> Json<AndroidSandboxSummary> {
 
 async fn shutdown_signal() {
     let ctrl_c = async {
-        signal::ctrl_c().await.expect("install Ctrl+C handler");
+        if let Err(err) = signal::ctrl_c().await {
+            warn!(error = %err, "Ctrl+C handler not available");
+        }
     };
 
     #[cfg(unix)]
