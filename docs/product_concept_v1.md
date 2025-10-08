@@ -328,9 +328,11 @@ to keep policy, planner, and API services aligned on envelopes and error handlin
 
 ## 11) Watchers & Proactivity (without types)
 - **Event sources:** email, messages, calls, calendar, files, webhooks (delivery/order), custom signals.
-- **Predicate:** natural‑language or DSL compiled to a check (e.g., overlaps ≥ 15 min, ETA slip ≥ 20 min, unanswered VIP email ≥ 24 h).
+- **Predicate:** natural-language or DSL compiled to a check (e.g., overlaps ≥ 15 min, ETA slip ≥ 20 min, unanswered VIP email ≥ 24 h).
 - **Reaction:** a small plan built from the same primitives (notify, rebook, reschedule).
 - The PA proposes/updates rules; user can tweak or disable any watcher.
+- Registrations persist to the `watchers` Postgres table; planner services join on `watchers.plan_reference` to hydrate execution plans.
+- AuthN/AuthZ is pending for the registration surface; keep route internal until policy gate issues scoped credentials.
 
 ---
 

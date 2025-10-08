@@ -4,3 +4,4 @@ pub mod metrics;
 pub mod telegram;
 pub mod telemetry;
 pub mod waitlist;
+pub mod watchers;

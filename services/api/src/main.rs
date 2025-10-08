@@ -5,7 +5,13 @@ use anyhow::{Context, Result, anyhow};
 use tyrum_api::{
     account_linking::AccountLinkingRepository,
     ingress::{IngressRepository, IngressRepositoryError},
+    metrics, telegram,
+    telemetry::TelemetryGuard,
     waitlist::{NewWaitlistSignup, WaitlistError, WaitlistRepository},
+    watchers::{
+        RegisterWatcherError, WATCHERS_ROUTE, WatcherRegistrationRequest,
+        WatcherRegistrationResponse, WatcherRepository, process_registration,
+    },
 };
 
 use axum::{
@@ -18,11 +24,8 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use tyrum_api::telemetry::TelemetryGuard;
-use validator::Validate;
-
-use tyrum_api::{metrics, telegram};
 use tyrum_shared::telegram::{TelegramNormalizationError, normalize_update};
+use validator::Validate;
 
 const DEFAULT_BIND_ADDR: &str = "0.0.0.0:8080";
 const DEFAULT_DATABASE_URL: &str = "postgres://tyrum:tyrum_dev_password@localhost:5432/tyrum_dev";
@@ -62,6 +65,7 @@ struct AppState {
     waitlist: WaitlistRepository,
     account_linking: AccountLinkingRepository,
     ingress: IngressRepository,
+    watchers: WatcherRepository,
     telegram: telegram::TelegramWebhookVerifier,
 }
 
@@ -167,6 +171,7 @@ fn build_router(state: AppState) -> Router {
             ACCOUNT_LINKING_TOGGLE_ROUTE,
             put(update_account_link_preference),
         )
+        .route(WATCHERS_ROUTE, post(register_watcher))
         .route(TELEGRAM_WEBHOOK_ROUTE, post(telegram_webhook))
         .with_state(state)
 }
@@ -318,6 +323,74 @@ async fn update_account_link_preference(
         ACCOUNT_LINKING_TOGGLE_ROUTE,
         response.status().as_u16(),
     );
+
+    response
+}
+
+#[tracing::instrument(name = "api.watchers.register", skip_all)]
+async fn register_watcher(
+    State(state): State<AppState>,
+    Json(payload): Json<WatcherRegistrationRequest>,
+) -> Response {
+    let mut sanitized = payload.clone();
+    sanitized.sanitize();
+
+    let response = match process_registration(&state.watchers, payload).await {
+        Ok(watcher) => {
+            tracing::info!(
+                event_source = %watcher.event_source,
+                plan_reference = %watcher.plan_reference,
+                "registered watcher definition; auth enforcement pending"
+            );
+            (
+                StatusCode::CREATED,
+                Json(WatcherRegistrationResponse {
+                    status: "created",
+                    watcher,
+                }),
+            )
+                .into_response()
+        }
+        Err(RegisterWatcherError::Validation { message, .. }) => {
+            tracing::warn!(reason = %message, "invalid watcher registration payload");
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "invalid_payload",
+                    message,
+                }),
+            )
+                .into_response()
+        }
+        Err(RegisterWatcherError::Duplicate) => {
+            tracing::warn!(
+                event_source = %sanitized.event_source,
+                plan_reference = %sanitized.plan_reference,
+                "duplicate watcher registration attempted"
+            );
+            (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    error: "duplicate",
+                    message: "Watcher already registered with the same event source, predicate, and plan reference".into(),
+                }),
+            )
+                .into_response()
+        }
+        Err(RegisterWatcherError::Database(error)) => {
+            tracing::error!(reason = %error, "failed to persist watcher registration");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "server_error",
+                    message: "Unable to persist watcher registration".into(),
+                }),
+            )
+                .into_response()
+        }
+    };
+
+    metrics::record_http_request("POST", WATCHERS_ROUTE, response.status().as_u16());
 
     response
 }
@@ -526,6 +599,7 @@ async fn main() -> Result<()> {
 
     let account_linking = AccountLinkingRepository::new(waitlist.pool().clone());
     let ingress = IngressRepository::new(waitlist.pool().clone());
+    let watchers = WatcherRepository::new(waitlist.pool().clone());
 
     let telegram_secret =
         env::var("TELEGRAM_WEBHOOK_SECRET").context("TELEGRAM_WEBHOOK_SECRET must be set")?;
@@ -536,6 +610,7 @@ async fn main() -> Result<()> {
         waitlist,
         account_linking,
         ingress,
+        watchers,
         telegram,
     });
 
@@ -578,6 +653,7 @@ mod tests {
         ingress::IngressRepository,
         telegram::TelegramWebhookVerifier,
         waitlist::{NewWaitlistSignup, WaitlistError, WaitlistRepository},
+        watchers::WatcherRepository,
     };
 
     const POSTGRES_IMAGE: &str = "pgvector/pgvector";
@@ -643,6 +719,7 @@ mod tests {
 
             let account_linking = AccountLinkingRepository::new(waitlist.pool().clone());
             let ingress = IngressRepository::new(waitlist.pool().clone());
+            let watchers = WatcherRepository::new(waitlist.pool().clone());
             let telegram =
                 TelegramWebhookVerifier::new(TELEGRAM_SECRET).expect("construct telegram verifier");
 
@@ -650,6 +727,7 @@ mod tests {
                 waitlist: waitlist.clone(),
                 account_linking: account_linking.clone(),
                 ingress: ingress.clone(),
+                watchers: watchers.clone(),
                 telegram: telegram.clone(),
             });
 
@@ -672,12 +750,14 @@ mod tests {
         let waitlist = WaitlistRepository::from_pool(pool.clone());
         let ingress = IngressRepository::new(pool.clone());
         let account_linking = AccountLinkingRepository::new(pool);
+        let watchers = WatcherRepository::new(waitlist.pool().clone());
         let telegram =
             TelegramWebhookVerifier::new(TELEGRAM_SECRET).expect("construct telegram verifier");
         let state = AppState {
             waitlist,
             account_linking,
             ingress,
+            watchers,
             telegram,
         };
         let app = build_router(state);
