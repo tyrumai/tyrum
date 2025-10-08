@@ -288,9 +288,13 @@ impl PlanStateMachine {
         };
 
         let detail = failure.detail.as_deref().unwrap_or("");
-        let step_index_converted = failure.step_index.and_then(|idx| i64::try_from(idx).ok());
-        let step_index = step_index_converted.unwrap_or(-1);
-        let step_index_known = step_index_converted.is_some();
+        let (step_index, step_index_known) = match failure.step_index {
+            Some(idx) => match i64::try_from(idx) {
+                Ok(value) => (value, true),
+                Err(_) => (i64::MAX, true),
+            },
+            None => (-1, false),
+        };
         let executed_steps = self.executed_steps;
         let total_steps = self.total_steps;
         let reason = failure.reason;
