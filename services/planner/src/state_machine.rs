@@ -291,7 +291,7 @@ impl PlanStateMachine {
         let (step_index, step_index_known) = match failure.step_index {
             Some(idx) => match i64::try_from(idx) {
                 Ok(value) => (value, true),
-                Err(_) => (i64::MAX, false),
+                Err(_) => (i64::MAX, true),
             },
             None => (-1, false),
         };
