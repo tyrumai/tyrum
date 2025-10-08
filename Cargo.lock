@@ -4544,10 +4544,18 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-nats",
+ "axum",
+ "chrono",
  "futures",
+ "reqwest 0.12.23",
+ "serde",
+ "serde_json",
  "testcontainers",
  "thiserror 1.0.69",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "tyrum-shared",
 ]
 
 [[package]]
