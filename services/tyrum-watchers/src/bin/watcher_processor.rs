@@ -86,19 +86,29 @@ fn maybe_override_fetch_timeout(config: WatcherProcessorConfig) -> WatcherProces
 }
 
 fn maybe_override_max_batch(config: WatcherProcessorConfig) -> WatcherProcessorConfig {
-    match env::var(MAX_BATCH_ENV) {
-        Ok(raw) => match raw.parse::<usize>() {
-            Ok(max_batch) => config.with_max_batch(max_batch),
-            Err(_) => {
-                warn!(
-                    key = MAX_BATCH_ENV,
-                    value = %raw,
-                    "ignoring invalid max batch override"
-                );
-                config
-            }
-        },
-        Err(_) => config,
+    let raw = match env::var(MAX_BATCH_ENV) {
+        Ok(raw) => raw,
+        Err(_) => return config,
+    };
+
+    match parse_positive_usize(&raw) {
+        Ok(max_batch) => config.with_max_batch(max_batch),
+        Err(reason) => {
+            warn!(key = MAX_BATCH_ENV, value = %raw, reason, "ignoring max batch override");
+            config
+        }
+    }
+}
+
+fn parse_positive_usize(raw: &str) -> Result<usize, &'static str> {
+    let value = raw
+        .parse::<usize>()
+        .map_err(|_| "value is not a positive integer")?;
+
+    if value == 0 {
+        Err("value must be greater than zero")
+    } else {
+        Ok(value)
     }
 }
 
