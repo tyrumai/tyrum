@@ -10,7 +10,6 @@ use axum::{
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::path::Path;
 use tokio::task::JoinHandle;
 use tyrum_executor_web::{WebExecutorError, execute_web_action};
 use tyrum_shared::planner::{ActionArguments, ActionPrimitive, ActionPrimitiveKind};
@@ -112,7 +111,7 @@ async fn form_action_executes_and_captures_confirmation() -> anyhow::Result<()> 
 fn playwright_runtime_available() -> bool {
     match std::env::var_os("PLAYWRIGHT_BROWSERS_PATH") {
         Some(path) => {
-            let root = Path::new(&path);
+            let root = std::path::Path::new(&path);
             root.join("chromium").exists() || root.join("webkit").exists()
         }
         None => false,

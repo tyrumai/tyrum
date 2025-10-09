@@ -56,12 +56,16 @@ async fn main() -> anyhow::Result<()> {
     axum::serve(listener, app).await?;
     Ok(())
 }
+
 fn init_tracing() {
     let env_filter = env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
-    tracing_subscriber::registry()
+    if let Err(err) = tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(env_filter))
         .with(tracing_subscriber::fmt::layer())
-        .init();
+        .try_init()
+    {
+        eprintln!("tracing already initialized: {err}");
+    }
 }
 
 #[derive(Clone)]
@@ -191,7 +195,7 @@ fn sanitize_base_url(raw: &str) -> anyhow::Result<String> {
     let mut cleaned = url.clone();
     cleaned.set_query(None);
     cleaned.set_fragment(None);
-    Ok(cleaned.into())
+    Ok(cleaned.to_string())
 }
 
 #[derive(Default, Deserialize)]
