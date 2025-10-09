@@ -1,4 +1,5 @@
 use std::{
+    collections::VecDeque,
     env,
     sync::Arc,
     time::{Duration, Instant},
@@ -380,13 +381,7 @@ struct VllmCompletionRequest<'a> {
 struct RateLimiter {
     limit: u64,
     window: Duration,
-    inner: Mutex<RateWindow>,
-}
-
-#[derive(Debug)]
-struct RateWindow {
-    start: Instant,
-    count: u64,
+    inner: Mutex<VecDeque<Instant>>,
 }
 
 impl RateLimiter {
@@ -394,24 +389,29 @@ impl RateLimiter {
         Self {
             limit: settings.max_requests,
             window: settings.per,
-            inner: Mutex::new(RateWindow {
-                start: Instant::now(),
-                count: 0,
-            }),
+            inner: Mutex::new(VecDeque::with_capacity(
+                settings.max_requests.saturating_add(1) as usize,
+            )),
         }
     }
 
     async fn check(&self) -> std::result::Result<(), GatewayError> {
-        let mut state = self.inner.lock().await;
         let now = Instant::now();
+        self.check_at(now).await
+    }
 
-        if now.duration_since(state.start) >= self.window {
-            state.start = now;
-            state.count = 0;
+    async fn check_at(&self, now: Instant) -> std::result::Result<(), GatewayError> {
+        let mut timestamps = self.inner.lock().await;
+        while let Some(&front) = timestamps.front() {
+            if now.duration_since(front) >= self.window {
+                timestamps.pop_front();
+            } else {
+                break;
+            }
         }
 
-        if state.count < self.limit {
-            state.count += 1;
+        if timestamps.len() < self.limit as usize {
+            timestamps.push_back(now);
             Ok(())
         } else {
             warn!("llm gateway rate limit exceeded");
@@ -537,5 +537,41 @@ mod logging_tests {
             usage: None,
         };
         log_response(&response, 12);
+    }
+}
+
+#[cfg(test)]
+mod rate_limiter_tests {
+    use std::time::{Duration, Instant};
+
+    use super::{GatewayError, RateLimitSettings, RateLimiter};
+
+    #[tokio::test]
+    async fn enforces_sliding_window() {
+        let limiter = RateLimiter::new(RateLimitSettings::new(2, Duration::from_secs(1)));
+        let base = Instant::now();
+
+        assert!(limiter.check_at(base).await.is_ok());
+        assert!(
+            limiter
+                .check_at(base + Duration::from_millis(100))
+                .await
+                .is_ok()
+        );
+        assert!(matches!(
+            limiter.check_at(base + Duration::from_millis(200)).await,
+            Err(GatewayError::RateLimited)
+        ));
+        assert!(matches!(
+            limiter.check_at(base + Duration::from_millis(900)).await,
+            Err(GatewayError::RateLimited)
+        ));
+
+        assert!(
+            limiter
+                .check_at(base + Duration::from_millis(1_100))
+                .await
+                .is_ok()
+        );
     }
 }
