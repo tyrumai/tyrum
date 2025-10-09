@@ -4,7 +4,7 @@ import { parseUpstreamResponse, resolveApiBaseUrl } from "../../../shared";
 type ParamsRecord = Record<string, string | string[] | undefined>;
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<ParamsRecord> },
 ) {
   const rawParams = ((await context.params) ?? {}) as ParamsRecord;
@@ -33,8 +33,14 @@ export async function GET(
   }
 
   try {
+    const requestUrl = new URL(request.url);
+    const upstreamUrl = new URL(`/audit/plan/${encodeURIComponent(planId)}`, baseUrl);
+    if (requestUrl.search) {
+      upstreamUrl.search = requestUrl.search;
+    }
+
     const upstreamResponse = await fetch(
-      `${baseUrl}/audit/plan/${encodeURIComponent(planId)}`,
+      upstreamUrl,
       {
         method: "GET",
         headers: {
