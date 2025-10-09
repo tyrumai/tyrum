@@ -35,6 +35,8 @@ COPY services/executor_android/Cargo.toml services/executor_android/Cargo.toml
 COPY services/executor_android/src services/executor_android/src
 COPY services/policy/Cargo.toml services/policy/Cargo.toml
 COPY services/policy/src services/policy/src
+COPY services/model_gateway/Cargo.toml services/model_gateway/Cargo.toml
+COPY services/model_gateway/src services/model_gateway/src
 COPY services/tyrum-wallet/Cargo.toml services/tyrum-wallet/Cargo.toml
 COPY services/tyrum-wallet/src services/tyrum-wallet/src
 COPY services/tyrum-wallet/tests services/tyrum-wallet/tests
