@@ -12,6 +12,7 @@ members = [
     "services/tyrum-wallet",
     "shared/tyrum-shared",
     "services/tyrum-watchers",
+    "services/model_gateway",
 ]
 resolver = "2"
 

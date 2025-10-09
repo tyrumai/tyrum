@@ -118,9 +118,16 @@ flowchart LR
 - **Data tier:** PostgreSQL 16 with `pgvector` for embeddings + RLS policies; hydrated via Rust and ingestion pipelines.
 - **Eventing & jobs:** NATS JetStream for the event bus/watchers, with Rust consumers handling parallel execution; lightweight cron via Kubernetes Jobs.
 - **Caching & rate limits:** Redis 7 (cluster mode) for low-latency session state, policy throttles, and short-lived planner memory.
-- **LLM runtime:** vLLM (containerized) fronted by an internal gateway; supports multi-model routing and token accounting.
+- **LLM runtime:** Model gateway (see `docs/infra/model_gateway.md`) fronts local vLLM deployments and upstream frontier APIs, applying routing policy, token accounting, and auth.
 - **Observability:** OpenTelemetry instrumentation exported to Prometheus/Grafana + Tempo/Loki stack; audit evidence streamed to S3-compatible storage.
 - **Infra as code:** Terraform + Helm charts managing cluster bootstrap, secrets, runners, and CD pipelines.
+
+### Model Gateway (multi-backend LLM access)
+- The gateway exposes a single OpenAI-compatible surface to internal services and consults configuration to decide whether to route a call to local vLLM models or a frontier provider (OpenAI, OpenRouter, etc.).
+- Each model entry carries auth profile, capability flags, token/cost guardrails, and target endpoint; unknown models fail closed.
+- Telemetry and audit logs record the chosen backend, token usage, latency, and any policy violations.
+- Streaming responses (`stream: true` or upstream SSE) are proxied without buffering so downstream services (e.g., voice) can act on partial completions immediately.
+- Detailed configuration and next steps live in `docs/infra/model_gateway.md`.
 
 ---
 
@@ -553,7 +560,7 @@ Milestones are cumulative; later milestones build on earlier ones.
 - **Watchers**: Configure JetStream client (#82); expose watcher registration API (#83); implement watcher processor worker (#84).
 - **Policy guardrails**: Enrich policy with per-user fields (#85); ensure planner error propagation coverage (#86).
 - **Audit console**: Add plan timeline API (#87); build portal timeline view (#88).
-- **LLM runtime**: Package vLLM container (#89); deliver Rust gateway shim (#90).
+- **LLM runtime**: Package vLLM container (#89); ship model gateway service + routing config (#90); document model-to-endpoint mapping and guardrails in `docs/infra/model_gateway.md`.
 - **Onboarding funnel**: Wire landing to onboarding start (#91); build consent checklist UI (#92); implement verification/session stub (#93).
 - **Runbooks**: Update staging runbook for Telegram ingress (#94).
 

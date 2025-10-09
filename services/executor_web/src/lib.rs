@@ -240,7 +240,13 @@ fn is_transient(err: &WebExecutorError) -> bool {
 
 #[allow(clippy::cognitive_complexity)]
 async fn run_single_attempt(target: Url, options: WebActionOptions) -> Result<WebActionOutcome> {
-    let playwright = Playwright::initialize().await?;
+    let playwright = match Playwright::initialize().await {
+        Ok(driver) => driver,
+        Err(err) => {
+            tracing::warn!(error = %err, "playwright initialization failed");
+            return Err(WebExecutorError::from(err));
+        }
+    };
     let (browser, browser_flavor) = launch_browser(&playwright).await?;
     let context = browser.context_builder().build().await?;
     let page = context.new_page().await?;
