@@ -154,6 +154,29 @@ function humanizeLabel(value: string) {
     .trim();
 }
 
+function extractErrorMessage(
+  payload: TimelineResponse | TimelineError | undefined,
+) {
+  if (!payload || typeof payload !== "object") {
+    return undefined;
+  }
+
+  if (
+    "message" in payload &&
+    typeof (payload as TimelineError).message === "string"
+  ) {
+    return (payload as TimelineError).message;
+  }
+
+  return undefined;
+}
+
+function isTimelineResponse(
+  payload: TimelineResponse | TimelineError | undefined,
+): payload is TimelineResponse {
+  return !!payload && typeof payload === "object" && "events" in payload;
+}
+
 function statusVariant(status: string) {
   const normalized = status.trim().toLowerCase();
   if (["success", "succeeded", "ok", "completed"].includes(normalized)) {
@@ -204,20 +227,29 @@ export default function PlanTimelinePage() {
       .then(async (response) => {
         const payload = (await parseJsonResponse(response)) as
           | TimelineResponse
-          | TimelineError;
+          | TimelineError
+          | undefined;
         if (aborted) {
           return;
         }
 
         if (!response.ok) {
           const message =
-            ensureString(payload?.message) ??
+            extractErrorMessage(payload) ??
             "Unable to load the audit timeline.";
           setState({ status: "error", message });
           return;
         }
 
-        setState({ status: "loaded", timeline: payload as TimelineResponse });
+        if (isTimelineResponse(payload)) {
+          setState({ status: "loaded", timeline: payload });
+          return;
+        }
+
+        setState({
+          status: "error",
+          message: "Audit timeline payload was malformed.",
+        });
       })
       .catch((error) => {
         if (aborted) {
