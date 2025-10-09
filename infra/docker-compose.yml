@@ -194,18 +194,17 @@ services:
       start_period: 5s
 
   llm-gateway:
-    profiles: ["llm"]
     build:
       context: ..
       dockerfile: Dockerfile.llm
     image: tyrum/llm-gateway:local
     environment:
       LLM_GATEWAY_BIND_ADDR: 0.0.0.0:8086
-      LLM_VLLM_URL: http://vllm-gateway:8000/v1/completions
+      LLM_VLLM_URL: ${LLM_VLLM_URL:-http://mock-llm:8085/v1/completions}
       LLM_GATEWAY_MODEL: ${VLLM_MODEL_NAME:-tyrum-stub-8b}
       LLM_RATE_LIMIT_PER_SECOND: 10
     depends_on:
-      vllm-gateway:
+      mock-llm:
         condition: service_healthy
     ports:
       - "8086:8086"
