@@ -10,6 +10,7 @@ use axum::{
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
+use std::path::Path;
 use tokio::task::JoinHandle;
 use tyrum_executor_web::{WebExecutorError, execute_web_action};
 use tyrum_shared::planner::{ActionArguments, ActionPrimitive, ActionPrimitiveKind};
@@ -48,9 +49,9 @@ struct BookingForm {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn form_action_executes_and_captures_confirmation() -> anyhow::Result<()> {
-    if std::env::var_os("CI").is_some() {
+    if !playwright_runtime_available() {
         tracing::warn!(
-            "Skipping web executor fixture test in CI where Playwright binaries are unavailable"
+            "Skipping web executor fixture test; Playwright runtime not installed on this runner"
         );
         return Ok(());
     }
@@ -106,6 +107,16 @@ async fn form_action_executes_and_captures_confirmation() -> anyhow::Result<()> 
     let _ = handle.await;
 
     Ok(())
+}
+
+fn playwright_runtime_available() -> bool {
+    match std::env::var_os("PLAYWRIGHT_BROWSERS_PATH") {
+        Some(path) => {
+            let root = Path::new(&path);
+            root.join("chromium").exists() || root.join("webkit").exists()
+        }
+        None => false,
+    }
 }
 
 fn into_args(value: Value) -> ActionArguments {
