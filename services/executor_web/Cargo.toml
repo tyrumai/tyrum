@@ -22,7 +22,7 @@ opentelemetry-appender-tracing = "0.31.1"
 opentelemetry-otlp = { version = "0.31", features = ["grpc-tonic", "metrics", "logs"] }
 opentelemetry_sdk = { version = "0.31", features = ["metrics", "logs", "trace", "rt-tokio", "testing"] }
 # TODO(#90): re-enable driver download once build environment provides the required TLS chain.
-playwright = { version = "0.0.20", features = ["only-for-docs-rs"] }
+playwright = "0.0.20"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "1"

@@ -56,7 +56,6 @@ async fn main() -> anyhow::Result<()> {
     axum::serve(listener, app).await?;
     Ok(())
 }
-
 fn init_tracing() {
     let env_filter = env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
     tracing_subscriber::registry()
@@ -87,7 +86,6 @@ impl TryFrom<GatewaySettings> for AppState {
         })
     }
 }
-
 #[derive(Debug, Clone)]
 struct ModelRoute {
     target: String,
@@ -389,18 +387,31 @@ fn default_hop_by_hop_set() -> HashSet<HeaderName> {
 }
 
 fn extend_with_connection_tokens(set: &mut HashSet<HeaderName>, header: Option<&HeaderValue>) {
-    if let Some(value) = header
-        && let Ok(tokens) = value.to_str()
-    {
-        for token in tokens.split(',') {
-            let trimmed = token.trim();
-            if trimmed.is_empty() {
-                continue;
-            }
-            if let Ok(name) = HeaderName::from_bytes(trimmed.as_bytes()) {
-                set.insert(name);
-            }
+    let Some(value) = header else {
+        return;
+    };
+    let tokens = match value.to_str() {
+        Ok(tokens) => tokens,
+        Err(err) => {
+            warn!("ignoring connection header with non-UTF8 value: {err}");
+            return;
         }
+    };
+    for token in tokens.split(',') {
+        handle_connection_token(set, token);
+    }
+}
+
+fn handle_connection_token(set: &mut HashSet<HeaderName>, token: &str) {
+    let trimmed = token.trim();
+    if trimmed.is_empty() {
+        return;
+    }
+    match HeaderName::from_bytes(trimmed.as_bytes()) {
+        Ok(name) => {
+            set.insert(name);
+        }
+        Err(err) => warn!("ignoring invalid hop-by-hop header token '{trimmed}': {err}"),
     }
 }
 
@@ -630,15 +641,24 @@ impl GatewayError {
         (status, Json(ErrorBody { error: error_body })).into_response()
     }
 
-    #[allow(clippy::cognitive_complexity)]
     fn log(log_error: bool, message: Option<String>) {
-        match (log_error, message) {
-            (true, Some(msg)) => error!("{msg}"),
-            (false, Some(msg)) => warn!("{msg}"),
-            (true, None) => error!("gateway error occurred without additional context"),
-            (false, None) => {}
+        match log_error {
+            true => log_error_message(message),
+            false => log_warning_message(message),
         }
     }
+}
+
+fn log_error_message(message: Option<String>) {
+    let msg =
+        message.unwrap_or_else(|| "gateway error occurred without additional context".to_string());
+    error!("{msg}");
+}
+
+fn log_warning_message(message: Option<String>) {
+    let msg = message
+        .unwrap_or_else(|| "gateway warning occurred without additional context".to_string());
+    warn!("{msg}");
 }
 
 #[cfg(test)]
