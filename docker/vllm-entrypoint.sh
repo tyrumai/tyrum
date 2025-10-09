@@ -13,6 +13,7 @@ if [[ -n "${VLLM_EXTRA_ARGS:-}" ]]; then
     exit 1
   fi
   while IFS= read -r arg; do
+    [[ -n "$arg" ]] || continue
     EXTRA_ARGS+=("$arg")
   done < <(python3 - <<'PY'
 import os

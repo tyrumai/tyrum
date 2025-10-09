@@ -244,7 +244,16 @@ impl TryFrom<AuthProfileConfig> for ResolvedAuth {
                 let token = env::var(&env).with_context(|| {
                     format!("missing environment variable '{env}' for bearer auth")
                 })?;
-                let header_val = HeaderValue::from_str(&format!("Bearer {token}"))
+                let trimmed = token.trim();
+                if trimmed.is_empty() {
+                    bail!("environment variable '{env}' for bearer auth is empty");
+                }
+                if trimmed.contains('\n') || trimmed.contains('\r') {
+                    bail!(
+                        "environment variable '{env}' contains invalid characters for bearer auth"
+                    );
+                }
+                let header_val = HeaderValue::from_str(trimmed)
                     .with_context(|| format!("invalid bearer header value from env '{env}'"))?;
                 Ok(ResolvedAuth::Bearer(header_val))
             }
@@ -668,32 +677,41 @@ impl GatewayError {
     fn render(
         status: StatusCode,
         body: impl Into<String>,
-        log_error: bool,
+        use_error_level: bool,
         log_message: Option<String>,
     ) -> Response {
-        Self::log(log_error, log_message);
+        Self::log(use_error_level, log_message);
         let error_body = body.into();
         (status, Json(ErrorBody { error: error_body })).into_response()
     }
 
-    fn log(log_error: bool, message: Option<String>) {
-        match log_error {
-            true => log_error_message(message),
-            false => log_warning_message(message),
+    fn log(use_error_level: bool, message: Option<String>) {
+        let log_fn = select_logger(use_error_level);
+        match message {
+            Some(msg) => log_fn(&msg),
+            None => log_fn(default_log_message(use_error_level)),
         }
     }
 }
 
-fn log_error_message(message: Option<String>) {
-    let msg =
-        message.unwrap_or_else(|| "gateway error occurred without additional context".to_string());
-    error!("{msg}");
+fn select_logger(is_error: bool) -> fn(&str) {
+    if is_error { log_error } else { log_warn }
 }
 
-fn log_warning_message(message: Option<String>) {
-    let msg = message
-        .unwrap_or_else(|| "gateway warning occurred without additional context".to_string());
-    warn!("{msg}");
+fn default_log_message(is_error: bool) -> &'static str {
+    if is_error {
+        "gateway error occurred without additional context"
+    } else {
+        "gateway warning occurred without additional context"
+    }
+}
+
+fn log_error(message: &str) {
+    error!("{message}");
+}
+
+fn log_warn(message: &str) {
+    warn!("{message}");
 }
 
 #[cfg(test)]
