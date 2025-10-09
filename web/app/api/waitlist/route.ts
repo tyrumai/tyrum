@@ -1,13 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-function resolveApiBaseUrl(): string | undefined {
-  const fromEnv =
-    process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? undefined;
-  if (!fromEnv) {
-    return undefined;
-  }
-  return fromEnv.replace(/\/$/, "");
-}
+import { parseUpstreamResponse, resolveApiBaseUrl } from "../shared";
 
 async function readJsonBody(request: NextRequest) {
   try {
@@ -50,15 +42,7 @@ export async function POST(request: NextRequest) {
       cache: "no-store",
     });
 
-    const raw = await upstreamResponse.text();
-    let payload: unknown = {};
-    if (raw.length > 0) {
-      try {
-        payload = JSON.parse(raw);
-      } catch (error) {
-        payload = { message: raw };
-      }
-    }
+    const payload = await parseUpstreamResponse(upstreamResponse);
 
     return NextResponse.json(payload, { status: upstreamResponse.status });
   } catch (error) {
