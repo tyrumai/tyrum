@@ -51,10 +51,16 @@ describe("middleware", () => {
 
   it("does not guard onboarding or auth routes", () => {
     const onboarding = middleware(createRequest("/portal/onboarding"));
+    const onboardingStart = middleware(createRequest("/portal/onboarding/start"));
+    const onboardingEntry = middleware(createRequest("/portal/onboarding/entry"));
     const auth = middleware(createRequest("/portal/auth/reset"));
 
     expect(onboarding.status).toBe(200);
     expect(onboarding.headers.get("location")).toBeNull();
+    expect(onboardingStart.status).toBe(200);
+    expect(onboardingStart.headers.get("location")).toBeNull();
+    expect(onboardingEntry.status).toBe(200);
+    expect(onboardingEntry.headers.get("location")).toBeNull();
     expect(auth.status).toBe(200);
     expect(auth.headers.get("location")).toBeNull();
   });

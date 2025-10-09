@@ -562,6 +562,7 @@ Milestones are cumulative; later milestones build on earlier ones.
 - **Audit console**: Add plan timeline API (#87); build portal timeline view (#88).
 - **LLM runtime**: Package vLLM container (#89); ship model gateway service + routing config (#90); document model-to-endpoint mapping and guardrails in `docs/infra/model_gateway.md`.
 - **Onboarding funnel**: Wire landing to onboarding start (#91); build consent checklist UI (#92); implement verification/session stub (#93).
+  - Landing waitlist CTA posts to `/portal/onboarding/entry`, which stubs a portal session cookie and forwards to `/portal/onboarding/start` with flash state so the onboarding checklist can acknowledge waitlist progress.
 - **Runbooks**: Update staging runbook for Telegram ingress (#94).
 
 #### Ingress — Telegram Webhook

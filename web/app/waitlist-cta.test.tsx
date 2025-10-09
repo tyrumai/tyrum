@@ -1,7 +1,7 @@
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import WaitlistCta from "./waitlist-cta";
 
 const trackAnalytics = vi.fn();
@@ -15,64 +15,24 @@ describe("WaitlistCta", () => {
 
   beforeEach(() => {
     trackAnalytics.mockReset();
-    vi.restoreAllMocks();
-    window.history.replaceState({}, "", "?utm_source=ads&utm_campaign=launch");
   });
 
   afterEach(() => {
-    // @ts-expect-error resetting test stub
-    globalThis.fetch = undefined;
+    window.history.replaceState({}, "", "/");
   });
 
-  it("submits the email and reports success", async () => {
-    const json = vi.fn().mockResolvedValue({ status: "created" });
-    globalThis.fetch = vi      .fn()      .mockResolvedValue({
-        ok: true,
-        status: 201,
-        json,
-      }) as unknown as typeof fetch;
+  it("renders duplicate notice from search params and tracks analytics", () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/?utm_source=ads&utm_campaign=launch&waitlist_status=duplicate",
+    );
 
     render(<WaitlistCta />);
 
-    await user.type(screen.getByLabelText("Email address"), "founder@example.com");
-    await user.click(screen.getByRole("button", { name: "Join the waitlist" }));
-
-    await waitFor(() =>
-      expect(screen.getByText("You're on the list. We'll keep you posted.")).toBeVisible(),
-    );
-
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      "/api/waitlist",
-      expect.objectContaining({
-        method: "POST",
-      }),
-    );
-
-    expect(trackAnalytics).toHaveBeenCalledWith("waitlist_signup", {
-      status: "success",
-      utm_source: "ads",
-      utm_campaign: "launch",
-    });
-  });
-
-  it("surfaces duplicate signups", async () => {
-    const json = vi.fn().mockResolvedValue({ error: "duplicate" });
-    globalThis.fetch = vi      .fn()      .mockResolvedValue({
-        ok: false,
-        status: 409,
-        json,
-      }) as unknown as typeof fetch;
-
-    render(<WaitlistCta />);
-
-    await user.type(screen.getByLabelText("Email address"), "founder@example.com");
-    await user.click(screen.getByRole("button", { name: "Join the waitlist" }));
-
-    await waitFor(() =>
-      expect(
-        screen.getByText("You're already on the waitlist. Thanks for your trust."),
-      ).toBeVisible(),
-    );
+    expect(
+      screen.getByText("You're already on the waitlist. Thanks for your trust."),
+    ).toBeVisible();
 
     expect(trackAnalytics).toHaveBeenCalledWith("waitlist_signup", {
       status: "duplicate",
@@ -81,24 +41,40 @@ describe("WaitlistCta", () => {
     });
   });
 
-  it("falls back to a friendly error on network failures", async () => {
-    globalThis.fetch = vi.fn().mockRejectedValue(new Error("boom")) as unknown as typeof fetch;
+  it("prevents blank submissions and surfaces the validation message", async () => {
+    window.history.replaceState({}, "", "/?utm_source=ads");
 
     render(<WaitlistCta />);
 
-    await user.type(screen.getByLabelText("Email address"), "founder@example.com");
+    await user.clear(screen.getByLabelText("Email address"));
+    await user.type(screen.getByLabelText("Email address"), "   ");
     await user.click(screen.getByRole("button", { name: "Join the waitlist" }));
 
     await waitFor(() =>
       expect(
-        screen.getByText("We couldn't save that email. Try again in a moment."),
+        screen.getByText("That doesn't look like a valid email. Please try again."),
       ).toBeVisible(),
     );
 
     expect(trackAnalytics).toHaveBeenCalledWith("waitlist_signup", {
-      status: "network_error",
+      status: "invalid",
       utm_source: "ads",
-      utm_campaign: "launch",
     });
+  });
+
+  it("prefills the email field when the query parameter is present", () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/?waitlist_status=invalid_email&waitlist_email=founder%40example.com",
+    );
+
+    render(<WaitlistCta />);
+
+    const emailInput = screen.getByLabelText("Email address") as HTMLInputElement;
+    expect(emailInput.value).toBe("founder@example.com");
+    expect(
+      screen.getByText("That doesn't look like a valid email. Please try again."),
+    ).toBeVisible();
   });
 });
