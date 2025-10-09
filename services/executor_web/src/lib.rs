@@ -243,9 +243,8 @@ async fn run_single_attempt(target: Url, options: WebActionOptions) -> Result<We
     let playwright = match Playwright::initialize().await {
         Ok(driver) => driver,
         Err(err) => {
-            return Err(WebExecutorError::BrowserUnavailable {
-                details: format!("playwright init: {err}"),
-            });
+            tracing::warn!(error = %err, "playwright initialization failed");
+            return Err(WebExecutorError::from(err));
         }
     };
     let (browser, browser_flavor) = launch_browser(&playwright).await?;
