@@ -1,0 +1,16 @@
+# syntax=docker/dockerfile:1.7
+
+FROM vllm/vllm-openai:latest
+
+ENV VLLM_MODEL=hf-internal-testing/tiny-random-LlamaForCausalLM \
+    VLLM_MODEL_NAME=tyrum-stub \
+    VLLM_HOST=0.0.0.0 \
+    VLLM_PORT=8000 \
+    VLLM_EXTRA_ARGS=
+
+COPY docker/vllm-entrypoint.sh /usr/local/bin/vllm-entrypoint
+RUN chmod 0755 /usr/local/bin/vllm-entrypoint
+
+EXPOSE 8000
+
+ENTRYPOINT ["/usr/local/bin/vllm-entrypoint"]

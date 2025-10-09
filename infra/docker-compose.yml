@@ -145,6 +145,53 @@ services:
       retries: 5
       start_period: 10s
 
+  vllm-gateway:
+    profiles: ["llm"]
+    platform: linux/amd64
+    build:
+      context: ..
+      dockerfile: Dockerfile.vllm
+    image: tyrum/vllm-gateway:local
+    environment:
+      VLLM_MODEL: hf-internal-testing/tiny-random-LlamaForCausalLM
+      VLLM_MODEL_NAME: tyrum-stub-8b
+      VLLM_EXTRA_ARGS: ""
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: ["gpu"]
+
+  model-gateway:
+    build:
+      context: ..
+      dockerfile: Dockerfile.model-gateway
+    image: tyrum/model-gateway:local
+    environment:
+      MODEL_GATEWAY_CONFIG: /app/config/model_gateway.yml
+      MODEL_GATEWAY_BIND_ADDR: 0.0.0.0:8001
+    depends_on:
+      mock-llm:
+        condition: service_healthy
+    volumes:
+      - ../config/model_gateway.yml:/app/config/model_gateway.yml:ro
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:8001/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
   executor-cli:
     build:
       context: ..
