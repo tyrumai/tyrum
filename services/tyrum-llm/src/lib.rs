@@ -470,10 +470,22 @@ fn truncate(value: &str, limit: usize) -> String {
     if limit == 0 {
         return String::new();
     }
-    if value.len() <= limit {
+
+    let mut end = value.len();
+    for (char_count, (idx, _)) in value.char_indices().enumerate() {
+        if char_count == limit {
+            end = idx;
+            break;
+        }
+    }
+
+    if end == value.len() {
         value.to_string()
     } else {
-        format!("{}…", &value[..limit])
+        let mut truncated = String::with_capacity(end + 3);
+        truncated.push_str(&value[..end]);
+        truncated.push('…');
+        truncated
     }
 }
 
@@ -492,6 +504,12 @@ mod truncation_tests {
     #[test]
     fn truncates_when_limit_exceeded() {
         assert_eq!(truncate("abcdef", 3), "abc…");
+    }
+
+    #[test]
+    fn truncates_without_breaking_utf8() {
+        assert_eq!(truncate("🙂🙂🙂", 2), "🙂🙂…");
+        assert_eq!(truncate("Héllo", 4), "Héll…");
     }
 
     #[test]
