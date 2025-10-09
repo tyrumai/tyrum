@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { parseUpstreamResponse, resolveApiBaseUrl } from "./shared";
+import { parseUpstreamResponse, resolveApiBaseUrl } from "../../shared";
 
 export async function GET() {
   const baseUrl = resolveApiBaseUrl();

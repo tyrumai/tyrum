@@ -1,0 +1,268 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`PortalTimelinePage > renders the timeline and matches the snapshot 1`] = `
+<div>
+  <main
+    aria-labelledby="timeline-heading"
+    class="portal-timeline"
+  >
+    <header
+      class="portal-timeline__header"
+    >
+      <p
+        class="portal-timeline__eyebrow"
+      >
+        Audit Console
+      </p>
+      <h1
+        id="timeline-heading"
+      >
+        Plan timeline
+      </h1>
+      <p
+        class="portal-timeline__lead"
+      >
+        Review executor outcomes, planner summaries, and policy decisions for the selected plan. Redactions hide sensitive fields while keeping the audit trail navigable.
+      </p>
+      <a
+        class="portal-timeline__raw-link"
+        href="/api/audit/plan/3a1c9f77-2f6b-4f2f-a1a3-bc9471d8e852"
+        rel="noopener noreferrer"
+        target="_blank"
+      >
+        View raw timeline JSON
+      </a>
+    </header>
+    <section
+      aria-label="Plan summary"
+      class="portal-timeline__meta"
+    >
+      <div
+        class="portal-timeline__meta-item"
+      >
+        <span
+          class="portal-timeline__meta-label"
+        >
+          Plan ID
+        </span>
+        <code
+          class="portal-timeline__meta-value"
+        >
+          3a1c9f77-2f6b-4f2f-a1a3-bc9471d8e852
+        </code>
+      </div>
+      <div
+        class="portal-timeline__meta-item"
+      >
+        <span
+          class="portal-timeline__meta-label"
+        >
+          Generated
+        </span>
+        <time
+          class="portal-timeline__meta-value"
+          datetime="2025-10-08T18:00:12.142Z"
+        >
+          Oct 08, 2025, 08:00:12 PM
+        </time>
+      </div>
+      <div
+        class="portal-timeline__meta-item"
+      >
+        <span
+          class="portal-timeline__meta-label"
+        >
+          Events
+        </span>
+        <span
+          class="portal-timeline__meta-value"
+        >
+          2
+        </span>
+      </div>
+      <div
+        class="portal-timeline__meta-item"
+      >
+        <span
+          class="portal-timeline__meta-label"
+        >
+          Redactions
+        </span>
+        <span
+          class="portal-timeline__meta-value"
+        >
+          Present
+        </span>
+      </div>
+    </section>
+    <section
+      aria-labelledby="timeline-events-heading"
+    >
+      <h2
+        class="portal-timeline__subheading"
+        id="timeline-events-heading"
+      >
+        Timeline events
+      </h2>
+      <ol
+        class="portal-timeline__events"
+        role="list"
+      >
+        <li
+          class="portal-timeline__event"
+        >
+          <div
+            class="portal-timeline__event-header"
+          >
+            <span
+              aria-label="Status: Success"
+              class="portal-timeline__status portal-timeline__status--success"
+            >
+              Success
+            </span>
+            <span
+              class="portal-timeline__event-meta"
+            >
+              Step 
+              1
+            </span>
+            <span
+              class="portal-timeline__event-meta"
+            >
+              Executor: 
+              generic-web
+            </span>
+            <span
+              class="portal-timeline__event-meta"
+            >
+              <time
+                datetime="2025-10-08T17:58:54.327Z"
+              >
+                Occurred 
+                Oct 08, 2025, 07:58:54 PM
+              </time>
+            </span>
+          </div>
+          <div
+            class="portal-timeline__event-body"
+          >
+            <p
+              class="portal-timeline__reason"
+            >
+              <span
+                class="portal-timeline__reason-label"
+              >
+                Reason
+              </span>
+              <span>
+                Hidden for privacy (redacted).
+              </span>
+            </p>
+            <p
+              class="portal-timeline__kind"
+            >
+              Action kind:
+               
+              Executor Result
+            </p>
+            <div
+              class="portal-timeline__redactions"
+              role="note"
+            >
+              <span
+                class="portal-timeline__redaction-badge"
+              >
+                Redactions applied
+              </span>
+              <ul
+                class="portal-timeline__redaction-list"
+              >
+                <li>
+                  <code>
+                    /action/result/detail
+                  </code>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <a
+            class="portal-timeline__raw-link portal-timeline__raw-link--inline"
+            href="/api/audit/plan/3a1c9f77-2f6b-4f2f-a1a3-bc9471d8e852?event=b91a7a90-239a-4f6e-9ad4-2a089dfb67d8"
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            View raw event JSON
+          </a>
+        </li>
+        <li
+          class="portal-timeline__event"
+        >
+          <div
+            class="portal-timeline__event-header"
+          >
+            <span
+              aria-label="Status: Success"
+              class="portal-timeline__status portal-timeline__status--success"
+            >
+              Success
+            </span>
+            <span
+              class="portal-timeline__event-meta"
+            >
+              Step 
+              2
+            </span>
+            <span
+              class="portal-timeline__event-meta"
+            >
+              Executor: 
+              planner
+            </span>
+            <span
+              class="portal-timeline__event-meta"
+            >
+              <time
+                datetime="2025-10-08T17:59:12.927Z"
+              >
+                Occurred 
+                Oct 08, 2025, 07:59:12 PM
+              </time>
+            </span>
+          </div>
+          <div
+            class="portal-timeline__event-body"
+          >
+            <p
+              class="portal-timeline__reason"
+            >
+              <span
+                class="portal-timeline__reason-label"
+              >
+                Reason
+              </span>
+              <span>
+                Postconditions satisfied for all steps.
+              </span>
+            </p>
+            <p
+              class="portal-timeline__kind"
+            >
+              Action kind:
+               
+              Plan Summary
+            </p>
+          </div>
+          <a
+            class="portal-timeline__raw-link portal-timeline__raw-link--inline"
+            href="/api/audit/plan/3a1c9f77-2f6b-4f2f-a1a3-bc9471d8e852?event=e5129e54-4370-48af-8941-891d0d9751b3"
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            View raw event JSON
+          </a>
+        </li>
+      </ol>
+    </section>
+  </main>
+</div>
+`;

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseUpstreamResponse, resolveApiBaseUrl } from "../shared";
+import { parseUpstreamResponse, resolveApiBaseUrl } from "../../../shared";
 
 async function readJsonBody(request: NextRequest) {
   try {
