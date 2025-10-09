@@ -64,6 +64,8 @@ function formatDateTime(isoString?: string) {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
+      timeZone: "UTC",
+      timeZoneName: "short",
     }).format(date);
   } catch (error) {
     return date.toISOString();

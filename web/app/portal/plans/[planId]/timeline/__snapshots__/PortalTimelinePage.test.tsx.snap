@@ -63,7 +63,7 @@ exports[`PortalTimelinePage > renders the timeline and matches the snapshot 1`] 
           class="portal-timeline__meta-value"
           datetime="2025-10-08T18:00:12.142Z"
         >
-          Oct 08, 2025, 08:00:12 PM
+          Oct 08, 2025, 06:00:12 PM UTC
         </time>
       </div>
       <div
@@ -139,7 +139,7 @@ exports[`PortalTimelinePage > renders the timeline and matches the snapshot 1`] 
                 datetime="2025-10-08T17:58:54.327Z"
               >
                 Occurred 
-                Oct 08, 2025, 07:58:54 PM
+                Oct 08, 2025, 05:58:54 PM UTC
               </time>
             </span>
           </div>
@@ -225,7 +225,7 @@ exports[`PortalTimelinePage > renders the timeline and matches the snapshot 1`] 
                 datetime="2025-10-08T17:59:12.927Z"
               >
                 Occurred 
-                Oct 08, 2025, 07:59:12 PM
+                Oct 08, 2025, 05:59:12 PM UTC
               </time>
             </span>
           </div>
