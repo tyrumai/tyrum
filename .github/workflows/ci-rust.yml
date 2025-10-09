@@ -58,6 +58,12 @@ jobs:
         if: steps.detect.outputs.has-workspace != 'true'
         run: echo "No Rust workspace detected; skipping Rust CI." >>"$GITHUB_STEP_SUMMARY"
 
+      - name: Setup Node.js for Playwright
+        if: steps.detect.outputs.has-workspace == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
       - name: Install Playwright browsers
         if: steps.detect.outputs.has-workspace == 'true'
         run: |
