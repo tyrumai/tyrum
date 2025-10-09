@@ -1,0 +1,19 @@
+defaults:
+  timeout_ms: 20000
+
+auth_profiles:
+  local_vllm:
+    type: none
+  mock:
+    type: none
+
+models:
+  tyrum-stub-8b:
+    target: local_vllm
+    endpoint: http://vllm-gateway:8000
+    capabilities: [text]
+
+  frontier-mock:
+    target: mock
+    endpoint: http://mock-llm:8085
+    capabilities: [text]
