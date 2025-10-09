@@ -577,9 +577,22 @@ fn extract_request_details(body: &[u8]) -> Result<RequestBody, GatewayError> {
     let value: Value = serde_json::from_slice(body)
         .map_err(|err| GatewayError::invalid_request("invalid JSON payload", err))?;
     let model = value.get("model").and_then(|m| m.as_str()).ok_or_else(|| {
-        let snapshot = serde_json::to_string(&value)
-            .unwrap_or_else(|_| "<unserializable request body>".to_string());
-        GatewayError::invalid_request("request body missing 'model' field", anyhow!(snapshot))
+        let context = if let Some(object) = value.as_object() {
+            if object.is_empty() {
+                "present top-level keys: <none>".to_string()
+            } else {
+                let list = object
+                    .keys()
+                    .map(|k| k.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("present top-level keys: {list}")
+            }
+        } else {
+            format!("body type: {}", describe_value_type(&value))
+        };
+
+        GatewayError::invalid_request("request body missing 'model' field", anyhow!(context))
     })?;
     let stream = value
         .get("stream")
@@ -589,6 +602,17 @@ fn extract_request_details(body: &[u8]) -> Result<RequestBody, GatewayError> {
         model: model.to_string(),
         stream,
     })
+}
+
+fn describe_value_type(value: &Value) -> &'static str {
+    match value {
+        Value::Null => "null",
+        Value::Bool(_) => "bool",
+        Value::Number(_) => "number",
+        Value::String(_) => "string",
+        Value::Array(_) => "array",
+        Value::Object(_) => "object",
+    }
 }
 
 #[derive(Error, Debug)]
