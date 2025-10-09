@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{Context, anyhow};
+use anyhow::{Context, anyhow, bail};
 use axum::{
     Error as AxumError, Router,
     body::Body,
@@ -30,7 +30,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    init_tracing();
+    init_tracing()?;
 
     let bind_addr =
         env::var("MODEL_GATEWAY_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8001".to_string());
@@ -57,15 +57,14 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn init_tracing() {
+fn init_tracing() -> anyhow::Result<()> {
     let env_filter = env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
-    if let Err(err) = tracing_subscriber::registry()
+    tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(env_filter))
         .with(tracing_subscriber::fmt::layer())
         .try_init()
-    {
-        eprintln!("tracing already initialized: {err}");
-    }
+        .with_context(|| "initializing tracing subscriber")?;
+    Ok(())
 }
 
 #[derive(Clone)]
@@ -143,12 +142,14 @@ impl GatewaySettings {
     fn load(path: &Path) -> anyhow::Result<Self> {
         let contents = fs::read_to_string(path)
             .with_context(|| format!("reading model gateway config at {}", path.display()))?;
-        let config: GatewayConfig = if contents.trim().is_empty() {
-            GatewayConfig::default()
-        } else {
-            serde_yaml::from_str(&contents)
-                .with_context(|| format!("parsing model gateway config at {}", path.display()))?
-        };
+        if contents.trim().is_empty() {
+            bail!(
+                "model gateway config at {} is empty; define at least one model route",
+                path.display()
+            );
+        }
+        let config: GatewayConfig = serde_yaml::from_str(&contents)
+            .with_context(|| format!("parsing model gateway config at {}", path.display()))?;
 
         let defaults = Defaults {
             timeout_ms: config
@@ -184,6 +185,13 @@ impl GatewaySettings {
                 cost_ceiling_usd: cfg.cost_ceiling_usd,
             };
             routes.insert(model_name, route);
+        }
+
+        if routes.is_empty() {
+            bail!(
+                "model gateway config at {} defines no models; at least one is required",
+                path.display()
+            );
         }
 
         Ok(Self { defaults, routes })
@@ -569,10 +577,9 @@ fn extract_request_details(body: &[u8]) -> Result<RequestBody, GatewayError> {
     let value: Value = serde_json::from_slice(body)
         .map_err(|err| GatewayError::invalid_request("invalid JSON payload", err))?;
     let model = value.get("model").and_then(|m| m.as_str()).ok_or_else(|| {
-        GatewayError::invalid_request(
-            "request body missing 'model' field",
-            anyhow!("missing model field"),
-        )
+        let snapshot = serde_json::to_string(&value)
+            .unwrap_or_else(|_| "<unserializable request body>".to_string());
+        GatewayError::invalid_request("request body missing 'model' field", anyhow!(snapshot))
     })?;
     let stream = value
         .get("stream")
