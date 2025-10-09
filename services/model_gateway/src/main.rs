@@ -8,7 +8,7 @@ use std::{
 
 use anyhow::{Context, anyhow};
 use axum::{
-    Router,
+    Error as AxumError, Router,
     body::Body,
     extract::{OriginalUri, State},
     http::{Request, StatusCode},
@@ -16,6 +16,7 @@ use axum::{
     routing::{get, post},
 };
 use bytes::Bytes;
+use futures_util::StreamExt;
 use http_body_util::BodyExt;
 use reqwest::header::{HeaderMap as ReqwestHeaderMap, HeaderName, HeaderValue};
 use serde::{Deserialize, Serialize};
@@ -310,12 +311,24 @@ async fn proxy(
     let (parts, body) = req.into_parts();
     let method = validate_method(&parts)?;
     let body_bytes = read_body(body).await?;
-    let (route, model) = resolve_model(&state, &body_bytes)?;
-    let upstream_url = build_forward_url(&route.base_url, &original_uri)?;
-    let headers = build_forward_headers(&parts, route);
-    let upstream_response =
-        forward_request(&state, method, upstream_url, headers, body_bytes, &model).await?;
-    build_response(upstream_response).await
+    let details = resolve_request(&state, &body_bytes)?;
+    let upstream_url = build_forward_url(&details.route.base_url, &original_uri)?;
+    let headers = build_forward_headers(&parts, details.route);
+    let upstream_response = forward_request(
+        &state,
+        method,
+        upstream_url,
+        headers,
+        body_bytes,
+        &details.model,
+    )
+    .await?;
+
+    if should_stream(&details, &upstream_response) {
+        build_streaming_response(upstream_response).await
+    } else {
+        build_buffered_response(upstream_response).await
+    }
 }
 
 fn validate_method(parts: &axum::http::request::Parts) -> Result<reqwest::Method, GatewayError> {
@@ -333,16 +346,26 @@ async fn read_body(body: Body) -> Result<Bytes, GatewayError> {
         .map(|collected| collected.to_bytes())
 }
 
-fn resolve_model<'routes>(
-    state: &'routes AppState,
+struct RequestDetails<'route> {
+    route: &'route ModelRoute,
+    model: String,
+    stream: bool,
+}
+
+fn resolve_request<'route>(
+    state: &'route AppState,
     body_bytes: &[u8],
-) -> Result<(&'routes ModelRoute, String), GatewayError> {
-    let model = extract_model(body_bytes)?;
+) -> Result<RequestDetails<'route>, GatewayError> {
+    let RequestBody { model, stream } = extract_request_details(body_bytes)?;
     let route = state
         .routes
         .get(model.as_str())
         .ok_or_else(|| GatewayError::unknown_model(model.clone()))?;
-    Ok((route, model))
+    Ok(RequestDetails {
+        route,
+        model,
+        stream,
+    })
 }
 
 fn build_forward_headers(
@@ -386,7 +409,19 @@ async fn forward_request(
         .map_err(|err| GatewayError::upstream_failure(model.to_string(), err))
 }
 
-async fn build_response(upstream_response: reqwest::Response) -> Result<Response, GatewayError> {
+fn should_stream(details: &RequestDetails<'_>, upstream: &reqwest::Response) -> bool {
+    details.stream
+        || upstream
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .map(|value| value.starts_with("text/event-stream"))
+            .unwrap_or(false)
+}
+
+async fn build_buffered_response(
+    upstream_response: reqwest::Response,
+) -> Result<Response, GatewayError> {
     let status = upstream_response.status();
     let upstream_headers = upstream_response.headers().clone();
     let bytes = upstream_response
@@ -411,6 +446,36 @@ async fn build_response(upstream_response: reqwest::Response) -> Result<Response
         .map_err(|err| GatewayError::internal("building response", err))
 }
 
+async fn build_streaming_response(
+    upstream_response: reqwest::Response,
+) -> Result<Response, GatewayError> {
+    let status = upstream_response.status();
+    let upstream_headers = upstream_response.headers().clone();
+
+    let mut response_builder = Response::builder().status(status);
+    if let Some(headers_mut) = response_builder.headers_mut() {
+        for (name, value) in upstream_headers.iter() {
+            if name == reqwest::header::CONTENT_LENGTH {
+                continue;
+            }
+            headers_mut.insert(name.clone(), value.clone());
+        }
+    } else {
+        warn!("unable to mutate response headers; upstream headers dropped");
+    }
+
+    let stream = upstream_response.bytes_stream().map(|chunk| {
+        chunk.map_err(|err| {
+            error!("streaming error from upstream: {err}");
+            AxumError::new(err)
+        })
+    });
+
+    response_builder
+        .body(Body::from_stream(stream))
+        .map_err(|err| GatewayError::internal("building streaming response", err))
+}
+
 fn build_upstream_url(
     base: &str,
     path: &str,
@@ -428,19 +493,28 @@ fn build_upstream_url(
     reqwest::Url::parse(&url)
 }
 
-fn extract_model(body: &[u8]) -> Result<String, GatewayError> {
+struct RequestBody {
+    model: String,
+    stream: bool,
+}
+
+fn extract_request_details(body: &[u8]) -> Result<RequestBody, GatewayError> {
     let value: Value = serde_json::from_slice(body)
         .map_err(|err| GatewayError::invalid_request("invalid JSON payload", err))?;
-    value
-        .get("model")
-        .and_then(|m| m.as_str())
-        .map(|m| m.to_string())
-        .ok_or_else(|| {
-            GatewayError::invalid_request(
-                "request body missing 'model' field",
-                anyhow!("missing model field"),
-            )
-        })
+    let model = value.get("model").and_then(|m| m.as_str()).ok_or_else(|| {
+        GatewayError::invalid_request(
+            "request body missing 'model' field",
+            anyhow!("missing model field"),
+        )
+    })?;
+    let stream = value
+        .get("stream")
+        .and_then(|flag| flag.as_bool())
+        .unwrap_or(false);
+    Ok(RequestBody {
+        model: model.to_string(),
+        stream,
+    })
 }
 
 #[derive(Error, Debug)]

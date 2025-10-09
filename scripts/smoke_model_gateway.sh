@@ -22,3 +22,15 @@ completion_response=$(curl --show-error --silent --fail \
 
 echo "$completion_response" | jq -e '.choices[0].text | startswith("Echo:")' >/dev/null
 echo "Routing verification passed."
+
+echo "Validating streaming response via SSE"
+stream_response=$(curl --show-error --silent --fail --no-buffer \
+  -H "Content-Type: application/json" \
+  -d '{"model":"frontier-mock","prompt":"ping","stream":true}' \
+  "$gateway_url/v1/completions")
+
+if [[ "$stream_response" != *"data: [DONE]"* ]]; then
+  echo "Streaming response missing [DONE] sentinel" >&2
+  exit 1
+fi
+echo "Streaming verification passed."

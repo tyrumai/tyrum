@@ -81,6 +81,12 @@ models:
 3. Gateway rewrites or proxies the request to the backend, attaching auth headers.
 4. Response is normalized to OpenAI schema and returned to the caller.
 
+## Streaming responses
+
+- Requests that include `stream: true` are proxied using Server-Sent Events (`text/event-stream`). The gateway forwards each upstream chunk without buffering, so downstream consumers (e.g., voice TTS) can react to partial completions.
+- When upstreams return streaming responses by default (e.g., long-running inference), the gateway automatically switches to streaming mode even if the client did not request it explicitly.
+- Streaming works for any configured backend that supports OpenAI-compatible SSE (local vLLM or third-party APIs).
+
 ## Health & Observability
 
 - The gateway exposes `/healthz` for docker-compose readiness.

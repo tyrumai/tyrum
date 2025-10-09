@@ -126,6 +126,7 @@ flowchart LR
 - The gateway exposes a single OpenAI-compatible surface to internal services and consults configuration to decide whether to route a call to local vLLM models or a frontier provider (OpenAI, OpenRouter, etc.).
 - Each model entry carries auth profile, capability flags, token/cost guardrails, and target endpoint; unknown models fail closed.
 - Telemetry and audit logs record the chosen backend, token usage, latency, and any policy violations.
+- Streaming responses (`stream: true` or upstream SSE) are proxied without buffering so downstream services (e.g., voice) can act on partial completions immediately.
 - Detailed configuration and next steps live in `docs/infra/model_gateway.md`.
 
 ---
