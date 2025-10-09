@@ -13,11 +13,11 @@ ENV HTTP_PROXY=$HTTP_PROXY \
 
 WORKDIR /app
 
-COPY services/model_gateway/Cargo.toml Cargo.toml
-COPY services/model_gateway/src src
-COPY shared/tyrum-shared shared/tyrum-shared
+COPY Cargo.toml Cargo.lock ./
+COPY services services
+COPY shared shared
 
-RUN cargo build --release
+RUN cargo build --locked --release --package tyrum-model-gateway
 
 FROM debian:bookworm-slim AS runtime
 

@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     env, fs,
     path::{Path, PathBuf},
     sync::Arc,
@@ -368,16 +368,66 @@ fn resolve_request<'route>(
     })
 }
 
+const HOP_BY_HOP_HEADERS: &[&str] = &[
+    "connection",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "proxy-connection",
+    "te",
+    "trailer",
+    "transfer-encoding",
+    "upgrade",
+];
+
+fn default_hop_by_hop_set() -> HashSet<HeaderName> {
+    let mut headers = HashSet::with_capacity(HOP_BY_HOP_HEADERS.len());
+    for name in HOP_BY_HOP_HEADERS {
+        headers.insert(HeaderName::from_static(name));
+    }
+    headers
+}
+
+fn extend_with_connection_tokens(set: &mut HashSet<HeaderName>, header: Option<&HeaderValue>) {
+    if let Some(value) = header
+        && let Ok(tokens) = value.to_str()
+    {
+        for token in tokens.split(',') {
+            let trimmed = token.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            if let Ok(name) = HeaderName::from_bytes(trimmed.as_bytes()) {
+                set.insert(name);
+            }
+        }
+    }
+}
+
+fn request_skip_headers(headers: &axum::http::HeaderMap) -> HashSet<HeaderName> {
+    let mut skip = default_hop_by_hop_set();
+    skip.insert(axum::http::header::HOST.clone());
+    skip.insert(axum::http::header::CONTENT_LENGTH.clone());
+    skip.insert(axum::http::header::AUTHORIZATION.clone());
+    extend_with_connection_tokens(&mut skip, headers.get(axum::http::header::CONNECTION));
+    skip
+}
+
+fn response_skip_headers(headers: &ReqwestHeaderMap) -> HashSet<HeaderName> {
+    let mut skip = default_hop_by_hop_set();
+    skip.insert(reqwest::header::CONTENT_LENGTH.clone());
+    extend_with_connection_tokens(&mut skip, headers.get(reqwest::header::CONNECTION));
+    skip
+}
+
 fn build_forward_headers(
     parts: &axum::http::request::Parts,
     route: &ModelRoute,
 ) -> ReqwestHeaderMap {
     let mut headers = ReqwestHeaderMap::new();
+    let skip = request_skip_headers(&parts.headers);
     for (name, value) in parts.headers.iter() {
-        if name == axum::http::header::HOST
-            || name == axum::http::header::CONTENT_LENGTH
-            || name == axum::http::header::AUTHORIZATION
-        {
+        if skip.contains(name) {
             continue;
         }
         headers.insert(name.clone(), value.clone());
@@ -431,8 +481,9 @@ async fn build_buffered_response(
 
     let mut response_builder = Response::builder().status(status);
     if let Some(headers_mut) = response_builder.headers_mut() {
+        let skip = response_skip_headers(&upstream_headers);
         for (name, value) in upstream_headers.iter() {
-            if name == reqwest::header::CONTENT_LENGTH {
+            if skip.contains(name) {
                 continue;
             }
             headers_mut.insert(name.clone(), value.clone());
@@ -454,8 +505,9 @@ async fn build_streaming_response(
 
     let mut response_builder = Response::builder().status(status);
     if let Some(headers_mut) = response_builder.headers_mut() {
+        let skip = response_skip_headers(&upstream_headers);
         for (name, value) in upstream_headers.iter() {
-            if name == reqwest::header::CONTENT_LENGTH {
+            if skip.contains(name) {
                 continue;
             }
             headers_mut.insert(name.clone(), value.clone());
@@ -583,8 +635,88 @@ impl GatewayError {
         match (log_error, message) {
             (true, Some(msg)) => error!("{msg}"),
             (false, Some(msg)) => warn!("{msg}"),
-            (_, None) => {}
+            (true, None) => error!("gateway error occurred without additional context"),
+            (false, None) => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::Body;
+    use axum::http::Request;
+    use reqwest::header::{HeaderName, HeaderValue};
+
+    #[test]
+    fn request_headers_remove_hop_by_hop_and_custom_tokens() {
+        let request = match Request::builder()
+            .method("POST")
+            .uri("/v1/completions")
+            .header("Connection", "keep-alive, Custom-Hop")
+            .header("Upgrade", "websocket")
+            .header("Custom-Hop", "value")
+            .header("Authorization", "Bearer downstream")
+            .header("Content-Length", "42")
+            .header("Host", "localhost")
+            .header("X-Correlation-Id", "abc123")
+            .body(Body::empty())
+        {
+            Ok(request) => request,
+            Err(err) => panic!("failed to build request: {err}"),
+        };
+        let (parts, _) = request.into_parts();
+        let route = ModelRoute {
+            target: "test".to_string(),
+            base_url: "https://example.com".to_string(),
+            auth: ResolvedAuth::None,
+            capabilities: vec![],
+            max_total_tokens: None,
+            cost_ceiling_usd: None,
+        };
+
+        let headers = build_forward_headers(&parts, &route);
+
+        assert!(!headers.contains_key("connection"));
+        assert!(!headers.contains_key("keep-alive"));
+        assert!(!headers.contains_key("custom-hop"));
+        assert!(!headers.contains_key("upgrade"));
+        assert!(!headers.contains_key("authorization"));
+        assert!(!headers.contains_key("content-length"));
+        assert!(headers.contains_key("x-correlation-id"));
+    }
+
+    #[test]
+    fn response_headers_remove_hop_by_hop_and_connection_tokens() {
+        let mut headers = ReqwestHeaderMap::new();
+        headers.insert(
+            reqwest::header::CONNECTION,
+            HeaderValue::from_static("keep-alive, X-Trace"),
+        );
+        headers.insert(
+            reqwest::header::TRANSFER_ENCODING,
+            HeaderValue::from_static("chunked"),
+        );
+        headers.insert(
+            HeaderName::from_static("x-trace"),
+            HeaderValue::from_static("trace-id"),
+        );
+        headers.insert(
+            HeaderName::from_static("x-forwarded-for"),
+            HeaderValue::from_static("127.0.0.1"),
+        );
+        headers.insert(
+            reqwest::header::CONTENT_LENGTH,
+            HeaderValue::from_static("1024"),
+        );
+
+        let skip = response_skip_headers(&headers);
+
+        assert!(skip.contains(&reqwest::header::CONNECTION));
+        assert!(skip.contains(&reqwest::header::TRANSFER_ENCODING));
+        assert!(skip.contains(&HeaderName::from_static("x-trace")));
+        assert!(skip.contains(&reqwest::header::CONTENT_LENGTH));
+        assert!(!skip.contains(&HeaderName::from_static("x-forwarded-for")));
     }
 }
 
