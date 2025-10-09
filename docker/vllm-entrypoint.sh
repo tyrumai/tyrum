@@ -8,10 +8,21 @@ PORT="${VLLM_PORT:-8000}"
 
 EXTRA_ARGS=()
 if [[ -n "${VLLM_EXTRA_ARGS:-}" ]]; then
-  # shellcheck disable=SC2086
-  eval "set -- ${VLLM_EXTRA_ARGS}"
-  EXTRA_ARGS=("$@")
-  set --
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "python3 is required to parse VLLM_EXTRA_ARGS safely" >&2
+    exit 1
+  fi
+  while IFS= read -r arg; do
+    EXTRA_ARGS+=("$arg")
+  done < <(python3 - <<'PY'
+import os
+import shlex
+
+value = os.environ.get("VLLM_EXTRA_ARGS", "")
+for token in shlex.split(value):
+    print(token)
+PY
+)
 fi
 
 exec vllm serve "${MODEL}" \
