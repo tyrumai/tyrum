@@ -87,6 +87,10 @@ models:
 - When upstreams return streaming responses by default (e.g., long-running inference), the gateway automatically switches to streaming mode even if the client did not request it explicitly.
 - Streaming works for any configured backend that supports OpenAI-compatible SSE (local vLLM or third-party APIs).
 
+## Local Gateway Implementation
+
+Issue #90 introduced the `services/tyrum-llm` crate, a lightweight Rust HTTP proxy that presents `/completions` to the planner, applies a basic per-second rate limit, logs truncated prompt/response previews, and forwards JSON payloads to `http://vllm-gateway:8000/v1/completions`. The Docker Compose stack builds this as `llm-gateway` (see `Dockerfile.llm`) and sets the planner's `LLM_GATEWAY_URL` environment variable so runtime calls resolve through the proxy instead of hitting vLLM directly.
+
 ## Health & Observability
 
 - The gateway exposes `/healthz` for docker-compose readiness.

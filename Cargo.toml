@@ -13,6 +13,7 @@ members = [
     "shared/tyrum-shared",
     "services/tyrum-watchers",
     "services/model_gateway",
+    "services/tyrum-llm",
 ]
 resolver = "2"
 
