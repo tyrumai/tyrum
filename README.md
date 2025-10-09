@@ -114,8 +114,22 @@ Follow these steps to provision the Telegram channel safely across local and sta
    - Next.js portal on http://localhost:3000
    - PostgreSQL on `localhost:5432` (`tyrum`/`tyrum_dev_password`)
    - Redis on `localhost:6379`
+   - Rust LLM gateway on http://localhost:8086/completions forwarding planner prompts to vLLM
    - Mock LLM on http://localhost:8085/v1/completions echoing prompts
    - Android executor emulator reachable via adb on localhost:5555 (gRPC stream on 8554)
 4. Tear the stack down with `docker compose -f infra/docker-compose.yml down --volumes` when finished.
+
+### LLM Gateway Environment
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `LLM_GATEWAY_BIND_ADDR` | `0.0.0.0:8086` | Socket the Rust gateway listens on. |
+| `LLM_VLLM_URL` | `http://vllm-gateway:8000/v1/completions` | Upstream vLLM completions endpoint. |
+| `LLM_GATEWAY_MODEL` | `tyrum-stub-8b` | Default model identifier forwarded to vLLM. |
+| `LLM_GATEWAY_TIMEOUT_MS` | `20000` | Upstream HTTP timeout in milliseconds. |
+| `LLM_RATE_LIMIT_PER_SECOND` | `5` | Max planner requests accepted per second. |
+| `LLM_LOG_TRUNCATE` | `256` | Character limit for prompt/response previews in logs. |
+
+Planner containers resolve the gateway via the `LLM_GATEWAY_URL` environment variable, set to `http://llm-gateway:8086/completions` in Docker Compose. The compose file also overrides `LLM_VLLM_URL` to `http://mock-llm:8085/v1/completions` so the stack works without the optional vLLM profile; point this back at `http://vllm-gateway:8000/v1/completions` when running with GPU-backed inference.
 
 The Docker Compose definition lives in `infra/docker-compose.yml` and mirrors how the future GitHub Actions container smoke tests will exercise the stack.
