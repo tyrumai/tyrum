@@ -13,12 +13,13 @@ async fn jetstream_publish_and_consume_roundtrip() -> Result<()> {
     let fixture = match NatsFixture::start().await {
         Ok(fixture) => fixture,
         Err(err) => {
-            if err
-                .chain()
-                .any(|cause| cause.to_string().contains("No such file or directory"))
-            {
+            if err.chain().any(|cause| {
+                let message = cause.to_string();
+                message.contains("No such file or directory")
+                    || message.contains("client error (Connect)")
+            }) {
                 eprintln!(
-                    "skipping jetstream_publish_and_consume_roundtrip: docker socket unavailable ({err})"
+                    "skipping jetstream_publish_and_consume_roundtrip: docker unavailable ({err})"
                 );
                 return Ok(());
             }

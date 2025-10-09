@@ -35,12 +35,13 @@ async fn watcher_processor_invokes_planner_and_records_outcome() -> Result<()> {
     let fixture = match NatsFixture::start().await {
         Ok(fixture) => fixture,
         Err(err) => {
-            if err
-                .chain()
-                .any(|cause| cause.to_string().contains("No such file or directory"))
-            {
+            if err.chain().any(|cause| {
+                let message = cause.to_string();
+                message.contains("No such file or directory")
+                    || message.contains("client error (Connect)")
+            }) {
                 eprintln!(
-                    "skipping watcher_processor_invokes_planner_and_records_outcome: docker socket unavailable ({err})"
+                    "skipping watcher_processor_invokes_planner_and_records_outcome: docker unavailable ({err})"
                 );
                 return Ok(());
             }

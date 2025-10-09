@@ -1,6 +1,6 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
-use std::time::Duration;
+use std::{path::Path, time::Duration};
 
 use chrono::Utc;
 use serde_json::json;
@@ -23,6 +23,12 @@ const POSTGRES_TAG: &str = "pg16";
 const POSTGRES_USER: &str = "tyrum";
 const POSTGRES_PASSWORD: &str = "tyrum_dev_password";
 const POSTGRES_DB: &str = "tyrum_dev";
+
+fn docker_available() -> bool {
+    std::env::var("DOCKER_HOST").is_ok()
+        || std::env::var("TESTCONTAINERS_HOST_OVERRIDE").is_ok()
+        || Path::new("/var/run/docker.sock").exists()
+}
 
 struct TestContext {
     #[allow(dead_code)]
@@ -68,6 +74,10 @@ impl TestContext {
 
 #[tokio::test]
 async fn fact_crud_roundtrip() {
+    if !docker_available() {
+        eprintln!("skipping fact_crud_roundtrip: docker unavailable");
+        return;
+    }
     let ctx = TestContext::new().await;
     let subject_id = Uuid::new_v4();
 
@@ -119,6 +129,10 @@ async fn fact_crud_roundtrip() {
 
 #[tokio::test]
 async fn episodic_event_crud_roundtrip() {
+    if !docker_available() {
+        eprintln!("skipping episodic_event_crud_roundtrip: docker unavailable");
+        return;
+    }
     let ctx = TestContext::new().await;
     let subject_id = Uuid::new_v4();
     let event_id = Uuid::new_v4();
@@ -172,6 +186,10 @@ async fn episodic_event_crud_roundtrip() {
 
 #[tokio::test]
 async fn capability_memory_crud_roundtrip() {
+    if !docker_available() {
+        eprintln!("skipping capability_memory_crud_roundtrip: docker unavailable");
+        return;
+    }
     let ctx = TestContext::new().await;
     let subject_id = Uuid::new_v4();
 
@@ -270,6 +288,10 @@ async fn capability_memory_crud_roundtrip() {
 
 #[tokio::test]
 async fn vector_embedding_crud_roundtrip() {
+    if !docker_available() {
+        eprintln!("skipping vector_embedding_crud_roundtrip: docker unavailable");
+        return;
+    }
     let ctx = TestContext::new().await;
     let subject_id = Uuid::new_v4();
     let embedding_id = Uuid::new_v4();

@@ -11,7 +11,7 @@ use axum::{
     routing::post,
 };
 use chrono::Utc;
-use common::postgres::TestPostgres;
+use common::postgres::{TestPostgres, docker_available};
 use common::wallet::start_wallet_stub;
 use http_body_util::BodyExt;
 use reqwest::Url;
@@ -31,6 +31,15 @@ use tyrum_shared::{
     PamProfileRef, PiiField, PlanUserContext, SenderMetadata, ThreadKind,
 };
 use tyrum_wallet::Thresholds;
+
+fn skip_if_no_docker(test_name: &str) -> bool {
+    if docker_available() {
+        true
+    } else {
+        eprintln!("skipping {test_name}: docker unavailable");
+        false
+    }
+}
 
 fn sample_request() -> PlanRequest {
     PlanRequest {
@@ -165,6 +174,9 @@ impl DiscoveryPipeline for MockDiscoveryPipeline {
 
 #[tokio::test]
 async fn plan_returns_stub_response() {
+    if !skip_if_no_docker("plan_returns_stub_response") {
+        return;
+    }
     let payload = sample_request();
     let body = serde_json::to_vec(&payload).expect("serialize plan request");
 
@@ -221,6 +233,9 @@ async fn plan_returns_stub_response() {
 
 #[tokio::test]
 async fn discovery_pipeline_uses_mcp_capability() {
+    if !skip_if_no_docker("discovery_pipeline_uses_mcp_capability") {
+        return;
+    }
     let pipeline = Arc::new(MockDiscoveryPipeline::new(
         found_connector(DiscoveryStrategy::Mcp, "mcp://capability"),
         DiscoveryOutcome::NotFound,
@@ -284,6 +299,9 @@ async fn discovery_pipeline_uses_mcp_capability() {
 
 #[tokio::test]
 async fn discovery_pipeline_uses_structured_api_capability() {
+    if !skip_if_no_docker("discovery_pipeline_uses_structured_api_capability") {
+        return;
+    }
     let pipeline = Arc::new(MockDiscoveryPipeline::new(
         DiscoveryOutcome::NotFound,
         found_connector(DiscoveryStrategy::StructuredApi, "https://api.example.com"),
@@ -342,6 +360,9 @@ async fn discovery_pipeline_uses_structured_api_capability() {
 
 #[tokio::test]
 async fn discovery_pipeline_uses_generic_http_capability() {
+    if !skip_if_no_docker("discovery_pipeline_uses_generic_http_capability") {
+        return;
+    }
     let pipeline = Arc::new(MockDiscoveryPipeline::new(
         DiscoveryOutcome::NotFound,
         DiscoveryOutcome::NotFound,
@@ -407,6 +428,9 @@ async fn discovery_pipeline_uses_generic_http_capability() {
 
 #[tokio::test]
 async fn plan_rejects_oversized_payloads() {
+    if !skip_if_no_docker("plan_rejects_oversized_payloads") {
+        return;
+    }
     let mut payload = sample_request();
     payload.tags = vec![
         String::from_utf8(vec![b'x'; MAX_PLAN_REQUEST_BYTES + 1]).expect("build oversized tag"),
@@ -440,6 +464,9 @@ async fn plan_rejects_oversized_payloads() {
 
 #[tokio::test]
 async fn plan_escalates_on_policy_escalation() {
+    if !skip_if_no_docker("plan_escalates_on_policy_escalation") {
+        return;
+    }
     let payload = sample_request();
     let body = serde_json::to_vec(&payload).expect("serialize plan request");
 
@@ -485,6 +512,9 @@ async fn plan_escalates_on_policy_escalation() {
 
 #[tokio::test]
 async fn plan_returns_failure_on_policy_denial() {
+    if !skip_if_no_docker("plan_returns_failure_on_policy_denial") {
+        return;
+    }
     let payload = sample_request();
     let body = serde_json::to_vec(&payload).expect("serialize plan request");
 
@@ -531,6 +561,9 @@ async fn plan_returns_failure_on_policy_denial() {
 
 #[tokio::test]
 async fn plan_escalation_includes_context_when_rules_do_not_match() {
+    if !skip_if_no_docker("plan_escalation_includes_context_when_rules_do_not_match") {
+        return;
+    }
     let payload = sample_request();
     let body = serde_json::to_vec(&payload).expect("serialize plan request");
 
@@ -574,6 +607,9 @@ async fn plan_escalation_includes_context_when_rules_do_not_match() {
 
 #[tokio::test]
 async fn plan_failure_includes_details_when_rules_do_not_match() {
+    if !skip_if_no_docker("plan_failure_includes_details_when_rules_do_not_match") {
+        return;
+    }
     let payload = sample_request();
     let body = serde_json::to_vec(&payload).expect("serialize plan request");
 

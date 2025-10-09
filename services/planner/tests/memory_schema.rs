@@ -3,7 +3,7 @@
 mod common;
 
 use chrono::Utc;
-use common::postgres::TestPostgres;
+use common::postgres::{TestPostgres, docker_available};
 use serde_json::json;
 use sqlx::Row;
 use uuid::Uuid;
@@ -12,6 +12,10 @@ static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 
 #[tokio::test(flavor = "current_thread")]
 async fn pgvector_extension_supports_embedding_roundtrip() {
+    if !docker_available() {
+        eprintln!("skipping pgvector_extension_supports_embedding_roundtrip: docker unavailable");
+        return;
+    }
     let postgres = TestPostgres::start()
         .await
         .expect("start postgres container");

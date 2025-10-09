@@ -11,7 +11,7 @@ use axum::{
 use http_body_util::BodyExt;
 use serde_json::{Value, json};
 use sqlx::{PgPool, Row, postgres::PgPoolOptions};
-use std::time::Duration;
+use std::{path::Path, time::Duration};
 use testcontainers::{
     ContainerAsync, GenericImage, ImageExt,
     core::{IntoContainerPort, WaitFor},
@@ -31,6 +31,12 @@ const POSTGRES_PASSWORD: &str = "tyrum_dev_password";
 const POSTGRES_DB: &str = "tyrum_dev";
 
 static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
+
+fn docker_available() -> bool {
+    std::env::var("DOCKER_HOST").is_ok()
+        || std::env::var("TESTCONTAINERS_HOST_OVERRIDE").is_ok()
+        || Path::new("/var/run/docker.sock").exists()
+}
 
 struct TestContext {
     #[allow(dead_code)]
@@ -142,6 +148,10 @@ async fn connect_with_retry(database_url: &str) -> PgPool {
 
 #[tokio::test]
 async fn register_watcher_persists_record() {
+    if !docker_available() {
+        eprintln!("skipping register_watcher_persists_record: docker unavailable");
+        return;
+    }
     let ctx = TestContext::new().await;
     let app = ctx.router.clone();
 
@@ -193,6 +203,10 @@ async fn register_watcher_persists_record() {
 
 #[tokio::test]
 async fn register_watcher_rejects_invalid_source() {
+    if !docker_available() {
+        eprintln!("skipping register_watcher_rejects_invalid_source: docker unavailable");
+        return;
+    }
     let ctx = TestContext::new().await;
     let app = ctx.router.clone();
 
@@ -227,6 +241,10 @@ async fn register_watcher_rejects_invalid_source() {
 
 #[tokio::test]
 async fn register_watcher_rejects_duplicates() {
+    if !docker_available() {
+        eprintln!("skipping register_watcher_rejects_duplicates: docker unavailable");
+        return;
+    }
     let ctx = TestContext::new().await;
     let app = ctx.router.clone();
 

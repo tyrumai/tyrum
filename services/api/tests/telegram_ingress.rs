@@ -3,6 +3,7 @@
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use serde_json::Value;
 use sqlx::{PgPool, Row, postgres::PgPoolOptions};
+use std::path::Path;
 use testcontainers::{
     ContainerAsync, GenericImage, ImageExt,
     core::{IntoContainerPort, WaitFor},
@@ -20,6 +21,12 @@ const POSTGRES_TAG: &str = "pg16";
 const POSTGRES_USER: &str = "tyrum";
 const POSTGRES_PASSWORD: &str = "tyrum_dev_password";
 const POSTGRES_DB: &str = "tyrum_dev";
+
+fn docker_available() -> bool {
+    std::env::var("DOCKER_HOST").is_ok()
+        || std::env::var("TESTCONTAINERS_HOST_OVERRIDE").is_ok()
+        || Path::new("/var/run/docker.sock").exists()
+}
 
 struct TestContext {
     #[allow(dead_code)]
@@ -130,6 +137,10 @@ fn sample_message() -> NormalizedMessage {
 
 #[tokio::test]
 async fn upsert_thread_persists_and_updates_records() {
+    if !docker_available() {
+        eprintln!("skipping upsert_thread_persists_and_updates_records: docker unavailable");
+        return;
+    }
     let ctx = TestContext::new().await;
     let thread = sample_thread();
 
@@ -199,6 +210,10 @@ async fn upsert_thread_persists_and_updates_records() {
 
 #[tokio::test]
 async fn insert_message_persists_and_dedupes() {
+    if !docker_available() {
+        eprintln!("skipping insert_message_persists_and_dedupes: docker unavailable");
+        return;
+    }
     let ctx = TestContext::new().await;
     let thread = sample_thread();
     ctx.repository

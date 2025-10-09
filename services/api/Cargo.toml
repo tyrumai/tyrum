@@ -15,7 +15,7 @@ opentelemetry-otlp = { version = "0.31", features = ["grpc-tonic", "metrics", "l
 opentelemetry_sdk = { version = "0.31", features = ["metrics", "logs", "trace", "rt-tokio"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sqlx = { version = "0.7", default-features = false, features = ["runtime-tokio", "postgres", "chrono", "macros", "migrate"] }
+sqlx = { version = "0.7", default-features = false, features = ["runtime-tokio", "postgres", "chrono", "uuid", "macros", "migrate"] }
 thiserror = "1"
 tokio = { version = "1.43", features = ["full"] }
 tracing = "0.1"
@@ -27,6 +27,7 @@ hmac = "0.12"
 sha2 = "0.10"
 anyhow = "1"
 tyrum-shared = { path = "../../shared/tyrum-shared" }
+uuid = { version = "1", features = ["serde", "v4"] }
 
 [dev-dependencies]
 axum = { version = "0.7", features = ["json"] }
@@ -34,3 +35,4 @@ http-body-util = "0.1"
 serde_json = "1"
 testcontainers = "0.18"
 tower = "0.5"
+tyrum-planner = { path = "../planner" }
