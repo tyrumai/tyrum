@@ -382,10 +382,16 @@ jobs:
 
       - name: Generate SBOM
         if: steps.change.outputs.should_build == 'true'
-        uses: anchore/syft-action@v0.19.0
-        with:
-          image: ${{ steps.tags.outputs.primary }}@${{ steps.build.outputs.digest }}
-          output-file: sbom-${{ matrix.id }}.spdx.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="${{ steps.tags.outputs.primary }}@${{ steps.build.outputs.digest }}"
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            ghcr.io/anchore/syft:latest \
+            "$image" \
+            -o "spdx-json=sbom-${{ matrix.id }}.spdx.json"
 
       - name: Upload SBOM
         if: steps.change.outputs.should_build == 'true'
