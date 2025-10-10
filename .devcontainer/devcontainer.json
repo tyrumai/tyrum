@@ -1,43 +1,42 @@
 {
-  "name": "Tyrum Dev Container",
+  "name": "Tyrum",
   "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
   "features": {
-    "ghcr.io/devcontainers/features/common-utils:2": {
-      "username": "vscode",
-      "userUid": "1000",
-      "userGid": "1000"
-    },
-    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
-    "ghcr.io/devcontainers/features/rust:1": {
-      "version": "latest"
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "24.0"
     },
     "ghcr.io/devcontainers/features/node:1": {
-      "version": "20"
+      "version": "24",
+      "installYarn": true
+    },
+    "ghcr.io/devcontainers/features/rust:1": {
+      "profile": "default"
+    },
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.13"
     },
     "ghcr.io/devcontainers/features/terraform:1": {
-      "version": "1.6"
+      "version": "1.13.3"
     }
-  },
-  "postCreateCommand": ".devcontainer/scripts/post-create.sh",
-  "postStartCommand": "pre-commit install || true",
-  "remoteUser": "vscode",
-  "containerEnv": {
-    "PNPM_HOME": "/home/vscode/.local/share/pnpm",
-    "PATH": "${containerEnv:PNPM_HOME}:$PATH"
   },
   "customizations": {
     "vscode": {
       "extensions": [
         "rust-lang.rust-analyzer",
         "ms-azuretools.vscode-docker",
-        "hashicorp.terraform",
+        "esbenp.prettier-vscode",
         "dbaeumer.vscode-eslint",
-        "esbenp.prettier-vscode"
-      ],
-      "settings": {
-        "rust-analyzer.check.command": "clippy",
-        "editor.formatOnSave": true
-      }
+        "hashicorp.terraform",
+        "redhat.vscode-yaml"
+      ]
     }
-  }
+  },
+  "remoteUser": "vscode",
+  "containerEnv": {
+    "CARGO_REGISTRIES_CRATES_IO_PROTOCOL": "sparse"
+  },
+  "postCreateCommand": "npm install -g npm@11.6.0 && pip install --user pre-commit && pre-commit install",
+  "updateContentCommand": "npm install --prefix web && cargo fetch && terraform -chdir=infra/terraform/bootstrap init -backend=false",
+  "workspaceFolder": "/workspaces/tyrum",
+  "forwardPorts": [3000, 8080, 8081]
 }
