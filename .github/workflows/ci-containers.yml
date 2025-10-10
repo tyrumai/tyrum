@@ -9,6 +9,10 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   containers:
     name: Build and smoke test ${{ matrix.title }} image
@@ -23,24 +27,102 @@ jobs:
             dockerfile: Dockerfile.api
             port: 8080
             endpoint: /healthz
+            smoke: true
+            build_arg: ""
           - id: policy
             title: Policy
             context: .
             dockerfile: Dockerfile.policy
             port: 8081
             endpoint: /healthz
+            smoke: true
+            build_arg: ""
+          - id: planner
+            title: Planner
+            context: .
+            dockerfile: Dockerfile.planner
+            smoke: false
+            build_arg: ""
+          - id: wallet
+            title: Wallet
+            context: .
+            dockerfile: Dockerfile.wallet
+            port: 8084
+            endpoint: /healthz
+            smoke: true
+            build_arg: ""
+          - id: executor-http
+            title: Executor HTTP
+            context: .
+            dockerfile: Dockerfile.executor-http
+            port: 8092
+            endpoint: /healthz
+            smoke: true
+            build_arg: ""
+          - id: executor-web
+            title: Executor Web
+            context: .
+            dockerfile: Dockerfile.executor-web
+            port: 8091
+            endpoint: /healthz
+            smoke: true
+            build_arg: ""
+          - id: executor-cli
+            title: Executor CLI
+            context: .
+            dockerfile: Dockerfile.executor-cli
+            port: 8093
+            endpoint: /healthz
+            smoke: true
+            build_arg: ""
+          - id: executor-android
+            title: Executor Android
+            context: .
+            dockerfile: Dockerfile.executor-android
+            smoke: false
+            build_arg: ""
+          - id: llm-gateway
+            title: LLM Gateway
+            context: .
+            dockerfile: Dockerfile.llm
+            port: 8086
+            endpoint: /healthz
+            smoke: true
+            build_arg: ""
+          - id: model-gateway
+            title: Model Gateway
+            context: .
+            dockerfile: Dockerfile.model-gateway
+            smoke: false
+            build_arg: ""
+          - id: watchers
+            title: Watchers Processor
+            context: .
+            dockerfile: Dockerfile.watchers
+            smoke: false
+            build_arg: ""
+          - id: vllm
+            title: VLLM Gateway
+            context: .
+            dockerfile: Dockerfile.vllm
+            smoke: false
+            build_arg: BASE_IMAGE=python:3.11-slim
           - id: web
             title: Web
             context: web
             dockerfile: web/Dockerfile
             port: 3000
             endpoint: /
+            smoke: true
+            build_arg: ""
           - id: mock-llm
             title: Mock LLM
             context: services/mock_llm
             dockerfile: services/mock_llm/Dockerfile
             port: 8085
             endpoint: /healthz
+            smoke: true
+            build_arg: ""
     permissions:
       contents: read
     env:
@@ -65,13 +147,18 @@ jobs:
         run: |
           set -euo pipefail
           image="ghcr.io/virtunetbv/tyrum-ci-${{ matrix.id }}:${GITHUB_SHA}"
-          docker buildx build --progress plain --load \
+          cmd=(docker buildx build --progress plain --load \
             --file "${{ matrix.dockerfile }}" \
-            --tag "$image" \
-            "${{ matrix.context }}"
+            --tag "$image")
+          if [ -n "${{ matrix.build_arg }}" ]; then
+            cmd+=(--build-arg "${{ matrix.build_arg }}")
+          fi
+          cmd+=("${{ matrix.context }}")
+          "${cmd[@]}"
           echo "BUILT_IMAGE=$image" >>"$GITHUB_ENV"
 
       - name: Smoke test ${{ matrix.title }} image
+        if: ${{ matrix.smoke != false }}
         shell: bash
         run: |
           set -euo pipefail

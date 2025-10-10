@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
-FROM vllm/vllm-openai:latest
+ARG BASE_IMAGE=vllm/vllm-openai:latest
+FROM ${BASE_IMAGE}
 
 ENV VLLM_MODEL=hf-internal-testing/tiny-random-LlamaForCausalLM \
     VLLM_MODEL_NAME=tyrum-stub \
