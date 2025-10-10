@@ -8,12 +8,10 @@ global:
     webhookUrl: https://example.com/api/telegram/webhook
     webhookSecret: local-telegram-secret
   otel:
-    endpoint: http://{{ include "tyrum-core.serviceHostname" (dict "root" . "name"
-      "otel-collector") }}:4317
+    endpoint: ""
     protocol: grpc
   llm:
-    backendUrl: http://{{ include "tyrum-core.serviceHostname" (dict "root" . "name"
-      "mock-llm") }}:8085/v1/completions
+    backendUrl: ""
     modelName: tyrum-stub-8b
     rateLimitPerSecond: 10
   postgres:
