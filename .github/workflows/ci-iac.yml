@@ -111,7 +111,7 @@ jobs:
 
       - name: Setup TFLint
         if: steps.detect.outputs.has-terraform == 'true'
-        uses: terraform-linters/setup-tflint@v3
+        uses: terraform-linters/setup-tflint@v6
         with:
           tflint_version: latest
 
