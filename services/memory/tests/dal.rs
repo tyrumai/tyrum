@@ -3,7 +3,7 @@
 use std::{path::Path, time::Duration};
 
 use chrono::Utc;
-use serde_json::json;
+use serde_json::{Value, json};
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use testcontainers::{
     ContainerAsync, GenericImage, ImageExt,
@@ -12,7 +12,8 @@ use testcontainers::{
 };
 use tyrum_memory::{
     CapabilityMemoryChanges, EpisodicEventChanges, MemoryDal, MemoryError, NewCapabilityMemory,
-    NewEpisodicEvent, NewFact, NewVectorEmbedding, VectorEmbeddingChanges,
+    NewEpisodicEvent, NewFact, NewVectorEmbedding, PamProfileUpsert, PvpProfileUpsert,
+    VectorEmbeddingChanges,
 };
 use uuid::Uuid;
 
@@ -284,6 +285,151 @@ async fn capability_memory_crud_roundtrip() {
         .await
         .unwrap_err();
     assert!(matches!(err, MemoryError::NotFound { .. }));
+}
+
+#[tokio::test]
+async fn pam_profile_upsert_roundtrip() {
+    if !docker_available() {
+        eprintln!("skipping pam_profile_upsert_roundtrip: docker unavailable");
+        return;
+    }
+
+    let ctx = TestContext::new().await;
+    let subject_id = Uuid::new_v4();
+
+    let first = ctx
+        .dal
+        .upsert_pam_profile(PamProfileUpsert {
+            subject_id,
+            profile_id: "pam-default".into(),
+            profile: json!({
+                "escalation_mode": "ask_first",
+                "auto_approve": {
+                    "limit_minor_units": 1500,
+                    "currency": "EUR"
+                }
+            }),
+            confidence: Some(json!({
+                "escalation_mode": 0.9,
+                "auto_approve.limit_minor_units": 0.8
+            })),
+            version: None,
+        })
+        .await
+        .expect("create pam profile");
+
+    assert_eq!(
+        first.profile["escalation_mode"],
+        Value::String("ask_first".into())
+    );
+
+    let second = ctx
+        .dal
+        .upsert_pam_profile(PamProfileUpsert {
+            subject_id,
+            profile_id: "pam-default".into(),
+            profile: json!({
+                "escalation_mode": "act_within_limits",
+                "auto_approve": {
+                    "limit_minor_units": 2000,
+                    "currency": "EUR"
+                }
+            }),
+            confidence: None,
+            version: None,
+        })
+        .await
+        .expect("update pam profile");
+
+    assert_ne!(first.version, second.version);
+    assert_eq!(
+        second.profile["escalation_mode"],
+        Value::String("act_within_limits".into())
+    );
+    assert!(
+        second
+            .confidence
+            .as_object()
+            .map(|map| map.is_empty())
+            .unwrap_or(false),
+        "confidence should default to an empty object"
+    );
+
+    let fetched = ctx
+        .dal
+        .get_pam_profile(subject_id, "pam-default")
+        .await
+        .expect("fetch pam profile")
+        .expect("pam profile present");
+
+    assert_eq!(fetched.version, second.version);
+    assert_eq!(fetched.profile, second.profile);
+}
+
+#[tokio::test]
+async fn pvp_profile_upsert_roundtrip() {
+    if !docker_available() {
+        eprintln!("skipping pvp_profile_upsert_roundtrip: docker unavailable");
+        return;
+    }
+
+    let ctx = TestContext::new().await;
+    let subject_id = Uuid::new_v4();
+
+    let created = ctx
+        .dal
+        .upsert_pvp_profile(PvpProfileUpsert {
+            subject_id,
+            profile_id: "pvp-default".into(),
+            profile: json!({
+                "tone": "calm",
+                "verbosity": "balanced",
+                "voice": {
+                    "voice_id": "voice_a",
+                    "pace": 0.5
+                }
+            }),
+            version: None,
+        })
+        .await
+        .expect("create pvp profile");
+
+    assert_eq!(created.profile["tone"], Value::String("calm".into()));
+
+    let updated = ctx
+        .dal
+        .upsert_pvp_profile(PvpProfileUpsert {
+            subject_id,
+            profile_id: "pvp-default".into(),
+            profile: json!({
+                "tone": "energetic",
+                "verbosity": "thorough",
+                "voice": {
+                    "voice_id": "voice_b",
+                    "pace": 0.7,
+                    "warmth": 0.6
+                }
+            }),
+            version: None,
+        })
+        .await
+        .expect("update pvp profile");
+
+    assert_ne!(created.version, updated.version);
+    assert_eq!(
+        updated.profile["voice"]["voice_id"],
+        Value::String("voice_b".into())
+    );
+
+    let fetched = ctx
+        .dal
+        .get_pvp_profile(subject_id, "pvp-default")
+        .await
+        .expect("fetch pvp profile")
+        .expect("pvp profile present");
+
+    assert_eq!(fetched.version, updated.version);
+    assert_eq!(fetched.profile, updated.profile);
 }
 
 #[tokio::test]

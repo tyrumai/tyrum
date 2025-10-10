@@ -21,8 +21,9 @@ use tyrum_discovery::{
     DefaultDiscoveryPipeline, DiscoveryConnector, DiscoveryOutcome, DiscoveryPipeline,
     DiscoveryRequest, DiscoveryStrategy,
 };
+use tyrum_memory::{MemoryDal, PamProfileUpsert};
 use tyrum_planner::{
-    ActionPrimitiveKind, EventLog, PlanOutcome, PlanRequest, PlanResponse,
+    ActionPrimitiveKind, EventLog, PlanOutcome, PlanRequest, PlanResponse, ProfileStore,
     http::{MAX_PLAN_REQUEST_BYTES, PlannerState, build_router},
     policy::PolicyClient,
 };
@@ -31,6 +32,7 @@ use tyrum_shared::{
     PamProfileRef, PiiField, PlanUserContext, SenderMetadata, ThreadKind,
 };
 use tyrum_wallet::Thresholds;
+use uuid::Uuid;
 
 fn skip_if_no_docker(test_name: &str) -> bool {
     if docker_available() {
@@ -560,6 +562,134 @@ async fn plan_returns_failure_on_policy_denial() {
 }
 
 #[tokio::test]
+async fn planner_injects_pam_profile_reference_from_store() {
+    use axum::extract::State;
+
+    if !skip_if_no_docker("planner_injects_pam_profile_reference_from_store") {
+        return;
+    }
+
+    let subject_id = Uuid::new_v4();
+    let pam_version = Uuid::new_v4();
+    let recordings: Arc<Mutex<Vec<serde_json::Value>>> = Arc::new(Mutex::new(Vec::new()));
+
+    let policy_response = approving_policy_payload();
+    let policy_state = recordings.clone();
+    let policy_app = Router::new()
+        .route(
+            "/policy/check",
+            post({
+                move |State(state): State<Arc<Mutex<Vec<serde_json::Value>>>>,
+                      Json(payload): Json<serde_json::Value>| {
+                    let response = policy_response.clone();
+                    async move {
+                        state.lock().expect("record policy payload").push(payload);
+                        Json(response)
+                    }
+                }
+            }),
+        )
+        .with_state(policy_state);
+
+    let policy_listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind policy listener");
+    let policy_addr = policy_listener.local_addr().expect("policy addr");
+    let policy_url = Url::parse(&format!("http://{}", policy_addr)).expect("construct policy url");
+
+    let policy_server = tokio::spawn(async move {
+        axum::serve(policy_listener, policy_app)
+            .await
+            .expect("policy server failed");
+    });
+
+    let policy_client = PolicyClient::new(policy_url);
+    let thresholds = Thresholds {
+        auto_approve_minor_units: 10_000,
+        hard_deny_minor_units: 50_000,
+    };
+    let (wallet_client, wallet_server) = start_wallet_stub(thresholds).await;
+    let postgres = TestPostgres::start().await.expect("start postgres fixture");
+    let event_log = EventLog::from_pool(postgres.pool().clone());
+    event_log.migrate().await.expect("migrate planner schema");
+    let profiles = ProfileStore::new(event_log.pool().clone());
+
+    let memory = MemoryDal::new(postgres.pool().clone());
+    memory
+        .upsert_pam_profile(PamProfileUpsert {
+            subject_id,
+            profile_id: "pam-default".into(),
+            profile: serde_json::json!({
+                "escalation_mode": "ask_first"
+            }),
+            confidence: None,
+            version: Some(pam_version),
+        })
+        .await
+        .expect("seed pam profile");
+
+    let state = PlannerState {
+        policy_client,
+        event_log,
+        discovery: Arc::new(DefaultDiscoveryPipeline::new()),
+        wallet_client,
+        profiles,
+    };
+
+    let mut request = sample_request();
+    request.subject_id = subject_id.to_string();
+    request.user = None;
+
+    let body = serde_json::to_vec(&request).expect("serialize plan request");
+
+    let response = build_router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/plan")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .expect("construct request"),
+        )
+        .await
+        .expect("receive response");
+
+    policy_server.abort();
+    wallet_server.abort();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let recorded = recordings.lock().expect("read recorded payloads");
+    let policy_payload = recorded.first().expect("policy payload recorded");
+    let pam_profile = policy_payload
+        .get("pam_profile")
+        .expect("pam profile present")
+        .as_object()
+        .expect("pam profile object");
+
+    assert_eq!(
+        pam_profile
+            .get("profile_id")
+            .and_then(|value| value.as_str()),
+        Some("pam-default")
+    );
+    assert_eq!(
+        pam_profile
+            .get("version")
+            .and_then(|value| value.as_str())
+            .map(|value| value.to_string()),
+        Some(pam_version.to_string())
+    );
+    assert_eq!(
+        policy_payload
+            .get("user_id")
+            .and_then(|value| value.as_str())
+            .map(|value| value.to_string()),
+        Some(subject_id.to_string())
+    );
+}
+
+#[tokio::test]
 async fn plan_escalation_includes_context_when_rules_do_not_match() {
     if !skip_if_no_docker("plan_escalation_includes_context_when_rules_do_not_match") {
         return;
@@ -696,6 +826,7 @@ async fn planner_state_with_pipeline(
     let postgres = TestPostgres::start().await.expect("start postgres fixture");
     let event_log = EventLog::from_pool(postgres.pool().clone());
     event_log.migrate().await.expect("migrate planner schema");
+    let profiles = ProfileStore::new(event_log.pool().clone());
 
     (
         PlannerState {
@@ -703,6 +834,7 @@ async fn planner_state_with_pipeline(
             event_log,
             discovery,
             wallet_client,
+            profiles,
         },
         server,
         wallet_server,

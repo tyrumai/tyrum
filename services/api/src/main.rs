@@ -6,7 +6,12 @@ use tyrum_api::{
     account_linking::AccountLinkingRepository,
     audit::{AuditTimelineError, AuditTimelineRepository},
     ingress::{IngressRepository, IngressRepositoryError},
-    metrics, telegram,
+    metrics,
+    profiles::{
+        DEFAULT_PAM_PROFILE_ID, DEFAULT_PVP_PROFILE_ID, PamProfileUpdateRequest,
+        ProfilesRepository, PvpProfileUpdateRequest,
+    },
+    telegram,
     telemetry::TelemetryGuard,
     waitlist::{NewWaitlistSignup, WaitlistError, WaitlistRepository},
     watchers::{
@@ -36,7 +41,10 @@ const ACCOUNT_LINKING_ROUTE: &str = "/account-linking/preferences";
 const ACCOUNT_LINKING_TOGGLE_ROUTE: &str = "/account-linking/preferences/:integration_slug";
 const AUDIT_PLAN_TIMELINE_ROUTE: &str = "/audit/plan/:plan_id";
 const TELEGRAM_WEBHOOK_ROUTE: &str = "/telegram/webhook";
-const PORTAL_ACCOUNT_ID: &str = "demo-account";
+const PROFILES_ROUTE: &str = "/profiles";
+const PROFILE_PAM_ROUTE: &str = "/profiles/pam";
+const PROFILE_PVP_ROUTE: &str = "/profiles/pvp";
+const PORTAL_ACCOUNT_ID: &str = "11111111-2222-3333-4444-555555555555";
 
 #[derive(Clone, Copy)]
 struct IntegrationDefinition {
@@ -71,6 +79,8 @@ struct AppState {
     audit: AuditTimelineRepository,
     watchers: WatcherRepository,
     telegram: telegram::TelegramWebhookVerifier,
+    profiles: ProfilesRepository,
+    portal_subject_id: Uuid,
 }
 
 #[derive(Clone, Serialize)]
@@ -176,6 +186,9 @@ fn build_router(state: AppState) -> Router {
             ACCOUNT_LINKING_TOGGLE_ROUTE,
             put(update_account_link_preference),
         )
+        .route(PROFILES_ROUTE, get(get_profiles))
+        .route(PROFILE_PAM_ROUTE, put(update_pam_profile))
+        .route(PROFILE_PVP_ROUTE, put(update_pvp_profile))
         .route(WATCHERS_ROUTE, post(register_watcher))
         .route(TELEGRAM_WEBHOOK_ROUTE, post(telegram_webhook))
         .with_state(state)
@@ -228,6 +241,135 @@ async fn get_plan_timeline(State(state): State<AppState>, Path(plan_id): Path<Uu
     };
 
     metrics::record_http_request("GET", AUDIT_PLAN_TIMELINE_ROUTE, response.status().as_u16());
+
+    response
+}
+
+#[tracing::instrument(name = "api.profiles.get", skip_all)]
+async fn get_profiles(State(state): State<AppState>) -> Response {
+    let response = match state.profiles.fetch_profiles(state.portal_subject_id).await {
+        Ok(envelope) => Json(envelope).into_response(),
+        Err(error) => {
+            tracing::error!(reason = %error, "failed to fetch profiles");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "profiles_unavailable",
+                    message: "Unable to load stored profiles".into(),
+                }),
+            )
+                .into_response()
+        }
+    };
+
+    metrics::record_http_request("GET", PROFILES_ROUTE, response.status().as_u16());
+
+    response
+}
+
+#[tracing::instrument(name = "api.profiles.update_pam", skip_all)]
+async fn update_pam_profile(
+    State(state): State<AppState>,
+    Json(payload): Json<PamProfileUpdateRequest>,
+) -> Response {
+    if !payload.profile.is_object() {
+        let response = (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid_profile",
+                message: "profile must be a JSON object".into(),
+            }),
+        )
+            .into_response();
+        metrics::record_http_request("PUT", PROFILE_PAM_ROUTE, response.status().as_u16());
+        return response;
+    }
+    if let Some(confidence) = payload.confidence.as_ref()
+        && !confidence.is_object()
+    {
+        let response = (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid_confidence",
+                message: "confidence must be a JSON object".into(),
+            }),
+        )
+            .into_response();
+        metrics::record_http_request("PUT", PROFILE_PAM_ROUTE, response.status().as_u16());
+        return response;
+    }
+
+    let response = match state
+        .profiles
+        .upsert_pam_profile(
+            state.portal_subject_id,
+            DEFAULT_PAM_PROFILE_ID,
+            payload.profile,
+            payload.confidence,
+        )
+        .await
+    {
+        Ok(profile) => Json(profile).into_response(),
+        Err(error) => {
+            tracing::error!(reason = %error, "failed to persist pam profile");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "profiles_unavailable",
+                    message: "Unable to persist PAM profile".into(),
+                }),
+            )
+                .into_response()
+        }
+    };
+
+    metrics::record_http_request("PUT", PROFILE_PAM_ROUTE, response.status().as_u16());
+
+    response
+}
+
+#[tracing::instrument(name = "api.profiles.update_pvp", skip_all)]
+async fn update_pvp_profile(
+    State(state): State<AppState>,
+    Json(payload): Json<PvpProfileUpdateRequest>,
+) -> Response {
+    if !payload.profile.is_object() {
+        let response = (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid_profile",
+                message: "profile must be a JSON object".into(),
+            }),
+        )
+            .into_response();
+        metrics::record_http_request("PUT", PROFILE_PVP_ROUTE, response.status().as_u16());
+        return response;
+    }
+
+    let response = match state
+        .profiles
+        .upsert_pvp_profile(
+            state.portal_subject_id,
+            DEFAULT_PVP_PROFILE_ID,
+            payload.profile,
+        )
+        .await
+    {
+        Ok(profile) => Json(profile).into_response(),
+        Err(error) => {
+            tracing::error!(reason = %error, "failed to persist pvp profile");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "profiles_unavailable",
+                    message: "Unable to persist PVP profile".into(),
+                }),
+            )
+                .into_response()
+        }
+    };
+
+    metrics::record_http_request("PUT", PROFILE_PVP_ROUTE, response.status().as_u16());
 
     response
 }
@@ -636,6 +778,9 @@ async fn main() -> Result<()> {
     let ingress = IngressRepository::new(waitlist.pool().clone());
     let audit = AuditTimelineRepository::new(waitlist.pool().clone());
     let watchers = WatcherRepository::new(waitlist.pool().clone());
+    let profiles = ProfilesRepository::new(waitlist.pool().clone());
+    let portal_subject_id =
+        Uuid::parse_str(PORTAL_ACCOUNT_ID).context("PORTAL_ACCOUNT_ID must be a valid UUID")?;
 
     let telegram_secret =
         env::var("TELEGRAM_WEBHOOK_SECRET").context("TELEGRAM_WEBHOOK_SECRET must be set")?;
@@ -649,6 +794,8 @@ async fn main() -> Result<()> {
         audit,
         watchers,
         telegram,
+        profiles,
+        portal_subject_id,
     });
 
     tracing::info!("listening on {}", bind_addr);
@@ -668,7 +815,8 @@ mod tests {
 
     use super::{
         ACCOUNT_LINKING_ROUTE, AppState, AuditTimelineRepository, PLACEHOLDER_INTEGRATIONS,
-        PORTAL_ACCOUNT_ID, TELEGRAM_WEBHOOK_ROUTE, WAITLIST_ROUTE, build_router, sanitize_opt,
+        PORTAL_ACCOUNT_ID, PROFILE_PAM_ROUTE, PROFILE_PVP_ROUTE, PROFILES_ROUTE,
+        TELEGRAM_WEBHOOK_ROUTE, WAITLIST_ROUTE, build_router, sanitize_opt,
     };
     use axum::{
         body::Body,
@@ -689,6 +837,7 @@ mod tests {
     use tyrum_api::{
         account_linking::AccountLinkingRepository,
         ingress::IngressRepository,
+        profiles::ProfilesRepository,
         telegram::TelegramWebhookVerifier,
         waitlist::{NewWaitlistSignup, WaitlistError, WaitlistRepository},
         watchers::WatcherRepository,
@@ -780,6 +929,7 @@ mod tests {
         waitlist: WaitlistRepository,
         account_linking: AccountLinkingRepository,
         ingress: IngressRepository,
+        profiles: ProfilesRepository,
         telegram: TelegramWebhookVerifier,
     }
 
@@ -813,6 +963,9 @@ mod tests {
             let account_linking = AccountLinkingRepository::new(waitlist.pool().clone());
             let ingress = IngressRepository::new(waitlist.pool().clone());
             let watchers = WatcherRepository::new(waitlist.pool().clone());
+            let profiles = ProfilesRepository::new(waitlist.pool().clone());
+            let portal_subject_id =
+                Uuid::parse_str(PORTAL_ACCOUNT_ID).expect("valid portal subject uuid");
             ensure_planner_event_log_schema(waitlist.pool())
                 .await
                 .expect("seed planner event log schema");
@@ -826,6 +979,8 @@ mod tests {
                 audit: AuditTimelineRepository::new(waitlist.pool().clone()),
                 watchers: watchers.clone(),
                 telegram: telegram.clone(),
+                profiles: profiles.clone(),
+                portal_subject_id,
             });
 
             Self {
@@ -834,6 +989,7 @@ mod tests {
                 waitlist,
                 account_linking,
                 ingress,
+                profiles,
                 telegram,
             }
         }
@@ -852,8 +1008,11 @@ mod tests {
             eprintln!("skipping planner event log schema for health test: {error}");
         }
         let audit = AuditTimelineRepository::new(waitlist.pool().clone());
+        let profiles = ProfilesRepository::new(waitlist.pool().clone());
         let telegram =
             TelegramWebhookVerifier::new(TELEGRAM_SECRET).expect("construct telegram verifier");
+        let portal_subject_id =
+            Uuid::parse_str(PORTAL_ACCOUNT_ID).expect("valid portal subject uuid");
         let state = AppState {
             waitlist,
             account_linking,
@@ -861,6 +1020,8 @@ mod tests {
             audit,
             watchers,
             telegram,
+            profiles,
+            portal_subject_id,
         };
         let app = build_router(state);
 
@@ -1356,6 +1517,130 @@ mod tests {
                 "sender_username",
                 "sender_language_code"
             ]
+        );
+    }
+
+    #[tokio::test]
+    async fn profiles_get_returns_empty_payload() {
+        if !docker_available() {
+            return;
+        }
+
+        let ctx = TestContext::new().await;
+        let app = ctx.router.clone();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(PROFILES_ROUTE)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let payload: Value = serde_json::from_slice(&body).unwrap();
+        assert!(payload.get("pam").is_none() || payload.get("pam").unwrap().is_null());
+        assert!(payload.get("pvp").is_none() || payload.get("pvp").unwrap().is_null());
+    }
+
+    #[tokio::test]
+    async fn profiles_update_endpoints_store_profiles() {
+        if !docker_available() {
+            return;
+        }
+
+        let ctx = TestContext::new().await;
+        let app = ctx.router.clone();
+        let subject_id = Uuid::parse_str(PORTAL_ACCOUNT_ID).unwrap();
+
+        let pam_payload = json!({
+            "profile": {
+                "escalation_mode": "ask_first",
+                "auto_approve": {"limit_minor_units": 1_500, "currency": "EUR"}
+            },
+            "confidence": {
+                "escalation_mode": 0.9
+            }
+        });
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri(PROFILE_PAM_ROUTE)
+                    .header("content-type", "application/json")
+                    .body(Body::from(pam_payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let pam_body: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(pam_body["profile"]["escalation_mode"], json!("ask_first"));
+        assert!(pam_body["version"].as_str().is_some());
+
+        let pvp_payload = json!({
+            "profile": {
+                "tone": "calm",
+                "verbosity": "balanced",
+                "voice": {
+                    "voice_id": "voice_test",
+                    "pace": 0.4
+                }
+            }
+        });
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri(PROFILE_PVP_ROUTE)
+                    .header("content-type", "application/json")
+                    .body(Body::from(pvp_payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let stored = ctx
+            .profiles
+            .fetch_profiles(subject_id)
+            .await
+            .expect("fetch persisted profiles");
+        assert!(stored.pam.is_some());
+        assert!(stored.pvp.is_some());
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(PROFILES_ROUTE)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let payload: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            payload["pam"]["profile"]["escalation_mode"],
+            json!("ask_first")
+        );
+        assert_eq!(
+            payload["pvp"]["profile"]["voice"]["voice_id"],
+            json!("voice_test")
         );
     }
 

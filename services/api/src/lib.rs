@@ -2,6 +2,7 @@ pub mod account_linking;
 pub mod audit;
 pub mod ingress;
 pub mod metrics;
+pub mod profiles;
 pub mod telegram;
 pub mod telemetry;
 pub mod waitlist;

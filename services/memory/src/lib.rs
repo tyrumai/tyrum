@@ -2,6 +2,7 @@ use std::fmt;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::{Map as JsonMap, Value};
 use sqlx::{
     PgPool, Row,
     postgres::{PgPoolOptions, PgRow},
@@ -538,6 +539,137 @@ impl MemoryDal {
         Ok(())
     }
 
+    // --- Profile operations (PAM / PVP) -----------------------------------
+
+    /// Upsert a Policy/Autonomy Model profile for a subject.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MemoryError::Database`] if the upsert fails.
+    pub async fn upsert_pam_profile(
+        &self,
+        upsert: PamProfileUpsert,
+    ) -> Result<PamProfile, MemoryError> {
+        let version = upsert.version.unwrap_or_else(Uuid::new_v4);
+        let profile = upsert.profile;
+        let confidence = upsert
+            .confidence
+            .unwrap_or_else(|| Value::Object(JsonMap::new()));
+
+        let record = sqlx::query_as::<_, PamProfile>(
+            r#"
+            INSERT INTO pam_profiles (subject_id, profile_id, version, profile, confidence)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (subject_id, profile_id)
+            DO UPDATE SET
+                version = EXCLUDED.version,
+                profile = EXCLUDED.profile,
+                confidence = EXCLUDED.confidence,
+                updated_at = NOW()
+            RETURNING id, subject_id, profile_id, version, profile, confidence,
+                created_at, updated_at
+            "#,
+        )
+        .bind(upsert.subject_id)
+        .bind(upsert.profile_id)
+        .bind(version)
+        .bind(profile)
+        .bind(confidence)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(record)
+    }
+
+    /// Fetch the latest Policy/Autonomy Model profile for a subject.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MemoryError::Database`] if the select fails.
+    pub async fn get_pam_profile(
+        &self,
+        subject_id: Uuid,
+        profile_id: &str,
+    ) -> Result<Option<PamProfile>, MemoryError> {
+        let record = sqlx::query_as::<_, PamProfile>(
+            r#"
+            SELECT id, subject_id, profile_id, version, profile, confidence,
+                created_at, updated_at
+            FROM pam_profiles
+            WHERE subject_id = $1
+              AND profile_id = $2
+            "#,
+        )
+        .bind(subject_id)
+        .bind(profile_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(record)
+    }
+
+    /// Upsert a Persona & Voice Profile for a subject.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MemoryError::Database`] if the upsert fails.
+    pub async fn upsert_pvp_profile(
+        &self,
+        upsert: PvpProfileUpsert,
+    ) -> Result<PvpProfile, MemoryError> {
+        let version = upsert.version.unwrap_or_else(Uuid::new_v4);
+        let profile = upsert.profile;
+
+        let record = sqlx::query_as::<_, PvpProfile>(
+            r#"
+            INSERT INTO pvp_profiles (subject_id, profile_id, version, profile)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (subject_id, profile_id)
+            DO UPDATE SET
+                version = EXCLUDED.version,
+                profile = EXCLUDED.profile,
+                updated_at = NOW()
+            RETURNING id, subject_id, profile_id, version, profile,
+                created_at, updated_at
+            "#,
+        )
+        .bind(upsert.subject_id)
+        .bind(upsert.profile_id)
+        .bind(version)
+        .bind(profile)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(record)
+    }
+
+    /// Fetch the latest Persona & Voice Profile for a subject.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MemoryError::Database`] if the select fails.
+    pub async fn get_pvp_profile(
+        &self,
+        subject_id: Uuid,
+        profile_id: &str,
+    ) -> Result<Option<PvpProfile>, MemoryError> {
+        let record = sqlx::query_as::<_, PvpProfile>(
+            r#"
+            SELECT id, subject_id, profile_id, version, profile,
+                created_at, updated_at
+            FROM pvp_profiles
+            WHERE subject_id = $1
+              AND profile_id = $2
+            "#,
+        )
+        .bind(subject_id)
+        .bind(profile_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(record)
+    }
+
     // --- Vector embedding operations --------------------------------------
 
     /// Persist a new vector embedding for a subject.
@@ -688,7 +820,7 @@ pub struct Fact {
     pub id: i64,
     pub subject_id: Uuid,
     pub fact_key: String,
-    pub fact_value: serde_json::Value,
+    pub fact_value: Value,
     pub source: String,
     pub observed_at: DateTime<Utc>,
     pub confidence: f32,
@@ -699,7 +831,7 @@ pub struct Fact {
 pub struct NewFact {
     pub subject_id: Uuid,
     pub fact_key: String,
-    pub fact_value: serde_json::Value,
+    pub fact_value: Value,
     pub source: String,
     pub observed_at: DateTime<Utc>,
     pub confidence: f32,
@@ -707,7 +839,7 @@ pub struct NewFact {
 
 #[derive(Debug, Clone)]
 pub struct FactChanges {
-    pub fact_value: serde_json::Value,
+    pub fact_value: Value,
     pub source: String,
     pub observed_at: DateTime<Utc>,
     pub confidence: f32,
@@ -721,7 +853,7 @@ pub struct EpisodicEvent {
     pub occurred_at: DateTime<Utc>,
     pub channel: String,
     pub event_type: String,
-    pub payload: serde_json::Value,
+    pub payload: Value,
     pub created_at: DateTime<Utc>,
 }
 
@@ -732,7 +864,7 @@ pub struct NewEpisodicEvent {
     pub occurred_at: DateTime<Utc>,
     pub channel: String,
     pub event_type: String,
-    pub payload: serde_json::Value,
+    pub payload: Value,
 }
 
 #[derive(Debug, Clone)]
@@ -740,7 +872,7 @@ pub struct EpisodicEventChanges {
     pub occurred_at: DateTime<Utc>,
     pub channel: String,
     pub event_type: String,
-    pub payload: serde_json::Value,
+    pub payload: Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -751,7 +883,7 @@ pub struct VectorEmbedding {
     pub embedding: Vec<f32>,
     pub embedding_model: String,
     pub label: Option<String>,
-    pub metadata: Option<serde_json::Value>,
+    pub metadata: Option<Value>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -762,7 +894,7 @@ pub struct NewVectorEmbedding {
     pub embedding: Vec<f32>,
     pub embedding_model: String,
     pub label: Option<String>,
-    pub metadata: Option<serde_json::Value>,
+    pub metadata: Option<Value>,
 }
 
 #[derive(Debug, Clone)]
@@ -770,7 +902,7 @@ pub struct VectorEmbeddingChanges {
     pub embedding: Vec<f32>,
     pub embedding_model: String,
     pub label: Option<String>,
-    pub metadata: Option<serde_json::Value>,
+    pub metadata: Option<Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, PartialEq)]
@@ -780,8 +912,8 @@ pub struct CapabilityMemory {
     pub capability_type: String,
     pub capability_identifier: String,
     pub executor_kind: String,
-    pub selectors: Option<serde_json::Value>,
-    pub outcome_metadata: serde_json::Value,
+    pub selectors: Option<Value>,
+    pub outcome_metadata: Value,
     pub result_summary: Option<String>,
     pub success_count: i32,
     pub last_success_at: DateTime<Utc>,
@@ -795,8 +927,8 @@ pub struct NewCapabilityMemory {
     pub capability_type: String,
     pub capability_identifier: String,
     pub executor_kind: String,
-    pub selectors: Option<serde_json::Value>,
-    pub outcome_metadata: serde_json::Value,
+    pub selectors: Option<Value>,
+    pub outcome_metadata: Value,
     pub result_summary: Option<String>,
     pub success_count: i32,
     pub last_success_at: DateTime<Utc>,
@@ -804,11 +936,51 @@ pub struct NewCapabilityMemory {
 
 #[derive(Debug, Clone)]
 pub struct CapabilityMemoryChanges {
-    pub selectors: Option<serde_json::Value>,
-    pub outcome_metadata: serde_json::Value,
+    pub selectors: Option<Value>,
+    pub outcome_metadata: Value,
     pub result_summary: Option<String>,
     pub success_count: i32,
     pub last_success_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, PartialEq)]
+pub struct PamProfile {
+    pub id: i64,
+    pub subject_id: Uuid,
+    pub profile_id: String,
+    pub version: Uuid,
+    pub profile: Value,
+    pub confidence: Value,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PamProfileUpsert {
+    pub subject_id: Uuid,
+    pub profile_id: String,
+    pub profile: Value,
+    pub confidence: Option<Value>,
+    pub version: Option<Uuid>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, PartialEq)]
+pub struct PvpProfile {
+    pub id: i64,
+    pub subject_id: Uuid,
+    pub profile_id: String,
+    pub version: Uuid,
+    pub profile: Value,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PvpProfileUpsert {
+    pub subject_id: Uuid,
+    pub profile_id: String,
+    pub profile: Value,
+    pub version: Option<Uuid>,
 }
 
 impl<'r> sqlx::FromRow<'r, PgRow> for VectorEmbedding {

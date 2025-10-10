@@ -8,7 +8,7 @@ use tracing_subscriber::{EnvFilter, fmt};
 use tyrum_discovery::DefaultDiscoveryPipeline;
 use tyrum_planner::http::{DEFAULT_BIND_ADDR, PlannerState, build_router};
 use tyrum_planner::policy::PolicyClient;
-use tyrum_planner::{EventLog, EventLogSettings, WalletClient};
+use tyrum_planner::{EventLog, EventLogSettings, ProfileStore, WalletClient};
 
 const EVENT_LOG_URL_ENV: &str = "PLANNER_EVENT_LOG_URL";
 const WALLET_GATE_URL_ENV: &str = "WALLET_GATE_URL";
@@ -42,12 +42,14 @@ async fn main() -> Result<()> {
         .migrate()
         .await
         .context("run planner migrations")?;
+    let profiles = ProfileStore::new(event_log.pool().clone());
 
     let app = build_router(PlannerState {
         policy_client,
         event_log,
         discovery: Arc::new(DefaultDiscoveryPipeline::new()),
         wallet_client,
+        profiles,
     });
     let listener = TcpListener::bind(bind_addr)
         .await
