@@ -29,7 +29,7 @@ COPY services/tyrum-wallet/tests services/tyrum-wallet/tests
 
 RUN cargo build --locked --release --package tyrum-executor-web
 
-FROM mcr.microsoft.com/playwright:v1.48.0-jammy AS runtime
+FROM mcr.microsoft.com/playwright:v1.56.0-jammy AS runtime
 
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
