@@ -17,11 +17,12 @@ use crate::wallet::{AuthorizationDecision, SpendAuthorization, WalletClient};
 use crate::{
     ActionArguments, ActionPrimitive, ActionPrimitiveKind, EventLog, NewPlannerEvent, PlanError,
     PlanErrorCode, PlanEscalation, PlanOutcome, PlanRequest, PlanResponse, PlanSummary,
+    PlanUserContext, ProfileStore,
 };
 use tyrum_discovery::{
     DiscoveryConnector, DiscoveryOutcome, DiscoveryPipeline, DiscoveryRequest, DiscoveryStrategy,
 };
-use tyrum_shared::{MessageSource, PiiField, ThreadKind};
+use tyrum_shared::{MessageSource, PamProfileRef, PiiField, ThreadKind};
 
 pub const DEFAULT_BIND_ADDR: &str = "0.0.0.0:8083";
 pub const MAX_PLAN_REQUEST_BYTES: usize = 256 * 1024; // 256 KiB safety rail for ingress payloads.
@@ -43,6 +44,108 @@ pub struct PlannerState {
     pub event_log: EventLog,
     pub discovery: Arc<dyn DiscoveryPipeline + Send + Sync>,
     pub wallet_client: WalletClient,
+    pub profiles: ProfileStore,
+}
+
+impl PlannerState {
+    async fn enrich_user_context(&self, request: &mut PlanRequest) {
+        let Some(subject_id) = Self::parse_subject_uuid(&request.subject_id) else {
+            return;
+        };
+
+        let (profile_id, has_version) = Self::desired_pam_profile(request);
+
+        if has_version {
+            Self::ensure_user_id_if_present(request);
+            return;
+        }
+
+        self.attach_latest_profile(request, subject_id, profile_id)
+            .await;
+    }
+}
+
+impl PlannerState {
+    fn parse_subject_uuid(raw: &str) -> Option<Uuid> {
+        match Uuid::parse_str(raw.trim()) {
+            Ok(uuid) => Some(uuid),
+            Err(error) => {
+                tracing::debug!(%error, "subject_id is not a valid UUID; skipping PAM lookup");
+                None
+            }
+        }
+    }
+    fn desired_pam_profile(request: &PlanRequest) -> (String, bool) {
+        request
+            .user
+            .as_ref()
+            .and_then(|context| context.pam_profile.as_ref())
+            .map(|pam| {
+                let has_version = pam
+                    .version
+                    .as_ref()
+                    .map(|version| !version.trim().is_empty())
+                    .unwrap_or(false);
+                (pam.profile_id.clone(), has_version)
+            })
+            .unwrap_or_else(|| ("pam-default".to_string(), false))
+    }
+
+    fn ensure_user_id_if_present(request: &mut PlanRequest) {
+        if let Some(context) = request.user.as_mut() {
+            Self::ensure_user_id(&request.subject_id, context);
+        }
+    }
+
+    async fn attach_latest_profile(
+        &self,
+        request: &mut PlanRequest,
+        subject_id: Uuid,
+        profile_id: String,
+    ) {
+        let profile_key = profile_id.as_str();
+        let lookup = match self.profiles.pam_profile_ref(subject_id, profile_key).await {
+            Ok(result) => result,
+            Err(error) => {
+                tracing::warn!(
+                    %error,
+                    subject_id = %request.subject_id,
+                    profile_id = profile_key,
+                    "failed to load PAM profile reference"
+                );
+                return;
+            }
+        };
+
+        let Some(reference) = lookup else {
+            Self::ensure_user_id_if_present(request);
+            return;
+        };
+
+        Self::attach_pam_profile(request, reference);
+    }
+
+    fn ensure_user_id(subject_id: &str, context: &mut PlanUserContext) {
+        if context.user_id.trim().is_empty() {
+            context.user_id = subject_id.to_string();
+        }
+    }
+
+    fn attach_pam_profile(request: &mut PlanRequest, reference: PamProfileRef) {
+        let subject_id = request.subject_id.clone();
+        match request.user.as_mut() {
+            Some(context) => {
+                Self::ensure_user_id(&subject_id, context);
+                context.pam_profile = Some(reference);
+            }
+            None => {
+                request.user = Some(PlanUserContext {
+                    user_id: subject_id,
+                    pam_profile: Some(reference),
+                });
+            }
+        }
+    }
 }
 
 pub fn build_router(state: PlannerState) -> Router {
@@ -62,6 +165,7 @@ async fn plan(
     Json(payload): Json<PlanRequest>,
 ) -> Result<Json<PlanResponse>, (StatusCode, Json<ValidationError>)> {
     tracing::debug!("plan request received");
+    let mut payload = payload;
 
     if payload.request_id.trim().is_empty() {
         return Err(bad_request("request_id must not be empty"));
@@ -70,6 +174,8 @@ async fn plan(
     if payload.subject_id.trim().is_empty() {
         return Err(bad_request("subject_id must not be empty"));
     }
+
+    state.enrich_user_context(&mut payload).await;
 
     let plan_uuid = Uuid::new_v4();
     let plan_id = format_plan_id(plan_uuid);

@@ -1,6 +1,7 @@
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AccountSettingsPage from "./page";
 
 declare global {
@@ -9,8 +10,13 @@ declare global {
 }
 
 describe("AccountSettingsPage", () => {
+  const emptyProfilesResponse = { pam: null, pvp: null };
+
   beforeEach(() => {
     vi.resetAllMocks();
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue(mockFetch(emptyProfilesResponse)) as unknown as typeof fetch;
   });
 
   afterEach(() => {
@@ -28,7 +34,8 @@ describe("AccountSettingsPage", () => {
     } as unknown as Response;
   };
 
-  it("renders the account settings header and description", () => {
+  it("renders the account settings header and description", async () => {
+    const fetchSpy = vi.spyOn(global, "fetch");
     render(<AccountSettingsPage />);
 
     expect(
@@ -39,11 +46,16 @@ describe("AccountSettingsPage", () => {
         "Control the account lifecycle for your Tyrum workspace. Export archives help you verify that our automation respects consent before requesting deletion.",
       ),
     ).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalled();
+    });
   });
 
   it("queues an export and surfaces a success toast", async () => {
     const fetchSpy = vi
       .spyOn(global, "fetch")
+      .mockResolvedValueOnce(mockFetch(emptyProfilesResponse))
       .mockResolvedValue(
         mockFetch({
           status: "enqueued",
@@ -69,6 +81,7 @@ describe("AccountSettingsPage", () => {
   it("surfaces an error toast when the deletion request fails", async () => {
     const fetchSpy = vi
       .spyOn(global, "fetch")
+      .mockResolvedValueOnce(mockFetch(emptyProfilesResponse))
       .mockResolvedValue(
         mockFetch(
           {
@@ -93,5 +106,209 @@ describe("AccountSettingsPage", () => {
         "Deletion currently unavailable.",
       );
     });
+  });
+
+  it("loads stored profiles into the settings forms", async () => {
+    const storedProfiles = {
+      pam: {
+        profile_id: "pam-default",
+        version: "pam-version-123",
+        profile: {
+          escalation_mode: "act_within_limits",
+          auto_approve: {
+            limit_minor_units: 2500,
+            currency: "USD",
+          },
+        },
+      },
+      pvp: {
+        profile_id: "pvp-default",
+        version: "pvp-version-456",
+        profile: {
+          tone: "calm",
+          verbosity: "thorough",
+          initiative: "high",
+          consent_style: "ask_once_per_vendor",
+          emoji_gifs: "often",
+          language: "en-US",
+          voice: {
+            voice_id: "alloy",
+            pace: 0.7,
+            pitch: 0.2,
+            warmth: 0.5,
+          },
+        },
+      },
+    };
+
+    const fetchMock = vi.fn().mockResolvedValue(mockFetch(storedProfiles));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    render(<AccountSettingsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Escalation mode")).toHaveValue("act_within_limits");
+    });
+
+    expect(screen.getByLabelText("Auto-approve limit (minor units)")).toHaveValue(2500);
+    expect(screen.getByLabelText("Auto-approve currency")).toHaveValue("USD");
+    expect(screen.getByText("Current version: pam-version-123")).toBeInTheDocument();
+
+    expect(screen.getByLabelText("Tone")).toHaveValue("calm");
+    expect(screen.getByLabelText("Verbosity")).toHaveValue("thorough");
+    expect(screen.getByLabelText("Initiative")).toHaveValue("high");
+    expect(screen.getByLabelText("Consent style")).toHaveValue("ask_once_per_vendor");
+    expect(screen.getByLabelText("Emoji & GIFs")).toHaveValue("often");
+    expect(screen.getByLabelText("Preferred language")).toHaveValue("en-US");
+    expect(screen.getByLabelText("Voice ID")).toHaveValue("alloy");
+    expect(screen.getByLabelText("Voice pace")).toHaveValue(0.7);
+    expect(screen.getByLabelText("Voice pitch")).toHaveValue(0.2);
+    expect(screen.getByLabelText("Voice warmth")).toHaveValue(0.5);
+    expect(screen.getByText("Current version: pvp-version-456")).toBeInTheDocument();
+  });
+
+  it("submits autonomy preferences and surfaces success feedback", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(mockFetch(emptyProfilesResponse))
+      .mockResolvedValue(
+        mockFetch({
+          profile: {
+            escalation_mode: "act_within_limits",
+            auto_approve: { limit_minor_units: 3200, currency: "EUR" },
+          },
+          version: "pam-version-999",
+        }),
+      );
+
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const user = userEvent.setup();
+    render(<AccountSettingsPage />);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/profiles", expect.any(Object));
+    });
+
+    await user.selectOptions(
+      screen.getByLabelText("Escalation mode"),
+      "act_within_limits",
+    );
+    await user.clear(screen.getByLabelText("Auto-approve limit (minor units)"));
+    await user.type(screen.getByLabelText("Auto-approve limit (minor units)"), "3200");
+    await user.clear(screen.getByLabelText("Auto-approve currency"));
+    await user.type(screen.getByLabelText("Auto-approve currency"), "EUR");
+
+    await user.click(
+      screen.getByRole("button", { name: "Save autonomy preferences" }),
+    );
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/profiles/pam",
+      expect.objectContaining({
+        method: "PUT",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Autonomy preferences saved.")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Current version: pam-version-999")).toBeInTheDocument();
+  });
+
+  it("surfaces an error when persona persistence fails", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(mockFetch(emptyProfilesResponse))
+      .mockResolvedValue(
+        mockFetch(
+          { message: "Persona persistence failed." },
+          { ok: false, status: 502 },
+        ),
+      );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const user = userEvent.setup();
+    render(<AccountSettingsPage />);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/profiles", expect.any(Object));
+    });
+
+    await user.selectOptions(screen.getByLabelText("Tone"), "calm");
+
+    await user.click(screen.getByRole("button", { name: "Save persona profile" }));
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/profiles/pvp",
+      expect.objectContaining({ method: "PUT" }),
+    );
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Persona persistence failed.",
+      );
+    });
+  });
+
+  it("submits persona preferences and surfaces success feedback", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(mockFetch(emptyProfilesResponse))
+      .mockResolvedValue(
+        mockFetch({
+          profile: {
+            tone: "energetic",
+            verbosity: "balanced",
+            initiative: "medium",
+            consent_style: "ask_first",
+            emoji_gifs: "sometimes",
+            language: "fr-FR",
+            voice: {
+              voice_id: "nova",
+              pace: 0.6,
+              pitch: 0.3,
+              warmth: 0.4,
+            },
+          },
+          version: "pvp-version-321",
+        }),
+      );
+
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const user = userEvent.setup();
+    render(<AccountSettingsPage />);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/profiles", expect.any(Object));
+    });
+
+    await user.selectOptions(screen.getByLabelText("Tone"), "energetic");
+    await user.selectOptions(screen.getByLabelText("Verbosity"), "balanced");
+    await user.selectOptions(screen.getByLabelText("Initiative"), "medium");
+    await user.selectOptions(screen.getByLabelText("Consent style"), "ask_first");
+    await user.selectOptions(screen.getByLabelText("Emoji & GIFs"), "sometimes");
+    await user.clear(screen.getByLabelText("Preferred language"));
+    await user.type(screen.getByLabelText("Preferred language"), "fr-FR");
+    await user.clear(screen.getByLabelText("Voice ID"));
+    await user.type(screen.getByLabelText("Voice ID"), "nova");
+    await user.clear(screen.getByLabelText("Voice pace"));
+    await user.type(screen.getByLabelText("Voice pace"), "0.6");
+    await user.clear(screen.getByLabelText("Voice pitch"));
+    await user.type(screen.getByLabelText("Voice pitch"), "0.3");
+    await user.clear(screen.getByLabelText("Voice warmth"));
+    await user.type(screen.getByLabelText("Voice warmth"), "0.4");
+
+    await user.click(screen.getByRole("button", { name: "Save persona profile" }));
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/profiles/pvp",
+      expect.objectContaining({
+        method: "PUT",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Persona preferences saved.")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Current version: pvp-version-321")).toBeInTheDocument();
   });
 });

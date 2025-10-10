@@ -17,7 +17,7 @@ use sqlx::Row;
 use tower::ServiceExt;
 use tyrum_discovery::DefaultDiscoveryPipeline;
 use tyrum_planner::{
-    EventLog, PlanOutcome, PlanRequest, PlanResponse,
+    EventLog, PlanOutcome, PlanRequest, PlanResponse, ProfileStore,
     http::{PlannerState, build_router},
 };
 use tyrum_shared::{
@@ -62,11 +62,14 @@ async fn planner_appends_audit_event_with_redacted_payload() {
     })
     .await;
 
+    let profiles = ProfileStore::new(event_log.pool().clone());
+
     let state = PlannerState {
         policy_client,
         event_log: event_log.clone(),
         discovery: Arc::new(DefaultDiscoveryPipeline::new()),
         wallet_client,
+        profiles,
     };
 
     let request = sample_request();

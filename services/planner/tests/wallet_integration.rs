@@ -12,7 +12,7 @@ use sqlx::Row;
 use tower::ServiceExt;
 use tyrum_discovery::DefaultDiscoveryPipeline;
 use tyrum_planner::{
-    ActionPrimitiveKind, EventLog, PlanOutcome, PlanRequest,
+    ActionPrimitiveKind, EventLog, PlanOutcome, PlanRequest, ProfileStore,
     http::{PlannerState, build_router},
 };
 use tyrum_shared::{
@@ -113,12 +113,14 @@ async fn planner_state() -> (
     let postgres = TestPostgres::start().await.expect("start postgres fixture");
     let event_log = EventLog::from_pool(postgres.pool().clone());
     event_log.migrate().await.expect("migrate planner schema");
+    let profiles = ProfileStore::new(event_log.pool().clone());
 
     let state = PlannerState {
         policy_client,
         event_log,
         discovery: Arc::new(DefaultDiscoveryPipeline::new()),
         wallet_client,
+        profiles,
     };
 
     (state, policy_server, wallet_server, postgres)

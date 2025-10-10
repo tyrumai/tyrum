@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AccountLinkingPage from "./page";
 
 const integrationsResponse = {
-  account_id: "demo-account",
+  account_id: "11111111-2222-3333-4444-555555555555",
   integrations: [
     {
       slug: "calendar-suite",
