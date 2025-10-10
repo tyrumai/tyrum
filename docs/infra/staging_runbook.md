@@ -155,19 +155,48 @@ cluster by the Helm chart.
 6. Confirm rotation by checking that pods now reference the latest secret
    resource version (`kubectl describe pod … | grep platform-config`).
 
-### Telegram bot credentials
-- Telegram tokens and webhook URLs live in AWS Secrets Manager under
-  `tyrum-staging/integrations/telegram`. The secret stores `bot_token` and
-  `webhook_url` keys used by the ingestion service.
-- Rotate the token through BotFather, then update Secrets Manager:
+## Telegram Ingress (Staging)
+- Context: [#58](https://github.com/VirtunetBV/tyrum/issues/58), [#59](https://github.com/VirtunetBV/tyrum/issues/59), [#60](https://github.com/VirtunetBV/tyrum/issues/60), [#61](https://github.com/VirtunetBV/tyrum/issues/61), [#62](https://github.com/VirtunetBV/tyrum/issues/62). Complete these upstream changes before altering ingress settings.
+- Prerequisites: the Secrets Manager envelope `tyrum-staging/platform/config` must include the Telegram environment block and the dedicated secret `tyrum-staging/integrations/telegram` must hold `bot_token`, `webhook_url`, and `secret_token`. Tokens stay in Secrets Manager or the staged GitHub environment; never commit them or paste into chat channels.
+
+### Deployment Checklist
+1. Resolve the staging ingress hostname with `kubectl get ingress tyrum-core-api --namespace tyrum-core -o jsonpath='{.spec.rules[0].host}'` and confirm it matches the `webhook_url` stored in Secrets Manager.
+2. Export the secrets required by the API and GitHub Actions:
+   ```bash
+   SECRET=$(aws secretsmanager get-secret-value \
+     --secret-id tyrum-staging/integrations/telegram \
+     --query 'SecretString' \
+     --output text)
+
+   export TELEGRAM_BOT_TOKEN=$(jq -r '.bot_token' <<<"$SECRET")
+   export TELEGRAM_WEBHOOK_URL=$(jq -r '.webhook_url' <<<"$SECRET")
+   export TELEGRAM_WEBHOOK_SECRET=$(jq -r '.secret_token' <<<"$SECRET")
+   ```
+3. Set or update the webhook against Telegram once the API deployment is healthy:
+   ```bash
+   curl "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
+     --data-urlencode "url=${TELEGRAM_WEBHOOK_URL}" \
+     --data-urlencode "secret_token=${TELEGRAM_WEBHOOK_SECRET}"
+   ```
+4. Restart the ingestion workloads so Kubernetes refreshes projected secrets:
+   ```bash
+   kubectl rollout restart deployment/tyrum-core-api --namespace tyrum-core
+   kubectl rollout restart deployment/tyrum-telegram-ingestor --namespace tyrum-core || true
+   kubectl rollout status deployment/tyrum-core-api --namespace tyrum-core
+   ```
+   Use the ingestor restart when a dedicated deployment exists; omit it if Telegram handling is bundled into the API rollout.
+5. Mirror updated values into the staging GitHub environment (`Settings → Environments → Staging`) for `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_URL`, and `TELEGRAM_WEBHOOK_SECRET` so CI webhooks remain valid.
+
+### Secret Rotation
+- Rotate the BotFather token first, then write it to Secrets Manager:
   ```bash
   aws secretsmanager put-secret-value \
     --secret-id tyrum-staging/integrations/telegram \
-    --secret-string '{"bot_token":"<new-token>","webhook_url":"https://staging.tyrum.run/api/telegram/webhook"}'
+    --secret-string '{"bot_token":"<new-token>","webhook_url":"https://staging.tyrum.run/api/telegram/webhook","secret_token":"<new-secret-token>"}'
   ```
-  Never log the raw token; confirm CLI output is redacted before sharing.
-- Sync the Kubernetes secret projecting these values (update the key names if
-  the deployment uses different literals):
+  Never log raw tokens; confirm CLI output is redacted before sharing rotation transcripts.
+- Regenerate the HMAC secret with `/setwebhook` using the `secret_token` field so signature validation stays aligned with the API.
+- Sync the Kubernetes secret projecting these values (update key names if the deployment uses different literals):
   ```bash
   SECRET_STRING=$(aws secretsmanager get-secret-value \
     --secret-id tyrum-staging/integrations/telegram \
@@ -178,12 +207,28 @@ cluster by the Helm chart.
     --namespace tyrum-core \
     --from-literal=TELEGRAM_BOT_TOKEN="$(jq -r '.bot_token' <<<"$SECRET_STRING")" \
     --from-literal=TELEGRAM_WEBHOOK_URL="$(jq -r '.webhook_url' <<<"$SECRET_STRING")" \
+    --from-literal=TELEGRAM_WEBHOOK_SECRET="$(jq -r '.secret_token' <<<"$SECRET_STRING")" \
     --dry-run=client -o yaml | kubectl apply -f -
   ```
-- Update GitHub Actions environment secrets (`Settings → Environments → Staging`)
-  for `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_URL` so CI jobs can run smoke
-  checks without leaking credentials. GitHub masks their values automatically;
-  avoid echoing the token in workflows or logs.
+- Update GitHub Actions environment secrets (`Settings → Environments → Staging`) for all three variables so CI smoke checks align with staging. GitHub masks values by default; avoid echoing tokens in workflows or logs. Document the rotation time and approver in the change log for auditability.
+
+### Validation Commands
+Use the staged webhook to replay a signed payload and confirm the API records it without raising authentication errors.
+
+```bash
+payload=$(jq -n --argjson timestamp "$(date +%s)" '{update_id:123,message:{message_id:1,date:$timestamp}}')
+signature=$(printf '%s' "$payload" \
+  | openssl dgst -binary -sha256 -hmac "$TELEGRAM_WEBHOOK_SECRET" \
+  | xxd -p -c 256)
+
+curl -X POST "${TELEGRAM_WEBHOOK_URL}" \
+  -H "Content-Type: application/json" \
+  -H "X-Telegram-Bot-Api-Secret-Token: $TELEGRAM_WEBHOOK_SECRET" \
+  -H "X-Telegram-Bot-Api-Signature: sha256=$signature" \
+  -d "$payload"
+```
+
+Follow with `kubectl logs deployment/tyrum-core-api --namespace tyrum-core | tail -n 20` or the staging Grafana ingress dashboard to confirm the request succeeded and persisted to `ingress_threads`/`ingress_messages`.
 
 ## Observability & Alerting Links
 - Grafana (Control Plane Overview):
