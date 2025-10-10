@@ -12,7 +12,7 @@ serde_json = "1"
 tokio = { version = "1.43", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "registry"] }
-thiserror = "1"
+thiserror = "2"
 once_cell = "1.19"
 opentelemetry = { version = "0.31", features = ["metrics", "logs"] }
 opentelemetry-appender-tracing = "0.31.1"
