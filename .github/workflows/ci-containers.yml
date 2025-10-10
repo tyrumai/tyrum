@@ -50,6 +50,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Docker Buildx
+        if: ${{ github.actor != 'dependabot[bot]' }}
         uses: docker/setup-buildx-action@v3
 
       - name: Authenticate to Docker Hub
@@ -60,7 +61,13 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Skip container build for Dependabot
+        if: ${{ github.actor == 'dependabot[bot]' }}
+        run: |
+          echo "Dependabot PR detected; skipping container builds that rely on docker.io authentication." >>"$GITHUB_STEP_SUMMARY"
+
       - name: Build ${{ matrix.title }} image
+        if: ${{ github.actor != 'dependabot[bot]' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -72,6 +79,7 @@ jobs:
           echo "BUILT_IMAGE=$image" >>"$GITHUB_ENV"
 
       - name: Smoke test ${{ matrix.title }} image
+        if: ${{ github.actor != 'dependabot[bot]' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -160,7 +168,7 @@ jobs:
           fi
 
       - name: Remove ${{ matrix.title }} image
-        if: always()
+        if: ${{ always() && github.actor != 'dependabot[bot]' }}
         shell: bash
         run: |
           set -euo pipefail
