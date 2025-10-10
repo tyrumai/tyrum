@@ -28,6 +28,7 @@ jobs:
             port: 8080
             endpoint: /healthz
             smoke: true
+            build_arg: ""
           - id: policy
             title: Policy
             context: .
@@ -35,11 +36,13 @@ jobs:
             port: 8081
             endpoint: /healthz
             smoke: true
+            build_arg: ""
           - id: planner
             title: Planner
             context: .
             dockerfile: Dockerfile.planner
             smoke: false
+            build_arg: ""
           - id: wallet
             title: Wallet
             context: .
@@ -47,6 +50,7 @@ jobs:
             port: 8084
             endpoint: /healthz
             smoke: true
+            build_arg: ""
           - id: executor-http
             title: Executor HTTP
             context: .
@@ -54,6 +58,7 @@ jobs:
             port: 8092
             endpoint: /healthz
             smoke: true
+            build_arg: ""
           - id: executor-web
             title: Executor Web
             context: .
@@ -61,6 +66,7 @@ jobs:
             port: 8091
             endpoint: /healthz
             smoke: true
+            build_arg: ""
           - id: executor-cli
             title: Executor CLI
             context: .
@@ -68,11 +74,13 @@ jobs:
             port: 8093
             endpoint: /healthz
             smoke: true
+            build_arg: ""
           - id: executor-android
             title: Executor Android
             context: .
             dockerfile: Dockerfile.executor-android
             smoke: false
+            build_arg: ""
           - id: llm-gateway
             title: LLM Gateway
             context: .
@@ -80,21 +88,25 @@ jobs:
             port: 8086
             endpoint: /healthz
             smoke: true
+            build_arg: ""
           - id: model-gateway
             title: Model Gateway
             context: .
             dockerfile: Dockerfile.model-gateway
             smoke: false
+            build_arg: ""
           - id: watchers
             title: Watchers Processor
             context: .
             dockerfile: Dockerfile.watchers
             smoke: false
+            build_arg: ""
           - id: vllm
             title: VLLM Gateway
             context: .
             dockerfile: Dockerfile.vllm
             smoke: false
+            build_arg: BASE_IMAGE=python:3.11-slim
           - id: web
             title: Web
             context: web
@@ -102,6 +114,7 @@ jobs:
             port: 3000
             endpoint: /
             smoke: true
+            build_arg: ""
           - id: mock-llm
             title: Mock LLM
             context: services/mock_llm
@@ -109,6 +122,7 @@ jobs:
             port: 8085
             endpoint: /healthz
             smoke: true
+            build_arg: ""
     permissions:
       contents: read
     env:
@@ -133,10 +147,14 @@ jobs:
         run: |
           set -euo pipefail
           image="ghcr.io/virtunetbv/tyrum-ci-${{ matrix.id }}:${GITHUB_SHA}"
-          docker buildx build --progress plain --load \
+          cmd=(docker buildx build --progress plain --load \
             --file "${{ matrix.dockerfile }}" \
-            --tag "$image" \
-            "${{ matrix.context }}"
+            --tag "$image")
+          if [ -n "${{ matrix.build_arg }}" ]; then
+            cmd+=(--build-arg "${{ matrix.build_arg }}")
+          fi
+          cmd+=("${{ matrix.context }}")
+          "${cmd[@]}"
           echo "BUILT_IMAGE=$image" >>"$GITHUB_ENV"
 
       - name: Smoke test ${{ matrix.title }} image
