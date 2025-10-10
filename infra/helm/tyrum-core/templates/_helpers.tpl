@@ -53,6 +53,26 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- printf "%s-%s" (include "tyrum-core.fullname" .root) .name | trunc 63 | trimSuffix "-" -}}
 {{- end }}
 
+{{/* Config map name for a service entry. */}}
+{{- define "tyrum-core.serviceConfigName" -}}
+{{- printf "%s-config" (include "tyrum-core.serviceFullname" .) -}}
+{{- end }}
+
+{{/* Secret name for a service entry. */}}
+{{- define "tyrum-core.serviceSecretName" -}}
+{{- printf "%s-secrets" (include "tyrum-core.serviceFullname" .) -}}
+{{- end }}
+
+{{/* File config map name for a service entry. */}}
+{{- define "tyrum-core.serviceFilesName" -}}
+{{- printf "%s-files" (include "tyrum-core.serviceFullname" .) -}}
+{{- end }}
+
+{{/* Qualified job name. */}}
+{{- define "tyrum-core.jobFullname" -}}
+{{- include "tyrum-core.serviceFullname" . -}}
+{{- end }}
+
 {{/* Labels used to select pods belonging to a service entry. */}}
 {{- define "tyrum-core.serviceSelectorLabels" -}}
 app.kubernetes.io/name: {{ include "tyrum-core.serviceFullname" . }}
@@ -148,19 +168,19 @@ spec:
           envFrom:
             {{- if $service.config }}
             - configMapRef:
-                name: {{ printf "%s-config" $svcFullname }}
+                name: {{ include "tyrum-core.serviceConfigName" (dict "root" $root "name" $name) }}
             {{- end }}
             {{- if $service.secrets }}
             - secretRef:
-                name: {{ printf "%s-secrets" $svcFullname }}
+                name: {{ include "tyrum-core.serviceSecretName" (dict "root" $root "name" $name) }}
             {{- end }}
-            {{- range $service.envFrom }}
-            - {{- toYaml . | nindent 14 }}
+            {{- if $service.envFrom }}
+{{ tpl (toYaml $service.envFrom) (dict "root" $root "name" $name "service" $service) | indent 12 }}
             {{- end }}
           {{- end }}
           {{- with $service.env }}
           env:
-            {{- toYaml . | nindent 12 }}
+{{ tpl (toYaml .) (dict "root" $root "name" $name "service" $service) | indent 12 }}
           {{- end }}
           {{- with $service.resources }}
           resources:
@@ -180,11 +200,11 @@ spec:
           {{- end }}
           {{- with $service.volumeMounts }}
           volumeMounts:
-            {{- toYaml . | nindent 12 }}
+{{ tpl (toYaml .) (dict "root" $root "name" $name "service" $service) | indent 12 }}
           {{- end }}
       {{- if $service.volumes }}
       volumes:
-        {{- toYaml $service.volumes | nindent 8 }}
+{{ tpl (toYaml $service.volumes) (dict "root" $root "name" $name "service" $service) | indent 8 }}
       {{- end }}
       {{- with $service.nodeSelector }}
       nodeSelector:
@@ -249,7 +269,7 @@ spec:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ printf "%s-config" $svcFullname }}
+  name: {{ include "tyrum-core.serviceConfigName" (dict "root" $root "name" $name) }}
   labels:
     {{- include "tyrum-core.labels" $root | nindent 4 }}
     app.kubernetes.io/component: {{ $name }}
@@ -261,7 +281,12 @@ data:
   {{- range $key, $value := $service.config }}
   {{- $raw := printf "%v" $value }}
   {{- $rendered := tpl $raw $root }}
+  {{- if contains "\n" $rendered }}
+  {{ $key }}: |-
+{{ $rendered | nindent 4 }}
+  {{- else }}
   {{ $key }}: {{ $rendered | quote }}
+  {{- end }}
   {{- end }}
 {{- end }}
 {{- end }}
@@ -277,7 +302,7 @@ data:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: {{ printf "%s-secrets" $svcFullname }}
+  name: {{ include "tyrum-core.serviceSecretName" (dict "root" $root "name" $name) }}
   labels:
     {{- include "tyrum-core.labels" $root | nindent 4 }}
     app.kubernetes.io/component: {{ $name }}
@@ -289,6 +314,139 @@ stringData:
   {{- $rendered := tpl $raw $root }}
   {{ $key }}: {{ $rendered | quote }}
   {{- end }}
+{{- end }}
+{{- end }}
+
+{{/* Render a config map containing mounted file data. */}}
+{{- define "tyrum-core.fileConfigMap" -}}
+{{- $root := .root -}}
+{{- $name := .name -}}
+{{- $service := .service -}}
+{{- if and (default true $service.enabled) $service.files -}}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "tyrum-core.serviceFilesName" (dict "root" $root "name" $name) }}
+  labels:
+    {{- include "tyrum-core.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+    tyrum.dev/service: {{ $name }}
+  annotations:
+    tyrum.dev/config-purpose: file-mounts
+    tyrum.dev/managed-for: {{ $name }}
+data:
+  {{- range $key, $value := $service.files }}
+  {{- $raw := printf "%v" $value }}
+  {{- $rendered := tpl $raw $root }}
+  {{ $key }}: |-
+{{ $rendered | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- end }}
+
+{{/* Render a batch job manifest. */}}
+{{- define "tyrum-core.job" -}}
+{{- $root := .root -}}
+{{- $name := .name -}}
+{{- $job := .job -}}
+{{- if (default true $job.enabled) -}}
+{{- $jobFullname := include "tyrum-core.jobFullname" (dict "root" $root "name" $name) -}}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $jobFullname }}
+  labels:
+    {{- include "tyrum-core.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+    tyrum.dev/job: {{ $name }}
+  {{- with $job.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if $job.backoffLimit }}
+  backoffLimit: {{ $job.backoffLimit }}
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "tyrum-core.serviceSelectorLabels" (dict "root" $root "name" $name) | nindent 8 }}
+        {{- with $job.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- $annotations := merge (default (dict) $root.Values.podAnnotations) (default (dict) $job.podAnnotations) }}
+      {{- if $annotations }}
+      annotations:
+        {{- toYaml $annotations | nindent 8 }}
+      {{- end }}
+    spec:
+      restartPolicy: {{ default "OnFailure" $job.restartPolicy }}
+      serviceAccountName: {{ include "tyrum-core.serviceAccountName" $root }}
+      {{- if $root.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml $root.Values.imagePullSecrets | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ $name }}
+          {{- $tag := default $root.Chart.AppVersion $job.image.tag }}
+          image: {{ printf "%s:%s" $job.image.repository $tag }}
+          imagePullPolicy: {{ default "IfNotPresent" $job.image.pullPolicy }}
+          {{- with $job.command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $job.args }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if or $job.config $job.secrets $job.envFrom }}
+          envFrom:
+            {{- if $job.config }}
+            - configMapRef:
+                name: {{ include "tyrum-core.serviceConfigName" (dict "root" $root "name" $name) }}
+            {{- end }}
+            {{- if $job.secrets }}
+            - secretRef:
+                name: {{ include "tyrum-core.serviceSecretName" (dict "root" $root "name" $name) }}
+            {{- end }}
+            {{- if $job.envFrom }}
+{{ tpl (toYaml $job.envFrom) (dict "root" $root "name" $name "service" $job) | indent 12 }}
+            {{- end }}
+          {{- end }}
+          {{- with $job.env }}
+          env:
+{{ tpl (toYaml .) (dict "root" $root "name" $name "service" $job) | indent 12 }}
+          {{- end }}
+          {{- with $job.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $job.volumeMounts }}
+          volumeMounts:
+{{ tpl (toYaml .) (dict "root" $root "name" $name "service" $job) | indent 12 }}
+          {{- end }}
+      {{- if $job.volumes }}
+      volumes:
+{{ tpl (toYaml $job.volumes) (dict "root" $root "name" $name "service" $job) | indent 8 }}
+      {{- end }}
+      {{- with $job.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $job.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $job.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $job.securityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
 {{- end }}
 {{- end }}
 

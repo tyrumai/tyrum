@@ -18,7 +18,7 @@ An issue is **Ready** when it meets all of the following:
 - **Design References:** Links to design stubs, architecture diagrams, API contracts, or user flows are attached. For UX items, screenshots or Figma frames are referenced. For backend work, relevant sequence diagrams or schemas are cited.
 - **Dependencies Identified:** Upstream work, external teams, secrets, or approvals are listed. Any unresolved dependency keeps the issue in Backlog.
 - **Data & Test Inputs:** Required fixtures, sample payloads, or environment variables are defined and checked into the repo (sanitised) or stored in Vault with instructions.
-- **Env Readiness:** Local and staging environments support the change (e.g., feature flags, Terraform resources, mock services). Missing infrastructure must have its own issue.
+- **Env Readiness:** Local and staging environments support the change (e.g., feature flags, Kubernetes manifests, mock services). Missing infrastructure must have its own issue.
 - **Security & Compliance:** Required policy checks, guardrails, or consent implications are documented. For data-touching work, retention/PII considerations are acknowledged.
 - **Sizing Confirmation:** The assignee confirms the work fits the one-developer-day target. If not, the issue is split before moving to Ready.
 - **Quality Signals:** Required automated checks (tests, linting, formatting) are known and documented; any new tooling updates are captured as sub-tasks.
@@ -31,7 +31,7 @@ An issue reaches **Done** only when all criteria below are satisfied:
 - **Manual QA (if required):** High-risk flows (auth, payments, policy enforcement) include manual test notes or screen recordings.
 - **Documentation Updated:** README, `docs/`, API docs, and runbooks reflect new behaviour, flags, or operational steps. Changelog entries are added when externally visible.
 - **Observability Wired:** Metrics, logs, and traces are instrumented or updated. Dashboards/alerts referenced in acceptance criteria are validated.
-- **Security Compliance:** Secrets remain managed via approved vaults; dependency updates pass `cargo audit`, `npm audit`, `tfsec`, and `trivy`. Threat considerations are documented for data-sensitive work.
+- **Security Compliance:** Secrets remain managed via approved vaults; dependency updates pass `cargo audit`, `npm audit`, and `trivy`. Threat considerations are documented for data-sensitive work.
 - **Backwards Compatibility:** Migration scripts are tested with up/down paths; fallback strategies are documented. Feature flags include rollback instructions.
 - **Peer Review Completed:** At least one reviewer signs off. Review conversations are resolved or tracked for follow-up.
 - **Merge & Cleanup:** Feature branches are merged to `main`, stale branches are removed, and the linked GitHub Issue is closed with a completion note.
@@ -40,7 +40,7 @@ An issue reaches **Done** only when all criteria below are satisfied:
 ## 4. Acceptance Criteria Guidelines
 - Write acceptance criteria as bullet points beginning with observable outcomes (e.g., “Given… When… Then…” or “Script X outputs status Y”).
 - Include success AND failure behaviours. Specify expected errors, policy escalations, and retry behaviour.
-- Reference the exact command(s) or endpoints to validate the change (e.g., `cargo test -p planner`, `npm run test -- --runInBand`, `terraform plan`).
+- Reference the exact command(s) or endpoints to validate the change (e.g., `cargo test -p planner`, `npm run test -- --runInBand`, `helm lint infra/helm/tyrum-core`).
 - Quantify non-functional requirements (latency, throughput, Lighthouse score, token usage, cost ceiling).
 - Attach verification artifacts (screenshots, trace IDs, log snippets) to issues or link to the relevant dashboard panel.
 - Update or extend acceptance criteria whenever scope changes during implementation; the issue owner is responsible for keeping them current.
