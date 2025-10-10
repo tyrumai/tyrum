@@ -905,7 +905,7 @@ mod tests {
     }
 
     async fn connect_with_retry(database_url: &str) -> WaitlistRepository {
-        const MAX_ATTEMPTS: usize = 5;
+        const MAX_ATTEMPTS: usize = 40;
         let mut attempts = 0;
         loop {
             match WaitlistRepository::connect(database_url).await {
@@ -914,7 +914,7 @@ mod tests {
                     if attempts < MAX_ATTEMPTS && matches!(error, sqlx::Error::Io(_)) =>
                 {
                     attempts += 1;
-                    sleep(Duration::from_millis(100)).await;
+                    sleep(Duration::from_millis(250)).await;
                 }
                 Err(err) => panic!("connect waitlist repository: {err}"),
             }
