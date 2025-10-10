@@ -13,39 +13,8 @@ ENV HTTP_PROXY=$HTTP_PROXY \
 WORKDIR /app
 
 COPY Cargo.toml Cargo.lock ./
-COPY shared/tyrum-shared/Cargo.toml shared/tyrum-shared/Cargo.toml
-COPY shared/tyrum-shared/src shared/tyrum-shared/src
-COPY services/api/Cargo.toml services/api/Cargo.toml
-COPY services/api/src services/api/src
-COPY services/api/migrations services/api/migrations
-COPY services/discovery/Cargo.toml services/discovery/Cargo.toml
-COPY services/discovery/src services/discovery/src
-COPY services/memory/Cargo.toml services/memory/Cargo.toml
-COPY services/memory/src services/memory/src
-COPY services/memory/tests services/memory/tests
-COPY services/memory/migrations services/memory/migrations
-COPY services/executor_web/Cargo.toml services/executor_web/Cargo.toml
-COPY services/executor_web/src services/executor_web/src
-COPY services/executor_web/tests services/executor_web/tests
-COPY services/executor_http/Cargo.toml services/executor_http/Cargo.toml
-COPY services/executor_http/src services/executor_http/src
-COPY services/executor_http/tests services/executor_http/tests
-COPY services/executor_cli/Cargo.toml services/executor_cli/Cargo.toml
-COPY services/executor_cli/src services/executor_cli/src
-COPY services/policy/Cargo.toml services/policy/Cargo.toml
-COPY services/policy/src services/policy/src
-COPY services/tyrum-wallet/Cargo.toml services/tyrum-wallet/Cargo.toml
-COPY services/tyrum-wallet/src services/tyrum-wallet/src
-COPY services/tyrum-wallet/tests services/tyrum-wallet/tests
-COPY services/tyrum-watchers/Cargo.toml services/tyrum-watchers/Cargo.toml
-COPY services/tyrum-watchers/src services/tyrum-watchers/src
-COPY services/tyrum-watchers/tests services/tyrum-watchers/tests
-COPY services/tyrum-llm/Cargo.toml services/tyrum-llm/Cargo.toml
-COPY services/tyrum-llm/src services/tyrum-llm/src
-COPY services/tyrum-llm/tests services/tyrum-llm/tests
-COPY services/planner/Cargo.toml services/planner/Cargo.toml
-COPY services/planner/migrations services/planner/migrations
-COPY services/planner/src services/planner/src
+COPY shared shared
+COPY services services
 
 RUN cargo build --locked --release --bin planner_http
 
