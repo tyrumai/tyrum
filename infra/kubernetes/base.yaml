@@ -3108,6 +3108,34 @@ spec:
 apiVersion: v1
 kind: Pod
 metadata:
+  name: tyrum-tyrum-core-loki-test
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: loki
+    tyrum.dev/service: loki
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  restartPolicy: Never
+  containers:
+    - name: loki-check
+      image: curlimages/curl:8.11.1
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/sh
+        - -c
+        - >-
+          curl -fsS --max-time 10 http://tyrum-tyrum-core-loki:3100/
+---
+# Source: tyrum-core/templates/tests.yaml
+apiVersion: v1
+kind: Pod
+metadata:
   name: tyrum-tyrum-core-mock-llm-test
   labels:
     helm.sh/chart: tyrum-core-0.1.0
@@ -3270,7 +3298,7 @@ spec:
         - /bin/sh
         - -c
         - >-
-          curl -fsS --max-time 10 http://tyrum-tyrum-core-policy:4318/healthz
+          curl -fsS --max-time 10 http://tyrum-tyrum-core-policy:8081/healthz
 ---
 # Source: tyrum-core/templates/tests.yaml
 apiVersion: v1
@@ -3356,6 +3384,62 @@ spec:
         - -h
         - tyrum-tyrum-core-redis.default.svc.cluster.local
         - ping
+---
+# Source: tyrum-core/templates/tests.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tyrum-tyrum-core-tempo-test
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: tempo
+    tyrum.dev/service: tempo
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  restartPolicy: Never
+  containers:
+    - name: tempo-check
+      image: curlimages/curl:8.11.1
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/sh
+        - -c
+        - >-
+          curl -fsS --max-time 10 http://tyrum-tyrum-core-tempo:3200/
+---
+# Source: tyrum-core/templates/tests.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tyrum-tyrum-core-vllm-gateway-test
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: vllm-gateway
+    tyrum.dev/service: vllm-gateway
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  restartPolicy: Never
+  containers:
+    - name: vllm-gateway-check
+      image: curlimages/curl:8.11.1
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/sh
+        - -c
+        - >-
+          curl -fsS --max-time 10 http://tyrum-tyrum-core-vllm-gateway:8000/
 ---
 # Source: tyrum-core/templates/tests.yaml
 apiVersion: v1

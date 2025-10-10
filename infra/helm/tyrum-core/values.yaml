@@ -8,10 +8,10 @@ global:
     webhookUrl: https://example.com/api/telegram/webhook
     webhookSecret: local-telegram-secret
   otel:
-    endpoint: ""
+    endpoint: ''
     protocol: grpc
   llm:
-    backendUrl: ""
+    backendUrl: ''
     modelName: tyrum-stub-8b
     rateLimitPerSecond: 10
   postgres:
@@ -125,6 +125,7 @@ services:
     volumes: []
     test:
       path: /healthz
+      port: 8084
   planner:
     replicaCount: 1
     image:
@@ -179,6 +180,7 @@ services:
     volumes: []
     test:
       path: /healthz
+      port: 8083
   watchers-processor:
     replicaCount: 1
     image:
@@ -251,6 +253,7 @@ services:
     volumes: []
     test:
       path: /healthz
+      port: 8091
   executor-http:
     replicaCount: 1
     image:
@@ -294,6 +297,7 @@ services:
     volumes: []
     test:
       path: /healthz
+      port: 8092
   executor-cli:
     replicaCount: 1
     image:
@@ -340,6 +344,7 @@ services:
         medium: Memory
     test:
       path: /healthz
+      port: 8093
   executor-android:
     enabled: false
     replicaCount: 1
@@ -420,6 +425,7 @@ services:
       - -c
       - wget --spider -q http://{{ include "tyrum-core.serviceHostname" (dict "root"
         . "name" "nats") }}:8222/healthz?js-enabled
+      port: 4222
   llm-gateway:
     replicaCount: 1
     image:
@@ -465,6 +471,7 @@ services:
     volumes: []
     test:
       path: /healthz
+      port: 8086
   model-gateway:
     replicaCount: 1
     image:
@@ -522,6 +529,7 @@ services:
           "model-gateway") }}'
     test:
       path: /healthz
+      port: 8001
   vllm-gateway:
     enabled: false
     replicaCount: 1
@@ -562,7 +570,8 @@ services:
     envFrom: []
     volumeMounts: []
     volumes: []
-    test: {}
+    test:
+      port: 8000
   api:
     replicaCount: 1
     image:
@@ -618,6 +627,7 @@ services:
     volumes: []
     test:
       path: /healthz
+      port: 8080
   web:
     replicaCount: 1
     image:
@@ -662,6 +672,7 @@ services:
     volumes: []
     test:
       path: /
+      port: 3000
   mock-llm:
     replicaCount: 1
     image:
@@ -700,6 +711,7 @@ services:
     volumes: []
     test:
       path: /healthz
+      port: 8085
   postgres:
     replicaCount: 1
     strategy:
@@ -757,6 +769,7 @@ services:
       - pg_isready -h {{ include "tyrum-core.serviceHostname" (dict "root" . "name"
         "postgres") }} -U {{ .Values.global.postgres.user }} -d {{ .Values.global.postgres.database
         }}
+      port: 5432
   redis:
     replicaCount: 1
     image:
@@ -806,6 +819,7 @@ services:
       - -h
       - '{{ include "tyrum-core.serviceHostname" (dict "root" . "name" "redis") }}'
       - ping
+      port: 6379
   otel-collector:
     replicaCount: 1
     image:
@@ -878,6 +892,7 @@ services:
           "otel-collector") }}'
     test:
       path: /healthz
+      port: 4317
   prometheus:
     replicaCount: 1
     image:
@@ -930,6 +945,7 @@ services:
           "prometheus") }}'
     test:
       path: /-/ready
+      port: 9090
   tempo:
     replicaCount: 1
     image:
@@ -1004,7 +1020,8 @@ services:
           "tempo") }}'
     - name: tempo-data
       emptyDir: {}
-    test: {}
+    test:
+      port: 3200
   loki:
     replicaCount: 1
     image:
@@ -1068,7 +1085,8 @@ services:
           "loki") }}'
     - name: loki-data
       emptyDir: {}
-    test: {}
+    test:
+      port: 3100
   grafana:
     replicaCount: 1
     image:
@@ -1138,6 +1156,7 @@ services:
       emptyDir: {}
     test:
       path: /api/health
+      port: 3001
 jobs:
   api-migrations:
     enabled: true
