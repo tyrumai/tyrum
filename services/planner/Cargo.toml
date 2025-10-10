@@ -15,7 +15,7 @@ axum = { version = "0.7", features = ["json"] }
 chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sqlx = { version = "0.7", default-features = false, features = [
+sqlx = { version = "0.8", default-features = false, features = [
   "runtime-tokio",
   "postgres",
   "chrono",
@@ -42,7 +42,7 @@ tyrum-wallet = { path = "../tyrum-wallet" }
 [dev-dependencies]
 anyhow = "1"
 serde_json = "1"
-sqlx = { version = "0.7", default-features = false, features = [
+sqlx = { version = "0.8", default-features = false, features = [
   "runtime-tokio",
   "postgres",
   "chrono",
