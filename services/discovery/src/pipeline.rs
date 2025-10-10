@@ -1,6 +1,8 @@
-use std::time::Duration;
+use std::{net::IpAddr, time::Duration};
 
 use tracing::debug;
+
+use url::Url;
 
 use crate::telemetry;
 
@@ -117,34 +119,424 @@ pub trait DiscoveryPipeline {
     }
 }
 
-/// Stub pipeline used while executors are wired in.
+/// Default discovery pipeline that performs lightweight heuristics to surface
+/// MCP, structured API, or generic HTTP connectors.
 #[derive(Default)]
 pub struct DefaultDiscoveryPipeline;
 
 impl DefaultDiscoveryPipeline {
-    /// Creates a pipeline stub useful for tests or planner scaffolding. All
-    /// strategies currently return `NotFound` while the executor wiring lands.
+    /// Creates a pipeline instance using built-in heuristics.
     #[must_use]
     pub fn new() -> Self {
         Self
     }
+
+    fn descriptor(&self, request: &DiscoveryRequest) -> SubjectDescriptor {
+        SubjectDescriptor::parse(request.sanitized_subject())
+    }
+
+    fn detect_mcp(&self, descriptor: &SubjectDescriptor) -> Option<String> {
+        if let Some(locator) = parse_mcp_locator(descriptor.trimmed.as_str()) {
+            return Some(locator);
+        }
+
+        if let Some(remainder) = strip_prefix_case_insensitive(descriptor.trimmed.as_str(), "mcp:")
+        {
+            let slug = remainder.trim_start_matches('/');
+            if slug.is_empty() {
+                return None;
+            }
+            let candidate = format!("mcp://{}", slug);
+            return parse_mcp_locator(&candidate);
+        }
+
+        for (alias, locator) in MCP_ALIAS_MAP {
+            if descriptor.tokens.iter().any(|token| token == alias) {
+                return Some(locator.to_string());
+            }
+        }
+
+        None
+    }
+
+    fn detect_structured_api(&self, descriptor: &SubjectDescriptor) -> Option<String> {
+        if let Some(url) = descriptor.url.as_ref().filter(|url| {
+            matches!(url.scheme(), "http" | "https") && indicates_structured_endpoint(url)
+        }) {
+            return Some(Self::canonicalize_http_url(url));
+        }
+
+        if descriptor
+            .tokens
+            .iter()
+            .any(|token| STRUCTURED_KEYWORDS.contains(&token.as_str()))
+        {
+            return descriptor
+                .url
+                .as_ref()
+                .filter(|url| matches!(url.scheme(), "http" | "https"))
+                .map(Self::canonicalize_http_url)
+                .or_else(|| Some(build_structured_locator_from_tokens(&descriptor.tokens)));
+        }
+
+        if let Some(locator) = self.structured_from_alias(descriptor) {
+            return Some(locator);
+        }
+
+        None
+    }
+
+    fn structured_from_alias(&self, descriptor: &SubjectDescriptor) -> Option<String> {
+        if descriptor.tokens.is_empty() {
+            return None;
+        }
+
+        let looks_like_namespace =
+            descriptor.lowercase.contains(':') || descriptor.lowercase.contains(' ');
+        if !looks_like_namespace {
+            return None;
+        }
+
+        // Handle subjects such as `api:calendar:events` by skipping the `api`
+        // prefix when present.
+        if descriptor.tokens.len() >= 2 && descriptor.tokens[0] == "api" {
+            let service = descriptor.tokens[1].clone();
+            let remainder = descriptor
+                .tokens
+                .iter()
+                .skip(2)
+                .cloned()
+                .collect::<Vec<_>>();
+            return Some(build_structured_locator(&service, &remainder));
+        }
+
+        for alias in STRUCTURED_ALIAS_HINTS {
+            if let Some(index) = descriptor.tokens.iter().position(|token| token == alias) {
+                let remainder = descriptor
+                    .tokens
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(idx, token)| (idx > index).then_some(token.clone()))
+                    .collect::<Vec<_>>();
+                return Some(build_structured_locator(alias, &remainder));
+            }
+        }
+
+        None
+    }
+
+    fn detect_generic_http(&self, descriptor: &SubjectDescriptor) -> Option<String> {
+        if let Some(url) = descriptor
+            .url
+            .as_ref()
+            .filter(|url| matches!(url.scheme(), "http" | "https"))
+        {
+            return Some(Self::canonicalize_http_url(url));
+        }
+
+        let candidate = descriptor.trimmed.trim();
+        if looks_like_hostname(candidate) {
+            let url_str = format!(
+                "https://{}",
+                candidate
+                    .trim_start_matches("https://")
+                    .trim_start_matches("http://")
+            );
+            if let Ok(url) = Url::parse(&url_str) {
+                return Some(Self::canonicalize_http_url(&url));
+            }
+        }
+
+        None
+    }
+
+    fn canonicalize_http_url(url: &Url) -> String {
+        let mut normalized = url.clone();
+        normalized.set_fragment(None);
+
+        let mut value = normalized.to_string();
+        if normalized.path() == "/" && normalized.query().is_none() && value.ends_with('/') {
+            value.pop();
+        }
+        value
+    }
 }
 
 impl DiscoveryPipeline for DefaultDiscoveryPipeline {
-    fn try_mcp(&self, _request: &DiscoveryRequest) -> DiscoveryOutcome {
-        DiscoveryOutcome::NotFound
+    fn try_mcp(&self, request: &DiscoveryRequest) -> DiscoveryOutcome {
+        let descriptor = self.descriptor(request);
+        match self.detect_mcp(&descriptor) {
+            Some(locator) => DiscoveryOutcome::Found(DiscoveryConnector {
+                strategy: DiscoveryStrategy::Mcp,
+                locator,
+            }),
+            None => DiscoveryOutcome::NotFound,
+        }
     }
 
-    fn try_structured_api(&self, _request: &DiscoveryRequest) -> DiscoveryOutcome {
-        DiscoveryOutcome::NotFound
+    fn try_structured_api(&self, request: &DiscoveryRequest) -> DiscoveryOutcome {
+        let descriptor = self.descriptor(request);
+        match self.detect_structured_api(&descriptor) {
+            Some(locator) => DiscoveryOutcome::Found(DiscoveryConnector {
+                strategy: DiscoveryStrategy::StructuredApi,
+                locator,
+            }),
+            None => DiscoveryOutcome::NotFound,
+        }
     }
 
-    fn try_generic_http(&self, _request: &DiscoveryRequest) -> DiscoveryOutcome {
-        // TODO: support credential-scoped discovery without leaking secrets.
-        DiscoveryOutcome::NotFound
+    fn try_generic_http(&self, request: &DiscoveryRequest) -> DiscoveryOutcome {
+        let descriptor = self.descriptor(request);
+        match self.detect_generic_http(&descriptor) {
+            Some(locator) => DiscoveryOutcome::Found(DiscoveryConnector {
+                strategy: DiscoveryStrategy::GenericHttp,
+                locator,
+            }),
+            None => DiscoveryOutcome::NotFound,
+        }
     }
 }
 
+const MCP_ALIAS_MAP: &[(&str, &str)] = &[
+    ("calendar", "mcp://calendar"),
+    ("crm", "mcp://crm"),
+    ("email", "mcp://email"),
+    ("files", "mcp://files"),
+    ("tasks", "mcp://tasks"),
+    ("support", "mcp://support"),
+];
+
+const STRUCTURED_ALIAS_HINTS: &[&str] = &[
+    "api",
+    "calendar",
+    "crm",
+    "billing",
+    "payments",
+    "inventory",
+    "orders",
+    "support",
+    "email",
+    "files",
+    "docs",
+];
+
+const STRUCTURED_KEYWORDS: &[&str] = &["openapi", "graphql", "swagger", "rest", "caldav", "imap"];
+
+const TOKEN_SPLIT_CHARS: &[char] = &[
+    ':', '/', '.', ' ', '\t', '\n', '\r', '?', '#', '&', '=', '_', '-', '\\', '@',
+];
+
+#[derive(Debug, Clone)]
+struct SubjectDescriptor {
+    trimmed: String,
+    lowercase: String,
+    tokens: Vec<String>,
+    url: Option<Url>,
+}
+
+impl SubjectDescriptor {
+    fn parse(subject: &str) -> Self {
+        let trimmed = subject.trim().to_string();
+        let lowercase = trimmed.to_lowercase();
+        let tokens = tokenize(&trimmed);
+        let url = parse_url_candidate(&trimmed);
+
+        Self {
+            trimmed,
+            lowercase,
+            tokens,
+            url,
+        }
+    }
+}
+
+fn tokenize(value: &str) -> Vec<String> {
+    value
+        .split(|c: char| TOKEN_SPLIT_CHARS.contains(&c))
+        .filter(|segment| !segment.is_empty())
+        .map(|segment| segment.trim_matches(|ch: char| ch == '"' || ch == '\''))
+        .filter(|segment| !segment.is_empty())
+        .map(|segment| segment.to_lowercase())
+        .collect()
+}
+
+fn parse_url_candidate(value: &str) -> Option<Url> {
+    if value.is_empty() {
+        return None;
+    }
+
+    let parsed = Url::parse(value).ok().or_else(|| {
+        if value.contains("://") {
+            return None;
+        }
+
+        let candidate = format!("https://{}", value.trim_start_matches('/'));
+        Url::parse(&candidate).ok()
+    });
+
+    parsed.filter(|url| url.host_str().is_some_and(valid_host_candidate))
+}
+
+fn indicates_structured_endpoint(url: &Url) -> bool {
+    let host = url.host_str().unwrap_or_default().to_lowercase();
+    if host.starts_with("api.")
+        || host.contains(".api.")
+        || host.ends_with(".api")
+        || host.contains("graphql")
+    {
+        return true;
+    }
+
+    let path = url.path().to_lowercase();
+    if path.contains("/api/") {
+        return true;
+    }
+
+    STRUCTURED_KEYWORDS
+        .iter()
+        .any(|keyword| path.contains(keyword))
+}
+
+fn build_structured_locator(service: &str, remainder: &[String]) -> String {
+    let service_slug = sanitize_segment(service);
+
+    let segments: Vec<_> = remainder
+        .iter()
+        .map(|segment| sanitize_segment(segment))
+        .filter(|segment| !segment.is_empty() && segment != "unknown")
+        .collect();
+
+    if segments.is_empty() {
+        format!("structured://{}", service_slug)
+    } else {
+        format!("structured://{}/{}", service_slug, segments.join("/"))
+    }
+}
+
+fn build_structured_locator_from_tokens(tokens: &[String]) -> String {
+    if tokens.is_empty() {
+        return "structured://subject".to_string();
+    }
+
+    if tokens.len() == 1 {
+        return format!("structured://{}", sanitize_segment(&tokens[0]));
+    }
+
+    build_structured_locator(&tokens[0], &tokens[1..])
+}
+
+fn sanitize_segment(segment: &str) -> String {
+    let mut sanitized = String::new();
+    for ch in segment.chars() {
+        if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_') {
+            sanitized.push(ch.to_ascii_lowercase());
+        }
+    }
+
+    if sanitized.is_empty() {
+        let fallback = segment
+            .chars()
+            .filter(|c| c.is_alphanumeric())
+            .map(|c| c.to_ascii_lowercase())
+            .collect::<String>();
+        if fallback.is_empty() {
+            "unknown".to_string()
+        } else {
+            fallback
+        }
+    } else {
+        sanitized
+    }
+}
+
+fn looks_like_hostname(value: &str) -> bool {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+
+    let candidate = trimmed
+        .trim_start_matches("https://")
+        .trim_start_matches("http://")
+        .trim_start_matches("www.");
+
+    if candidate.starts_with("mcp://") {
+        return false;
+    }
+
+    let host_port = candidate
+        .split(|c| ['/', '?', '#'].contains(&c))
+        .next()
+        .unwrap_or(candidate);
+    if host_port.is_empty() {
+        return false;
+    }
+
+    let (host, port) = if let Some((host, port)) = host_port.split_once(':') {
+        (host, Some(port))
+    } else {
+        (host_port, None)
+    };
+
+    if host.is_empty() || !valid_host_candidate(host) {
+        return false;
+    }
+
+    if port
+        .map(|port| port.is_empty() || !port.chars().all(|ch| ch.is_ascii_digit()))
+        .unwrap_or(false)
+    {
+        return false;
+    }
+
+    true
+}
+
+fn valid_host_candidate(host: &str) -> bool {
+    if host.is_empty() {
+        return false;
+    }
+
+    if host.eq_ignore_ascii_case("localhost") || host.parse::<IpAddr>().is_ok() {
+        return true;
+    }
+
+    if !host.contains('.') {
+        return false;
+    }
+
+    host.chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '.'))
+}
+
+fn parse_mcp_locator(candidate: &str) -> Option<String> {
+    let mut url = Url::parse(candidate).ok()?;
+    if !url.scheme().eq_ignore_ascii_case("mcp") {
+        return None;
+    }
+    let host = url.host_str().map(|host| host.to_ascii_lowercase())?;
+    if host.is_empty() {
+        return None;
+    }
+    url.set_host(Some(&host)).ok()?;
+    url.set_fragment(None);
+    if url.set_scheme("mcp").is_err() {
+        return None;
+    }
+    Some(url.to_string())
+}
+
+fn strip_prefix_case_insensitive<'a>(value: &'a str, prefix: &str) -> Option<&'a str> {
+    if value.len() < prefix.len() {
+        return None;
+    }
+
+    if value[..prefix.len()].eq_ignore_ascii_case(prefix) {
+        Some(&value[prefix.len()..])
+    } else {
+        None
+    }
+}
 #[allow(clippy::cognitive_complexity)]
 fn execute_step<F>(
     request: &DiscoveryRequest,
@@ -202,6 +594,115 @@ mod tests {
                 eprintln!("{context}: mutex poisoned");
                 poisoned.into_inner()
             }
+        }
+    }
+
+    #[test]
+    fn mcp_scheme_returns_connector() {
+        let pipeline = DefaultDiscoveryPipeline::new();
+        let request = DiscoveryRequest {
+            subject: "mcp://knowledge-base".into(),
+        };
+
+        match pipeline.try_mcp(&request) {
+            DiscoveryOutcome::Found(connector) => {
+                assert_eq!(connector.strategy, DiscoveryStrategy::Mcp);
+                assert_eq!(connector.locator, "mcp://knowledge-base");
+            }
+            other => panic!("expected MCP connector, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn mcp_alias_lookup_returns_match() {
+        let pipeline = DefaultDiscoveryPipeline::new();
+        let request = DiscoveryRequest {
+            subject: "Connect calendar automation via MCP".into(),
+        };
+
+        match pipeline.try_mcp(&request) {
+            DiscoveryOutcome::Found(connector) => {
+                assert_eq!(connector.strategy, DiscoveryStrategy::Mcp);
+                assert_eq!(connector.locator, "mcp://calendar");
+            }
+            other => panic!("expected MCP alias match, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn mcp_prefix_is_case_insensitive() {
+        let pipeline = DefaultDiscoveryPipeline::new();
+        let request = DiscoveryRequest {
+            subject: "MCP:Workspace/Tool".into(),
+        };
+
+        match pipeline.try_mcp(&request) {
+            DiscoveryOutcome::Found(connector) => {
+                assert_eq!(connector.strategy, DiscoveryStrategy::Mcp);
+                assert_eq!(connector.locator, "mcp://workspace/Tool");
+            }
+            other => panic!("expected MCP locator, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn invalid_mcp_locator_is_rejected() {
+        let pipeline = DefaultDiscoveryPipeline::new();
+        let request = DiscoveryRequest {
+            subject: "mcp://".into(),
+        };
+
+        match pipeline.try_mcp(&request) {
+            DiscoveryOutcome::NotFound => {}
+            other => panic!("expected NotFound, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn structured_api_detects_http_endpoint() {
+        let pipeline = DefaultDiscoveryPipeline::new();
+        let request = DiscoveryRequest {
+            subject: "https://api.example.com/v1/openapi.json".into(),
+        };
+
+        match pipeline.try_structured_api(&request) {
+            DiscoveryOutcome::Found(connector) => {
+                assert_eq!(connector.strategy, DiscoveryStrategy::StructuredApi);
+                assert_eq!(connector.locator, "https://api.example.com/v1/openapi.json");
+            }
+            other => panic!("expected structured API connector, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn structured_alias_generates_locator() {
+        let pipeline = DefaultDiscoveryPipeline::new();
+        let request = DiscoveryRequest {
+            subject: "calendar:events:list".into(),
+        };
+
+        match pipeline.try_structured_api(&request) {
+            DiscoveryOutcome::Found(connector) => {
+                assert_eq!(connector.strategy, DiscoveryStrategy::StructuredApi);
+                assert_eq!(connector.locator, "structured://calendar/events/list");
+            }
+            other => panic!("expected structured alias connector, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn generic_http_adds_https_scheme() {
+        let pipeline = DefaultDiscoveryPipeline::new();
+        let request = DiscoveryRequest {
+            subject: "calendar.example.com/slots".into(),
+        };
+
+        match pipeline.try_generic_http(&request) {
+            DiscoveryOutcome::Found(connector) => {
+                assert_eq!(connector.strategy, DiscoveryStrategy::GenericHttp);
+                assert_eq!(connector.locator, "https://calendar.example.com/slots");
+            }
+            other => panic!("expected generic HTTP connector, got {other:?}"),
         }
     }
 

@@ -4383,6 +4383,7 @@ dependencies = [
  "opentelemetry_sdk",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
