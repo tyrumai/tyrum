@@ -380,27 +380,6 @@ jobs:
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ steps.revision.outputs.sha }}
 
-      - name: Generate SBOM
-        if: steps.change.outputs.should_build == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          image="${{ steps.tags.outputs.primary }}@${{ steps.build.outputs.digest }}"
-          docker run --rm \
-            -v "$PWD:/workspace" \
-            -w /workspace \
-            ghcr.io/anchore/syft:latest \
-            "$image" \
-            -o "spdx-json=sbom-${{ matrix.id }}.spdx.json"
-
-      - name: Upload SBOM
-        if: steps.change.outputs.should_build == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: sbom-${{ matrix.id }}-${{ github.run_id }}
-          path: sbom-${{ matrix.id }}.spdx.json
-          retention-days: 5
-
       - name: Scan image with Trivy
         if: steps.change.outputs.should_build == 'true'
         uses: aquasecurity/trivy-action@0.24.0
