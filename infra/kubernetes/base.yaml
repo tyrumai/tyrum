@@ -99,12 +99,24 @@ metadata:
     tyrum.dev/config-purpose: runtime-env
     tyrum.dev/managed-for: api
 data:
+  
   API_BIND_ADDR: "0.0.0.0:8080"
+  
+  
   MOCK_LLM_URL: "http://tyrum-tyrum-core-mock-llm.default.svc.cluster.local:8085"
-  OTEL_EXPORTER_OTLP_ENDPOINT: "http://{{ include \"tyrum-core.serviceHostname\" (dict \"root\" . \"name\" \"otel-collector\") }}:4317"
+  
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://tyrum-tyrum-core-otel-collector.default.svc.cluster.local:4317"
+  
+  
   OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+  
+  
   REDIS_URL: "redis://tyrum-tyrum-core-redis.default.svc.cluster.local:6379/0"
+  
+  
   RUST_LOG: "info"
+  
+  
   TELEGRAM_WEBHOOK_URL: "https://example.com/api/telegram/webhook"
 ---
 # Source: tyrum-core/templates/configmap.yaml
@@ -124,10 +136,19 @@ metadata:
     tyrum.dev/config-purpose: runtime-env
     tyrum.dev/managed-for: executor-android
 data:
+  
   ANDROID_BOOT_TIMEOUT_SECONDS: "480"
+  
+  
   AVD_NAME: "tyrum-android-executor"
+  
+  
   EMULATOR_ADB_PORT_INTERNAL: "5655"
+  
+  
   EMULATOR_CONSOLE_PORT_INTERNAL: "5654"
+  
+  
   RUST_LOG: "info"
 ---
 # Source: tyrum-core/templates/configmap.yaml
@@ -147,8 +168,13 @@ metadata:
     tyrum.dev/config-purpose: runtime-env
     tyrum.dev/managed-for: executor-cli
 data:
+  
   CLI_EXECUTOR_BIND_ADDR: "0.0.0.0:8093"
+  
+  
   CLI_EXECUTOR_SANDBOX_DIR: "/sandbox"
+  
+  
   RUST_LOG: "info"
 ---
 # Source: tyrum-core/templates/configmap.yaml
@@ -168,7 +194,10 @@ metadata:
     tyrum.dev/config-purpose: runtime-env
     tyrum.dev/managed-for: executor-http
 data:
+  
   HTTP_EXECUTOR_BIND_ADDR: "0.0.0.0:8092"
+  
+  
   RUST_LOG: "info"
 ---
 # Source: tyrum-core/templates/configmap.yaml
@@ -188,7 +217,10 @@ metadata:
     tyrum.dev/config-purpose: runtime-env
     tyrum.dev/managed-for: executor-web
 data:
+  
   RUST_LOG: "info"
+  
+  
   WEB_EXECUTOR_BIND_ADDR: "0.0.0.0:8091"
 ---
 # Source: tyrum-core/templates/configmap.yaml
@@ -208,10 +240,16 @@ metadata:
     tyrum.dev/config-purpose: runtime-env
     tyrum.dev/managed-for: llm-gateway
 data:
+  
   LLM_GATEWAY_BIND_ADDR: "0.0.0.0:8086"
+  
+  
   LLM_GATEWAY_MODEL: "tyrum-stub-8b"
+  
+  
   LLM_RATE_LIMIT_PER_SECOND: "10"
-  LLM_VLLM_URL: "http://{{ include \"tyrum-core.serviceHostname\" (dict \"root\" . \"name\" \"mock-llm\") }}:8085/v1/completions"
+  
+  LLM_VLLM_URL: "http://tyrum-tyrum-core-mock-llm.default.svc.cluster.local:8085/v1/completions"
 ---
 # Source: tyrum-core/templates/configmap.yaml
 apiVersion: v1
@@ -230,7 +268,10 @@ metadata:
     tyrum.dev/config-purpose: runtime-env
     tyrum.dev/managed-for: model-gateway
 data:
+  
   MODEL_GATEWAY_BIND_ADDR: "0.0.0.0:8001"
+  
+  
   MODEL_GATEWAY_CONFIG: "/app/config/model_gateway.yml"
 ---
 # Source: tyrum-core/templates/configmap.yaml
@@ -250,13 +291,27 @@ metadata:
     tyrum.dev/config-purpose: runtime-env
     tyrum.dev/managed-for: planner
 data:
+  
   LLM_GATEWAY_URL: "http://tyrum-tyrum-core-llm-gateway.default.svc.cluster.local:8086/completions"
-  OTEL_EXPORTER_OTLP_ENDPOINT: "http://{{ include \"tyrum-core.serviceHostname\" (dict \"root\" . \"name\" \"otel-collector\") }}:4317"
+  
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://tyrum-tyrum-core-otel-collector.default.svc.cluster.local:4317"
+  
+  
   OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+  
+  
   PLANNER_BIND_ADDR: "0.0.0.0:8083"
+  
+  
   PLANNER_EVENT_LOG_URL: "postgres://tyrum:tyrum_dev_password@tyrum-tyrum-core-postgres.default.svc.cluster.local:5432/tyrum_dev"
+  
+  
   POLICY_GATE_URL: "http://tyrum-tyrum-core-policy.default.svc.cluster.local:8081"
+  
+  
   RUST_LOG: "info"
+  
+  
   WALLET_GATE_URL: "http://tyrum-tyrum-core-wallet.default.svc.cluster.local:8084"
 ---
 # Source: tyrum-core/templates/configmap.yaml
@@ -276,9 +331,15 @@ metadata:
     tyrum.dev/config-purpose: runtime-env
     tyrum.dev/managed-for: policy
 data:
-  OTEL_EXPORTER_OTLP_ENDPOINT: "http://{{ include \"tyrum-core.serviceHostname\" (dict \"root\" . \"name\" \"otel-collector\") }}:4317"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://tyrum-tyrum-core-otel-collector.default.svc.cluster.local:4317"
+  
+  
   OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+  
+  
   POLICY_BIND_ADDR: "0.0.0.0:8081"
+  
+  
   RUST_LOG: "info"
 ---
 # Source: tyrum-core/templates/configmap.yaml
@@ -298,7 +359,10 @@ metadata:
     tyrum.dev/config-purpose: runtime-env
     tyrum.dev/managed-for: postgres
 data:
+  
   POSTGRES_DB: "tyrum_dev"
+  
+  
   POSTGRES_USER: "tyrum"
 ---
 # Source: tyrum-core/templates/configmap.yaml
@@ -318,8 +382,13 @@ metadata:
     tyrum.dev/config-purpose: runtime-env
     tyrum.dev/managed-for: vllm-gateway
 data:
+  
   VLLM_EXTRA_ARGS: ""
+  
+  
   VLLM_MODEL: "hf-internal-testing/tiny-random-LlamaForCausalLM"
+  
+  
   VLLM_MODEL_NAME: "tyrum-stub-8b"
 ---
 # Source: tyrum-core/templates/configmap.yaml
@@ -339,11 +408,21 @@ metadata:
     tyrum.dev/config-purpose: runtime-env
     tyrum.dev/managed-for: wallet
 data:
-  OTEL_EXPORTER_OTLP_ENDPOINT: "http://{{ include \"tyrum-core.serviceHostname\" (dict \"root\" . \"name\" \"otel-collector\") }}:4317"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://tyrum-tyrum-core-otel-collector.default.svc.cluster.local:4317"
+  
+  
   OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+  
+  
   RUST_LOG: "info"
+  
+  
   WALLET_AUTO_APPROVE_LIMIT_MINOR: "10000"
+  
+  
   WALLET_BIND_ADDR: "0.0.0.0:8084"
+  
+  
   WALLET_HARD_DENY_LIMIT_MINOR: "50000"
 ---
 # Source: tyrum-core/templates/configmap.yaml
@@ -363,12 +442,25 @@ metadata:
     tyrum.dev/config-purpose: runtime-env
     tyrum.dev/managed-for: watchers-processor
 data:
+  
   RUST_LOG: "info,tyrum_watchers=info"
+  
+  
   WATCHERS_JETSTREAM_PROCESSOR_CONSUMER: "watchers_local_processor"
+  
+  
   WATCHERS_JETSTREAM_STREAM: "watchers_events"
+  
+  
   WATCHERS_JETSTREAM_SUBJECT_PREFIX: "watchers.events"
+  
+  
   WATCHERS_JETSTREAM_URL: "nats://tyrum-tyrum-core-nats.default.svc.cluster.local:4222"
+  
+  
   WATCHERS_PLANNER_URL: "http://tyrum-tyrum-core-planner.default.svc.cluster.local:8083/plan"
+  
+  
   WATCHERS_PROCESSOR_FETCH_TIMEOUT_MS: "500"
 ---
 # Source: tyrum-core/templates/configmap.yaml
@@ -388,7 +480,10 @@ metadata:
     tyrum.dev/config-purpose: runtime-env
     tyrum.dev/managed-for: web
 data:
+  
   API_BASE_URL: "http://tyrum-tyrum-core-api.default.svc.cluster.local:8080"
+  
+  
   NEXT_TELEMETRY_DISABLED: "1"
 ---
 # Source: tyrum-core/templates/configmap.yaml
@@ -408,7 +503,10 @@ metadata:
     tyrum.dev/config-purpose: runtime-env
     tyrum.dev/managed-for: api-migrations
 data:
+  
   RUN_MIGRATIONS_ONLY: "1"
+  
+  
   RUST_LOG: "info"
 ---
 # Source: tyrum-core/templates/file-configmap.yaml
@@ -1006,6 +1104,7 @@ spec:
     app.kubernetes.io/component: nats
     tyrum.dev/service: nats
   ports:
+    
     - name: client
       port: 4222
       targetPort: 4222
@@ -1034,6 +1133,7 @@ spec:
     app.kubernetes.io/component: otel-collector
     tyrum.dev/service: otel-collector
   ports:
+    
     - name: grpc
       port: 4317
       targetPort: 4317
@@ -1195,6 +1295,7 @@ spec:
     app.kubernetes.io/component: tempo
     tyrum.dev/service: tempo
   ports:
+    
     - name: http
       port: 3200
       targetPort: 3200
@@ -1334,11 +1435,13 @@ spec:
         tyrum.dev/service: api
     spec:
       serviceAccountName: tyrum-tyrum-core
+      
       containers:
         - name: api
-          image: tyrum/api:{{ .Values.global.image.tag }}
+          image: tyrum/api:local
           imagePullPolicy: IfNotPresent
           ports:
+            
             - containerPort: 8080
               name: http
           envFrom:
@@ -1389,9 +1492,10 @@ spec:
         tyrum.dev/service: executor-android
     spec:
       serviceAccountName: tyrum-tyrum-core
+      
       containers:
         - name: executor-android
-          image: tyrum/executor-android:{{ .Values.global.image.tag }}
+          image: tyrum/executor-android:local
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
@@ -1427,11 +1531,13 @@ spec:
         tyrum.dev/service: executor-cli
     spec:
       serviceAccountName: tyrum-tyrum-core
+      
       containers:
         - name: executor-cli
-          image: tyrum/executor-cli:{{ .Values.global.image.tag }}
+          image: tyrum/executor-cli:local
           imagePullPolicy: IfNotPresent
           ports:
+            
             - containerPort: 8093
               name: http
           envFrom:
@@ -1449,6 +1555,7 @@ spec:
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
+          
           volumeMounts:
             - mountPath: /sandbox
               name: sandbox
@@ -1487,11 +1594,13 @@ spec:
         tyrum.dev/service: executor-http
     spec:
       serviceAccountName: tyrum-tyrum-core
+      
       containers:
         - name: executor-http
-          image: tyrum/executor-http:{{ .Values.global.image.tag }}
+          image: tyrum/executor-http:local
           imagePullPolicy: IfNotPresent
           ports:
+            
             - containerPort: 8092
               name: http
           envFrom:
@@ -1540,11 +1649,13 @@ spec:
         tyrum.dev/service: executor-web
     spec:
       serviceAccountName: tyrum-tyrum-core
+      
       containers:
         - name: executor-web
-          image: tyrum/executor-web:{{ .Values.global.image.tag }}
+          image: tyrum/executor-web:local
           imagePullPolicy: IfNotPresent
           ports:
+            
             - containerPort: 8091
               name: http
           envFrom:
@@ -1593,11 +1704,13 @@ spec:
         tyrum.dev/service: grafana
     spec:
       serviceAccountName: tyrum-tyrum-core
+      
       containers:
         - name: grafana
           image: grafana/grafana:11.1.0
           imagePullPolicy: IfNotPresent
           ports:
+            
             - containerPort: 3000
               name: http
           envFrom:
@@ -1620,6 +1733,7 @@ spec:
               port: http
             initialDelaySeconds: 10
             periodSeconds: 15
+          
           volumeMounts:
             - mountPath: /etc/grafana/provisioning
               name: grafana-provisioning
@@ -1663,11 +1777,13 @@ spec:
         tyrum.dev/service: llm-gateway
     spec:
       serviceAccountName: tyrum-tyrum-core
+      
       containers:
         - name: llm-gateway
-          image: tyrum/llm-gateway:{{ .Values.global.image.tag }}
+          image: tyrum/llm-gateway:local
           imagePullPolicy: IfNotPresent
           ports:
+            
             - containerPort: 8086
               name: http
           envFrom:
@@ -1716,6 +1832,7 @@ spec:
         tyrum.dev/service: loki
     spec:
       serviceAccountName: tyrum-tyrum-core
+      
       containers:
         - name: loki
           image: grafana/loki:2.9.4
@@ -1723,6 +1840,7 @@ spec:
           command:
             - -config.file=/etc/loki/config.yaml
           ports:
+            
             - containerPort: 3100
               name: http
           livenessProbe:
@@ -1737,6 +1855,7 @@ spec:
               port: http
             initialDelaySeconds: 10
             periodSeconds: 15
+          
           volumeMounts:
             - mountPath: /etc/loki
               name: loki-config
@@ -1780,11 +1899,13 @@ spec:
         tyrum.dev/service: mock-llm
     spec:
       serviceAccountName: tyrum-tyrum-core
+      
       containers:
         - name: mock-llm
-          image: tyrum/mock-llm:{{ .Values.global.image.tag }}
+          image: tyrum/mock-llm:local
           imagePullPolicy: IfNotPresent
           ports:
+            
             - containerPort: 8085
               name: http
           livenessProbe:
@@ -1830,11 +1951,13 @@ spec:
         tyrum.dev/service: model-gateway
     spec:
       serviceAccountName: tyrum-tyrum-core
+      
       containers:
         - name: model-gateway
-          image: tyrum/model-gateway:{{ .Values.global.image.tag }}
+          image: tyrum/model-gateway:local
           imagePullPolicy: IfNotPresent
           ports:
+            
             - containerPort: 8001
               name: http
           envFrom:
@@ -1852,6 +1975,7 @@ spec:
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
+          
           volumeMounts:
             - mountPath: /app/config
               name: model-gateway-config
@@ -1891,6 +2015,7 @@ spec:
         tyrum.dev/service: nats
     spec:
       serviceAccountName: tyrum-tyrum-core
+      
       containers:
         - name: nats
           image: nats:2.10-alpine
@@ -1900,6 +2025,7 @@ spec:
             - -m
             - "8222"
           ports:
+            
             - containerPort: 4222
               name: client
             - containerPort: 8222
@@ -1947,11 +2073,13 @@ spec:
         tyrum.dev/service: otel-collector
     spec:
       serviceAccountName: tyrum-tyrum-core
+      
       containers:
         - name: otel-collector
           image: otel/opentelemetry-collector-contrib:0.100.0
           imagePullPolicy: IfNotPresent
           ports:
+            
             - containerPort: 4317
               name: grpc
             - containerPort: 4318
@@ -1970,6 +2098,7 @@ spec:
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
+          
           volumeMounts:
             - mountPath: /etc/otelcol
               name: otel-config
@@ -2009,11 +2138,13 @@ spec:
         tyrum.dev/service: planner
     spec:
       serviceAccountName: tyrum-tyrum-core
+      
       containers:
         - name: planner
-          image: tyrum/planner:{{ .Values.global.image.tag }}
+          image: tyrum/planner:local
           imagePullPolicy: IfNotPresent
           ports:
+            
             - containerPort: 8083
               name: http
           envFrom:
@@ -2062,11 +2193,13 @@ spec:
         tyrum.dev/service: policy
     spec:
       serviceAccountName: tyrum-tyrum-core
+      
       containers:
         - name: policy
-          image: tyrum/policy:{{ .Values.global.image.tag }}
+          image: tyrum/policy:local
           imagePullPolicy: IfNotPresent
           ports:
+            
             - containerPort: 8081
               name: http
           envFrom:
@@ -2117,11 +2250,13 @@ spec:
         tyrum.dev/service: postgres
     spec:
       serviceAccountName: tyrum-tyrum-core
+      
       containers:
         - name: postgres
           image: pgvector/pgvector:pg16
           imagePullPolicy: IfNotPresent
           ports:
+            
             - containerPort: 5432
               name: tcp
           envFrom:
@@ -2145,6 +2280,7 @@ spec:
               - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
             initialDelaySeconds: 10
             periodSeconds: 10
+          
           volumeMounts:
             - mountPath: /var/lib/postgresql/data
               name: postgres-data
@@ -2182,6 +2318,7 @@ spec:
         tyrum.dev/service: prometheus
     spec:
       serviceAccountName: tyrum-tyrum-core
+      
       containers:
         - name: prometheus
           image: prom/prometheus:v2.54.1
@@ -2189,6 +2326,7 @@ spec:
           command:
             - --config.file=/etc/prometheus/prometheus.yml
           ports:
+            
             - containerPort: 9090
               name: http
           livenessProbe:
@@ -2203,6 +2341,7 @@ spec:
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
+          
           volumeMounts:
             - mountPath: /etc/prometheus
               name: prometheus-config
@@ -2242,6 +2381,7 @@ spec:
         tyrum.dev/service: redis
     spec:
       serviceAccountName: tyrum-tyrum-core
+      
       containers:
         - name: redis
           image: redis:7-alpine
@@ -2251,6 +2391,7 @@ spec:
             - --appendonly
             - "no"
           ports:
+            
             - containerPort: 6379
               name: tcp
           livenessProbe:
@@ -2298,6 +2439,7 @@ spec:
         tyrum.dev/service: tempo
     spec:
       serviceAccountName: tyrum-tyrum-core
+      
       containers:
         - name: tempo
           image: grafana/tempo:2.6.1
@@ -2305,6 +2447,7 @@ spec:
           command:
             - -config.file=/etc/tempo.yaml
           ports:
+            
             - containerPort: 3200
               name: http
             - containerPort: 4317
@@ -2323,6 +2466,7 @@ spec:
               port: http
             initialDelaySeconds: 10
             periodSeconds: 15
+          
           volumeMounts:
             - mountPath: /etc
               name: tempo-config
@@ -2366,11 +2510,13 @@ spec:
         tyrum.dev/service: vllm-gateway
     spec:
       serviceAccountName: tyrum-tyrum-core
+      
       containers:
         - name: vllm-gateway
-          image: tyrum/vllm-gateway:{{ .Values.global.image.tag }}
+          image: tyrum/vllm-gateway:local
           imagePullPolicy: IfNotPresent
           ports:
+            
             - containerPort: 8000
               name: http
           envFrom:
@@ -2419,11 +2565,13 @@ spec:
         tyrum.dev/service: wallet
     spec:
       serviceAccountName: tyrum-tyrum-core
+      
       containers:
         - name: wallet
-          image: tyrum/wallet:{{ .Values.global.image.tag }}
+          image: tyrum/wallet:local
           imagePullPolicy: IfNotPresent
           ports:
+            
             - containerPort: 8084
               name: http
           envFrom:
@@ -2472,9 +2620,10 @@ spec:
         tyrum.dev/service: watchers-processor
     spec:
       serviceAccountName: tyrum-tyrum-core
+      
       containers:
         - name: watchers-processor
-          image: tyrum/watchers:{{ .Values.global.image.tag }}
+          image: tyrum/watchers:local
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
@@ -2510,11 +2659,13 @@ spec:
         tyrum.dev/service: web
     spec:
       serviceAccountName: tyrum-tyrum-core
+      
       containers:
         - name: web
-          image: tyrum/web:{{ .Values.global.image.tag }}
+          image: tyrum/web:local
           imagePullPolicy: IfNotPresent
           ports:
+            
             - containerPort: 3000
               name: http
           envFrom:
@@ -3031,6 +3182,7 @@ spec:
     - name: nats-check
       image: nats:2.10-alpine
       imagePullPolicy: IfNotPresent
+      
       command:
         - /bin/sh
         - -c
@@ -3062,7 +3214,7 @@ spec:
         - /bin/sh
         - -c
         - >-
-          curl -fsS --max-time 10 http://tyrum-tyrum-core-otel-collector:80/healthz
+          curl -fsS --max-time 10 http://tyrum-tyrum-core-otel-collector:4317/healthz
 ---
 # Source: tyrum-core/templates/tests.yaml
 apiVersion: v1
@@ -3118,7 +3270,7 @@ spec:
         - /bin/sh
         - -c
         - >-
-          curl -fsS --max-time 10 http://tyrum-tyrum-core-policy:8081/healthz
+          curl -fsS --max-time 10 http://tyrum-tyrum-core-policy:4318/healthz
 ---
 # Source: tyrum-core/templates/tests.yaml
 apiVersion: v1
@@ -3142,6 +3294,7 @@ spec:
     - name: postgres-check
       image: postgres:16-alpine
       imagePullPolicy: IfNotPresent
+      
       command:
         - /bin/sh
         - -c
@@ -3197,6 +3350,7 @@ spec:
     - name: redis-check
       image: redis:7-alpine
       imagePullPolicy: IfNotPresent
+      
       command:
         - redis-cli
         - -h
@@ -3287,9 +3441,10 @@ spec:
     spec:
       restartPolicy: OnFailure
       serviceAccountName: tyrum-tyrum-core
+      
       containers:
         - name: api-migrations
-          image: tyrum/api:{{ .Values.global.image.tag }}
+          image: tyrum/api:local
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:

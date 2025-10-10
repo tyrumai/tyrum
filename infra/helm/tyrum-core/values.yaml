@@ -79,6 +79,7 @@ services:
     volumes: []
     test:
       path: /healthz
+      port: 4318
   wallet:
     replicaCount: 1
     image:
