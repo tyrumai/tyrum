@@ -4,6 +4,7 @@ import {
   CTA_REDIRECT_PARAM,
   CTA_REDIRECT_REASON,
   PORTAL_SESSION_COOKIE,
+  isPortalSessionTokenValid,
   isProtectedPortalPath,
 } from "./app/lib/portal-auth";
 
@@ -16,7 +17,7 @@ export function middleware(request: NextRequest) {
 
   const sessionCookie = request.cookies.get(PORTAL_SESSION_COOKIE)?.value?.trim();
 
-  if (sessionCookie) {
+  if (isPortalSessionTokenValid(sessionCookie)) {
     return NextResponse.next();
   }
 
