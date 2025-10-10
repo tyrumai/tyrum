@@ -1,0 +1,425 @@
+name: publish-containers
+
+on:
+  schedule:
+    - cron: "15 03 * * *" # 03:15 UTC nightly build
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Publish channel to run"
+        type: choice
+        default: nightly
+        options:
+          - nightly
+          - release
+      release_tag:
+        description: "Override release tag when channel = release (e.g. v1.2.3)"
+        required: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io/virtunetbv
+  CACHE_REGISTRY: ghcr.io/virtunetbv/cache
+  DOCKER_BUILDKIT: "1"
+
+jobs:
+  publish:
+    name: Publish ${{ matrix.title }} image
+    runs-on: [self-hosted, Linux, X64]
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: api
+            title: API
+            context: .
+            dockerfile: Dockerfile.api
+            repository: ghcr.io/virtunetbv/tyrum-api
+            build_args: ""
+            paths: |
+              Dockerfile.api
+              Cargo.toml
+              Cargo.lock
+              shared/**
+              services/api/**
+          - id: policy
+            title: Policy
+            context: .
+            dockerfile: Dockerfile.policy
+            repository: ghcr.io/virtunetbv/tyrum-policy
+            build_args: ""
+            paths: |
+              Dockerfile.policy
+              Cargo.toml
+              Cargo.lock
+              shared/**
+              services/policy/**
+          - id: planner
+            title: Planner
+            context: .
+            dockerfile: Dockerfile.planner
+            repository: ghcr.io/virtunetbv/tyrum-planner
+            build_args: ""
+            paths: |
+              Dockerfile.planner
+              Cargo.toml
+              Cargo.lock
+              shared/**
+              services/planner/**
+          - id: wallet
+            title: Wallet
+            context: .
+            dockerfile: Dockerfile.wallet
+            repository: ghcr.io/virtunetbv/tyrum-wallet
+            build_args: ""
+            paths: |
+              Dockerfile.wallet
+              Cargo.toml
+              Cargo.lock
+              shared/**
+              services/tyrum-wallet/**
+          - id: executor-http
+            title: Executor HTTP
+            context: .
+            dockerfile: Dockerfile.executor-http
+            repository: ghcr.io/virtunetbv/tyrum-executor-http
+            build_args: ""
+            paths: |
+              Dockerfile.executor-http
+              Cargo.toml
+              Cargo.lock
+              shared/**
+              services/executor_http/**
+          - id: executor-web
+            title: Executor Web
+            context: .
+            dockerfile: Dockerfile.executor-web
+            repository: ghcr.io/virtunetbv/tyrum-executor-web
+            build_args: ""
+            paths: |
+              Dockerfile.executor-web
+              Cargo.toml
+              Cargo.lock
+              shared/**
+              services/executor_web/**
+          - id: executor-cli
+            title: Executor CLI
+            context: .
+            dockerfile: Dockerfile.executor-cli
+            repository: ghcr.io/virtunetbv/tyrum-executor-cli
+            build_args: ""
+            paths: |
+              Dockerfile.executor-cli
+              Cargo.toml
+              Cargo.lock
+              shared/**
+              services/executor_cli/**
+          - id: executor-android
+            title: Executor Android
+            context: .
+            dockerfile: Dockerfile.executor-android
+            repository: ghcr.io/virtunetbv/tyrum-executor-android
+            build_args: ""
+            paths: |
+              Dockerfile.executor-android
+              Cargo.toml
+              Cargo.lock
+              shared/**
+              services/executor_android/**
+          - id: llm-gateway
+            title: LLM Gateway
+            context: .
+            dockerfile: Dockerfile.llm
+            repository: ghcr.io/virtunetbv/tyrum-llm
+            build_args: ""
+            paths: |
+              Dockerfile.llm
+              Cargo.toml
+              Cargo.lock
+              shared/**
+              services/tyrum-llm/**
+          - id: model-gateway
+            title: Model Gateway
+            context: .
+            dockerfile: Dockerfile.model-gateway
+            repository: ghcr.io/virtunetbv/tyrum-model-gateway
+            build_args: ""
+            paths: |
+              Dockerfile.model-gateway
+              Cargo.toml
+              Cargo.lock
+              shared/**
+              services/model_gateway/**
+          - id: watchers
+            title: Watchers Processor
+            context: .
+            dockerfile: Dockerfile.watchers
+            repository: ghcr.io/virtunetbv/tyrum-watchers
+            build_args: ""
+            paths: |
+              Dockerfile.watchers
+              Cargo.toml
+              Cargo.lock
+              shared/**
+              services/tyrum-watchers/**
+          - id: vllm
+            title: VLLM Gateway
+            context: .
+            dockerfile: Dockerfile.vllm
+            repository: ghcr.io/virtunetbv/tyrum-vllm
+            build_args: |
+              BASE_IMAGE=python:3.11-slim
+            paths: |
+              Dockerfile.vllm
+              docker/vllm-entrypoint.sh
+          - id: web
+            title: Web
+            context: web
+            dockerfile: web/Dockerfile
+            repository: ghcr.io/virtunetbv/tyrum-web
+            build_args: ""
+            paths: |
+              web/**
+          - id: mock-llm
+            title: Mock LLM
+            context: services/mock_llm
+            dockerfile: services/mock_llm/Dockerfile
+            repository: ghcr.io/virtunetbv/tyrum-mock-llm
+            build_args: ""
+            paths: |
+              services/mock_llm/**
+              shared/**
+              Cargo.toml
+              Cargo.lock
+
+    steps:
+      - name: Determine publish channel
+        id: channel
+        shell: bash
+        run: |
+          set -euo pipefail
+          event="${{ github.event_name }}"
+          channel="nightly"
+          tag=""
+
+          if [ "$event" = "schedule" ]; then
+            channel="nightly"
+          elif [ "$event" = "push" ]; then
+            ref="${GITHUB_REF##*/}"
+            channel="release"
+            tag="$ref"
+          elif [ "$event" = "workflow_dispatch" ]; then
+            channel_input="${{ github.event.inputs.channel }}"
+            if [ -n "$channel_input" ]; then
+              channel="$channel_input"
+            fi
+            if [ "$channel" = "release" ]; then
+              tag_input="${{ github.event.inputs.release_tag }}"
+              if [ -z "$tag_input" ]; then
+                echo "Release channel requires a release_tag input" >&2
+                exit 1
+              fi
+              tag="$tag_input"
+            fi
+          fi
+
+          echo "channel=$channel" >>"$GITHUB_OUTPUT"
+          echo "release_tag=$tag" >>"$GITHUB_OUTPUT"
+
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 200
+
+      - name: Checkout release ref
+        if: steps.channel.outputs.channel == 'release'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ steps.channel.outputs.release_tag }}"
+          if ! git rev-parse "refs/tags/$tag" >/dev/null 2>&1; then
+            git fetch --tags --depth=1 origin "refs/tags/$tag:refs/tags/$tag"
+          fi
+          git checkout "refs/tags/$tag"
+
+      - name: Resolve source revision
+        id: revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          short="$(git rev-parse --short=12 HEAD)"
+          echo "sha=$sha" >>"$GITHUB_OUTPUT"
+          echo "short=$short" >>"$GITHUB_OUTPUT"
+
+      - name: Compute tags
+        id: tags
+        shell: bash
+        env:
+          CHANNEL: ${{ steps.channel.outputs.channel }}
+          RELEASE_TAG: ${{ steps.channel.outputs.release_tag }}
+          REPOSITORY: ${{ matrix.repository }}
+          SOURCE_SHA: ${{ steps.revision.outputs.sha }}
+          SOURCE_SHORT_SHA: ${{ steps.revision.outputs.short }}
+        run: |
+          set -euo pipefail
+          channel="$CHANNEL"
+          repo="$REPOSITORY"
+          sha="$SOURCE_SHA"
+          short_sha="$SOURCE_SHORT_SHA"
+          tags=()
+          primary=""
+
+          if [ "$channel" = "nightly" ]; then
+            tags+=("$repo:nightly")
+            tags+=("$repo:sha-$short_sha")
+            tags+=("$repo:build-${GITHUB_RUN_ID}")
+            primary="$repo:nightly"
+          else
+            tag="${RELEASE_TAG:-}"
+            if [[ ! "$tag" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              echo "Release tag '$tag' is not semver (vMAJOR.MINOR.PATCH)" >&2
+              exit 1
+            fi
+            major="${BASH_REMATCH[1]}"
+            minor="${BASH_REMATCH[2]}"
+            patch="${BASH_REMATCH[3]}"
+
+            tags+=("$repo:$tag")
+            tags+=("$repo:${major}.${minor}")
+            tags+=("$repo:${major}")
+            tags+=("$repo:sha-$short_sha")
+            primary="$repo:$tag"
+          fi
+
+          printf '%s\n' "${tags[@]}" > tags.txt
+          {
+            printf 'tags<<EOF\n'
+            cat tags.txt
+            printf 'EOF\n'
+          } >>"$GITHUB_OUTPUT"
+          echo "primary=$primary" >>"$GITHUB_OUTPUT"
+
+      - name: Evaluate change window
+        id: change
+        shell: bash
+        env:
+          CHANNEL: ${{ steps.channel.outputs.channel }}
+          PATHS: ${{ matrix.paths }}
+        run: |
+          set -euo pipefail
+          if [ "$CHANNEL" != "nightly" ]; then
+            echo "should_build=true" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ -z "${PATHS// /}" ]; then
+            echo "should_build=true" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          SINCE="$(date -u -d '24 hours ago' +'%Y-%m-%dT%H:%M:%SZ')"
+          mapfile -t raw_paths <<<"$PATHS"
+          declare -a args=()
+          for entry in "${raw_paths[@]}"; do
+            trimmed="$(echo "$entry" | xargs)"
+            if [ -n "$trimmed" ]; then
+              args+=("$trimmed")
+            fi
+          done
+
+          if [ "${#args[@]}" -eq 0 ]; then
+            echo "should_build=true" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          count=$(git rev-list --count --since="$SINCE" HEAD -- "${args[@]}" || true)
+          if [ "$count" -gt 0 ]; then
+            echo "should_build=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "No changes for ${args[*]} in the last 24 hours; skipping build."
+            echo "should_build=false" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Docker Buildx
+        if: steps.change.outputs.should_build == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        if: steps.change.outputs.should_build == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push ${{ matrix.title }}
+        id: build
+        if: steps.change.outputs.should_build == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          provenance: true
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=registry,ref=${{ env.CACHE_REGISTRY }}/${{ matrix.id }}:buildcache
+          cache-to: type=registry,ref=${{ env.CACHE_REGISTRY }}/${{ matrix.id }}:buildcache,mode=max
+          build-args: ${{ matrix.build_args }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ steps.revision.outputs.sha }}
+
+      - name: Generate SBOM
+        if: steps.change.outputs.should_build == 'true'
+        uses: anchore/syft-action@v0.19.0
+        with:
+          image: ${{ steps.tags.outputs.primary }}@${{ steps.build.outputs.digest }}
+          output-file: sbom-${{ matrix.id }}.spdx.json
+
+      - name: Upload SBOM
+        if: steps.change.outputs.should_build == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ matrix.id }}-${{ github.run_id }}
+          path: sbom-${{ matrix.id }}.spdx.json
+          retention-days: 5
+
+      - name: Scan image with Trivy
+        if: steps.change.outputs.should_build == 'true'
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ steps.tags.outputs.primary }}@${{ steps.build.outputs.digest }}
+          vulnerability-type: "os,library"
+          severity: "CRITICAL,HIGH"
+
+      - name: Summarise publish
+        if: steps.change.outputs.should_build == 'true'
+        shell: bash
+        run: |
+          {
+            echo "### ${{ matrix.title }} image"
+            echo "- Tags pushed:"
+            cat tags.txt | sed 's/^/- /'
+            echo "- Digest: ${{ steps.build.outputs.digest }}"
+            echo "- Source commit: ${{ steps.revision.outputs.sha }}"
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      - name: No changes summary
+        if: steps.change.outputs.should_build != 'true'
+        shell: bash
+        run: |
+          {
+            echo "### ${{ matrix.title }} image"
+            echo "- Skipped nightly build (no changes in the last 24 hours)"
+          } >>"$GITHUB_STEP_SUMMARY"
