@@ -107,6 +107,11 @@ export default function WaitlistCta() {
 
   const handleSubmit = useCallback(
     (event: React.FormEvent<HTMLFormElement>) => {
+      const form = event.currentTarget;
+      const emailField = form.elements.namedItem("email") as
+        | HTMLInputElement
+        | null;
+
       const trimmedEmail = email.trim();
       if (trimmedEmail.length === 0) {
         event.preventDefault();
@@ -117,6 +122,10 @@ export default function WaitlistCta() {
           buildAnalyticsPayload("invalid", campaignParams),
         );
         return;
+      }
+
+      if (emailField && emailField.value !== trimmedEmail) {
+        emailField.value = trimmedEmail;
       }
 
       setEmail(trimmedEmail);

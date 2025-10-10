@@ -5,6 +5,12 @@ import OnboardingStart from "./page";
 
 const trackAnalytics = vi.fn();
 
+type SearchParamRecord = Record<string, string | string[] | undefined>;
+
+function createSearchParams(values: SearchParamRecord) {
+  return Object.assign(Promise.resolve(values), values) as Promise<SearchParamRecord>;
+}
+
 vi.mock("../../../lib/analytics", () => ({
   trackAnalytics: (...args: unknown[]) => trackAnalytics(...args),
 }));
@@ -21,11 +27,11 @@ describe("OnboardingStart", () => {
   it("shows the welcome flash message and tracks analytics when arriving from the waitlist", async () => {
     render(
       <OnboardingStart
-        searchParams={{
+        searchParams={createSearchParams({
           flash: "waitlist-welcome",
           signup_status: "created",
           utm_source: "ads",
-        }}
+        })}
       />,
     );
 

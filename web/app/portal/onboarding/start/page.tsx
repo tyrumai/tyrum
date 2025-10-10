@@ -43,7 +43,7 @@ const STEPS = [
 type SearchParamRecord = Record<string, string | string[] | undefined>;
 
 type OnboardingStartProps = {
-  searchParams?: SearchParamRecord | Promise<SearchParamRecord>;
+  searchParams?: Promise<SearchParamRecord>;
 };
 
 function unwrapSearchParams(
@@ -53,13 +53,13 @@ function unwrapSearchParams(
     return {};
   }
 
-  if (typeof (searchParams as { then?: unknown }).then === "function") {
-    return searchParams as unknown as UnsafeUnwrappedSearchParams<
-      Promise<SearchParamRecord>
-    >;
+  if (typeof (searchParams as { then?: unknown }).then !== "function") {
+    return searchParams as unknown as SearchParamRecord;
   }
 
-  return searchParams as SearchParamRecord;
+  return searchParams as unknown as UnsafeUnwrappedSearchParams<
+    Promise<SearchParamRecord>
+  >;
 }
 
 function extractParamValue(
