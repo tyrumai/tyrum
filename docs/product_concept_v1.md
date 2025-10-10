@@ -510,6 +510,8 @@ Milestones are cumulative; later milestones build on earlier ones.
   - Rust 2024 service exposes `POST /policy/check` with static spend/PII/legal rules returning structured decisions and unit tests for approve/deny/escalate.
 - **Consent UX stub**
   - Minimal chat prompt + approval button in Next.js wired to mocked policy responses with snapshot test coverage.
+- **Onboarding consent checklist**
+  - `/portal/onboarding/consent` surfaces guardrail toggles and persists selections to `/api/onboarding/consent`, an in-memory stub that returns deterministic audit references until the consent service lands.
 - **Event log foundation**
   - Planner writes append-only action traces with replayable IDs and dedupe guard to Postgres. See `docs/planner_event_log.md` for the schema and API surface.
 - **Telemetry pipeline**
