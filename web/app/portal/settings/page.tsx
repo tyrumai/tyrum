@@ -95,6 +95,16 @@ const PVP_EMOJI_OPTIONS = ["never", "sometimes", "often"];
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const isProfilesEnvelopeLike = (value: unknown): value is ProfilesEnvelope => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return (
+    ("pam" in value && (value as ProfilesEnvelope).pam !== undefined) ||
+    ("pvp" in value && (value as ProfilesEnvelope).pvp !== undefined)
+  );
+};
+
 const humanizeOption = (value: string) =>
   value
     .replace(/_/g, " ")
@@ -467,6 +477,13 @@ export default function AccountSettingsPage() {
         }
 
         if (!isMountedRef.current) {
+          return;
+        }
+
+        if (!isProfilesEnvelopeLike(payload)) {
+          if (isMountedRef.current) {
+            raiseToast("error", "Unable to load stored profiles.");
+          }
           return;
         }
 
