@@ -905,15 +905,16 @@ mod tests {
     }
 
     async fn connect_with_retry(database_url: &str) -> WaitlistRepository {
+        const MAX_ATTEMPTS: usize = 5;
         let mut attempts = 0;
         loop {
             match WaitlistRepository::connect(database_url).await {
                 Ok(repository) => break repository,
                 Err(WaitlistError::Database(error))
-                    if attempts < 10 && matches!(error, sqlx::Error::Io(_)) =>
+                    if attempts < MAX_ATTEMPTS && matches!(error, sqlx::Error::Io(_)) =>
                 {
                     attempts += 1;
-                    sleep(Duration::from_millis(150)).await;
+                    sleep(Duration::from_millis(100)).await;
                 }
                 Err(err) => panic!("connect waitlist repository: {err}"),
             }
@@ -951,6 +952,8 @@ mod tests {
                 .get_host_port_ipv4(5432.tcp())
                 .await
                 .expect("map postgres port");
+
+            wait_for_postgres_ready(&container).await;
 
             let database_url = format!(
                 "postgres://{}:{}@127.0.0.1:{}/{}",
@@ -993,6 +996,34 @@ mod tests {
                 telegram,
             }
         }
+    }
+
+    async fn wait_for_postgres_ready(container: &ContainerAsync<GenericImage>) {
+        use testcontainers::core::ExecCommand;
+
+        const MAX_ATTEMPTS: usize = 40;
+        for _ in 0..MAX_ATTEMPTS {
+            match container
+                .exec(ExecCommand::new(["pg_isready", "-U", POSTGRES_USER]))
+                .await
+            {
+                Ok(mut exec_result) => {
+                    // Drain stdout/stderr so pg_isready can exit cleanly.
+                    let _ = exec_result.stdout_to_vec().await;
+                    let _ = exec_result.stderr_to_vec().await;
+                    if matches!(exec_result.exit_code().await, Ok(Some(0))) {
+                        return;
+                    }
+                }
+                Err(err) => {
+                    eprintln!("pg_isready exec failed: {err}");
+                }
+            }
+
+            sleep(Duration::from_millis(250)).await;
+        }
+
+        panic!("postgres never became ready");
     }
 
     #[tokio::test]
