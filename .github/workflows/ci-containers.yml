@@ -47,7 +47,7 @@ jobs:
       DOCKER_BUILDKIT: "1"
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Docker Buildx
         if: ${{ github.actor != 'dependabot[bot]' }}

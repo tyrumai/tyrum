@@ -21,7 +21,7 @@ jobs:
       KUBECONFORM_VERSION: "0.6.7"
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Detect infrastructure assets
         id: detect
