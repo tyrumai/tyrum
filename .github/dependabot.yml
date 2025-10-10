@@ -9,14 +9,14 @@ updates:
     schedule:
       interval: "daily"
   - package-ecosystem: "npm"
-    directory: "/apps/console"
+    directory: "/web"
     schedule:
       interval: "daily"
   - package-ecosystem: "docker"
-    directory: "/infra/docker"
+    directory: "/"
     schedule:
       interval: "daily"
   - package-ecosystem: "helm"
-    directory: "/infra/helm/preview-stack"
+    directory: "/infra/helm/tyrum-core"
     schedule:
       interval: "daily"
