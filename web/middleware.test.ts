@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
 import { middleware } from "./middleware";
 import {
@@ -6,7 +6,11 @@ import {
   CTA_REDIRECT_PARAM,
   CTA_REDIRECT_REASON,
   PORTAL_SESSION_COOKIE,
+  PORTAL_SESSION_SECRET_ENV,
+  clearPortalSessionSecretForTesting,
+  setPortalSessionSecretForTesting,
 } from "./app/lib/portal-auth";
+import { VERIFICATION_TOKEN_FIXTURES } from "./app/api/onboarding/verify/fixtures";
 
 const origin = "https://example.com";
 
@@ -25,6 +29,21 @@ function createRequest(path: string, options: RequestOptions = {}) {
 }
 
 describe("middleware", () => {
+  const originalSecret = process.env[PORTAL_SESSION_SECRET_ENV];
+
+  beforeEach(() => {
+    setPortalSessionSecretForTesting(VERIFICATION_TOKEN_FIXTURES.secret);
+  });
+
+  afterEach(() => {
+    clearPortalSessionSecretForTesting();
+    if (originalSecret === undefined) {
+      delete process.env[PORTAL_SESSION_SECRET_ENV];
+    } else {
+      process.env[PORTAL_SESSION_SECRET_ENV] = originalSecret;
+    }
+  });
+
   it("redirects unauthenticated portal traffic to the onboarding CTA", () => {
     const response = middleware(createRequest("/portal/cases"));
 
@@ -42,11 +61,27 @@ describe("middleware", () => {
     expect(redirectUrl.searchParams.get(CTA_FROM_PARAM)).toBe("/portal/cases");
   });
 
-  it("passes through when a session cookie is present", () => {
-    const response = middleware(createRequest("/portal", { cookie: "token" }));
+  it("passes through when a verified session cookie is present", () => {
+    const response = middleware(
+      createRequest("/portal", { cookie: VERIFICATION_TOKEN_FIXTURES.success }),
+    );
 
     expect(response.status).toBe(200);
     expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("redirects when the portal cookie is invalid", () => {
+    const response = middleware(
+      createRequest("/portal", { cookie: VERIFICATION_TOKEN_FIXTURES.invalid }),
+    );
+
+    expect(response.status).toBe(307);
+    const redirect = response.headers.get("location");
+    const url = new URL(redirect ?? "", origin);
+    expect(url.pathname).toBe("/");
+    expect(url.searchParams.get(CTA_REDIRECT_PARAM)).toBe(
+      CTA_REDIRECT_REASON,
+    );
   });
 
   it("does not guard onboarding or auth routes", () => {

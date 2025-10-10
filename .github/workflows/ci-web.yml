@@ -13,6 +13,8 @@ jobs:
   web:
     name: Web checks
     runs-on: [self-hosted, Linux, X64]
+    env:
+      PORTAL_SESSION_SECRET: ci-portal-session-secret
     permissions:
       contents: read
     steps:
