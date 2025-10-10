@@ -382,7 +382,7 @@ jobs:
 
       - name: Scan image with Trivy
         if: steps.change.outputs.should_build == 'true'
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@0.33.1
         with:
           image-ref: ${{ steps.tags.outputs.primary }}@${{ steps.build.outputs.digest }}
           vulnerability-type: "os,library"
