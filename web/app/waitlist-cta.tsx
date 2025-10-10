@@ -2,16 +2,21 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { trackAnalytics } from "./lib/analytics";
+import {
+  extractCampaignParams,
+  type CampaignParams,
+} from "./lib/campaign";
 
-type CampaignParams = {
-  utm_source?: string;
-  utm_medium?: string;
-  utm_campaign?: string;
-  utm_term?: string;
-  utm_content?: string;
-};
+type SubmissionState = "idle" | "loading" | "error";
+type WaitlistStatus = "duplicate" | "invalid_email" | "error";
 
-type SubmissionState = "idle" | "loading" | "success" | "error";
+const INITIAL_MESSAGE = "Join the waitlist";
+const DUPLICATE_MESSAGE = "You're already on the waitlist. Thanks for your trust.";
+const GENERAL_ERROR_MESSAGE = "We couldn't save that email. Try again in a moment.";
+const INVALID_EMAIL_MESSAGE = "That doesn't look like a valid email. Please try again.";
+
+const WAITLIST_STATUS_PARAM = "waitlist_status";
+const WAITLIST_EMAIL_PARAM = "waitlist_email";
 
 function buildAnalyticsPayload(status: string, params: CampaignParams) {
   return Object.fromEntries(
@@ -21,30 +26,38 @@ function buildAnalyticsPayload(status: string, params: CampaignParams) {
   ) as Record<string, string>;
 }
 
-const INITIAL_MESSAGE = "Join the waitlist";
-const SUCCESS_MESSAGE = "You're on the list. We'll keep you posted.";
-const DUPLICATE_MESSAGE = "You're already on the waitlist. Thanks for your trust.";
-const GENERAL_ERROR_MESSAGE = "We couldn't save that email. Try again in a moment.";
-const INVALID_EMAIL_MESSAGE = "That doesn't look like a valid email. Please try again.";
+function parseWaitlistStatus(value: string | null): WaitlistStatus | null {
+  if (!value) {
+    return null;
+  }
 
-function extractUtms(search: string): CampaignParams {
-  const params = new URLSearchParams(search);
-  const utms: CampaignParams = {};
+  if (value === "duplicate" || value === "invalid_email" || value === "error") {
+    return value;
+  }
 
-  const maybeSet = (key: keyof CampaignParams) => {
-    const value = params.get(key);
-    if (value && value.trim().length > 0) {
-      utms[key] = value.trim();
-    }
-  };
+  return null;
+}
 
-  maybeSet("utm_source");
-  maybeSet("utm_medium");
-  maybeSet("utm_campaign");
-  maybeSet("utm_term");
-  maybeSet("utm_content");
+function messageForStatus(status: WaitlistStatus): string {
+  if (status === "duplicate") {
+    return DUPLICATE_MESSAGE;
+  }
 
-  return utms;
+  if (status === "invalid_email") {
+    return INVALID_EMAIL_MESSAGE;
+  }
+
+  return GENERAL_ERROR_MESSAGE;
+}
+
+function analyticsStatusFor(status: WaitlistStatus): string {
+  if (status === "duplicate") {
+    return "duplicate";
+  }
+  if (status === "invalid_email") {
+    return "invalid";
+  }
+  return "error";
 }
 
 export default function WaitlistCta() {
@@ -57,86 +70,79 @@ export default function WaitlistCta() {
     if (typeof window === "undefined") {
       return;
     }
-    setCampaignParams(extractUtms(window.location.search));
+
+    const params = new URLSearchParams(window.location.search);
+    const campaigns = extractCampaignParams(params);
+    setCampaignParams(campaigns);
+
+    const status = parseWaitlistStatus(params.get(WAITLIST_STATUS_PARAM));
+    const initialEmail = params.get(WAITLIST_EMAIL_PARAM);
+
+    if (typeof initialEmail === "string" && initialEmail.trim().length > 0) {
+      setEmail(initialEmail);
+    }
+
+    if (status) {
+      setState("error");
+      setMessage(messageForStatus(status));
+      trackAnalytics(
+        "waitlist_signup",
+        buildAnalyticsPayload(analyticsStatusFor(status), campaigns),
+      );
+    } else {
+      setState("idle");
+      setMessage(INITIAL_MESSAGE);
+    }
   }, []);
 
-  const isDisabled = state === "loading" || state === "success";
+  const isDisabled = state === "loading";
 
   const buttonLabel = useMemo(() => {
     if (state === "loading") {
       return "Saving...";
     }
-    if (state === "success") {
-      return "On the list";
-    }
+
     return INITIAL_MESSAGE;
   }, [state]);
 
   const handleSubmit = useCallback(
-    async (event: React.FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
+    (event: React.FormEvent<HTMLFormElement>) => {
+      const form = event.currentTarget;
+      const emailField = form.elements.namedItem("email") as
+        | HTMLInputElement
+        | null;
 
       const trimmedEmail = email.trim();
       if (trimmedEmail.length === 0) {
+        event.preventDefault();
         setState("error");
         setMessage(INVALID_EMAIL_MESSAGE);
+        trackAnalytics(
+          "waitlist_signup",
+          buildAnalyticsPayload("invalid", campaignParams),
+        );
         return;
       }
 
+      if (emailField && emailField.value !== trimmedEmail) {
+        emailField.value = trimmedEmail;
+      }
+
+      setEmail(trimmedEmail);
       setState("loading");
       setMessage("Adding you to the waitlist...");
-
-      const payload = {
-        email: trimmedEmail,
-        ...campaignParams,
-      };
-
-      try {
-        const response = await fetch("/api/waitlist", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-          },
-          body: JSON.stringify(payload),
-        });
-        const data = await response.json();
-
-        if (response.ok) {
-          setState("success");
-          setMessage(SUCCESS_MESSAGE);
-          setEmail("");
-          trackAnalytics("waitlist_signup", buildAnalyticsPayload("success", campaignParams));
-          return;
-        }
-
-        if (response.status === 409) {
-          setState("error");
-          setMessage(DUPLICATE_MESSAGE);
-          trackAnalytics("waitlist_signup", buildAnalyticsPayload("duplicate", campaignParams));
-          return;
-        }
-
-        if (response.status === 400) {
-          setState("error");
-          setMessage(typeof data.message === "string" ? data.message : INVALID_EMAIL_MESSAGE);
-          trackAnalytics("waitlist_signup", buildAnalyticsPayload("invalid", campaignParams));
-          return;
-        }
-
-        setState("error");
-        setMessage(typeof data.message === "string" ? data.message : GENERAL_ERROR_MESSAGE);
-        trackAnalytics("waitlist_signup", buildAnalyticsPayload("error", campaignParams));
-      } catch (error) {
-        setState("error");
-        setMessage(GENERAL_ERROR_MESSAGE);
-        trackAnalytics("waitlist_signup", buildAnalyticsPayload("network_error", campaignParams));
-      }
     },
     [email, campaignParams],
   );
 
   return (
-    <form className="waitlist-form" onSubmit={handleSubmit}>
+    <form
+      className="waitlist-form"
+      method="post"
+      action="/portal/onboarding/entry"
+      onSubmit={handleSubmit}
+      noValidate
+    >
       <label className="waitlist-form__label" htmlFor="waitlist-email">
         Email address
       </label>
@@ -151,7 +157,7 @@ export default function WaitlistCta() {
           placeholder="you@example.com"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          disabled={state === "loading"}
+          disabled={isDisabled}
           required
         />
         <button
@@ -162,6 +168,9 @@ export default function WaitlistCta() {
           {buttonLabel}
         </button>
       </div>
+      {Object.entries(campaignParams).map(([key, value]) => (
+        <input key={key} type="hidden" name={key} value={value} />
+      ))}
       <p
         className={`waitlist-form__message waitlist-form__message--${state}`}
         role="status"
