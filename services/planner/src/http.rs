@@ -21,7 +21,8 @@ use crate::{
     PlanUserContext, ProfileStore,
 };
 use tyrum_discovery::{
-    DiscoveryConnector, DiscoveryOutcome, DiscoveryPipeline, DiscoveryRequest, DiscoveryStrategy,
+    DiscoveryConnector, DiscoveryOutcome, DiscoveryPipeline, DiscoveryRequest, DiscoveryResolution,
+    DiscoveryStrategy,
 };
 use tyrum_shared::{MessageSource, PamProfileRef, PiiField, ThreadKind};
 
@@ -522,12 +523,21 @@ fn discovery_request_for(request: &PlanRequest) -> DiscoveryRequest {
 fn log_discovery_outcome(request: &DiscoveryRequest, outcome: &DiscoveryOutcome) {
     let subject = request.sanitized_subject();
     match outcome {
-        DiscoveryOutcome::Found(connector) => {
+        DiscoveryOutcome::Found(resolution) => {
+            let primary = &resolution.primary;
+            let alternatives = resolution
+                .alternatives
+                .iter()
+                .map(|alt| format!("{}@{}", strategy_label(alt.strategy), alt.locator))
+                .collect::<Vec<_>>();
             tracing::info!(
                 target: "tyrum::planner",
                 subject,
-                strategy = strategy_label(connector.strategy),
-                locator = connector.locator.as_str(),
+                strategy = strategy_label(primary.strategy),
+                locator = primary.locator.as_str(),
+                rank = primary.rank,
+                alternative_count = alternatives.len(),
+                alternatives = %alternatives.join(","),
                 "discovery resolved connector"
             );
         }
@@ -559,8 +569,8 @@ fn build_plan_steps(
     steps.push(research_step());
 
     match outcome {
-        DiscoveryOutcome::Found(connector) => {
-            steps.push(discovered_execution_step(connector));
+        DiscoveryOutcome::Found(resolution) => {
+            steps.push(discovered_execution_step(resolution));
         }
         DiscoveryOutcome::NotFound => {
             steps.push(fallback_execution_step());
@@ -583,11 +593,19 @@ fn plan_summary_for(
     spend_directive: Option<&SpendDirective>,
 ) -> PlanSummary {
     let synopsis = match outcome {
-        DiscoveryOutcome::Found(connector) => format!(
-            "Discovered {} capability for {}",
-            strategy_label(connector.strategy),
-            request.subject_id
-        ),
+        DiscoveryOutcome::Found(resolution) => {
+            let primary = &resolution.primary;
+            let alt_note = match resolution.alternatives.len() {
+                0 => String::new(),
+                count => format!(" ({} alternatives cached)", count),
+            };
+            format!(
+                "Discovered {} capability for {}{}",
+                strategy_label(primary.strategy),
+                request.subject_id,
+                alt_note
+            )
+        }
         DiscoveryOutcome::NotFound => {
             format!("Falling back to automation for {}", request.subject_id)
         }
@@ -619,24 +637,43 @@ fn research_step() -> ActionPrimitive {
     ActionPrimitive::new(ActionPrimitiveKind::Research, research_args)
 }
 
-fn discovered_execution_step(connector: &DiscoveryConnector) -> ActionPrimitive {
+fn discovered_execution_step(resolution: &DiscoveryResolution) -> ActionPrimitive {
+    let primary = &resolution.primary;
+
     let mut args = JsonMap::new();
     args.insert(
         "executor".to_string(),
-        Value::String(executor_label(connector.strategy).into()),
+        Value::String(executor_label(primary.strategy).into()),
     );
     args.insert(
         "locator".to_string(),
-        Value::String(connector.locator.clone()),
+        Value::String(primary.locator.clone()),
     );
+    args.insert("rank".to_string(), json!(primary.rank));
     args.insert(
         "intent".to_string(),
         Value::String("execute_discovered_capability".into()),
     );
 
+    if !resolution.alternatives.is_empty() {
+        let alternatives = resolution
+            .alternatives
+            .iter()
+            .map(|alt| {
+                json!({
+                    "strategy": strategy_label(alt.strategy),
+                    "locator": alt.locator,
+                    "rank": alt.rank,
+                })
+            })
+            .collect::<Vec<_>>();
+        args.insert("alternatives".to_string(), Value::Array(alternatives));
+    }
+
     ActionPrimitive::new(ActionPrimitiveKind::Http, args).with_postcondition(json!({
         "status": "completed",
-        "strategy": strategy_label(connector.strategy),
+        "strategy": strategy_label(primary.strategy),
+        "rank": primary.rank,
     }))
 }
 
@@ -928,18 +965,27 @@ impl PolicyAudit {
 #[derive(Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 enum DiscoveryAudit {
-    Resolved { strategy: String, locator: String },
+    Resolved {
+        primary: DiscoveryAuditConnector,
+        alternatives: Vec<DiscoveryAuditConnector>,
+    },
     NotFound,
-    Deferred { retry_after_ms: Option<u64> },
+    Deferred {
+        retry_after_ms: Option<u64>,
+    },
     Skipped,
 }
 
 impl DiscoveryAudit {
     fn from_outcome(outcome: &DiscoveryOutcome) -> Self {
         match outcome {
-            DiscoveryOutcome::Found(connector) => Self::Resolved {
-                strategy: strategy_label(connector.strategy).into(),
-                locator: connector.locator.clone(),
+            DiscoveryOutcome::Found(resolution) => Self::Resolved {
+                primary: DiscoveryAuditConnector::from_connector(&resolution.primary),
+                alternatives: resolution
+                    .alternatives
+                    .iter()
+                    .map(DiscoveryAuditConnector::from_connector)
+                    .collect(),
             },
             DiscoveryOutcome::NotFound => Self::NotFound,
             DiscoveryOutcome::RetryLater { retry_after } => Self::Deferred {
@@ -955,6 +1001,23 @@ impl DiscoveryAudit {
 
     fn skipped() -> Self {
         Self::Skipped
+    }
+}
+
+#[derive(Serialize)]
+struct DiscoveryAuditConnector {
+    strategy: String,
+    locator: String,
+    rank: usize,
+}
+
+impl DiscoveryAuditConnector {
+    fn from_connector(connector: &DiscoveryConnector) -> Self {
+        Self {
+            strategy: strategy_label(connector.strategy).into(),
+            locator: connector.locator.clone(),
+            rank: connector.rank,
+        }
     }
 }
 

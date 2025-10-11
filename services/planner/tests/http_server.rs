@@ -2,6 +2,8 @@
 
 mod common;
 
+use std::borrow::Cow;
+use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 
 use axum::{
@@ -14,12 +16,17 @@ use chrono::Utc;
 use common::postgres::{TestPostgres, docker_available};
 use common::wallet::start_wallet_stub;
 use http_body_util::BodyExt;
+use opentelemetry::global;
+use opentelemetry_sdk::metrics::{
+    InMemoryMetricExporter, PeriodicReader, SdkMeterProvider,
+    data::{AggregatedMetrics, MetricData, ResourceMetrics},
+};
 use reqwest::Url;
 use tokio::{net::TcpListener, task::JoinHandle};
-use tower::ServiceExt;
+use tower::{Service, ServiceExt};
 use tyrum_discovery::{
     DefaultDiscoveryPipeline, DiscoveryConnector, DiscoveryOutcome, DiscoveryPipeline,
-    DiscoveryRequest, DiscoveryStrategy,
+    DiscoveryRequest, DiscoveryResolution, DiscoveryStrategy, InMemoryConnectorCache,
 };
 use tyrum_memory::{MemoryDal, PamProfileUpsert};
 use tyrum_planner::{
@@ -113,10 +120,11 @@ fn approving_policy_payload() -> serde_json::Value {
 }
 
 fn found_connector(strategy: DiscoveryStrategy, locator: &str) -> DiscoveryOutcome {
-    DiscoveryOutcome::Found(DiscoveryConnector {
+    DiscoveryOutcome::Found(DiscoveryResolution::single(DiscoveryConnector {
         strategy,
         locator: locator.to_string(),
-    })
+        rank: 1,
+    }))
 }
 
 struct MockDiscoveryPipeline {
@@ -359,6 +367,81 @@ async fn discovery_pipeline_uses_structured_api_capability() {
             .as_ref()
             .is_some_and(|text| text.contains("Discovered structured_api capability"))
     );
+}
+
+#[tokio::test]
+async fn discovery_cache_records_hit_metric() {
+    if !skip_if_no_docker("discovery_cache_records_hit_metric") {
+        return;
+    }
+
+    let exporter = InMemoryMetricExporter::default();
+    let reader = PeriodicReader::builder(exporter.clone()).build();
+    let meter_provider = SdkMeterProvider::builder().with_reader(reader).build();
+    global::set_meter_provider(meter_provider.clone());
+
+    let cache = Arc::new(InMemoryConnectorCache::new());
+    let pipeline = Arc::new(DefaultDiscoveryPipeline::with_cache_backend(
+        cache,
+        "planner-cache",
+        NonZeroUsize::new(5).unwrap(),
+    ));
+
+    let mut payload = sample_request();
+    payload.subject_id = "https://api.example.com/v1/openapi.json".into();
+    let body = serde_json::to_vec(&payload).expect("serialize plan request");
+
+    let (state, policy_server, wallet_server, _postgres) =
+        planner_state_with_pipeline(approving_policy_payload(), pipeline).await;
+
+    let mut app = build_router(state);
+
+    let response = app
+        .call(
+            Request::builder()
+                .method("POST")
+                .uri("/plan")
+                .header("content-type", "application/json")
+                .body(Body::from(body.clone()))
+                .expect("construct request"),
+        )
+        .await
+        .expect("receive response");
+    assert_eq!(response.status(), StatusCode::OK);
+
+    meter_provider
+        .force_flush()
+        .expect("flush metrics after miss");
+
+    let response = app
+        .call(
+            Request::builder()
+                .method("POST")
+                .uri("/plan")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .expect("construct request"),
+        )
+        .await
+        .expect("receive response");
+    assert_eq!(response.status(), StatusCode::OK);
+
+    meter_provider
+        .force_flush()
+        .expect("flush metrics after hit");
+    meter_provider.shutdown().expect("shutdown meter provider");
+
+    let metrics = exporter
+        .get_finished_metrics()
+        .expect("read exported metrics");
+    let (hits, misses) = cache_event_counts(&metrics);
+    assert!(hits >= 1, "expected cache hit metric, got {:?}", metrics);
+    assert!(misses >= 1, "expected cache miss metric, got {:?}", metrics);
+
+    global::set_meter_provider(SdkMeterProvider::builder().build());
+
+    policy_server.abort();
+    wallet_server.abort();
 }
 
 #[tokio::test]
@@ -845,4 +928,36 @@ async fn planner_state_with_pipeline(
         wallet_server,
         postgres,
     )
+}
+
+fn cache_event_counts(metrics: &[ResourceMetrics]) -> (u64, u64) {
+    let mut hits = 0;
+    let mut misses = 0;
+
+    for resource in metrics {
+        for scope in resource.scope_metrics() {
+            for metric in scope.metrics() {
+                if metric.name() != "discovery.cache.hit" {
+                    continue;
+                }
+
+                if let AggregatedMetrics::U64(MetricData::Sum(sum)) = metric.data() {
+                    for point in sum.data_points() {
+                        let status = point
+                            .attributes()
+                            .find(|attr| attr.key.as_str() == "status")
+                            .map(|attr| attr.value.as_str())
+                            .unwrap_or_else(|| Cow::Borrowed(""));
+                        match status.as_ref() {
+                            "hit" => hits += point.value(),
+                            "miss" => misses += point.value(),
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    (hits, misses)
 }

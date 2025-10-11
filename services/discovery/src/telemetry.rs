@@ -14,6 +14,7 @@ use crate::pipeline::{DiscoveryOutcome, DiscoveryStrategy};
 const METER_NAME: &str = "tyrum-discovery";
 const DURATION_METRIC_NAME: &str = "tyrum_discovery_attempt_duration_seconds";
 const COUNT_METRIC_NAME: &str = "tyrum_discovery_attempt_total";
+const CACHE_HIT_METRIC_NAME: &str = "discovery.cache.hit";
 
 #[derive(Clone)]
 struct MetricsInstruments {
@@ -28,6 +29,31 @@ struct MetricsCache {
 }
 
 static METRICS: OnceCell<Mutex<MetricsCache>> = OnceCell::new();
+static CACHE_METRICS: OnceCell<Mutex<CacheMetricCache>> = OnceCell::new();
+
+#[derive(Default)]
+struct CacheMetricCache {
+    provider: Option<Arc<dyn opentelemetry::metrics::MeterProvider + Send + Sync>>,
+    counter: Option<Counter<u64>>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum CacheEvent {
+    Hit,
+    Miss,
+    Error,
+}
+
+pub(crate) fn record_cache_event(event: CacheEvent) {
+    let counter = cache_counter();
+    let (hit, status) = match event {
+        CacheEvent::Hit => ("true", "hit"),
+        CacheEvent::Miss => ("false", "miss"),
+        CacheEvent::Error => ("false", "error"),
+    };
+    let labels = [KeyValue::new("hit", hit), KeyValue::new("status", status)];
+    counter.add(1, &labels);
+}
 
 pub(crate) fn record_step<F>(
     strategy: DiscoveryStrategy,
@@ -120,4 +146,36 @@ fn metrics_instruments() -> MetricsInstruments {
     guard.instruments = Some(instruments.clone());
 
     instruments
+}
+
+fn cache_counter() -> Counter<u64> {
+    let provider = global::meter_provider();
+    let cache = CACHE_METRICS.get_or_init(|| Mutex::new(CacheMetricCache::default()));
+    let mut guard = match cache.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            warn!("cache metric lock poisoned; continuing with cached counter");
+            poisoned.into_inner()
+        }
+    };
+
+    if guard
+        .provider
+        .as_ref()
+        .is_some_and(|current| Arc::ptr_eq(current, &provider))
+        && let Some(counter) = &guard.counter
+    {
+        return counter.clone();
+    }
+
+    let meter = provider.meter(METER_NAME);
+    let counter = meter
+        .u64_counter(CACHE_HIT_METRIC_NAME)
+        .with_description("Discovery cache hit/miss events")
+        .build();
+
+    guard.provider = Some(provider);
+    guard.counter = Some(counter.clone());
+
+    counter
 }

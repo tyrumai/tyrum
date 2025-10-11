@@ -437,7 +437,11 @@ mod tests {
 
     fn write_script(dir: &Path, name: &str, body: &str) -> anyhow::Result<PathBuf> {
         let path = dir.join(name);
-        fs::write(&path, format!("#!/bin/sh\n{body}\n"))?;
+        use std::io::Write;
+
+        let mut file = fs::File::create(&path)?;
+        file.write_all(format!("#!/bin/sh\n{body}\n").as_bytes())?;
+        file.sync_all()?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;

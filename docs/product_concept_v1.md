@@ -726,6 +726,7 @@ curl -X POST http://localhost:8080/telegram/webhook \
 - Route intent/risk classification to small local models.
 - Cache API schemas and successful flows.
 - Retrieve only top‑k tools per task.
+- Discovery cache (Redis-backed) retains ranked connectors for 900 seconds by default (override via `DISCOVERY_CACHE_TTL_SECONDS`); planners query a max of five entries (`DISCOVERY_CACHE_TOP_K`). Emits `discovery.cache.hit` with `hit`/`status` labels to observe hit, miss, and error rates.
 - Batch background enrichment and summarization.
 - Enforce per‑user spend/compute quotas with graceful degradation.
 
