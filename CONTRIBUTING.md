@@ -3,7 +3,7 @@
 Thanks for helping build the Tyrum assistant platform. This document captures the day-zero workflow for contributors and complements the repository guidelines in `AGENTS.md` plus the working agreements in `docs/working_agreements.md`.
 
 ## 1. Getting Started
-- Install Docker, Git, Node.js 24+, Rust 1.89+, Terraform 1.13+, and Python 3.13+ on your host.
+- Install Docker, Git, Node.js 24+, Rust 1.89+, Helm 3.12+, kubectl 1.30+, and Python 3.13+ on your host.
 - Clone the repository and create branches as `<issue-number>-<slug>` (for example `issue-12-memory-schema`).
 - Install the shared hooks with `pre-commit install` so every commit runs the same validations enforced in CI.
 
@@ -12,7 +12,7 @@ We ship a fully provisioned VS Code dev container under `.devcontainer/devcontai
 
 1. Install the **Dev Containers** VS Code extension (or `devcontainer` CLI).
 2. Run **Dev Containers: Reopen in Container** from the command palette after opening the repo root.
-3. The container installs Rust (with `rustfmt`/`clippy`), Node 24 with npm 11.6, Terraform 1.13, Docker CLI access, and bootstraps `pre-commit` hooks.
+3. The container installs Rust (with `rustfmt`/`clippy`), Node 24 with npm 11.6, Helm 3, kubectl, Docker CLI access, and bootstraps `pre-commit` hooks.
 4. Use the mounted Docker socket to exercise `docker compose -f infra/docker-compose.yml up --build` without leaving the container.
 
 ## 3. Environment Configuration
@@ -33,9 +33,9 @@ Run these commands before opening a pull request. They mirror the required GitHu
 | Repository hygiene | `pre-commit run --all-files` |
 | Rust workspace | `cargo fmt --all`, `cargo clippy --all-targets --all-features`, `cargo test --all --all-targets` |
 | Web portal | `npm install` (first run) then `npm run lint` and `npm run test -- --watch=false` from the portal root |
-| Infrastructure | `terraform fmt -check`, `terraform validate`, `tflint`, `docker compose config`, `kubeconform ./infra` |
+| Infrastructure | `docker compose config`, `helm lint infra/helm/tyrum-core`, `helm template tyrum infra/helm/tyrum-core >/dev/null` |
 | Containers | `docker compose -f infra/docker-compose.yml up --build` (ensure planner, executors, policy gate, and Postgres boot) |
-| Security baseline | `cargo audit`, `npm audit --audit-level high`, `tfsec`, `trivy config .` |
+| Security baseline | `cargo audit`, `npm audit --audit-level high`, `trivy config .` |
 
 Document the commands you executed in your pull-request description, along with any manual verification (screenshots, logs, trace IDs) required by the Definition of Done.
 
