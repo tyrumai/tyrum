@@ -1137,10 +1137,6 @@ services:
     hpa:
       enabled: false
     resources: {}
-    envFrom:
-    - secretRef:
-        name: '{{ include "tyrum-core.serviceSecretName" (dict "root" .root "name"
-          "grafana") }}'
     volumeMounts:
     - name: grafana-provisioning
       mountPath: /etc/grafana/provisioning
