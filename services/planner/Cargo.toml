@@ -7,8 +7,8 @@ authors = ["VirtunetBV <oss@virtunet.example>"]
 description = "Planner core utilities for Tyrum"
 
 [features]
-default = []
-audit-demo = ["dep:testcontainers", "dep:tyrum-memory"]
+default = ["dep:tyrum-memory"]
+audit-demo = ["dep:testcontainers"]
 
 [dependencies]
 axum = { version = "0.7", features = ["json"] }
