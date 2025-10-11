@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::num::NonZeroUsize;
-use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::sync::{Arc, OnceLock};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
@@ -471,6 +471,7 @@ impl DefaultDiscoveryPipeline {
             match outcome {
                 DiscoveryOutcome::Found(resolution) => {
                     collected.extend(self.cache_entries_from_resolution(resolution, now_ms));
+                    break;
                 }
                 DiscoveryOutcome::RetryLater { .. } => return Err(outcome),
                 DiscoveryOutcome::NotFound => {}
@@ -598,12 +599,20 @@ impl DefaultDiscoveryPipeline {
     }
 
     fn now_epoch_ms() -> u64 {
-        let millis = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_else(|_| Duration::from_secs(0))
-            .as_millis();
-        u64::try_from(millis).unwrap_or(u64::MAX)
+        match SystemTime::now().duration_since(UNIX_EPOCH) {
+            Ok(duration) => clamp_millis(duration.as_millis()),
+            Err(_) => {
+                let start = FALLBACK_MONOTONIC.get_or_init(Instant::now);
+                clamp_millis(start.elapsed().as_millis())
+            }
+        }
     }
+}
+
+static FALLBACK_MONOTONIC: OnceLock<Instant> = OnceLock::new();
+
+fn clamp_millis(value: u128) -> u64 {
+    u64::try_from(value).unwrap_or(u64::MAX)
 }
 
 impl DiscoveryPipeline for DefaultDiscoveryPipeline {
