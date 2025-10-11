@@ -79,6 +79,8 @@ pub struct PostconditionReport {
     pub passed: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub assertions: Vec<AssertionResult>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<Value>,
 }
 
 /// Errors surfaced when parsing or evaluating postconditions.
@@ -100,11 +102,11 @@ pub fn evaluate_postcondition<'a>(
     raw: &Value,
     context: &EvaluationContext<'a>,
 ) -> Result<PostconditionReport, PostconditionError> {
-    let assertions = parse_spec(raw)?;
-    let mut results = Vec::with_capacity(assertions.len());
+    let parsed = parse_spec(raw)?;
+    let mut results = Vec::with_capacity(parsed.assertions.len());
     let mut overall_passed = true;
 
-    for assertion in assertions {
+    for assertion in parsed.assertions {
         let (kind, outcome) = evaluate_assertion(&assertion, context)?;
         if !matches!(outcome, AssertionOutcome::Passed { .. }) {
             overall_passed = false;
@@ -115,6 +117,7 @@ pub fn evaluate_postcondition<'a>(
     Ok(PostconditionReport {
         passed: overall_passed,
         assertions: results,
+        metadata: parsed.metadata,
     })
 }
 
@@ -252,19 +255,48 @@ fn evaluate_assertion<'a>(
     }
 }
 
-fn parse_spec(raw: &Value) -> Result<Vec<AssertionSpec>, PostconditionError> {
+struct ParsedSpec {
+    assertions: Vec<AssertionSpec>,
+    metadata: Option<Value>,
+}
+
+fn parse_spec(raw: &Value) -> Result<ParsedSpec, PostconditionError> {
     match raw {
-        Value::Array(items) => parse_assertion_array(items),
+        Value::Array(items) => {
+            let assertions = parse_assertion_array(items)?;
+            Ok(ParsedSpec {
+                assertions,
+                metadata: None,
+            })
+        }
         Value::Object(map) => {
             if let Some(assertions) = map.get("assertions") {
-                match assertions {
+                let assertions_vec = match assertions {
                     Value::Array(items) => parse_assertion_array(items),
                     _ => Err(PostconditionError::Invalid {
                         message: "`assertions` must be an array".into(),
                     }),
+                }?;
+                let mut metadata = Map::new();
+                for (key, value) in map {
+                    if key != "assertions" {
+                        metadata.insert(key.clone(), value.clone());
+                    }
                 }
+                let metadata_value = if metadata.is_empty() {
+                    None
+                } else {
+                    Some(Value::Object(metadata))
+                };
+                Ok(ParsedSpec {
+                    assertions: assertions_vec,
+                    metadata: metadata_value,
+                })
             } else if map.contains_key("type") {
-                Ok(vec![parse_assertion(raw)?])
+                Ok(ParsedSpec {
+                    assertions: vec![parse_assertion(raw)?],
+                    metadata: None,
+                })
             } else {
                 Err(PostconditionError::Unsupported {
                     type_name: describe_object_shape(map),
@@ -587,6 +619,39 @@ mod tests {
             }
             other => panic!("unexpected outcome: {:?}", other),
         }
+    }
+
+    #[test]
+    fn metadata_preserved_in_report() {
+        let spec = json!({
+            "assertions": [
+                { "type": "http_status", "equals": 200 }
+            ],
+            "metadata": {
+                "status": "completed",
+                "strategy": "generic-http",
+                "details": { "rank": 1 }
+            }
+        });
+        let ctx = EvaluationContext {
+            http: Some(HttpContext { status: 200 }),
+            json: None,
+            dom: None,
+        };
+
+        let report = match evaluate_postcondition(&spec, &ctx) {
+            Ok(report) => report,
+            Err(err) => panic!("unexpected evaluation error: {err}"),
+        };
+
+        assert!(report.passed);
+        let metadata = match report.metadata {
+            Some(value) => value,
+            None => panic!("metadata should be present in the report"),
+        };
+        assert_eq!(metadata["metadata"]["status"], json!("completed"));
+        assert_eq!(metadata["metadata"]["strategy"], json!("generic-http"));
+        assert_eq!(metadata["metadata"]["details"]["rank"], json!(1));
     }
 
     #[test]
