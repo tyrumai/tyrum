@@ -399,9 +399,10 @@ fn parse_json_path(path: &str) -> Result<Vec<PathToken>, String> {
                 .map_err(|_| "array index must be a non-negative integer")?;
             tokens.push(PathToken::Index(index));
             rest = &rest[closing + 1..];
-        } else {
-            let ch = rest.as_bytes()[0] as char;
+        } else if let Some(ch) = rest.chars().next() {
             return Err(format!("unexpected character '{ch}' in path"));
+        } else {
+            return Err("unexpected trailing data in path".into());
         }
     }
 
