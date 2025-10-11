@@ -1,62 +1,18 @@
 # Staging Infrastructure Runbook
 
 This runbook captures the day-one operational procedures for Tyrum's staging
-environment. It covers Terraform-driven infrastructure updates, Helm-based
-application rollouts, rollback mechanics, and secret rotations, plus links to
+environment. It covers Helm-based application rollouts, rollback mechanics, and secret rotations, plus links to
 observability dashboards and alerting paths required for readiness checks.
 
 ## Access & Prerequisites
-- Terraform 1.8+, Helm 3.9+, kubectl 1.30+, the AWS CLI, and `jq` must be installed.
+- Helm 3.9+, kubectl 1.30+, the AWS CLI, and `jq` must be installed.
 - Log in with the staging profile: `aws sso login --profile virtunet-staging`.
-- Export the profile before invoking Terraform or kubectl:
+- Export the profile before invoking kubectl:
   ```bash
   export AWS_PROFILE=virtunet-staging
   ```
-- Terraform state lives in `s3://tyrum-staging-terraform-state` with
-  DynamoDB locking (`tyrum-terraform-locks`). Never edit the state file by
-  hand.
 - Ensure you have bastion/VPN access to the staging VPC for private endpoints
   and that your machine's SSH key is registered with the infra team.
-
-## Terraform Apply (Staging)
-1. Change to the environment directory:
-   ```bash
-   cd infra/terraform/environments/staging
-   ```
-2. Initialise providers and backends if this is a fresh checkout:
-   ```bash
-   terraform init
-   ```
-3. Create a plan and persist it for peer review (attach the file and summary to
-   the issue or PR):
-   ```bash
-   terraform plan -out plan.tfplan
-   terraform show -json plan.tfplan | jq '.'
-   ```
-4. Apply the reviewed plan only after confirming the diff:
-   ```bash
-   terraform apply plan.tfplan
-   ```
-5. Post-apply verification:
-   - Capture outputs for the run log:
-     ```bash
-     terraform output -json > ../../../../artifacts/staging-$(date +%Y%m%d%H%M%S)-outputs.json
-     ```
-   - Update kubeconfig and confirm the cluster is reachable:
-     ```bash
-     aws eks update-kubeconfig --name tyrum-staging-eks --region eu-west-1
-     kubectl get nodes -o wide
-     ```
-   - Check Secrets Manager envelopes referenced by the outputs exist and are in
-     `Enabled` rotation status:
-     ```bash
-     aws secretsmanager describe-secret --secret-id tyrum-staging/platform/config
-     ```
-6. If the plan introduces networking changes, validate the staging endpoints:
-   ```bash
-   aws ec2 describe-vpcs --vpc-ids $(terraform output -raw vpc_id)
-   kubectl get svc --namespace tyrum-core
-   ```
 
 ## Helm Upgrade Workflow
 1. Pull the latest container tags earmarked for staging (e.g. from the release
@@ -110,24 +66,11 @@ observability dashboards and alerting paths required for readiness checks.
 4. Annotate the Grafana deployment dashboard with the rollback timestamp and
    root cause.
 
-### Terraform Rollback / Drift Repair
-- Revert the Terraform configuration to the previous commit (or cherry-pick the
-  last known good state) and re-run `terraform plan` to ensure the diff is empty.
-- If an unsafe resource change was applied (e.g. VPC deletion), open a high
-  severity incident in `#tyrum-staging-ops` and coordinate manual remediation
-  with the infra lead before touching state.
-- For fast rollback of simple values (e.g. ASG counts), prefer applying the
-  previous plan file you captured before the change:
-  ```bash
-  terraform apply previous-plan.tfplan
-  ```
-
 ## Secret Rotation
 Staging secrets are managed in AWS Secrets Manager and projected into the
 cluster by the Helm chart.
 
-1. Identify the secret to rotate from Terraform outputs (`platform_config` or
-   `cluster_bootstrap`).
+1. Identify the secret to rotate from the staging change ticket or Secrets Manager inventory (`platform_config`, `cluster_bootstrap`, etc.).
 2. Set the new payload without deleting previous versions:
   ```bash
   aws secretsmanager put-secret-value \

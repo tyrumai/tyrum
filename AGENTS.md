@@ -9,7 +9,7 @@
 - Rust control-plane services: `cargo check` for fast sanity, `cargo fmt --all` and `cargo clippy --all-targets --all-features` before commits, `cargo test --all --all-targets` for unit + integration coverage.
 - Next.js console: `npm install` once, then `npm run dev` for local development, `npm run lint` for ESLint/Prettier, and `npm run test` for component and hook specs.
 - Container workflows: `docker compose up --build` should stand up planner, executors, policy gate, and Postgres; add new services to `docker-compose.yml` with sane defaults.
-- Automation: install `pre-commit` and run `pre-commit install` so shared hooks enforce linting for Rust, Next.js, GitHub Actions, Terraform, Compose, Kubernetes, and Helm assets before every commit.
+- Automation: install `pre-commit` and run `pre-commit install` so shared hooks enforce linting for Rust, Next.js, GitHub Actions, Compose, Kubernetes, and Helm assets before every commit.
 
 ## Coding Style & Naming Conventions
 - Rust: rely on `rustfmt`; modules and files use `snake_case`, types `PascalCase`, constants `SCREAMING_SNAKE_CASE`. Keep functions under 80 columns when practical and favour small, testable units.

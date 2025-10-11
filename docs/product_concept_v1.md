@@ -120,7 +120,7 @@ flowchart LR
 - **Caching & rate limits:** Redis 7 (cluster mode) for low-latency session state, policy throttles, and short-lived planner memory.
 - **LLM runtime:** Model gateway (see `docs/infra/model_gateway.md`) fronts local vLLM deployments and upstream frontier APIs, applying routing policy, token accounting, and auth.
 - **Observability:** OpenTelemetry instrumentation exported to Prometheus/Grafana + Tempo/Loki stack; audit evidence streamed to S3-compatible storage.
-- **Infra as code:** Terraform + Helm charts managing cluster bootstrap, secrets, runners, and CD pipelines.
+- **Infra as code:** Helm charts plus raw Kubernetes manifests managing cluster bootstrap, secrets, runners, and CD pipelines (Terraform reserved for later cloud provisioning).
 
 ### Model Gateway (multi-backend LLM access)
 - The gateway exposes a single OpenAI-compatible surface to internal services and consults configuration to decide whether to route a call to local vLLM models or a frontier provider (OpenAI, OpenRouter, etc.).
@@ -502,11 +502,11 @@ Milestones are cumulative; later milestones build on earlier ones.
 - **Rust + web CI workflows**
   - `ci-rust` (fmt, clippy, test) and `ci-web` (lint, test, build) Actions run on PRs and block merges on failure.
 - **IaC validation workflow**
-  - `ci-iac` runs `terraform fmt -check`, `terraform validate`, `tflint`, `docker compose config`, and `kubeconform` on manifests.
+  - `ci-iac` runs `docker compose config`, `helm lint`, and `kubeconform` on manifests to ensure cluster assets stay valid.
 - **Container build smoke workflow**
   - `ci-containers` builds core Docker images with BuildKit and executes `docker run --rm` health checks on main merges.
 - **Security baseline workflow**
-  - Scheduled `security-baseline` job executes `cargo audit`, `npm audit --audit-level high`, `tfsec`, and `trivy config` against the repo, alerting on failures.
+  - Scheduled `security-baseline` job executes `cargo audit`, `npm audit --audit-level high`, and `trivy config` against the repo, alerting on failures.
 - **Policy check service skeleton**
   - Rust 2024 service exposes `POST /policy/check` with static spend/PII/legal rules returning structured decisions and unit tests for approve/deny/escalate.
 - **Consent UX stub**
@@ -543,12 +543,12 @@ Milestones are cumulative; later milestones build on earlier ones.
 - **Portal export/delete stubs**
   - Export/delete buttons enqueue mocked audit tasks, display toast status, and return deterministic API responses.
   - Next.js portal route `/portal/settings` surfaces export and deletion controls with `/api/account/export` and `/api/account/delete` stubs returning deterministic audit references.
-- **Terraform baseline**
-  - `terraform plan/apply` stands up staging VPC, Kubernetes cluster, and secrets store without manual steps.
+- **Helm baseline**
+  - `helm lint`/`helm template` validate deployable manifests; `helm upgrade --install` provisions the stack in staging without manual steps.
 - **Helm chart deployment**
   - Helm releases deploy core services with health checks, config maps, and HPA defaults; `helm test` passes.
 - **Infra runbook**
-  - Runbook covers `terraform apply`, `helm upgrade`, rollback, and secret rotation procedures with links to dashboards.
+  - Runbook covers `helm upgrade --install`, rollback, and secret rotation procedures with links to dashboards.
 
 ### M1 — Telegram MVP (text-first)
 - **Telegram ingestion**: Document bot setup & secrets (#58); expose webhook endpoint (#59); normalize updates into shared schemas (#60); persist threads/messages with migrations (#61); add end-to-end webhook test (#62).

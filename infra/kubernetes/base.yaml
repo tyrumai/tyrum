@@ -1,0 +1,3535 @@
+---
+# Source: tyrum-core/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tyrum-tyrum-core
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+automountServiceAccountToken: true
+---
+# Source: tyrum-core/templates/secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tyrum-tyrum-core-api-secrets
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: api
+    tyrum.dev/service: api
+type: Opaque
+stringData:
+  DATABASE_URL: "postgres://tyrum:tyrum_dev_password@tyrum-tyrum-core-postgres.default.svc.cluster.local:5432/tyrum_dev"
+  TELEGRAM_BOT_TOKEN: "local-telegram-token"
+  TELEGRAM_WEBHOOK_SECRET: "local-telegram-secret"
+---
+# Source: tyrum-core/templates/secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tyrum-tyrum-core-grafana-secrets
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: grafana
+    tyrum.dev/service: grafana
+type: Opaque
+stringData:
+  GF_SECURITY_ADMIN_PASSWORD: "tyrum"
+---
+# Source: tyrum-core/templates/secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tyrum-tyrum-core-postgres-secrets
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: postgres
+    tyrum.dev/service: postgres
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: "tyrum_dev_password"
+---
+# Source: tyrum-core/templates/secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tyrum-tyrum-core-api-migrations-secrets
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: api-migrations
+    tyrum.dev/service: api-migrations
+type: Opaque
+stringData:
+  DATABASE_URL: "postgres://tyrum:tyrum_dev_password@tyrum-tyrum-core-postgres.default.svc.cluster.local:5432/tyrum_dev"
+---
+# Source: tyrum-core/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tyrum-tyrum-core-api-config
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: api
+    tyrum.dev/service: api
+  annotations:
+    tyrum.dev/config-purpose: runtime-env
+    tyrum.dev/managed-for: api
+data:
+  
+  API_BIND_ADDR: "0.0.0.0:8080"
+  
+  
+  MOCK_LLM_URL: "http://tyrum-tyrum-core-mock-llm.default.svc.cluster.local:8085"
+  
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://tyrum-tyrum-core-otel-collector.default.svc.cluster.local:4317"
+  
+  
+  OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+  
+  
+  REDIS_URL: "redis://tyrum-tyrum-core-redis.default.svc.cluster.local:6379/0"
+  
+  
+  RUST_LOG: "info"
+  
+  
+  TELEGRAM_WEBHOOK_URL: "https://example.com/api/telegram/webhook"
+---
+# Source: tyrum-core/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tyrum-tyrum-core-executor-android-config
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: executor-android
+    tyrum.dev/service: executor-android
+  annotations:
+    tyrum.dev/config-purpose: runtime-env
+    tyrum.dev/managed-for: executor-android
+data:
+  
+  ANDROID_BOOT_TIMEOUT_SECONDS: "480"
+  
+  
+  AVD_NAME: "tyrum-android-executor"
+  
+  
+  EMULATOR_ADB_PORT_INTERNAL: "5655"
+  
+  
+  EMULATOR_CONSOLE_PORT_INTERNAL: "5654"
+  
+  
+  RUST_LOG: "info"
+---
+# Source: tyrum-core/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tyrum-tyrum-core-executor-cli-config
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: executor-cli
+    tyrum.dev/service: executor-cli
+  annotations:
+    tyrum.dev/config-purpose: runtime-env
+    tyrum.dev/managed-for: executor-cli
+data:
+  
+  CLI_EXECUTOR_BIND_ADDR: "0.0.0.0:8093"
+  
+  
+  CLI_EXECUTOR_SANDBOX_DIR: "/sandbox"
+  
+  
+  RUST_LOG: "info"
+---
+# Source: tyrum-core/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tyrum-tyrum-core-executor-http-config
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: executor-http
+    tyrum.dev/service: executor-http
+  annotations:
+    tyrum.dev/config-purpose: runtime-env
+    tyrum.dev/managed-for: executor-http
+data:
+  
+  HTTP_EXECUTOR_BIND_ADDR: "0.0.0.0:8092"
+  
+  
+  RUST_LOG: "info"
+---
+# Source: tyrum-core/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tyrum-tyrum-core-executor-web-config
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: executor-web
+    tyrum.dev/service: executor-web
+  annotations:
+    tyrum.dev/config-purpose: runtime-env
+    tyrum.dev/managed-for: executor-web
+data:
+  
+  RUST_LOG: "info"
+  
+  
+  WEB_EXECUTOR_BIND_ADDR: "0.0.0.0:8091"
+---
+# Source: tyrum-core/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tyrum-tyrum-core-llm-gateway-config
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: llm-gateway
+    tyrum.dev/service: llm-gateway
+  annotations:
+    tyrum.dev/config-purpose: runtime-env
+    tyrum.dev/managed-for: llm-gateway
+data:
+  
+  LLM_GATEWAY_BIND_ADDR: "0.0.0.0:8086"
+  
+  
+  LLM_GATEWAY_MODEL: "tyrum-stub-8b"
+  
+  
+  LLM_RATE_LIMIT_PER_SECOND: "10"
+  
+  LLM_VLLM_URL: "http://tyrum-tyrum-core-mock-llm.default.svc.cluster.local:8085/v1/completions"
+---
+# Source: tyrum-core/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tyrum-tyrum-core-model-gateway-config
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: model-gateway
+    tyrum.dev/service: model-gateway
+  annotations:
+    tyrum.dev/config-purpose: runtime-env
+    tyrum.dev/managed-for: model-gateway
+data:
+  
+  MODEL_GATEWAY_BIND_ADDR: "0.0.0.0:8001"
+  
+  
+  MODEL_GATEWAY_CONFIG: "/app/config/model_gateway.yml"
+---
+# Source: tyrum-core/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tyrum-tyrum-core-planner-config
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: planner
+    tyrum.dev/service: planner
+  annotations:
+    tyrum.dev/config-purpose: runtime-env
+    tyrum.dev/managed-for: planner
+data:
+  
+  LLM_GATEWAY_URL: "http://tyrum-tyrum-core-llm-gateway.default.svc.cluster.local:8086/completions"
+  
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://tyrum-tyrum-core-otel-collector.default.svc.cluster.local:4317"
+  
+  
+  OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+  
+  
+  PLANNER_BIND_ADDR: "0.0.0.0:8083"
+  
+  
+  PLANNER_EVENT_LOG_URL: "postgres://tyrum:tyrum_dev_password@tyrum-tyrum-core-postgres.default.svc.cluster.local:5432/tyrum_dev"
+  
+  
+  POLICY_GATE_URL: "http://tyrum-tyrum-core-policy.default.svc.cluster.local:8081"
+  
+  
+  RUST_LOG: "info"
+  
+  
+  WALLET_GATE_URL: "http://tyrum-tyrum-core-wallet.default.svc.cluster.local:8084"
+---
+# Source: tyrum-core/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tyrum-tyrum-core-policy-config
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: policy
+    tyrum.dev/service: policy
+  annotations:
+    tyrum.dev/config-purpose: runtime-env
+    tyrum.dev/managed-for: policy
+data:
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://tyrum-tyrum-core-otel-collector.default.svc.cluster.local:4317"
+  
+  
+  OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+  
+  
+  POLICY_BIND_ADDR: "0.0.0.0:8081"
+  
+  
+  RUST_LOG: "info"
+---
+# Source: tyrum-core/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tyrum-tyrum-core-postgres-config
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: postgres
+    tyrum.dev/service: postgres
+  annotations:
+    tyrum.dev/config-purpose: runtime-env
+    tyrum.dev/managed-for: postgres
+data:
+  
+  POSTGRES_DB: "tyrum_dev"
+  
+  
+  POSTGRES_USER: "tyrum"
+---
+# Source: tyrum-core/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tyrum-tyrum-core-vllm-gateway-config
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: vllm-gateway
+    tyrum.dev/service: vllm-gateway
+  annotations:
+    tyrum.dev/config-purpose: runtime-env
+    tyrum.dev/managed-for: vllm-gateway
+data:
+  
+  VLLM_EXTRA_ARGS: ""
+  
+  
+  VLLM_MODEL: "hf-internal-testing/tiny-random-LlamaForCausalLM"
+  
+  
+  VLLM_MODEL_NAME: "tyrum-stub-8b"
+---
+# Source: tyrum-core/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tyrum-tyrum-core-wallet-config
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: wallet
+    tyrum.dev/service: wallet
+  annotations:
+    tyrum.dev/config-purpose: runtime-env
+    tyrum.dev/managed-for: wallet
+data:
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://tyrum-tyrum-core-otel-collector.default.svc.cluster.local:4317"
+  
+  
+  OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+  
+  
+  RUST_LOG: "info"
+  
+  
+  WALLET_AUTO_APPROVE_LIMIT_MINOR: "10000"
+  
+  
+  WALLET_BIND_ADDR: "0.0.0.0:8084"
+  
+  
+  WALLET_HARD_DENY_LIMIT_MINOR: "50000"
+---
+# Source: tyrum-core/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tyrum-tyrum-core-watchers-processor-config
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: watchers-processor
+    tyrum.dev/service: watchers-processor
+  annotations:
+    tyrum.dev/config-purpose: runtime-env
+    tyrum.dev/managed-for: watchers-processor
+data:
+  
+  RUST_LOG: "info,tyrum_watchers=info"
+  
+  
+  WATCHERS_JETSTREAM_PROCESSOR_CONSUMER: "watchers_local_processor"
+  
+  
+  WATCHERS_JETSTREAM_STREAM: "watchers_events"
+  
+  
+  WATCHERS_JETSTREAM_SUBJECT_PREFIX: "watchers.events"
+  
+  
+  WATCHERS_JETSTREAM_URL: "nats://tyrum-tyrum-core-nats.default.svc.cluster.local:4222"
+  
+  
+  WATCHERS_PLANNER_URL: "http://tyrum-tyrum-core-planner.default.svc.cluster.local:8083/plan"
+  
+  
+  WATCHERS_PROCESSOR_FETCH_TIMEOUT_MS: "500"
+---
+# Source: tyrum-core/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tyrum-tyrum-core-web-config
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: web
+    tyrum.dev/service: web
+  annotations:
+    tyrum.dev/config-purpose: runtime-env
+    tyrum.dev/managed-for: web
+data:
+  
+  API_BASE_URL: "http://tyrum-tyrum-core-api.default.svc.cluster.local:8080"
+  
+  
+  NEXT_TELEMETRY_DISABLED: "1"
+---
+# Source: tyrum-core/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tyrum-tyrum-core-api-migrations-config
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: api-migrations
+    tyrum.dev/service: api-migrations
+  annotations:
+    tyrum.dev/config-purpose: runtime-env
+    tyrum.dev/managed-for: api-migrations
+data:
+  
+  RUN_MIGRATIONS_ONLY: "1"
+  
+  
+  RUST_LOG: "info"
+---
+# Source: tyrum-core/templates/file-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tyrum-tyrum-core-grafana-files
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: grafana
+    tyrum.dev/service: grafana
+  annotations:
+    tyrum.dev/config-purpose: file-mounts
+    tyrum.dev/managed-for: grafana
+data:
+  datasources.yaml: |-
+
+    apiVersion: 1
+    
+    datasources:
+      - name: Prometheus
+        uid: prometheus
+        type: prometheus
+        access: proxy
+        url: http://tyrum-tyrum-core-prometheus.default.svc.cluster.local:9090
+        isDefault: true
+        jsonData:
+          httpMethod: GET
+      - name: Loki
+        uid: loki
+        type: loki
+        access: proxy
+        url: http://tyrum-tyrum-core-loki.default.svc.cluster.local:3100
+      - name: Tempo
+        uid: tempo
+        type: tempo
+        access: proxy
+        url: http://tyrum-tyrum-core-tempo.default.svc.cluster.local:3200
+        jsonData:
+          httpMethod: GET
+          tracesToLogs:
+            datasourceUid: loki
+            mappedTags:
+              - key: service.name
+                value: service_name
+            spanStartTimeShift: "-5m"
+            spanEndTimeShift: "5m"
+            filterByTraceID: true
+            filterBySpanID: false
+---
+# Source: tyrum-core/templates/file-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tyrum-tyrum-core-loki-files
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: loki
+    tyrum.dev/service: loki
+  annotations:
+    tyrum.dev/config-purpose: file-mounts
+    tyrum.dev/managed-for: loki
+data:
+  config.yaml: |-
+
+    server:
+      http_listen_port: 3100
+      log_level: info
+    
+    auth_enabled: false
+    
+    table_manager:
+      retention_deletes_enabled: true
+      retention_period: 168h
+    
+    schema_config:
+      configs:
+        - from: 2020-10-15
+          store: boltdb-shipper
+          object_store: filesystem
+          schema: v11
+          index:
+            prefix: index_
+            period: 24h
+    
+    storage_config:
+      boltdb_shipper:
+        active_index_directory: /var/loki/index
+        shared_store: filesystem
+        cache_location: /var/loki/cache
+      filesystem:
+        directory: /var/loki/chunks
+    
+    limits_config:
+      allow_structured_metadata: true
+      ingestion_rate_mb: 16
+      ingestion_burst_size_mb: 32
+      retention_period: 168h
+    
+    chunk_store_config:
+      max_look_back_period: 0s
+    
+    ingester:
+      lifecycler:
+        address: 127.0.0.1
+        ring:
+          kvstore:
+            store: inmemory
+          replication_factor: 1
+        final_sleep: 0s
+      chunk_idle_period: 5m
+      chunk_retain_period: 1m
+---
+# Source: tyrum-core/templates/file-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tyrum-tyrum-core-model-gateway-files
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: model-gateway
+    tyrum.dev/service: model-gateway
+  annotations:
+    tyrum.dev/config-purpose: file-mounts
+    tyrum.dev/managed-for: model-gateway
+data:
+  model_gateway.yml: |-
+
+    defaults:
+      timeout_ms: 20000
+    
+    auth_profiles:
+      local_vllm:
+        type: none
+      mock:
+        type: none
+    
+    models:
+      tyrum-stub-8b:
+        target: local_vllm
+        endpoint: http://tyrum-tyrum-core-vllm-gateway.default.svc.cluster.local:8000
+        capabilities: [text]
+    
+      frontier-mock:
+        target: mock
+        endpoint: http://tyrum-tyrum-core-mock-llm.default.svc.cluster.local:8085
+        capabilities: [text]
+---
+# Source: tyrum-core/templates/file-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tyrum-tyrum-core-otel-collector-files
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: otel-collector
+    tyrum.dev/service: otel-collector
+  annotations:
+    tyrum.dev/config-purpose: file-mounts
+    tyrum.dev/managed-for: otel-collector
+data:
+  config.yaml: |-
+
+    extensions:
+      health_check: {}
+    
+    receivers:
+      otlp:
+        protocols:
+          grpc: {}
+          http: {}
+    
+    processors:
+      batch:
+        timeout: 5s
+    
+    exporters:
+      prometheus:
+        endpoint: 0.0.0.0:9464
+        resource_to_telemetry_conversion:
+          enabled: true
+      otlp/tempo:
+        endpoint: tyrum-tyrum-core-tempo.default.svc.cluster.local:4317
+        tls:
+          insecure: true
+      loki:
+        endpoint: http://tyrum-tyrum-core-loki.default.svc.cluster.local:3100/loki/api/v1/push
+        tls:
+          insecure: true
+        labels:
+          resource:
+            service.name: service_name
+          attributes:
+            severity_text: level
+    
+    service:
+      extensions: [health_check]
+      pipelines:
+        metrics:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [prometheus]
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [otlp/tempo]
+        logs:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [loki]
+---
+# Source: tyrum-core/templates/file-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tyrum-tyrum-core-prometheus-files
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: prometheus
+    tyrum.dev/service: prometheus
+  annotations:
+    tyrum.dev/config-purpose: file-mounts
+    tyrum.dev/managed-for: prometheus
+data:
+  prometheus.yml: |-
+
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+    
+    scrape_configs:
+      - job_name: otel-collector
+        static_configs:
+          - targets: ['tyrum-tyrum-core-otel-collector.default.svc.cluster.local:9464']
+---
+# Source: tyrum-core/templates/file-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tyrum-tyrum-core-tempo-files
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: tempo
+    tyrum.dev/service: tempo
+  annotations:
+    tyrum.dev/config-purpose: file-mounts
+    tyrum.dev/managed-for: tempo
+data:
+  tempo.yaml: |-
+
+    server:
+      http_listen_port: 3200
+      grpc_listen_port: 4317
+      log_level: info
+    
+    distributor:
+      receivers:
+        otlp:
+          protocols:
+            http: {}
+            grpc: {}
+    
+    ingester:
+      lifecycler:
+        ring:
+          kvstore:
+            store: inmemory
+          replication_factor: 1
+        final_sleep: 0s
+      max_block_duration: 5m
+      trace_idle_period: 30s
+    
+    querier:
+      frontend_worker:
+        frontend_address: tyrum-tyrum-core-tempo.default.svc.cluster.local:9095
+    
+    query_frontend:
+      search:
+        concurrent_jobs: 200
+        target_bytes_per_job: 10000000
+    
+    compactor:
+      compaction:
+        block_retention: 48h
+      ring:
+        kvstore:
+          store: inmemory
+      working_directory: /var/tempo/compactor
+    
+    storage:
+      trace:
+        backend: local
+        local:
+          path: /var/tempo/traces
+        wal:
+          path: /var/tempo/wal
+---
+# Source: tyrum-core/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: tyrum-tyrum-core-api
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: api
+    tyrum.dev/service: api
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tyrum-tyrum-core-api
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/component: api
+    tyrum.dev/service: api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+---
+# Source: tyrum-core/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: tyrum-tyrum-core-executor-android
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: executor-android
+    tyrum.dev/service: executor-android
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tyrum-tyrum-core-executor-android
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/component: executor-android
+    tyrum.dev/service: executor-android
+---
+# Source: tyrum-core/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: tyrum-tyrum-core-executor-cli
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: executor-cli
+    tyrum.dev/service: executor-cli
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tyrum-tyrum-core-executor-cli
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/component: executor-cli
+    tyrum.dev/service: executor-cli
+  ports:
+    - name: http
+      port: 8093
+      targetPort: 8093
+      protocol: TCP
+---
+# Source: tyrum-core/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: tyrum-tyrum-core-executor-http
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: executor-http
+    tyrum.dev/service: executor-http
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tyrum-tyrum-core-executor-http
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/component: executor-http
+    tyrum.dev/service: executor-http
+  ports:
+    - name: http
+      port: 8092
+      targetPort: 8092
+      protocol: TCP
+---
+# Source: tyrum-core/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: tyrum-tyrum-core-executor-web
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: executor-web
+    tyrum.dev/service: executor-web
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tyrum-tyrum-core-executor-web
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/component: executor-web
+    tyrum.dev/service: executor-web
+  ports:
+    - name: http
+      port: 8091
+      targetPort: 8091
+      protocol: TCP
+---
+# Source: tyrum-core/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: tyrum-tyrum-core-grafana
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: grafana
+    tyrum.dev/service: grafana
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tyrum-tyrum-core-grafana
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/component: grafana
+    tyrum.dev/service: grafana
+  ports:
+    - name: http
+      port: 3001
+      targetPort: 3001
+      protocol: TCP
+---
+# Source: tyrum-core/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: tyrum-tyrum-core-llm-gateway
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: llm-gateway
+    tyrum.dev/service: llm-gateway
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tyrum-tyrum-core-llm-gateway
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/component: llm-gateway
+    tyrum.dev/service: llm-gateway
+  ports:
+    - name: http
+      port: 8086
+      targetPort: 8086
+      protocol: TCP
+---
+# Source: tyrum-core/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: tyrum-tyrum-core-loki
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: loki
+    tyrum.dev/service: loki
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tyrum-tyrum-core-loki
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/component: loki
+    tyrum.dev/service: loki
+  ports:
+    - name: http
+      port: 3100
+      targetPort: 3100
+      protocol: TCP
+---
+# Source: tyrum-core/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: tyrum-tyrum-core-mock-llm
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: mock-llm
+    tyrum.dev/service: mock-llm
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tyrum-tyrum-core-mock-llm
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/component: mock-llm
+    tyrum.dev/service: mock-llm
+  ports:
+    - name: http
+      port: 8085
+      targetPort: 8085
+      protocol: TCP
+---
+# Source: tyrum-core/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: tyrum-tyrum-core-model-gateway
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: model-gateway
+    tyrum.dev/service: model-gateway
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tyrum-tyrum-core-model-gateway
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/component: model-gateway
+    tyrum.dev/service: model-gateway
+  ports:
+    - name: http
+      port: 8001
+      targetPort: 8001
+      protocol: TCP
+---
+# Source: tyrum-core/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: tyrum-tyrum-core-nats
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: nats
+    tyrum.dev/service: nats
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tyrum-tyrum-core-nats
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/component: nats
+    tyrum.dev/service: nats
+  ports:
+    
+    - name: client
+      port: 4222
+      targetPort: 4222
+    - name: http
+      port: 8222
+      targetPort: 8222
+---
+# Source: tyrum-core/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: tyrum-tyrum-core-otel-collector
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: otel-collector
+    tyrum.dev/service: otel-collector
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tyrum-tyrum-core-otel-collector
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/component: otel-collector
+    tyrum.dev/service: otel-collector
+  ports:
+    
+    - name: grpc
+      port: 4317
+      targetPort: 4317
+    - name: http
+      port: 4318
+      targetPort: 4318
+    - name: metrics
+      port: 9464
+      targetPort: 9464
+---
+# Source: tyrum-core/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: tyrum-tyrum-core-planner
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: planner
+    tyrum.dev/service: planner
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tyrum-tyrum-core-planner
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/component: planner
+    tyrum.dev/service: planner
+  ports:
+    - name: http
+      port: 8083
+      targetPort: 8083
+      protocol: TCP
+---
+# Source: tyrum-core/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: tyrum-tyrum-core-policy
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: policy
+    tyrum.dev/service: policy
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tyrum-tyrum-core-policy
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/component: policy
+    tyrum.dev/service: policy
+  ports:
+    - name: http
+      port: 8081
+      targetPort: 8081
+      protocol: TCP
+---
+# Source: tyrum-core/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: tyrum-tyrum-core-postgres
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: postgres
+    tyrum.dev/service: postgres
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tyrum-tyrum-core-postgres
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/component: postgres
+    tyrum.dev/service: postgres
+  ports:
+    - name: tcp
+      port: 5432
+      targetPort: 5432
+      protocol: TCP
+---
+# Source: tyrum-core/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: tyrum-tyrum-core-prometheus
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: prometheus
+    tyrum.dev/service: prometheus
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tyrum-tyrum-core-prometheus
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/component: prometheus
+    tyrum.dev/service: prometheus
+  ports:
+    - name: http
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+---
+# Source: tyrum-core/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: tyrum-tyrum-core-redis
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: redis
+    tyrum.dev/service: redis
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tyrum-tyrum-core-redis
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/component: redis
+    tyrum.dev/service: redis
+  ports:
+    - name: tcp
+      port: 6379
+      targetPort: 6379
+      protocol: TCP
+---
+# Source: tyrum-core/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: tyrum-tyrum-core-tempo
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: tempo
+    tyrum.dev/service: tempo
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tyrum-tyrum-core-tempo
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/component: tempo
+    tyrum.dev/service: tempo
+  ports:
+    
+    - name: http
+      port: 3200
+      targetPort: 3200
+    - name: grpc
+      port: 4317
+      targetPort: 4317
+    - name: frontend
+      port: 9095
+      targetPort: 9095
+---
+# Source: tyrum-core/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: tyrum-tyrum-core-vllm-gateway
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: vllm-gateway
+    tyrum.dev/service: vllm-gateway
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tyrum-tyrum-core-vllm-gateway
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/component: vllm-gateway
+    tyrum.dev/service: vllm-gateway
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+---
+# Source: tyrum-core/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: tyrum-tyrum-core-wallet
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: wallet
+    tyrum.dev/service: wallet
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tyrum-tyrum-core-wallet
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/component: wallet
+    tyrum.dev/service: wallet
+  ports:
+    - name: http
+      port: 8084
+      targetPort: 8084
+      protocol: TCP
+---
+# Source: tyrum-core/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: tyrum-tyrum-core-watchers-processor
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: watchers-processor
+    tyrum.dev/service: watchers-processor
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tyrum-tyrum-core-watchers-processor
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/component: watchers-processor
+    tyrum.dev/service: watchers-processor
+---
+# Source: tyrum-core/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: tyrum-tyrum-core-web
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: web
+    tyrum.dev/service: web
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: tyrum-tyrum-core-web
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/component: web
+    tyrum.dev/service: web
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+---
+# Source: tyrum-core/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tyrum-tyrum-core-api
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: api
+    tyrum.dev/service: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tyrum-tyrum-core-api
+      app.kubernetes.io/instance: tyrum
+      app.kubernetes.io/component: api
+      tyrum.dev/service: api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tyrum-tyrum-core-api
+        app.kubernetes.io/instance: tyrum
+        app.kubernetes.io/component: api
+        tyrum.dev/service: api
+    spec:
+      serviceAccountName: tyrum-tyrum-core
+      
+      containers:
+        - name: api
+          image: tyrum/api:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - configMapRef:
+                name: tyrum-tyrum-core-api-config
+            - secretRef:
+                name: tyrum-tyrum-core-api-secrets
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+# Source: tyrum-core/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tyrum-tyrum-core-executor-android
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: executor-android
+    tyrum.dev/service: executor-android
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tyrum-tyrum-core-executor-android
+      app.kubernetes.io/instance: tyrum
+      app.kubernetes.io/component: executor-android
+      tyrum.dev/service: executor-android
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tyrum-tyrum-core-executor-android
+        app.kubernetes.io/instance: tyrum
+        app.kubernetes.io/component: executor-android
+        tyrum.dev/service: executor-android
+    spec:
+      serviceAccountName: tyrum-tyrum-core
+      
+      containers:
+        - name: executor-android
+          image: tyrum/executor-android:local
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: tyrum-tyrum-core-executor-android-config
+---
+# Source: tyrum-core/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tyrum-tyrum-core-executor-cli
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: executor-cli
+    tyrum.dev/service: executor-cli
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tyrum-tyrum-core-executor-cli
+      app.kubernetes.io/instance: tyrum
+      app.kubernetes.io/component: executor-cli
+      tyrum.dev/service: executor-cli
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tyrum-tyrum-core-executor-cli
+        app.kubernetes.io/instance: tyrum
+        app.kubernetes.io/component: executor-cli
+        tyrum.dev/service: executor-cli
+    spec:
+      serviceAccountName: tyrum-tyrum-core
+      
+      containers:
+        - name: executor-cli
+          image: tyrum/executor-cli:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            
+            - containerPort: 8093
+              name: http
+          envFrom:
+            - configMapRef:
+                name: tyrum-tyrum-core-executor-cli-config
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          
+          volumeMounts:
+            - mountPath: /sandbox
+              name: sandbox
+      volumes:
+        - emptyDir:
+            medium: Memory
+          name: sandbox
+---
+# Source: tyrum-core/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tyrum-tyrum-core-executor-http
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: executor-http
+    tyrum.dev/service: executor-http
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tyrum-tyrum-core-executor-http
+      app.kubernetes.io/instance: tyrum
+      app.kubernetes.io/component: executor-http
+      tyrum.dev/service: executor-http
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tyrum-tyrum-core-executor-http
+        app.kubernetes.io/instance: tyrum
+        app.kubernetes.io/component: executor-http
+        tyrum.dev/service: executor-http
+    spec:
+      serviceAccountName: tyrum-tyrum-core
+      
+      containers:
+        - name: executor-http
+          image: tyrum/executor-http:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            
+            - containerPort: 8092
+              name: http
+          envFrom:
+            - configMapRef:
+                name: tyrum-tyrum-core-executor-http-config
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+# Source: tyrum-core/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tyrum-tyrum-core-executor-web
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: executor-web
+    tyrum.dev/service: executor-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tyrum-tyrum-core-executor-web
+      app.kubernetes.io/instance: tyrum
+      app.kubernetes.io/component: executor-web
+      tyrum.dev/service: executor-web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tyrum-tyrum-core-executor-web
+        app.kubernetes.io/instance: tyrum
+        app.kubernetes.io/component: executor-web
+        tyrum.dev/service: executor-web
+    spec:
+      serviceAccountName: tyrum-tyrum-core
+      
+      containers:
+        - name: executor-web
+          image: tyrum/executor-web:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            
+            - containerPort: 8091
+              name: http
+          envFrom:
+            - configMapRef:
+                name: tyrum-tyrum-core-executor-web-config
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+# Source: tyrum-core/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tyrum-tyrum-core-grafana
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: grafana
+    tyrum.dev/service: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tyrum-tyrum-core-grafana
+      app.kubernetes.io/instance: tyrum
+      app.kubernetes.io/component: grafana
+      tyrum.dev/service: grafana
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tyrum-tyrum-core-grafana
+        app.kubernetes.io/instance: tyrum
+        app.kubernetes.io/component: grafana
+        tyrum.dev/service: grafana
+    spec:
+      serviceAccountName: tyrum-tyrum-core
+      
+      containers:
+        - name: grafana
+          image: grafana/grafana:11.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            
+            - containerPort: 3000
+              name: http
+          envFrom:
+            - secretRef:
+                name: tyrum-tyrum-core-grafana-secrets
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              value: admin
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          
+          volumeMounts:
+            - mountPath: /etc/grafana/provisioning
+              name: grafana-provisioning
+              readOnly: true
+            - mountPath: /var/lib/grafana
+              name: grafana-storage
+      volumes:
+        - configMap:
+            name: 'tyrum-tyrum-core-grafana-files'
+          name: grafana-provisioning
+        - emptyDir: {}
+          name: grafana-storage
+---
+# Source: tyrum-core/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tyrum-tyrum-core-llm-gateway
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: llm-gateway
+    tyrum.dev/service: llm-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tyrum-tyrum-core-llm-gateway
+      app.kubernetes.io/instance: tyrum
+      app.kubernetes.io/component: llm-gateway
+      tyrum.dev/service: llm-gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tyrum-tyrum-core-llm-gateway
+        app.kubernetes.io/instance: tyrum
+        app.kubernetes.io/component: llm-gateway
+        tyrum.dev/service: llm-gateway
+    spec:
+      serviceAccountName: tyrum-tyrum-core
+      
+      containers:
+        - name: llm-gateway
+          image: tyrum/llm-gateway:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            
+            - containerPort: 8086
+              name: http
+          envFrom:
+            - configMapRef:
+                name: tyrum-tyrum-core-llm-gateway-config
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+# Source: tyrum-core/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tyrum-tyrum-core-loki
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: loki
+    tyrum.dev/service: loki
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tyrum-tyrum-core-loki
+      app.kubernetes.io/instance: tyrum
+      app.kubernetes.io/component: loki
+      tyrum.dev/service: loki
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tyrum-tyrum-core-loki
+        app.kubernetes.io/instance: tyrum
+        app.kubernetes.io/component: loki
+        tyrum.dev/service: loki
+    spec:
+      serviceAccountName: tyrum-tyrum-core
+      
+      containers:
+        - name: loki
+          image: grafana/loki:2.9.4
+          imagePullPolicy: IfNotPresent
+          command:
+            - -config.file=/etc/loki/config.yaml
+          ports:
+            
+            - containerPort: 3100
+              name: http
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          
+          volumeMounts:
+            - mountPath: /etc/loki
+              name: loki-config
+              readOnly: true
+            - mountPath: /var/loki
+              name: loki-data
+      volumes:
+        - configMap:
+            name: 'tyrum-tyrum-core-loki-files'
+          name: loki-config
+        - emptyDir: {}
+          name: loki-data
+---
+# Source: tyrum-core/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tyrum-tyrum-core-mock-llm
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: mock-llm
+    tyrum.dev/service: mock-llm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tyrum-tyrum-core-mock-llm
+      app.kubernetes.io/instance: tyrum
+      app.kubernetes.io/component: mock-llm
+      tyrum.dev/service: mock-llm
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tyrum-tyrum-core-mock-llm
+        app.kubernetes.io/instance: tyrum
+        app.kubernetes.io/component: mock-llm
+        tyrum.dev/service: mock-llm
+    spec:
+      serviceAccountName: tyrum-tyrum-core
+      
+      containers:
+        - name: mock-llm
+          image: tyrum/mock-llm:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            
+            - containerPort: 8085
+              name: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+# Source: tyrum-core/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tyrum-tyrum-core-model-gateway
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: model-gateway
+    tyrum.dev/service: model-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tyrum-tyrum-core-model-gateway
+      app.kubernetes.io/instance: tyrum
+      app.kubernetes.io/component: model-gateway
+      tyrum.dev/service: model-gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tyrum-tyrum-core-model-gateway
+        app.kubernetes.io/instance: tyrum
+        app.kubernetes.io/component: model-gateway
+        tyrum.dev/service: model-gateway
+    spec:
+      serviceAccountName: tyrum-tyrum-core
+      
+      containers:
+        - name: model-gateway
+          image: tyrum/model-gateway:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            
+            - containerPort: 8001
+              name: http
+          envFrom:
+            - configMapRef:
+                name: tyrum-tyrum-core-model-gateway-config
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          
+          volumeMounts:
+            - mountPath: /app/config
+              name: model-gateway-config
+              readOnly: true
+      volumes:
+        - configMap:
+            name: 'tyrum-tyrum-core-model-gateway-files'
+          name: model-gateway-config
+---
+# Source: tyrum-core/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tyrum-tyrum-core-nats
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: nats
+    tyrum.dev/service: nats
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tyrum-tyrum-core-nats
+      app.kubernetes.io/instance: tyrum
+      app.kubernetes.io/component: nats
+      tyrum.dev/service: nats
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tyrum-tyrum-core-nats
+        app.kubernetes.io/instance: tyrum
+        app.kubernetes.io/component: nats
+        tyrum.dev/service: nats
+    spec:
+      serviceAccountName: tyrum-tyrum-core
+      
+      containers:
+        - name: nats
+          image: nats:2.10-alpine
+          imagePullPolicy: IfNotPresent
+          command:
+            - -js
+            - -m
+            - "8222"
+          ports:
+            
+            - containerPort: 4222
+              name: client
+            - containerPort: 8222
+              name: http
+          livenessProbe:
+            httpGet:
+              path: /healthz?js-enabled
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz?js-enabled
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+# Source: tyrum-core/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tyrum-tyrum-core-otel-collector
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: otel-collector
+    tyrum.dev/service: otel-collector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tyrum-tyrum-core-otel-collector
+      app.kubernetes.io/instance: tyrum
+      app.kubernetes.io/component: otel-collector
+      tyrum.dev/service: otel-collector
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tyrum-tyrum-core-otel-collector
+        app.kubernetes.io/instance: tyrum
+        app.kubernetes.io/component: otel-collector
+        tyrum.dev/service: otel-collector
+    spec:
+      serviceAccountName: tyrum-tyrum-core
+      
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:0.100.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            
+            - containerPort: 4317
+              name: grpc
+            - containerPort: 4318
+              name: http
+            - containerPort: 9464
+              name: metrics
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          
+          volumeMounts:
+            - mountPath: /etc/otelcol
+              name: otel-config
+              readOnly: true
+      volumes:
+        - configMap:
+            name: 'tyrum-tyrum-core-otel-collector-files'
+          name: otel-config
+---
+# Source: tyrum-core/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tyrum-tyrum-core-planner
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: planner
+    tyrum.dev/service: planner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tyrum-tyrum-core-planner
+      app.kubernetes.io/instance: tyrum
+      app.kubernetes.io/component: planner
+      tyrum.dev/service: planner
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tyrum-tyrum-core-planner
+        app.kubernetes.io/instance: tyrum
+        app.kubernetes.io/component: planner
+        tyrum.dev/service: planner
+    spec:
+      serviceAccountName: tyrum-tyrum-core
+      
+      containers:
+        - name: planner
+          image: tyrum/planner:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            
+            - containerPort: 8083
+              name: http
+          envFrom:
+            - configMapRef:
+                name: tyrum-tyrum-core-planner-config
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+# Source: tyrum-core/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tyrum-tyrum-core-policy
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: policy
+    tyrum.dev/service: policy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tyrum-tyrum-core-policy
+      app.kubernetes.io/instance: tyrum
+      app.kubernetes.io/component: policy
+      tyrum.dev/service: policy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tyrum-tyrum-core-policy
+        app.kubernetes.io/instance: tyrum
+        app.kubernetes.io/component: policy
+        tyrum.dev/service: policy
+    spec:
+      serviceAccountName: tyrum-tyrum-core
+      
+      containers:
+        - name: policy
+          image: tyrum/policy:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            
+            - containerPort: 8081
+              name: http
+          envFrom:
+            - configMapRef:
+                name: tyrum-tyrum-core-policy-config
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+# Source: tyrum-core/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tyrum-tyrum-core-postgres
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: postgres
+    tyrum.dev/service: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tyrum-tyrum-core-postgres
+      app.kubernetes.io/instance: tyrum
+      app.kubernetes.io/component: postgres
+      tyrum.dev/service: postgres
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tyrum-tyrum-core-postgres
+        app.kubernetes.io/instance: tyrum
+        app.kubernetes.io/component: postgres
+        tyrum.dev/service: postgres
+    spec:
+      serviceAccountName: tyrum-tyrum-core
+      
+      containers:
+        - name: postgres
+          image: pgvector/pgvector:pg16
+          imagePullPolicy: IfNotPresent
+          ports:
+            
+            - containerPort: 5432
+              name: tcp
+          envFrom:
+            - configMapRef:
+                name: tyrum-tyrum-core-postgres-config
+            - secretRef:
+                name: tyrum-tyrum-core-postgres-secrets
+          livenessProbe:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          
+          volumeMounts:
+            - mountPath: /var/lib/postgresql/data
+              name: postgres-data
+      volumes:
+        - emptyDir: {}
+          name: postgres-data
+---
+# Source: tyrum-core/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tyrum-tyrum-core-prometheus
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: prometheus
+    tyrum.dev/service: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tyrum-tyrum-core-prometheus
+      app.kubernetes.io/instance: tyrum
+      app.kubernetes.io/component: prometheus
+      tyrum.dev/service: prometheus
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tyrum-tyrum-core-prometheus
+        app.kubernetes.io/instance: tyrum
+        app.kubernetes.io/component: prometheus
+        tyrum.dev/service: prometheus
+    spec:
+      serviceAccountName: tyrum-tyrum-core
+      
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.54.1
+          imagePullPolicy: IfNotPresent
+          command:
+            - --config.file=/etc/prometheus/prometheus.yml
+          ports:
+            
+            - containerPort: 9090
+              name: http
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          
+          volumeMounts:
+            - mountPath: /etc/prometheus
+              name: prometheus-config
+              readOnly: true
+      volumes:
+        - configMap:
+            name: 'tyrum-tyrum-core-prometheus-files'
+          name: prometheus-config
+---
+# Source: tyrum-core/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tyrum-tyrum-core-redis
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: redis
+    tyrum.dev/service: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tyrum-tyrum-core-redis
+      app.kubernetes.io/instance: tyrum
+      app.kubernetes.io/component: redis
+      tyrum.dev/service: redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tyrum-tyrum-core-redis
+        app.kubernetes.io/instance: tyrum
+        app.kubernetes.io/component: redis
+        tyrum.dev/service: redis
+    spec:
+      serviceAccountName: tyrum-tyrum-core
+      
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          imagePullPolicy: IfNotPresent
+          command:
+            - redis-server
+            - --appendonly
+            - "no"
+          ports:
+            
+            - containerPort: 6379
+              name: tcp
+          livenessProbe:
+            exec:
+              command:
+              - redis-cli
+              - ping
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+              - redis-cli
+              - ping
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+# Source: tyrum-core/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tyrum-tyrum-core-tempo
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: tempo
+    tyrum.dev/service: tempo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tyrum-tyrum-core-tempo
+      app.kubernetes.io/instance: tyrum
+      app.kubernetes.io/component: tempo
+      tyrum.dev/service: tempo
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tyrum-tyrum-core-tempo
+        app.kubernetes.io/instance: tyrum
+        app.kubernetes.io/component: tempo
+        tyrum.dev/service: tempo
+    spec:
+      serviceAccountName: tyrum-tyrum-core
+      
+      containers:
+        - name: tempo
+          image: grafana/tempo:2.6.1
+          imagePullPolicy: IfNotPresent
+          command:
+            - -config.file=/etc/tempo.yaml
+          ports:
+            
+            - containerPort: 3200
+              name: http
+            - containerPort: 4317
+              name: grpc
+            - containerPort: 9095
+              name: frontend
+          livenessProbe:
+            httpGet:
+              path: /status
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          
+          volumeMounts:
+            - mountPath: /etc
+              name: tempo-config
+              readOnly: true
+            - mountPath: /var/tempo
+              name: tempo-data
+      volumes:
+        - configMap:
+            name: 'tyrum-tyrum-core-tempo-files'
+          name: tempo-config
+        - emptyDir: {}
+          name: tempo-data
+---
+# Source: tyrum-core/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tyrum-tyrum-core-vllm-gateway
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: vllm-gateway
+    tyrum.dev/service: vllm-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tyrum-tyrum-core-vllm-gateway
+      app.kubernetes.io/instance: tyrum
+      app.kubernetes.io/component: vllm-gateway
+      tyrum.dev/service: vllm-gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tyrum-tyrum-core-vllm-gateway
+        app.kubernetes.io/instance: tyrum
+        app.kubernetes.io/component: vllm-gateway
+        tyrum.dev/service: vllm-gateway
+    spec:
+      serviceAccountName: tyrum-tyrum-core
+      
+      containers:
+        - name: vllm-gateway
+          image: tyrum/vllm-gateway:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: tyrum-tyrum-core-vllm-gateway-config
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+---
+# Source: tyrum-core/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tyrum-tyrum-core-wallet
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: wallet
+    tyrum.dev/service: wallet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tyrum-tyrum-core-wallet
+      app.kubernetes.io/instance: tyrum
+      app.kubernetes.io/component: wallet
+      tyrum.dev/service: wallet
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tyrum-tyrum-core-wallet
+        app.kubernetes.io/instance: tyrum
+        app.kubernetes.io/component: wallet
+        tyrum.dev/service: wallet
+    spec:
+      serviceAccountName: tyrum-tyrum-core
+      
+      containers:
+        - name: wallet
+          image: tyrum/wallet:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            
+            - containerPort: 8084
+              name: http
+          envFrom:
+            - configMapRef:
+                name: tyrum-tyrum-core-wallet-config
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+# Source: tyrum-core/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tyrum-tyrum-core-watchers-processor
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: watchers-processor
+    tyrum.dev/service: watchers-processor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tyrum-tyrum-core-watchers-processor
+      app.kubernetes.io/instance: tyrum
+      app.kubernetes.io/component: watchers-processor
+      tyrum.dev/service: watchers-processor
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tyrum-tyrum-core-watchers-processor
+        app.kubernetes.io/instance: tyrum
+        app.kubernetes.io/component: watchers-processor
+        tyrum.dev/service: watchers-processor
+    spec:
+      serviceAccountName: tyrum-tyrum-core
+      
+      containers:
+        - name: watchers-processor
+          image: tyrum/watchers:local
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: tyrum-tyrum-core-watchers-processor-config
+---
+# Source: tyrum-core/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tyrum-tyrum-core-web
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: web
+    tyrum.dev/service: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tyrum-tyrum-core-web
+      app.kubernetes.io/instance: tyrum
+      app.kubernetes.io/component: web
+      tyrum.dev/service: web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tyrum-tyrum-core-web
+        app.kubernetes.io/instance: tyrum
+        app.kubernetes.io/component: web
+        tyrum.dev/service: web
+    spec:
+      serviceAccountName: tyrum-tyrum-core
+      
+      containers:
+        - name: web
+          image: tyrum/web:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            
+            - containerPort: 3000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: tyrum-tyrum-core-web-config
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+# Source: tyrum-core/templates/hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: tyrum-tyrum-core-api
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: api
+    tyrum.dev/service: api
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: tyrum-tyrum-core-api
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
+---
+# Source: tyrum-core/templates/hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: tyrum-tyrum-core-executor-http
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: executor-http
+    tyrum.dev/service: executor-http
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: tyrum-tyrum-core-executor-http
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
+---
+# Source: tyrum-core/templates/hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: tyrum-tyrum-core-executor-web
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: executor-web
+    tyrum.dev/service: executor-web
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: tyrum-tyrum-core-executor-web
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
+---
+# Source: tyrum-core/templates/hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: tyrum-tyrum-core-llm-gateway
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: llm-gateway
+    tyrum.dev/service: llm-gateway
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: tyrum-tyrum-core-llm-gateway
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
+---
+# Source: tyrum-core/templates/hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: tyrum-tyrum-core-model-gateway
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: model-gateway
+    tyrum.dev/service: model-gateway
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: tyrum-tyrum-core-model-gateway
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
+---
+# Source: tyrum-core/templates/hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: tyrum-tyrum-core-planner
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: planner
+    tyrum.dev/service: planner
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: tyrum-tyrum-core-planner
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
+---
+# Source: tyrum-core/templates/hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: tyrum-tyrum-core-policy
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: policy
+    tyrum.dev/service: policy
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: tyrum-tyrum-core-policy
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
+---
+# Source: tyrum-core/templates/hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: tyrum-tyrum-core-wallet
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: wallet
+    tyrum.dev/service: wallet
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: tyrum-tyrum-core-wallet
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
+---
+# Source: tyrum-core/templates/hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: tyrum-tyrum-core-web
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: web
+    tyrum.dev/service: web
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: tyrum-tyrum-core-web
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
+---
+# Source: tyrum-core/templates/tests.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tyrum-tyrum-core-api-test
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: api
+    tyrum.dev/service: api
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  restartPolicy: Never
+  containers:
+    - name: api-check
+      image: curlimages/curl:8.11.1
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/sh
+        - -c
+        - >-
+          curl -fsS --max-time 10 http://tyrum-tyrum-core-api:8080/healthz
+---
+# Source: tyrum-core/templates/tests.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tyrum-tyrum-core-executor-cli-test
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: executor-cli
+    tyrum.dev/service: executor-cli
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  restartPolicy: Never
+  containers:
+    - name: executor-cli-check
+      image: curlimages/curl:8.11.1
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/sh
+        - -c
+        - >-
+          curl -fsS --max-time 10 http://tyrum-tyrum-core-executor-cli:8093/healthz
+---
+# Source: tyrum-core/templates/tests.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tyrum-tyrum-core-executor-http-test
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: executor-http
+    tyrum.dev/service: executor-http
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  restartPolicy: Never
+  containers:
+    - name: executor-http-check
+      image: curlimages/curl:8.11.1
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/sh
+        - -c
+        - >-
+          curl -fsS --max-time 10 http://tyrum-tyrum-core-executor-http:8092/healthz
+---
+# Source: tyrum-core/templates/tests.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tyrum-tyrum-core-executor-web-test
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: executor-web
+    tyrum.dev/service: executor-web
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  restartPolicy: Never
+  containers:
+    - name: executor-web-check
+      image: curlimages/curl:8.11.1
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/sh
+        - -c
+        - >-
+          curl -fsS --max-time 10 http://tyrum-tyrum-core-executor-web:8091/healthz
+---
+# Source: tyrum-core/templates/tests.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tyrum-tyrum-core-grafana-test
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: grafana
+    tyrum.dev/service: grafana
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  restartPolicy: Never
+  containers:
+    - name: grafana-check
+      image: curlimages/curl:8.11.1
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/sh
+        - -c
+        - >-
+          curl -fsS --max-time 10 http://tyrum-tyrum-core-grafana:3001/api/health
+---
+# Source: tyrum-core/templates/tests.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tyrum-tyrum-core-llm-gateway-test
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: llm-gateway
+    tyrum.dev/service: llm-gateway
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  restartPolicy: Never
+  containers:
+    - name: llm-gateway-check
+      image: curlimages/curl:8.11.1
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/sh
+        - -c
+        - >-
+          curl -fsS --max-time 10 http://tyrum-tyrum-core-llm-gateway:8086/healthz
+---
+# Source: tyrum-core/templates/tests.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tyrum-tyrum-core-loki-test
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: loki
+    tyrum.dev/service: loki
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  restartPolicy: Never
+  containers:
+    - name: loki-check
+      image: curlimages/curl:8.11.1
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/sh
+        - -c
+        - >-
+          curl -fsS --max-time 10 http://tyrum-tyrum-core-loki:3100/
+---
+# Source: tyrum-core/templates/tests.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tyrum-tyrum-core-mock-llm-test
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: mock-llm
+    tyrum.dev/service: mock-llm
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  restartPolicy: Never
+  containers:
+    - name: mock-llm-check
+      image: curlimages/curl:8.11.1
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/sh
+        - -c
+        - >-
+          curl -fsS --max-time 10 http://tyrum-tyrum-core-mock-llm:8085/healthz
+---
+# Source: tyrum-core/templates/tests.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tyrum-tyrum-core-model-gateway-test
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: model-gateway
+    tyrum.dev/service: model-gateway
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  restartPolicy: Never
+  containers:
+    - name: model-gateway-check
+      image: curlimages/curl:8.11.1
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/sh
+        - -c
+        - >-
+          curl -fsS --max-time 10 http://tyrum-tyrum-core-model-gateway:8001/healthz
+---
+# Source: tyrum-core/templates/tests.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tyrum-tyrum-core-nats-test
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: nats
+    tyrum.dev/service: nats
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  restartPolicy: Never
+  containers:
+    - name: nats-check
+      image: nats:2.10-alpine
+      imagePullPolicy: IfNotPresent
+      
+      command:
+        - /bin/sh
+        - -c
+        - wget --spider -q http://tyrum-tyrum-core-nats.default.svc.cluster.local:8222/healthz?js-enabled
+---
+# Source: tyrum-core/templates/tests.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tyrum-tyrum-core-otel-collector-test
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: otel-collector
+    tyrum.dev/service: otel-collector
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  restartPolicy: Never
+  containers:
+    - name: otel-collector-check
+      image: curlimages/curl:8.11.1
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/sh
+        - -c
+        - >-
+          curl -fsS --max-time 10 http://tyrum-tyrum-core-otel-collector:4317/healthz
+---
+# Source: tyrum-core/templates/tests.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tyrum-tyrum-core-planner-test
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: planner
+    tyrum.dev/service: planner
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  restartPolicy: Never
+  containers:
+    - name: planner-check
+      image: curlimages/curl:8.11.1
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/sh
+        - -c
+        - >-
+          curl -fsS --max-time 10 http://tyrum-tyrum-core-planner:8083/healthz
+---
+# Source: tyrum-core/templates/tests.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tyrum-tyrum-core-policy-test
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: policy
+    tyrum.dev/service: policy
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  restartPolicy: Never
+  containers:
+    - name: policy-check
+      image: curlimages/curl:8.11.1
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/sh
+        - -c
+        - >-
+          curl -fsS --max-time 10 http://tyrum-tyrum-core-policy:8081/healthz
+---
+# Source: tyrum-core/templates/tests.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tyrum-tyrum-core-postgres-test
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: postgres
+    tyrum.dev/service: postgres
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  restartPolicy: Never
+  containers:
+    - name: postgres-check
+      image: postgres:16-alpine
+      imagePullPolicy: IfNotPresent
+      
+      command:
+        - /bin/sh
+        - -c
+        - pg_isready -h tyrum-tyrum-core-postgres.default.svc.cluster.local -U tyrum -d tyrum_dev
+---
+# Source: tyrum-core/templates/tests.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tyrum-tyrum-core-prometheus-test
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: prometheus
+    tyrum.dev/service: prometheus
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  restartPolicy: Never
+  containers:
+    - name: prometheus-check
+      image: curlimages/curl:8.11.1
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/sh
+        - -c
+        - >-
+          curl -fsS --max-time 10 http://tyrum-tyrum-core-prometheus:9090/-/ready
+---
+# Source: tyrum-core/templates/tests.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tyrum-tyrum-core-redis-test
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: redis
+    tyrum.dev/service: redis
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  restartPolicy: Never
+  containers:
+    - name: redis-check
+      image: redis:7-alpine
+      imagePullPolicy: IfNotPresent
+      
+      command:
+        - redis-cli
+        - -h
+        - tyrum-tyrum-core-redis.default.svc.cluster.local
+        - ping
+---
+# Source: tyrum-core/templates/tests.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tyrum-tyrum-core-tempo-test
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: tempo
+    tyrum.dev/service: tempo
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  restartPolicy: Never
+  containers:
+    - name: tempo-check
+      image: curlimages/curl:8.11.1
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/sh
+        - -c
+        - >-
+          curl -fsS --max-time 10 http://tyrum-tyrum-core-tempo:3200/
+---
+# Source: tyrum-core/templates/tests.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tyrum-tyrum-core-vllm-gateway-test
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: vllm-gateway
+    tyrum.dev/service: vllm-gateway
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  restartPolicy: Never
+  containers:
+    - name: vllm-gateway-check
+      image: curlimages/curl:8.11.1
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/sh
+        - -c
+        - >-
+          curl -fsS --max-time 10 http://tyrum-tyrum-core-vllm-gateway:8000/
+---
+# Source: tyrum-core/templates/tests.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tyrum-tyrum-core-wallet-test
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: wallet
+    tyrum.dev/service: wallet
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  restartPolicy: Never
+  containers:
+    - name: wallet-check
+      image: curlimages/curl:8.11.1
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/sh
+        - -c
+        - >-
+          curl -fsS --max-time 10 http://tyrum-tyrum-core-wallet:8084/healthz
+---
+# Source: tyrum-core/templates/tests.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tyrum-tyrum-core-web-test
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: web
+    tyrum.dev/service: web
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  restartPolicy: Never
+  containers:
+    - name: web-check
+      image: curlimages/curl:8.11.1
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/sh
+        - -c
+        - >-
+          curl -fsS --max-time 10 http://tyrum-tyrum-core-web:3000/
+---
+# Source: tyrum-core/templates/job.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: tyrum-tyrum-core-api-migrations
+  labels:
+    helm.sh/chart: tyrum-core-0.1.0
+    app.kubernetes.io/name: tyrum-core
+    app.kubernetes.io/instance: tyrum
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: api-migrations
+    tyrum.dev/job: api-migrations
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tyrum-tyrum-core-api-migrations
+        app.kubernetes.io/instance: tyrum
+        app.kubernetes.io/component: api-migrations
+        tyrum.dev/service: api-migrations
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: tyrum-tyrum-core
+      
+      containers:
+        - name: api-migrations
+          image: tyrum/api:local
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: tyrum-tyrum-core-api-migrations-config
+            - secretRef:
+                name: tyrum-tyrum-core-api-migrations-secrets

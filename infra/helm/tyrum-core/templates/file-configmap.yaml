@@ -1,0 +1,7 @@
+{{- $root := . -}}
+{{- range $name, $service := .Values.services }}
+{{ include "tyrum-core.fileConfigMap" (dict "root" $root "name" $name "service" $service) }}
+{{- end }}
+{{- range $name, $job := .Values.jobs }}
+{{ include "tyrum-core.fileConfigMap" (dict "root" $root "name" $name "service" $job) }}
+{{- end }}
