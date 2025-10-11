@@ -8,6 +8,7 @@ use std::sync::RwLock;
 
 use redis::Commands;
 use serde::{Deserialize, Serialize};
+use tokio::{runtime::Handle, task};
 
 use crate::pipeline::DiscoveryStrategy;
 
@@ -60,36 +61,50 @@ impl RedisConnectorCache {
         let client = redis::Client::open(redis_url)?;
         Ok(Self { client, ttl })
     }
+
+    fn execute_blocking<T, F>(&self, op: F) -> Result<T, CacheError>
+    where
+        F: FnOnce() -> Result<T, CacheError>,
+    {
+        match Handle::try_current() {
+            Ok(_) => task::block_in_place(op),
+            Err(_) => op(),
+        }
+    }
 }
 
 impl ConnectorCache for RedisConnectorCache {
     fn fetch(&self, key: &str) -> Result<Option<Vec<CachedConnector>>, CacheError> {
-        let mut connection = self.client.get_connection()?;
-        let result: Option<String> = connection.get(key)?;
-        match result {
-            Some(payload) => {
-                let envelope: CacheEnvelope = serde_json::from_str(&payload)?;
-                Ok(Some(envelope.connectors))
+        self.execute_blocking(|| {
+            let mut connection = self.client.get_connection()?;
+            let result: Option<String> = connection.get(key)?;
+            match result {
+                Some(payload) => {
+                    let envelope: CacheEnvelope = serde_json::from_str(&payload)?;
+                    Ok(Some(envelope.connectors))
+                }
+                None => Ok(None),
             }
-            None => Ok(None),
-        }
+        })
     }
 
     fn store(&self, key: &str, connectors: &[CachedConnector]) -> Result<(), CacheError> {
-        let mut connection = self.client.get_connection()?;
-        let payload = CacheEnvelope {
-            connectors: connectors.to_vec(),
-        };
-        let serialized = serde_json::to_string(&payload)?;
+        self.execute_blocking(|| {
+            let mut connection = self.client.get_connection()?;
+            let payload = CacheEnvelope {
+                connectors: connectors.to_vec(),
+            };
+            let serialized = serde_json::to_string(&payload)?;
 
-        let ttl_secs = self.ttl.as_secs();
-        if ttl_secs == 0 {
-            let _: () = connection.set(key, serialized)?;
-        } else {
-            let _: () = connection.set_ex(key, serialized, ttl_secs)?;
-        }
+            let ttl_secs = self.ttl.as_secs();
+            if ttl_secs == 0 {
+                let _: () = connection.set(key, serialized)?;
+            } else {
+                let _: () = connection.set_ex(key, serialized, ttl_secs)?;
+            }
 
-        Ok(())
+            Ok(())
+        })
     }
 }
 
