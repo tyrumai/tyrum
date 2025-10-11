@@ -3,14 +3,21 @@
 mod common;
 
 use anyhow::{Context, Result, bail};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use common::postgres::{TestPostgres, docker_available};
 use serde_json::{Value, json};
 use std::convert::TryFrom;
-use tyrum_memory::{MemoryDal, NewEpisodicEvent, NewFact};
+use tracing::Subscriber;
+use tracing::field::{Field, Visit};
+use tracing_subscriber::{
+    Layer,
+    layer::{Context as LayerContext, SubscriberExt},
+    registry::LookupSpan,
+};
+use tyrum_memory::{MemoryDal, NewCapabilityMemory, NewEpisodicEvent, NewFact};
 use tyrum_planner::{
     ActionArguments, ActionPrimitive, ActionPrimitiveKind, AppendOutcome, CapabilityMemoryResult,
-    EventLog, NewPlannerEvent, PlanEvent, PlanStateMachine, PlanStatus,
+    CapabilityMemoryService, EventLog, NewPlannerEvent, PlanEvent, PlanStateMachine, PlanStatus,
 };
 use uuid::Uuid;
 
@@ -282,6 +289,360 @@ async fn mock_book_call_plan_creates_audit_and_memory_artifacts() -> Result<()> 
     );
 
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn capability_memory_hydration_hit_populates_primitive() -> Result<()> {
+    if !docker_available() {
+        eprintln!(
+            "skipping capability_memory_hydration_hit_populates_primitive: docker unavailable"
+        );
+        return Ok(());
+    }
+
+    let postgres = TestPostgres::start()
+        .await
+        .context("start postgres fixture")?;
+    let pool = postgres.pool().clone();
+    let event_log = EventLog::from_pool(pool.clone());
+    event_log
+        .migrate()
+        .await
+        .context("migrate planner schema")?;
+
+    let memory = MemoryDal::new(pool.clone());
+    let subject_id = Uuid::new_v4();
+    let last_success_at = Utc::now();
+
+    memory
+        .create_capability_memory(NewCapabilityMemory {
+            subject_id,
+            capability_type: "web".into(),
+            capability_identifier: "calendar.example.com".into(),
+            executor_kind: "generic-web".into(),
+            selectors: Some(json!({
+                "login_button": "#login",
+                "email_input": { "selector": "input[type=\"email\"]", "prefill": "alex@example.com" },
+                "otp_field": "[data-test=\"otp\"]"
+            })),
+            outcome_metadata: json!({
+                "postcondition": {
+                    "appointment": {
+                        "status": "booked"
+                    }
+                }
+            }),
+            result_summary: Some("generic-web satisfied intent book_call".into()),
+            success_count: 3,
+            last_success_at,
+        })
+        .await
+        .context("seed capability memory")?;
+
+    let primitive = ActionPrimitive::new(
+        ActionPrimitiveKind::Web,
+        into_args(json!({
+            "executor": "generic-web",
+            "intent": "fallback_automation",
+            "capability_identifier": "calendar.example.com"
+        })),
+    )
+    .with_postcondition(json!({
+        "status": "completed"
+    }));
+
+    let mut steps = vec![primitive];
+    let recorder = LookupRecorder::default();
+    let subscriber = tracing_subscriber::registry().with(recorder.clone());
+    let service = CapabilityMemoryService::new(memory.clone());
+
+    let _guard = tracing::subscriber::set_default(subscriber);
+    service.hydrate_primitives(subject_id, &mut steps).await;
+
+    let enriched = &steps[0];
+    let capability = enriched
+        .args
+        .get("capability_memory")
+        .and_then(Value::as_object)
+        .expect("capability memory attached");
+    assert_eq!(
+        capability
+            .get("capability_identifier")
+            .and_then(Value::as_str),
+        Some("calendar.example.com")
+    );
+    assert_eq!(
+        capability.get("executor_kind").and_then(Value::as_str),
+        Some("generic-web")
+    );
+    assert_eq!(
+        capability.get("success_count").and_then(Value::as_i64),
+        Some(3)
+    );
+    let last_success_value = capability
+        .get("last_success_at")
+        .and_then(Value::as_str)
+        .expect("last_success_at present");
+    let parsed_last_success = DateTime::parse_from_rfc3339(last_success_value)
+        .expect("parse last_success_at")
+        .with_timezone(&Utc);
+    let delta = parsed_last_success
+        .signed_duration_since(last_success_at)
+        .num_nanoseconds()
+        .unwrap_or_default()
+        .abs();
+    assert!(
+        delta <= 1_000,
+        "last_success_at drift exceeded tolerance: {delta}ns"
+    );
+    assert_eq!(
+        capability.get("result_summary").and_then(Value::as_str),
+        Some("generic-web satisfied intent book_call")
+    );
+    assert_eq!(
+        capability.get("outcome_metadata"),
+        Some(&json!({
+            "postcondition": {
+                "appointment": {
+                    "status": "booked"
+                }
+            }
+        }))
+    );
+    let selector_hints = enriched
+        .args
+        .get("selector_hints")
+        .and_then(Value::as_object)
+        .expect("selector hints populated");
+    assert_eq!(selector_hints.get("login_button"), Some(&json!("#login")));
+    assert_eq!(
+        selector_hints.get("otp_field"),
+        Some(&json!("[data-test=\"otp\"]"))
+    );
+
+    let records = recorder.records();
+    assert_eq!(records.len(), 1);
+    let lookup = &records[0];
+    let expected_subject = subject_id.to_string();
+    assert_eq!(
+        lookup.subject_id.as_deref(),
+        Some(expected_subject.as_str())
+    );
+    assert_eq!(
+        lookup.capability_identifier.as_deref(),
+        Some("calendar.example.com")
+    );
+    assert_eq!(lookup.executor_kind.as_deref(), Some("generic-web"));
+    assert_eq!(lookup.capability_type.as_deref(), Some("web"));
+    assert_eq!(lookup.hit, Some(true));
+    assert!(lookup.latency_ms.is_some());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn capability_memory_hydration_miss_logs_lookup() -> Result<()> {
+    if !docker_available() {
+        eprintln!("skipping capability_memory_hydration_miss_logs_lookup: docker unavailable");
+        return Ok(());
+    }
+
+    let postgres = TestPostgres::start()
+        .await
+        .context("start postgres fixture")?;
+    let pool = postgres.pool().clone();
+    let event_log = EventLog::from_pool(pool.clone());
+    event_log
+        .migrate()
+        .await
+        .context("migrate planner schema")?;
+    let memory = MemoryDal::new(pool);
+    let service = CapabilityMemoryService::new(memory.clone());
+
+    let subject_id = Uuid::new_v4();
+    let primitive = ActionPrimitive::new(
+        ActionPrimitiveKind::Web,
+        into_args(json!({
+            "executor": "generic-web",
+            "intent": "fallback_automation",
+            "capability_identifier": "calendar.example.com"
+        })),
+    )
+    .with_postcondition(json!({
+        "status": "completed"
+    }));
+    let mut steps = vec![primitive];
+
+    let recorder = LookupRecorder::default();
+    let subscriber = tracing_subscriber::registry().with(recorder.clone());
+
+    let _guard = tracing::subscriber::set_default(subscriber);
+    service.hydrate_primitives(subject_id, &mut steps).await;
+
+    let enriched = &steps[0];
+    assert!(
+        enriched.args.get("capability_memory").is_none(),
+        "capability memory should not be attached on cache miss"
+    );
+    assert!(
+        enriched.args.get("selector_hints").is_none(),
+        "selector hints should remain absent on miss"
+    );
+
+    let records = recorder.records();
+    assert_eq!(records.len(), 1);
+    let lookup = &records[0];
+    assert_eq!(lookup.hit, Some(false));
+    assert!(lookup.latency_ms.is_some());
+
+    Ok(())
+}
+
+#[derive(Clone, Debug, Default)]
+struct LookupRecorder {
+    records: std::sync::Arc<std::sync::Mutex<Vec<LookupRecord>>>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct LookupRecord {
+    subject_id: Option<String>,
+    capability_identifier: Option<String>,
+    executor_kind: Option<String>,
+    capability_type: Option<String>,
+    hit: Option<bool>,
+    latency_ms: Option<i64>,
+}
+
+impl LookupRecorder {
+    fn records(&self) -> Vec<LookupRecord> {
+        self.records.lock().expect("read lookup records").clone()
+    }
+}
+
+impl<S> Layer<S> for LookupRecorder
+where
+    S: Subscriber + for<'a> LookupSpan<'a>,
+{
+    fn on_new_span(
+        &self,
+        attrs: &tracing::span::Attributes<'_>,
+        id: &tracing::span::Id,
+        ctx: LayerContext<'_, S>,
+    ) {
+        if attrs.metadata().name() != "planner.capability_memory.lookup" {
+            return;
+        }
+
+        let mut record = LookupRecord::default();
+        attrs.record(&mut LookupVisitor {
+            record: &mut record,
+        });
+
+        if let Some(span) = ctx.span(id) {
+            span.extensions_mut().insert(record);
+        }
+    }
+
+    fn on_record(
+        &self,
+        id: &tracing::span::Id,
+        values: &tracing::span::Record<'_>,
+        ctx: LayerContext<'_, S>,
+    ) {
+        if let Some(span) = ctx.span(id)
+            && let Some(record) = span.extensions_mut().get_mut::<LookupRecord>()
+        {
+            values.record(&mut LookupVisitor { record });
+        }
+    }
+
+    fn on_close(&self, id: tracing::span::Id, ctx: LayerContext<'_, S>) {
+        if let Some(span) = ctx.span(&id)
+            && let Some(record) = span.extensions_mut().remove::<LookupRecord>()
+        {
+            self.records
+                .lock()
+                .expect("store lookup record")
+                .push(record);
+        }
+    }
+}
+
+struct LookupVisitor<'a> {
+    record: &'a mut LookupRecord,
+}
+
+impl<'a> Visit for LookupVisitor<'a> {
+    fn record_str(&mut self, field: &Field, value: &str) {
+        match field.name() {
+            "subject_id" => self.record.subject_id = Some(value.to_string()),
+            "capability_identifier" => self.record.capability_identifier = Some(value.to_string()),
+            "executor_kind" => self.record.executor_kind = Some(value.to_string()),
+            "capability_type" => self.record.capability_type = Some(value.to_string()),
+            _ => {}
+        }
+    }
+
+    fn record_bool(&mut self, field: &Field, value: bool) {
+        if field.name() == "hit" {
+            self.record.hit = Some(value);
+        }
+    }
+
+    fn record_i64(&mut self, field: &Field, value: i64) {
+        if field.name() == "latency_ms" {
+            self.record.latency_ms = Some(value);
+        }
+    }
+
+    fn record_u64(&mut self, field: &Field, value: u64) {
+        if field.name() == "latency_ms" {
+            let clamped = i64::try_from(value).unwrap_or(i64::MAX);
+            self.record.latency_ms = Some(clamped);
+        }
+    }
+
+    fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+        let rendered = format!("{value:?}");
+        match field.name() {
+            "subject_id" => {
+                if self.record.subject_id.is_none() {
+                    self.record.subject_id = Some(rendered.trim_matches('"').to_string());
+                }
+            }
+            "capability_identifier" => {
+                if self.record.capability_identifier.is_none() {
+                    self.record.capability_identifier =
+                        Some(rendered.trim_matches('"').to_string());
+                }
+            }
+            "executor_kind" => {
+                if self.record.executor_kind.is_none() {
+                    self.record.executor_kind = Some(rendered.trim_matches('"').to_string());
+                }
+            }
+            "capability_type" => {
+                if self.record.capability_type.is_none() {
+                    self.record.capability_type = Some(rendered.trim_matches('"').to_string());
+                }
+            }
+            "hit" => {
+                if self.record.hit.is_none()
+                    && let Ok(parsed) = rendered.parse::<bool>()
+                {
+                    self.record.hit = Some(parsed);
+                }
+            }
+            "latency_ms" => {
+                if self.record.latency_ms.is_none()
+                    && let Ok(parsed) = rendered.parse::<i64>()
+                {
+                    self.record.latency_ms = Some(parsed);
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 struct MockGenericExecutors {

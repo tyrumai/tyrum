@@ -83,6 +83,17 @@ replay.
 2. Provides `append` to insert entries with idempotent handling.
 3. Exposes `events_for_plan` to stream traces back when deriving audit or replay artefacts.
 
+## Capability Memory Hydration
+- Before dispatching any mutating primitive, the planner consults the capability memory store using a
+  connection shared with the event log (via `CapabilityMemoryService`).
+- Each lookup emits a `planner.capability_memory.lookup` span capturing `subject_id`,
+  `capability_identifier`, `executor_kind`, `hit` (true/false), and `latency_ms`.
+- When a lookup hits, the planner merges the stored `selectors` into the primitive's `selector_hints`
+  (without overwriting caller-provided hints) and attaches a `capability_memory` payload containing
+  the latest `success_count`, `last_success_at`, `outcome_metadata`, and `result_summary`.
+- Misses leave the primitive unchanged, but the span still records `hit=false` so telemetry consumers
+  can track cache effectiveness.
+
 Unit tests spin up an ephemeral Postgres container to assert insertion, dedupe, ordering, and
 validation of step indices. They run as part of `cargo test --all --all-targets` via the
 `pre-commit` hook.

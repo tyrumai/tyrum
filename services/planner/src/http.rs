@@ -12,6 +12,7 @@ use serde_json::{Map as JsonMap, Value, json};
 use tower_http::limit::RequestBodyLimitLayer;
 use uuid::Uuid;
 
+use crate::capability_memory::CapabilityMemoryService;
 use crate::policy::{PolicyClient, PolicyDecision, PolicyDecisionKind, PolicyRuleDecision};
 use crate::wallet::{AuthorizationDecision, SpendAuthorization, WalletClient};
 use crate::{
@@ -45,6 +46,7 @@ pub struct PlannerState {
     pub discovery: Arc<dyn DiscoveryPipeline + Send + Sync>,
     pub wallet_client: WalletClient,
     pub profiles: ProfileStore,
+    pub capability_memory: CapabilityMemoryService,
 }
 
 impl PlannerState {
@@ -175,6 +177,7 @@ async fn plan(
         return Err(bad_request("subject_id must not be empty"));
     }
 
+    let subject_uuid = PlannerState::parse_subject_uuid(&payload.subject_id);
     state.enrich_user_context(&mut payload).await;
 
     let plan_uuid = Uuid::new_v4();
@@ -201,6 +204,15 @@ async fn plan(
                 state.discovery.as_ref(),
                 spend_directive.as_ref(),
             );
+
+            if let Some(subject_id) = subject_uuid
+                && let PlanOutcome::Success { steps, .. } = &mut outcome
+            {
+                state
+                    .capability_memory
+                    .hydrate_primitives(subject_id, steps)
+                    .await;
+            }
 
             let mut wallet_audit = WalletAudit::skipped();
 
