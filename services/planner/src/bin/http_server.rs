@@ -1,11 +1,12 @@
-use std::{env, net::SocketAddr, sync::Arc};
+use std::{env, net::SocketAddr, num::NonZeroUsize, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result, anyhow};
 use reqwest::Url;
 use tokio::net::TcpListener;
+use tracing::warn;
 use tracing_subscriber::{EnvFilter, fmt};
 
-use tyrum_discovery::DefaultDiscoveryPipeline;
+use tyrum_discovery::{DefaultDiscoveryPipeline, DiscoveryCacheSettings, DiscoveryPipelineConfig};
 use tyrum_memory::MemoryDal;
 use tyrum_planner::capability_memory::CapabilityMemoryService;
 use tyrum_planner::http::{DEFAULT_BIND_ADDR, PlannerState, build_router};
@@ -46,11 +47,12 @@ async fn main() -> Result<()> {
         .context("run planner migrations")?;
     let profiles = ProfileStore::new(event_log.pool().clone());
     let capability_memory = CapabilityMemoryService::new(MemoryDal::new(event_log.pool().clone()));
+    let discovery_pipeline = build_discovery_pipeline();
 
     let app = build_router(PlannerState {
         policy_client,
         event_log,
-        discovery: Arc::new(DefaultDiscoveryPipeline::new()),
+        discovery: Arc::new(discovery_pipeline),
         wallet_client,
         profiles,
         capability_memory,
@@ -67,6 +69,38 @@ async fn main() -> Result<()> {
         .context("planner HTTP server exited unexpectedly")?;
 
     Ok(())
+}
+
+fn build_discovery_pipeline() -> DefaultDiscoveryPipeline {
+    let redis_url = match env::var("REDIS_URL") {
+        Ok(url) if !url.trim().is_empty() => url,
+        _ => return DefaultDiscoveryPipeline::new(),
+    };
+
+    let ttl_seconds = env::var("DISCOVERY_CACHE_TTL_SECONDS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(900);
+    let ttl = Duration::from_secs(ttl_seconds);
+
+    let top_k = env::var("DISCOVERY_CACHE_TOP_K")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .and_then(NonZeroUsize::new)
+        .unwrap_or_else(|| NonZeroUsize::new(5).unwrap_or(NonZeroUsize::MIN));
+
+    let settings = DiscoveryCacheSettings::new(redis_url, "discovery", ttl);
+
+    match DefaultDiscoveryPipeline::from_config(DiscoveryPipelineConfig {
+        cache: Some(settings),
+        top_k,
+    }) {
+        Ok(pipeline) => pipeline,
+        Err(error) => {
+            warn!(%error, "failed to initialize Redis cache for discovery; continuing without caching");
+            DefaultDiscoveryPipeline::new()
+        }
+    }
 }
 
 fn init_tracing() -> Result<()> {

@@ -36,7 +36,7 @@ tyrum-shared = { path = "../../shared/tyrum-shared" }
 tower-http = { version = "0.5", features = ["limit"] }
 reqwest = { version = "0.12.23", default-features = false, features = ["json", "rustls-tls"] }
 url = "2"
-tyrum-discovery = { path = "../discovery" }
+tyrum-discovery = { path = "../discovery", features = ["test-support"] }
 tyrum-wallet = { path = "../tyrum-wallet" }
 
 [dev-dependencies]
@@ -56,6 +56,8 @@ tokio = { version = "1.43", features = ["macros", "rt", "rt-multi-thread", "time
 tyrum-memory = { path = "../memory" }
 tower = "0.5"
 http-body-util = "0.1"
+opentelemetry = { version = "0.31", features = ["metrics"] }
+opentelemetry_sdk = { version = "0.31", features = ["metrics", "testing"] }
 
 [[bin]]
 name = "audit_demo"

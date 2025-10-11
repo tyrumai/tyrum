@@ -1,10 +1,20 @@
-use std::{net::IpAddr, time::Duration};
+use std::collections::HashMap;
+use std::net::IpAddr;
+use std::num::NonZeroUsize;
+use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use tracing::debug;
-
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+use serde::{Deserialize, Serialize};
+use tracing::{debug, warn};
 use url::Url;
 
+use crate::cache::{CacheError, CachedConnector, ConnectorCache, RedisConnectorCache};
 use crate::telemetry;
+
+fn default_top_k() -> NonZeroUsize {
+    NonZeroUsize::new(5).unwrap_or(NonZeroUsize::MIN)
+}
 
 /// Request envelope supplied to discovery strategies.
 ///
@@ -34,7 +44,7 @@ impl DiscoveryRequest {
 pub enum DiscoveryOutcome {
     /// Discovery succeeded and returns sanitized connector metadata for
     /// executor hand-off.
-    Found(DiscoveryConnector),
+    Found(DiscoveryResolution),
     /// No strategy produced a match; downstream callers can offer manual
     /// fallback or prompt for more context.
     NotFound,
@@ -65,13 +75,63 @@ impl DiscoveryOutcome {
 pub struct DiscoveryConnector {
     pub strategy: DiscoveryStrategy,
     pub locator: String,
+    pub rank: usize,
+}
+
+impl DiscoveryConnector {
+    fn new(strategy: DiscoveryStrategy, locator: String) -> Self {
+        Self {
+            strategy,
+            locator,
+            rank: 0,
+        }
+    }
+
+    fn with_rank(mut self, rank: usize) -> Self {
+        self.rank = rank;
+        self
+    }
+}
+
+/// Ranked discovery result comprising the primary connector and alternatives.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiscoveryResolution {
+    pub primary: DiscoveryConnector,
+    pub alternatives: Vec<DiscoveryConnector>,
+}
+
+impl DiscoveryResolution {
+    #[must_use]
+    pub fn single(connector: DiscoveryConnector) -> Self {
+        Self {
+            primary: connector,
+            alternatives: Vec::new(),
+        }
+    }
+
+    #[must_use]
+    pub fn from_ranked(mut connectors: Vec<DiscoveryConnector>) -> Option<Self> {
+        if connectors.is_empty() {
+            return None;
+        }
+
+        let primary = connectors.remove(0);
+        Some(Self {
+            primary,
+            alternatives: connectors,
+        })
+    }
+
+    pub fn connectors(&self) -> impl Iterator<Item = &DiscoveryConnector> {
+        std::iter::once(&self.primary).chain(self.alternatives.iter())
+    }
 }
 
 /// Enumerates the strategies executed by the pipeline.
 ///
 /// The order here mirrors the MVP cut outlined in `docs/product_concept_v1.md`
 /// and should stay in sync with the planner's decision tree.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum DiscoveryStrategy {
     Mcp,
     StructuredApi,
@@ -120,15 +180,114 @@ pub trait DiscoveryPipeline {
 }
 
 /// Default discovery pipeline that performs lightweight heuristics to surface
-/// MCP, structured API, or generic HTTP connectors.
-#[derive(Default)]
-pub struct DefaultDiscoveryPipeline;
+/// MCP, structured API, or generic HTTP connectors while caching ranked
+/// results in Redis.
+pub struct DefaultDiscoveryPipeline {
+    cache: Option<PipelineCache>,
+    top_k: NonZeroUsize,
+}
+
+struct PipelineCache {
+    backend: Arc<dyn ConnectorCache>,
+    namespace: String,
+}
+
+impl PipelineCache {
+    fn backend(&self) -> Arc<dyn ConnectorCache> {
+        Arc::clone(&self.backend)
+    }
+
+    fn key_for(&self, subject: &str) -> String {
+        let encoded = URL_SAFE_NO_PAD.encode(subject.as_bytes());
+        format!("{}:{encoded}", self.namespace)
+    }
+}
+
+struct CacheContext {
+    backend: Arc<dyn ConnectorCache>,
+    key: String,
+}
+
+#[derive(Clone)]
+pub struct DiscoveryPipelineConfig {
+    pub cache: Option<DiscoveryCacheSettings>,
+    pub top_k: NonZeroUsize,
+}
+
+impl Default for DiscoveryPipelineConfig {
+    fn default() -> Self {
+        Self {
+            cache: None,
+            top_k: default_top_k(),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct DiscoveryCacheSettings {
+    pub redis_url: String,
+    pub namespace: String,
+    pub ttl: Duration,
+}
+
+impl DiscoveryCacheSettings {
+    #[must_use]
+    pub fn new(redis_url: impl Into<String>, namespace: impl Into<String>, ttl: Duration) -> Self {
+        Self {
+            redis_url: redis_url.into(),
+            namespace: namespace.into(),
+            ttl,
+        }
+    }
+}
+
+impl Default for DefaultDiscoveryPipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl DefaultDiscoveryPipeline {
-    /// Creates a pipeline instance using built-in heuristics.
+    /// Creates a pipeline instance using built-in heuristics without caching.
     #[must_use]
     pub fn new() -> Self {
-        Self
+        Self {
+            cache: None,
+            top_k: default_top_k(),
+        }
+    }
+
+    /// Creates a pipeline from configuration, optionally enabling Redis cache.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CacheError`] when the configured cache backend cannot be initialized.
+    pub fn from_config(config: DiscoveryPipelineConfig) -> Result<Self, CacheError> {
+        let cache = if let Some(settings) = config.cache {
+            Some(PipelineCache {
+                backend: Arc::new(RedisConnectorCache::new(&settings.redis_url, settings.ttl)?),
+                namespace: settings.namespace,
+            })
+        } else {
+            None
+        };
+
+        Ok(Self {
+            cache,
+            top_k: config.top_k,
+        })
+    }
+
+    /// Convenience helper for enabling Redis cache with default top-k.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CacheError`] when the cache backend cannot be initialized.
+    pub fn with_cache(settings: DiscoveryCacheSettings) -> Result<Self, CacheError> {
+        Self::from_config(DiscoveryPipelineConfig {
+            cache: Some(settings),
+            ..DiscoveryPipelineConfig::default()
+        })
     }
 
     fn descriptor(&self, request: &DiscoveryRequest) -> SubjectDescriptor {
@@ -260,16 +419,233 @@ impl DefaultDiscoveryPipeline {
         }
         value
     }
+
+    fn cache_context(&self, subject: &str) -> Option<CacheContext> {
+        self.cache.as_ref().map(|cache| CacheContext {
+            backend: cache.backend(),
+            key: cache.key_for(subject),
+        })
+    }
+
+    fn try_cache_hit(
+        &self,
+        subject: &str,
+        context: &Option<CacheContext>,
+    ) -> Option<DiscoveryOutcome> {
+        let Some(context) = context else {
+            telemetry::record_cache_event(telemetry::CacheEvent::Miss);
+            return None;
+        };
+
+        match context.backend.fetch(&context.key) {
+            Ok(Some(entries)) => {
+                telemetry::record_cache_event(telemetry::CacheEvent::Hit);
+                return self.handle_cached_entries(subject, context, entries);
+            }
+            Ok(None) => telemetry::record_cache_event(telemetry::CacheEvent::Miss),
+            Err(error) => {
+                warn!(%subject, %error, "failed to load discovery cache entry");
+                telemetry::record_cache_event(telemetry::CacheEvent::Error);
+            }
+        }
+
+        None
+    }
+
+    fn collect_connectors(
+        &self,
+        request: &DiscoveryRequest,
+        now_ms: u64,
+    ) -> Result<Vec<CachedConnector>, DiscoveryOutcome> {
+        let mut collected = Vec::new();
+
+        for outcome in [
+            execute_step(request, DiscoveryStrategy::Mcp, || self.try_mcp(request)),
+            execute_step(request, DiscoveryStrategy::StructuredApi, || {
+                self.try_structured_api(request)
+            }),
+            execute_step(request, DiscoveryStrategy::GenericHttp, || {
+                self.try_generic_http(request)
+            }),
+        ] {
+            match outcome {
+                DiscoveryOutcome::Found(resolution) => {
+                    collected.extend(self.cache_entries_from_resolution(resolution, now_ms));
+                }
+                DiscoveryOutcome::RetryLater { .. } => return Err(outcome),
+                DiscoveryOutcome::NotFound => {}
+            }
+        }
+
+        Ok(collected)
+    }
+
+    fn handle_cached_entries(
+        &self,
+        subject: &str,
+        context: &CacheContext,
+        mut entries: Vec<CachedConnector>,
+    ) -> Option<DiscoveryOutcome> {
+        let now = Self::now_epoch_ms();
+        for entry in entries.iter_mut() {
+            entry.bump(now);
+        }
+        let ranked = self.normalize_entries(entries);
+        let resolution = self.resolution_from_cached(&ranked)?;
+        if let Err(error) = context.backend.store(&context.key, &ranked) {
+            warn!(%subject, %error, "failed to refresh discovery cache entry");
+            telemetry::record_cache_event(telemetry::CacheEvent::Error);
+        }
+        Some(DiscoveryOutcome::Found(resolution))
+    }
+
+    fn persist_cache(
+        &self,
+        context: &Option<CacheContext>,
+        ranked: &[CachedConnector],
+        subject: &str,
+    ) {
+        if let Some(context) = context
+            && let Err(error) = context.backend.store(&context.key, ranked)
+        {
+            warn!(%subject, %error, "failed to write discovery cache entry");
+            telemetry::record_cache_event(telemetry::CacheEvent::Error);
+        }
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn with_cache_backend(
+        backend: Arc<dyn ConnectorCache>,
+        namespace: &str,
+        top_k: NonZeroUsize,
+    ) -> Self {
+        Self {
+            cache: Some(PipelineCache {
+                backend,
+                namespace: namespace.to_string(),
+            }),
+            top_k,
+        }
+    }
+
+    fn cache_entries_from_resolution(
+        &self,
+        resolution: DiscoveryResolution,
+        now_ms: u64,
+    ) -> Vec<CachedConnector> {
+        let DiscoveryResolution {
+            primary,
+            alternatives,
+        } = resolution;
+        let mut connectors = Vec::with_capacity(1 + alternatives.len());
+        connectors.push(primary);
+        connectors.extend(alternatives);
+
+        connectors
+            .into_iter()
+            .map(|connector| CachedConnector {
+                strategy: connector.strategy,
+                locator: connector.locator,
+                success_count: Self::base_weight(connector.strategy),
+                last_seen_epoch_ms: now_ms,
+            })
+            .collect()
+    }
+
+    fn normalize_entries(&self, entries: Vec<CachedConnector>) -> Vec<CachedConnector> {
+        let mut deduped: HashMap<(DiscoveryStrategy, String), CachedConnector> = HashMap::new();
+        for entry in entries {
+            let key = (entry.strategy, entry.locator.clone());
+            deduped
+                .entry(key)
+                .and_modify(|existing| {
+                    if entry.last_seen_epoch_ms > existing.last_seen_epoch_ms {
+                        existing.last_seen_epoch_ms = entry.last_seen_epoch_ms;
+                    }
+                    existing.success_count = existing.success_count.max(entry.success_count);
+                })
+                .or_insert(entry);
+        }
+
+        let mut unique: Vec<_> = deduped.into_values().collect();
+        unique.sort_by(|a, b| {
+            b.success_count
+                .cmp(&a.success_count)
+                .then_with(|| b.last_seen_epoch_ms.cmp(&a.last_seen_epoch_ms))
+        });
+        unique.truncate(self.top_k.get());
+        unique
+    }
+
+    fn resolution_from_cached(&self, entries: &[CachedConnector]) -> Option<DiscoveryResolution> {
+        let ranked = entries
+            .iter()
+            .enumerate()
+            .map(|(index, entry)| {
+                DiscoveryConnector::new(entry.strategy, entry.locator.clone()).with_rank(index + 1)
+            })
+            .collect::<Vec<_>>();
+
+        DiscoveryResolution::from_ranked(ranked)
+    }
+
+    fn base_weight(strategy: DiscoveryStrategy) -> u32 {
+        match strategy {
+            DiscoveryStrategy::Mcp => 10,
+            DiscoveryStrategy::StructuredApi => 6,
+            DiscoveryStrategy::GenericHttp => 3,
+        }
+    }
+
+    fn now_epoch_ms() -> u64 {
+        let millis = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_else(|_| Duration::from_secs(0))
+            .as_millis();
+        u64::try_from(millis).unwrap_or(u64::MAX)
+    }
 }
 
 impl DiscoveryPipeline for DefaultDiscoveryPipeline {
+    fn discover(&self, request: &DiscoveryRequest) -> DiscoveryOutcome {
+        debug!(
+            subject = %request.sanitized_subject(),
+            "Starting discovery"
+        );
+
+        let subject = request.sanitized_subject();
+        let cache_context = self.cache_context(subject);
+
+        if let Some(outcome) = self.try_cache_hit(subject, &cache_context) {
+            return outcome;
+        }
+
+        let now = Self::now_epoch_ms();
+        let connectors = match self.collect_connectors(request, now) {
+            Ok(connectors) => connectors,
+            Err(outcome) => return outcome,
+        };
+
+        if connectors.is_empty() {
+            return DiscoveryOutcome::NotFound;
+        }
+
+        let ranked = self.normalize_entries(connectors);
+        let Some(resolution) = self.resolution_from_cached(&ranked) else {
+            return DiscoveryOutcome::NotFound;
+        };
+
+        self.persist_cache(&cache_context, &ranked, subject);
+
+        DiscoveryOutcome::Found(resolution)
+    }
+
     fn try_mcp(&self, request: &DiscoveryRequest) -> DiscoveryOutcome {
         let descriptor = self.descriptor(request);
         match self.detect_mcp(&descriptor) {
-            Some(locator) => DiscoveryOutcome::Found(DiscoveryConnector {
-                strategy: DiscoveryStrategy::Mcp,
-                locator,
-            }),
+            Some(locator) => DiscoveryOutcome::Found(DiscoveryResolution::single(
+                DiscoveryConnector::new(DiscoveryStrategy::Mcp, locator),
+            )),
             None => DiscoveryOutcome::NotFound,
         }
     }
@@ -277,10 +653,9 @@ impl DiscoveryPipeline for DefaultDiscoveryPipeline {
     fn try_structured_api(&self, request: &DiscoveryRequest) -> DiscoveryOutcome {
         let descriptor = self.descriptor(request);
         match self.detect_structured_api(&descriptor) {
-            Some(locator) => DiscoveryOutcome::Found(DiscoveryConnector {
-                strategy: DiscoveryStrategy::StructuredApi,
-                locator,
-            }),
+            Some(locator) => DiscoveryOutcome::Found(DiscoveryResolution::single(
+                DiscoveryConnector::new(DiscoveryStrategy::StructuredApi, locator),
+            )),
             None => DiscoveryOutcome::NotFound,
         }
     }
@@ -288,10 +663,9 @@ impl DiscoveryPipeline for DefaultDiscoveryPipeline {
     fn try_generic_http(&self, request: &DiscoveryRequest) -> DiscoveryOutcome {
         let descriptor = self.descriptor(request);
         match self.detect_generic_http(&descriptor) {
-            Some(locator) => DiscoveryOutcome::Found(DiscoveryConnector {
-                strategy: DiscoveryStrategy::GenericHttp,
-                locator,
-            }),
+            Some(locator) => DiscoveryOutcome::Found(DiscoveryResolution::single(
+                DiscoveryConnector::new(DiscoveryStrategy::GenericHttp, locator),
+            )),
             None => DiscoveryOutcome::NotFound,
         }
     }
@@ -565,11 +939,15 @@ where
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::expect_used, clippy::unwrap_used, clippy::len_zero)]
     use super::*;
     use std::cell::RefCell;
     use std::fmt;
+    use std::num::NonZeroUsize;
     use std::sync::{Arc, Mutex, MutexGuard};
 
+    use crate::cache::InMemoryConnectorCache;
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
     use once_cell::sync::Lazy;
     use opentelemetry::{Value, global};
     use opentelemetry_sdk::metrics::{
@@ -586,6 +964,18 @@ mod tests {
     };
 
     static TELEMETRY_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+
+    fn resolution(strategy: DiscoveryStrategy, locator: &str) -> DiscoveryResolution {
+        DiscoveryResolution::single(DiscoveryConnector {
+            strategy,
+            locator: locator.to_string(),
+            rank: 1,
+        })
+    }
+
+    fn found(strategy: DiscoveryStrategy, locator: &str) -> DiscoveryOutcome {
+        DiscoveryOutcome::Found(resolution(strategy, locator))
+    }
 
     fn lock<'a, T>(mutex: &'a Mutex<T>, context: &str) -> MutexGuard<'a, T> {
         match mutex.lock() {
@@ -605,7 +995,8 @@ mod tests {
         };
 
         match pipeline.try_mcp(&request) {
-            DiscoveryOutcome::Found(connector) => {
+            DiscoveryOutcome::Found(resolution) => {
+                let connector = &resolution.primary;
                 assert_eq!(connector.strategy, DiscoveryStrategy::Mcp);
                 assert_eq!(connector.locator, "mcp://knowledge-base");
             }
@@ -621,7 +1012,8 @@ mod tests {
         };
 
         match pipeline.try_mcp(&request) {
-            DiscoveryOutcome::Found(connector) => {
+            DiscoveryOutcome::Found(resolution) => {
+                let connector = &resolution.primary;
                 assert_eq!(connector.strategy, DiscoveryStrategy::Mcp);
                 assert_eq!(connector.locator, "mcp://calendar");
             }
@@ -637,7 +1029,8 @@ mod tests {
         };
 
         match pipeline.try_mcp(&request) {
-            DiscoveryOutcome::Found(connector) => {
+            DiscoveryOutcome::Found(resolution) => {
+                let connector = &resolution.primary;
                 assert_eq!(connector.strategy, DiscoveryStrategy::Mcp);
                 assert_eq!(connector.locator, "mcp://workspace/Tool");
             }
@@ -666,7 +1059,8 @@ mod tests {
         };
 
         match pipeline.try_structured_api(&request) {
-            DiscoveryOutcome::Found(connector) => {
+            DiscoveryOutcome::Found(resolution) => {
+                let connector = &resolution.primary;
                 assert_eq!(connector.strategy, DiscoveryStrategy::StructuredApi);
                 assert_eq!(connector.locator, "https://api.example.com/v1/openapi.json");
             }
@@ -682,7 +1076,8 @@ mod tests {
         };
 
         match pipeline.try_structured_api(&request) {
-            DiscoveryOutcome::Found(connector) => {
+            DiscoveryOutcome::Found(resolution) => {
+                let connector = &resolution.primary;
                 assert_eq!(connector.strategy, DiscoveryStrategy::StructuredApi);
                 assert_eq!(connector.locator, "structured://calendar/events/list");
             }
@@ -698,12 +1093,125 @@ mod tests {
         };
 
         match pipeline.try_generic_http(&request) {
-            DiscoveryOutcome::Found(connector) => {
+            DiscoveryOutcome::Found(resolution) => {
+                let connector = &resolution.primary;
                 assert_eq!(connector.strategy, DiscoveryStrategy::GenericHttp);
                 assert_eq!(connector.locator, "https://calendar.example.com/slots");
             }
             other => panic!("expected generic HTTP connector, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn cache_hit_returns_ranked_connectors() {
+        let cache = Arc::new(InMemoryConnectorCache::new());
+        let namespace = "cache-hit";
+        let subject = "subject:sample";
+        let key = format!(
+            "{}:{}",
+            namespace,
+            URL_SAFE_NO_PAD.encode(subject.as_bytes())
+        );
+
+        cache.seed(
+            &key,
+            vec![
+                CachedConnector {
+                    strategy: DiscoveryStrategy::GenericHttp,
+                    locator: "https://b.example.com".into(),
+                    success_count: 4,
+                    last_seen_epoch_ms: 100,
+                },
+                CachedConnector {
+                    strategy: DiscoveryStrategy::StructuredApi,
+                    locator: "structured://top".into(),
+                    success_count: 8,
+                    last_seen_epoch_ms: 80,
+                },
+            ],
+        );
+
+        let pipeline = DefaultDiscoveryPipeline::with_cache_backend(
+            cache.clone(),
+            namespace,
+            NonZeroUsize::new(5).unwrap(),
+        );
+        let request = DiscoveryRequest {
+            subject: subject.into(),
+        };
+
+        let outcome = pipeline.discover(&request);
+
+        match outcome {
+            DiscoveryOutcome::Found(resolution) => {
+                assert_eq!(resolution.primary.locator, "structured://top");
+                assert_eq!(resolution.primary.rank, 1);
+                assert_eq!(resolution.alternatives.len(), 1);
+                let alternative = &resolution.alternatives[0];
+                assert_eq!(alternative.locator, "https://b.example.com");
+                assert_eq!(alternative.rank, 2);
+            }
+            other => panic!("expected cached connectors, got {other:?}"),
+        }
+
+        let cached = cache
+            .fetch(&key)
+            .expect("fetch cache")
+            .expect("cached entry");
+        let primary = cached
+            .iter()
+            .find(|entry| entry.locator == "structured://top")
+            .expect("primary cached entry");
+        assert!(primary.success_count >= 9);
+    }
+
+    #[test]
+    fn cache_miss_persists_results() {
+        let cache = Arc::new(InMemoryConnectorCache::new());
+        let namespace = "cache-miss";
+        let subject = "https://api.example.com/v1/openapi.json";
+        let key = format!(
+            "{}:{}",
+            namespace,
+            URL_SAFE_NO_PAD.encode(subject.as_bytes())
+        );
+
+        let pipeline = DefaultDiscoveryPipeline::with_cache_backend(
+            cache.clone(),
+            namespace,
+            NonZeroUsize::new(5).unwrap(),
+        );
+        let request = DiscoveryRequest {
+            subject: subject.into(),
+        };
+
+        let outcome = pipeline.discover(&request);
+
+        match outcome {
+            DiscoveryOutcome::Found(resolution) => {
+                assert_eq!(
+                    resolution.primary.strategy,
+                    DiscoveryStrategy::StructuredApi
+                );
+                assert_eq!(
+                    resolution.primary.locator,
+                    "https://api.example.com/v1/openapi.json"
+                );
+            }
+            other => panic!("expected heuristics to produce connector, got {other:?}"),
+        }
+
+        let cached = cache
+            .fetch(&key)
+            .expect("fetch cache")
+            .expect("cached entry");
+        assert!(!cached.is_empty());
+        let primary = cached
+            .iter()
+            .find(|entry| entry.strategy == DiscoveryStrategy::StructuredApi)
+            .expect("structured connector stored");
+        assert_eq!(primary.locator, "https://api.example.com/v1/openapi.json");
+        assert!(primary.success_count >= 6);
     }
 
     struct ScriptedPipeline {
@@ -859,17 +1367,14 @@ mod tests {
 
     #[test]
     fn short_circuits_on_first_successful_strategy() {
-        let connector = DiscoveryConnector {
-            strategy: DiscoveryStrategy::StructuredApi,
-            locator: "structured://crm.accounts".into(),
-        };
+        let connector = resolution(
+            DiscoveryStrategy::StructuredApi,
+            "structured://crm.accounts",
+        );
         let pipeline = ScriptedPipeline::new(
             DiscoveryOutcome::NotFound,
             DiscoveryOutcome::Found(connector.clone()),
-            DiscoveryOutcome::Found(DiscoveryConnector {
-                strategy: DiscoveryStrategy::GenericHttp,
-                locator: "https://example.com".into(),
-            }),
+            found(DiscoveryStrategy::GenericHttp, "https://example.com"),
         );
 
         let outcome = pipeline.discover(&request());
@@ -933,21 +1438,18 @@ mod tests {
 
         global::set_meter_provider(meter_provider.clone());
 
-        let connector = DiscoveryConnector {
-            strategy: DiscoveryStrategy::StructuredApi,
-            locator: "structured://crm.accounts".into(),
-        };
+        let connector = resolution(
+            DiscoveryStrategy::StructuredApi,
+            "structured://crm.accounts",
+        );
         let pipeline = ScriptedPipeline::new(
             DiscoveryOutcome::NotFound,
-            DiscoveryOutcome::Found(connector),
-            DiscoveryOutcome::Found(DiscoveryConnector {
-                strategy: DiscoveryStrategy::GenericHttp,
-                locator: "https://example.com".into(),
-            }),
+            DiscoveryOutcome::Found(connector.clone()),
+            found(DiscoveryStrategy::GenericHttp, "https://example.com"),
         );
 
         let outcome = pipeline.discover(&request());
-        assert!(matches!(outcome, DiscoveryOutcome::Found(_)));
+        assert_eq!(outcome, DiscoveryOutcome::Found(connector));
 
         if let Err(err) = meter_provider.force_flush() {
             panic!("force flush metrics failed: {err}");
