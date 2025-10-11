@@ -38,6 +38,8 @@ reqwest = { version = "0.12.23", default-features = false, features = ["json", "
 url = "2"
 tyrum-discovery = { path = "../discovery", features = ["test-support"] }
 tyrum-wallet = { path = "../tyrum-wallet" }
+clap = { version = "4.5", features = ["derive", "env"] }
+opentelemetry = { version = "0.31", features = ["metrics"] }
 
 [dev-dependencies]
 anyhow = "1"
@@ -56,7 +58,6 @@ tokio = { version = "1.43", features = ["macros", "rt", "rt-multi-thread", "time
 tyrum-memory = { path = "../memory" }
 tower = "0.5"
 http-body-util = "0.1"
-opentelemetry = { version = "0.31", features = ["metrics"] }
 opentelemetry_sdk = { version = "0.31", features = ["metrics", "testing"] }
 
 [[bin]]
@@ -67,6 +68,10 @@ required-features = ["audit-demo"]
 [[bin]]
 name = "planner_http"
 path = "src/bin/http_server.rs"
+
+[[bin]]
+name = "replay_sandbox"
+path = "src/bin/replay_sandbox.rs"
 
 [lints]
 workspace = true
