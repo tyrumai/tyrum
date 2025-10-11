@@ -94,6 +94,12 @@ Follow these steps to provision the Telegram channel safely across local and sta
 - On success the run writes `artifacts/audit-demo/trace.json` (full payloads) and `artifacts/audit-demo/trace.md` (table view) so reviewers can inspect the trace without rerunning the demo.
 - The script exits non-zero if any assertion fails (missing events, postcondition mismatch, replay drift) to keep CI-friendly behaviour. Docker must be available locally.
 
+## Planner Replay Sandbox
+- Use `cargo run -p tyrum-planner --bin replay_sandbox -- --plan-id <UUID> --database-url <postgres-url> [--subject-id <UUID>] [--output-dir <dir>]` to replay stored planner traces. The CLI also exposes `--help` for full flag descriptions.
+- The sandbox rehydrates plan steps from `planner_events`, replays them with stub executors, and repopulates Tyrum memory (facts + episodic events) when a `--subject-id` is supplied.
+- OpenTelemetry counters `replay.steps_total` and `replay.failures_total` emit for each invocation when a global meter provider is configured.
+- Divergences cause a non-zero exit code and a markdown diff at `artifacts/replay/<plan-id>.md` summarising executor drift and JSON pointer mismatches.
+
 ## Memory Tooling
 - `tyrum-memory` crate exposes a Postgres-backed data access layer for facts, episodic events, and vector embeddings.
 - Seed sample data for manual smoke tests with `cargo run -p tyrum-memory -- insert-sample --subject <uuid>` (subject optional).

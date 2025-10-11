@@ -83,6 +83,18 @@ replay.
 2. Provides `append` to insert entries with idempotent handling.
 3. Exposes `events_for_plan` to stream traces back when deriving audit or replay artefacts.
 
+## Replay Sandbox Workflow
+- The binary `replay_sandbox` replays recorded planner steps to detect executor drift and postcondition regressions.
+- Usage (also printed by `cargo run -p tyrum-planner --bin replay_sandbox -- --help`):
+
+  ```
+  replay_sandbox --plan-id <UUID> --database-url <postgres-url> [--subject-id <UUID>] [--output-dir <dir>]
+  ```
+
+- `--subject-id` is optional but recommended so the sandbox can repopulate Tyrum memory with episodic events and capability facts during replay.
+- Metrics `replay.steps_total` and `replay.failures_total` are emitted via OpenTelemetry for each run when instrumentation is enabled.
+- On divergence the command exits non-zero and writes a markdown summary to `artifacts/replay/<plan-id>.md`, detailing executors, expected vs actual results, and JSON pointer diffs.
+
 ## Capability Memory Hydration
 - Before dispatching any mutating primitive, the planner consults the capability memory store using a
   connection shared with the event log (via `CapabilityMemoryService`).

@@ -5,6 +5,7 @@ pub mod event_log;
 pub mod http;
 pub mod policy;
 pub mod profiles;
+pub mod replay;
 pub mod state_machine;
 pub mod wallet;
 
