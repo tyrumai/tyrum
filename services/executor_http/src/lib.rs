@@ -153,7 +153,7 @@ pub enum HttpExecutorError {
         message: String,
     },
     /// Planner requested a postcondition type this executor cannot evaluate.
-    #[error("unsupported_postcondition")]
+    #[error("unsupported_postcondition: {type_name}")]
     UnsupportedPostcondition {
         /// Unsupported postcondition kind.
         type_name: String,

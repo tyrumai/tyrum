@@ -138,7 +138,7 @@ pub enum WebExecutorError {
     #[error("invalid postcondition: {message}")]
     InvalidPostcondition { message: String },
     /// Planner requested a postcondition type that is not supported.
-    #[error("unsupported_postcondition")]
+    #[error("unsupported_postcondition: {type_name}")]
     UnsupportedPostcondition { type_name: String },
     /// Postcondition evaluation was missing required evidence.
     #[error("missing postcondition evidence for {kind:?}")]
