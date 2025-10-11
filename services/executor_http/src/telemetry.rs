@@ -5,6 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use crate::HttpRetryOutcome;
 use once_cell::sync::OnceCell;
 use opentelemetry::{
     KeyValue, global,
@@ -28,6 +29,7 @@ const EXPORT_TIMEOUT_SECS: u64 = 5;
 const METER_NAME: &str = "tyrum-executor-http";
 const DURATION_METRIC_NAME: &str = "tyrum_executor_http_attempt_duration_seconds";
 const COUNT_METRIC_NAME: &str = "tyrum_executor_http_attempt_total";
+const RETRY_COUNT_METRIC_NAME: &str = "executor_http.retry";
 
 #[derive(Clone, Debug)]
 pub struct AttemptContext {
@@ -54,6 +56,8 @@ impl AttemptContext {
 
 pub async fn record_attempt<Fut, T, E>(
     context: &AttemptContext,
+    attempt: u32,
+    max_attempts: u32,
     future: Fut,
 ) -> (Result<T, E>, Duration)
 where
@@ -64,6 +68,8 @@ where
         "executor.http.attempt",
         target_host = context.host(),
         method = context.method(),
+        attempt,
+        max_attempts,
         outcome = field::Empty,
         error = field::Empty,
         duration_ms = field::Empty,
@@ -82,7 +88,7 @@ where
         span.record("error", tracing::field::display(err));
     }
 
-    record_metrics(context, outcome, elapsed);
+    record_metrics(context, attempt, outcome, elapsed);
 
     (result, elapsed)
 }
@@ -100,18 +106,63 @@ struct MetricsCache {
 
 static METRICS: OnceCell<Mutex<MetricsCache>> = OnceCell::new();
 
-fn record_metrics(context: &AttemptContext, outcome: &str, duration: Duration) {
+#[derive(Clone)]
+struct RetryInstruments {
+    count: Counter<u64>,
+}
+
+static RETRIES: OnceCell<Mutex<Option<RetryInstruments>>> = OnceCell::new();
+
+fn record_metrics(context: &AttemptContext, attempt: u32, outcome: &str, duration: Duration) {
     let instruments = metrics_instruments();
     let attributes = [
         KeyValue::new("executor.http.host", context.host().to_string()),
         KeyValue::new("executor.http.method", context.method().to_string()),
         KeyValue::new("executor.http.outcome", outcome.to_string()),
+        KeyValue::new("executor.http.attempt_number", attempt as i64),
     ];
 
     instruments
         .duration
         .record(duration.as_secs_f64(), &attributes);
     instruments.count.add(1, &attributes);
+}
+
+pub fn record_retry_event(context: &AttemptContext, attempt: u32, outcome: &HttpRetryOutcome) {
+    let instruments = retry_instruments();
+
+    let mut attributes = vec![
+        KeyValue::new("executor.http.host", context.host().to_string()),
+        KeyValue::new("executor.http.method", context.method().to_string()),
+        KeyValue::new("executor.http.attempt_number", attempt as i64),
+    ];
+
+    let (kind, status, reason) = retry_outcome_details(outcome);
+    if let Some(code) = status {
+        attributes.push(KeyValue::new("executor.http.retry_status", code as i64));
+    }
+    attributes.push(KeyValue::new("executor.http.retry_kind", kind.to_string()));
+    instruments.count.add(1, &attributes);
+
+    tracing::info!(
+        target: "executor_http.retry",
+        attempt,
+        method = context.method(),
+        host = context.host(),
+        "retry scheduled kind={} status={:?} reason={:?}",
+        kind,
+        status,
+        reason
+    );
+}
+
+fn retry_outcome_details(outcome: &HttpRetryOutcome) -> (&'static str, Option<u16>, Option<&str>) {
+    match outcome {
+        HttpRetryOutcome::Status(code) => ("status", Some(*code), None),
+        HttpRetryOutcome::Timeout => ("timeout", None, None),
+        HttpRetryOutcome::Connect => ("connect", None, None),
+        HttpRetryOutcome::Other(message) => ("other", None, Some(message.as_str())),
+    }
 }
 
 fn metrics_instruments() -> MetricsInstruments {
@@ -143,6 +194,34 @@ fn metrics_instruments() -> MetricsInstruments {
     };
 
     guard.instruments = Some(instruments.clone());
+
+    instruments
+}
+
+fn retry_instruments() -> RetryInstruments {
+    let provider = global::meter_provider();
+    let cache = RETRIES.get_or_init(|| Mutex::new(None));
+    let mut guard = match cache.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            warn!("retry metrics cache lock poisoned; continuing");
+            poisoned.into_inner()
+        }
+    };
+
+    if let Some(instruments) = &*guard {
+        return instruments.clone();
+    }
+
+    let meter = provider.meter(METER_NAME);
+    let instruments = RetryInstruments {
+        count: meter
+            .u64_counter(RETRY_COUNT_METRIC_NAME)
+            .with_description("HTTP executor retries scheduled")
+            .build(),
+    };
+
+    *guard = Some(instruments.clone());
 
     instruments
 }

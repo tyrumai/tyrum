@@ -1,17 +1,26 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
-use std::net::SocketAddr;
+use std::{
+    net::SocketAddr,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+};
 
 use anyhow::Context;
 use axum::{
     Json, Router,
+    extract::State,
     http::{HeaderName, HeaderValue, StatusCode},
     routing::{get, post},
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::task::JoinHandle;
-use tyrum_executor_http::{HttpActionOutcome, HttpExecutorError, execute_http_action};
+use tyrum_executor_http::{
+    HttpActionOutcome, HttpExecutorError, HttpRetryOutcome, execute_http_action,
+};
 use tyrum_shared::planner::{ActionArguments, ActionPrimitive, ActionPrimitiveKind};
 use tyrum_shared::{AssertionFailureCode, AssertionOutcome};
 
@@ -21,9 +30,24 @@ struct EchoPayload {
     count: u32,
 }
 
+#[derive(Clone)]
+struct FixtureState {
+    flaky_attempts: Arc<AtomicUsize>,
+    failure_attempts: Arc<AtomicUsize>,
+}
+
+impl FixtureState {
+    fn new() -> Self {
+        Self {
+            flaky_attempts: Arc::new(AtomicUsize::new(0)),
+            failure_attempts: Arc::new(AtomicUsize::new(0)),
+        }
+    }
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn post_request_with_schema_succeeds() -> anyhow::Result<()> {
-    let (addr, server) = start_mock_server().await?;
+    let (addr, server, _) = start_mock_server().await?;
     let url = format!("http://{addr}/echo");
 
     let schema = json!({
@@ -76,7 +100,7 @@ async fn post_request_with_schema_succeeds() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn postcondition_success_returns_report() -> anyhow::Result<()> {
-    let (addr, server) = start_mock_server().await?;
+    let (addr, server, _) = start_mock_server().await?;
     let url = format!("http://{addr}/echo");
 
     let primitive = ActionPrimitive::new(
@@ -116,7 +140,7 @@ async fn postcondition_success_returns_report() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn postcondition_failure_surfaces_report() -> anyhow::Result<()> {
-    let (addr, server) = start_mock_server().await?;
+    let (addr, server, _) = start_mock_server().await?;
     let url = format!("http://{addr}/echo");
 
     let primitive = ActionPrimitive::new(
@@ -165,7 +189,7 @@ async fn postcondition_failure_surfaces_report() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn unsupported_postcondition_returns_error() -> anyhow::Result<()> {
-    let (addr, server) = start_mock_server().await?;
+    let (addr, server, _) = start_mock_server().await?;
     let url = format!("http://{addr}/echo");
 
     let primitive = ActionPrimitive::new(
@@ -203,7 +227,7 @@ async fn unsupported_postcondition_returns_error() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn schema_validation_failure_surfaces_error() -> anyhow::Result<()> {
-    let (addr, server) = start_mock_server().await?;
+    let (addr, server, _) = start_mock_server().await?;
     let url = format!("http://{addr}/echo");
 
     let primitive = ActionPrimitive::new(
@@ -244,7 +268,7 @@ async fn schema_validation_failure_surfaces_error() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn non_success_status_returns_failure_context() -> anyhow::Result<()> {
-    let (addr, server) = start_mock_server().await?;
+    let (addr, server, _) = start_mock_server().await?;
     let url = format!("http://{addr}/fail");
 
     let primitive = ActionPrimitive::new(
@@ -283,7 +307,7 @@ async fn non_success_status_returns_failure_context() -> anyhow::Result<()> {
 }
 #[tokio::test(flavor = "multi_thread")]
 async fn redirects_to_disallowed_host_are_not_followed() -> anyhow::Result<()> {
-    let (addr, server) = start_mock_server().await?;
+    let (addr, server, _) = start_mock_server().await?;
     let url = format!("http://{addr}/redirect");
 
     let primitive = ActionPrimitive::new(
@@ -318,6 +342,73 @@ async fn redirects_to_disallowed_host_are_not_followed() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn retry_transient_status_eventually_succeeds() -> anyhow::Result<()> {
+    let (addr, server, state) = start_mock_server().await?;
+    let url = format!("http://{addr}/flaky");
+
+    let primitive = ActionPrimitive::new(
+        ActionPrimitiveKind::Http,
+        into_args(json!({
+            "method": "GET",
+            "url": url
+        })),
+    );
+
+    let outcome = execute_http_action(&primitive).await?;
+    assert_eq!(outcome.status, StatusCode::OK.as_u16());
+    assert_eq!(outcome.body["ok"], json!(true));
+
+    assert_eq!(state.flaky_attempts.load(Ordering::SeqCst), 2);
+
+    server.abort();
+    let _ = server.await;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn retry_exhaustion_reports_history() -> anyhow::Result<()> {
+    let (addr, server, _) = start_mock_server().await?;
+    let url = format!("http://{addr}/unstable");
+
+    let primitive = ActionPrimitive::new(
+        ActionPrimitiveKind::Http,
+        into_args(json!({
+            "method": "GET",
+            "url": url
+        })),
+    );
+
+    let err = execute_http_action(&primitive)
+        .await
+        .expect_err("persistent failures should exhaust retries");
+
+    match err {
+        HttpExecutorError::RetriesExhausted {
+            attempts,
+            history,
+            last_error,
+        } => {
+            assert!(attempts >= 3);
+            assert_eq!(history.len() as u32, attempts);
+            assert!(history.iter().all(|record| matches!(record.outcome, HttpRetryOutcome::Status(code) if code == StatusCode::SERVICE_UNAVAILABLE.as_u16())));
+            match *last_error {
+                HttpExecutorError::HttpFailure { status, .. } => {
+                    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE.as_u16());
+                }
+                other => panic!("unexpected last error variant: {:?}", other),
+            }
+        }
+        other => panic!("unexpected error variant: {:?}", other),
+    }
+
+    server.abort();
+    let _ = server.await;
+
+    Ok(())
+}
+
 fn into_args(value: Value) -> ActionArguments {
     value
         .as_object()
@@ -325,11 +416,15 @@ fn into_args(value: Value) -> ActionArguments {
         .clone()
 }
 
-async fn start_mock_server() -> anyhow::Result<(SocketAddr, JoinHandle<()>)> {
+async fn start_mock_server() -> anyhow::Result<(SocketAddr, JoinHandle<()>, FixtureState)> {
+    let state = FixtureState::new();
     let app = Router::new()
         .route("/echo", post(handle_echo))
         .route("/fail", get(handle_failure))
-        .route("/redirect", get(handle_redirect));
+        .route("/redirect", get(handle_redirect))
+        .route("/flaky", get(handle_flaky))
+        .route("/unstable", get(handle_persistent_failure))
+        .with_state(state.clone());
 
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
         .await
@@ -342,7 +437,7 @@ async fn start_mock_server() -> anyhow::Result<(SocketAddr, JoinHandle<()>)> {
         }
     });
 
-    Ok((addr, handle))
+    Ok((addr, handle, state))
 }
 
 async fn handle_echo(Json(payload): Json<EchoPayload>) -> impl axum::response::IntoResponse {
@@ -383,6 +478,40 @@ async fn handle_redirect() -> impl axum::response::IntoResponse {
         HeaderValue::from_static("http://example.com/blocked"),
     )];
     (StatusCode::TEMPORARY_REDIRECT, headers, Json(json!({})))
+}
+
+async fn handle_flaky(State(state): State<FixtureState>) -> impl axum::response::IntoResponse {
+    let attempt = state.flaky_attempts.fetch_add(1, Ordering::SeqCst);
+    if attempt == 0 {
+        (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({
+                "ok": false,
+                "attempt": attempt + 1
+            })),
+        )
+    } else {
+        (
+            StatusCode::OK,
+            Json(json!({
+                "ok": true,
+                "attempt": attempt + 1
+            })),
+        )
+    }
+}
+
+async fn handle_persistent_failure(
+    State(state): State<FixtureState>,
+) -> impl axum::response::IntoResponse {
+    let attempt = state.failure_attempts.fetch_add(1, Ordering::SeqCst);
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(json!({
+            "ok": false,
+            "attempt": attempt + 1
+        })),
+    )
 }
 
 fn assert_redacted(outcome: &HttpActionOutcome) {

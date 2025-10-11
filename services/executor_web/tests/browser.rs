@@ -11,7 +11,7 @@ use axum::{
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::task::JoinHandle;
-use tyrum_executor_web::{WebExecutorError, execute_web_action};
+use tyrum_executor_web::{SelectorRole, WebExecutorError, execute_web_action};
 use tyrum_shared::planner::{ActionArguments, ActionPrimitive, ActionPrimitiveKind};
 
 const FORM_HTML: &str = r#"
@@ -27,13 +27,13 @@ const FORM_HTML: &str = r#"
         <form action="/submit" method="post">
             <label>
                 Name
-                <input name="name" type="text" />
+                <input name="name" data-testid="booking-name" type="text" placeholder="Full name" />
             </label>
             <label>
                 Preferred time
-                <input name="slot" type="time" />
+                <input name="slot" data-testid="booking-slot" type="time" aria-label="Preferred time" />
             </label>
-            <button type="submit">Request booking</button>
+            <button type="submit" data-testid="submit-booking">Request booking</button>
         </form>
     </main>
 </body>
@@ -101,6 +101,111 @@ async fn form_action_executes_and_captures_confirmation() -> anyhow::Result<()> 
     assert_eq!(outcome.submitted_fields[1].selector, "input[name='slot']");
     assert_eq!(outcome.submitted_fields[1].value, "15:00");
     assert!(!outcome.submitted_fields[1].redacted);
+
+    handle.abort();
+    let _ = handle.await;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn semantic_retry_recovers_from_selector_drift() -> anyhow::Result<()> {
+    if !playwright_runtime_available() {
+        tracing::warn!(
+            "Skipping semantic retry test; Playwright runtime not installed on this runner"
+        );
+        return Ok(());
+    }
+
+    let (addr, handle) = start_fixture_server().await?;
+    let url = format!("http://{addr}");
+
+    let primitive = ActionPrimitive::new(
+        ActionPrimitiveKind::Web,
+        into_args(json!({
+            "url": url,
+            "executor": "generic-web",
+            "fields": [
+                { "selector": "input[name='full_name']", "value": "Retry Example", "redact": true },
+                { "selector": "input[data-testid='booking_slot']", "value": "10:30" }
+            ],
+            "submit": {
+                "selector": "button[data-testid='submit_request']",
+                "kind": "click",
+                "wait_after_ms": 25
+            },
+            "snapshot_selector": "#confirmation"
+        })),
+    );
+
+    let outcome = execute_web_action(&primitive).await?;
+
+    assert!(outcome.current_url.ends_with("/submit"));
+    assert_eq!(outcome.submitted_fields.len(), 2);
+    assert_eq!(outcome.submitted_fields[0].selector, "input[name=\"name\"]");
+    assert_eq!(outcome.submitted_fields[0].value, "REDACTED");
+    assert_eq!(
+        outcome.submitted_fields[1].selector,
+        "input[data-testid=\"booking-slot\"]"
+    );
+    assert_eq!(outcome.submitted_fields[1].value, "10:30");
+
+    handle.abort();
+    let _ = handle.await;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn semantic_retry_reports_history_on_failure() -> anyhow::Result<()> {
+    if !playwright_runtime_available() {
+        tracing::warn!(
+            "Skipping semantic failure test; Playwright runtime not installed on this runner"
+        );
+        return Ok(());
+    }
+
+    let (addr, handle) = start_fixture_server().await?;
+    let url = format!("http://{addr}");
+
+    let primitive = ActionPrimitive::new(
+        ActionPrimitiveKind::Web,
+        into_args(json!({
+            "url": url,
+            "executor": "generic-web",
+            "fields": [
+                { "selector": "input[data-testid='missing_field']", "value": "Donna" }
+            ],
+            "submit": {
+                "selector": "button[data-testid='missing_submit']",
+                "kind": "click"
+            }
+        })),
+    );
+
+    let err = execute_web_action(&primitive)
+        .await
+        .expect_err("selectors should exhaust when no matches");
+
+    match err {
+        WebExecutorError::SelectorsExhausted {
+            attempts,
+            attempted,
+        } => {
+            assert!(attempts >= 1);
+            let field_attempts = attempted
+                .iter()
+                .find(|summary| matches!(summary.role, SelectorRole::Field { .. }))
+                .expect("field attempts present");
+            assert!(
+                field_attempts
+                    .tried
+                    .iter()
+                    .any(|selector| selector.contains("missing_field"))
+            );
+        }
+        other => panic!("unexpected error variant: {other:?}"),
+    }
 
     handle.abort();
     let _ = handle.await;

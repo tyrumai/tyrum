@@ -27,6 +27,7 @@ const EXPORT_TIMEOUT_SECS: u64 = 5;
 const METER_NAME: &str = "tyrum-executor-web";
 const DURATION_METRIC_NAME: &str = "tyrum_executor_web_attempt_duration_seconds";
 const COUNT_METRIC_NAME: &str = "tyrum_executor_web_attempt_total";
+const RETRY_COUNT_METRIC_NAME: &str = "executor_web.retry";
 
 #[derive(Clone, Debug)]
 pub struct AttemptContext {
@@ -104,6 +105,13 @@ struct MetricsCache {
 
 static METRICS: OnceCell<Mutex<MetricsCache>> = OnceCell::new();
 
+#[derive(Clone)]
+struct RetryInstruments {
+    count: Counter<u64>,
+}
+
+static RETRIES: OnceCell<Mutex<Option<RetryInstruments>>> = OnceCell::new();
+
 fn record_metrics(context: &AttemptContext, attempt: u32, outcome: &str, duration: Duration) {
     let instruments = metrics_instruments();
     let attributes = [
@@ -117,6 +125,27 @@ fn record_metrics(context: &AttemptContext, attempt: u32, outcome: &str, duratio
         .duration
         .record(duration.as_secs_f64(), &attributes);
     instruments.count.add(1, &attributes);
+}
+
+pub fn record_retry_event(context: &AttemptContext, attempt: u32, selector_count: u32) {
+    let instruments = retry_instruments();
+    let attributes = [
+        KeyValue::new("executor.web.host", context.host().to_string()),
+        KeyValue::new("executor.web.scheme", context.scheme().to_string()),
+        KeyValue::new("attempt", attempt as i64),
+        KeyValue::new("selector_count", selector_count as i64),
+    ];
+
+    instruments.count.add(1, &attributes);
+
+    tracing::info!(
+        target: "executor_web.retry",
+        attempt,
+        selector_count,
+        host = context.host(),
+        scheme = context.scheme(),
+        "selector retry scheduled"
+    );
 }
 
 fn metrics_instruments() -> MetricsInstruments {
@@ -154,6 +183,34 @@ fn metrics_instruments() -> MetricsInstruments {
 
     guard.provider = Some(provider);
     guard.instruments = Some(instruments.clone());
+
+    instruments
+}
+
+fn retry_instruments() -> RetryInstruments {
+    let provider = global::meter_provider();
+    let cache = RETRIES.get_or_init(|| Mutex::new(None));
+    let mut guard = match cache.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            warn!("retry metrics cache lock poisoned; continuing");
+            poisoned.into_inner()
+        }
+    };
+
+    if let Some(instruments) = &*guard {
+        return instruments.clone();
+    }
+
+    let meter = provider.meter(METER_NAME);
+    let instruments = RetryInstruments {
+        count: meter
+            .u64_counter(RETRY_COUNT_METRIC_NAME)
+            .with_description("Selector retries scheduled by the web executor")
+            .build(),
+    };
+
+    *guard = Some(instruments.clone());
 
     instruments
 }

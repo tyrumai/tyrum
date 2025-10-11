@@ -39,5 +39,21 @@ Returned outcomes include the final URL, document title, sanitised DOM excerpt
 and a field summary so postconditions can assert behaviour without leaking form
 data.
 
+## Drift Handling & Retries
+
+- The executor resolves selectors semantically before each attempt. When a
+  referenced element is missing, it derives alternative selectors by
+  normalising CSS attributes (e.g. `data-testid`, `name`, `aria-label`) and
+  comparing them with the planner payload. Suggestions are tried sequentially
+  with exponential backoff (200 ms → 400 ms → 800 ms, capped at three
+  attempts).
+- Each retry emits `executor_web.retry` telemetry with the attempt number and
+  remaining selector candidates. Structured log events (`executor_web.retry`)
+  capture the same context for audit dashboards.
+- If all candidates are exhausted the executor surfaces a
+  `SelectorsExhausted` error containing the retry count and the selectors that
+  were attempted, allowing the planner to persist the drift in capability
+  memory.
+
 See `services/executor_web/src/lib.rs` for the executor entrypoint and
 `infra/docker-compose.yml` to boot the container as part of the local stack.
