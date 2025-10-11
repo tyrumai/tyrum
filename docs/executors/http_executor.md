@@ -23,6 +23,20 @@ and the parsed JSON payload. Non-success status codes are reported via the
 `HttpFailure` error variant while still exposing the sanitised headers and body
 for downstream observability.
 
+## Retry Semantics
+
+- Idempotent methods (`GET`, `HEAD`, `PUT`, `DELETE`, `OPTIONS`) are retried
+  when upstreams return transient failures (`429`, `5xx`) or when `reqwest`
+  surfaces connection/timeout errors. The policy performs up to three attempts
+  with exponential backoff (200 ms → 400 ms → 800 ms, capped at 2 s).
+- Each retry emits `executor_http.retry` telemetry with the attempt number,
+  failure classification, and (when applicable) the response status. Structured
+  logs with the same target help populate reliability dashboards.
+- After the retry budget is exhausted, the executor returns a
+  `RetriesExhausted` error. The payload includes the attempt count, the
+  per-attempt history (`HttpRetryRecord`), and the final upstream error so the
+  planner can stash the outcome or escalate.
+
 ## Sandbox & Outbound Policy
 
 The executor runs in a Debian-based container listening on
