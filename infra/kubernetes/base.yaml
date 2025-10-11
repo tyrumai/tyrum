@@ -1716,8 +1716,6 @@ spec:
           envFrom:
             - secretRef:
                 name: tyrum-tyrum-core-grafana-secrets
-            - secretRef:
-                name: 'tyrum-tyrum-core-grafana-secrets'
           env:
             - name: GF_SECURITY_ADMIN_USER
               value: admin
