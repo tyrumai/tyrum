@@ -18,6 +18,10 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::time::sleep;
 use tyrum_shared::planner::{ActionPrimitive, ActionPrimitiveKind};
+use tyrum_shared::{
+    AssertionKind, DomContext as PostconditionDomContext, EvaluationContext, PostconditionError,
+    PostconditionReport, evaluate_postcondition,
+};
 use url::Url;
 
 pub mod telemetry;
@@ -31,7 +35,7 @@ const BACKOFF_MULTIPLIER: u32 = 2;
 pub type Result<T> = std::result::Result<T, WebExecutorError>;
 
 /// Captures the observable state after a web action finishes.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WebActionOutcome {
     /// Final URL reported by the page after navigation completes.
     pub current_url: String,
@@ -43,6 +47,9 @@ pub struct WebActionOutcome {
     pub submitted_fields: Vec<SubmittedFieldSummary>,
     /// Browser family used to satisfy the action.
     pub browser: BrowserFlavor,
+    /// Structured postcondition report when assertions were evaluated.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub postcondition: Option<PostconditionReport>,
 }
 
 /// Represents a focussed snapshot of the DOM relevant to the executed action.
@@ -127,6 +134,18 @@ pub enum WebExecutorError {
     /// None of the supported browser engines could be launched.
     #[error("unable to launch supported browser: {details}")]
     BrowserUnavailable { details: String },
+    /// Planner supplied an invalid postcondition payload.
+    #[error("invalid postcondition: {message}")]
+    InvalidPostcondition { message: String },
+    /// Planner requested a postcondition type that is not supported.
+    #[error("unsupported_postcondition")]
+    UnsupportedPostcondition { type_name: String },
+    /// Postcondition evaluation was missing required evidence.
+    #[error("missing postcondition evidence for {kind:?}")]
+    PostconditionMissingEvidence { kind: AssertionKind },
+    /// Postcondition evaluation completed but an assertion failed.
+    #[error("postcondition failed")]
+    PostconditionFailed { report: PostconditionReport },
     /// Test-only helper variant to simulate transient failures.
     #[cfg(test)]
     #[error("transient test failure: {0}")]
@@ -162,12 +181,18 @@ pub async fn execute_web_action(action: &ActionPrimitive) -> Result<WebActionOut
     ensure_web_primitive(action)?;
     let target = extract_url(action)?;
     let options = parse_web_action_options(action)?;
+    let action_for_retry = action.clone();
     let telemetry_context = AttemptContext::from_url(&target);
 
     execute_with_retry(&telemetry_context, move |_attempt| {
         let target = target.clone();
         let options = options.clone();
-        async move { run_single_attempt(target, options).await }
+        let action = action_for_retry.clone();
+        async move {
+            let mut outcome = run_single_attempt(target, options).await?;
+            evaluate_postcondition_report(&action, &mut outcome)?;
+            Ok(outcome)
+        }
     })
     .await
 }
@@ -276,7 +301,50 @@ async fn run_single_attempt(target: Url, options: WebActionOptions) -> Result<We
         dom_excerpt,
         submitted_fields,
         browser: browser_flavor,
+        postcondition: None,
     })
+}
+
+fn evaluate_postcondition_report(
+    action: &ActionPrimitive,
+    outcome: &mut WebActionOutcome,
+) -> Result<()> {
+    let Some(spec) = action.postcondition.as_ref() else {
+        return Ok(());
+    };
+
+    let selector = outcome.dom_excerpt.selector.as_str();
+    let selector_opt = (!selector.is_empty()).then_some(selector);
+    let dom_context = PostconditionDomContext {
+        selector: selector_opt,
+        html: outcome.dom_excerpt.html.as_str(),
+    };
+
+    let context = EvaluationContext {
+        http: None,
+        json: None,
+        dom: Some(dom_context),
+    };
+
+    match evaluate_postcondition(spec, &context) {
+        Ok(report) => {
+            if report.passed {
+                outcome.postcondition = Some(report);
+                Ok(())
+            } else {
+                Err(WebExecutorError::PostconditionFailed { report })
+            }
+        }
+        Err(PostconditionError::Invalid { message }) => {
+            Err(WebExecutorError::InvalidPostcondition { message })
+        }
+        Err(PostconditionError::Unsupported { type_name }) => {
+            Err(WebExecutorError::UnsupportedPostcondition { type_name })
+        }
+        Err(PostconditionError::MissingEvidence { kind }) => {
+            Err(WebExecutorError::PostconditionMissingEvidence { kind })
+        }
+    }
 }
 
 /// Returns static sandbox properties enforced by the container runtime.
@@ -702,6 +770,7 @@ mod tests {
         Layer, Registry, layer::Context, layer::SubscriberExt, registry::LookupSpan,
     };
     use tyrum_shared::planner::ActionArguments;
+    use tyrum_shared::{AssertionFailureCode, AssertionOutcome};
 
     static TELEMETRY_GUARD: Lazy<AsyncMutex<()>> = Lazy::new(|| AsyncMutex::new(()));
 
@@ -842,6 +911,108 @@ mod tests {
             WebExecutorError::InvalidArgumentValue { argument, .. }
             if argument == "submit.selector"
         ));
+    }
+
+    #[test]
+    fn postcondition_success_sets_report() {
+        let action = ActionPrimitive::new(ActionPrimitiveKind::Web, ActionArguments::default())
+            .with_postcondition(json!({
+                "type": "dom_contains",
+                "text": "Welcome"
+            }));
+
+        let mut outcome = WebActionOutcome {
+            current_url: "https://example.test".into(),
+            title: "Example".into(),
+            dom_excerpt: DomExcerpt {
+                selector: "body".into(),
+                html: "<body><h1>Welcome</h1></body>".into(),
+            },
+            submitted_fields: Vec::new(),
+            browser: BrowserFlavor::Chromium,
+            postcondition: None,
+        };
+
+        evaluate_postcondition_report(&action, &mut outcome)
+            .expect("postcondition evaluation succeeds");
+        let report = outcome.postcondition.expect("report present");
+        assert!(report.passed);
+        assert!(
+            report
+                .assertions
+                .iter()
+                .all(|item| matches!(item.outcome, AssertionOutcome::Passed { .. }))
+        );
+    }
+
+    #[test]
+    fn postcondition_failure_returns_structured_error() {
+        let action = ActionPrimitive::new(ActionPrimitiveKind::Web, ActionArguments::default())
+            .with_postcondition(json!({
+                "assertions": [
+                    { "type": "dom_contains", "text": "Missing" }
+                ]
+            }));
+
+        let mut outcome = WebActionOutcome {
+            current_url: "https://example.test".into(),
+            title: "Example".into(),
+            dom_excerpt: DomExcerpt {
+                selector: "body".into(),
+                html: "<body><h1>Welcome</h1></body>".into(),
+            },
+            submitted_fields: Vec::new(),
+            browser: BrowserFlavor::Chromium,
+            postcondition: None,
+        };
+
+        let err = evaluate_postcondition_report(&action, &mut outcome)
+            .expect_err("postcondition should fail");
+        match err {
+            WebExecutorError::PostconditionFailed { report } => {
+                assert!(!report.passed);
+                let failure = report
+                    .assertions
+                    .iter()
+                    .find_map(|item| match &item.outcome {
+                        AssertionOutcome::Failed { code, .. } => Some(code),
+                        AssertionOutcome::Passed { .. } => None,
+                    })
+                    .expect("failing assertion");
+                assert_eq!(*failure, AssertionFailureCode::DomTextMissing);
+            }
+            other => panic!("unexpected error variant: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn unsupported_postcondition_surfaces_error() {
+        let action = ActionPrimitive::new(ActionPrimitiveKind::Web, ActionArguments::default())
+            .with_postcondition(json!({
+                "type": "screenshot_matches",
+                "hash": "abc123"
+            }));
+
+        let mut outcome = WebActionOutcome {
+            current_url: "https://example.test".into(),
+            title: "Example".into(),
+            dom_excerpt: DomExcerpt {
+                selector: "body".into(),
+                html: "<body><h1>Welcome</h1></body>".into(),
+            },
+            submitted_fields: Vec::new(),
+            browser: BrowserFlavor::Chromium,
+            postcondition: None,
+        };
+
+        let err = evaluate_postcondition_report(&action, &mut outcome)
+            .expect_err("unsupported postcondition should fail");
+        match err {
+            WebExecutorError::UnsupportedPostcondition { type_name } => {
+                assert_eq!(type_name, "screenshot_matches");
+            }
+            other => panic!("unexpected error variant: {:?}", other),
+        }
     }
 
     #[tokio::test]

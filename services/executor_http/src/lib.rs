@@ -13,6 +13,10 @@ use serde_json::Value;
 use thiserror::Error;
 use tracing::{info, warn};
 use tyrum_shared::planner::{ActionArguments, ActionPrimitive, ActionPrimitiveKind};
+use tyrum_shared::{
+    AssertionKind, EvaluationContext, HttpContext, PostconditionError, PostconditionReport,
+    evaluate_postcondition,
+};
 use url::Url;
 
 pub mod telemetry;
@@ -39,6 +43,9 @@ pub struct HttpActionOutcome {
     pub headers: Vec<HttpHeader>,
     /// Parsed JSON payload returned by the upstream service.
     pub body: Value,
+    /// Structured postcondition report when assertions were evaluated.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub postcondition: Option<PostconditionReport>,
 }
 
 /// Sandbox constraints surfaced via the HTTP executor HTTP API.
@@ -139,6 +146,30 @@ pub enum HttpExecutorError {
         /// JSON body returned by the upstream.
         body: Value,
     },
+    /// Planner supplied a postcondition that could not be parsed.
+    #[error("invalid postcondition: {message}")]
+    InvalidPostcondition {
+        /// Human-readable validation error.
+        message: String,
+    },
+    /// Planner requested a postcondition type this executor cannot evaluate.
+    #[error("unsupported_postcondition")]
+    UnsupportedPostcondition {
+        /// Unsupported postcondition kind.
+        type_name: String,
+    },
+    /// Required evidence for a postcondition assertion was missing.
+    #[error("missing postcondition evidence for {kind:?}")]
+    PostconditionMissingEvidence {
+        /// Assertion kind that could not be evaluated.
+        kind: AssertionKind,
+    },
+    /// Postcondition evaluation completed but failed an assertion.
+    #[error("postcondition failed")]
+    PostconditionFailed {
+        /// Structured failure report surfaced to the planner.
+        report: PostconditionReport,
+    },
 }
 
 /// Executes the HTTP primitive and returns the validated JSON payload.
@@ -175,16 +206,39 @@ pub async fn execute_http_action(action: &ActionPrimitive) -> Result<HttpActionO
     .await;
 
     match result {
-        Ok(outcome) => {
-            log_http_success(
-                &method,
-                &url,
-                elapsed,
-                &request_headers_for_logging,
-                &outcome,
-            );
-            Ok(outcome)
-        }
+        Ok(mut outcome) => match evaluate_action_postcondition(action, &outcome) {
+            Ok(Some(report)) => {
+                if report.passed {
+                    outcome.postcondition = Some(report);
+                    log_http_success(
+                        &method,
+                        &url,
+                        elapsed,
+                        &request_headers_for_logging,
+                        &outcome,
+                    );
+                    Ok(outcome)
+                } else {
+                    let err = HttpExecutorError::PostconditionFailed { report };
+                    log_http_failure(&method, &url, elapsed, &request_headers_for_logging, &err);
+                    Err(err)
+                }
+            }
+            Ok(None) => {
+                log_http_success(
+                    &method,
+                    &url,
+                    elapsed,
+                    &request_headers_for_logging,
+                    &outcome,
+                );
+                Ok(outcome)
+            }
+            Err(err) => {
+                log_http_failure(&method, &url, elapsed, &request_headers_for_logging, &err);
+                Err(err)
+            }
+        },
         Err(err) => {
             log_http_failure(&method, &url, elapsed, &request_headers_for_logging, &err);
             Err(err)
@@ -228,7 +282,38 @@ async fn perform_http_request(
         status: status.as_u16(),
         headers,
         body: body_json,
+        postcondition: None,
     })
+}
+
+fn evaluate_action_postcondition(
+    action: &ActionPrimitive,
+    outcome: &HttpActionOutcome,
+) -> Result<Option<PostconditionReport>> {
+    let Some(spec) = action.postcondition.as_ref() else {
+        return Ok(None);
+    };
+
+    let context = EvaluationContext {
+        http: Some(HttpContext {
+            status: outcome.status,
+        }),
+        json: Some(&outcome.body),
+        dom: None,
+    };
+
+    match evaluate_postcondition(spec, &context) {
+        Ok(report) => Ok(Some(report)),
+        Err(PostconditionError::Invalid { message }) => {
+            Err(HttpExecutorError::InvalidPostcondition { message })
+        }
+        Err(PostconditionError::Unsupported { type_name }) => {
+            Err(HttpExecutorError::UnsupportedPostcondition { type_name })
+        }
+        Err(PostconditionError::MissingEvidence { kind }) => {
+            Err(HttpExecutorError::PostconditionMissingEvidence { kind })
+        }
+    }
 }
 
 fn log_http_success(
@@ -245,6 +330,7 @@ fn log_http_success(
         duration_ms = duration.as_millis(),
         request_headers = ?request_headers,
         response_headers = ?outcome.headers,
+        postcondition = ?outcome.postcondition,
         "http executor request completed"
     );
 }
@@ -267,9 +353,17 @@ fn log_http_failure(
         duration_ms = duration.as_millis(),
         request_headers = ?request_headers,
         response_headers = ?response_headers,
+        postcondition = ?failing_postcondition(err),
         error = %err,
         "http executor request failed"
     );
+}
+
+fn failing_postcondition(err: &HttpExecutorError) -> Option<&PostconditionReport> {
+    match err {
+        HttpExecutorError::PostconditionFailed { report } => Some(report),
+        _ => None,
+    }
 }
 
 fn ensure_http_primitive(action: &ActionPrimitive) -> Result<()> {

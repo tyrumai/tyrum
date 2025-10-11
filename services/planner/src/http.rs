@@ -671,9 +671,14 @@ fn discovered_execution_step(resolution: &DiscoveryResolution) -> ActionPrimitiv
     }
 
     ActionPrimitive::new(ActionPrimitiveKind::Http, args).with_postcondition(json!({
-        "status": "completed",
-        "strategy": strategy_label(primary.strategy),
-        "rank": primary.rank,
+        "assertions": [
+            { "type": "http_status", "equals": 200 }
+        ],
+        "metadata": {
+            "status": "completed",
+            "strategy": strategy_label(primary.strategy),
+            "rank": primary.rank,
+        }
     }))
 }
 
@@ -686,8 +691,13 @@ fn fallback_execution_step() -> ActionPrimitive {
     );
 
     ActionPrimitive::new(ActionPrimitiveKind::Web, args).with_postcondition(json!({
-        "status": "completed",
-        "executor": "generic-web",
+        "assertions": [
+            { "type": "dom_contains", "text": "<" }
+        ],
+        "metadata": {
+            "status": "completed",
+            "executor": "generic-web",
+        }
     }))
 }
 
