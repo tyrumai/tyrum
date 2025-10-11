@@ -11,6 +11,7 @@ use reqwest::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
+use tokio::time::sleep;
 use tracing::{info, warn};
 use tyrum_shared::planner::{ActionArguments, ActionPrimitive, ActionPrimitiveKind};
 use tyrum_shared::{
@@ -26,6 +27,10 @@ const REQUEST_TIMEOUT_SECS: u64 = 15;
 const POOL_IDLE_TIMEOUT_SECS: u64 = 30;
 const ALLOWED_HOSTS_ENV: &str = "HTTP_EXECUTOR_ALLOWED_HOSTS";
 const DEFAULT_ALLOWED_HOSTS: &[&str] = &["localhost", "127.0.0.1", "::1"];
+const MAX_ATTEMPTS: u32 = 3;
+const INITIAL_BACKOFF_MS: u64 = 200;
+const MAX_BACKOFF_MS: u64 = 2_000;
+const BACKOFF_MULTIPLIER: u32 = 2;
 // TODO: add per-host rate limiting once outbound allowlists include remote APIs.
 
 static HTTP_CLIENT: OnceCell<Client> = OnceCell::new();
@@ -46,6 +51,28 @@ pub struct HttpActionOutcome {
     /// Structured postcondition report when assertions were evaluated.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub postcondition: Option<PostconditionReport>,
+}
+
+/// Describes the outcome of a retry attempt for observability.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HttpRetryRecord {
+    /// Attempt number recorded (1-indexed).
+    pub attempt: u32,
+    /// Classification of the failure encountered.
+    pub outcome: HttpRetryOutcome,
+}
+
+/// Classification for retry outcomes to aid downstream logging.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HttpRetryOutcome {
+    /// Upstream responded with a specific status code.
+    Status(u16),
+    /// Request timed out.
+    Timeout,
+    /// Connection-level failure (DNS, TLS, etc.).
+    Connect,
+    /// Other request-layer failure (message included).
+    Other(String),
 }
 
 /// Sandbox constraints surfaced via the HTTP executor HTTP API.
@@ -170,6 +197,17 @@ pub enum HttpExecutorError {
         /// Structured failure report surfaced to the planner.
         report: PostconditionReport,
     },
+    /// Retry budget exhausted while attempting to satisfy the request.
+    #[error("retry attempts exhausted after {attempts} attempts; last error: {last_error}")]
+    RetriesExhausted {
+        /// Number of attempts that were performed.
+        attempts: u32,
+        /// Snapshot of the retry history.
+        history: Vec<HttpRetryRecord>,
+        /// Final error raised by the upstream service.
+        #[source]
+        last_error: Box<HttpExecutorError>,
+    },
 }
 
 /// Executes the HTTP primitive and returns the validated JSON payload.
@@ -186,30 +224,57 @@ pub async fn execute_http_action(action: &ActionPrimitive) -> Result<HttpActionO
     let context = telemetry::AttemptContext::new(&method, &url);
     let request_headers_for_logging = sanitise_header_pairs(&header_entries);
     let client = http_client();
-    let method_for_request = method.clone();
-    let url_for_request = url.clone();
-    let body_for_request = body.clone();
-    let schema_for_request = schema.clone();
-    let header_map = build_header_map(&header_entries, body_for_request.as_ref());
+    let mut attempt = 1;
+    let mut backoff = Duration::from_millis(INITIAL_BACKOFF_MS);
+    let mut tracker = HttpRetryTracker::default();
 
-    let (result, elapsed) = telemetry::record_attempt(&context, async move {
-        perform_http_request(
-            client,
-            method_for_request,
-            url_for_request,
-            header_map,
-            body_for_request,
-            schema_for_request,
-        )
-        .await
-    })
-    .await;
+    loop {
+        let method_for_request = method.clone();
+        let url_for_request = url.clone();
+        let body_for_request = body.clone();
+        let schema_for_request = schema.clone();
+        let header_map = build_header_map(&header_entries, body_for_request.as_ref());
 
-    match result {
-        Ok(mut outcome) => match evaluate_action_postcondition(action, &outcome) {
-            Ok(Some(report)) => {
-                if report.passed {
-                    outcome.postcondition = Some(report);
+        let (result, elapsed) =
+            telemetry::record_attempt(&context, attempt, MAX_ATTEMPTS, async move {
+                perform_http_request(
+                    client,
+                    method_for_request,
+                    url_for_request,
+                    header_map,
+                    body_for_request,
+                    schema_for_request,
+                )
+                .await
+            })
+            .await;
+
+        match result {
+            Ok(mut outcome) => match evaluate_action_postcondition(action, &outcome) {
+                Ok(Some(report)) => {
+                    if report.passed {
+                        outcome.postcondition = Some(report);
+                        log_http_success(
+                            &method,
+                            &url,
+                            elapsed,
+                            &request_headers_for_logging,
+                            &outcome,
+                        );
+                        return Ok(outcome);
+                    } else {
+                        let err = HttpExecutorError::PostconditionFailed { report };
+                        log_http_failure(
+                            &method,
+                            &url,
+                            elapsed,
+                            &request_headers_for_logging,
+                            &err,
+                        );
+                        return Err(err);
+                    }
+                }
+                Ok(None) => {
                     log_http_success(
                         &method,
                         &url,
@@ -217,31 +282,35 @@ pub async fn execute_http_action(action: &ActionPrimitive) -> Result<HttpActionO
                         &request_headers_for_logging,
                         &outcome,
                     );
-                    Ok(outcome)
-                } else {
-                    let err = HttpExecutorError::PostconditionFailed { report };
-                    log_http_failure(&method, &url, elapsed, &request_headers_for_logging, &err);
-                    Err(err)
+                    return Ok(outcome);
                 }
-            }
-            Ok(None) => {
-                log_http_success(
-                    &method,
-                    &url,
-                    elapsed,
-                    &request_headers_for_logging,
-                    &outcome,
-                );
-                Ok(outcome)
-            }
+                Err(err) => {
+                    log_http_failure(&method, &url, elapsed, &request_headers_for_logging, &err);
+                    return Err(err);
+                }
+            },
             Err(err) => {
                 log_http_failure(&method, &url, elapsed, &request_headers_for_logging, &err);
-                Err(err)
+
+                if let Some(outcome) = classify_retry(&method, &err) {
+                    telemetry::record_retry_event(&context, attempt, &outcome);
+                    tracker.record(attempt, outcome);
+
+                    if attempt >= MAX_ATTEMPTS {
+                        return Err(HttpExecutorError::RetriesExhausted {
+                            attempts: attempt,
+                            history: tracker.into_history(),
+                            last_error: Box::new(err),
+                        });
+                    }
+
+                    sleep(backoff).await;
+                    attempt += 1;
+                    backoff = next_backoff(backoff);
+                } else {
+                    return Err(err);
+                }
             }
-        },
-        Err(err) => {
-            log_http_failure(&method, &url, elapsed, &request_headers_for_logging, &err);
-            Err(err)
         }
     }
 }
@@ -583,6 +652,58 @@ fn require_string(args: &ActionArguments, key: &'static str) -> Result<String> {
             reason: "expected string",
         }),
         None => Err(HttpExecutorError::MissingArgument(key)),
+    }
+}
+
+fn classify_retry(method: &Method, err: &HttpExecutorError) -> Option<HttpRetryOutcome> {
+    if !is_idempotent(method) {
+        return None;
+    }
+
+    match err {
+        HttpExecutorError::HttpFailure { status, .. } => {
+            if *status == 429 || (500..=599).contains(status) {
+                Some(HttpRetryOutcome::Status(*status))
+            } else {
+                None
+            }
+        }
+        HttpExecutorError::Request(inner) if inner.is_timeout() => Some(HttpRetryOutcome::Timeout),
+        HttpExecutorError::Request(inner) if inner.is_connect() => Some(HttpRetryOutcome::Connect),
+        HttpExecutorError::Request(inner) if inner.is_request() => {
+            Some(HttpRetryOutcome::Other(inner.to_string()))
+        }
+        _ => None,
+    }
+}
+
+fn is_idempotent(method: &Method) -> bool {
+    matches!(
+        *method,
+        Method::GET | Method::HEAD | Method::DELETE | Method::PUT | Method::OPTIONS
+    )
+}
+
+fn next_backoff(current: Duration) -> Duration {
+    let multiplied = current
+        .as_millis()
+        .saturating_mul(BACKOFF_MULTIPLIER as u128)
+        .min(MAX_BACKOFF_MS as u128);
+    Duration::from_millis(multiplied as u64)
+}
+
+#[derive(Default)]
+struct HttpRetryTracker {
+    history: Vec<HttpRetryRecord>,
+}
+
+impl HttpRetryTracker {
+    fn record(&mut self, attempt: u32, outcome: HttpRetryOutcome) {
+        self.history.push(HttpRetryRecord { attempt, outcome });
+    }
+
+    fn into_history(self) -> Vec<HttpRetryRecord> {
+        self.history
     }
 }
 
