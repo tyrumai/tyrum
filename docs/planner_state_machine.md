@@ -41,3 +41,13 @@ state transitions. Events fall into three buckets:
 
 This state machine is versioned in code; downstream services should prefer the Rust types (or their
 serialized JSON) instead of copying the schema into bespoke representations.
+
+## Postcondition Evaluation
+- Executors must evaluate action postconditions through the shared
+  `tyrum_shared::postconditions` module to keep assertion semantics consistent.
+- The initial assertion set covers HTTP status codes, DOM text predicates, and JSONPath equality
+  checks. Additional assertion kinds should be added in the shared library before individual
+  executors start emitting them.
+- Evaluation results surface as structured `PostconditionReport`s with sensitive values redacted.
+  Failed assertions use deterministic codes (`unsupported_postcondition`, `dom_text_missing`, etc.)
+  so the planner and observability pipelines can react consistently.

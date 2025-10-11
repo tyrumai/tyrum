@@ -13,6 +13,7 @@ use serde_json::{Value, json};
 use tokio::task::JoinHandle;
 use tyrum_executor_http::{HttpActionOutcome, HttpExecutorError, execute_http_action};
 use tyrum_shared::planner::{ActionArguments, ActionPrimitive, ActionPrimitiveKind};
+use tyrum_shared::{AssertionFailureCode, AssertionOutcome};
 
 #[derive(Deserialize)]
 struct EchoPayload {
@@ -64,7 +65,135 @@ async fn post_request_with_schema_succeeds() -> anyhow::Result<()> {
     assert_eq!(outcome.body["ok"], json!(true));
     assert_eq!(outcome.body["echo"]["message"], json!("ping"));
     assert_eq!(outcome.body["echo"]["count"], json!(2));
+    assert!(outcome.postcondition.is_none());
     assert_redacted(&outcome);
+
+    server.abort();
+    let _ = server.await;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn postcondition_success_returns_report() -> anyhow::Result<()> {
+    let (addr, server) = start_mock_server().await?;
+    let url = format!("http://{addr}/echo");
+
+    let primitive = ActionPrimitive::new(
+        ActionPrimitiveKind::Http,
+        into_args(json!({
+            "method": "POST",
+            "url": url,
+            "body": {
+                "message": "ping",
+                "count": 2
+            }
+        })),
+    )
+    .with_postcondition(json!({
+        "assertions": [
+            { "type": "http_status", "equals": 200 },
+            { "type": "json_path", "path": "$.echo.message", "equals": "ping" }
+        ]
+    }));
+
+    let outcome = execute_http_action(&primitive).await?;
+    let report = outcome.postcondition.expect("postcondition report present");
+    assert!(report.passed);
+    assert_eq!(report.assertions.len(), 2);
+    assert!(
+        report
+            .assertions
+            .iter()
+            .all(|item| matches!(item.outcome, AssertionOutcome::Passed { .. }))
+    );
+
+    server.abort();
+    let _ = server.await;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn postcondition_failure_surfaces_report() -> anyhow::Result<()> {
+    let (addr, server) = start_mock_server().await?;
+    let url = format!("http://{addr}/echo");
+
+    let primitive = ActionPrimitive::new(
+        ActionPrimitiveKind::Http,
+        into_args(json!({
+            "method": "POST",
+            "url": url,
+            "body": {
+                "message": "ping",
+                "count": 2
+            }
+        })),
+    )
+    .with_postcondition(json!({
+        "assertions": [
+            { "type": "http_status", "equals": 200 },
+            { "type": "json_path", "path": "$.echo.count", "equals": 99 }
+        ]
+    }));
+
+    let err = execute_http_action(&primitive)
+        .await
+        .expect_err("postcondition mismatch should fail");
+
+    match err {
+        HttpExecutorError::PostconditionFailed { report } => {
+            assert!(!report.passed);
+            let failing = report
+                .assertions
+                .iter()
+                .find_map(|item| match &item.outcome {
+                    AssertionOutcome::Failed { code, .. } => Some(code),
+                    AssertionOutcome::Passed { .. } => None,
+                })
+                .expect("failing assertion present");
+            assert_eq!(*failing, AssertionFailureCode::JsonPathPredicateFailed);
+        }
+        other => panic!("unexpected error variant: {:?}", other),
+    }
+
+    server.abort();
+    let _ = server.await;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn unsupported_postcondition_returns_error() -> anyhow::Result<()> {
+    let (addr, server) = start_mock_server().await?;
+    let url = format!("http://{addr}/echo");
+
+    let primitive = ActionPrimitive::new(
+        ActionPrimitiveKind::Http,
+        into_args(json!({
+            "method": "POST",
+            "url": url,
+            "body": {
+                "message": "ping",
+                "count": 2
+            }
+        })),
+    )
+    .with_postcondition(json!({
+        "type": "legacy_status",
+        "value": "done"
+    }));
+
+    let err = execute_http_action(&primitive)
+        .await
+        .expect_err("unsupported postcondition should fail");
+
+    match err {
+        HttpExecutorError::UnsupportedPostcondition { type_name } => {
+            assert_eq!(type_name, "legacy_status");
+        }
+        other => panic!("unexpected error variant: {:?}", other),
+    }
 
     server.abort();
     let _ = server.await;

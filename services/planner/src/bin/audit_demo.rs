@@ -424,9 +424,14 @@ fn build_plan(call_slot: Value) -> Vec<ActionPrimitive> {
             })),
         )
         .with_postcondition(json!({
-            "appointment": {
-                "status": "booked",
-                "slot": call_slot.clone(),
+            "assertions": [
+                { "type": "dom_contains", "text": "booked", "case_insensitive": true }
+            ],
+            "metadata": {
+                "appointment": {
+                    "status": "booked",
+                    "slot": call_slot.clone(),
+                }
             }
         })),
         ActionPrimitive::new(
@@ -502,9 +507,14 @@ impl MockGenericExecutors {
         Ok(ExecutorOutcome {
             executor: "generic-web".into(),
             postcondition: json!({
-                "appointment": {
-                    "status": "booked",
-                    "slot": slot,
+                "assertions": [
+                    { "type": "dom_contains", "text": "booked", "case_insensitive": true }
+                ],
+                "metadata": {
+                    "appointment": {
+                        "status": "booked",
+                        "slot": slot,
+                    }
                 }
             }),
         })
