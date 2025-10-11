@@ -1,10 +1,12 @@
-use std::{collections::HashMap, env, net::SocketAddr};
+use std::{collections::HashMap, env, net::SocketAddr, time::Duration};
 
 use anyhow::{Context, Result, anyhow};
 
 use tyrum_api::{
     account_linking::AccountLinkingRepository,
     audit::{AuditTimelineError, AuditTimelineRepository},
+    cache::{CacheLookup, CapabilityCache},
+    capabilities::{CapabilityCacheKey, CapabilityRepository},
     ingress::{IngressRepository, IngressRepositoryError},
     metrics,
     profiles::{
@@ -45,6 +47,11 @@ const PROFILES_ROUTE: &str = "/profiles";
 const PROFILE_PAM_ROUTE: &str = "/profiles/pam";
 const PROFILE_PVP_ROUTE: &str = "/profiles/pvp";
 const PORTAL_ACCOUNT_ID: &str = "11111111-2222-3333-4444-555555555555";
+const CAPABILITY_SCHEMA_ROUTE: &str =
+    "/capabilities/:subject_id/:capability_type/:capability_identifier/:executor_kind/schema";
+const CAPABILITY_COST_ROUTE: &str =
+    "/capabilities/:subject_id/:capability_type/:capability_identifier/:executor_kind/cost";
+const DEFAULT_CAPABILITY_CACHE_TTL: Duration = Duration::from_secs(300);
 
 #[derive(Clone, Copy)]
 struct IntegrationDefinition {
@@ -80,6 +87,8 @@ struct AppState {
     watchers: WatcherRepository,
     telegram: telegram::TelegramWebhookVerifier,
     profiles: ProfilesRepository,
+    capabilities: CapabilityRepository,
+    cache: CapabilityCache,
     portal_subject_id: Uuid,
 }
 
@@ -116,6 +125,14 @@ struct UpdatePreferenceRequest {
 struct UpdatePreferenceResponse {
     status: &'static str,
     integration: IntegrationPreferenceResponse,
+}
+
+#[derive(Debug, Deserialize)]
+struct CapabilityPathParams {
+    subject_id: Uuid,
+    capability_type: String,
+    capability_identifier: String,
+    executor_kind: String,
 }
 
 fn normalize_integration_slug(raw: &str) -> String {
@@ -190,6 +207,8 @@ fn build_router(state: AppState) -> Router {
         .route(PROFILE_PAM_ROUTE, put(update_pam_profile))
         .route(PROFILE_PVP_ROUTE, put(update_pvp_profile))
         .route(WATCHERS_ROUTE, post(register_watcher))
+        .route(CAPABILITY_SCHEMA_ROUTE, get(get_capability_schema))
+        .route(CAPABILITY_COST_ROUTE, get(get_capability_cost))
         .route(TELEGRAM_WEBHOOK_ROUTE, post(telegram_webhook))
         .with_state(state)
 }
@@ -243,6 +262,183 @@ async fn get_plan_timeline(State(state): State<AppState>, Path(plan_id): Path<Uu
     metrics::record_http_request("GET", AUDIT_PLAN_TIMELINE_ROUTE, response.status().as_u16());
 
     response
+}
+
+#[tracing::instrument(
+    name = "api.capabilities.schema",
+    skip_all,
+    fields(
+        subject_id = %params.subject_id,
+        capability_type = %params.capability_type,
+        capability_identifier = %params.capability_identifier,
+        executor_kind = %params.executor_kind
+    )
+)]
+async fn get_capability_schema(
+    State(state): State<AppState>,
+    Path(params): Path<CapabilityPathParams>,
+) -> Response {
+    let CapabilityPathParams {
+        subject_id,
+        capability_type,
+        capability_identifier,
+        executor_kind,
+    } = params;
+
+    let cache_key = CapabilityCacheKey {
+        subject_id,
+        capability_type: capability_type.clone(),
+        capability_identifier: capability_identifier.clone(),
+        executor_kind: executor_kind.clone(),
+    };
+
+    let lookup = state.cache.schema_lookup(&cache_key).await;
+    match lookup {
+        CacheLookup::Hit(schema) => {
+            metrics::record_cache_hit(metrics::CacheKind::Schema);
+            let response = Json(schema).into_response();
+            metrics::record_http_request(
+                "GET",
+                CAPABILITY_SCHEMA_ROUTE,
+                response.status().as_u16(),
+            );
+            response
+        }
+        _ => {
+            let status = match lookup {
+                CacheLookup::Miss => metrics::CacheMissStatus::Miss,
+                CacheLookup::Unavailable => metrics::CacheMissStatus::Unavailable,
+                CacheLookup::Hit(_) => unreachable!("handled above"),
+            };
+            metrics::record_cache_miss(metrics::CacheKind::Schema, status);
+
+            let response = match state.capabilities.fetch(&cache_key).await {
+                Ok(Some(record)) => {
+                    let schema = record.into_schema_response();
+                    state.cache.cache_schema(&cache_key, &schema).await;
+                    Json(schema).into_response()
+                }
+                Ok(None) => (
+                    StatusCode::NOT_FOUND,
+                    Json(ErrorResponse {
+                        error: "capability_not_found",
+                        message: format!(
+                            "Capability {capability_type} / {capability_identifier} for executor {executor_kind} was not found."
+                        ),
+                    }),
+                )
+                    .into_response(),
+                Err(error) => {
+                    tracing::error!(reason = %error, "failed to load capability schema");
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorResponse {
+                            error: "capability_lookup_failed",
+                            message: "Unable to load capability metadata".into(),
+                        }),
+                    )
+                        .into_response()
+                }
+            };
+
+            metrics::record_http_request(
+                "GET",
+                CAPABILITY_SCHEMA_ROUTE,
+                response.status().as_u16(),
+            );
+            response
+        }
+    }
+}
+
+#[tracing::instrument(
+    name = "api.capabilities.cost",
+    skip_all,
+    fields(
+        subject_id = %params.subject_id,
+        capability_type = %params.capability_type,
+        capability_identifier = %params.capability_identifier,
+        executor_kind = %params.executor_kind
+    )
+)]
+async fn get_capability_cost(
+    State(state): State<AppState>,
+    Path(params): Path<CapabilityPathParams>,
+) -> Response {
+    let CapabilityPathParams {
+        subject_id,
+        capability_type,
+        capability_identifier,
+        executor_kind,
+    } = params;
+
+    let cache_key = CapabilityCacheKey {
+        subject_id,
+        capability_type: capability_type.clone(),
+        capability_identifier: capability_identifier.clone(),
+        executor_kind: executor_kind.clone(),
+    };
+
+    let lookup = state.cache.cost_lookup(&cache_key).await;
+    match lookup {
+        CacheLookup::Hit(cost) => {
+            metrics::record_cache_hit(metrics::CacheKind::Cost);
+            let response = Json(cost).into_response();
+            metrics::record_http_request("GET", CAPABILITY_COST_ROUTE, response.status().as_u16());
+            response
+        }
+        _ => {
+            let status = match lookup {
+                CacheLookup::Miss => metrics::CacheMissStatus::Miss,
+                CacheLookup::Unavailable => metrics::CacheMissStatus::Unavailable,
+                CacheLookup::Hit(_) => unreachable!("handled above"),
+            };
+            metrics::record_cache_miss(metrics::CacheKind::Cost, status);
+
+            let response = match state.capabilities.fetch(&cache_key).await {
+                Ok(Some(record)) => match record.into_cost_response() {
+                    Some(cost) => {
+                        state.cache.cache_cost(&cache_key, &cost).await;
+                        Json(cost).into_response()
+                    }
+                    None => (
+                        StatusCode::NOT_FOUND,
+                        Json(ErrorResponse {
+                            error: "cost_not_recorded",
+                            message: format!(
+                                "No cost metadata recorded for capability {capability_type} / {capability_identifier} ({executor_kind})."
+                            ),
+                        }),
+                    )
+                        .into_response(),
+                },
+                Ok(None) => (
+                    StatusCode::NOT_FOUND,
+                    Json(ErrorResponse {
+                        error: "capability_not_found",
+                        message: format!(
+                            "Capability {capability_type} / {capability_identifier} for executor {executor_kind} was not found."
+                        ),
+                    }),
+                )
+                    .into_response(),
+                Err(error) => {
+                    tracing::error!(reason = %error, "failed to load capability cost data");
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorResponse {
+                            error: "capability_lookup_failed",
+                            message: "Unable to load capability cost metadata".into(),
+                        }),
+                    )
+                        .into_response()
+                }
+            };
+
+            metrics::record_http_request("GET", CAPABILITY_COST_ROUTE, response.status().as_u16());
+            response
+        }
+    }
 }
 
 #[tracing::instrument(name = "api.profiles.get", skip_all)]
@@ -779,6 +975,12 @@ async fn main() -> Result<()> {
     let audit = AuditTimelineRepository::new(waitlist.pool().clone());
     let watchers = WatcherRepository::new(waitlist.pool().clone());
     let profiles = ProfilesRepository::new(waitlist.pool().clone());
+    let capabilities = CapabilityRepository::new(waitlist.pool().clone());
+    let redis_url = env::var("REDIS_URL")
+        .ok()
+        .map(|raw| raw.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let cache = CapabilityCache::connect(redis_url, DEFAULT_CAPABILITY_CACHE_TTL).await;
     let portal_subject_id =
         Uuid::parse_str(PORTAL_ACCOUNT_ID).context("PORTAL_ACCOUNT_ID must be a valid UUID")?;
 
@@ -795,6 +997,8 @@ async fn main() -> Result<()> {
         watchers,
         telegram,
         profiles,
+        capabilities,
+        cache,
         portal_subject_id,
     });
 
@@ -814,17 +1018,19 @@ mod tests {
     #![allow(clippy::expect_used, clippy::unwrap_used)]
 
     use super::{
-        ACCOUNT_LINKING_ROUTE, AppState, AuditTimelineRepository, PLACEHOLDER_INTEGRATIONS,
-        PORTAL_ACCOUNT_ID, PROFILE_PAM_ROUTE, PROFILE_PVP_ROUTE, PROFILES_ROUTE,
-        TELEGRAM_WEBHOOK_ROUTE, WAITLIST_ROUTE, build_router, sanitize_opt,
+        ACCOUNT_LINKING_ROUTE, AppState, AuditTimelineRepository, DEFAULT_CAPABILITY_CACHE_TTL,
+        PLACEHOLDER_INTEGRATIONS, PORTAL_ACCOUNT_ID, PROFILE_PAM_ROUTE, PROFILE_PVP_ROUTE,
+        PROFILES_ROUTE, TELEGRAM_WEBHOOK_ROUTE, WAITLIST_ROUTE, build_router, sanitize_opt,
     };
+    use crate::metrics;
     use axum::{
         body::Body,
         http::{Request, StatusCode},
     };
-    use chrono::Utc;
+    use chrono::{DateTime, Utc};
     use http_body_util::BodyExt;
     use serde_json::{Value, json};
+    use serial_test::serial;
     use sqlx::{PgPool, Row, postgres::PgPoolOptions};
     use std::{path::Path, time::Duration};
     use testcontainers::{
@@ -836,6 +1042,8 @@ mod tests {
     use tower::ServiceExt;
     use tyrum_api::{
         account_linking::AccountLinkingRepository,
+        cache::CapabilityCache,
+        capabilities::{CapabilityCacheKey, CapabilityRepository},
         ingress::IngressRepository,
         profiles::ProfilesRepository,
         telegram::TelegramWebhookVerifier,
@@ -850,6 +1058,8 @@ mod tests {
     const POSTGRES_USER: &str = "tyrum";
     const POSTGRES_PASSWORD: &str = "tyrum_dev_password";
     const POSTGRES_DB: &str = "tyrum_dev";
+    const REDIS_IMAGE: &str = "redis";
+    const REDIS_TAG: &str = "7-alpine";
 
     async fn ensure_planner_event_log_schema(pool: &PgPool) -> Result<(), sqlx::Error> {
         sqlx::query(
@@ -931,6 +1141,10 @@ mod tests {
         account_linking: AccountLinkingRepository,
         ingress: IngressRepository,
         profiles: ProfilesRepository,
+        #[allow(dead_code)]
+        capabilities: CapabilityRepository,
+        #[allow(dead_code)]
+        cache: CapabilityCache,
         telegram: TelegramWebhookVerifier,
     }
 
@@ -967,6 +1181,8 @@ mod tests {
             let ingress = IngressRepository::new(waitlist.pool().clone());
             let watchers = WatcherRepository::new(waitlist.pool().clone());
             let profiles = ProfilesRepository::new(waitlist.pool().clone());
+            let capabilities = CapabilityRepository::new(waitlist.pool().clone());
+            let cache = CapabilityCache::disabled();
             let portal_subject_id =
                 Uuid::parse_str(PORTAL_ACCOUNT_ID).expect("valid portal subject uuid");
             ensure_planner_event_log_schema(waitlist.pool())
@@ -983,6 +1199,8 @@ mod tests {
                 watchers: watchers.clone(),
                 telegram: telegram.clone(),
                 profiles: profiles.clone(),
+                capabilities: capabilities.clone(),
+                cache: cache.clone(),
                 portal_subject_id,
             });
 
@@ -993,6 +1211,8 @@ mod tests {
                 account_linking,
                 ingress,
                 profiles,
+                capabilities,
+                cache,
                 telegram,
             }
         }
@@ -1026,6 +1246,99 @@ mod tests {
         panic!("postgres never became ready");
     }
 
+    async fn ensure_capability_memory_schema(pool: &PgPool) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS capability_memories (
+                id BIGSERIAL PRIMARY KEY,
+                subject_id UUID NOT NULL,
+                capability_type TEXT NOT NULL,
+                capability_identifier TEXT NOT NULL,
+                executor_kind TEXT NOT NULL,
+                selectors JSONB,
+                outcome_metadata JSONB NOT NULL,
+                result_summary TEXT,
+                success_count INTEGER NOT NULL DEFAULT 1 CHECK (success_count > 0),
+                last_success_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                UNIQUE(subject_id, capability_type, capability_identifier, executor_kind)
+            )
+            "#,
+        )
+        .execute(pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE INDEX IF NOT EXISTS capability_memories_subject_type_idx
+            ON capability_memories (subject_id, capability_type)
+            "#,
+        )
+        .execute(pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE INDEX IF NOT EXISTS capability_memories_last_success_idx
+            ON capability_memories (subject_id, last_success_at DESC)
+            "#,
+        )
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn insert_capability_memory(
+        pool: &PgPool,
+        key: &CapabilityCacheKey,
+        selectors: Option<Value>,
+        outcome_metadata: Value,
+        result_summary: Option<&str>,
+        success_count: i32,
+        last_success_at: DateTime<Utc>,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            r#"
+            INSERT INTO capability_memories (
+                subject_id,
+                capability_type,
+                capability_identifier,
+                executor_kind,
+                selectors,
+                outcome_metadata,
+                result_summary,
+                success_count,
+                last_success_at,
+                updated_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+            ON CONFLICT (subject_id, capability_type, capability_identifier, executor_kind)
+            DO UPDATE SET
+                selectors = EXCLUDED.selectors,
+                outcome_metadata = EXCLUDED.outcome_metadata,
+                result_summary = EXCLUDED.result_summary,
+                success_count = EXCLUDED.success_count,
+                last_success_at = EXCLUDED.last_success_at,
+                updated_at = NOW()
+            "#,
+        )
+        .bind(key.subject_id)
+        .bind(&key.capability_type)
+        .bind(&key.capability_identifier)
+        .bind(&key.executor_kind)
+        .bind(selectors)
+        .bind(outcome_metadata)
+        .bind(result_summary)
+        .bind(success_count)
+        .bind(last_success_at)
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
+
     #[tokio::test]
     async fn health_endpoint_returns_ok() {
         let pool = PgPoolOptions::new()
@@ -1040,6 +1353,8 @@ mod tests {
         }
         let audit = AuditTimelineRepository::new(waitlist.pool().clone());
         let profiles = ProfilesRepository::new(waitlist.pool().clone());
+        let capabilities = CapabilityRepository::new(waitlist.pool().clone());
+        let cache = CapabilityCache::disabled();
         let telegram =
             TelegramWebhookVerifier::new(TELEGRAM_SECRET).expect("construct telegram verifier");
         let portal_subject_id =
@@ -1052,6 +1367,8 @@ mod tests {
             watchers,
             telegram,
             profiles,
+            capabilities,
+            cache,
             portal_subject_id,
         };
         let app = build_router(state);
@@ -1673,6 +1990,447 @@ mod tests {
             payload["pvp"]["profile"]["voice"]["voice_id"],
             json!("voice_test")
         );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn capability_schema_cache_emits_hit_and_miss_metrics() {
+        if !docker_available() {
+            eprintln!(
+                "skipping capability_schema_cache_emits_hit_and_miss_metrics: docker unavailable"
+            );
+            return;
+        }
+
+        metrics::test::reset();
+
+        let postgres_image = GenericImage::new(POSTGRES_IMAGE, POSTGRES_TAG)
+            .with_exposed_port(5432.tcp())
+            .with_wait_for(WaitFor::message_on_stdout(
+                "database system is ready to accept connections",
+            ))
+            .with_env_var("POSTGRES_USER", POSTGRES_USER)
+            .with_env_var("POSTGRES_PASSWORD", POSTGRES_PASSWORD)
+            .with_env_var("POSTGRES_DB", POSTGRES_DB);
+        let redis_image = GenericImage::new(REDIS_IMAGE, REDIS_TAG)
+            .with_exposed_port(6379.tcp())
+            .with_wait_for(WaitFor::message_on_stdout("Ready to accept connections"));
+
+        let postgres = postgres_image.start().await.expect("start postgres");
+        let redis = redis_image.start().await.expect("start redis");
+
+        wait_for_postgres_ready(&postgres).await;
+
+        let pg_port = postgres
+            .get_host_port_ipv4(5432.tcp())
+            .await
+            .expect("postgres port");
+        let redis_port = redis
+            .get_host_port_ipv4(6379.tcp())
+            .await
+            .expect("redis port");
+
+        let database_url = format!(
+            "postgres://{}:{}@127.0.0.1:{}/{}",
+            POSTGRES_USER, POSTGRES_PASSWORD, pg_port, POSTGRES_DB
+        );
+        let redis_url = format!("redis://127.0.0.1:{redis_port}/0");
+
+        let waitlist = connect_with_retry(&database_url).await;
+        waitlist.migrate().await.expect("run migrations");
+        ensure_capability_memory_schema(waitlist.pool())
+            .await
+            .expect("create capability memories schema");
+
+        let subject_id = Uuid::new_v4();
+        let key = CapabilityCacheKey {
+            subject_id,
+            capability_type: "web".into(),
+            capability_identifier: "calendar.example.com".into(),
+            executor_kind: "generic-web".into(),
+        };
+        insert_capability_memory(
+            waitlist.pool(),
+            &key,
+            Some(json!({
+                "login_button": "#login",
+                "otp_field": "[data-test\"otp\"]"
+            })),
+            json!({
+                "postcondition": {
+                    "status": "booked"
+                },
+                "cost": {
+                    "amount_minor_units": 2599,
+                    "currency": "USD"
+                }
+            }),
+            Some("generic-web satisfied intent book_call"),
+            3,
+            Utc::now(),
+        )
+        .await
+        .expect("seed capability memory");
+
+        let account_linking = AccountLinkingRepository::new(waitlist.pool().clone());
+        let ingress = IngressRepository::new(waitlist.pool().clone());
+        let audit = AuditTimelineRepository::new(waitlist.pool().clone());
+        let watchers = WatcherRepository::new(waitlist.pool().clone());
+        let profiles = ProfilesRepository::new(waitlist.pool().clone());
+        let capabilities = CapabilityRepository::new(waitlist.pool().clone());
+        let cache = CapabilityCache::connect(Some(redis_url), DEFAULT_CAPABILITY_CACHE_TTL).await;
+        let portal_subject_id =
+            Uuid::parse_str(PORTAL_ACCOUNT_ID).expect("valid portal subject uuid");
+        let telegram =
+            TelegramWebhookVerifier::new(TELEGRAM_SECRET).expect("construct telegram verifier");
+
+        capabilities
+            .clone()
+            .fetch(&key)
+            .await
+            .expect("load capability")
+            .expect("capability stored");
+
+        let router = build_router(AppState {
+            waitlist,
+            account_linking,
+            ingress,
+            audit,
+            watchers,
+            telegram,
+            profiles,
+            capabilities,
+            cache,
+            portal_subject_id,
+        });
+
+        let schema_route = format!(
+            "/capabilities/{}/{}/{}/{}/schema",
+            subject_id, "web", "calendar.example.com", "generic-web"
+        );
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(&schema_route)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let status = response.status();
+        let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(
+            status,
+            StatusCode::OK,
+            "schema lookup failed: {}",
+            String::from_utf8_lossy(&body_bytes)
+        );
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(&schema_route)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let status = response.status();
+        let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(
+            status,
+            StatusCode::OK,
+            "schema lookup failed: {}",
+            String::from_utf8_lossy(&body_bytes)
+        );
+
+        let snapshot = metrics::test::snapshot();
+        assert_eq!(snapshot.schema_hits, 1);
+        assert_eq!(snapshot.schema_miss, 1);
+        assert_eq!(snapshot.schema_unavailable, 0);
+        assert_eq!(snapshot.cost_hits, 0);
+        assert_eq!(snapshot.cost_miss, 0);
+        assert_eq!(snapshot.cost_unavailable, 0);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn capability_cost_cache_emits_hit_and_miss_metrics() {
+        if !docker_available() {
+            eprintln!(
+                "skipping capability_cost_cache_emits_hit_and_miss_metrics: docker unavailable"
+            );
+            return;
+        }
+
+        metrics::test::reset();
+
+        let postgres_image = GenericImage::new(POSTGRES_IMAGE, POSTGRES_TAG)
+            .with_exposed_port(5432.tcp())
+            .with_wait_for(WaitFor::message_on_stdout(
+                "database system is ready to accept connections",
+            ))
+            .with_env_var("POSTGRES_USER", POSTGRES_USER)
+            .with_env_var("POSTGRES_PASSWORD", POSTGRES_PASSWORD)
+            .with_env_var("POSTGRES_DB", POSTGRES_DB);
+        let redis_image = GenericImage::new(REDIS_IMAGE, REDIS_TAG)
+            .with_exposed_port(6379.tcp())
+            .with_wait_for(WaitFor::message_on_stdout("Ready to accept connections"));
+
+        let postgres = postgres_image.start().await.expect("start postgres");
+        let redis = redis_image.start().await.expect("start redis");
+
+        wait_for_postgres_ready(&postgres).await;
+
+        let pg_port = postgres
+            .get_host_port_ipv4(5432.tcp())
+            .await
+            .expect("postgres port");
+        let redis_port = redis
+            .get_host_port_ipv4(6379.tcp())
+            .await
+            .expect("redis port");
+
+        let database_url = format!(
+            "postgres://{}:{}@127.0.0.1:{}/{}",
+            POSTGRES_USER, POSTGRES_PASSWORD, pg_port, POSTGRES_DB
+        );
+        let redis_url = format!("redis://127.0.0.1:{redis_port}/0");
+
+        let waitlist = connect_with_retry(&database_url).await;
+        waitlist.migrate().await.expect("run migrations");
+        ensure_capability_memory_schema(waitlist.pool())
+            .await
+            .expect("create capability memories schema");
+
+        let subject_id = Uuid::new_v4();
+        let key = CapabilityCacheKey {
+            subject_id,
+            capability_type: "web".into(),
+            capability_identifier: "travel.example.com".into(),
+            executor_kind: "generic-web".into(),
+        };
+        insert_capability_memory(
+            waitlist.pool(),
+            &key,
+            None,
+            json!({
+                "postcondition": {
+                    "status": "completed"
+                },
+                "cost": {
+                    "amount_minor_units": 1899,
+                    "currency": "EUR"
+                }
+            }),
+            None,
+            2,
+            Utc::now(),
+        )
+        .await
+        .expect("seed capability memory");
+
+        let account_linking = AccountLinkingRepository::new(waitlist.pool().clone());
+        let ingress = IngressRepository::new(waitlist.pool().clone());
+        let audit = AuditTimelineRepository::new(waitlist.pool().clone());
+        let watchers = WatcherRepository::new(waitlist.pool().clone());
+        let profiles = ProfilesRepository::new(waitlist.pool().clone());
+        let capabilities = CapabilityRepository::new(waitlist.pool().clone());
+        let cache = CapabilityCache::connect(Some(redis_url), DEFAULT_CAPABILITY_CACHE_TTL).await;
+        let portal_subject_id =
+            Uuid::parse_str(PORTAL_ACCOUNT_ID).expect("valid portal subject uuid");
+        let telegram =
+            TelegramWebhookVerifier::new(TELEGRAM_SECRET).expect("construct telegram verifier");
+
+        capabilities
+            .clone()
+            .fetch(&key)
+            .await
+            .expect("load capability")
+            .expect("capability stored");
+
+        let router = build_router(AppState {
+            waitlist,
+            account_linking,
+            ingress,
+            audit,
+            watchers,
+            telegram,
+            profiles,
+            capabilities,
+            cache,
+            portal_subject_id,
+        });
+
+        let cost_route = format!(
+            "/capabilities/{}/{}/{}/{}/cost",
+            subject_id, "web", "travel.example.com", "generic-web"
+        );
+
+        for _ in 0..2 {
+            let response = router
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri(&cost_route)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            let status = response.status();
+            let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+            assert_eq!(
+                status,
+                StatusCode::OK,
+                "cost lookup failed: {}",
+                String::from_utf8_lossy(&body_bytes)
+            );
+        }
+
+        let snapshot = metrics::test::snapshot();
+        assert_eq!(snapshot.cost_hits, 1);
+        assert_eq!(snapshot.cost_miss, 1);
+        assert_eq!(snapshot.cost_unavailable, 0);
+        assert_eq!(snapshot.schema_hits, 0);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn capability_cache_gracefully_handles_unavailable_backend() {
+        if !docker_available() {
+            eprintln!(
+                "skipping capability_cache_gracefully_handles_unavailable_backend: docker unavailable"
+            );
+            return;
+        }
+
+        metrics::test::reset();
+
+        let postgres_image = GenericImage::new(POSTGRES_IMAGE, POSTGRES_TAG)
+            .with_exposed_port(5432.tcp())
+            .with_wait_for(WaitFor::message_on_stdout(
+                "database system is ready to accept connections",
+            ))
+            .with_env_var("POSTGRES_USER", POSTGRES_USER)
+            .with_env_var("POSTGRES_PASSWORD", POSTGRES_PASSWORD)
+            .with_env_var("POSTGRES_DB", POSTGRES_DB);
+
+        let postgres = postgres_image.start().await.expect("start postgres");
+        wait_for_postgres_ready(&postgres).await;
+
+        let pg_port = postgres
+            .get_host_port_ipv4(5432.tcp())
+            .await
+            .expect("postgres port");
+
+        let database_url = format!(
+            "postgres://{}:{}@127.0.0.1:{}/{}",
+            POSTGRES_USER, POSTGRES_PASSWORD, pg_port, POSTGRES_DB
+        );
+
+        let waitlist = connect_with_retry(&database_url).await;
+        waitlist.migrate().await.expect("run migrations");
+        ensure_capability_memory_schema(waitlist.pool())
+            .await
+            .expect("create capability memories schema");
+
+        let subject_id = Uuid::new_v4();
+        let key = CapabilityCacheKey {
+            subject_id,
+            capability_type: "web".into(),
+            capability_identifier: "unavailable.example.com".into(),
+            executor_kind: "generic-web".into(),
+        };
+        insert_capability_memory(
+            waitlist.pool(),
+            &key,
+            None,
+            json!({
+                "postcondition": {
+                    "status": "completed"
+                },
+                "cost": {
+                    "amount_minor_units": 990,
+                    "currency": "GBP"
+                }
+            }),
+            None,
+            1,
+            Utc::now(),
+        )
+        .await
+        .expect("seed capability memory");
+
+        let account_linking = AccountLinkingRepository::new(waitlist.pool().clone());
+        let ingress = IngressRepository::new(waitlist.pool().clone());
+        let audit = AuditTimelineRepository::new(waitlist.pool().clone());
+        let watchers = WatcherRepository::new(waitlist.pool().clone());
+        let profiles = ProfilesRepository::new(waitlist.pool().clone());
+        let capabilities = CapabilityRepository::new(waitlist.pool().clone());
+        let cache = CapabilityCache::disabled();
+        let portal_subject_id =
+            Uuid::parse_str(PORTAL_ACCOUNT_ID).expect("valid portal subject uuid");
+        let telegram =
+            TelegramWebhookVerifier::new(TELEGRAM_SECRET).expect("construct telegram verifier");
+
+        capabilities
+            .clone()
+            .fetch(&key)
+            .await
+            .expect("load capability")
+            .expect("capability stored");
+
+        let router = build_router(AppState {
+            waitlist,
+            account_linking,
+            ingress,
+            audit,
+            watchers,
+            telegram,
+            profiles,
+            capabilities,
+            cache,
+            portal_subject_id,
+        });
+
+        let cost_route = format!(
+            "/capabilities/{}/{}/{}/{}/cost",
+            subject_id, "web", "unavailable.example.com", "generic-web"
+        );
+
+        for _ in 0..2 {
+            let response = router
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri(&cost_route)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            let status = response.status();
+            let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+            assert_eq!(
+                status,
+                StatusCode::OK,
+                "cost lookup failed: {}",
+                String::from_utf8_lossy(&body_bytes)
+            );
+        }
+
+        let snapshot = metrics::test::snapshot();
+        assert_eq!(snapshot.cost_hits, 0);
+        assert_eq!(snapshot.cost_miss, 0);
+        assert_eq!(snapshot.cost_unavailable, 2);
     }
 
     #[test]

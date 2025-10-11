@@ -135,6 +135,12 @@ Follow these steps to provision the Telegram channel safely across local and sta
 | `LLM_RATE_LIMIT_PER_SECOND` | `5` | Max planner requests accepted per second. |
 | `LLM_LOG_TRUNCATE` | `256` | Character limit for prompt/response previews in logs. |
 
+### API Environment
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `REDIS_URL` | `redis://redis:6379/0` | Redis connection string for capability schema and cost caches (5 minute TTL). Leave unset to disable caching (requests log `cache_unavailable` and fall back to Postgres). |
+
 Planner containers resolve the gateway via the `LLM_GATEWAY_URL` environment variable, set to `http://llm-gateway:8086/completions` in Docker Compose. The compose file also overrides `LLM_VLLM_URL` to `http://mock-llm:8085/v1/completions` so the stack works without the optional vLLM profile; point this back at `http://vllm-gateway:8000/v1/completions` when running with GPU-backed inference.
 
 The Docker Compose definition lives in `infra/docker-compose.yml` and mirrors how the future GitHub Actions container smoke tests will exercise the stack.

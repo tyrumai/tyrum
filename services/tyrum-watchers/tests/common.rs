@@ -8,6 +8,7 @@ use testcontainers::{
 pub const NATS_IMAGE: &str = "nats";
 pub const NATS_TAG: &str = "2.10-alpine";
 pub const NATS_PORT: u16 = 4222;
+pub const NATS_MONITORING_PORT: u16 = 8222;
 
 pub struct NatsFixture {
     #[allow(dead_code)]
@@ -24,9 +25,10 @@ impl NatsFixture {
     pub async fn start() -> Result<Self> {
         let image = GenericImage::new(NATS_IMAGE, NATS_TAG)
             .with_exposed_port(NATS_PORT.tcp())
+            .with_exposed_port(NATS_MONITORING_PORT.tcp())
             .with_wait_for(WaitFor::http(
                 HttpWaitStrategy::new("/healthz?js-enabled=true")
-                    .with_port(8222.tcp())
+                    .with_port(NATS_MONITORING_PORT.tcp())
                     .with_expected_status_code(200u16),
             ))
             .with_cmd(["-js", "-m", "8222"]);
