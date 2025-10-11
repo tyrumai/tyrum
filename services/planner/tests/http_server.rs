@@ -23,7 +23,8 @@ use tyrum_discovery::{
 };
 use tyrum_memory::{MemoryDal, PamProfileUpsert};
 use tyrum_planner::{
-    ActionPrimitiveKind, EventLog, PlanOutcome, PlanRequest, PlanResponse, ProfileStore,
+    ActionPrimitiveKind, CapabilityMemoryService, EventLog, PlanOutcome, PlanRequest, PlanResponse,
+    ProfileStore,
     http::{MAX_PLAN_REQUEST_BYTES, PlannerState, build_router},
     policy::PolicyClient,
 };
@@ -627,6 +628,7 @@ async fn planner_injects_pam_profile_reference_from_store() {
         })
         .await
         .expect("seed pam profile");
+    let capability_memory = CapabilityMemoryService::new(memory.clone());
 
     let state = PlannerState {
         policy_client,
@@ -634,6 +636,7 @@ async fn planner_injects_pam_profile_reference_from_store() {
         discovery: Arc::new(DefaultDiscoveryPipeline::new()),
         wallet_client,
         profiles,
+        capability_memory,
     };
 
     let mut request = sample_request();
@@ -827,6 +830,7 @@ async fn planner_state_with_pipeline(
     let event_log = EventLog::from_pool(postgres.pool().clone());
     event_log.migrate().await.expect("migrate planner schema");
     let profiles = ProfileStore::new(event_log.pool().clone());
+    let capability_memory = CapabilityMemoryService::new(MemoryDal::new(event_log.pool().clone()));
 
     (
         PlannerState {
@@ -835,6 +839,7 @@ async fn planner_state_with_pipeline(
             discovery,
             wallet_client,
             profiles,
+            capability_memory,
         },
         server,
         wallet_server,

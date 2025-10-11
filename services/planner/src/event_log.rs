@@ -162,7 +162,7 @@ impl EventLog {
     }
 }
 
-fn capability_type_label(kind: ActionPrimitiveKind) -> &'static str {
+pub(crate) fn capability_type_label(kind: ActionPrimitiveKind) -> &'static str {
     match kind {
         ActionPrimitiveKind::Web => "web",
         ActionPrimitiveKind::Android => "android",
@@ -178,7 +178,7 @@ fn capability_type_label(kind: ActionPrimitiveKind) -> &'static str {
     }
 }
 
-fn derive_capability_identifier(primitive: &ActionPrimitive) -> Option<String> {
+pub(crate) fn derive_capability_identifier(primitive: &ActionPrimitive) -> Option<String> {
     if let Some(identifier) = primitive
         .args
         .get("capability_identifier")

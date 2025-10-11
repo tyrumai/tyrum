@@ -11,8 +11,9 @@ use serde_json::json;
 use sqlx::Row;
 use tower::ServiceExt;
 use tyrum_discovery::DefaultDiscoveryPipeline;
+use tyrum_memory::MemoryDal;
 use tyrum_planner::{
-    ActionPrimitiveKind, EventLog, PlanOutcome, PlanRequest, ProfileStore,
+    ActionPrimitiveKind, CapabilityMemoryService, EventLog, PlanOutcome, PlanRequest, ProfileStore,
     http::{PlannerState, build_router},
 };
 use tyrum_shared::{
@@ -114,6 +115,7 @@ async fn planner_state() -> (
     let event_log = EventLog::from_pool(postgres.pool().clone());
     event_log.migrate().await.expect("migrate planner schema");
     let profiles = ProfileStore::new(event_log.pool().clone());
+    let capability_memory = CapabilityMemoryService::new(MemoryDal::new(event_log.pool().clone()));
 
     let state = PlannerState {
         policy_client,
@@ -121,6 +123,7 @@ async fn planner_state() -> (
         discovery: Arc::new(DefaultDiscoveryPipeline::new()),
         wallet_client,
         profiles,
+        capability_memory,
     };
 
     (state, policy_server, wallet_server, postgres)

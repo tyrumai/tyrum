@@ -1,5 +1,6 @@
 //! Core primitives shared between the planner service and its dependants.
 
+pub mod capability_memory;
 pub mod event_log;
 pub mod http;
 pub mod policy;
@@ -7,6 +8,7 @@ pub mod profiles;
 pub mod state_machine;
 pub mod wallet;
 
+pub use capability_memory::CapabilityMemoryService;
 pub use event_log::{
     AppendOutcome, CapabilityMemoryResult, CapabilityMemorySkipReason, EventLog, EventLogError,
     EventLogSettings, NewPlannerEvent, PersistedPlannerEvent,

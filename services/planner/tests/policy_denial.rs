@@ -16,8 +16,10 @@ use serde_json::json;
 use sqlx::Row;
 use tower::ServiceExt;
 use tyrum_discovery::DefaultDiscoveryPipeline;
+use tyrum_memory::MemoryDal;
 use tyrum_planner::{
-    EventLog, PlanErrorCode, PlanOutcome, PlanRequest, PlanResponse, ProfileStore,
+    CapabilityMemoryService, EventLog, PlanErrorCode, PlanOutcome, PlanRequest, PlanResponse,
+    ProfileStore,
     http::{PlannerState, build_router},
 };
 use tyrum_shared::{
@@ -59,6 +61,7 @@ async fn policy_denial_is_logged_and_sanitized() {
     .await;
 
     let profiles = ProfileStore::new(event_log.pool().clone());
+    let capability_memory = CapabilityMemoryService::new(MemoryDal::new(event_log.pool().clone()));
 
     let state = PlannerState {
         policy_client,
@@ -66,6 +69,7 @@ async fn policy_denial_is_logged_and_sanitized() {
         discovery: Arc::new(DefaultDiscoveryPipeline::new()),
         wallet_client,
         profiles,
+        capability_memory,
     };
 
     let request = sample_request();
