@@ -67,9 +67,10 @@ services:
         periodSeconds: 10
     hpa:
       enabled: true
-      minReplicas: 1
-      maxReplicas: 3
-      targetCPUUtilizationPercentage: 60
+      minReplicas: 2
+      maxReplicas: 6
+      targetCPUUtilizationPercentage: 55
+      targetMemoryUtilizationPercentage: 70
     resources: {}
     env: []
     envFrom: []
@@ -170,9 +171,10 @@ services:
         periodSeconds: 10
     hpa:
       enabled: true
-      minReplicas: 1
-      maxReplicas: 3
-      targetCPUUtilizationPercentage: 60
+      minReplicas: 2
+      maxReplicas: 8
+      targetCPUUtilizationPercentage: 55
+      targetMemoryUtilizationPercentage: 70
     resources: {}
     env: []
     envFrom: []
@@ -772,6 +774,24 @@ services:
       port: 5432
   redis:
     replicaCount: 1
+    cluster:
+      enabled: true
+      replicas: 3
+      nodeTimeout: 5000
+      persistence:
+        size: 8Gi
+        storageClass: ""
+        volumeName: redis-data
+        accessModes:
+        - ReadWriteOnce
+    standalone:
+      command:
+      - redis-server
+      - --appendonly
+      - 'no'
+      volumeMounts: []
+      volumes: []
+      volumeClaimTemplates: []
     image:
       repository: redis
       tag: 7-alpine
@@ -781,15 +801,34 @@ services:
       type: ClusterIP
       port: 6379
       portName: tcp
+    headlessService:
+      annotations: {}
+      publishNotReadyAddresses: true
+    statefulSet:
+      podManagementPolicy: Parallel
+      updateStrategy:
+        type: RollingUpdate
     config: {}
     secrets: {}
     command:
-    - redis-server
-    - --appendonly
-    - 'no'
+    - /bin/sh
+    - -c
+    - |
+      redis-server \
+        --cluster-enabled yes \
+        --cluster-config-file /data/nodes.conf \
+        --cluster-node-timeout {{ .root.Values.services.redis.cluster.nodeTimeout }} \
+        --cluster-announce-host ${HOSTNAME}.{{ include "tyrum-core.serviceHeadlessFullname" (dict "root" .root "name" "redis") }} \
+        --cluster-announce-port {{ .root.Values.services.redis.service.port }} \
+        --cluster-announce-bus-port 16379 \
+        --appendonly yes \
+        --save 60 1000 \
+        --protected-mode no
     ports:
-    - name: tcp
+    - name: redis
       containerPort: 6379
+    - name: redis-bus
+      containerPort: 16379
     probes:
       liveness:
         exec:
@@ -810,15 +849,18 @@ services:
     resources: {}
     env: []
     envFrom: []
-    volumeMounts: []
-    volumes: []
+    volumeMounts:
+    - name: redis-data
+      mountPath: /data
+    volumeClaimTemplates: []
     test:
       image: redis:7-alpine
       command:
-      - redis-cli
-      - -h
-      - '{{ include "tyrum-core.serviceHostname" (dict "root" . "name" "redis") }}'
-      - ping
+      - /bin/sh
+      - -c
+      - |
+        set -euo pipefail
+        redis-cli -h {{ include "tyrum-core.serviceHostname" (dict "root" . "name" "redis") }} -c cluster info | grep -q 'cluster_state:ok'
       port: 6379
   otel-collector:
     replicaCount: 1
@@ -1154,6 +1196,68 @@ services:
       path: /api/health
       port: 3001
 jobs:
+  redis-cluster-init:
+    enabled: true
+    annotations:
+      helm.sh/hook: post-install,post-upgrade
+      helm.sh/hook-weight: "10"
+      helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+    image:
+      repository: redis
+      tag: 7-alpine
+      pullPolicy: IfNotPresent
+    command:
+    - /bin/sh
+    - -c
+    - |
+      set -euo pipefail
+      if [ "{{ .root.Values.services.redis.cluster.enabled }}" != "true" ]; then
+        echo "Redis cluster disabled; skipping bootstrap"
+        exit 0
+      fi
+
+      REPLICAS={{ default 3 .root.Values.services.redis.cluster.replicas }}
+      PORT={{ default 6379 .root.Values.services.redis.service.port }}
+      HOST_PREFIX={{ include "tyrum-core.serviceFullname" (dict "root" .root "name" "redis") }}
+      HEADLESS={{ include "tyrum-core.serviceHeadlessFullname" (dict "root" .root "name" "redis") }}
+
+      wait_for() {
+        local host="$1"
+        local attempts=0
+        until redis-cli -h "$host" -p $PORT PING >/dev/null 2>&1; do
+          attempts=$((attempts+1))
+          if [ $attempts -gt 150 ]; then
+            echo "Timed out waiting for $host"
+            exit 1
+          fi
+          sleep 2
+        done
+      }
+
+      ordinal=0
+      while [ $ordinal -lt $REPLICAS ]; do
+        wait_for "${HOST_PREFIX}-${ordinal}.${HEADLESS}"
+        ordinal=$((ordinal+1))
+      done
+
+      if redis-cli -h "${HOST_PREFIX}-0.${HEADLESS}" -p $PORT cluster info | grep -q 'cluster_state:ok'; then
+        echo "Redis cluster already configured"
+        exit 0
+      fi
+
+      HOSTS=""
+      ordinal=0
+      while [ $ordinal -lt $REPLICAS ]; do
+        HOSTS="$HOSTS ${HOST_PREFIX}-${ordinal}.${HEADLESS}:$PORT"
+        ordinal=$((ordinal+1))
+      done
+
+      redis-cli --cluster create $HOSTS --cluster-replicas 0 --cluster-yes
+
+      if ! redis-cli -h "${HOST_PREFIX}-0.${HEADLESS}" -p $PORT cluster info | grep -q 'cluster_state:ok'; then
+        echo "Cluster creation failed"
+        exit 1
+      fi
   api-migrations:
     enabled: true
     annotations:

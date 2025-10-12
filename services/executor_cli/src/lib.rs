@@ -442,6 +442,7 @@ mod tests {
         let mut file = fs::File::create(&path)?;
         file.write_all(format!("#!/bin/sh\n{body}\n").as_bytes())?;
         file.sync_all()?;
+        drop(file);
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;

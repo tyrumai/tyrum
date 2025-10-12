@@ -43,7 +43,10 @@ observability dashboards and alerting paths required for readiness checks.
    kubectl rollout status deployment/tyrum-core-api --namespace tyrum-core
    kubectl rollout status deployment/tyrum-core-policy --namespace tyrum-core
    kubectl rollout status deployment/tyrum-core-web --namespace tyrum-core
+   kubectl rollout status statefulset/tyrum-core-redis --namespace tyrum-core
    helm test tyrum-core --namespace tyrum-core
+   kubectl logs job/tyrum-core-redis-cluster-init --namespace tyrum-core
+   kubectl get hpa --namespace tyrum-core | grep -E 'policy|planner|web'
    ```
 6. Validate service health via the staging ingress (replace `<ingress-host>` with
    the DNS record returned by `kubectl get ingress`):
@@ -172,6 +175,20 @@ curl -X POST "${TELEGRAM_WEBHOOK_URL}" \
 ```
 
 Follow with `kubectl logs deployment/tyrum-core-api --namespace tyrum-core | tail -n 20` or the staging Grafana ingress dashboard to confirm the request succeeded and persisted to `ingress_threads`/`ingress_messages`.
+
+### Redis cluster validation
+Confirm the Redis cluster formed correctly after the Helm hook runs:
+
+```bash
+kubectl exec -n tyrum-core statefulset/tyrum-core-redis -- \
+  redis-cli -c cluster info | grep cluster_state
+
+kubectl exec -n tyrum-core statefulset/tyrum-core-redis -- \
+  redis-cli -c cluster nodes
+```
+
+All three pods should be listed as masters with unique hash-slot ranges and the
+`cluster_state:ok` flag.
 
 ## Observability & Alerting Links
 - Grafana (Control Plane Overview):

@@ -53,6 +53,11 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- printf "%s-%s" (include "tyrum-core.fullname" .root) .name | trunc 63 | trimSuffix "-" -}}
 {{- end }}
 
+{{/* Build a qualified name for a headless service associated with an entry. */}}
+{{- define "tyrum-core.serviceHeadlessFullname" -}}
+{{- printf "%s-headless" (include "tyrum-core.serviceFullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end }}
+
 {{/* Render a value that may contain nested templates. */}}
 {{- define "tyrum-core.renderValue" -}}
 {{- $root := index . 0 -}}
@@ -115,17 +120,66 @@ tyrum.dev/service: {{ .name }}
 {{- end -}}
 {{- end }}
 
-{{/* Render a deployment manifest for a service entry. */}}
-{{- define "tyrum-core.deployment" -}}
+{{/* Render a workload manifest (Deployment or StatefulSet) for a service entry. */}}
+{{- define "tyrum-core.workload" -}}
 {{- $root := .root -}}
 {{- $name := .name -}}
 {{- $service := .service -}}
 {{- if (default true $service.enabled) -}}
-{{- $kind := default "Deployment" $service.kind | lower -}}
-{{- if ne $kind "deployment" }}
-{{- fail (printf "service %s uses unsupported kind %s" $name $service.kind) -}}
-{{- end }}
+{{- $clusterEnabled := false -}}
+{{- if $service.cluster -}}
+  {{- $clusterEnabled = default true $service.cluster.enabled -}}
+{{- end -}}
+{{- $defaultKind := "Deployment" -}}
+{{- if and $clusterEnabled (not $service.kind) -}}
+  {{- $defaultKind = "StatefulSet" -}}
+{{- end -}}
+{{- $kind := default $defaultKind $service.kind -}}
+{{- $kindLower := lower $kind -}}
+{{- $replicas := default 1 $service.replicaCount -}}
+{{- if and $clusterEnabled $service.cluster $service.cluster.replicas -}}
+  {{- $replicas = $service.cluster.replicas -}}
+{{- end -}}
+{{- $command := $service.command -}}
+{{- $volumeMounts := $service.volumeMounts -}}
+{{- $volumes := $service.volumes -}}
+{{- $volumeClaimTemplates := $service.volumeClaimTemplates -}}
+{{- if and $service.standalone (not $clusterEnabled) -}}
+  {{- if $service.standalone.command -}}
+    {{- $command = $service.standalone.command -}}
+  {{- end -}}
+  {{- if hasKey $service.standalone "volumeMounts" -}}
+    {{- $volumeMounts = $service.standalone.volumeMounts -}}
+  {{- end -}}
+  {{- if hasKey $service.standalone "volumes" -}}
+    {{- $volumes = $service.standalone.volumes -}}
+  {{- end -}}
+  {{- if hasKey $service.standalone "volumeClaimTemplates" -}}
+    {{- $volumeClaimTemplates = $service.standalone.volumeClaimTemplates -}}
+  {{- end -}}
+{{- end -}}
+{{- if and $clusterEnabled (or (not $volumeClaimTemplates) (eq (len $volumeClaimTemplates) 0)) -}}
+  {{- $persistence := dict -}}
+  {{- if and $service.cluster $service.cluster.persistence -}}
+    {{- $persistence = $service.cluster.persistence -}}
+  {{- end -}}
+  {{- $accessModes := default (list "ReadWriteOnce") (index $persistence "accessModes") -}}
+  {{- $storageSize := default "8Gi" (index $persistence "size") -}}
+  {{- $storageClass := default "" (index $persistence "storageClass") -}}
+  {{- $defaultVolumeName := printf "%s-data" $name | trunc 63 | trimSuffix "-" -}}
+  {{- $volumeName := default $defaultVolumeName (index $persistence "volumeName") -}}
+  {{- $claimSpec := dict "accessModes" $accessModes -}}
+  {{- $_ := set $claimSpec "resources" (dict "requests" (dict "storage" $storageSize)) -}}
+  {{- if $storageClass }}
+    {{- $_ = set $claimSpec "storageClassName" $storageClass -}}
+  {{- end -}}
+  {{- $claimMeta := dict "name" $volumeName -}}
+  {{- $claim := dict "metadata" $claimMeta "spec" $claimSpec -}}
+  {{- $volumeClaimTemplates = list $claim -}}
+{{- end -}}
 {{- $svcFullname := include "tyrum-core.serviceFullname" (dict "root" $root "name" $name) -}}
+{{- $podTemplate := dict "root" $root "name" $name "service" $service "command" $command "volumeMounts" $volumeMounts "volumes" $volumes -}}
+{{- if eq $kindLower "deployment" -}}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -136,7 +190,7 @@ metadata:
     app.kubernetes.io/component: {{ $name }}
     tyrum.dev/service: {{ $name }}
 spec:
-  replicas: {{ default 1 $service.replicaCount }}
+  replicas: {{ $replicas }}
   selector:
     matchLabels:
       {{- include "tyrum-core.serviceSelectorLabels" (dict "root" $root "name" $name) | nindent 6 }}
@@ -144,6 +198,76 @@ spec:
   strategy:
     {{- toYaml . | nindent 4 }}
   {{- end }}
+{{ include "tyrum-core.workloadPodTemplate" $podTemplate | nindent 2 }}
+{{- else if eq $kindLower "statefulset" -}}
+{{- $serviceName := include "tyrum-core.serviceFullname" (dict "root" $root "name" $name) -}}
+{{- $headlessEnabled := $clusterEnabled -}}
+{{- if $service.headlessService -}}
+  {{- if hasKey $service.headlessService "enabled" -}}
+    {{- $headlessEnabled = default false $service.headlessService.enabled -}}
+  {{- else -}}
+    {{- $headlessEnabled = $clusterEnabled -}}
+  {{- end -}}
+{{- end -}}
+{{- if $headlessEnabled -}}
+  {{- $serviceName = include "tyrum-core.serviceHeadlessFullname" (dict "root" $root "name" $name) -}}
+{{- end -}}
+{{- if and $service.statefulSet $service.statefulSet.serviceName -}}
+  {{- $serviceName = include "tyrum-core.renderValue" (list $root $service.statefulSet.serviceName) -}}
+{{- end -}}
+{{- $podManagementPolicy := "" -}}
+{{- if and $service.statefulSet $service.statefulSet.podManagementPolicy -}}
+  {{- $podManagementPolicy = $service.statefulSet.podManagementPolicy -}}
+{{- end -}}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $svcFullname }}
+  labels:
+    {{- include "tyrum-core.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+    tyrum.dev/service: {{ $name }}
+spec:
+  serviceName: {{ $serviceName }}
+  replicas: {{ $replicas }}
+  selector:
+    matchLabels:
+      {{- include "tyrum-core.serviceSelectorLabels" (dict "root" $root "name" $name) | nindent 6 }}
+  {{- if $podManagementPolicy }}
+  podManagementPolicy: {{ $podManagementPolicy }}
+  {{- end }}
+  {{- with $service.statefulSet.updateStrategy }}
+  updateStrategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with $service.statefulSet.persistentVolumeClaimRetentionPolicy }}
+  persistentVolumeClaimRetentionPolicy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{ include "tyrum-core.workloadPodTemplate" $podTemplate | nindent 2 }}
+  {{- if $volumeClaimTemplates }}
+  volumeClaimTemplates:
+    {{- $vctYaml := tpl (toYaml $volumeClaimTemplates) (dict "root" $root "name" $name "service" $service) -}}
+    {{- if contains $vctYaml "{{" -}}
+      {{- $vctYaml = tpl $vctYaml (dict "root" $root "name" $name "service" $service) -}}
+    {{- end -}}
+{{ $vctYaml | nindent 4 }}
+  {{- end }}
+{{- else -}}
+{{- fail (printf "service %s uses unsupported kind %s" $name $kind) -}}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/* Shared pod template metadata/spec for workloads. */}}
+{{- define "tyrum-core.workloadPodTemplate" -}}
+{{- $root := .root -}}
+{{- $name := .name -}}
+{{- $service := .service -}}
+{{- $command := .command -}}
+{{- $volumeMounts := .volumeMounts -}}
+{{- $volumes := .volumes -}}
   template:
     metadata:
       labels:
@@ -176,7 +300,7 @@ spec:
         - name: {{ $name }}
           image: {{ printf "%s:%s" $service.image.repository $tag }}
           imagePullPolicy: {{ default "IfNotPresent" $service.image.pullPolicy }}
-          {{- with $service.command }}
+          {{- with $command }}
           command:
             {{- $cmdYaml := tpl (toYaml .) (dict "root" $root "name" $name "service" $service) -}}
             {{- if contains $cmdYaml "{{" -}}
@@ -247,17 +371,17 @@ spec:
           startupProbe:
             {{- toYaml $service.probes.startup | nindent 12 }}
           {{- end }}
-          {{ if $service.volumeMounts }}
+          {{- if $volumeMounts }}
           volumeMounts:
-            {{- $vmYaml := tpl (toYaml $service.volumeMounts) (dict "root" $root "name" $name "service" $service) -}}
+            {{- $vmYaml := tpl (toYaml $volumeMounts) (dict "root" $root "name" $name "service" $service) -}}
             {{- if contains $vmYaml "{{" -}}
               {{- $vmYaml = tpl $vmYaml (dict "root" $root "name" $name "service" $service) -}}
             {{- end -}}
 {{ $vmYaml | nindent 12 }}
           {{- end }}
-      {{- if $service.volumes }}
+      {{- if $volumes }}
       volumes:
-        {{- $volYaml := tpl (toYaml $service.volumes) (dict "root" $root "name" $name "service" $service) -}}
+        {{- $volYaml := tpl (toYaml $volumes) (dict "root" $root "name" $name "service" $service) -}}
         {{- if contains $volYaml "{{" -}}
           {{- $volYaml = tpl $volYaml (dict "root" $root "name" $name "service" $service) -}}
         {{- end -}}
@@ -275,7 +399,6 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-{{- end }}
 {{- end }}
 
 {{/* Render a service manifest for a service entry. */}}
@@ -316,6 +439,83 @@ spec:
       targetPort: {{ default $service.service.port $service.service.targetPort }}
       protocol: {{ default "TCP" $service.service.protocol }}
   {{- end }}
+{{- end }}
+{{- end }}
+
+{{/* Render an optional headless service for discovery/stateful workloads. */}}
+{{- define "tyrum-core.headlessService" -}}
+{{- $root := .root -}}
+{{- $name := .name -}}
+{{- $service := .service -}}
+{{- if not (default true $service.enabled) -}}
+{{- else -}}
+{{- $clusterEnabled := false -}}
+{{- if $service.cluster -}}
+  {{- $clusterEnabled = default true $service.cluster.enabled -}}
+{{- end -}}
+{{- $headless := $service.headlessService -}}
+{{- $shouldRender := false -}}
+{{- if $headless -}}
+  {{- if hasKey $headless "enabled" -}}
+    {{- $shouldRender = default false $headless.enabled -}}
+  {{- else -}}
+    {{- $shouldRender = $clusterEnabled -}}
+  {{- end -}}
+{{- else if $clusterEnabled -}}
+  {{- $shouldRender = true -}}
+{{- end -}}
+{{- if $shouldRender -}}
+{{- $svcFullname := include "tyrum-core.serviceHeadlessFullname" (dict "root" $root "name" $name) -}}
+{{- $annotations := default (dict) (and $headless $headless.annotations) -}}
+{{- $publishNotReady := true -}}
+{{- if and $headless (hasKey $headless "publishNotReadyAddresses") -}}
+  {{- $publishNotReady = $headless.publishNotReadyAddresses -}}
+{{- end -}}
+{{- $portName := "tcp" -}}
+{{- if and $service.service $service.service.portName -}}
+  {{- $portName = $service.service.portName -}}
+{{- end -}}
+{{- if and $headless $headless.portName -}}
+  {{- $portName = $headless.portName -}}
+{{- end -}}
+{{- $port := int 6379 -}}
+{{- if and $service.service $service.service.port -}}
+  {{- $port = int $service.service.port -}}
+{{- end -}}
+{{- if and $headless $headless.port -}}
+  {{- $port = int $headless.port -}}
+{{- end -}}
+{{- $targetPort := $port -}}
+{{- if and $service.service $service.service.targetPort -}}
+  {{- $targetPort = $service.service.targetPort -}}
+{{- end -}}
+{{- if and $headless $headless.targetPort -}}
+  {{- $targetPort = $headless.targetPort -}}
+{{- end -}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $svcFullname }}
+  labels:
+    {{- include "tyrum-core.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+    tyrum.dev/service: {{ $name }}
+  {{- if $annotations }}
+  annotations:
+    {{- toYaml $annotations | nindent 4 }}
+  {{- end }}
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: {{ ternary true false $publishNotReady }}
+  selector:
+    {{- include "tyrum-core.serviceSelectorLabels" (dict "root" $root "name" $name) | nindent 4 }}
+  ports:
+    - name: {{ $portName }}
+      port: {{ $port }}
+      targetPort: {{ $targetPort }}
+      protocol: TCP
+{{- end }}
 {{- end }}
 {{- end }}
 
