@@ -11,6 +11,7 @@ type TimelineEvent = {
   occurred_at?: string;
   recorded_at?: string;
   action?: TimelineAction;
+  voice_rationale?: string;
   redactions?: string[];
 };
 
@@ -356,8 +357,10 @@ export default function PlanTimelinePage() {
                   const variant = statusVariant(status);
                   const executor =
                     extractExecutor(event.action) ?? "Unknown executor";
-                  const reason = extractReason(event.action);
-                  const reasonRedacted = isRedacted(reason);
+                  const fallbackReason = extractReason(event.action);
+                  const voiceRationale = ensureString(event.voice_rationale);
+                  const chosenReason = voiceRationale ?? fallbackReason;
+                  const reasonRedacted = isRedacted(chosenReason);
                   const redactions = event.redactions ?? [];
                   const stepNumber =
                     typeof event.step_index === "number"
@@ -366,7 +369,7 @@ export default function PlanTimelinePage() {
 
                   const displayReason = reasonRedacted
                     ? "Hidden for privacy (redacted)."
-                    : reason ?? "No reason provided.";
+                    : chosenReason ?? "No reason provided.";
 
                   return (
                     <li key={event.replay_id ?? `event-${event.step_index}`} className="portal-timeline__event">

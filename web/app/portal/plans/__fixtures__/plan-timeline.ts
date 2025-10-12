@@ -17,6 +17,7 @@ export const planTimelineFixture = {
           detail: "[redacted]",
         },
       },
+      voice_rationale: "[redacted]",
       redactions: ["/action/result/detail"],
     },
     {
@@ -32,8 +33,8 @@ export const planTimelineFixture = {
           notes: "Postconditions satisfied for all steps.",
         },
       },
+      voice_rationale: "Planner compiled summary for playback.",
       redactions: [],
     },
   ],
 };
-

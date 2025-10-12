@@ -330,7 +330,8 @@ async fn capability_memory_hydration_hit_populates_primitive() -> Result<()> {
                     "appointment": {
                         "status": "booked"
                     }
-                }
+                },
+                "voice_rationale": "fallback automation"
             }),
             result_summary: Some("generic-web satisfied intent book_call".into()),
             success_count: 3,
@@ -399,15 +400,23 @@ async fn capability_memory_hydration_hit_populates_primitive() -> Result<()> {
         capability.get("result_summary").and_then(Value::as_str),
         Some("generic-web satisfied intent book_call")
     );
+    let outcome_metadata = capability
+        .get("outcome_metadata")
+        .and_then(Value::as_object)
+        .expect("outcome_metadata populated");
     assert_eq!(
-        capability.get("outcome_metadata"),
+        outcome_metadata.get("postcondition"),
         Some(&json!({
-            "postcondition": {
-                "appointment": {
-                    "status": "booked"
-                }
+            "appointment": {
+                "status": "booked"
             }
         }))
+    );
+    assert_eq!(
+        outcome_metadata
+            .get("voice_rationale")
+            .and_then(Value::as_str),
+        Some("fallback automation")
     );
     let selector_hints = enriched
         .args

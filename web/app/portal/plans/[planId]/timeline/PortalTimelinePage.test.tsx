@@ -45,6 +45,9 @@ describe("PortalTimelinePage", () => {
     expect(
       await screen.findByText("Hidden for privacy (redacted)."),
     ).toBeInTheDocument();
+    expect(
+      await screen.findByText("Planner compiled summary for playback."),
+    ).toBeInTheDocument();
     expect(screen.queryByText("[redacted]")).not.toBeInTheDocument();
 
     expect(fetchMock).toHaveBeenCalledWith(

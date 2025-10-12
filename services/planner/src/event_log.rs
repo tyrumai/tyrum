@@ -9,6 +9,7 @@ use tracing::{debug, info, instrument, warn};
 use url::Url;
 use uuid::Uuid;
 
+use crate::http::sanitize_detail;
 use crate::{ActionPrimitive, ActionPrimitiveKind};
 
 static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
@@ -230,7 +231,53 @@ fn build_outcome_metadata(primitive: &ActionPrimitive, outcome: &Value) -> Value
         metadata.insert("url".into(), url_metadata);
     }
 
+    if let Some(voice) = primitive_voice_rationale(primitive) {
+        metadata.insert("voice_rationale".into(), Value::String(voice));
+    }
+
     Value::Object(metadata)
+}
+
+fn primitive_voice_rationale(primitive: &ActionPrimitive) -> Option<String> {
+    const VOICE_KEYS: &[&str] = &[
+        "voice_rationale",
+        "notes",
+        "body",
+        "prompt",
+        "summary",
+        "reason",
+        "message",
+    ];
+
+    for key in VOICE_KEYS {
+        if let Some(value) = primitive.args.get(*key).and_then(Value::as_str)
+            && let Some(rationale) = sanitize_voice_for_log(value)
+        {
+            return Some(rationale);
+        }
+    }
+
+    if let Some(intent) = primitive.args.get("intent").and_then(Value::as_str) {
+        let friendly = intent.replace('_', " ");
+        if let Some(rationale) = sanitize_voice_for_log(&friendly) {
+            return Some(rationale);
+        }
+    }
+
+    None
+}
+
+fn sanitize_voice_for_log(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if looks_sensitive(trimmed) {
+        return Some("[redacted]".into());
+    }
+
+    Some(sanitize_detail(trimmed))
 }
 
 fn build_result_summary(

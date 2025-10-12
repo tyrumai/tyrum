@@ -64,12 +64,15 @@ impl AuditTimelineRepository {
                 has_redactions = true;
             }
 
+            let voice_rationale = extract_voice_rationale(&action);
+
             events.push(PlanAuditEvent {
                 replay_id,
                 step_index,
                 occurred_at,
                 recorded_at,
                 action,
+                voice_rationale,
                 redactions,
             });
         }
@@ -109,6 +112,8 @@ pub struct PlanAuditEvent {
     #[serde(rename = "recorded_at")]
     pub recorded_at: DateTime<Utc>,
     pub action: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub voice_rationale: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub redactions: Vec<String>,
 }
@@ -118,6 +123,53 @@ fn collect_redactions(action: &Value) -> Vec<String> {
     let mut segments = vec!["action".to_string()];
     collect_redactions_inner(action, &mut segments, &mut paths);
     paths
+}
+
+fn extract_voice_rationale(value: &Value) -> Option<String> {
+    match value {
+        Value::Object(map) => {
+            if let Some(voice) = map.get("voice_rationale").and_then(Value::as_str)
+                && let Some(cleaned) = clean_voice_string(voice)
+            {
+                return Some(cleaned);
+            }
+
+            if let Some(steps) = map.get("steps").and_then(Value::as_array) {
+                let voices: Vec<String> =
+                    steps.iter().filter_map(extract_voice_rationale).collect();
+                if !voices.is_empty() {
+                    return Some(voices.join(" • "));
+                }
+            }
+
+            for (key, nested) in map {
+                if key == "steps" {
+                    continue;
+                }
+                if let Some(voice) = extract_voice_rationale(nested) {
+                    return Some(voice);
+                }
+            }
+        }
+        Value::Array(items) => {
+            let voices: Vec<String> = items.iter().filter_map(extract_voice_rationale).collect();
+            if !voices.is_empty() {
+                return Some(voices.join(" • "));
+            }
+        }
+        _ => {}
+    }
+
+    None
+}
+
+fn clean_voice_string(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
 }
 
 fn collect_redactions_inner(value: &Value, path: &mut Vec<String>, acc: &mut Vec<String>) {
@@ -154,4 +206,36 @@ fn format_pointer(segments: &[String]) -> String {
 
 fn escape_pointer_segment(segment: &str) -> String {
     segment.replace('~', "~0").replace('/', "~1")
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    #[test]
+    fn extract_voice_rationale_prefers_top_level_field() {
+        let action = json!({ "voice_rationale": "Executor completed successfully." });
+        assert_eq!(
+            super::extract_voice_rationale(&action),
+            Some("Executor completed successfully.".into())
+        );
+    }
+
+    #[test]
+    fn extract_voice_rationale_joins_step_rationales() {
+        let action = json!({
+            "outcome": {
+                "status": "success",
+                "steps": [
+                    { "voice_rationale": "Collected context." },
+                    { "voice_rationale": "Executed capability." }
+                ]
+            }
+        });
+
+        assert_eq!(
+            super::extract_voice_rationale(&action),
+            Some("Collected context. • Executed capability.".into())
+        );
+    }
 }
