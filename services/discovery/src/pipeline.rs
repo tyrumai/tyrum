@@ -48,9 +48,10 @@ pub enum DiscoveryOutcome {
     /// No strategy produced a match; downstream callers can offer manual
     /// fallback or prompt for more context.
     NotFound,
-    /// Upstream requested a retry (rate limit, temporary outage, etc.). This
-    /// will evolve to include consent escalation once policy hooks land.
+    /// Upstream requested a retry (rate limit, temporary outage, etc.).
     RetryLater { retry_after: Option<Duration> },
+    /// Policy denied or escalated the requested connector scope.
+    RequiresConsent { scope: String },
 }
 
 impl DiscoveryOutcome {
@@ -63,6 +64,7 @@ impl DiscoveryOutcome {
             Self::Found(_) => "found",
             Self::NotFound => "not_found",
             Self::RetryLater { .. } => "retry_later",
+            Self::RequiresConsent { .. } => "requires_consent",
         }
     }
 }
@@ -474,6 +476,7 @@ impl DefaultDiscoveryPipeline {
                     break;
                 }
                 DiscoveryOutcome::RetryLater { .. } => return Err(outcome),
+                DiscoveryOutcome::RequiresConsent { .. } => return Err(outcome),
                 DiscoveryOutcome::NotFound => {}
             }
         }

@@ -36,6 +36,27 @@ impl PolicyClient {
     /// when the policy gate returns a non-success HTTP status.
     pub async fn check(&self, request: &PlanRequest) -> Result<PolicyDecision, PolicyClientError> {
         let payload = PolicyCheckPayload::from_plan_request(request);
+        self.submit(payload).await
+    }
+
+    /// Execute a policy check that explicitly targets connector scope consent.
+    ///
+    /// # Errors
+    ///
+    /// Mirrors [`Self::check`] error semantics.
+    pub async fn check_connector_scope(
+        &self,
+        request: &PlanRequest,
+        scope: &str,
+    ) -> Result<PolicyDecision, PolicyClientError> {
+        let payload = PolicyCheckPayload::from_plan_request(request).with_connector_scope(scope);
+        self.submit(payload).await
+    }
+
+    async fn submit(
+        &self,
+        payload: PolicyCheckPayload,
+    ) -> Result<PolicyDecision, PolicyClientError> {
         let url = self
             .base_url
             .join("/policy/check")
@@ -86,6 +107,8 @@ struct PolicyCheckPayload {
     pii: Option<PiiContext>,
     #[serde(skip_serializing_if = "Option::is_none")]
     legal: Option<LegalContext>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    connector: Option<ConnectorScopePayload>,
 }
 
 impl PolicyCheckPayload {
@@ -124,7 +147,15 @@ impl PolicyCheckPayload {
             spend: None,
             pii,
             legal: None,
+            connector: None,
         }
+    }
+
+    fn with_connector_scope(mut self, scope: &str) -> Self {
+        self.connector = Some(ConnectorScopePayload {
+            scope: scope.trim().to_string(),
+        });
+        self
     }
 }
 
@@ -146,6 +177,11 @@ struct PiiContext {
 struct LegalContext {
     #[serde(default)]
     flags: Vec<LegalFlag>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct ConnectorScopePayload {
+    scope: String,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -212,6 +248,7 @@ pub enum PolicyRuleKind {
     SpendLimit,
     PiiGuardrail,
     LegalCompliance,
+    ConnectorScope,
 }
 
 #[cfg(test)]
@@ -224,7 +261,8 @@ mod tests {
     use axum::{Json, Router, routing::post};
     use chrono::Utc;
     use reqwest::Url;
-    use serde_json::json;
+    use serde_json::{Value, json};
+    use std::sync::{Arc, Mutex};
     use tokio::{net::TcpListener, task::JoinHandle};
     use tyrum_shared::{
         MessageContent, MessageSource, NormalizedMessage, NormalizedThread,
@@ -373,6 +411,38 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn client_includes_connector_scope_payload() {
+        let response = json!({
+            "decision": "approve",
+            "rules": [
+                {
+                    "rule": "connector_scope",
+                    "outcome": "approve",
+                    "detail": "Connector scope mcp://calendar already granted."
+                }
+            ]
+        });
+
+        let (client, handle, captured) = policy_server_with_capture(response).await;
+
+        let decision = client
+            .check_connector_scope(&sample_plan_request(), "mcp://calendar")
+            .await
+            .expect("policy decision");
+
+        handle.abort();
+
+        let payloads = captured.lock().expect("capture payloads");
+        assert_eq!(payloads.len(), 1);
+        let connector_scope = payloads[0]
+            .get("connector")
+            .and_then(|value| value.get("scope"))
+            .and_then(Value::as_str);
+        assert_eq!(connector_scope, Some("mcp://calendar"));
+        assert_eq!(decision.decision, PolicyDecisionKind::Approve);
+    }
+
     async fn policy_server(response: serde_json::Value) -> (PolicyClient, JoinHandle<()>) {
         let body = response;
         let app = Router::new().route(
@@ -396,5 +466,43 @@ mod tests {
         });
 
         (PolicyClient::new(url), server)
+    }
+
+    async fn policy_server_with_capture(
+        response: serde_json::Value,
+    ) -> (PolicyClient, JoinHandle<()>, Arc<Mutex<Vec<Value>>>) {
+        let captured_payloads: Arc<Mutex<Vec<Value>>> = Arc::new(Mutex::new(Vec::new()));
+        let app = Router::new().route(
+            "/policy/check",
+            post({
+                let captured_for_handler = Arc::clone(&captured_payloads);
+                let response_template = response.clone();
+                move |Json(payload): Json<Value>| {
+                    let captured_for_request = Arc::clone(&captured_for_handler);
+                    let response_body = response_template.clone();
+                    async move {
+                        captured_for_request
+                            .lock()
+                            .expect("capture policy payload")
+                            .push(payload);
+                        Json(response_body)
+                    }
+                }
+            }),
+        );
+
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind policy listener");
+        let addr = listener.local_addr().expect("read addr");
+        let url = Url::parse(&format!("http://{}", addr)).expect("parse url");
+
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app)
+                .await
+                .expect("policy server failed");
+        });
+
+        (PolicyClient::new(url), server, captured_payloads)
     }
 }
