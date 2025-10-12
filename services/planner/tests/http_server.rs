@@ -2,9 +2,9 @@
 
 mod common;
 
-use std::borrow::Cow;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
+use std::{borrow::Cow, collections::VecDeque};
 
 use axum::{
     Json, Router,
@@ -115,6 +115,45 @@ fn approving_policy_payload() -> serde_json::Value {
                 "outcome": "approve",
                 "detail": "No legal flags",
             },
+        ],
+    })
+}
+
+fn connector_escalation_payload(scope: &str) -> serde_json::Value {
+    serde_json::json!({
+        "decision": "escalate",
+        "rules": [
+            {
+                "rule": "connector_scope",
+                "outcome": "escalate",
+                "detail": format!("Consent required for {scope}"),
+            }
+        ],
+    })
+}
+
+fn connector_approval_payload(scope: &str) -> serde_json::Value {
+    serde_json::json!({
+        "decision": "approve",
+        "rules": [
+            {
+                "rule": "connector_scope",
+                "outcome": "approve",
+                "detail": format!("Connector scope {scope} already granted."),
+            }
+        ],
+    })
+}
+
+fn connector_denial_payload(scope: &str) -> serde_json::Value {
+    serde_json::json!({
+        "decision": "deny",
+        "rules": [
+            {
+                "rule": "connector_scope",
+                "outcome": "deny",
+                "detail": format!("Connector scope {scope} prohibited by policy."),
+            }
         ],
     })
 }
@@ -367,6 +406,295 @@ async fn discovery_pipeline_uses_structured_api_capability() {
             .as_ref()
             .is_some_and(|text| text.contains("Discovered structured_api capability"))
     );
+}
+
+#[tokio::test]
+async fn planner_escalates_when_connector_requires_consent() {
+    if !skip_if_no_docker("planner_escalates_when_connector_requires_consent") {
+        return;
+    }
+
+    let pipeline = Arc::new(MockDiscoveryPipeline::new(
+        found_connector(DiscoveryStrategy::Mcp, "mcp://restricted"),
+        DiscoveryOutcome::NotFound,
+        DiscoveryOutcome::NotFound,
+    ));
+    let discovery: Arc<dyn DiscoveryPipeline + Send + Sync> = pipeline.clone();
+
+    let (policy_client, policy_server, captured) = policy_sequence(vec![
+        approving_policy_payload(),
+        connector_escalation_payload("mcp://restricted"),
+    ])
+    .await;
+
+    let thresholds = Thresholds {
+        auto_approve_minor_units: 10_000,
+        hard_deny_minor_units: 50_000,
+    };
+    let (wallet_client, wallet_server) = start_wallet_stub(thresholds).await;
+    let postgres = TestPostgres::start().await.expect("start postgres fixture");
+    let event_log = EventLog::from_pool(postgres.pool().clone());
+    event_log.migrate().await.expect("migrate planner schema");
+    let profiles = ProfileStore::new(event_log.pool().clone());
+    let capability_memory = CapabilityMemoryService::new(MemoryDal::new(event_log.pool().clone()));
+
+    let state = PlannerState {
+        policy_client,
+        event_log,
+        discovery,
+        wallet_client,
+        profiles,
+        capability_memory,
+        risk_classifier: None,
+    };
+
+    let payload = sample_request();
+    let body = serde_json::to_vec(&payload).expect("serialize plan request");
+
+    let response = build_router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/plan")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .expect("construct request"),
+        )
+        .await
+        .expect("receive response");
+
+    policy_server.abort();
+    wallet_server.abort();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let plan: PlanResponse = serde_json::from_slice(&bytes).expect("decode plan response");
+
+    let escalation = match plan.outcome {
+        PlanOutcome::Escalate { escalation } => escalation,
+        other => panic!("expected escalation, got {other:?}"),
+    };
+
+    assert!(
+        escalation
+            .rationale
+            .as_ref()
+            .is_some_and(|text| text.contains("mcp://restricted"))
+    );
+    let prompt = escalation
+        .action
+        .args
+        .get("prompt")
+        .and_then(|value| value.as_str())
+        .expect("prompt present");
+    assert!(prompt.contains("mcp://restricted"));
+
+    let payloads = captured.lock().expect("capture policy payloads").clone();
+    assert_eq!(payloads.len(), 2, "expected plan and scope checks");
+    let connector_scope = payloads[1]
+        .get("connector")
+        .and_then(|value| value.get("scope"))
+        .and_then(|value| value.as_str());
+    assert_eq!(connector_scope, Some("mcp://restricted"));
+}
+
+#[tokio::test]
+async fn planner_filters_blocked_connectors_before_returning() {
+    if !skip_if_no_docker("planner_filters_blocked_connectors_before_returning") {
+        return;
+    }
+
+    let primary = DiscoveryConnector {
+        strategy: DiscoveryStrategy::Mcp,
+        locator: "mcp://restricted".into(),
+        rank: 1,
+    };
+    let allowed = DiscoveryConnector {
+        strategy: DiscoveryStrategy::StructuredApi,
+        locator: "https://api.allowed.com".into(),
+        rank: 2,
+    };
+    let resolution = DiscoveryResolution {
+        primary: primary.clone(),
+        alternatives: vec![allowed.clone()],
+    };
+
+    let pipeline = Arc::new(MockDiscoveryPipeline::new(
+        DiscoveryOutcome::Found(resolution),
+        DiscoveryOutcome::NotFound,
+        DiscoveryOutcome::NotFound,
+    ));
+    let discovery: Arc<dyn DiscoveryPipeline + Send + Sync> = pipeline.clone();
+
+    let (policy_client, policy_server, captured) = policy_sequence(vec![
+        approving_policy_payload(),
+        connector_escalation_payload("mcp://restricted"),
+        connector_approval_payload("https://api.allowed.com"),
+    ])
+    .await;
+
+    let thresholds = Thresholds {
+        auto_approve_minor_units: 10_000,
+        hard_deny_minor_units: 50_000,
+    };
+    let (wallet_client, wallet_server) = start_wallet_stub(thresholds).await;
+    let postgres = TestPostgres::start().await.expect("start postgres fixture");
+    let event_log = EventLog::from_pool(postgres.pool().clone());
+    event_log.migrate().await.expect("migrate planner schema");
+    let profiles = ProfileStore::new(event_log.pool().clone());
+    let capability_memory = CapabilityMemoryService::new(MemoryDal::new(event_log.pool().clone()));
+
+    let state = PlannerState {
+        policy_client,
+        event_log,
+        discovery,
+        wallet_client,
+        profiles,
+        capability_memory,
+        risk_classifier: None,
+    };
+
+    let payload = sample_request();
+    let body = serde_json::to_vec(&payload).expect("serialize plan request");
+
+    let response = build_router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/plan")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .expect("construct request"),
+        )
+        .await
+        .expect("receive response");
+
+    policy_server.abort();
+    wallet_server.abort();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let plan: PlanResponse = serde_json::from_slice(&bytes).expect("decode plan response");
+
+    let (steps, summary) = match plan.outcome {
+        PlanOutcome::Success { steps, summary } => (steps, summary),
+        other => panic!("expected success, got {other:?}"),
+    };
+
+    assert_eq!(steps[1].kind, ActionPrimitiveKind::Http);
+    assert_eq!(
+        steps[1]
+            .args
+            .get("locator")
+            .and_then(|value| value.as_str()),
+        Some("https://api.allowed.com")
+    );
+    assert!(
+        summary
+            .synopsis
+            .as_ref()
+            .is_some_and(|text| text.contains("Discovered structured_api capability"))
+    );
+
+    let payloads = captured.lock().expect("capture policy payloads").clone();
+    assert_eq!(payloads.len(), 3, "expected plan plus two scope checks");
+    let second_scope = payloads[1]
+        .get("connector")
+        .and_then(|value| value.get("scope"))
+        .and_then(|value| value.as_str());
+    assert_eq!(second_scope, Some("mcp://restricted"));
+    let third_scope = payloads[2]
+        .get("connector")
+        .and_then(|value| value.get("scope"))
+        .and_then(|value| value.as_str());
+    assert_eq!(third_scope, Some("https://api.allowed.com"));
+}
+
+#[tokio::test]
+async fn planner_fails_when_connector_denied_by_policy() {
+    if !skip_if_no_docker("planner_fails_when_connector_denied_by_policy") {
+        return;
+    }
+
+    let pipeline = Arc::new(MockDiscoveryPipeline::new(
+        found_connector(DiscoveryStrategy::Mcp, "mcp://secrets"),
+        DiscoveryOutcome::NotFound,
+        DiscoveryOutcome::NotFound,
+    ));
+    let discovery: Arc<dyn DiscoveryPipeline + Send + Sync> = pipeline.clone();
+
+    let (policy_client, policy_server, captured) = policy_sequence(vec![
+        approving_policy_payload(),
+        connector_denial_payload("mcp://secrets"),
+    ])
+    .await;
+
+    let thresholds = Thresholds {
+        auto_approve_minor_units: 10_000,
+        hard_deny_minor_units: 50_000,
+    };
+    let (wallet_client, wallet_server) = start_wallet_stub(thresholds).await;
+    let postgres = TestPostgres::start().await.expect("start postgres fixture");
+    let event_log = EventLog::from_pool(postgres.pool().clone());
+    event_log.migrate().await.expect("migrate planner schema");
+    let profiles = ProfileStore::new(event_log.pool().clone());
+    let capability_memory = CapabilityMemoryService::new(MemoryDal::new(event_log.pool().clone()));
+
+    let state = PlannerState {
+        policy_client,
+        event_log,
+        discovery,
+        wallet_client,
+        profiles,
+        capability_memory,
+        risk_classifier: None,
+    };
+
+    let payload = sample_request();
+    let body = serde_json::to_vec(&payload).expect("serialize plan request");
+
+    let response = build_router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/plan")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .expect("construct request"),
+        )
+        .await
+        .expect("receive response");
+
+    policy_server.abort();
+    wallet_server.abort();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let plan: PlanResponse = serde_json::from_slice(&bytes).expect("decode plan response");
+
+    let error = match plan.outcome {
+        PlanOutcome::Failure { error } => error,
+        other => panic!("expected failure, got {other:?}"),
+    };
+
+    assert_eq!(error.code, tyrum_planner::PlanErrorCode::PolicyDenied);
+    assert!(
+        error
+            .detail
+            .as_ref()
+            .is_some_and(|text| text.contains("mcp://secrets"))
+    );
+
+    let payloads = captured.lock().expect("capture policy payloads").clone();
+    assert_eq!(payloads.len(), 2, "expected plan plus scope denial");
+    let scope = payloads[1]
+        .get("connector")
+        .and_then(|value| value.get("scope"))
+        .and_then(|value| value.as_str());
+    assert_eq!(scope, Some("mcp://secrets"));
 }
 
 #[tokio::test]
@@ -898,6 +1226,62 @@ async fn planner_state(
     policy_response: serde_json::Value,
 ) -> (PlannerState, JoinHandle<()>, JoinHandle<()>, TestPostgres) {
     planner_state_with_pipeline(policy_response, Arc::new(DefaultDiscoveryPipeline::new())).await
+}
+
+async fn policy_sequence(
+    responses: Vec<serde_json::Value>,
+) -> (
+    PolicyClient,
+    JoinHandle<()>,
+    Arc<Mutex<Vec<serde_json::Value>>>,
+) {
+    assert!(
+        !responses.is_empty(),
+        "policy sequence requires at least one response"
+    );
+    let captured: Arc<Mutex<Vec<serde_json::Value>>> = Arc::new(Mutex::new(Vec::new()));
+    let queue: Arc<Mutex<VecDeque<serde_json::Value>>> =
+        Arc::new(Mutex::new(VecDeque::from(responses.clone())));
+    let fallback = responses.last().expect("sequence fallback").clone();
+
+    let app = Router::new().route(
+        "/policy/check",
+        post({
+            let queue = Arc::clone(&queue);
+            let captured = Arc::clone(&captured);
+            move |Json(payload): Json<serde_json::Value>| {
+                let queue = Arc::clone(&queue);
+                let captured = Arc::clone(&captured);
+                let fallback = fallback.clone();
+                async move {
+                    captured
+                        .lock()
+                        .expect("record policy payload")
+                        .push(payload);
+                    let response = queue
+                        .lock()
+                        .expect("lock policy response queue")
+                        .pop_front()
+                        .unwrap_or_else(|| fallback.clone());
+                    Json(response)
+                }
+            }
+        }),
+    );
+
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind policy listener");
+    let addr = listener.local_addr().expect("obtain policy addr");
+    let url = Url::parse(&format!("http://{}", addr)).expect("construct policy url");
+
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app)
+            .await
+            .expect("policy server failed");
+    });
+
+    (PolicyClient::new(url), server, captured)
 }
 
 async fn planner_state_with_pipeline(

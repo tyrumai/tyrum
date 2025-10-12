@@ -15,6 +15,15 @@ const HARD_DENY_LIMIT_MINOR: u64 = 50_000;
 const MAX_USER_IDENTIFIER_LEN: usize = 128;
 const MAX_PAM_PROFILE_LEN: usize = 64;
 const MAX_PAM_VERSION_LEN: usize = 32;
+const AUTO_APPROVE_SCOPES: &[&str] = &[
+    "mcp://calendar",
+    "mcp://crm",
+    "mcp://email",
+    "mcp://files",
+    "mcp://support",
+    "mcp://tasks",
+];
+const HARD_DENY_SCOPES: &[&str] = &["mcp://root", "mcp://secrets", "mcp://admin"];
 
 pub fn build_router() -> Router {
     Router::new()
@@ -36,6 +45,7 @@ pub enum RuleKind {
     SpendLimit,
     PiiGuardrail,
     LegalCompliance,
+    ConnectorScope,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -67,6 +77,8 @@ pub struct PolicyCheckRequest {
     pub spend: Option<SpendContext>,
     pub pii: Option<PiiContext>,
     pub legal: Option<LegalContext>,
+    #[serde(default)]
+    pub connector: Option<ConnectorScopeContext>,
 }
 
 impl PolicyCheckRequest {
@@ -94,6 +106,13 @@ impl PolicyCheckRequest {
 
         Ok(())
     }
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct ConnectorScopeContext {
+    #[serde(default, deserialize_with = "deserialize_trimmed_option_string")]
+    pub scope: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -215,8 +234,12 @@ async fn policy_check(
     let spend_decision = evaluate_spend(payload.spend.as_ref());
     let pii_decision = evaluate_pii(payload.pii.as_ref());
     let legal_decision = evaluate_legal(payload.legal.as_ref());
+    let connector_decision = evaluate_connector_scope(payload.connector.as_ref());
 
-    let rules = vec![spend_decision, pii_decision, legal_decision];
+    let mut rules = vec![spend_decision, pii_decision, legal_decision];
+    if let Some(rule) = connector_decision {
+        rules.push(rule);
+    }
     let decision = overall_decision(&rules);
 
     telemetry::record_policy_decision(decision);
@@ -400,6 +423,40 @@ fn evaluate_legal(ctx: Option<&LegalContext>) -> RuleDecision {
     }
 }
 
+fn evaluate_connector_scope(ctx: Option<&ConnectorScopeContext>) -> Option<RuleDecision> {
+    let ctx = ctx?;
+    let scope = match ctx.scope.as_ref().filter(|value| !value.is_empty()) {
+        Some(scope) => scope.as_str(),
+        None => {
+            return Some(RuleDecision {
+                rule: RuleKind::ConnectorScope,
+                outcome: Decision::Escalate,
+                detail: "Connector scope missing; escalate for consent.".into(),
+            });
+        }
+    };
+
+    if HARD_DENY_SCOPES.contains(&scope) {
+        Some(RuleDecision {
+            rule: RuleKind::ConnectorScope,
+            outcome: Decision::Deny,
+            detail: format!("Connector scope {scope} prohibited by policy."),
+        })
+    } else if AUTO_APPROVE_SCOPES.contains(&scope) {
+        Some(RuleDecision {
+            rule: RuleKind::ConnectorScope,
+            outcome: Decision::Approve,
+            detail: format!("Connector scope {scope} already granted."),
+        })
+    } else {
+        Some(RuleDecision {
+            rule: RuleKind::ConnectorScope,
+            outcome: Decision::Escalate,
+            detail: format!("Consent required before activating connector scope {scope}."),
+        })
+    }
+}
+
 fn describe_categories(categories: &[PiiCategory]) -> String {
     categories
         .iter()
@@ -569,6 +626,40 @@ mod tests {
             flags: vec![LegalFlag::ProhibitedContent],
         }));
         assert_eq!(decision.outcome, Decision::Deny);
+    }
+
+    #[test]
+    fn connector_rule_approves_whitelisted_scope() {
+        let decision = evaluate_connector_scope(Some(&ConnectorScopeContext {
+            scope: Some("mcp://calendar".into()),
+        }))
+        .expect("decision");
+        assert_eq!(decision.outcome, Decision::Approve);
+    }
+
+    #[test]
+    fn connector_rule_escalates_for_unknown_scope() {
+        let decision = evaluate_connector_scope(Some(&ConnectorScopeContext {
+            scope: Some("mcp://analytics".into()),
+        }))
+        .expect("decision");
+        assert_eq!(decision.outcome, Decision::Escalate);
+    }
+
+    #[test]
+    fn connector_rule_denies_for_blocked_scope() {
+        let decision = evaluate_connector_scope(Some(&ConnectorScopeContext {
+            scope: Some("mcp://secrets".into()),
+        }))
+        .expect("decision");
+        assert_eq!(decision.outcome, Decision::Deny);
+    }
+
+    #[test]
+    fn connector_rule_escalates_when_scope_missing() {
+        let decision = evaluate_connector_scope(Some(&ConnectorScopeContext { scope: None }))
+            .expect("decision");
+        assert_eq!(decision.outcome, Decision::Escalate);
     }
 
     #[tokio::test]

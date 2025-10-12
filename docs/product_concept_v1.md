@@ -684,7 +684,8 @@ curl -X POST http://localhost:8080/telegram/webhook \
 1) Try linked endpoints from user accounts or `.well-known/mcp`.
 2) If found, fetch capability list, auth methods, scopes, rate limits, and side‑effects.
 3) Present to policy gate for scope grant; cache on success.
-4) If not found or denied, silently continue down the discovery chain.
+4) If policy escalates or denies, emit a `requires_consent` discovery outcome so the planner can prompt the user.
+5) If not found, silently continue down the discovery chain.
 
 ---
 

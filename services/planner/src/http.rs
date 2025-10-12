@@ -13,7 +13,9 @@ use tower_http::limit::RequestBodyLimitLayer;
 use uuid::Uuid;
 
 use crate::capability_memory::CapabilityMemoryService;
-use crate::policy::{PolicyClient, PolicyDecision, PolicyDecisionKind, PolicyRuleDecision};
+use crate::policy::{
+    PolicyClient, PolicyClientError, PolicyDecision, PolicyDecisionKind, PolicyRuleDecision,
+};
 use crate::wallet::{AuthorizationDecision, SpendAuthorization, WalletClient};
 use crate::{
     ActionArguments, ActionPrimitive, ActionPrimitiveKind, EventLog, NewPlannerEvent, PlanError,
@@ -206,8 +208,10 @@ async fn plan(
                 &payload,
                 &decision,
                 state.discovery.as_ref(),
+                &state.policy_client,
                 spend_directive.as_ref(),
-            );
+            )
+            .await;
 
             if let Some(subject_id) = subject_uuid
                 && let PlanOutcome::Success { steps, .. } = &mut outcome
@@ -469,49 +473,248 @@ fn build_policy_failure(decision: &PolicyDecision) -> PlanError {
     }
 }
 
-fn build_outcome_for_decision(
+fn build_consent_escalation(scope: &str) -> PlanEscalation {
+    let rationale = format!("Connector scope {scope} requires explicit consent.");
+    let context = json!({
+        "decision": "consent_required",
+        "scope": scope,
+    });
+    let args = ActionArguments::from_iter([
+        (
+            "prompt".into(),
+            json!(format!(
+                "Grant consent before activating connector scope {scope}."
+            )),
+        ),
+        ("context".into(), context),
+    ]);
+    let action = ActionPrimitive::new(ActionPrimitiveKind::Confirm, args);
+
+    PlanEscalation {
+        step_index: 0,
+        action,
+        rationale: Some(rationale),
+        expires_at: None,
+    }
+}
+
+struct BlockedConnector {
+    scope: String,
+    decision: PolicyDecisionKind,
+}
+
+struct GatedDiscovery {
+    outcome: DiscoveryOutcome,
+    blocked: Vec<BlockedConnector>,
+    denied: Vec<String>,
+}
+
+async fn gate_discovery_outcome(
+    policy_client: &PolicyClient,
+    request: &PlanRequest,
+    outcome: DiscoveryOutcome,
+) -> Result<GatedDiscovery, PolicyClientError> {
+    match outcome {
+        DiscoveryOutcome::Found(resolution) => {
+            let mut connectors = Vec::with_capacity(1 + resolution.alternatives.len());
+            connectors.push(resolution.primary.clone());
+            connectors.extend(resolution.alternatives.clone());
+
+            let mut approved: Vec<DiscoveryConnector> = Vec::new();
+            let mut blocked: Vec<BlockedConnector> = Vec::new();
+            let mut denied_scopes: Vec<String> = Vec::new();
+
+            for connector in connectors {
+                let decision = policy_client
+                    .check_connector_scope(request, &connector.locator)
+                    .await?;
+
+                match decision.decision {
+                    PolicyDecisionKind::Approve => approved.push(connector),
+                    PolicyDecisionKind::Escalate => {
+                        blocked.push(BlockedConnector {
+                            scope: connector.locator.clone(),
+                            decision: decision.decision,
+                        });
+                    }
+                    PolicyDecisionKind::Deny => {
+                        let scope = connector.locator.clone();
+                        blocked.push(BlockedConnector {
+                            scope: scope.clone(),
+                            decision: decision.decision,
+                        });
+                        denied_scopes.push(scope);
+                    }
+                }
+            }
+
+            if !approved.is_empty() {
+                let mut ranked: Vec<DiscoveryConnector> = approved
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, mut connector)| {
+                        connector.rank = index + 1;
+                        connector
+                    })
+                    .collect();
+
+                let primary = ranked.remove(0);
+                let resolution = DiscoveryResolution {
+                    primary,
+                    alternatives: ranked,
+                };
+                Ok(GatedDiscovery {
+                    outcome: DiscoveryOutcome::Found(resolution),
+                    blocked,
+                    denied: denied_scopes,
+                })
+            } else if !denied_scopes.is_empty() {
+                Ok(GatedDiscovery {
+                    outcome: DiscoveryOutcome::NotFound,
+                    blocked,
+                    denied: denied_scopes,
+                })
+            } else if let Some(first_blocked) = blocked.first() {
+                Ok(GatedDiscovery {
+                    outcome: DiscoveryOutcome::RequiresConsent {
+                        scope: first_blocked.scope.clone(),
+                    },
+                    blocked,
+                    denied: denied_scopes,
+                })
+            } else {
+                Ok(GatedDiscovery {
+                    outcome: DiscoveryOutcome::NotFound,
+                    blocked,
+                    denied: denied_scopes,
+                })
+            }
+        }
+        other => Ok(GatedDiscovery {
+            outcome: other,
+            blocked: Vec::new(),
+            denied: Vec::new(),
+        }),
+    }
+}
+
+fn finalize_gated_outcome(
+    plan_request: &PlanRequest,
+    discovery_request: &DiscoveryRequest,
+    gated: GatedDiscovery,
+    spend_directive: Option<&SpendDirective>,
+) -> (PlanOutcome, DiscoveryAudit) {
+    let denial_scope =
+        if !gated.denied.is_empty() && !matches!(gated.outcome, DiscoveryOutcome::Found(_)) {
+            Some(gated.denied[0].as_str())
+        } else {
+            None
+        };
+
+    if let Some(scope) = denial_scope {
+        log_discovery_outcome(
+            discovery_request,
+            &gated.outcome,
+            &gated.blocked,
+            &gated.denied,
+        );
+        let detail = if gated.denied.len() == 1 {
+            format!("Connector scope {scope} denied by policy")
+        } else {
+            let joined = gated.denied.join(", ");
+            format!("Connector scopes denied by policy: {joined}")
+        };
+        let outcome = PlanOutcome::Failure {
+            error: PlanError {
+                code: PlanErrorCode::PolicyDenied,
+                message: "Policy gate denied the connector scope".into(),
+                detail: Some(detail),
+                retryable: false,
+            },
+        };
+        return (outcome, DiscoveryAudit::denied(scope));
+    }
+
+    log_discovery_outcome(
+        discovery_request,
+        &gated.outcome,
+        &gated.blocked,
+        &gated.denied,
+    );
+
+    match &gated.outcome {
+        DiscoveryOutcome::RetryLater { retry_after } => {
+            let (detail, retry_after_ms) = match retry_after {
+                Some(duration) => {
+                    let millis = duration.as_millis();
+                    let capped = u64::try_from(millis).unwrap_or(u64::MAX);
+                    (Some(format!("retry_after_ms={capped}")), Some(capped))
+                }
+                None => (None, None),
+            };
+
+            let error = PlanError {
+                code: PlanErrorCode::ExecutorUnavailable,
+                message: "Discovery pipeline requested retry".into(),
+                detail,
+                retryable: true,
+            };
+
+            (
+                PlanOutcome::Failure { error },
+                DiscoveryAudit::deferred(retry_after_ms),
+            )
+        }
+        DiscoveryOutcome::RequiresConsent { scope } => (
+            PlanOutcome::Escalate {
+                escalation: build_consent_escalation(scope),
+            },
+            DiscoveryAudit::consent_required(scope),
+        ),
+        _ => (
+            PlanOutcome::Success {
+                steps: build_plan_steps(plan_request, &gated.outcome, spend_directive),
+                summary: plan_summary_for(plan_request, &gated.outcome, spend_directive),
+            },
+            DiscoveryAudit::from_outcome(&gated.outcome),
+        ),
+    }
+}
+
+async fn build_outcome_for_decision(
     request: &PlanRequest,
     decision: &PolicyDecision,
-    discovery: &dyn DiscoveryPipeline,
+    discovery: &(dyn DiscoveryPipeline + Send + Sync),
+    policy_client: &PolicyClient,
     spend_directive: Option<&SpendDirective>,
 ) -> (PlanOutcome, DiscoveryAudit) {
     match decision.decision {
         PolicyDecisionKind::Approve => {
             let discovery_request = discovery_request_for(request);
-            let outcome = discovery.discover(&discovery_request);
-            log_discovery_outcome(&discovery_request, &outcome);
-
-            match &outcome {
-                DiscoveryOutcome::RetryLater { retry_after } => {
-                    let (detail, retry_after_ms) = match retry_after {
-                        Some(duration) => {
-                            let millis = duration.as_millis();
-                            let capped = u64::try_from(millis).unwrap_or(u64::MAX);
-                            (Some(format!("retry_after_ms={capped}")), Some(capped))
-                        }
-                        None => (None, None),
+            let initial_outcome = discovery.discover(&discovery_request);
+            let gated = match gate_discovery_outcome(policy_client, request, initial_outcome).await
+            {
+                Ok(result) => result,
+                Err(error) => {
+                    tracing::warn!(
+                        %error,
+                        subject = %discovery_request.sanitized_subject(),
+                        "policy scope check failed"
+                    );
+                    let detail = sanitize_detail(&error.to_string());
+                    let outcome = PlanOutcome::Failure {
+                        error: PlanError {
+                            code: PlanErrorCode::Internal,
+                            message: "Policy gate unavailable".into(),
+                            detail: Some(detail.clone()),
+                            retryable: true,
+                        },
                     };
-
-                    let error = PlanError {
-                        code: PlanErrorCode::ExecutorUnavailable,
-                        message: "Discovery pipeline requested retry".into(),
-                        detail,
-                        retryable: true,
-                    };
-
-                    (
-                        PlanOutcome::Failure { error },
-                        DiscoveryAudit::deferred(retry_after_ms),
-                    )
+                    return (outcome, DiscoveryAudit::skipped());
                 }
-                _ => (
-                    PlanOutcome::Success {
-                        steps: build_plan_steps(request, &outcome, spend_directive),
-                        summary: plan_summary_for(request, &outcome, spend_directive),
-                    },
-                    DiscoveryAudit::from_outcome(&outcome),
-                ),
-            }
+            };
+
+            finalize_gated_outcome(request, &discovery_request, gated, spend_directive)
         }
         PolicyDecisionKind::Escalate => (
             PlanOutcome::Escalate {
@@ -535,7 +738,12 @@ fn discovery_request_for(request: &PlanRequest) -> DiscoveryRequest {
 }
 
 #[allow(clippy::cognitive_complexity)]
-fn log_discovery_outcome(request: &DiscoveryRequest, outcome: &DiscoveryOutcome) {
+fn log_discovery_outcome(
+    request: &DiscoveryRequest,
+    outcome: &DiscoveryOutcome,
+    blocked: &[BlockedConnector],
+    denied: &[String],
+) {
     let subject = request.sanitized_subject();
     match outcome {
         DiscoveryOutcome::Found(resolution) => {
@@ -572,6 +780,38 @@ fn log_discovery_outcome(request: &DiscoveryRequest, outcome: &DiscoveryOutcome)
                 "discovery requested retry"
             );
         }
+        DiscoveryOutcome::RequiresConsent { scope } => {
+            tracing::info!(
+                target: "tyrum::planner",
+                subject,
+                scope,
+                "discovery blocked pending consent"
+            );
+        }
+    }
+
+    if !blocked.is_empty() {
+        let blocked_scopes = blocked
+            .iter()
+            .map(|entry| format!("{}:{:?}", entry.scope, entry.decision))
+            .collect::<Vec<_>>()
+            .join(",");
+        tracing::info!(
+            target: "tyrum::planner",
+            subject,
+            blocked_scopes = %blocked_scopes,
+            "policy filtered connectors pending consent"
+        );
+    }
+
+    if !denied.is_empty() {
+        let denied_scopes = denied.join(",");
+        tracing::warn!(
+            target: "tyrum::planner",
+            subject,
+            denied_scopes = %denied_scopes,
+            "policy denied connector scope"
+        );
     }
 }
 
@@ -591,6 +831,7 @@ fn build_plan_steps(
             steps.push(fallback_execution_step());
         }
         DiscoveryOutcome::RetryLater { .. } => {}
+        DiscoveryOutcome::RequiresConsent { .. } => {}
     }
 
     if let Some(spend) = spend_directive {
@@ -625,6 +866,9 @@ fn plan_summary_for(
             format!("Falling back to automation for {}", request.subject_id)
         }
         DiscoveryOutcome::RetryLater { .. } => "Discovery deferred".to_string(),
+        DiscoveryOutcome::RequiresConsent { scope } => {
+            format!("Consent required before activating {}", scope)
+        }
     };
 
     let synopsis = if let Some(spend) = spend_directive {
@@ -1074,6 +1318,12 @@ enum DiscoveryAudit {
     Deferred {
         retry_after_ms: Option<u64>,
     },
+    ConsentRequired {
+        scope: String,
+    },
+    Denied {
+        scope: String,
+    },
     Skipped,
 }
 
@@ -1093,6 +1343,9 @@ impl DiscoveryAudit {
                 retry_after_ms: retry_after
                     .map(|duration| u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)),
             },
+            DiscoveryOutcome::RequiresConsent { scope } => Self::ConsentRequired {
+                scope: scope.clone(),
+            },
         }
     }
 
@@ -1102,6 +1355,18 @@ impl DiscoveryAudit {
 
     fn skipped() -> Self {
         Self::Skipped
+    }
+
+    fn consent_required(scope: &str) -> Self {
+        Self::ConsentRequired {
+            scope: scope.to_string(),
+        }
+    }
+
+    fn denied(scope: &str) -> Self {
+        Self::Denied {
+            scope: scope.to_string(),
+        }
     }
 }
 
