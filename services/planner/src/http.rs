@@ -186,6 +186,7 @@ async fn plan(
     let plan_uuid = Uuid::new_v4();
     let plan_id = format_plan_id(plan_uuid);
     let spend_directive = extract_spend_directive(&payload);
+    let mut captured_spend = None;
     let policy_result = state.policy_client.check(&payload).await;
 
     let (outcome, policy_audit, discovery_audit, wallet_audit) = match policy_result {
@@ -221,6 +222,7 @@ async fn plan(
 
             if let PlanOutcome::Success { steps, .. } = &mut outcome {
                 if let Some(spend) = first_spend_request(steps) {
+                    captured_spend = Some(spend_request_to_context(spend.clone()));
                     let authorization = SpendAuthorization {
                         request_id: Some(plan_id.clone()),
                         amount_minor_units: spend.amount_minor_units,
@@ -303,7 +305,13 @@ async fn plan(
     };
 
     let risk_verdict = state.risk_classifier.as_ref().map(|classifier| {
-        classify_plan_risk(classifier, &payload, spend_directive.as_ref(), &outcome)
+        classify_plan_risk(
+            classifier,
+            &payload,
+            spend_directive.as_ref(),
+            &outcome,
+            captured_spend.as_ref(),
+        )
     });
 
     let audit_event = PlannerDecisionAudit::new(
@@ -818,11 +826,16 @@ fn classify_plan_risk(
     request: &PlanRequest,
     directive: Option<&SpendDirective>,
     outcome: &PlanOutcome,
+    captured_spend: Option<&SpendContext>,
 ) -> RiskVerdict {
+    let spend = captured_spend
+        .cloned()
+        .or_else(|| spend_context_from_outcome(outcome))
+        .or_else(|| directive.map(directive_to_spend_context));
+
     let input = RiskInput {
         tags: request.tags.clone(),
-        spend: spend_context_from_outcome(outcome)
-            .or_else(|| directive.map(directive_to_spend_context)),
+        spend,
     };
 
     classifier.classify(&input)
@@ -1288,4 +1301,95 @@ fn sanitize_detail(detail: &str) -> String {
             }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+    use serde_json::{Map as JsonMap, json};
+    use tyrum_risk_classifier::load_classifier_from_toml_str;
+    use tyrum_shared::{
+        MessageContent, MessageSource, NormalizedMessage, NormalizedThread,
+        NormalizedThreadMessage, PlanRequest, ThreadKind,
+    };
+
+    fn basic_request() -> PlanRequest {
+        PlanRequest {
+            request_id: "req-1".into(),
+            subject_id: "subject-1".into(),
+            user: None,
+            trigger: NormalizedThreadMessage {
+                thread: NormalizedThread {
+                    id: "thread-1".into(),
+                    kind: ThreadKind::Private,
+                    title: None,
+                    username: None,
+                    pii_fields: vec![],
+                },
+                message: NormalizedMessage {
+                    id: "msg-1".into(),
+                    thread_id: "thread-1".into(),
+                    source: MessageSource::Telegram,
+                    content: MessageContent::Text {
+                        text: "request assistance".into(),
+                    },
+                    sender: None,
+                    timestamp: Utc::now(),
+                    edited_timestamp: None,
+                    pii_fields: vec![],
+                },
+            },
+            locale: None,
+            timezone: None,
+            tags: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn classify_plan_risk_prefers_captured_spend_for_escalations() {
+        let classifier = load_classifier_from_toml_str(
+            r#"
+[spend_thresholds.USD]
+caution_minor_units = 20000
+high_minor_units = 40000
+"#,
+        )
+        .unwrap_or_else(|error| panic!("load classifier config: {error}"));
+
+        let confirm_action = ActionPrimitive::new(ActionPrimitiveKind::Confirm, JsonMap::new())
+            .with_postcondition(json!({"status": "pending"}));
+        let outcome = PlanOutcome::Escalate {
+            escalation: PlanEscalation {
+                step_index: 1,
+                action: confirm_action,
+                rationale: None,
+                expires_at: None,
+            },
+        };
+
+        let captured_spend = SpendContext {
+            amount_minor_units: 55_000,
+            currency: "USD".into(),
+            merchant: Some("High Value Merchant".into()),
+        };
+
+        let verdict = classify_plan_risk(
+            &classifier,
+            &basic_request(),
+            None,
+            &outcome,
+            Some(&captured_spend),
+        );
+
+        assert_eq!(verdict.level, RiskLevel::High);
+        assert!(
+            verdict
+                .reasons
+                .iter()
+                .any(|reason| reason.contains("exceeds high threshold")),
+            "expected reasons to include threshold notice, got: {:?}",
+            verdict.reasons
+        );
+    }
 }
