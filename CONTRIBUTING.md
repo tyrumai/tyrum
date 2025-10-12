@@ -4,6 +4,7 @@ Thanks for helping build the Tyrum assistant platform. This document captures th
 
 ## 1. Getting Started
 - Install Docker, Git, Node.js 24+, Rust 1.89+, Helm 3.12+, kubectl 1.30+, and Python 3.13+ on your host.
+- Install the Python tooling used by repo scripts: `pip install pyyaml`.
 - Clone the repository and create branches as `<issue-number>-<slug>` (for example `issue-12-memory-schema`).
 - Install the shared hooks with `pre-commit install` so every commit runs the same validations enforced in CI.
 
@@ -36,8 +37,26 @@ Run these commands before opening a pull request. They mirror the required GitHu
 | Infrastructure | `docker compose config`, `helm lint infra/helm/tyrum-core`, `helm template tyrum infra/helm/tyrum-core >/dev/null` |
 | Containers | `docker compose -f infra/docker-compose.yml up --build` (ensure planner, executors, policy gate, and Postgres boot) |
 | Security baseline | `cargo audit`, `npm audit --audit-level high`, `trivy config .` |
+| Work tracking board | `python3 scripts/apply_project_config.py` (dry-run) then `python3 scripts/apply_project_config.py --apply` |
 
 Document the commands you executed in your pull-request description, along with any manual verification (screenshots, logs, trace IDs) required by the Definition of Done.
+
+### Project board bootstrap
+
+The project configuration in `.github/projects/m0-foundations.yml` defines the Tyrum M0 backlog. Use the helper in `scripts/apply_project_config.py` whenever you need to recreate or validate the board:
+
+```sh
+# Preview changes without mutating GitHub (requires gh auth with project scope)
+python3 scripts/apply_project_config.py
+
+# Apply the configuration (creates/updates the project and seeds backlog items)
+python3 scripts/apply_project_config.py --apply
+
+# If you are working from a fork, override the owner login:
+python3 scripts/apply_project_config.py --owner your-org --apply
+```
+
+The script requires the GitHub CLI (`gh`) authenticated with the `project` scope and `pyyaml` available in your Python environment.
 
 ## 5. Branch Protections & Reviews
 Pull requests must reference their GitHub Issue, include the acceptance checklist, and pass all required checks:
