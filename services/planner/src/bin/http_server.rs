@@ -18,6 +18,7 @@ const RISK_CLASSIFIER_CONFIG_ENV: &str = "PLANNER_RISK_CLASSIFIER_CONFIG";
 
 const EVENT_LOG_URL_ENV: &str = "PLANNER_EVENT_LOG_URL";
 const WALLET_GATE_URL_ENV: &str = "WALLET_GATE_URL";
+const DISCOVERY_PROBE_TIMEOUT_MS_ENV: &str = "DISCOVERY_PROBE_TIMEOUT_MS";
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
@@ -78,9 +79,15 @@ async fn main() -> Result<()> {
 }
 
 fn build_discovery_pipeline() -> DefaultDiscoveryPipeline {
+    let probe_timeout_ms = env::var(DISCOVERY_PROBE_TIMEOUT_MS_ENV)
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(1_500);
+    let probe_timeout = Duration::from_millis(probe_timeout_ms);
+
     let redis_url = match env::var("REDIS_URL") {
         Ok(url) if !url.trim().is_empty() => url,
-        _ => return DefaultDiscoveryPipeline::new(),
+        _ => return DefaultDiscoveryPipeline::with_probe_timeout(probe_timeout),
     };
 
     let ttl_seconds = env::var("DISCOVERY_CACHE_TTL_SECONDS")
@@ -100,11 +107,12 @@ fn build_discovery_pipeline() -> DefaultDiscoveryPipeline {
     match DefaultDiscoveryPipeline::from_config(DiscoveryPipelineConfig {
         cache: Some(settings),
         top_k,
+        probe_timeout,
     }) {
         Ok(pipeline) => pipeline,
         Err(error) => {
             warn!(%error, "failed to initialize Redis cache for discovery; continuing without caching");
-            DefaultDiscoveryPipeline::new()
+            DefaultDiscoveryPipeline::with_probe_timeout(probe_timeout)
         }
     }
 }

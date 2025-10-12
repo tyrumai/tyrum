@@ -691,7 +691,7 @@ async fn build_outcome_for_decision(
     match decision.decision {
         PolicyDecisionKind::Approve => {
             let discovery_request = discovery_request_for(request);
-            let initial_outcome = discovery.discover(&discovery_request);
+            let initial_outcome = discovery.discover(&discovery_request).await;
             let gated = match gate_discovery_outcome(policy_client, request, initial_outcome).await
             {
                 Ok(result) => result,

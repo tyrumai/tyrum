@@ -1,19 +1,27 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::future::Future;
 use std::net::IpAddr;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 use url::Url;
 
 use crate::cache::{CacheError, CachedConnector, ConnectorCache, RedisConnectorCache};
-use crate::telemetry;
+use crate::probe::{ProbeOutcome, ProbeResult, probe_structured_origin};
+use crate::telemetry::{self, ProbeStatus};
 
 fn default_top_k() -> NonZeroUsize {
     NonZeroUsize::new(5).unwrap_or(NonZeroUsize::MIN)
+}
+
+fn default_probe_timeout() -> Duration {
+    Duration::from_secs(2)
 }
 
 /// Request envelope supplied to discovery strategies.
@@ -151,33 +159,42 @@ impl DiscoveryStrategy {
 }
 
 /// Defines the contract for executing discovery strategies in a fixed order.
-pub trait DiscoveryPipeline {
-    fn try_mcp(&self, request: &DiscoveryRequest) -> DiscoveryOutcome;
+#[async_trait]
+pub trait DiscoveryPipeline: Send + Sync {
+    async fn try_mcp(&self, request: &DiscoveryRequest) -> DiscoveryOutcome;
 
-    fn try_structured_api(&self, request: &DiscoveryRequest) -> DiscoveryOutcome;
+    async fn try_structured_api(&self, request: &DiscoveryRequest) -> DiscoveryOutcome;
 
-    fn try_generic_http(&self, request: &DiscoveryRequest) -> DiscoveryOutcome;
+    async fn try_generic_http(&self, request: &DiscoveryRequest) -> DiscoveryOutcome;
 
     /// Executes the discovery strategies in priority order, short-circuiting on
     /// the first non-`NotFound` outcome.
-    fn discover(&self, request: &DiscoveryRequest) -> DiscoveryOutcome {
-        debug!(subject = %request.sanitized_subject(), "Starting discovery");
+    async fn discover(&self, request: &DiscoveryRequest) -> DiscoveryOutcome {
+        debug!(
+            subject = %request.sanitized_subject(),
+            "Starting discovery"
+        );
 
-        let outcome = execute_step(request, DiscoveryStrategy::Mcp, || self.try_mcp(request));
-        if !outcome.continues() {
-            return outcome;
-        }
-
-        let outcome = execute_step(request, DiscoveryStrategy::StructuredApi, || {
-            self.try_structured_api(request)
-        });
-        if !outcome.continues() {
-            return outcome;
-        }
-
-        execute_step(request, DiscoveryStrategy::GenericHttp, || {
-            self.try_generic_http(request)
+        let outcome = execute_step(request, DiscoveryStrategy::Mcp, || async {
+            self.try_mcp(request).await
         })
+        .await;
+        if !outcome.continues() {
+            return outcome;
+        }
+
+        let outcome = execute_step(request, DiscoveryStrategy::StructuredApi, || async {
+            self.try_structured_api(request).await
+        })
+        .await;
+        if !outcome.continues() {
+            return outcome;
+        }
+
+        execute_step(request, DiscoveryStrategy::GenericHttp, || async {
+            self.try_generic_http(request).await
+        })
+        .await
     }
 }
 
@@ -187,6 +204,8 @@ pub trait DiscoveryPipeline {
 pub struct DefaultDiscoveryPipeline {
     cache: Option<PipelineCache>,
     top_k: NonZeroUsize,
+    probe_client: Client,
+    probe_timeout: Duration,
 }
 
 struct PipelineCache {
@@ -214,6 +233,7 @@ struct CacheContext {
 pub struct DiscoveryPipelineConfig {
     pub cache: Option<DiscoveryCacheSettings>,
     pub top_k: NonZeroUsize,
+    pub probe_timeout: Duration,
 }
 
 impl Default for DiscoveryPipelineConfig {
@@ -221,6 +241,7 @@ impl Default for DiscoveryPipelineConfig {
         Self {
             cache: None,
             top_k: default_top_k(),
+            probe_timeout: default_probe_timeout(),
         }
     }
 }
@@ -256,6 +277,29 @@ impl DefaultDiscoveryPipeline {
         Self {
             cache: None,
             top_k: default_top_k(),
+            probe_client: Client::new(),
+            probe_timeout: default_probe_timeout(),
+        }
+    }
+
+    #[must_use]
+    pub fn with_probe_timeout(timeout: Duration) -> Self {
+        Self {
+            cache: None,
+            top_k: default_top_k(),
+            probe_client: Client::new(),
+            probe_timeout: timeout,
+        }
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    #[must_use]
+    pub fn with_probe_client(client: Client, probe_timeout: Duration) -> Self {
+        Self {
+            cache: None,
+            top_k: default_top_k(),
+            probe_client: client,
+            probe_timeout,
         }
     }
 
@@ -277,6 +321,8 @@ impl DefaultDiscoveryPipeline {
         Ok(Self {
             cache,
             top_k: config.top_k,
+            probe_client: Client::new(),
+            probe_timeout: config.probe_timeout,
         })
     }
 
@@ -345,6 +391,72 @@ impl DefaultDiscoveryPipeline {
         }
 
         None
+    }
+
+    async fn probe_structured_connectors(
+        &self,
+        descriptor: &SubjectDescriptor,
+    ) -> Option<Vec<DiscoveryConnector>> {
+        let url = descriptor.url.as_ref()?;
+        let origin = Self::https_origin(url)?;
+
+        let started = Instant::now();
+        let ProbeResult { outcome, urls } =
+            probe_structured_origin(&self.probe_client, &origin, self.probe_timeout).await;
+        let elapsed = started.elapsed();
+        telemetry::record_probe(Self::map_probe_status(outcome), elapsed);
+
+        let connectors = urls
+            .into_iter()
+            .filter_map(|url| {
+                if !matches!(url.scheme(), "http" | "https") {
+                    return None;
+                }
+                Some(DiscoveryConnector::new(
+                    DiscoveryStrategy::StructuredApi,
+                    Self::canonicalize_http_url(&url),
+                ))
+            })
+            .collect::<Vec<_>>();
+
+        Some(connectors)
+    }
+
+    fn map_probe_status(outcome: ProbeOutcome) -> ProbeStatus {
+        match outcome {
+            ProbeOutcome::Success => ProbeStatus::Success,
+            ProbeOutcome::Miss => ProbeStatus::Miss,
+            ProbeOutcome::Timeout => ProbeStatus::Timeout,
+            ProbeOutcome::Error => ProbeStatus::Error,
+        }
+    }
+
+    fn https_origin(url: &Url) -> Option<Url> {
+        if !url.scheme().eq_ignore_ascii_case("https") {
+            return None;
+        }
+
+        let mut origin = url.clone();
+        origin.set_path("/");
+        origin.set_query(None);
+        origin.set_fragment(None);
+        origin.set_username("").ok()?;
+        origin.set_password(None).ok()?;
+        Some(origin)
+    }
+
+    fn dedupe_connectors(connectors: Vec<DiscoveryConnector>) -> Vec<DiscoveryConnector> {
+        let mut seen = HashSet::new();
+        let mut deduped = Vec::new();
+
+        for connector in connectors {
+            let key = (connector.strategy, connector.locator.clone());
+            if seen.insert(key) {
+                deduped.push(connector);
+            }
+        }
+
+        deduped
     }
 
     fn structured_from_alias(&self, descriptor: &SubjectDescriptor) -> Option<String> {
@@ -454,31 +566,52 @@ impl DefaultDiscoveryPipeline {
         None
     }
 
-    fn collect_connectors(
+    async fn collect_connectors(
         &self,
         request: &DiscoveryRequest,
         now_ms: u64,
     ) -> Result<Vec<CachedConnector>, DiscoveryOutcome> {
         let mut collected = Vec::new();
 
-        for outcome in [
-            execute_step(request, DiscoveryStrategy::Mcp, || self.try_mcp(request)),
-            execute_step(request, DiscoveryStrategy::StructuredApi, || {
-                self.try_structured_api(request)
-            }),
-            execute_step(request, DiscoveryStrategy::GenericHttp, || {
-                self.try_generic_http(request)
-            }),
-        ] {
-            match outcome {
-                DiscoveryOutcome::Found(resolution) => {
-                    collected.extend(self.cache_entries_from_resolution(resolution, now_ms));
-                    break;
-                }
-                DiscoveryOutcome::RetryLater { .. } => return Err(outcome),
-                DiscoveryOutcome::RequiresConsent { .. } => return Err(outcome),
-                DiscoveryOutcome::NotFound => {}
+        let outcome = execute_step(request, DiscoveryStrategy::Mcp, || async {
+            self.try_mcp(request).await
+        })
+        .await;
+        match outcome {
+            DiscoveryOutcome::Found(resolution) => {
+                collected.extend(self.cache_entries_from_resolution(resolution, now_ms));
+                return Ok(collected);
             }
+            DiscoveryOutcome::RetryLater { .. } => return Err(outcome),
+            DiscoveryOutcome::RequiresConsent { .. } => return Err(outcome),
+            DiscoveryOutcome::NotFound => {}
+        }
+
+        let outcome = execute_step(request, DiscoveryStrategy::StructuredApi, || async {
+            self.try_structured_api(request).await
+        })
+        .await;
+        match outcome {
+            DiscoveryOutcome::Found(resolution) => {
+                collected.extend(self.cache_entries_from_resolution(resolution, now_ms));
+                return Ok(collected);
+            }
+            DiscoveryOutcome::RetryLater { .. } => return Err(outcome),
+            DiscoveryOutcome::RequiresConsent { .. } => return Err(outcome),
+            DiscoveryOutcome::NotFound => {}
+        }
+
+        let outcome = execute_step(request, DiscoveryStrategy::GenericHttp, || async {
+            self.try_generic_http(request).await
+        })
+        .await;
+        match outcome {
+            DiscoveryOutcome::Found(resolution) => {
+                collected.extend(self.cache_entries_from_resolution(resolution, now_ms));
+            }
+            DiscoveryOutcome::RetryLater { .. } => return Err(outcome),
+            DiscoveryOutcome::RequiresConsent { .. } => return Err(outcome),
+            DiscoveryOutcome::NotFound => {}
         }
 
         Ok(collected)
@@ -529,6 +662,8 @@ impl DefaultDiscoveryPipeline {
                 namespace: namespace.to_string(),
             }),
             top_k,
+            probe_client: Client::new(),
+            probe_timeout: default_probe_timeout(),
         }
     }
 
@@ -618,8 +753,9 @@ fn clamp_millis(value: u128) -> u64 {
     u64::try_from(value).unwrap_or(u64::MAX)
 }
 
+#[async_trait]
 impl DiscoveryPipeline for DefaultDiscoveryPipeline {
-    fn discover(&self, request: &DiscoveryRequest) -> DiscoveryOutcome {
+    async fn discover(&self, request: &DiscoveryRequest) -> DiscoveryOutcome {
         debug!(
             subject = %request.sanitized_subject(),
             "Starting discovery"
@@ -633,7 +769,7 @@ impl DiscoveryPipeline for DefaultDiscoveryPipeline {
         }
 
         let now = Self::now_epoch_ms();
-        let connectors = match self.collect_connectors(request, now) {
+        let connectors = match self.collect_connectors(request, now).await {
             Ok(connectors) => connectors,
             Err(outcome) => return outcome,
         };
@@ -652,7 +788,7 @@ impl DiscoveryPipeline for DefaultDiscoveryPipeline {
         DiscoveryOutcome::Found(resolution)
     }
 
-    fn try_mcp(&self, request: &DiscoveryRequest) -> DiscoveryOutcome {
+    async fn try_mcp(&self, request: &DiscoveryRequest) -> DiscoveryOutcome {
         let descriptor = self.descriptor(request);
         match self.detect_mcp(&descriptor) {
             Some(locator) => DiscoveryOutcome::Found(DiscoveryResolution::single(
@@ -662,17 +798,40 @@ impl DiscoveryPipeline for DefaultDiscoveryPipeline {
         }
     }
 
-    fn try_structured_api(&self, request: &DiscoveryRequest) -> DiscoveryOutcome {
+    async fn try_structured_api(&self, request: &DiscoveryRequest) -> DiscoveryOutcome {
         let descriptor = self.descriptor(request);
-        match self.detect_structured_api(&descriptor) {
-            Some(locator) => DiscoveryOutcome::Found(DiscoveryResolution::single(
-                DiscoveryConnector::new(DiscoveryStrategy::StructuredApi, locator),
-            )),
+        let mut connectors = Vec::new();
+
+        if let Some(locator) = self.detect_structured_api(&descriptor) {
+            connectors.push(DiscoveryConnector::new(
+                DiscoveryStrategy::StructuredApi,
+                locator,
+            ));
+        }
+
+        if let Some(mut probed) = self.probe_structured_connectors(&descriptor).await {
+            connectors.append(&mut probed);
+        }
+
+        let connectors = Self::dedupe_connectors(connectors);
+
+        if connectors.is_empty() {
+            return DiscoveryOutcome::NotFound;
+        }
+
+        let ranked = connectors
+            .into_iter()
+            .enumerate()
+            .map(|(index, connector)| connector.with_rank(index + 1))
+            .collect::<Vec<_>>();
+
+        match DiscoveryResolution::from_ranked(ranked) {
+            Some(resolution) => DiscoveryOutcome::Found(resolution),
             None => DiscoveryOutcome::NotFound,
         }
     }
 
-    fn try_generic_http(&self, request: &DiscoveryRequest) -> DiscoveryOutcome {
+    async fn try_generic_http(&self, request: &DiscoveryRequest) -> DiscoveryOutcome {
         let descriptor = self.descriptor(request);
         match self.detect_generic_http(&descriptor) {
             Some(locator) => DiscoveryOutcome::Found(DiscoveryResolution::single(
@@ -924,13 +1083,14 @@ fn strip_prefix_case_insensitive<'a>(value: &'a str, prefix: &str) -> Option<&'a
     }
 }
 #[allow(clippy::cognitive_complexity)]
-fn execute_step<F>(
+async fn execute_step<F, Fut>(
     request: &DiscoveryRequest,
     strategy: DiscoveryStrategy,
     attempt: F,
 ) -> DiscoveryOutcome
 where
-    F: FnOnce() -> DiscoveryOutcome,
+    F: FnOnce() -> Fut,
+    Fut: Future<Output = DiscoveryOutcome> + Send,
 {
     debug!(
         subject = %request.sanitized_subject(),
@@ -938,7 +1098,7 @@ where
         "Running discovery step",
     );
 
-    let outcome = telemetry::record_step(strategy, request.sanitized_subject(), attempt);
+    let outcome = telemetry::record_step(strategy, request.sanitized_subject(), attempt).await;
 
     if outcome.continues() {
         debug!(strategy = strategy.as_str(), "Strategy returned NotFound");
@@ -953,13 +1113,14 @@ where
 mod tests {
     #![allow(clippy::expect_used, clippy::unwrap_used, clippy::len_zero)]
     use super::*;
-    use std::cell::RefCell;
     use std::fmt;
+    use std::future::Future;
     use std::num::NonZeroUsize;
     use std::sync::{Arc, Mutex, MutexGuard};
 
     use crate::cache::InMemoryConnectorCache;
     use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    use httpmock::{Method, prelude::*};
     use once_cell::sync::Lazy;
     use opentelemetry::{Value, global};
     use opentelemetry_sdk::metrics::{
@@ -976,6 +1137,14 @@ mod tests {
     };
 
     static TELEMETRY_GUARD: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+
+    fn block_on_future<F: Future>(future: F) -> F::Output {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("build tokio runtime")
+            .block_on(future)
+    }
 
     fn resolution(strategy: DiscoveryStrategy, locator: &str) -> DiscoveryResolution {
         DiscoveryResolution::single(DiscoveryConnector {
@@ -1006,7 +1175,7 @@ mod tests {
             subject: "mcp://knowledge-base".into(),
         };
 
-        match pipeline.try_mcp(&request) {
+        match block_on_future(pipeline.try_mcp(&request)) {
             DiscoveryOutcome::Found(resolution) => {
                 let connector = &resolution.primary;
                 assert_eq!(connector.strategy, DiscoveryStrategy::Mcp);
@@ -1023,7 +1192,7 @@ mod tests {
             subject: "Connect calendar automation via MCP".into(),
         };
 
-        match pipeline.try_mcp(&request) {
+        match block_on_future(pipeline.try_mcp(&request)) {
             DiscoveryOutcome::Found(resolution) => {
                 let connector = &resolution.primary;
                 assert_eq!(connector.strategy, DiscoveryStrategy::Mcp);
@@ -1040,7 +1209,7 @@ mod tests {
             subject: "MCP:Workspace/Tool".into(),
         };
 
-        match pipeline.try_mcp(&request) {
+        match block_on_future(pipeline.try_mcp(&request)) {
             DiscoveryOutcome::Found(resolution) => {
                 let connector = &resolution.primary;
                 assert_eq!(connector.strategy, DiscoveryStrategy::Mcp);
@@ -1057,7 +1226,7 @@ mod tests {
             subject: "mcp://".into(),
         };
 
-        match pipeline.try_mcp(&request) {
+        match block_on_future(pipeline.try_mcp(&request)) {
             DiscoveryOutcome::NotFound => {}
             other => panic!("expected NotFound, got {other:?}"),
         }
@@ -1070,7 +1239,7 @@ mod tests {
             subject: "https://api.example.com/v1/openapi.json".into(),
         };
 
-        match pipeline.try_structured_api(&request) {
+        match block_on_future(pipeline.try_structured_api(&request)) {
             DiscoveryOutcome::Found(resolution) => {
                 let connector = &resolution.primary;
                 assert_eq!(connector.strategy, DiscoveryStrategy::StructuredApi);
@@ -1087,7 +1256,7 @@ mod tests {
             subject: "calendar:events:list".into(),
         };
 
-        match pipeline.try_structured_api(&request) {
+        match block_on_future(pipeline.try_structured_api(&request)) {
             DiscoveryOutcome::Found(resolution) => {
                 let connector = &resolution.primary;
                 assert_eq!(connector.strategy, DiscoveryStrategy::StructuredApi);
@@ -1104,13 +1273,86 @@ mod tests {
             subject: "calendar.example.com/slots".into(),
         };
 
-        match pipeline.try_generic_http(&request) {
+        match block_on_future(pipeline.try_generic_http(&request)) {
             DiscoveryOutcome::Found(resolution) => {
                 let connector = &resolution.primary;
                 assert_eq!(connector.strategy, DiscoveryStrategy::GenericHttp);
                 assert_eq!(connector.locator, "https://calendar.example.com/slots");
             }
             other => panic!("expected generic HTTP connector, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn probe_discovers_well_known_openapi() {
+        let server = MockServer::start();
+        let _openapi = server.mock(|when, then| {
+            when.method(Method::GET).path("/.well-known/openapi.json");
+            then.status(200)
+                .header("Content-Type", "application/json")
+                .body(r#"{"openapi":"3.0.0"}"#);
+        });
+        let _ai_plugin = server.mock(|when, then| {
+            when.method(Method::GET).path("/.well-known/ai-plugin.json");
+            then.status(404);
+        });
+        let _head = server.mock(|when, then| {
+            when.method(Method::HEAD).path("/");
+            then.status(404);
+        });
+
+        let client = Client::builder()
+            .danger_accept_invalid_certs(true)
+            .build()
+            .expect("build probe client");
+        let pipeline = DefaultDiscoveryPipeline::with_probe_client(client, Duration::from_secs(1));
+        let request = DiscoveryRequest {
+            subject: server.base_url(),
+        };
+
+        match block_on_future(pipeline.try_structured_api(&request)) {
+            DiscoveryOutcome::Found(resolution) => {
+                let connector = &resolution.primary;
+                assert_eq!(connector.strategy, DiscoveryStrategy::StructuredApi);
+                assert_eq!(connector.locator, server.url("/.well-known/openapi.json"));
+            }
+            other => panic!("expected structured API connector from probe, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn probe_discovers_graphql_from_header() {
+        let server = MockServer::start();
+        let _head = server.mock(|when, then| {
+            when.method(Method::HEAD).path("/");
+            then.status(200)
+                .header("Link", "</graphql>; rel=\"graphql\"");
+        });
+        let _openapi = server.mock(|when, then| {
+            when.method(Method::GET).path("/.well-known/openapi.json");
+            then.status(404);
+        });
+        let _ai_plugin = server.mock(|when, then| {
+            when.method(Method::GET).path("/.well-known/ai-plugin.json");
+            then.status(404);
+        });
+
+        let client = Client::builder()
+            .danger_accept_invalid_certs(true)
+            .build()
+            .expect("build probe client");
+        let pipeline = DefaultDiscoveryPipeline::with_probe_client(client, Duration::from_secs(1));
+        let request = DiscoveryRequest {
+            subject: server.base_url(),
+        };
+
+        match block_on_future(pipeline.try_structured_api(&request)) {
+            DiscoveryOutcome::Found(resolution) => {
+                let connector = &resolution.primary;
+                assert_eq!(connector.strategy, DiscoveryStrategy::StructuredApi);
+                assert_eq!(connector.locator, server.url("/graphql"));
+            }
+            other => panic!("expected graphql connector from probe, got {other:?}"),
         }
     }
 
@@ -1152,7 +1394,7 @@ mod tests {
             subject: subject.into(),
         };
 
-        let outcome = pipeline.discover(&request);
+        let outcome = block_on_future(pipeline.discover(&request));
 
         match outcome {
             DiscoveryOutcome::Found(resolution) => {
@@ -1197,7 +1439,7 @@ mod tests {
             subject: subject.into(),
         };
 
-        let outcome = pipeline.discover(&request);
+        let outcome = block_on_future(pipeline.discover(&request));
 
         match outcome {
             DiscoveryOutcome::Found(resolution) => {
@@ -1227,7 +1469,7 @@ mod tests {
     }
 
     struct ScriptedPipeline {
-        calls: RefCell<Vec<DiscoveryStrategy>>,
+        calls: Mutex<Vec<DiscoveryStrategy>>,
         mcp_outcome: DiscoveryOutcome,
         structured_outcome: DiscoveryOutcome,
         generic_outcome: DiscoveryOutcome,
@@ -1240,7 +1482,7 @@ mod tests {
             generic_outcome: DiscoveryOutcome,
         ) -> Self {
             Self {
-                calls: RefCell::new(Vec::new()),
+                calls: Mutex::new(Vec::new()),
                 mcp_outcome,
                 structured_outcome,
                 generic_outcome,
@@ -1248,25 +1490,33 @@ mod tests {
         }
 
         fn calls(&self) -> Vec<DiscoveryStrategy> {
-            self.calls.borrow().clone()
+            self.calls.lock().expect("lock calls").clone()
         }
     }
 
+    #[async_trait]
     impl DiscoveryPipeline for ScriptedPipeline {
-        fn try_mcp(&self, _request: &DiscoveryRequest) -> DiscoveryOutcome {
-            self.calls.borrow_mut().push(DiscoveryStrategy::Mcp);
+        async fn try_mcp(&self, _request: &DiscoveryRequest) -> DiscoveryOutcome {
+            self.calls
+                .lock()
+                .expect("record mcp call")
+                .push(DiscoveryStrategy::Mcp);
             self.mcp_outcome.clone()
         }
 
-        fn try_structured_api(&self, _request: &DiscoveryRequest) -> DiscoveryOutcome {
+        async fn try_structured_api(&self, _request: &DiscoveryRequest) -> DiscoveryOutcome {
             self.calls
-                .borrow_mut()
+                .lock()
+                .expect("record structured call")
                 .push(DiscoveryStrategy::StructuredApi);
             self.structured_outcome.clone()
         }
 
-        fn try_generic_http(&self, _request: &DiscoveryRequest) -> DiscoveryOutcome {
-            self.calls.borrow_mut().push(DiscoveryStrategy::GenericHttp);
+        async fn try_generic_http(&self, _request: &DiscoveryRequest) -> DiscoveryOutcome {
+            self.calls
+                .lock()
+                .expect("record generic call")
+                .push(DiscoveryStrategy::GenericHttp);
             self.generic_outcome.clone()
         }
     }
@@ -1364,7 +1614,7 @@ mod tests {
             DiscoveryOutcome::NotFound,
         );
 
-        let outcome = pipeline.discover(&request());
+        let outcome = block_on_future(pipeline.discover(&request()));
 
         assert_eq!(outcome, DiscoveryOutcome::NotFound);
         assert_eq!(
@@ -1389,7 +1639,7 @@ mod tests {
             found(DiscoveryStrategy::GenericHttp, "https://example.com"),
         );
 
-        let outcome = pipeline.discover(&request());
+        let outcome = block_on_future(pipeline.discover(&request()));
 
         assert_eq!(outcome, DiscoveryOutcome::Found(connector));
         assert_eq!(
@@ -1413,7 +1663,7 @@ mod tests {
         );
 
         with_default(subscriber, || {
-            let _ = pipeline.discover(&request());
+            let _ = block_on_future(pipeline.discover(&request()));
         });
 
         let captured = lock(&spans, "captured spans").clone();
@@ -1460,7 +1710,7 @@ mod tests {
             found(DiscoveryStrategy::GenericHttp, "https://example.com"),
         );
 
-        let outcome = pipeline.discover(&request());
+        let outcome = block_on_future(pipeline.discover(&request()));
         assert_eq!(outcome, DiscoveryOutcome::Found(connector));
 
         if let Err(err) = meter_provider.force_flush() {
