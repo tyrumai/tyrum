@@ -70,6 +70,7 @@ async fn policy_denial_is_logged_and_sanitized() {
         wallet_client,
         profiles,
         capability_memory,
+        risk_classifier: None,
     };
 
     let request = sample_request();

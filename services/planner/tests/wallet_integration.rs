@@ -124,6 +124,7 @@ async fn planner_state() -> (
         wallet_client,
         profiles,
         capability_memory,
+        risk_classifier: None,
     };
 
     (state, policy_server, wallet_server, postgres)

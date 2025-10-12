@@ -1,0 +1,16 @@
+baseline_confidence = 0.4
+tag_medium_threshold = 0.3
+tag_high_threshold = 0.65
+
+[tag_weights]
+"risk:manual_review" = 0.35
+"risk:legal_hold" = 0.3
+"risk:expedited" = 0.15
+
+[spend_thresholds.USD]
+caution_minor_units = 50000
+high_minor_units = 125000
+
+[spend_thresholds.EUR]
+caution_minor_units = 45000
+high_minor_units = 100000

@@ -9,6 +9,7 @@ members = [
     "services/executor_android",
     "services/planner",
     "services/policy",
+    "services/risk_classifier",
     "services/tyrum-wallet",
     "shared/tyrum-shared",
     "services/tyrum-watchers",

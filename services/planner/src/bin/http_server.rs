@@ -3,7 +3,7 @@ use std::{env, net::SocketAddr, num::NonZeroUsize, sync::Arc, time::Duration};
 use anyhow::{Context, Result, anyhow};
 use reqwest::Url;
 use tokio::net::TcpListener;
-use tracing::warn;
+use tracing::{info, warn};
 use tracing_subscriber::{EnvFilter, fmt};
 
 use tyrum_discovery::{DefaultDiscoveryPipeline, DiscoveryCacheSettings, DiscoveryPipelineConfig};
@@ -12,6 +12,9 @@ use tyrum_planner::capability_memory::CapabilityMemoryService;
 use tyrum_planner::http::{DEFAULT_BIND_ADDR, PlannerState, build_router};
 use tyrum_planner::policy::PolicyClient;
 use tyrum_planner::{EventLog, EventLogSettings, ProfileStore, WalletClient};
+use tyrum_risk_classifier::RiskClassifier;
+
+const RISK_CLASSIFIER_CONFIG_ENV: &str = "PLANNER_RISK_CLASSIFIER_CONFIG";
 
 const EVENT_LOG_URL_ENV: &str = "PLANNER_EVENT_LOG_URL";
 const WALLET_GATE_URL_ENV: &str = "WALLET_GATE_URL";
@@ -49,6 +52,8 @@ async fn main() -> Result<()> {
     let capability_memory = CapabilityMemoryService::new(MemoryDal::new(event_log.pool().clone()));
     let discovery_pipeline = build_discovery_pipeline();
 
+    let risk_classifier = load_risk_classifier();
+
     let app = build_router(PlannerState {
         policy_client,
         event_log,
@@ -56,6 +61,7 @@ async fn main() -> Result<()> {
         wallet_client,
         profiles,
         capability_memory,
+        risk_classifier,
     });
     let listener = TcpListener::bind(bind_addr)
         .await
@@ -123,4 +129,23 @@ async fn shutdown_signal() {
         tracing::warn!(%error, "ctrl-c handler failed");
     }
     tracing::info!("shutdown signal received");
+}
+
+#[allow(clippy::cognitive_complexity)]
+fn load_risk_classifier() -> Option<RiskClassifier> {
+    match env::var(RISK_CLASSIFIER_CONFIG_ENV) {
+        Ok(path) if !path.trim().is_empty() => {
+            match tyrum_risk_classifier::load_classifier_from_path(&path) {
+                Ok(classifier) => {
+                    info!(config = %path, "risk classifier enabled");
+                    Some(classifier)
+                }
+                Err(error) => {
+                    warn!(%error, config = %path, "failed to load risk classifier config; continuing without classifier");
+                    None
+                }
+            }
+        }
+        _ => None,
+    }
 }

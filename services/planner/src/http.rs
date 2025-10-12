@@ -24,6 +24,7 @@ use tyrum_discovery::{
     DiscoveryConnector, DiscoveryOutcome, DiscoveryPipeline, DiscoveryRequest, DiscoveryResolution,
     DiscoveryStrategy,
 };
+use tyrum_risk_classifier::{RiskClassifier, RiskInput, RiskLevel, RiskVerdict, SpendContext};
 use tyrum_shared::{MessageSource, PamProfileRef, PiiField, ThreadKind};
 
 pub const DEFAULT_BIND_ADDR: &str = "0.0.0.0:8083";
@@ -48,6 +49,7 @@ pub struct PlannerState {
     pub wallet_client: WalletClient,
     pub profiles: ProfileStore,
     pub capability_memory: CapabilityMemoryService,
+    pub risk_classifier: Option<RiskClassifier>,
 }
 
 impl PlannerState {
@@ -300,6 +302,10 @@ async fn plan(
         }
     };
 
+    let risk_verdict = state.risk_classifier.as_ref().map(|classifier| {
+        classify_plan_risk(classifier, &payload, spend_directive.as_ref(), &outcome)
+    });
+
     let audit_event = PlannerDecisionAudit::new(
         plan_uuid,
         &plan_id,
@@ -308,6 +314,7 @@ async fn plan(
         discovery_audit,
         wallet_audit,
         &outcome,
+        risk_verdict.as_ref(),
     );
 
     match NewPlannerEvent::from_payload(
@@ -806,6 +813,74 @@ fn first_spend_request(steps: &[ActionPrimitive]) -> Option<SpendRequest> {
     })
 }
 
+fn classify_plan_risk(
+    classifier: &RiskClassifier,
+    request: &PlanRequest,
+    directive: Option<&SpendDirective>,
+    outcome: &PlanOutcome,
+) -> RiskVerdict {
+    let input = RiskInput {
+        tags: request.tags.clone(),
+        spend: spend_context_from_outcome(outcome)
+            .or_else(|| directive.map(directive_to_spend_context)),
+    };
+
+    classifier.classify(&input)
+}
+
+fn spend_context_from_outcome(outcome: &PlanOutcome) -> Option<SpendContext> {
+    match outcome {
+        PlanOutcome::Success { steps, .. } => {
+            first_spend_request(steps).map(spend_request_to_context)
+        }
+        PlanOutcome::Escalate { escalation } => pay_step_to_spend(&escalation.action),
+        PlanOutcome::Failure { .. } => None,
+    }
+}
+
+fn pay_step_to_spend(step: &ActionPrimitive) -> Option<SpendContext> {
+    if step.kind != ActionPrimitiveKind::Pay {
+        return None;
+    }
+
+    let amount_minor_units = step
+        .args
+        .get("amount_minor_units")
+        .and_then(Value::as_u64)?;
+    let currency = step
+        .args
+        .get("currency")
+        .and_then(Value::as_str)?
+        .to_string();
+    let merchant = step
+        .args
+        .get("merchant")
+        .and_then(Value::as_str)
+        .map(|value| value.to_string());
+
+    Some(SpendContext {
+        amount_minor_units,
+        currency,
+        merchant,
+    })
+}
+
+fn spend_request_to_context(request: SpendRequest) -> SpendContext {
+    SpendContext {
+        amount_minor_units: request.amount_minor_units,
+        currency: request.currency,
+        merchant: request.merchant,
+    }
+}
+
+fn directive_to_spend_context(directive: &SpendDirective) -> SpendContext {
+    SpendContext {
+        amount_minor_units: directive.amount_minor_units,
+        currency: directive.currency.clone(),
+        merchant: directive.merchant.clone(),
+    }
+}
+
 fn guardrail_message(reason: &str) -> String {
     if reason.is_empty() {
         WALLET_GUARDRAIL_NOTE.to_string()
@@ -875,6 +950,7 @@ struct PlannerDecisionAudit {
 }
 
 impl PlannerDecisionAudit {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         plan_uuid: Uuid,
         plan_id: &str,
@@ -883,6 +959,7 @@ impl PlannerDecisionAudit {
         discovery: DiscoveryAudit,
         wallet: WalletAudit,
         outcome: &PlanOutcome,
+        risk: Option<&RiskVerdict>,
     ) -> Self {
         Self {
             plan_id: plan_id.to_owned(),
@@ -891,7 +968,7 @@ impl PlannerDecisionAudit {
             policy,
             discovery,
             wallet,
-            outcome: PlanOutcomeAudit::from(outcome),
+            outcome: PlanOutcomeAudit::from(outcome, risk),
         }
     }
 }
@@ -1089,22 +1166,28 @@ enum PlanOutcomeAudit {
         step_count: usize,
         steps: Vec<LoggedStep>,
         summary_present: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        risk: Option<RiskVerdictAudit>,
     },
     Escalate {
         step_index: usize,
         action_kind: ActionPrimitiveKind,
         arg_keys: Vec<String>,
         rationale_present: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        risk: Option<RiskVerdictAudit>,
     },
     Failure {
         code: PlanErrorCode,
         retryable: bool,
         detail: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        risk: Option<RiskVerdictAudit>,
     },
 }
 
-impl From<&PlanOutcome> for PlanOutcomeAudit {
-    fn from(outcome: &PlanOutcome) -> Self {
+impl PlanOutcomeAudit {
+    fn from(outcome: &PlanOutcome, risk: Option<&RiskVerdict>) -> Self {
         match outcome {
             PlanOutcome::Success { steps, summary } => Self::Success {
                 step_count: steps.len(),
@@ -1117,6 +1200,7 @@ impl From<&PlanOutcome> for PlanOutcomeAudit {
                     .synopsis
                     .as_ref()
                     .is_some_and(|synopsis| !synopsis.is_empty()),
+                risk: map_risk_verdict(risk),
             },
             PlanOutcome::Escalate { escalation } => Self::Escalate {
                 step_index: escalation.step_index,
@@ -1126,6 +1210,7 @@ impl From<&PlanOutcome> for PlanOutcomeAudit {
                     .rationale
                     .as_ref()
                     .is_some_and(|value| !value.is_empty()),
+                risk: map_risk_verdict(risk),
             },
             PlanOutcome::Failure { error } => Self::Failure {
                 code: error.code,
@@ -1135,9 +1220,39 @@ impl From<&PlanOutcome> for PlanOutcomeAudit {
                     .as_ref()
                     .map(|value| sanitize_detail(value))
                     .filter(|value| !value.is_empty()),
+                risk: map_risk_verdict(risk),
             },
         }
     }
+}
+
+#[derive(Serialize)]
+struct RiskVerdictAudit {
+    level: RiskLevel,
+    confidence: f32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    reasons: Vec<String>,
+}
+
+impl From<&RiskVerdict> for RiskVerdictAudit {
+    fn from(value: &RiskVerdict) -> Self {
+        let reasons = value
+            .reasons
+            .iter()
+            .map(|reason| sanitize_detail(reason))
+            .filter(|reason| !reason.is_empty())
+            .collect();
+
+        Self {
+            level: value.level,
+            confidence: (value.confidence * 100.0).round() / 100.0,
+            reasons,
+        }
+    }
+}
+
+fn map_risk_verdict(risk: Option<&RiskVerdict>) -> Option<RiskVerdictAudit> {
+    risk.map(RiskVerdictAudit::from)
 }
 
 #[derive(Serialize)]
