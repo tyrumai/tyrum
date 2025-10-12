@@ -1,0 +1,163 @@
+version: 1
+owner:
+  type: organization
+  login: VirtunetBV
+project:
+  title: Tyrum M0 Foundations
+  short_description: Work-tracking board for the M0 guardrails milestone.
+  readme: |
+    # Tyrum M0 Foundations
+
+    This configuration bootstraps the Tyrum M0 backlog defined in
+    `docs/product_concept_v1.md` §20. Run the companion script in
+    `scripts/apply_project_config.py` to create or refresh the project.
+status_field:
+  name: Status
+  options:
+    - name: Backlog
+      color: GRAY
+      description: Scoped but not yet started.
+    - name: In Progress
+      color: BLUE
+      description: Actively being implemented.
+    - name: Review
+      color: PURPLE
+      description: Awaiting review or validation.
+    - name: Done
+      color: GREEN
+      description: Meets the definition of done with evidence attached.
+seeding:
+  issue_items: []
+  draft_items:
+    - key: m0-local-compose
+      title: Local container dev environment
+      status: Backlog
+      body: |
+        Tracks the "Local container dev environment" requirement from the M0
+        milestone. Validate `docker compose up` starts API, portal, Postgres, Redis,
+        and mock LLM containers within five minutes.
+    - key: m0-repo-policies
+      title: GitHub repo policies and docs
+      status: Backlog
+      body: |
+        Covers branch protections, CODEOWNERS, required reviews, and CONTRIBUTING
+        updates documented for M0.
+    - key: m0-work-tracking
+      title: Work tracking scaffolding
+      status: Backlog
+      body: |
+        Ensures issues templates, labels, and the M0 project board exist per the
+        roadmap. This item remains until the automation is validated in CI.
+    - key: m0-rust-web-ci
+      title: Rust and web CI workflows
+      status: Backlog
+      body: |
+        Adds blocking `ci-rust` and `ci-web` workflows mirroring local checks.
+    - key: m0-iac-validation
+      title: IaC validation workflow
+      status: Backlog
+      body: |
+        Adds `ci-iac` to run `docker compose config`, `helm lint`, and
+        `kubeconform` for infrastructure manifests.
+    - key: m0-container-smoke
+      title: Container build smoke workflow
+      status: Backlog
+      body: |
+        Builds core Docker images with BuildKit and runs container health checks on
+        main merges.
+    - key: m0-security-baseline
+      title: Security baseline workflow
+      status: Backlog
+      body: |
+        Schedules `cargo audit`, `npm audit --audit-level high`, and `trivy config`
+        over the repository.
+    - key: m0-policy-service
+      title: Policy check service skeleton
+      status: Backlog
+      body: |
+        Implements the Rust 2024 policy service with `POST /policy/check` returning
+        approve, deny, or escalate decisions and tests.
+    - key: m0-consent-ux
+      title: Consent UX stub
+      status: Backlog
+      body: |
+        Creates the chat prompt and approval flow in Next.js wired to mocked policy
+        responses with snapshot coverage.
+    - key: m0-onboarding-consent
+      title: Onboarding consent checklist
+      status: Backlog
+      body: |
+        Adds `/portal/onboarding/consent` toggles persisted to `/api/onboarding/consent`
+        with deterministic audit references.
+    - key: m0-event-log
+      title: Planner event log foundation
+      status: Backlog
+      body: |
+        Writes append-only planner traces with replayable IDs and dedupe guard backed
+        by Postgres as per `docs/planner_event_log.md`.
+    - key: m0-telemetry
+      title: Telemetry pipeline
+      status: Backlog
+      body: |
+        Ships the OpenTelemetry collector exporting to Prometheus, Tempo, Loki, and
+        documents access in `docs/telemetry_pipeline.md`.
+    - key: m0-audit-replay
+      title: Audit replay demo
+      status: Backlog
+      body: |
+        Automates `make audit-demo` to run a sample plan and capture replay artifacts
+        needed for auditability.
+    - key: m0-memory-schema
+      title: Memory schema and pgvector base
+      status: Backlog
+      body: |
+        Adds migrations for `facts`, `episodic_events`, and `vector_embeddings` plus
+        enables pgvector with row-level security placeholders.
+    - key: m0-memory-tooling
+      title: Memory access tooling
+      status: Backlog
+      body: |
+        Provides a Rust DAL and CLI utilities to insert and retrieve sample memory
+        records with unit tests.
+    - key: m0-planner-core
+      title: Planner core crate
+      status: Backlog
+      body: |
+        Defines the action primitive schema, planner state machine, and documentation
+        for success and failure events.
+    - key: m0-planner-harness
+      title: Planner integration harness
+      status: Backlog
+      body: |
+        Runs a mock "book call" plan through executors and persists audit plus memory
+        artifacts for regression coverage.
+    - key: m0-planner-errors
+      title: Planner error propagation
+      status: Backlog
+      body: |
+        Ensures error handling flows propagate policy denials and executor failures
+        with structured logs and regression tests.
+    - key: m0-landing-page
+      title: Landing page skeleton
+      status: Backlog
+      body: |
+        Implements the Next.js `/` route hero, value props, and CTA following the
+        M0 design stub with a9y guardrails.
+    - key: m0-waitlist
+      title: Waitlist capture and analytics
+      status: Backlog
+      body: |
+        Persists waitlist email submissions to Postgres and emits Plausible/Segment
+        stub events with campaign parameters.
+    - key: m0-performance
+      title: Performance and accessibility baseline
+      status: Backlog
+      body: |
+        Validates Lighthouse ≥90 for performance, accessibility, and best practices on
+        desktop and mobile runs.
+    - key: m0-portal-auth
+      title: Portal auth guard
+      status: Backlog
+      body: |
+        Adds middleware that redirects unauthenticated users to onboarding CTA and
+        enforces session validation.
