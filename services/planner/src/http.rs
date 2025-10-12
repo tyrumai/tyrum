@@ -974,6 +974,7 @@ impl PlannerDecisionAudit {
         outcome: &PlanOutcome,
         risk: Option<&RiskVerdict>,
     ) -> Self {
+        let wallet_voice = wallet.voice_rationale().and_then(sanitize_voice_text);
         Self {
             plan_id: plan_id.to_owned(),
             plan_uuid,
@@ -981,7 +982,7 @@ impl PlannerDecisionAudit {
             policy,
             discovery,
             wallet,
-            outcome: PlanOutcomeAudit::from(outcome, risk),
+            outcome: PlanOutcomeAudit::from(outcome, risk, wallet_voice.as_deref()),
         }
     }
 }
@@ -1170,6 +1171,14 @@ impl WalletAudit {
             error: (!error.is_empty()).then_some(error),
         }
     }
+
+    fn voice_rationale(&self) -> Option<&str> {
+        match self {
+            Self::Evaluated { reason, .. } => reason.as_deref(),
+            Self::Errored { error } => error.as_deref(),
+            Self::Skipped => None,
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -1188,6 +1197,8 @@ enum PlanOutcomeAudit {
         arg_keys: Vec<String>,
         rationale_present: bool,
         #[serde(skip_serializing_if = "Option::is_none")]
+        voice_rationale: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         risk: Option<RiskVerdictAudit>,
     },
     Failure {
@@ -1195,46 +1206,76 @@ enum PlanOutcomeAudit {
         retryable: bool,
         detail: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
+        voice_rationale: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         risk: Option<RiskVerdictAudit>,
     },
 }
 
 impl PlanOutcomeAudit {
-    fn from(outcome: &PlanOutcome, risk: Option<&RiskVerdict>) -> Self {
+    fn from(outcome: &PlanOutcome, risk: Option<&RiskVerdict>, wallet_voice: Option<&str>) -> Self {
         match outcome {
-            PlanOutcome::Success { steps, summary } => Self::Success {
-                step_count: steps.len(),
-                steps: steps
+            PlanOutcome::Success { steps, summary } => {
+                let wallet_override = wallet_voice.and_then(|voice| {
+                    first_spend_request(steps).map(|spend| (spend.step_index, voice.to_string()))
+                });
+
+                let logged_steps: Vec<LoggedStep> = steps
                     .iter()
                     .enumerate()
-                    .map(|(idx, step)| LoggedStep::from_step(idx, step))
-                    .collect(),
-                summary_present: summary
-                    .synopsis
-                    .as_ref()
-                    .is_some_and(|synopsis| !synopsis.is_empty()),
-                risk: map_risk_verdict(risk),
-            },
-            PlanOutcome::Escalate { escalation } => Self::Escalate {
-                step_index: escalation.step_index,
-                action_kind: escalation.action.kind,
-                arg_keys: escalation.action.args.keys().cloned().collect(),
-                rationale_present: escalation
+                    .map(|(idx, step)| {
+                        let from_wallet =
+                            wallet_override.as_ref().and_then(|(wallet_idx, message)| {
+                                (*wallet_idx == idx).then(|| message.clone())
+                            });
+                        let fallback = default_voice_rationale(step);
+                        LoggedStep::from_step(idx, step, from_wallet.or(fallback))
+                    })
+                    .collect();
+
+                Self::Success {
+                    step_count: logged_steps.len(),
+                    steps: logged_steps,
+                    summary_present: summary
+                        .synopsis
+                        .as_ref()
+                        .is_some_and(|synopsis| !synopsis.is_empty()),
+                    risk: map_risk_verdict(risk),
+                }
+            }
+            PlanOutcome::Escalate { escalation } => {
+                let voice_rationale = escalation
                     .rationale
-                    .as_ref()
-                    .is_some_and(|value| !value.is_empty()),
-                risk: map_risk_verdict(risk),
-            },
-            PlanOutcome::Failure { error } => Self::Failure {
-                code: error.code,
-                retryable: error.retryable,
-                detail: error
-                    .detail
-                    .as_ref()
-                    .map(|value| sanitize_detail(value))
-                    .filter(|value| !value.is_empty()),
-                risk: map_risk_verdict(risk),
-            },
+                    .as_deref()
+                    .and_then(sanitize_voice_text);
+                Self::Escalate {
+                    step_index: escalation.step_index,
+                    action_kind: escalation.action.kind,
+                    arg_keys: escalation.action.args.keys().cloned().collect(),
+                    rationale_present: escalation
+                        .rationale
+                        .as_ref()
+                        .is_some_and(|value| !value.is_empty()),
+                    voice_rationale,
+                    risk: map_risk_verdict(risk),
+                }
+            }
+            PlanOutcome::Failure { error } => {
+                let detail = error.detail.as_deref().and_then(sanitize_voice_text);
+                let voice_rationale = detail.or_else(|| sanitize_voice_text(&error.message));
+
+                Self::Failure {
+                    code: error.code,
+                    retryable: error.retryable,
+                    detail: error
+                        .detail
+                        .as_ref()
+                        .map(|value| sanitize_detail(value))
+                        .filter(|value| !value.is_empty()),
+                    voice_rationale,
+                    risk: map_risk_verdict(risk),
+                }
+            }
         }
     }
 }
@@ -1275,21 +1316,83 @@ struct LoggedStep {
     arg_keys: Vec<String>,
     has_postcondition: bool,
     has_idempotency_key: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    voice_rationale: Option<String>,
 }
 
 impl LoggedStep {
-    fn from_step(index: usize, step: &ActionPrimitive) -> Self {
+    fn from_step(index: usize, step: &ActionPrimitive, voice_rationale: Option<String>) -> Self {
         Self {
             step_index: index,
             kind: step.kind,
             arg_keys: step.args.keys().cloned().collect(),
             has_postcondition: step.postcondition.is_some(),
             has_idempotency_key: step.idempotency_key.is_some(),
+            voice_rationale,
         }
     }
 }
 
-fn sanitize_detail(detail: &str) -> String {
+fn default_voice_rationale(step: &ActionPrimitive) -> Option<String> {
+    const VOICE_KEYS: &[&str] = &[
+        "voice_rationale",
+        "notes",
+        "body",
+        "prompt",
+        "summary",
+        "reason",
+        "message",
+    ];
+
+    for key in VOICE_KEYS {
+        if let Some(value) = step.args.get(*key).and_then(Value::as_str)
+            && let Some(text) = sanitize_voice_text(value)
+        {
+            return Some(text);
+        }
+    }
+
+    if let Some(intent) = step.args.get("intent").and_then(Value::as_str) {
+        let friendly = intent.replace('_', " ");
+        if let Some(text) = sanitize_voice_text(&friendly) {
+            return Some(text);
+        }
+    }
+
+    None
+}
+
+fn sanitize_voice_text(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if voice_text_looks_sensitive(trimmed) {
+        return Some("[redacted]".into());
+    }
+
+    Some(sanitize_detail(trimmed))
+}
+
+fn voice_text_looks_sensitive(value: &str) -> bool {
+    if value.len() > 128 {
+        return true;
+    }
+
+    if value.contains('@') {
+        return true;
+    }
+
+    if value.chars().all(|character| character.is_ascii_digit()) && value.len() >= 6 {
+        return true;
+    }
+
+    let lowercase = value.to_ascii_lowercase();
+    lowercase.starts_with("bearer ") || lowercase.starts_with("basic ")
+}
+
+pub(crate) fn sanitize_detail(detail: &str) -> String {
     // Replace numeric characters to avoid leaking precise spend thresholds in audit logs.
     detail
         .chars()
@@ -1390,6 +1493,105 @@ high_minor_units = 40000
                 .any(|reason| reason.contains("exceeds high threshold")),
             "expected reasons to include threshold notice, got: {:?}",
             verdict.reasons
+        );
+    }
+
+    #[test]
+    fn plan_outcome_audit_includes_step_voice_rationales() {
+        let mut research_args = JsonMap::new();
+        research_args.insert(
+            "notes".to_string(),
+            Value::String("Review memory and prior commitments".into()),
+        );
+        let research_step = ActionPrimitive::new(ActionPrimitiveKind::Research, research_args);
+
+        let mut pay_args = JsonMap::new();
+        pay_args.insert("amount_minor_units".to_string(), json!(10_000u64));
+        pay_args.insert("currency".to_string(), Value::String("USD".into()));
+        pay_args.insert(
+            "merchant".to_string(),
+            Value::String("Test Merchant".into()),
+        );
+        let pay_step = ActionPrimitive::new(ActionPrimitiveKind::Pay, pay_args);
+
+        let outcome = PlanOutcome::Success {
+            steps: vec![research_step, pay_step],
+            summary: PlanSummary {
+                synopsis: Some("Demo summary".into()),
+            },
+        };
+
+        let wallet_voice = match sanitize_voice_text("Spend approved within configured limits.") {
+            Some(value) => value,
+            None => panic!("wallet rationale sanitized"),
+        };
+
+        let audit = PlanOutcomeAudit::from(&outcome, None, Some(wallet_voice.as_str()));
+
+        let PlanOutcomeAudit::Success { steps, .. } = audit else {
+            panic!("expected success audit payload");
+        };
+
+        assert_eq!(steps.len(), 2);
+        assert_eq!(
+            steps[0].voice_rationale.as_deref(),
+            Some("Review memory and prior commitments")
+        );
+        assert_eq!(
+            steps[1].voice_rationale.as_deref(),
+            Some(wallet_voice.as_str())
+        );
+    }
+
+    #[test]
+    fn plan_outcome_audit_sets_escalation_voice_rationale() {
+        let escalation = PlanEscalation {
+            step_index: 2,
+            action: ActionPrimitive::new(ActionPrimitiveKind::Confirm, JsonMap::new()),
+            rationale: Some("Spend exceeded guardrail; confirm before proceeding.".into()),
+            expires_at: None,
+        };
+
+        let audit = PlanOutcomeAudit::from(&PlanOutcome::Escalate { escalation }, None, None);
+
+        let PlanOutcomeAudit::Escalate {
+            voice_rationale, ..
+        } = audit
+        else {
+            panic!("expected escalation audit payload");
+        };
+
+        assert_eq!(
+            voice_rationale.as_deref(),
+            Some("Spend exceeded guardrail; confirm before proceeding.")
+        );
+    }
+
+    #[test]
+    fn plan_outcome_audit_sets_failure_voice_rationale() {
+        let audit = PlanOutcomeAudit::from(
+            &PlanOutcome::Failure {
+                error: PlanError {
+                    code: PlanErrorCode::PolicyDenied,
+                    message: "Policy denied the request".into(),
+                    detail: Some("Escalate to human reviewer.".into()),
+                    retryable: false,
+                },
+            },
+            None,
+            None,
+        );
+
+        let PlanOutcomeAudit::Failure {
+            voice_rationale, ..
+        } = audit
+        else {
+            panic!("expected failure audit payload");
+        };
+
+        assert_eq!(
+            voice_rationale.as_deref(),
+            Some("Escalate to human reviewer.")
         );
     }
 }

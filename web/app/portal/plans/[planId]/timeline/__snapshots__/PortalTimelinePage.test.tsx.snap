@@ -241,7 +241,7 @@ exports[`PortalTimelinePage > renders the timeline and matches the snapshot 1`] 
                 Reason
               </span>
               <span>
-                Postconditions satisfied for all steps.
+                Planner compiled summary for playback.
               </span>
             </p>
             <p
