@@ -506,6 +506,7 @@ struct BlockedConnector {
 struct GatedDiscovery {
     outcome: DiscoveryOutcome,
     blocked: Vec<BlockedConnector>,
+    denied: Option<String>,
 }
 
 async fn gate_discovery_outcome(
@@ -529,10 +530,22 @@ async fn gate_discovery_outcome(
 
                 match decision.decision {
                     PolicyDecisionKind::Approve => approved.push(connector),
-                    PolicyDecisionKind::Escalate | PolicyDecisionKind::Deny => {
+                    PolicyDecisionKind::Escalate => {
                         blocked.push(BlockedConnector {
                             scope: connector.locator.clone(),
                             decision: decision.decision,
+                        });
+                    }
+                    PolicyDecisionKind::Deny => {
+                        let scope = connector.locator.clone();
+                        blocked.push(BlockedConnector {
+                            scope: scope.clone(),
+                            decision: decision.decision,
+                        });
+                        return Ok(GatedDiscovery {
+                            outcome: DiscoveryOutcome::NotFound,
+                            blocked,
+                            denied: Some(scope),
                         });
                     }
                 }
@@ -556,6 +569,7 @@ async fn gate_discovery_outcome(
                 Ok(GatedDiscovery {
                     outcome: DiscoveryOutcome::Found(resolution),
                     blocked,
+                    denied: None,
                 })
             } else if let Some(first_blocked) = blocked.first() {
                 Ok(GatedDiscovery {
@@ -563,17 +577,20 @@ async fn gate_discovery_outcome(
                         scope: first_blocked.scope.clone(),
                     },
                     blocked,
+                    denied: None,
                 })
             } else {
                 Ok(GatedDiscovery {
                     outcome: DiscoveryOutcome::NotFound,
                     blocked,
+                    denied: None,
                 })
             }
         }
         other => Ok(GatedDiscovery {
             outcome: other,
             blocked: Vec::new(),
+            denied: None,
         }),
     }
 }
@@ -611,7 +628,26 @@ async fn build_outcome_for_decision(
                 }
             };
 
-            log_discovery_outcome(&discovery_request, &gated.outcome, &gated.blocked);
+            if let Some(scope) = gated.denied.as_deref() {
+                log_discovery_outcome(
+                    &discovery_request,
+                    &gated.outcome,
+                    &gated.blocked,
+                    Some(scope),
+                );
+                let detail = format!("Connector scope {scope} denied by policy");
+                let outcome = PlanOutcome::Failure {
+                    error: PlanError {
+                        code: PlanErrorCode::PolicyDenied,
+                        message: "Policy gate denied the connector scope".into(),
+                        detail: Some(detail),
+                        retryable: false,
+                    },
+                };
+                return (outcome, DiscoveryAudit::denied(scope));
+            }
+
+            log_discovery_outcome(&discovery_request, &gated.outcome, &gated.blocked, None);
 
             match &gated.outcome {
                 DiscoveryOutcome::RetryLater { retry_after } => {
@@ -677,6 +713,7 @@ fn log_discovery_outcome(
     request: &DiscoveryRequest,
     outcome: &DiscoveryOutcome,
     blocked: &[BlockedConnector],
+    denied: Option<&str>,
 ) {
     let subject = request.sanitized_subject();
     match outcome {
@@ -735,6 +772,15 @@ fn log_discovery_outcome(
             subject,
             blocked_scopes = %blocked_scopes,
             "policy filtered connectors pending consent"
+        );
+    }
+
+    if let Some(scope) = denied {
+        tracing::warn!(
+            target: "tyrum::planner",
+            subject,
+            scope,
+            "policy denied connector scope"
         );
     }
 }
@@ -1245,6 +1291,9 @@ enum DiscoveryAudit {
     ConsentRequired {
         scope: String,
     },
+    Denied {
+        scope: String,
+    },
     Skipped,
 }
 
@@ -1280,6 +1329,12 @@ impl DiscoveryAudit {
 
     fn consent_required(scope: &str) -> Self {
         Self::ConsentRequired {
+            scope: scope.to_string(),
+        }
+    }
+
+    fn denied(scope: &str) -> Self {
+        Self::Denied {
             scope: scope.to_string(),
         }
     }
