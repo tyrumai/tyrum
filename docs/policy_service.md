@@ -31,6 +31,9 @@ The planner service consumes `POST /policy/check` via its async client. Configur
     "flags": [
       "prohibited_content" | "requires_review" | "terms_unknown" | "export_controlled" | "other"
     ]
+  },
+  "connector": {
+    "scope": "mcp://calendar"
   }
 }
 ```
@@ -41,6 +44,7 @@ All sections other than `user_id` are optional; when context is missing the serv
 - `pam_profile.profile_id` – Optional; same character set as `user_id`, up to 64 characters.
 - `pam_profile.version` – Optional semantic version/hint (32 characters max) to help policy caches select the right profile revision.
 - `pam_profile` may be omitted entirely when no learned policy is available; the planner continues to supply `user_id` so guardrails remain per-user.
+- `connector.scope` – Optional; connector identifier that requires consent before activation. When omitted, the connector rule is skipped. Known trusted scopes auto-approve, while unknown scopes escalate and explicitly blocked scopes deny.
 
 ## Static Rule Set
 - **Spend:**
@@ -55,6 +59,10 @@ All sections other than `user_id` are optional; when context is missing the serv
   - Deny when `prohibited_content` is present.
   - Escalate for `requires_review`, `export_controlled`, or `terms_unknown` flags.
   - Approve when no flags (or only `other`) are supplied.
+- **Connector Scope:**
+  - Approve when the scope matches curated MCP capabilities (`mcp://calendar`, `mcp://crm`, `mcp://email`, `mcp://files`, `mcp://support`, `mcp://tasks`).
+  - Deny sensitive scopes such as `mcp://root`, `mcp://secrets`, or `mcp://admin`.
+  - Escalate for any other scope or when the scope string is missing, prompting the planner to request user consent.
 
 The overall `decision` is `deny` if any rule denies, `escalate` if any rule escalates, and `approve` otherwise.
 
@@ -73,7 +81,8 @@ The overall `decision` is `deny` if any rule denies, `escalate` if any rule esca
   "pam_profile": { "profile_id": "pam-default", "version": "v1" },
   "spend": { "amount_minor_units": 8750, "currency": "EUR" },
   "pii": { "categories": ["basic_contact"] },
-  "legal": { "flags": [] }
+  "legal": { "flags": [] },
+  "connector": { "scope": "mcp://calendar" }
 }
 
 // Response
@@ -94,6 +103,11 @@ The overall `decision` is `deny` if any rule denies, `escalate` if any rule esca
       "rule": "legal_compliance",
       "outcome": "approve",
       "detail": "No legal flags raised."
+    },
+    {
+      "rule": "connector_scope",
+      "outcome": "approve",
+      "detail": "Connector scope mcp://calendar already granted."
     }
   ]
 }
