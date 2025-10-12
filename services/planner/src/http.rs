@@ -506,7 +506,7 @@ struct BlockedConnector {
 struct GatedDiscovery {
     outcome: DiscoveryOutcome,
     blocked: Vec<BlockedConnector>,
-    denied: Option<String>,
+    denied: Vec<String>,
 }
 
 async fn gate_discovery_outcome(
@@ -522,6 +522,7 @@ async fn gate_discovery_outcome(
 
             let mut approved: Vec<DiscoveryConnector> = Vec::new();
             let mut blocked: Vec<BlockedConnector> = Vec::new();
+            let mut denied_scopes: Vec<String> = Vec::new();
 
             for connector in connectors {
                 let decision = policy_client
@@ -542,11 +543,7 @@ async fn gate_discovery_outcome(
                             scope: scope.clone(),
                             decision: decision.decision,
                         });
-                        return Ok(GatedDiscovery {
-                            outcome: DiscoveryOutcome::NotFound,
-                            blocked,
-                            denied: Some(scope),
-                        });
+                        denied_scopes.push(scope);
                     }
                 }
             }
@@ -569,7 +566,13 @@ async fn gate_discovery_outcome(
                 Ok(GatedDiscovery {
                     outcome: DiscoveryOutcome::Found(resolution),
                     blocked,
-                    denied: None,
+                    denied: denied_scopes,
+                })
+            } else if !denied_scopes.is_empty() {
+                Ok(GatedDiscovery {
+                    outcome: DiscoveryOutcome::NotFound,
+                    blocked,
+                    denied: denied_scopes,
                 })
             } else if let Some(first_blocked) = blocked.first() {
                 Ok(GatedDiscovery {
@@ -577,21 +580,104 @@ async fn gate_discovery_outcome(
                         scope: first_blocked.scope.clone(),
                     },
                     blocked,
-                    denied: None,
+                    denied: denied_scopes,
                 })
             } else {
                 Ok(GatedDiscovery {
                     outcome: DiscoveryOutcome::NotFound,
                     blocked,
-                    denied: None,
+                    denied: denied_scopes,
                 })
             }
         }
         other => Ok(GatedDiscovery {
             outcome: other,
             blocked: Vec::new(),
-            denied: None,
+            denied: Vec::new(),
         }),
+    }
+}
+
+fn finalize_gated_outcome(
+    plan_request: &PlanRequest,
+    discovery_request: &DiscoveryRequest,
+    gated: GatedDiscovery,
+    spend_directive: Option<&SpendDirective>,
+) -> (PlanOutcome, DiscoveryAudit) {
+    let denial_scope =
+        if !gated.denied.is_empty() && !matches!(gated.outcome, DiscoveryOutcome::Found(_)) {
+            Some(gated.denied[0].as_str())
+        } else {
+            None
+        };
+
+    if let Some(scope) = denial_scope {
+        log_discovery_outcome(
+            discovery_request,
+            &gated.outcome,
+            &gated.blocked,
+            &gated.denied,
+        );
+        let detail = if gated.denied.len() == 1 {
+            format!("Connector scope {scope} denied by policy")
+        } else {
+            let joined = gated.denied.join(", ");
+            format!("Connector scopes denied by policy: {joined}")
+        };
+        let outcome = PlanOutcome::Failure {
+            error: PlanError {
+                code: PlanErrorCode::PolicyDenied,
+                message: "Policy gate denied the connector scope".into(),
+                detail: Some(detail),
+                retryable: false,
+            },
+        };
+        return (outcome, DiscoveryAudit::denied(scope));
+    }
+
+    log_discovery_outcome(
+        discovery_request,
+        &gated.outcome,
+        &gated.blocked,
+        &gated.denied,
+    );
+
+    match &gated.outcome {
+        DiscoveryOutcome::RetryLater { retry_after } => {
+            let (detail, retry_after_ms) = match retry_after {
+                Some(duration) => {
+                    let millis = duration.as_millis();
+                    let capped = u64::try_from(millis).unwrap_or(u64::MAX);
+                    (Some(format!("retry_after_ms={capped}")), Some(capped))
+                }
+                None => (None, None),
+            };
+
+            let error = PlanError {
+                code: PlanErrorCode::ExecutorUnavailable,
+                message: "Discovery pipeline requested retry".into(),
+                detail,
+                retryable: true,
+            };
+
+            (
+                PlanOutcome::Failure { error },
+                DiscoveryAudit::deferred(retry_after_ms),
+            )
+        }
+        DiscoveryOutcome::RequiresConsent { scope } => (
+            PlanOutcome::Escalate {
+                escalation: build_consent_escalation(scope),
+            },
+            DiscoveryAudit::consent_required(scope),
+        ),
+        _ => (
+            PlanOutcome::Success {
+                steps: build_plan_steps(plan_request, &gated.outcome, spend_directive),
+                summary: plan_summary_for(plan_request, &gated.outcome, spend_directive),
+            },
+            DiscoveryAudit::from_outcome(&gated.outcome),
+        ),
     }
 }
 
@@ -628,64 +714,7 @@ async fn build_outcome_for_decision(
                 }
             };
 
-            if let Some(scope) = gated.denied.as_deref() {
-                log_discovery_outcome(
-                    &discovery_request,
-                    &gated.outcome,
-                    &gated.blocked,
-                    Some(scope),
-                );
-                let detail = format!("Connector scope {scope} denied by policy");
-                let outcome = PlanOutcome::Failure {
-                    error: PlanError {
-                        code: PlanErrorCode::PolicyDenied,
-                        message: "Policy gate denied the connector scope".into(),
-                        detail: Some(detail),
-                        retryable: false,
-                    },
-                };
-                return (outcome, DiscoveryAudit::denied(scope));
-            }
-
-            log_discovery_outcome(&discovery_request, &gated.outcome, &gated.blocked, None);
-
-            match &gated.outcome {
-                DiscoveryOutcome::RetryLater { retry_after } => {
-                    let (detail, retry_after_ms) = match retry_after {
-                        Some(duration) => {
-                            let millis = duration.as_millis();
-                            let capped = u64::try_from(millis).unwrap_or(u64::MAX);
-                            (Some(format!("retry_after_ms={capped}")), Some(capped))
-                        }
-                        None => (None, None),
-                    };
-
-                    let error = PlanError {
-                        code: PlanErrorCode::ExecutorUnavailable,
-                        message: "Discovery pipeline requested retry".into(),
-                        detail,
-                        retryable: true,
-                    };
-
-                    (
-                        PlanOutcome::Failure { error },
-                        DiscoveryAudit::deferred(retry_after_ms),
-                    )
-                }
-                DiscoveryOutcome::RequiresConsent { scope } => (
-                    PlanOutcome::Escalate {
-                        escalation: build_consent_escalation(scope),
-                    },
-                    DiscoveryAudit::consent_required(scope),
-                ),
-                _ => (
-                    PlanOutcome::Success {
-                        steps: build_plan_steps(request, &gated.outcome, spend_directive),
-                        summary: plan_summary_for(request, &gated.outcome, spend_directive),
-                    },
-                    DiscoveryAudit::from_outcome(&gated.outcome),
-                ),
-            }
+            finalize_gated_outcome(request, &discovery_request, gated, spend_directive)
         }
         PolicyDecisionKind::Escalate => (
             PlanOutcome::Escalate {
@@ -713,7 +742,7 @@ fn log_discovery_outcome(
     request: &DiscoveryRequest,
     outcome: &DiscoveryOutcome,
     blocked: &[BlockedConnector],
-    denied: Option<&str>,
+    denied: &[String],
 ) {
     let subject = request.sanitized_subject();
     match outcome {
@@ -775,11 +804,12 @@ fn log_discovery_outcome(
         );
     }
 
-    if let Some(scope) = denied {
+    if !denied.is_empty() {
+        let denied_scopes = denied.join(",");
         tracing::warn!(
             target: "tyrum::planner",
             subject,
-            scope,
+            denied_scopes = %denied_scopes,
             "policy denied connector scope"
         );
     }
