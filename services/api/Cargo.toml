@@ -28,6 +28,7 @@ sha2 = "0.10"
 anyhow = "1"
 tyrum-shared = { path = "../../shared/tyrum-shared" }
 uuid = { version = "1", features = ["serde", "v4"] }
+redis = { version = "0.32", features = ["tokio-comp", "connection-manager"] }
 
 [dev-dependencies]
 axum = { version = "0.7", features = ["json"] }
@@ -36,3 +37,4 @@ serde_json = "1"
 testcontainers = "0.18"
 tower = "0.5"
 tyrum-planner = { path = "../planner" }
+serial_test = "2"

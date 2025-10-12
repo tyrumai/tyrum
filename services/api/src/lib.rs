@@ -1,5 +1,7 @@
 pub mod account_linking;
 pub mod audit;
+pub mod cache;
+pub mod capabilities;
 pub mod ingress;
 pub mod metrics;
 pub mod profiles;
