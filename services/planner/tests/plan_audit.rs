@@ -21,6 +21,7 @@ use tyrum_planner::{
     CapabilityMemoryService, EventLog, PlanOutcome, PlanRequest, PlanResponse, ProfileStore,
     http::{PlannerState, build_router},
 };
+use tyrum_risk_classifier::load_classifier_from_toml_str;
 use tyrum_shared::{
     MessageContent, MessageSource, NormalizedMessage, NormalizedThread, NormalizedThreadMessage,
     PamProfileRef, PiiField, PlanUserContext, SenderMetadata, ThreadKind,
@@ -73,6 +74,7 @@ async fn planner_appends_audit_event_with_redacted_payload() {
         wallet_client,
         profiles,
         capability_memory,
+        risk_classifier: None,
     };
 
     let request = sample_request();
@@ -181,6 +183,123 @@ async fn planner_appends_audit_event_with_redacted_payload() {
         PlanOutcome::Success { .. } => {}
         other => panic!("expected success outcome, got {other:?}"),
     }
+}
+
+#[tokio::test]
+async fn planner_records_risk_verdict_when_classifier_enabled() {
+    if !docker_available() {
+        eprintln!(
+            "skipping planner_records_risk_verdict_when_classifier_enabled: docker unavailable"
+        );
+        return;
+    }
+
+    let postgres = TestPostgres::start().await.expect("start postgres fixture");
+    let pool = postgres.pool().clone();
+
+    let event_log = EventLog::from_pool(pool.clone());
+    event_log.migrate().await.expect("migrate planner schema");
+
+    let (policy_client, policy_server) = mock_policy(json!({
+        "decision": "approve",
+        "rules": []
+    }))
+    .await;
+
+    let (wallet_client, wallet_server) = start_wallet_stub(Thresholds {
+        auto_approve_minor_units: 40_000,
+        hard_deny_minor_units: 90_000,
+    })
+    .await;
+
+    let profiles = ProfileStore::new(event_log.pool().clone());
+    let capability_memory = CapabilityMemoryService::new(MemoryDal::new(event_log.pool().clone()));
+    let classifier = load_classifier_from_toml_str(
+        r#"
+baseline_confidence = 0.4
+tag_medium_threshold = 0.2
+tag_high_threshold = 0.6
+
+[tag_weights]
+"risk:manual_review" = 0.45
+
+[spend_thresholds.USD]
+caution_minor_units = 20000
+high_minor_units = 25000
+"#,
+    )
+    .expect("load risk classifier config");
+
+    let state = PlannerState {
+        policy_client,
+        event_log: event_log.clone(),
+        discovery: Arc::new(DefaultDiscoveryPipeline::new()),
+        wallet_client,
+        profiles,
+        capability_memory,
+        risk_classifier: Some(classifier),
+    };
+
+    let mut request = sample_request();
+    request.tags = vec![
+        "spend:30000:USD:crypto_kiosk".into(),
+        "risk:manual_review".into(),
+    ];
+
+    let response = build_router(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/plan")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&request).expect("serialize")))
+                .expect("construct request"),
+        )
+        .await
+        .expect("receive response");
+
+    policy_server.abort();
+    wallet_server.abort();
+
+    assert_eq!(response.status(), axum::http::StatusCode::OK);
+
+    let row = sqlx::query("SELECT action FROM planner_events")
+        .fetch_one(&pool)
+        .await
+        .expect("fetch audit event");
+
+    let action: serde_json::Value = row.try_get("action").expect("decode audit event");
+    let outcome = action
+        .get("outcome")
+        .and_then(|value| value.as_object())
+        .expect("outcome present");
+
+    assert_eq!(
+        outcome.get("status").and_then(|value| value.as_str()),
+        Some("success")
+    );
+
+    let risk = outcome
+        .get("risk")
+        .and_then(|value| value.as_object())
+        .expect("risk payload present");
+
+    assert_eq!(
+        risk.get("level").and_then(|value| value.as_str()),
+        Some("high")
+    );
+    let confidence = risk
+        .get("confidence")
+        .and_then(|value| value.as_f64())
+        .expect("risk confidence recorded");
+    assert!(confidence >= 0.8);
+
+    let reasons = risk
+        .get("reasons")
+        .and_then(|value| value.as_array())
+        .expect("risk reasons array");
+    assert!(!reasons.is_empty());
+    assert!(reasons.iter().any(|reason| reason.as_str().is_some()));
 }
 
 fn sample_request() -> PlanRequest {

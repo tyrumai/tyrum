@@ -720,6 +720,7 @@ async fn planner_injects_pam_profile_reference_from_store() {
         wallet_client,
         profiles,
         capability_memory,
+        risk_classifier: None,
     };
 
     let mut request = sample_request();
@@ -923,6 +924,7 @@ async fn planner_state_with_pipeline(
             wallet_client,
             profiles,
             capability_memory,
+            risk_classifier: None,
         },
         server,
         wallet_server,

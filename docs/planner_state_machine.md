@@ -51,3 +51,17 @@ serialized JSON) instead of copying the schema into bespoke representations.
 - Evaluation results surface as structured `PostconditionReport`s with sensitive values redacted.
   Failed assertions use deterministic codes (`unsupported_postcondition`, `dom_text_missing`, etc.)
   so the planner and observability pipelines can react consistently.
+
+## Risk Classification Stub
+- `services/risk_classifier` hosts a deterministic, file-driven classifier used to score spend
+  intents before dispatch. The stub exposes both a synchronous API (used in-process by the planner)
+  and an Axum router at `POST /risk/score` for future containerisation.
+- Enable the classifier by pointing `PLANNER_RISK_CLASSIFIER_CONFIG` at a TOML or YAML weights file
+  when launching `planner_http`. If the variable is unset or invalid, the planner skips risk scoring
+  without affecting the happy path.
+- When enabled, the planner enriches `PlanOutcomeAudit` with a `risk` block that records the verdict
+  (`low`, `medium`, or `high`), the rounded confidence, and sanitized rationales. These entries are
+  persisted in the event log alongside policy, discovery, and wallet audits.
+- Spend thresholds and tag weights are deterministic and local-only. The default stub config lives
+  at `services/risk_classifier/config/default_weights.toml`; edits to this file should be reviewed
+  with policy to ensure guardrails remain transparent.
