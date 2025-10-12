@@ -5,6 +5,7 @@ import {
   CAMPAIGN_PARAM_KEYS,
   type CampaignParams,
 } from "../../../lib/campaign";
+import CalibrationFlow from "./calibration-flow";
 
 const FLASH_PARAM = "flash";
 const SIGNUP_STATUS_PARAM = "signup_status";
@@ -21,24 +22,6 @@ const FLASH_CONFIG = {
     analyticsStatus: "duplicate",
   },
 };
-
-const STEPS = [
-  {
-    title: "Calibrate voice and consent",
-    copy:
-      "Lock in tone, initiative, and escalation defaults so the planner honours your guardrails from the first automation.",
-  },
-  {
-    title: "Review mandatory watchers",
-    copy:
-      "Enable baseline observers for spend, privacy, and audit coverage. Tyrum will only act inside the limits you approve.",
-  },
-  {
-    title: "Queue first outcomes",
-    copy:
-      "Prioritise the initial tasks you want Tyrum to own—visa renewals, inbox triage, or spend monitoring—to guide the planner preview.",
-  },
-];
 
 type SearchParamRecord = Record<string, string | string[] | undefined>;
 
@@ -123,24 +106,12 @@ export default function OnboardingStart({
           />
         ) : null}
       </header>
-      <section
-        className="portal-onboarding__content"
-        aria-label="Onboarding preparation steps"
-      >
-        <ol className="portal-onboarding__steps">
-          {STEPS.map(({ title, copy }) => (
-            <li className="portal-onboarding__step" key={title}>
-              <h2>{title}</h2>
-              <p>{copy}</p>
-            </li>
-          ))}
-        </ol>
-      </section>
+      <CalibrationFlow />
       <section className="portal-onboarding__next">
         <h2>What happens next</h2>
         <p>
-          We&apos;ll notify you as soon as the consent checklist (ONB-02) is live so you can
-          finalise the session placeholder, unlock planner previews, and start the full audit trail.
+          Once calibration is recorded we&apos;ll surface watcher defaults (ONB-02) so you can review
+          spend, privacy, and escalation observers before the planner issues your first preview.
         </p>
       </section>
     </main>

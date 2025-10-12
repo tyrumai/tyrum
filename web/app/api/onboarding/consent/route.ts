@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   type ConsentSelections,
+  type CalibrationSnapshot,
   persistConsent,
   snapshotConsent,
 } from "./store";
@@ -17,6 +18,56 @@ function isConsentSelections(payload: unknown): payload is ConsentSelections {
     typeof record.allowPlannerAutonomy === "boolean" &&
     typeof record.retainAuditTrail === "boolean"
   );
+}
+
+function isCalibrationPersona(value: unknown) {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const allowedKeys = new Set([
+    "tone",
+    "verbosity",
+    "initiative",
+    "quietHours",
+    "spending",
+    "voice",
+  ]);
+  const record = value as Record<string, unknown>;
+
+  return Object.keys(record).every(
+    (key) => allowedKeys.has(key) && (record[key] === undefined || typeof record[key] === "string"),
+  );
+}
+
+function isIsoDate(value: unknown) {
+  return typeof value === "string" && !Number.isNaN(Date.parse(value));
+}
+
+function isCalibrationSnapshot(payload: unknown): payload is CalibrationSnapshot {
+  if (!payload || typeof payload !== "object") {
+    return false;
+  }
+
+  const record = payload as Record<string, unknown>;
+
+  if (!isCalibrationPersona(record.persona)) {
+    return false;
+  }
+
+  if (!isIsoDate(record.startedAt) || !isIsoDate(record.completedAt)) {
+    return false;
+  }
+
+  if (
+    typeof record.durationSeconds !== "number" ||
+    !Number.isFinite(record.durationSeconds) ||
+    record.durationSeconds < 0
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
 export async function GET() {
@@ -39,6 +90,7 @@ export async function POST(request: NextRequest) {
   }
 
   const selections = (payload as { selections?: unknown }).selections;
+  const calibrationPayload = (payload as { calibration?: unknown }).calibration;
 
   if (!isConsentSelections(selections)) {
     return NextResponse.json(
@@ -51,7 +103,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const record = persistConsent(selections);
+  let calibration: CalibrationSnapshot | undefined;
+  if (typeof calibrationPayload !== "undefined") {
+    if (!isCalibrationSnapshot(calibrationPayload)) {
+      return NextResponse.json(
+        {
+          error: "invalid_calibration",
+          message:
+            "Calibration payload must include persona, startedAt, completedAt, and durationSeconds fields.",
+        },
+        { status: 400 },
+      );
+    }
+
+    calibration = calibrationPayload;
+  }
+
+  const record = persistConsent(selections, calibration);
 
   return NextResponse.json(
     {
@@ -60,6 +128,7 @@ export async function POST(request: NextRequest) {
       revision: record.revision,
       recordedAt: record.recordedAt,
       selections: record.selections,
+      calibration: record.calibration,
       stub: record.stub,
     },
     { status: 201 },

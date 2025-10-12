@@ -11,10 +11,27 @@ export type ConsentRecord = {
   auditReference: string;
   recordedAt: string;
   selections: ConsentSelections;
+  calibration?: CalibrationSnapshot;
   stub: {
     persistence: "memory";
     note: string;
   };
+};
+
+export type CalibrationPersona = {
+  tone?: string;
+  verbosity?: string;
+  initiative?: string;
+  quietHours?: string;
+  spending?: string;
+  voice?: string;
+};
+
+export type CalibrationSnapshot = {
+  persona: CalibrationPersona;
+  startedAt: string;
+  completedAt: string;
+  durationSeconds: number;
 };
 
 const CONSENT_RECORD_ID = "onboarding-consent-stub";
@@ -51,6 +68,7 @@ export function snapshotConsent() {
       allowPlannerAutonomy: false,
       retainAuditTrail: false,
     },
+    calibration: undefined,
     stub: {
       persistence: "memory" as const,
       note: "Replace with onboarding consent service; stub keeps the most recent selections in memory only.",
@@ -58,7 +76,10 @@ export function snapshotConsent() {
   } satisfies ConsentRecord;
 }
 
-export function persistConsent(selections: ConsentSelections): ConsentRecord {
+export function persistConsent(
+  selections: ConsentSelections,
+  calibration?: CalibrationSnapshot,
+): ConsentRecord {
   const previousRevision = latestRecord?.revision ?? 0;
   const revision = previousRevision + 1;
 
@@ -68,6 +89,7 @@ export function persistConsent(selections: ConsentSelections): ConsentRecord {
     auditReference: buildAuditReference(revision),
     recordedAt: computeRecordedAt(revision),
     selections,
+    calibration,
     stub: {
       persistence: "memory",
       note: "Replace with onboarding consent service; stub keeps the most recent selections in memory only.",

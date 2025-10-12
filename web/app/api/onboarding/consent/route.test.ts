@@ -98,6 +98,73 @@ describe("onboarding consent route", () => {
     expect(secondPayload.auditReference).toBe("CONSENT-STUB-0001-R02");
   });
 
+  it("persists calibration snapshots when provided", async () => {
+    const request = createRequest({
+      selections: {
+        shareCalendarSignals: true,
+        allowPlannerAutonomy: true,
+        retainAuditTrail: true,
+      },
+      calibration: {
+        persona: {
+          tone: "upbeat",
+          verbosity: "balanced",
+          initiative: "act_within_limits",
+          quietHours: "21-07",
+          spending: "50",
+          voice: "warm",
+        },
+        startedAt: "2025-10-12T10:00:00.000Z",
+        completedAt: "2025-10-12T10:01:10.000Z",
+        durationSeconds: 70,
+      },
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(201);
+    const payload = (await response.json()) as {
+      calibration: {
+        persona: Record<string, string>;
+        durationSeconds: number;
+        startedAt: string;
+        completedAt: string;
+      };
+      revision: number;
+    };
+
+    expect(payload.revision).toBe(1);
+    expect(payload.calibration.persona.voice).toBe("warm");
+    expect(payload.calibration.durationSeconds).toBe(70);
+
+    const snapshot = await GET();
+    const snapshotPayload = (await snapshot.json()) as {
+      calibration: { persona: Record<string, string> };
+    };
+    expect(snapshotPayload.calibration?.persona.initiative).toBe("act_within_limits");
+  });
+
+  it("rejects invalid calibration payloads", async () => {
+    const response = await POST(
+      createRequest({
+        selections: {
+          shareCalendarSignals: false,
+          allowPlannerAutonomy: true,
+          retainAuditTrail: true,
+        },
+        calibration: {
+          persona: {},
+          startedAt: "not-a-date",
+          completedAt: "still-not-a-date",
+          durationSeconds: -2,
+        },
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    const payload = (await response.json()) as { error: string };
+    expect(payload.error).toBe("invalid_calibration");
+  });
+
   it("rejects invalid payloads", async () => {
     const request = createRequest({ selections: { foo: "bar" } });
     const response = await POST(request);

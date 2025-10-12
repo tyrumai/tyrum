@@ -609,6 +609,7 @@ curl -X POST http://localhost:8080/telegram/webhook \
 ### M3 — Persona & Voice
 - PVP editor (tone, verbosity, initiative, consent style) with on‑the‑fly tweaks (#12, Appendix B).
 - 90‑second calibration in onboarding (Telegram) (#12, Appendix E).
+- Portal onboarding start runs the timed calibration flow, persisting persona defaults alongside consent selections for the stubbed review stack.
 - Voice notes + TTS; per‑contact pronunciation dictionary (#12).
 - Explainability in voice: concise rationales tied to audit events (#13).
 
