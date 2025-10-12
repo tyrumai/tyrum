@@ -7,13 +7,30 @@ import AccountSettingsPage from "./page";
 declare global {
   // eslint-disable-next-line no-var
   var fetch: typeof fetch;
+  // eslint-disable-next-line no-var
+  var Audio: typeof Audio;
 }
 
 describe("AccountSettingsPage", () => {
   const emptyProfilesResponse = { pam: null, pvp: null };
+  let audioPlayMock: ReturnType<typeof vi.fn>;
+  let audioPauseMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.resetAllMocks();
+    audioPlayMock = vi.fn().mockResolvedValue(undefined);
+    audioPauseMock = vi.fn();
+    global.Audio = vi
+      .fn()
+      .mockImplementation(
+        () =>
+          ({
+            src: "",
+            currentTime: 0,
+            play: audioPlayMock,
+            pause: audioPauseMock,
+          }) as unknown as HTMLAudioElement,
+      ) as unknown as typeof Audio;
     global.fetch = vi
       .fn()
       .mockResolvedValue(mockFetch(emptyProfilesResponse)) as unknown as typeof fetch;
@@ -136,6 +153,10 @@ describe("AccountSettingsPage", () => {
             pace: 0.7,
             pitch: 0.2,
             warmth: 0.5,
+            pronunciation_dict: [
+              { token: "Tyrum", pronounce: "Tie-rum" },
+              { token: "AI", pronounce: "A I" },
+            ],
           },
         },
       },
@@ -164,7 +185,159 @@ describe("AccountSettingsPage", () => {
     expect(screen.getByLabelText("Voice pace")).toHaveValue(0.7);
     expect(screen.getByLabelText("Voice pitch")).toHaveValue(0.2);
     expect(screen.getByLabelText("Voice warmth")).toHaveValue(0.5);
+    const tokenFields = screen.getAllByLabelText("Token");
+    expect(tokenFields).toHaveLength(2);
+    expect(tokenFields[0]).toHaveValue("Tyrum");
+    expect(tokenFields[1]).toHaveValue("AI");
+    const pronounceFields = screen.getAllByLabelText("Pronounce as");
+    expect(pronounceFields).toHaveLength(2);
+    expect(pronounceFields[0]).toHaveValue("Tie-rum");
+    expect(pronounceFields[1]).toHaveValue("A I");
     expect(screen.getByText("Current version: pvp-version-456")).toBeInTheDocument();
+  });
+
+  it("allows adding and removing pronunciation overrides", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(mockFetch(emptyProfilesResponse));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const user = userEvent.setup();
+    render(<AccountSettingsPage />);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/profiles", expect.any(Object));
+    });
+
+    await user.click(screen.getByRole("button", { name: "Add pronunciation" }));
+    const tokenFields = screen.getAllByLabelText("Token");
+    const pronounceFields = screen.getAllByLabelText("Pronounce as");
+    expect(tokenFields).toHaveLength(1);
+    expect(pronounceFields).toHaveLength(1);
+
+    await user.type(tokenFields[0], "Tyrum");
+    await user.type(pronounceFields[0], "Tie-rum");
+    expect(tokenFields[0]).toHaveValue("Tyrum");
+    expect(pronounceFields[0]).toHaveValue("Tie-rum");
+
+    await user.click(screen.getByRole("button", { name: /Remove pronunciation override/ }));
+    expect(screen.queryAllByLabelText("Token")).toHaveLength(0);
+  });
+
+  it("surfaces an error when a pronunciation entry is incomplete", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(mockFetch(emptyProfilesResponse));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const user = userEvent.setup();
+    render(<AccountSettingsPage />);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/profiles", expect.any(Object));
+    });
+
+    await user.click(screen.getByRole("button", { name: "Add pronunciation" }));
+    await user.type(screen.getByLabelText("Token"), "Tyrum");
+
+    await user.click(screen.getByRole("button", { name: "Save persona profile" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Pronunciation entries must include both the token and the pronunciation.",
+    );
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/api/profiles/pvp",
+      expect.objectContaining({ method: "PUT" }),
+    );
+  });
+
+  it("plays a voice preview when the API returns audio", async () => {
+    const previewAudio = "ZmFrZS1hdWRpby1kYXRh";
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        mockFetch({
+          pam: null,
+          pvp: {
+            profile_id: "pvp-default",
+            version: "pvp-version-200",
+            profile: {
+              voice: {
+                voice_id: "nova",
+              },
+            },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        mockFetch({
+          audio_base64: previewAudio,
+          format: "wav",
+        }),
+      );
+
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const user = userEvent.setup();
+    render(<AccountSettingsPage />);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/profiles", expect.any(Object));
+    });
+
+    await user.click(screen.getByRole("button", { name: "Preview voice" }));
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/profiles/pvp/preview",
+      expect.objectContaining({
+        method: "POST",
+      }),
+    );
+    expect(audioPlayMock).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.getByText("Playing voice preview.")).toBeInTheDocument();
+    });
+  });
+
+  it("surfaces an error when the voice preview fails", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        mockFetch({
+          pam: null,
+          pvp: {
+            profile_id: "pvp-default",
+            version: "pvp-version-201",
+            profile: {
+              voice: {
+                voice_id: "nova",
+              },
+            },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        mockFetch(
+          {
+            message: "Preview unavailable.",
+          },
+          { ok: false, status: 502 },
+        ),
+      );
+
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const user = userEvent.setup();
+    render(<AccountSettingsPage />);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/profiles", expect.any(Object));
+    });
+
+    await user.click(screen.getByRole("button", { name: "Preview voice" }));
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/profiles/pvp/preview",
+      expect.objectContaining({ method: "POST" }),
+    );
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("Preview unavailable.");
+    });
+    expect(audioPlayMock).not.toHaveBeenCalled();
   });
 
   it("submits autonomy preferences and surfaces success feedback", async () => {
@@ -267,6 +440,7 @@ describe("AccountSettingsPage", () => {
               pace: 0.6,
               pitch: 0.3,
               warmth: 0.4,
+              pronunciation_dict: [{ token: "Tyrum", pronounce: "Tie-rum" }],
             },
           },
           version: "pvp-version-321",
@@ -296,6 +470,9 @@ describe("AccountSettingsPage", () => {
     await user.type(screen.getByLabelText("Voice pitch"), "0.3");
     await user.clear(screen.getByLabelText("Voice warmth"));
     await user.type(screen.getByLabelText("Voice warmth"), "0.4");
+    await user.click(screen.getByRole("button", { name: "Add pronunciation" }));
+    await user.type(screen.getByLabelText("Token"), "Tyrum");
+    await user.type(screen.getByLabelText("Pronounce as"), "Tie-rum");
 
     await user.click(screen.getByRole("button", { name: "Save persona profile" }));
 
@@ -305,6 +482,11 @@ describe("AccountSettingsPage", () => {
         method: "PUT",
       }),
     );
+    const [, requestInit] = fetchMock.mock.calls.at(-1) ?? [];
+    const body = requestInit && requestInit.body ? JSON.parse(requestInit.body as string) : {};
+    expect(body.profile.voice.pronunciation_dict).toEqual([
+      { token: "Tyrum", pronounce: "Tie-rum" },
+    ]);
 
     await waitFor(() => {
       expect(screen.getByText("Persona preferences saved.")).toBeInTheDocument();

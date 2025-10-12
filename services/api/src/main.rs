@@ -1,4 +1,9 @@
-use std::{collections::HashMap, env, net::SocketAddr, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    env,
+    net::SocketAddr,
+    time::Duration,
+};
 
 use anyhow::{Context, Result, anyhow};
 
@@ -31,7 +36,9 @@ use axum::{
     routing::{get, post, put},
 };
 use chrono::{DateTime, Utc};
+use reqwest::Url;
 use serde::{Deserialize, Serialize};
+use serde_json::{Map as JsonMap, Value, json};
 use tyrum_shared::telegram::{TelegramNormalizationError, normalize_update};
 use uuid::Uuid;
 use validator::Validate;
@@ -46,12 +53,19 @@ const TELEGRAM_WEBHOOK_ROUTE: &str = "/telegram/webhook";
 const PROFILES_ROUTE: &str = "/profiles";
 const PROFILE_PAM_ROUTE: &str = "/profiles/pam";
 const PROFILE_PVP_ROUTE: &str = "/profiles/pvp";
+const PROFILE_PVP_PREVIEW_ROUTE: &str = "/profiles/pvp/preview";
 const PORTAL_ACCOUNT_ID: &str = "11111111-2222-3333-4444-555555555555";
 const CAPABILITY_SCHEMA_ROUTE: &str =
     "/capabilities/:subject_id/:capability_type/:capability_identifier/:executor_kind/schema";
 const CAPABILITY_COST_ROUTE: &str =
     "/capabilities/:subject_id/:capability_type/:capability_identifier/:executor_kind/cost";
 const DEFAULT_CAPABILITY_CACHE_TTL: Duration = Duration::from_secs(300);
+const DEFAULT_MODEL_GATEWAY_URL: &str = "http://model-gateway:8001";
+const VOICE_PREVIEW_MODEL: &str = "tyrum-voice-preview";
+const VOICE_PREVIEW_SAMPLE: &str =
+    "Hi, this is Tyrum. Thanks for calibrating your pronunciation preferences.";
+const MAX_PRONUNCIATION_ENTRIES: usize = 32;
+const MAX_PRONUNCIATION_FIELD_LENGTH: usize = 128;
 
 #[derive(Clone, Copy)]
 struct IntegrationDefinition {
@@ -90,6 +104,190 @@ struct AppState {
     capabilities: CapabilityRepository,
     cache: CapabilityCache,
     portal_subject_id: Uuid,
+    model_gateway: ModelGatewayClient,
+}
+
+#[derive(Clone)]
+struct ModelGatewayClient {
+    client: reqwest::Client,
+    audio_url: Url,
+    preview_model: String,
+}
+
+impl ModelGatewayClient {
+    fn new(base_url: Url, preview_model: impl Into<String>) -> Result<Self> {
+        let audio_url = base_url
+            .join("/v1/audio/speech")
+            .context("resolving /v1/audio/speech on MODEL_GATEWAY_URL")?;
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(15))
+            .build()
+            .context("building model gateway HTTP client")?;
+        Ok(Self {
+            client,
+            audio_url,
+            preview_model: preview_model.into(),
+        })
+    }
+
+    #[cfg(test)]
+    fn with_client(
+        client: reqwest::Client,
+        base_url: Url,
+        preview_model: impl Into<String>,
+    ) -> Result<Self> {
+        let audio_url = base_url
+            .join("/v1/audio/speech")
+            .context("resolving /v1/audio/speech on MODEL_GATEWAY_URL")?;
+        Ok(Self {
+            client,
+            audio_url,
+            preview_model: preview_model.into(),
+        })
+    }
+
+    async fn request_preview(
+        &self,
+        mut payload: JsonMap<String, Value>,
+    ) -> Result<ModelGatewaySpeechResponse> {
+        payload.insert(
+            "model".to_string(),
+            Value::String(self.preview_model.clone()),
+        );
+        payload.insert("stream".to_string(), Value::Bool(false));
+
+        let response = self
+            .client
+            .post(self.audio_url.clone())
+            .json(&payload)
+            .send()
+            .await
+            .with_context(|| {
+                format!(
+                    "sending preview request to model gateway at {}",
+                    self.audio_url
+                )
+            })?;
+
+        let status = response.status();
+        let bytes = response
+            .bytes()
+            .await
+            .context("reading model gateway preview response body")?;
+        if !status.is_success() {
+            let body = String::from_utf8_lossy(&bytes);
+            return Err(anyhow!(
+                "model gateway returned {} for preview request: {}",
+                status,
+                body
+            ));
+        }
+
+        let preview: ModelGatewaySpeechResponse = serde_json::from_slice(&bytes)
+            .context("deserializing model gateway preview response")?;
+        Ok(preview)
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct ModelGatewaySpeechResponse {
+    audio_base64: String,
+    #[serde(default = "default_preview_format")]
+    format: String,
+}
+
+fn default_preview_format() -> String {
+    "wav".to_string()
+}
+
+fn sanitize_pvp_profile(profile: Value) -> Result<Value, String> {
+    let Value::Object(mut object) = profile else {
+        return Err("profile must be a JSON object".to_string());
+    };
+
+    if let Some(voice_value) = object.get_mut("voice") {
+        let voice_object = voice_value
+            .as_object_mut()
+            .ok_or_else(|| "voice must be an object".to_string())?;
+
+        if let Some(raw_dict) = voice_object.remove("pronunciation_dict") {
+            let sanitized = sanitize_pronunciation_dict(raw_dict)?;
+            if let Some(entries) = sanitized {
+                voice_object.insert("pronunciation_dict".to_string(), entries);
+            }
+        }
+    }
+
+    Ok(Value::Object(object))
+}
+
+fn sanitize_pronunciation_dict(raw: Value) -> Result<Option<Value>, String> {
+    let entries = raw
+        .as_array()
+        .ok_or_else(|| "pronunciation_dict must be an array".to_string())?;
+    if entries.len() > MAX_PRONUNCIATION_ENTRIES {
+        return Err(format!(
+            "pronunciation_dict cannot exceed {MAX_PRONUNCIATION_ENTRIES} entries"
+        ));
+    }
+
+    let mut sanitized = Vec::with_capacity(entries.len());
+    let mut seen_tokens = HashSet::new();
+
+    for (index, entry) in entries.iter().enumerate() {
+        let object = entry
+            .as_object()
+            .ok_or_else(|| format!("pronunciation_dict[{index}] must be an object"))?;
+        let token = object
+            .get("token")
+            .and_then(Value::as_str)
+            .ok_or_else(|| format!("pronunciation_dict[{index}] is missing a token"))?;
+        let pronounce = object
+            .get("pronounce")
+            .and_then(Value::as_str)
+            .ok_or_else(|| format!("pronunciation_dict[{index}] is missing a pronounce value"))?;
+
+        let token_trimmed = token.trim();
+        if token_trimmed.is_empty() {
+            return Err(format!("pronunciation_dict[{index}].token cannot be empty"));
+        }
+        if token_trimmed.len() > MAX_PRONUNCIATION_FIELD_LENGTH {
+            return Err(format!(
+                "pronunciation_dict[{index}].token must be at most {MAX_PRONUNCIATION_FIELD_LENGTH} characters"
+            ));
+        }
+
+        let pronounce_trimmed = pronounce.trim();
+        if pronounce_trimmed.is_empty() {
+            return Err(format!(
+                "pronunciation_dict[{index}].pronounce cannot be empty"
+            ));
+        }
+        if pronounce_trimmed.len() > MAX_PRONUNCIATION_FIELD_LENGTH {
+            return Err(format!(
+                "pronunciation_dict[{index}].pronounce must be at most {MAX_PRONUNCIATION_FIELD_LENGTH} characters"
+            ));
+        }
+
+        let normalized_token = token_trimmed.to_lowercase();
+        if !seen_tokens.insert(normalized_token) {
+            return Err(format!(
+                "pronunciation_dict contains a duplicate entry for '{}'",
+                token_trimmed
+            ));
+        }
+
+        sanitized.push(json!({
+            "token": token_trimmed,
+            "pronounce": pronounce_trimmed,
+        }));
+    }
+
+    if sanitized.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(Value::Array(sanitized)))
+    }
 }
 
 #[derive(Clone, Serialize)]
@@ -206,6 +404,7 @@ fn build_router(state: AppState) -> Router {
         .route(PROFILES_ROUTE, get(get_profiles))
         .route(PROFILE_PAM_ROUTE, put(update_pam_profile))
         .route(PROFILE_PVP_ROUTE, put(update_pvp_profile))
+        .route(PROFILE_PVP_PREVIEW_ROUTE, post(preview_pvp_voice))
         .route(WATCHERS_ROUTE, post(register_watcher))
         .route(CAPABILITY_SCHEMA_ROUTE, get(get_capability_schema))
         .route(CAPABILITY_COST_ROUTE, get(get_capability_cost))
@@ -222,6 +421,171 @@ async fn index() -> Response {
 
     metrics::record_http_request("GET", "/", response.status().as_u16());
 
+    response
+}
+
+#[tracing::instrument(name = "api.profiles.preview_pvp_voice", skip_all)]
+async fn preview_pvp_voice(State(state): State<AppState>) -> Response {
+    let stored_profiles = match state.profiles.fetch_profiles(state.portal_subject_id).await {
+        Ok(envelope) => envelope,
+        Err(error) => {
+            tracing::error!(reason = %error, "failed to load profiles before preview");
+            let response = (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "profiles_unavailable",
+                    message: "Unable to load persona profile for preview.".into(),
+                }),
+            )
+                .into_response();
+            metrics::record_http_request(
+                "POST",
+                PROFILE_PVP_PREVIEW_ROUTE,
+                response.status().as_u16(),
+            );
+            return response;
+        }
+    };
+
+    let Some(pvp_profile) = stored_profiles.pvp else {
+        let response = (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "voice_not_configured",
+                message: "Save persona voice settings before requesting a preview.".into(),
+            }),
+        )
+            .into_response();
+        metrics::record_http_request(
+            "POST",
+            PROFILE_PVP_PREVIEW_ROUTE,
+            response.status().as_u16(),
+        );
+        return response;
+    };
+
+    let profile_object = match pvp_profile.profile.as_object() {
+        Some(profile) => profile,
+        None => {
+            let response = (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "voice_not_configured",
+                    message: "Stored persona profile is not a JSON object.".into(),
+                }),
+            )
+                .into_response();
+            metrics::record_http_request(
+                "POST",
+                PROFILE_PVP_PREVIEW_ROUTE,
+                response.status().as_u16(),
+            );
+            return response;
+        }
+    };
+
+    let voice_object = match profile_object
+        .get("voice")
+        .and_then(|value| value.as_object())
+    {
+        Some(voice) => voice,
+        None => {
+            let response = (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "voice_not_configured",
+                    message: "Save a voice configuration before requesting a preview.".into(),
+                }),
+            )
+                .into_response();
+            metrics::record_http_request(
+                "POST",
+                PROFILE_PVP_PREVIEW_ROUTE,
+                response.status().as_u16(),
+            );
+            return response;
+        }
+    };
+
+    let voice_id = match voice_object
+        .get("voice_id")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        Some(id) => id.to_string(),
+        None => {
+            let response = (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "voice_not_configured",
+                    message: "Set a voice identifier before requesting a preview.".into(),
+                }),
+            )
+                .into_response();
+            metrics::record_http_request(
+                "POST",
+                PROFILE_PVP_PREVIEW_ROUTE,
+                response.status().as_u16(),
+            );
+            return response;
+        }
+    };
+
+    let mut request_payload = JsonMap::new();
+    request_payload.insert(
+        "input".to_string(),
+        Value::String(VOICE_PREVIEW_SAMPLE.to_string()),
+    );
+    request_payload.insert("voice".to_string(), Value::String(voice_id));
+
+    if let Some(pace) = voice_object.get("pace").and_then(Value::as_f64) {
+        request_payload.insert("pace".to_string(), Value::from(pace));
+    }
+    if let Some(pitch) = voice_object.get("pitch").and_then(Value::as_f64) {
+        request_payload.insert("pitch".to_string(), Value::from(pitch));
+    }
+    if let Some(warmth) = voice_object.get("warmth").and_then(Value::as_f64) {
+        request_payload.insert("warmth".to_string(), Value::from(warmth));
+    }
+    if let Some(pronunciations) = voice_object
+        .get("pronunciation_dict")
+        .and_then(|value| value.as_array())
+        .filter(|array| !array.is_empty())
+    {
+        request_payload.insert(
+            "pronunciation_dict".to_string(),
+            Value::Array(pronunciations.clone()),
+        );
+    }
+
+    let preview = match state.model_gateway.request_preview(request_payload).await {
+        Ok(preview) => preview,
+        Err(error) => {
+            tracing::error!(reason = %error, "model gateway preview failed");
+            let response = (
+                StatusCode::BAD_GATEWAY,
+                Json(ErrorResponse {
+                    error: "preview_unavailable",
+                    message: "Voice preview is temporarily unavailable.".into(),
+                }),
+            )
+                .into_response();
+            metrics::record_http_request(
+                "POST",
+                PROFILE_PVP_PREVIEW_ROUTE,
+                response.status().as_u16(),
+            );
+            return response;
+        }
+    };
+
+    let response = Json(preview).into_response();
+    metrics::record_http_request(
+        "POST",
+        PROFILE_PVP_PREVIEW_ROUTE,
+        response.status().as_u16(),
+    );
     response
 }
 
@@ -542,12 +906,28 @@ async fn update_pvp_profile(
         return response;
     }
 
+    let sanitized_profile = match sanitize_pvp_profile(payload.profile) {
+        Ok(profile) => profile,
+        Err(message) => {
+            let response = (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "invalid_profile",
+                    message,
+                }),
+            )
+                .into_response();
+            metrics::record_http_request("PUT", PROFILE_PVP_ROUTE, response.status().as_u16());
+            return response;
+        }
+    };
+
     let response = match state
         .profiles
         .upsert_pvp_profile(
             state.portal_subject_id,
             DEFAULT_PVP_PROFILE_ID,
-            payload.profile,
+            sanitized_profile,
         )
         .await
     {
@@ -989,6 +1369,13 @@ async fn main() -> Result<()> {
     let telegram = telegram::TelegramWebhookVerifier::new(telegram_secret)
         .context("invalid telegram webhook secret")?;
 
+    let model_gateway_base =
+        env::var("MODEL_GATEWAY_URL").unwrap_or_else(|_| DEFAULT_MODEL_GATEWAY_URL.to_string());
+    let model_gateway_url =
+        Url::parse(&model_gateway_base).context("MODEL_GATEWAY_URL must be a valid URL")?;
+    let model_gateway = ModelGatewayClient::new(model_gateway_url, VOICE_PREVIEW_MODEL)
+        .context("initializing model gateway client")?;
+
     let app = build_router(AppState {
         waitlist,
         account_linking,
@@ -1000,6 +1387,7 @@ async fn main() -> Result<()> {
         capabilities,
         cache,
         portal_subject_id,
+        model_gateway,
     });
 
     tracing::info!("listening on {}", bind_addr);
@@ -1019,25 +1407,33 @@ mod tests {
 
     use super::{
         ACCOUNT_LINKING_ROUTE, AppState, AuditTimelineRepository, DEFAULT_CAPABILITY_CACHE_TTL,
-        PLACEHOLDER_INTEGRATIONS, PORTAL_ACCOUNT_ID, PROFILE_PAM_ROUTE, PROFILE_PVP_ROUTE,
-        PROFILES_ROUTE, TELEGRAM_WEBHOOK_ROUTE, WAITLIST_ROUTE, build_router, sanitize_opt,
+        ModelGatewayClient, PLACEHOLDER_INTEGRATIONS, PORTAL_ACCOUNT_ID, PROFILE_PAM_ROUTE,
+        PROFILE_PVP_PREVIEW_ROUTE, PROFILE_PVP_ROUTE, PROFILES_ROUTE, TELEGRAM_WEBHOOK_ROUTE,
+        VOICE_PREVIEW_MODEL, VOICE_PREVIEW_SAMPLE, WAITLIST_ROUTE, build_router, sanitize_opt,
     };
     use crate::metrics;
     use axum::{
+        Json, Router,
         body::Body,
         http::{Request, StatusCode},
+        routing::post,
     };
     use chrono::{DateTime, Utc};
     use http_body_util::BodyExt;
+    use reqwest::Url;
     use serde_json::{Value, json};
     use serial_test::serial;
     use sqlx::{PgPool, Row, postgres::PgPoolOptions};
+    use std::sync::Arc;
     use std::{path::Path, time::Duration};
     use testcontainers::{
         ContainerAsync, GenericImage, ImageExt,
         core::{IntoContainerPort, WaitFor},
         runners::AsyncRunner,
     };
+    use tokio::net::TcpListener;
+    use tokio::sync::Mutex;
+    use tokio::task::JoinHandle;
     use tokio::time::sleep;
     use tower::ServiceExt;
     use tyrum_api::{
@@ -1133,6 +1529,8 @@ mod tests {
 
     const TELEGRAM_SECRET: &str = "test-telegram-secret";
 
+    const TEST_PREVIEW_AUDIO: &str = "UklGRmQGAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YUAGAAAAAAENeRgNIbcl7SWmIWQZIg40ASP0eOiV34fa6NnK3bflwPCX/bYKkRbCHzElOia+IiYbWRCdA3T2a+rw4CHbrtnD3APkku4w+2AIkxRXHoQkYSazI80cfxIBBs/4dexq4uDbmtng22ridezP+AEGfxLNHLMjYSaEJFcekxRgCDD7ku4D5MPcrtkh2/Dga+p09p0DWRAmG74iOiYxJcIfkRa2Cpf9wPC35crd6NmH2pXfeOgj9DQBIg5kGaYh7SW3JQ0heRgBDQAA//KH5/PeSdoT2lrenObe8cz+3QuIF2sgeSUYJjYiSRpAD2kCSvVv6T7gz9rG2ULd2uSn72P8jAmVFRAf3yRSJj0j/RtuEdAEoPdt66nhfNuf2U3cM+OB7f/5MQeLE5YdICRmJiAklh2LEzEH//mB7TPjTdyf2XzbqeFt66D30ARuEf0bPSNSJt8kEB+VFYwJY/yn79rkQt3G2c/aPuBv6Ur1aQJAD0kaNiIYJnklayCIF90LzP7e8ZzmWt4T2kna896H5//yAAA";
+
     struct TestContext {
         #[allow(dead_code)]
         container: ContainerAsync<GenericImage>,
@@ -1146,6 +1544,9 @@ mod tests {
         #[allow(dead_code)]
         cache: CapabilityCache,
         telegram: TelegramWebhookVerifier,
+        #[allow(dead_code)]
+        model_gateway_handle: JoinHandle<()>,
+        tts_requests: Arc<Mutex<Vec<Value>>>,
     }
 
     impl TestContext {
@@ -1191,6 +1592,43 @@ mod tests {
             let telegram =
                 TelegramWebhookVerifier::new(TELEGRAM_SECRET).expect("construct telegram verifier");
 
+            let tts_requests: Arc<Mutex<Vec<Value>>> = Arc::new(Mutex::new(Vec::new()));
+            let tts_store = tts_requests.clone();
+            let tts_app = Router::new().route(
+                "/v1/audio/speech",
+                post(move |Json(payload): Json<Value>| {
+                    let tts_store = tts_store.clone();
+                    async move {
+                        tts_store.lock().await.push(payload);
+                        (
+                            StatusCode::OK,
+                            Json(json!({
+                                "audio_base64": TEST_PREVIEW_AUDIO,
+                                "format": "wav",
+                            })),
+                        )
+                    }
+                }),
+            );
+
+            let listener = TcpListener::bind("127.0.0.1:0")
+                .await
+                .expect("bind preview stub listener");
+            let addr = listener.local_addr().expect("preview stub addr");
+            let gateway_handle = tokio::spawn(async move {
+                if let Err(error) = axum::serve(listener, tts_app).await {
+                    eprintln!("model gateway preview stub terminated unexpectedly: {error}");
+                }
+            });
+
+            let gateway_url = Url::parse(&format!("http://{}", addr)).expect("preview stub url");
+            let model_gateway = ModelGatewayClient::with_client(
+                reqwest::Client::new(),
+                gateway_url,
+                VOICE_PREVIEW_MODEL,
+            )
+            .expect("construct model gateway client");
+
             let router = build_router(AppState {
                 waitlist: waitlist.clone(),
                 account_linking: account_linking.clone(),
@@ -1202,6 +1640,7 @@ mod tests {
                 capabilities: capabilities.clone(),
                 cache: cache.clone(),
                 portal_subject_id,
+                model_gateway,
             });
 
             Self {
@@ -1214,7 +1653,15 @@ mod tests {
                 capabilities,
                 cache,
                 telegram,
+                model_gateway_handle: gateway_handle,
+                tts_requests,
             }
+        }
+    }
+
+    impl Drop for TestContext {
+        fn drop(&mut self) {
+            self.model_gateway_handle.abort();
         }
     }
 
@@ -1359,6 +1806,12 @@ mod tests {
             TelegramWebhookVerifier::new(TELEGRAM_SECRET).expect("construct telegram verifier");
         let portal_subject_id =
             Uuid::parse_str(PORTAL_ACCOUNT_ID).expect("valid portal subject uuid");
+        let model_gateway = ModelGatewayClient::with_client(
+            reqwest::Client::new(),
+            Url::parse("http://localhost:65535").expect("parse fallback gateway url"),
+            VOICE_PREVIEW_MODEL,
+        )
+        .expect("construct model gateway client");
         let state = AppState {
             waitlist,
             account_linking,
@@ -1370,6 +1823,7 @@ mod tests {
             capabilities,
             cache,
             portal_subject_id,
+            model_gateway,
         };
         let app = build_router(state);
 
@@ -1940,7 +2394,11 @@ mod tests {
                 "verbosity": "balanced",
                 "voice": {
                     "voice_id": "voice_test",
-                    "pace": 0.4
+                    "pace": 0.4,
+                    "pronunciation_dict": [
+                        { "token": " Tyrum ", "pronounce": "Tie-rum" },
+                        { "token": "AI", "pronounce": "Aye Eye" }
+                    ]
                 }
             }
         });
@@ -1990,6 +2448,124 @@ mod tests {
             payload["pvp"]["profile"]["voice"]["voice_id"],
             json!("voice_test")
         );
+        assert_eq!(
+            payload["pvp"]["profile"]["voice"]["pronunciation_dict"],
+            json!([
+                { "token": "Tyrum", "pronounce": "Tie-rum" },
+                { "token": "AI", "pronounce": "Aye Eye" }
+            ])
+        );
+    }
+
+    #[tokio::test]
+    async fn pvp_update_rejects_invalid_pronunciation_dictionary() {
+        if !docker_available() {
+            return;
+        }
+
+        let ctx = TestContext::new().await;
+        let app = ctx.router.clone();
+
+        let payload = json!({
+            "profile": {
+                "voice": {
+                    "voice_id": "voice_test",
+                    "pronunciation_dict": [
+                        { "token": "Tyrum", "pronounce": "Tie-rum" },
+                        { "token": "tyrum", "pronounce": "Different" }
+                    ]
+                }
+            }
+        });
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri(PROFILE_PVP_ROUTE)
+                    .header("content-type", "application/json")
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let payload: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(payload["error"], "invalid_profile");
+        assert!(
+            payload["message"]
+                .as_str()
+                .expect("error message")
+                .contains("duplicate entry")
+        );
+    }
+
+    #[tokio::test]
+    async fn preview_voice_returns_audio_clip_and_forwards_voice_settings() {
+        if !docker_available() {
+            return;
+        }
+
+        let ctx = TestContext::new().await;
+        let app = ctx.router.clone();
+
+        let pvp_payload = json!({
+            "profile": {
+                "voice": {
+                    "voice_id": "tyrum-preview",
+                    "pace": 0.7,
+                    "pronunciation_dict": [
+                        { "token": "Tyrum", "pronounce": "Tie-rum" }
+                    ]
+                }
+            }
+        });
+
+        let store_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri(PROFILE_PVP_ROUTE)
+                    .header("content-type", "application/json")
+                    .body(Body::from(pvp_payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(store_response.status(), StatusCode::OK);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(PROFILE_PVP_PREVIEW_ROUTE)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let payload: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(payload["format"], json!("wav"));
+        assert_eq!(payload["audio_base64"], json!(TEST_PREVIEW_AUDIO));
+
+        let recordings = ctx.tts_requests.lock().await;
+        assert_eq!(recordings.len(), 1);
+        let forwarded = recordings[0].clone();
+        assert_eq!(forwarded["model"], json!(VOICE_PREVIEW_MODEL));
+        assert_eq!(forwarded["stream"], json!(false));
+        assert_eq!(forwarded["input"], json!(VOICE_PREVIEW_SAMPLE));
+        assert_eq!(forwarded["voice"], json!("tyrum-preview"));
+        assert_eq!(
+            forwarded["pronunciation_dict"],
+            json!([{ "token": "Tyrum", "pronounce": "Tie-rum" }])
+        );
+        assert_eq!(forwarded["pace"], json!(0.7));
     }
 
     #[tokio::test]
@@ -2091,6 +2667,13 @@ mod tests {
             .expect("load capability")
             .expect("capability stored");
 
+        let model_gateway = ModelGatewayClient::with_client(
+            reqwest::Client::new(),
+            Url::parse("http://localhost:65535").expect("parse fallback gateway url"),
+            VOICE_PREVIEW_MODEL,
+        )
+        .expect("construct model gateway client");
+
         let router = build_router(AppState {
             waitlist,
             account_linking,
@@ -2102,6 +2685,7 @@ mod tests {
             capabilities,
             cache,
             portal_subject_id,
+            model_gateway,
         });
 
         let schema_route = format!(
@@ -2254,6 +2838,13 @@ mod tests {
             .expect("load capability")
             .expect("capability stored");
 
+        let model_gateway = ModelGatewayClient::with_client(
+            reqwest::Client::new(),
+            Url::parse("http://localhost:65535").expect("parse fallback gateway url"),
+            VOICE_PREVIEW_MODEL,
+        )
+        .expect("construct model gateway client");
+
         let router = build_router(AppState {
             waitlist,
             account_linking,
@@ -2265,6 +2856,7 @@ mod tests {
             capabilities,
             cache,
             portal_subject_id,
+            model_gateway,
         });
 
         let cost_route = format!(
@@ -2387,6 +2979,13 @@ mod tests {
             .expect("load capability")
             .expect("capability stored");
 
+        let model_gateway = ModelGatewayClient::with_client(
+            reqwest::Client::new(),
+            Url::parse("http://localhost:65535").expect("parse fallback gateway url"),
+            VOICE_PREVIEW_MODEL,
+        )
+        .expect("construct model gateway client");
+
         let router = build_router(AppState {
             waitlist,
             account_linking,
@@ -2398,6 +2997,7 @@ mod tests {
             capabilities,
             cache,
             portal_subject_id,
+            model_gateway,
         });
 
         let cost_route = format!(
