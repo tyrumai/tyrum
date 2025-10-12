@@ -4504,6 +4504,7 @@ dependencies = [
  "opentelemetry-otlp",
  "opentelemetry_sdk",
  "redis",
+ "reqwest 0.12.23",
  "serde",
  "serde_json",
  "serial_test",

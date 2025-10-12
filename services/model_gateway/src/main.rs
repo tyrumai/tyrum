@@ -45,6 +45,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/healthz", get(health))
         .route("/v1/completions", post(proxy))
         .route("/v1/chat/completions", post(proxy))
+        .route("/v1/audio/speech", post(proxy))
         .route("/v1/embeddings", post(proxy))
         .with_state(app_state)
         .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()));

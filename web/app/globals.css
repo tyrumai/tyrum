@@ -832,6 +832,35 @@ main.consent-container {
   box-shadow: none;
 }
 
+.portal-settings__button-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.portal-settings__button--secondary {
+  background: transparent;
+  border: 1px dashed rgba(147, 197, 253, 0.6);
+  color: #bfdbfe;
+  box-shadow: none;
+}
+
+.portal-settings__button--secondary:hover {
+  transform: none;
+  box-shadow: 0 0 0 1px rgba(147, 197, 253, 0.4);
+}
+
+.portal-settings__button--ghost {
+  background: rgba(37, 99, 235, 0.18);
+  color: #bfdbfe;
+  box-shadow: none;
+}
+
+.portal-settings__button--ghost:hover {
+  transform: none;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.25);
+}
+
 .portal-settings__form {
   display: flex;
   flex-direction: column;
@@ -870,6 +899,77 @@ main.consent-container {
   display: grid;
   gap: 1rem;
   grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+}
+
+.portal-settings__dictionary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px dashed rgba(88, 114, 181, 0.6);
+  border-radius: 1rem;
+  background: rgba(15, 23, 42, 0.65);
+}
+
+.portal-settings__dictionary-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.portal-settings__dictionary-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: rgba(224, 242, 254, 0.95);
+}
+
+.portal-settings__dictionary-header p {
+  margin: 0;
+  color: rgba(204, 219, 252, 0.72);
+  font-size: 0.9rem;
+}
+
+.portal-settings__dictionary-empty {
+  margin: 0;
+  color: rgba(209, 213, 219, 0.7);
+  font-size: 0.9rem;
+}
+
+.portal-settings__dictionary-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.portal-settings__dictionary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.portal-settings__dictionary-remove {
+  align-self: center;
+  background: transparent;
+  border: none;
+  color: #fda4af;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.4rem 0.6rem;
+}
+
+.portal-settings__dictionary-remove:hover {
+  text-decoration: underline;
+}
+
+.portal-settings__dictionary-remove:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  text-decoration: none;
 }
 
 .portal-settings__meta {

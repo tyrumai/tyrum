@@ -31,6 +31,12 @@ type PamFormState = {
   currency: string;
 };
 
+type PronunciationFormEntry = {
+  id: number;
+  token: string;
+  pronounce: string;
+};
+
 type PvpFormState = {
   tone: string;
   verbosity: string;
@@ -42,6 +48,7 @@ type PvpFormState = {
   pace: string;
   pitch: string;
   warmth: string;
+  pronunciationDict: PronunciationFormEntry[];
 };
 
 type ProfilesEnvelope = {
@@ -74,6 +81,7 @@ const DEFAULT_PVP_FORM: PvpFormState = {
   pace: "",
   pitch: "",
   warmth: "",
+  pronunciationDict: [],
 };
 
 const PAM_ESCALATION_OPTIONS = [
@@ -91,6 +99,8 @@ const PVP_CONSENT_OPTIONS = [
   "act_within_limits",
 ];
 const PVP_EMOJI_OPTIONS = ["never", "sometimes", "often"];
+const PRONUNCIATION_MAX_ENTRIES = 32;
+const PRONUNCIATION_MAX_LENGTH = 128;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -165,6 +175,9 @@ export default function AccountSettingsPage() {
   const [pamVersion, setPamVersion] = useState<string | null>(null);
   const [pvpForm, setPvpForm] = useState<PvpFormState>(DEFAULT_PVP_FORM);
   const [pvpVersion, setPvpVersion] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const pronunciationIdRef = useRef(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const isMountedRef = useRef(true);
 
   useEffect(() => {
@@ -183,6 +196,14 @@ export default function AccountSettingsPage() {
     return () => window.clearTimeout(timeout);
   }, [toast]);
 
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+    };
+  }, []);
+
   const raiseToast = useCallback((tone: ToastTone, message: string) => {
     if (!isMountedRef.current) {
       return;
@@ -198,6 +219,71 @@ export default function AccountSettingsPage() {
       return next;
     });
   }, []);
+
+  const extractPronunciationDict = useCallback(
+    (value: unknown): PronunciationFormEntry[] => {
+      if (!Array.isArray(value)) {
+        pronunciationIdRef.current = 0;
+        return [];
+      }
+
+      let counter = 0;
+      const entries: PronunciationFormEntry[] = [];
+      for (const item of value) {
+        if (!isRecord(item)) {
+          continue;
+        }
+        const token = typeof item.token === "string" ? item.token : "";
+        const pronounce = typeof item.pronounce === "string" ? item.pronounce : "";
+        counter += 1;
+        entries.push({ id: counter, token, pronounce });
+      }
+      pronunciationIdRef.current = counter;
+      return entries;
+    },
+    [],
+  );
+
+  const handlePronunciationChange = useCallback(
+    (id: number, field: "token" | "pronounce", value: string) => {
+      setPvpForm((current) => ({
+        ...current,
+        pronunciationDict: current.pronunciationDict.map((entry) =>
+          entry.id === id ? { ...entry, [field]: value } : entry,
+        ),
+      }));
+    },
+    [],
+  );
+
+  const handleRemovePronunciation = useCallback((id: number) => {
+    setPvpForm((current) => ({
+      ...current,
+      pronunciationDict: current.pronunciationDict.filter((entry) => entry.id !== id),
+    }));
+  }, []);
+
+  const handleAddPronunciation = useCallback(() => {
+    setPvpForm((current) => {
+      if (current.pronunciationDict.length >= PRONUNCIATION_MAX_ENTRIES) {
+        raiseToast(
+          "error",
+          `You can only store up to ${PRONUNCIATION_MAX_ENTRIES} pronunciation overrides.`,
+        );
+        return current;
+      }
+      const nextId = pronunciationIdRef.current + 1;
+      pronunciationIdRef.current = nextId;
+
+      return {
+        ...current,
+        pronunciationDict: [
+          ...current.pronunciationDict,
+          { id: nextId, token: "", pronounce: "" },
+        ],
+      };
+    });
+  }, [raiseToast]);
 
   const triggerAction = async (action: AccountAction) => {
     if (pendingAction) {
@@ -385,6 +471,55 @@ export default function AccountSettingsPage() {
       profile.voice = voice;
     }
 
+    const pronunciationEntries: Array<{ token: string; pronounce: string }> = [];
+    const seenTokens = new Set<string>();
+
+    for (const entry of pvpForm.pronunciationDict) {
+      const token = entry.token.trim();
+      const pronounce = entry.pronounce.trim();
+
+      if (!token && !pronounce) {
+        continue;
+      }
+
+      if (!token || !pronounce) {
+        raiseToast(
+          "error",
+          "Pronunciation entries must include both the token and the pronunciation.",
+        );
+        return;
+      }
+
+      if (token.length > PRONUNCIATION_MAX_LENGTH || pronounce.length > PRONUNCIATION_MAX_LENGTH) {
+        raiseToast(
+          "error",
+          `Pronunciation entries must be ${PRONUNCIATION_MAX_LENGTH} characters or fewer.`,
+        );
+        return;
+      }
+
+      const normalizedToken = token.toLowerCase();
+      if (seenTokens.has(normalizedToken)) {
+        raiseToast("error", `Duplicate pronunciation override for "${token}".`);
+        return;
+      }
+      seenTokens.add(normalizedToken);
+      pronunciationEntries.push({ token, pronounce });
+    }
+
+    if (pronunciationEntries.length > PRONUNCIATION_MAX_ENTRIES) {
+      raiseToast(
+        "error",
+        `You can only store up to ${PRONUNCIATION_MAX_ENTRIES} pronunciation overrides.`,
+      );
+      return;
+    }
+
+    if (pronunciationEntries.length > 0) {
+      voice.pronunciation_dict = pronunciationEntries;
+      profile.voice = voice;
+    }
+
     try {
       const response = await fetch("/api/profiles/pvp", {
         method: "PUT",
@@ -422,6 +557,9 @@ export default function AccountSettingsPage() {
         : undefined;
       const numericToString = (value: unknown) =>
         typeof value === "number" ? value.toString() : "";
+      const savedPronunciations = extractPronunciationDict(
+        updatedVoice?.pronunciation_dict,
+      );
 
       setPvpForm({
         tone: typeof pvpProfile?.tone === "string" ? pvpProfile.tone : "",
@@ -441,6 +579,7 @@ export default function AccountSettingsPage() {
         pace: numericToString(updatedVoice?.pace),
         pitch: numericToString(updatedVoice?.pitch),
         warmth: numericToString(updatedVoice?.warmth),
+        pronunciationDict: savedPronunciations,
       });
       setPvpVersion(payload.version ?? null);
       raiseToast("success", "Persona preferences saved.");
@@ -454,6 +593,82 @@ export default function AccountSettingsPage() {
       }
     }
   };
+
+  const handleVoicePreview = useCallback(async () => {
+    if (previewLoading) {
+      return;
+    }
+
+    if (!pvpVersion) {
+      raiseToast("error", "Save your persona profile before requesting a preview.");
+      return;
+    }
+
+    if (!pvpForm.voiceId.trim()) {
+      raiseToast("error", "Set a voice ID before requesting a preview.");
+      return;
+    }
+
+    setPreviewLoading(true);
+    try {
+      const response = await fetch("/api/profiles/pvp/preview", {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+        },
+        cache: "no-store",
+      });
+
+      const payload = (await parseJsonResponse(response)) as {
+        audio_base64?: unknown;
+        audioBase64?: unknown;
+        format?: unknown;
+        message?: string;
+      };
+
+      if (!response.ok) {
+        const message =
+          typeof payload?.message === "string"
+            ? payload.message
+            : "Unable to load voice preview.";
+        throw new Error(message);
+      }
+
+      const base64 =
+        typeof payload?.audio_base64 === "string"
+          ? payload.audio_base64
+          : typeof payload?.audioBase64 === "string"
+            ? payload.audioBase64
+            : "";
+      if (!base64) {
+        throw new Error("Voice preview response did not include audio data.");
+      }
+
+      const format =
+        typeof payload?.format === "string" && payload.format.trim()
+          ? payload.format
+          : "wav";
+      const dataUrl = `data:audio/${format};base64,${base64}`;
+
+      if (!audioRef.current) {
+        audioRef.current = new Audio();
+      } else {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+      audioRef.current.src = dataUrl;
+      await audioRef.current.play();
+      raiseToast("success", "Playing voice preview.");
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "Unable to play voice preview.";
+      raiseToast("error", message);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [pvpForm.voiceId, pvpVersion, previewLoading, raiseToast]);
 
   useEffect(() => {
     const loadProfiles = async () => {
@@ -519,6 +734,9 @@ export default function AccountSettingsPage() {
 
         const numericToString = (value: unknown) =>
           typeof value === "number" ? value.toString() : "";
+        const savedPronunciations = extractPronunciationDict(
+          voice?.pronunciation_dict,
+        );
 
         setPvpForm({
           tone: typeof pvpProfile?.tone === "string" ? pvpProfile.tone : "",
@@ -538,6 +756,7 @@ export default function AccountSettingsPage() {
           pace: numericToString(voice?.pace),
           pitch: numericToString(voice?.pitch),
           warmth: numericToString(voice?.warmth),
+          pronunciationDict: savedPronunciations,
         });
         setPvpVersion(payload?.pvp?.version ?? null);
       } catch (error) {
@@ -872,14 +1091,85 @@ export default function AccountSettingsPage() {
                 />
               </div>
             </div>
-            <footer className="portal-settings__card-footer">
+            <div className="portal-settings__dictionary">
+              <div className="portal-settings__dictionary-header">
+                <h3>Pronunciation dictionary</h3>
+                <p>Teach Tyrum how to pronounce important names or phrases.</p>
+              </div>
+              {pvpForm.pronunciationDict.length === 0 ? (
+                <p className="portal-settings__dictionary-empty">
+                  No pronunciation overrides saved yet.
+                </p>
+              ) : (
+                <ul className="portal-settings__dictionary-list">
+                  {pvpForm.pronunciationDict.map((entry) => (
+                    <li key={entry.id} className="portal-settings__dictionary-row">
+                      <div className="portal-settings__field">
+                        <label htmlFor={`pvp-pronunciation-token-${entry.id}`}>Token</label>
+                        <input
+                          id={`pvp-pronunciation-token-${entry.id}`}
+                          type="text"
+                          value={entry.token}
+                          onChange={(event) =>
+                            handlePronunciationChange(entry.id, "token", event.target.value)
+                          }
+                          disabled={profilesLoading}
+                        />
+                      </div>
+                      <div className="portal-settings__field">
+                        <label htmlFor={`pvp-pronunciation-value-${entry.id}`}>Pronounce as</label>
+                        <input
+                          id={`pvp-pronunciation-value-${entry.id}`}
+                          type="text"
+                          value={entry.pronounce}
+                          onChange={(event) =>
+                            handlePronunciationChange(entry.id, "pronounce", event.target.value)
+                          }
+                          disabled={profilesLoading}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="portal-settings__dictionary-remove"
+                        onClick={() => handleRemovePronunciation(entry.id)}
+                        disabled={profilesLoading}
+                        aria-label={`Remove pronunciation override ${entry.token || entry.id}`}
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
               <button
-                type="submit"
-                className="portal-settings__button"
-                disabled={profilesLoading}
+                type="button"
+                className="portal-settings__button portal-settings__button--secondary"
+                onClick={handleAddPronunciation}
+                disabled={
+                  profilesLoading || pvpForm.pronunciationDict.length >= PRONUNCIATION_MAX_ENTRIES
+                }
               >
-                Save persona profile
+                Add pronunciation
               </button>
+            </div>
+            <footer className="portal-settings__card-footer">
+              <div className="portal-settings__button-group">
+                <button
+                  type="submit"
+                  className="portal-settings__button"
+                  disabled={profilesLoading}
+                >
+                  Save persona profile
+                </button>
+                <button
+                  type="button"
+                  className="portal-settings__button portal-settings__button--ghost"
+                  onClick={handleVoicePreview}
+                  disabled={profilesLoading || previewLoading}
+                >
+                  {previewLoading ? "Previewing…" : "Preview voice"}
+                </button>
+              </div>
             </footer>
             <p className="portal-settings__meta" aria-live="polite">
               {pvpVersion ? `Current version: ${pvpVersion}` : "No persona profile saved yet."}
