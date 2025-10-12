@@ -438,6 +438,8 @@ def add_issue_item(
     if existing:
         if existing.get("status_option_id") != status_option_id:
             logs.append(f"Updating status for issue #{issue_number}")
+            if client.dry_run:
+                return
             client.graphql(
                 """
                 mutation ($input: UpdateProjectV2ItemFieldValueInput!) {
@@ -461,6 +463,9 @@ def add_issue_item(
         return
 
     logs.append(f"Adding issue #{issue_number} to project")
+    if client.dry_run:
+        return
+
     issue_data = client.graphql(
         """
         query ($owner: String!, $name: String!, $number: Int!) {
@@ -528,6 +533,8 @@ def add_draft_item(
     if existing:
         if existing.get("status_option_id") != status_option_id:
             logs.append(f"Updating status for {summary_line}")
+            if client.dry_run:
+                return
             client.graphql(
                 """
                 mutation ($input: UpdateProjectV2ItemFieldValueInput!) {
@@ -553,6 +560,9 @@ def add_draft_item(
     logs.append(f"Creating draft item for {summary_line}")
     body = draft_cfg.get("body", "").rstrip()
     body_with_key = f"{body}\n\n<!-- slug: {key} -->"
+
+    if client.dry_run:
+        return
 
     item_data = client.graphql(
         """
