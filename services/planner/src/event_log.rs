@@ -222,7 +222,23 @@ fn extract_selectors(primitive: &ActionPrimitive, outcome: &Value) -> Option<Val
         }
     }
 
-    outcome.get("selectors").cloned()
+    if let Some(value) = selectors_from_value(outcome) {
+        return Some(value.clone());
+    }
+
+    if let Some(postcondition) = outcome.get("postcondition")
+        && let Some(value) = selectors_from_value(postcondition)
+    {
+        return Some(value.clone());
+    }
+
+    None
+}
+
+fn selectors_from_value(value: &Value) -> Option<&Value> {
+    const SELECTOR_KEYS: &[&str] = &["selectors", "selector_hints", "flow_hints"];
+    let map = value.as_object()?;
+    SELECTOR_KEYS.iter().find_map(|key| map.get(*key))
 }
 
 fn extract_cost_profile(outcome: &Value) -> Value {

@@ -64,24 +64,24 @@ async fn mock_book_call_plan_creates_audit_and_memory_artifacts() -> Result<()> 
                 "executor": "generic-web",
                 "intent": "book_call",
                 "url": "https://calendar.example.com/slots",
-                "slot": call_slot.clone(),
-                "selector_hints": {
-                    "login_button": "#login",
-                    "email_input": {
-                        "selector": "input[type=\"email\"]",
-                        "prefill": "alex@example.com"
-                    },
-                    "otp_field": {
-                        "selector": "[data-test=\"otp\"]",
-                        "value": "123456"
-                    }
-                }
+                "slot": call_slot.clone()
             })),
         )
         .with_postcondition(json!({
             "appointment": {
                 "status": "booked",
                 "slot": call_slot.clone(),
+            },
+            "selectors": {
+                "login_button": "#login",
+                "email_input": {
+                    "selector": "input[type=\"email\"]",
+                    "prefill": "alex@example.com"
+                },
+                "otp_field": {
+                    "selector": "[data-test=\"otp\"]",
+                    "value": "123456"
+                }
             }
         })),
         ActionPrimitive::new(
@@ -747,6 +747,17 @@ impl MockGenericExecutors {
                 "appointment": {
                     "status": "booked",
                     "slot": slot,
+                },
+                "selectors": {
+                    "login_button": "#login",
+                    "email_input": {
+                        "selector": "input[type=\"email\"]",
+                        "prefill": "alex@example.com"
+                    },
+                    "otp_field": {
+                        "selector": "[data-test=\"otp\"]",
+                        "value": "123456"
+                    }
                 }
             }),
             cost_profile: Some(json!({
