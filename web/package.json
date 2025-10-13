@@ -12,7 +12,7 @@
     "lighthouse:ci": "lhci autorun --config=./lighthouserc.mobile.json && lhci autorun --config=./lighthouserc.desktop.json"
   },
   "dependencies": {
-    "next": "15.5.4",
+    "next": "15.5.5",
     "react": "19.2.0",
     "react-dom": "19.2.0"
   },
