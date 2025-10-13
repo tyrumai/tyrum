@@ -992,7 +992,7 @@ services:
     replicaCount: 1
     image:
       repository: grafana/tempo
-      tag: 2.6.1
+      tag: 2.9.0
       pullPolicy: IfNotPresent
     service:
       enabled: true
