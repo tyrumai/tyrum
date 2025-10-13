@@ -96,6 +96,8 @@ impl EventLog {
 
         let selectors = extract_selectors(primitive, outcome).map(|value| sanitize_value(&value));
         let outcome_metadata = build_outcome_metadata(primitive, outcome);
+        let cost_profile = extract_cost_profile(outcome);
+        let anti_bot_notes = extract_anti_bot_notes(outcome);
         let summary = build_result_summary(&capability_identifier, executor_kind, primitive);
 
         let row = sqlx::query(
@@ -107,15 +109,19 @@ impl EventLog {
                 executor_kind,
                 selectors,
                 outcome_metadata,
+                cost_profile,
+                anti_bot_notes,
                 result_summary,
                 success_count,
                 last_success_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, 1, $8)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1, $10)
             ON CONFLICT (subject_id, capability_type, capability_identifier, executor_kind)
             DO UPDATE SET
                 selectors = EXCLUDED.selectors,
                 outcome_metadata = EXCLUDED.outcome_metadata,
+                cost_profile = EXCLUDED.cost_profile,
+                anti_bot_notes = EXCLUDED.anti_bot_notes,
                 result_summary = EXCLUDED.result_summary,
                 success_count = capability_memories.success_count + 1,
                 last_success_at = EXCLUDED.last_success_at,
@@ -129,6 +135,8 @@ impl EventLog {
         .bind(executor_kind)
         .bind(selectors.clone())
         .bind(outcome_metadata.clone())
+        .bind(cost_profile.clone())
+        .bind(anti_bot_notes.clone())
         .bind(summary.clone())
         .bind(occurred_at)
         .fetch_one(&self.pool)
@@ -214,12 +222,46 @@ fn extract_selectors(primitive: &ActionPrimitive, outcome: &Value) -> Option<Val
         }
     }
 
-    outcome.get("selectors").cloned()
+    if let Some(value) = selectors_from_value(outcome) {
+        return Some(value.clone());
+    }
+
+    if let Some(postcondition) = outcome.get("postcondition")
+        && let Some(value) = selectors_from_value(postcondition)
+    {
+        return Some(value.clone());
+    }
+
+    None
+}
+
+fn selectors_from_value(value: &Value) -> Option<&Value> {
+    const SELECTOR_KEYS: &[&str] = &["selectors", "selector_hints", "flow_hints"];
+    let map = value.as_object()?;
+    SELECTOR_KEYS.iter().find_map(|key| map.get(*key))
+}
+
+fn extract_cost_profile(outcome: &Value) -> Value {
+    outcome
+        .get("cost_profile")
+        .map(sanitize_value)
+        .unwrap_or_else(|| Value::Object(JsonMap::new()))
+}
+
+fn extract_anti_bot_notes(outcome: &Value) -> Value {
+    outcome
+        .get("anti_bot_notes")
+        .map(sanitize_value)
+        .unwrap_or_else(|| Value::Array(Vec::new()))
 }
 
 fn build_outcome_metadata(primitive: &ActionPrimitive, outcome: &Value) -> Value {
     let mut metadata = JsonMap::new();
-    metadata.insert("postcondition".into(), sanitize_value(outcome));
+    let postcondition = outcome
+        .get("postcondition")
+        .map(sanitize_value)
+        .unwrap_or_else(|| sanitize_value(outcome));
+    metadata.insert("postcondition".into(), postcondition);
 
     if let Some(intent) = primitive.args.get("intent").and_then(Value::as_str) {
         metadata.insert("intent".into(), Value::String(intent.to_string()));

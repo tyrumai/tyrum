@@ -112,6 +112,17 @@ async fn insert_sample(
             "postconditions": ["order confirmation #12345"],
             "estimated_cost": "€29.95"
         }),
+        cost_profile: json!({
+            "currency": "EUR",
+            "amount_minor_units": 2995,
+            "observed_at": Utc::now()
+        }),
+        anti_bot_notes: json!([
+            {
+                "observation": "Captcha triggers after three rapid submissions",
+                "mitigation": "Inject 2s delay between retries"
+            }
+        ]),
         result_summary: Some("Successful checkout via sample flow".into()),
         success_count: 1,
         last_success_at: Utc::now(),

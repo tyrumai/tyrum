@@ -1704,6 +1704,8 @@ mod tests {
                 executor_kind TEXT NOT NULL,
                 selectors JSONB,
                 outcome_metadata JSONB NOT NULL,
+                cost_profile JSONB NOT NULL DEFAULT '{}'::jsonb,
+                anti_bot_notes JSONB NOT NULL DEFAULT '[]'::jsonb,
                 result_summary TEXT,
                 success_count INTEGER NOT NULL DEFAULT 1 CHECK (success_count > 0),
                 last_success_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -1737,15 +1739,31 @@ mod tests {
         Ok(())
     }
 
+    struct CapabilityMemorySeed {
+        selectors: Option<Value>,
+        outcome_metadata: Value,
+        cost_profile: Value,
+        anti_bot_notes: Value,
+        result_summary: Option<String>,
+        success_count: i32,
+        last_success_at: DateTime<Utc>,
+    }
+
     async fn insert_capability_memory(
         pool: &PgPool,
         key: &CapabilityCacheKey,
-        selectors: Option<Value>,
-        outcome_metadata: Value,
-        result_summary: Option<&str>,
-        success_count: i32,
-        last_success_at: DateTime<Utc>,
+        seed: CapabilityMemorySeed,
     ) -> Result<(), sqlx::Error> {
+        let CapabilityMemorySeed {
+            selectors,
+            outcome_metadata,
+            cost_profile,
+            anti_bot_notes,
+            result_summary,
+            success_count,
+            last_success_at,
+        } = seed;
+        let summary_ref = result_summary.as_deref();
         sqlx::query(
             r#"
             INSERT INTO capability_memories (
@@ -1755,16 +1773,20 @@ mod tests {
                 executor_kind,
                 selectors,
                 outcome_metadata,
+                cost_profile,
+                anti_bot_notes,
                 result_summary,
                 success_count,
                 last_success_at,
                 updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
             ON CONFLICT (subject_id, capability_type, capability_identifier, executor_kind)
             DO UPDATE SET
                 selectors = EXCLUDED.selectors,
                 outcome_metadata = EXCLUDED.outcome_metadata,
+                cost_profile = EXCLUDED.cost_profile,
+                anti_bot_notes = EXCLUDED.anti_bot_notes,
                 result_summary = EXCLUDED.result_summary,
                 success_count = EXCLUDED.success_count,
                 last_success_at = EXCLUDED.last_success_at,
@@ -1777,7 +1799,9 @@ mod tests {
         .bind(&key.executor_kind)
         .bind(selectors)
         .bind(outcome_metadata)
-        .bind(result_summary)
+        .bind(cost_profile)
+        .bind(anti_bot_notes)
+        .bind(summary_ref)
         .bind(success_count)
         .bind(last_success_at)
         .execute(pool)
@@ -2628,22 +2652,35 @@ mod tests {
         insert_capability_memory(
             waitlist.pool(),
             &key,
-            Some(json!({
-                "login_button": "#login",
-                "otp_field": "[data-test\"otp\"]"
-            })),
-            json!({
-                "postcondition": {
-                    "status": "booked"
-                },
-                "cost": {
+            CapabilityMemorySeed {
+                selectors: Some(json!({
+                    "login_button": "#login",
+                    "otp_field": "[data-test\"otp\"]"
+                })),
+                outcome_metadata: json!({
+                    "postcondition": {
+                        "status": "booked"
+                    },
+                    "cost": {
+                        "amount_minor_units": 2599,
+                        "currency": "USD"
+                    }
+                }),
+                cost_profile: json!({
+                    "currency": "USD",
                     "amount_minor_units": 2599,
-                    "currency": "USD"
-                }
-            }),
-            Some("generic-web satisfied intent book_call"),
-            3,
-            Utc::now(),
+                    "observed_at": Utc::now()
+                }),
+                anti_bot_notes: json!([
+                    {
+                        "issue": "captcha_after_login",
+                        "mitigation": "wait_3s_then_retry"
+                    }
+                ]),
+                result_summary: Some("generic-web satisfied intent book_call".into()),
+                success_count: 3,
+                last_success_at: Utc::now(),
+            },
         )
         .await
         .expect("seed capability memory");
@@ -2802,19 +2839,32 @@ mod tests {
         insert_capability_memory(
             waitlist.pool(),
             &key,
-            None,
-            json!({
-                "postcondition": {
-                    "status": "completed"
-                },
-                "cost": {
+            CapabilityMemorySeed {
+                selectors: None,
+                outcome_metadata: json!({
+                    "postcondition": {
+                        "status": "completed"
+                    },
+                    "cost": {
+                        "amount_minor_units": 1899,
+                        "currency": "EUR"
+                    }
+                }),
+                cost_profile: json!({
+                    "currency": "EUR",
                     "amount_minor_units": 1899,
-                    "currency": "EUR"
-                }
-            }),
-            None,
-            2,
-            Utc::now(),
+                    "observed_at": Utc::now()
+                }),
+                anti_bot_notes: json!([
+                    {
+                        "issue": "ip_block",
+                        "mitigation": "rotate_user_agents"
+                    }
+                ]),
+                result_summary: None,
+                success_count: 2,
+                last_success_at: Utc::now(),
+            },
         )
         .await
         .expect("seed capability memory");
@@ -2943,19 +2993,32 @@ mod tests {
         insert_capability_memory(
             waitlist.pool(),
             &key,
-            None,
-            json!({
-                "postcondition": {
-                    "status": "completed"
-                },
-                "cost": {
+            CapabilityMemorySeed {
+                selectors: None,
+                outcome_metadata: json!({
+                    "postcondition": {
+                        "status": "completed"
+                    },
+                    "cost": {
+                        "amount_minor_units": 990,
+                        "currency": "GBP"
+                    }
+                }),
+                cost_profile: json!({
+                    "currency": "GBP",
                     "amount_minor_units": 990,
-                    "currency": "GBP"
-                }
-            }),
-            None,
-            1,
-            Utc::now(),
+                    "observed_at": Utc::now()
+                }),
+                anti_bot_notes: json!([
+                    {
+                        "issue": "dynamic_captcha",
+                        "mitigation": "fallback_to_executor_queue"
+                    }
+                ]),
+                result_summary: None,
+                success_count: 1,
+                last_success_at: Utc::now(),
+            },
         )
         .await
         .expect("seed capability memory");

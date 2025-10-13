@@ -144,6 +144,8 @@ impl CapabilityMemoryService {
         payload.insert("success_count".into(), json!(memory.success_count));
         payload.insert("last_success_at".into(), json!(memory.last_success_at));
         payload.insert("outcome_metadata".into(), memory.outcome_metadata.clone());
+        payload.insert("cost_profile".into(), memory.cost_profile.clone());
+        payload.insert("anti_bot_notes".into(), memory.anti_bot_notes.clone());
         if let Some(summary) = memory.result_summary.as_ref() {
             payload.insert("result_summary".into(), Value::String(summary.clone()));
         }
