@@ -18,7 +18,7 @@ tyrum-shared = { path = "../../shared/tyrum-shared" }
 
 [dev-dependencies]
 anyhow = "1"
-axum = { version = "0.7", features = ["macros"] }
+axum = { version = "0.8", features = ["macros"] }
 chrono = { version = "0.4", default-features = true }
 testcontainers = "0.18"
 
