@@ -343,14 +343,17 @@ impl MemoryDal {
                 executor_kind,
                 selectors,
                 outcome_metadata,
+                cost_profile,
+                anti_bot_notes,
                 result_summary,
                 success_count,
                 last_success_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             RETURNING id, subject_id, capability_type, capability_identifier,
-                executor_kind, selectors, outcome_metadata, result_summary,
-                success_count, last_success_at, created_at, updated_at
+                executor_kind, selectors, outcome_metadata, cost_profile,
+                anti_bot_notes, result_summary, success_count, last_success_at,
+                created_at, updated_at
             "#,
         )
         .bind(new_memory.subject_id)
@@ -359,6 +362,8 @@ impl MemoryDal {
         .bind(new_memory.executor_kind)
         .bind(new_memory.selectors)
         .bind(new_memory.outcome_metadata)
+        .bind(new_memory.cost_profile)
+        .bind(new_memory.anti_bot_notes)
         .bind(new_memory.result_summary)
         .bind(new_memory.success_count)
         .bind(new_memory.last_success_at)
@@ -380,8 +385,9 @@ impl MemoryDal {
         let record = sqlx::query_as::<_, CapabilityMemory>(
             r#"
             SELECT id, subject_id, capability_type, capability_identifier,
-                executor_kind, selectors, outcome_metadata, result_summary,
-                success_count, last_success_at, created_at, updated_at
+                executor_kind, selectors, outcome_metadata, cost_profile,
+                anti_bot_notes, result_summary, success_count, last_success_at,
+                created_at, updated_at
             FROM capability_memories
             WHERE id = $1
             "#,
@@ -408,8 +414,9 @@ impl MemoryDal {
         let record = sqlx::query_as::<_, CapabilityMemory>(
             r#"
             SELECT id, subject_id, capability_type, capability_identifier,
-                executor_kind, selectors, outcome_metadata, result_summary,
-                success_count, last_success_at, created_at, updated_at
+                executor_kind, selectors, outcome_metadata, cost_profile,
+                anti_bot_notes, result_summary, success_count, last_success_at,
+                created_at, updated_at
             FROM capability_memories
             WHERE subject_id = $1
                 AND capability_type = $2
@@ -439,8 +446,9 @@ impl MemoryDal {
         let records = sqlx::query_as::<_, CapabilityMemory>(
             r#"
             SELECT id, subject_id, capability_type, capability_identifier,
-                executor_kind, selectors, outcome_metadata, result_summary,
-                success_count, last_success_at, created_at, updated_at
+                executor_kind, selectors, outcome_metadata, cost_profile,
+                anti_bot_notes, result_summary, success_count, last_success_at,
+                created_at, updated_at
             FROM capability_memories
             WHERE subject_id = $1
             ORDER BY last_success_at DESC, id DESC
@@ -466,8 +474,9 @@ impl MemoryDal {
         let records = sqlx::query_as::<_, CapabilityMemory>(
             r#"
             SELECT id, subject_id, capability_type, capability_identifier,
-                executor_kind, selectors, outcome_metadata, result_summary,
-                success_count, last_success_at, created_at, updated_at
+                executor_kind, selectors, outcome_metadata, cost_profile,
+                anti_bot_notes, result_summary, success_count, last_success_at,
+                created_at, updated_at
             FROM capability_memories
             WHERE subject_id = $1
                 AND capability_type = $2
@@ -498,18 +507,23 @@ impl MemoryDal {
             UPDATE capability_memories
             SET selectors = $1,
                 outcome_metadata = $2,
-                result_summary = $3,
-                success_count = $4,
-                last_success_at = $5,
+                cost_profile = $3,
+                anti_bot_notes = $4,
+                result_summary = $5,
+                success_count = $6,
+                last_success_at = $7,
                 updated_at = NOW()
-            WHERE id = $6
+            WHERE id = $8
             RETURNING id, subject_id, capability_type, capability_identifier,
-                executor_kind, selectors, outcome_metadata, result_summary,
-                success_count, last_success_at, created_at, updated_at
+                executor_kind, selectors, outcome_metadata, cost_profile,
+                anti_bot_notes, result_summary, success_count, last_success_at,
+                created_at, updated_at
             "#,
         )
         .bind(changes.selectors)
         .bind(changes.outcome_metadata)
+        .bind(changes.cost_profile)
+        .bind(changes.anti_bot_notes)
         .bind(changes.result_summary)
         .bind(changes.success_count)
         .bind(changes.last_success_at)
@@ -914,6 +928,8 @@ pub struct CapabilityMemory {
     pub executor_kind: String,
     pub selectors: Option<Value>,
     pub outcome_metadata: Value,
+    pub cost_profile: Value,
+    pub anti_bot_notes: Value,
     pub result_summary: Option<String>,
     pub success_count: i32,
     pub last_success_at: DateTime<Utc>,
@@ -929,6 +945,8 @@ pub struct NewCapabilityMemory {
     pub executor_kind: String,
     pub selectors: Option<Value>,
     pub outcome_metadata: Value,
+    pub cost_profile: Value,
+    pub anti_bot_notes: Value,
     pub result_summary: Option<String>,
     pub success_count: i32,
     pub last_success_at: DateTime<Utc>,
@@ -938,6 +956,8 @@ pub struct NewCapabilityMemory {
 pub struct CapabilityMemoryChanges {
     pub selectors: Option<Value>,
     pub outcome_metadata: Value,
+    pub cost_profile: Value,
+    pub anti_bot_notes: Value,
     pub result_summary: Option<String>,
     pub success_count: i32,
     pub last_success_at: DateTime<Utc>,

@@ -206,6 +206,14 @@ async fn capability_memory_crud_roundtrip() {
                 "postconditions": ["order confirmation"],
                 "cost_eur": 29.95
             }),
+            cost_profile: json!({
+                "currency": "EUR",
+                "amount_minor_units": 2995,
+                "observed_at": Utc::now()
+            }),
+            anti_bot_notes: json!([
+                { "note": "Nightly maintenance window introduces 429s" }
+            ]),
             result_summary: Some("Initial success".into()),
             success_count: 1,
             last_success_at: Utc::now(),
@@ -213,6 +221,16 @@ async fn capability_memory_crud_roundtrip() {
         .await
         .expect("create capability memory");
     assert_eq!(created.capability_type, "web");
+    assert_eq!(created.cost_profile["currency"], "EUR");
+    assert_eq!(created.cost_profile["amount_minor_units"], 2995);
+    assert!(
+        created
+            .anti_bot_notes
+            .as_array()
+            .map(|entries| !entries.is_empty())
+            .unwrap_or(false),
+        "anti-bot notes should persist"
+    );
 
     let fetched = ctx
         .dal
@@ -254,6 +272,17 @@ async fn capability_memory_crud_roundtrip() {
                     "postconditions": ["order confirmation", "receipt artifact"],
                     "cost_eur": 24.99
                 }),
+                cost_profile: json!({
+                    "currency": "EUR",
+                    "amount_minor_units": 2499,
+                    "observed_at": Utc::now()
+                }),
+                anti_bot_notes: json!([
+                    {
+                        "note": "Site now prompts for security question every Monday",
+                        "mitigation": "Pre-fill answer before step 2"
+                    }
+                ]),
                 result_summary: Some("Updated flow with cached selectors".into()),
                 success_count: 3,
                 last_success_at: Utc::now(),
@@ -265,6 +294,16 @@ async fn capability_memory_crud_roundtrip() {
     assert_eq!(
         updated.result_summary.as_deref(),
         Some("Updated flow with cached selectors")
+    );
+    assert_eq!(updated.cost_profile["amount_minor_units"], 2499);
+    assert_eq!(
+        updated
+            .anti_bot_notes
+            .as_array()
+            .and_then(|array| array.first())
+            .and_then(|entry| entry.get("mitigation"))
+            .and_then(Value::as_str),
+        Some("Pre-fill answer before step 2")
     );
 
     ctx.dal

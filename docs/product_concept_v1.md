@@ -305,8 +305,12 @@ to keep policy, planner, and API services aligned on envelopes and error handlin
   - `selectors` – JSON blob with DOM/API selector hints. Treat this as PII‑adjacent:
     redact literal handles, emails, or account numbers before persisting and only
     store hashed or templated selectors that the executor can safely reuse.
-  - `outcome_metadata` – structured JSON storing postconditions, costs, receipts,
-    or other artifacts that prove the run succeeded.
+  - `outcome_metadata` – structured JSON storing postconditions, receipts, or
+    other artifacts that prove the run succeeded.
+  - `cost_profile` – vendor cost envelope (currency, observed minor units,
+    timestamps) so planners can estimate spend before replaying a flow.
+  - `anti_bot_notes` – executor-facing notes describing captcha/rate-limit
+    quirks and the mitigations that previously worked.
   - `success_count`, `last_success_at`, `result_summary` – track reliability and
     provide operator context when reviewing audit trails.
 - RLS is enabled (policy TODO) so access stays scoped per subject once authz

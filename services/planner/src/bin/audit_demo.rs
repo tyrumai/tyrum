@@ -3,7 +3,7 @@ use std::{convert::TryFrom, fs, path::PathBuf, time::Duration};
 use anyhow::{Context, Result, bail, ensure};
 use chrono::Utc;
 use serde::Serialize;
-use serde_json::{Value, json};
+use serde_json::{Map as JsonMap, Value, json};
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use testcontainers::{
     ContainerAsync, GenericImage, ImageExt,
@@ -256,13 +256,14 @@ impl DemoRuntime {
 
         machine.apply(PlanEvent::PostconditionSatisfied { step_index })?;
 
+        let capability_payload = executor_outcome.capability_payload();
         let _ = self
             .event_log
             .record_capability_memory(
                 subject_id,
                 primitive,
                 executor_outcome.executor.as_str(),
-                &executor_outcome.postcondition,
+                &capability_payload,
                 occurred_at,
             )
             .await
@@ -517,6 +518,19 @@ impl MockGenericExecutors {
                     }
                 }
             }),
+            cost_profile: Some(json!({
+                "currency": "USD",
+                "amount_minor_units": 2200,
+                "observed_at": Utc::now(),
+                "vendor": "calendar.example.com"
+            })),
+            anti_bot_notes: Some(json!([
+                {
+                    "issue": "otp_prompt",
+                    "mitigation": "reuse cached code within 60s window",
+                    "last_seen": Utc::now()
+                }
+            ])),
         })
     }
 
@@ -558,6 +572,8 @@ impl MockGenericExecutors {
                 "status": "delivered",
                 "channel": channel,
             }),
+            cost_profile: None,
+            anti_bot_notes: None,
         })
     }
 }
@@ -565,6 +581,22 @@ impl MockGenericExecutors {
 struct ExecutorOutcome {
     executor: String,
     postcondition: Value,
+    cost_profile: Option<Value>,
+    anti_bot_notes: Option<Value>,
+}
+
+impl ExecutorOutcome {
+    fn capability_payload(&self) -> Value {
+        let mut payload = JsonMap::new();
+        payload.insert("postcondition".into(), self.postcondition.clone());
+        if let Some(cost_profile) = &self.cost_profile {
+            payload.insert("cost_profile".into(), cost_profile.clone());
+        }
+        if let Some(anti_bot_notes) = &self.anti_bot_notes {
+            payload.insert("anti_bot_notes".into(), anti_bot_notes.clone());
+        }
+        Value::Object(payload)
+    }
 }
 
 fn into_args(value: Value) -> ActionArguments {

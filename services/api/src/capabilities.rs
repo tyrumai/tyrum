@@ -40,6 +40,8 @@ impl CapabilityRepository {
                 executor_kind,
                 selectors,
                 outcome_metadata,
+                cost_profile,
+                anti_bot_notes,
                 result_summary,
                 success_count,
                 last_success_at,
@@ -71,6 +73,8 @@ pub struct ToolSchemaResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selectors: Option<Value>,
     pub outcome_metadata: Value,
+    pub cost_profile: Value,
+    pub anti_bot_notes: Value,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub result_summary: Option<String>,
     pub success_count: i32,
@@ -126,6 +130,8 @@ pub struct CapabilityRecord {
     pub executor_kind: String,
     pub selectors: Option<Value>,
     pub outcome_metadata: Value,
+    pub cost_profile: Value,
+    pub anti_bot_notes: Value,
     pub result_summary: Option<String>,
     pub success_count: i32,
     pub last_success_at: DateTime<Utc>,
@@ -141,6 +147,8 @@ impl CapabilityRecord {
             executor_kind: self.executor_kind,
             selectors: self.selectors,
             outcome_metadata: self.outcome_metadata,
+            cost_profile: self.cost_profile,
+            anti_bot_notes: self.anti_bot_notes,
             result_summary: self.result_summary,
             success_count: self.success_count,
             last_success_at: self.last_success_at,
@@ -149,7 +157,8 @@ impl CapabilityRecord {
     }
 
     pub fn into_cost_response(self) -> Option<ToolCostResponse> {
-        let cost = extract_cost(&self.outcome_metadata)?;
+        let cost = extract_cost_from_profile(&self.cost_profile)
+            .or_else(|| extract_cost(&self.outcome_metadata))?;
         Some(ToolCostResponse {
             subject_id: self.subject_id,
             capability_type: self.capability_type,
@@ -164,6 +173,35 @@ impl CapabilityRecord {
 
 fn extract_cost(outcome: &Value) -> Option<CostBreakdown> {
     let cost = outcome.get("cost")?;
+    let currency = cost.get("currency")?.as_str()?.to_string();
+    let amount_minor_units = cost
+        .get("amount_minor_units")
+        .and_then(Value::as_i64)
+        .or_else(|| {
+            cost.get("amount_minor_units")
+                .and_then(Value::as_u64)
+                .and_then(|value| i64::try_from(value).ok())
+        })?;
+
+    let observed_at = cost
+        .get("observed_at")
+        .and_then(Value::as_str)
+        .and_then(|value| DateTime::parse_from_rfc3339(value).ok())
+        .map(|dt| dt.with_timezone(&Utc));
+
+    Some(CostBreakdown {
+        amount_minor_units,
+        currency,
+        observed_at,
+    })
+}
+
+fn extract_cost_from_profile(profile: &Value) -> Option<CostBreakdown> {
+    let cost = profile.as_object()?;
+    if cost.is_empty() {
+        return None;
+    }
+
     let currency = cost.get("currency")?.as_str()?.to_string();
     let amount_minor_units = cost
         .get("amount_minor_units")

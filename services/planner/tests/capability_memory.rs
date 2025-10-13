@@ -5,7 +5,7 @@ mod common;
 use anyhow::{Context, Result, bail};
 use chrono::{DateTime, Utc};
 use common::postgres::{TestPostgres, docker_available};
-use serde_json::{Value, json};
+use serde_json::{Map as JsonMap, Value, json};
 use std::convert::TryFrom;
 use tracing::Subscriber;
 use tracing::field::{Field, Visit};
@@ -177,12 +177,13 @@ async fn mock_book_call_plan_creates_audit_and_memory_artifacts() -> Result<()> 
 
         machine.apply(PlanEvent::PostconditionSatisfied { step_index })?;
 
+        let capability_payload = outcome.capability_payload();
         let memory_outcome = event_log
             .record_capability_memory(
                 subject_id,
                 primitive,
                 outcome.executor,
-                &outcome.postcondition,
+                &capability_payload,
                 occurred_at,
             )
             .await?;
@@ -287,6 +288,17 @@ async fn mock_book_call_plan_creates_audit_and_memory_artifacts() -> Result<()> 
         capability.outcome_metadata["postcondition"]["appointment"]["status"],
         "booked"
     );
+    assert_eq!(capability.cost_profile["currency"], "USD");
+    assert_eq!(capability.cost_profile["amount_minor_units"], 1500);
+    let anti_bot_notes = capability
+        .anti_bot_notes
+        .as_array()
+        .expect("anti_bot notes stored as array");
+    assert!(
+        !anti_bot_notes.is_empty(),
+        "anti-bot notes should be populated"
+    );
+    assert_eq!(anti_bot_notes[0]["issue"], "captcha_after_login");
 
     Ok(())
 }
@@ -333,6 +345,18 @@ async fn capability_memory_hydration_hit_populates_primitive() -> Result<()> {
                 },
                 "voice_rationale": "fallback automation"
             }),
+            cost_profile: json!({
+                "currency": "USD",
+                "amount_minor_units": 4500,
+                "observed_at": Utc::now()
+            }),
+            anti_bot_notes: json!([
+                {
+                    "issue": "ip_rate_limit",
+                    "mitigation": "rotate_proxy_pool",
+                    "last_seen": Utc::now()
+                }
+            ]),
             result_summary: Some("generic-web satisfied intent book_call".into()),
             success_count: 3,
             last_success_at,
@@ -418,6 +442,16 @@ async fn capability_memory_hydration_hit_populates_primitive() -> Result<()> {
             .and_then(Value::as_str),
         Some("fallback automation")
     );
+    let cost_profile = capability
+        .get("cost_profile")
+        .and_then(Value::as_object)
+        .expect("cost profile attached");
+    assert_eq!(cost_profile.get("currency"), Some(&json!("USD")));
+    let anti_bot_notes = capability
+        .get("anti_bot_notes")
+        .and_then(Value::as_array)
+        .expect("anti-bot notes attached");
+    assert!(!anti_bot_notes.is_empty());
     let selector_hints = enriched
         .args
         .get("selector_hints")
@@ -715,6 +749,19 @@ impl MockGenericExecutors {
                     "slot": slot,
                 }
             }),
+            cost_profile: Some(json!({
+                "currency": "USD",
+                "amount_minor_units": 1500,
+                "observed_at": Utc::now(),
+                "vendor": "calendar.example.com"
+            })),
+            anti_bot_notes: Some(json!([
+                {
+                    "issue": "captcha_after_login",
+                    "mitigation": "wait_3s_then_retry",
+                    "last_seen": Utc::now()
+                }
+            ])),
         })
     }
 
@@ -755,6 +802,8 @@ impl MockGenericExecutors {
                 "status": "delivered",
                 "channel": channel,
             }),
+            cost_profile: None,
+            anti_bot_notes: None,
         })
     }
 }
@@ -762,6 +811,22 @@ impl MockGenericExecutors {
 struct ExecutorOutcome {
     executor: &'static str,
     postcondition: Value,
+    cost_profile: Option<Value>,
+    anti_bot_notes: Option<Value>,
+}
+
+impl ExecutorOutcome {
+    fn capability_payload(&self) -> Value {
+        let mut payload = JsonMap::new();
+        payload.insert("postcondition".into(), self.postcondition.clone());
+        if let Some(cost_profile) = &self.cost_profile {
+            payload.insert("cost_profile".into(), cost_profile.clone());
+        }
+        if let Some(anti_bot_notes) = &self.anti_bot_notes {
+            payload.insert("anti_bot_notes".into(), anti_bot_notes.clone());
+        }
+        Value::Object(payload)
+    }
 }
 
 fn into_args(value: Value) -> ActionArguments {
