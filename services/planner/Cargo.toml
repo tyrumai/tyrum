@@ -61,6 +61,7 @@ tower = "0.5"
 http-body-util = "0.1"
 opentelemetry_sdk = { version = "0.31", features = ["metrics", "testing"] }
 tyrum-risk-classifier = { path = "../risk_classifier" }
+async-trait = "0.1"
 
 [[bin]]
 name = "audit_demo"

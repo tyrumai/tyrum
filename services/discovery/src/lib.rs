@@ -1,6 +1,7 @@
 //! Discovery pipeline interfaces and default stub implementation.
 
 mod cache;
+mod probe;
 mod telemetry;
 
 pub mod pipeline;

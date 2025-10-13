@@ -6,6 +6,7 @@ use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 use std::{borrow::Cow, collections::VecDeque};
 
+use async_trait::async_trait;
 use axum::{
     Json, Router,
     body::Body,
@@ -193,8 +194,9 @@ impl MockDiscoveryPipeline {
     }
 }
 
+#[async_trait]
 impl DiscoveryPipeline for MockDiscoveryPipeline {
-    fn try_mcp(&self, request: &DiscoveryRequest) -> DiscoveryOutcome {
+    async fn try_mcp(&self, request: &DiscoveryRequest) -> DiscoveryOutcome {
         assert!(
             !request.sanitized_subject().is_empty(),
             "subject should be sanitized"
@@ -203,7 +205,7 @@ impl DiscoveryPipeline for MockDiscoveryPipeline {
         self.mcp.clone()
     }
 
-    fn try_structured_api(&self, request: &DiscoveryRequest) -> DiscoveryOutcome {
+    async fn try_structured_api(&self, request: &DiscoveryRequest) -> DiscoveryOutcome {
         assert!(
             !request.sanitized_subject().is_empty(),
             "subject should be sanitized"
@@ -212,7 +214,7 @@ impl DiscoveryPipeline for MockDiscoveryPipeline {
         self.structured.clone()
     }
 
-    fn try_generic_http(&self, request: &DiscoveryRequest) -> DiscoveryOutcome {
+    async fn try_generic_http(&self, request: &DiscoveryRequest) -> DiscoveryOutcome {
         assert!(
             !request.sanitized_subject().is_empty(),
             "subject should be sanitized"
