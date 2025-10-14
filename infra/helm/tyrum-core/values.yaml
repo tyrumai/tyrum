@@ -866,7 +866,7 @@ services:
     replicaCount: 1
     image:
       repository: otel/opentelemetry-collector-contrib
-      tag: 0.100.0
+      tag: 0.137.0
       pullPolicy: IfNotPresent
     service:
       enabled: true
