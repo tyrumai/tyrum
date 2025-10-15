@@ -794,7 +794,7 @@ services:
       volumeClaimTemplates: []
     image:
       repository: redis
-      tag: 7-alpine
+      tag: 8
       pullPolicy: IfNotPresent
     service:
       enabled: true
@@ -1204,7 +1204,7 @@ jobs:
       helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
     image:
       repository: redis
-      tag: 7-alpine
+      tag: 8
       pullPolicy: IfNotPresent
     command:
     - /bin/sh
