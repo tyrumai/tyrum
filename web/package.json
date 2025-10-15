@@ -20,7 +20,7 @@
     "@lhci/cli": "^0.15.1",
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "16.1.0",
-    "@testing-library/user-event": "14.5.1",
+    "@testing-library/user-event": "14.6.1",
     "@types/node": "24.7.1",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
