@@ -1133,7 +1133,7 @@ services:
     replicaCount: 1
     image:
       repository: grafana/grafana
-      tag: 11.1.0
+      tag: 12.2.0
       pullPolicy: IfNotPresent
     service:
       enabled: true
