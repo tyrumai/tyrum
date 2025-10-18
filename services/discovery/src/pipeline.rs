@@ -10,7 +10,7 @@ use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
-use url::Url;
+use url::{Host, Url};
 
 use crate::cache::{CacheError, CachedConnector, ConnectorCache, RedisConnectorCache};
 use crate::probe::{ProbeOutcome, ProbeResult, probe_structured_origin};
@@ -432,7 +432,11 @@ impl DefaultDiscoveryPipeline {
     }
 
     fn https_origin(url: &Url) -> Option<Url> {
-        if !url.scheme().eq_ignore_ascii_case("https") {
+        let scheme = url.scheme();
+        let is_https = scheme.eq_ignore_ascii_case("https");
+        let is_local_http = scheme.eq_ignore_ascii_case("http") && Self::allows_insecure_probe(url);
+
+        if !is_https && !is_local_http {
             return None;
         }
 
@@ -443,6 +447,23 @@ impl DefaultDiscoveryPipeline {
         origin.set_username("").ok()?;
         origin.set_password(None).ok()?;
         Some(origin)
+    }
+
+    fn allows_insecure_probe(url: &Url) -> bool {
+        match url.host() {
+            Some(Host::Domain(domain)) => {
+                if domain.eq_ignore_ascii_case("localhost") {
+                    return true;
+                }
+                domain
+                    .parse::<IpAddr>()
+                    .map(|addr| addr.is_loopback())
+                    .unwrap_or(false)
+            }
+            Some(Host::Ipv4(addr)) => addr.is_loopback(),
+            Some(Host::Ipv6(addr)) => addr.is_loopback(),
+            None => false,
+        }
     }
 
     fn dedupe_connectors(connectors: Vec<DiscoveryConnector>) -> Vec<DiscoveryConnector> {
