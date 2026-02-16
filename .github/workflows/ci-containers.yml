@@ -106,7 +106,7 @@ jobs:
             context: .
             dockerfile: Dockerfile.vllm
             smoke: false
-            build_arg: BASE_IMAGE=ghcr.io/rhernaus/tyrum/base-images/python:3.11-slim
+            build_arg: BASE_IMAGE=public.ecr.aws/docker/library/python:3.11-slim
           - id: web
             title: Web
             context: web
@@ -163,13 +163,19 @@ jobs:
             docker network create "$network" >/dev/null
 
             db_container="smoke-postgres-${GITHUB_SHA}-${RANDOM}"
+            docker build -t pgvector-pg16:local -f - . <<'PGDOCKERFILE'
+          FROM public.ecr.aws/docker/library/postgres:16
+          RUN apt-get update \
+              && apt-get install -y --no-install-recommends postgresql-16-pgvector \
+              && rm -rf /var/lib/apt/lists/*
+          PGDOCKERFILE
             docker run -d \
               --name "$db_container" \
               --network "$network" \
               -e POSTGRES_USER=tyrum \
               -e POSTGRES_PASSWORD=tyrum_dev_password \
               -e POSTGRES_DB=tyrum_dev \
-              ghcr.io/rhernaus/tyrum/base-images/pgvector-pg16:pg16 >/dev/null
+              pgvector-pg16:local >/dev/null
 
             for attempt in $(seq 1 40); do
               if docker exec "$db_container" pg_isready -U tyrum -d tyrum_dev >/dev/null 2>&1; then
