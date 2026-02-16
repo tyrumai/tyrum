@@ -237,7 +237,7 @@ jobs:
           echo "release_tag=$tag" >>"$GITHUB_OUTPUT"
 
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 200
 
@@ -382,7 +382,7 @@ jobs:
 
       - name: Scan image with Trivy
         if: steps.change.outputs.should_build == 'true'
-        uses: aquasecurity/trivy-action@v0.33.1
+        uses: aquasecurity/trivy-action@0.34.0
         with:
           image-ref: ${{ steps.tags.outputs.primary }}@${{ steps.build.outputs.digest }}
           vuln-type: 'os,library'
