@@ -92,9 +92,9 @@ class, access modes). If you supply a custom
 `services.redis.volumeClaimTemplates`, the template bypasses the generated
 claim definition.
 
-### Autoscaling baselines (M2 reliability)
+### Autoscaling baselines
 
-The default HPAs reflect the M2 reliability runbook. CPU targets are paired with
+The default HPAs reflect the reliability runbook. CPU targets are paired with
 memory utilisation to keep latency predictable under burst load. Override these
 values per environment when you have empirical data.
 

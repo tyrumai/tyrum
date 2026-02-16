@@ -113,4 +113,4 @@ The overall `decision` is `deny` if any rule denies, `escalate` if any rule esca
 }
 ```
 
-Future milestones will replace the static thresholds with learned policy models and wire the service to shared policy definitions under `shared/`.
+Future work will replace the static thresholds with learned policy models and wire the service to shared policy definitions under `shared/`.

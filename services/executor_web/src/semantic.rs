@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, collections::HashSet};
 
-use playwright::api::page::Page;
+use playwright_rs::protocol::Page;
 use serde::Deserialize;
 use strsim::jaro_winkler;
 
@@ -48,7 +48,7 @@ pub async fn suggest_field_selectors(
                     dataTestid: element.getAttribute('data-testid') || null
                 }));
             })",
-            Option::<()>::None,
+            None::<&()>,
         )
         .await
         .map_err(WebExecutorError::from)?;
@@ -127,7 +127,7 @@ pub async fn suggest_submit_selectors(
                     typeAttr: element.getAttribute('type') || null
                 }));
             })",
-            Option::<()>::None,
+            None::<&()>,
         )
         .await
         .map_err(WebExecutorError::from)?;

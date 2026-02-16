@@ -9,7 +9,7 @@
   description: "Maintenance, refactors, or enabling work."
 - name: "priority: now"
   color: "d93f0b"
-  description: "Top priority work required for the current milestone sprint."
+  description: "Top priority work required for the current sprint."
 - name: "priority: next"
   color: "fbca04"
   description: "Important but can follow after the current committed work."

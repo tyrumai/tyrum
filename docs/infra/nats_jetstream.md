@@ -19,5 +19,5 @@
 - Compose keeps the service unauthenticated for now; local overrides can be applied by exporting the variables above before invoking binaries that depend on the watcher client.
 
 ## Security & Follow-Up
-- Authentication and authorization are **TBD**. Future milestones will introduce NATS credentials (user/pass or nkeys) issued via the existing secret manager; do not embed secrets in the repository.
+- Authentication and authorization are **TBD**. Future work will introduce NATS credentials (user/pass or nkeys) issued via the existing secret manager; do not embed secrets in the repository.
 - When credentials land, update this document and `tyrum-watchers::JetStreamConfig::from_env` to require them, and ensure policy gate reviews the new outbound domain list.

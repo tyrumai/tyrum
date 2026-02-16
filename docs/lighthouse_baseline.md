@@ -1,6 +1,6 @@
 # Landing Page Lighthouse Baseline
 
-This document captures the repeatable workflow for validating the `/` route meets the M0 performance and accessibility guardrails.
+This document captures the repeatable workflow for validating the `/` route meets the performance and accessibility guardrails.
 
 ## Prerequisites
 - Node.js v24.9.0 (other 20+ LTS releases are expected to work).

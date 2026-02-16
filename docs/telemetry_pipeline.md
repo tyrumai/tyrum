@@ -1,6 +1,6 @@
 # Telemetry Pipeline
 
-The local compose stack now exposes a full OpenTelemetry pipeline so developers can inspect traces, metrics, and logs while building against the M0 services. The collector is the single ingestion point for OTLP traffic and fans out data to Prometheus, Tempo, and Loki for storage/visualisation.
+The local compose stack now exposes a full OpenTelemetry pipeline so developers can inspect traces, metrics, and logs while building against the local services. The collector is the single ingestion point for OTLP traffic and fans out data to Prometheus, Tempo, and Loki for storage/visualisation.
 
 ## Stack Overview
 - **OpenTelemetry Collector (`otel-collector`)** – receives OTLP gRPC/HTTP traffic on ports `4317`/`4318`, exports metrics to Prometheus, traces to Tempo, and logs to Loki.

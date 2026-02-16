@@ -50,7 +50,7 @@ async fn mock_book_call_plan_creates_audit_and_memory_artifacts() -> Result<()> 
         "with": "Alex Doe",
     });
 
-    let plan_steps = vec![
+    let plan_steps = [
         ActionPrimitive::new(
             ActionPrimitiveKind::Confirm,
             into_args(json!({

@@ -95,10 +95,7 @@ where
         retry_after: Some(delay),
     } = &outcome
     {
-        let millis = match i64::try_from(delay.as_millis()) {
-            Ok(value) => value,
-            Err(_) => i64::MAX,
-        };
+        let millis = i64::try_from(delay.as_millis()).unwrap_or(i64::MAX);
         span.record("retry_after_ms", millis);
     }
 

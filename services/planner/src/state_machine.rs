@@ -289,14 +289,7 @@ impl PlanStateMachine {
 
         let detail = failure.detail.as_deref().unwrap_or("");
         let (step_index, step_index_known) = match failure.step_index {
-            Some(idx) => match i64::try_from(idx) {
-                Ok(value) => (value, true),
-                Err(_) => {
-                    // Represent indices that overflow i64 with a sentinel but still mark that a
-                    // step index was provided so downstream logs reflect that context.
-                    (i64::MAX, true)
-                }
-            },
+            Some(idx) => (i64::try_from(idx).unwrap_or(i64::MAX), true),
             None => (-1, false),
         };
         let executed_steps = self.executed_steps;
