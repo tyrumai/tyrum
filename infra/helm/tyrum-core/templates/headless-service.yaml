@@ -1,4 +1,0 @@
-{{- $root := . -}}
-{{- range $name, $service := .Values.services }}
-{{ include "tyrum-core.headlessService" (dict "root" $root "name" $name "service" $service) }}
-{{- end }}

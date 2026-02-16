@@ -1,9 +1,0 @@
-{
-  "request_id": "fixture-no-user",
-  "pii": {
-    "categories": []
-  },
-  "legal": {
-    "flags": []
-  }
-}
