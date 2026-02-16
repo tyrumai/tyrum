@@ -40,8 +40,7 @@ jobs:
         run: pnpm audit
 
       - name: Audit web dependencies
-        working-directory: web
-        run: npm audit --omit dev --audit-level high
+        run: pnpm --filter tyrum-portal audit --prod --audit-level high
 
       - name: Report failure for triage
         if: failure()

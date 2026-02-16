@@ -74,7 +74,9 @@ const RISK_ORDER: Record<RiskLevel, number> = {
 };
 
 function maxRiskLevel(a: RiskLevel, b: RiskLevel): RiskLevel {
-  return RISK_ORDER[a] >= RISK_ORDER[b] ? a : b;
+  const aScore = RISK_ORDER[a] ?? 0;
+  const bScore = RISK_ORDER[b] ?? 0;
+  return aScore >= bScore ? a : b;
 }
 
 // ---------------------------------------------------------------------------
