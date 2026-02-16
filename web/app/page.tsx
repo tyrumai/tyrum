@@ -1,5 +1,4 @@
 import React from "react";
-import type { UnsafeUnwrappedSearchParams } from "next/server";
 import WaitlistCta from "./waitlist-cta";
 import {
   CTA_FROM_PARAM,
@@ -43,13 +42,9 @@ function unwrapSearchParams(
     return {};
   }
 
-  if (typeof (searchParams as { then?: unknown }).then !== "function") {
-    return searchParams as unknown as SearchParamRecord;
-  }
-
-  return searchParams as unknown as UnsafeUnwrappedSearchParams<
-    Promise<SearchParamRecord>
-  >;
+  // Next.js spreads params directly on the Promise object, allowing
+  // synchronous property access without awaiting.
+  return searchParams as unknown as SearchParamRecord;
 }
 
 function extractParamValue(
