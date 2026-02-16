@@ -22,7 +22,7 @@ opentelemetry = { version = "0.31", features = ["metrics", "logs"] }
 opentelemetry-appender-tracing = "0.31.1"
 opentelemetry-otlp = { version = "0.31", features = ["grpc-tonic", "metrics", "logs"] }
 opentelemetry_sdk = { version = "0.31", features = ["metrics", "logs", "trace", "rt-tokio", "testing"] }
-quick-xml = { version = "0.32", default-features = false, features = ["serialize"] }
+quick-xml = { version = "0.39", default-features = false, features = ["serialize"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
