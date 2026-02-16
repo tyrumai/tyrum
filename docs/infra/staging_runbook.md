@@ -102,7 +102,7 @@ cluster by the Helm chart.
    resource version (`kubectl describe pod … | grep platform-config`).
 
 ## Telegram Ingress (Staging)
-- Context: [#58](https://github.com/VirtunetBV/tyrum/issues/58), [#59](https://github.com/VirtunetBV/tyrum/issues/59), [#60](https://github.com/VirtunetBV/tyrum/issues/60), [#61](https://github.com/VirtunetBV/tyrum/issues/61), [#62](https://github.com/VirtunetBV/tyrum/issues/62). Complete these upstream changes before altering ingress settings.
+- Context: [#58](https://github.com/rhernaus/tyrum/issues/58), [#59](https://github.com/rhernaus/tyrum/issues/59), [#60](https://github.com/rhernaus/tyrum/issues/60), [#61](https://github.com/rhernaus/tyrum/issues/61), [#62](https://github.com/rhernaus/tyrum/issues/62). Complete these upstream changes before altering ingress settings.
 - Prerequisites: the Secrets Manager envelope `tyrum-staging/platform/config` must include the Telegram environment block and the dedicated secret `tyrum-staging/integrations/telegram` must hold `bot_token`, `webhook_url`, and `secret_token`. Tokens stay in Secrets Manager or the staged GitHub environment; never commit them or paste into chat channels.
 
 ### Deployment Checklist

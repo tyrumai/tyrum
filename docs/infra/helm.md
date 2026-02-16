@@ -110,7 +110,7 @@ Example override file:
 services:
   api:
     image:
-      repository: ghcr.io/virtunetbv/tyrum-api
+      repository: ghcr.io/rhernaus/tyrum-api
       tag: v0.2.3
     hpa:
       minReplicas: 2

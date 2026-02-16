@@ -24,14 +24,14 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  REGISTRY: ghcr.io/virtunetbv
-  CACHE_REGISTRY: ghcr.io/virtunetbv/cache
+  REGISTRY: ghcr.io/rhernaus
+  CACHE_REGISTRY: ghcr.io/rhernaus/cache
   DOCKER_BUILDKIT: "1"
 
 jobs:
   publish:
     name: Publish ${{ matrix.title }} image
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
@@ -44,7 +44,7 @@ jobs:
             title: API
             context: .
             dockerfile: Dockerfile.api
-            repository: ghcr.io/virtunetbv/tyrum-api
+            repository: ghcr.io/rhernaus/tyrum-api
             build_args: ""
             paths: |
               Dockerfile.api
@@ -56,7 +56,7 @@ jobs:
             title: Policy
             context: .
             dockerfile: Dockerfile.policy
-            repository: ghcr.io/virtunetbv/tyrum-policy
+            repository: ghcr.io/rhernaus/tyrum-policy
             build_args: ""
             paths: |
               Dockerfile.policy
@@ -68,7 +68,7 @@ jobs:
             title: Planner
             context: .
             dockerfile: Dockerfile.planner
-            repository: ghcr.io/virtunetbv/tyrum-planner
+            repository: ghcr.io/rhernaus/tyrum-planner
             build_args: ""
             paths: |
               Dockerfile.planner
@@ -80,7 +80,7 @@ jobs:
             title: Wallet
             context: .
             dockerfile: Dockerfile.wallet
-            repository: ghcr.io/virtunetbv/tyrum-wallet
+            repository: ghcr.io/rhernaus/tyrum-wallet
             build_args: ""
             paths: |
               Dockerfile.wallet
@@ -92,7 +92,7 @@ jobs:
             title: Executor HTTP
             context: .
             dockerfile: Dockerfile.executor-http
-            repository: ghcr.io/virtunetbv/tyrum-executor-http
+            repository: ghcr.io/rhernaus/tyrum-executor-http
             build_args: ""
             paths: |
               Dockerfile.executor-http
@@ -104,7 +104,7 @@ jobs:
             title: Executor Web
             context: .
             dockerfile: Dockerfile.executor-web
-            repository: ghcr.io/virtunetbv/tyrum-executor-web
+            repository: ghcr.io/rhernaus/tyrum-executor-web
             build_args: ""
             paths: |
               Dockerfile.executor-web
@@ -116,7 +116,7 @@ jobs:
             title: Executor CLI
             context: .
             dockerfile: Dockerfile.executor-cli
-            repository: ghcr.io/virtunetbv/tyrum-executor-cli
+            repository: ghcr.io/rhernaus/tyrum-executor-cli
             build_args: ""
             paths: |
               Dockerfile.executor-cli
@@ -128,7 +128,7 @@ jobs:
             title: Executor Android
             context: .
             dockerfile: Dockerfile.executor-android
-            repository: ghcr.io/virtunetbv/tyrum-executor-android
+            repository: ghcr.io/rhernaus/tyrum-executor-android
             build_args: ""
             paths: |
               Dockerfile.executor-android
@@ -140,7 +140,7 @@ jobs:
             title: LLM Gateway
             context: .
             dockerfile: Dockerfile.llm
-            repository: ghcr.io/virtunetbv/tyrum-llm
+            repository: ghcr.io/rhernaus/tyrum-llm
             build_args: ""
             paths: |
               Dockerfile.llm
@@ -152,7 +152,7 @@ jobs:
             title: Model Gateway
             context: .
             dockerfile: Dockerfile.model-gateway
-            repository: ghcr.io/virtunetbv/tyrum-model-gateway
+            repository: ghcr.io/rhernaus/tyrum-model-gateway
             build_args: ""
             paths: |
               Dockerfile.model-gateway
@@ -164,7 +164,7 @@ jobs:
             title: Watchers Processor
             context: .
             dockerfile: Dockerfile.watchers
-            repository: ghcr.io/virtunetbv/tyrum-watchers
+            repository: ghcr.io/rhernaus/tyrum-watchers
             build_args: ""
             paths: |
               Dockerfile.watchers
@@ -176,9 +176,9 @@ jobs:
             title: VLLM Gateway
             context: .
             dockerfile: Dockerfile.vllm
-            repository: ghcr.io/virtunetbv/tyrum-vllm
+            repository: ghcr.io/rhernaus/tyrum-vllm
             build_args: |
-              BASE_IMAGE=python:3.11-slim
+              BASE_IMAGE=public.ecr.aws/docker/library/python:3.11-slim
             paths: |
               Dockerfile.vllm
               docker/vllm-entrypoint.sh
@@ -186,7 +186,7 @@ jobs:
             title: Web
             context: web
             dockerfile: web/Dockerfile
-            repository: ghcr.io/virtunetbv/tyrum-web
+            repository: ghcr.io/rhernaus/tyrum-web
             build_args: ""
             paths: |
               web/**
@@ -194,7 +194,7 @@ jobs:
             title: Mock LLM
             context: services/mock_llm
             dockerfile: services/mock_llm/Dockerfile
-            repository: ghcr.io/virtunetbv/tyrum-mock-llm
+            repository: ghcr.io/rhernaus/tyrum-mock-llm
             build_args: ""
             paths: |
               services/mock_llm/**

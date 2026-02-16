@@ -16,7 +16,7 @@ concurrency:
 jobs:
   iac:
     name: Infrastructure validation
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     env:
