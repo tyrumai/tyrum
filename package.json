@@ -14,6 +14,11 @@
     "lint": "oxlint --ignore-pattern '**/dist/**' .",
     "typecheck": "tsc -b"
   },
+  "pnpm": {
+    "overrides": {
+      "tmp": ">=0.2.4"
+    }
+  },
   "devDependencies": {
     "@vitest/coverage-v8": "^3.2.4",
     "oxlint": "^0.16.6",
