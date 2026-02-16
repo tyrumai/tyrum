@@ -26,7 +26,7 @@ reqwest = { version = "0.12.23", default-features = false, features = ["json", "
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
-tokio = { version = "1.43", features = ["macros", "rt-multi-thread", "signal", "time"] }
+tokio = { version = "1.49", features = ["macros", "rt-multi-thread", "signal", "time"] }
 tracing = "0.1"
 tracing-opentelemetry = "0.32"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "registry"] }
@@ -37,4 +37,4 @@ url = { version = "2", features = ["serde"] }
 anyhow = "1"
 axum = { version = "0.8", features = ["json", "macros"] }
 serde_json = "1"
-tokio = { version = "1.43", features = ["macros", "rt-multi-thread", "time"] }
+tokio = { version = "1.49", features = ["macros", "rt-multi-thread", "time"] }
