@@ -1,5 +1,5 @@
 /**
- * Telegram ingress normalizer — port of shared/tyrum-shared/src/telegram.rs
+ * Telegram ingress normalizer.
  *
  * Converts raw Telegram update payloads into the NormalizedThreadMessage schema.
  */
@@ -181,7 +181,7 @@ export function normalizeUpdate(
     );
   }
 
-  // edited_message takes precedence (same as Rust: edited_message.or(message))
+  // edited_message takes precedence over message when both are present.
   const message = update.edited_message ?? update.message;
   if (message == null) {
     throw new TelegramNormalizationError(

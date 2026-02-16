@@ -1,9 +1,9 @@
 # HTTP Executor Skeleton
 
-The `tyrum-executor-http` crate executes planner `ActionPrimitiveKind::Http`
+The HTTP executor service executes planner `Http` action primitives
 primitives by issuing JSON HTTP requests and validating responses against an
 optional JSON Schema. The executor accepts planner arguments documented in
-`services/executor_http/src/lib.rs`:
+this document:
 
 - `method` (required): HTTP method, normalised to uppercase. Supported values are `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, and `OPTIONS`.
 - `url` (required): Absolute URL. Hosts must be present in the outbound
@@ -15,7 +15,7 @@ optional JSON Schema. The executor accepts planner arguments documented in
   executor automatically injects `Content-Type: application/json` unless the
   planner overrides it explicitly.
 - `response_schema` (optional): JSON Schema used to validate the response body
-  with the `jsonschema` crate (draft 2020-12). Validation failures short-circuit
+  with a draft 2020-12 compatible validator. Validation failures short-circuit
   the execution and surface the joined error messages to the planner.
 
 Successful executions return the HTTP status code, sanitised response headers,
@@ -46,11 +46,10 @@ an allowlist resolved from `HTTP_EXECUTOR_ALLOWED_HOSTS`. The default value is
 `["localhost", "127.0.0.1", "::1"]`, enforcing the localhost-only posture noted
 in the issue acceptance criteria. Future integrations can expand the allowlist
 via configuration; document each new domain and revisit rate limiting when
-external vendors are enabled (tracked by the TODO in `lib.rs`).
+external vendors are enabled.
 
 ## Local Development
 
-Build the executor binary with `cargo build -p tyrum-executor-http` or start the
-containerised service via `docker compose up executor-http`. The integration test
-suite (`cargo test -p tyrum-executor-http`) spins up an Axum mock server to cover
+Start the containerised service via `docker compose up executor-http`. The integration test
+suite (`pnpm test`) spins up a mock HTTP server to cover
 success, schema-failure, and non-success status paths.

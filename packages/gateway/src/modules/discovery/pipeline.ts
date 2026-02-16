@@ -1,10 +1,10 @@
 /**
- * Discovery pipeline — simplified port of services/discovery/src/pipeline.rs
+ * Discovery pipeline.
  *
  * Provides an in-memory connector cache and a pipeline skeleton.
- * The full Rust implementation includes Redis caching, HTTP probing, and
+ * The full implementation can include Redis caching, HTTP probing, and
  * heuristic matching; this TypeScript version exposes the cache and pipeline
- * interfaces for use by the gateway service.
+ * interfaces for the gateway service.
  */
 
 import type {

@@ -15,7 +15,7 @@ Personal AI assistant platform focusing on proactive planning, strong guardrails
 
 | Layer | Choice |
 | --- | --- |
-| Runtime | Node.js >= 22 |
+| Runtime | Node.js 24.x |
 | Language | TypeScript (strict, ESM) |
 | HTTP framework | Hono |
 | Validation/types | Zod |
@@ -41,7 +41,7 @@ Personal AI assistant platform focusing on proactive planning, strong guardrails
 ## Getting Started
 
 1. **Read the concept:** Start with `docs/product_concept_v1.md` to understand goals and architecture.
-2. **Install tooling:** Node.js 22+ and pnpm.
+2. **Install tooling:** Node.js 24.x and pnpm.
 3. **Clone & branch:** Fork/clone the repo, create branches as `<issue-number>-<slug>`.
 4. **Install dependencies:** `pnpm install` from the repo root.
 5. **Run checks:** `pnpm typecheck && pnpm test && pnpm lint`
