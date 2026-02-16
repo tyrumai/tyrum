@@ -11,7 +11,7 @@ default = ["dep:tyrum-memory"]
 audit-demo = ["dep:testcontainers"]
 
 [dependencies]
-axum = { version = "0.7", features = ["json"] }
+axum = { version = "0.8", features = ["json"] }
 chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -29,7 +29,7 @@ tracing = "0.1"
 uuid = { version = "1", features = ["serde", "v4"] }
 anyhow = "1"
 tokio = { version = "1.43", features = ["macros", "net", "rt", "rt-multi-thread", "signal", "time"] }
-testcontainers = { version = "0.18", optional = true }
+testcontainers = { version = "0.27", optional = true }
 tyrum-memory = { path = "../memory", optional = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
 tyrum-shared = { path = "../../shared/tyrum-shared" }
@@ -54,7 +54,7 @@ sqlx = { version = "0.8", default-features = false, features = [
   "migrate",
   "macros"
 ] }
-testcontainers = "0.18"
+testcontainers = "0.27"
 tokio = { version = "1.43", features = ["macros", "rt", "rt-multi-thread", "time"] }
 tyrum-memory = { path = "../memory" }
 tower = "0.5"
