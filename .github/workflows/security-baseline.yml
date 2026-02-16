@@ -158,7 +158,7 @@ jobs:
 
       - name: Setup Trivy
         if: steps.detect.outputs.has-iac == 'true'
-        uses: aquasecurity/setup-trivy@v0.2.3
+        uses: aquasecurity/setup-trivy@v0.2.5
 
       - name: trivy config .
         if: steps.detect.outputs.has-iac == 'true'
