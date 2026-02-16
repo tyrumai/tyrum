@@ -35,4 +35,4 @@ All other application services automatically depend on the collector and export 
 ## Notes
 - The collector configuration lives at `config/observability/otel-collector.yaml`; adjust exporters here if additional backends are required.
 - Grafana provisioning (`config/observability/grafana/provisioning/datasources.yaml`) declares the default data sources so new dashboards can be saved immediately.
-- Local binaries (outside Docker) will honour `OTEL_EXPORTER_OTLP_ENDPOINT`; copy `config/local.env.example` to `config/local.env` and source it before running `cargo run`.
+- Local services (outside Docker) will honour `OTEL_EXPORTER_OTLP_ENDPOINT`; copy `config/local.env.example` to `config/local.env` and source it before running `pnpm --filter @tyrum/gateway start`.

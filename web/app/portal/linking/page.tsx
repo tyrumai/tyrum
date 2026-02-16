@@ -27,7 +27,7 @@ async function parseJsonResponse(response: Response) {
 
   try {
     return JSON.parse(raw);
-  } catch (error) {
+  } catch {
     return { message: raw };
   }
 }

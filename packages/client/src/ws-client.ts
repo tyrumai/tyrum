@@ -1,7 +1,7 @@
 /**
  * TyrumClient — lightweight WebSocket client for the Tyrum gateway.
  *
- * Connects via the standard WebSocket API (available natively in Node 22+
+ * Connects via the standard WebSocket API (available natively in Node 24+
  * and all modern browsers), sends/receives typed protocol messages, and
  * optionally auto-reconnects with exponential backoff.
  */

@@ -1,7 +1,7 @@
 # Helm Deployment Runbook
 
 This runbook describes how to deploy the Tyrum control-plane stack to Kubernetes
-using the `infra/helm/tyrum-core` chart. The chart ships the Rust services
+using the `infra/helm/tyrum-core` chart. The chart ships the core services
 (`policy`, `api`), the Next.js web console, the mock LLM, and the data tier
 (Postgres + Redis cluster) with default ConfigMaps, Secrets, Horizontal Pod
 Autoscalers, and Helm tests.

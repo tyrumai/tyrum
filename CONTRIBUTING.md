@@ -3,7 +3,7 @@
 Thanks for helping build the Tyrum assistant platform.
 
 ## 1. Getting Started
-- Install Node.js 22+ and pnpm on your host.
+- Install Node.js 24.x and pnpm on your host.
 - Clone the repository and create branches as `<issue-number>-<slug>`.
 - Run `pnpm install` from the repo root to bootstrap all packages.
 

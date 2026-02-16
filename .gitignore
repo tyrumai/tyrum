@@ -3,24 +3,6 @@ node_modules/
 dist/
 *.tsbuildinfo
 
-# Terraform artifacts
-.terraform/
-*.tfstate
-*.tfstate.*
-terraform.tfstate
-terraform.tfstate.backup
-target/
-**/*.rs.bk
-
-# Rust artifacts
-.cargo/
-*.profraw
-*.rlib
-*.rmeta
-rustfmt.toml
-.rustc_info.json
-*.cargo-lock
-
 # Database files
 *.db
 *.sqlite

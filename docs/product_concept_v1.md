@@ -113,14 +113,14 @@ flowchart LR
 
 ### Technology Stack (initial)
 - **Containers first:** Build OCI images with Docker/BuildKit; local orchestration via `docker compose`, production scheduling on Kubernetes for isolation and autoscaling.
-- **Core services:** Rust 2024 (async via `tokio` + `axum`) for planner/orchestrator, policy gate, memory, and executor control planes; sidecars for policy/audit enforcement share the same toolchain.
+- **Core services:** Node.js 24 + TypeScript for planner/orchestrator, policy gate, memory, and executor control planes; sidecars for policy/audit enforcement share the same toolchain.
 - **Web portal:** Next.js 15.5+ + React 19.2 with Server Components/Actions for the admin console and live activity feed; Tailwind or design system TBD.
-- **Data tier:** PostgreSQL 16 with `pgvector` for embeddings + RLS policies; hydrated via Rust and ingestion pipelines.
-- **Eventing & jobs:** NATS JetStream for the event bus/watchers, with Rust consumers handling parallel execution; lightweight cron via Kubernetes Jobs.
+- **Data tier:** PostgreSQL 16 with `pgvector` for embeddings + RLS policies; hydrated via gateway services and ingestion pipelines.
+- **Eventing & jobs:** NATS JetStream for the event bus/watchers, with Node workers handling parallel execution; lightweight cron via Kubernetes Jobs.
 - **Caching & rate limits:** Redis 7 (cluster mode) for low-latency session state, policy throttles, and short-lived planner memory.
 - **LLM runtime:** Model gateway (see `docs/infra/model_gateway.md`) fronts local vLLM deployments and upstream frontier APIs, applying routing policy, token accounting, and auth.
 - **Observability:** OpenTelemetry instrumentation exported to Prometheus/Grafana + Tempo/Loki stack; audit evidence streamed to S3-compatible storage.
-- **Infra as code:** Helm charts plus raw Kubernetes manifests managing cluster bootstrap, secrets, runners, and CD pipelines (Terraform reserved for later cloud provisioning).
+- **Infra as code:** Helm charts plus raw Kubernetes manifests managing cluster bootstrap, secrets, runners, and CD pipelines.
 
 ### Model Gateway (multi-backend LLM access)
 - The gateway exposes a single OpenAI-compatible surface to internal services and consults configuration to decide whether to route a call to local vLLM models or a frontier provider (OpenAI, OpenRouter, etc.).
@@ -161,7 +161,7 @@ Use a minimal set of **universal action primitives** to enable auditability, ret
 **Postconditions are mandatory** on state‑changing steps to avoid silent failure.
 
 ### Planner request/response contract
-Planner clients exchange the shared `PlanRequest` and `PlanResponse` types from `tyrum-shared::planner`
+Planner clients exchange the shared `PlanRequest` and `PlanResponse` types from `@tyrum/schemas`
 to keep policy, planner, and API services aligned on envelopes and error handling. Optional hints such as
 `locale` or `timezone` may be omitted when the caller has no preference.
 

@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
 
   try {
     payload = await request.json();
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       {
         error: "invalid_payload",

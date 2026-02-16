@@ -10,7 +10,7 @@
   policy, portal).
 - Implementation happens in short-lived branches named `<issue-number>-<slug>` (for example `issue-12-memory-schema`). Each branch is merged through a pull request linked to its issue.
 - All work executes inside containers. Local development uses `docker compose` and GitHub Actions mirrors the same images for CI and security workflows.
-- GitHub Actions gates (`ci-rust`, `ci-web`, `ci-iac`, `ci-containers`, `security-baseline`) must be green before a pull request is eligible for review or merge.
+- GitHub Actions gates (`ci`, `security-baseline`) must be green before a pull request is eligible for review or merge.
 
 ## 2. Definition of Ready (DoR)
 An issue is **Ready** when it meets all of the following:
@@ -26,12 +26,12 @@ An issue is **Ready** when it meets all of the following:
 ## 3. Definition of Done (DoD)
 An issue reaches **Done** only when all criteria below are satisfied:
 - **Acceptance Criteria Met:** Every acceptance bullet in the issue is verified. Evidence is provided in the issue or PR (screenshots, logs, test output, links to dashboards).
-- **Automated Checks Pass:** Relevant GitHub Actions workflows (`ci-rust`, `ci-web`, `ci-iac`, `ci-containers`, `security-baseline`) pass. For scheduled jobs, the latest successful run is referenced if manual trigger is impractical.
+- **Automated Checks Pass:** Relevant GitHub Actions workflows (`ci`, `security-baseline`) pass. For scheduled jobs, the latest successful run is referenced if manual trigger is impractical.
 - **Tests & Coverage:** Unit, integration, and snapshot tests introduced/updated for the change run locally and in CI. New failure modes are covered by regression tests.
 - **Manual QA (if required):** High-risk flows (auth, payments, policy enforcement) include manual test notes or screen recordings.
 - **Documentation Updated:** README, `docs/`, API docs, and runbooks reflect new behaviour, flags, or operational steps. Changelog entries are added when externally visible.
 - **Observability Wired:** Metrics, logs, and traces are instrumented or updated. Dashboards/alerts referenced in acceptance criteria are validated.
-- **Security Compliance:** Secrets remain managed via approved vaults; dependency updates pass `cargo audit`, `npm audit`, and `trivy`. Threat considerations are documented for data-sensitive work.
+- **Security Compliance:** Secrets remain managed via approved vaults; dependency updates pass `pnpm audit` and `npm audit`. Threat considerations are documented for data-sensitive work.
 - **Backwards Compatibility:** Migration scripts are tested with up/down paths; fallback strategies are documented. Feature flags include rollback instructions.
 - **Peer Review Completed:** At least one reviewer signs off. Review conversations are resolved or tracked for follow-up.
 - **Merge & Cleanup:** Feature branches are merged to `main`, stale branches are removed, and the linked GitHub Issue is closed with a completion note.
@@ -40,7 +40,7 @@ An issue reaches **Done** only when all criteria below are satisfied:
 ## 4. Acceptance Criteria Guidelines
 - Write acceptance criteria as bullet points beginning with observable outcomes (e.g., “Given… When… Then…” or “Script X outputs status Y”).
 - Include success AND failure behaviours. Specify expected errors, policy escalations, and retry behaviour.
-- Reference the exact command(s) or endpoints to validate the change (e.g., `cargo test -p planner`, `npm run test -- --runInBand`, `helm lint infra/helm/tyrum-core`).
+- Reference the exact command(s) or endpoints to validate the change (e.g., `pnpm typecheck`, `pnpm test -- --coverage`, `npm --prefix web run test`).
 - Quantify non-functional requirements (latency, throughput, Lighthouse score, token usage, cost ceiling).
 - Attach verification artifacts (screenshots, trace IDs, log snippets) to issues or link to the relevant dashboard panel.
 - Update or extend acceptance criteria whenever scope changes during implementation; the issue owner is responsible for keeping them current.

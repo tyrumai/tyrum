@@ -52,7 +52,7 @@ export async function GET(
 
     const payload = await parseUpstreamResponse(upstreamResponse);
     return NextResponse.json(payload, { status: upstreamResponse.status });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       {
         error: "upstream_unavailable",

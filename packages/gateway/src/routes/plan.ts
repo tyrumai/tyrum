@@ -1,9 +1,8 @@
 /**
- * Plan route — port of services/planner/src/http.rs orchestrator.
+ * Plan route orchestrator.
  *
- * Key difference from Rust: all "client" calls (policy, wallet, discovery)
- * become direct in-process function calls since everything runs inside
- * a single gateway process.
+ * All "client" calls (policy, wallet, discovery) are direct in-process
+ * function calls since everything runs inside a single gateway process.
  */
 
 import { Hono } from "hono";
