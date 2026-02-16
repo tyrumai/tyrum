@@ -161,7 +161,7 @@ async function parseJsonResponse(response: Response) {
 
   try {
     return JSON.parse(raw);
-  } catch (error) {
+  } catch {
     return { message: raw };
   }
 }
@@ -169,7 +169,6 @@ async function parseJsonResponse(response: Response) {
 export default function AccountSettingsPage() {
   const [toast, setToast] = useState<ToastState | null>(null);
   const [pendingAction, setPendingAction] = useState<AccountAction | null>(null);
-  const [toastCounter, setToastCounter] = useState(0);
   const [profilesLoading, setProfilesLoading] = useState(true);
   const [pamForm, setPamForm] = useState<PamFormState>(DEFAULT_PAM_FORM);
   const [pamVersion, setPamVersion] = useState<string | null>(null);
@@ -179,6 +178,7 @@ export default function AccountSettingsPage() {
   const pronunciationIdRef = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const isMountedRef = useRef(true);
+  const toastCounterRef = useRef(0);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -209,15 +209,8 @@ export default function AccountSettingsPage() {
       return;
     }
 
-    setToastCounter((current) => {
-      if (!isMountedRef.current) {
-        return current;
-      }
-
-      const next = current + 1;
-      setToast({ id: next, tone, message });
-      return next;
-    });
+    toastCounterRef.current += 1;
+    setToast({ id: toastCounterRef.current, tone, message });
   }, []);
 
   const extractPronunciationDict = useCallback(
@@ -775,7 +768,7 @@ export default function AccountSettingsPage() {
     };
 
     loadProfiles();
-  }, [raiseToast]);
+  }, [extractPronunciationDict, raiseToast]);
 
   return (
     <main className="portal-settings" aria-labelledby="settings-heading">

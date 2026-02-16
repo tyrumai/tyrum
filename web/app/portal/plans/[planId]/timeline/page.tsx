@@ -41,7 +41,7 @@ function parseJsonResponse(response: Response) {
 
     try {
       return JSON.parse(raw) as TimelineResponse | TimelineError;
-    } catch (error) {
+    } catch {
       return { message: raw } satisfies TimelineError;
     }
   });
@@ -68,7 +68,7 @@ function formatDateTime(isoString?: string) {
       timeZone: "UTC",
       timeZoneName: "short",
     }).format(date);
-  } catch (error) {
+  } catch {
     return date.toISOString();
   }
 }

@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify(payload),
       cache: "no-store",
     });
-  } catch (error) {
+  } catch {
     return redirectToLanding(request, "error", email, campaignParams);
   }
 

@@ -1,0 +1,25 @@
+{
+  "name": "@tyrum/client",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown src/index.ts --format esm --dts"
+  },
+  "dependencies": {
+    "@tyrum/schemas": "workspace:*",
+    "mitt": "^3.0.1"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1",
+    "ws": "^8.19.0"
+  }
+}

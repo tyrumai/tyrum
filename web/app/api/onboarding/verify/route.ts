@@ -28,7 +28,7 @@ function buildExpiresAt() {
   return expiresAt.toISOString();
 }
 
-export async function POST() {
+export async function POST(_request: Request) {
   const consent = snapshotConsent();
 
   if (consent.revision === 0) {

@@ -4,7 +4,7 @@ import { parseUpstreamResponse, resolveApiBaseUrl } from "../shared";
 async function readJsonBody(request: NextRequest) {
   try {
     return await request.json();
-  } catch (error) {
+  } catch {
     return undefined;
   }
 }
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     const payload = await parseUpstreamResponse(upstreamResponse);
 
     return NextResponse.json(payload, { status: upstreamResponse.status });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       {
         error: "upstream_unavailable",

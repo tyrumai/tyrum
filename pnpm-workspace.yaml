@@ -1,0 +1,7 @@
+packages:
+  - "packages/*"
+  - "web"
+
+onlyBuiltDependencies:
+  - esbuild
+  - better-sqlite3

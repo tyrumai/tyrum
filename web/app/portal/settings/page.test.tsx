@@ -4,13 +4,6 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AccountSettingsPage from "./page";
 
-declare global {
-  // eslint-disable-next-line no-var
-  var fetch: typeof fetch;
-  // eslint-disable-next-line no-var
-  var Audio: typeof Audio;
-}
-
 describe("AccountSettingsPage", () => {
   const emptyProfilesResponse = { pam: null, pvp: null };
   let audioPlayMock: ReturnType<typeof vi.fn>;

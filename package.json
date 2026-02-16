@@ -1,0 +1,29 @@
+{
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "pretypecheck": "pnpm --filter @tyrum/schemas build",
+    "build": "pnpm -r --filter './packages/*' run build",
+    "pretest": "pnpm --filter @tyrum/schemas build",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "lint": "oxlint --ignore-pattern '**/dist/**' .",
+    "typecheck": "tsc -b"
+  },
+  "pnpm": {
+    "overrides": {
+      "tmp": ">=0.2.4"
+    }
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^3.2.4",
+    "oxlint": "^0.16.6",
+    "tsdown": "^0.12.5",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}

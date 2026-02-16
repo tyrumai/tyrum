@@ -70,22 +70,22 @@ CREATE TABLE planner_events (
 
 ## Dedupe Guard
 Duplicate ingest attempts (for example, planner retries after a network blip) reuse the same
-`replay_id`. The schema enforces uniqueness on that column and the Rust facade returns
-`AppendOutcome::Duplicate` so callers can log idempotent attempts without writing another row.
+`replay_id`. The schema enforces uniqueness on that column and the event-log layer returns a
+duplicate outcome so callers can record idempotent attempts without writing another row.
 
 We also ensure `step_index` monotonically increases for a plan by enforcing `CHECK step_index >= 0`
 and `UNIQUE(plan_id, step_index)`. The read path always orders by `step_index` for deterministic
 replay.
 
 ## Service Integration
-`tyrum-planner` exposes `EventLog` which:
-1. Runs migrations (`EventLog::migrate`) during bootstrap to ensure the table exists.
+The planner service exposes an event-log module that:
+1. Runs migrations during bootstrap to ensure the table exists.
 2. Provides `append` to insert entries with idempotent handling.
-3. Exposes `events_for_plan` to stream traces back when deriving audit or replay artefacts.
+3. Provides `events_for_plan` to stream traces back when deriving audit or replay artefacts.
 
 ## Replay Sandbox Workflow
 - The binary `replay_sandbox` replays recorded planner steps to detect executor drift and postcondition regressions.
-- Usage (also printed by `cargo run -p tyrum-planner --bin replay_sandbox -- --help`):
+- Usage (also printed by `replay_sandbox --help`):
 
   ```
   replay_sandbox --plan-id <UUID> --database-url <postgres-url> [--subject-id <UUID>] [--output-dir <dir>]
@@ -107,8 +107,7 @@ replay.
   can track cache effectiveness.
 
 Unit tests spin up an ephemeral Postgres container to assert insertion, dedupe, ordering, and
-validation of step indices. They run as part of `cargo test --all --all-targets` via the
-`pre-commit` hook.
+validation of step indices. They run as part of `pnpm test` in CI.
 
 ## Troubleshooting Policy Denials
 - Negative policy decisions land in the event log as a `failure` outcome with a sanitized
@@ -119,16 +118,16 @@ validation of step indices. They run as part of `cargo test --all --all-targets`
 - Wallet authorizations record a `wallet` audit block with sanitized reasons and append the
   `Spend guardrail enforced by wallet authorization.` note so reviewers can trace guardrail
   enforcement without revealing raw spend amounts or card metadata.
-- Use `cargo test -p tyrum-planner policy_denial` to run the regression harness that exercises the
-  denial flow and ensures both the planner response and audit payloads include the reason string.
+- Run the policy-denial regression harness with `pnpm test` to exercise the
+  denial flow and ensure both the planner response and audit payloads include the reason string.
 
 ## Troubleshooting Executor Failures
-- Executor and postcondition faults raise `PlanFailureReason::ExecutorFailed` with the failing
+- Executor and postcondition faults raise `ExecutorFailed` with the failing
   `step_index` so responders can identify which primitive stalled.
 - Planner responses surface the same detail string, while the event log writes a `failure` outcome
   block containing the error `code`, sanitized `detail`, and `retryable` flag for downstream replay.
 - Inspect the audit row with `SELECT outcome FROM planner_events WHERE plan_id = ?` to confirm the
   failure metadata propagated end-to-end; the `code` should match the wire error (`internal` or
   `executor_unavailable`).
-- Run `cargo test -p tyrum-planner failure_propagation` to exercise the regression harness that asserts
+- Run the failure-propagation regression harness with `pnpm test` to assert
   executor failures keep the `step_index` and detail intact across planner surfaces.

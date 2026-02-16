@@ -15,12 +15,12 @@ docker compose -f infra/docker-compose.yml up android-executor --build
 The service publishes the ports to the host so you can connect via `adb connect localhost:5555` once the health check reports success. Hardware acceleration is enabled automatically when `/dev/kvm` is available; otherwise the emulator runs under software emulation. Expect significantly longer boot times (4–6 minutes) without KVM.
 
 ## Primitive Support & Testing
-- The `tyrum-executor-android` crate currently exposes two primitives:
+- The Android executor service currently exposes two primitives:
   - `launch_app` launches an application by package name (optionally targeting a specific activity).
   - `tap` triggers a screen interaction using absolute coordinates or an accessibility identifier resolved from the UI hierarchy.
 - Run the integration test suite with the emulator online via:
   ```bash
-  cargo test -p tyrum-executor-android -- --ignored --nocapture
+  pnpm test
   ```
   The test installs the `ApiDemos-debug.apk` fixture, performs a tap, and verifies that screenshot artifacts are persisted under `artifacts/android/`.
 

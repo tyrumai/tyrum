@@ -1,6 +1,0 @@
-apiVersion: v2
-name: tyrum-core
-description: Deploys the Tyrum core control-plane services with shared configuration helpers
-type: application
-version: 0.1.0
-appVersion: "0.1.0"

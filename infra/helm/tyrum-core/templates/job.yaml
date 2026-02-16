@@ -1,4 +1,0 @@
-{{- $root := . -}}
-{{- range $name, $job := .Values.jobs }}
-{{ include "tyrum-core.job" (dict "root" $root "name" $name "job" $job) }}
-{{- end }}

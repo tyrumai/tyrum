@@ -3,7 +3,7 @@
 This document captures the repeatable workflow for validating the `/` route meets the performance and accessibility guardrails.
 
 ## Prerequisites
-- Node.js v24.9.0 (other 20+ LTS releases are expected to work).
+- Node.js v24.9.0 (Node 24.x recommended).
 - Dependencies installed: `cd web && npm install`.
 - Lighthouse CLI tooling is bundled via `@lhci/cli`; GitHub Actions also invokes `npm run lighthouse:ci` as part of `ci-web`.
 

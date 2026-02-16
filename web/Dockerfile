@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM public.ecr.aws/docker/library/node:20-bullseye AS base
+FROM public.ecr.aws/docker/library/node:24-bullseye AS base
 
 ARG HTTP_PROXY
 ARG HTTPS_PROXY

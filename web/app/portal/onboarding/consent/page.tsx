@@ -68,7 +68,7 @@ async function submitConsent(selections: ConsentSelections) {
 
   try {
     payload = await response.json();
-  } catch (error) {
+  } catch {
     payload = null;
   }
 
