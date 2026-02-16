@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM --platform=linux/amd64 ghcr.io/rhernaus/base-images/debian:bookworm-slim
+FROM --platform=linux/amd64 ghcr.io/rhernaus/tyrum/base-images/debian:bookworm-slim
 
 ARG CMDLINE_TOOLS_VERSION=11076708
 ENV DEBIAN_FRONTEND=noninteractive \

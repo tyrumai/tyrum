@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM ghcr.io/rhernaus/base-images/rust:1.90 AS builder
+FROM ghcr.io/rhernaus/tyrum/base-images/rust:1.90 AS builder
 
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
@@ -19,7 +19,7 @@ COPY services services
 
 RUN cargo build --locked --release --package tyrum-wallet
 
-FROM ghcr.io/rhernaus/base-images/debian:bookworm-slim AS runtime
+FROM ghcr.io/rhernaus/tyrum/base-images/debian:bookworm-slim AS runtime
 
 ARG HTTP_PROXY
 ARG HTTPS_PROXY

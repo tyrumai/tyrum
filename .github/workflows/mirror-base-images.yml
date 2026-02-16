@@ -34,13 +34,13 @@ jobs:
           set -euo pipefail
 
           images=(
-            "docker.io/library/rust:1.90|ghcr.io/rhernaus/base-images/rust:1.90"
-            "docker.io/library/debian:bookworm-slim|ghcr.io/rhernaus/base-images/debian:bookworm-slim"
-            "docker.io/library/python:3.12-slim|ghcr.io/rhernaus/base-images/python:3.12-slim"
-            "docker.io/library/python:3.11-slim|ghcr.io/rhernaus/base-images/python:3.11-slim"
-            "docker.io/library/node:20-bullseye|ghcr.io/rhernaus/base-images/node:20-bullseye"
-            "mcr.microsoft.com/playwright:v1.56.1-jammy|ghcr.io/rhernaus/base-images/playwright:v1.56.1-jammy"
-            "docker.io/pgvector/pgvector:pg16|ghcr.io/rhernaus/base-images/pgvector-pg16:pg16"
+            "docker.io/library/rust:1.90|ghcr.io/rhernaus/tyrum/base-images/rust:1.90"
+            "docker.io/library/debian:bookworm-slim|ghcr.io/rhernaus/tyrum/base-images/debian:bookworm-slim"
+            "docker.io/library/python:3.12-slim|ghcr.io/rhernaus/tyrum/base-images/python:3.12-slim"
+            "docker.io/library/python:3.11-slim|ghcr.io/rhernaus/tyrum/base-images/python:3.11-slim"
+            "docker.io/library/node:20-bullseye|ghcr.io/rhernaus/tyrum/base-images/node:20-bullseye"
+            "mcr.microsoft.com/playwright:v1.56.1-jammy|ghcr.io/rhernaus/tyrum/base-images/playwright:v1.56.1-jammy"
+            "docker.io/pgvector/pgvector:pg16|ghcr.io/rhernaus/tyrum/base-images/pgvector-pg16:pg16"
           )
 
           for mapping in "${images[@]}"; do

@@ -178,7 +178,7 @@ jobs:
             dockerfile: Dockerfile.vllm
             repository: ghcr.io/rhernaus/tyrum-vllm
             build_args: |
-              BASE_IMAGE=ghcr.io/rhernaus/base-images/python:3.11-slim
+              BASE_IMAGE=ghcr.io/rhernaus/tyrum/base-images/python:3.11-slim
             paths: |
               Dockerfile.vllm
               docker/vllm-entrypoint.sh
