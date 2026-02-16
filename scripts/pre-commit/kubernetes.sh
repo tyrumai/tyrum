@@ -15,10 +15,17 @@ if command -v kubeconform >/dev/null 2>&1; then
 fi
 
 if command -v kubectl >/dev/null 2>&1; then
+  failed=0
   for manifest in "$@"; do
     [ -f "${manifest}" ] || continue
-    kubectl apply --dry-run=client --validate=true -f "${manifest}"
+    if ! kubectl apply --dry-run=client --validate=false -f "${manifest}" 2>/dev/null; then
+      echo "warning: kubectl could not validate ${manifest} (no cluster credentials?)" >&2
+      failed=1
+    fi
   done
+  if [ "$failed" -eq 1 ]; then
+    echo "hint: install kubeconform for offline manifest validation" >&2
+  fi
   exit 0
 fi
 

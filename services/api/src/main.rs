@@ -47,8 +47,8 @@ const DEFAULT_BIND_ADDR: &str = "0.0.0.0:8080";
 const DEFAULT_DATABASE_URL: &str = "postgres://tyrum:tyrum_dev_password@localhost:5432/tyrum_dev";
 const WAITLIST_ROUTE: &str = "/waitlist";
 const ACCOUNT_LINKING_ROUTE: &str = "/account-linking/preferences";
-const ACCOUNT_LINKING_TOGGLE_ROUTE: &str = "/account-linking/preferences/:integration_slug";
-const AUDIT_PLAN_TIMELINE_ROUTE: &str = "/audit/plan/:plan_id";
+const ACCOUNT_LINKING_TOGGLE_ROUTE: &str = "/account-linking/preferences/{integration_slug}";
+const AUDIT_PLAN_TIMELINE_ROUTE: &str = "/audit/plan/{plan_id}";
 const TELEGRAM_WEBHOOK_ROUTE: &str = "/telegram/webhook";
 const PROFILES_ROUTE: &str = "/profiles";
 const PROFILE_PAM_ROUTE: &str = "/profiles/pam";
@@ -56,9 +56,9 @@ const PROFILE_PVP_ROUTE: &str = "/profiles/pvp";
 const PROFILE_PVP_PREVIEW_ROUTE: &str = "/profiles/pvp/preview";
 const PORTAL_ACCOUNT_ID: &str = "11111111-2222-3333-4444-555555555555";
 const CAPABILITY_SCHEMA_ROUTE: &str =
-    "/capabilities/:subject_id/:capability_type/:capability_identifier/:executor_kind/schema";
+    "/capabilities/{subject_id}/{capability_type}/{capability_identifier}/{executor_kind}/schema";
 const CAPABILITY_COST_ROUTE: &str =
-    "/capabilities/:subject_id/:capability_type/:capability_identifier/:executor_kind/cost";
+    "/capabilities/{subject_id}/{capability_type}/{capability_identifier}/{executor_kind}/cost";
 const DEFAULT_CAPABILITY_CACHE_TTL: Duration = Duration::from_secs(300);
 const DEFAULT_MODEL_GATEWAY_URL: &str = "http://model-gateway:8001";
 const VOICE_PREVIEW_MODEL: &str = "tyrum-voice-preview";

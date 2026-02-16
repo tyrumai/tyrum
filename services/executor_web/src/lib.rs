@@ -916,10 +916,7 @@ fn parse_selector_argument(value: &serde_json::Value, argument: &'static str) ->
 async fn submit_form(page: &Page, submit: &ResolvedSubmitSpec) -> Result<()> {
     match submit.kind {
         SubmitActionKind::Click => {
-            page.locator(&submit.selector)
-                .await
-                .click(None)
-                .await?;
+            page.locator(&submit.selector).await.click(None).await?;
         }
         SubmitActionKind::Submit => {
             #[derive(Serialize)]
@@ -966,10 +963,7 @@ async fn wait_for_post_submit(page: &Page, submit: &ResolvedSubmitSpec) -> Resul
     let deadline = tokio::time::Instant::now() + MAX_WAIT;
     loop {
         let ready: bool = page
-            .evaluate(
-                "() => document.readyState === 'complete'",
-                None::<&()>,
-            )
+            .evaluate("() => document.readyState === 'complete'", None::<&()>)
             .await?;
         if ready {
             break;

@@ -273,9 +273,9 @@ jobs:
           SOURCE_SHORT_SHA: ${{ steps.revision.outputs.short }}
         run: |
           set -euo pipefail
+          # shellcheck disable=SC2153
           channel="$CHANNEL"
           repo="$REPOSITORY"
-          sha="$SOURCE_SHA"
           short_sha="$SOURCE_SHORT_SHA"
           tags=()
           primary=""
@@ -293,7 +293,6 @@ jobs:
             fi
             major="${BASH_REMATCH[1]}"
             minor="${BASH_REMATCH[2]}"
-            patch="${BASH_REMATCH[3]}"
 
             tags+=("$repo:$tag")
             tags+=("$repo:${major}.${minor}")

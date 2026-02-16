@@ -20,7 +20,7 @@ tyrum-shared = { path = "../../shared/tyrum-shared" }
 anyhow = "1"
 axum = { version = "0.8", features = ["macros"] }
 chrono = { version = "0.4", default-features = true }
-testcontainers = "0.27"
+testcontainers = { version = "0.27", features = ["http_wait_plain"] }
 
 [lints]
 workspace = true

@@ -59,9 +59,11 @@ jobs:
               echo "EOF"
             } >>"$GITHUB_OUTPUT"
           else
-            echo "has-node=false" >>"$GITHUB_OUTPUT"
-            echo "node_manifests=" >>"$GITHUB_OUTPUT"
-            echo "node_dirs=" >>"$GITHUB_OUTPUT"
+            {
+              echo "has-node=false"
+              echo "node_manifests="
+              echo "node_dirs="
+            } >>"$GITHUB_OUTPUT"
           fi
 
           if [ -n "$(git ls-files '*.tf' '*.tfvars')" ]; then
