@@ -1,0 +1,101 @@
+import type Database from "better-sqlite3";
+
+export interface NewPlannerEvent {
+  replayId: string;
+  planId: string;
+  stepIndex: number;
+  occurredAt: string;
+  action: unknown;
+}
+
+export interface PersistedPlannerEvent extends NewPlannerEvent {
+  id: number;
+  createdAt: string;
+}
+
+export type AppendOutcome =
+  | { kind: "inserted"; event: PersistedPlannerEvent }
+  | { kind: "duplicate" };
+
+interface RawPlannerEventRow {
+  id: number;
+  replay_id: string;
+  plan_id: string;
+  step_index: number;
+  occurred_at: string;
+  action: string;
+  created_at: string;
+}
+
+function rowToEvent(row: RawPlannerEventRow): PersistedPlannerEvent {
+  return {
+    id: row.id,
+    replayId: row.replay_id,
+    planId: row.plan_id,
+    stepIndex: row.step_index,
+    occurredAt: row.occurred_at,
+    action: JSON.parse(row.action) as unknown,
+    createdAt: row.created_at,
+  };
+}
+
+export class EventLog {
+  constructor(private db: Database.Database) {}
+
+  append(event: NewPlannerEvent): AppendOutcome {
+    if (event.stepIndex < 0) {
+      throw new Error(
+        `step_index must be non-negative, got ${String(event.stepIndex)}`,
+      );
+    }
+
+    const actionJson = JSON.stringify(event.action);
+
+    // SQLite does not support RETURNING with ON CONFLICT DO NOTHING,
+    // so we use a transaction: attempt insert, detect UNIQUE violation.
+    const doAppend = this.db.transaction((): AppendOutcome => {
+      // Check for existing row with this (plan_id, step_index) combination
+      const existing = this.db
+        .prepare(
+          "SELECT id FROM planner_events WHERE plan_id = ? AND step_index = ?",
+        )
+        .get(event.planId, event.stepIndex) as
+        | { id: number }
+        | undefined;
+
+      if (existing) {
+        return { kind: "duplicate" };
+      }
+
+      const result = this.db
+        .prepare(
+          `INSERT INTO planner_events (replay_id, plan_id, step_index, occurred_at, action)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run(
+          event.replayId,
+          event.planId,
+          event.stepIndex,
+          event.occurredAt,
+          actionJson,
+        );
+
+      const inserted = this.db
+        .prepare("SELECT * FROM planner_events WHERE id = ?")
+        .get(Number(result.lastInsertRowid)) as RawPlannerEventRow;
+
+      return { kind: "inserted", event: rowToEvent(inserted) };
+    });
+
+    return doAppend();
+  }
+
+  eventsForPlan(planId: string): PersistedPlannerEvent[] {
+    const rows = this.db
+      .prepare(
+        "SELECT * FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
+      )
+      .all(planId) as RawPlannerEventRow[];
+    return rows.map(rowToEvent);
+  }
+}
