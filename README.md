@@ -20,17 +20,8 @@ Container-native personal AI assistant platform focusing on proactive planning, 
 - **Kubernetes Delivery:** Helm chart + raw manifests for workloads, GitHub Actions for CI (Rust, web, container smoke tests, security baseline).
 - **Observability:** OpenTelemetry instrumentation feeding Prometheus, Grafana, Tempo, and Loki; audit evidence persisted to S3-compatible storage.
 
-## Roadmap Snapshot
-Milestones are cumulative; see `docs/product_concept_v1.md` for full details.
-- **M0 – Foundations & Guardrails:** Containerized dev environment, repo governance, CI/security workflows, planner/policy skeletons, memory schema, landing/portal shells, Helm baseline.
-- **M1 – Telegram MVP:** End-to-end planner with policy checks, discovery pipeline, generic executors, wallet integration, watchers, audit console, new-user onboarding funnel.
-- **M2 – Reliability & Capability Memory:** Drift handling, capability memory reuse, cost controls, replay sandbox, production-readiness for Rust/Web services.
-- **M3 – Persona & Voice:** Persona editor, onboarding calibration, voice support, explainability in audio responses.
-- **M4 – Structured Integrations & MCP:** MCP discovery, schema caches, per-vendor capability memories.
-- **M5 – Portal, Privacy & Admin:** Expanded portal (account controls, redaction), audit replay, quotas, compliance (KYC/AML), secrets management.
-- **M6 – Multichannel & GA:** Additional messaging/voice channels, decision queues, branding/marketing site, GA checklist.
-
-M0 tasks are broken into single-day issues (1 developer each) and tracked in GitHub Issues (`Ready` column onwards) following the working agreements below.
+## Roadmap
+See `docs/product_concept_v1.md` for architecture and feature details.
 
 ## Way of Working
 - **Definition of Ready / Done:** See `docs/working_agreements.md` for detailed criteria. No issue enters development without clear acceptance checks, dependencies, and environment readiness; nothing is Done without tests, documentation, observability, and review.
@@ -47,7 +38,7 @@ M0 tasks are broken into single-day issues (1 developer each) and tracked in Git
 - `shared/` – Interface contracts (OpenAPI, protobuf, policy schemas).
 
 ## Getting Started
-1. **Read the concept:** Start with `docs/product_concept_v1.md` to understand goals, architecture, and milestones.
+1. **Read the concept:** Start with `docs/product_concept_v1.md` to understand goals and architecture.
 2. **Review the working agreements:** `docs/working_agreements.md` defines Definition of Ready, Definition of Done, and acceptance-criteria expectations.
 3. **Review contributor workflow:** `CONTRIBUTING.md` covers the dev container setup, required environment files, and smoke tests expected before PRs.
 4. **Set up tooling:** Install Docker, Rust 1.89+, Node 24+ (with npm 11.6+), Helm 3, kubectl 1.30+, and Python 3.13+. Local development will rely on `docker compose` once the services land.

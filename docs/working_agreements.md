@@ -2,7 +2,7 @@
 
 ## 1. Process Overview
 - We track all work in GitHub Issues using the Tyrum project board. Every issue is scoped to roughly one developer day and includes links to the source of truth (e.g., `docs/product_concept_v1.md`).
-- The project board lives at https://github.com/orgs/VirtunetBV/projects/4 and is preloaded with the M0 backlog.
+- The project board lives at https://github.com/orgs/VirtunetBV/projects/4 and is preloaded with the project backlog.
 - Issues move left-to-right through the following default columns: Backlog → Ready → In Progress → Review → Done. "Blocked" is available as a swim lane; blocked items must note the dependency in the issue description.
 - Default labels follow this taxonomy:
   `type:*` (bug, feature, chore), `priority:*` (now, next, later),

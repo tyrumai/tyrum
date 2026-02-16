@@ -15,7 +15,6 @@ WORKDIR /app
 
 COPY Cargo.toml Cargo.lock ./
 COPY shared shared
-COPY patches patches
 COPY services services
 
 RUN cargo build --locked --release --package tyrum-llm

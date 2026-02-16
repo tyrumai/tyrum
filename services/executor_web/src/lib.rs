@@ -14,10 +14,7 @@ use std::{
 };
 
 use crate::telemetry::AttemptContext;
-use playwright::{
-    Playwright,
-    api::{browser::Browser, page::Page},
-};
+use playwright_rs::{Playwright, protocol::Browser, protocol::Page};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::{sync::Mutex, time::sleep};
@@ -130,12 +127,9 @@ pub enum WebExecutorError {
         /// Human-readable explanation.
         reason: &'static str,
     },
-    /// Error reported by Playwright initialization.
-    #[error("playwright initialization failed: {0}")]
-    Playwright(#[from] playwright::Error),
-    /// Error reported by the Playwright driver (async operations).
-    #[error("playwright driver error: {0}")]
-    PlaywrightDriver(#[from] Arc<playwright::Error>),
+    /// Error reported by Playwright initialization or driver operations.
+    #[error("playwright error: {0}")]
+    Playwright(#[from] playwright_rs::Error),
     /// None of the supported browser engines could be launched.
     #[error("unable to launch supported browser: {details}")]
     BrowserUnavailable { details: String },
@@ -351,9 +345,7 @@ fn next_backoff(current: Duration) -> Duration {
 fn is_transient(err: &WebExecutorError) -> bool {
     matches!(
         err,
-        WebExecutorError::Playwright(_)
-            | WebExecutorError::PlaywrightDriver(_)
-            | WebExecutorError::SelectorFallback { .. }
+        WebExecutorError::Playwright(_) | WebExecutorError::SelectorFallback { .. }
     ) || {
         #[cfg(test)]
         {
@@ -368,7 +360,7 @@ fn is_transient(err: &WebExecutorError) -> bool {
 
 #[allow(clippy::cognitive_complexity)]
 async fn run_single_attempt(target: Url, plan: ResolvedActionPlan) -> Result<WebActionOutcome> {
-    let playwright = match Playwright::initialize().await {
+    let playwright = match Playwright::launch().await {
         Ok(driver) => driver,
         Err(err) => {
             tracing::warn!(error = %err, "playwright initialization failed");
@@ -376,10 +368,9 @@ async fn run_single_attempt(target: Url, plan: ResolvedActionPlan) -> Result<Web
         }
     };
     let (browser, browser_flavor) = launch_browser(&playwright).await?;
-    let context = browser.context_builder().build().await?;
-    let page = context.new_page().await?;
+    let page = browser.new_page().await?;
 
-    page.goto_builder(target.as_str()).goto().await?;
+    page.goto(target.as_str(), None).await?;
 
     ensure_selectors_present(&page, &plan).await?;
 
@@ -392,13 +383,14 @@ async fn run_single_attempt(target: Url, plan: ResolvedActionPlan) -> Result<Web
     }
 
     let title = page.title().await?;
-    let current_url: String = page.eval("() => window.location.href").await?;
+    let current_url: String = page
+        .evaluate("() => window.location.href", None::<&()>)
+        .await?;
     let dom_excerpt =
         capture_dom_excerpt(&page, plan.snapshot_selector.as_deref(), &plan.fields).await?;
     let submitted_fields = summarize_fields(&plan.fields, &auto_redacted);
 
-    let _ = page.close(None).await;
-    let _ = context.close().await;
+    let _ = page.close().await;
     let _ = browser.close().await;
 
     Ok(WebActionOutcome {
@@ -553,28 +545,15 @@ async fn launch_browser(playwright: &Playwright) -> Result<(Browser, BrowserFlav
     // Attempt Chromium first for parity with other runtimes; fall back to
     // WebKit on platforms where Chromium binaries are unavailable (e.g.,
     // macOS 15 at the time of writing).
-    if let Err(err) = playwright.install_chromium() {
-        notes.push(format!("chromium install: {err}"));
-    }
-
-    match playwright
-        .chromium()
-        .launcher()
-        .headless(true)
-        .launch()
-        .await
-    {
+    // Browsers must be pre-installed via `npx playwright install`.
+    match playwright.chromium().launch().await {
         Ok(browser) => return Ok((browser, BrowserFlavor::Chromium)),
         Err(err) => {
             notes.push(format!("chromium launch: {err}"));
         }
     }
 
-    if let Err(err) = playwright.install_webkit() {
-        notes.push(format!("webkit install: {err}"));
-    }
-
-    match playwright.webkit().launcher().headless(true).launch().await {
+    match playwright.webkit().launch().await {
         Ok(browser) => Ok((browser, BrowserFlavor::Webkit)),
         Err(err) => {
             notes.push(format!("webkit launch: {err}"));
@@ -611,17 +590,12 @@ struct SubmitActionSpec {
     wait_after_ms: Option<u64>,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum SubmitActionKind {
+    #[default]
     Click,
     Submit,
-}
-
-impl Default for SubmitActionKind {
-    fn default() -> Self {
-        Self::Click
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -926,8 +900,9 @@ fn parse_web_action_options(action: &ActionPrimitive) -> Result<WebActionOptions
 
 async fn fill_fields(page: &Page, fields: &[ResolvedFieldSpec]) -> Result<()> {
     for field in fields {
-        page.fill_builder(&field.selector, &field.value)
-            .fill()
+        page.locator(&field.selector)
+            .await
+            .fill(&field.value, None)
             .await?;
     }
     Ok(())
@@ -941,12 +916,23 @@ fn parse_selector_argument(value: &serde_json::Value, argument: &'static str) ->
 async fn submit_form(page: &Page, submit: &ResolvedSubmitSpec) -> Result<()> {
     match submit.kind {
         SubmitActionKind::Click => {
-            page.click_builder(&submit.selector).click().await?;
+            page.locator(&submit.selector)
+                .await
+                .click(None)
+                .await?;
         }
         SubmitActionKind::Submit => {
-            page.evaluate_on_selector::<_, bool>(
-                &submit.selector,
-                "(element) => {
+            #[derive(Serialize)]
+            struct SubmitArgs<'a> {
+                selector: &'a str,
+            }
+            let args = SubmitArgs {
+                selector: &submit.selector,
+            };
+            let _: bool = page
+                .evaluate(
+                    "(config) => {
+                        const element = document.querySelector(config.selector);
                         if (!element) {
                             throw new Error('submit selector not found');
                         }
@@ -964,9 +950,9 @@ async fn submit_form(page: &Page, submit: &ResolvedSubmitSpec) -> Result<()> {
 
                         throw new Error('submit selector is not associated with a form');
                     }",
-                Option::<()>::None,
-            )
-            .await?;
+                    Some(&args),
+                )
+                .await?;
         }
     }
 
@@ -974,13 +960,29 @@ async fn submit_form(page: &Page, submit: &ResolvedSubmitSpec) -> Result<()> {
 }
 
 async fn wait_for_post_submit(page: &Page, submit: &ResolvedSubmitSpec) -> Result<()> {
-    let _ = page
-        .wait_for_function_builder("() => document.readyState === 'complete'")
-        .wait_for_function()
-        .await?;
+    const POLL_INTERVAL: Duration = Duration::from_millis(50);
+    const MAX_WAIT: Duration = Duration::from_secs(30);
+
+    let deadline = tokio::time::Instant::now() + MAX_WAIT;
+    loop {
+        let ready: bool = page
+            .evaluate(
+                "() => document.readyState === 'complete'",
+                None::<&()>,
+            )
+            .await?;
+        if ready {
+            break;
+        }
+        if tokio::time::Instant::now() >= deadline {
+            tracing::warn!("timed out waiting for document.readyState === 'complete'");
+            break;
+        }
+        sleep(POLL_INTERVAL).await;
+    }
 
     if let Some(wait_ms) = submit.wait_after_ms {
-        page.wait_for_timeout(wait_ms as f64).await;
+        sleep(Duration::from_millis(wait_ms)).await;
     }
 
     Ok(())
@@ -1089,7 +1091,7 @@ async fn snapshot_with_selector(
 
                 return clone.outerHTML;
             }",
-            args,
+            Some(&args),
         )
         .await?;
 
@@ -1161,7 +1163,7 @@ async fn identify_sensitive_fields(
 
                 return sensitive;
             }",
-            args,
+            Some(&args),
         )
         .await?;
 

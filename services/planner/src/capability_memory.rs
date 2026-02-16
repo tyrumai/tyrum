@@ -168,8 +168,5 @@ struct LookupContext<'a> {
 }
 
 fn clamp_latency(millis: u128) -> i64 {
-    match i64::try_from(millis) {
-        Ok(value) => value,
-        Err(_) => i64::MAX,
-    }
+    i64::try_from(millis).unwrap_or(i64::MAX)
 }
