@@ -1,0 +1,33 @@
+/**
+ * Policy check route — thin wrapper around evaluatePolicy.
+ */
+
+import { Hono } from "hono";
+import { PolicyCheckRequest } from "@tyrum/schemas";
+import {
+  evaluatePolicy,
+  validatePolicyRequest,
+} from "../modules/policy/engine.js";
+
+const policy = new Hono();
+
+policy.post("/policy/check", async (c) => {
+  const body: unknown = await c.req.json();
+  const parsed = PolicyCheckRequest.safeParse(body);
+  if (!parsed.success) {
+    return c.json(
+      { error: "invalid_request", message: parsed.error.message },
+      400,
+    );
+  }
+
+  const validationError = validatePolicyRequest(parsed.data);
+  if (validationError) {
+    return c.json(validationError, 400);
+  }
+
+  const decision = evaluatePolicy(parsed.data);
+  return c.json(decision);
+});
+
+export { policy };
