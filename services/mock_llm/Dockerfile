@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM ghcr.io/rhernaus/tyrum/base-images/python:3.12-slim AS base
+FROM public.ecr.aws/docker/library/python:3.12-slim AS base
 
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
