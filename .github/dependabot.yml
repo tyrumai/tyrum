@@ -1,17 +1,5 @@
 version: 2
 updates:
-  - package-ecosystem: "cargo"
-    directory: "/"
-    schedule:
-      interval: "daily"
-    groups:
-      cargo-minor-patch:
-        update-types:
-          - "minor"
-          - "patch"
-      cargo-major:
-        update-types:
-          - "major"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -20,6 +8,18 @@ updates:
       github-actions:
         patterns:
           - "*"
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    groups:
+      npm-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+      npm-major:
+        update-types:
+          - "major"
   - package-ecosystem: "npm"
     directory: "/web"
     schedule:
@@ -32,19 +32,3 @@ updates:
       npm-major:
         update-types:
           - "major"
-  - package-ecosystem: "docker"
-    directory: "/"
-    schedule:
-      interval: "daily"
-    groups:
-      docker:
-        patterns:
-          - "*"
-  - package-ecosystem: "helm"
-    directory: "/infra/helm/tyrum-core"
-    schedule:
-      interval: "daily"
-    groups:
-      helm:
-        patterns:
-          - "*"
