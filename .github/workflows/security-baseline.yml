@@ -43,7 +43,7 @@ jobs:
         run: pnpm --filter tyrum-portal audit --prod --audit-level high
 
       - name: Report failure for triage
-        if: failure()
+        if: failure() && github.event_name == 'schedule'
         uses: actions/github-script@v8
         with:
           github-token: ${{ github.token }}
