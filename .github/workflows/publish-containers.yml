@@ -31,7 +31,7 @@ env:
 jobs:
   publish:
     name: Publish ${{ matrix.title }} image
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write

@@ -16,7 +16,7 @@ concurrency:
 jobs:
   containers:
     name: Build and smoke test ${{ matrix.title }} image
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
