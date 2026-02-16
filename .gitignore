@@ -1,20 +1,7 @@
-# Terraform artifacts
-.terraform/
-*.tfstate
-*.tfstate.*
-terraform.tfstate
-terraform.tfstate.backup
-target/
-**/*.rs.bk
-
-# Rust artifacts
-.cargo/
-*.profraw
-*.rlib
-*.rmeta
-rustfmt.toml
-.rustc_info.json
-*.cargo-lock
+# Node.js
+node_modules/
+dist/
+*.tsbuildinfo
 
 # Database files
 *.db
@@ -83,3 +70,6 @@ web/.next/
 web/out/
 web/.turbo/
 .lighthouseci/
+
+# Git worktrees
+.worktrees/
