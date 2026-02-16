@@ -22,7 +22,7 @@
   },
   "remoteUser": "vscode",
   "postCreateCommand": "npm install -g npm@11.8.0 && corepack enable && corepack prepare pnpm@10 --activate",
-  "updateContentCommand": "pnpm install && npm install --prefix web",
+  "updateContentCommand": "pnpm install",
   "workspaceFolder": "/workspaces/tyrum",
   "forwardPorts": [3000, 8080, 8081]
 }

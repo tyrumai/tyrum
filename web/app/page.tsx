@@ -1,5 +1,4 @@
 import React from "react";
-import type { UnsafeUnwrappedSearchParams } from "next/server";
 import WaitlistCta from "./waitlist-cta";
 import {
   CTA_FROM_PARAM,
@@ -47,9 +46,9 @@ function unwrapSearchParams(
     return searchParams as unknown as SearchParamRecord;
   }
 
-  return searchParams as unknown as UnsafeUnwrappedSearchParams<
-    Promise<SearchParamRecord>
-  >;
+  // Next.js 16 no longer exports UnsafeUnwrappedSearchParams.
+  // Tests pass a promise-like object with enumerable keys for sync render.
+  return searchParams as unknown as SearchParamRecord;
 }
 
 function extractParamValue(

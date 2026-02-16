@@ -33,6 +33,5 @@ export function trackAnalytics(
   }
 
   // Stub fallback so we can validate payloads locally without Plausible/Segment.
-  // eslint-disable-next-line no-console -- intentional observability fallback
   console.info(`[analytics] ${event}`, properties);
 }

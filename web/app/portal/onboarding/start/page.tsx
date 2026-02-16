@@ -1,5 +1,4 @@
 import React from "react";
-import type { UnsafeUnwrappedSearchParams } from "next/server";
 import FlashNotice from "./flash-notice";
 import {
   CAMPAIGN_PARAM_KEYS,
@@ -40,9 +39,9 @@ function unwrapSearchParams(
     return searchParams as unknown as SearchParamRecord;
   }
 
-  return searchParams as unknown as UnsafeUnwrappedSearchParams<
-    Promise<SearchParamRecord>
-  >;
+  // Next.js 16 no longer exports UnsafeUnwrappedSearchParams.
+  // Tests pass a promise-like object with enumerable keys for sync render.
+  return searchParams as unknown as SearchParamRecord;
 }
 
 function extractParamValue(

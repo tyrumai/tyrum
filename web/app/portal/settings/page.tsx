@@ -768,7 +768,7 @@ export default function AccountSettingsPage() {
     };
 
     loadProfiles();
-  }, [raiseToast]);
+  }, [extractPronunciationDict, raiseToast]);
 
   return (
     <main className="portal-settings" aria-labelledby="settings-heading">
