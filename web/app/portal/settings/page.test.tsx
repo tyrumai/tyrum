@@ -23,13 +23,14 @@ describe("AccountSettingsPage", () => {
     global.Audio = vi
       .fn()
       .mockImplementation(
-        () =>
-          ({
+        function () {
+          return {
             src: "",
             currentTime: 0,
             play: audioPlayMock,
             pause: audioPauseMock,
-          }) as unknown as HTMLAudioElement,
+          } as unknown as HTMLAudioElement;
+        },
       ) as unknown as typeof Audio;
     global.fetch = vi
       .fn()

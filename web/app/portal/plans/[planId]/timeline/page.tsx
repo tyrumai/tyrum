@@ -202,20 +202,19 @@ export default function PlanTimelinePage() {
     return ensureString(planIdParam)?.trim() ?? "";
   }, [planIdParam]);
 
-  const [state, setState] = useState<FetchState>({ status: "idle" });
+  const [state, setState] = useState<FetchState>(() =>
+    planId
+      ? { status: "loading" }
+      : { status: "error", message: "Plan identifier is missing from the URL." },
+  );
 
   useEffect(() => {
     if (!planId) {
-      setState({
-        status: "error",
-        message: "Plan identifier is missing from the URL.",
-      });
       return;
     }
 
     let aborted = false;
     const controller = new AbortController();
-    setState({ status: "loading" });
 
     fetch(`/api/audit/plan/${encodeURIComponent(planId)}`, {
       method: "GET",

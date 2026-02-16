@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint app",
     "test": "node ./scripts/run-tests.mjs",
     "lighthouse:ci": "lhci autorun --config=./lighthouserc.mobile.json && lhci autorun --config=./lighthouserc.desktop.json"
   },
@@ -25,7 +25,7 @@
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
     "axe-core": "4.11.0",
-    "eslint": "10.0.0",
+    "eslint": "9.37.0",
     "eslint-config-next": "16.1.6",
     "jsdom": "28.1.0",
     "typescript": "5.6.3",

@@ -66,6 +66,8 @@ export default function WaitlistCta() {
   const [message, setMessage] = useState(INITIAL_MESSAGE);
   const [campaignParams, setCampaignParams] = useState<CampaignParams>({});
 
+  // Mount-only: read URL params after hydration to avoid SSR mismatch.
+  /* eslint-disable react-hooks/set-state-in-effect -- hydration-safe browser-state init */
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
@@ -94,6 +96,7 @@ export default function WaitlistCta() {
       setMessage(INITIAL_MESSAGE);
     }
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const isDisabled = state === "loading";
 

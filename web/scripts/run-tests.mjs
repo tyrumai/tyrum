@@ -19,10 +19,6 @@ if (sequenced) {
     forwardedArgs.push('--maxWorkers', '1');
   }
 
-  if (!forwardedArgs.some((arg) => arg === '--minWorkers' || arg.startsWith('--minWorkers='))) {
-    forwardedArgs.push('--minWorkers', '1');
-  }
-
   const hasFileParallelOverride = forwardedArgs.some((arg) =>
     arg === '--no-file-parallelism' || arg.startsWith('--fileParallelism')
   );
