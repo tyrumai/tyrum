@@ -13,6 +13,6 @@
     "build": "tsdown src/index.ts --format esm --dts && node ./scripts/write-dts-entry.mjs"
   },
   "dependencies": {
-    "zod": "^3.25.67"
+    "zod": "^4.3.6"
   }
 }
