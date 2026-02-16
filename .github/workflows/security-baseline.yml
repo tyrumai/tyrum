@@ -7,6 +7,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   baseline:
@@ -19,154 +22,26 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Detect dependency manifests
-        id: detect
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [ -f Cargo.lock ]; then
-            echo "has-cargo-lock=true" >>"$GITHUB_OUTPUT"
-          else
-            echo "has-cargo-lock=false" >>"$GITHUB_OUTPUT"
-          fi
-
-          node_lockfiles=$(git ls-files 2>/dev/null | grep 'package-lock\.json$' || true)
-          if [ -n "$node_lockfiles" ]; then
-            node_lockfiles=$(printf '%s\n' "$node_lockfiles" | sort -u)
-            {
-              echo "node_lockfiles<<EOF"
-              printf '%s\n' "$node_lockfiles"
-              echo "EOF"
-            } >>"$GITHUB_OUTPUT"
-          else
-            echo "node_lockfiles=" >>"$GITHUB_OUTPUT"
-          fi
-
-          node_manifests=$(git ls-files 2>/dev/null | grep -E 'package\.json$' || true)
-          if [ -n "$node_manifests" ]; then
-            node_manifests=$(printf '%s\n' "$node_manifests" | sort -u)
-            {
-              echo "node_manifests<<EOF"
-              printf '%s\n' "$node_manifests"
-              echo "EOF"
-            } >>"$GITHUB_OUTPUT"
-            node_dirs=$(NODE_MANIFESTS="$node_manifests" python3 -c 'import os; paths=[line for line in os.environ.get("NODE_MANIFESTS", "").splitlines() if line]; dirs=sorted({os.path.dirname(path) or "." for path in paths}); print("\n".join(dirs))')
-            echo "has-node=true" >>"$GITHUB_OUTPUT"
-            {
-              echo "node_dirs<<EOF"
-              printf '%s\n' "$node_dirs"
-              echo "EOF"
-            } >>"$GITHUB_OUTPUT"
-          else
-            echo "has-node=false" >>"$GITHUB_OUTPUT"
-            echo "node_manifests=" >>"$GITHUB_OUTPUT"
-            echo "node_dirs=" >>"$GITHUB_OUTPUT"
-          fi
-
-          if [ -n "$(git ls-files '*.tf' '*.tfvars')" ]; then
-            echo "has-terraform=true" >>"$GITHUB_OUTPUT"
-          else
-            echo "has-terraform=false" >>"$GITHUB_OUTPUT"
-          fi
-
-          if git ls-files 2>/dev/null | grep -Eq '(^infra/.*\.ya?ml$|/k8s/.*\.ya?ml$|/manifests/.*\.ya?ml$)'; then
-            echo "has-iac=true" >>"$GITHUB_OUTPUT"
-          else
-            echo "has-iac=false" >>"$GITHUB_OUTPUT"
-          fi
-
-      - name: Install system dependencies
-        if: steps.detect.outputs.has-cargo-lock == 'true'
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes pkg-config libssl-dev
-
-      - name: Setup Rust
-        if: steps.detect.outputs.has-cargo-lock == 'true'
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install cargo-audit
-        if: steps.detect.outputs.has-cargo-lock == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo install cargo-audit --locked --force
-
-      - name: cargo audit
-        if: steps.detect.outputs.has-cargo-lock == 'true'
-        run: cargo audit
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
 
       - name: Setup Node.js
-        if: steps.detect.outputs.has-node == 'true'
         uses: actions/setup-node@v6
         with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: ${{ steps.detect.outputs.node_lockfiles || steps.detect.outputs.node_manifests }}
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
-      - name: Ensure npm 11.6
-        if: steps.detect.outputs.has-node == 'true'
-        run: npm install -g npm@11.6.0
+      - name: Install dependencies
+        run: pnpm install
 
-      - name: Prepare npm dependencies
-        if: steps.detect.outputs.has-node == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          node_dirs="${{ steps.detect.outputs.node_dirs }}"
-          if [ -z "$node_dirs" ]; then
-            echo "No Node projects detected; skipping install." >>"$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          printf '%s\n' "$node_dirs" | while IFS= read -r dir; do
-            [ -n "$dir" ] || continue
-            echo "Preparing dependencies for $dir"
-            if [ ! -f "$dir/package-lock.json" ]; then
-              npm --prefix "$dir" install --package-lock-only --ignore-scripts
-            fi
-            npm --prefix "$dir" ci --ignore-scripts
-          done
+      - name: pnpm audit (workspace packages)
+        run: pnpm audit
 
-      - name: npm audit --audit-level high
-        if: steps.detect.outputs.has-node == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          node_dirs="${{ steps.detect.outputs.node_dirs }}"
-          if [ -z "$node_dirs" ]; then
-            echo "No Node projects detected; skipping audit." >>"$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          printf '%s\n' "$node_dirs" | while IFS= read -r dir; do
-            [ -n "$dir" ] || continue
-            echo "Running npm audit in $dir"
-            npm --prefix "$dir" audit --audit-level high
-          done
-
-      - name: Install tfsec
-        if: steps.detect.outputs.has-terraform == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -sSL https://github.com/aquasecurity/tfsec/releases/latest/download/tfsec-linux-amd64.tar.gz | tar -xz
-          sudo mv tfsec /usr/local/bin/
-
-      - name: tfsec scan
-        if: steps.detect.outputs.has-terraform == 'true'
-        run: tfsec .
-
-      - name: Setup Trivy
-        if: steps.detect.outputs.has-iac == 'true'
-        uses: aquasecurity/setup-trivy@v0.2.5
-
-      - name: trivy config .
-        if: steps.detect.outputs.has-iac == 'true'
-        run: trivy config .
-
-      - name: Security baseline summary
-        if: steps.detect.outputs.has-cargo-lock != 'true' && steps.detect.outputs.has-node != 'true' && steps.detect.outputs.has-terraform != 'true' && steps.detect.outputs.has-iac != 'true'
-        run: echo "No manifests detected; security baseline skipped." >>"$GITHUB_STEP_SUMMARY"
+      - name: Audit web dependencies
+        working-directory: web
+        run: npm audit --omit dev --audit-level high
 
       - name: Report failure for triage
         if: failure()

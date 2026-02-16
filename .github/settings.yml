@@ -15,7 +15,8 @@ branches:
       required_status_checks:
         strict: true
         contexts:
-          - ci-web
+          - ci / Packages
+          - ci / Web
           - security-baseline
       required_pull_request_reviews:
         require_code_owner_reviews: true
