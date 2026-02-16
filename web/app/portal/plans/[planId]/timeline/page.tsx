@@ -208,13 +208,16 @@ export default function PlanTimelinePage() {
       : { status: "error", message: "Plan identifier is missing from the URL." },
   );
 
+  /* eslint-disable react-hooks/set-state-in-effect -- state must reset on planId change */
   useEffect(() => {
     if (!planId) {
+      setState({ status: "error", message: "Plan identifier is missing from the URL." });
       return;
     }
 
     let aborted = false;
     const controller = new AbortController();
+    setState({ status: "loading" });
 
     fetch(`/api/audit/plan/${encodeURIComponent(planId)}`, {
       method: "GET",
@@ -268,6 +271,7 @@ export default function PlanTimelinePage() {
       controller.abort();
     };
   }, [planId]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const timeline =
     state.status === "loaded" ? state.timeline : undefined;

@@ -15,18 +15,20 @@ if command -v kubeconform >/dev/null 2>&1; then
 fi
 
 if command -v kubectl >/dev/null 2>&1; then
-  failed=0
+  errors=0
   for manifest in "$@"; do
     [ -f "${manifest}" ] || continue
-    if ! kubectl apply --dry-run=client --validate=false -f "${manifest}" 2>/dev/null; then
-      echo "warning: kubectl could not validate ${manifest} (no cluster credentials?)" >&2
-      failed=1
-    fi
+    stderr="$(kubectl apply --dry-run=client --validate=false -f "${manifest}" 2>&1 >/dev/null)" || {
+      if printf '%s' "$stderr" | grep -qi 'credential\|unauthorized\|unable to recognize'; then
+        echo "warning: kubectl could not validate ${manifest} (no cluster credentials)" >&2
+        echo "hint: install kubeconform for offline manifest validation" >&2
+        exit 0
+      fi
+      echo "error: ${manifest}: ${stderr}" >&2
+      errors=1
+    }
   done
-  if [ "$failed" -eq 1 ]; then
-    echo "hint: install kubeconform for offline manifest validation" >&2
-  fi
-  exit 0
+  exit "$errors"
 fi
 
 echo "kubeconform or kubectl not found; install one to validate Kubernetes manifests." >&2
