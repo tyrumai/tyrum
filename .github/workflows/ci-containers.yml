@@ -106,7 +106,7 @@ jobs:
             context: .
             dockerfile: Dockerfile.vllm
             smoke: false
-            build_arg: BASE_IMAGE=python:3.11-slim
+            build_arg: BASE_IMAGE=ghcr.io/rhernaus/base-images/python:3.11-slim
           - id: web
             title: Web
             context: web
@@ -138,7 +138,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          image="ghcr.io/virtunetbv/tyrum-ci-${{ matrix.id }}:${GITHUB_SHA}"
+          image="ghcr.io/rhernaus/tyrum-ci-${{ matrix.id }}:${GITHUB_SHA}"
           cmd=(docker buildx build --progress plain --load \
             --file "${{ matrix.dockerfile }}" \
             --tag "$image")
@@ -169,7 +169,7 @@ jobs:
               -e POSTGRES_USER=tyrum \
               -e POSTGRES_PASSWORD=tyrum_dev_password \
               -e POSTGRES_DB=tyrum_dev \
-              pgvector/pgvector:pg16 >/dev/null
+              ghcr.io/rhernaus/base-images/pgvector-pg16:pg16 >/dev/null
 
             for attempt in $(seq 1 40); do
               if docker exec "$db_container" pg_isready -U tyrum -d tyrum_dev >/dev/null 2>&1; then
