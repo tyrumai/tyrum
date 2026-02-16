@@ -83,3 +83,6 @@ web/.next/
 web/out/
 web/.turbo/
 .lighthouseci/
+
+# Git worktrees
+.worktrees/
