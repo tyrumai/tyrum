@@ -6,7 +6,7 @@ authors = ["VirtunetBV <oss@virtunet.example>"]
 description = "Tyrum API service skeleton"
 
 [dependencies]
-axum = { version = "0.7", features = ["json"] }
+axum = { version = "0.8", features = ["json"] }
 chrono = { version = "0.4", features = ["serde"] }
 once_cell = "1.19"
 opentelemetry = { version = "0.31", features = ["metrics", "logs"] }
@@ -29,13 +29,13 @@ sha2 = "0.10"
 anyhow = "1"
 tyrum-shared = { path = "../../shared/tyrum-shared" }
 uuid = { version = "1", features = ["serde", "v4"] }
-redis = { version = "0.32", features = ["tokio-comp", "connection-manager"] }
+redis = { version = "1.0", features = ["tokio-comp", "connection-manager"] }
 
 [dev-dependencies]
-axum = { version = "0.7", features = ["json"] }
+axum = { version = "0.8", features = ["json"] }
 http-body-util = "0.1"
 serde_json = "1"
-testcontainers = "0.18"
+testcontainers = "0.27"
 tower = "0.5"
 tyrum-planner = { path = "../planner" }
-serial_test = "2"
+serial_test = "3"
