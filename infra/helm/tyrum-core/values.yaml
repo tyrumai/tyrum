@@ -1068,7 +1068,7 @@ services:
     replicaCount: 1
     image:
       repository: grafana/loki
-      tag: 2.9.4
+      tag: 3.5.7
       pullPolicy: IfNotPresent
     service:
       enabled: true
