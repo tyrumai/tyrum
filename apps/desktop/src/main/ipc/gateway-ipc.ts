@@ -49,7 +49,7 @@ export function registerGatewayIpc(window: BrowserWindow): GatewayManager {
       host: "127.0.0.1",
     });
 
-    return { status: "running", port: config.embedded.port, wsToken };
+    return { status: "running", port: config.embedded.port, tokenPreview: wsToken.slice(-8) };
   });
 
   ipcMain.handle("gateway:stop", async () => {
