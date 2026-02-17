@@ -100,30 +100,35 @@ export class JobQueue {
 
   /**
    * Dequeue the next pending job for a plan, marking it as running.
+   * Uses a transaction to prevent TOCTOU races under concurrent access.
    * Returns undefined if no pending jobs remain.
    */
   dequeue(planId: string): Job | undefined {
     const now = new Date().toISOString();
 
-    const row = this.db
-      .prepare(
-        `SELECT * FROM jobs
-         WHERE plan_id = ? AND status = 'pending'
-         ORDER BY step_index ASC
-         LIMIT 1`,
-      )
-      .get(planId) as JobRow | undefined;
+    const txn = this.db.transaction(() => {
+      const row = this.db
+        .prepare(
+          `SELECT * FROM jobs
+           WHERE plan_id = ? AND status = 'pending'
+           ORDER BY step_index ASC
+           LIMIT 1`,
+        )
+        .get(planId) as JobRow | undefined;
 
-    if (!row) return undefined;
+      if (!row) return undefined;
 
-    this.db
-      .prepare(
-        `UPDATE jobs SET status = 'running', attempt = attempt + 1, started_at = ?
-         WHERE id = ?`,
-      )
-      .run(now, row.id);
+      this.db
+        .prepare(
+          `UPDATE jobs SET status = 'running', attempt = attempt + 1, started_at = ?
+           WHERE id = ? AND status = 'pending'`,
+        )
+        .run(now, row.id);
 
-    return this.getById(row.id);
+      return this.getById(row.id);
+    });
+
+    return txn();
   }
 
   markCompleted(id: string, result: unknown): void {

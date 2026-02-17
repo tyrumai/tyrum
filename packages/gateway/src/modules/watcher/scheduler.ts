@@ -115,9 +115,10 @@ export class WatcherScheduler {
       },
     );
 
-    this.eventBus.emit("plan:completed", {
+    this.eventBus.emit("watcher:fired", {
+      watcherId: watcher.id,
       planId: watcher.plan_id,
-      stepsExecuted: 0,
+      triggerType: "periodic",
     });
   }
 }

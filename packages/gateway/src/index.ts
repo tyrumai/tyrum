@@ -56,10 +56,11 @@ async function main(): Promise<void> {
   const token = await tokenStore.initialize();
 
   if (!isLocalOnly) {
+    const tokenPath = join(tyrumHome, ".admin-token");
     console.log("---");
-    console.log(`Admin token: ${token}`);
-    console.log("Use this token to authenticate API requests:");
-    console.log(`  Authorization: Bearer ${token}`);
+    console.log("Gateway is exposed on a non-local interface.");
+    console.log(`Admin token stored at: ${tokenPath}`);
+    console.log("Read it with: cat " + tokenPath);
     console.log("---");
   }
 

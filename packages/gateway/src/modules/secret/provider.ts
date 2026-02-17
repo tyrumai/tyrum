@@ -1,5 +1,5 @@
 import { randomUUID, createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from "node:crypto";
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFile, writeFile, access } from "node:fs/promises";
 import type { SecretHandle as SecretHandleT } from "@tyrum/schemas";
 
 /** Interface for all secret providers. */
@@ -65,7 +65,7 @@ export class FileSecretProvider implements SecretProvider {
   }
 
   async resolve(handle: SecretHandleT): Promise<string | null> {
-    const store = this.readStore();
+    const store = await this.readStore();
     const entry = store.handles[handle.handle_id];
     if (!entry) return null;
     return this.decrypt(entry);
@@ -80,23 +80,23 @@ export class FileSecretProvider implements SecretProvider {
     };
 
     const encrypted = this.encrypt(value);
-    const store = this.readStore();
+    const store = await this.readStore();
     store.handles[handle.handle_id] = { handle, ...encrypted };
-    this.writeStore(store);
+    await this.writeStore(store);
 
     return handle;
   }
 
   async revoke(handleId: string): Promise<boolean> {
-    const store = this.readStore();
+    const store = await this.readStore();
     if (!(handleId in store.handles)) return false;
     delete store.handles[handleId];
-    this.writeStore(store);
+    await this.writeStore(store);
     return true;
   }
 
   async list(): Promise<SecretHandleT[]> {
-    const store = this.readStore();
+    const store = await this.readStore();
     return Object.values(store.handles).map((e) => e.handle);
   }
 
@@ -126,19 +126,21 @@ export class FileSecretProvider implements SecretProvider {
     return decrypted.toString("utf8");
   }
 
-  private readStore(): SecretStore {
-    if (!existsSync(this.secretsPath)) {
+  private async readStore(): Promise<SecretStore> {
+    try {
+      await access(this.secretsPath);
+    } catch {
       return { handles: {} };
     }
     try {
-      const raw = readFileSync(this.secretsPath, "utf8");
+      const raw = await readFile(this.secretsPath, "utf8");
       return JSON.parse(raw) as SecretStore;
     } catch {
       return { handles: {} };
     }
   }
 
-  private writeStore(store: SecretStore): void {
-    writeFileSync(this.secretsPath, JSON.stringify(store), "utf8");
+  private async writeStore(store: SecretStore): Promise<void> {
+    await writeFile(this.secretsPath, JSON.stringify(store), { mode: 0o600 });
   }
 }

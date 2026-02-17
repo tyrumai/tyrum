@@ -6,23 +6,28 @@
  */
 
 import { Hono } from "hono";
-import type { ApprovalDal } from "../modules/approval/dal.js";
+import type { ApprovalDal, ApprovalStatus } from "../modules/approval/dal.js";
+
+const VALID_STATUSES = new Set<ApprovalStatus>(["pending", "approved", "denied", "expired"]);
 
 export function createApprovalRoutes(approvalDal: ApprovalDal): Hono {
   const app = new Hono();
 
   /** List approvals. Defaults to pending; use ?status= to filter. */
   app.get("/approvals", (c) => {
-    const status = c.req.query("status");
+    const status = c.req.query("status") as ApprovalStatus | undefined;
 
-    if (status === "pending" || status === undefined) {
-      const approvals = approvalDal.getPending();
-      return c.json({ approvals });
+    if (status && !VALID_STATUSES.has(status)) {
+      return c.json(
+        {
+          error: "invalid_request",
+          message: `Invalid status. Allowed: ${[...VALID_STATUSES].join(", ")}`,
+        },
+        400,
+      );
     }
 
-    // For non-pending statuses, there's no dedicated query method,
-    // so we return pending as the default list.
-    const approvals = approvalDal.getPending();
+    const approvals = approvalDal.getByStatus(status ?? "pending");
     return c.json({ approvals });
   });
 
