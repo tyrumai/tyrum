@@ -39,12 +39,18 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
+      '@hono/node-server':
+        specifier: ^1.19.9
+        version: 1.19.9(hono@4.11.9)
       '@types/react':
         specifier: ^19.2.0
         version: 19.2.14
       '@types/react-dom':
         specifier: ^19.2.0
         version: 19.2.3(@types/react@19.2.14)
+      '@tyrum/gateway':
+        specifier: workspace:*
+        version: link:../../packages/gateway
       '@vitejs/plugin-react':
         specifier: ^4.5.0
         version: 4.7.0(vite@7.3.1(@types/node@25.2.3)(jiti@2.6.1)(yaml@2.8.2))
