@@ -2,7 +2,7 @@ import { z } from "zod";
 import { ActionPrimitive, ActionPrimitiveKind } from "./planner.js";
 
 /** Client capability kinds. */
-export const ClientCapability = z.enum(["playwright", "android", "cli", "http"]);
+export const ClientCapability = z.enum(["playwright", "android", "cli", "http", "desktop"]);
 export type ClientCapability = z.infer<typeof ClientCapability>;
 
 // --- Client → Gateway messages ---
@@ -96,6 +96,7 @@ const CAPABILITY_MAP: Partial<Record<ActionPrimitiveKind, ClientCapability>> = {
   Android: "android",
   CLI: "cli",
   Http: "http",
+  Desktop: "desktop",
 };
 
 export function requiredCapability(
