@@ -163,7 +163,7 @@ export class McpManager {
       return descriptors;
     } catch {
       // Degrade gracefully if the server isn't reachable or misbehaves.
-      entry.toolsCache = [];
+      // Do not cache failures: transient discovery errors should be retried on a later call.
       return [];
     }
   }
