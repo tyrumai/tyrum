@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import type { ActionPrimitive, ClientCapability } from "@tyrum/schemas";
+import { evaluatePostcondition, PostconditionError } from "@tyrum/schemas";
+import type { EvaluationContext } from "@tyrum/schemas";
 import type { CapabilityProvider, TaskResult } from "@tyrum/client";
 
 const MAX_OUTPUT_BYTES = 1_000_000; // 1MB output cap
@@ -68,16 +70,71 @@ export class CliProvider implements CapabilityProvider {
       });
 
       child.on("close", (code) => {
-        resolveResult({
-          success: code === 0,
-          evidence: {
-            exit_code: code,
-            stdout: stdout.slice(0, MAX_OUTPUT_BYTES),
-            stderr: stderr.slice(0, MAX_OUTPUT_BYTES),
-            duration_ms: Date.now() - start,
-          },
-          error: code !== 0 ? `Process exited with code ${code}` : undefined,
-        });
+        const evidence: Record<string, unknown> = {
+          exit_code: code,
+          stdout: stdout.slice(0, MAX_OUTPUT_BYTES),
+          stderr: stderr.slice(0, MAX_OUTPUT_BYTES),
+          duration_ms: Date.now() - start,
+        };
+
+        // If the command itself failed, skip postcondition evaluation
+        if (code !== 0) {
+          resolveResult({
+            success: false,
+            evidence,
+            error: `Process exited with code ${code}`,
+          });
+          return;
+        }
+
+        // Evaluate postcondition if present
+        if (action.postcondition != null) {
+          try {
+            // Try to parse stdout as JSON for json_path assertions
+            let jsonContext: unknown;
+            try {
+              jsonContext = JSON.parse(stdout);
+            } catch {
+              // stdout is not JSON — that's fine, json_path assertions will
+              // fail with missing_evidence which we catch below
+            }
+
+            const evalContext: EvaluationContext = {
+              json: jsonContext,
+            };
+
+            const report = evaluatePostcondition(
+              action.postcondition,
+              evalContext,
+            );
+            evidence.postcondition = report;
+
+            if (!report.passed) {
+              resolveResult({
+                success: false,
+                evidence,
+                error: `Command succeeded but postcondition failed: ${report.assertions
+                  .filter((a) => a.status === "failed")
+                  .map((a) => a.message)
+                  .join("; ")}`,
+              });
+              return;
+            }
+          } catch (err) {
+            if (err instanceof PostconditionError) {
+              evidence.postcondition = { passed: false, error: err.message };
+              resolveResult({
+                success: false,
+                evidence,
+                error: `Postcondition evaluation error: ${err.message}`,
+              });
+              return;
+            }
+            throw err;
+          }
+        }
+
+        resolveResult({ success: true, evidence });
       });
 
       child.on("error", (err) => {
