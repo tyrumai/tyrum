@@ -17,8 +17,6 @@ export {
   ActionPostcondition,
   ActionPrimitiveKind,
   ActionPrimitive,
-  PamProfileRef,
-  PlanUserContext,
   PlanRequest,
   PlanSummary,
   PlanEscalation,

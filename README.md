@@ -1,9 +1,10 @@
 # Tyrum
 
-Personal AI assistant platform focusing on proactive planning, strong guardrails, and explainable automation. Clients (browser, desktop, phone) connect via WebSocket; a single gateway process orchestrates planning, policy, memory, and LLM integration, then dispatches execution tasks to connected clients.
+Self-hosted personal AI assistant platform with a single-instance, single-user runtime. The default profile is local-first and runs without application-layer authentication; services bind to localhost by default.
 
 ## Overview
 - **Vision:** A chat/voice-native personal assistant that handles execution end-to-end across web, mobile, CLI, and structured APIs while keeping the backend invisible to the user.
+- **Deployment profile (default):** user-hosted, single-user, localhost-only (`127.0.0.1`) with no auth prompts.
 - **Differentiators:**
   - No hard-coded skills; autonomy emerges from learned memory and generic executors.
   - Proactive nudges with external policy enforcement for spending, PII, and explainability.
@@ -46,6 +47,15 @@ Personal AI assistant platform focusing on proactive planning, strong guardrails
 4. **Install dependencies:** `pnpm install` from the repo root.
 5. **Run checks:** `pnpm typecheck && pnpm test && pnpm lint`
 6. **Start the gateway:** `pnpm --filter @tyrum/gateway start`
+7. **Start the portal:** `pnpm --filter tyrum-portal dev`
+8. **Run single-instance runtime (web + gateway in one process):** `pnpm --filter tyrum-portal start:single`
+
+### Localhost Safety Defaults
+
+- `GATEWAY_HOST` defaults to `127.0.0.1`.
+- `GATEWAY_PORT` defaults to `8080`.
+- Binding to non-local interfaces logs a warning because app auth is disabled in the self-hosted profile.
+- `pnpm --filter tyrum-portal start:single` serves web + gateway HTTP in one process; WebSocket upgrades on `/ws` return `501` in this mode.
 
 ## Development Commands
 
@@ -58,6 +68,9 @@ Personal AI assistant platform focusing on proactive planning, strong guardrails
 | Lint | `pnpm lint` |
 | Build all packages | `pnpm build` |
 | Start gateway | `pnpm --filter @tyrum/gateway start` |
+| Start web portal | `pnpm --filter tyrum-portal dev` |
+| Start single-instance runtime | `pnpm --filter tyrum-portal start:single` |
+| Build web portal | `pnpm --filter tyrum-portal build` |
 
 ## Telegram Bot Setup
 

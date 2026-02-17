@@ -11,7 +11,6 @@ describe("POST /policy/check", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        user_id: "user-1",
         spend: { amount_minor_units: 5000, currency: "USD" },
         pii: { categories: [] },
         legal: { flags: [] },
@@ -28,7 +27,6 @@ describe("POST /policy/check", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        user_id: "user-1",
         spend: { amount_minor_units: 60000, currency: "USD" },
       }),
     });
@@ -43,7 +41,6 @@ describe("POST /policy/check", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        user_id: "user-1",
         spend: { amount_minor_units: 15000, currency: "USD" },
       }),
     });
@@ -53,24 +50,11 @@ describe("POST /policy/check", () => {
     expect(json.decision).toBe("escalate");
   });
 
-  it("returns 400 for missing user_id", async () => {
-    const res = await app.request("/policy/check", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        spend: { amount_minor_units: 5000, currency: "USD" },
-      }),
-    });
-
-    expect(res.status).toBe(400);
-  });
-
   it("returns deny for biometric PII", async () => {
     const res = await app.request("/policy/check", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        user_id: "user-1",
         pii: { categories: ["biometric"] },
       }),
     });

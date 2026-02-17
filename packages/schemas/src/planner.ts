@@ -51,25 +51,9 @@ export const ActionPrimitive = z.object({
 });
 export type ActionPrimitive = z.infer<typeof ActionPrimitive>;
 
-/** Reference to a Policy/Autonomy Model profile. */
-export const PamProfileRef = z.object({
-  profile_id: z.string().trim(),
-  version: z.string().trim().optional(),
-});
-export type PamProfileRef = z.infer<typeof PamProfileRef>;
-
-/** User context containing PII-safe identifiers and guardrail metadata. */
-export const PlanUserContext = z.object({
-  user_id: z.string().trim(),
-  pam_profile: PamProfileRef.optional(),
-});
-export type PlanUserContext = z.infer<typeof PlanUserContext>;
-
 /** Canonical request envelope accepted by the planner service. */
 export const PlanRequest = z.object({
   request_id: z.string(),
-  subject_id: z.string(),
-  user: PlanUserContext.optional(),
   trigger: NormalizedThreadMessage,
   locale: z.string().optional(),
   timezone: z.string().optional(),

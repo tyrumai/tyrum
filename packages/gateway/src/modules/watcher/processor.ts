@@ -17,7 +17,6 @@ import type { MemoryDal } from "../memory/dal.js";
 
 export interface WatcherRow {
   id: number;
-  subject_id: string;
   plan_id: string;
   trigger_type: string;
   trigger_config: unknown;
@@ -28,7 +27,6 @@ export interface WatcherRow {
 
 interface RawWatcherRow {
   id: number;
-  subject_id: string;
   plan_id: string;
   trigger_type: string;
   trigger_config: string;
@@ -116,7 +114,6 @@ export class WatcherProcessor {
     for (const watcher of watchers) {
       if (this.evaluateTrigger(watcher, event)) {
         this.memoryDal.insertEpisodicEvent(
-          watcher.subject_id,
           `watcher-${String(watcher.id)}-${event.planId}-completed`,
           new Date().toISOString(),
           "watcher",
@@ -136,7 +133,6 @@ export class WatcherProcessor {
     const watchers = this.getActiveWatchersForPlan(event.planId);
     for (const watcher of watchers) {
       this.memoryDal.insertEpisodicEvent(
-        watcher.subject_id,
         `watcher-${String(watcher.id)}-${event.planId}-failed`,
         new Date().toISOString(),
         "watcher",
@@ -161,26 +157,25 @@ export class WatcherProcessor {
   // -----------------------------------------------------------------------
 
   createWatcher(
-    subjectId: string,
     planId: string,
     triggerType: string,
     triggerConfig: unknown,
   ): number {
     const result = this.db
       .prepare(
-        `INSERT INTO watchers (subject_id, plan_id, trigger_type, trigger_config)
-         VALUES (?, ?, ?, ?)`,
+        `INSERT INTO watchers (plan_id, trigger_type, trigger_config)
+         VALUES (?, ?, ?)`,
       )
-      .run(subjectId, planId, triggerType, JSON.stringify(triggerConfig));
+      .run(planId, triggerType, JSON.stringify(triggerConfig));
     return Number(result.lastInsertRowid);
   }
 
-  listWatchers(subjectId: string): WatcherRow[] {
+  listWatchers(): WatcherRow[] {
     const rows = this.db
       .prepare(
-        "SELECT * FROM watchers WHERE subject_id = ? AND active = 1 ORDER BY created_at DESC",
+        "SELECT * FROM watchers WHERE active = 1 ORDER BY created_at DESC",
       )
-      .all(subjectId) as RawWatcherRow[];
+      .all() as RawWatcherRow[];
     return rows.map(parseRow);
   }
 

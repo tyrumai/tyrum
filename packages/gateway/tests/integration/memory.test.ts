@@ -16,7 +16,6 @@ describe("Memory CRUD routes", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          subject_id: "sub-1",
           fact_key: "name",
           fact_value: "Alice",
           source: "user",
@@ -29,7 +28,7 @@ describe("Memory CRUD routes", () => {
       const created = (await createRes.json()) as { id: number };
       expect(created.id).toBeGreaterThan(0);
 
-      const getRes = await app.request("/memory/facts/sub-1");
+      const getRes = await app.request("/memory/facts");
       expect(getRes.status).toBe(200);
       const body = (await getRes.json()) as {
         facts: Array<{ fact_key: string; fact_value: unknown }>;
@@ -39,8 +38,8 @@ describe("Memory CRUD routes", () => {
       expect(body.facts[0]!.fact_value).toBe("Alice");
     });
 
-    it("returns empty array for unknown subject", async () => {
-      const res = await app.request("/memory/facts/unknown");
+    it("returns empty array when no facts exist", async () => {
+      const res = await app.request("/memory/facts");
       expect(res.status).toBe(200);
       const body = (await res.json()) as { facts: unknown[] };
       expect(body.facts).toEqual([]);
@@ -50,7 +49,7 @@ describe("Memory CRUD routes", () => {
       const res = await app.request("/memory/facts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject_id: "sub-1" }),
+        body: JSON.stringify({ fact_key: "name" }),
       });
       expect(res.status).toBe(400);
     });
@@ -62,7 +61,6 @@ describe("Memory CRUD routes", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          subject_id: "sub-1",
           event_id: "evt-1",
           occurred_at: "2025-01-15T10:00:00Z",
           channel: "telegram",
@@ -73,7 +71,7 @@ describe("Memory CRUD routes", () => {
 
       expect(createRes.status).toBe(201);
 
-      const getRes = await app.request("/memory/events/sub-1");
+      const getRes = await app.request("/memory/events");
       expect(getRes.status).toBe(200);
       const body = (await getRes.json()) as {
         events: Array<{
@@ -93,7 +91,6 @@ describe("Memory CRUD routes", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          subject_id: "sub-1",
           capability_type: "web_scrape",
           capability_identifier: "example.com",
           executor_kind: "playwright",
@@ -112,7 +109,7 @@ describe("Memory CRUD routes", () => {
       expect(created.inserted).toBe(true);
       expect(created.successCount).toBe(1);
 
-      const getRes = await app.request("/memory/capabilities/sub-1");
+      const getRes = await app.request("/memory/capabilities");
       expect(getRes.status).toBe(200);
       const body = (await getRes.json()) as {
         capabilities: Array<{
@@ -126,7 +123,6 @@ describe("Memory CRUD routes", () => {
 
     it("upserts capability memory and increments count", async () => {
       const base = {
-        subject_id: "sub-1",
         capability_type: "web_scrape",
         capability_identifier: "example.com",
         executor_kind: "playwright",

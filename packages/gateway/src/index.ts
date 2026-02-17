@@ -23,6 +23,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 function main(): void {
   const port = parseInt(process.env["GATEWAY_PORT"] ?? "8080", 10);
+  const host = process.env["GATEWAY_HOST"]?.trim() || "127.0.0.1";
   const dbPath = process.env["GATEWAY_DB_PATH"] ?? "gateway.db";
   const migrationsDir =
     process.env["GATEWAY_MIGRATIONS_DIR"] ?? join(__dirname, "../migrations");
@@ -37,14 +38,22 @@ function main(): void {
 
   const app = createApp(container);
 
-  console.log(`Gateway v${VERSION} listening on port ${port}`);
-  serve({ fetch: app.fetch, port });
+  const localHosts = new Set(["127.0.0.1", "localhost", "::1"]);
+  if (!localHosts.has(host)) {
+    console.warn(
+      "Gateway is configured to bind to a non-local interface without app authentication enabled.",
+    );
+  }
+
+  console.log(`Gateway v${VERSION} listening on http://${host}:${port}`);
+  serve({ fetch: app.fetch, port, hostname: host });
 }
 
 // Run when executed directly
 const isMain =
   process.argv[1] &&
-  (process.argv[1].endsWith("/index.js") ||
+  (process.argv[1].endsWith("/index.mjs") ||
+    process.argv[1].endsWith("/index.js") ||
     process.argv[1].endsWith("/index.ts"));
 
 if (isMain) {
