@@ -13,15 +13,17 @@
     "dist": "pnpm build && electron-builder"
   },
   "dependencies": {
+    "@nut-tree-fork/nut-js": "^4.2.6",
     "@tyrum/client": "workspace:*",
     "@tyrum/schemas": "workspace:*",
+    "playwright": "^1.58.2",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@hono/node-server": "^1.19.9",
-    "@tyrum/gateway": "workspace:*",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "@tyrum/gateway": "workspace:*",
     "@vitejs/plugin-react": "^4.5.0",
     "electron": "^36.0.0",
     "electron-builder": "^26.0.0",
