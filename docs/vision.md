@@ -71,6 +71,7 @@ Guardrails (spend/PII/legal/explainability) are enforced outside the LLM prompt.
 - **Consent UX:** one-tap approvals with clear cost/impact; “ask once per vendor” and spend caps supported; controls mirror the live activity feed so users can pause or escalate any plan.
 - **Approval notifications:** if an approval is pending, notify the user (Telegram) with inline **Approve/Deny** plus a deep link into the approval queue.
 - **Live activity feed:** real-time timeline showing planner intents, policy checks, and executions with pause/hold controls for each step.
+- **Canvas outputs:** rich, shareable HTML views (receipts, dashboards) rendered in the portal and backed by gateway `/canvas/*` artifacts.
 - **Dry-run / read-only mode:** before executing, show the plan + touched accounts/domains/apps + estimated cost/time; run read-only probes when possible (locate elements, check auth state) without mutating anything.
 - **Human takeover (pause + drive):** users can pause execution, see exactly what the executor sees, take control for tricky steps (login/2FA/captcha/weird forms), then hand control back.
 - **Flow recorder + playbook editor:** “show Tyrum once”: record a human run, auto-extract selectors/screenshots/postconditions, then review and save a runnable playbook artifact.
@@ -96,6 +97,7 @@ flowchart LR
     POLICY["/policy/check"]
     MEMORY["/memory/*"]
     AGENT["/agent/* (singleton agent)"]
+    CANVAS["/canvas/* (HTML artifacts)"]
     WS["/ws (capability providers, planned)"]
   end
 
@@ -107,6 +109,7 @@ flowchart LR
   PORTAL -->|HTTP| PLAN
   PORTAL -->|HTTP| MEMORY
   PORTAL -->|HTTP| AGENT
+  PORTAL -->|HTTP| CANVAS
   DESKTOP -->|WS| WS
 
   INGRESS --> PLAN
@@ -128,6 +131,8 @@ flowchart LR
 **Agent runtime:** A singleton agent that reads identity/config/skills from `~/.tyrum`, keeps short-term context in `sessions` (SQLite), and optionally writes narrative memory to markdown files.
 
 **LLM backend:** BYOK via an OpenAI-compatible upstream API.
+
+**Canvas:** An optional HTML artifact surface (served under `/canvas/*`) for rich, shareable outputs (receipts, dashboards) rendered in the portal and referenced from audit trails.
 
 **Desktop worker app(s):** Capability providers that expose “human-like” desktop control (screen, keyboard/mouse, local apps) to the gateway over WebSocket. This is required for robust UI automation fallback, but the WebSocket runtime is still being wired up.
 
@@ -163,7 +168,7 @@ Default home: `~/.tyrum` (override with `TYRUM_HOME`).
 ### Technology Stack (current repo / local-first profile)
 - **Runtime:** Node.js 24.x
 - **Language:** TypeScript (strict, ESM)
-- **Gateway:** Hono (+ `@hono/node-server`)
+- **Gateway:** Hono (+ Node `http.createServer()` for HTTP + WebSocket upgrades)
 - **Validation/types:** Zod (`@tyrum/schemas`)
 - **Database:** SQLite (`better-sqlite3`) + migrations
 - **Event bus:** `mitt` (in-process)
@@ -207,6 +212,7 @@ Use a minimal set of **universal action primitives** to enable auditability, ret
 - `Research(query|url) → observations`
 - `Decide(options|policy|memory) → choice`
 - `Web(action[, postcondition])`
+- `Desktop(action[, postcondition])`
 - `CLI(action[, postcondition])`
 - `Http(request[, postcondition])`
 - `Message(send|draft)`
@@ -216,6 +222,8 @@ Use a minimal set of **universal action primitives** to enable auditability, ret
 - `Confirm(summary, cost, risk)`
 
 **Postconditions are mandatory** on state‑changing steps to avoid silent failure (the canonical primitive kind list lives in `@tyrum/schemas`, which also exposes a `requiresPostcondition(kind)` helper).
+
+**Agent tools (IDs, allowlisted):** Separate from planner primitives, the agent runtime may expose a small set of tool IDs to the model, gated by policy + `agent.yml` allowlists (e.g. `tool.fs.read`, `tool.fs.write`).
 
 **Dry-run is first-class (design target).** Any plan can be previewed and (when possible) executed as read-only probes: navigate, detect auth state, locate key elements, and estimate feasibility/cost without mutating external state.
 
@@ -420,7 +428,7 @@ Tyrum persists operator knowledge in three layers:
   2) No PII to new parties without consent.
   3) Respect legal/channel ToS (e.g., WhatsApp 24‑hour windows, GDPR export/delete).
   4) Explainability: every action must have a human‑readable why/what/source.
-- **Profiles (user-configured):** `safest`, `balanced`, `poweruser` control default escalation/approval behavior.
+- **Profiles (user-configured):** `Safe`, `Balanced`, `PowerUser` control default escalation/approval behavior.
 - **Spend defaults:** No caps are preconfigured; spending is **disabled** until configured.
 - **Everything else is learned** (PAM) or asked once, then remembered.
 
@@ -569,7 +577,7 @@ Tyrum persists operator knowledge in three layers:
   "type": "object",
   "properties": {
     "type": {"type": "string", "enum": [
-      "Research","Decide","Web","CLI","Http","Message","Pay","Store","Watch","Confirm"
+      "Research","Decide","Web","Desktop","CLI","Http","Message","Pay","Store","Watch","Confirm"
     ]},
     "args": {"type": "object"},
     "postcondition": {"type": ["object","null"]},
