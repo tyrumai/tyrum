@@ -257,21 +257,6 @@ export function overallDecision(rules: readonly RuleDecision[]): Decision {
 }
 
 // ---------------------------------------------------------------------------
-// Validation
-// ---------------------------------------------------------------------------
-
-export interface RequestValidationError {
-  error: string;
-  message: string;
-}
-
-export function validatePolicyRequest(
-  _request: PolicyCheckRequest,
-): RequestValidationError | undefined {
-  return undefined;
-}
-
-// ---------------------------------------------------------------------------
 // Combined evaluation
 // ---------------------------------------------------------------------------
 
