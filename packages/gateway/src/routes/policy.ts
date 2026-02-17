@@ -4,10 +4,7 @@
 
 import { Hono } from "hono";
 import { PolicyCheckRequest } from "@tyrum/schemas";
-import {
-  evaluatePolicy,
-  validatePolicyRequest,
-} from "../modules/policy/engine.js";
+import { evaluatePolicy } from "../modules/policy/engine.js";
 
 const policy = new Hono();
 
@@ -19,11 +16,6 @@ policy.post("/policy/check", async (c) => {
       { error: "invalid_request", message: parsed.error.message },
       400,
     );
-  }
-
-  const validationError = validatePolicyRequest(parsed.data);
-  if (validationError) {
-    return c.json(validationError, 400);
   }
 
   const decision = evaluatePolicy(parsed.data);
