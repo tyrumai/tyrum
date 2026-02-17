@@ -5,12 +5,12 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.mjs"
     }
   },
   "files": ["dist"],
   "scripts": {
-    "build": "tsdown src/index.ts --format esm --dts && node ./scripts/write-dts-entry.mjs"
+    "build": "tsdown src/index.ts --format esm --dts && node ./scripts/write-dts-entry.mjs && node ./scripts/write-runtime-entry.mjs"
   },
   "dependencies": {
     "zod": "^4.3.6"
