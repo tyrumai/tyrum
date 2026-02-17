@@ -7,6 +7,7 @@ process.stdin.setEncoding("utf8");
 
 let buffer = "";
 let initialized = false;
+const instanceId = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 function write(obj) {
   const line = JSON.stringify(obj);
@@ -50,6 +51,14 @@ function onRequest(msg) {
               additionalProperties: false,
             },
           },
+          {
+            name: "instance_id",
+            description: "Return a unique server instance id.",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+            },
+          },
         ],
       },
     });
@@ -65,6 +74,17 @@ function onRequest(msg) {
         id,
         result: {
           content: [{ type: "text", text: String(args.text ?? "") }],
+          isError: false,
+        },
+      });
+      return;
+    }
+    if (name === "instance_id") {
+      write({
+        jsonrpc: "2.0",
+        id,
+        result: {
+          content: [{ type: "text", text: instanceId }],
           isError: false,
         },
       });

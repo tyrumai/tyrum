@@ -50,7 +50,10 @@ export class McpManager {
   private readonly entries = new Map<string, McpClientEntry>();
 
   private reconcileEnabledServers(enabledServers: readonly McpServerSpecT[]): void {
-    const enabledIds = new Set(enabledServers.map((server) => server.id));
+    // Only keep running entries for currently enabled servers.
+    const enabledIds = new Set(
+      enabledServers.filter((server) => server.enabled).map((server) => server.id),
+    );
     for (const [serverId, entry] of this.entries.entries()) {
       if (!enabledIds.has(serverId)) {
         void entry.client.stop();
