@@ -40,6 +40,7 @@ export interface AgentRuntimeOptions {
   home?: string;
   sessionDal?: SessionDal;
   fetchImpl?: typeof fetch;
+  mcpManager?: McpManager;
 }
 
 function trimTo(value: string, max: number): string {
@@ -236,13 +237,18 @@ export class AgentRuntime {
   private readonly home: string;
   private readonly sessionDal: SessionDal;
   private readonly fetchImpl: typeof fetch;
-  private readonly mcpManager = new McpManager();
+  private readonly mcpManager: McpManager;
   private cleanupAtMs = 0;
 
   constructor(private readonly opts: AgentRuntimeOptions) {
     this.home = opts.home ?? resolveTyrumHome();
     this.sessionDal = opts.sessionDal ?? opts.container.sessionDal;
     this.fetchImpl = opts.fetchImpl ?? fetch;
+    this.mcpManager = opts.mcpManager ?? new McpManager();
+  }
+
+  async shutdown(): Promise<void> {
+    await this.mcpManager.shutdown();
   }
 
   private async loadContext(): Promise<AgentLoadedContext> {
@@ -331,7 +337,7 @@ export class AgentRuntime {
         : Promise.resolve([]),
       wantsMcpTools
         ? this.mcpManager.listToolDescriptors(ctx.mcpServers)
-        : Promise.resolve([]),
+        : this.mcpManager.listToolDescriptors([]),
     ]);
 
     const tools = selectToolDirectory(input.message, ctx.config.tools.allow, mcpTools, 8);

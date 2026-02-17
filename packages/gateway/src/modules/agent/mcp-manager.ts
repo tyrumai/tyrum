@@ -1,4 +1,3 @@
-import { isAbsolute, join } from "node:path";
 import type { McpServerSpec as McpServerSpecT } from "@tyrum/schemas";
 import type { ToolDescriptor } from "./tools.js";
 import { McpStdioClient, type McpToolInfo } from "./mcp-stdio-client.js";
@@ -9,6 +8,17 @@ interface McpClientEntry {
   client: McpStdioClient;
   toolsCache?: readonly ToolDescriptor[];
   toolsPromise?: Promise<readonly ToolDescriptor[]>;
+  discoveryFailureCount?: number;
+  discoveryBackoffUntilMs?: number;
+}
+
+function discoveryBackoffMs(failureCount: number): number {
+  // Avoid repeatedly blocking the agent turn on unreachable servers.
+  // Exponential backoff capped at 5 minutes.
+  const baseMs = 30_000;
+  const capMs = 5 * 60_000;
+  const exponent = Math.min(6, Math.max(0, failureCount - 1));
+  return Math.min(capMs, baseMs * 2 ** exponent);
 }
 
 function stableFingerprint(spec: McpServerSpecT): string {
@@ -60,20 +70,6 @@ export class McpManager {
         this.entries.delete(serverId);
       }
     }
-  }
-
-  /**
-   * Normalize cwd for a spec when running from an MCP installation directory.
-   * If the spec omits cwd, we default to the server directory so relative args work.
-   */
-  static resolveSpecCwd(spec: McpServerSpecT, serverDir: string): McpServerSpecT {
-    if (!spec.cwd) {
-      return { ...spec, cwd: serverDir };
-    }
-    if (isAbsolute(spec.cwd)) {
-      return spec;
-    }
-    return { ...spec, cwd: join(serverDir, spec.cwd) };
   }
 
   private ensureEntry(spec: McpServerSpecT): McpClientEntry {
@@ -141,6 +137,10 @@ export class McpManager {
       return entry.toolsPromise;
     }
 
+    if (entry.discoveryBackoffUntilMs && Date.now() < entry.discoveryBackoffUntilMs) {
+      return [];
+    }
+
     entry.toolsPromise = this.fetchAndCacheToolDescriptors(entry).finally(() => {
       entry.toolsPromise = undefined;
     });
@@ -152,21 +152,41 @@ export class McpManager {
     try {
       const allTools: McpToolInfo[] = [];
       let cursor: string | undefined;
-      let guard = 0;
+      const seenCursors = new Set<string>();
+      let pages = 0;
 
-      while (guard++ < 20) {
+      while (true) {
+        if (pages++ >= 1_000) {
+          throw new Error(
+            `MCP tools/list exceeded 1000 pages for server '${entry.spec.id}'.`,
+          );
+        }
         const page = await entry.client.toolsList(cursor);
         allTools.push(...page.tools);
-        if (!page.nextCursor) break;
-        cursor = page.nextCursor;
+        const nextCursor = page.nextCursor;
+        if (!nextCursor) break;
+        if (seenCursors.has(nextCursor)) {
+          throw new Error(
+            `MCP tools/list cursor loop detected for server '${entry.spec.id}' (cursor='${nextCursor}').`,
+          );
+        }
+        seenCursors.add(nextCursor);
+        cursor = nextCursor;
       }
 
       const descriptors = allTools.map((tool) => toMcpToolDescriptor(entry.spec, tool));
       entry.toolsCache = descriptors;
+      entry.discoveryFailureCount = undefined;
+      entry.discoveryBackoffUntilMs = undefined;
       return descriptors;
     } catch {
       // Degrade gracefully if the server isn't reachable or misbehaves.
-      // Do not cache failures: transient discovery errors should be retried on a later call.
+      // Do not cache failures indefinitely: transient discovery errors should be retried
+      // on a later call, but not on every agent turn.
+      const failures = (entry.discoveryFailureCount ?? 0) + 1;
+      entry.discoveryFailureCount = failures;
+      entry.discoveryBackoffUntilMs = Date.now() + discoveryBackoffMs(failures);
+      void entry.client.stop();
       return [];
     }
   }
