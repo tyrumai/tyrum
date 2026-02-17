@@ -11,6 +11,10 @@ const unresponsiveServerPath = fileURLToPath(
   new URL("../fixtures/mcp/mock-server-unresponsive.mjs", import.meta.url),
 );
 
+const newerProtocolServerPath = fileURLToPath(
+  new URL("../fixtures/mcp/mock-server-newer-protocol.mjs", import.meta.url),
+);
+
 function makeSpec(overrides: Partial<McpServerSpecT> = {}): McpServerSpecT {
   return {
     id: "test",
@@ -62,6 +66,19 @@ describe("McpStdioClient", () => {
     await client.start();
     const internal = client as unknown as { negotiatedProtocolVersion?: string };
     expect(internal.negotiatedProtocolVersion).toBe("2024-11-05");
+    const result = await client.toolsList();
+    expect(result.tools.map((t) => t.name)).toContain("echo");
+  });
+
+  it("start() accepts newer negotiated protocol versions", async () => {
+    client = new McpStdioClient(
+      makeSpec({
+        args: [newerProtocolServerPath],
+      }),
+    );
+    await client.start();
+    const internal = client as unknown as { negotiatedProtocolVersion?: string };
+    expect(internal.negotiatedProtocolVersion).toBe("2025-01-01");
     const result = await client.toolsList();
     expect(result.tools.map((t) => t.name)).toContain("echo");
   });

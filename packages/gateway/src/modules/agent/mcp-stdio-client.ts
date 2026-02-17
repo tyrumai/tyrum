@@ -55,6 +55,31 @@ function resolveClientProtocolVersion(): string {
   return fromEnv && fromEnv.length > 0 ? fromEnv : DEFAULT_MCP_PROTOCOL_VERSION;
 }
 
+function parseProtocolDateVersion(version: string): number | undefined {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(version)) {
+    return undefined;
+  }
+  const parsed = Date.parse(`${version}T00:00:00Z`);
+  return Number.isNaN(parsed) ? undefined : parsed;
+}
+
+function isProtocolVersionCompatible(serverVersion: string, requestedVersion: string): boolean {
+  const serverDate = parseProtocolDateVersion(serverVersion);
+  // If server version is not date-based, avoid hard-failing on unknown-but-valid formats.
+  if (serverDate === undefined) {
+    return true;
+  }
+
+  const requestedDate = parseProtocolDateVersion(requestedVersion);
+  const minSupportedDate = parseProtocolDateVersion(DEFAULT_MCP_PROTOCOL_VERSION);
+  const requiredDate = requestedDate ?? minSupportedDate;
+
+  if (requiredDate === undefined) {
+    return true;
+  }
+  return serverDate >= requiredDate;
+}
+
 function parseInitializeProtocolVersion(result: unknown): string | undefined {
   if (!result || typeof result !== "object") return undefined;
   const protocolVersion = (result as Record<string, unknown>)["protocolVersion"];
@@ -173,15 +198,9 @@ export class McpStdioClient {
         `MCP initialize did not return a protocolVersion. stderr: ${this.stderrTail}`,
       );
     }
-    const supportedProtocolVersions = new Set([
-      DEFAULT_MCP_PROTOCOL_VERSION,
-      requestedProtocolVersion,
-    ]);
-    if (!supportedProtocolVersions.has(serverProtocolVersion)) {
+    if (!isProtocolVersionCompatible(serverProtocolVersion, requestedProtocolVersion)) {
       throw new Error(
-        `Unsupported MCP protocol version '${serverProtocolVersion}'. Supported: ${Array.from(
-          supportedProtocolVersions,
-        ).join(", ")}.`,
+        `Unsupported MCP protocol version '${serverProtocolVersion}'. Required >= '${requestedProtocolVersion}'.`,
       );
     }
     this.negotiatedProtocolVersion = serverProtocolVersion;
