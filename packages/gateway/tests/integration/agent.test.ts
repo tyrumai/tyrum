@@ -239,9 +239,14 @@ describe("agent routes", () => {
     });
     expect(third.status).toBe(200);
 
-    expect(capturedPayloads).toHaveLength(3);
-    const secondPrompt = findSessionPrompt(capturedPayloads[1]);
-    const thirdPrompt = findSessionPrompt(capturedPayloads[2]);
+    // Filter to only LLM chat/completions payloads (have `messages` array),
+    // excluding embedding endpoint calls (have `input` field) added by semantic search.
+    const llmPayloads = capturedPayloads.filter(
+      (p) => p && typeof p === "object" && Array.isArray((p as Record<string, unknown>)["messages"]),
+    );
+    expect(llmPayloads).toHaveLength(3);
+    const secondPrompt = findSessionPrompt(llmPayloads[1]);
+    const thirdPrompt = findSessionPrompt(llmPayloads[2]);
 
     expect(secondPrompt.toLowerCase()).not.toContain("prefer tea");
     expect(thirdPrompt.toLowerCase()).toContain("prefer tea");

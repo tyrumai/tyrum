@@ -11,12 +11,18 @@ import type { EventLog } from "./modules/planner/event-log.js";
 import type { DiscoveryPipeline } from "./modules/discovery/pipeline.js";
 import type { RiskClassifier } from "./modules/risk/classifier.js";
 import type { SessionDal } from "./modules/agent/session-dal.js";
+import type { TelegramBot } from "./modules/ingress/telegram-bot.js";
+import type { ApprovalDal } from "./modules/approval/dal.js";
+import type { WatcherProcessor } from "./modules/watcher/processor.js";
+import type { CanvasDal } from "./modules/canvas/dal.js";
+import type { JobQueue } from "./modules/executor/job-queue.js";
 
 import { createDatabase } from "./db.js";
 import { migrate } from "./migrate.js";
 import { createEventBus } from "./event-bus.js";
 import { MemoryDal as MemoryDalImpl } from "./modules/memory/dal.js";
 import { EventLog as EventLogImpl } from "./modules/planner/event-log.js";
+import { ApprovalDal as ApprovalDalImpl } from "./modules/approval/dal.js";
 import {
   DiscoveryPipeline as DiscoveryPipelineImpl,
   InMemoryConnectorCache,
@@ -26,6 +32,10 @@ import {
   defaultRiskConfig,
 } from "./modules/risk/classifier.js";
 import { SessionDal as SessionDalImpl } from "./modules/agent/session-dal.js";
+import { TelegramBot as TelegramBotImpl } from "./modules/ingress/telegram-bot.js";
+import { WatcherProcessor as WatcherProcessorImpl } from "./modules/watcher/processor.js";
+import { CanvasDal as CanvasDalImpl } from "./modules/canvas/dal.js";
+import { JobQueue as JobQueueImpl } from "./modules/executor/job-queue.js";
 
 export interface GatewayConfig {
   dbPath: string;
@@ -41,6 +51,11 @@ export interface GatewayContainer {
   riskClassifier: RiskClassifier;
   sessionDal: SessionDal;
   eventBus: EventBus;
+  telegramBot?: TelegramBot;
+  approvalDal: ApprovalDal;
+  watcherProcessor: WatcherProcessor;
+  canvasDal: CanvasDal;
+  jobQueue: JobQueue;
   config: GatewayConfig;
 }
 
@@ -51,10 +66,21 @@ export function createContainer(config: GatewayConfig): GatewayContainer {
   const memoryDal = new MemoryDalImpl(db);
   const eventLog = new EventLogImpl(db);
   const connectorCache = new InMemoryConnectorCache();
-  const discoveryPipeline = new DiscoveryPipelineImpl(connectorCache);
+  const discoveryPipeline = new DiscoveryPipelineImpl(connectorCache, {
+    capabilityMemorySource: memoryDal,
+  });
   const riskClassifier = new RiskClassifierImpl(defaultRiskConfig());
   const sessionDal = new SessionDalImpl(db);
   const eventBus = createEventBus();
+
+  const telegramToken = process.env["TELEGRAM_BOT_TOKEN"]?.trim();
+  const telegramBot = telegramToken
+    ? new TelegramBotImpl(telegramToken)
+    : undefined;
+  const approvalDal = new ApprovalDalImpl(db);
+  const watcherProcessor = new WatcherProcessorImpl({ db, memoryDal, eventBus });
+  const canvasDal = new CanvasDalImpl(db);
+  const jobQueue = new JobQueueImpl(db);
 
   return {
     db,
@@ -64,6 +90,11 @@ export function createContainer(config: GatewayConfig): GatewayContainer {
     riskClassifier,
     sessionDal,
     eventBus,
+    telegramBot,
+    approvalDal,
+    watcherProcessor,
+    canvasDal,
+    jobQueue,
     config,
   };
 }

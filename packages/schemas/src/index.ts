@@ -121,3 +121,20 @@ export {
   AgentTurnResponse,
   AgentStatusResponse,
 } from "./agent.js";
+
+export {
+  AuditEvent,
+  ChainVerification,
+  ReceiptBundle,
+} from "./audit.js";
+
+export {
+  SecretHandle,
+  SecretStoreRequest,
+} from "./secret.js";
+
+export {
+  PlaybookStep,
+  PlaybookManifest,
+  Playbook,
+} from "./playbook.js";
