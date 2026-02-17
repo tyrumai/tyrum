@@ -20,6 +20,7 @@ import { createWsHandler } from "../../src/routes/ws.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import type { ProtocolDeps } from "../../src/ws/protocol.js";
 import { TyrumClient } from "../../../client/src/ws-client.js";
+import { TokenStore } from "../../src/modules/auth/token-store.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -59,9 +60,14 @@ function startServer(
     },
   };
 
+  // Use a dummy token store with local-only mode for e2e tests
+  const tokenStore = new TokenStore("/tmp/tyrum-e2e-test-" + Date.now());
+
   const { handleUpgrade, stopHeartbeat } = createWsHandler({
     connectionManager,
     protocolDeps,
+    tokenStore,
+    isLocalOnly: true,
   });
 
   const requestListener = getRequestListener(app.fetch);

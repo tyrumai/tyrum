@@ -15,6 +15,7 @@ export const ActionPrimitiveKind = z.enum([
   "Decide",
   "Web",
   "Android",
+  "Desktop",
   "CLI",
   "Http",
   "Message",
@@ -29,6 +30,7 @@ export type ActionPrimitiveKind = z.infer<typeof ActionPrimitiveKind>;
 const REQUIRES_POSTCONDITION = new Set<ActionPrimitiveKind>([
   "Web",
   "Android",
+  "Desktop",
   "CLI",
   "Http",
   "Message",

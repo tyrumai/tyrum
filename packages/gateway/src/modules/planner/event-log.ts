@@ -1,4 +1,6 @@
 import type Database from "better-sqlite3";
+import { computeEventHash } from "../audit/hash-chain.js";
+import type { ChainableEvent } from "../audit/hash-chain.js";
 
 export interface NewPlannerEvent {
   replayId: string;
@@ -25,6 +27,8 @@ interface RawPlannerEventRow {
   occurred_at: string;
   action: string;
   created_at: string;
+  prev_hash: string | null;
+  event_hash: string | null;
 }
 
 function rowToEvent(row: RawPlannerEventRow): PersistedPlannerEvent {
@@ -67,10 +71,29 @@ export class EventLog {
         return { kind: "duplicate" };
       }
 
+      // Fetch the last event's hash for this plan to chain
+      const lastRow = this.db
+        .prepare(
+          "SELECT event_hash FROM planner_events WHERE plan_id = ? ORDER BY step_index DESC LIMIT 1",
+        )
+        .get(event.planId) as { event_hash: string | null } | undefined;
+
+      const prevHash = lastRow?.event_hash ?? null;
+
+      const eventHash = computeEventHash(
+        {
+          plan_id: event.planId,
+          step_index: event.stepIndex,
+          occurred_at: event.occurredAt,
+          action: actionJson,
+        },
+        prevHash,
+      );
+
       const result = this.db
         .prepare(
-          `INSERT INTO planner_events (replay_id, plan_id, step_index, occurred_at, action)
-           VALUES (?, ?, ?, ?, ?)`,
+          `INSERT INTO planner_events (replay_id, plan_id, step_index, occurred_at, action, prev_hash, event_hash)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           event.replayId,
@@ -78,6 +101,8 @@ export class EventLog {
           event.stepIndex,
           event.occurredAt,
           actionJson,
+          prevHash,
+          eventHash,
         );
 
       const inserted = this.db
@@ -97,5 +122,23 @@ export class EventLog {
       )
       .all(planId) as RawPlannerEventRow[];
     return rows.map(rowToEvent);
+  }
+
+  /** Returns events with hash columns for chain verification. */
+  getEventsForVerification(planId: string): ChainableEvent[] {
+    const rows = this.db
+      .prepare(
+        "SELECT id, plan_id, step_index, occurred_at, action, prev_hash, event_hash FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
+      )
+      .all(planId) as Array<{
+      id: number;
+      plan_id: string;
+      step_index: number;
+      occurred_at: string;
+      action: string;
+      prev_hash: string | null;
+      event_hash: string | null;
+    }>;
+    return rows;
   }
 }

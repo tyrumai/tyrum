@@ -24,6 +24,7 @@ import {
   authorizeWithThresholds,
   defaultThresholds,
 } from "../modules/wallet/authorization.js";
+import type { ExecutionRunner, StepExecutor } from "../modules/executor/runner.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -295,7 +296,15 @@ function directiveToSpendContext(
 // Route factory
 // ---------------------------------------------------------------------------
 
-export function createPlanRoutes(container: GatewayContainer): Hono {
+export interface PlanRouteOptions {
+  executionRunner?: ExecutionRunner;
+  stepExecutor?: StepExecutor;
+}
+
+export function createPlanRoutes(
+  container: GatewayContainer,
+  opts?: PlanRouteOptions,
+): Hono {
   const plan = new Hono();
 
   plan.post("/plan", async (c) => {
@@ -456,8 +465,16 @@ export function createPlanRoutes(container: GatewayContainer): Hono {
       action: auditPayload,
     });
 
-    // --- Emit completion event for success ---
-    if (outcome.status === "success") {
+    // --- Hand off to execution runner for async execution ---
+    if (outcome.status === "success" && opts?.executionRunner && opts?.stepExecutor) {
+      // Fire-and-forget: execution happens asynchronously
+      void opts.executionRunner
+        .executePlan(planId, outcome.steps, opts.stepExecutor)
+        .catch(() => {
+          // Runner handles its own error reporting via event bus
+        });
+    } else if (outcome.status === "success") {
+      // No runner configured: emit completion immediately (legacy behavior)
       container.eventBus.emit("plan:completed", {
         planId,
         stepsExecuted: outcome.steps.length,

@@ -1,5 +1,5 @@
 /**
- * Ingress routes — Telegram webhook normalization.
+ * Ingress routes — Telegram webhook normalization + agent flow.
  */
 
 import { Hono } from "hono";
@@ -7,31 +7,81 @@ import {
   normalizeUpdate,
   TelegramNormalizationError,
 } from "../modules/ingress/telegram.js";
+import type { TelegramBot } from "../modules/ingress/telegram-bot.js";
+import type { AgentRuntime } from "../modules/agent/runtime.js";
 
-const ingress = new Hono();
+export interface IngressDeps {
+  telegramBot?: TelegramBot;
+  agentRuntime?: AgentRuntime;
+}
 
-ingress.post("/ingress/telegram", async (c) => {
-  const rawBody = await c.req.text();
+export function createIngressRoutes(deps: IngressDeps = {}): Hono {
+  const ingressRouter = new Hono();
 
-  if (!rawBody) {
-    return c.json(
-      { error: "invalid_request", message: "request body is empty" },
-      400,
-    );
-  }
+  ingressRouter.post("/ingress/telegram", async (c) => {
+    const rawBody = await c.req.text();
 
-  try {
-    const normalized = normalizeUpdate(rawBody);
-    return c.json(normalized);
-  } catch (err) {
-    if (err instanceof TelegramNormalizationError) {
+    if (!rawBody) {
       return c.json(
-        { error: "normalization_error", message: err.message },
+        { error: "invalid_request", message: "request body is empty" },
         400,
       );
     }
-    throw err;
-  }
-});
 
-export { ingress };
+    let normalized;
+    try {
+      normalized = normalizeUpdate(rawBody);
+    } catch (err) {
+      if (err instanceof TelegramNormalizationError) {
+        return c.json(
+          { error: "normalization_error", message: err.message },
+          400,
+        );
+      }
+      throw err;
+    }
+
+    // If no agent runtime, return normalized message (legacy behavior)
+    if (!deps.agentRuntime || !deps.telegramBot) {
+      return c.json(normalized);
+    }
+
+    // Extract text from the normalized message
+    const chatId = normalized.thread.id;
+    const messageText =
+      normalized.message.content.kind === "text"
+        ? normalized.message.content.text
+        : normalized.message.content.caption ?? "";
+
+    if (!messageText) {
+      // Non-text messages without captions — acknowledge silently
+      return c.json({ ok: true });
+    }
+
+    try {
+      const result = await deps.agentRuntime.turn({
+        channel: "telegram",
+        thread_id: chatId,
+        message: messageText,
+      });
+
+      await deps.telegramBot.sendMessage(chatId, result.reply);
+      return c.json({ ok: true, session_id: result.session_id });
+    } catch {
+      try {
+        await deps.telegramBot.sendMessage(
+          chatId,
+          "Sorry, something went wrong. Please try again later.",
+        );
+      } catch {
+        // If we can't even send the error message, just return 200 to Telegram
+      }
+      return c.json({ ok: true, error: "agent_error" });
+    }
+  });
+
+  return ingressRouter;
+}
+
+// Backward-compatible export for existing consumers
+export const ingress = createIngressRoutes();

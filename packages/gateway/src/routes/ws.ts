@@ -14,6 +14,7 @@ import type { ConnectionManager } from "../ws/connection-manager.js";
 import { validateWsToken } from "../ws/auth.js";
 import { handleClientMessage } from "../ws/protocol.js";
 import type { ProtocolDeps } from "../ws/protocol.js";
+import type { TokenStore } from "../modules/auth/token-store.js";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -29,6 +30,8 @@ const HEARTBEAT_INTERVAL_MS = 5_000;
 export interface WsRouteOptions {
   connectionManager: ConnectionManager;
   protocolDeps: ProtocolDeps;
+  tokenStore: TokenStore;
+  isLocalOnly: boolean;
 }
 
 /**
@@ -42,7 +45,7 @@ export function createWsHandler(opts: WsRouteOptions): {
   handleUpgrade: (req: IncomingMessage, socket: Duplex, head: Buffer) => void;
   stopHeartbeat: () => void;
 } {
-  const { connectionManager, protocolDeps } = opts;
+  const { connectionManager, protocolDeps, tokenStore, isLocalOnly } = opts;
 
   const wss = new WebSocketServer({ noServer: true });
 
@@ -64,7 +67,7 @@ export function createWsHandler(opts: WsRouteOptions): {
     const url = new URL(req.url ?? "/", "http://localhost");
     const token = url.searchParams.get("token") ?? undefined;
 
-    if (!validateWsToken(token)) {
+    if (!validateWsToken(token, tokenStore, isLocalOnly)) {
       ws.close(4001, "unauthorized");
       return;
     }
