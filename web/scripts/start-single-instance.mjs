@@ -51,6 +51,7 @@ const nextApp = next({
 
 await nextApp.prepare();
 const nextHandler = nextApp.getRequestHandler();
+const nextUpgradeHandler = nextApp.getUpgradeHandler();
 
 const container = createContainer({
   dbPath,
@@ -70,7 +71,7 @@ const server = createServer((req, res) => {
   nextHandler(req, res);
 });
 
-server.on("upgrade", (req, socket) => {
+server.on("upgrade", (req, socket, head) => {
   const url = new URL(req.url ?? "/", "http://localhost");
   if (url.pathname === "/ws") {
     socket.write(
@@ -83,7 +84,10 @@ server.on("upgrade", (req, socket) => {
     return;
   }
 
-  socket.destroy();
+  void nextUpgradeHandler(req, socket, head).catch((error) => {
+    console.error("Failed to handle WebSocket upgrade:", error);
+    socket.destroy();
+  });
 });
 
 server.listen(port, host, () => {

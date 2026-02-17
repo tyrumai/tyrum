@@ -4,7 +4,7 @@ import { getPlanTimeline } from "../../../local-store";
 type ParamsRecord = Record<string, string | string[] | undefined>;
 
 export async function GET(
-  request: Request,
+  _request: Request,
   context: { params: Promise<ParamsRecord> },
 ) {
   const rawParams = ((await context.params) ?? {}) as ParamsRecord;
@@ -30,11 +30,6 @@ export async function GET(
       },
       { status: 404 },
     );
-  }
-
-  const requestUrl = new URL(request.url);
-  if (requestUrl.searchParams.get("redact") === "none") {
-    return NextResponse.json(timeline, { status: 200 });
   }
 
   // Return the default redacted timeline in self-hosted single-user mode.
