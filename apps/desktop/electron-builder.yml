@@ -1,0 +1,15 @@
+appId: net.tyrum.desktop
+productName: Tyrum Desktop
+directories:
+  output: release
+files:
+  - dist/**/*
+  - "!node_modules"
+mac:
+  target: [dmg, zip]
+  category: public.app-category.productivity
+win:
+  target: [nsis, portable]
+linux:
+  target: [AppImage, deb]
+  category: Utility
