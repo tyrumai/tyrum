@@ -17,6 +17,17 @@ describe("ClientMessage", () => {
     }
   });
 
+  it("parses hello message with desktop capability", () => {
+    const msg = ClientMessage.parse({
+      type: "hello",
+      capabilities: ["desktop"],
+    });
+    expect(msg.type).toBe("hello");
+    if (msg.type === "hello") {
+      expect(msg.capabilities).toEqual(["desktop"]);
+    }
+  });
+
   it("parses task_result message", () => {
     const msg = ClientMessage.parse({
       type: "task_result",
@@ -57,6 +68,10 @@ describe("requiredCapability", () => {
 
   it("maps Http to http", () => {
     expect(requiredCapability("Http")).toBe("http");
+  });
+
+  it("maps Desktop to desktop", () => {
+    expect(requiredCapability("Desktop")).toBe("desktop");
   });
 
   it("returns undefined for Research", () => {

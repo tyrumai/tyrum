@@ -17,6 +17,7 @@ import { createCanvasRoutes } from "./routes/canvas.js";
 import { createAuditRoutes } from "./routes/audit.js";
 import { createSecretRoutes } from "./routes/secret.js";
 import { createPlaybookRoutes } from "./routes/playbook.js";
+import { createConnectionsRoute } from "./routes/connections.js";
 import { PlaybookRunner } from "./modules/playbook/runner.js";
 import { loadAllPlaybooks } from "./modules/playbook/loader.js";
 import type { Playbook } from "@tyrum/schemas";
@@ -24,6 +25,7 @@ import type { AgentRuntime } from "./modules/agent/runtime.js";
 import type { TokenStore } from "./modules/auth/token-store.js";
 import type { SecretProvider } from "./modules/secret/provider.js";
 import { createAuthMiddleware } from "./modules/auth/middleware.js";
+import type { ConnectionManager } from "./ws/connection-manager.js";
 
 export interface AppOptions {
   agentRuntime?: AgentRuntime;
@@ -31,6 +33,7 @@ export interface AppOptions {
   secretProvider?: SecretProvider;
   playbooks?: Playbook[];
   isLocalOnly?: boolean;
+  connectionManager?: ConnectionManager;
 }
 
 export function createApp(container: GatewayContainer, opts: AppOptions = {}): Hono {
@@ -67,6 +70,10 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
 
   if (opts.secretProvider) {
     app.route("/", createSecretRoutes(opts.secretProvider));
+  }
+
+  if (opts.connectionManager) {
+    app.route("/", createConnectionsRoute(opts.connectionManager));
   }
 
   if (process.env["TYRUM_AGENT_ENABLED"] === "1") {
