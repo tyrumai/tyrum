@@ -47,6 +47,7 @@ Self-hosted personal AI assistant platform with a single-instance, single-user r
 4. **Install dependencies:** `pnpm install` from the repo root.
 5. **Run checks:** `pnpm typecheck && pnpm test && pnpm lint`
 6. **Start the gateway:** `pnpm --filter @tyrum/gateway start`
+   - To enable singleton agent routes (`/agent/status`, `/agent/turn`), set `TYRUM_AGENT_ENABLED=1`.
 7. **Start the portal:** `pnpm --filter tyrum-portal dev`
 8. **Run single-instance runtime (web + gateway in one process):** `pnpm --filter tyrum-portal start:single`
 
@@ -68,6 +69,7 @@ Self-hosted personal AI assistant platform with a single-instance, single-user r
 | Lint | `pnpm lint` |
 | Build all packages | `pnpm build` |
 | Start gateway | `pnpm --filter @tyrum/gateway start` |
+| Start gateway + agent runtime | `TYRUM_AGENT_ENABLED=1 pnpm --filter @tyrum/gateway start` |
 | Start web portal | `pnpm --filter tyrum-portal dev` |
 | Start single-instance runtime | `pnpm --filter tyrum-portal start:single` |
 | Build web portal | `pnpm --filter tyrum-portal build` |
