@@ -3,6 +3,9 @@ import { NodeRuntime } from "../node-runtime.js";
 import { loadConfig } from "../config/store.js";
 import { resolvePermissions } from "../config/permissions.js";
 import { decryptToken } from "../config/token-store.js";
+import { DesktopProvider } from "../providers/desktop-provider.js";
+import { PlaywrightProvider } from "../providers/playwright-provider.js";
+import { CliProvider } from "../providers/cli-provider.js";
 
 let runtime: NodeRuntime | null = null;
 
@@ -32,7 +35,26 @@ export function registerNodeIpc(window: BrowserWindow): void {
       token = config.remote.tokenRef ? decryptToken(config.remote.tokenRef) : "";
     }
 
-    // Register providers here in future tasks (5.2, 5.3, 5.4)
+    // Register providers based on capabilities and permissions
+    if (config.capabilities.desktop) {
+      runtime.registerProvider(new DesktopProvider(permissions, async (_prompt) => {
+        // For V1: fail-closed - always require explicit approval through UI
+        return false;
+      }));
+    }
+    if (config.capabilities.playwright && permissions.playwright) {
+      runtime.registerProvider(new PlaywrightProvider({
+        allowedDomains: config.web.allowedDomains,
+        headless: config.web.headless,
+        domainRestricted: permissions.playwrightDomainRestricted,
+      }));
+    }
+    if (config.capabilities.cli && permissions.cli) {
+      runtime.registerProvider(new CliProvider(
+        config.cli.allowedCommands,
+        config.cli.allowedWorkingDirs,
+      ));
+    }
 
     runtime.connect(wsUrl, token);
     return { status: "connecting" };

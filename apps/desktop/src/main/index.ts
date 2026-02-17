@@ -2,6 +2,7 @@ import { app, BrowserWindow } from "electron";
 import { join } from "node:path";
 import { registerGatewayIpc } from "./ipc/gateway-ipc.js";
 import { registerNodeIpc } from "./ipc/node-ipc.js";
+import { registerConfigIpc } from "./ipc/config-ipc.js";
 import type { GatewayManager } from "./gateway-manager.js";
 
 let mainWindow: BrowserWindow | null = null;
@@ -18,6 +19,7 @@ function createWindow(): void {
     },
   });
 
+  registerConfigIpc();
   gatewayManager = registerGatewayIpc(mainWindow);
   registerNodeIpc(mainWindow);
 
