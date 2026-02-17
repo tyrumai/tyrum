@@ -4,7 +4,8 @@
  * Creates the DI container, builds the Hono app, and starts the HTTP server.
  */
 
-import { serve } from "@hono/node-server";
+import { createServer } from "node:http";
+import { getRequestListener } from "@hono/node-server";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -27,6 +28,10 @@ export { createApp } from "./app.js";
 export { createEventBus } from "./event-bus.js";
 export type { GatewayEvents, EventBus } from "./event-bus.js";
 export { TokenStore } from "./modules/auth/token-store.js";
+export { createWsHandler } from "./routes/ws.js";
+export type { WsRouteOptions } from "./routes/ws.js";
+export { ConnectionManager } from "./ws/connection-manager.js";
+export type { ConnectedClient, ConnectionStats } from "./ws/connection-manager.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -87,12 +92,22 @@ async function main(): Promise<void> {
   watcherScheduler.start();
   console.log("Watcher processor and scheduler started");
 
-  const agentEnabled = process.env["TYRUM_AGENT_ENABLED"] === "1";
-  const agentRuntime = agentEnabled ? new AgentRuntime({ container, secretProvider }) : undefined;
-  const app = createApp(container, { agentRuntime, tokenStore, secretProvider, isLocalOnly });
-
-  // Set up WebSocket handler
   const connectionManager = new ConnectionManager();
+
+  const agentEnabled = process.env["TYRUM_AGENT_ENABLED"] === "1";
+  const agentRuntime = agentEnabled
+    ? new AgentRuntime({ container, secretProvider })
+    : undefined;
+
+  const app = createApp(container, {
+    agentRuntime,
+    tokenStore,
+    secretProvider,
+    isLocalOnly,
+    connectionManager,
+  });
+
+  // --- WebSocket handler ---
   const wsHandler = createWsHandler({
     connectionManager,
     protocolDeps: { connectionManager },
@@ -100,10 +115,10 @@ async function main(): Promise<void> {
     isLocalOnly,
   });
 
-  console.log(`Gateway v${VERSION} listening on http://${host}:${port}`);
-  const server = serve({ fetch: app.fetch, port, hostname: host });
+  // --- HTTP server with WS upgrade support ---
+  const listener = getRequestListener(app.fetch);
+  const server = createServer(listener);
 
-  // Mount WebSocket upgrade handler on the raw HTTP server
   server.on("upgrade", (req, socket, head) => {
     const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
     if (pathname === "/ws") {
@@ -111,6 +126,10 @@ async function main(): Promise<void> {
     } else {
       socket.destroy();
     }
+  });
+
+  server.listen(port, host, () => {
+    console.log(`Gateway v${VERSION} listening on http://${host}:${port}`);
   });
 
   let shuttingDown = false;
@@ -133,12 +152,22 @@ async function main(): Promise<void> {
       }
     });
 
+    wsHandler.stopHeartbeat();
+
+    const closeWss = new Promise<void>((resolve) => {
+      try {
+        wsHandler.wss.close(() => resolve());
+      } catch {
+        resolve();
+      }
+    });
+
     container.watcherProcessor.stop();
     watcherScheduler.stop();
-    wsHandler.stopHeartbeat();
 
     Promise.allSettled([
       closeServer,
+      closeWss,
       agentRuntime?.shutdown() ?? Promise.resolve(),
     ])
       .finally(() => {
@@ -164,5 +193,6 @@ const isMain =
     process.argv[1].endsWith("/index.ts"));
 
 if (isMain) {
-  main();
+  void main();
 }
+

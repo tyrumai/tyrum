@@ -38,6 +38,7 @@ describe("requiresPostcondition", () => {
       "Pay",
       "Store",
       "Watch",
+      "Desktop",
     ];
     for (const kind of mutating) {
       expect(requiresPostcondition(kind)).toBe(true);
