@@ -14,7 +14,8 @@
   },
   "dependencies": {
     "@tyrum/client": "workspace:*",
-    "@tyrum/schemas": "workspace:*"
+    "@tyrum/schemas": "workspace:*",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/react": "^19.2.0",
