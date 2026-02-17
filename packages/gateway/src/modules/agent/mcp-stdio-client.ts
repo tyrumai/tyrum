@@ -88,6 +88,11 @@ export class McpStdioClient {
   }
 
   private async startInternal(): Promise<void> {
+    // Clear leftover I/O buffers from any previous process to prevent
+    // stale bytes from corrupting the new process's JSON-RPC framing.
+    this.buffer = "";
+    this.stderrTail = "";
+
     const args = this.spec.args ?? [];
     const env = {
       ...process.env,
@@ -118,6 +123,8 @@ export class McpStdioClient {
       this.started = false;
       this.startPromise = undefined;
       this.proc = undefined;
+      this.buffer = "";
+      this.stderrTail = "";
     };
 
     this.proc.on("error", (err) => {
@@ -151,6 +158,8 @@ export class McpStdioClient {
     this.started = false;
     this.startPromise = undefined;
     this.rejectAllPending(new Error("MCP client stopped"));
+    this.buffer = "";
+    this.stderrTail = "";
 
     if (!proc) return;
 

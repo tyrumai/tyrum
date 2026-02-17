@@ -63,4 +63,27 @@ describe("McpStdioClient", () => {
     const result = await client.toolsList();
     expect(result.tools.map((t) => t.name)).toContain("echo");
   });
+
+  it("clears buffer and stderrTail on stop so restart is not corrupted", async () => {
+    client = new McpStdioClient(makeSpec());
+    await client.start();
+
+    // Simulate a partial JSON-RPC write left in buffer (as if the server
+    // crashed mid-line) and stale stderr content.
+    const internal = client as unknown as { buffer: string; stderrTail: string };
+    internal.buffer = '{"jsonrpc":"2.0","id":99,"res';
+    internal.stderrTail = "stale stderr from dead process";
+
+    await client.stop();
+
+    // After stop, both buffers must be cleared.
+    expect(internal.buffer).toBe("");
+    expect(internal.stderrTail).toBe("");
+
+    // Restart with the same client instance must succeed: the stale partial
+    // line must not corrupt the new initialize handshake.
+    await client.start();
+    const result = await client.toolsList();
+    expect(result.tools.map((t) => t.name)).toContain("echo");
+  });
 });
