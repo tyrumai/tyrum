@@ -1,16 +1,17 @@
 # Tyrum
 
-Self-hosted personal AI assistant platform with a single-instance, single-user runtime. The default profile is local-first and runs without application-layer authentication; services bind to localhost by default.
+Self-hosted autonomous worker agent platform with a single-instance, single-user runtime. The default profile is local-first and runs without application-layer authentication; services bind to localhost by default.
 
 ## Overview
-- **Vision:** A chat/voice-native personal assistant that handles execution end-to-end across web, mobile, CLI, and structured APIs while keeping the backend invisible to the user.
-- **Deployment profile (default):** user-hosted, single-user, localhost-only (`127.0.0.1`) with no auth prompts.
+- **Goal:** A chat-first autonomous worker agent that can operate software like a human would, while preferring structured interfaces when available and using web/desktop automation as fallback. It produces audit evidence and asks for approvals when needed. “Personal assistant” is the first role, but the same worker can take on other remote-work roles via configuration.
+- **Deployment profile (default):** user-hosted, single-user, localhost-only (`127.0.0.1`) with no auth prompts. Run multiple instances (separate `TYRUM_HOME` + DB) if you want multiple workers.
 - **Differentiators:**
   - No hard-coded skills; autonomy emerges from learned memory and generic executors.
-  - Proactive nudges with external policy enforcement for spending, PII, and explainability.
-  - Generic execution surfaces first, with opportunistic structured integrations (MCP/OpenAPI/GraphQL).
-  - Every action remains auditable, reproducible, and backed by minimal constitutional rules.
-- Full product concept, architecture diagrams, and appendices live in `docs/product_concept_v1.md`.
+  - Approvals + policy gate for spending, PII, and explainability; spend is deny-by-default until configured.
+  - Prefer structured interfaces; fall back to web/desktop automation for drop-in “remote worker replacement”.
+  - Every action is auditable, reproducible, and backed by minimal constitutional rules.
+  - BYOK LLMs via OpenAI-compatible `/v1/*` proxy routes.
+- Full vision (goal), architecture diagrams, and appendices live in `docs/vision.md`.
 
 ## Technology Stack
 
@@ -41,7 +42,7 @@ Self-hosted personal AI assistant platform with a single-instance, single-user r
 
 ## Getting Started
 
-1. **Read the concept:** Start with `docs/product_concept_v1.md` to understand goals and architecture.
+1. **Read the vision:** Start with `docs/vision.md` to understand goals and architecture.
 2. **Install tooling:** Node.js 24.x and pnpm.
 3. **Clone & branch:** Fork/clone the repo, create branches as `<issue-number>-<slug>`.
 4. **Install dependencies:** `pnpm install` from the repo root.
@@ -79,7 +80,7 @@ Self-hosted personal AI assistant platform with a single-instance, single-user r
 Follow these steps to provision the Telegram channel safely across local and staging environments.
 
 ### 1. Create the bot via BotFather
-- Chat with [@BotFather](https://t.me/BotFather) and run `/newbot` to name the assistant and choose a unique handle.
+- Chat with [@BotFather](https://t.me/BotFather) and run `/newbot` to name the agent and choose a unique handle.
 - Copy the API token BotFather returns; treat it as a secret and never paste it in chat or commit history.
 
 ### 2. Set the webhook endpoint
@@ -94,17 +95,16 @@ Follow these steps to provision the Telegram channel safely across local and sta
 - Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_URL` environment variables before starting the gateway.
 
 ## Key Documents
-- [Product Concept v1](docs/product_concept_v1.md)
-- [Working Agreements (DoR/DoD)](docs/working_agreements.md)
+- [Vision (Goal)](docs/vision.md)
 
 ## Roadmap
-See `docs/product_concept_v1.md` for architecture and feature details.
+See `docs/vision.md` for architecture and feature details.
 
 ## Way of Working
 - **Issue Lifecycle:** All work lives in GitHub Issues with acceptance criteria; the Tyrum project board tracks Backlog → Ready → In Progress → Review → Done.
 - **PR Expectations:** One issue per PR, automated checks pass before review.
-- **Continuous Improvement:** Retrospectives update the working agreements.
+- **Continuous Improvement:** Retrospectives update `CONTRIBUTING.md` and `docs/` when needed.
 
 ## Contact & Support
 - Discussion and planning live in GitHub Issues and the Tyrum project board.
-- For urgent questions, mention the relevant owner in Issues/PRs; long-term decisions belong in `docs/` (ADRs) or in the working agreements.
+- For urgent questions, mention the relevant owner in Issues/PRs; long-term decisions belong in `docs/` and Issues.
