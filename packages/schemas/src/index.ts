@@ -101,3 +101,23 @@ export {
   GatewayMessage,
   requiredCapability,
 } from "./protocol.js";
+
+export {
+  AgentModelConfig,
+  AgentSkillConfig,
+  AgentMcpConfig,
+  AgentToolConfig,
+  AgentSessionConfig,
+  AgentMemoryConfig,
+  AgentConfig,
+  IdentityStyle,
+  IdentityFrontmatter,
+  IdentityPack,
+  SkillRequires,
+  SkillFrontmatter,
+  SkillManifest,
+  McpServerSpec,
+  AgentTurnRequest,
+  AgentTurnResponse,
+  AgentStatusResponse,
+} from "./agent.js";
