@@ -20,6 +20,7 @@ import {
   loadIdentity,
 } from "./workspace.js";
 import { selectToolDirectory } from "./tools.js";
+import { McpManager } from "./mcp-manager.js";
 
 interface LlmMessage {
   role: "system" | "developer" | "user";
@@ -235,6 +236,7 @@ export class AgentRuntime {
   private readonly home: string;
   private readonly sessionDal: SessionDal;
   private readonly fetchImpl: typeof fetch;
+  private readonly mcpManager = new McpManager();
   private cleanupAtMs = 0;
 
   constructor(private readonly opts: AgentRuntimeOptions) {
@@ -319,16 +321,20 @@ export class AgentRuntime {
     this.maybeCleanupSessions(ctx.config.sessions.ttl_days);
 
     const session = this.sessionDal.getOrCreate(input.channel, input.thread_id);
-    const memoryHits = ctx.config.memory.markdown_enabled
-      ? await ctx.memoryStore.search(input.message, 5)
-      : [];
-
-    const tools = selectToolDirectory(
-      input.message,
-      ctx.config.tools.allow,
-      ctx.mcpServers,
-      8,
+    const wantsMcpTools = ctx.config.tools.allow.some(
+      (entry) => entry === "*" || entry.startsWith("mcp."),
     );
+
+    const [memoryHits, mcpTools] = await Promise.all([
+      ctx.config.memory.markdown_enabled
+        ? ctx.memoryStore.search(input.message, 5)
+        : Promise.resolve([]),
+      wantsMcpTools
+        ? this.mcpManager.listToolDescriptors(ctx.mcpServers)
+        : Promise.resolve([]),
+    ]);
+
+    const tools = selectToolDirectory(input.message, ctx.config.tools.allow, mcpTools, 8);
 
     const messages: LlmMessage[] = [
       {
