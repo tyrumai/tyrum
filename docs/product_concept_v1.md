@@ -343,8 +343,8 @@ to keep policy, planner, and API services aligned on envelopes and error handlin
 - **Reaction:** a small plan built from the same primitives (notify, rebook, reschedule).
 - The PA proposes/updates rules; user can tweak or disable any watcher.
 - Registrations persist to the `watchers` Postgres table; planner services join on `watchers.plan_reference` to hydrate execution plans.
-- AuthN/AuthZ is pending for the registration surface; keep route internal until policy gate issues scoped credentials.
-- **Portal verification stub:** deterministic session cookies derive from `PORTAL_SESSION_SECRET` and expire after 1 hour. Manual QA: (1) capture consent via `POST /api/onboarding/consent` with stub payload, (2) call `POST /api/onboarding/verify` to receive the session cookie, (3) confirm `/portal` routes load while tampered cookies redirect to the landing CTA. Document that the stub precedes real auth.
+- Self-hosted profile defaults to a single-user local deployment with no application-layer auth.
+- Portal routes are directly accessible in local mode; hardening should happen at the network boundary (localhost bind, reverse proxy, VPN).
 
 ---
 

@@ -1,10 +1,4 @@
 import React from "react";
-import WaitlistCta from "./waitlist-cta";
-import {
-  CTA_FROM_PARAM,
-  CTA_REDIRECT_PARAM,
-  CTA_REDIRECT_REASON,
-} from "./lib/portal-auth";
 
 const valueProps = [
   {
@@ -19,7 +13,7 @@ const valueProps = [
   },
   {
     title: "Privacy by default",
-    copy: "Data stays within your workspace boundary and redacts sensitive fields by design.",
+    copy: "Data stays within your local workspace boundary by default.",
   },
 ];
 
@@ -29,48 +23,7 @@ const trustSignals = [
   "Privacy by default",
 ];
 
-type SearchParamRecord = Record<string, string | string[] | undefined>;
-
-type HomeProps = {
-  searchParams?: Promise<SearchParamRecord>;
-};
-
-function unwrapSearchParams(
-  searchParams: HomeProps["searchParams"],
-): SearchParamRecord {
-  if (!searchParams) {
-    return {};
-  }
-
-  if (typeof (searchParams as { then?: unknown }).then !== "function") {
-    return searchParams as unknown as SearchParamRecord;
-  }
-
-  // Next.js 16 no longer exports UnsafeUnwrappedSearchParams.
-  // Tests pass a promise-like object with enumerable keys for sync render.
-  return searchParams as unknown as SearchParamRecord;
-}
-
-function extractParamValue(
-  value: string | string[] | undefined,
-): string | undefined {
-  if (!value) {
-    return undefined;
-  }
-
-  return Array.isArray(value) ? value[0] : value;
-}
-
-export default function Home({ searchParams }: HomeProps) {
-  const params = unwrapSearchParams(searchParams);
-  const redirectReason = extractParamValue(params[CTA_REDIRECT_PARAM]);
-  const redirectedFromRaw = extractParamValue(params[CTA_FROM_PARAM]);
-  const redirectedFrom =
-    redirectedFromRaw && redirectedFromRaw.startsWith("/")
-      ? redirectedFromRaw
-      : undefined;
-  const showPortalRedirect = redirectReason === CTA_REDIRECT_REASON;
-
+export default function Home() {
   return (
     <main className="landing" aria-labelledby="hero-heading">
       <section className="hero">
@@ -78,22 +31,12 @@ export default function Home({ searchParams }: HomeProps) {
           <p className="hero__eyebrow">Autonomy within your limits</p>
           <h1 id="hero-heading">The end of to-do.</h1>
           <p className="hero__deck">
-            No lists. Just outcomes—captured, handled, and proven.
+            No lists. Just outcomes-captured, handled, and proven.
           </p>
-          {showPortalRedirect ? (
-            <p className="hero__notice" role="status" aria-live="polite">
-              {redirectedFrom ? (
-                <>
-                  Access to <span className="hero__notice-path">{redirectedFrom}</span> requires an
-                  active session. Complete onboarding below to continue.
-                </>
-              ) : (
-                <>Portal access requires an active session. Complete onboarding below to continue.</>
-              )}
-            </p>
-          ) : null}
           <div className="hero__cta">
-            <WaitlistCta />
+            <a className="cta cta--primary" href="/portal/settings">
+              Open portal
+            </a>
             <a className="cta cta--secondary" href="#value-props">
               See how it works
             </a>

@@ -24,9 +24,6 @@ import type {
 
 const AUTO_APPROVE_LIMIT_MINOR = 10_000;
 const HARD_DENY_LIMIT_MINOR = 50_000;
-const MAX_USER_IDENTIFIER_LEN = 128;
-const MAX_PAM_PROFILE_LEN = 64;
-const MAX_PAM_VERSION_LEN = 32;
 
 const AUTO_APPROVE_SCOPES: readonly string[] = [
   "mcp://calendar",
@@ -280,50 +277,8 @@ export interface RequestValidationError {
 }
 
 export function validatePolicyRequest(
-  request: PolicyCheckRequest,
+  _request: PolicyCheckRequest,
 ): RequestValidationError | undefined {
-  const userId = request.user_id?.trim();
-  if (userId == null || userId.length === 0) {
-    return {
-      error: "missing_user_id",
-      message: "user_id is required for policy evaluation",
-    };
-  }
-
-  if (!isValidIdentifier(userId, MAX_USER_IDENTIFIER_LEN)) {
-    return {
-      error: "invalid_user_id",
-      message:
-        "user_id must contain 1-128 ASCII alphanumeric, hyphen, underscore, or dot characters",
-    };
-  }
-
-  if (request.pam_profile != null) {
-    if (
-      !isValidIdentifier(
-        request.pam_profile.profile_id,
-        MAX_PAM_PROFILE_LEN,
-      )
-    ) {
-      return {
-        error: "invalid_pam_profile_id",
-        message:
-          "pam_profile.profile_id must contain 1-64 ASCII alphanumeric, hyphen, underscore, or dot characters",
-      };
-    }
-
-    if (
-      request.pam_profile.version != null &&
-      !isValidIdentifier(request.pam_profile.version, MAX_PAM_VERSION_LEN)
-    ) {
-      return {
-        error: "invalid_pam_profile_version",
-        message:
-          "pam_profile.version must contain 1-32 ASCII alphanumeric, hyphen, underscore, or dot characters",
-      };
-    }
-  }
-
   return undefined;
 }
 

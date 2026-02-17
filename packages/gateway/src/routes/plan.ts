@@ -121,7 +121,7 @@ function followUpStep(request: PlanRequest): ActionPrimitive {
     type: "Message",
     args: {
       channel: "internal",
-      body: `Summarize discovery path for subject ${request.subject_id}`,
+      body: `Summarize discovery path for single-user workspace request ${request.request_id}`,
     },
     postcondition: { status: "queued" },
   };
@@ -317,16 +317,6 @@ export function createPlanRoutes(container: GatewayContainer): Hono {
       );
     }
 
-    if (request.subject_id.trim() === "") {
-      return c.json(
-        { error: "invalid_request", message: "subject_id must not be empty" },
-        400,
-      );
-    }
-
-    // Enrich user context: look up PAM profile from memory if available
-    enrichUserContext(container, request);
-
     const planId = formatPlanId();
     const spendDirective = extractSpendDirective(request);
     let capturedSpend: RiskSpendContext | undefined;
@@ -335,9 +325,6 @@ export function createPlanRoutes(container: GatewayContainer): Hono {
 
     const policyRequest = {
       request_id: request.request_id,
-      user_id:
-        request.user?.user_id ?? request.subject_id,
-      pam_profile: request.user?.pam_profile,
       spend: spendDirective
         ? {
             amount_minor_units: spendDirective.amountMinorUnits,
@@ -361,7 +348,7 @@ export function createPlanRoutes(container: GatewayContainer): Hono {
         // resolutions in the simplified pipeline, so we use fallback path)
         const steps = buildPlanSteps(request, spendDirective);
 
-        const synopsis = `Falling back to automation for ${request.subject_id}`;
+        const synopsis = "Falling back to automation for the local workspace";
         const spendSuffix = spendDirective
           ? `; collect authorized spend in ${spendDirective.currency}`
           : "";
@@ -456,7 +443,6 @@ export function createPlanRoutes(container: GatewayContainer): Hono {
     const auditPayload = {
       plan_id: planId,
       request_id: request.request_id,
-      subject_id: request.subject_id,
       policy_decision: policyDecision.decision,
       risk: riskVerdict,
       outcome_status: outcome.status,
@@ -491,50 +477,4 @@ export function createPlanRoutes(container: GatewayContainer): Hono {
   });
 
   return plan;
-}
-
-// ---------------------------------------------------------------------------
-// User context enrichment
-// ---------------------------------------------------------------------------
-
-function enrichUserContext(
-  container: GatewayContainer,
-  request: PlanRequest,
-): void {
-  const subjectId = request.subject_id.trim();
-  if (!subjectId) return;
-
-  // Determine desired PAM profile
-  const pamProfile = request.user?.pam_profile;
-  const profileId = pamProfile?.profile_id ?? "pam-default";
-  const hasVersion = Boolean(pamProfile?.version?.trim());
-
-  if (hasVersion) {
-    ensureUserId(request);
-    return;
-  }
-
-  // Look up PAM profile from memory
-  const stored = container.memoryDal.getPamProfile(subjectId, profileId);
-  if (stored) {
-    const version =
-      typeof stored.version === "string" ? stored.version : undefined;
-    if (!request.user) {
-      request.user = {
-        user_id: subjectId,
-        pam_profile: { profile_id: profileId, version },
-      };
-    } else {
-      ensureUserId(request);
-      request.user.pam_profile = { profile_id: profileId, version };
-    }
-  } else {
-    ensureUserId(request);
-  }
-}
-
-function ensureUserId(request: PlanRequest): void {
-  if (request.user && request.user.user_id.trim() === "") {
-    request.user.user_id = request.subject_id;
-  }
 }

@@ -1,46 +1,41 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { GET } from "./route";
+import { resetLocalStoreForTesting } from "../../../local-store";
 
-const originalFetch = global.fetch;
-const originalApiBaseUrl = process.env.API_BASE_URL;
+const PLAN_ID = "3a1c9f77-2f6b-4f2f-a1a3-bc9471d8e852";
 
 describe("audit plan route", () => {
   beforeEach(() => {
-    vi.resetAllMocks();
-    process.env.API_BASE_URL = "https://api.example.com";
+    resetLocalStoreForTesting();
   });
 
-  afterEach(() => {
-    global.fetch = originalFetch;
-    if (originalApiBaseUrl === undefined) {
-      delete process.env.API_BASE_URL;
-    } else {
-      process.env.API_BASE_URL = originalApiBaseUrl;
-    }
-  });
-
-  it("forwards query parameters to the upstream API", async () => {
-    const responsePayload = JSON.stringify({ plan_id: "demo", events: [] });
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(responsePayload, {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
-    global.fetch = fetchMock as unknown as typeof global.fetch;
-
+  it("returns a local timeline for known plans", async () => {
     const request = new Request(
-      "https://portal.local/api/audit/plan/demo?event=abc123",
+      `https://portal.local/api/audit/plan/${PLAN_ID}?event=abc123`,
     );
 
-    await GET(request, {
-      params: Promise.resolve({ planId: "demo" }),
+    const response = await GET(request, {
+      params: Promise.resolve({ planId: PLAN_ID }),
     });
 
-    const [calledUrl, init] = fetchMock.mock.calls[0] ?? [];
-    expect(String(calledUrl)).toBe(
-      "https://api.example.com/audit/plan/demo?event=abc123",
-    );
-    expect(init).toMatchObject({ method: "GET" });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      plan_id: string;
+      events: unknown[];
+    };
+    expect(body.plan_id).toBe(PLAN_ID);
+    expect(body.events.length).toBeGreaterThan(0);
+  });
+
+  it("returns 404 for unknown plans", async () => {
+    const request = new Request("https://portal.local/api/audit/plan/unknown");
+
+    const response = await GET(request, {
+      params: Promise.resolve({ planId: "unknown" }),
+    });
+
+    expect(response.status).toBe(404);
+    const body = (await response.json()) as { error: string };
+    expect(body.error).toBe("plan_not_found");
   });
 });

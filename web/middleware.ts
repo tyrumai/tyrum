@@ -1,33 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
-import {
-  CTA_FROM_PARAM,
-  CTA_REDIRECT_PARAM,
-  CTA_REDIRECT_REASON,
-  PORTAL_SESSION_COOKIE,
-  isPortalSessionTokenValid,
-  isProtectedPortalPath,
-} from "./app/lib/portal-auth";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
-export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-
-  if (!isProtectedPortalPath(pathname)) {
-    return NextResponse.next();
-  }
-
-  const sessionCookie = request.cookies.get(PORTAL_SESSION_COOKIE)?.value?.trim();
-
-  if (isPortalSessionTokenValid(sessionCookie)) {
-    return NextResponse.next();
-  }
-
-  const redirectUrl = new URL("/", request.url);
-  redirectUrl.searchParams.set(CTA_REDIRECT_PARAM, CTA_REDIRECT_REASON);
-  redirectUrl.searchParams.set(CTA_FROM_PARAM, pathname);
-
-  return NextResponse.redirect(redirectUrl);
+export function middleware(_request: NextRequest) {
+  return NextResponse.next();
 }
-
-export const config = {
-  matcher: ["/portal/:path*"],
-};
