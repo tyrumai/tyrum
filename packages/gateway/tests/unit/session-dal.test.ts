@@ -72,4 +72,9 @@ describe("formatSessionId", () => {
   it("joins channel and thread id deterministically", () => {
     expect(formatSessionId("telegram", "123")).toBe("telegram:123");
   });
+
+  it("escapes colons to avoid collisions", () => {
+    expect(formatSessionId("a", "b:c")).toBe("a:b%3Ac");
+    expect(formatSessionId("a:b", "c")).toBe("a%3Ab:c");
+  });
 });

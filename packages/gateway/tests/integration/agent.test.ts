@@ -102,6 +102,8 @@ describe("agent routes", () => {
   let homeDir: string | undefined;
   const originalTyrumHome = process.env["TYRUM_HOME"];
   const originalAgentFlag = process.env["TYRUM_AGENT_ENABLED"];
+  const originalGatewayHost = process.env["GATEWAY_HOST"];
+  const originalGatewayPort = process.env["GATEWAY_PORT"];
 
   beforeEach(async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-"));
@@ -112,7 +114,17 @@ describe("agent routes", () => {
 
   afterEach(async () => {
     vi.restoreAllMocks();
-    delete process.env["GATEWAY_PORT"];
+    if (originalGatewayHost === undefined) {
+      delete process.env["GATEWAY_HOST"];
+    } else {
+      process.env["GATEWAY_HOST"] = originalGatewayHost;
+    }
+
+    if (originalGatewayPort === undefined) {
+      delete process.env["GATEWAY_PORT"];
+    } else {
+      process.env["GATEWAY_PORT"] = originalGatewayPort;
+    }
     if (originalTyrumHome === undefined) {
       delete process.env["TYRUM_HOME"];
     } else {
@@ -228,5 +240,41 @@ describe("agent routes", () => {
     const memoryFiles = await readdir(join(homeDir!, "memory"));
     expect(memoryFiles).toContain("MEMORY.md");
     expect(memoryFiles.some((name) => /^\d{4}-\d{2}-\d{2}\.md$/.test(name))).toBe(true);
+  });
+
+  it("normalizes bind-all host when deriving default model base url", async () => {
+    process.env["GATEWAY_HOST"] = "0.0.0.0";
+    process.env["GATEWAY_PORT"] = "8080";
+
+    await writeFile(
+      join(homeDir!, "agent.yml"),
+      `model:\n  model: frontier-gpt-4o\nskills:\n  enabled: []\nmcp:\n  enabled: []\ntools:\n  allow:\n    - tool.fs.read\nsessions:\n  ttl_days: 30\n  max_turns: 20\nmemory:\n  markdown_enabled: false\n`,
+      "utf-8",
+    );
+
+    const fetchMock = vi.fn(async (url: RequestInfo | URL) => {
+      expect(String(url)).toBe("http://127.0.0.1:8080/v1/chat/completions");
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: "ok" } }],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { app } = createTestApp();
+    const res = await app.request("/agent/turn", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        channel: "telegram",
+        thread_id: "dm-1",
+        message: "hello",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalled();
   });
 });
