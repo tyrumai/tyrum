@@ -123,11 +123,16 @@ export class ApprovalDal {
 
   /** Get all pending approvals, ordered by creation time (oldest first). */
   getPending(): ApprovalRow[] {
+    return this.getByStatus("pending");
+  }
+
+  /** Get approvals filtered by status, ordered by creation time (oldest first). */
+  getByStatus(status: ApprovalStatus): ApprovalRow[] {
     const rows = this.db
       .prepare(
-        "SELECT * FROM approvals WHERE status = 'pending' ORDER BY created_at ASC",
+        "SELECT * FROM approvals WHERE status = ? ORDER BY created_at ASC",
       )
-      .all() as RawApprovalRow[];
+      .all(status) as RawApprovalRow[];
 
     return rows.map(toApprovalRow);
   }

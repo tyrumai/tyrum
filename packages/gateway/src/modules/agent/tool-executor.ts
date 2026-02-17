@@ -244,12 +244,13 @@ export class ToolExecutor {
     const walk = async (value: unknown): Promise<unknown> => {
       if (typeof value === "string" && value.startsWith(SECRET_HANDLE_PREFIX)) {
         const handleId = value.slice(SECRET_HANDLE_PREFIX.length);
-        const resolved = await this.secretProvider!.resolve({
-          handle_id: handleId,
-          provider: "env",
-          scope: "",
-          created_at: "",
-        });
+        // Look up the full handle from the provider's stored list so that
+        // scope (needed by EnvSecretProvider) is populated correctly.
+        const allHandles = await this.secretProvider!.list();
+        const handle = allHandles.find((h) => h.handle_id === handleId);
+        const resolved = handle
+          ? await this.secretProvider!.resolve(handle)
+          : null;
         if (resolved !== null) {
           secrets.push(resolved);
           return resolved;

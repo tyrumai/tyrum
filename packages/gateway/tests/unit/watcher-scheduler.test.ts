@@ -85,16 +85,17 @@ describe("WatcherScheduler", () => {
     expect(events).toHaveLength(0);
   });
 
-  it("emits plan:completed event on fire", () => {
+  it("emits watcher:fired event on fire", () => {
     processor.createWatcher("plan-1", "periodic", { intervalMs: 1000 });
 
-    const received: GatewayEvents["plan:completed"][] = [];
-    eventBus.on("plan:completed", (e) => received.push(e));
+    const received: GatewayEvents["watcher:fired"][] = [];
+    eventBus.on("watcher:fired", (e) => received.push(e));
 
     scheduler.tick();
 
     expect(received).toHaveLength(1);
     expect(received[0]!.planId).toBe("plan-1");
+    expect(received[0]!.triggerType).toBe("periodic");
   });
 
   it("start and stop manage the interval timer", () => {

@@ -77,7 +77,7 @@ describe("Canvas routes", () => {
       expect(getRes.status).toBe(200);
 
       const csp = getRes.headers.get("Content-Security-Policy");
-      expect(csp).toBe("default-src 'self'; script-src 'none'");
+      expect(csp).toBe("default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; font-src 'self'");
 
       const contentType = getRes.headers.get("Content-Type");
       expect(contentType).toContain("text/html");
@@ -106,7 +106,7 @@ describe("Canvas routes", () => {
       expect(contentType).toContain("text/plain");
 
       const csp = getRes.headers.get("Content-Security-Policy");
-      expect(csp).toBe("default-src 'self'; script-src 'none'");
+      expect(csp).toBe("default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; font-src 'self'");
     });
 
     it("returns 404 for unknown artifact", async () => {

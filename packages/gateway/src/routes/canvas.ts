@@ -5,7 +5,7 @@
 import { Hono } from "hono";
 import type { CanvasDal } from "../modules/canvas/dal.js";
 
-const CSP_HEADER = "default-src 'self'; script-src 'none'";
+const CSP_HEADER = "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; font-src 'self'";
 const ALLOWED_CONTENT_TYPES = new Set(["text/html", "text/plain"]);
 
 export function createCanvasRoutes(canvasDal: CanvasDal): Hono {

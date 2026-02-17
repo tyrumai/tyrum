@@ -23,6 +23,7 @@ export type GatewayEvents = {
   "plan:completed": { planId: string; stepsExecuted: number };
   "plan:failed": { planId: string; reason: string };
   "plan:escalated": { planId: string; stepIndex: number };
+  "watcher:fired": { watcherId: number; planId: string; triggerType: string };
 };
 
 export type EventBus = Emitter<GatewayEvents>;
