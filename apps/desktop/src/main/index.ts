@@ -1,7 +1,10 @@
 import { app, BrowserWindow } from "electron";
 import { join } from "node:path";
+import { registerGatewayIpc } from "./ipc/gateway-ipc.js";
+import type { GatewayManager } from "./gateway-manager.js";
 
 let mainWindow: BrowserWindow | null = null;
+let gatewayManager: GatewayManager | null = null;
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -13,6 +16,8 @@ function createWindow(): void {
       nodeIntegration: false,
     },
   });
+
+  gatewayManager = registerGatewayIpc(mainWindow);
 
   if (process.env["VITE_DEV_SERVER_URL"]) {
     mainWindow.loadURL(process.env["VITE_DEV_SERVER_URL"]);
@@ -31,4 +36,7 @@ app.on("window-all-closed", () => {
 });
 app.on("activate", () => {
   if (mainWindow === null) createWindow();
+});
+app.on("before-quit", async () => {
+  await gatewayManager?.stop();
 });
