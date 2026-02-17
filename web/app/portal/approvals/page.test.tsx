@@ -60,7 +60,7 @@ describe("ApprovalsPage", () => {
   it("shows loading state then renders approval cards", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: vi.fn().mockResolvedValue(sampleApprovals),
+      json: vi.fn().mockResolvedValue({ approvals: sampleApprovals }),
     });
     global.fetch = fetchMock as unknown as typeof fetch;
 
@@ -82,7 +82,7 @@ describe("ApprovalsPage", () => {
   it("shows empty state when no approvals exist", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: vi.fn().mockResolvedValue([]),
+      json: vi.fn().mockResolvedValue({ approvals: [] }),
     });
     global.fetch = fetchMock as unknown as typeof fetch;
 
@@ -115,14 +115,16 @@ describe("ApprovalsPage", () => {
       .fn()
       .mockResolvedValueOnce({
         ok: true,
-        json: vi.fn().mockResolvedValue(sampleApprovals),
+        json: vi.fn().mockResolvedValue({ approvals: sampleApprovals }),
       })
       .mockResolvedValueOnce({
         ok: true,
         json: vi.fn().mockResolvedValue({
-          id: "appr-001",
-          status: "approved",
-          responded_at: "2026-02-17T11:00:00.000Z",
+          approval: {
+            id: "appr-001",
+            status: "approved",
+            responded_at: "2026-02-17T11:00:00.000Z",
+          },
         }),
       });
     global.fetch = fetchMock as unknown as typeof fetch;
@@ -158,14 +160,16 @@ describe("ApprovalsPage", () => {
       .fn()
       .mockResolvedValueOnce({
         ok: true,
-        json: vi.fn().mockResolvedValue(sampleApprovals),
+        json: vi.fn().mockResolvedValue({ approvals: sampleApprovals }),
       })
       .mockResolvedValueOnce({
         ok: true,
         json: vi.fn().mockResolvedValue({
-          id: "appr-001",
-          status: "denied",
-          responded_at: "2026-02-17T11:00:00.000Z",
+          approval: {
+            id: "appr-001",
+            status: "denied",
+            responded_at: "2026-02-17T11:00:00.000Z",
+          },
         }),
       });
     global.fetch = fetchMock as unknown as typeof fetch;
@@ -191,7 +195,7 @@ describe("ApprovalsPage", () => {
   it("renders the page heading", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: vi.fn().mockResolvedValue([]),
+      json: vi.fn().mockResolvedValue({ approvals: [] }),
     });
     global.fetch = fetchMock as unknown as typeof fetch;
 

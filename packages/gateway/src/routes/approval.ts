@@ -58,21 +58,29 @@ export function createApprovalRoutes(approvalDal: ApprovalDal): Hono {
     }
 
     const body = (await c.req.json()) as {
+      decision?: "approved" | "denied";
       approved?: boolean;
       reason?: string;
     };
 
-    if (typeof body.approved !== "boolean") {
+    // Accept either { decision: "approved"|"denied" } or legacy { approved: boolean }
+    let isApproved: boolean;
+    if (body.decision === "approved" || body.decision === "denied") {
+      isApproved = body.decision === "approved";
+    } else if (typeof body.approved === "boolean") {
+      isApproved = body.approved;
+    } else {
       return c.json(
         {
           error: "invalid_request",
-          message: "approved (boolean) is required",
+          message:
+            'decision ("approved" or "denied") or approved (boolean) is required',
         },
         400,
       );
     }
 
-    const updated = approvalDal.respond(id, body.approved, body.reason);
+    const updated = approvalDal.respond(id, isApproved, body.reason);
     if (!updated) {
       return c.json(
         {

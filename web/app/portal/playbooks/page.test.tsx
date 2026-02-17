@@ -57,7 +57,7 @@ describe("PlaybooksPage", () => {
   it("shows loading state then renders playbook cards", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: vi.fn().mockResolvedValue(samplePlaybooks),
+      json: vi.fn().mockResolvedValue({ playbooks: samplePlaybooks }),
     });
     global.fetch = fetchMock as unknown as typeof fetch;
 
@@ -77,7 +77,7 @@ describe("PlaybooksPage", () => {
   it("shows empty state when no playbooks exist", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: vi.fn().mockResolvedValue([]),
+      json: vi.fn().mockResolvedValue({ playbooks: [] }),
     });
     global.fetch = fetchMock as unknown as typeof fetch;
 
@@ -112,7 +112,7 @@ describe("PlaybooksPage", () => {
       .fn()
       .mockResolvedValueOnce({
         ok: true,
-        json: vi.fn().mockResolvedValue(samplePlaybooks),
+        json: vi.fn().mockResolvedValue({ playbooks: samplePlaybooks }),
       })
       .mockResolvedValueOnce({
         ok: true,
@@ -151,7 +151,7 @@ describe("PlaybooksPage", () => {
       .fn()
       .mockResolvedValueOnce({
         ok: true,
-        json: vi.fn().mockResolvedValue(samplePlaybooks),
+        json: vi.fn().mockResolvedValue({ playbooks: samplePlaybooks }),
       })
       .mockResolvedValueOnce({
         ok: false,
@@ -180,7 +180,7 @@ describe("PlaybooksPage", () => {
   it("renders the page heading", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: vi.fn().mockResolvedValue([]),
+      json: vi.fn().mockResolvedValue({ playbooks: [] }),
     });
     global.fetch = fetchMock as unknown as typeof fetch;
 
@@ -198,7 +198,7 @@ describe("PlaybooksPage", () => {
   it("has no accessibility violations", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: vi.fn().mockResolvedValue(samplePlaybooks),
+      json: vi.fn().mockResolvedValue({ playbooks: samplePlaybooks }),
     });
     global.fetch = fetchMock as unknown as typeof fetch;
 

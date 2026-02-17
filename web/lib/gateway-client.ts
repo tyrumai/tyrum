@@ -118,11 +118,15 @@ export class GatewayClient {
   }
 
   async getApprovals(): Promise<Approval[]> {
-    return this.request("/approvals");
+    const data = await this.request<{ approvals: Approval[] }>("/approvals");
+    return data.approvals;
   }
 
   async getApproval(id: string): Promise<Approval> {
-    return this.request(`/approvals/${encodeURIComponent(id)}`);
+    const data = await this.request<{ approval: Approval }>(
+      `/approvals/${encodeURIComponent(id)}`,
+    );
+    return data.approval;
   }
 
   async respondToApproval(
@@ -130,10 +134,14 @@ export class GatewayClient {
     decision: "approved" | "denied",
     reason?: string,
   ): Promise<ApprovalResponse> {
-    return this.request(`/approvals/${encodeURIComponent(id)}/respond`, {
-      method: "POST",
-      body: JSON.stringify({ decision, reason }),
-    });
+    const data = await this.request<{ approval: ApprovalResponse }>(
+      `/approvals/${encodeURIComponent(id)}/respond`,
+      {
+        method: "POST",
+        body: JSON.stringify({ decision, reason }),
+      },
+    );
+    return data.approval;
   }
 
   async getCanvasMeta(id: string): Promise<CanvasMeta> {
@@ -141,7 +149,8 @@ export class GatewayClient {
   }
 
   async getPlaybooks(): Promise<Playbook[]> {
-    return this.request("/playbooks");
+    const data = await this.request<{ playbooks: Playbook[] }>("/playbooks");
+    return data.playbooks;
   }
 
   async runPlaybook(id: string): Promise<PlaybookRunResult> {
@@ -151,7 +160,8 @@ export class GatewayClient {
   }
 
   async getWatchers(): Promise<Watcher[]> {
-    return this.request("/watchers");
+    const data = await this.request<{ watchers: Watcher[] }>("/watchers");
+    return data.watchers;
   }
 
   async createWatcher(req: CreateWatcherRequest): Promise<Watcher> {

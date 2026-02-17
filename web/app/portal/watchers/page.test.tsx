@@ -55,7 +55,7 @@ describe("WatchersPage", () => {
   it("shows loading state then renders watcher cards", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: vi.fn().mockResolvedValue(sampleWatchers),
+      json: vi.fn().mockResolvedValue({ watchers: sampleWatchers }),
     });
     global.fetch = fetchMock as unknown as typeof fetch;
 
@@ -75,7 +75,7 @@ describe("WatchersPage", () => {
   it("shows empty state when no watchers exist", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: vi.fn().mockResolvedValue([]),
+      json: vi.fn().mockResolvedValue({ watchers: [] }),
     });
     global.fetch = fetchMock as unknown as typeof fetch;
 
@@ -118,7 +118,7 @@ describe("WatchersPage", () => {
       .fn()
       .mockResolvedValueOnce({
         ok: true,
-        json: vi.fn().mockResolvedValue([]),
+        json: vi.fn().mockResolvedValue({ watchers: [] }),
       })
       .mockResolvedValueOnce({
         ok: true,
@@ -166,7 +166,7 @@ describe("WatchersPage", () => {
       .fn()
       .mockResolvedValueOnce({
         ok: true,
-        json: vi.fn().mockResolvedValue(sampleWatchers),
+        json: vi.fn().mockResolvedValue({ watchers: sampleWatchers }),
       })
       .mockResolvedValueOnce({
         ok: true,
@@ -206,7 +206,7 @@ describe("WatchersPage", () => {
       .fn()
       .mockResolvedValueOnce({
         ok: true,
-        json: vi.fn().mockResolvedValue(sampleWatchers),
+        json: vi.fn().mockResolvedValue({ watchers: sampleWatchers }),
       })
       .mockResolvedValueOnce({
         ok: true,
@@ -236,7 +236,7 @@ describe("WatchersPage", () => {
   it("renders the page heading", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: vi.fn().mockResolvedValue([]),
+      json: vi.fn().mockResolvedValue({ watchers: [] }),
     });
     global.fetch = fetchMock as unknown as typeof fetch;
 
@@ -254,7 +254,7 @@ describe("WatchersPage", () => {
   it("has no accessibility violations", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: vi.fn().mockResolvedValue(sampleWatchers),
+      json: vi.fn().mockResolvedValue({ watchers: sampleWatchers }),
     });
     global.fetch = fetchMock as unknown as typeof fetch;
 

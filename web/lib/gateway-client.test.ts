@@ -114,7 +114,7 @@ describe("GatewayClient", () => {
     const mockApprovals = [{ id: "appr-1", status: "pending" }];
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: vi.fn().mockResolvedValue(mockApprovals),
+      json: vi.fn().mockResolvedValue({ approvals: mockApprovals }),
     });
     global.fetch = fetchMock as unknown as typeof fetch;
 
@@ -132,7 +132,7 @@ describe("GatewayClient", () => {
     const mockApproval = { id: "appr-1", status: "pending" };
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: vi.fn().mockResolvedValue(mockApproval),
+      json: vi.fn().mockResolvedValue({ approval: mockApproval }),
     });
     global.fetch = fetchMock as unknown as typeof fetch;
 
@@ -154,7 +154,7 @@ describe("GatewayClient", () => {
     };
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: vi.fn().mockResolvedValue(mockResponse),
+      json: vi.fn().mockResolvedValue({ approval: mockResponse }),
     });
     global.fetch = fetchMock as unknown as typeof fetch;
 
@@ -246,7 +246,7 @@ describe("GatewayClient", () => {
     const mockPlaybooks = [{ id: "pb-1", name: "Daily Report" }];
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: vi.fn().mockResolvedValue(mockPlaybooks),
+      json: vi.fn().mockResolvedValue({ playbooks: mockPlaybooks }),
     });
     global.fetch = fetchMock as unknown as typeof fetch;
 
@@ -282,7 +282,7 @@ describe("GatewayClient", () => {
     const mockWatchers = [{ id: "w-1", active: true }];
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: vi.fn().mockResolvedValue(mockWatchers),
+      json: vi.fn().mockResolvedValue({ watchers: mockWatchers }),
     });
     global.fetch = fetchMock as unknown as typeof fetch;
 
