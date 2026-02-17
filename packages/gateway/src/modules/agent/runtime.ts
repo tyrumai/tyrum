@@ -322,7 +322,7 @@ export class AgentRuntime {
 
     const session = this.sessionDal.getOrCreate(input.channel, input.thread_id);
     const wantsMcpTools = ctx.config.tools.allow.some(
-      (entry) => entry === "*" || entry.startsWith("mcp."),
+      (entry) => entry === "*" || entry === "mcp*" || entry.startsWith("mcp."),
     );
 
     const [memoryHits, mcpTools] = await Promise.all([
