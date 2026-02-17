@@ -29,17 +29,24 @@ export class PlaywrightProvider implements CapabilityProvider {
       return { success: false, error: "Missing 'op' field in Web action args" };
     }
 
-    switch (op) {
-      case "navigate":
-        return this.navigate(action, args);
-      case "click":
-        return this.click(action, args);
-      case "fill":
-        return this.fill(action, args);
-      case "snapshot":
-        return this.snapshot();
-      default:
-        return { success: false, error: `Unknown Web operation: ${op}` };
+    try {
+      switch (op) {
+        case "navigate":
+          return await this.navigate(action, args);
+        case "click":
+          return await this.click(action, args);
+        case "fill":
+          return await this.fill(action, args);
+        case "snapshot":
+          return await this.snapshot();
+        default:
+          return { success: false, error: `Unknown Web operation: ${op}` };
+      }
+    } catch (err) {
+      return {
+        success: false,
+        error: `Playwright backend error: ${(err as Error).message}`,
+      };
     }
   }
 

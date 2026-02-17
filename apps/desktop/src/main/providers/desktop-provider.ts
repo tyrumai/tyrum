@@ -25,13 +25,20 @@ export class DesktopProvider implements CapabilityProvider {
     }
     const args = parseResult.data;
 
-    switch (args.op) {
-      case "screenshot":
-        return this.screenshot(args);
-      case "mouse":
-        return this.mouseAction(args);
-      case "keyboard":
-        return this.keyboardAction(args);
+    try {
+      switch (args.op) {
+        case "screenshot":
+          return await this.screenshot(args);
+        case "mouse":
+          return await this.mouseAction(args);
+        case "keyboard":
+          return await this.keyboardAction(args);
+      }
+    } catch (err) {
+      return {
+        success: false,
+        error: `Desktop backend error: ${(err as Error).message}`,
+      };
     }
   }
 

@@ -6,6 +6,8 @@
  * connections are allowed, preserving backward compatibility.
  */
 
+import { timingSafeEqual } from "node:crypto";
+
 /**
  * Validates the token supplied during the WebSocket upgrade handshake.
  *
@@ -18,5 +20,6 @@ export function validateWsToken(token: string | undefined): boolean {
     // No token configured — dev/local mode, allow all
     return true;
   }
-  return token === expected;
+  if (!token || token.length !== expected.length) return false;
+  return timingSafeEqual(Buffer.from(token), Buffer.from(expected));
 }
