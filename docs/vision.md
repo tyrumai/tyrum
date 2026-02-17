@@ -11,9 +11,9 @@ Tyrum is a self-hosted **autonomous worker agent**: software that can take on ro
 
 The goal is for the worker to operate software **like a human would**, making it a drop-in replacement for many remote human workflows.
 
-Tyrum is built for self-hosters and is intentionally **single-user per installation**. To run multiple workers, run multiple instances (separate `TYRUM_HOME` and SQLite DB) on one or more machines. The agent has a stable identity + role overlay, short-term **Sessions** keyed by `(channel, thread_id)`, and long-term memory (facts, episodic events, journal) designed to prevent repeating mistakes.
+Tyrum is built for self-hosters and is intentionally **single-user per installation**. To run multiple workers, run multiple instances on separate machines (each with its own `TYRUM_HOME` and SQLite DB). The agent has a stable identity + role overlay, short-term **Sessions** keyed by `(channel, thread_id)`, and long-term memory (facts, episodic events, journal) designed to prevent repeating mistakes.
 
-Guardrails (spend/PII/legal/explainability) are enforced outside the LLM prompt. Spend is **denied by default** until the user configures caps/permissions. Users interact via Telegram + desktop worker apps + a portal that exposes settings, an approval queue, and a live audit timeline. The goal is to operate software “like a human” while preferring structured interfaces when available and using web/desktop automation as fallback. LLM access is BYOK via OpenAI-compatible `/v1/*` proxy routes (no offline mode; no built-in local model requirement).
+Guardrails (spend/PII/legal/explainability) are enforced outside the LLM prompt. Spend is **denied by default** until the user configures caps/permissions. Users interact via Telegram + desktop worker apps + a portal that exposes settings, an approval queue, and a live audit timeline. The goal is to operate software “like a human” while preferring structured interfaces when available and using web/desktop automation as fallback. LLM access is BYOK via OpenAI-compatible upstream APIs (no offline mode; no built-in local model requirement).
 
 ---
 
@@ -38,7 +38,7 @@ Guardrails (spend/PII/legal/explainability) are enforced outside the LLM prompt.
    - No new‑party PII sharing without consent.
    - Respect legal/channel rules.
    - Every action must be explainable in a human‑readable audit trail.
-2. **Single-user, multi-instance.** Tyrum is a single-user product. Scale by running multiple instances for multiple workers (not multi-tenant auth).
+2. **Single-user, multi-instance.** Tyrum is a single-user product. Scale by running multiple instances on separate machines for multiple workers (not multi-tenant auth).
 3. **Prefer structured interfaces; use web/desktop as fallback.** When multiple ways exist to do the same job, prefer the most structured, least brittle interface that is allowed by policy—while preserving the “operate like a human” UX (approvals, evidence, audit).
 
    Decision rule:
@@ -96,7 +96,6 @@ flowchart LR
     POLICY["/policy/check"]
     MEMORY["/memory/*"]
     AGENT["/agent/* (singleton agent)"]
-    MODEL["/v1/* (model proxy, optional)"]
     WS["/ws (capability providers, planned)"]
   end
 
@@ -118,18 +117,17 @@ flowchart LR
   AGENT --> DB
   AGENT --> HOME
 
-  PLAN --> MODEL
-  AGENT --> MODEL
-  MODEL --> UPSTREAM
+  PLAN --> UPSTREAM
+  AGENT --> UPSTREAM
 ```
 
-**Gateway:** A single local-first process that hosts planner, policy checks, memory APIs, Telegram ingress, and optional agent + model-proxy routes. The default profile is single-user and binds to localhost.
+**Gateway:** A single local-first process that hosts planner, policy checks, memory APIs, Telegram ingress, and optional agent routes. The default profile is single-user and binds to localhost.
 
 **Safe-by-default when exposed:** if the gateway is bound to a non-local interface (or otherwise reachable outside the host), authentication must be required. A gateway admin token is generated automatically if none exists and is shown once during setup; the portal also surfaces a prominent “you are exposed” banner until auth is confirmed.
 
 **Agent runtime:** A singleton agent that reads identity/config/skills from `~/.tyrum`, keeps short-term context in `sessions` (SQLite), and optionally writes narrative memory to markdown files.
 
-**Model proxy:** Optional OpenAI-compatible `/v1/*` routes that fan out to multiple upstream backends based on YAML configuration.
+**LLM backend:** BYOK via an OpenAI-compatible upstream API.
 
 **Desktop worker app(s):** Capability providers that expose “human-like” desktop control (screen, keyboard/mouse, local apps) to the gateway over WebSocket. This is required for robust UI automation fallback, but the WebSocket runtime is still being wired up.
 
@@ -160,7 +158,6 @@ Default home: `~/.tyrum` (override with `TYRUM_HOME`).
 
 **Runtime flags (current):**
 - `TYRUM_AGENT_ENABLED=1` enables `/agent/status` and `/agent/turn`
-- `MODEL_GATEWAY_CONFIG=./config/model_gateway.yml` enables `/v1/*` model proxy routes
 - `GATEWAY_HOST`, `GATEWAY_PORT`, `GATEWAY_DB_PATH` control gateway bind and SQLite location
 
 ### Technology Stack (current repo / local-first profile)
@@ -175,12 +172,7 @@ Default home: `~/.tyrum` (override with `TYRUM_HOME`).
 - **Lint:** `oxlint` (repo), ESLint (portal)
 - **Tests:** Vitest
 
-> Tyrum is intentionally single-user. To run multiple workers, run multiple instances (separate `TYRUM_HOME` + DB) on one or more machines.
-
-### Model Proxy (multi-backend LLM access)
-- When `MODEL_GATEWAY_CONFIG` is set, the gateway registers OpenAI-compatible routes under `/v1/*` (e.g., `/v1/models`, `/v1/chat/completions`, `/v1/embeddings`, `/v1/audio/speech`).
-- Requests route by `model` ID to a configured upstream backend (BYOK) based on YAML config (see `config/model_gateway.yml` and `packages/gateway/src/routes/model-proxy.ts`).
-- Unknown model IDs fail closed to avoid silent misroutes.
+> Tyrum is intentionally single-user. To run multiple workers, run multiple instances on separate machines (each with its own `TYRUM_HOME` + DB).
 
 ---
 
@@ -215,7 +207,6 @@ Use a minimal set of **universal action primitives** to enable auditability, ret
 - `Research(query|url) → observations`
 - `Decide(options|policy|memory) → choice`
 - `Web(action[, postcondition])`
-- `Android(action[, postcondition])`
 - `CLI(action[, postcondition])`
 - `Http(request[, postcondition])`
 - `Message(send|draft)`
@@ -430,7 +421,7 @@ Tyrum persists operator knowledge in three layers:
   3) Respect legal/channel ToS (e.g., WhatsApp 24‑hour windows, GDPR export/delete).
   4) Explainability: every action must have a human‑readable why/what/source.
 - **Profiles (user-configured):** `safest`, `balanced`, `poweruser` control default escalation/approval behavior.
-- **Spend defaults:** Tyrum ships **no default spend caps**. If spend is not configured, spending is **not allowed** (deny-by-default).
+- **Spend defaults:** No caps are preconfigured; spending is **disabled** until configured.
 - **Everything else is learned** (PAM) or asked once, then remembered.
 
 ---
@@ -519,17 +510,6 @@ Tyrum persists operator knowledge in three layers:
 
 ## 15) Roadmap (Telegram + desktop-first, local-first)
 
-### 15.0 What exists in this repo today
-1) Single-user gateway (Hono) + SQLite migrations (`gateway.db`) with localhost-only defaults.
-2) `/policy/check` policy engine skeleton (approve/escalate/deny).
-3) `/plan` planner skeleton that demonstrates envelopes, policy + wallet guardrails, and audit logging.
-4) `/memory/*` CRUD for facts, episodic events, and capability memories.
-5) Telegram ingress normalization (`/ingress/telegram`) + webhook setup (see `README.md`).
-6) Singleton agent runtime behind `TYRUM_AGENT_ENABLED=1`: `/agent/status`, `/agent/turn` with sessions + markdown memory under `~/.tyrum`.
-7) Optional OpenAI-compatible model proxy routes under `/v1/*` when `MODEL_GATEWAY_CONFIG` is set.
-8) Portal scaffolding (landing + onboarding + settings + timeline UI), currently backed by local fixtures in the self-hosted profile.
-9) Single-instance runtime (`pnpm --filter tyrum-portal start:single`) for portal + gateway HTTP (no WebSocket upgrades yet).
-
 ### 15.1 Next milestones (proposed)
 1) Safe-by-default exposure: gateway auth token (auto-generated) + force auth on non-local binds + “exposed” banner and setup wizard.
 2) Ship a real approval queue + notifications + dry-run previews: show plan, touched accounts/domains/apps, and estimated cost/time; support one-tap Approve/Deny with deep links.
@@ -581,79 +561,6 @@ Tyrum persists operator knowledge in three layers:
 
 ---
 
-## 19) Branding & Naming — Tyrum
-
-**Primary tagline:** **The end of to-do.**
-**Lockline (pair with tagline):** *No lists. Just outcomes—captured, handled, and proven.*
-
-### 19.1 Brand proposition
-- **Platform brand:** Tyrum (site, docs, billing).
-- **Assistant identity:** user-chosen name (stored in PVP). Present as **“<AssistantName>, by Tyrum.”**
-- **Why this architecture:** maximizes personal attachment while keeping a stable platform brand and domain.
-
-### 19.2 Messaging hierarchy (website/ads)
-- **H1 (Hero):** *The end of to-do.*
-- **Lockline:** *No lists. Just outcomes—captured, handled, and proven.*
-- **Proof bullets (support the claim):**
-  - Always-on capture from email, messages, calendar, files.
-  - Learned autonomy with user-managed spend limits and safe defaults.
-  - Generic executors (Web, Android, CLI/HTTP) → works anywhere; structured APIs when discovered.
-  - Mandatory postconditions on actions → proof of done.
-  - Commitments ledger (not tasks) → two states: handled or needs a decision.
-  - Daily brief + tiny decision queue.
-
-**Secondary lines (rotate as subheads):**
-- *Intent in. Outcome out.*
-- *Outcomes, not apps.*
-- *From chat to action.*
-
-**Dutch variants:**
-- *Einde aan je takenlijst.*
-- *Geen apps. Alleen resultaat.*
-- *Zeg het. Klaar.*
-
-### 19.3 Voice & tone (brand)
-- **Personality:** calm, confident, minimal; never cutesy.
-- **Writing:** short sentences, plain language, outcome-first.
-- **Honesty line:** avoid hype; state what’s proven and show evidence (receipts, confirmations, diffs).
-- **Style toggles by context:** more formal for work surfaces; warmer for consumer channels.
-
-### 19.4 Naming policy (assistants)
-- Users can name their agent; rename anytime (PVP).
-- **Channels:**
-  - Telegram/WhatsApp: global bot handle is fixed; introduce yourself in-chat as the chosen name.
-  - Phone/SIP: set CNAM/display name to the chosen name; provide a vCard.
-  - Email: optional alias `name@tyrum.com` per user.
-
-### 19.5 Domain & handles
-- **Primary:** tyrum.com.
-- **Helpful adjacents:** tyrum.ai, tyrum.app (optional).
-- **Patterns:** `hey<name>.tyrum.com`, `ask<name>.tyrum.com`; consider `hey<name>.com` if available later.
-- Keep social/bot handles clean: `@tyrum` (brand), `@Hey<AssistantName>` (assistants).
-
-### 19.6 Visual identity starters
-- **Logo direction:** geometric **T** monogram + wordmark; avoid alcohol connotations.
-- **Palette:** cool blue + graphite base; a single bright accent for confirmations (“Done”).
-- **Type:** modern sans (e.g., Inter/Plus Jakarta) for product; serif or high-contrast sans for headlines if desired.
-- **Motion:** subtle; emphasize “quietly on it”.
-
-### 19.7 Tagline usage & disclaimers
-- Always pair the tagline with a supporting lockline or proof bullets.
-- Microcopy for honesty: *“Autonomy within your limits. Asks when uncertain. Every action is explainable.”*
-
-### 19.8 Sample hero section copy
-**H1:** The end of to-do.
-**Deck:** No lists. Just outcomes—captured, handled, and proven.
-**CTA:** *Try Tyrum*  •  *See how it works*
-**Trust row:** icons for “Wallet limits”, “Explainable actions”, “Privacy by default”.
-
-### 19.9 Pronunciation & guardrails
-- **Pronunciation:** *Tyrum* = **TIE-rum** (note once on early pages).
-- Avoid alcohol imagery; keep tech-forward cues.
-- Respect legal/channel policies in all brand copy.
-
----
-
 ## Appendix A — Action Primitive Schema (minimal)
 ```json
 {
@@ -662,7 +569,7 @@ Tyrum persists operator knowledge in three layers:
   "type": "object",
   "properties": {
     "type": {"type": "string", "enum": [
-      "Research","Decide","Web","Android","CLI","Http","Message","Pay","Store","Watch","Confirm"
+      "Research","Decide","Web","CLI","Http","Message","Pay","Store","Watch","Confirm"
     ]},
     "args": {"type": "object"},
     "postcondition": {"type": ["object","null"]},
@@ -754,8 +661,3 @@ Tyrum persists operator knowledge in three layers:
 - Enforce per-installation spend/compute quotas with graceful degradation.
 
 ---
-
-**End of Document**
-
-**Brand:** Tyrum
-**Tagline:** The end of to-do
