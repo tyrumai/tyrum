@@ -5,6 +5,7 @@ import {
   DesktopProvider,
   type ConfirmationFn,
 } from "../src/main/providers/desktop-provider.js";
+import { MockDesktopBackend } from "../src/main/providers/backends/desktop-backend.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -19,7 +20,9 @@ function makeProvider(
   confirmFn?: ConfirmationFn,
 ) {
   const permissions = resolvePermissions(profile, {});
+  const backend = new MockDesktopBackend();
   return new DesktopProvider(
+    backend,
     permissions,
     confirmFn ?? vi.fn<ConfirmationFn>(),
   );
