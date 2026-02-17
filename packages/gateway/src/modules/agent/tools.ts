@@ -1,5 +1,3 @@
-import type { McpServerSpec } from "@tyrum/schemas";
-
 export type ToolRisk = "low" | "medium" | "high";
 
 export interface ToolDescriptor {
@@ -61,16 +59,6 @@ export function isToolAllowed(allowlist: readonly string[], toolId: string): boo
   return false;
 }
 
-function mcpServerToTool(spec: McpServerSpec): ToolDescriptor {
-  return {
-    id: `mcp.${spec.id}.invoke`,
-    description: `Invoke tools exposed by MCP server '${spec.name}'.`,
-    risk: "medium",
-    requires_confirmation: true,
-    keywords: ["mcp", spec.id.toLowerCase(), spec.name.toLowerCase()],
-  };
-}
-
 function scoreTool(tool: ToolDescriptor, normalizedPrompt: string): number {
   let score = 0;
   for (const keyword of tool.keywords) {
@@ -89,7 +77,7 @@ function scoreTool(tool: ToolDescriptor, normalizedPrompt: string): number {
 export function selectToolDirectory(
   userPrompt: string,
   allowlist: readonly string[],
-  enabledMcpServers: readonly McpServerSpec[],
+  mcpTools: readonly ToolDescriptor[],
   limit = 8,
 ): ToolDescriptor[] {
   const available: ToolDescriptor[] = [];
@@ -100,9 +88,8 @@ export function selectToolDirectory(
     }
   }
 
-  for (const server of enabledMcpServers) {
-    const tool = mcpServerToTool(server);
-    if (isToolAllowed(allowlist, tool.id) || isToolAllowed(allowlist, "mcp.*")) {
+  for (const tool of mcpTools) {
+    if (isToolAllowed(allowlist, tool.id)) {
       available.push(tool);
     }
   }

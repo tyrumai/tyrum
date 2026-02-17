@@ -11,8 +11,13 @@ import { ingress } from "./routes/ingress.js";
 import { createPlanRoutes } from "./routes/plan.js";
 import { createModelProxyRoutes } from "./routes/model-proxy.js";
 import { createAgentRoutes } from "./routes/agent.js";
+import type { AgentRuntime } from "./modules/agent/runtime.js";
 
-export function createApp(container: GatewayContainer): Hono {
+export interface AppOptions {
+  agentRuntime?: AgentRuntime;
+}
+
+export function createApp(container: GatewayContainer, opts: AppOptions = {}): Hono {
   const app = new Hono();
 
   // Register all routes
@@ -23,7 +28,12 @@ export function createApp(container: GatewayContainer): Hono {
   app.route("/", createPlanRoutes(container));
 
   if (process.env["TYRUM_AGENT_ENABLED"] === "1") {
-    app.route("/", createAgentRoutes(container));
+    if (!opts.agentRuntime) {
+      throw new Error(
+        "Agent routes require an explicit AgentRuntime when TYRUM_AGENT_ENABLED=1.",
+      );
+    }
+    app.route("/", createAgentRoutes(opts.agentRuntime));
   }
 
   // Model proxy routes are optional — only register if config path is set

@@ -6,12 +6,10 @@
 
 import { Hono } from "hono";
 import { AgentTurnRequest } from "@tyrum/schemas";
-import type { GatewayContainer } from "../container.js";
-import { AgentRuntime } from "../modules/agent/runtime.js";
+import type { AgentRuntime } from "../modules/agent/runtime.js";
 
-export function createAgentRoutes(container: GatewayContainer): Hono {
+export function createAgentRoutes(runtime: AgentRuntime): Hono {
   const agent = new Hono();
-  const runtime = new AgentRuntime({ container });
 
   agent.get("/agent/status", async (c) => {
     const status = await runtime.status(true);

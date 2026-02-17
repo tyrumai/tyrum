@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createTestApp } from "./helpers.js";
+import { createApp } from "../../src/app.js";
+import { createTestApp, createTestContainer } from "./helpers.js";
 
 async function writeWorkspace(home: string): Promise<void> {
   await mkdir(home, { recursive: true });
@@ -161,6 +162,14 @@ describe("agent routes", () => {
     expect(payload.skills).toEqual(["file-reader"]);
     expect(payload.mcp.map((server) => server.id)).toEqual(["calendar"]);
     expect(payload.tools).toContain("tool.fs.read");
+  });
+
+  it("requires explicit runtime wiring when agent routes are enabled", async () => {
+    const container = createTestContainer();
+    expect(() => createApp(container)).toThrow(
+      /explicit AgentRuntime when TYRUM_AGENT_ENABLED=1/,
+    );
+    container.db.close();
   });
 
   it("separates short-term session context per channel/thread and writes memory files", async () => {
