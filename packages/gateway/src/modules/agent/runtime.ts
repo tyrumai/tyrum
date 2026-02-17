@@ -428,7 +428,6 @@ export class AgentRuntime {
     return AgentTurnResponse.parse({
       reply,
       session_id: session.session_id,
-      used_tools: tools.map((tool) => tool.id),
       memory_written: memoryWritten,
     });
   }
