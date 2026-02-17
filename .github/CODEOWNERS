@@ -1,9 +1,0 @@
-# Default ownership for all files in the repository.
-* @rhernaus
-
-# Key project areas are explicitly listed for clarity.
-/docs/ @rhernaus
-/services/ @rhernaus
-/web/ @rhernaus
-/infra/ @rhernaus
-/shared/ @rhernaus
