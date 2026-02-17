@@ -109,19 +109,6 @@ describe("POST /plan", () => {
     expect(res.status).toBe(400);
   });
 
-  it("returns 400 for empty subject_id", async () => {
-    const { app } = createTestApp();
-    const body = minimalPlanRequest({ subject_id: "" });
-
-    const res = await app.request("/plan", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    expect(res.status).toBe(400);
-  });
-
   it("returns success with small spend (within auto-approve)", async () => {
     const { app } = createTestApp();
     const body = minimalPlanRequest({ tags: ["spend:5000:USD"] });

@@ -4,7 +4,6 @@ import type Database from "better-sqlite3";
 
 export interface FactRow {
   id: number;
-  subject_id: string;
   fact_key: string;
   fact_value: unknown;
   source: string;
@@ -15,7 +14,6 @@ export interface FactRow {
 
 export interface EpisodicEventRow {
   id: number;
-  subject_id: string;
   event_id: string;
   occurred_at: string;
   channel: string;
@@ -26,7 +24,6 @@ export interface EpisodicEventRow {
 
 export interface CapabilityMemoryRow {
   id: number;
-  subject_id: string;
   capability_type: string;
   capability_identifier: string;
   executor_kind: string;
@@ -54,7 +51,6 @@ export interface CapabilityMemoryData {
 
 export interface ProfileRow {
   id: number;
-  subject_id: string;
   profile_id: string;
   version: string | null;
   profile_data: unknown;
@@ -66,7 +62,6 @@ export interface ProfileRow {
 
 interface RawFactRow {
   id: number;
-  subject_id: string;
   fact_key: string;
   fact_value: string;
   source: string;
@@ -77,7 +72,6 @@ interface RawFactRow {
 
 interface RawEpisodicEventRow {
   id: number;
-  subject_id: string;
   event_id: string;
   occurred_at: string;
   channel: string;
@@ -88,7 +82,6 @@ interface RawEpisodicEventRow {
 
 interface RawCapabilityMemoryRow {
   id: number;
-  subject_id: string;
   capability_type: string;
   capability_identifier: string;
   executor_kind: string;
@@ -106,7 +99,6 @@ interface RawCapabilityMemoryRow {
 
 interface RawProfileRow {
   id: number;
-  subject_id: string;
   profile_id: string;
   version: string | null;
   profile_data: string;
@@ -125,7 +117,6 @@ export class MemoryDal {
   // --- Facts ---
 
   insertFact(
-    subjectId: string,
     factKey: string,
     factValue: unknown,
     source: string,
@@ -134,11 +125,10 @@ export class MemoryDal {
   ): number {
     const result = this.db
       .prepare(
-        `INSERT INTO facts (subject_id, fact_key, fact_value, source, observed_at, confidence)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO facts (fact_key, fact_value, source, observed_at, confidence)
+         VALUES (?, ?, ?, ?, ?)`,
       )
       .run(
-        subjectId,
         factKey,
         JSON.stringify(factValue),
         source,
@@ -148,24 +138,22 @@ export class MemoryDal {
     return Number(result.lastInsertRowid);
   }
 
-  getFacts(subjectId: string): FactRow[] {
+  getFacts(): FactRow[] {
     const rows = this.db
-      .prepare(
-        "SELECT * FROM facts WHERE subject_id = ? ORDER BY observed_at DESC",
-      )
-      .all(subjectId) as RawFactRow[];
+      .prepare("SELECT * FROM facts ORDER BY observed_at DESC")
+      .all() as RawFactRow[];
     return rows.map((r) => ({
       ...r,
       fact_value: JSON.parse(r.fact_value) as unknown,
     }));
   }
 
-  getFactsByKey(subjectId: string, factKey: string): FactRow[] {
+  getFactsByKey(factKey: string): FactRow[] {
     const rows = this.db
       .prepare(
-        "SELECT * FROM facts WHERE subject_id = ? AND fact_key = ? ORDER BY observed_at DESC",
+        "SELECT * FROM facts WHERE fact_key = ? ORDER BY observed_at DESC",
       )
-      .all(subjectId, factKey) as RawFactRow[];
+      .all(factKey) as RawFactRow[];
     return rows.map((r) => ({
       ...r,
       fact_value: JSON.parse(r.fact_value) as unknown,
@@ -175,7 +163,6 @@ export class MemoryDal {
   // --- Episodic Events ---
 
   insertEpisodicEvent(
-    subjectId: string,
     eventId: string,
     occurredAt: string,
     channel: string,
@@ -184,11 +171,10 @@ export class MemoryDal {
   ): number {
     const result = this.db
       .prepare(
-        `INSERT INTO episodic_events (subject_id, event_id, occurred_at, channel, event_type, payload)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO episodic_events (event_id, occurred_at, channel, event_type, payload)
+         VALUES (?, ?, ?, ?, ?)`,
       )
       .run(
-        subjectId,
         eventId,
         occurredAt,
         channel,
@@ -198,12 +184,12 @@ export class MemoryDal {
     return Number(result.lastInsertRowid);
   }
 
-  getEpisodicEvents(subjectId: string, limit = 100): EpisodicEventRow[] {
+  getEpisodicEvents(limit = 100): EpisodicEventRow[] {
     const rows = this.db
       .prepare(
-        "SELECT * FROM episodic_events WHERE subject_id = ? ORDER BY occurred_at DESC LIMIT ?",
+        "SELECT * FROM episodic_events ORDER BY occurred_at DESC LIMIT ?",
       )
-      .all(subjectId, limit) as RawEpisodicEventRow[];
+      .all(limit) as RawEpisodicEventRow[];
     return rows.map((r) => ({
       ...r,
       payload: JSON.parse(r.payload) as unknown,
@@ -213,7 +199,6 @@ export class MemoryDal {
   // --- Capability Memories ---
 
   upsertCapabilityMemory(
-    subjectId: string,
     capabilityType: string,
     capabilityIdentifier: string,
     executorKind: string,
@@ -223,10 +208,9 @@ export class MemoryDal {
       const existing = this.db
         .prepare(
           `SELECT id, success_count FROM capability_memories
-           WHERE subject_id = ? AND capability_type = ? AND capability_identifier = ? AND executor_kind = ?`,
+           WHERE capability_type = ? AND capability_identifier = ? AND executor_kind = ?`,
         )
         .get(
-          subjectId,
           capabilityType,
           capabilityIdentifier,
           executorKind,
@@ -273,13 +257,12 @@ export class MemoryDal {
       this.db
         .prepare(
           `INSERT INTO capability_memories
-            (subject_id, capability_type, capability_identifier, executor_kind,
+            (capability_type, capability_identifier, executor_kind,
              selectors, outcome_metadata, cost_profile, anti_bot_notes,
              result_summary, success_count, last_success_at, metadata)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
         )
         .run(
-          subjectId,
           capabilityType,
           capabilityIdentifier,
           executorKind,
@@ -306,7 +289,6 @@ export class MemoryDal {
   }
 
   getCapabilityMemories(
-    subjectId: string,
     capabilityType?: string,
   ): CapabilityMemoryRow[] {
     let rows: RawCapabilityMemoryRow[];
@@ -314,18 +296,17 @@ export class MemoryDal {
       rows = this.db
         .prepare(
           `SELECT * FROM capability_memories
-           WHERE subject_id = ? AND capability_type = ?
+           WHERE capability_type = ?
            ORDER BY updated_at DESC`,
         )
-        .all(subjectId, capabilityType) as RawCapabilityMemoryRow[];
+        .all(capabilityType) as RawCapabilityMemoryRow[];
     } else {
       rows = this.db
         .prepare(
           `SELECT * FROM capability_memories
-           WHERE subject_id = ?
            ORDER BY updated_at DESC`,
         )
-        .all(subjectId) as RawCapabilityMemoryRow[];
+        .all() as RawCapabilityMemoryRow[];
     }
     return rows.map((r) => ({
       ...r,
@@ -339,32 +320,28 @@ export class MemoryDal {
   // --- PAM Profiles ---
 
   upsertPamProfile(
-    subjectId: string,
     profileId: string,
     version: string | undefined,
     profileData: unknown,
   ): void {
     this.db
       .prepare(
-        `INSERT INTO pam_profiles (subject_id, profile_id, version, profile_data)
-         VALUES (?, ?, ?, ?)
-         ON CONFLICT(subject_id, profile_id) DO UPDATE SET
+        `INSERT INTO pam_profiles (profile_id, version, profile_data)
+         VALUES (?, ?, ?)
+         ON CONFLICT(profile_id) DO UPDATE SET
            version = excluded.version,
            profile_data = excluded.profile_data,
            updated_at = datetime('now')`,
       )
-      .run(subjectId, profileId, version ?? null, JSON.stringify(profileData));
+      .run(profileId, version ?? null, JSON.stringify(profileData));
   }
 
-  getPamProfile(
-    subjectId: string,
-    profileId: string,
-  ): ProfileRow | undefined {
+  getPamProfile(profileId: string): ProfileRow | undefined {
     const row = this.db
       .prepare(
-        "SELECT * FROM pam_profiles WHERE subject_id = ? AND profile_id = ?",
+        "SELECT * FROM pam_profiles WHERE profile_id = ?",
       )
-      .get(subjectId, profileId) as RawProfileRow | undefined;
+      .get(profileId) as RawProfileRow | undefined;
     if (!row) return undefined;
     return {
       ...row,
@@ -375,32 +352,28 @@ export class MemoryDal {
   // --- PVP Profiles ---
 
   upsertPvpProfile(
-    subjectId: string,
     profileId: string,
     version: string | undefined,
     profileData: unknown,
   ): void {
     this.db
       .prepare(
-        `INSERT INTO pvp_profiles (subject_id, profile_id, version, profile_data)
-         VALUES (?, ?, ?, ?)
-         ON CONFLICT(subject_id, profile_id) DO UPDATE SET
+        `INSERT INTO pvp_profiles (profile_id, version, profile_data)
+         VALUES (?, ?, ?)
+         ON CONFLICT(profile_id) DO UPDATE SET
            version = excluded.version,
            profile_data = excluded.profile_data,
            updated_at = datetime('now')`,
       )
-      .run(subjectId, profileId, version ?? null, JSON.stringify(profileData));
+      .run(profileId, version ?? null, JSON.stringify(profileData));
   }
 
-  getPvpProfile(
-    subjectId: string,
-    profileId: string,
-  ): ProfileRow | undefined {
+  getPvpProfile(profileId: string): ProfileRow | undefined {
     const row = this.db
       .prepare(
-        "SELECT * FROM pvp_profiles WHERE subject_id = ? AND profile_id = ?",
+        "SELECT * FROM pvp_profiles WHERE profile_id = ?",
       )
-      .get(subjectId, profileId) as RawProfileRow | undefined;
+      .get(profileId) as RawProfileRow | undefined;
     if (!row) return undefined;
     return {
       ...row,

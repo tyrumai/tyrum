@@ -2,7 +2,6 @@ import { z } from "zod";
 
 export const Fact = z.object({
   id: z.number().int().optional(),
-  subject_id: z.string(),
   fact_key: z.string(),
   fact_value: z.unknown(),
   source: z.string(),
@@ -14,7 +13,6 @@ export type Fact = z.infer<typeof Fact>;
 
 export const EpisodicEvent = z.object({
   id: z.number().int().optional(),
-  subject_id: z.string(),
   event_id: z.string(),
   occurred_at: z.string().datetime(),
   channel: z.string(),
@@ -26,7 +24,6 @@ export type EpisodicEvent = z.infer<typeof EpisodicEvent>;
 
 export const CapabilityMemory = z.object({
   id: z.number().int().optional(),
-  subject_id: z.string(),
   capability_key: z.string(),
   capability_value: z.unknown(),
   source: z.string(),
@@ -39,7 +36,6 @@ export type CapabilityMemory = z.infer<typeof CapabilityMemory>;
 
 export const PamProfile = z.object({
   id: z.number().int().optional(),
-  subject_id: z.string(),
   profile_id: z.string(),
   version: z.string().optional(),
   profile_data: z.unknown(),
@@ -50,7 +46,6 @@ export type PamProfile = z.infer<typeof PamProfile>;
 
 export const PvpProfile = z.object({
   id: z.number().int().optional(),
-  subject_id: z.string(),
   profile_id: z.string(),
   version: z.string().optional(),
   profile_data: z.unknown(),
@@ -61,7 +56,6 @@ export type PvpProfile = z.infer<typeof PvpProfile>;
 
 export const VectorEmbedding = z.object({
   id: z.number().int().optional(),
-  subject_id: z.string(),
   embedding_id: z.string(),
   embedding: z.array(z.number()),
   embedding_model: z.string(),

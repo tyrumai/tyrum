@@ -1,15 +1,14 @@
 /**
- * WebSocket handshake authentication — placeholder for real auth.
+ * WebSocket handshake authentication for single-user local deployments.
  *
- * Accepts any non-empty token. Replace with JWT / API-key validation
- * once the auth service is wired up.
+ * In self-hosted mode no application auth is required.
  */
 
 /**
  * Validates the token supplied during the WebSocket upgrade handshake.
  *
- * @returns `true` when the token is a non-empty string.
+ * @returns `true` for all inputs.
  */
-export function validateWsToken(token: string | undefined): boolean {
-  return typeof token === "string" && token.length > 0;
+export function validateWsToken(_token: string | undefined): boolean {
+  return true;
 }
