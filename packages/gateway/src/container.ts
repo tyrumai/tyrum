@@ -10,6 +10,7 @@ import type { MemoryDal } from "./modules/memory/dal.js";
 import type { EventLog } from "./modules/planner/event-log.js";
 import type { DiscoveryPipeline } from "./modules/discovery/pipeline.js";
 import type { RiskClassifier } from "./modules/risk/classifier.js";
+import type { SessionDal } from "./modules/agent/session-dal.js";
 
 import { createDatabase } from "./db.js";
 import { migrate } from "./migrate.js";
@@ -24,6 +25,7 @@ import {
   RiskClassifier as RiskClassifierImpl,
   defaultRiskConfig,
 } from "./modules/risk/classifier.js";
+import { SessionDal as SessionDalImpl } from "./modules/agent/session-dal.js";
 
 export interface GatewayConfig {
   dbPath: string;
@@ -37,6 +39,7 @@ export interface GatewayContainer {
   eventLog: EventLog;
   discoveryPipeline: DiscoveryPipeline;
   riskClassifier: RiskClassifier;
+  sessionDal: SessionDal;
   eventBus: EventBus;
   config: GatewayConfig;
 }
@@ -50,6 +53,7 @@ export function createContainer(config: GatewayConfig): GatewayContainer {
   const connectorCache = new InMemoryConnectorCache();
   const discoveryPipeline = new DiscoveryPipelineImpl(connectorCache);
   const riskClassifier = new RiskClassifierImpl(defaultRiskConfig());
+  const sessionDal = new SessionDalImpl(db);
   const eventBus = createEventBus();
 
   return {
@@ -58,6 +62,7 @@ export function createContainer(config: GatewayConfig): GatewayContainer {
     eventLog,
     discoveryPipeline,
     riskClassifier,
+    sessionDal,
     eventBus,
     config,
   };

@@ -18,6 +18,7 @@ function isGatewayPath(pathname) {
   return (
     pathname === "/healthz" ||
     pathname === "/plan" ||
+    pathname.startsWith("/agent/") ||
     pathname.startsWith("/policy/") ||
     pathname.startsWith("/memory/") ||
     pathname.startsWith("/ingress/") ||

@@ -10,6 +10,7 @@ import { createMemoryRoutes } from "./routes/memory.js";
 import { ingress } from "./routes/ingress.js";
 import { createPlanRoutes } from "./routes/plan.js";
 import { createModelProxyRoutes } from "./routes/model-proxy.js";
+import { createAgentRoutes } from "./routes/agent.js";
 
 export function createApp(container: GatewayContainer): Hono {
   const app = new Hono();
@@ -20,6 +21,10 @@ export function createApp(container: GatewayContainer): Hono {
   app.route("/", createMemoryRoutes(container.memoryDal));
   app.route("/", ingress);
   app.route("/", createPlanRoutes(container));
+
+  if (process.env["TYRUM_AGENT_ENABLED"] === "1") {
+    app.route("/", createAgentRoutes(container));
+  }
 
   // Model proxy routes are optional — only register if config path is set
   if (container.config.modelGatewayConfigPath) {
