@@ -25,6 +25,7 @@ import { TyrumClient, autoExecute } from "../../../../packages/client/src/index.
 import { DesktopProvider } from "../../src/main/providers/desktop-provider.js";
 import { CliProvider } from "../../src/main/providers/cli-provider.js";
 import { resolvePermissions } from "../../src/main/config/permissions.js";
+import { MockDesktopBackend } from "../../src/main/providers/backends/desktop-backend.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../../../packages/gateway/migrations");
@@ -153,7 +154,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
     client = await connectClient(srv.port, ["desktop", "cli"]);
     expect(client.connected).toBe(true);
 
-    const desktopProvider = new DesktopProvider(permissions, async () => true);
+    const desktopProvider = new DesktopProvider(new MockDesktopBackend(), permissions, async () => true);
     const cliProvider = new CliProvider(["echo"], ["/tmp"]);
     autoExecute(client, [desktopProvider, cliProvider]);
 
@@ -194,7 +195,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
     const permissions = resolvePermissions("poweruser", {});
     client = await connectClient(srv.port, ["desktop"]);
 
-    const desktopProvider = new DesktopProvider(permissions, async () => true);
+    const desktopProvider = new DesktopProvider(new MockDesktopBackend(), permissions, async () => true);
     autoExecute(client, [desktopProvider]);
 
     const taskId = dispatchTask(

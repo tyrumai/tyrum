@@ -4,6 +4,7 @@ import {
   PlaywrightProvider,
   type PlaywrightProviderConfig,
 } from "../src/main/providers/playwright-provider.js";
+import { MockPlaywrightBackend } from "../src/main/providers/backends/playwright-backend.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -20,7 +21,8 @@ function makeProvider(overrides: Partial<PlaywrightProviderConfig> = {}) {
     domainRestricted: true,
     ...overrides,
   };
-  return new PlaywrightProvider(config);
+  const backend = new MockPlaywrightBackend();
+  return new PlaywrightProvider(config, backend);
 }
 
 // ---------------------------------------------------------------------------

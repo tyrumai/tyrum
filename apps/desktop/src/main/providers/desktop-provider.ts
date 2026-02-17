@@ -2,6 +2,7 @@ import type { ActionPrimitive, ClientCapability } from "@tyrum/schemas";
 import { DesktopActionArgs } from "@tyrum/schemas";
 import type { CapabilityProvider, TaskResult } from "@tyrum/client";
 import type { ResolvedPermissions } from "../config/permissions.js";
+import type { DesktopBackend } from "./backends/desktop-backend.js";
 
 export type ConfirmationFn = (prompt: string) => Promise<boolean>;
 
@@ -9,6 +10,7 @@ export class DesktopProvider implements CapabilityProvider {
   readonly capability: ClientCapability = "desktop";
 
   constructor(
+    private backend: DesktopBackend,
     private permissions: ResolvedPermissions,
     private requestConfirmation: ConfirmationFn,
   ) {}
@@ -34,6 +36,7 @@ export class DesktopProvider implements CapabilityProvider {
   }
 
   private async screenshot(args: {
+    display: "primary" | "all" | { id: string };
     max_width?: number;
   }): Promise<TaskResult> {
     if (!this.permissions.desktopScreenshot) {
@@ -43,17 +46,17 @@ export class DesktopProvider implements CapabilityProvider {
       };
     }
 
-    // V1 stub: In the real implementation, use Electron desktopCapturer
-    // or @nut-tree/nut-js screen.capture()
+    const capture = await this.backend.captureScreen(args.display);
+
     return {
       success: true,
       evidence: {
         type: "screenshot",
         mime: "image/png",
-        width: 1920,
-        height: 1080,
+        width: capture.width,
+        height: capture.height,
         timestamp: new Date().toISOString(),
-        bytesBase64: "", // placeholder
+        bytesBase64: capture.buffer.toString("base64"),
       },
     };
   }
@@ -80,7 +83,22 @@ export class DesktopProvider implements CapabilityProvider {
       }
     }
 
-    // V1 stub: In real implementation, use @nut-tree/nut-js
+    switch (args.action) {
+      case "move":
+        await this.backend.moveMouse(args.x, args.y);
+        break;
+      case "click":
+        await this.backend.clickMouse(
+          args.x,
+          args.y,
+          args.button as "left" | "right" | "middle" | undefined,
+        );
+        break;
+      case "drag":
+        await this.backend.dragMouse(args.x, args.y, args.duration_ms);
+        break;
+    }
+
     return {
       success: true,
       evidence: {
@@ -113,7 +131,12 @@ export class DesktopProvider implements CapabilityProvider {
       }
     }
 
-    // V1 stub
+    if (args.action === "type" && args.text != null) {
+      await this.backend.typeText(args.text);
+    } else if (args.action === "press" && args.key != null) {
+      await this.backend.pressKey(args.key);
+    }
+
     return {
       success: true,
       evidence: {

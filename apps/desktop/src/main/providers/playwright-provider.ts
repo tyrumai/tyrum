@@ -1,5 +1,6 @@
 import type { ActionPrimitive, ClientCapability } from "@tyrum/schemas";
 import type { CapabilityProvider, TaskResult } from "@tyrum/client";
+import type { PlaywrightBackend } from "./backends/playwright-backend.js";
 
 export interface PlaywrightProviderConfig {
   allowedDomains: string[];
@@ -11,7 +12,10 @@ export class PlaywrightProvider implements CapabilityProvider {
   readonly capability: ClientCapability = "playwright";
   private config: PlaywrightProviderConfig;
 
-  constructor(config: PlaywrightProviderConfig) {
+  constructor(
+    config: PlaywrightProviderConfig,
+    private backend: PlaywrightBackend,
+  ) {
     this.config = config;
   }
 
@@ -63,12 +67,15 @@ export class PlaywrightProvider implements CapabilityProvider {
     const domainCheck = this.checkDomain(url);
     if (domainCheck) return domainCheck;
 
-    // V1 stub: In real impl, launch browser and navigate
+    await this.backend.ensureBrowser();
+    const result = await this.backend.navigate(url);
+
     return {
       success: true,
       evidence: {
         type: "navigate",
-        url,
+        url: result.url,
+        title: result.title,
         timestamp: new Date().toISOString(),
       },
     };
@@ -77,6 +84,9 @@ export class PlaywrightProvider implements CapabilityProvider {
   private async click(args: Record<string, unknown>): Promise<TaskResult> {
     const selector = args["selector"] as string | undefined;
     if (!selector) return { success: false, error: "Missing 'selector' in click args" };
+
+    await this.backend.ensureBrowser();
+    await this.backend.click(selector);
 
     return {
       success: true,
@@ -95,6 +105,9 @@ export class PlaywrightProvider implements CapabilityProvider {
       return { success: false, error: "Missing 'selector' or 'value' in fill args" };
     }
 
+    await this.backend.ensureBrowser();
+    await this.backend.fill(selector, value);
+
     return {
       success: true,
       evidence: {
@@ -107,12 +120,17 @@ export class PlaywrightProvider implements CapabilityProvider {
   }
 
   private async snapshot(): Promise<TaskResult> {
+    await this.backend.ensureBrowser();
+    const snap = await this.backend.snapshot();
+
     return {
       success: true,
       evidence: {
         type: "snapshot",
+        html: snap.html,
+        title: snap.title,
+        url: snap.url,
         timestamp: new Date().toISOString(),
-        // In real impl: DOM snapshot / accessibility tree
       },
     };
   }
