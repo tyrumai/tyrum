@@ -1,4 +1,6 @@
 import type { ActionPrimitive, ClientCapability } from "@tyrum/schemas";
+import { evaluatePostcondition, PostconditionError } from "@tyrum/schemas";
+import type { EvaluationContext } from "@tyrum/schemas";
 import type { CapabilityProvider, TaskResult } from "@tyrum/client";
 import type { PlaywrightBackend } from "./backends/playwright-backend.js";
 
@@ -29,11 +31,11 @@ export class PlaywrightProvider implements CapabilityProvider {
 
     switch (op) {
       case "navigate":
-        return this.navigate(args);
+        return this.navigate(action, args);
       case "click":
-        return this.click(args);
+        return this.click(action, args);
       case "fill":
-        return this.fill(args);
+        return this.fill(action, args);
       case "snapshot":
         return this.snapshot();
       default:
@@ -60,7 +62,10 @@ export class PlaywrightProvider implements CapabilityProvider {
     return null;
   }
 
-  private async navigate(args: Record<string, unknown>): Promise<TaskResult> {
+  private async navigate(
+    action: ActionPrimitive,
+    args: Record<string, unknown>,
+  ): Promise<TaskResult> {
     const url = args["url"] as string | undefined;
     if (!url) return { success: false, error: "Missing 'url' in navigate args" };
 
@@ -70,35 +75,51 @@ export class PlaywrightProvider implements CapabilityProvider {
     await this.backend.ensureBrowser();
     const result = await this.backend.navigate(url);
 
-    return {
-      success: true,
-      evidence: {
-        type: "navigate",
-        url: result.url,
-        title: result.title,
-        timestamp: new Date().toISOString(),
-      },
+    const evidence: Record<string, unknown> = {
+      type: "navigate",
+      url: result.url,
+      title: result.title,
+      timestamp: new Date().toISOString(),
     };
+
+    const postcondResult = await this.evaluatePostconditionIfPresent(
+      action,
+      evidence,
+    );
+    if (postcondResult) return postcondResult;
+
+    return { success: true, evidence };
   }
 
-  private async click(args: Record<string, unknown>): Promise<TaskResult> {
+  private async click(
+    action: ActionPrimitive,
+    args: Record<string, unknown>,
+  ): Promise<TaskResult> {
     const selector = args["selector"] as string | undefined;
     if (!selector) return { success: false, error: "Missing 'selector' in click args" };
 
     await this.backend.ensureBrowser();
     await this.backend.click(selector);
 
-    return {
-      success: true,
-      evidence: {
-        type: "click",
-        selector,
-        timestamp: new Date().toISOString(),
-      },
+    const evidence: Record<string, unknown> = {
+      type: "click",
+      selector,
+      timestamp: new Date().toISOString(),
     };
+
+    const postcondResult = await this.evaluatePostconditionIfPresent(
+      action,
+      evidence,
+    );
+    if (postcondResult) return postcondResult;
+
+    return { success: true, evidence };
   }
 
-  private async fill(args: Record<string, unknown>): Promise<TaskResult> {
+  private async fill(
+    action: ActionPrimitive,
+    args: Record<string, unknown>,
+  ): Promise<TaskResult> {
     const selector = args["selector"] as string | undefined;
     const value = args["value"] as string | undefined;
     if (!selector || value === undefined) {
@@ -108,15 +129,20 @@ export class PlaywrightProvider implements CapabilityProvider {
     await this.backend.ensureBrowser();
     await this.backend.fill(selector, value);
 
-    return {
-      success: true,
-      evidence: {
-        type: "fill",
-        selector,
-        value,
-        timestamp: new Date().toISOString(),
-      },
+    const evidence: Record<string, unknown> = {
+      type: "fill",
+      selector,
+      value,
+      timestamp: new Date().toISOString(),
     };
+
+    const postcondResult = await this.evaluatePostconditionIfPresent(
+      action,
+      evidence,
+    );
+    if (postcondResult) return postcondResult;
+
+    return { success: true, evidence };
   }
 
   private async snapshot(): Promise<TaskResult> {
@@ -133,5 +159,50 @@ export class PlaywrightProvider implements CapabilityProvider {
         timestamp: new Date().toISOString(),
       },
     };
+  }
+
+  /**
+   * Evaluates a postcondition against the current page state.
+   * Returns a failing TaskResult when the postcondition is not met,
+   * or null when the postcondition passes (or is absent).
+   */
+  private async evaluatePostconditionIfPresent(
+    action: ActionPrimitive,
+    evidence: Record<string, unknown>,
+  ): Promise<TaskResult | null> {
+    if (action.postcondition == null) return null;
+
+    try {
+      const snap = await this.backend.snapshot();
+      const evalContext: EvaluationContext = {
+        dom: { html: snap.html },
+      };
+
+      const report = evaluatePostcondition(action.postcondition, evalContext);
+      evidence.postcondition = report;
+
+      if (!report.passed) {
+        return {
+          success: false,
+          evidence,
+          error: `Action succeeded but postcondition failed: ${report.assertions
+            .filter((a) => a.status === "failed")
+            .map((a) => a.message)
+            .join("; ")}`,
+        };
+      }
+    } catch (err) {
+      if (err instanceof PostconditionError) {
+        evidence.postcondition = { passed: false, error: err.message };
+        return {
+          success: false,
+          evidence,
+          error: `Postcondition evaluation error: ${err.message}`,
+        };
+      }
+      throw err;
+    }
+
+    return null;
   }
 }
