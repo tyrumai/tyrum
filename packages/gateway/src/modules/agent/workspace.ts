@@ -96,10 +96,12 @@ async function loadMcpServerFromDir(
     }
 
     // Make relative commands/args behave predictably by defaulting cwd to the install dir.
-    if (!spec.cwd) {
-      spec = { ...spec, cwd: serverDir };
-    } else if (!isAbsolute(spec.cwd)) {
-      spec = { ...spec, cwd: join(serverDir, spec.cwd) };
+    if (spec.transport === "stdio") {
+      if (!spec.cwd) {
+        spec = { ...spec, cwd: serverDir };
+      } else if (!isAbsolute(spec.cwd)) {
+        spec = { ...spec, cwd: join(serverDir, spec.cwd) };
+      }
     }
 
     return spec;

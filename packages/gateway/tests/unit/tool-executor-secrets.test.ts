@@ -128,7 +128,8 @@ describe("ToolExecutor secret resolution", () => {
       { path: "test.txt" },
     );
 
-    expect(result.output).toBe("file content");
+    expect(result.output).toContain('<data source="tool">');
+    expect(result.output).toContain("file content");
   });
 
   it("leaves non-secret string args unchanged", async () => {
@@ -230,7 +231,8 @@ describe("ToolExecutor secret resolution", () => {
     );
 
     // The file read should still work
-    expect(result.output).toBe("content");
+    expect(result.output).toContain('<data source="tool">');
+    expect(result.output).toContain("content");
   });
 
   it("redacts multiple secret values from output", async () => {

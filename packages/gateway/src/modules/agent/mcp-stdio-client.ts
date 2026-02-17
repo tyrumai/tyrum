@@ -10,6 +10,27 @@ import type { McpServerSpec as McpServerSpecT } from "@tyrum/schemas";
 
 type JsonRpcId = number;
 
+interface McpStdioSpec {
+  id: string;
+  name: string;
+  enabled: boolean;
+  transport: "stdio";
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+  cwd?: string;
+  timeout_ms?: number;
+  scopes?: string[];
+}
+
+function asStdioSpec(spec: McpServerSpecT): McpStdioSpec {
+  const record = spec as unknown as { transport?: string };
+  if (record.transport !== "stdio") {
+    throw new Error("McpStdioClient requires transport=stdio");
+  }
+  return spec as unknown as McpStdioSpec;
+}
+
 interface JsonRpcRequest {
   jsonrpc: "2.0";
   id: JsonRpcId;
@@ -94,6 +115,7 @@ export class McpStdioClient {
   private stderrTail = "";
   private nextId: JsonRpcId = 1;
   private negotiatedProtocolVersion: string | undefined;
+  private readonly spec: McpStdioSpec;
   private readonly pending = new Map<
     JsonRpcId,
     {
@@ -107,7 +129,9 @@ export class McpStdioClient {
   private started = false;
   private startPromise: Promise<void> | undefined;
 
-  constructor(private readonly spec: McpServerSpecT) {}
+  constructor(spec: McpServerSpecT) {
+    this.spec = asStdioSpec(spec);
+  }
 
   async start(): Promise<void> {
     if (this.started) return;
