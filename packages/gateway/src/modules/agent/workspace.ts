@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import {
   AgentConfig,
@@ -83,11 +83,26 @@ async function loadMcpServerFromDir(
   mcpDir: string,
   serverId: string,
 ): Promise<McpServerSpecT | undefined> {
-  const serverPath = join(mcpDir, serverId, "server.yml");
+  const serverDir = join(mcpDir, serverId);
+  const serverPath = join(serverDir, "server.yml");
   try {
     const contents = await readFile(serverPath, "utf-8");
     const parsed = readYamlObject(contents);
-    return McpServerSpec.parse(parsed);
+    let spec = McpServerSpec.parse(parsed);
+
+    // Keep IDs consistent with the directory/config key.
+    if (spec.id !== serverId) {
+      spec = { ...spec, id: serverId };
+    }
+
+    // Make relative commands/args behave predictably by defaulting cwd to the install dir.
+    if (!spec.cwd) {
+      spec = { ...spec, cwd: serverDir };
+    } else if (!isAbsolute(spec.cwd)) {
+      spec = { ...spec, cwd: join(serverDir, spec.cwd) };
+    }
+
+    return spec;
   } catch {
     return undefined;
   }
