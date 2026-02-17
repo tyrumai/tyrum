@@ -68,6 +68,12 @@ function toSessionRow(raw: RawSessionRow): SessionRow {
 }
 
 export function formatSessionId(channel: string, threadId: string): string {
+  const channelPart = encodeURIComponent(channel);
+  const threadPart = encodeURIComponent(threadId);
+  return `${channelPart}:${threadPart}`;
+}
+
+export function formatLegacySessionId(channel: string, threadId: string): string {
   return `${channel}:${threadId}`;
 }
 
@@ -79,6 +85,26 @@ export class SessionDal {
     const existing = this.getById(sessionId);
     if (existing) {
       return existing;
+    }
+
+    const legacyId = formatLegacySessionId(channel, threadId);
+    if (legacyId !== sessionId) {
+      const legacy = this.getById(legacyId);
+      if (legacy) {
+        const conflict = this.getById(sessionId);
+        if (!conflict) {
+          this.db
+            .prepare(
+              "UPDATE sessions SET session_id = ?, updated_at = datetime('now') WHERE session_id = ?",
+            )
+            .run(sessionId, legacyId);
+          const migrated = this.getById(sessionId);
+          if (migrated) {
+            return migrated;
+          }
+        }
+        return legacy;
+      }
     }
 
     this.db

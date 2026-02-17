@@ -143,7 +143,7 @@ function resolveModelBaseUrl(config: AgentConfigT): string {
     return configured.replace(/\/$/, "");
   }
 
-  const host =
+  const rawHost =
     process.env["GATEWAY_HOST"]?.trim() ||
     process.env["HOST"]?.trim() ||
     process.env["SINGLE_HOST"]?.trim() ||
@@ -152,7 +152,17 @@ function resolveModelBaseUrl(config: AgentConfigT): string {
     process.env["GATEWAY_PORT"]?.trim() ||
     process.env["PORT"]?.trim() ||
     "8080";
-  return `http://${host}:${port}/v1`;
+
+  // Binding addresses like 0.0.0.0 / :: are not connectable as clients.
+  const connectHost =
+    rawHost === "0.0.0.0" ? "127.0.0.1" : rawHost === "::" ? "::1" : rawHost;
+
+  const hostForUrl =
+    connectHost.includes(":") && !connectHost.startsWith("[") && !connectHost.endsWith("]")
+      ? `[${connectHost}]`
+      : connectHost;
+
+  return `http://${hostForUrl}:${port}/v1`;
 }
 
 function resolveChatCompletionsUrl(baseUrl: string): string {

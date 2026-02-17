@@ -15,6 +15,41 @@ function normalizeLines(value: string): string {
   return value.replace(/\r\n/g, "\n");
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function findLevel2Section(
+  lines: readonly string[],
+  sectionKey: string,
+): { startLine: number; endLine: number } | undefined {
+  const heading = new RegExp(`^##\\s+${escapeRegExp(sectionKey)}\\s*$`);
+  let startLine = -1;
+
+  for (let idx = 0; idx < lines.length; idx += 1) {
+    const line = lines[idx] ?? "";
+    if (heading.test(line)) {
+      startLine = idx;
+      break;
+    }
+  }
+
+  if (startLine < 0) {
+    return undefined;
+  }
+
+  let endLine = lines.length;
+  for (let idx = startLine + 1; idx < lines.length; idx += 1) {
+    const line = lines[idx] ?? "";
+    if (/^##\s+/.test(line)) {
+      endLine = idx;
+      break;
+    }
+  }
+
+  return { startLine, endLine };
+}
+
 export class MarkdownMemoryStore {
   readonly memoryDir: string;
   readonly corePath: string;
@@ -48,59 +83,64 @@ export class MarkdownMemoryStore {
 
   async upsertCoreSection(sectionKey: string, content: string): Promise<void> {
     await this.ensureInitialized();
-    const heading = `## ${sectionKey}`;
     const raw = await readFile(this.corePath, "utf-8");
     const normalized = normalizeLines(raw);
-    const nextSectionRegex = /^##\s+/m;
-    const startIndex = normalized.indexOf(heading);
-
-    if (startIndex >= 0) {
-      const before = normalized.slice(0, startIndex);
-      const afterStart = startIndex + heading.length;
-      const tail = normalized.slice(afterStart);
-      const nextIndexInTail = tail.search(nextSectionRegex);
-      const after =
-        nextIndexInTail >= 0 ? tail.slice(nextIndexInTail) : "";
-      const rebuilt = `${before}${heading}\n\n${content.trim()}\n\n${after}`.trimEnd() + "\n";
-      await writeFile(this.corePath, rebuilt, "utf-8");
-      return;
-    }
-
-    const suffix = normalized.endsWith("\n") ? "" : "\n";
-    const appended = `${normalized}${suffix}\n${heading}\n\n${content.trim()}\n`;
-    await writeFile(this.corePath, appended, "utf-8");
-  }
-
-  async appendToCoreSection(sectionKey: string, line: string): Promise<void> {
-    await this.ensureInitialized();
+    const lines = normalized.split("\n");
+    const bounds = findLevel2Section(lines, sectionKey);
     const heading = `## ${sectionKey}`;
-    const raw = await readFile(this.corePath, "utf-8");
-    const normalized = normalizeLines(raw);
-    const startIndex = normalized.indexOf(heading);
-    const normalizedLine = line.trim();
+    const contentLines = content.trim().length > 0 ? content.trim().split("\n") : [];
 
-    if (startIndex < 0) {
-      const fallback = normalized.endsWith("\n") ? normalized : `${normalized}\n`;
-      const appended = `${fallback}\n${heading}\n\n${normalizedLine}\n`;
+    if (!bounds) {
+      const base = normalized.trimEnd();
+      const prefix = base.length > 0 ? `${base}\n` : "";
+      const appended = `${prefix}\n${heading}\n\n${content.trim()}\n`;
       await writeFile(this.corePath, appended, "utf-8");
       return;
     }
 
-    const afterHeadingIndex = startIndex + heading.length;
-    const tail = normalized.slice(afterHeadingIndex);
-    const nextHeadingOffset = tail.search(/^##\s+/m);
-    const sectionBody = (nextHeadingOffset >= 0 ? tail.slice(0, nextHeadingOffset) : tail).trim();
+    const beforeLines = lines.slice(0, bounds.startLine);
+    const afterLines = lines.slice(bounds.endLine);
+    const rebuilt = [
+      ...beforeLines,
+      heading,
+      "",
+      ...contentLines,
+      "",
+      ...afterLines,
+    ]
+      .join("\n")
+      .trimEnd() + "\n";
 
-    const lines = sectionBody
-      .split("\n")
+    await writeFile(this.corePath, rebuilt, "utf-8");
+  }
+
+  async appendToCoreSection(sectionKey: string, line: string): Promise<void> {
+    await this.ensureInitialized();
+    const raw = await readFile(this.corePath, "utf-8");
+    const normalized = normalizeLines(raw);
+    const lines = normalized.split("\n");
+    const bounds = findLevel2Section(lines, sectionKey);
+    const heading = `## ${sectionKey}`;
+    const normalizedLine = line.trim();
+
+    if (!bounds) {
+      const base = normalized.trimEnd();
+      const prefix = base.length > 0 ? `${base}\n` : "";
+      const appended = `${prefix}\n${heading}\n\n${normalizedLine}\n`;
+      await writeFile(this.corePath, appended, "utf-8");
+      return;
+    }
+
+    const bodyLines = lines
+      .slice(bounds.startLine + 1, bounds.endLine)
       .map((existing) => existing.trim())
       .filter((existing) => existing.length > 0);
 
-    if (!lines.includes(normalizedLine)) {
-      lines.push(normalizedLine);
+    if (!bodyLines.includes(normalizedLine)) {
+      bodyLines.push(normalizedLine);
     }
 
-    await this.upsertCoreSection(sectionKey, `${lines.join("\n")}\n`);
+    await this.upsertCoreSection(sectionKey, bodyLines.join("\n"));
   }
 
   async search(query: string, limit: number): Promise<MemorySearchHit[]> {
