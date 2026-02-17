@@ -1,4 +1,4 @@
-import { readFile, readdir } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import {
@@ -108,24 +108,4 @@ export async function loadEnabledMcpServers(
   }
 
   return loaded;
-}
-
-export async function listInstalledSkillIds(home: string): Promise<string[]> {
-  const skillsDir = resolveSkillsDir(home);
-  try {
-    const entries = await readdir(skillsDir, { withFileTypes: true });
-    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
-  } catch {
-    return [];
-  }
-}
-
-export async function listInstalledMcpServerIds(home: string): Promise<string[]> {
-  const mcpDir = resolveMcpDir(home);
-  try {
-    const entries = await readdir(mcpDir, { withFileTypes: true });
-    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
-  } catch {
-    return [];
-  }
 }
