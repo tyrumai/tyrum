@@ -13,17 +13,12 @@ describe("AccountSettingsPage", () => {
     vi.resetAllMocks();
     audioPlayMock = vi.fn().mockResolvedValue(undefined);
     audioPauseMock = vi.fn();
-    global.Audio = vi
-      .fn()
-      .mockImplementation(
-        () =>
-          ({
-            src: "",
-            currentTime: 0,
-            play: audioPlayMock,
-            pause: audioPauseMock,
-          }) as unknown as HTMLAudioElement,
-      ) as unknown as typeof Audio;
+    global.Audio = class {
+      src = "";
+      currentTime = 0;
+      play = audioPlayMock;
+      pause = audioPauseMock;
+    } as unknown as typeof Audio;
     global.fetch = vi
       .fn()
       .mockResolvedValue(mockFetch(emptyProfilesResponse)) as unknown as typeof fetch;
