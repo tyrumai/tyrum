@@ -28,7 +28,12 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   app.route("/", createPlanRoutes(container));
 
   if (process.env["TYRUM_AGENT_ENABLED"] === "1") {
-    app.route("/", createAgentRoutes(container, opts.agentRuntime));
+    if (!opts.agentRuntime) {
+      throw new Error(
+        "Agent routes require an explicit AgentRuntime when TYRUM_AGENT_ENABLED=1.",
+      );
+    }
+    app.route("/", createAgentRoutes(opts.agentRuntime));
   }
 
   // Model proxy routes are optional — only register if config path is set

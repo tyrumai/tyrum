@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { createContainer } from "../../src/container.js";
 import { createApp } from "../../src/app.js";
 import type { GatewayContainer } from "../../src/container.js";
+import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import type { Hono } from "hono";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -19,10 +20,18 @@ export function createTestContainer(): GatewayContainer {
   });
 }
 
-export function createTestApp(): { app: Hono; container: GatewayContainer } {
+export function createTestApp(): {
+  app: Hono;
+  container: GatewayContainer;
+  agentRuntime?: AgentRuntime;
+} {
   const container = createTestContainer();
-  const app = createApp(container);
-  return { app, container };
+  const agentRuntime =
+    process.env["TYRUM_AGENT_ENABLED"] === "1"
+      ? new AgentRuntime({ container })
+      : undefined;
+  const app = createApp(container, { agentRuntime });
+  return { app, container, agentRuntime };
 }
 
 /**

@@ -6,15 +6,13 @@
 
 import { Hono } from "hono";
 import { AgentTurnRequest } from "@tyrum/schemas";
-import type { GatewayContainer } from "../container.js";
-import { AgentRuntime } from "../modules/agent/runtime.js";
+import type { AgentRuntime } from "../modules/agent/runtime.js";
 
-export function createAgentRoutes(container: GatewayContainer, runtime?: AgentRuntime): Hono {
+export function createAgentRoutes(runtime: AgentRuntime): Hono {
   const agent = new Hono();
-  const runtimeInstance = runtime ?? new AgentRuntime({ container });
 
   agent.get("/agent/status", async (c) => {
-    const status = await runtimeInstance.status(true);
+    const status = await runtime.status(true);
     return c.json(status);
   });
 
@@ -29,7 +27,7 @@ export function createAgentRoutes(container: GatewayContainer, runtime?: AgentRu
     }
 
     try {
-      const result = await runtimeInstance.turn(parsed.data);
+      const result = await runtime.turn(parsed.data);
       return c.json(result, 200);
     } catch (err) {
       const message = err instanceof Error ? err.message : "unknown error";
