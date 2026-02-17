@@ -40,17 +40,6 @@ const HARD_DENY_SCOPES: readonly string[] = [
   "mcp://admin",
 ];
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-export function isValidIdentifier(value: string, maxLen: number): boolean {
-  if (value.length === 0 || value.length > maxLen) {
-    return false;
-  }
-  return /^[a-zA-Z0-9\-_.]+$/.test(value);
-}
-
 export function currencyMinorUnits(currency: string): number {
   const upper = currency.toUpperCase();
   const zeroDecimal = new Set([
