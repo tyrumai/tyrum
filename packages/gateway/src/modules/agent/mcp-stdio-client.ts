@@ -48,11 +48,27 @@ function resolveTimeoutMs(spec: McpServerSpecT): number {
   return spec.timeout_ms ?? 5_000;
 }
 
+const DEFAULT_MCP_PROTOCOL_VERSION = "2024-11-05";
+
+function resolveClientProtocolVersion(): string {
+  const fromEnv = process.env["TYRUM_MCP_PROTOCOL_VERSION"]?.trim();
+  return fromEnv && fromEnv.length > 0 ? fromEnv : DEFAULT_MCP_PROTOCOL_VERSION;
+}
+
+function parseInitializeProtocolVersion(result: unknown): string | undefined {
+  if (!result || typeof result !== "object") return undefined;
+  const protocolVersion = (result as Record<string, unknown>)["protocolVersion"];
+  return typeof protocolVersion === "string" && protocolVersion.trim().length > 0
+    ? protocolVersion.trim()
+    : undefined;
+}
+
 export class McpStdioClient {
   private proc: ChildProcessWithoutNullStreams | undefined;
   private buffer = "";
   private stderrTail = "";
   private nextId: JsonRpcId = 1;
+  private negotiatedProtocolVersion: string | undefined;
   private readonly pending = new Map<
     JsonRpcId,
     {
@@ -92,6 +108,7 @@ export class McpStdioClient {
     // stale bytes from corrupting the new process's JSON-RPC framing.
     this.buffer = "";
     this.stderrTail = "";
+    this.negotiatedProtocolVersion = undefined;
 
     const args = this.spec.args ?? [];
     const env = {
@@ -136,10 +153,11 @@ export class McpStdioClient {
 
     // MCP initialize handshake.
     const timeoutMs = resolveTimeoutMs(this.spec);
-    await this.requestNoStart(
+    const requestedProtocolVersion = resolveClientProtocolVersion();
+    const initResult = await this.requestNoStart(
       "initialize",
       {
-        protocolVersion: "2024-11-05",
+        protocolVersion: requestedProtocolVersion,
         capabilities: {},
         clientInfo: {
           name: "tyrum-gateway",
@@ -148,6 +166,25 @@ export class McpStdioClient {
       },
       timeoutMs,
     );
+
+    const serverProtocolVersion = parseInitializeProtocolVersion(initResult);
+    if (!serverProtocolVersion) {
+      throw new Error(
+        `MCP initialize did not return a protocolVersion. stderr: ${this.stderrTail}`,
+      );
+    }
+    const supportedProtocolVersions = new Set([
+      DEFAULT_MCP_PROTOCOL_VERSION,
+      requestedProtocolVersion,
+    ]);
+    if (!supportedProtocolVersions.has(serverProtocolVersion)) {
+      throw new Error(
+        `Unsupported MCP protocol version '${serverProtocolVersion}'. Supported: ${Array.from(
+          supportedProtocolVersions,
+        ).join(", ")}.`,
+      );
+    }
+    this.negotiatedProtocolVersion = serverProtocolVersion;
 
     this.notify("initialized");
   }
@@ -160,6 +197,7 @@ export class McpStdioClient {
     this.rejectAllPending(new Error("MCP client stopped"));
     this.buffer = "";
     this.stderrTail = "";
+    this.negotiatedProtocolVersion = undefined;
 
     if (!proc) return;
 
@@ -349,6 +387,9 @@ export class McpStdioClient {
 
   async request(method: string, params?: unknown, timeoutMs?: number): Promise<unknown> {
     await this.start();
+    if (!this.negotiatedProtocolVersion) {
+      throw new Error("MCP client is not initialized");
+    }
     return this.requestNoStart(method, params, timeoutMs);
   }
 

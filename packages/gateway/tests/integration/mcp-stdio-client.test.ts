@@ -60,6 +60,8 @@ describe("McpStdioClient", () => {
   it("start() succeeds with a well-behaved server", async () => {
     client = new McpStdioClient(makeSpec());
     await client.start();
+    const internal = client as unknown as { negotiatedProtocolVersion?: string };
+    expect(internal.negotiatedProtocolVersion).toBe("2024-11-05");
     const result = await client.toolsList();
     expect(result.tools.map((t) => t.name)).toContain("echo");
   });

@@ -9,6 +9,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createContainer } from "./container.js";
 import { createApp } from "./app.js";
+import { AgentRuntime } from "./modules/agent/runtime.js";
 
 export const VERSION = "0.1.0";
 
@@ -36,7 +37,9 @@ function main(): void {
     modelGatewayConfigPath,
   });
 
-  const app = createApp(container);
+  const agentEnabled = process.env["TYRUM_AGENT_ENABLED"] === "1";
+  const agentRuntime = agentEnabled ? new AgentRuntime({ container }) : undefined;
+  const app = createApp(container, { agentRuntime });
 
   const localHosts = new Set(["127.0.0.1", "localhost", "::1"]);
   if (!localHosts.has(host)) {
@@ -46,7 +49,45 @@ function main(): void {
   }
 
   console.log(`Gateway v${VERSION} listening on http://${host}:${port}`);
-  serve({ fetch: app.fetch, port, hostname: host });
+  const server = serve({ fetch: app.fetch, port, hostname: host });
+
+  let shuttingDown = false;
+  const shutdown = (signal: string): void => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`Gateway shutting down (${signal})`);
+
+    const hardExitTimer = setTimeout(() => {
+      console.warn("Gateway forced shutdown after 5 seconds.");
+      process.exit(1);
+    }, 5_000);
+    hardExitTimer.unref();
+
+    const closeServer = new Promise<void>((resolve) => {
+      try {
+        server.close(() => resolve());
+      } catch {
+        resolve();
+      }
+    });
+
+    Promise.allSettled([
+      closeServer,
+      agentRuntime?.shutdown() ?? Promise.resolve(),
+    ])
+      .finally(() => {
+        clearTimeout(hardExitTimer);
+        try {
+          container.db.close();
+        } catch {
+          // ignore
+        }
+        process.exit(0);
+      });
+  };
+
+  process.once("SIGINT", () => shutdown("SIGINT"));
+  process.once("SIGTERM", () => shutdown("SIGTERM"));
 }
 
 // Run when executed directly
