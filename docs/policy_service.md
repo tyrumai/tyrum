@@ -1,12 +1,12 @@
 # Policy Check Service Skeleton
 
-The policy check service provides the constitutional guardrails described in `docs/product_concept_v1.md` for spend, PII, and legal reviews. The current milestone exposes a stateless HTTP API with static rules to unblock downstream integrations and testing.
+The policy check service provides the constitutional guardrails described in `docs/vision.md` for spend, PII, and legal reviews. The current milestone exposes a stateless HTTP API with static rules to unblock downstream integrations and testing.
 
 ## Endpoints
 - `POST /policy/check` – Evaluates a request across spend, PII, and legal guardrails and returns structured rule decisions plus an overall outcome.
 - `GET /healthz` – Returns `{ "status": "ok" }` for container health checks.
 
-The planner service consumes `POST /policy/check` via its async client. Configure the planner with `POLICY_GATE_URL` (defaults provided by `docker-compose.yml`) so it can locate the deployed policy service.
+In the local-first profile, the policy check runs in-process inside `@tyrum/gateway`: the planner route calls the pure policy engine directly, while the `/policy/check` HTTP endpoint remains available for UI and integration testing.
 
 ## Request Schema
 ```jsonc
@@ -59,7 +59,7 @@ The overall `decision` is `deny` if any rule denies, `escalate` if any rule esca
 
 ## Validation & PII Handling
 - Requests are validated structurally against the policy schema; no user identifier is required in single-user mode.
-- JSON fixtures that cover both shapes live in `services/policy/tests/fixtures/` and can be reused for integration smoke tests.
+- Tests live in `packages/gateway/tests/integration/policy.test.ts` and `packages/gateway/tests/integration/plan.test.ts`.
 
 ## Sample Interaction
 ```json
@@ -100,4 +100,4 @@ The overall `decision` is `deny` if any rule denies, `escalate` if any rule esca
 }
 ```
 
-Future work will replace the static thresholds with learned policy models and wire the service to shared policy definitions under `shared/`.
+Future work can replace the static thresholds (currently constants in `packages/gateway/src/modules/policy/engine.ts`) with user-configured profiles and learned policies, while keeping `@tyrum/schemas` as the shared contract.
