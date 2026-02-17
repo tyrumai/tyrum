@@ -76,9 +76,11 @@ export class McpStdioClient {
       .then(() => {
         this.started = true;
       })
-      .catch((err) => {
+      .catch(async (err) => {
         // Reset so a future call can retry after a failure.
         this.startPromise = undefined;
+        // Kill the spawned process to prevent leaked child processes.
+        await this.stop();
         throw err;
       });
 
