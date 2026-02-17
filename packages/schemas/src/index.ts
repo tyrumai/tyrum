@@ -103,6 +103,14 @@ export {
 } from "./protocol.js";
 
 export {
+  DesktopDisplayTarget,
+  DesktopScreenshotArgs,
+  DesktopMouseArgs,
+  DesktopKeyboardArgs,
+  DesktopActionArgs,
+} from "./desktop.js";
+
+export {
   AgentModelConfig,
   AgentSkillConfig,
   AgentMcpConfig,
