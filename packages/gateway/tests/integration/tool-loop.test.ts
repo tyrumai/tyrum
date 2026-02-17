@@ -14,6 +14,14 @@ const migrationsDir = join(__dirname, "../../migrations");
  * On the first LLM call, returns tool_calls. On subsequent LLM calls, returns final text.
  * Non-LLM calls (e.g. embedding endpoint) return a 404 so they are handled gracefully.
  */
+function resolveFetchUrl(urlOrInput: string | URL | Request): string {
+  if (typeof urlOrInput === "string") return urlOrInput;
+  if (urlOrInput instanceof URL) return urlOrInput.toString();
+  const maybeRequest = urlOrInput as unknown as { url?: string };
+  if (typeof maybeRequest.url === "string") return maybeRequest.url;
+  return String(urlOrInput);
+}
+
 function createToolCallFetchStub(
   toolCalls: Array<{
     id: string;
@@ -22,63 +30,57 @@ function createToolCallFetchStub(
   finalReply: string,
 ): typeof fetch {
   let llmCallCount = 0;
-  return (async (urlOrInput: string | URL | Request) => {
-    const url = typeof urlOrInput === "string" ? urlOrInput : urlOrInput.toString();
+  return (async (urlOrInput: string | URL | Request, _init?: RequestInit) => {
+    const url = resolveFetchUrl(urlOrInput);
 
     // Only count LLM chat/completions calls
     if (!url.includes("/chat/completions")) {
-      return { ok: false, status: 404, text: async () => "not found" } as unknown as Response;
+      return new Response("not found", { status: 404 });
     }
 
     llmCallCount++;
     if (llmCallCount === 1) {
       // First LLM call: return tool_calls
-      return {
-        ok: true,
-        status: 200,
-        text: async () =>
-          JSON.stringify({
-            choices: [
-              {
-                message: {
-                  content: null,
-                  tool_calls: toolCalls.map((tc) => ({
-                    id: tc.id,
-                    type: "function",
-                    function: tc.function,
-                  })),
-                },
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: null,
+                tool_calls: toolCalls.map((tc) => ({
+                  id: tc.id,
+                  type: "function",
+                  function: tc.function,
+                })),
               },
-            ],
-          }),
-      } as unknown as Response;
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
     }
     // Subsequent LLM calls: return final text
-    return {
-      ok: true,
-      status: 200,
-      text: async () =>
-        JSON.stringify({
-          choices: [{ message: { content: finalReply } }],
-        }),
-    } as unknown as Response;
+    return new Response(
+      JSON.stringify({
+        choices: [{ message: { content: finalReply } }],
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
   }) as typeof fetch;
 }
 
 function createSimpleFetchStub(reply: string): typeof fetch {
-  return (async (urlOrInput: string | URL | Request) => {
-    const url = typeof urlOrInput === "string" ? urlOrInput : urlOrInput.toString();
+  return (async (urlOrInput: string | URL | Request, _init?: RequestInit) => {
+    const url = resolveFetchUrl(urlOrInput);
 
     if (!url.includes("/chat/completions")) {
-      return { ok: false, status: 404, text: async () => "not found" } as unknown as Response;
+      return new Response("not found", { status: 404 });
     }
 
-    return {
-      ok: true,
-      status: 200,
-      text: async () =>
-        JSON.stringify({ choices: [{ message: { content: reply } }] }),
-    } as unknown as Response;
+    return new Response(
+      JSON.stringify({ choices: [{ message: { content: reply } }] }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
   }) as typeof fetch;
 }
 
@@ -247,66 +249,58 @@ describe("Tool execution loop", () => {
     // The ToolExecutor uses the same fetchImpl, so we need a smarter mock.
     let llmCallIndex = 0;
     const smartFetch = (async (urlOrInput: string | URL | Request, _init?: RequestInit) => {
-      const url = typeof urlOrInput === "string" ? urlOrInput : urlOrInput.toString();
+      const url = resolveFetchUrl(urlOrInput);
 
       // Non-LLM, non-tool calls (e.g. embeddings) — return 404 so they fail gracefully
       if (!url.includes("/chat/completions") && !url.startsWith("https://")) {
-        return { ok: false, status: 404, text: async () => "not found" } as unknown as Response;
+        return new Response("not found", { status: 404 });
       }
 
       // LLM calls go to completions endpoint
-      if (url.includes("/v1/chat/completions")) {
+      if (url.includes("/chat/completions")) {
         llmCallIndex++;
         if (llmCallIndex === 1) {
-          return {
-            ok: true,
-            status: 200,
-            text: async () =>
-              JSON.stringify({
-                choices: [
-                  {
-                    message: {
-                      content: null,
-                      tool_calls: [
-                        {
-                          id: "tc-1",
-                          type: "function",
-                          function: {
-                            name: "tool.fs.read",
-                            arguments: JSON.stringify({ path: "a.txt" }),
-                          },
-                        },
-                        {
-                          id: "tc-2",
-                          type: "function",
-                          function: {
-                            name: "tool.http.fetch",
-                            arguments: JSON.stringify({ url: "https://example.com" }),
-                          },
-                        },
-                      ],
-                    },
-                  },
-                ],
-              }),
-          } as unknown as Response;
-        }
-        return {
-          ok: true,
-          status: 200,
-          text: async () =>
+          return new Response(
             JSON.stringify({
-              choices: [{ message: { content: "done with both tools" } }],
+              choices: [
+                {
+                  message: {
+                    content: null,
+                    tool_calls: [
+                      {
+                        id: "tc-1",
+                        type: "function",
+                        function: {
+                          name: "tool.fs.read",
+                          arguments: JSON.stringify({ path: "a.txt" }),
+                        },
+                      },
+                      {
+                        id: "tc-2",
+                        type: "function",
+                        function: {
+                          name: "tool.http.fetch",
+                          arguments: JSON.stringify({ url: "https://example.com" }),
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
             }),
-        } as unknown as Response;
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            choices: [{ message: { content: "done with both tools" } }],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
       }
 
       // Tool http.fetch call
-      return {
-        ok: true,
-        status: 200,
-        text: async () => "example.com content",
-      } as unknown as Response;
+      return new Response("example.com content", { status: 200 });
     }) as typeof fetch;
 
     const mcpManager = {
@@ -336,7 +330,7 @@ describe("Tool execution loop", () => {
     expect(result.used_tools).toHaveLength(2);
   });
 
-  it("respects maxIterations and stops looping", async () => {
+  it("respects maxSteps and stops looping", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
     container = createContainer({ dbPath: ":memory:", migrationsDir });
 
@@ -362,37 +356,35 @@ describe("Tool execution loop", () => {
     );
 
     // Always return tool_calls for LLM calls, never final text
-    const infiniteFetch = (async (urlOrInput: string | URL | Request) => {
-      const url = typeof urlOrInput === "string" ? urlOrInput : urlOrInput.toString();
+    const infiniteFetch = (async (urlOrInput: string | URL | Request, _init?: RequestInit) => {
+      const url = resolveFetchUrl(urlOrInput);
 
       if (!url.includes("/chat/completions")) {
-        return { ok: false, status: 404, text: async () => "not found" } as unknown as Response;
+        return new Response("not found", { status: 404 });
       }
 
-      return {
-        ok: true,
-        status: 200,
-        text: async () =>
-          JSON.stringify({
-            choices: [
-              {
-                message: {
-                  content: null,
-                  tool_calls: [
-                    {
-                      id: "tc-loop",
-                      type: "function",
-                      function: {
-                        name: "tool.exec",
-                        arguments: JSON.stringify({ command: "echo hi" }),
-                      },
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: null,
+                tool_calls: [
+                  {
+                    id: "tc-loop",
+                    type: "function",
+                    function: {
+                      name: "tool.exec",
+                      arguments: JSON.stringify({ command: "echo hi" }),
                     },
-                  ],
-                },
+                  },
+                ],
               },
-            ],
-          }),
-      } as unknown as Response;
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
     }) as typeof fetch;
 
     const mcpManager = {
@@ -408,7 +400,7 @@ describe("Tool execution loop", () => {
       mcpManager: mcpManager as unknown as ConstructorParameters<
         typeof AgentRuntime
       >[0]["mcpManager"],
-      maxIterations: 3,
+      maxSteps: 3,
     });
 
     const result = await runtime.turn({
@@ -417,7 +409,7 @@ describe("Tool execution loop", () => {
       message: "run something",
     });
 
-    // Should stop after maxIterations and return the default "No assistant response"
+    // Should stop after maxSteps and return the default "No assistant response"
     expect(result.reply).toBe("No assistant response returned.");
     expect(result.used_tools).toContain("tool.exec");
   });

@@ -75,6 +75,29 @@ args:
   );
 }
 
+function messageTextParts(message: unknown): string[] {
+  if (!message || typeof message !== "object") return [];
+  const content = (message as Record<string, unknown>)["content"];
+
+  if (typeof content === "string") {
+    return [content];
+  }
+
+  if (!Array.isArray(content)) {
+    return [];
+  }
+
+  const parts: string[] = [];
+  for (const part of content) {
+    if (!part || typeof part !== "object") continue;
+    const record = part as Record<string, unknown>;
+    if (record["type"] === "text" && typeof record["text"] === "string") {
+      parts.push(record["text"]);
+    }
+  }
+  return parts;
+}
+
 function findSessionPrompt(payload: unknown): string {
   if (!payload || typeof payload !== "object") {
     return "";
@@ -84,16 +107,10 @@ function findSessionPrompt(payload: unknown): string {
     return "";
   }
   for (const message of messages) {
-    if (
-      message &&
-      typeof message === "object" &&
-      (message as Record<string, unknown>)["role"] === "developer" &&
-      typeof (message as Record<string, unknown>)["content"] === "string" &&
-      ((message as Record<string, unknown>)["content"] as string).startsWith(
-        "Session context:",
-      )
-    ) {
-      return (message as Record<string, unknown>)["content"] as string;
+    for (const text of messageTextParts(message)) {
+      if (text.startsWith("Session context:")) {
+        return text;
+      }
     }
   }
   return "";

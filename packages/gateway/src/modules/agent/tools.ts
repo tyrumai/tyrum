@@ -20,6 +20,14 @@ const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
       type: "object",
       properties: {
         path: { type: "string", description: "Absolute or workspace-relative path to the file." },
+        offset: {
+          type: "number",
+          description: "Optional line offset to start reading from (0-indexed).",
+        },
+        limit: {
+          type: "number",
+          description: "Optional maximum number of lines to return.",
+        },
       },
       required: ["path"],
       additionalProperties: false,
@@ -51,6 +59,10 @@ const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
       type: "object",
       properties: {
         command: { type: "string", description: "Shell command to execute." },
+        cwd: {
+          type: "string",
+          description: "Optional working directory (absolute or workspace-relative).",
+        },
         timeout_ms: { type: "number", description: "Optional timeout in milliseconds." },
       },
       required: ["command"],

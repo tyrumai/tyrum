@@ -16,8 +16,11 @@
     "start": "node dist/index.mjs"
   },
   "dependencies": {
+    "@ai-sdk/openai-compatible": "^2.0.30",
     "@hono/node-server": "^1.19.9",
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "@tyrum/schemas": "workspace:*",
+    "ai": "^6.0.86",
     "better-sqlite3": "^12.6.2",
     "hono": "^4.11.9",
     "mitt": "^3.0.1",

@@ -1,5 +1,6 @@
-import { readFile } from "node:fs/promises";
-import { resolve, normalize } from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { dirname, resolve, normalize } from "node:path";
 import type { McpServerSpec as McpServerSpecT } from "@tyrum/schemas";
 import type { McpManager } from "./mcp-manager.js";
 import type { TaggedContent } from "./provenance.js";
@@ -9,9 +10,40 @@ import type { SecretProvider } from "../secret/provider.js";
 
 const MAX_RESPONSE_BYTES = 32_768;
 const HTTP_TIMEOUT_MS = 30_000;
+const DEFAULT_EXEC_TIMEOUT_MS = 30_000;
+const MAX_EXEC_TIMEOUT_MS = 300_000;
 
 /** Sentinel prefix for secret handle references in tool arguments. */
 const SECRET_HANDLE_PREFIX = "secret:";
+
+const BLOCKED_HTTP_HOSTS = new Set([
+  "localhost",
+  "127.0.0.1",
+  "0.0.0.0",
+  "[::1]",
+  "169.254.169.254", // cloud metadata
+  "metadata.google.internal",
+]);
+
+function isBlockedUrl(raw: string): boolean {
+  try {
+    const parsed = new URL(raw);
+    if (BLOCKED_HTTP_HOSTS.has(parsed.hostname)) return true;
+
+    // Block RFC 1918 / link-local ranges (IPv4)
+    const parts = parsed.hostname.split(".");
+    if (parts[0] === "10") return true;
+    if (parts[0] === "172") {
+      const second = Number(parts[1]);
+      if (second >= 16 && second <= 31) return true;
+    }
+    if (parts[0] === "192" && parts[1] === "168") return true;
+
+    return false;
+  } catch {
+    return true; // invalid URL → block
+  }
+}
 
 export interface ToolResult {
   tool_call_id: string;
@@ -51,7 +83,11 @@ export class ToolExecutor {
             result = await this.executeHttpFetch(toolCallId, resolvedArgs);
             break;
           case "tool.fs.write":
+            result = await this.executeFsWrite(toolCallId, resolvedArgs);
+            break;
           case "tool.exec":
+            result = await this.executeExec(toolCallId, resolvedArgs);
+            break;
           case "tool.node.dispatch":
             result = {
               tool_call_id: toolCallId,
@@ -106,15 +142,40 @@ export class ToolExecutor {
       return { tool_call_id: toolCallId, output: "", error: "missing required argument: path" };
     }
 
+    const offsetRaw = parsed?.["offset"];
+    const limitRaw = parsed?.["limit"];
+    const offset = typeof offsetRaw === "number" ? Math.floor(offsetRaw) : undefined;
+    const limit = typeof limitRaw === "number" ? Math.floor(limitRaw) : undefined;
+
+    if (offset !== undefined && (Number.isNaN(offset) || offset < 0)) {
+      return { tool_call_id: toolCallId, output: "", error: "offset must be a non-negative integer" };
+    }
+    if (limit !== undefined && (Number.isNaN(limit) || limit < 1)) {
+      return { tool_call_id: toolCallId, output: "", error: "limit must be a positive integer" };
+    }
+
     const safePath = this.assertSandboxed(rawPath);
     const content = await readFile(safePath, "utf-8");
 
-    const truncated = content.length > MAX_RESPONSE_BYTES
-      ? `${content.slice(0, MAX_RESPONSE_BYTES)}...(truncated)`
+    const selected = offset !== undefined || limit !== undefined
+      ? (() => {
+          const lines = content.split("\n");
+          const start = offset ?? 0;
+          const sliced = limit !== undefined ? lines.slice(start, start + limit) : lines.slice(start);
+          return sliced.join("\n");
+        })()
       : content;
 
-    const tagged = tagContent(truncated, "tool", true);
-    return { tool_call_id: toolCallId, output: truncated, provenance: tagged };
+    const truncated = selected.length > MAX_RESPONSE_BYTES
+      ? `${selected.slice(0, MAX_RESPONSE_BYTES)}...(truncated)`
+      : selected;
+
+    const tagged = tagContent(truncated, "tool");
+    return {
+      tool_call_id: toolCallId,
+      output: sanitizeForModel(tagged),
+      provenance: tagged,
+    };
   }
 
   private async executeHttpFetch(
@@ -125,6 +186,14 @@ export class ToolExecutor {
     const url = typeof parsed?.["url"] === "string" ? parsed["url"] : undefined;
     if (!url) {
       return { tool_call_id: toolCallId, output: "", error: "missing required argument: url" };
+    }
+
+    if (isBlockedUrl(url)) {
+      return {
+        tool_call_id: toolCallId,
+        output: "",
+        error: "blocked url: requests to private/internal network addresses are denied",
+      };
     }
 
     const method = typeof parsed?.["method"] === "string" ? parsed["method"] : "GET";
@@ -164,6 +233,104 @@ export class ToolExecutor {
     } finally {
       clearTimeout(timeout);
     }
+  }
+
+  private async executeFsWrite(
+    toolCallId: string,
+    args: unknown,
+  ): Promise<ToolResult> {
+    const parsed = args as Record<string, unknown> | null;
+    const rawPath = typeof parsed?.["path"] === "string" ? parsed["path"] : undefined;
+    if (!rawPath) {
+      return { tool_call_id: toolCallId, output: "", error: "missing required argument: path" };
+    }
+    const content = typeof parsed?.["content"] === "string" ? parsed["content"] : undefined;
+    if (content === undefined) {
+      return { tool_call_id: toolCallId, output: "", error: "missing required argument: content" };
+    }
+
+    const safePath = this.assertSandboxed(rawPath);
+    await mkdir(dirname(safePath), { recursive: true });
+    await writeFile(safePath, content, "utf-8");
+
+    const output = `Wrote ${content.length} bytes to ${safePath}`;
+    const tagged = tagContent(output, "tool");
+    return {
+      tool_call_id: toolCallId,
+      output: sanitizeForModel(tagged),
+      provenance: tagged,
+    };
+  }
+
+  private async executeExec(
+    toolCallId: string,
+    args: unknown,
+  ): Promise<ToolResult> {
+    const parsed = args as Record<string, unknown> | null;
+    const command = typeof parsed?.["command"] === "string" ? parsed["command"] : undefined;
+    if (!command) {
+      return { tool_call_id: toolCallId, output: "", error: "missing required argument: command" };
+    }
+
+    const cwdRaw = typeof parsed?.["cwd"] === "string" ? parsed["cwd"] : ".";
+    const safeCwd = this.assertSandboxed(cwdRaw);
+
+    const timeoutMsRaw = parsed?.["timeout_ms"];
+    const timeoutMs = typeof timeoutMsRaw === "number"
+      ? Math.max(1, Math.min(MAX_EXEC_TIMEOUT_MS, Math.floor(timeoutMsRaw)))
+      : DEFAULT_EXEC_TIMEOUT_MS;
+
+    const output = await new Promise<string>((resolvePromise) => {
+      const child = spawn("sh", ["-c", command], {
+        cwd: safeCwd,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+
+      const chunks: Buffer[] = [];
+      let size = 0;
+
+      const pushChunk = (data: Buffer) => {
+        if (size >= MAX_RESPONSE_BYTES) return;
+        const remaining = MAX_RESPONSE_BYTES - size;
+        if (data.length <= remaining) {
+          chunks.push(data);
+          size += data.length;
+        } else {
+          chunks.push(data.subarray(0, remaining));
+          size += remaining;
+        }
+      };
+
+      child.stdout.on("data", (data: Buffer) => pushChunk(data));
+      child.stderr.on("data", (data: Buffer) => pushChunk(data));
+
+      const timer = setTimeout(() => {
+        child.kill("SIGTERM");
+      }, timeoutMs);
+
+      child.on("close", (code) => {
+        clearTimeout(timer);
+        const combined = Buffer.concat(chunks).toString("utf-8");
+        const exitLine = `\n[exit code: ${code ?? "unknown"}]`;
+        resolvePromise(combined + exitLine);
+      });
+
+      child.on("error", (err) => {
+        clearTimeout(timer);
+        resolvePromise(`Error spawning command: ${err.message}`);
+      });
+    });
+
+    const truncated = output.length > MAX_RESPONSE_BYTES
+      ? `${output.slice(0, MAX_RESPONSE_BYTES)}...(truncated)`
+      : output;
+
+    const tagged = tagContent(truncated, "tool");
+    return {
+      tool_call_id: toolCallId,
+      output: sanitizeForModel(tagged),
+      provenance: tagged,
+    };
   }
 
   private async executeMcp(

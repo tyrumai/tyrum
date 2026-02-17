@@ -24,7 +24,7 @@ describe("ToolExecutor provenance tagging", () => {
     }
   });
 
-  it("fs.read results have trusted tool provenance", async () => {
+  it("fs.read results have untrusted tool provenance", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "provenance-test-"));
     await writeFile(join(homeDir, "test.txt"), "safe content", "utf-8");
 
@@ -39,10 +39,11 @@ describe("ToolExecutor provenance tagging", () => {
 
     expect(result.provenance).toBeDefined();
     expect(result.provenance!.source).toBe("tool");
-    expect(result.provenance!.trusted).toBe(true);
-    // Trusted content is not wrapped in <data> tags
-    expect(result.output).toBe("safe content");
-    expect(result.output).not.toContain("<data");
+    expect(result.provenance!.trusted).toBe(false);
+    // Untrusted content is wrapped in <data> tags
+    expect(result.output).toContain('<data source="tool">');
+    expect(result.output).toContain("safe content");
+    expect(result.output).toContain("</data>");
   });
 
   it("http.fetch results have untrusted web provenance", async () => {

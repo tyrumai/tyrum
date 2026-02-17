@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { mkdtemp, writeFile, rm, mkdir } from "node:fs/promises";
+import { mkdtemp, writeFile, rm, mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach } from "vitest";
@@ -45,7 +45,8 @@ describe("ToolExecutor", () => {
       );
 
       expect(result.tool_call_id).toBe("call-1");
-      expect(result.output).toBe("hello world");
+      expect(result.output).toContain('<data source="tool">');
+      expect(result.output).toContain("hello world");
       expect(result.error).toBeUndefined();
     });
 
@@ -93,6 +94,30 @@ describe("ToolExecutor", () => {
       );
     });
 
+    it("http.fetch blocks requests to private network addresses", async () => {
+      homeDir = await mkdtemp(join(tmpdir(), "tool-executor-"));
+
+      const mockFetch = vi.fn(async () => ({
+        text: async () => "should-not-fetch",
+      })) as unknown as typeof fetch;
+
+      const executor = new ToolExecutor(
+        homeDir,
+        stubMcpManager(),
+        new Map(),
+        mockFetch,
+      );
+
+      const result = await executor.execute(
+        "tool.http.fetch",
+        "call-ssrf-1",
+        { url: "http://169.254.169.254/latest/meta-data/" },
+      );
+
+      expect(result.error).toContain("blocked url");
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
     it("http.fetch returns error for missing url", async () => {
       homeDir = await mkdtemp(join(tmpdir(), "tool-executor-"));
 
@@ -107,7 +132,7 @@ describe("ToolExecutor", () => {
       expect(result.error).toBe("missing required argument: url");
     });
 
-    it("fs.write returns not-yet-available", async () => {
+    it("fs.write writes file content", async () => {
       homeDir = await mkdtemp(join(tmpdir(), "tool-executor-"));
 
       const executor = new ToolExecutor(
@@ -123,10 +148,15 @@ describe("ToolExecutor", () => {
         { path: "test.txt", content: "data" },
       );
 
-      expect(result.error).toBe("tool not yet available");
+      expect(result.error).toBeUndefined();
+      expect(result.output).toContain('<data source="tool">');
+      expect(result.output).toContain("Wrote");
+
+      const written = await readFile(join(homeDir, "test.txt"), "utf-8");
+      expect(written).toBe("data");
     });
 
-    it("tool.exec returns not-yet-available", async () => {
+    it("tool.exec executes commands", async () => {
       homeDir = await mkdtemp(join(tmpdir(), "tool-executor-"));
 
       const executor = new ToolExecutor(
@@ -139,10 +169,13 @@ describe("ToolExecutor", () => {
       const result = await executor.execute(
         "tool.exec",
         "call-6",
-        { command: "ls" },
+        { command: "echo hi" },
       );
 
-      expect(result.error).toBe("tool not yet available");
+      expect(result.error).toBeUndefined();
+      expect(result.output).toContain('<data source="tool">');
+      expect(result.output).toContain("hi");
+      expect(result.output).toContain("[exit code:");
     });
 
     it("tool.node.dispatch returns not-yet-available", async () => {
@@ -241,7 +274,8 @@ describe("ToolExecutor", () => {
         { path: "sub/data.txt" },
       );
 
-      expect(result.output).toBe("nested content");
+      expect(result.output).toContain('<data source="tool">');
+      expect(result.output).toContain("nested content");
       expect(result.error).toBeUndefined();
     });
   });
