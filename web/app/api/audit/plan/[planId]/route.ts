@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { parseUpstreamResponse, resolveApiBaseUrl } from "../../../shared";
+import { getPlanTimeline } from "../../../local-store";
 
 type ParamsRecord = Record<string, string | string[] | undefined>;
 
 export async function GET(
-  request: Request,
+  _request: Request,
   context: { params: Promise<ParamsRecord> },
 ) {
   const rawParams = ((await context.params) ?? {}) as ParamsRecord;
@@ -21,44 +21,17 @@ export async function GET(
     );
   }
 
-  const baseUrl = resolveApiBaseUrl();
-  if (!baseUrl) {
+  const timeline = getPlanTimeline(planId);
+  if (!timeline) {
     return NextResponse.json(
       {
-        error: "configuration",
-        message: "API_BASE_URL is not configured.",
+        error: "plan_not_found",
+        message: "Plan audit timeline not found.",
       },
-      { status: 500 },
+      { status: 404 },
     );
   }
 
-  try {
-    const requestUrl = new URL(request.url);
-    const upstreamUrl = new URL(`/audit/plan/${encodeURIComponent(planId)}`, baseUrl);
-    if (requestUrl.search) {
-      upstreamUrl.search = requestUrl.search;
-    }
-
-    const upstreamResponse = await fetch(
-      upstreamUrl,
-      {
-        method: "GET",
-        headers: {
-          accept: "application/json",
-        },
-        cache: "no-store",
-      },
-    );
-
-    const payload = await parseUpstreamResponse(upstreamResponse);
-    return NextResponse.json(payload, { status: upstreamResponse.status });
-  } catch {
-    return NextResponse.json(
-      {
-        error: "upstream_unavailable",
-        message: "Unable to reach the audit service.",
-      },
-      { status: 502 },
-    );
-  }
+  // Return the default redacted timeline in self-hosted single-user mode.
+  return NextResponse.json(timeline, { status: 200 });
 }

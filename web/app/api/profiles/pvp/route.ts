@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseUpstreamResponse, resolveApiBaseUrl } from "../../shared";
+import { savePvpProfile } from "../../local-store";
 
 async function readJsonBody(request: NextRequest) {
   try {
@@ -11,7 +11,12 @@ async function readJsonBody(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   const body = await readJsonBody(request);
-  if (!body || typeof body !== "object" || typeof (body as any).profile !== "object") {
+  if (
+    !body ||
+    typeof body !== "object" ||
+    typeof (body as any).profile !== "object" ||
+    Array.isArray((body as any).profile)
+  ) {
     return NextResponse.json(
       {
         error: "invalid_payload",
@@ -21,37 +26,13 @@ export async function PUT(request: NextRequest) {
     );
   }
 
-  const baseUrl = resolveApiBaseUrl();
-  if (!baseUrl) {
-    return NextResponse.json(
-      {
-        error: "configuration",
-        message: "API_BASE_URL is not configured.",
-      },
-      { status: 500 },
-    );
-  }
-
-  try {
-    const upstreamResponse = await fetch(`${baseUrl}/profiles/pvp`, {
-      method: "PUT",
-      headers: {
-        "content-type": "application/json",
-        accept: "application/json",
-      },
-      body: JSON.stringify(body),
-      cache: "no-store",
-    });
-
-    const payload = await parseUpstreamResponse(upstreamResponse);
-    return NextResponse.json(payload, { status: upstreamResponse.status });
-  } catch {
-    return NextResponse.json(
-      {
-        error: "upstream_unavailable",
-        message: "Unable to persist PVP profile upstream.",
-      },
-      { status: 502 },
-    );
-  }
+  const saved = savePvpProfile((body as { profile: Record<string, unknown> }).profile);
+  return NextResponse.json(
+    {
+      status: "updated",
+      profile: saved.profile,
+      version: saved.version,
+    },
+    { status: 200 },
+  );
 }

@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { PamProfileRef } from "./planner.js";
 
 export const Decision = z.enum(["approve", "escalate", "deny"]);
 export type Decision = z.infer<typeof Decision>;
@@ -69,8 +68,6 @@ export type ConnectorScopeContext = z.infer<typeof ConnectorScopeContext>;
 
 export const PolicyCheckRequest = z.object({
   request_id: z.string().optional(),
-  user_id: z.string().trim().optional(),
-  pam_profile: PamProfileRef.optional(),
   spend: SpendContext.optional(),
   pii: PiiContext.optional(),
   legal: LegalContext.optional(),

@@ -10,15 +10,13 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
 
   // --- Facts ---
 
-  memory.get("/memory/facts/:subjectId", (c) => {
-    const subjectId = c.req.param("subjectId");
-    const facts = memoryDal.getFacts(subjectId);
+  memory.get("/memory/facts", (c) => {
+    const facts = memoryDal.getFacts();
     return c.json({ facts });
   });
 
   memory.post("/memory/facts", async (c) => {
     const body = (await c.req.json()) as {
-      subject_id?: string;
       fact_key?: string;
       fact_value?: unknown;
       source?: string;
@@ -26,11 +24,10 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
       confidence?: number;
     };
 
-    const { subject_id, fact_key, fact_value, source, observed_at, confidence } =
+    const { fact_key, fact_value, source, observed_at, confidence } =
       body;
 
     if (
-      !subject_id ||
       !fact_key ||
       fact_value === undefined ||
       !source ||
@@ -41,14 +38,13 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
         {
           error: "invalid_request",
           message:
-            "subject_id, fact_key, fact_value, source, observed_at, and confidence are required",
+            "fact_key, fact_value, source, observed_at, and confidence are required",
         },
         400,
       );
     }
 
     const id = memoryDal.insertFact(
-      subject_id,
       fact_key,
       fact_value,
       source,
@@ -60,15 +56,13 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
 
   // --- Episodic Events ---
 
-  memory.get("/memory/events/:subjectId", (c) => {
-    const subjectId = c.req.param("subjectId");
-    const events = memoryDal.getEpisodicEvents(subjectId);
+  memory.get("/memory/events", (c) => {
+    const events = memoryDal.getEpisodicEvents();
     return c.json({ events });
   });
 
   memory.post("/memory/events", async (c) => {
     const body = (await c.req.json()) as {
-      subject_id?: string;
       event_id?: string;
       occurred_at?: string;
       channel?: string;
@@ -76,11 +70,10 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
       payload?: unknown;
     };
 
-    const { subject_id, event_id, occurred_at, channel, event_type, payload } =
+    const { event_id, occurred_at, channel, event_type, payload } =
       body;
 
     if (
-      !subject_id ||
       !event_id ||
       !occurred_at ||
       !channel ||
@@ -91,14 +84,13 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
         {
           error: "invalid_request",
           message:
-            "subject_id, event_id, occurred_at, channel, event_type, and payload are required",
+            "event_id, occurred_at, channel, event_type, and payload are required",
         },
         400,
       );
     }
 
     const id = memoryDal.insertEpisodicEvent(
-      subject_id,
       event_id,
       occurred_at,
       channel,
@@ -110,19 +102,14 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
 
   // --- Capability Memories ---
 
-  memory.get("/memory/capabilities/:subjectId", (c) => {
-    const subjectId = c.req.param("subjectId");
+  memory.get("/memory/capabilities", (c) => {
     const capabilityType = c.req.query("capability_type");
-    const capabilities = memoryDal.getCapabilityMemories(
-      subjectId,
-      capabilityType,
-    );
+    const capabilities = memoryDal.getCapabilityMemories(capabilityType);
     return c.json({ capabilities });
   });
 
   memory.post("/memory/capabilities", async (c) => {
     const body = (await c.req.json()) as {
-      subject_id?: string;
       capability_type?: string;
       capability_identifier?: string;
       executor_kind?: string;
@@ -138,7 +125,6 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
     };
 
     const {
-      subject_id,
       capability_type,
       capability_identifier,
       executor_kind,
@@ -146,7 +132,6 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
     } = body;
 
     if (
-      !subject_id ||
       !capability_type ||
       !capability_identifier ||
       !executor_kind
@@ -155,14 +140,13 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
         {
           error: "invalid_request",
           message:
-            "subject_id, capability_type, capability_identifier, and executor_kind are required",
+            "capability_type, capability_identifier, and executor_kind are required",
         },
         400,
       );
     }
 
     const result = memoryDal.upsertCapabilityMemory(
-      subject_id,
       capability_type,
       capability_identifier,
       executor_kind,

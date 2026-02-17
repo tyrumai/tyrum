@@ -3,52 +3,27 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import OnboardingStart from "./page";
 
-const trackAnalytics = vi.fn();
 const originalFetch = global.fetch;
-
-type SearchParamRecord = Record<string, string | string[] | undefined>;
-
-function createSearchParams(values: SearchParamRecord) {
-  return Object.assign(Promise.resolve(values), values) as Promise<SearchParamRecord>;
-}
-
-vi.mock("../../../lib/analytics", () => ({
-  trackAnalytics: (...args: unknown[]) => trackAnalytics(...args),
-}));
 
 describe("OnboardingStart", () => {
   beforeEach(() => {
-    trackAnalytics.mockReset();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2025-10-12T10:00:00.000Z"));
   });
 
   afterEach(() => {
-    trackAnalytics.mockReset();
     vi.useRealTimers();
     global.fetch = originalFetch;
   });
 
-  it("shows the welcome flash message and tracks analytics when arriving from the waitlist", async () => {
-    render(
-      <OnboardingStart
-        searchParams={createSearchParams({
-          flash: "waitlist-welcome",
-          signup_status: "created",
-          utm_source: "ads",
-        })}
-      />,
-    );
+  it("renders onboarding header copy", async () => {
+    render(<OnboardingStart />);
 
     expect(
-      screen.getByText("You're on the list. Let's calibrate Tyrum to your voice."),
+      screen.getByText(
+        "Calibrate Tyrum to your voice so planning and guardrails match your local single-user workspace.",
+      ),
     ).toBeVisible();
-
-    await vi.runOnlyPendingTimersAsync();
-    expect(trackAnalytics).toHaveBeenCalledWith("waitlist_signup", {
-      status: "created",
-      utm_source: "ads",
-    });
   });
 
   it(

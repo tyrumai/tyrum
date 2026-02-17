@@ -138,7 +138,7 @@ export default function ConsentChecklistPage() {
           <h1 id="consent-checklist-heading">Consent Checklist</h1>
         </div>
         <p className="portal-onboarding__lead">
-          Review the guardrails Tyrum needs before we issue your session placeholder. Toggle the
+          Review the guardrails Tyrum needs before first use. Toggle the
           approvals you&apos;re comfortable with so we can calibrate autonomy from the first plan.
         </p>
       </header>
@@ -264,8 +264,8 @@ export default function ConsentChecklistPage() {
         <h2>What happens after consent</h2>
         <p>
           We&apos;ll light up watcher defaults next so you can confirm how Tyrum monitors spend,
-          privacy, and escalation triggers. Once the verification stub is complete, these toggles
-          will sync to the policy gate and issue your portal session.
+          privacy, and escalation triggers. These toggles are persisted locally for the single-user
+          runtime profile.
         </p>
       </section>
     </main>

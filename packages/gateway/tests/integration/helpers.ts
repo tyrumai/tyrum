@@ -31,7 +31,6 @@ export function createTestApp(): { app: Hono; container: GatewayContainer } {
 export function minimalPlanRequest(overrides?: Record<string, unknown>): Record<string, unknown> {
   return {
     request_id: "test-req-1",
-    subject_id: "test-subject-1",
     trigger: {
       thread: {
         id: "thread-1",

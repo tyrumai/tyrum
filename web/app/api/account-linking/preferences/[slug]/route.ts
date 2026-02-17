@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseUpstreamResponse, resolveApiBaseUrl } from "../../../shared";
+import { setIntegrationPreference } from "../../../local-store";
 
 async function readJsonBody(request: NextRequest) {
   try {
@@ -11,12 +11,9 @@ async function readJsonBody(request: NextRequest) {
 
 export async function PUT(
   request: NextRequest,
-  context: { params: Promise<any> },
+  context: { params: Promise<Record<string, string | string[] | undefined>> },
 ) {
-  const resolvedParams = ((await context.params) ?? {}) as Record<
-    string,
-    string | string[] | undefined
-  >;
+  const resolvedParams = (await context.params) ?? {};
   const slugValue = resolvedParams?.slug;
   const slug = Array.isArray(slugValue) ? slugValue[0]?.trim() : slugValue?.trim();
   if (!slug) {
@@ -40,40 +37,22 @@ export async function PUT(
     );
   }
 
-  const baseUrl = resolveApiBaseUrl();
-  if (!baseUrl) {
+  const integration = setIntegrationPreference(slug, body.enabled);
+  if (!integration) {
     return NextResponse.json(
       {
-        error: "configuration",
-        message: "API_BASE_URL is not configured.",
+        error: "not_found",
+        message: `No integration preference registered for slug '${slug}'.`,
       },
-      { status: 500 },
+      { status: 404 },
     );
   }
 
-  try {
-    const upstreamResponse = await fetch(
-      `${baseUrl}/account-linking/preferences/${encodeURIComponent(slug)}`,
-      {
-        method: "PUT",
-        headers: {
-          "content-type": "application/json",
-          accept: "application/json",
-        },
-        body: JSON.stringify({ enabled: body.enabled }),
-        cache: "no-store",
-      },
-    );
-
-    const payload = await parseUpstreamResponse(upstreamResponse);
-    return NextResponse.json(payload, { status: upstreamResponse.status });
-  } catch {
-    return NextResponse.json(
-      {
-        error: "upstream_unavailable",
-        message: "Unable to update account linking preferences upstream.",
-      },
-      { status: 502 },
-    );
-  }
+  return NextResponse.json(
+    {
+      status: "updated",
+      integration,
+    },
+    { status: 200 },
+  );
 }

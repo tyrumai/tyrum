@@ -10,11 +10,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "start:single": "pnpm --filter @tyrum/gateway build && node ./scripts/start-single-instance.mjs",
     "lint": "eslint .",
     "test": "node ./scripts/run-tests.mjs",
     "lighthouse:ci": "lhci autorun --config=./lighthouserc.mobile.json && lhci autorun --config=./lighthouserc.desktop.json"
   },
   "dependencies": {
+    "@hono/node-server": "^1.19.9",
+    "@tyrum/gateway": "workspace:*",
     "next": "16.1.6",
     "react": "19.2.4",
     "react-dom": "19.2.4"
