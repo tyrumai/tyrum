@@ -46,7 +46,8 @@ function main(): void {
 
   const agentEnabled = process.env["TYRUM_AGENT_ENABLED"] === "1";
   const agentRuntime = agentEnabled ? new AgentRuntime({ container }) : undefined;
-  const app = createApp(container, { agentRuntime });
+  const connectionManager = new ConnectionManager();
+  const app = createApp(container, { agentRuntime, connectionManager });
 
   const localHosts = new Set(["127.0.0.1", "localhost", "::1"]);
   if (!localHosts.has(host)) {
@@ -56,7 +57,6 @@ function main(): void {
   }
 
   // --- WebSocket handler ---
-  const connectionManager = new ConnectionManager();
   const { handleUpgrade, stopHeartbeat, wss } = createWsHandler({
     connectionManager,
     protocolDeps: { connectionManager },

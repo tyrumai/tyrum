@@ -11,10 +11,13 @@ import { ingress } from "./routes/ingress.js";
 import { createPlanRoutes } from "./routes/plan.js";
 import { createModelProxyRoutes } from "./routes/model-proxy.js";
 import { createAgentRoutes } from "./routes/agent.js";
+import { createConnectionsRoute } from "./routes/connections.js";
 import type { AgentRuntime } from "./modules/agent/runtime.js";
+import type { ConnectionManager } from "./ws/connection-manager.js";
 
 export interface AppOptions {
   agentRuntime?: AgentRuntime;
+  connectionManager?: ConnectionManager;
 }
 
 export function createApp(container: GatewayContainer, opts: AppOptions = {}): Hono {
@@ -26,6 +29,10 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   app.route("/", createMemoryRoutes(container.memoryDal));
   app.route("/", ingress);
   app.route("/", createPlanRoutes(container));
+
+  if (opts.connectionManager) {
+    app.route("/", createConnectionsRoute(opts.connectionManager));
+  }
 
   if (process.env["TYRUM_AGENT_ENABLED"] === "1") {
     if (!opts.agentRuntime) {
