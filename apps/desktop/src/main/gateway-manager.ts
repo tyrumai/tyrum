@@ -26,6 +26,7 @@ export interface GatewayManagerEvents {
 
 export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
   private process: ChildProcess | null = null;
+  private stoppingProcess: ChildProcess | null = null;
   private healthTimer: ReturnType<typeof setInterval> | null = null;
   private _status: GatewayStatus = "stopped";
 
@@ -44,7 +45,7 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
 
     const host = opts.host ?? "127.0.0.1";
 
-    this.process = spawn("node", [opts.gatewayBin], {
+    const proc = spawn("node", [opts.gatewayBin], {
       env: {
         ...process.env,
         GATEWAY_PORT: String(opts.port),
@@ -54,8 +55,9 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
+    this.process = proc;
 
-    this.process.stdout?.on("data", (data: Buffer) => {
+    proc.stdout?.on("data", (data: Buffer) => {
       this.emit("log", {
         level: "info",
         message: data.toString().trimEnd(),
@@ -63,7 +65,7 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
       });
     });
 
-    this.process.stderr?.on("data", (data: Buffer) => {
+    proc.stderr?.on("data", (data: Buffer) => {
       this.emit("log", {
         level: "error",
         message: data.toString().trimEnd(),
@@ -71,11 +73,21 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
       });
     });
 
-    this.process.on("exit", (code) => {
-      this.setStatus(code === 0 ? "stopped" : "error");
+    proc.on("exit", (code) => {
+      const isGracefulStop = this.stoppingProcess === proc;
+      if (isGracefulStop) {
+        this.stoppingProcess = null;
+      } else {
+        this.setStatus(code === 0 ? "stopped" : "error");
+      }
+
       this.emit("exit", code);
-      this.process = null;
-      this.stopHealthCheck();
+
+      // Avoid clobbering a newer process if one was started before this exit fired.
+      if (this.process === proc) {
+        this.process = null;
+        this.stopHealthCheck();
+      }
     });
 
     await this.waitForHealth(opts.port, host);
@@ -97,6 +109,8 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
       return;
     }
 
+    this.stoppingProcess = proc;
+
     return new Promise<void>((resolve) => {
       const killTimer = setTimeout(() => {
         try {
@@ -110,6 +124,9 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
 
       proc.once("exit", () => {
         clearTimeout(killTimer);
+        if (this.stoppingProcess === proc) {
+          this.stoppingProcess = null;
+        }
         this.setStatus("stopped");
         resolve();
       });
@@ -121,6 +138,9 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
         // If it already fired before we attached our listener, resolve now.
         if (proc.exitCode !== null || proc.signalCode !== null) {
           clearTimeout(killTimer);
+          if (this.stoppingProcess === proc) {
+            this.stoppingProcess = null;
+          }
           this.setStatus("stopped");
           resolve();
         }
@@ -158,10 +178,8 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
           }
           return;
         }
-        if (!res.ok) {
-          this.setStatus("error");
-          this.emit("health-fail");
-        }
+        this.setStatus("error");
+        this.emit("health-fail");
       } catch {
         this.setStatus("error");
         this.emit("health-fail");
