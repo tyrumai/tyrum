@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import type { ActionPrimitive } from "@tyrum/schemas";
 import { CliProvider } from "../src/main/providers/cli-provider.js";
 
@@ -12,7 +14,7 @@ function makeAction(args: Record<string, unknown>): ActionPrimitive {
 
 function makeProvider(
   allowedCommands = ["echo", "ls", "false"],
-  allowedWorkingDirs = ["/tmp"],
+  allowedWorkingDirs = [tmpdir()],
 ) {
   return new CliProvider(allowedCommands, allowedWorkingDirs);
 }
@@ -101,7 +103,7 @@ describe("CliProvider", () => {
   it("allowed cwd passes", async () => {
     const provider = makeProvider();
     const result = await provider.execute(
-      makeAction({ cmd: "echo", args: ["cwd-test"], cwd: "/tmp" }),
+      makeAction({ cmd: "echo", args: ["cwd-test"], cwd: tmpdir() }),
     );
     expect(result.success).toBe(true);
     const evidence = result.evidence as Record<string, unknown>;
@@ -110,8 +112,9 @@ describe("CliProvider", () => {
 
   it("disallowed cwd fails", async () => {
     const provider = makeProvider();
+    const disallowedCwd = resolve(tmpdir(), "..");
     const result = await provider.execute(
-      makeAction({ cmd: "echo", args: ["nope"], cwd: "/etc" }),
+      makeAction({ cmd: "echo", args: ["nope"], cwd: disallowedCwd }),
     );
     expect(result.success).toBe(false);
     expect(result.error).toContain("not in the allowlist");
@@ -119,8 +122,9 @@ describe("CliProvider", () => {
 
   it("disallowed cwd allowed when enforcement disabled", async () => {
     const provider = new CliProvider([], [], false);
+    const disallowedCwd = resolve(tmpdir(), "..");
     const result = await provider.execute(
-      makeAction({ cmd: "echo", args: ["cwd-allowlist-off"], cwd: "/etc" }),
+      makeAction({ cmd: "echo", args: ["cwd-allowlist-off"], cwd: disallowedCwd }),
     );
     expect(result.success).toBe(true);
     const evidence = result.evidence as Record<string, unknown>;
@@ -129,11 +133,12 @@ describe("CliProvider", () => {
 
   it("subdirectory of allowed dir passes", async () => {
     const provider = makeProvider();
+    const allowedSubdir = join(tmpdir(), "sub");
     const result = await provider.execute(
-      makeAction({ cmd: "echo", args: ["sub"], cwd: "/tmp/sub" }),
+      makeAction({ cmd: "echo", args: ["sub"], cwd: allowedSubdir }),
     );
-    // /tmp/sub is within /tmp so it should be allowed
-    // The command itself may fail if /tmp/sub doesn't exist, but the
+    // The subdirectory is within the default allowlisted tmp directory.
+    // The command itself may fail if that subdirectory doesn't exist, but the
     // allowlist check should pass. We check that the error is NOT about
     // the working directory allowlist.
     if (!result.success) {
@@ -143,8 +148,9 @@ describe("CliProvider", () => {
 
   it("working directory wildcard allows any cwd", async () => {
     const provider = new CliProvider(["echo"], ["*"], true);
+    const anyCwd = resolve(tmpdir(), "..");
     const result = await provider.execute(
-      makeAction({ cmd: "echo", args: ["cwd-wildcard"], cwd: "/etc" }),
+      makeAction({ cmd: "echo", args: ["cwd-wildcard"], cwd: anyCwd }),
     );
     expect(result.success).toBe(true);
     const evidence = result.evidence as Record<string, unknown>;
@@ -152,9 +158,11 @@ describe("CliProvider", () => {
   });
 
   it("sibling directory with shared prefix is rejected", async () => {
-    const provider = makeProvider(undefined, ["/tmp"]);
+    const allowedDir = join(tmpdir(), "allow");
+    const siblingPrefixDir = `${allowedDir}-evil`;
+    const provider = makeProvider(undefined, [allowedDir]);
     const result = await provider.execute(
-      makeAction({ cmd: "echo", args: ["nope"], cwd: "/tmpevil" }),
+      makeAction({ cmd: "echo", args: ["nope"], cwd: siblingPrefixDir }),
     );
     expect(result.success).toBe(false);
     expect(result.error).toContain("not in the allowlist");

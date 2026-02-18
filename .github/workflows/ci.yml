@@ -45,7 +45,7 @@ jobs:
       - run: pnpm build
 
   desktop-cross-os:
-    name: Desktop Tests (${{ matrix.os }})
+    name: Desktop + Packages Tests (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -66,6 +66,12 @@ jobs:
 
       - run: pnpm install
 
+      - name: Build shared test dependencies
+        run: pnpm run pretest
+
+      - name: Test packages suite
+        run: pnpm exec vitest run packages --passWithNoTests
+
       - name: Install Playwright (Chromium)
         shell: bash
         run: |
@@ -81,7 +87,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$RUNNER_OS" == "Linux" ]]; then
-            xvfb-run -a --server-args="-screen 0 1920x1080x24" pnpm test -- "apps/desktop/tests/**/*.test.ts"
+            xvfb-run -a --server-args="-screen 0 1920x1080x24" pnpm exec vitest run apps/desktop/tests --passWithNoTests
           else
-            pnpm test -- "apps/desktop/tests/**/*.test.ts"
+            pnpm exec vitest run apps/desktop/tests --passWithNoTests
           fi

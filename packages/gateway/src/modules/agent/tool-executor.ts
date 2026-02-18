@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { lookup } from "node:dns/promises";
 import type { LookupAddress } from "node:dns";
 import { isIP } from "node:net";
-import { dirname, resolve, normalize } from "node:path";
+import { dirname, resolve, relative, isAbsolute } from "node:path";
 import type { McpServerSpec as McpServerSpecT } from "@tyrum/schemas";
 import type { McpManager } from "./mcp-manager.js";
 import type { TaggedContent } from "./provenance.js";
@@ -374,14 +374,14 @@ export class ToolExecutor {
   }
 
   private assertSandboxed(filePath: string): string {
-    const resolved = resolve(this.home, filePath);
-    const normalized = normalize(resolved);
-    const normalizedHome = normalize(this.home);
+    const resolvedHome = resolve(this.home);
+    const resolvedPath = resolve(resolvedHome, filePath);
+    const rel = relative(resolvedHome, resolvedPath);
 
-    if (!normalized.startsWith(normalizedHome + "/") && normalized !== normalizedHome) {
+    if (rel !== "" && (rel.startsWith("..") || isAbsolute(rel))) {
       throw new Error(`path escapes workspace: ${filePath}`);
     }
-    return normalized;
+    return resolvedPath;
   }
 
   private async executeFsRead(
