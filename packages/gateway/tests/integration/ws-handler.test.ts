@@ -8,6 +8,13 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+function authProtocols(token: string): string[] {
+  return [
+    "tyrum-v1",
+    `tyrum-auth.${Buffer.from(token, "utf-8").toString("base64url")}`,
+  ];
+}
+
 function waitForOpen(ws: WebSocket): Promise<void> {
   return new Promise((resolve, reject) => {
     if (ws.readyState === WebSocket.OPEN) {
@@ -65,14 +72,13 @@ describe("WS handler integration", () => {
   it("accepts connection, completes hello handshake, and registers client", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
     const tokenStore = new TokenStore(homeDir);
-    await tokenStore.initialize();
+    const adminToken = await tokenStore.initialize();
 
     const connectionManager = new ConnectionManager();
     const { handleUpgrade, stopHeartbeat } = createWsHandler({
       connectionManager,
       protocolDeps: { connectionManager },
       tokenStore,
-      isLocalOnly: true,
     });
 
     server = createServer();
@@ -87,8 +93,10 @@ describe("WS handler integration", () => {
       });
     });
 
-    // Connect without token (local-only mode allows it)
-    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    const ws = new WebSocket(
+      `ws://127.0.0.1:${port}/ws`,
+      authProtocols(adminToken),
+    );
     clients.push(ws);
     await waitForOpen(ws);
 
@@ -116,7 +124,7 @@ describe("WS handler integration", () => {
     stopHeartbeat();
   });
 
-  it("rejects connection with invalid token in non-local mode", async () => {
+  it("rejects connection with invalid token", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
     const tokenStore = new TokenStore(homeDir);
     await tokenStore.initialize();
@@ -126,7 +134,6 @@ describe("WS handler integration", () => {
       connectionManager,
       protocolDeps: { connectionManager },
       tokenStore,
-      isLocalOnly: false,
     });
 
     server = createServer();
@@ -142,7 +149,10 @@ describe("WS handler integration", () => {
     });
 
     // Connect with bad token
-    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?token=bad-token`);
+    const ws = new WebSocket(
+      `ws://127.0.0.1:${port}/ws`,
+      authProtocols("bad-token"),
+    );
     clients.push(ws);
 
     const { code } = await waitForClose(ws);

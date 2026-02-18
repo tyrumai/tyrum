@@ -21,9 +21,9 @@ describe("Auth middleware", () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  function buildApp(isLocalOnly: boolean): Hono {
+  function buildApp(): Hono {
     const app = new Hono();
-    app.use("*", createAuthMiddleware(tokenStore, isLocalOnly));
+    app.use("*", createAuthMiddleware(tokenStore));
     app.get("/healthz", (c) => c.json({ status: "ok" }));
     app.get("/api/data", (c) => c.json({ data: "secret" }));
     app.post("/api/action", (c) => c.json({ done: true }));
@@ -31,19 +31,13 @@ describe("Auth middleware", () => {
   }
 
   it("allows /healthz without token", async () => {
-    const app = buildApp(false);
+    const app = buildApp();
     const res = await app.request("/healthz");
     expect(res.status).toBe(200);
   });
 
-  it("allows all requests when isLocalOnly is true", async () => {
-    const app = buildApp(true);
-    const res = await app.request("/api/data");
-    expect(res.status).toBe(200);
-  });
-
-  it("rejects requests without token when not local", async () => {
-    const app = buildApp(false);
+  it("rejects requests without token", async () => {
+    const app = buildApp();
     const res = await app.request("/api/data");
     expect(res.status).toBe(401);
     const body = (await res.json()) as { error: string };
@@ -51,7 +45,7 @@ describe("Auth middleware", () => {
   });
 
   it("rejects requests with wrong token", async () => {
-    const app = buildApp(false);
+    const app = buildApp();
     const res = await app.request("/api/data", {
       headers: { Authorization: "Bearer wrong-token" },
     });
@@ -59,7 +53,7 @@ describe("Auth middleware", () => {
   });
 
   it("allows requests with correct token", async () => {
-    const app = buildApp(false);
+    const app = buildApp();
     const res = await app.request("/api/data", {
       headers: { Authorization: `Bearer ${adminToken}` },
     });
@@ -69,7 +63,7 @@ describe("Auth middleware", () => {
   });
 
   it("rejects malformed Authorization header", async () => {
-    const app = buildApp(false);
+    const app = buildApp();
     const res = await app.request("/api/data", {
       headers: { Authorization: "Basic abc123" },
     });
@@ -77,7 +71,7 @@ describe("Auth middleware", () => {
   });
 
   it("rejects Authorization header with empty bearer value", async () => {
-    const app = buildApp(false);
+    const app = buildApp();
     const res = await app.request("/api/data", {
       headers: { Authorization: "Bearer " },
     });

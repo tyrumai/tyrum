@@ -90,7 +90,6 @@ export function Connection() {
   const [mode, setMode] = useState<string>("embedded");
   const [port, setPort] = useState(8080);
   const [gatewayStatus, setGatewayStatus] = useState("stopped");
-  const [wsToken, setWsToken] = useState("");
   const [remoteUrl, setRemoteUrl] = useState("ws://127.0.0.1:8080/ws");
   const [remoteToken, setRemoteToken] = useState("");
   const [hasSavedRemoteToken, setHasSavedRemoteToken] = useState(false);
@@ -119,7 +118,6 @@ export function Connection() {
       const info = s as Record<string, unknown>;
       if (info["gatewayStatus"]) setGatewayStatus(info["gatewayStatus"] as string);
       if (info["nodeStatus"]) setNodeStatus(info["nodeStatus"] as string);
-      if (info["wsToken"]) setWsToken(info["wsToken"] as string);
       if (info["port"]) setPort(info["port"] as number);
     });
     return unsubscribe;
@@ -134,7 +132,6 @@ export function Connection() {
       const result = await api.gateway.start();
       setGatewayStatus(result.status);
       setPort(result.port);
-      setWsToken(result.wsToken);
     } finally {
       setBusy(false);
     }
@@ -205,18 +202,6 @@ export function Connection() {
             min={1024}
             max={65535}
           />
-
-          {wsToken && (
-            <>
-              <div style={labelStyle}>WebSocket Token</div>
-              <input
-                style={{ ...inputStyle, fontFamily: "monospace", fontSize: 12 }}
-                type="text"
-                value={wsToken}
-                readOnly
-              />
-            </>
-          )}
 
           <div>
             {gatewayStatus === "stopped" || gatewayStatus === "error" ? (

@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
@@ -146,5 +146,12 @@ describe("Config store", () => {
     // Verify round-trip
     const loaded = loadConfig();
     expect(loaded).toEqual(custom);
+  });
+
+  it("saveConfig writes config file with owner-only permissions", () => {
+    saveConfig(DEFAULT_CONFIG);
+    const filePath = join(tmpDir, "desktop-node.json");
+    const mode = statSync(filePath).mode & 0o777;
+    expect(mode).toBe(0o600);
   });
 });

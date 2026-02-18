@@ -68,8 +68,6 @@ export function registerGatewayIpc(window: BrowserWindow): GatewayManager {
       return {
         status: "running",
         port: config.embedded.port,
-        wsToken,
-        tokenPreview: wsToken.slice(-8),
       };
     });
 

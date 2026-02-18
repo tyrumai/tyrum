@@ -44,7 +44,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
 
   // Apply auth middleware if a token store is provided
   if (opts.tokenStore) {
-    app.use("*", createAuthMiddleware(opts.tokenStore, isLocalOnly));
+    app.use("*", createAuthMiddleware(opts.tokenStore));
   }
 
   // Register all routes

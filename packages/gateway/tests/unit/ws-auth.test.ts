@@ -2,12 +2,12 @@
  * Unit tests for WebSocket token authentication.
  *
  * Validates that `validateWsToken` correctly gates access based on the
- * `GATEWAY_WS_TOKEN` environment variable while remaining open in
- * dev/local mode (env var unset).
+ * `GATEWAY_WS_TOKEN` override and token-store fallback behavior.
  */
 
 import { afterEach, describe, expect, it } from "vitest";
 import { validateWsToken } from "../../src/ws/auth.js";
+import type { TokenStore } from "../../src/modules/auth/token-store.js";
 
 // ---------------------------------------------------------------------------
 // Save / restore process.env around each test
@@ -15,6 +15,11 @@ import { validateWsToken } from "../../src/ws/auth.js";
 
 describe("validateWsToken", () => {
   const originalEnv = process.env["GATEWAY_WS_TOKEN"];
+  const tokenStore = {
+    validate(candidate: string) {
+      return candidate === "admin-123";
+    },
+  } as unknown as TokenStore;
 
   afterEach(() => {
     if (originalEnv === undefined) {
@@ -43,27 +48,25 @@ describe("validateWsToken", () => {
     expect(validateWsToken(undefined)).toBe(false);
   });
 
-  // -------------------------------------------------------------------------
-  // GATEWAY_WS_TOKEN is NOT set (dev / local mode)
-  // -------------------------------------------------------------------------
-
-  it("returns true when GATEWAY_WS_TOKEN is not set and token is undefined", () => {
+  it("returns false when GATEWAY_WS_TOKEN is not set and tokenStore is missing", () => {
     delete process.env["GATEWAY_WS_TOKEN"];
-    expect(validateWsToken(undefined)).toBe(true);
+    expect(validateWsToken(undefined)).toBe(false);
   });
 
-  it("returns true when GATEWAY_WS_TOKEN is not set and any token is supplied", () => {
+  it("validates against tokenStore when GATEWAY_WS_TOKEN is not set", () => {
     delete process.env["GATEWAY_WS_TOKEN"];
-    expect(validateWsToken("any-value")).toBe(true);
+    expect(validateWsToken("admin-123", tokenStore)).toBe(true);
+    expect(validateWsToken("wrong", tokenStore)).toBe(false);
+    expect(validateWsToken(undefined, tokenStore)).toBe(false);
   });
 
   // -------------------------------------------------------------------------
   // Edge: GATEWAY_WS_TOKEN is set to empty string (treated as unset)
   // -------------------------------------------------------------------------
 
-  it("returns true when GATEWAY_WS_TOKEN is empty string (treated as unset)", () => {
+  it("falls back to tokenStore when GATEWAY_WS_TOKEN is empty string", () => {
     process.env["GATEWAY_WS_TOKEN"] = "";
-    expect(validateWsToken(undefined)).toBe(true);
-    expect(validateWsToken("anything")).toBe(true);
+    expect(validateWsToken("admin-123", tokenStore)).toBe(true);
+    expect(validateWsToken("anything", tokenStore)).toBe(false);
   });
 });
