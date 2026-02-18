@@ -3,7 +3,7 @@ import { mkdtemp, writeFile, rm, mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach } from "vitest";
-import { ToolExecutor } from "../../src/modules/agent/tool-executor.js";
+import { ToolExecutor, sanitizeEnv, isBlockedUrl } from "../../src/modules/agent/tool-executor.js";
 import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
 import type { McpServerSpec } from "@tyrum/schemas";
 
@@ -396,5 +396,190 @@ describe("ToolExecutor", () => {
 
       expect(result.error).toBeTruthy();
     });
+  });
+});
+
+describe("sanitizeEnv", () => {
+  it("strips TYRUM_* prefixed vars", () => {
+    const env = { TYRUM_SECRET: "s", TYRUM_HOME: "/h", PATH: "/usr/bin" };
+    const result = sanitizeEnv(env);
+    expect(result).not.toHaveProperty("TYRUM_SECRET");
+    expect(result).not.toHaveProperty("TYRUM_HOME");
+    expect(result).toHaveProperty("PATH", "/usr/bin");
+  });
+
+  it("strips GATEWAY_* prefixed vars", () => {
+    const env = { GATEWAY_PORT: "3000", GATEWAY_SECRET: "x", HOME: "/home/test" };
+    const result = sanitizeEnv(env);
+    expect(result).not.toHaveProperty("GATEWAY_PORT");
+    expect(result).not.toHaveProperty("GATEWAY_SECRET");
+    expect(result).toHaveProperty("HOME", "/home/test");
+  });
+
+  it("strips TELEGRAM_BOT_TOKEN exact match", () => {
+    const env = { TELEGRAM_BOT_TOKEN: "tok123", TELEGRAM_OTHER: "safe" };
+    const result = sanitizeEnv(env);
+    expect(result).not.toHaveProperty("TELEGRAM_BOT_TOKEN");
+    expect(result).toHaveProperty("TELEGRAM_OTHER", "safe");
+  });
+
+  it("strips MODEL_GATEWAY_CONFIG exact match", () => {
+    const env = { MODEL_GATEWAY_CONFIG: "{}", USER: "test" };
+    const result = sanitizeEnv(env);
+    expect(result).not.toHaveProperty("MODEL_GATEWAY_CONFIG");
+    expect(result).toHaveProperty("USER", "test");
+  });
+
+  it("preserves PATH, HOME, LANG, USER", () => {
+    const env = { PATH: "/usr/bin", HOME: "/home/u", LANG: "en_US.UTF-8", USER: "u" };
+    const result = sanitizeEnv(env);
+    expect(result).toEqual({ PATH: "/usr/bin", HOME: "/home/u", LANG: "en_US.UTF-8", USER: "u" });
+  });
+
+  it("accepts extra deny prefixes and names", () => {
+    const env = { CUSTOM_KEY: "v", SECRET_X: "v2", KEEP: "ok" };
+    const result = sanitizeEnv(env, ["CUSTOM_"], new Set(["SECRET_X"]));
+    expect(result).not.toHaveProperty("CUSTOM_KEY");
+    expect(result).not.toHaveProperty("SECRET_X");
+    expect(result).toHaveProperty("KEEP", "ok");
+  });
+
+  it("skips entries with undefined values", () => {
+    const env: NodeJS.ProcessEnv = { DEFINED: "yes", UNDEF: undefined };
+    const result = sanitizeEnv(env);
+    expect(result).toHaveProperty("DEFINED", "yes");
+    expect(result).not.toHaveProperty("UNDEF");
+  });
+});
+
+describe("env sanitization", () => {
+  let homeDir: string | undefined;
+
+  afterEach(async () => {
+    if (homeDir) {
+      await rm(homeDir, { recursive: true, force: true });
+      homeDir = undefined;
+    }
+  });
+
+  it("tool.exec does not leak sensitive env vars", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tool-executor-"));
+
+    // Inject sensitive vars into the real process.env for this test
+    const origTyrum = process.env["TYRUM_TEST_SECRET"];
+    const origGateway = process.env["GATEWAY_TEST_SECRET"];
+    process.env["TYRUM_TEST_SECRET"] = "should-not-appear";
+    process.env["GATEWAY_TEST_SECRET"] = "should-not-appear-either";
+
+    try {
+      const executor = new ToolExecutor(
+        homeDir,
+        stubMcpManager(),
+        new Map(),
+        fetch,
+      );
+
+      const result = await executor.execute(
+        "tool.exec",
+        "call-env-1",
+        { command: "env" },
+      );
+
+      expect(result.error).toBeUndefined();
+      expect(result.output).not.toContain("TYRUM_TEST_SECRET");
+      expect(result.output).not.toContain("GATEWAY_TEST_SECRET");
+      expect(result.output).toContain("PATH=");
+    } finally {
+      // Restore original env state
+      if (origTyrum === undefined) delete process.env["TYRUM_TEST_SECRET"];
+      else process.env["TYRUM_TEST_SECRET"] = origTyrum;
+
+      if (origGateway === undefined) delete process.env["GATEWAY_TEST_SECRET"];
+      else process.env["GATEWAY_TEST_SECRET"] = origGateway;
+    }
+  });
+});
+
+describe("SSRF protection", () => {
+  // --- IPv6 ---
+
+  it("blocks IPv6 loopback [::1]", () => {
+    expect(isBlockedUrl("http://[::1]/")).toBe(true);
+  });
+
+  it("blocks IPv6 link-local [fe80::1]", () => {
+    expect(isBlockedUrl("http://[fe80::1]/")).toBe(true);
+  });
+
+  it("blocks IPv6 unique-local [fc00::1]", () => {
+    expect(isBlockedUrl("http://[fc00::1]/")).toBe(true);
+  });
+
+  it("blocks IPv6 unique-local [fd00::1]", () => {
+    expect(isBlockedUrl("http://[fd00::1]/")).toBe(true);
+  });
+
+  it("blocks IPv4-mapped IPv6 [::ffff:127.0.0.1]", () => {
+    expect(isBlockedUrl("http://[::ffff:127.0.0.1]/")).toBe(true);
+  });
+
+  it("blocks IPv4-mapped IPv6 [::ffff:10.0.0.1]", () => {
+    expect(isBlockedUrl("http://[::ffff:10.0.0.1]/")).toBe(true);
+  });
+
+  // --- Numeric IPv4 evasion ---
+
+  it("blocks decimal integer IP 2130706433 (127.0.0.1)", () => {
+    expect(isBlockedUrl("http://2130706433/")).toBe(true);
+  });
+
+  it("blocks hex IP 0x7f000001 (127.0.0.1)", () => {
+    expect(isBlockedUrl("http://0x7f000001/")).toBe(true);
+  });
+
+  it("blocks octal IP 0177.0.0.1 (127.0.0.1)", () => {
+    expect(isBlockedUrl("http://0177.0.0.1/")).toBe(true);
+  });
+
+  // --- Cloud metadata ---
+
+  it("blocks cloud metadata hostname metadata.google.internal", () => {
+    expect(isBlockedUrl("http://metadata.google.internal/")).toBe(true);
+  });
+
+  // --- Standard private IPv4 ---
+
+  it("blocks 10.x.x.x", () => {
+    expect(isBlockedUrl("http://10.0.0.1/")).toBe(true);
+  });
+
+  it("blocks 172.16.x.x", () => {
+    expect(isBlockedUrl("http://172.16.0.1/")).toBe(true);
+  });
+
+  it("blocks 192.168.x.x", () => {
+    expect(isBlockedUrl("http://192.168.1.1/")).toBe(true);
+  });
+
+  it("blocks 169.254.x.x (link-local)", () => {
+    expect(isBlockedUrl("http://169.254.169.254/")).toBe(true);
+  });
+
+  it("blocks 127.0.0.1", () => {
+    expect(isBlockedUrl("http://127.0.0.1/")).toBe(true);
+  });
+
+  it("blocks localhost", () => {
+    expect(isBlockedUrl("http://localhost/")).toBe(true);
+  });
+
+  // --- Allowed ---
+
+  it("allows public hostname https://example.com", () => {
+    expect(isBlockedUrl("https://example.com")).toBe(false);
+  });
+
+  it("allows public IP 8.8.8.8", () => {
+    expect(isBlockedUrl("http://8.8.8.8/")).toBe(false);
   });
 });

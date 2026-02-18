@@ -16,28 +16,192 @@ const MAX_EXEC_TIMEOUT_MS = 300_000;
 /** Sentinel prefix for secret handle references in tool arguments. */
 const SECRET_HANDLE_PREFIX = "secret:";
 
+/* ------------------------------------------------------------------ */
+/*  Environment sanitisation for child processes                       */
+/* ------------------------------------------------------------------ */
+
+const ENV_DENY_PREFIXES: readonly string[] = ["TYRUM_", "GATEWAY_"];
+const ENV_DENY_NAMES: ReadonlySet<string> = new Set([
+  "TELEGRAM_BOT_TOKEN",
+  "MODEL_GATEWAY_CONFIG",
+]);
+
+/**
+ * Build a sanitised copy of the process environment by stripping keys that
+ * match a denylist of prefixes or exact names.  Designed for spawning child
+ * processes that must not inherit gateway secrets.
+ */
+export function sanitizeEnv(
+  baseEnv: NodeJS.ProcessEnv = process.env,
+  extraDenyPrefixes: readonly string[] = [],
+  extraDenyNames: ReadonlySet<string> = new Set(),
+): Record<string, string> {
+  const denyPrefixes = [...ENV_DENY_PREFIXES, ...extraDenyPrefixes];
+  const denyNames = new Set([...ENV_DENY_NAMES, ...extraDenyNames]);
+
+  const result: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(baseEnv)) {
+    if (value === undefined) continue;
+    if (denyNames.has(key)) continue;
+    if (denyPrefixes.some((prefix) => key.startsWith(prefix))) continue;
+    result[key] = value;
+  }
+
+  return result;
+}
+
+/* ------------------------------------------------------------------ */
+/*  SSRF blocklist helpers                                             */
+/* ------------------------------------------------------------------ */
+
 const BLOCKED_HTTP_HOSTS = new Set([
   "localhost",
-  "127.0.0.1",
-  "0.0.0.0",
-  "[::1]",
-  "169.254.169.254", // cloud metadata
   "metadata.google.internal",
 ]);
 
-function isBlockedUrl(raw: string): boolean {
+/**
+ * Parse a hostname that encodes an IPv4 address as a single decimal integer,
+ * a hex literal, or dot-separated octets that use octal notation.
+ *
+ * Returns a 4-tuple `[a, b, c, d]` or `null` if the hostname is not a
+ * numeric IPv4 representation.
+ */
+function parseNumericIPv4(
+  hostname: string,
+): [number, number, number, number] | null {
+  // Single decimal integer: "2130706433" → 127.0.0.1
+  if (/^\d+$/.test(hostname)) {
+    const n = Number(hostname);
+    if (!Number.isFinite(n) || n < 0 || n > 0xffffffff) return null;
+    return [
+      (n >>> 24) & 0xff,
+      (n >>> 16) & 0xff,
+      (n >>> 8) & 0xff,
+      n & 0xff,
+    ];
+  }
+
+  // Hex integer: "0x7f000001" → 127.0.0.1
+  if (/^0x[0-9a-fA-F]+$/i.test(hostname)) {
+    const n = Number(hostname);
+    if (!Number.isFinite(n) || n < 0 || n > 0xffffffff) return null;
+    return [
+      (n >>> 24) & 0xff,
+      (n >>> 16) & 0xff,
+      (n >>> 8) & 0xff,
+      n & 0xff,
+    ];
+  }
+
+  // Octal per-octet: "0177.0.0.1" → 127.0.0.1
+  // Accept dotted-quad where any octet starts with "0" (octal prefix).
+  const octets = hostname.split(".");
+  if (octets.length === 4 && octets.some((o) => /^0\d/.test(o))) {
+    const parsed = octets.map((o) => {
+      if (/^0[0-7]+$/.test(o)) return parseInt(o, 8); // octal
+      if (/^\d+$/.test(o)) return Number(o); // decimal
+      return NaN;
+    });
+    if (parsed.every((v) => Number.isFinite(v) && v >= 0 && v <= 255)) {
+      return parsed as [number, number, number, number];
+    }
+  }
+
+  return null;
+}
+
+/** Check whether an IPv4 address falls in a private / reserved range. */
+function isPrivateIPv4(a: number, b: number, c: number, d: number): boolean {
+  // 10.0.0.0/8
+  if (a === 10) return true;
+  // 172.16.0.0/12
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  // 192.168.0.0/16
+  if (a === 192 && b === 168) return true;
+  // 127.0.0.0/8
+  if (a === 127) return true;
+  // 169.254.0.0/16 (link-local)
+  if (a === 169 && b === 254) return true;
+  // 0.0.0.0/8
+  if (a === 0) return true;
+  return false;
+}
+
+/** Check whether a hostname is a blocked IPv6 address. */
+function isBlockedIPv6(hostname: string): boolean {
+  const raw = hostname.toLowerCase();
+
+  // Loopback ::1
+  if (raw === "::1") return true;
+  // Unspecified ::
+  if (raw === "::") return true;
+
+  // Link-local fe80::/10  (fe80 – febf)
+  if (/^fe[89ab][0-9a-f]?:/i.test(raw)) return true;
+
+  // Unique-local fc00::/7  (fc00 – fdff)
+  if (/^f[cd][0-9a-f]{2}:/i.test(raw)) return true;
+  if (raw === "fc00::" || raw === "fd00::") return true;
+
+  // IPv4-mapped — dotted-decimal form ::ffff:x.x.x.x
+  const v4dotted = raw.match(
+    /^::ffff:(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/,
+  );
+  if (v4dotted) {
+    const [, sa, sb, sc, sd] = v4dotted;
+    if (isPrivateIPv4(Number(sa), Number(sb), Number(sc), Number(sd)))
+      return true;
+  }
+
+  // IPv4-mapped — hex-normalised form ::ffff:HHHH:HHHH
+  // Node's URL parser normalises e.g. ::ffff:127.0.0.1 → ::ffff:7f00:1
+  const v4hex = raw.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (v4hex) {
+    const hi = parseInt(v4hex[1]!, 16);
+    const lo = parseInt(v4hex[2]!, 16);
+    const a = (hi >>> 8) & 0xff;
+    const b = hi & 0xff;
+    const c = (lo >>> 8) & 0xff;
+    const d = lo & 0xff;
+    if (isPrivateIPv4(a, b, c, d)) return true;
+  }
+
+  return false;
+}
+
+/**
+ * Determine whether a URL targets a private, loopback, link-local, or
+ * otherwise reserved network address.  Used by `tool.http.fetch` to
+ * prevent server-side request forgery (SSRF).
+ */
+export function isBlockedUrl(raw: string): boolean {
   try {
     const parsed = new URL(raw);
-    if (BLOCKED_HTTP_HOSTS.has(parsed.hostname)) return true;
+    const hostname = parsed.hostname;
 
-    // Block RFC 1918 / link-local ranges (IPv4)
-    const parts = parsed.hostname.split(".");
-    if (parts[0] === "10") return true;
-    if (parts[0] === "172") {
-      const second = Number(parts[1]);
-      if (second >= 16 && second <= 31) return true;
+    // Exact-match denylist (localhost, cloud metadata hostnames)
+    if (BLOCKED_HTTP_HOSTS.has(hostname)) return true;
+
+    // IPv6 literals: Node's URL keeps brackets, e.g. "[::1]" → "[::1]"
+    if (hostname.startsWith("[") && hostname.endsWith("]")) {
+      const bare = hostname.slice(1, -1);
+      return isBlockedIPv6(bare);
     }
-    if (parts[0] === "192" && parts[1] === "168") return true;
+
+    // Standard dotted-quad IPv4
+    const dotParts = hostname.split(".");
+    if (
+      dotParts.length === 4 &&
+      dotParts.every((p) => /^\d+$/.test(p))
+    ) {
+      const [a, b, c, d] = dotParts.map(Number) as [number, number, number, number];
+      if (isPrivateIPv4(a, b, c, d)) return true;
+    }
+
+    // Numeric IPv4 evasion (decimal integer, hex, octal)
+    const numeric = parseNumericIPv4(hostname);
+    if (numeric && isPrivateIPv4(...numeric)) return true;
 
     return false;
   } catch {
@@ -283,6 +447,7 @@ export class ToolExecutor {
     const output = await new Promise<string>((resolvePromise) => {
       const child = spawn("sh", ["-c", command], {
         cwd: safeCwd,
+        env: sanitizeEnv(),
         stdio: ["ignore", "pipe", "pipe"],
       });
 
