@@ -109,4 +109,12 @@ export class CanvasDal {
 
     return rows.map(toArtifactRow);
   }
+
+  /** List most recent artifacts, newest first. */
+  listRecent(limit = 50): CanvasArtifactRow[] {
+    const rows = this.db
+      .prepare("SELECT * FROM canvas_artifacts ORDER BY created_at DESC LIMIT ?")
+      .all(limit) as RawCanvasArtifactRow[];
+    return rows.map(toArtifactRow);
+  }
 }
