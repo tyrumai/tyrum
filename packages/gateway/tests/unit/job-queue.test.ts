@@ -190,6 +190,52 @@ describe("JobQueue", () => {
     expect(plan1Jobs[1]!.step_index).toBe(1);
   });
 
+  it("dequeueById targets specific job by ID", () => {
+    container = createContainer({ dbPath: ":memory:", migrationsDir });
+    const queue = new JobQueue(container.db);
+
+    const job0 = queue.enqueue("plan-1", 0, testAction({ type: "Research" }));
+    const job1 = queue.enqueue("plan-1", 1, testAction({ type: "Message" }));
+    const job2 = queue.enqueue("plan-1", 2, testAction({ type: "Web" }));
+
+    // Dequeue job1 (step_index=1) specifically, skipping step_index=0
+    const dequeued = queue.dequeueById(job1.id);
+
+    expect(dequeued).toBeDefined();
+    expect(dequeued!.id).toBe(job1.id);
+    expect(dequeued!.step_index).toBe(1);
+    expect(dequeued!.status).toBe("running");
+    expect(dequeued!.attempt).toBe(1);
+    expect(dequeued!.started_at).toBeTruthy();
+
+    // Other jobs remain pending
+    const remaining0 = queue.getById(job0.id);
+    expect(remaining0!.status).toBe("pending");
+    const remaining2 = queue.getById(job2.id);
+    expect(remaining2!.status).toBe("pending");
+  });
+
+  it("dequeueById returns undefined for non-pending job", () => {
+    container = createContainer({ dbPath: ":memory:", migrationsDir });
+    const queue = new JobQueue(container.db);
+
+    const job = queue.enqueue("plan-1", 0, testAction());
+    // Dequeue to make it running
+    queue.dequeue("plan-1");
+
+    // Attempt to dequeueById on a now-running job
+    const result = queue.dequeueById(job.id);
+    expect(result).toBeUndefined();
+  });
+
+  it("dequeueById returns undefined for nonexistent ID", () => {
+    container = createContainer({ dbPath: ":memory:", migrationsDir });
+    const queue = new JobQueue(container.db);
+
+    const result = queue.dequeueById("job-does-not-exist");
+    expect(result).toBeUndefined();
+  });
+
   it("respects custom maxAttempts and timeoutMs", () => {
     container = createContainer({ dbPath: ":memory:", migrationsDir });
     const queue = new JobQueue(container.db);

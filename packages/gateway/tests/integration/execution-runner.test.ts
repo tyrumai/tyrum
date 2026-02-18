@@ -243,6 +243,73 @@ describe("ExecutionRunner", () => {
     expect(jobs[0]!.error).toContain("postcondition failed");
   });
 
+  it("retry re-dequeues the same job, not a different step", async () => {
+    container = createContainer({ dbPath: ":memory:", migrationsDir });
+    const jobQueue = new JobQueue(container.db);
+
+    const completedEvents: string[] = [];
+    container.eventBus.on("plan:completed", ({ planId }) => {
+      completedEvents.push(planId);
+    });
+
+    const runner = new ExecutionRunner(
+      {
+        jobQueue,
+        eventLog: container.eventLog,
+        eventBus: container.eventBus,
+      },
+      { planTimeoutMs: 30_000 },
+    );
+
+    let step0CallCount = 0;
+    const mockExecutor: StepExecutor = {
+      execute: vi.fn(
+        async (
+          action: ActionPrimitive,
+          _planId: string,
+          stepIndex: number,
+        ): Promise<StepResult> => {
+          if (stepIndex === 0) {
+            step0CallCount++;
+            if (step0CallCount === 1) {
+              // Fail the first attempt of step 0
+              return { success: false, error: "transient error" };
+            }
+            // Succeed on retry
+            return { success: true, result: { retried: true } };
+          }
+          // Step 1 always succeeds
+          return { success: true, result: { ok: true } };
+        },
+      ),
+    };
+
+    const steps: ActionPrimitive[] = [
+      testStep("Research", { intent: "step0" }),
+      testStep("Message", { body: "step1" }),
+    ];
+
+    await runner.executePlan("plan-retry-same", steps, mockExecutor);
+
+    // Step 0 was called twice (fail + retry), step 1 once => 3 total
+    expect(mockExecutor.execute).toHaveBeenCalledTimes(3);
+
+    const jobs = jobQueue.getByPlanId("plan-retry-same");
+    expect(jobs).toHaveLength(2);
+
+    // Both jobs should be completed
+    expect(jobs[0]!.status).toBe("completed");
+    expect(jobs[0]!.step_index).toBe(0);
+    expect(jobs[1]!.status).toBe("completed");
+    expect(jobs[1]!.step_index).toBe(1);
+
+    // Step 0 was retried (attempt > 1)
+    expect(jobs[0]!.attempt).toBeGreaterThan(1);
+
+    // Plan completed successfully
+    expect(completedEvents).toContain("plan-retry-same");
+  });
+
   it("handles empty plan (0 steps)", async () => {
     container = createContainer({ dbPath: ":memory:", migrationsDir });
     const jobQueue = new JobQueue(container.db);
