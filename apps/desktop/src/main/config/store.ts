@@ -13,7 +13,7 @@ function getConfigPath(): string {
 
 export function loadConfig(): DesktopNodeConfig {
   const path = getConfigPath();
-  if (!existsSync(path)) return { ...DEFAULT_CONFIG };
+  if (!existsSync(path)) return structuredClone(DEFAULT_CONFIG);
   const raw = readFileSync(path, "utf-8");
   return DesktopNodeConfig.parse(JSON.parse(raw));
 }

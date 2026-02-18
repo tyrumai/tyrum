@@ -1,7 +1,7 @@
 import { app, BrowserWindow } from "electron";
 import { join } from "node:path";
 import { registerGatewayIpc } from "./ipc/gateway-ipc.js";
-import { registerNodeIpc } from "./ipc/node-ipc.js";
+import { registerNodeIpc, shutdownNodeResources } from "./ipc/node-ipc.js";
 import { registerConfigIpc } from "./ipc/config-ipc.js";
 import type { GatewayManager } from "./gateway-manager.js";
 
@@ -48,7 +48,17 @@ app.on("before-quit", (event) => {
   event.preventDefault();
   void (async () => {
     try {
-      await gatewayManager?.stop();
+      try {
+        await shutdownNodeResources();
+      } catch (err) {
+        console.error("Failed to shutdown node resources", err);
+      }
+
+      try {
+        await gatewayManager?.stop();
+      } catch (err) {
+        console.error("Failed to stop embedded gateway", err);
+      }
     } finally {
       app.quit();
     }

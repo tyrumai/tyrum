@@ -4,34 +4,26 @@ import { loadConfig, saveConfig } from "../config/store.js";
 import { decryptToken, generateToken, encryptToken } from "../config/token-store.js";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { createWindowSender } from "./window-sender.js";
+
+const sender = createWindowSender();
 
 let manager: GatewayManager | null = null;
-let currentWindow: BrowserWindow | null = null;
 let ipcRegistered = false;
 
-function sendToRenderer(channel: string, payload: unknown): void {
-  const win = currentWindow;
-  if (!win) return;
-  if (win.isDestroyed() || win.webContents.isDestroyed()) {
-    currentWindow = null;
-    return;
-  }
-  win.webContents.send(channel, payload);
-}
-
 export function registerGatewayIpc(window: BrowserWindow): GatewayManager {
-  currentWindow = window;
+  sender.setWindow(window);
 
   if (!manager) {
     manager = new GatewayManager();
 
     // Forward logs to renderer
     manager.on("log", (entry) => {
-      sendToRenderer("log:entry", { source: "gateway", ...entry });
+      sender.send("log:entry", { source: "gateway", ...entry });
     });
 
     manager.on("status-change", (status) => {
-      sendToRenderer("status:change", { gatewayStatus: status });
+      sender.send("status:change", { gatewayStatus: status });
     });
   }
 

@@ -8,21 +8,13 @@ import { PlaywrightProvider } from "../providers/playwright-provider.js";
 import { CliProvider } from "../providers/cli-provider.js";
 import { NutJsDesktopBackend } from "../providers/backends/nutjs-desktop-backend.js";
 import { RealPlaywrightBackend } from "../providers/backends/real-playwright-backend.js";
+import { createWindowSender } from "./window-sender.js";
+
+const sender = createWindowSender();
 
 let runtime: NodeRuntime | null = null;
 let playwrightBackend: RealPlaywrightBackend | null = null;
-let currentWindow: BrowserWindow | null = null;
 let ipcRegistered = false;
-
-function sendToRenderer(channel: string, payload: unknown): void {
-  const win = currentWindow;
-  if (!win) return;
-  if (win.isDestroyed() || win.webContents.isDestroyed()) {
-    currentWindow = null;
-    return;
-  }
-  win.webContents.send(channel, payload);
-}
 
 function toNodeStatusString(status: { connected: boolean; code?: number }): string {
   if (status.connected) return "connected";
@@ -30,19 +22,27 @@ function toNodeStatusString(status: { connected: boolean; code?: number }): stri
   return "disconnected";
 }
 
+async function cleanupNodeResources(): Promise<void> {
+  runtime?.disconnect();
+  runtime = null;
+  if (playwrightBackend) {
+    await playwrightBackend.close();
+    playwrightBackend = null;
+  }
+}
+
+export async function shutdownNodeResources(): Promise<void> {
+  await cleanupNodeResources();
+}
+
 export function registerNodeIpc(window: BrowserWindow): void {
-  currentWindow = window;
+  sender.setWindow(window);
   if (ipcRegistered) return;
   ipcRegistered = true;
 
   ipcMain.handle("node:connect", async () => {
     // Clean up any prior runtime/backends (e.g., if user clicks connect twice).
-    runtime?.disconnect();
-    runtime = null;
-    if (playwrightBackend) {
-      await playwrightBackend.close();
-      playwrightBackend = null;
-    }
+    await cleanupNodeResources();
 
     const config = loadConfig();
     const permissions = resolvePermissions(
@@ -52,13 +52,13 @@ export function registerNodeIpc(window: BrowserWindow): void {
 
     runtime = new NodeRuntime(config, permissions, {
       onStatusChange: (status) =>
-        sendToRenderer("status:change", {
+        sender.send("status:change", {
           nodeStatus: toNodeStatusString(status),
           node: status,
         }),
-      onConsentRequest: (msg) => sendToRenderer("consent:request", msg),
-      onPlanUpdate: (msg) => sendToRenderer("plan:update", msg),
-      onLog: (entry) => sendToRenderer("log:entry", { source: "node", ...entry }),
+      onConsentRequest: (msg) => sender.send("consent:request", msg),
+      onPlanUpdate: (msg) => sender.send("plan:update", msg),
+      onLog: (entry) => sender.send("log:entry", { source: "node", ...entry }),
     });
 
     // Determine WS URL and token based on mode
@@ -110,13 +110,8 @@ export function registerNodeIpc(window: BrowserWindow): void {
   });
 
   ipcMain.handle("node:disconnect", async () => {
-    runtime?.disconnect();
-    runtime = null;
-    if (playwrightBackend) {
-      await playwrightBackend.close();
-      playwrightBackend = null;
-    }
-    sendToRenderer("status:change", { nodeStatus: "disconnected" });
+    await cleanupNodeResources();
+    sender.send("status:change", { nodeStatus: "disconnected" });
     return { status: "disconnected" };
   });
 
