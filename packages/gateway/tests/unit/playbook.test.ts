@@ -80,7 +80,7 @@ describe("loadPlaybook", () => {
     expect(pb.manifest.name).toBe("Test Playbook");
     expect(pb.manifest.version).toBe("1.0.0");
     expect(pb.manifest.steps).toHaveLength(3);
-    expect(pb.file_path).toContain("test-playbook/playbook.yml");
+    expect(pb.file_path).toContain(join("test-playbook", "playbook.yml"));
     expect(pb.loaded_at).toBeDefined();
   });
 

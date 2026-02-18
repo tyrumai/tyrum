@@ -152,6 +152,11 @@ describe("Config store", () => {
     saveConfig(DEFAULT_CONFIG);
     const filePath = join(tmpDir, "desktop-node.json");
     const mode = statSync(filePath).mode & 0o777;
+    if (process.platform === "win32") {
+      // Windows ACLs do not map cleanly to POSIX mode bits.
+      expect(mode & 0o600).toBe(0o600);
+      return;
+    }
     expect(mode).toBe(0o600);
   });
 });
