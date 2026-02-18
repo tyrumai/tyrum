@@ -131,6 +131,15 @@ describe("CliProvider", () => {
     expect((evidence.stdout as string).trim()).toBe("cwd-allowlist-off");
   });
 
+  it("empty cwd allowlist fails closed when enforcement is active", async () => {
+    const provider = new CliProvider(["echo"], [], true);
+    const result = await provider.execute(
+      makeAction({ cmd: "echo", args: ["cwd-default-deny"], cwd: tmpdir() }),
+    );
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("working-directory allowlist is active (default deny) and empty");
+  });
+
   it("subdirectory of allowed dir passes", async () => {
     const provider = makeProvider();
     const allowedSubdir = join(tmpdir(), "sub");

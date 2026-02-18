@@ -76,7 +76,7 @@ export class CliProvider implements CapabilityProvider {
 
     if (this.allowlistEnforced && cwd) {
       const normalizedAllowedDirs = normalizeLines(this.allowedWorkingDirs);
-      if (!normalizedAllowedDirs.includes("*") && normalizedAllowedDirs.length === 0) {
+      if (normalizedAllowedDirs.length === 0) {
         return {
           success: false,
           error:
