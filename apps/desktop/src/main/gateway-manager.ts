@@ -152,6 +152,12 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
     this.healthTimer = setInterval(async () => {
       try {
         const res = await fetch(`http://${host}:${port}/healthz`);
+        if (res.ok) {
+          if (this.status === "error" && this.process) {
+            this.setStatus("running");
+          }
+          return;
+        }
         if (!res.ok) {
           this.setStatus("error");
           this.emit("health-fail");
