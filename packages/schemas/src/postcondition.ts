@@ -431,6 +431,43 @@ function sanitiseValue(value: unknown): unknown {
   return value;
 }
 
+export interface PostconditionCheckResult {
+  passed: boolean;
+  error?: string;
+  report?: PostconditionReport;
+}
+
+/**
+ * Evaluate postcondition assertions against evidence.
+ * Returns { passed: true } when spec is undefined (no postcondition).
+ * Returns { passed: false, error } for assertion failures or PostconditionError.
+ * Re-throws unknown errors.
+ */
+export function checkPostcondition(
+  spec: unknown | undefined,
+  context: EvaluationContext,
+): PostconditionCheckResult {
+  if (!spec) return { passed: true };
+  try {
+    const report = evaluatePostcondition(spec, context);
+    if (report.passed) return { passed: true, report };
+    const failedAssertions = report.assertions
+      .filter((a) => a.status === "failed")
+      .map((a) => ("message" in a ? `${a.kind}: ${a.message}` : a.kind))
+      .join("; ");
+    return {
+      passed: false,
+      error: `postcondition failed: ${failedAssertions || "assertions failed"}`,
+      report,
+    };
+  } catch (err) {
+    if (err instanceof PostconditionError) {
+      return { passed: false, error: `postcondition error: ${err.message}` };
+    }
+    throw err;
+  }
+}
+
 function deepEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (a == null || b == null) return false;

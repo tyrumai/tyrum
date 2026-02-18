@@ -1,5 +1,5 @@
 import type { ActionPrimitive, ClientCapability } from "@tyrum/schemas";
-import { evaluatePostcondition, PostconditionError } from "@tyrum/schemas";
+import { checkPostcondition } from "@tyrum/schemas";
 import type { EvaluationContext } from "@tyrum/schemas";
 import type { CapabilityProvider, TaskResult } from "@tyrum/client";
 import type { PlaywrightBackend } from "./backends/playwright-backend.js";
@@ -179,35 +179,23 @@ export class PlaywrightProvider implements CapabilityProvider {
   ): Promise<TaskResult | null> {
     if (action.postcondition == null) return null;
 
-    try {
-      const snap = await this.backend.snapshot();
-      const evalContext: EvaluationContext = {
-        dom: { html: snap.html },
+    const snap = await this.backend.snapshot();
+    const evalContext: EvaluationContext = {
+      dom: { html: snap.html },
+    };
+
+    const postcondResult = checkPostcondition(action.postcondition, evalContext);
+    if (postcondResult.report) {
+      evidence.postcondition = postcondResult.report;
+    }
+
+    if (!postcondResult.passed) {
+      evidence.postcondition ??= { passed: false, error: postcondResult.error };
+      return {
+        success: false,
+        evidence,
+        error: postcondResult.error ?? "postcondition failed",
       };
-
-      const report = evaluatePostcondition(action.postcondition, evalContext);
-      evidence.postcondition = report;
-
-      if (!report.passed) {
-        return {
-          success: false,
-          evidence,
-          error: `Action succeeded but postcondition failed: ${report.assertions
-            .filter((a) => a.status === "failed")
-            .map((a) => a.message)
-            .join("; ")}`,
-        };
-      }
-    } catch (err) {
-      if (err instanceof PostconditionError) {
-        evidence.postcondition = { passed: false, error: err.message };
-        return {
-          success: false,
-          evidence,
-          error: `Postcondition evaluation error: ${err.message}`,
-        };
-      }
-      throw err;
     }
 
     return null;
