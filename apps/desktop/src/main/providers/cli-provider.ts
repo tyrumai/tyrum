@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { resolve } from "node:path";
+import { isAbsolute, relative, resolve } from "node:path";
 import type { ActionPrimitive, ClientCapability } from "@tyrum/schemas";
 import { evaluatePostcondition, PostconditionError } from "@tyrum/schemas";
 import type { EvaluationContext } from "@tyrum/schemas";
@@ -37,10 +37,12 @@ export class CliProvider implements CapabilityProvider {
     }
 
     if (cwd) {
-      const resolved = resolve(cwd);
-      const allowed = this.allowedWorkingDirs.some((dir) =>
-        resolved.startsWith(resolve(dir)),
-      );
+      const resolvedCwd = resolve(cwd);
+      const allowed = this.allowedWorkingDirs.some((dir) => {
+        const allowedDir = resolve(dir);
+        const rel = relative(allowedDir, resolvedCwd);
+        return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+      });
       if (!allowed) {
         return {
           success: false,

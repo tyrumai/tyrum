@@ -11,9 +11,35 @@ import { RealPlaywrightBackend } from "../providers/backends/real-playwright-bac
 
 let runtime: NodeRuntime | null = null;
 let playwrightBackend: RealPlaywrightBackend | null = null;
+let currentWindow: BrowserWindow | null = null;
+let ipcRegistered = false;
+
+function sendToRenderer(channel: string, payload: unknown): void {
+  const win = currentWindow;
+  if (!win || win.isDestroyed()) return;
+  win.webContents.send(channel, payload);
+}
+
+function toNodeStatusString(status: { connected: boolean; code?: number }): string {
+  if (status.connected) return "connected";
+  if (status.code != null && status.code !== 1000) return "error";
+  return "disconnected";
+}
 
 export function registerNodeIpc(window: BrowserWindow): void {
+  currentWindow = window;
+  if (ipcRegistered) return;
+  ipcRegistered = true;
+
   ipcMain.handle("node:connect", async () => {
+    // Clean up any prior runtime/backends (e.g., if user clicks connect twice).
+    runtime?.disconnect();
+    runtime = null;
+    if (playwrightBackend) {
+      await playwrightBackend.close();
+      playwrightBackend = null;
+    }
+
     const config = loadConfig();
     const permissions = resolvePermissions(
       config.permissions.profile,
@@ -21,10 +47,14 @@ export function registerNodeIpc(window: BrowserWindow): void {
     );
 
     runtime = new NodeRuntime(config, permissions, {
-      onStatusChange: (status) => window.webContents.send("status:change", { node: status }),
-      onConsentRequest: (msg) => window.webContents.send("consent:request", msg),
-      onPlanUpdate: (msg) => window.webContents.send("plan:update", msg),
-      onLog: (entry) => window.webContents.send("log:entry", { source: "node", ...entry }),
+      onStatusChange: (status) =>
+        sendToRenderer("status:change", {
+          nodeStatus: toNodeStatusString(status),
+          node: status,
+        }),
+      onConsentRequest: (msg) => sendToRenderer("consent:request", msg),
+      onPlanUpdate: (msg) => sendToRenderer("plan:update", msg),
+      onLog: (entry) => sendToRenderer("log:entry", { source: "node", ...entry }),
     });
 
     // Determine WS URL and token based on mode
@@ -32,7 +62,9 @@ export function registerNodeIpc(window: BrowserWindow): void {
     let token: string;
     if (config.mode === "embedded") {
       wsUrl = `ws://127.0.0.1:${config.embedded.port}/ws`;
-      token = config.embedded.tokenRef ? decryptToken(config.embedded.tokenRef) : "";
+      token = config.embedded.tokenRef
+        ? decryptToken(config.embedded.tokenRef)
+        : "";
     } else {
       wsUrl = config.remote.wsUrl;
       token = config.remote.tokenRef ? decryptToken(config.remote.tokenRef) : "";
@@ -41,26 +73,32 @@ export function registerNodeIpc(window: BrowserWindow): void {
     // Register providers based on capabilities and permissions
     if (config.capabilities.desktop) {
       const desktopBackend = new NutJsDesktopBackend();
-      runtime.registerProvider(new DesktopProvider(desktopBackend, permissions, async (_prompt) => {
-        // For V1: fail-closed - always require explicit approval through UI
-        return false;
-      }));
+      runtime.registerProvider(
+        new DesktopProvider(desktopBackend, permissions, async (_prompt) => {
+          // For V1: fail-closed - always require explicit approval through UI
+          return false;
+        }),
+      );
     }
     if (config.capabilities.playwright && permissions.playwright) {
       playwrightBackend = new RealPlaywrightBackend({
         headless: config.web.headless,
       });
-      runtime.registerProvider(new PlaywrightProvider({
-        allowedDomains: config.web.allowedDomains,
-        headless: config.web.headless,
-        domainRestricted: permissions.playwrightDomainRestricted,
-      }, playwrightBackend));
+      runtime.registerProvider(
+        new PlaywrightProvider(
+          {
+            allowedDomains: config.web.allowedDomains,
+            headless: config.web.headless,
+            domainRestricted: permissions.playwrightDomainRestricted,
+          },
+          playwrightBackend,
+        ),
+      );
     }
     if (config.capabilities.cli && permissions.cli) {
-      runtime.registerProvider(new CliProvider(
-        config.cli.allowedCommands,
-        config.cli.allowedWorkingDirs,
-      ));
+      runtime.registerProvider(
+        new CliProvider(config.cli.allowedCommands, config.cli.allowedWorkingDirs),
+      );
     }
 
     runtime.connect(wsUrl, token);
@@ -74,11 +112,15 @@ export function registerNodeIpc(window: BrowserWindow): void {
       await playwrightBackend.close();
       playwrightBackend = null;
     }
+    sendToRenderer("status:change", { nodeStatus: "disconnected" });
     return { status: "disconnected" };
   });
 
-  ipcMain.handle("consent:respond", (_event, planId: string, approved: boolean, reason?: string) => {
-    runtime?.respondToConsent(planId, approved, reason);
-    return { status: "responded" };
-  });
+  ipcMain.handle(
+    "consent:respond",
+    (_event, planId: string, approved: boolean, reason?: string) => {
+      runtime?.respondToConsent(planId, approved, reason);
+      return { status: "responded" };
+    },
+  );
 }

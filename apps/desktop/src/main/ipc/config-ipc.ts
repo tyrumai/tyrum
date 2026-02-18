@@ -3,6 +3,8 @@ import { loadConfig, saveConfig } from "../config/store.js";
 import { DesktopNodeConfig } from "../config/schema.js";
 import { checkMacPermissions } from "../platform/permissions.js";
 
+let ipcRegistered = false;
+
 /** Recursively merge `source` into `target`, preserving nested fields. */
 function deepMerge(
   target: Record<string, unknown>,
@@ -32,6 +34,9 @@ function deepMerge(
 }
 
 export function registerConfigIpc(): void {
+  if (ipcRegistered) return;
+  ipcRegistered = true;
+
   ipcMain.handle("config:get", () => {
     return loadConfig();
   });
