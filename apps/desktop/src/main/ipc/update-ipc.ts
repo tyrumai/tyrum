@@ -92,7 +92,9 @@ async function openReleaseFileFromDisk(): Promise<ManualReleaseFileResult> {
     throw new Error("Selected file type is not a supported installer package.");
   }
 
-  const openError = await shell.openPath(selectedPath);
+  const openResult = await shell.openPath(selectedPath);
+  const openError =
+    typeof openResult === "string" ? openResult : String(openResult ?? "");
   if (openError.trim().length > 0) {
     throw new Error(openError);
   }
