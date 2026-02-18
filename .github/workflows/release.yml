@@ -131,7 +131,7 @@ jobs:
           (cd packages/gateway && pnpm pack --pack-destination ../../artifacts/npm)
           ls -lah artifacts/npm
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: npm-packages
           path: artifacts/npm/*.tgz
@@ -365,7 +365,7 @@ jobs:
 
           ls -lah artifacts/desktop
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: desktop-${{ matrix.os }}
           path: artifacts/desktop/*
@@ -381,12 +381,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: npm-packages
           path: release-assets
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           pattern: desktop-*
           path: release-assets
