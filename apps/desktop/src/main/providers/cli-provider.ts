@@ -132,7 +132,14 @@ export class CliProvider implements CapabilityProvider {
               });
               return;
             }
-            throw err;
+            const message = err instanceof Error ? err.message : String(err);
+            evidence.postcondition = { passed: false, error: message };
+            resolveResult({
+              success: false,
+              evidence,
+              error: `Unexpected postcondition error: ${message}`,
+            });
+            return;
           }
         }
 

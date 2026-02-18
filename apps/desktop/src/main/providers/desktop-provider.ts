@@ -33,6 +33,11 @@ export class DesktopProvider implements CapabilityProvider {
           return await this.mouseAction(args);
         case "keyboard":
           return await this.keyboardAction(args);
+        default:
+          return {
+            success: false,
+            error: `Unsupported desktop operation: ${(args as { op: string }).op}`,
+          };
       }
     } catch (err) {
       return {
@@ -104,6 +109,11 @@ export class DesktopProvider implements CapabilityProvider {
       case "drag":
         await this.backend.dragMouse(args.x, args.y, args.duration_ms);
         break;
+      default:
+        return {
+          success: false,
+          error: `Unsupported mouse action: ${args.action}`,
+        };
     }
 
     return {
@@ -130,18 +140,38 @@ export class DesktopProvider implements CapabilityProvider {
       };
     }
     if (this.permissions.desktopInputRequiresConfirmation) {
+      const detail =
+        args.action === "type"
+          ? args.text
+          : args.action === "press"
+            ? args.key
+            : undefined;
       const approved = await this.requestConfirmation(
-        `Allow keyboard ${args.action}: "${args.text ?? args.key}"?`,
+        `Allow keyboard ${args.action}: "${detail ?? "<missing>"}"?`,
       );
       if (!approved) {
         return { success: false, error: "User denied keyboard action" };
       }
     }
 
-    if (args.action === "type" && args.text != null) {
-      await this.backend.typeText(args.text);
-    } else if (args.action === "press" && args.key != null) {
-      await this.backend.pressKey(args.key);
+    switch (args.action) {
+      case "type":
+        if (!args.text) {
+          return { success: false, error: "Missing text for keyboard type action" };
+        }
+        await this.backend.typeText(args.text);
+        break;
+      case "press":
+        if (!args.key) {
+          return { success: false, error: "Missing key for keyboard press action" };
+        }
+        await this.backend.pressKey(args.key);
+        break;
+      default:
+        return {
+          success: false,
+          error: `Unsupported keyboard action: ${args.action}`,
+        };
     }
 
     return {
