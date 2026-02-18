@@ -1318,11 +1318,15 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
         (function () {
           const forms = document.querySelectorAll("form[data-mode]");
           for (const form of forms) {
-            form.addEventListener("submit", function () {
+            form.addEventListener("submit", function (event) {
               const mode = form.getAttribute("data-mode");
               if (!mode) return;
               try {
-                if (window.parent && window.parent !== window) {
+                const hasDesktopHost = Boolean(window.parent && window.parent !== window);
+                if (hasDesktopHost) {
+                  if (mode === "remote") {
+                    event.preventDefault();
+                  }
                   window.parent.postMessage({ type: "tyrum:onboarding-mode-selected", mode: mode }, "*");
                 }
               } catch {

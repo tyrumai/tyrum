@@ -41,14 +41,19 @@ export function App() {
     const api = window.tyrumDesktop;
     if (!api) return;
 
-    void api.getConfig().then((cfg) => {
-      const config = cfg as Record<string, unknown>;
-      const mode = config["mode"] === "remote" ? "remote" : "embedded";
-      if (mode === "embedded") {
-        setPage("gateway");
-        setLaunchOnboarding(true);
-      }
-    });
+    void Promise.all([api.getConfig(), api.getStartupState()]).then(
+      ([cfg, startup]) => {
+        const config = cfg as Record<string, unknown>;
+        const mode = config["mode"] === "remote" ? "remote" : "embedded";
+        const shouldLaunchOnboarding = startup?.launchOnboarding === true;
+        if (mode === "embedded") {
+          setPage("gateway");
+          if (shouldLaunchOnboarding) {
+            setLaunchOnboarding(true);
+          }
+        }
+      },
+    );
 
     const unsubscribe = api.onStatusChange((statusRaw) => {
       const status =
