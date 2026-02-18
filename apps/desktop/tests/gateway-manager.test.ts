@@ -24,6 +24,8 @@ function mockProc(
 type Internal = {
   process: unknown;
   setStatus(s: GatewayStatus): void;
+  startHealthCheck(port: number, host: string): void;
+  stopHealthCheck(): void;
 };
 
 describe("GatewayManager", () => {
@@ -70,6 +72,61 @@ describe("GatewayManager", () => {
     internal.setStatus("stopped");
 
     expect(statuses).toEqual(["starting", "running", "stopped"]);
+  });
+
+  describe("health checks", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    });
+
+    it("restores status to running after transient health failure", async () => {
+      const gm = new GatewayManager();
+      const internal = gm as unknown as Internal;
+      internal.process = {};
+      internal.setStatus("running");
+
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: false } as Response)
+        .mockResolvedValueOnce({ ok: true } as Response);
+      vi.stubGlobal("fetch", fetchMock);
+
+      const onHealthFail = vi.fn();
+      gm.on("health-fail", onHealthFail);
+
+      internal.startHealthCheck(7777, "127.0.0.1");
+
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(gm.status).toBe("error");
+      expect(onHealthFail).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(gm.status).toBe("running");
+      expect(onHealthFail).toHaveBeenCalledTimes(1);
+
+      internal.stopHealthCheck();
+    });
+
+    it("does not restore running when process is no longer managed", async () => {
+      const gm = new GatewayManager();
+      const internal = gm as unknown as Internal;
+      internal.process = null;
+      internal.setStatus("error");
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true } as Response));
+
+      internal.startHealthCheck(7777, "127.0.0.1");
+
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(gm.status).toBe("error");
+
+      internal.stopHealthCheck();
+    });
   });
 
   describe("stop() race-condition handling", () => {
