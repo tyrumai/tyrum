@@ -10,6 +10,10 @@ import { join, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { PlaybookManifest, type Playbook } from "@tyrum/schemas";
 
+interface LoadAllPlaybooksOptions {
+  onInvalidPlaybook?: (manifestPath: string, error: unknown) => void;
+}
+
 /**
  * Load a single playbook from a YAML file path.
  *
@@ -35,9 +39,17 @@ export function loadPlaybook(filePath: string): Playbook {
  *
  * Invalid playbooks are skipped with a warning logged to stderr.
  */
-export function loadAllPlaybooks(dir: string): Playbook[] {
+export function loadAllPlaybooks(
+  dir: string,
+  options: LoadAllPlaybooksOptions = {},
+): Playbook[] {
   const absoluteDir = resolve(dir);
   const playbooks: Playbook[] = [];
+  const onInvalidPlaybook =
+    options.onInvalidPlaybook ??
+    ((manifestPath: string, err: unknown) => {
+      console.warn(`Skipping playbook at ${manifestPath}: ${String(err)}`);
+    });
 
   let entries: string[];
   try {
@@ -59,7 +71,7 @@ export function loadAllPlaybooks(dir: string): Playbook[] {
       const playbook = loadPlaybook(manifestPath);
       playbooks.push(playbook);
     } catch (err) {
-      console.warn(`Skipping playbook at ${manifestPath}: ${String(err)}`);
+      onInvalidPlaybook(manifestPath, err);
     }
   }
 

@@ -42,16 +42,6 @@ jobs:
 
       - run: pnpm build
 
-      - name: Test packages suite
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ "$RUNNER_OS" == "Linux" ]]; then
-            pnpm exec vitest run packages --coverage --passWithNoTests
-          else
-            pnpm exec vitest run packages --passWithNoTests
-          fi
-
       - name: Install Playwright (Chromium)
         shell: bash
         run: |
@@ -62,12 +52,15 @@ jobs:
             pnpm --filter tyrum-desktop exec playwright install chromium
           fi
 
+      - name: Test + coverage (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a --server-args="-screen 0 1920x1080x24" pnpm test -- --coverage
+
+      - name: Test packages suite
+        if: runner.os != 'Linux'
+        run: pnpm exec vitest run packages --passWithNoTests
+
       - name: Test desktop suite
+        if: runner.os != 'Linux'
         shell: bash
-        run: |
-          set -euo pipefail
-          if [[ "$RUNNER_OS" == "Linux" ]]; then
-            xvfb-run -a --server-args="-screen 0 1920x1080x24" pnpm exec vitest run apps/desktop/tests --passWithNoTests
-          else
-            pnpm exec vitest run apps/desktop/tests --passWithNoTests
-          fi
+        run: pnpm exec vitest run apps/desktop/tests --passWithNoTests

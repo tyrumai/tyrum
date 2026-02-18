@@ -97,7 +97,9 @@ describe("loadPlaybook", () => {
 
 describe("loadAllPlaybooks", () => {
   it("loads all valid playbooks from a directory", () => {
-    const playbooks = loadAllPlaybooks(fixturesDir);
+    const playbooks = loadAllPlaybooks(fixturesDir, {
+      onInvalidPlaybook: () => {},
+    });
     // Should load test-playbook and second-playbook; invalid-playbook is skipped
     const ids = playbooks.map((p) => p.manifest.id).sort();
     expect(ids).toContain("test-playbook");
