@@ -25,7 +25,7 @@ export default function ActivityPage() {
   const loadEvents = useCallback(async () => {
     try {
       const client = getGatewayClient();
-      const data = (await client.getEvents()) as ActivityEvent[];
+      const data = await client.getEvents();
       if (isMountedRef.current) {
         const sorted = [...data].sort(
           (a, b) =>

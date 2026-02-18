@@ -97,7 +97,7 @@ export class GatewayClient {
 
   async getEvents(
     limit?: number,
-  ): Promise<Array<Record<string, unknown>>> {
+  ): Promise<ActivityEvent[]> {
     const query = limit !== undefined ? `?limit=${limit}` : "";
     return this.request(`/memory/events${query}`);
   }
