@@ -39,9 +39,6 @@ jobs:
       - name: pnpm audit (workspace packages)
         run: pnpm audit
 
-      - name: Audit web dependencies
-        run: pnpm --filter tyrum-portal exec pnpm audit --prod --audit-level high
-
       - name: Report failure for triage
         if: failure() && github.event_name == 'schedule'
         uses: actions/github-script@v8

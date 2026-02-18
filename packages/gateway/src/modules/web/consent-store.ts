@@ -5,19 +5,6 @@ export type ConsentToggleKey =
 
 export type ConsentSelections = Record<ConsentToggleKey, boolean>;
 
-export type ConsentRecord = {
-  id: string;
-  revision: number;
-  auditReference: string;
-  recordedAt: string;
-  selections: ConsentSelections;
-  calibration?: CalibrationSnapshot;
-  stub: {
-    persistence: "memory";
-    note: string;
-  };
-};
-
 export type CalibrationPersona = {
   tone?: string;
   verbosity?: string;
@@ -32,6 +19,19 @@ export type CalibrationSnapshot = {
   startedAt: string;
   completedAt: string;
   durationSeconds: number;
+};
+
+export type ConsentRecord = {
+  id: string;
+  revision: number;
+  auditReference: string;
+  recordedAt: string;
+  selections: ConsentSelections;
+  calibration?: CalibrationSnapshot;
+  stub: {
+    persistence: "memory";
+    note: string;
+  };
 };
 
 const CONSENT_RECORD_ID = "onboarding-consent-stub";
@@ -101,4 +101,68 @@ export function persistConsent(
 
 export function resetConsentStore() {
   latestRecord = undefined;
+}
+
+export function isConsentSelections(payload: unknown): payload is ConsentSelections {
+  if (!payload || typeof payload !== "object") {
+    return false;
+  }
+
+  const record = payload as Record<string, unknown>;
+
+  return (
+    typeof record.shareCalendarSignals === "boolean" &&
+    typeof record.allowPlannerAutonomy === "boolean" &&
+    typeof record.retainAuditTrail === "boolean"
+  );
+}
+
+function isCalibrationPersona(value: unknown) {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const allowedKeys = new Set([
+    "tone",
+    "verbosity",
+    "initiative",
+    "quietHours",
+    "spending",
+    "voice",
+  ]);
+  const record = value as Record<string, unknown>;
+
+  return Object.keys(record).every(
+    (key) => allowedKeys.has(key) && (record[key] === undefined || typeof record[key] === "string"),
+  );
+}
+
+function isIsoDate(value: unknown) {
+  return typeof value === "string" && !Number.isNaN(Date.parse(value));
+}
+
+export function isCalibrationSnapshot(payload: unknown): payload is CalibrationSnapshot {
+  if (!payload || typeof payload !== "object") {
+    return false;
+  }
+
+  const record = payload as Record<string, unknown>;
+
+  if (!isCalibrationPersona(record.persona)) {
+    return false;
+  }
+
+  if (!isIsoDate(record.startedAt) || !isIsoDate(record.completedAt)) {
+    return false;
+  }
+
+  if (
+    typeof record.durationSeconds !== "number" ||
+    !Number.isFinite(record.durationSeconds) ||
+    record.durationSeconds < 0
+  ) {
+    return false;
+  }
+
+  return true;
 }

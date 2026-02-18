@@ -1,17 +1,17 @@
-type StoredProfile = {
+export type StoredProfile = {
   profile_id: string;
   version: string;
   profile: Record<string, unknown>;
 };
 
-type IntegrationPreference = {
+export type IntegrationPreference = {
   slug: string;
   name: string;
   description: string;
   enabled: boolean;
 };
 
-type TimelineEvent = {
+export type TimelineEvent = {
   replay_id: string;
   step_index: number;
   occurred_at: string;
@@ -21,7 +21,7 @@ type TimelineEvent = {
   redactions: string[];
 };
 
-type PlanTimeline = {
+export type PlanTimeline = {
   plan_id: string;
   generated_at: string;
   event_count: number;
@@ -168,6 +168,30 @@ export function getPlanTimeline(planId: string) {
     return undefined;
   }
   return clone(timeline);
+}
+
+export function buildAuditTaskResponse(action: "export" | "delete") {
+  const tasks = {
+    export: {
+      id: "export-task-stub",
+      type: "account_export",
+      auditReference: "AUDIT-EXPORT-0001",
+      etaSeconds: 120,
+      enqueuedAt: "2025-01-15T11:00:00.000Z",
+    },
+    delete: {
+      id: "delete-task-stub",
+      type: "account_delete",
+      auditReference: "AUDIT-DELETE-0001",
+      etaSeconds: 43200,
+      enqueuedAt: "2025-01-16T08:00:00.000Z",
+    },
+  } as const;
+
+  return {
+    status: "enqueued",
+    task: tasks[action],
+  };
 }
 
 export function resetLocalStoreForTesting() {

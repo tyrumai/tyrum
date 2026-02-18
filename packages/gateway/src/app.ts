@@ -19,6 +19,8 @@ import { createSecretRoutes } from "./routes/secret.js";
 import { createPlaybookRoutes } from "./routes/playbook.js";
 import { createConnectionsRoute } from "./routes/connections.js";
 import { PlaybookRunner } from "./modules/playbook/runner.js";
+import { createWebApiRoutes } from "./routes/web-api.js";
+import { createWebUiRoutes } from "./routes/web-ui.js";
 import { loadAllPlaybooks } from "./modules/playbook/loader.js";
 import type { Playbook } from "@tyrum/schemas";
 import type { AgentRuntime } from "./modules/agent/runtime.js";
@@ -68,6 +70,9 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   const playbookRunner = new PlaybookRunner();
   app.route("/", createPlaybookRoutes({ playbooks, runner: playbookRunner }));
 
+  // Gateway-hosted web API compatibility layer for former Next handlers.
+  app.route("/", createWebApiRoutes());
+
   if (opts.secretProvider) {
     app.route("/", createSecretRoutes(opts.secretProvider));
   }
@@ -99,6 +104,20 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       );
     }
   }
+
+  // Gateway-hosted web UI.
+  app.route(
+    "/",
+    createWebUiRoutes({
+      approvalDal: container.approvalDal,
+      memoryDal: container.memoryDal,
+      watcherProcessor: container.watcherProcessor,
+      canvasDal: container.canvasDal,
+      playbooks,
+      playbookRunner,
+      isLocalOnly,
+    }),
+  );
 
   return app;
 }
