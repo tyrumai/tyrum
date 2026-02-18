@@ -452,8 +452,8 @@ export function checkPostcondition(
     const report = evaluatePostcondition(spec, context);
     if (report.passed) return { passed: true, report };
     const failedAssertions = report.assertions
-      .filter((a) => a.status === "failed")
-      .map((a) => ("message" in a ? `${a.kind}: ${a.message}` : a.kind))
+      .filter((a): a is AssertionResult & { status: "failed"; message: string } => a.status === "failed")
+      .map((a) => `${a.kind}: ${a.message}`)
       .join("; ");
     return {
       passed: false,

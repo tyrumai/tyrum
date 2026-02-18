@@ -112,7 +112,7 @@ function parseNumericIPv4(
 }
 
 /** Check whether an IPv4 address falls in a private / reserved range. */
-function isPrivateIPv4(a: number, b: number, c: number, d: number): boolean {
+function isPrivateIPv4(a: number, b: number, _c: number, _d: number): boolean {
   // 10.0.0.0/8
   if (a === 10) return true;
   // 172.16.0.0/12
