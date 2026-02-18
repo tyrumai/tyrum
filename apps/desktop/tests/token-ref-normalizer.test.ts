@@ -35,4 +35,20 @@ describe("normalizeConfigPartialForSave", () => {
     expect(remote["wsUrl"]).toBe("ws://example.test/ws");
     expect(remote["tokenRef"]).toBeUndefined();
   });
+
+  it("encrypts embedded.tokenRef while preserving other embedded fields", () => {
+    const normalized = normalizeConfigPartialForSave({
+      embedded: {
+        port: 8080,
+        tokenRef: "embedded-secret-token",
+      },
+    });
+
+    const embedded = normalized["embedded"] as Record<string, unknown>;
+    const tokenRef = embedded["tokenRef"] as string;
+
+    expect(tokenRef).not.toBe("embedded-secret-token");
+    expect(decryptToken(tokenRef)).toBe("embedded-secret-token");
+    expect(embedded["port"]).toBe(8080);
+  });
 });

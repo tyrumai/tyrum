@@ -6,7 +6,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /**
  * Normalizes config partials before persisting:
- * - Encrypts plaintext `remote.tokenRef` values.
+ * - Encrypts plaintext `remote.tokenRef` and `embedded.tokenRef` values.
  */
 export function normalizeConfigPartialForSave(
   partial: unknown,
@@ -14,15 +14,19 @@ export function normalizeConfigPartialForSave(
   if (!isRecord(partial)) return {};
 
   const normalized: Record<string, unknown> = { ...partial };
-  const remote = normalized["remote"];
-  if (!isRecord(remote)) return normalized;
 
-  const normalizedRemote: Record<string, unknown> = { ...remote };
-  const tokenRef = normalizedRemote["tokenRef"];
-  if (typeof tokenRef === "string" && tokenRef.length > 0) {
-    normalizedRemote["tokenRef"] = encryptToken(tokenRef);
+  for (const sectionKey of ["remote", "embedded"] as const) {
+    const section = normalized[sectionKey];
+    if (!isRecord(section)) continue;
+
+    const normalizedSection: Record<string, unknown> = { ...section };
+    const tokenRef = normalizedSection["tokenRef"];
+    if (typeof tokenRef === "string" && tokenRef.length > 0) {
+      normalizedSection["tokenRef"] = encryptToken(tokenRef);
+    }
+
+    normalized[sectionKey] = normalizedSection;
   }
 
-  normalized["remote"] = normalizedRemote;
   return normalized;
 }
