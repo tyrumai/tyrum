@@ -9,6 +9,10 @@ import { CliProvider } from "../providers/cli-provider.js";
 import { NutJsDesktopBackend } from "../providers/backends/nutjs-desktop-backend.js";
 import { RealPlaywrightBackend } from "../providers/backends/real-playwright-backend.js";
 import { createWindowSender } from "./window-sender.js";
+import {
+  ensureEmbeddedGatewayToken,
+  startEmbeddedGatewayFromConfig,
+} from "./gateway-ipc.js";
 
 const sender = createWindowSender();
 
@@ -44,7 +48,7 @@ export function registerNodeIpc(window: BrowserWindow): void {
     // Clean up any prior runtime/backends (e.g., if user clicks connect twice).
     await cleanupNodeResources();
 
-    const config = loadConfig();
+    let config = loadConfig();
     const permissions = resolvePermissions(
       config.permissions.profile,
       config.permissions.overrides,
@@ -65,10 +69,10 @@ export function registerNodeIpc(window: BrowserWindow): void {
     let wsUrl: string;
     let token: string;
     if (config.mode === "embedded") {
+      await startEmbeddedGatewayFromConfig();
+      config = loadConfig();
       wsUrl = `ws://127.0.0.1:${config.embedded.port}/ws`;
-      token = config.embedded.tokenRef
-        ? decryptToken(config.embedded.tokenRef)
-        : "";
+      token = ensureEmbeddedGatewayToken(config);
     } else {
       wsUrl = config.remote.wsUrl;
       token = config.remote.tokenRef ? decryptToken(config.remote.tokenRef) : "";

@@ -1,4 +1,5 @@
 export interface TyrumDesktopApi {
+  getStartupState: () => Promise<{ launchOnboarding: boolean }>;
   getConfig: () => Promise<unknown>;
   setConfig: (partial: unknown) => Promise<void>;
   updates: {
@@ -12,7 +13,7 @@ export interface TyrumDesktopApi {
     start: () => Promise<{ status: string; port: number }>;
     stop: () => Promise<{ status: string }>;
     getStatus: () => Promise<{ status: string; port: number }>;
-    getUiUrls: () => Promise<{
+    getUiUrls: (options?: { startOnboarding?: boolean }) => Promise<{
       embedUrl: string | null;
       displayUrl: string | null;
       externalUrl: string | null;
@@ -30,6 +31,9 @@ export interface TyrumDesktopApi {
     approved: boolean,
     reason?: string,
   ) => Promise<void>;
+  onboarding: {
+    selectMode: (mode: "embedded" | "remote") => Promise<{ mode: "embedded" | "remote" }>;
+  };
   checkMacPermissions: () => Promise<unknown>;
   requestMacPermission: (
     permission: "accessibility" | "screenRecording",

@@ -449,8 +449,8 @@ Tyrum persists operator knowledge in three layers:
 - **Reaction:** a small plan built from the same primitives (notify, rebook, reschedule).
 - The agent proposes/updates rules; user can tweak or disable any watcher.
 - Registrations persist to the `watchers` SQLite table in the local-first profile. A watcher processor skeleton exists (event-bus driven) but is not yet wired into the default runtime; periodic triggers require a scheduler.
-- Self-hosted profile defaults to a single-user localhost-only deployment; if exposed, require gateway auth and explicit network boundaries (reverse proxy / VPN).
-- Portal routes are directly accessible in local mode; exposed deployments must require auth and provide clear operator warnings.
+- Self-hosted profile defaults to a single-user localhost-only deployment with required gateway token auth; if exposed, also require explicit network boundaries (reverse proxy / VPN).
+- Portal routes require auth in local and exposed modes, with clear operator warnings when exposure is detected.
 
 ---
 
@@ -491,7 +491,7 @@ Tyrum persists operator knowledge in three layers:
 
 ### Safe-by-default exposure (no “localhost-only” footguns)
 - Bind to localhost by default.
-- If binding to a non-local interface (or otherwise exposed via reverse proxy / container publishing), **force authentication on**.
+- Require gateway authentication on localhost and non-local interfaces.
 - Generate a gateway admin token automatically if none exists; show it once during setup (one-time view) and store it via the Secret Provider.
 - Portal shows a prominent banner when exposure is detected (“you are reachable outside localhost; auth is required”).
 

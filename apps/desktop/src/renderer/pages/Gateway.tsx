@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toErrorMessage } from "../lib/errors.js";
 
 interface GatewayConfigShape {
@@ -11,6 +11,11 @@ interface GatewayUiUrls {
   embedUrl: string | null;
   displayUrl: string | null;
   externalUrl: string | null;
+}
+
+interface GatewayProps {
+  launchOnboarding?: boolean;
+  onOnboardingLaunchHandled?: () => void;
 }
 
 const headingStyle: React.CSSProperties = {
@@ -107,7 +112,10 @@ const STATUS_COLORS: Record<string, string> = {
   stopped: "#9ca3af",
 };
 
-export function Gateway() {
+export function Gateway({
+  launchOnboarding = false,
+  onOnboardingLaunchHandled,
+}: GatewayProps) {
   const [config, setConfig] = useState<GatewayConfigShape>({
     mode: "embedded",
     embedded: { port: 8080 },
@@ -125,11 +133,18 @@ export function Gateway() {
   });
 
   const api = window.tyrumDesktop;
+  const startOnboardingRef = useRef(launchOnboarding);
 
-  const refreshGatewayUrls = useCallback(async () => {
+  useEffect(() => {
+    if (launchOnboarding) {
+      startOnboardingRef.current = true;
+    }
+  }, [launchOnboarding]);
+
+  const refreshGatewayUrls = useCallback(async (options?: { startOnboarding?: boolean }) => {
     if (!api) return;
     try {
-      const urls = await api.gateway.getUiUrls();
+      const urls = await api.gateway.getUiUrls(options);
       setGatewayUrls(urls);
     } catch (error) {
       setErrorMessage(toErrorMessage(error));
@@ -190,7 +205,9 @@ export function Gateway() {
       .catch(() => {
         // Ignore snapshot failures; status events and actions still drive this view.
       });
-    void refreshGatewayUrls();
+    void refreshGatewayUrls({
+      startOnboarding: startOnboardingRef.current,
+    });
 
     const unsubscribe = api.onStatusChange((statusRaw) => {
       const status = statusRaw as Record<string, unknown>;
@@ -212,7 +229,9 @@ export function Gateway() {
       }
 
       if (shouldRefreshUrls) {
-        void refreshGatewayUrls();
+        void refreshGatewayUrls({
+          startOnboarding: startOnboardingRef.current,
+        });
       }
     });
 
@@ -228,6 +247,55 @@ export function Gateway() {
   const canEmbed =
     appUrl != null &&
     (config.mode === "remote" || gatewayStatus === "running");
+
+  useEffect(() => {
+    if (!launchOnboarding) {
+      return;
+    }
+    if (!canEmbed) {
+      return;
+    }
+    if (!gatewayUrls.embedUrl?.includes("next=%2Fapp%2Fonboarding%2Fstart")) {
+      return;
+    }
+    startOnboardingRef.current = false;
+    onOnboardingLaunchHandled?.();
+  }, [canEmbed, gatewayUrls.embedUrl, launchOnboarding, onOnboardingLaunchHandled]);
+
+  useEffect(() => {
+    if (!api || config.mode !== "embedded") {
+      return;
+    }
+    const expectedOrigin = `http://127.0.0.1:${config.embedded.port}`;
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== expectedOrigin) {
+        return;
+      }
+      if (!event.data || typeof event.data !== "object" || Array.isArray(event.data)) {
+        return;
+      }
+
+      const payload = event.data as Record<string, unknown>;
+      if (payload["type"] !== "tyrum:onboarding-mode-selected") {
+        return;
+      }
+
+      const mode = payload["mode"];
+      if (mode !== "embedded" && mode !== "remote") {
+        return;
+      }
+
+      void api.onboarding.selectMode(mode).catch((error) => {
+        setErrorMessage(toErrorMessage(error));
+      });
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => {
+      window.removeEventListener("message", handleMessage);
+    };
+  }, [api, config.mode, config.embedded.port]);
 
   const startGateway = async () => {
     if (!api || busy) return;

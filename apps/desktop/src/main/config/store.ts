@@ -17,6 +17,10 @@ function getConfigPath(): string {
   return join(getConfigDir(), "desktop-node.json");
 }
 
+export function configExists(): boolean {
+  return existsSync(getConfigPath());
+}
+
 export function loadConfig(): DesktopNodeConfig {
   const path = getConfigPath();
   if (!existsSync(path)) return structuredClone(DEFAULT_CONFIG);
