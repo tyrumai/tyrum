@@ -2,6 +2,10 @@ appId: net.tyrum.desktop
 productName: Tyrum Desktop
 directories:
   output: release
+publish:
+  - provider: github
+    owner: rhernaus
+    repo: tyrum
 files:
   - dist/**/*
   - "!dist/gateway/**"
