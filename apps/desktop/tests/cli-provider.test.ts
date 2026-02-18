@@ -52,6 +52,16 @@ describe("CliProvider", () => {
     expect(result.error).toContain("rm");
   });
 
+  it("disallowed command allowed when enforcement disabled", async () => {
+    const provider = new CliProvider([], [], false);
+    const result = await provider.execute(
+      makeAction({ cmd: "echo", args: ["allowlist-off"] }),
+    );
+    expect(result.success).toBe(true);
+    const evidence = result.evidence as Record<string, unknown>;
+    expect((evidence.stdout as string).trim()).toBe("allowlist-off");
+  });
+
   // -- Missing cmd returns error ---------------------------------------------
 
   it("missing cmd returns error", async () => {
@@ -80,6 +90,16 @@ describe("CliProvider", () => {
     );
     expect(result.success).toBe(false);
     expect(result.error).toContain("not in the allowlist");
+  });
+
+  it("disallowed cwd allowed when enforcement disabled", async () => {
+    const provider = new CliProvider([], [], false);
+    const result = await provider.execute(
+      makeAction({ cmd: "echo", args: ["cwd-allowlist-off"], cwd: "/etc" }),
+    );
+    expect(result.success).toBe(true);
+    const evidence = result.evidence as Record<string, unknown>;
+    expect((evidence.stdout as string).trim()).toBe("cwd-allowlist-off");
   });
 
   it("subdirectory of allowed dir passes", async () => {

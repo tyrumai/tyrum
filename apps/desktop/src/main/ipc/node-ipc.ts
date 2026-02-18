@@ -101,7 +101,11 @@ export function registerNodeIpc(window: BrowserWindow): void {
     }
     if (config.capabilities.cli && permissions.cli) {
       runtime.registerProvider(
-        new CliProvider(config.cli.allowedCommands, config.cli.allowedWorkingDirs),
+        new CliProvider(
+          config.cli.allowedCommands,
+          config.cli.allowedWorkingDirs,
+          permissions.cliAllowlistEnforced,
+        ),
       );
     }
 
