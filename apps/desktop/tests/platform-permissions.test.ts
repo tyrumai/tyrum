@@ -1,9 +1,39 @@
 import Module from "node:module";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   checkMacPermissions,
   requestMacPermission,
 } from "../src/main/platform/permissions.js";
+
+async function withMockedDarwinElectron<T>(
+  electronMock: unknown,
+  run: () => Promise<T>,
+): Promise<T> {
+  const originalPlatform = process.platform;
+  const originalRequire = Module.prototype.require;
+
+  Object.defineProperty(process, "platform", {
+    value: "darwin",
+    writable: true,
+  });
+
+  Module.prototype.require = function patchedRequire(this: unknown, id: string) {
+    if (id === "electron") {
+      return electronMock;
+    }
+    return originalRequire.call(this as object, id);
+  };
+
+  try {
+    return await run();
+  } finally {
+    Module.prototype.require = originalRequire;
+    Object.defineProperty(process, "platform", {
+      value: originalPlatform,
+      writable: true,
+    });
+  }
+}
 
 describe("checkMacPermissions", () => {
   it("returns both true on non-darwin platforms", () => {
@@ -101,5 +131,44 @@ describe("requestMacPermission", () => {
     expect(result).toHaveProperty("granted");
     expect(typeof result.granted).toBe("boolean");
     expect(result).toHaveProperty("instructions");
+  });
+
+  it("prompts accessibility permission on macOS and returns granted", async () => {
+    const isTrustedAccessibilityClient = vi.fn(() => true);
+    await withMockedDarwinElectron(
+      {
+        systemPreferences: {
+          isTrustedAccessibilityClient,
+          getMediaAccessStatus: () => "granted",
+        },
+        shell: { openExternal: vi.fn() },
+      },
+      async () => {
+        const result = await requestMacPermission("accessibility");
+        expect(isTrustedAccessibilityClient).toHaveBeenCalledWith({ prompt: true });
+        expect(result).toEqual({ granted: true, instructions: undefined });
+      },
+    );
+  });
+
+  it("opens Screen Recording settings when not granted on macOS", async () => {
+    const openExternal = vi.fn().mockResolvedValue(undefined);
+    await withMockedDarwinElectron(
+      {
+        systemPreferences: {
+          isTrustedAccessibilityClient: vi.fn(() => true),
+          getMediaAccessStatus: vi.fn(() => "denied"),
+        },
+        shell: { openExternal },
+      },
+      async () => {
+        const result = await requestMacPermission("screenRecording");
+        expect(openExternal).toHaveBeenCalledWith(
+          "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+        );
+        expect(result.granted).toBe(false);
+        expect(result.instructions).toContain("Opened Screen Recording settings");
+      },
+    );
   });
 });

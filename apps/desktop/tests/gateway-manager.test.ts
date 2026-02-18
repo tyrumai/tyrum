@@ -355,6 +355,30 @@ describe("GatewayManager", () => {
       expect(gm.status).toBe("stopped");
     });
 
+    it("resolves stop when signals are unsupported (windows-like)", async () => {
+      const gm = new GatewayManager();
+      const internal = gm as unknown as Internal;
+      const proc = mockProc();
+
+      proc.kill.mockImplementation(() => {
+        const err = new Error("signal not supported") as NodeJS.ErrnoException;
+        err.code = "EINVAL";
+        throw err;
+      });
+      internal.process = proc;
+      internal.setStatus("running");
+
+      const stopPromise = gm.stop();
+
+      expect(proc.kill).toHaveBeenCalledWith("SIGTERM");
+
+      await vi.advanceTimersByTimeAsync(5_000);
+      await stopPromise;
+
+      expect(proc.kill).toHaveBeenCalledWith("SIGKILL");
+      expect(gm.status).toBe("stopped");
+    });
+
     it("escalates to SIGKILL after timeout", async () => {
       const gm = new GatewayManager();
       const internal = gm as unknown as Internal;
