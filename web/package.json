@@ -11,7 +11,7 @@
     "build": "next build",
     "start": "next start",
     "start:single": "pnpm --filter @tyrum/gateway build && node ./scripts/start-single-instance.mjs",
-    "lint": "eslint .",
+    "lint": "pnpm -w lint",
     "test": "node ./scripts/run-tests.mjs",
     "lighthouse:ci": "lhci autorun --config=./lighthouserc.mobile.json && lhci autorun --config=./lighthouserc.desktop.json"
   },
@@ -31,8 +31,6 @@
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "axe-core": "4.11.1",
-    "eslint": "9.39.2",
-    "eslint-config-next": "16.1.6",
     "jsdom": "28.1.0",
     "typescript": "5.9.3",
     "vitest": "4.0.18",

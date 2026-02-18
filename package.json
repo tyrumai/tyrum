@@ -16,7 +16,14 @@
   },
   "pnpm": {
     "overrides": {
+      "@develar/schema-utils>ajv": "8.18.0",
+      "@develar/schema-utils>ajv-keywords": "5.1.0",
+      "dmg-license>ajv": "8.18.0",
       "tmp": ">=0.2.4"
+    },
+    "patchedDependencies": {
+      "@develar/schema-utils@2.6.5": "patches/@develar__schema-utils@2.6.5.patch",
+      "dmg-license@1.0.11": "patches/dmg-license@1.0.11.patch"
     }
   },
   "devDependencies": {

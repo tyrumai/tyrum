@@ -1,0 +1,94 @@
+diff --git a/dist/index.js b/dist/index.js
+index e7c67917443c99d69397318630f8900cdce31b4a..bdb2f114c4406e8e447c2ac6064c5359b7b5fc13 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -1,5 +1,5 @@
+ "use strict";
+ 
+-const validate = require('./validate');
++const validate = require("./validate");
+ 
+ module.exports = validate.default;
+diff --git a/dist/validate.js b/dist/validate.js
+index 21f43d0dee5fd024990e28e855edaa6d91bd042f..147486beabc107729445ff1f4e766a776f99ba32 100644
+--- a/dist/validate.js
++++ b/dist/validate.js
+@@ -44,11 +44,60 @@ const ajv = new _ajv.default({
+   allErrors: true,
+   verbose: true,
+   $data: true,
+-  coerceTypes: true
++  coerceTypes: true,
++  strict: false
+ });
+-(0, _ajvKeywords.default)(ajv, ['instanceof', 'formatMinimum', 'formatMaximum', 'patternRequired']); // Custom keywords
++(0, _ajvKeywords.default)(ajv, ['instanceof', 'patternRequired']); // Custom keywords
+ 
+ (0, _absolutePath.default)(ajv);
++
++function decodeJsonPointerSegment(segment) {
++  return segment.replace(/~1/g, "/").replace(/~0/g, "~");
++}
++
++function isNumericSegment(segment) {
++  return /^-?\d+$/.test(segment);
++}
++
++function isIdentifierSegment(segment) {
++  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(segment);
++}
++
++function escapeSingleQuotedString(value) {
++  return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
++}
++
++function instancePathToDataPath(instancePath) {
++  if (typeof instancePath !== "string" || instancePath.length === 0) {
++    return "";
++  }
++
++  if (instancePath[0] !== "/") {
++    // Not a JSON pointer; best-effort fallback.
++    return instancePath;
++  }
++
++  const segments = instancePath.split("/").slice(1).map(decodeJsonPointerSegment);
++
++  let out = "";
++  for (const segment of segments) {
++    if (!segment) continue;
++
++    if (isNumericSegment(segment)) {
++      out += `[${segment}]`;
++      continue;
++    }
++
++    if (isIdentifierSegment(segment)) {
++      out += `.${segment}`;
++      continue;
++    }
++
++    out += `['${escapeSingleQuotedString(segment)}']`;
++  }
++
++  return out;
++}
+ /**
+  * @param {Schema} schema
+  * @param {Array<object> | object} options
+@@ -101,7 +150,14 @@ function validateObject(schema, options) {
+     return [];
+   }
+ 
+-  return valid ? [] : filterErrors(compiledSchema.errors);
++  const normalizedErrors = compiledSchema.errors.map(error => {
++    if (typeof error.dataPath === "string") return error;
++    return {
++      ...error,
++      dataPath: instancePathToDataPath(error.instancePath || "")
++    };
++  });
++  return valid ? [] : filterErrors(normalizedErrors);
+ }
+ /**
+  * @param {Array<ErrorObject>} errors

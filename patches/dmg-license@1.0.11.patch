@@ -1,0 +1,41 @@
+diff --git a/lib/specFromJSON.js b/lib/specFromJSON.js
+index 4e1cb98df34645c18f4d8ebb6797f119d6906b67..b6dddf58cc206ae8946111bffc2c13a2ccfc6f4a 100644
+--- a/lib/specFromJSON.js
++++ b/lib/specFromJSON.js
+@@ -1,11 +1,11 @@
+ "use strict";
+ Object.defineProperty(exports, "__esModule", { value: true });
+-const Ajv = require("ajv");
++const Ajv = require("ajv").default || require("ajv");
+ const format_verror_1 = require("./util/format-verror");
+ const ajv = new Ajv({
+     allErrors: true,
+-    format: "full",
+-    jsonPointers: true
++    strict: false,
++    verbose: true
+ });
+ const validator = ajv.compile(require("../schema.json"));
+ class BadJSONLicenseSpecError extends format_verror_1.PrettyVError {
+@@ -24,7 +24,7 @@ function specFromJSON(spec, options) {
+     }
+     const dataPath = options && options.specSourceURL || "";
+     try {
+-        if (!validator(spec, dataPath)) {
++        if (!validator(spec)) {
+             throw new BadJSONLicenseSpecError({
+                 info: {
+                     errors: validator.errors
+diff --git a/package.json b/package.json
+index cfb55db84fc54fcc03ced6ee8d6e4eb022ef80fa..de487a2e1c3547429658b5414ec1f9cfa0764773 100644
+--- a/package.json
++++ b/package.json
+@@ -37,7 +37,7 @@
+ 	"dependencies": {
+ 		"@types/plist": "^3.0.1",
+ 		"@types/verror": "^1.10.3",
+-		"ajv": "^6.10.0",
++		"ajv": "^8.18.0",
+ 		"crc": "^3.8.0",
+ 		"iconv-corefoundation": "^1.1.7",
+ 		"plist": "^3.0.4",
