@@ -83,7 +83,7 @@ export async function requestMacPermission(
   permission: MacPermissionKind,
 ): Promise<MacPermissionRequestResult> {
   if (process.platform !== "darwin") {
-    return { granted: true };
+    return { granted: true, instructions: undefined };
   }
 
   try {
@@ -97,7 +97,7 @@ export async function requestMacPermission(
         prompt: true,
       });
       return granted
-        ? { granted: true }
+        ? { granted: true, instructions: undefined }
         : {
             granted: false,
             instructions:
@@ -107,7 +107,7 @@ export async function requestMacPermission(
 
     const screenStatus = systemPreferences.getMediaAccessStatus("screen");
     if (screenStatus === "granted") {
-      return { granted: true };
+      return { granted: true, instructions: undefined };
     }
 
     // macOS does not expose a direct request prompt API for screen recording.
