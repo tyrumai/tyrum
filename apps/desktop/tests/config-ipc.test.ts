@@ -10,12 +10,17 @@ describe("filterMutableKeys", () => {
   const ALLOWED = new Set([
     "mode",
     "remote.wsUrl",
+    "remote.tokenRef",
     "embedded.port",
     "embedded.dbPath",
+    "permissions.profile",
     "capabilities.desktop",
     "capabilities.playwright",
     "capabilities.cli",
     "capabilities.http",
+    "cli.allowedCommands",
+    "cli.allowedWorkingDirs",
+    "web.allowedDomains",
     "web.headless",
     "permissions.overrides",
   ]);
@@ -41,36 +46,36 @@ describe("filterMutableKeys", () => {
     expect(result).toEqual({ permissions: { overrides: { "cli.exec": true } } });
   });
 
-  it("strips permissions.profile", () => {
+  it("allows permissions.profile", () => {
     const result = filterMutableKeys(
       { permissions: { profile: "poweruser" } },
       ALLOWED,
     );
-    expect(result).toEqual({});
+    expect(result).toEqual({ permissions: { profile: "poweruser" } });
   });
 
-  it("strips cli.allowedCommands", () => {
+  it("allows cli.allowedCommands", () => {
     const result = filterMutableKeys(
       { cli: { allowedCommands: ["rm", "curl"] } },
       ALLOWED,
     );
-    expect(result).toEqual({});
+    expect(result).toEqual({ cli: { allowedCommands: ["rm", "curl"] } });
   });
 
-  it("strips cli.allowedWorkingDirs", () => {
+  it("allows cli.allowedWorkingDirs", () => {
     const result = filterMutableKeys(
       { cli: { allowedWorkingDirs: ["/"] } },
       ALLOWED,
     );
-    expect(result).toEqual({});
+    expect(result).toEqual({ cli: { allowedWorkingDirs: ["/"] } });
   });
 
-  it("strips web.allowedDomains", () => {
+  it("allows web.allowedDomains", () => {
     const result = filterMutableKeys(
       { web: { allowedDomains: ["evil.com"] } },
       ALLOWED,
     );
-    expect(result).toEqual({});
+    expect(result).toEqual({ web: { allowedDomains: ["evil.com"] } });
   });
 
   it("strips embedded.tokenRef", () => {
@@ -81,12 +86,12 @@ describe("filterMutableKeys", () => {
     expect(result).toEqual({});
   });
 
-  it("strips remote.tokenRef", () => {
+  it("allows remote.tokenRef", () => {
     const result = filterMutableKeys(
       { remote: { tokenRef: "stolen" } },
       ALLOWED,
     );
-    expect(result).toEqual({});
+    expect(result).toEqual({ remote: { tokenRef: "stolen" } });
   });
 
   it("strips version field", () => {
@@ -105,7 +110,7 @@ describe("filterMutableKeys", () => {
     );
     expect(result).toEqual({
       mode: "embedded",
-      permissions: { overrides: { x: true } },
+      permissions: { profile: "poweruser", overrides: { x: true } },
       embedded: { port: 3000 },
     });
   });
