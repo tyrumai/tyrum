@@ -4,6 +4,13 @@ contextBridge.exposeInMainWorld("tyrumDesktop", {
   getStartupState: () => ipcRenderer.invoke("app:get-startup-state"),
   getConfig: () => ipcRenderer.invoke("config:get"),
   setConfig: (partial: unknown) => ipcRenderer.invoke("config:set", partial),
+  updates: {
+    getState: () => ipcRenderer.invoke("updates:state"),
+    check: () => ipcRenderer.invoke("updates:check"),
+    download: () => ipcRenderer.invoke("updates:download"),
+    install: () => ipcRenderer.invoke("updates:install"),
+    openReleaseFile: () => ipcRenderer.invoke("updates:open-release-file"),
+  },
   gateway: {
     start: () => ipcRenderer.invoke("gateway:start"),
     stop: () => ipcRenderer.invoke("gateway:stop"),
@@ -46,4 +53,11 @@ contextBridge.exposeInMainWorld("tyrumDesktop", {
   requestMacPermission: (permission: "accessibility" | "screenRecording") =>
     ipcRenderer.invoke("permissions:request-mac", permission),
   openExternal: (url: string) => ipcRenderer.invoke("shell:open-external", url),
+  onUpdateStateChange: (cb: (state: unknown) => void) => {
+    const listener = (_event: unknown, state: unknown) => cb(state);
+    ipcRenderer.on("update:state", listener);
+    return () => {
+      ipcRenderer.removeListener("update:state", listener);
+    };
+  },
 });

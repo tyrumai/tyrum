@@ -18,19 +18,19 @@ This guide covers end-user installation options for Tyrum gateway.
 Installs a versioned `@tyrum/gateway` release tarball after verifying `SHA256SUMS`.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rhernaus/tyrum/main/scripts/install.sh | bash
+curl -fsSL https://get.tyrum.ai/install.sh | bash
 ```
 
 Install from a channel:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rhernaus/tyrum/main/scripts/install.sh | bash -s -- --channel beta
+curl -fsSL https://get.tyrum.ai/install.sh | bash -s -- --channel beta
 ```
 
 Install a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rhernaus/tyrum/main/scripts/install.sh | bash -s -- 2026.2.18
+curl -fsSL https://get.tyrum.ai/install.sh | bash -s -- 2026.2.18
 ```
 
 Advanced overrides:
@@ -48,13 +48,13 @@ npm i -g @tyrum/gateway
 Run:
 
 ```bash
-tyrum-gateway
+tyrum
 ```
 
 Enable singleton agent routes:
 
 ```bash
-TYRUM_AGENT_ENABLED=1 tyrum-gateway
+TYRUM_AGENT_ENABLED=1 tyrum
 ```
 
 ## Option 3: GitHub Releases
@@ -81,17 +81,39 @@ GitHub release title format is:
 
 ## Updating
 
-If installed with npm:
+In-place update via installed CLI (recommended once `tyrum` is already on PATH):
 
 ```bash
-npm i -g @tyrum/gateway@latest
+tyrum update
 ```
 
-If installed with the script:
+Update from a release channel:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rhernaus/tyrum/main/scripts/install.sh | bash
+tyrum update --channel beta
 ```
+
+Pin to an exact release version:
+
+```bash
+tyrum update --version 2026.2.18
+```
+
+Re-install/update via installer script (useful for fresh bootstrap or PATH repair):
+
+```bash
+curl -fsSL https://get.tyrum.ai/install.sh | bash
+curl -fsSL https://get.tyrum.ai/install.sh | bash -s -- --channel beta
+```
+
+Difference:
+- `tyrum update` uses your existing installed command and updates `@tyrum/gateway` via npm.
+- `install.sh` fetches signed release assets (`SHA256SUMS` verified) and reinstalls globally.
+
+Desktop app updates:
+- The desktop app checks for updates automatically and notifies when one is available.
+- Download/install remains user initiated from the Diagnostics page.
+- You can also install from a local release file via **Diagnostics → Use Local Release File**.
 
 ## Version Pinning
 
@@ -104,5 +126,11 @@ npm i -g @tyrum/gateway@2026.2.18
 or:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rhernaus/tyrum/main/scripts/install.sh | bash -s -- 2026.2.18
+curl -fsSL https://get.tyrum.ai/install.sh | bash -s -- 2026.2.18
 ```
+
+## Next Steps
+
+- [Quick Start](getting-started.md)
+- [Remote Gateway Guide](advanced/remote-gateway.md)
+- [Multi-Node Guide](advanced/multi-node.md)
