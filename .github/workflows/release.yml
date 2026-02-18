@@ -331,7 +331,7 @@ jobs:
 
       - name: Build desktop release files (macOS signed + notarized)
         if: ${{ matrix.os == 'macos-latest' }}
-        timeout-minutes: 45
+        timeout-minutes: 90
         env:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
