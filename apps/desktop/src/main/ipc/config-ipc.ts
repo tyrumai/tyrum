@@ -3,6 +3,62 @@ import { loadConfig, saveConfig } from "../config/store.js";
 import { DesktopNodeConfig } from "../config/schema.js";
 import { checkMacPermissions } from "../platform/permissions.js";
 
+const RENDERER_MUTABLE_PATHS = new Set([
+  "mode",
+  "remote.wsUrl",
+  "embedded.port",
+  "embedded.dbPath",
+  "capabilities.desktop",
+  "capabilities.playwright",
+  "capabilities.cli",
+  "capabilities.http",
+  "web.headless",
+  "permissions.overrides",
+]);
+
+/**
+ * Recursively filter an object to only include keys whose dot-paths
+ * appear in `allowed`. Sub-objects whose path is listed are kept whole;
+ * otherwise we recurse and keep only the allowed leaves.
+ */
+export function filterMutableKeys(
+  partial: Record<string, unknown>,
+  allowed: ReadonlySet<string>,
+  prefix = "",
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const key of Object.keys(partial)) {
+    const dotPath = prefix ? `${prefix}.${key}` : key;
+    const value = partial[key];
+    if (
+      value !== null &&
+      typeof value === "object" &&
+      !Array.isArray(value)
+    ) {
+      // Check if the entire sub-object path is allowed (e.g. "permissions.overrides")
+      if (allowed.has(dotPath)) {
+        result[key] = value;
+      } else {
+        // Recurse into nested objects
+        const filtered = filterMutableKeys(
+          value as Record<string, unknown>,
+          allowed,
+          dotPath,
+        );
+        if (Object.keys(filtered).length > 0) {
+          result[key] = filtered;
+        }
+      }
+    } else {
+      // Leaf value — only include if the dot-path is allowlisted
+      if (allowed.has(dotPath)) {
+        result[key] = value;
+      }
+    }
+  }
+  return result;
+}
+
 let ipcRegistered = false;
 
 /** Recursively merge `source` into `target`, preserving nested fields. */
@@ -42,11 +98,18 @@ export function registerConfigIpc(): void {
   });
 
   ipcMain.handle("config:set", (_event, partial: unknown) => {
+    if (partial === null || typeof partial !== "object" || Array.isArray(partial)) {
+      throw new Error("config:set requires a plain object");
+    }
+    const filtered = filterMutableKeys(
+      partial as Record<string, unknown>,
+      RENDERER_MUTABLE_PATHS,
+    );
     const current = loadConfig();
     const merged = DesktopNodeConfig.parse(
       deepMerge(
         current as unknown as Record<string, unknown>,
-        partial as Record<string, unknown>,
+        filtered,
       ),
     );
     saveConfig(merged);

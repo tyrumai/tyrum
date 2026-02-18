@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  checkPostcondition,
-  PostconditionError,
-} from "../src/postcondition.js";
+import { checkPostcondition } from "../src/postcondition.js";
 import type { EvaluationContext } from "../src/postcondition.js";
 
 describe("checkPostcondition", () => {
