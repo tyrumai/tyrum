@@ -2,9 +2,10 @@ import { EventEmitter } from "node:events";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BrowserWindow } from "electron";
 
-const { ipcMainHandleMock, registeredHandlers, testState } = vi.hoisted(() => ({
+const { ipcMainHandleMock, registeredHandlers, testState, saveConfigMock } = vi.hoisted(() => ({
   ipcMainHandleMock: vi.fn(),
   registeredHandlers: new Map<string, (...args: unknown[]) => unknown>(),
+  saveConfigMock: vi.fn(),
   testState: {
     port: 8080,
     mode: "embedded" as "embedded" | "remote",
@@ -49,7 +50,7 @@ vi.mock("../src/main/config/store.js", () => ({
       tokenRef: "enc:remote-token",
     },
   })),
-  saveConfig: vi.fn(),
+  saveConfig: saveConfigMock,
 }));
 
 vi.mock("../src/main/config/token-store.js", () => ({
@@ -68,6 +69,7 @@ describe("registerGatewayIpc handlers", () => {
     testState.port = 8080;
     testState.mode = "embedded";
     testState.remoteWsUrl = "ws://127.0.0.1:8080/ws";
+    saveConfigMock.mockReset();
     registeredHandlers.clear();
     ipcMainHandleMock.mockReset();
     ipcMainHandleMock.mockImplementation((channel: string, handler: (...args: unknown[]) => unknown) => {
@@ -137,6 +139,66 @@ describe("registerGatewayIpc handlers", () => {
       embedUrl: "http://127.0.0.1:8080/app/auth?token=token&next=%2Fapp",
       displayUrl: "http://127.0.0.1:8080/app",
       externalUrl: "http://127.0.0.1:8080/app/auth?token=token&next=%2Fapp",
+    });
+  });
+
+  it("returns onboarding URL targets when requested", async () => {
+    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
+
+    const windowStub = {
+      isDestroyed: () => false,
+      webContents: {
+        isDestroyed: () => false,
+        send: vi.fn(),
+      },
+    } as unknown as BrowserWindow;
+
+    registerGatewayIpc(windowStub);
+
+    const uiUrlsHandler = registeredHandlers.get("gateway:ui-urls");
+    expect(uiUrlsHandler).toBeDefined();
+
+    const urls = await uiUrlsHandler!({} as never, { startOnboarding: true });
+    expect(urls).toEqual({
+      embedUrl:
+        "http://127.0.0.1:8080/app/auth?token=token&next=%2Fapp%2Fonboarding%2Fstart",
+      displayUrl: "http://127.0.0.1:8080/app/onboarding/start",
+      externalUrl:
+        "http://127.0.0.1:8080/app/auth?token=token&next=%2Fapp%2Fonboarding%2Fstart",
+    });
+  });
+
+  it("switches to remote mode, stops gateway, and emits navigation update", async () => {
+    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
+
+    const sentEvents: Array<{ channel: string; payload: unknown }> = [];
+    const windowStub = {
+      isDestroyed: () => false,
+      webContents: {
+        isDestroyed: () => false,
+        send: (channel: string, payload: unknown) => {
+          sentEvents.push({ channel, payload });
+        },
+      },
+    } as unknown as BrowserWindow;
+
+    const manager = registerGatewayIpc(windowStub);
+    await manager.start();
+
+    const modeHandler = registeredHandlers.get("onboarding:select-mode");
+    expect(modeHandler).toBeDefined();
+
+    const result = await modeHandler!({} as never, "remote");
+    expect(result).toEqual({ mode: "remote" });
+    expect(saveConfigMock).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: "remote" }),
+    );
+    expect(sentEvents).toContainEqual({
+      channel: "status:change",
+      payload: {
+        gatewayStatus: "stopped",
+        navigateTo: { page: "connection", tab: "remote" },
+      },
     });
   });
 

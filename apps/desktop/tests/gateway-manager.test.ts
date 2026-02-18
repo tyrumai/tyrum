@@ -120,7 +120,7 @@ describe("GatewayManager", () => {
         gatewayBin: "/nonexistent",
         port: 9999,
         dbPath: "/tmp/test.db",
-        wsToken: "test-token",
+        accessToken: "test-token",
       }),
     ).rejects.toThrow("Gateway already running");
   });
@@ -141,7 +141,7 @@ describe("GatewayManager", () => {
     expect(statuses).toEqual(["starting", "running", "stopped"]);
   });
 
-  it("sets TYRUM_ADMIN_TOKEN when starting gateway", async () => {
+  it("sets GATEWAY_TOKEN when starting gateway", async () => {
     const gm = new GatewayManager();
     const proc = mockProc();
     proc.kill.mockImplementation((signal?: string) => {
@@ -157,13 +157,12 @@ describe("GatewayManager", () => {
       gatewayBin: "/nonexistent",
       port: 7788,
       dbPath: "/tmp/test.db",
-      wsToken: "local-token-123",
+      accessToken: "local-token-123",
     });
 
     const [, , options] = spawnMock.mock.calls[0] ?? [];
     const env = (options as { env?: Record<string, string> }).env;
-    expect(env?.["GATEWAY_WS_TOKEN"]).toBe("local-token-123");
-    expect(env?.["TYRUM_ADMIN_TOKEN"]).toBe("local-token-123");
+    expect(env?.["GATEWAY_TOKEN"]).toBe("local-token-123");
 
     await gm.stop();
   });
@@ -187,7 +186,7 @@ describe("GatewayManager", () => {
       gatewayBin: "/nonexistent",
       port: 7777,
       dbPath: "/tmp/test.db",
-      wsToken: "test-token",
+      accessToken: "test-token",
     });
     await gm.stop();
 
@@ -218,7 +217,7 @@ describe("GatewayManager", () => {
         gatewayBin: "/nonexistent",
         port: 7788,
         dbPath: "/tmp/test.db",
-        wsToken: "test-token",
+        accessToken: "test-token",
       }),
     ).rejects.toThrow("Gateway failed to start");
 

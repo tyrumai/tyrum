@@ -20,7 +20,13 @@ interface GatewayUiUrls {
   externalUrl: string | null;
 }
 
-function ensureEmbeddedGatewayToken(config: DesktopNodeConfig): string {
+interface EmbeddedGatewayUiUrlOptions {
+  startOnboarding?: boolean;
+}
+
+let startPromise: Promise<void> | null = null;
+
+export function ensureEmbeddedGatewayToken(config: DesktopNodeConfig): string {
   const existingTokenRef = config.embedded.tokenRef;
   if (existingTokenRef) {
     return decryptToken(existingTokenRef);
@@ -51,12 +57,17 @@ function toHttpAppUrlFromWsUrl(rawUrl: string): string | null {
   }
 }
 
-function buildEmbeddedGatewayUiUrls(port: number, token: string): GatewayUiUrls {
+function buildEmbeddedGatewayUiUrls(
+  port: number,
+  token: string,
+  options: EmbeddedGatewayUiUrlOptions = {},
+): GatewayUiUrls {
   const baseUrl = `http://127.0.0.1:${port}`;
-  const displayUrl = `${baseUrl}/app`;
+  const nextPath = options.startOnboarding ? "/app/onboarding/start" : "/app";
+  const displayUrl = `${baseUrl}${nextPath}`;
   const search = new URLSearchParams({
     token,
-    next: "/app",
+    next: nextPath,
   });
   const authUrl = `${baseUrl}/app/auth?${search.toString()}`;
 
@@ -64,6 +75,55 @@ function buildEmbeddedGatewayUiUrls(port: number, token: string): GatewayUiUrls 
     embedUrl: authUrl,
     displayUrl,
     externalUrl: authUrl,
+  };
+}
+
+async function startEmbeddedGatewayWithConfig(
+  mgr: GatewayManager,
+  config: DesktopNodeConfig,
+): Promise<void> {
+  if (mgr.status === "running") {
+    return;
+  }
+  if (startPromise) {
+    await startPromise;
+    return;
+  }
+
+  const tyrumHome = process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
+  const accessToken = ensureEmbeddedGatewayToken(config);
+  const dbPath =
+    config.embedded.dbPath || join(tyrumHome, "gateway", "gateway.db");
+  const gatewayBin = resolveGatewayBinPath();
+
+  const starter = mgr.start({
+    gatewayBin,
+    port: config.embedded.port,
+    dbPath,
+    accessToken,
+    host: "127.0.0.1",
+  });
+  startPromise = starter;
+  try {
+    await starter;
+  } finally {
+    if (startPromise === starter) {
+      startPromise = null;
+    }
+  }
+}
+
+export async function startEmbeddedGatewayFromConfig(): Promise<{
+  status: "running";
+  port: number;
+}> {
+  const mgr = manager;
+  if (!mgr) throw new Error("Gateway IPC is not initialized");
+  const config = loadConfig();
+  await startEmbeddedGatewayWithConfig(mgr, config);
+  return {
+    status: "running",
+    port: config.embedded.port,
   };
 }
 
@@ -87,33 +147,7 @@ export function registerGatewayIpc(window: BrowserWindow): GatewayManager {
     ipcRegistered = true;
 
     ipcMain.handle("gateway:start", async () => {
-      const mgr = manager;
-      if (!mgr) throw new Error("Gateway IPC is not initialized");
-
-      const config = loadConfig();
-      const tyrumHome = process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
-
-      // Resolve or generate token
-      const wsToken = ensureEmbeddedGatewayToken(config);
-
-      const dbPath =
-        config.embedded.dbPath || join(tyrumHome, "gateway", "gateway.db");
-
-      const gatewayBin = resolveGatewayBinPath();
-
-      await mgr.start({
-        gatewayBin,
-        port: config.embedded.port,
-        dbPath,
-        wsToken,
-        adminToken: wsToken,
-        host: "127.0.0.1",
-      });
-
-      return {
-        status: "running",
-        port: config.embedded.port,
-      };
+      return startEmbeddedGatewayFromConfig();
     });
 
     ipcMain.handle("gateway:stop", async () => {
@@ -129,11 +163,18 @@ export function registerGatewayIpc(window: BrowserWindow): GatewayManager {
       return getGatewayStatusSnapshot(mgr?.status, config.embedded.port);
     });
 
-    ipcMain.handle("gateway:ui-urls", async () => {
+    ipcMain.handle("gateway:ui-urls", async (_event, rawOptions?: unknown) => {
+      const startOnboarding =
+        rawOptions &&
+        typeof rawOptions === "object" &&
+        !Array.isArray(rawOptions) &&
+        (rawOptions as { startOnboarding?: unknown }).startOnboarding === true;
       const config = loadConfig();
       if (config.mode === "embedded") {
         const token = ensureEmbeddedGatewayToken(config);
-        return buildEmbeddedGatewayUiUrls(config.embedded.port, token);
+        return buildEmbeddedGatewayUiUrls(config.embedded.port, token, {
+          startOnboarding,
+        });
       }
 
       const displayUrl = toHttpAppUrlFromWsUrl(config.remote.wsUrl);
@@ -142,6 +183,36 @@ export function registerGatewayIpc(window: BrowserWindow): GatewayManager {
         displayUrl,
         externalUrl: displayUrl,
       } satisfies GatewayUiUrls;
+    });
+
+    ipcMain.handle("onboarding:select-mode", async (_event, modeRaw: unknown) => {
+      if (modeRaw !== "embedded" && modeRaw !== "remote") {
+        throw new Error("onboarding:select-mode requires 'embedded' or 'remote'");
+      }
+
+      const config = loadConfig();
+      if (modeRaw === "embedded") {
+        if (config.mode !== "embedded") {
+          config.mode = "embedded";
+          saveConfig(config);
+        }
+        return { mode: "embedded" as const };
+      }
+
+      config.mode = "remote";
+      saveConfig(config);
+
+      const mgr = manager;
+      if (mgr && (mgr.status === "running" || mgr.status === "starting")) {
+        await mgr.stop();
+      }
+
+      sender.send("status:change", {
+        gatewayStatus: "stopped",
+        navigateTo: { page: "connection", tab: "remote" },
+      });
+
+      return { mode: "remote" as const };
     });
   }
 

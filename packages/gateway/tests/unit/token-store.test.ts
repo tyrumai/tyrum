@@ -9,11 +9,11 @@ describe("TokenStore", () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "tyrum-token-test-"));
-    delete process.env["TYRUM_ADMIN_TOKEN"];
+    delete process.env["GATEWAY_TOKEN"];
   });
 
   afterEach(async () => {
-    delete process.env["TYRUM_ADMIN_TOKEN"];
+    delete process.env["GATEWAY_TOKEN"];
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -36,8 +36,8 @@ describe("TokenStore", () => {
     expect(token).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it("reads token from TYRUM_ADMIN_TOKEN env var", async () => {
-    process.env["TYRUM_ADMIN_TOKEN"] = "env-token-123";
+  it("reads token from GATEWAY_TOKEN env var", async () => {
+    process.env["GATEWAY_TOKEN"] = "env-token-123";
 
     const store = new TokenStore(tempDir);
     const token = await store.initialize();
@@ -55,7 +55,7 @@ describe("TokenStore", () => {
   });
 
   it("env var takes precedence over file", async () => {
-    process.env["TYRUM_ADMIN_TOKEN"] = "env-wins";
+    process.env["GATEWAY_TOKEN"] = "env-wins";
     await writeFile(join(tempDir, ".admin-token"), "file-loses\n");
 
     const store = new TokenStore(tempDir);

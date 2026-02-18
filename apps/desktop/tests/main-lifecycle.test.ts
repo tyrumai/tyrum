@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   appHandlers,
@@ -8,6 +8,9 @@ const {
   browserWindowMock,
   registerConfigIpcMock,
   registerGatewayIpcMock,
+  startEmbeddedGatewayFromConfigMock,
+  configExistsMock,
+  loadConfigMock,
   registerNodeIpcMock,
   shutdownNodeResourcesMock,
 } = vi.hoisted(() => {
@@ -23,6 +26,12 @@ const {
     on: vi.fn(),
   }));
   const registerGatewayIpcMock = vi.fn(() => ({ stop: vi.fn() }));
+  const startEmbeddedGatewayFromConfigMock = vi.fn(async () => ({
+    status: "running",
+    port: 8080,
+  }));
+  const configExistsMock = vi.fn(() => true);
+  const loadConfigMock = vi.fn(() => ({ mode: "embedded" }));
   const registerNodeIpcMock = vi.fn();
   const registerConfigIpcMock = vi.fn();
   const shutdownNodeResourcesMock = vi.fn(async () => {});
@@ -35,6 +44,9 @@ const {
     browserWindowMock,
     registerConfigIpcMock,
     registerGatewayIpcMock,
+    startEmbeddedGatewayFromConfigMock,
+    configExistsMock,
+    loadConfigMock,
     registerNodeIpcMock,
     shutdownNodeResourcesMock,
   };
@@ -51,6 +63,7 @@ vi.mock("electron", () => ({
 
 vi.mock("../src/main/ipc/gateway-ipc.js", () => ({
   registerGatewayIpc: registerGatewayIpcMock,
+  startEmbeddedGatewayFromConfig: startEmbeddedGatewayFromConfigMock,
 }));
 
 vi.mock("../src/main/ipc/node-ipc.js", () => ({
@@ -62,7 +75,12 @@ vi.mock("../src/main/ipc/config-ipc.js", () => ({
   registerConfigIpc: registerConfigIpcMock,
 }));
 
-await import("../src/main/index.js");
+vi.mock("../src/main/config/store.js", () => ({
+  configExists: configExistsMock,
+  loadConfig: loadConfigMock,
+}));
+
+const mainModule = await import("../src/main/index.js");
 
 function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
   const originalPlatform = process.platform;
@@ -88,6 +106,14 @@ function getHandler(eventName: string): (...args: unknown[]) => void {
 }
 
 describe("main process lifecycle", () => {
+  beforeEach(() => {
+    startEmbeddedGatewayFromConfigMock.mockClear();
+    configExistsMock.mockReset();
+    loadConfigMock.mockReset();
+    configExistsMock.mockReturnValue(true);
+    loadConfigMock.mockReturnValue({ mode: "embedded" });
+  });
+
   it("registers app lifecycle handlers", () => {
     expect(appWhenReadyMock).toHaveBeenCalledTimes(1);
     expect(appHandlers.has("window-all-closed")).toBe(true);
@@ -115,5 +141,32 @@ describe("main process lifecycle", () => {
     });
 
     expect(appQuitMock).not.toHaveBeenCalled();
+  });
+
+  it("auto-starts embedded gateway when configured mode is embedded", async () => {
+    configExistsMock.mockReturnValue(true);
+    loadConfigMock.mockReturnValue({ mode: "embedded" });
+
+    await mainModule.maybeAutoStartEmbeddedGatewayOnLaunch();
+
+    expect(startEmbeddedGatewayFromConfigMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("auto-starts embedded gateway on first launch regardless of saved mode", async () => {
+    configExistsMock.mockReturnValue(false);
+    loadConfigMock.mockReturnValue({ mode: "remote" });
+
+    await mainModule.maybeAutoStartEmbeddedGatewayOnLaunch();
+
+    expect(startEmbeddedGatewayFromConfigMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not auto-start embedded gateway when config exists and mode is remote", async () => {
+    configExistsMock.mockReturnValue(true);
+    loadConfigMock.mockReturnValue({ mode: "remote" });
+
+    await mainModule.maybeAutoStartEmbeddedGatewayOnLaunch();
+
+    expect(startEmbeddedGatewayFromConfigMock).not.toHaveBeenCalled();
   });
 });

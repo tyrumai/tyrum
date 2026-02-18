@@ -2,7 +2,7 @@
  * Admin token management for gateway authentication.
  *
  * Token resolution order:
- * 1. TYRUM_ADMIN_TOKEN environment variable
+ * 1. GATEWAY_TOKEN environment variable
  * 2. {tyrumHome}/.admin-token file
  * 3. Generate a new random token and persist to .admin-token
  */
@@ -25,7 +25,7 @@ export class TokenStore {
    */
   async initialize(): Promise<string> {
     // 1. Environment variable takes precedence
-    const envToken = process.env["TYRUM_ADMIN_TOKEN"]?.trim();
+    const envToken = process.env["GATEWAY_TOKEN"]?.trim();
     if (envToken) {
       this.token = envToken;
       return this.token;
