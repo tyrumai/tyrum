@@ -8,7 +8,7 @@
 
 import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/schemas";
 import {
-  evaluatePostcondition,
+  checkPostcondition,
   type EvaluationContext,
 } from "@tyrum/schemas";
 import type { EventBus } from "../../event-bus.js";
@@ -211,14 +211,14 @@ export class ExecutionRunner {
 
       if (result.success) {
         // Evaluate postcondition if the action defines one
-        const postconditionFailure = this.checkPostcondition(
-          currentJob.action,
+        const postconditionResult = checkPostcondition(
+          currentJob.action.postcondition,
           result.evidence ?? {},
         );
 
-        if (postconditionFailure) {
+        if (!postconditionResult.passed) {
           // Treat postcondition failure as a step failure
-          const errorDetail = `postcondition failed: ${postconditionFailure}`;
+          const errorDetail = postconditionResult.error ?? "postcondition failed";
           this.jobQueue.markFailed(currentJob.id, errorDetail);
           this.logEvent(planId, stepIndex, {
             event: "postcondition_failed",
@@ -343,38 +343,6 @@ export class ExecutionRunner {
    */
   resume(planId: string): void {
     this.paused.delete(planId);
-  }
-
-  /**
-   * Evaluate the postcondition for an action if one is defined.
-   * Returns an error string if the postcondition fails, or undefined if it passes
-   * (or if no postcondition is defined).
-   */
-  private checkPostcondition(
-    action: ActionPrimitiveT,
-    evidence: EvaluationContext,
-  ): string | undefined {
-    if (action.postcondition === undefined) {
-      return undefined;
-    }
-
-    try {
-      const report = evaluatePostcondition(action.postcondition, evidence);
-      if (report.passed) {
-        return undefined;
-      }
-
-      const failedAssertions = report.assertions
-        .filter((a: { status: string }) => a.status === "failed")
-        .map((a: { kind: string; message?: string }) =>
-          "message" in a ? `${a.kind}: ${a.message}` : a.kind,
-        );
-      return failedAssertions.join("; ") || "postcondition assertions failed";
-    } catch {
-      // Postcondition spec is invalid or unsupported — treat as a soft pass
-      // rather than failing the step, to avoid blocking on bad postcondition configs.
-      return undefined;
-    }
   }
 
   private logEvent(planId: string, stepIndex: number, action: unknown): void {

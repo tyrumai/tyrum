@@ -72,7 +72,7 @@ describe("CLI postcondition evaluation", () => {
     );
     // Should fail because json context is missing
     expect(result.success).toBe(false);
-    expect(result.error).toContain("Postcondition evaluation error");
+    expect(result.error).toContain("postcondition error");
   });
 
   it("succeeds without postcondition (backwards compatible)", async () => {

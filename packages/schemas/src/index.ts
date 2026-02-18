@@ -83,8 +83,14 @@ export {
   PostconditionReport,
   PostconditionError,
   evaluatePostcondition,
+  checkPostcondition,
 } from "./postcondition.js";
-export type { HttpContext, DomContext, EvaluationContext } from "./postcondition.js";
+export type {
+  HttpContext,
+  DomContext,
+  EvaluationContext,
+  PostconditionCheckResult,
+} from "./postcondition.js";
 
 export {
   ClientCapability,
