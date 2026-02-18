@@ -7,12 +7,17 @@ import { normalizeConfigPartialForSave } from "../config/token-ref-normalizer.js
 const RENDERER_MUTABLE_PATHS = new Set([
   "mode",
   "remote.wsUrl",
+  "remote.tokenRef",
   "embedded.port",
   "embedded.dbPath",
+  "permissions.profile",
   "capabilities.desktop",
   "capabilities.playwright",
   "capabilities.cli",
   "capabilities.http",
+  "cli.allowedCommands",
+  "cli.allowedWorkingDirs",
+  "web.allowedDomains",
   "web.headless",
   "permissions.overrides",
 ]);
