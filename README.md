@@ -37,7 +37,9 @@ Self-hosted autonomous worker agent platform with a single-instance, single-user
 | `packages/gateway` | Main gateway process — Hono HTTP + WebSocket + SQLite |
 | `packages/client` | Client SDK for connecting to the gateway |
 | `config/` | Runtime configuration (model gateway YAML) |
-| `docs/` | Architecture and design documentation |
+| `docs/` | Public user documentation (install, guides, advanced topics) |
+
+Docs are deployed to Cloudflare Pages (`tyrum-docs`) by `.github/workflows/docs-pages.yml`.
 
 ## Installation
 
@@ -45,11 +47,11 @@ The gateway can be installed in multiple ways:
 
 1. **One-line installer (recommended):**
    ```bash
-   curl -fsSL https://raw.githubusercontent.com/rhernaus/tyrum/main/scripts/install.sh | bash
+   curl -fsSL https://get.tyrum.ai/install.sh | bash
    ```
    Beta channel:
    ```bash
-   curl -fsSL https://raw.githubusercontent.com/rhernaus/tyrum/main/scripts/install.sh | bash -s -- --channel beta
+   curl -fsSL https://get.tyrum.ai/install.sh | bash -s -- --channel beta
    ```
 2. **npm global install:**
    ```bash

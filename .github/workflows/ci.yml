@@ -35,6 +35,14 @@ jobs:
       - name: Lint installer script
         run: shellcheck scripts/install.sh
 
+  docs-public-content:
+    name: Docs Public Content Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check docs for internal-only content
+        run: bash scripts/check-public-docs.sh
+
   dependency-review:
     name: Dependency Review
     if: github.event_name == 'pull_request'
