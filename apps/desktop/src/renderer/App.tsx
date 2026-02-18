@@ -29,6 +29,11 @@ const VALID_PAGES = new Set<PageId>([
 export function App() {
   const [page, setPage] = useState<PageId>("overview");
   const [launchOnboarding, setLaunchOnboarding] = useState(false);
+  const handleNavigate = (nextPage: string): void => {
+    if (VALID_PAGES.has(nextPage as PageId)) {
+      setPage(nextPage as PageId);
+    }
+  };
 
   useEffect(() => {
     const api = window.tyrumDesktop;
@@ -67,7 +72,7 @@ export function App() {
   }, []);
 
   return (
-    <Layout currentPage={page} onNavigate={setPage}>
+    <Layout currentPage={page} onNavigate={handleNavigate}>
       {page === "overview" && <Overview />}
       {page === "gateway" && (
         <Gateway
