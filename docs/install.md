@@ -61,7 +61,7 @@ TYRUM_AGENT_ENABLED=1 tyrum-gateway
 
 From each `v*` release, download:
 
-- Desktop installers (`.dmg`, `.zip`, `.exe`, `.AppImage`, `.deb`)
+- Desktop installers (`.dmg`, `.zip`, `.exe`, `.AppImage`, `.tar.gz`)
 - npm package tarballs (`tyrum-*.tgz`)
 - `SHA256SUMS`
 
