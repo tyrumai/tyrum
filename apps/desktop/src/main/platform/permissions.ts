@@ -31,11 +31,8 @@ export function checkMacPermissions(): MacPermissions {
     const { systemPreferences } =
       require("electron") as typeof import("electron");
 
-    // Accessibility: isTrustedAccessibilityClient({ prompt: false }) returns boolean
-    // prompt: false means check without showing the system prompt
-    accessibility = systemPreferences.isTrustedAccessibilityClient({
-      prompt: false,
-    });
+    // prompt=false checks status without showing the system prompt.
+    accessibility = systemPreferences.isTrustedAccessibilityClient(false);
 
     // Screen Recording: getMediaAccessStatus('screen') returns
     // 'granted' | 'denied' | 'not-determined' | 'restricted'
@@ -93,9 +90,7 @@ export async function requestMacPermission(
       require("electron") as typeof import("electron");
 
     if (permission === "accessibility") {
-      const granted = systemPreferences.isTrustedAccessibilityClient({
-        prompt: true,
-      });
+      const granted = systemPreferences.isTrustedAccessibilityClient(true);
       return granted
         ? { granted: true, instructions: undefined }
         : {
