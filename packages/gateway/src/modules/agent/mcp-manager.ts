@@ -372,6 +372,7 @@ export class McpManager {
         isError,
       };
     } catch {
+      this.invalidateEntryConnection(entry);
       return { content: [], isError: true };
     }
   }
