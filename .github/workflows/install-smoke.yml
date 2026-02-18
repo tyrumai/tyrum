@@ -76,11 +76,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          LOG_FILE="$RUNNER_TEMP/tyrum-gateway.log"
+          LOG_FILE="$RUNNER_TEMP/tyrum.log"
           TYRUM_HOME="$RUNNER_TEMP/.tyrum-home"
           mkdir -p "$TYRUM_HOME"
 
-          GATEWAY_PORT=18980 GATEWAY_HOST=127.0.0.1 TYRUM_HOME="$TYRUM_HOME" tyrum-gateway >"$LOG_FILE" 2>&1 &
+          GATEWAY_PORT=18980 GATEWAY_HOST=127.0.0.1 TYRUM_HOME="$TYRUM_HOME" tyrum >"$LOG_FILE" 2>&1 &
           gateway_pid=$!
 
           ready=0
@@ -156,4 +156,4 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          command -v tyrum-gateway
+          command -v tyrum

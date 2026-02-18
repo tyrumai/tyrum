@@ -12,6 +12,7 @@ const {
   configExistsMock,
   loadConfigMock,
   registerNodeIpcMock,
+  registerUpdateIpcMock,
   shutdownNodeResourcesMock,
 } = vi.hoisted(() => {
   const appHandlers = new Map<string, (...args: unknown[]) => void>();
@@ -34,6 +35,7 @@ const {
   const loadConfigMock = vi.fn(() => ({ mode: "embedded" }));
   const registerNodeIpcMock = vi.fn();
   const registerConfigIpcMock = vi.fn();
+  const registerUpdateIpcMock = vi.fn();
   const shutdownNodeResourcesMock = vi.fn(async () => {});
 
   return {
@@ -48,6 +50,7 @@ const {
     configExistsMock,
     loadConfigMock,
     registerNodeIpcMock,
+    registerUpdateIpcMock,
     shutdownNodeResourcesMock,
   };
 });
@@ -78,6 +81,10 @@ vi.mock("../src/main/ipc/config-ipc.js", () => ({
 vi.mock("../src/main/config/store.js", () => ({
   configExists: configExistsMock,
   loadConfig: loadConfigMock,
+}));
+
+vi.mock("../src/main/ipc/update-ipc.js", () => ({
+  registerUpdateIpc: registerUpdateIpcMock,
 }));
 
 const mainModule = await import("../src/main/index.js");

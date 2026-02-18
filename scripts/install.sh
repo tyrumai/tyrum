@@ -3,14 +3,14 @@ set -euo pipefail
 
 # Tyrum installer (macOS + Linux)
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/rhernaus/tyrum/main/scripts/install.sh | bash
-#   curl -fsSL https://raw.githubusercontent.com/rhernaus/tyrum/main/scripts/install.sh | bash -s -- --channel beta
-#   curl -fsSL https://raw.githubusercontent.com/rhernaus/tyrum/main/scripts/install.sh | bash -s -- 2026.2.18
+#   curl -fsSL https://get.tyrum.ai/install.sh | bash
+#   curl -fsSL https://get.tyrum.ai/install.sh | bash -s -- --channel beta
+#   curl -fsSL https://get.tyrum.ai/install.sh | bash -s -- 2026.2.18
 
 REPO="${TYRUM_REPO:-rhernaus/tyrum}"
 CHANNEL="${TYRUM_CHANNEL:-stable}"
 REQUESTED_VERSION="${TYRUM_VERSION:-}"
-INSTALL_CMD="tyrum-gateway"
+INSTALL_CMD="tyrum"
 
 usage() {
   cat <<'EOF'
