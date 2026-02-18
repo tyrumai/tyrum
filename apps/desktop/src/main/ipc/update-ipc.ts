@@ -7,7 +7,8 @@ import {
   type FileFilter,
   type OpenDialogOptions,
 } from "electron";
-import { autoUpdater } from "electron-updater";
+import electronUpdater from "electron-updater";
+const { autoUpdater } = electronUpdater;
 import {
   DesktopUpdaterService,
   isAllowedReleaseFilePath,
