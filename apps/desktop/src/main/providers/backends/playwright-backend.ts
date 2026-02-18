@@ -24,6 +24,7 @@ export interface PlaywrightBackend {
 /** Mock backend for tests -- returns plausible fake data, tracks calls. */
 export class MockPlaywrightBackend implements PlaywrightBackend {
   readonly calls: Array<{ method: string; args: unknown[] }> = [];
+  private currentUrl = "about:blank";
 
   async ensureBrowser(): Promise<void> {
     this.calls.push({ method: "ensureBrowser", args: [] });
@@ -31,6 +32,7 @@ export class MockPlaywrightBackend implements PlaywrightBackend {
 
   async navigate(url: string): Promise<{ title: string; url: string }> {
     this.calls.push({ method: "navigate", args: [url] });
+    this.currentUrl = url;
     return { title: "Mock Page", url };
   }
 
@@ -47,7 +49,7 @@ export class MockPlaywrightBackend implements PlaywrightBackend {
     return {
       html: "<html><body>mock</body></html>",
       title: "Mock Page",
-      url: "about:blank",
+      url: this.currentUrl,
     };
   }
 

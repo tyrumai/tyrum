@@ -81,6 +81,8 @@ export class PlaywrightProvider implements CapabilityProvider {
 
     await this.backend.ensureBrowser();
     const result = await this.backend.navigate(url);
+    const finalDomainCheck = this.checkDomain(result.url);
+    if (finalDomainCheck) return finalDomainCheck;
 
     const evidence: Record<string, unknown> = {
       type: "navigate",
@@ -107,10 +109,14 @@ export class PlaywrightProvider implements CapabilityProvider {
 
     await this.backend.ensureBrowser();
     await this.backend.click(selector);
+    const snap = await this.backend.snapshot();
+    const domainCheck = this.checkDomain(snap.url);
+    if (domainCheck) return domainCheck;
 
     const evidence: Record<string, unknown> = {
       type: "click",
       selector,
+      url: snap.url,
       timestamp: new Date().toISOString(),
     };
 
@@ -135,11 +141,15 @@ export class PlaywrightProvider implements CapabilityProvider {
 
     await this.backend.ensureBrowser();
     await this.backend.fill(selector, value);
+    const snap = await this.backend.snapshot();
+    const domainCheck = this.checkDomain(snap.url);
+    if (domainCheck) return domainCheck;
 
     const evidence: Record<string, unknown> = {
       type: "fill",
       selector,
       value,
+      url: snap.url,
       timestamp: new Date().toISOString(),
     };
 
@@ -155,6 +165,8 @@ export class PlaywrightProvider implements CapabilityProvider {
   private async snapshot(): Promise<TaskResult> {
     await this.backend.ensureBrowser();
     const snap = await this.backend.snapshot();
+    const domainCheck = this.checkDomain(snap.url);
+    if (domainCheck) return domainCheck;
 
     return {
       success: true,

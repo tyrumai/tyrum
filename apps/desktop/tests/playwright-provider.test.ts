@@ -25,6 +25,38 @@ function makeProvider(overrides: Partial<PlaywrightProviderConfig> = {}) {
   return new PlaywrightProvider(config, backend);
 }
 
+class RedirectingMockBackend extends MockPlaywrightBackend {
+  currentUrl = "https://example.com";
+  navigateRedirectUrl: string | null = null;
+  clickRedirectUrl: string | null = null;
+  fillRedirectUrl: string | null = null;
+
+  override async navigate(url: string): Promise<{ title: string; url: string }> {
+    this.calls.push({ method: "navigate", args: [url] });
+    this.currentUrl = this.navigateRedirectUrl ?? url;
+    return { title: "Mock Page", url: this.currentUrl };
+  }
+
+  override async click(selector: string): Promise<void> {
+    this.calls.push({ method: "click", args: [selector] });
+    if (this.clickRedirectUrl) this.currentUrl = this.clickRedirectUrl;
+  }
+
+  override async fill(selector: string, value: string): Promise<void> {
+    this.calls.push({ method: "fill", args: [selector, value] });
+    if (this.fillRedirectUrl) this.currentUrl = this.fillRedirectUrl;
+  }
+
+  override async snapshot() {
+    this.calls.push({ method: "snapshot", args: [] });
+    return {
+      html: "<html><body>mock</body></html>",
+      title: "Mock Page",
+      url: this.currentUrl,
+    };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -66,6 +98,21 @@ describe("PlaywrightProvider", () => {
     });
   });
 
+  it("navigate fails when final redirected domain is disallowed", async () => {
+    const backend = new RedirectingMockBackend();
+    backend.navigateRedirectUrl = "https://evil.com/landing";
+    const provider = new PlaywrightProvider(
+      { allowedDomains: ["example.com", "trusted.org"], headless: true, domainRestricted: true },
+      backend,
+    );
+    const result = await provider.execute(
+      makeAction({ op: "navigate", url: "https://example.com/start" }),
+    );
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("evil.com");
+    expect(result.error).toContain("not in the allowlist");
+  });
+
   it("navigate without URL fails", async () => {
     const provider = makeProvider();
     const result = await provider.execute(makeAction({ op: "navigate" }));
@@ -94,6 +141,9 @@ describe("PlaywrightProvider", () => {
 
   it("click with selector succeeds", async () => {
     const provider = makeProvider();
+    await provider.execute(
+      makeAction({ op: "navigate", url: "https://example.com/form" }),
+    );
     const result = await provider.execute(
       makeAction({ op: "click", selector: "#submit-btn" }),
     );
@@ -101,6 +151,7 @@ describe("PlaywrightProvider", () => {
     expect(result.evidence).toMatchObject({
       type: "click",
       selector: "#submit-btn",
+      url: "https://example.com/form",
     });
   });
 
@@ -115,6 +166,9 @@ describe("PlaywrightProvider", () => {
 
   it("fill with selector and value succeeds", async () => {
     const provider = makeProvider();
+    await provider.execute(
+      makeAction({ op: "navigate", url: "https://example.com/form" }),
+    );
     const result = await provider.execute(
       makeAction({ op: "fill", selector: "#email", value: "a@b.com" }),
     );
@@ -123,7 +177,38 @@ describe("PlaywrightProvider", () => {
       type: "fill",
       selector: "#email",
       value: "a@b.com",
+      url: "https://example.com/form",
     });
+  });
+
+  it("click fails when action ends on a disallowed domain", async () => {
+    const backend = new RedirectingMockBackend();
+    backend.clickRedirectUrl = "https://evil.com/after-click";
+    const provider = new PlaywrightProvider(
+      { allowedDomains: ["example.com", "trusted.org"], headless: true, domainRestricted: true },
+      backend,
+    );
+    const result = await provider.execute(
+      makeAction({ op: "click", selector: "#submit-btn" }),
+    );
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("evil.com");
+    expect(result.error).toContain("not in the allowlist");
+  });
+
+  it("fill fails when action ends on a disallowed domain", async () => {
+    const backend = new RedirectingMockBackend();
+    backend.fillRedirectUrl = "https://evil.com/after-fill";
+    const provider = new PlaywrightProvider(
+      { allowedDomains: ["example.com", "trusted.org"], headless: true, domainRestricted: true },
+      backend,
+    );
+    const result = await provider.execute(
+      makeAction({ op: "fill", selector: "#email", value: "a@b.com" }),
+    );
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("evil.com");
+    expect(result.error).toContain("not in the allowlist");
   });
 
   it("fill with missing value fails", async () => {
@@ -139,9 +224,25 @@ describe("PlaywrightProvider", () => {
 
   it("snapshot returns success", async () => {
     const provider = makeProvider();
+    await provider.execute(
+      makeAction({ op: "navigate", url: "https://example.com/page" }),
+    );
     const result = await provider.execute(makeAction({ op: "snapshot" }));
     expect(result.success).toBe(true);
     expect(result.evidence).toMatchObject({ type: "snapshot" });
+  });
+
+  it("snapshot fails when current page domain is disallowed", async () => {
+    const backend = new RedirectingMockBackend();
+    backend.currentUrl = "https://evil.com/snap";
+    const provider = new PlaywrightProvider(
+      { allowedDomains: ["example.com", "trusted.org"], headless: true, domainRestricted: true },
+      backend,
+    );
+    const result = await provider.execute(makeAction({ op: "snapshot" }));
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("evil.com");
+    expect(result.error).toContain("not in the allowlist");
   });
 
   // -- Unknown / Missing op -------------------------------------------------

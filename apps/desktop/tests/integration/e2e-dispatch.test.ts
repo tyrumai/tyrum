@@ -43,7 +43,7 @@ function delay(ms: number): Promise<void> {
 
 async function waitForCapabilities(
   connectionManager: ConnectionManager,
-  capabilities: readonly Array<"desktop" | "cli" | "playwright" | "http" | "android">,
+  capabilities: ReadonlyArray<"desktop" | "cli" | "playwright" | "http" | "android">,
   timeoutMs = 2_000,
 ): Promise<void> {
   const required = [...new Set(capabilities)];
