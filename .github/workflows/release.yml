@@ -162,6 +162,7 @@ jobs:
       - name: Apply release version to desktop manifest
         env:
           RELEASE_VERSION: ${{ needs.package-bundles.outputs.version }}
+        shell: bash
         run: |
           node --input-type=module <<'EOF'
           import { readFileSync, writeFileSync } from "node:fs";

@@ -175,6 +175,41 @@ describe("GatewayManager", () => {
 
       internal.stopHealthCheck();
     });
+
+    it("ignores stale failed health checks after stop", async () => {
+      const gm = new GatewayManager();
+      const internal = gm as unknown as Internal;
+      internal.process = {};
+      internal.setStatus("running");
+
+      let rejectHealth: ((reason?: unknown) => void) | undefined;
+      const fetchMock = vi.fn().mockImplementation(
+        () =>
+          new Promise<Response>((_resolve, reject) => {
+            rejectHealth = reject;
+          }),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+
+      const onHealthFail = vi.fn();
+      gm.on("health-fail", onHealthFail);
+
+      internal.startHealthCheck(7777, "127.0.0.1");
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      // Simulate stop() finishing while the previous health-check request is in flight.
+      internal.process = null;
+      internal.stopHealthCheck();
+      internal.setStatus("stopped");
+
+      rejectHealth?.(new Error("health check aborted"));
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(gm.status).toBe("stopped");
+      expect(onHealthFail).toHaveBeenCalledTimes(0);
+    });
   });
 
   describe("stop() race-condition handling", () => {
