@@ -14,6 +14,10 @@ function stubMcpManager(overrides?: Partial<McpManager>): McpManager {
   } as unknown as McpManager;
 }
 
+async function allowPublicDnsLookup() {
+  return [{ address: "93.184.216.34", family: 4 }] as const;
+}
+
 describe("ToolExecutor provenance tagging", () => {
   let homeDir: string | undefined;
 
@@ -58,6 +62,8 @@ describe("ToolExecutor provenance tagging", () => {
       stubMcpManager(),
       new Map(),
       mockFetch,
+      undefined,
+      allowPublicDnsLookup,
     );
 
     const result = await executor.execute(
@@ -88,6 +94,8 @@ describe("ToolExecutor provenance tagging", () => {
       stubMcpManager(),
       new Map(),
       mockFetch,
+      undefined,
+      allowPublicDnsLookup,
     );
 
     const result = await executor.execute(

@@ -31,6 +31,10 @@ function stubSecretProvider(secrets: Map<string, string>): SecretProvider {
   };
 }
 
+async function allowPublicDnsLookup() {
+  return [{ address: "93.184.216.34", family: 4 }] as const;
+}
+
 describe("ToolExecutor secret resolution", () => {
   let homeDir: string | undefined;
 
@@ -57,6 +61,7 @@ describe("ToolExecutor secret resolution", () => {
       new Map(),
       mockFetch,
       provider,
+      allowPublicDnsLookup,
     );
 
     await executor.execute(
@@ -95,6 +100,7 @@ describe("ToolExecutor secret resolution", () => {
       new Map(),
       mockFetch,
       provider,
+      allowPublicDnsLookup,
     );
 
     const result = await executor.execute(
@@ -148,6 +154,7 @@ describe("ToolExecutor secret resolution", () => {
       new Map(),
       mockFetch,
       provider,
+      allowPublicDnsLookup,
     );
 
     await executor.execute(
@@ -185,6 +192,7 @@ describe("ToolExecutor secret resolution", () => {
       new Map(),
       mockFetch,
       provider,
+      allowPublicDnsLookup,
     );
 
     await executor.execute(
@@ -254,6 +262,7 @@ describe("ToolExecutor secret resolution", () => {
       new Map(),
       mockFetch,
       provider,
+      allowPublicDnsLookup,
     );
 
     const result = await executor.execute(
