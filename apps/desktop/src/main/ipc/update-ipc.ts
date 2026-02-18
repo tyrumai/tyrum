@@ -53,20 +53,15 @@ function ensureUpdater(): DesktopUpdaterService {
 }
 
 function buildReleaseFileFilters(platform: NodeJS.Platform): FileFilter[] {
-  if (platform === "darwin") {
-    return [{ name: "macOS Installers", extensions: ["dmg", "zip"] }];
-  }
+  const extensions = [...releaseFileDialogExtensions(platform)];
+  const name =
+    platform === "darwin"
+      ? "macOS Installers"
+      : platform === "win32"
+        ? "Windows Installers"
+        : "Linux Packages";
 
-  if (platform === "win32") {
-    return [{ name: "Windows Installers", extensions: ["exe", "msi"] }];
-  }
-
-  return [
-    {
-      name: "Linux Packages",
-      extensions: [...releaseFileDialogExtensions(platform)],
-    },
-  ];
+  return [{ name, extensions }];
 }
 
 async function openReleaseFileFromDisk(): Promise<ManualReleaseFileResult> {
