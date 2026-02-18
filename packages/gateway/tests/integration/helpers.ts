@@ -8,6 +8,7 @@ import { createContainer } from "../../src/container.js";
 import { createApp } from "../../src/app.js";
 import type { GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
+import type { TokenStore } from "../../src/modules/auth/token-store.js";
 import type { Hono } from "hono";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -20,7 +21,12 @@ export function createTestContainer(): GatewayContainer {
   });
 }
 
-export function createTestApp(): {
+export interface TestAppOptions {
+  tokenStore?: TokenStore;
+  isLocalOnly?: boolean;
+}
+
+export function createTestApp(opts: TestAppOptions = {}): {
   app: Hono;
   container: GatewayContainer;
   agentRuntime?: AgentRuntime;
@@ -30,7 +36,11 @@ export function createTestApp(): {
     process.env["TYRUM_AGENT_ENABLED"] === "1"
       ? new AgentRuntime({ container })
       : undefined;
-  const app = createApp(container, { agentRuntime });
+  const app = createApp(container, {
+    agentRuntime,
+    tokenStore: opts.tokenStore,
+    isLocalOnly: opts.isLocalOnly,
+  });
   return { app, container, agentRuntime };
 }
 

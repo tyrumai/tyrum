@@ -6,14 +6,21 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  packages:
-    name: Packages
-    runs-on: ubuntu-latest
+  desktop-cross-os:
+    name: Validation (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
 
@@ -31,38 +38,29 @@ jobs:
 
       - run: pnpm typecheck
 
-      - run: pnpm test -- --coverage
-
       - run: pnpm lint
 
       - run: pnpm build
 
-  web:
-    name: Web
-    runs-on: ubuntu-latest
-    env:
-      PORTAL_SESSION_SECRET: ci-portal-session-secret
-    steps:
-      - uses: actions/checkout@v6
+      - name: Install Playwright (Chromium)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            pnpm --filter tyrum-desktop exec playwright install --with-deps chromium
+          else
+            pnpm --filter tyrum-desktop exec playwright install chromium
+          fi
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
+      - name: Test + coverage (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a --server-args="-screen 0 1920x1080x24" pnpm test -- --coverage
 
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
+      - name: Test packages suite
+        if: runner.os != 'Linux'
+        run: pnpm exec vitest run packages --passWithNoTests
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Lint
-        run: pnpm --filter tyrum-portal lint
-
-      - name: Test
-        run: pnpm --filter tyrum-portal test
-
-      - name: Build
-        run: pnpm --filter tyrum-portal build
+      - name: Test desktop suite
+        if: runner.os != 'Linux'
+        shell: bash
+        run: pnpm exec vitest run apps/desktop/tests --passWithNoTests

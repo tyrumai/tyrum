@@ -6,6 +6,7 @@ export interface ToolDescriptor {
   risk: ToolRisk;
   requires_confirmation: boolean;
   keywords: readonly string[];
+  inputSchema?: Record<string, unknown>;
 }
 
 const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
@@ -15,6 +16,22 @@ const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     risk: "low",
     requires_confirmation: false,
     keywords: ["read", "file", "open", "inspect", "view", "log"],
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Absolute or workspace-relative path to the file." },
+        offset: {
+          type: "number",
+          description: "Optional line offset to start reading from (0-indexed).",
+        },
+        limit: {
+          type: "number",
+          description: "Optional maximum number of lines to return.",
+        },
+      },
+      required: ["path"],
+      additionalProperties: false,
+    },
   },
   {
     id: "tool.fs.write",
@@ -22,6 +39,15 @@ const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     risk: "high",
     requires_confirmation: true,
     keywords: ["write", "edit", "update", "patch", "create", "file"],
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Absolute or workspace-relative path to write." },
+        content: { type: "string", description: "File content to write." },
+      },
+      required: ["path", "content"],
+      additionalProperties: false,
+    },
   },
   {
     id: "tool.exec",
@@ -29,6 +55,19 @@ const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     risk: "high",
     requires_confirmation: true,
     keywords: ["run", "command", "shell", "terminal", "execute", "build"],
+    inputSchema: {
+      type: "object",
+      properties: {
+        command: { type: "string", description: "Shell command to execute." },
+        cwd: {
+          type: "string",
+          description: "Optional working directory (absolute or workspace-relative).",
+        },
+        timeout_ms: { type: "number", description: "Optional timeout in milliseconds." },
+      },
+      required: ["command"],
+      additionalProperties: false,
+    },
   },
   {
     id: "tool.http.fetch",
@@ -36,6 +75,21 @@ const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     risk: "medium",
     requires_confirmation: true,
     keywords: ["fetch", "http", "api", "request", "web", "endpoint"],
+    inputSchema: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "URL to fetch." },
+        method: { type: "string", description: "HTTP method (GET, POST, etc.). Defaults to GET." },
+        headers: {
+          type: "object",
+          additionalProperties: { type: "string" },
+          description: "Optional HTTP headers.",
+        },
+        body: { type: "string", description: "Optional request body." },
+      },
+      required: ["url"],
+      additionalProperties: false,
+    },
   },
   {
     id: "tool.node.dispatch",
@@ -43,6 +97,20 @@ const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
     risk: "high",
     requires_confirmation: true,
     keywords: ["node", "device", "screen", "automation", "dispatch"],
+    inputSchema: {
+      type: "object",
+      properties: {
+        capability: { type: "string", description: "Node capability identifier." },
+        action: { type: "string", description: "Action to perform." },
+        args: {
+          type: "object",
+          additionalProperties: {},
+          description: "Optional action arguments.",
+        },
+      },
+      required: ["capability", "action"],
+      additionalProperties: false,
+    },
   },
 ];
 
@@ -79,17 +147,24 @@ export function selectToolDirectory(
   allowlist: readonly string[],
   mcpTools: readonly ToolDescriptor[],
   limit = 8,
+  allowRequiresConfirmation = true,
 ): ToolDescriptor[] {
   const available: ToolDescriptor[] = [];
 
   for (const tool of BUILTIN_TOOL_REGISTRY) {
-    if (isToolAllowed(allowlist, tool.id)) {
+    if (
+      isToolAllowed(allowlist, tool.id) &&
+      (allowRequiresConfirmation || !tool.requires_confirmation)
+    ) {
       available.push(tool);
     }
   }
 
   for (const tool of mcpTools) {
-    if (isToolAllowed(allowlist, tool.id)) {
+    if (
+      isToolAllowed(allowlist, tool.id) &&
+      (allowRequiresConfirmation || !tool.requires_confirmation)
+    ) {
       available.push(tool);
     }
   }

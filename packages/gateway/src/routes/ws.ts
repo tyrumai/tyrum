@@ -14,6 +14,7 @@ import type { ConnectionManager } from "../ws/connection-manager.js";
 import { validateWsToken } from "../ws/auth.js";
 import { handleClientMessage } from "../ws/protocol.js";
 import type { ProtocolDeps } from "../ws/protocol.js";
+import type { TokenStore } from "../modules/auth/token-store.js";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -21,6 +22,59 @@ import type { ProtocolDeps } from "../ws/protocol.js";
 
 /** Interval between heartbeat ticks (milliseconds). */
 const HEARTBEAT_INTERVAL_MS = 5_000;
+const WS_BASE_PROTOCOL = "tyrum-v1";
+const WS_AUTH_PROTOCOL_PREFIX = "tyrum-auth.";
+
+function parseProtocolHeader(
+  value: string | string[] | undefined,
+): string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) =>
+      entry
+        .split(",")
+        .map((part) => part.trim())
+        .filter((part) => part.length > 0),
+    );
+  }
+  if (typeof value !== "string") return [];
+  return value
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+}
+
+function decodeBase64Url(input: string): string | undefined {
+  try {
+    const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
+    const padding = (4 - (normalized.length % 4)) % 4;
+    const padded = normalized + "=".repeat(padding);
+    const decoded = Buffer.from(padded, "base64").toString("utf-8");
+    return decoded.length > 0 ? decoded : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function extractWsTokenFromProtocols(req: IncomingMessage): string | undefined {
+  const offered = parseProtocolHeader(req.headers["sec-websocket-protocol"]);
+  for (const protocol of offered) {
+    if (!protocol.startsWith(WS_AUTH_PROTOCOL_PREFIX)) continue;
+    const encodedToken = protocol.slice(WS_AUTH_PROTOCOL_PREFIX.length);
+    const decoded = decodeBase64Url(encodedToken);
+    if (decoded) return decoded;
+  }
+  return undefined;
+}
+
+function selectWsSubprotocol(protocols: Set<string>): string | false {
+  if (protocols.has(WS_BASE_PROTOCOL)) return WS_BASE_PROTOCOL;
+  for (const protocol of protocols) {
+    if (!protocol.startsWith(WS_AUTH_PROTOCOL_PREFIX)) {
+      return protocol;
+    }
+  }
+  return false;
+}
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -29,6 +83,7 @@ const HEARTBEAT_INTERVAL_MS = 5_000;
 export interface WsRouteOptions {
   connectionManager: ConnectionManager;
   protocolDeps: ProtocolDeps;
+  tokenStore: TokenStore;
 }
 
 /**
@@ -42,9 +97,12 @@ export function createWsHandler(opts: WsRouteOptions): {
   handleUpgrade: (req: IncomingMessage, socket: Duplex, head: Buffer) => void;
   stopHeartbeat: () => void;
 } {
-  const { connectionManager, protocolDeps } = opts;
+  const { connectionManager, protocolDeps, tokenStore } = opts;
 
-  const wss = new WebSocketServer({ noServer: true });
+  const wss = new WebSocketServer({
+    noServer: true,
+    handleProtocols: (protocols) => selectWsSubprotocol(protocols),
+  });
 
   // --- heartbeat timer ---
   const heartbeatTimer = setInterval(() => {
@@ -60,11 +118,9 @@ export function createWsHandler(opts: WsRouteOptions): {
 
   // --- connection handler ---
   wss.on("connection", (ws, req) => {
-    // Extract token from query string (?token=...)
-    const url = new URL(req.url ?? "/", "http://localhost");
-    const token = url.searchParams.get("token") ?? undefined;
+    const token = extractWsTokenFromProtocols(req);
 
-    if (!validateWsToken(token)) {
+    if (!validateWsToken(token, tokenStore)) {
       ws.close(4001, "unauthorized");
       return;
     }

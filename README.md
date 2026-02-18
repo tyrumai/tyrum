@@ -36,9 +36,28 @@ Self-hosted autonomous worker agent platform with a single-instance, single-user
 | `packages/schemas` | Shared Zod types (`@tyrum/schemas`) |
 | `packages/gateway` | Main gateway process — Hono HTTP + WebSocket + SQLite |
 | `packages/client` | Client SDK for connecting to the gateway |
-| `web/` | Next.js frontend portal |
 | `config/` | Runtime configuration (model gateway YAML) |
 | `docs/` | Architecture and design documentation |
+
+## Installation
+
+The gateway can be installed in multiple ways:
+
+1. **One-line installer (recommended):**
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/rhernaus/tyrum/main/scripts/install.sh | bash
+   ```
+   Beta channel:
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/rhernaus/tyrum/main/scripts/install.sh | bash -s -- --channel beta
+   ```
+2. **npm global install:**
+   ```bash
+   npm i -g @tyrum/gateway
+   ```
+3. **Release assets:** download platform installers and package tarballs from GitHub Releases.
+
+See `docs/install.md` for full details, version pinning, and update commands.
 
 ## Getting Started
 
@@ -49,15 +68,14 @@ Self-hosted autonomous worker agent platform with a single-instance, single-user
 5. **Run checks:** `pnpm typecheck && pnpm test && pnpm lint`
 6. **Start the gateway:** `pnpm --filter @tyrum/gateway start`
    - To enable singleton agent routes (`/agent/status`, `/agent/turn`), set `TYRUM_AGENT_ENABLED=1`.
-7. **Start the portal:** `pnpm --filter tyrum-portal dev`
-8. **Run single-instance runtime (web + gateway in one process):** `pnpm --filter tyrum-portal start:single`
+7. **Open the integrated web app:** `http://127.0.0.1:8080/app`
 
 ### Localhost Safety Defaults
 
 - `GATEWAY_HOST` defaults to `127.0.0.1`.
 - `GATEWAY_PORT` defaults to `8080`.
 - Binding to non-local interfaces logs a warning because app auth is disabled in the self-hosted profile.
-- `pnpm --filter tyrum-portal start:single` serves web + gateway HTTP in one process; WebSocket upgrades on `/ws` return `501` in this mode.
+- The gateway serves the web UI directly at `/app` and supports WebSocket upgrades on `/ws`.
 
 ## Development Commands
 
@@ -71,9 +89,7 @@ Self-hosted autonomous worker agent platform with a single-instance, single-user
 | Build all packages | `pnpm build` |
 | Start gateway | `pnpm --filter @tyrum/gateway start` |
 | Start gateway + agent runtime | `TYRUM_AGENT_ENABLED=1 pnpm --filter @tyrum/gateway start` |
-| Start web portal | `pnpm --filter tyrum-portal dev` |
-| Start single-instance runtime | `pnpm --filter tyrum-portal start:single` |
-| Build web portal | `pnpm --filter tyrum-portal build` |
+| Open integrated app | `http://127.0.0.1:8080/app` |
 
 ## Telegram Bot Setup
 
@@ -88,14 +104,16 @@ Follow these steps to provision the Telegram channel safely across local and sta
   ```bash
   ngrok http http://localhost:3001
   curl "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
-    --data-urlencode "url=https://<subdomain>.ngrok.app/ingress/telegram"
+    --data-urlencode "url=https://<subdomain>.ngrok.app/ingress/telegram" \
+    --data-urlencode "secret_token=${TELEGRAM_WEBHOOK_SECRET}"
   ```
 
 ### 3. Wire credentials
-- Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_URL` environment variables before starting the gateway.
+- Set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_URL`, and `TELEGRAM_WEBHOOK_SECRET` environment variables before starting the gateway.
 
 ## Key Documents
 - [Vision (Goal)](docs/vision.md)
+- [Install Guide](docs/install.md)
 
 ## Roadmap
 See `docs/vision.md` for architecture and feature details.

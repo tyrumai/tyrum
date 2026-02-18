@@ -2,6 +2,9 @@
   "name": "@tyrum/gateway",
   "version": "0.1.0",
   "type": "module",
+  "bin": {
+    "tyrum-gateway": "./bin/tyrum-gateway.mjs"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.mts",
@@ -9,15 +12,19 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "bin"
   ],
   "scripts": {
     "build": "tsdown src/index.ts --format esm --dts",
     "start": "node dist/index.mjs"
   },
   "dependencies": {
+    "@ai-sdk/openai-compatible": "^2.0.30",
     "@hono/node-server": "^1.19.9",
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "@tyrum/schemas": "workspace:*",
+    "ai": "^6.0.86",
     "better-sqlite3": "^12.6.2",
     "hono": "^4.11.9",
     "mitt": "^3.0.1",
@@ -25,6 +32,7 @@
     "yaml": "^2.8.2"
   },
   "devDependencies": {
+    "@types/node": "^25.2.3",
     "@types/better-sqlite3": "^7.6.13",
     "@types/ws": "^8.18.1"
   }
