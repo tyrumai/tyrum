@@ -50,14 +50,10 @@ export class RealPlaywrightBackend implements PlaywrightBackend {
     if (!this.page)
       throw new Error("Browser not initialized. Call ensureBrowser() first.");
 
-    const response = await this.page.goto(url, {
+    await this.page.goto(url, {
       timeout: 30_000,
       waitUntil: "domcontentloaded",
     });
-
-    if (!response) {
-      throw new Error(`Navigation to ${url} returned no response`);
-    }
 
     return {
       title: await this.page.title(),

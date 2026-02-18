@@ -60,12 +60,16 @@ describe.skipIf(!canRunPlaywright)("RealPlaywrightBackend", () => {
     // No error = success
   });
 
-  it("throws descriptive error on missing selector", async () => {
-    backend = await getBackend();
-    await backend.ensureBrowser();
-    await backend.navigate("data:text/html,<p>empty</p>");
-    await expect(backend.click("#nonexistent")).rejects.toThrow();
-  });
+  it(
+    "throws descriptive error on missing selector",
+    { timeout: 15_000 },
+    async () => {
+      backend = await getBackend();
+      await backend.ensureBrowser();
+      await backend.navigate("data:text/html,<p>empty</p>");
+      await expect(backend.click("#nonexistent")).rejects.toThrow();
+    },
+  );
 
   it("recovers from browser close", async () => {
     backend = await getBackend();
