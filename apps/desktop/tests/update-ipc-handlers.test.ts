@@ -76,6 +76,7 @@ describe("registerUpdateIpc handlers", () => {
     ipcMainHandleMock.mockReset();
     showOpenDialogMock.mockReset();
     openPathMock.mockReset();
+    openPathMock.mockResolvedValue("");
     checkForUpdatesMock.mockReset();
     downloadUpdateMock.mockReset();
     quitAndInstallMock.mockReset();
@@ -157,7 +158,7 @@ describe("registerUpdateIpc handlers", () => {
 
     showOpenDialogMock.mockResolvedValue({
       canceled: false,
-      filePaths: ["/tmp/not-supported.zip"],
+      filePaths: ["/tmp/not-supported.txt"],
     });
 
     const windowStub = {
