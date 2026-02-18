@@ -93,6 +93,7 @@ export function Connection() {
   const [wsToken, setWsToken] = useState("");
   const [remoteUrl, setRemoteUrl] = useState("ws://127.0.0.1:8080/ws");
   const [remoteToken, setRemoteToken] = useState("");
+  const [hasSavedRemoteToken, setHasSavedRemoteToken] = useState(false);
   const [nodeStatus, setNodeStatus] = useState("disconnected");
   const [busy, setBusy] = useState(false);
 
@@ -111,7 +112,7 @@ export function Connection() {
 
       const remote = c?.["remote"] as Record<string, unknown> | undefined;
       if (remote?.["wsUrl"]) setRemoteUrl(remote["wsUrl"] as string);
-      if (remote?.["tokenRef"]) setRemoteToken(remote["tokenRef"] as string);
+      if (remote?.["tokenRef"]) setHasSavedRemoteToken(true);
     });
 
     const unsubscribe = api.onStatusChange((s) => {
@@ -154,7 +155,14 @@ export function Connection() {
     if (!api || busy) return;
     setBusy(true);
     try {
-      await api.setConfig({ mode: "remote", remote: { wsUrl: remoteUrl, tokenRef: remoteToken } });
+      const trimmedToken = remoteToken.trim();
+      const remoteConfig: Record<string, unknown> = { wsUrl: remoteUrl };
+      if (trimmedToken.length > 0) {
+        remoteConfig["tokenRef"] = trimmedToken;
+        setHasSavedRemoteToken(true);
+      }
+
+      await api.setConfig({ mode: "remote", remote: remoteConfig });
       const result = await api.node.connect();
       setNodeStatus(result.status);
     } finally {
@@ -247,6 +255,11 @@ export function Connection() {
             onChange={(e) => setRemoteToken(e.target.value)}
             placeholder="Bearer token"
           />
+          {hasSavedRemoteToken && remoteToken.trim() === "" && (
+            <div style={infoStyle}>
+              A token is already saved. Leave blank to reuse it, or enter a new token to replace it.
+            </div>
+          )}
 
           <div>
             {nodeStatus === "disconnected" || nodeStatus === "error" ? (

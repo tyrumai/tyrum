@@ -2,6 +2,7 @@ import { ipcMain } from "electron";
 import { loadConfig, saveConfig } from "../config/store.js";
 import { DesktopNodeConfig } from "../config/schema.js";
 import { checkMacPermissions } from "../platform/permissions.js";
+import { normalizeConfigPartialForSave } from "../config/token-ref-normalizer.js";
 
 const RENDERER_MUTABLE_PATHS = new Set([
   "mode",
@@ -106,10 +107,11 @@ export function registerConfigIpc(): void {
       RENDERER_MUTABLE_PATHS,
     );
     const current = loadConfig();
+    const normalizedPartial = normalizeConfigPartialForSave(filtered);
     const merged = DesktopNodeConfig.parse(
       deepMerge(
         current as unknown as Record<string, unknown>,
-        filtered,
+        normalizedPartial,
       ),
     );
     saveConfig(merged);
