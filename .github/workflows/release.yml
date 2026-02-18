@@ -209,16 +209,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          decode_base64() {
-            local value="$1"
-            local output="$2"
-
-            printf '%s' "${value}" | base64 --decode > "${output}" 2>/dev/null && return 0
-            printf '%s' "${value}" | base64 -d > "${output}" 2>/dev/null && return 0
-            printf '%s' "${value}" | base64 -D > "${output}" 2>/dev/null && return 0
-
-            return 1
-          }
+          source "${GITHUB_WORKSPACE}/.github/scripts/decode-base64.sh"
 
           if [[ -z "${APPLE_API_KEY:-}" ]]; then
             exit 0
@@ -305,16 +296,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          decode_base64() {
-            local value="$1"
-            local output="$2"
-
-            printf '%s' "${value}" | base64 --decode > "${output}" 2>/dev/null && return 0
-            printf '%s' "${value}" | base64 -d > "${output}" 2>/dev/null && return 0
-            printf '%s' "${value}" | base64 -D > "${output}" 2>/dev/null && return 0
-
-            return 1
-          }
+          source "${GITHUB_WORKSPACE}/.github/scripts/decode-base64.sh"
 
           keychain_path="${RUNNER_TEMP}/ci-signing.keychain-db"
           cert_file="${RUNNER_TEMP}/codesign-cert.p12"
