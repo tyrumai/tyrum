@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
 import { join } from "node:path";
 import {
   registerGatewayIpc,
@@ -13,9 +13,23 @@ import { configExists, loadConfig } from "./config/store.js";
 let mainWindow: BrowserWindow | null = null;
 let gatewayManager: GatewayManager | null = null;
 let isQuitting = false;
+let appIpcRegistered = false;
+const startupState = { launchOnboarding: false };
+
+function registerAppIpc(): void {
+  if (appIpcRegistered) return;
+  appIpcRegistered = true;
+
+  ipcMain.handle("app:get-startup-state", () => {
+    const snapshot = { ...startupState };
+    startupState.launchOnboarding = false;
+    return snapshot;
+  });
+}
 
 export async function maybeAutoStartEmbeddedGatewayOnLaunch(): Promise<void> {
   const hadConfig = configExists();
+  startupState.launchOnboarding = !hadConfig;
   const config = loadConfig();
   const shouldStartEmbedded = !hadConfig || config.mode === "embedded";
   if (!shouldStartEmbedded) {
@@ -32,6 +46,7 @@ export async function maybeAutoStartEmbeddedGatewayOnLaunch(): Promise<void> {
 function createWindow(): void {
   mainWindow = new BrowserWindow(MAIN_WINDOW_OPTIONS);
 
+  registerAppIpc();
   registerConfigIpc();
   gatewayManager = registerGatewayIpc(mainWindow);
   registerNodeIpc(mainWindow);

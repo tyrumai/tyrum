@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("tyrumDesktop", {
+  getStartupState: () => ipcRenderer.invoke("app:get-startup-state"),
   getConfig: () => ipcRenderer.invoke("config:get"),
   setConfig: (partial: unknown) => ipcRenderer.invoke("config:set", partial),
   gateway: {

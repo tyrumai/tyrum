@@ -1,4 +1,5 @@
 export interface TyrumDesktopApi {
+  getStartupState: () => Promise<{ launchOnboarding: boolean }>;
   getConfig: () => Promise<unknown>;
   setConfig: (partial: unknown) => Promise<void>;
   gateway: {
