@@ -1,6 +1,13 @@
 export interface TyrumDesktopApi {
   getConfig: () => Promise<unknown>;
   setConfig: (partial: unknown) => Promise<void>;
+  updates: {
+    getState: () => Promise<unknown>;
+    check: () => Promise<unknown>;
+    download: () => Promise<unknown>;
+    install: () => Promise<unknown>;
+    openReleaseFile: () => Promise<unknown>;
+  };
   gateway: {
     start: () => Promise<{ status: string; port: number }>;
     stop: () => Promise<{ status: string }>;
@@ -28,6 +35,7 @@ export interface TyrumDesktopApi {
     permission: "accessibility" | "screenRecording",
   ) => Promise<unknown>;
   openExternal: (url: string) => Promise<void>;
+  onUpdateStateChange: (cb: (state: unknown) => void) => () => void;
 }
 
 declare global {

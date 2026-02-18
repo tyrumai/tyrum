@@ -13,6 +13,32 @@ interface MacPermissionSnapshot {
   instructions?: string;
 }
 
+interface DesktopUpdateState {
+  stage:
+    | "idle"
+    | "checking"
+    | "available"
+    | "not-available"
+    | "downloading"
+    | "downloaded"
+    | "installing"
+    | "error";
+  currentVersion: string;
+  availableVersion: string | null;
+  downloadedVersion: string | null;
+  releaseDate: string | null;
+  releaseNotes: string | null;
+  progressPercent: number | null;
+  message: string | null;
+  checkedAt: string | null;
+}
+
+interface ManualReleaseFileResult {
+  opened: boolean;
+  path: string | null;
+  message: string | null;
+}
+
 const headingStyle: React.CSSProperties = {
   fontSize: 22,
   fontWeight: 700,
@@ -32,6 +58,28 @@ const sectionTitle: React.CSSProperties = {
   fontWeight: 600,
   marginBottom: 12,
   color: "#374151",
+};
+
+const labelRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  padding: "6px 0",
+  borderBottom: "1px solid #f3f4f6",
+};
+
+const labelKeyStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: "#6b7280",
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+};
+
+const labelValueStyle: React.CSSProperties = {
+  fontSize: 13,
+  color: "#1f2937",
+  fontWeight: 600,
 };
 
 const checkRowStyle: React.CSSProperties = {
@@ -85,6 +133,17 @@ const secondaryBtnStyle: React.CSSProperties = {
   marginRight: 8,
 };
 
+const UPDATE_STAGE_LABEL: Record<DesktopUpdateState["stage"], string> = {
+  idle: "Idle",
+  checking: "Checking for updates...",
+  available: "Update available",
+  "not-available": "Up to date",
+  downloading: "Downloading update...",
+  downloaded: "Ready to install",
+  installing: "Installing update...",
+  error: "Update error",
+};
+
 export function Diagnostics() {
   const [checks, setChecks] = useState<CheckItem[]>([
     { label: "Gateway process", status: "pending", detail: "Checking..." },
@@ -99,6 +158,21 @@ export function Diagnostics() {
   const [permissionActionNote, setPermissionActionNote] = useState<string | null>(
     null,
   );
+  const [updateState, setUpdateState] = useState<DesktopUpdateState>({
+    stage: "idle",
+    currentVersion: "unknown",
+    availableVersion: null,
+    downloadedVersion: null,
+    releaseDate: null,
+    releaseNotes: null,
+    progressPercent: null,
+    message: null,
+    checkedAt: null,
+  });
+  const [updateBusy, setUpdateBusy] = useState<
+    "check" | "download" | "install" | "manual" | null
+  >(null);
+  const [updateActionNote, setUpdateActionNote] = useState<string | null>(null);
 
   const runChecks = () => {
     setRunning(true);
@@ -216,8 +290,97 @@ export function Diagnostics() {
       });
   };
 
+  const checkForUpdates = async () => {
+    const api = window.tyrumDesktop;
+    if (!api || updateBusy !== null) return;
+
+    setUpdateActionNote(null);
+    setUpdateBusy("check");
+    try {
+      const next = (await api.updates.check()) as DesktopUpdateState;
+      setUpdateState(next);
+      setUpdateActionNote("Update check started.");
+    } catch (error: unknown) {
+      setUpdateActionNote(toErrorMessage(error));
+    } finally {
+      setUpdateBusy(null);
+    }
+  };
+
+  const downloadUpdate = async () => {
+    const api = window.tyrumDesktop;
+    if (!api || updateBusy !== null) return;
+
+    setUpdateActionNote(null);
+    setUpdateBusy("download");
+    try {
+      const next = (await api.updates.download()) as DesktopUpdateState;
+      setUpdateState(next);
+      setUpdateActionNote("Download started.");
+    } catch (error: unknown) {
+      setUpdateActionNote(toErrorMessage(error));
+    } finally {
+      setUpdateBusy(null);
+    }
+  };
+
+  const installUpdate = async () => {
+    const api = window.tyrumDesktop;
+    if (!api || updateBusy !== null) return;
+
+    setUpdateActionNote(null);
+    setUpdateBusy("install");
+    try {
+      const next = (await api.updates.install()) as DesktopUpdateState;
+      setUpdateState(next);
+      setUpdateActionNote("Installing update...");
+    } catch (error: unknown) {
+      setUpdateActionNote(toErrorMessage(error));
+    } finally {
+      setUpdateBusy(null);
+    }
+  };
+
+  const openManualReleaseFile = async () => {
+    const api = window.tyrumDesktop;
+    if (!api || updateBusy !== null) return;
+
+    setUpdateActionNote(null);
+    setUpdateBusy("manual");
+    try {
+      const result =
+        (await api.updates.openReleaseFile()) as ManualReleaseFileResult;
+      if (result.message) {
+        setUpdateActionNote(result.message);
+      } else if (result.opened) {
+        setUpdateActionNote("Installer opened.");
+      }
+    } catch (error: unknown) {
+      setUpdateActionNote(toErrorMessage(error));
+    } finally {
+      setUpdateBusy(null);
+    }
+  };
+
   useEffect(() => {
     runChecks();
+
+    const api = window.tyrumDesktop;
+    if (!api) return;
+
+    void api
+      .updates
+      .getState()
+      .then((snapshot) => setUpdateState(snapshot as DesktopUpdateState))
+      .catch(() => {
+        // Ignore snapshot failures; event updates can still refresh the state.
+      });
+
+    const unsubscribe = api.onUpdateStateChange((state) => {
+      setUpdateState(state as DesktopUpdateState);
+    });
+
+    return unsubscribe;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -274,6 +437,97 @@ export function Diagnostics() {
         {permissionActionNote && (
           <div style={{ fontSize: 12, color: "#6b7280", marginTop: 10 }}>
             {permissionActionNote}
+          </div>
+        )}
+      </div>
+
+      <div style={cardStyle}>
+        <div style={sectionTitle}>Desktop Updates</div>
+        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 10 }}>
+          Update checks run automatically at startup. Download and install require
+          explicit user actions.
+        </div>
+
+        <div style={labelRowStyle}>
+          <span style={labelKeyStyle}>Current version</span>
+          <span style={labelValueStyle}>{updateState.currentVersion}</span>
+        </div>
+        <div style={labelRowStyle}>
+          <span style={labelKeyStyle}>Status</span>
+          <span style={labelValueStyle}>
+            {UPDATE_STAGE_LABEL[updateState.stage] ?? updateState.stage}
+          </span>
+        </div>
+        {updateState.availableVersion && (
+          <div style={labelRowStyle}>
+            <span style={labelKeyStyle}>Available version</span>
+            <span style={labelValueStyle}>{updateState.availableVersion}</span>
+          </div>
+        )}
+        {updateState.progressPercent != null && (
+          <div style={labelRowStyle}>
+            <span style={labelKeyStyle}>Download progress</span>
+            <span style={labelValueStyle}>
+              {Math.round(updateState.progressPercent)}%
+            </span>
+          </div>
+        )}
+        {updateState.message && (
+          <div style={{ fontSize: 12, color: "#b91c1c", marginTop: 8 }}>
+            {updateState.message}
+          </div>
+        )}
+        {updateState.releaseNotes && (
+          <div
+            style={{
+              marginTop: 10,
+              padding: "8px 10px",
+              background: "#f9fafb",
+              borderRadius: 6,
+              fontSize: 12,
+              color: "#4b5563",
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {updateState.releaseNotes}
+          </div>
+        )}
+
+        <div style={{ marginTop: 12 }}>
+          <button
+            style={btnStyle}
+            onClick={checkForUpdates}
+            disabled={updateBusy !== null}
+          >
+            {updateBusy === "check" ? "Checking..." : "Check for Updates"}
+          </button>
+        </div>
+        <div style={{ marginTop: 8 }}>
+          <button
+            style={secondaryBtnStyle}
+            onClick={downloadUpdate}
+            disabled={updateBusy !== null || updateState.stage !== "available"}
+          >
+            {updateBusy === "download" ? "Downloading..." : "Download Update"}
+          </button>
+          <button
+            style={secondaryBtnStyle}
+            onClick={installUpdate}
+            disabled={updateBusy !== null || updateState.stage !== "downloaded"}
+          >
+            {updateBusy === "install" ? "Installing..." : "Install Update"}
+          </button>
+          <button
+            style={secondaryBtnStyle}
+            onClick={openManualReleaseFile}
+            disabled={updateBusy !== null}
+          >
+            {updateBusy === "manual" ? "Opening..." : "Use Local Release File"}
+          </button>
+        </div>
+        {updateActionNote && (
+          <div style={{ fontSize: 12, color: "#6b7280", marginTop: 10 }}>
+            {updateActionNote}
           </div>
         )}
       </div>

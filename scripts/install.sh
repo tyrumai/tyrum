@@ -10,7 +10,7 @@ set -euo pipefail
 REPO="${TYRUM_REPO:-rhernaus/tyrum}"
 CHANNEL="${TYRUM_CHANNEL:-stable}"
 REQUESTED_VERSION="${TYRUM_VERSION:-}"
-INSTALL_CMD="tyrum-gateway"
+INSTALL_CMD="tyrum"
 
 usage() {
   cat <<'EOF'

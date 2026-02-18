@@ -57,6 +57,14 @@ The gateway can be installed in multiple ways:
    ```bash
    npm i -g @tyrum/gateway
    ```
+   Run:
+   ```bash
+   tyrum
+   ```
+   Update:
+   ```bash
+   tyrum update
+   ```
 3. **Release assets:** download platform installers and package tarballs from GitHub Releases.
 
 See `docs/install.md` for full details, version pinning, and update commands.
