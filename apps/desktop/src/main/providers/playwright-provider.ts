@@ -53,14 +53,27 @@ export class PlaywrightProvider implements CapabilityProvider {
   private checkDomain(url: string): TaskResult | null {
     if (!this.config.domainRestricted) return null;
     try {
-      const hostname = new URL(url).hostname;
-      const allowed = this.config.allowedDomains.some(
+      const hostname = new URL(url).hostname.toLowerCase();
+      const allowedDomains = this.config.allowedDomains
+        .map((domain) => domain.trim().toLowerCase())
+        .filter((domain) => domain.length > 0);
+
+      if (allowedDomains.includes("*")) return null;
+
+      const allowed = allowedDomains.some(
         (domain) => hostname === domain || hostname.endsWith(`.${domain}`),
       );
       if (!allowed) {
+        const shownAllowlist =
+          allowedDomains.length > 0
+            ? allowedDomains.join(", ")
+            : "(empty: default deny)";
         return {
           success: false,
-          error: `Domain "${hostname}" is not in the allowlist. Allowed: ${this.config.allowedDomains.join(", ")}`,
+          error:
+            `Domain allowlist is active (default deny). ` +
+            `Domain "${hostname}" is not in the allowlist. Allowed: ${shownAllowlist}. ` +
+            `Use "*" to allow all domains.`,
         };
       }
     } catch {

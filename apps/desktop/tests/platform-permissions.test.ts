@@ -1,5 +1,9 @@
+import Module from "node:module";
 import { describe, it, expect } from "vitest";
-import { checkMacPermissions } from "../src/main/platform/permissions.js";
+import {
+  checkMacPermissions,
+  requestMacPermission,
+} from "../src/main/platform/permissions.js";
 
 describe("checkMacPermissions", () => {
   it("returns both true on non-darwin platforms", () => {
@@ -42,5 +46,60 @@ describe("checkMacPermissions", () => {
     // accessibility is boolean or null
     expect([true, false, null]).toContain(result.accessibility);
     expect([true, false, null]).toContain(result.screenRecording);
+  });
+
+  it("omits instructions when all macOS permissions are granted", () => {
+    const originalPlatform = process.platform;
+    const originalRequire = Module.prototype.require;
+
+    Object.defineProperty(process, "platform", {
+      value: "darwin",
+      writable: true,
+    });
+
+    Module.prototype.require = function patchedRequire(this: unknown, id: string) {
+      if (id === "electron") {
+        return {
+          systemPreferences: {
+            isTrustedAccessibilityClient: () => true,
+            getMediaAccessStatus: () => "granted",
+          },
+        };
+      }
+
+      return originalRequire.call(this as object, id);
+    };
+
+    try {
+      const result = checkMacPermissions();
+      expect(result).toEqual({
+        accessibility: true,
+        screenRecording: true,
+      });
+      expect("instructions" in result).toBe(false);
+    } finally {
+      Module.prototype.require = originalRequire;
+      Object.defineProperty(process, "platform", {
+        value: originalPlatform,
+        writable: true,
+      });
+    }
+  });
+});
+
+describe("requestMacPermission", () => {
+  it("returns granted on non-darwin platforms without prompting", async () => {
+    if (process.platform !== "darwin") {
+      const result = await requestMacPermission("accessibility");
+      expect(result.granted).toBe(true);
+      expect(result.instructions).toBeUndefined();
+    }
+  });
+
+  it("returns known shape", async () => {
+    const result = await requestMacPermission("screenRecording");
+    expect(result).toHaveProperty("granted");
+    expect(typeof result.granted).toBe("boolean");
+    expect(result).toHaveProperty("instructions");
   });
 });

@@ -25,6 +25,7 @@ describe("Auth middleware", () => {
     const app = new Hono();
     app.use("*", createAuthMiddleware(tokenStore));
     app.get("/healthz", (c) => c.json({ status: "ok" }));
+    app.get("/app/auth", (c) => c.json({ ok: true }));
     app.get("/api/data", (c) => c.json({ data: "secret" }));
     app.post("/api/action", (c) => c.json({ done: true }));
     return app;
@@ -60,6 +61,36 @@ describe("Auth middleware", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { data: string };
     expect(body.data).toBe("secret");
+  });
+
+  it("allows requests with valid auth cookie", async () => {
+    const app = buildApp();
+    const res = await app.request("/api/data", {
+      headers: { Cookie: `tyrum_admin_token=${encodeURIComponent(adminToken)}` },
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("allows /app/auth bootstrap with query token", async () => {
+    const app = buildApp();
+    const res = await app.request(
+      `/app/auth?token=${encodeURIComponent(adminToken)}&next=%2Fapp`,
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects /app/auth bootstrap with invalid query token", async () => {
+    const app = buildApp();
+    const res = await app.request("/app/auth?token=invalid-token");
+    expect(res.status).toBe(401);
+  });
+
+  it("prefers /app/auth query token over cookie token", async () => {
+    const app = buildApp();
+    const res = await app.request("/app/auth?token=invalid-token", {
+      headers: { Cookie: `tyrum_admin_token=${encodeURIComponent(adminToken)}` },
+    });
+    expect(res.status).toBe(401);
   });
 
   it("rejects malformed Authorization header", async () => {

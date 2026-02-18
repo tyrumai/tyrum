@@ -128,6 +128,17 @@ describe("PlaywrightProvider", () => {
     expect(result.success).toBe(true);
   });
 
+  it("domain wildcard entry allows all domains when restricted mode is on", async () => {
+    const provider = makeProvider({
+      domainRestricted: true,
+      allowedDomains: ["*"],
+    });
+    const result = await provider.execute(
+      makeAction({ op: "navigate", url: "https://totally-new-domain.dev/path" }),
+    );
+    expect(result.success).toBe(true);
+  });
+
   it("invalid URL returns error", async () => {
     const provider = makeProvider();
     const result = await provider.execute(

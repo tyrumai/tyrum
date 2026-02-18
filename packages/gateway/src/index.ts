@@ -5,6 +5,7 @@
  */
 
 import { createServer } from "node:http";
+import { mkdirSync } from "node:fs";
 import { getRequestListener } from "@hono/node-server";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
@@ -38,6 +39,25 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
 
+export function ensureDatabaseDirectory(dbPath: string): void {
+  const trimmed = dbPath.trim();
+  if (trimmed.length === 0) return;
+  if (trimmed === ":memory:") return;
+  if (/^file:/i.test(trimmed)) return;
+
+  const parentDir = dirname(trimmed);
+  if (parentDir === "." || parentDir === "") return;
+
+  try {
+    mkdirSync(parentDir, { recursive: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Unable to create database directory "${parentDir}" for db path "${dbPath}": ${message}`,
+    );
+  }
+}
+
 export async function main(): Promise<void> {
   const port = parseInt(process.env["GATEWAY_PORT"] ?? "8080", 10);
   const host = process.env["GATEWAY_HOST"]?.trim() || "127.0.0.1";
@@ -50,6 +70,8 @@ export async function main(): Promise<void> {
   const tyrumHome =
     process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
   const isLocalOnly = LOCAL_HOSTS.has(host);
+
+  ensureDatabaseDirectory(dbPath);
 
   const container = createContainer({
     dbPath,

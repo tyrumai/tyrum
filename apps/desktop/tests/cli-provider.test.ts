@@ -62,6 +62,31 @@ describe("CliProvider", () => {
     expect((evidence.stdout as string).trim()).toBe("allowlist-off");
   });
 
+  it("wildcard command allowlist entry permits any command", async () => {
+    const provider = new CliProvider(["*"], [], true);
+    const result = await provider.execute(
+      makeAction({ cmd: "echo", args: ["wildcard-pass"] }),
+    );
+    expect(result.success).toBe(true);
+    const evidence = result.evidence as Record<string, unknown>;
+    expect((evidence.stdout as string).trim()).toBe("wildcard-pass");
+  });
+
+  it("supports subcommand allowlist prefixes (allow node --version only)", async () => {
+    const provider = new CliProvider(["node --version"], [], true);
+
+    const allowed = await provider.execute(
+      makeAction({ cmd: "node", args: ["--version"] }),
+    );
+    expect(allowed.success).toBe(true);
+
+    const denied = await provider.execute(
+      makeAction({ cmd: "node", args: ["--help"] }),
+    );
+    expect(denied.success).toBe(false);
+    expect(denied.error).toContain("not in the allowlist");
+  });
+
   // -- Missing cmd returns error ---------------------------------------------
 
   it("missing cmd returns error", async () => {
@@ -114,6 +139,16 @@ describe("CliProvider", () => {
     if (!result.success) {
       expect(result.error).not.toContain("not in the allowlist");
     }
+  });
+
+  it("working directory wildcard allows any cwd", async () => {
+    const provider = new CliProvider(["echo"], ["*"], true);
+    const result = await provider.execute(
+      makeAction({ cmd: "echo", args: ["cwd-wildcard"], cwd: "/etc" }),
+    );
+    expect(result.success).toBe(true);
+    const evidence = result.evidence as Record<string, unknown>;
+    expect((evidence.stdout as string).trim()).toBe("cwd-wildcard");
   });
 
   it("sibling directory with shared prefix is rejected", async () => {

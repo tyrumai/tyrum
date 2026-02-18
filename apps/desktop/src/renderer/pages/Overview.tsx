@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { toErrorMessage } from "../lib/errors.js";
 
 interface StatusInfo {
   gatewayMode: string;
@@ -68,6 +69,25 @@ const badgeStyle: React.CSSProperties = {
   marginBottom: 6,
 };
 
+function btnStyle(variant: "primary" | "danger"): React.CSSProperties {
+  const colors = {
+    primary: { bg: "#6c63ff", color: "#fff" },
+    danger: { bg: "#ef4444", color: "#fff" },
+  };
+  const c = colors[variant];
+  return {
+    padding: "8px 20px",
+    borderRadius: 6,
+    border: "none",
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: "pointer",
+    background: c.bg,
+    color: c.color,
+    marginBottom: 14,
+  };
+}
+
 function formatUptime(seconds: number): string {
   if (seconds < 60) return `${seconds}s`;
   const m = Math.floor(seconds / 60);
@@ -85,6 +105,8 @@ export function Overview() {
     capabilities: [],
     uptime: 0,
   });
+  const [busy, setBusy] = useState(false);
+  const [gatewayError, setGatewayError] = useState<string | null>(null);
 
   useEffect(() => {
     const api = window.tyrumDesktop;
@@ -94,6 +116,9 @@ export function Overview() {
     void api.getConfig().then((cfg) => {
       const c = cfg as Record<string, unknown>;
       const mode = (c?.["mode"] as string) ?? "embedded";
+      const embedded = c?.["embedded"] as Record<string, unknown> | undefined;
+      const port =
+        typeof embedded?.["port"] === "number" ? (embedded["port"] as number) : 8080;
       const capabilities: string[] = [];
       const caps = c?.["capabilities"] as Record<string, boolean> | undefined;
       if (caps) {
@@ -101,17 +126,63 @@ export function Overview() {
           if (v) capabilities.push(k);
         }
       }
-      setStatus((prev) => ({ ...prev, gatewayMode: mode, capabilities }));
+      setStatus((prev) => ({ ...prev, gatewayMode: mode, capabilities, port }));
     });
 
     const unsubscribe = api.onStatusChange((s) => {
       const info = s as Partial<StatusInfo>;
+      if (
+        info.gatewayStatus === "running" ||
+        info.gatewayStatus === "stopped"
+      ) {
+        setGatewayError(null);
+      }
       setStatus((prev) => ({ ...prev, ...info }));
     });
     return unsubscribe;
   }, []);
 
   const color = STATUS_COLORS[status.gatewayStatus] ?? "#9ca3af";
+  const api = window.tyrumDesktop;
+
+  const startGateway = async () => {
+    if (!api || busy) return;
+    setBusy(true);
+    setGatewayError(null);
+    const port = status.port > 0 ? status.port : 8080;
+    try {
+      await api.setConfig({
+        mode: "embedded",
+        embedded: { port },
+      });
+      const result = await api.gateway.start();
+      setStatus((prev) => ({
+        ...prev,
+        gatewayMode: "embedded",
+        gatewayStatus: result.status,
+        port: result.port,
+      }));
+    } catch (error) {
+      setStatus((prev) => ({ ...prev, gatewayStatus: "error" }));
+      setGatewayError(toErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const stopGateway = async () => {
+    if (!api || busy) return;
+    setBusy(true);
+    try {
+      const result = await api.gateway.stop();
+      setStatus((prev) => ({ ...prev, gatewayStatus: result.status }));
+      setGatewayError(null);
+    } catch (error) {
+      setGatewayError(toErrorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <div>
@@ -124,6 +195,23 @@ export function Overview() {
           {status.gatewayStatus.charAt(0).toUpperCase() +
             status.gatewayStatus.slice(1)}
         </div>
+
+        {(status.gatewayStatus === "stopped" || status.gatewayStatus === "error") && (
+          <button style={btnStyle("primary")} onClick={startGateway} disabled={busy}>
+            {busy ? "Starting..." : "Start Gateway"}
+          </button>
+        )}
+        {(status.gatewayStatus === "running" || status.gatewayStatus === "starting") && (
+          <button style={btnStyle("danger")} onClick={stopGateway} disabled={busy}>
+            {busy ? "Stopping..." : "Stop Gateway"}
+          </button>
+        )}
+
+        {gatewayError && (
+          <div style={{ marginBottom: 16, color: "#b91c1c", fontSize: 13 }}>
+            Reason: {gatewayError}
+          </div>
+        )}
 
         <div style={labelStyle}>Mode</div>
         <div style={valueStyle}>

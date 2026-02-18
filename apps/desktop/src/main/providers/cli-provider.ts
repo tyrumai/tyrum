@@ -8,6 +8,34 @@ import type { CapabilityProvider, TaskResult } from "@tyrum/client";
 const MAX_OUTPUT_BYTES = 1_000_000; // 1MB output cap
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+function normalizeLines(values: string[]): string[] {
+  return values
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
+function isCommandAllowed(
+  allowlist: string[],
+  cmd: string,
+  cmdArgs: string[],
+): boolean {
+  const normalized = normalizeLines(allowlist);
+  if (normalized.includes("*")) return true;
+
+  return normalized.some((entry) => {
+    const tokens = entry.split(/\s+/g);
+    if (tokens.length === 0 || tokens[0] !== cmd) return false;
+    if (tokens.length === 1) return true;
+    const requiredArgs = tokens.slice(1);
+    if (cmdArgs.length < requiredArgs.length) return false;
+    return requiredArgs.every((token, idx) => cmdArgs[idx] === token);
+  });
+}
+
+function formatCommand(cmd: string, cmdArgs: string[]): string {
+  return [cmd, ...cmdArgs].join(" ").trim();
+}
+
 export class CliProvider implements CapabilityProvider {
   readonly capability: ClientCapability = "cli";
 
@@ -30,16 +58,36 @@ export class CliProvider implements CapabilityProvider {
     }
 
     // Allowlist enforcement
-    if (this.allowlistEnforced && !this.allowedCommands.includes(cmd)) {
+    if (this.allowlistEnforced && !isCommandAllowed(this.allowedCommands, cmd, cmdArgs)) {
+      const normalizedAllowlist = normalizeLines(this.allowedCommands);
+      const shownAllowlist =
+        normalizedAllowlist.length > 0
+          ? normalizedAllowlist.join(", ")
+          : "(empty: default deny)";
       return {
         success: false,
-        error: `Command "${cmd}" is not in the allowlist. Allowed: ${this.allowedCommands.join(", ")}`,
+        error:
+          `CLI allowlist is active (default deny). ` +
+          `Command "${formatCommand(cmd, cmdArgs)}" is not in the allowlist. ` +
+          `Allowed: ${shownAllowlist}. ` +
+          `Use "*" to allow everything.`,
       };
     }
 
     if (this.allowlistEnforced && cwd) {
+      const normalizedAllowedDirs = normalizeLines(this.allowedWorkingDirs);
+      if (!normalizedAllowedDirs.includes("*") && normalizedAllowedDirs.length === 0) {
+        return {
+          success: false,
+          error:
+            `CLI working-directory allowlist is active (default deny) and empty. ` +
+            `Either add allowed directories or use "*" to allow all directories.`,
+        };
+      }
+
       const resolvedCwd = resolve(cwd);
-      const allowed = this.allowedWorkingDirs.some((dir) => {
+      const allowed = normalizedAllowedDirs.some((dir) => {
+        if (dir === "*") return true;
         const allowedDir = resolve(dir);
         const rel = relative(allowedDir, resolvedCwd);
         return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));

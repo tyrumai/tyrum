@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld("tyrumDesktop", {
   gateway: {
     start: () => ipcRenderer.invoke("gateway:start"),
     stop: () => ipcRenderer.invoke("gateway:stop"),
+    getUiUrls: () => ipcRenderer.invoke("gateway:ui-urls"),
   },
   node: {
     connect: () => ipcRenderer.invoke("node:connect"),
@@ -35,4 +36,7 @@ contextBridge.exposeInMainWorld("tyrumDesktop", {
   consentRespond: (planId: string, approved: boolean, reason?: string) =>
     ipcRenderer.invoke("consent:respond", planId, approved, reason),
   checkMacPermissions: () => ipcRenderer.invoke("permissions:check-mac"),
+  requestMacPermission: (permission: "accessibility" | "screenRecording") =>
+    ipcRenderer.invoke("permissions:request-mac", permission),
+  openExternal: (url: string) => ipcRenderer.invoke("shell:open-external", url),
 });
