@@ -12,8 +12,9 @@ extraResources:
 mac:
   target: [dmg, zip]
   category: public.app-category.productivity
+  hardenedRuntime: true
 win:
   target: [nsis, portable]
 linux:
-  target: [AppImage, deb]
+  target: [AppImage, tar.gz]
   category: Utility
