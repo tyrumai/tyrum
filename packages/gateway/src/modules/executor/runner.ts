@@ -237,7 +237,7 @@ export class ExecutionRunner {
                 backoffMs: backoff,
               });
               await sleep(backoff);
-              const freshJob = this.jobQueue.dequeue(planId);
+              const freshJob = this.jobQueue.dequeueById(currentJob.id);
               if (freshJob) {
                 currentJob = freshJob;
                 continue;
@@ -285,7 +285,7 @@ export class ExecutionRunner {
           });
           await sleep(backoff);
 
-          const freshJob = this.jobQueue.dequeue(planId);
+          const freshJob = this.jobQueue.dequeueById(currentJob.id);
           if (freshJob) {
             currentJob = freshJob;
             continue;

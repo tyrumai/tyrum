@@ -131,6 +131,38 @@ export class JobQueue {
     return txn();
   }
 
+  /**
+   * Dequeue a specific pending job by ID, marking it as running.
+   * Uses a transaction to prevent TOCTOU races.
+   * Returns undefined if the job is not found or not pending.
+   */
+  dequeueById(id: string): Job | undefined {
+    const now = new Date().toISOString();
+
+    const txn = this.db.transaction(() => {
+      const row = this.db
+        .prepare(
+          `SELECT * FROM jobs
+           WHERE id = ? AND status = 'pending'
+           LIMIT 1`,
+        )
+        .get(id) as JobRow | undefined;
+
+      if (!row) return undefined;
+
+      this.db
+        .prepare(
+          `UPDATE jobs SET status = 'running', attempt = attempt + 1, started_at = ?
+           WHERE id = ? AND status = 'pending'`,
+        )
+        .run(now, row.id);
+
+      return this.getById(row.id);
+    });
+
+    return txn();
+  }
+
   markCompleted(id: string, result: unknown): void {
     const now = new Date().toISOString();
     const resultJson = result != null ? JSON.stringify(result) : null;
