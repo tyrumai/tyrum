@@ -12,6 +12,8 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { createServer } from "node:http";
 import type { Server } from "node:http";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getRequestListener } from "@hono/node-server";
@@ -19,6 +21,7 @@ import { createContainer } from "../../../../packages/gateway/src/container.js";
 import { createApp } from "../../../../packages/gateway/src/app.js";
 import { createWsHandler } from "../../../../packages/gateway/src/routes/ws.js";
 import { ConnectionManager } from "../../../../packages/gateway/src/ws/connection-manager.js";
+import { TokenStore } from "../../../../packages/gateway/src/modules/auth/token-store.js";
 import { dispatchTask } from "../../../../packages/gateway/src/ws/protocol.js";
 import type { ProtocolDeps } from "../../../../packages/gateway/src/ws/protocol.js";
 import { TyrumClient, autoExecute } from "../../../../packages/client/src/index.js";
@@ -38,6 +41,31 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function waitForCapabilities(
+  connectionManager: ConnectionManager,
+  capabilities: readonly Array<"desktop" | "cli" | "playwright" | "http" | "android">,
+  timeoutMs = 2_000,
+): Promise<void> {
+  const required = [...new Set(capabilities)];
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() <= deadline) {
+    const stats = connectionManager.getStats();
+    const ready = required.every(
+      (capability) => (stats.capabilityCounts[capability] ?? 0) > 0,
+    );
+    if (ready) {
+      return;
+    }
+    await delay(25);
+  }
+
+  const stats = connectionManager.getStats();
+  throw new Error(
+    `timed out waiting for capabilities ${required.join(", ")}; stats=${JSON.stringify(stats)}`,
+  );
+}
+
 interface TaskResultEntry {
   taskId: string;
   success: boolean;
@@ -52,13 +80,15 @@ interface TaskResultEntry {
  * returned `taskResults` array, so any `task_result` messages received from
  * clients are captured for assertions.
  */
-function startServer(): {
+async function startServer(): Promise<{
   server: Server;
   port: number;
+  adminToken: string;
+  tokenHome: string;
   connectionManager: ConnectionManager;
   stopHeartbeat: () => void;
   taskResults: TaskResultEntry[];
-} {
+}> {
   const container = createContainer({
     dbPath: ":memory:",
     migrationsDir,
@@ -73,10 +103,15 @@ function startServer(): {
     },
   };
 
+  const tokenHome = await mkdtemp(join(tmpdir(), "tyrum-e2e-dispatch-"));
+  const tokenStore = new TokenStore(tokenHome);
+  const adminToken = await tokenStore.initialize();
+
   const app = createApp(container, { connectionManager });
   const { handleUpgrade, stopHeartbeat } = createWsHandler({
     connectionManager,
     protocolDeps,
+    tokenStore,
   });
 
   const requestListener = getRequestListener(app.fetch);
@@ -91,21 +126,34 @@ function startServer(): {
     }
   });
 
-  server.listen(0);
-  const addr = server.address();
-  const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+  const port = await new Promise<number>((resolve) => {
+    server.listen(0, "127.0.0.1", () => {
+      const addr = server.address();
+      resolve(typeof addr === "object" && addr !== null ? addr.port : 0);
+    });
+  });
 
-  return { server, port, connectionManager, stopHeartbeat, taskResults };
+  return {
+    server,
+    port,
+    adminToken,
+    tokenHome,
+    connectionManager,
+    stopHeartbeat,
+    taskResults,
+  };
 }
 
 /** Connect a TyrumClient and wait for the "connected" event. */
 async function connectClient(
   port: number,
+  token: string,
   capabilities: Array<"desktop" | "cli" | "playwright" | "http" | "android">,
+  connectionManager: ConnectionManager,
 ): Promise<TyrumClient> {
   const client = new TyrumClient({
     url: `ws://127.0.0.1:${port}/ws`,
-    token: "test",
+    token,
     capabilities,
     reconnect: false,
   });
@@ -116,9 +164,7 @@ async function connectClient(
 
   client.connect();
   await connectedP;
-
-  // Allow server time to register the hello handshake
-  await delay(100);
+  await waitForCapabilities(connectionManager, capabilities);
 
   return client;
 }
@@ -130,6 +176,7 @@ async function connectClient(
 describe("e2e: gateway dispatches task to desktop node", () => {
   let httpServer: Server | undefined;
   let client: TyrumClient | undefined;
+  let tokenHome: string | undefined;
   let stopHeartbeat: (() => void) | undefined;
 
   afterEach(async () => {
@@ -141,17 +188,27 @@ describe("e2e: gateway dispatches task to desktop node", () => {
       await new Promise<void>((resolve) => httpServer!.close(() => resolve()));
       httpServer = undefined;
     }
+    if (tokenHome) {
+      await rm(tokenHome, { recursive: true, force: true });
+      tokenHome = undefined;
+    }
     await delay(50);
   });
 
   it("dispatches Desktop.screenshot to connected desktop node and receives result", async () => {
-    const srv = startServer();
+    const srv = await startServer();
     httpServer = srv.server;
+    tokenHome = srv.tokenHome;
     stopHeartbeat = srv.stopHeartbeat;
 
     // Connect client with desktop + cli capabilities
     const permissions = resolvePermissions("poweruser", {});
-    client = await connectClient(srv.port, ["desktop", "cli"]);
+    client = await connectClient(
+      srv.port,
+      srv.adminToken,
+      ["desktop", "cli"],
+      srv.connectionManager,
+    );
     expect(client.connected).toBe(true);
 
     const desktopProvider = new DesktopProvider(new MockDesktopBackend(), permissions, async () => true);
@@ -188,12 +245,18 @@ describe("e2e: gateway dispatches task to desktop node", () => {
   });
 
   it("dispatches Desktop.mouse action through the full round-trip", async () => {
-    const srv = startServer();
+    const srv = await startServer();
     httpServer = srv.server;
+    tokenHome = srv.tokenHome;
     stopHeartbeat = srv.stopHeartbeat;
 
     const permissions = resolvePermissions("poweruser", {});
-    client = await connectClient(srv.port, ["desktop"]);
+    client = await connectClient(
+      srv.port,
+      srv.adminToken,
+      ["desktop"],
+      srv.connectionManager,
+    );
 
     const desktopProvider = new DesktopProvider(new MockDesktopBackend(), permissions, async () => true);
     autoExecute(client, [desktopProvider]);
@@ -216,11 +279,17 @@ describe("e2e: gateway dispatches task to desktop node", () => {
   });
 
   it("rejects forbidden CLI command with error", async () => {
-    const srv = startServer();
+    const srv = await startServer();
     httpServer = srv.server;
+    tokenHome = srv.tokenHome;
     stopHeartbeat = srv.stopHeartbeat;
 
-    client = await connectClient(srv.port, ["cli"]);
+    client = await connectClient(
+      srv.port,
+      srv.adminToken,
+      ["cli"],
+      srv.connectionManager,
+    );
 
     // Only "echo" is allowed
     const cliProvider = new CliProvider(["echo"], ["/tmp"]);
@@ -245,11 +314,17 @@ describe("e2e: gateway dispatches task to desktop node", () => {
   });
 
   it("executes allowed CLI command successfully", async () => {
-    const srv = startServer();
+    const srv = await startServer();
     httpServer = srv.server;
+    tokenHome = srv.tokenHome;
     stopHeartbeat = srv.stopHeartbeat;
 
-    client = await connectClient(srv.port, ["cli"]);
+    client = await connectClient(
+      srv.port,
+      srv.adminToken,
+      ["cli"],
+      srv.connectionManager,
+    );
 
     const cliProvider = new CliProvider(["echo"], ["/tmp"]);
     autoExecute(client, [cliProvider]);

@@ -218,10 +218,12 @@ describe("GatewayManager", () => {
 
     it("escalates to SIGKILL after timeout", async () => {
       const gm = new GatewayManager();
+      const internal = gm as unknown as Internal;
       const proc = mockProc();
       // SIGTERM succeeds but process doesn't exit
       proc.kill.mockImplementation(() => {});
-      (gm as unknown as Internal).process = proc;
+      internal.process = proc;
+      internal.setStatus("running");
 
       const stopPromise = gm.stop();
 
@@ -235,6 +237,7 @@ describe("GatewayManager", () => {
       expect(proc.kill).toHaveBeenCalledWith("SIGKILL");
 
       await stopPromise;
+      expect(gm.status).toBe("stopped");
     });
 
     it("concurrent stop() calls are safe", async () => {

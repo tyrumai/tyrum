@@ -129,6 +129,10 @@ export function Connection() {
     if (!api || busy) return;
     setBusy(true);
     try {
+      await api.setConfig({
+        mode: "embedded",
+        embedded: { port },
+      });
       const result = await api.gateway.start();
       setGatewayStatus(result.status);
       setPort(result.port);

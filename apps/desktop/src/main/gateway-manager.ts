@@ -118,6 +118,9 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
         } catch {
           /* already dead */
         }
+        if (this.status !== "stopped") {
+          this.setStatus("stopped");
+        }
         resolve();
       }, 5_000);
       killTimer.unref();
