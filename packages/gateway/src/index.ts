@@ -16,6 +16,7 @@ import { TokenStore } from "./modules/auth/token-store.js";
 import { WatcherScheduler } from "./modules/watcher/scheduler.js";
 import { EnvSecretProvider, FileSecretProvider } from "./modules/secret/provider.js";
 import type { SecretProvider } from "./modules/secret/provider.js";
+import { WsNotifier } from "./modules/approval/notifier.js";
 import { ConnectionManager } from "./ws/connection-manager.js";
 import { createWsHandler } from "./routes/ws.js";
 
@@ -93,10 +94,27 @@ async function main(): Promise<void> {
   console.log("Watcher processor and scheduler started");
 
   const connectionManager = new ConnectionManager();
+  const protocolDeps = {
+    connectionManager,
+    onHumanResponse: (
+      planId: string,
+      approved: boolean,
+      reason: string | undefined,
+    ) => {
+      const pendingApproval = container.approvalDal
+        .getByPlanId(planId)
+        .find((approval) => approval.status === "pending");
+      if (!pendingApproval) {
+        return;
+      }
+      container.approvalDal.respond(pendingApproval.id, approved, reason);
+    },
+  };
+  const approvalNotifier = new WsNotifier(protocolDeps);
 
   const agentEnabled = process.env["TYRUM_AGENT_ENABLED"] === "1";
   const agentRuntime = agentEnabled
-    ? new AgentRuntime({ container, secretProvider })
+    ? new AgentRuntime({ container, secretProvider, approvalNotifier })
     : undefined;
 
   const app = createApp(container, {
@@ -110,7 +128,7 @@ async function main(): Promise<void> {
   // --- WebSocket handler ---
   const wsHandler = createWsHandler({
     connectionManager,
-    protocolDeps: { connectionManager },
+    protocolDeps,
     tokenStore,
     isLocalOnly,
   });
@@ -195,4 +213,3 @@ const isMain =
 if (isMain) {
   void main();
 }
-

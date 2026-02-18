@@ -88,11 +88,12 @@ Follow these steps to provision the Telegram channel safely across local and sta
   ```bash
   ngrok http http://localhost:3001
   curl "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
-    --data-urlencode "url=https://<subdomain>.ngrok.app/ingress/telegram"
+    --data-urlencode "url=https://<subdomain>.ngrok.app/ingress/telegram" \
+    --data-urlencode "secret_token=${TELEGRAM_WEBHOOK_SECRET}"
   ```
 
 ### 3. Wire credentials
-- Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_URL` environment variables before starting the gateway.
+- Set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_URL`, and `TELEGRAM_WEBHOOK_SECRET` environment variables before starting the gateway.
 
 ## Key Documents
 - [Vision (Goal)](docs/vision.md)

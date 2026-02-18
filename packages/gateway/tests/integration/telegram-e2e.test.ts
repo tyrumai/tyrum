@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 import { createIngressRoutes } from "../../src/routes/ingress.js";
 import { TelegramBot } from "../../src/modules/ingress/telegram-bot.js";
@@ -27,6 +27,20 @@ function mockFetch(): typeof fetch {
 }
 
 describe("Telegram E2E: webhook -> agent -> reply", () => {
+  const originalWebhookSecret = process.env["TELEGRAM_WEBHOOK_SECRET"];
+
+  beforeEach(() => {
+    process.env["TELEGRAM_WEBHOOK_SECRET"] = "test-telegram-secret";
+  });
+
+  afterEach(() => {
+    if (originalWebhookSecret === undefined) {
+      delete process.env["TELEGRAM_WEBHOOK_SECRET"];
+    } else {
+      process.env["TELEGRAM_WEBHOOK_SECRET"] = originalWebhookSecret;
+    }
+  });
+
   it("normalizes, calls agent turn, and replies via bot", async () => {
     const fetchFn = mockFetch();
     const bot = new TelegramBot("test-token", fetchFn);
@@ -48,7 +62,10 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
 
     const res = await app.request("/ingress/telegram", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-telegram-bot-api-secret-token": "test-telegram-secret",
+      },
       body: JSON.stringify(makeTelegramUpdate("Help me")),
     });
 
@@ -92,7 +109,10 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
 
     const res = await app.request("/ingress/telegram", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-telegram-bot-api-secret-token": "test-telegram-secret",
+      },
       body: JSON.stringify(makeTelegramUpdate("Hello")),
     });
 
@@ -158,7 +178,10 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
 
     const res = await app.request("/ingress/telegram", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-telegram-bot-api-secret-token": "test-telegram-secret",
+      },
       body: JSON.stringify(update),
     });
 
@@ -166,6 +189,86 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     const body = (await res.json()) as { ok: boolean };
     expect(body.ok).toBe(true);
     // Agent should not be called for empty text
+    expect(mockRuntime.turn).not.toHaveBeenCalled();
+  });
+
+  it("rejects webhook when secret header is missing", async () => {
+    const fetchFn = mockFetch();
+    const bot = new TelegramBot("test-token", fetchFn);
+
+    const mockRuntime = {
+      turn: vi.fn(),
+    } as unknown as AgentRuntime;
+
+    const app = new Hono();
+    app.route(
+      "/",
+      createIngressRoutes({ telegramBot: bot, agentRuntime: mockRuntime }),
+    );
+
+    const res = await app.request("/ingress/telegram", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(makeTelegramUpdate("Hello")),
+    });
+
+    expect(res.status).toBe(401);
+    expect(mockRuntime.turn).not.toHaveBeenCalled();
+  });
+
+  it("rejects webhook when secret is wrong", async () => {
+    const fetchFn = mockFetch();
+    const bot = new TelegramBot("test-token", fetchFn);
+
+    const mockRuntime = {
+      turn: vi.fn(),
+    } as unknown as AgentRuntime;
+
+    const app = new Hono();
+    app.route(
+      "/",
+      createIngressRoutes({ telegramBot: bot, agentRuntime: mockRuntime }),
+    );
+
+    const res = await app.request("/ingress/telegram", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-telegram-bot-api-secret-token": "wrong-secret",
+      },
+      body: JSON.stringify(makeTelegramUpdate("Hello")),
+    });
+
+    expect(res.status).toBe(401);
+    expect(mockRuntime.turn).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when telegram secret is not configured", async () => {
+    delete process.env["TELEGRAM_WEBHOOK_SECRET"];
+
+    const fetchFn = mockFetch();
+    const bot = new TelegramBot("test-token", fetchFn);
+
+    const mockRuntime = {
+      turn: vi.fn(),
+    } as unknown as AgentRuntime;
+
+    const app = new Hono();
+    app.route(
+      "/",
+      createIngressRoutes({ telegramBot: bot, agentRuntime: mockRuntime }),
+    );
+
+    const res = await app.request("/ingress/telegram", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-telegram-bot-api-secret-token": "test-telegram-secret",
+      },
+      body: JSON.stringify(makeTelegramUpdate("Hello")),
+    });
+
+    expect(res.status).toBe(503);
     expect(mockRuntime.turn).not.toHaveBeenCalled();
   });
 });

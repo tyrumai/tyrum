@@ -2,6 +2,7 @@
  * Ingress routes — Telegram webhook normalization + agent flow.
  */
 
+import { timingSafeEqual } from "node:crypto";
 import { Hono } from "hono";
 import {
   normalizeUpdate,
@@ -15,10 +16,44 @@ export interface IngressDeps {
   agentRuntime?: AgentRuntime;
 }
 
+const TELEGRAM_SECRET_HEADER = "x-telegram-bot-api-secret-token";
+
+function secureStringEqual(a: string, b: string): boolean {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  if (left.length !== right.length) {
+    return false;
+  }
+  return timingSafeEqual(left, right);
+}
+
 export function createIngressRoutes(deps: IngressDeps = {}): Hono {
   const ingressRouter = new Hono();
 
   ingressRouter.post("/ingress/telegram", async (c) => {
+    // When Telegram integration is enabled, require Telegram webhook secret validation.
+    if (deps.telegramBot) {
+      const expectedSecret = process.env["TELEGRAM_WEBHOOK_SECRET"]?.trim();
+      if (!expectedSecret) {
+        return c.json(
+          {
+            error: "misconfigured",
+            message:
+              "TELEGRAM_WEBHOOK_SECRET must be set when Telegram ingress is enabled.",
+          },
+          503,
+        );
+      }
+
+      const providedSecret = c.req.header(TELEGRAM_SECRET_HEADER);
+      if (!providedSecret || !secureStringEqual(providedSecret, expectedSecret)) {
+        return c.json(
+          { error: "unauthorized", message: "invalid telegram webhook secret" },
+          401,
+        );
+      }
+    }
+
     const rawBody = await c.req.text();
 
     if (!rawBody) {
