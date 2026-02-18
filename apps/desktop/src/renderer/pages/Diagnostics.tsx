@@ -1,9 +1,16 @@
 import { useEffect, useState } from "react";
+import { toErrorMessage } from "../lib/errors.js";
 
 interface CheckItem {
   label: string;
   status: "ok" | "warn" | "error" | "pending";
   detail: string;
+}
+
+interface MacPermissionSnapshot {
+  accessibility: boolean | null;
+  screenRecording: boolean | null;
+  instructions?: string;
 }
 
 const headingStyle: React.CSSProperties = {
@@ -71,6 +78,13 @@ const btnStyle: React.CSSProperties = {
   marginTop: 12,
 };
 
+const secondaryBtnStyle: React.CSSProperties = {
+  ...btnStyle,
+  background: "#e5e7eb",
+  color: "#374151",
+  marginRight: 8,
+};
+
 export function Diagnostics() {
   const [checks, setChecks] = useState<CheckItem[]>([
     { label: "Gateway process", status: "pending", detail: "Checking..." },
@@ -79,6 +93,12 @@ export function Diagnostics() {
     { label: "macOS permissions", status: "pending", detail: "Checking..." },
   ]);
   const [running, setRunning] = useState(false);
+  const [requestingPermission, setRequestingPermission] = useState<
+    "accessibility" | "screenRecording" | null
+  >(null);
+  const [permissionActionNote, setPermissionActionNote] = useState<string | null>(
+    null,
+  );
 
   const runChecks = () => {
     setRunning(true);
@@ -135,16 +155,28 @@ export function Diagnostics() {
     void api
       .checkMacPermissions()
       .then((result) => {
-        const r = result as Record<string, boolean> | null;
+        const r = result as MacPermissionSnapshot | null;
         if (!r) {
           update(3, { status: "ok", detail: "Not macOS (skipped)" });
         } else {
-          const allOk = Object.values(r).every(Boolean);
+          const accessibility = r.accessibility === true;
+          const screenRecording = r.screenRecording === true;
+          const allOk = accessibility && screenRecording;
+          const missing = [
+            !accessibility ? "Accessibility" : null,
+            !screenRecording ? "Screen Recording" : null,
+          ]
+            .filter(Boolean)
+            .join(", ");
+          const instructions =
+            typeof r.instructions === "string" && r.instructions.trim().length > 0
+              ? ` ${r.instructions.trim()}`
+              : "";
           update(3, {
             status: allOk ? "ok" : "warn",
             detail: allOk
               ? "All permissions granted"
-              : "Some permissions missing",
+              : `Missing: ${missing}.${instructions}`,
           });
         }
       })
@@ -152,6 +184,36 @@ export function Diagnostics() {
         update(3, { status: "ok", detail: "Not applicable" });
       })
       .finally(() => setRunning(false));
+  };
+
+  const requestPermission = (permission: "accessibility" | "screenRecording") => {
+    const api = window.tyrumDesktop;
+    if (!api) {
+      setPermissionActionNote("IPC bridge unavailable.");
+      return;
+    }
+
+    setPermissionActionNote(null);
+    setRequestingPermission(permission);
+    void api
+      .requestMacPermission(permission)
+      .then((result) => {
+        const r = result as { granted: boolean; instructions?: string };
+        if (r.granted) {
+          setPermissionActionNote(`${permission} permission is granted.`);
+          return;
+        }
+        setPermissionActionNote(
+          r.instructions ?? `${permission} permission was not granted.`,
+        );
+      })
+      .catch((error: unknown) => {
+        setPermissionActionNote(toErrorMessage(error));
+      })
+      .finally(() => {
+        setRequestingPermission(null);
+        runChecks();
+      });
   };
 
   useEffect(() => {
@@ -184,6 +246,36 @@ export function Diagnostics() {
         <button style={btnStyle} onClick={runChecks} disabled={running}>
           {running ? "Running..." : "Re-run Checks"}
         </button>
+        <div style={{ ...sectionTitle, marginTop: 18, marginBottom: 8 }}>
+          Permission Requests (User initiated)
+        </div>
+        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 8 }}>
+          Diagnostics checks never request permissions automatically. Use these
+          buttons to request permissions when needed.
+        </div>
+        <button
+          style={secondaryBtnStyle}
+          onClick={() => requestPermission("accessibility")}
+          disabled={requestingPermission !== null}
+        >
+          {requestingPermission === "accessibility"
+            ? "Requesting..."
+            : "Request Accessibility"}
+        </button>
+        <button
+          style={secondaryBtnStyle}
+          onClick={() => requestPermission("screenRecording")}
+          disabled={requestingPermission !== null}
+        >
+          {requestingPermission === "screenRecording"
+            ? "Opening..."
+            : "Request Screen Recording"}
+        </button>
+        {permissionActionNote && (
+          <div style={{ fontSize: 12, color: "#6b7280", marginTop: 10 }}>
+            {permissionActionNote}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,6 +1,11 @@
-import { useEffect, useState } from "react";
-
-type Profile = "safe" | "balanced" | "poweruser";
+import { useEffect, useMemo, useState } from "react";
+import { toErrorMessage } from "../lib/errors.js";
+import {
+  capabilitiesForProfile,
+  getAllowlistMode,
+  type CapFlags,
+  type Profile,
+} from "../lib/permission-profile.js";
 
 const PROFILES: { id: Profile; label: string; description: string }[] = [
   {
@@ -115,12 +120,27 @@ const btnStyle: React.CSSProperties = {
   marginTop: 16,
 };
 
-interface CapFlags {
-  desktop: boolean;
-  playwright: boolean;
-  cli: boolean;
-  http: boolean;
-}
+const statusBadgeStyle: React.CSSProperties = {
+  display: "inline-block",
+  fontSize: 12,
+  fontWeight: 700,
+  borderRadius: 999,
+  padding: "3px 10px",
+  marginLeft: 8,
+};
+
+const helpStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: "#6b7280",
+  lineHeight: 1.5,
+  marginTop: 8,
+};
+
+const warningStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: "#b91c1c",
+  marginTop: 8,
+};
 
 interface CliConfig {
   allowedCommands: string[];
@@ -149,6 +169,14 @@ export function Permissions() {
     headless: true,
   });
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const allowlistMode = useMemo(
+    () => getAllowlistMode(profile, capabilities),
+    [profile, capabilities],
+  );
+  const cliAllowlistActive = allowlistMode.cli === "active";
+  const webAllowlistActive = allowlistMode.web === "active";
 
   useEffect(() => {
     const api = window.tyrumDesktop;
@@ -174,6 +202,7 @@ export function Permissions() {
     const api = window.tyrumDesktop;
     if (!api) return;
 
+    setSaveError(null);
     void api
       .setConfig({
         permissions: { profile },
@@ -184,7 +213,15 @@ export function Permissions() {
       .then(() => {
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
+      })
+      .catch((error: unknown) => {
+        setSaveError(toErrorMessage(error));
       });
+  };
+
+  const applyProfile = (nextProfile: Profile) => {
+    setProfile(nextProfile);
+    setCapabilities(capabilitiesForProfile(nextProfile));
   };
 
   const toggleCap = (key: keyof CapFlags) => {
@@ -204,7 +241,7 @@ export function Permissions() {
               name="profile"
               value={p.id}
               checked={profile === p.id}
-              onChange={() => setProfile(p.id)}
+              onChange={() => applyProfile(p.id)}
               style={{ marginTop: 3 }}
             />
             <div>
@@ -217,6 +254,10 @@ export function Permissions() {
 
       <div style={cardStyle}>
         <div style={sectionTitle}>Capabilities</div>
+        <div style={helpStyle}>
+          Switching profile applies recommended capability defaults for that
+          profile. You can still adjust these before saving.
+        </div>
         {(
           [
             ["desktop", "Desktop (screenshot & input)"],
@@ -238,46 +279,102 @@ export function Permissions() {
 
       <div style={cardStyle}>
         <div style={sectionTitle}>CLI Allowlist</div>
+        <div style={helpStyle}>
+          Enforcement:
+          <span
+            style={{
+              ...statusBadgeStyle,
+              background: cliAllowlistActive ? "#fee2e2" : "#dcfce7",
+              color: cliAllowlistActive ? "#b91c1c" : "#166534",
+            }}
+          >
+            {cliAllowlistActive ? "active (default deny)" : "inactive (default allow)"}
+          </span>
+        </div>
         <div style={labelStyle}>Allowed Commands (one per line)</div>
         <textarea
           style={textareaStyle}
           value={cli.allowedCommands.join("\n")}
+          disabled={!cliAllowlistActive}
           onChange={(e) =>
             setCli((prev) => ({
               ...prev,
               allowedCommands: e.target.value.split("\n").filter(Boolean),
             }))
           }
-          placeholder="ls&#10;git status&#10;node --version"
+          placeholder="git status&#10;node --version&#10;*"
         />
+        <div style={helpStyle}>
+          <div>- Use one rule per line.</div>
+          <div>- `*` allows all commands.</div>
+          <div>
+            - Subcommand rules are prefix matches. `git status` allows `git
+            status -sb`, but does not allow `git push`.
+          </div>
+          <div>- A bare command (for example `git`) allows all its subcommands.</div>
+        </div>
+        {cliAllowlistActive && cli.allowedCommands.length === 0 && (
+          <div style={warningStyle}>
+            CLI allowlist is active and empty, so command execution is default deny.
+          </div>
+        )}
         <div style={labelStyle}>Allowed Working Directories (one per line)</div>
         <textarea
           style={textareaStyle}
           value={cli.allowedWorkingDirs.join("\n")}
+          disabled={!cliAllowlistActive}
           onChange={(e) =>
             setCli((prev) => ({
               ...prev,
               allowedWorkingDirs: e.target.value.split("\n").filter(Boolean),
             }))
           }
-          placeholder="/home/user/projects"
+          placeholder="/home/user/projects&#10;*"
         />
+        <div style={helpStyle}>
+          <div>
+            - `*` allows any working directory when CLI allowlist enforcement is active.
+          </div>
+        </div>
       </div>
 
       <div style={cardStyle}>
         <div style={sectionTitle}>Web / Playwright</div>
+        <div style={helpStyle}>
+          Enforcement:
+          <span
+            style={{
+              ...statusBadgeStyle,
+              background: webAllowlistActive ? "#fee2e2" : "#dcfce7",
+              color: webAllowlistActive ? "#b91c1c" : "#166534",
+            }}
+          >
+            {webAllowlistActive ? "active (default deny)" : "inactive (default allow)"}
+          </span>
+        </div>
         <div style={labelStyle}>Allowed Domains (one per line)</div>
         <textarea
           style={textareaStyle}
           value={web.allowedDomains.join("\n")}
+          disabled={!webAllowlistActive}
           onChange={(e) =>
             setWeb((prev) => ({
               ...prev,
               allowedDomains: e.target.value.split("\n").filter(Boolean),
             }))
           }
-          placeholder="example.com&#10;docs.example.com"
+          placeholder="example.com&#10;docs.example.com&#10;*"
         />
+        <div style={helpStyle}>
+          <div>- Use one domain per line.</div>
+          <div>- Subdomains are allowed automatically.</div>
+          <div>- `*` allows all domains.</div>
+        </div>
+        {webAllowlistActive && web.allowedDomains.length === 0 && (
+          <div style={warningStyle}>
+            Domain allowlist is active and empty, so web navigation is default deny.
+          </div>
+        )}
         <div style={toggleRowStyle}>
           <span style={toggleLabelStyle}>Headless mode</span>
           <input
@@ -293,6 +390,7 @@ export function Permissions() {
       <button style={btnStyle} onClick={save}>
         {saved ? "Saved!" : "Save Permissions"}
       </button>
+      {saveError && <div style={warningStyle}>Save failed: {saveError}</div>}
     </div>
   );
 }

@@ -9,7 +9,7 @@ interface LayoutProps {
 
 const containerStyle: React.CSSProperties = {
   display: "flex",
-  minHeight: "100vh",
+  height: "100%",
   fontFamily: "system-ui, -apple-system, sans-serif",
   background: "#f5f5f7",
   color: "#1a1a2e",

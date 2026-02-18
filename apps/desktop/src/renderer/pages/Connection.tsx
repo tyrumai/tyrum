@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { toErrorMessage } from "../lib/errors.js";
 
 type Tab = "embedded" | "remote";
 
@@ -95,6 +96,7 @@ export function Connection() {
   const [hasSavedRemoteToken, setHasSavedRemoteToken] = useState(false);
   const [nodeStatus, setNodeStatus] = useState("disconnected");
   const [busy, setBusy] = useState(false);
+  const [gatewayError, setGatewayError] = useState<string | null>(null);
 
   useEffect(() => {
     const api = window.tyrumDesktop;
@@ -116,7 +118,13 @@ export function Connection() {
 
     const unsubscribe = api.onStatusChange((s) => {
       const info = s as Record<string, unknown>;
-      if (info["gatewayStatus"]) setGatewayStatus(info["gatewayStatus"] as string);
+      if (info["gatewayStatus"]) {
+        const nextGatewayStatus = info["gatewayStatus"] as string;
+        setGatewayStatus(nextGatewayStatus);
+        if (nextGatewayStatus === "running" || nextGatewayStatus === "stopped") {
+          setGatewayError(null);
+        }
+      }
       if (info["nodeStatus"]) setNodeStatus(info["nodeStatus"] as string);
       if (info["port"]) setPort(info["port"] as number);
     });
@@ -128,6 +136,7 @@ export function Connection() {
   const startGateway = async () => {
     if (!api || busy) return;
     setBusy(true);
+    setGatewayError(null);
     try {
       await api.setConfig({
         mode: "embedded",
@@ -136,6 +145,9 @@ export function Connection() {
       const result = await api.gateway.start();
       setGatewayStatus(result.status);
       setPort(result.port);
+    } catch (error) {
+      setGatewayStatus("error");
+      setGatewayError(toErrorMessage(error));
     } finally {
       setBusy(false);
     }
@@ -147,6 +159,7 @@ export function Connection() {
     try {
       const result = await api.gateway.stop();
       setGatewayStatus(result.status);
+      setGatewayError(null);
     } finally {
       setBusy(false);
     }
@@ -222,6 +235,11 @@ export function Connection() {
           <div style={infoStyle}>
             Status: {gatewayStatus} {mode === "embedded" ? "(active mode)" : ""}
           </div>
+          {gatewayError && (
+            <div style={{ ...infoStyle, color: "#b91c1c", marginTop: 6 }}>
+              Reason: {gatewayError}
+            </div>
+          )}
         </div>
       )}
 

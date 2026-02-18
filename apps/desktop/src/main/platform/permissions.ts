@@ -4,6 +4,13 @@ export interface MacPermissions {
   instructions?: string;
 }
 
+export type MacPermissionKind = "accessibility" | "screenRecording";
+
+export interface MacPermissionRequestResult {
+  granted: boolean;
+  instructions?: string;
+}
+
 /**
  * Check macOS Accessibility and Screen Recording permissions.
  * Returns definitive answers on macOS when running in Electron.
@@ -56,9 +63,68 @@ export function checkMacPermissions(): MacPermissions {
     );
   }
 
-  return {
+  const result: MacPermissions = {
     accessibility,
     screenRecording,
-    instructions: instructions.length > 0 ? instructions.join("\n") : undefined,
   };
+
+  if (instructions.length > 0) {
+    result.instructions = instructions.join("\n");
+  }
+
+  return result;
+}
+
+/**
+ * Requests a specific macOS permission. This function is intentionally
+ * user-initiated by UI action to avoid unexpected permission popups.
+ */
+export async function requestMacPermission(
+  permission: MacPermissionKind,
+): Promise<MacPermissionRequestResult> {
+  if (process.platform !== "darwin") {
+    return { granted: true };
+  }
+
+  try {
+    // Dynamic require to avoid crashes outside Electron
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { systemPreferences, shell } =
+      require("electron") as typeof import("electron");
+
+    if (permission === "accessibility") {
+      const granted = systemPreferences.isTrustedAccessibilityClient({
+        prompt: true,
+      });
+      return granted
+        ? { granted: true }
+        : {
+            granted: false,
+            instructions:
+              "Grant Accessibility in System Settings > Privacy & Security > Accessibility.",
+          };
+    }
+
+    const screenStatus = systemPreferences.getMediaAccessStatus("screen");
+    if (screenStatus === "granted") {
+      return { granted: true };
+    }
+
+    // macOS does not expose a direct request prompt API for screen recording.
+    // Opening the settings pane is the safest user-driven path.
+    await shell.openExternal(
+      "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+    );
+    return {
+      granted: false,
+      instructions:
+        "Opened Screen Recording settings. Enable Tyrum Desktop, then restart the app.",
+    };
+  } catch {
+    return {
+      granted: false,
+      instructions:
+        "Permission request unavailable outside Electron. Open System Settings > Privacy & Security manually.",
+    };
+  }
 }

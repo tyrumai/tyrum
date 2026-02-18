@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { setCookie } from "hono/cookie";
 import type { ApprovalDal } from "../modules/approval/dal.js";
 import type { MemoryDal } from "../modules/memory/dal.js";
 import type { WatcherProcessor } from "../modules/watcher/processor.js";
@@ -346,6 +347,8 @@ type PvpViewState = {
   pronunciationDict: PronunciationEntry[];
   version: string | null;
 };
+
+const AUTH_COOKIE_NAME = "tyrum_admin_token";
 
 function extractPamViewState(): PamViewState {
   const profiles = readProfiles();
@@ -784,6 +787,23 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
       </form>
     `;
     return c.html(shell("Consent", "/app/onboarding/consent", search, body));
+  });
+
+  app.get("/app/auth", (c) => {
+    const search = new URL(c.req.url).searchParams;
+    const token = search.get("token")?.trim();
+    const requestedNext = search.get("next") ?? "/app";
+    const nextPath = requestedNext.startsWith("/app") ? requestedNext : "/app";
+    if (!token) {
+      return c.redirect(nextPath);
+    }
+    setCookie(c, AUTH_COOKIE_NAME, token, {
+      path: "/",
+      httpOnly: true,
+      sameSite: "Strict",
+      maxAge: 604800,
+    });
+    return c.redirect(nextPath);
   });
 
   app.get("/app", (c) => {

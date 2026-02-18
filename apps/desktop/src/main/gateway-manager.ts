@@ -6,6 +6,7 @@ export interface GatewayManagerOptions {
   port: number;
   dbPath: string;
   wsToken: string;
+  adminToken?: string;
   host?: string;
 }
 
@@ -22,6 +23,76 @@ export interface GatewayManagerEvents {
   exit: [code: number | null];
   "status-change": [status: GatewayStatus];
   "health-fail": [];
+}
+
+const STARTUP_FAILURE_PATTERNS = [
+  /EADDRINUSE/i,
+  /address already in use/i,
+  /EACCES/i,
+  /permission denied/i,
+  /Cannot find module/i,
+  /ERR_MODULE_NOT_FOUND/i,
+];
+
+const GENERIC_ERROR_PATTERNS = [/ERR_[A-Z0-9_]+/i, /\bError\b/i];
+
+const STARTUP_NOISE_PATTERNS = [
+  /^Node\.js v\d+/i,
+  /^\^$/,
+  /^at\s+/,
+  /^node:internal\//,
+  /^file:\/\/.+:\d+:\d+$/,
+];
+
+const STARTUP_LOG_BUFFER_LIMIT = 80;
+
+function isStartupNoiseLine(line: string): boolean {
+  return STARTUP_NOISE_PATTERNS.some((pattern) => pattern.test(line));
+}
+
+export function summarizeGatewayStartupFailure(
+  startupLogLines: string[],
+): string | undefined {
+  const normalizedLines = startupLogLines
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  if (normalizedLines.length === 0) {
+    return undefined;
+  }
+
+  for (const pattern of STARTUP_FAILURE_PATTERNS) {
+    const matched = normalizedLines.find((line) => pattern.test(line));
+    if (matched) {
+      return matched;
+    }
+  }
+
+  for (const pattern of GENERIC_ERROR_PATTERNS) {
+    const matched = normalizedLines.find(
+      (line) => pattern.test(line) && !isStartupNoiseLine(line),
+    );
+    if (matched) {
+      return matched;
+    }
+  }
+
+  const meaningfulLines = normalizedLines.filter((line) => !isStartupNoiseLine(line));
+  return meaningfulLines.at(-1);
+}
+
+function appendStartupLogLines(buffer: string[], rawOutput: string): void {
+  const lines = rawOutput
+    .split(/\r?\n/g)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  if (lines.length === 0) return;
+
+  buffer.push(...lines);
+  if (buffer.length > STARTUP_LOG_BUFFER_LIMIT) {
+    buffer.splice(0, buffer.length - STARTUP_LOG_BUFFER_LIMIT);
+  }
 }
 
 export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
@@ -44,6 +115,7 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
     this.setStatus("starting");
 
     const host = opts.host ?? "127.0.0.1";
+    const startupLogLines: string[] = [];
 
     const proc = spawn("node", [opts.gatewayBin], {
       env: {
@@ -52,12 +124,14 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
         GATEWAY_HOST: host,
         GATEWAY_DB_PATH: opts.dbPath,
         GATEWAY_WS_TOKEN: opts.wsToken,
+        TYRUM_ADMIN_TOKEN: opts.adminToken ?? opts.wsToken,
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
     this.process = proc;
 
     proc.stdout?.on("data", (data: Buffer) => {
+      appendStartupLogLines(startupLogLines, data.toString());
       this.emit("log", {
         level: "info",
         message: data.toString().trimEnd(),
@@ -66,6 +140,7 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
     });
 
     proc.stderr?.on("data", (data: Buffer) => {
+      appendStartupLogLines(startupLogLines, data.toString());
       this.emit("log", {
         level: "error",
         message: data.toString().trimEnd(),
@@ -90,7 +165,13 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
       }
     });
 
-    await this.waitForHealth(opts.port, host);
+    await this.waitForHealth(proc, opts.port, host, startupLogLines);
+    if (this.process !== proc || proc.exitCode !== null || proc.signalCode !== null) {
+      const startupReason = summarizeGatewayStartupFailure(startupLogLines);
+      const processReason = `process exited (code ${String(proc.exitCode)}, signal ${String(proc.signalCode)})`;
+      const reason = startupReason ?? processReason;
+      throw new Error(`Gateway failed to start: ${reason}`);
+    }
     this.setStatus("running");
     this.startHealthCheck(opts.port, host);
   }
@@ -152,11 +233,22 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
   }
 
   private async waitForHealth(
+    proc: ChildProcess,
     port: number,
     host: string,
+    startupLogLines: string[],
     maxAttempts = 30,
   ): Promise<void> {
     for (let i = 0; i < maxAttempts; i++) {
+      if (this.process !== proc || proc.exitCode !== null || proc.signalCode !== null) {
+        this.process = null;
+        this.setStatus("error");
+        const startupReason = summarizeGatewayStartupFailure(startupLogLines);
+        const processReason = `process exited (code ${String(proc.exitCode)}, signal ${String(proc.signalCode)})`;
+        const reason = startupReason ?? processReason;
+        throw new Error(`Gateway failed to start: ${reason}`);
+      }
+
       try {
         const res = await fetch(`http://${host}:${port}/healthz`);
         if (res.ok) return;
@@ -165,9 +257,17 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
       }
       await new Promise((r) => setTimeout(r, 200));
     }
-    this.process?.kill("SIGKILL");
+    try {
+      proc.kill("SIGKILL");
+    } catch {
+      /* process already exited */
+    }
     this.process = null;
     this.setStatus("error");
+    const startupReason = summarizeGatewayStartupFailure(startupLogLines);
+    if (startupReason) {
+      throw new Error(`Gateway failed to start within timeout: ${startupReason}`);
+    }
     throw new Error("Gateway failed to start within timeout");
   }
 

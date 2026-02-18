@@ -86,5 +86,24 @@ describe("Auth integration", () => {
       });
       expect(res.status).toBe(200);
     });
+
+    it("bootstraps web auth cookie via /app/auth and grants /app access", async () => {
+      const bootstrapRes = await app.request(
+        `/app/auth?token=${encodeURIComponent(adminToken)}&next=%2Fapp`,
+      );
+      expect(bootstrapRes.status).toBe(302);
+      expect(bootstrapRes.headers.get("location")).toBe("/app");
+
+      const setCookie = bootstrapRes.headers.get("set-cookie");
+      expect(setCookie).toBeTruthy();
+      const cookie = setCookie?.split(";")[0] ?? "";
+
+      const appRes = await app.request("/app", {
+        headers: { Cookie: cookie },
+      });
+      expect(appRes.status).toBe(200);
+      const html = await appRes.text();
+      expect(html).toContain("Dashboard");
+    });
   });
 });

@@ -1,7 +1,11 @@
-import { ipcMain } from "electron";
+import { ipcMain, shell } from "electron";
 import { loadConfig, saveConfig } from "../config/store.js";
 import { DesktopNodeConfig } from "../config/schema.js";
-import { checkMacPermissions } from "../platform/permissions.js";
+import {
+  checkMacPermissions,
+  requestMacPermission,
+  type MacPermissionKind,
+} from "../platform/permissions.js";
 import { normalizeConfigPartialForSave } from "../config/token-ref-normalizer.js";
 
 const RENDERER_MUTABLE_PATHS = new Set([
@@ -125,5 +129,33 @@ export function registerConfigIpc(): void {
 
   ipcMain.handle("permissions:check-mac", () => {
     return checkMacPermissions();
+  });
+
+  ipcMain.handle("permissions:request-mac", (_event, permission: unknown) => {
+    if (permission !== "accessibility" && permission !== "screenRecording") {
+      throw new Error(
+        "permissions:request-mac requires 'accessibility' or 'screenRecording'",
+      );
+    }
+    return requestMacPermission(permission as MacPermissionKind);
+  });
+
+  ipcMain.handle("shell:open-external", async (_event, rawUrl: unknown) => {
+    if (typeof rawUrl !== "string") {
+      throw new Error("shell:open-external requires a URL string");
+    }
+
+    let parsed: URL;
+    try {
+      parsed = new URL(rawUrl);
+    } catch {
+      throw new Error(`Invalid URL: ${rawUrl}`);
+    }
+
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      throw new Error("Only http/https URLs are allowed for external open");
+    }
+
+    await shell.openExternal(parsed.toString());
   });
 }

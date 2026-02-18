@@ -18,6 +18,7 @@ vi.mock("node:child_process", async () => {
 import {
   GatewayManager,
   type GatewayStatus,
+  summarizeGatewayStartupFailure,
 } from "../src/main/gateway-manager.js";
 
 /** Minimal mock that satisfies the ChildProcess surface used by GatewayManager. */
@@ -52,6 +53,52 @@ describe("GatewayManager", () => {
   it("status starts as 'stopped'", () => {
     const gm = new GatewayManager();
     expect(gm.status).toBe("stopped");
+  });
+
+  it("summarizes startup logs with highest-priority bind errors", () => {
+    const reason = summarizeGatewayStartupFailure([
+      "Watcher processor and scheduler started",
+      "Error: listen EADDRINUSE: address already in use 127.0.0.1:8080",
+      "at Server.setupListenHandle (node:net:1940:16)",
+    ]);
+    expect(reason).toBe(
+      "Error: listen EADDRINUSE: address already in use 127.0.0.1:8080",
+    );
+  });
+
+  it("falls back to the last non-empty startup line", () => {
+    const reason = summarizeGatewayStartupFailure([
+      "one",
+      "two",
+      "  ",
+      "final line",
+    ]);
+    expect(reason).toBe("final line");
+  });
+
+  it("ignores stack footer noise and picks the actual error line", () => {
+    const reason = summarizeGatewayStartupFailure([
+      "node:internal/modules/cjs/loader:1386",
+      "  throw err;",
+      "  ^",
+      "Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/tmp/missing.mjs'",
+      "    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)",
+      "    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)",
+      "Node.js v24.9.0",
+    ]);
+    expect(reason).toBe(
+      "Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/tmp/missing.mjs'",
+    );
+  });
+
+  it("prefers generic error lines over Node.js version footer", () => {
+    const reason = summarizeGatewayStartupFailure([
+      "node:internal/modules/run_main:123",
+      "Error: spawn /tmp/bin ENOENT",
+      "    at ChildProcess._handle.onexit (node:internal/child_process:286:19)",
+      "Node.js v24.9.0",
+    ]);
+    expect(reason).toBe("Error: spawn /tmp/bin ENOENT");
   });
 
   it("stop() on a stopped manager is a no-op", async () => {
@@ -94,6 +141,33 @@ describe("GatewayManager", () => {
     expect(statuses).toEqual(["starting", "running", "stopped"]);
   });
 
+  it("sets TYRUM_ADMIN_TOKEN when starting gateway", async () => {
+    const gm = new GatewayManager();
+    const proc = mockProc();
+    proc.kill.mockImplementation((signal?: string) => {
+      if (signal === "SIGTERM") {
+        proc.signalCode = "SIGTERM";
+        queueMicrotask(() => proc.emit("exit", null));
+      }
+    });
+    spawnMock.mockReturnValue(proc);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true } as Response));
+
+    await gm.start({
+      gatewayBin: "/nonexistent",
+      port: 7788,
+      dbPath: "/tmp/test.db",
+      wsToken: "local-token-123",
+    });
+
+    const [, , options] = spawnMock.mock.calls[0] ?? [];
+    const env = (options as { env?: Record<string, string> }).env;
+    expect(env?.["GATEWAY_WS_TOKEN"]).toBe("local-token-123");
+    expect(env?.["TYRUM_ADMIN_TOKEN"]).toBe("local-token-123");
+
+    await gm.stop();
+  });
+
   it("graceful stop does not emit transient error status", async () => {
     const gm = new GatewayManager();
     const proc = mockProc();
@@ -120,6 +194,36 @@ describe("GatewayManager", () => {
     expect(proc.kill).toHaveBeenCalledWith("SIGTERM");
     expect(statuses).toContain("stopped");
     expect(statuses).not.toContain("error");
+  });
+
+  it("does not report running when process exits after health passes", async () => {
+    const gm = new GatewayManager();
+    const proc = mockProc();
+    spawnMock.mockReturnValue(proc);
+
+    const statuses: GatewayStatus[] = [];
+    gm.on("status-change", (status) => statuses.push(status));
+
+    const fetchMock = vi.fn().mockImplementation(async () => {
+      queueMicrotask(() => {
+        proc.exitCode = 1;
+        proc.emit("exit", 1);
+      });
+      return { ok: true } as Response;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      gm.start({
+        gatewayBin: "/nonexistent",
+        port: 7788,
+        dbPath: "/tmp/test.db",
+        wsToken: "test-token",
+      }),
+    ).rejects.toThrow("Gateway failed to start");
+
+    expect(gm.status).toBe("error");
+    expect(statuses).not.toContain("running");
   });
 
   describe("health checks", () => {
