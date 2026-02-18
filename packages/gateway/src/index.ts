@@ -38,7 +38,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   const port = parseInt(process.env["GATEWAY_PORT"] ?? "8080", 10);
   const host = process.env["GATEWAY_HOST"]?.trim() || "127.0.0.1";
   const dbPath = process.env["GATEWAY_DB_PATH"] ?? "gateway.db";

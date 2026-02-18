@@ -1,0 +1,156 @@
+name: install-smoke
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Release channel to test when version is not set"
+        required: false
+        default: stable
+        type: choice
+        options:
+          - stable
+          - beta
+          - dev
+      version:
+        description: "Specific version (without v prefix), e.g. 2026.2.18"
+        required: false
+        type: string
+
+concurrency:
+  group: install-smoke-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unix-installer:
+    name: Unix Installer (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - id: target
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            tag="${{ github.event.release.tag_name }}"
+            version="${tag#v}"
+            channel="stable"
+            if [[ "$tag" == *"-beta."* ]]; then
+              channel="beta"
+            elif [[ "$tag" == *"-dev."* ]]; then
+              channel="dev"
+            fi
+          else
+            channel="${{ inputs.channel || 'stable' }}"
+            version="${{ inputs.version || '' }}"
+          fi
+
+          echo "channel=${channel}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Install from release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${{ steps.target.outputs.version }}" ]]; then
+            bash scripts/install.sh "${{ steps.target.outputs.version }}"
+          else
+            bash scripts/install.sh --channel "${{ steps.target.outputs.channel }}"
+          fi
+
+      - name: Smoke test gateway startup
+        shell: bash
+        run: |
+          set -euo pipefail
+          LOG_FILE="$RUNNER_TEMP/tyrum-gateway.log"
+          TYRUM_HOME="$RUNNER_TEMP/.tyrum-home"
+          mkdir -p "$TYRUM_HOME"
+
+          GATEWAY_PORT=18980 GATEWAY_HOST=127.0.0.1 TYRUM_HOME="$TYRUM_HOME" tyrum-gateway >"$LOG_FILE" 2>&1 &
+          gateway_pid=$!
+
+          ready=0
+          for _ in $(seq 1 20); do
+            if grep -q "Gateway v" "$LOG_FILE"; then
+              ready=1
+              break
+            fi
+            sleep 0.5
+          done
+
+          kill "$gateway_pid" >/dev/null 2>&1 || true
+          wait "$gateway_pid" >/dev/null 2>&1 || true
+
+          if [[ "$ready" -ne 1 ]]; then
+            cat "$LOG_FILE"
+            echo "Gateway did not start successfully."
+            exit 1
+          fi
+
+          cat "$LOG_FILE"
+
+  windows-npm:
+    name: Windows npm Install
+    runs-on: windows-latest
+    steps:
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - id: target
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            tag="${{ github.event.release.tag_name }}"
+            version="${tag#v}"
+            channel="stable"
+            if [[ "$tag" == *"-beta."* ]]; then
+              channel="beta"
+            elif [[ "$tag" == *"-dev."* ]]; then
+              channel="dev"
+            fi
+          else
+            channel="${{ inputs.channel || 'stable' }}"
+            version="${{ inputs.version || '' }}"
+          fi
+
+          echo "channel=${channel}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Install from npm
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${{ steps.target.outputs.version }}" ]]; then
+            npm i -g "@tyrum/gateway@${{ steps.target.outputs.version }}"
+          else
+            npm_tag="latest"
+            if [[ "${{ steps.target.outputs.channel }}" == "beta" ]]; then
+              npm_tag="next"
+            elif [[ "${{ steps.target.outputs.channel }}" == "dev" ]]; then
+              npm_tag="dev"
+            fi
+            npm i -g "@tyrum/gateway@${npm_tag}"
+          fi
+
+          npm_prefix="$(npm config get prefix)"
+          echo "$npm_prefix" >> "$GITHUB_PATH"
+          echo "${npm_prefix}/bin" >> "$GITHUB_PATH"
+
+      - name: Verify command is available
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v tyrum-gateway

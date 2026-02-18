@@ -2,6 +2,9 @@
   "name": "@tyrum/gateway",
   "version": "0.1.0",
   "type": "module",
+  "bin": {
+    "tyrum-gateway": "./bin/tyrum-gateway.mjs"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.mts",
@@ -9,7 +12,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "bin"
   ],
   "scripts": {
     "build": "tsdown src/index.ts --format esm --dts",
