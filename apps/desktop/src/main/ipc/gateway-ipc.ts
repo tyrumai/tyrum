@@ -164,11 +164,11 @@ export function registerGatewayIpc(window: BrowserWindow): GatewayManager {
     });
 
     ipcMain.handle("gateway:ui-urls", async (_event, rawOptions?: unknown) => {
-      const startOnboarding =
-        rawOptions &&
-        typeof rawOptions === "object" &&
-        !Array.isArray(rawOptions) &&
-        (rawOptions as { startOnboarding?: unknown }).startOnboarding === true;
+      let startOnboarding = false;
+      if (rawOptions && typeof rawOptions === "object" && !Array.isArray(rawOptions)) {
+        startOnboarding =
+          (rawOptions as { startOnboarding?: unknown }).startOnboarding === true;
+      }
       const config = loadConfig();
       if (config.mode === "embedded") {
         const token = ensureEmbeddedGatewayToken(config);
