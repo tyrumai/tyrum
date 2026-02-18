@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import { createServer } from "node:http";
-import { resolve } from "node:path";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import process from "node:process";
 import next from "next";
 import { getRequestListener } from "@hono/node-server";
-import { createApp, createContainer } from "@tyrum/gateway";
+import { createApp, createContainer, TokenStore } from "@tyrum/gateway";
 
 function parsePort(value, fallback) {
   const parsed = Number.parseInt(value ?? "", 10);
@@ -34,12 +35,16 @@ const migrationsDir =
   process.env.GATEWAY_MIGRATIONS_DIR ??
   resolve(repoRoot, "packages/gateway/migrations");
 const modelGatewayConfigPath = process.env.MODEL_GATEWAY_CONFIG ?? undefined;
+const tyrumHome = process.env.TYRUM_HOME ?? join(homedir(), ".tyrum");
 
 const localHosts = new Set(["127.0.0.1", "localhost", "::1"]);
-if (!localHosts.has(host)) {
+const isLocalOnly = localHosts.has(host);
+if (!isLocalOnly) {
+  const tokenPath = join(tyrumHome, ".admin-token");
   console.warn(
-    "Single-instance runtime is binding to a non-local interface while app auth is disabled.",
+    "Single-instance runtime is binding to a non-local interface; gateway auth is required.",
   );
+  console.warn(`Admin token path: ${tokenPath}`);
 }
 
 const dev = process.env.NODE_ENV !== "production";
@@ -59,7 +64,9 @@ const container = createContainer({
   migrationsDir,
   modelGatewayConfigPath,
 });
-const gatewayApp = createApp(container);
+const tokenStore = new TokenStore(tyrumHome);
+await tokenStore.initialize();
+const gatewayApp = createApp(container, { tokenStore, isLocalOnly });
 const gatewayListener = getRequestListener(gatewayApp.fetch);
 
 const server = createServer((req, res) => {

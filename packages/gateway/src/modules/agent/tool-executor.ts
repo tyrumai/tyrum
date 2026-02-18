@@ -1,5 +1,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
+import { lookup } from "node:dns/promises";
+import type { LookupAddress } from "node:dns";
+import { isIP } from "node:net";
 import { dirname, resolve, normalize } from "node:path";
 import type { McpServerSpec as McpServerSpecT } from "@tyrum/schemas";
 import type { McpManager } from "./mcp-manager.js";
@@ -59,6 +62,19 @@ const BLOCKED_HTTP_HOSTS = new Set([
   "localhost",
   "metadata.google.internal",
 ]);
+
+type DnsLookupFn = (
+  hostname: string,
+) => Promise<readonly LookupAddress[]>;
+
+async function defaultDnsLookup(
+  hostname: string,
+): Promise<readonly LookupAddress[]> {
+  return lookup(hostname, {
+    all: true,
+    verbatim: true,
+  });
+}
 
 /**
  * Parse a hostname that encodes an IPv4 address as a single decimal integer,
@@ -170,6 +186,32 @@ function isBlockedIPv6(hostname: string): boolean {
   return false;
 }
 
+function isBlockedIpLiteral(hostname: string): boolean {
+  const version = isIP(hostname);
+  if (version === 4) {
+    const parts = hostname.split(".");
+    if (
+      parts.length === 4 &&
+      parts.every((p) => /^\d+$/.test(p))
+    ) {
+      const [a, b, c, d] = parts.map(Number) as [
+        number,
+        number,
+        number,
+        number,
+      ];
+      return isPrivateIPv4(a, b, c, d);
+    }
+    return false;
+  }
+
+  if (version === 6) {
+    return isBlockedIPv6(hostname);
+  }
+
+  return false;
+}
+
 /**
  * Determine whether a URL targets a private, loopback, link-local, or
  * otherwise reserved network address.  Used by `tool.http.fetch` to
@@ -178,6 +220,9 @@ function isBlockedIPv6(hostname: string): boolean {
 export function isBlockedUrl(raw: string): boolean {
   try {
     const parsed = new URL(raw);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return true;
+    }
     const hostname = parsed.hostname;
 
     // Exact-match denylist (localhost, cloud metadata hostnames)
@@ -209,6 +254,48 @@ export function isBlockedUrl(raw: string): boolean {
   }
 }
 
+/**
+ * Resolve non-literal hostnames and block if any resolved address is
+ * private/link-local/loopback/reserved.
+ */
+export async function resolvesToBlockedAddress(
+  raw: string,
+  dnsLookup: DnsLookupFn = defaultDnsLookup,
+): Promise<boolean> {
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return true;
+    }
+
+    const hostname = parsed.hostname;
+    if (hostname.startsWith("[") && hostname.endsWith("]")) {
+      return isBlockedIpLiteral(hostname.slice(1, -1));
+    }
+    if (isBlockedIpLiteral(hostname)) {
+      return true;
+    }
+    if (isIP(hostname) !== 0) {
+      return false;
+    }
+
+    const resolved = await dnsLookup(hostname);
+    if (resolved.length === 0) {
+      return true;
+    }
+
+    for (const entry of resolved) {
+      if (isBlockedIpLiteral(entry.address)) {
+        return true;
+      }
+    }
+
+    return false;
+  } catch {
+    return true;
+  }
+}
+
 export interface ToolResult {
   tool_call_id: string;
   output: string;
@@ -223,6 +310,7 @@ export class ToolExecutor {
     private readonly mcpServerSpecs: ReadonlyMap<string, McpServerSpecT>,
     private readonly fetchImpl: typeof fetch,
     private readonly secretProvider?: SecretProvider,
+    private readonly dnsLookup: DnsLookupFn = defaultDnsLookup,
   ) {}
 
   async execute(
@@ -353,6 +441,14 @@ export class ToolExecutor {
     }
 
     if (isBlockedUrl(url)) {
+      return {
+        tool_call_id: toolCallId,
+        output: "",
+        error: "blocked url: requests to private/internal network addresses are denied",
+      };
+    }
+
+    if (await resolvesToBlockedAddress(url, this.dnsLookup)) {
       return {
         tool_call_id: toolCallId,
         output: "",

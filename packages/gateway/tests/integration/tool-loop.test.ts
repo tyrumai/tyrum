@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
+import type { ApprovalRow } from "../../src/modules/approval/dal.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations");
@@ -82,6 +83,21 @@ function createSimpleFetchStub(reply: string): typeof fetch {
       { status: 200, headers: { "content-type": "application/json" } },
     );
   }) as typeof fetch;
+}
+
+async function waitForPendingApproval(
+  container: GatewayContainer,
+  timeoutMs = 5_000,
+): Promise<ApprovalRow> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const pending = container.approvalDal.getPending();
+    if (pending.length > 0) {
+      return pending[0]!;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error("Timed out waiting for pending approval");
 }
 
 describe("Tool execution loop", () => {
@@ -163,6 +179,158 @@ describe("Tool execution loop", () => {
 
     expect(result.reply).toBe("I read the file, it says: important notes");
     expect(result.used_tools).toContain("tool.fs.read");
+  });
+
+  it("queues high-risk tool calls and resumes after approval", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
+    container = createContainer({ dbPath: ":memory:", migrationsDir });
+
+    await writeFile(
+      join(homeDir, "agent.yml"),
+      [
+        "model:",
+        "  model: test-model",
+        "skills:",
+        "  enabled: []",
+        "mcp:",
+        "  enabled: []",
+        "tools:",
+        "  allow:",
+        "    - tool.exec",
+        "sessions:",
+        "  ttl_days: 30",
+        "  max_turns: 20",
+        "memory:",
+        "  markdown_enabled: false",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const fetchStub = createToolCallFetchStub(
+      [
+        {
+          id: "tc-approve",
+          function: {
+            name: "tool.exec",
+            arguments: JSON.stringify({ command: "echo approved" }),
+          },
+        },
+      ],
+      "approved and executed",
+    );
+
+    const mcpManager = {
+      listToolDescriptors: vi.fn(async () => []),
+      shutdown: vi.fn(async () => {}),
+      callTool: vi.fn(async () => ({ content: [] })),
+    };
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      fetchImpl: fetchStub,
+      mcpManager: mcpManager as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
+      approvalWaitMs: 10_000,
+      approvalPollMs: 20,
+    });
+
+    const turnPromise = runtime.turn({
+      channel: "test",
+      thread_id: "thread-approval-1",
+      message: "run command",
+    });
+
+    const pending = await waitForPendingApproval(container);
+    expect(pending.prompt).toContain("tool.exec");
+    expect(pending.status).toBe("pending");
+
+    const updated = container.approvalDal.respond(
+      pending.id,
+      true,
+      "approved in test",
+    );
+    expect(updated?.status).toBe("approved");
+
+    const result = await turnPromise;
+    expect(result.reply).toBe("approved and executed");
+    expect(result.used_tools).toContain("tool.exec");
+  });
+
+  it("does not execute high-risk tool when approval is denied", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
+    container = createContainer({ dbPath: ":memory:", migrationsDir });
+
+    await writeFile(
+      join(homeDir, "agent.yml"),
+      [
+        "model:",
+        "  model: test-model",
+        "skills:",
+        "  enabled: []",
+        "mcp:",
+        "  enabled: []",
+        "tools:",
+        "  allow:",
+        "    - tool.fs.write",
+        "sessions:",
+        "  ttl_days: 30",
+        "  max_turns: 20",
+        "memory:",
+        "  markdown_enabled: false",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const fetchStub = createToolCallFetchStub(
+      [
+        {
+          id: "tc-deny",
+          function: {
+            name: "tool.fs.write",
+            arguments: JSON.stringify({ path: "blocked.txt", content: "secret" }),
+          },
+        },
+      ],
+      "approval denied",
+    );
+
+    const mcpManager = {
+      listToolDescriptors: vi.fn(async () => []),
+      shutdown: vi.fn(async () => {}),
+      callTool: vi.fn(async () => ({ content: [] })),
+    };
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      fetchImpl: fetchStub,
+      mcpManager: mcpManager as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
+      approvalWaitMs: 10_000,
+      approvalPollMs: 20,
+    });
+
+    const turnPromise = runtime.turn({
+      channel: "test",
+      thread_id: "thread-approval-2",
+      message: "write blocked file",
+    });
+
+    const pending = await waitForPendingApproval(container);
+    const updated = container.approvalDal.respond(
+      pending.id,
+      false,
+      "denied in test",
+    );
+    expect(updated?.status).toBe("denied");
+
+    const result = await turnPromise;
+    expect(result.reply).toBe("approval denied");
+    expect(result.used_tools).not.toContain("tool.fs.write");
+    await expect(access(join(homeDir, "blocked.txt"))).rejects.toThrow();
   });
 
   it("returns final reply when LLM returns no tool_calls (single-shot)", async () => {
@@ -316,13 +484,23 @@ describe("Tool execution loop", () => {
       mcpManager: mcpManager as unknown as ConstructorParameters<
         typeof AgentRuntime
       >[0]["mcpManager"],
+      approvalWaitMs: 10_000,
+      approvalPollMs: 20,
     });
+
+    const autoApproveTimer = setInterval(() => {
+      for (const approval of container!.approvalDal.getPending()) {
+        container!.approvalDal.respond(approval.id, true, "approved in test");
+      }
+    }, 20);
+    autoApproveTimer.unref();
 
     const result = await runtime.turn({
       channel: "test",
       thread_id: "thread-3",
       message: "read a file and fetch a url",
     });
+    clearInterval(autoApproveTimer);
 
     expect(result.reply).toBe("done with both tools");
     expect(result.used_tools).toContain("tool.fs.read");
@@ -401,13 +579,23 @@ describe("Tool execution loop", () => {
         typeof AgentRuntime
       >[0]["mcpManager"],
       maxSteps: 3,
+      approvalWaitMs: 10_000,
+      approvalPollMs: 20,
     });
+
+    const autoApproveTimer = setInterval(() => {
+      for (const approval of container!.approvalDal.getPending()) {
+        container!.approvalDal.respond(approval.id, true, "approved in test");
+      }
+    }, 20);
+    autoApproveTimer.unref();
 
     const result = await runtime.turn({
       channel: "test",
       thread_id: "thread-4",
       message: "run something",
     });
+    clearInterval(autoApproveTimer);
 
     // Should stop after maxSteps and return the default "No assistant response"
     expect(result.reply).toBe("No assistant response returned.");

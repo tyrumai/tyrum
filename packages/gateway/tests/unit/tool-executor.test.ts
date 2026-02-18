@@ -3,7 +3,12 @@ import { mkdtemp, writeFile, rm, mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach } from "vitest";
-import { ToolExecutor, sanitizeEnv, isBlockedUrl } from "../../src/modules/agent/tool-executor.js";
+import {
+  ToolExecutor,
+  sanitizeEnv,
+  isBlockedUrl,
+  resolvesToBlockedAddress,
+} from "../../src/modules/agent/tool-executor.js";
 import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
 import type { McpServerSpec } from "@tyrum/schemas";
 
@@ -71,12 +76,17 @@ describe("ToolExecutor", () => {
       const mockFetch = vi.fn(async () => ({
         text: async () => "response-body",
       })) as unknown as typeof fetch;
+      const dnsLookup = vi.fn(async () => [
+        { address: "93.184.216.34", family: 4 as const },
+      ]);
 
       const executor = new ToolExecutor(
         homeDir,
         stubMcpManager(),
         new Map(),
         mockFetch,
+        undefined,
+        dnsLookup,
       );
 
       const result = await executor.execute(
@@ -92,6 +102,7 @@ describe("ToolExecutor", () => {
         "https://example.com/api",
         expect.objectContaining({ method: "GET" }),
       );
+      expect(dnsLookup).toHaveBeenCalledWith("example.com");
     });
 
     it("http.fetch blocks requests to private network addresses", async () => {
@@ -116,6 +127,36 @@ describe("ToolExecutor", () => {
 
       expect(result.error).toContain("blocked url");
       expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it("http.fetch blocks hostnames that resolve to private addresses", async () => {
+      homeDir = await mkdtemp(join(tmpdir(), "tool-executor-"));
+
+      const mockFetch = vi.fn(async () => ({
+        text: async () => "should-not-fetch",
+      })) as unknown as typeof fetch;
+      const dnsLookup = vi.fn(async () => [
+        { address: "10.0.0.42", family: 4 as const },
+      ]);
+
+      const executor = new ToolExecutor(
+        homeDir,
+        stubMcpManager(),
+        new Map(),
+        mockFetch,
+        undefined,
+        dnsLookup,
+      );
+
+      const result = await executor.execute(
+        "tool.http.fetch",
+        "call-ssrf-2",
+        { url: "https://example.com/private" },
+      );
+
+      expect(result.error).toContain("blocked url");
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(dnsLookup).toHaveBeenCalledWith("example.com");
     });
 
     it("http.fetch returns error for missing url", async () => {
@@ -581,5 +622,25 @@ describe("SSRF protection", () => {
 
   it("allows public IP 8.8.8.8", () => {
     expect(isBlockedUrl("http://8.8.8.8/")).toBe(false);
+  });
+
+  it("blocks non-http URL schemes", () => {
+    expect(isBlockedUrl("file:///etc/passwd")).toBe(true);
+  });
+
+  it("blocks when DNS resolves to a private IPv4", async () => {
+    const blocked = await resolvesToBlockedAddress(
+      "https://safe.example/path",
+      async () => [{ address: "192.168.1.10", family: 4 }],
+    );
+    expect(blocked).toBe(true);
+  });
+
+  it("allows when DNS resolves to public addresses only", async () => {
+    const blocked = await resolvesToBlockedAddress(
+      "https://safe.example/path",
+      async () => [{ address: "8.8.8.8", family: 4 }],
+    );
+    expect(blocked).toBe(false);
   });
 });

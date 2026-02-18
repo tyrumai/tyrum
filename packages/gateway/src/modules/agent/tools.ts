@@ -147,17 +147,24 @@ export function selectToolDirectory(
   allowlist: readonly string[],
   mcpTools: readonly ToolDescriptor[],
   limit = 8,
+  allowRequiresConfirmation = true,
 ): ToolDescriptor[] {
   const available: ToolDescriptor[] = [];
 
   for (const tool of BUILTIN_TOOL_REGISTRY) {
-    if (isToolAllowed(allowlist, tool.id)) {
+    if (
+      isToolAllowed(allowlist, tool.id) &&
+      (allowRequiresConfirmation || !tool.requires_confirmation)
+    ) {
       available.push(tool);
     }
   }
 
   for (const tool of mcpTools) {
-    if (isToolAllowed(allowlist, tool.id)) {
+    if (
+      isToolAllowed(allowlist, tool.id) &&
+      (allowRequiresConfirmation || !tool.requires_confirmation)
+    ) {
       available.push(tool);
     }
   }

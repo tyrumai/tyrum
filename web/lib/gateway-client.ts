@@ -208,8 +208,7 @@ export function getGatewayClient(): GatewayClient {
   if (!defaultClient) {
     const baseUrl =
       process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:8080";
-    const token = process.env.NEXT_PUBLIC_GATEWAY_TOKEN || undefined;
-    defaultClient = new GatewayClient({ baseUrl, token });
+    defaultClient = new GatewayClient({ baseUrl });
   }
   return defaultClient;
 }

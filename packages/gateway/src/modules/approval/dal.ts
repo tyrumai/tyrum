@@ -165,4 +165,17 @@ export class ApprovalDal {
 
     return result.changes;
   }
+
+  /** Expire a single pending approval immediately. */
+  expireById(id: number): ApprovalRow | undefined {
+    this.db
+      .prepare(
+        `UPDATE approvals
+         SET status = 'expired', responded_at = datetime('now')
+         WHERE id = ? AND status = 'pending'`,
+      )
+      .run(id);
+
+    return this.getById(id);
+  }
 }
