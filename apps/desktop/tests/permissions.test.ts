@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  resolvePermissions,
-  type ResolvedPermissions,
-} from "../src/main/config/permissions.js";
+import { resolvePermissions } from "../src/main/config/permissions.js";
 import type { PermissionProfile } from "../src/main/config/schema.js";
 
 describe("resolvePermissions", () => {
