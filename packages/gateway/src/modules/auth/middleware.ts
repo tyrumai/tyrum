@@ -2,7 +2,6 @@
  * HTTP authentication middleware for Hono.
  *
  * Enforces Bearer token authentication on all routes except /healthz.
- * When the gateway is bound to localhost only, auth is skipped (single-user mode).
  */
 
 import type { Context, Next } from "hono";
@@ -10,16 +9,10 @@ import type { TokenStore } from "./token-store.js";
 
 export function createAuthMiddleware(
   tokenStore: TokenStore,
-  isLocalOnly: boolean,
 ) {
   return async (c: Context, next: Next) => {
     // /healthz is always public
     if (c.req.path === "/healthz") {
-      return next();
-    }
-
-    // Single-user local mode — no auth required
-    if (isLocalOnly) {
       return next();
     }
 

@@ -2,7 +2,7 @@
  * WebSocket upgrade integration test.
  *
  * Verifies that:
- * 1. A WebSocket client can connect to ws://localhost:<port>/ws?token=test
+ * 1. A WebSocket client can connect to ws://localhost:<port>/ws with auth metadata
  * 2. The hello handshake completes successfully
  * 3. ConnectionManager reports the connected client with correct capabilities
  * 4. Non-/ws upgrade requests are rejected (socket destroyed)
@@ -11,10 +11,14 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { createServer } from "node:http";
 import type { Server } from "node:http";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { getRequestListener } from "@hono/node-server";
 import { createTestApp } from "./helpers.js";
 import { createWsHandler } from "../../src/routes/ws.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
+import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { TyrumClient } from "../../../client/src/ws-client.js";
 
 // ---------------------------------------------------------------------------
@@ -26,17 +30,23 @@ function delay(ms: number): Promise<void> {
 }
 
 /** Start a real HTTP server with WebSocket upgrade on a random port. */
-function startServer(app: ReturnType<typeof createTestApp>["app"]): {
+async function startServer(app: ReturnType<typeof createTestApp>["app"]): Promise<{
   server: Server;
   port: number;
+  adminToken: string;
+  tokenHome: string;
   connectionManager: ConnectionManager;
   stopHeartbeat: () => void;
-} {
+}> {
   const connectionManager = new ConnectionManager();
+  const tokenHome = await mkdtemp(join(tmpdir(), "tyrum-ws-upgrade-"));
+  const tokenStore = new TokenStore(tokenHome);
+  const adminToken = await tokenStore.initialize();
 
   const { handleUpgrade, stopHeartbeat } = createWsHandler({
     connectionManager,
     protocolDeps: { connectionManager },
+    tokenStore,
   });
 
   const requestListener = getRequestListener(app.fetch);
@@ -50,11 +60,14 @@ function startServer(app: ReturnType<typeof createTestApp>["app"]): {
     }
   });
 
-  server.listen(0);
-  const addr = server.address();
-  const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+  const port = await new Promise<number>((resolve) => {
+    server.listen(0, "127.0.0.1", () => {
+      const addr = server.address();
+      resolve(typeof addr === "object" && addr !== null ? addr.port : 0);
+    });
+  });
 
-  return { server, port, connectionManager, stopHeartbeat };
+  return { server, port, adminToken, tokenHome, connectionManager, stopHeartbeat };
 }
 
 // ---------------------------------------------------------------------------
@@ -64,6 +77,7 @@ function startServer(app: ReturnType<typeof createTestApp>["app"]): {
 describe("WebSocket upgrade", () => {
   let httpServer: Server | undefined;
   let client: TyrumClient | undefined;
+  let tokenHome: string | undefined;
   let stopHeartbeat: (() => void) | undefined;
 
   afterEach(async () => {
@@ -75,17 +89,22 @@ describe("WebSocket upgrade", () => {
       await new Promise<void>((resolve) => httpServer!.close(() => resolve()));
       httpServer = undefined;
     }
+    if (tokenHome) {
+      await rm(tokenHome, { recursive: true, force: true });
+      tokenHome = undefined;
+    }
   });
 
   it("connects via WebSocket and completes hello handshake", async () => {
     const { app } = createTestApp();
-    const srv = startServer(app);
+    const srv = await startServer(app);
     httpServer = srv.server;
+    tokenHome = srv.tokenHome;
     stopHeartbeat = srv.stopHeartbeat;
 
     client = new TyrumClient({
       url: `ws://127.0.0.1:${srv.port}/ws`,
-      token: "test",
+      token: srv.adminToken,
       capabilities: ["playwright", "http"],
       reconnect: false,
     });
@@ -110,14 +129,15 @@ describe("WebSocket upgrade", () => {
 
   it("registers client capabilities correctly in ConnectionManager", async () => {
     const { app } = createTestApp();
-    const srv = startServer(app);
+    const srv = await startServer(app);
     httpServer = srv.server;
+    tokenHome = srv.tokenHome;
     stopHeartbeat = srv.stopHeartbeat;
 
     // Connect a client with only the "cli" capability
     client = new TyrumClient({
       url: `ws://127.0.0.1:${srv.port}/ws`,
-      token: "test",
+      token: srv.adminToken,
       capabilities: ["cli"],
       reconnect: false,
     });
@@ -143,14 +163,13 @@ describe("WebSocket upgrade", () => {
 
   it("destroys socket for non-/ws upgrade requests", async () => {
     const { app } = createTestApp();
-    const srv = startServer(app);
+    const srv = await startServer(app);
     httpServer = srv.server;
+    tokenHome = srv.tokenHome;
     stopHeartbeat = srv.stopHeartbeat;
 
     // Attempt a WebSocket connection to a non-/ws path
-    const ws = new WebSocket(
-      `ws://127.0.0.1:${srv.port}/not-ws?token=test`,
-    );
+    const ws = new WebSocket(`ws://127.0.0.1:${srv.port}/not-ws`);
 
     const result = await new Promise<string>((resolve) => {
       ws.addEventListener("open", () => resolve("open"));
@@ -168,8 +187,9 @@ describe("WebSocket upgrade", () => {
 
   it("serves HTTP requests alongside WebSocket upgrades", async () => {
     const { app } = createTestApp();
-    const srv = startServer(app);
+    const srv = await startServer(app);
     httpServer = srv.server;
+    tokenHome = srv.tokenHome;
     stopHeartbeat = srv.stopHeartbeat;
 
     // Verify /healthz still works over plain HTTP
@@ -181,7 +201,7 @@ describe("WebSocket upgrade", () => {
     // Connect a WebSocket client alongside
     client = new TyrumClient({
       url: `ws://127.0.0.1:${srv.port}/ws`,
-      token: "test",
+      token: srv.adminToken,
       capabilities: ["http"],
       reconnect: false,
     });

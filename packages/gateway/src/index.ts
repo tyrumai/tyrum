@@ -130,7 +130,6 @@ async function main(): Promise<void> {
     connectionManager,
     protocolDeps,
     tokenStore,
-    isLocalOnly,
   });
 
   // --- HTTP server with WS upgrade support ---

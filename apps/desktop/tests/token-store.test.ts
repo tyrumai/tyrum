@@ -35,4 +35,32 @@ describe("token-store (fallback path)", () => {
     const b = generateToken();
     expect(a).not.toBe(b);
   });
+
+  it("fails closed when secure storage is unavailable and fallback is not allowed", () => {
+    const prevNodeEnv = process.env["NODE_ENV"];
+    const prevAllowFallback = process.env["TYRUM_ALLOW_INSECURE_TOKEN_STORAGE"];
+    process.env["NODE_ENV"] = "production";
+    delete process.env["TYRUM_ALLOW_INSECURE_TOKEN_STORAGE"];
+
+    try {
+      expect(() => encryptToken("secret")).toThrow(
+        "Secure token storage unavailable",
+      );
+      expect(() => decryptToken(Buffer.from("secret", "utf-8").toString("base64"))).toThrow(
+        "Secure token storage unavailable",
+      );
+    } finally {
+      if (prevNodeEnv === undefined) {
+        delete process.env["NODE_ENV"];
+      } else {
+        process.env["NODE_ENV"] = prevNodeEnv;
+      }
+
+      if (prevAllowFallback === undefined) {
+        delete process.env["TYRUM_ALLOW_INSECURE_TOKEN_STORAGE"];
+      } else {
+        process.env["TYRUM_ALLOW_INSECURE_TOKEN_STORAGE"] = prevAllowFallback;
+      }
+    }
+  });
 });

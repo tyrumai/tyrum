@@ -14,6 +14,13 @@ try {
   // Not running in Electron (e.g., tests)
 }
 
+function insecureFallbackAllowed(): boolean {
+  if (process.env["TYRUM_ALLOW_INSECURE_TOKEN_STORAGE"] === "1") {
+    return true;
+  }
+  return process.env["NODE_ENV"] === "test";
+}
+
 /**
  * Encrypt a token for storage. Returns a base64-encoded encrypted blob.
  * Falls back to base64 encoding if Electron safeStorage is not available.
@@ -23,7 +30,12 @@ export function encryptToken(token: string): string {
     const encrypted = safeStorage.encryptString(token);
     return encrypted.toString("base64");
   }
-  // Fallback: base64 encode (NOT secure — only for dev/test without Electron)
+  if (!insecureFallbackAllowed()) {
+    throw new Error(
+      "Secure token storage unavailable: Electron safeStorage is required unless TYRUM_ALLOW_INSECURE_TOKEN_STORAGE=1.",
+    );
+  }
+  // Explicitly limited fallback for tests/dev opt-in only.
   return Buffer.from(token, "utf-8").toString("base64");
 }
 
@@ -36,7 +48,12 @@ export function decryptToken(tokenRef: string): string {
     const buffer = Buffer.from(tokenRef, "base64");
     return safeStorage.decryptString(buffer);
   }
-  // Fallback: base64 decode
+  if (!insecureFallbackAllowed()) {
+    throw new Error(
+      "Secure token storage unavailable: Electron safeStorage is required unless TYRUM_ALLOW_INSECURE_TOKEN_STORAGE=1.",
+    );
+  }
+  // Explicitly limited fallback for tests/dev opt-in only.
   return Buffer.from(tokenRef, "base64").toString("utf-8");
 }
 

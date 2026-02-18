@@ -31,11 +31,12 @@ function delay(ms: number): Promise<void> {
 }
 
 /** Start a real HTTP server + WebSocket on a random port. */
-function startServer(
+async function startServer(
   app: ReturnType<typeof createTestApp>["app"],
-): {
+): Promise<{
   server: Server;
   port: number;
+  adminToken: string;
   connectionManager: ConnectionManager;
   stopHeartbeat: () => void;
   taskResults: Array<{
@@ -44,7 +45,7 @@ function startServer(
     evidence: unknown;
     error: string | undefined;
   }>;
-} {
+}> {
   const connectionManager = new ConnectionManager();
   const taskResults: Array<{
     taskId: string;
@@ -60,14 +61,14 @@ function startServer(
     },
   };
 
-  // Use a dummy token store with local-only mode for e2e tests
+  // Use a real token store to enforce WS authentication.
   const tokenStore = new TokenStore("/tmp/tyrum-e2e-test-" + Date.now());
+  const adminToken = await tokenStore.initialize();
 
   const { handleUpgrade, stopHeartbeat } = createWsHandler({
     connectionManager,
     protocolDeps,
     tokenStore,
-    isLocalOnly: true,
   });
 
   const requestListener = getRequestListener(app.fetch);
@@ -77,11 +78,21 @@ function startServer(
     handleUpgrade(req, socket, head);
   });
 
-  server.listen(0);
-  const addr = server.address();
-  const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+  const port = await new Promise<number>((resolve) => {
+    server.listen(0, "127.0.0.1", () => {
+      const addr = server.address();
+      resolve(typeof addr === "object" && addr !== null ? addr.port : 0);
+    });
+  });
 
-  return { server, port, connectionManager, stopHeartbeat, taskResults };
+  return {
+    server,
+    port,
+    adminToken,
+    connectionManager,
+    stopHeartbeat,
+    taskResults,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -106,7 +117,7 @@ describe("E2E smoke test", () => {
 
   it("full plan → dispatch → result → healthz flow", async () => {
     const { app } = createTestApp();
-    const srv = startServer(app);
+    const srv = await startServer(app);
     httpServer = srv.server;
     stopHeartbeat = srv.stopHeartbeat;
 
@@ -115,7 +126,7 @@ describe("E2E smoke test", () => {
     // --- 1. Connect a TyrumClient ---
     client = new TyrumClient({
       url: `ws://127.0.0.1:${srv.port}/ws`,
-      token: "e2e-test-token",
+      token: srv.adminToken,
       capabilities: ["playwright", "http"],
       reconnect: false,
     });

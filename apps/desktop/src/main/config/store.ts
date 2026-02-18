@@ -1,4 +1,10 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import {
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  existsSync,
+  chmodSync,
+} from "node:fs";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { DesktopNodeConfig, DEFAULT_CONFIG } from "./schema.js";
@@ -21,5 +27,6 @@ export function loadConfig(): DesktopNodeConfig {
 export function saveConfig(config: DesktopNodeConfig): void {
   const path = getConfigPath();
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(config, null, 2));
+  writeFileSync(path, JSON.stringify(config, null, 2), { mode: 0o600 });
+  chmodSync(path, 0o600);
 }

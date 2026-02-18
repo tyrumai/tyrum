@@ -56,11 +56,14 @@ describe("Auth integration", () => {
     });
   });
 
-  describe("localhost bind (auth bypassed)", () => {
+  describe("localhost bind (auth still enforced)", () => {
     let app: Hono;
+    let adminToken: string;
 
-    beforeEach(() => {
-      const result = createTestApp({ isLocalOnly: true });
+    beforeEach(async () => {
+      const tokenStore = new TokenStore(tempDir);
+      adminToken = await tokenStore.initialize();
+      const result = createTestApp({ tokenStore, isLocalOnly: true });
       app = result.app;
     });
 
@@ -72,8 +75,15 @@ describe("Auth integration", () => {
       expect(body.is_exposed).toBe(false);
     });
 
-    it("allows /memory/facts without token", async () => {
+    it("rejects /memory/facts without token", async () => {
       const res = await app.request("/memory/facts");
+      expect(res.status).toBe(401);
+    });
+
+    it("allows /memory/facts with valid token", async () => {
+      const res = await app.request("/memory/facts", {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
       expect(res.status).toBe(200);
     });
   });
