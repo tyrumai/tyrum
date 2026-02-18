@@ -166,9 +166,34 @@ jobs:
         run: |
           node --input-type=module <<'EOF'
           import { readFileSync, writeFileSync } from "node:fs";
+          const version = process.env.RELEASE_VERSION;
+          if (!version) {
+            throw new Error("RELEASE_VERSION is required");
+          }
+
           const path = "apps/desktop/package.json";
           const pkg = JSON.parse(readFileSync(path, "utf8"));
-          pkg.version = process.env.RELEASE_VERSION;
+
+          pkg.version = version;
+
+          const dependencyFields = [
+            "dependencies",
+            "devDependencies",
+            "peerDependencies",
+            "optionalDependencies",
+          ];
+
+          for (const field of dependencyFields) {
+            const deps = pkg[field];
+            if (!deps || typeof deps !== "object") continue;
+            for (const depName of Object.keys(deps)) {
+              const depVersion = deps[depName];
+              if (typeof depVersion === "string" && depVersion.startsWith("workspace:")) {
+                deps[depName] = version;
+              }
+            }
+          }
+
           writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
           console.log(`Updated ${path} -> ${pkg.version}`);
           EOF
