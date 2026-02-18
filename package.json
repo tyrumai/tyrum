@@ -7,7 +7,7 @@
   "scripts": {
     "pretypecheck": "pnpm --filter @tyrum/schemas build && node -e \"require('node:fs').rmSync('packages/schemas/tsconfig.tsbuildinfo',{force:true})\"",
     "build": "pnpm -r --filter './packages/*' run build",
-    "pretest": "pnpm --filter @tyrum/schemas build",
+    "pretest": "pnpm --filter @tyrum/schemas build && pnpm --filter @tyrum/client build",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
