@@ -18,19 +18,19 @@ This guide covers end-user installation options for Tyrum gateway.
 Installs a versioned `@tyrum/gateway` release tarball after verifying `SHA256SUMS`.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rhernaus/tyrum/main/scripts/install.sh | bash
+curl -fsSL https://get.tyrum.ai/install.sh | bash
 ```
 
 Install from a channel:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rhernaus/tyrum/main/scripts/install.sh | bash -s -- --channel beta
+curl -fsSL https://get.tyrum.ai/install.sh | bash -s -- --channel beta
 ```
 
 Install a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rhernaus/tyrum/main/scripts/install.sh | bash -s -- 2026.2.18
+curl -fsSL https://get.tyrum.ai/install.sh | bash -s -- 2026.2.18
 ```
 
 Advanced overrides:
@@ -90,7 +90,7 @@ npm i -g @tyrum/gateway@latest
 If installed with the script:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rhernaus/tyrum/main/scripts/install.sh | bash
+curl -fsSL https://get.tyrum.ai/install.sh | bash
 ```
 
 ## Version Pinning
@@ -104,5 +104,11 @@ npm i -g @tyrum/gateway@2026.2.18
 or:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rhernaus/tyrum/main/scripts/install.sh | bash -s -- 2026.2.18
+curl -fsSL https://get.tyrum.ai/install.sh | bash -s -- 2026.2.18
 ```
+
+## Next Steps
+
+- [Quick Start](getting-started.md)
+- [Remote Gateway Guide](advanced/remote-gateway.md)
+- [Multi-Node Guide](advanced/multi-node.md)
