@@ -7,6 +7,8 @@ const { ipcMainHandleMock, registeredHandlers, testState } = vi.hoisted(() => ({
   registeredHandlers: new Map<string, (...args: unknown[]) => unknown>(),
   testState: {
     port: 8080,
+    mode: "embedded" as "embedded" | "remote",
+    remoteWsUrl: "ws://127.0.0.1:8080/ws",
   },
 }));
 
@@ -36,14 +38,14 @@ vi.mock("../src/main/gateway-manager.js", () => ({
 
 vi.mock("../src/main/config/store.js", () => ({
   loadConfig: vi.fn(() => ({
-    mode: "embedded",
+    mode: testState.mode,
     embedded: {
       port: testState.port,
       dbPath: "/tmp/test-gateway.db",
       tokenRef: "enc:token",
     },
     remote: {
-      wsUrl: "ws://127.0.0.1:8080/ws",
+      wsUrl: testState.remoteWsUrl,
       tokenRef: "enc:remote-token",
     },
   })),
@@ -60,10 +62,12 @@ vi.mock("../src/main/gateway-bin-path.js", () => ({
   resolveGatewayBinPath: vi.fn(() => "/tmp/mock-gateway-bin.mjs"),
 }));
 
-describe("registerGatewayIpc status snapshot flow", () => {
+describe("registerGatewayIpc handlers", () => {
   beforeEach(() => {
     vi.resetModules();
     testState.port = 8080;
+    testState.mode = "embedded";
+    testState.remoteWsUrl = "ws://127.0.0.1:8080/ws";
     registeredHandlers.clear();
     ipcMainHandleMock.mockReset();
     ipcMainHandleMock.mockImplementation((channel: string, handler: (...args: unknown[]) => unknown) => {
@@ -109,6 +113,57 @@ describe("registerGatewayIpc status snapshot flow", () => {
     expect(sentEvents).toContainEqual({
       channel: "status:change",
       payload: { gatewayStatus: "running" },
+    });
+  });
+
+  it("returns embedded auth and display UI URLs", async () => {
+    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
+
+    const windowStub = {
+      isDestroyed: () => false,
+      webContents: {
+        isDestroyed: () => false,
+        send: vi.fn(),
+      },
+    } as unknown as BrowserWindow;
+
+    registerGatewayIpc(windowStub);
+
+    const uiUrlsHandler = registeredHandlers.get("gateway:ui-urls");
+    expect(uiUrlsHandler).toBeDefined();
+
+    const urls = await uiUrlsHandler!({} as never);
+    expect(urls).toEqual({
+      embedUrl: "http://127.0.0.1:8080/app/auth?token=token&next=%2Fapp",
+      displayUrl: "http://127.0.0.1:8080/app",
+      externalUrl: "http://127.0.0.1:8080/app/auth?token=token&next=%2Fapp",
+    });
+  });
+
+  it("converts remote websocket URL to HTTPS app URL", async () => {
+    testState.mode = "remote";
+    testState.remoteWsUrl = "wss://remote.example/ws";
+
+    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
+
+    const windowStub = {
+      isDestroyed: () => false,
+      webContents: {
+        isDestroyed: () => false,
+        send: vi.fn(),
+      },
+    } as unknown as BrowserWindow;
+
+    registerGatewayIpc(windowStub);
+
+    const uiUrlsHandler = registeredHandlers.get("gateway:ui-urls");
+    expect(uiUrlsHandler).toBeDefined();
+
+    const urls = await uiUrlsHandler!({} as never);
+    expect(urls).toEqual({
+      embedUrl: "https://remote.example/app",
+      displayUrl: "https://remote.example/app",
+      externalUrl: "https://remote.example/app",
     });
   });
 });
