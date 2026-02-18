@@ -70,6 +70,9 @@ jobs:
 
       - run: pnpm typecheck
 
+      - name: Build desktop type dependencies
+        run: pnpm --filter @tyrum/schemas build && pnpm --filter @tyrum/client build
+
       - name: Typecheck desktop app
         run: pnpm exec tsc --noEmit --project apps/desktop/tsconfig.json
 
