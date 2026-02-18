@@ -1,5 +1,20 @@
 import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const { spawnMock } = vi.hoisted(() => ({
+  spawnMock: vi.fn(),
+}));
+
+vi.mock("node:child_process", async () => {
+  const actual = await vi.importActual<typeof import("node:child_process")>(
+    "node:child_process",
+  );
+  return {
+    ...actual,
+    spawn: spawnMock,
+  };
+});
+
 import {
   GatewayManager,
   type GatewayStatus,
@@ -29,6 +44,11 @@ type Internal = {
 };
 
 describe("GatewayManager", () => {
+  afterEach(() => {
+    spawnMock.mockReset();
+    vi.unstubAllGlobals();
+  });
+
   it("status starts as 'stopped'", () => {
     const gm = new GatewayManager();
     expect(gm.status).toBe("stopped");
@@ -72,6 +92,34 @@ describe("GatewayManager", () => {
     internal.setStatus("stopped");
 
     expect(statuses).toEqual(["starting", "running", "stopped"]);
+  });
+
+  it("graceful stop does not emit transient error status", async () => {
+    const gm = new GatewayManager();
+    const proc = mockProc();
+    proc.kill.mockImplementation((signal?: string) => {
+      if (signal === "SIGTERM") {
+        proc.signalCode = "SIGTERM";
+        queueMicrotask(() => proc.emit("exit", null));
+      }
+    });
+    spawnMock.mockReturnValue(proc);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true } as Response));
+
+    const statuses: GatewayStatus[] = [];
+    gm.on("status-change", (s) => statuses.push(s));
+
+    await gm.start({
+      gatewayBin: "/nonexistent",
+      port: 7777,
+      dbPath: "/tmp/test.db",
+      wsToken: "test-token",
+    });
+    await gm.stop();
+
+    expect(proc.kill).toHaveBeenCalledWith("SIGTERM");
+    expect(statuses).toContain("stopped");
+    expect(statuses).not.toContain("error");
   });
 
   describe("health checks", () => {
