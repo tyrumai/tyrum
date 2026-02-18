@@ -5,12 +5,8 @@ import { decryptToken, generateToken, encryptToken } from "../config/token-store
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { createWindowSender } from "./window-sender.js";
-<<<<<<< Updated upstream
 import { resolveGatewayBinPath } from "../gateway-bin-path.js";
-=======
-import { resolveGatewayBinPath } from "../gateway-bin.js";
 import type { DesktopNodeConfig } from "../config/schema.js";
->>>>>>> Stashed changes
 
 const sender = createWindowSender();
 
@@ -102,13 +98,7 @@ export function registerGatewayIpc(window: BrowserWindow): GatewayManager {
       const dbPath =
         config.embedded.dbPath || join(tyrumHome, "gateway", "gateway.db");
 
-<<<<<<< Updated upstream
       const gatewayBin = resolveGatewayBinPath();
-=======
-      // Locate the gateway binary relative to this module.
-      // Prefer index.js; fall back to legacy index.mjs if present.
-      const gatewayBin = resolveGatewayBinPath(import.meta.dirname);
->>>>>>> Stashed changes
 
       await mgr.start({
         gatewayBin,
