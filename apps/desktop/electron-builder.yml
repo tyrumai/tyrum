@@ -4,7 +4,11 @@ directories:
   output: release
 files:
   - dist/**/*
+  - "!dist/gateway/**"
   - "!node_modules"
+extraResources:
+  - from: dist/gateway/index.mjs
+    to: gateway/index.mjs
 mac:
   target: [dmg, zip]
   category: public.app-category.productivity
