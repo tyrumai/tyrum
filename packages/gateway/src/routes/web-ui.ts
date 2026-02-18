@@ -1439,7 +1439,7 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
         <p class="muted">After saving this baseline, continue to the consent checklist.</p>
       </section>
     `;
-    return c.html(shell("Onboarding Persona", "/app/onboarding/start", search, body));
+    return c.html(shell("Onboarding Persona", "/app/onboarding/persona", search, body));
   });
 
   app.get("/app/onboarding/consent", (c) => {

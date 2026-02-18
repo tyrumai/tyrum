@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Layout } from "./components/Layout.js";
 import { Overview } from "./pages/Overview.js";
 import { Gateway } from "./pages/Gateway.js";
@@ -29,6 +28,9 @@ const VALID_PAGES = new Set<PageId>([
 export function App() {
   const [page, setPage] = useState<PageId>("overview");
   const [launchOnboarding, setLaunchOnboarding] = useState(false);
+  const handleOnboardingLaunchHandled = useCallback(() => {
+    setLaunchOnboarding(false);
+  }, []);
   const handleNavigate = (nextPage: string): void => {
     if (VALID_PAGES.has(nextPage as PageId)) {
       setPage(nextPage as PageId);
@@ -77,7 +79,7 @@ export function App() {
       {page === "gateway" && (
         <Gateway
           launchOnboarding={launchOnboarding}
-          onOnboardingLaunchHandled={() => setLaunchOnboarding(false)}
+          onOnboardingLaunchHandled={handleOnboardingLaunchHandled}
         />
       )}
       {page === "connection" && <Connection />}
