@@ -241,8 +241,18 @@ export function Gateway({
     };
   }, [api, refreshGatewayUrls]);
 
+  const appUrl = gatewayUrls.embedUrl;
+  const appDisplayUrl = gatewayUrls.displayUrl;
+  const externalUrl = gatewayUrls.externalUrl ?? appDisplayUrl;
+  const canEmbed =
+    appUrl != null &&
+    (config.mode === "remote" || gatewayStatus === "running");
+
   useEffect(() => {
     if (!launchOnboarding) {
+      return;
+    }
+    if (!canEmbed) {
       return;
     }
     if (!gatewayUrls.embedUrl?.includes("next=%2Fapp%2Fonboarding%2Fstart")) {
@@ -250,7 +260,7 @@ export function Gateway({
     }
     startOnboardingRef.current = false;
     onOnboardingLaunchHandled?.();
-  }, [gatewayUrls.embedUrl, launchOnboarding, onOnboardingLaunchHandled]);
+  }, [canEmbed, gatewayUrls.embedUrl, launchOnboarding, onOnboardingLaunchHandled]);
 
   useEffect(() => {
     if (!api || config.mode !== "embedded") {
@@ -286,13 +296,6 @@ export function Gateway({
       window.removeEventListener("message", handleMessage);
     };
   }, [api, config.mode, config.embedded.port]);
-
-  const appUrl = gatewayUrls.embedUrl;
-  const appDisplayUrl = gatewayUrls.displayUrl;
-  const externalUrl = gatewayUrls.externalUrl ?? appDisplayUrl;
-  const canEmbed =
-    appUrl != null &&
-    (config.mode === "remote" || gatewayStatus === "running");
 
   const startGateway = async () => {
     if (!api || busy) return;
