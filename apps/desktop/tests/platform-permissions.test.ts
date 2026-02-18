@@ -145,7 +145,7 @@ describe("requestMacPermission", () => {
       },
       async () => {
         const result = await requestMacPermission("accessibility");
-        expect(isTrustedAccessibilityClient).toHaveBeenCalledWith({ prompt: true });
+        expect(isTrustedAccessibilityClient).toHaveBeenCalledWith(true);
         expect(result).toEqual({ granted: true, instructions: undefined });
       },
     );

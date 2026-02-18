@@ -137,7 +137,7 @@ resolve_latest_tag_for_channel() {
     for (const rel of releases) {
       if (!rel || rel.draft || !rel.prerelease) continue;
       if (typeof rel.tag_name !== "string") continue;
-      if (rel.tag_name.includes(`-${channel}.`)) {
+      if (rel.tag_name.includes("-" + channel + ".")) {
         process.stdout.write(rel.tag_name);
         process.exit(0);
       }

@@ -8,7 +8,7 @@ export default defineConfig({
     ],
     coverage: {
       provider: "v8",
-      include: ["packages/*/src/**"],
+      include: ["packages/*/src/**", "apps/desktop/src/**"],
       thresholds: {
         lines: 75,
         functions: 75,
