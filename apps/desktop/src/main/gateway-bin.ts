@@ -1,19 +1,13 @@
-import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { resolveGatewayBinPath as resolveGatewayBinPathCanonical } from "./gateway-bin-path.js";
 
 export function resolveGatewayBinPath(
   baseDir: string,
-  pathExists: (path: string) => boolean = existsSync,
+  pathExists?: (path: string) => boolean,
 ): string {
-  const candidates = [
-    join(baseDir, "../../../../packages/gateway/dist/index.js"),
-    join(baseDir, "../../../../packages/gateway/dist/index.mjs"),
-  ];
-
-  for (const candidate of candidates) {
-    if (pathExists(candidate)) return candidate;
-  }
-
-  // Fall back to the modern default so startup errors are explicit if build artifacts are missing.
-  return candidates[0]!;
+  return resolveGatewayBinPathCanonical({
+    moduleDir: baseDir,
+    // Legacy resolver did not consider packaged paths.
+    isPackaged: false,
+    exists: pathExists,
+  });
 }
