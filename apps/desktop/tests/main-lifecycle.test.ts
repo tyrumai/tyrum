@@ -9,6 +9,7 @@ const {
   registerConfigIpcMock,
   registerGatewayIpcMock,
   registerNodeIpcMock,
+  registerUpdateIpcMock,
   shutdownNodeResourcesMock,
 } = vi.hoisted(() => {
   const appHandlers = new Map<string, (...args: unknown[]) => void>();
@@ -25,6 +26,7 @@ const {
   const registerGatewayIpcMock = vi.fn(() => ({ stop: vi.fn() }));
   const registerNodeIpcMock = vi.fn();
   const registerConfigIpcMock = vi.fn();
+  const registerUpdateIpcMock = vi.fn();
   const shutdownNodeResourcesMock = vi.fn(async () => {});
 
   return {
@@ -36,6 +38,7 @@ const {
     registerConfigIpcMock,
     registerGatewayIpcMock,
     registerNodeIpcMock,
+    registerUpdateIpcMock,
     shutdownNodeResourcesMock,
   };
 });
@@ -60,6 +63,10 @@ vi.mock("../src/main/ipc/node-ipc.js", () => ({
 
 vi.mock("../src/main/ipc/config-ipc.js", () => ({
   registerConfigIpc: registerConfigIpcMock,
+}));
+
+vi.mock("../src/main/ipc/update-ipc.js", () => ({
+  registerUpdateIpc: registerUpdateIpcMock,
 }));
 
 await import("../src/main/index.js");

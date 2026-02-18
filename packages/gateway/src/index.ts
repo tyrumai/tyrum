@@ -6,6 +6,7 @@
 
 import { createServer } from "node:http";
 import { mkdirSync } from "node:fs";
+import { spawn } from "node:child_process";
 import { getRequestListener } from "@hono/node-server";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
@@ -38,6 +39,19 @@ export type { ConnectedClient, ConnectionStats } from "./ws/connection-manager.j
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
+const UPDATE_CHANNEL_TAG: Record<UpdateChannel, string> = {
+  stable: "latest",
+  beta: "next",
+  dev: "dev",
+};
+
+type UpdateChannel = "stable" | "beta" | "dev";
+
+type CliCommand =
+  | { kind: "start" }
+  | { kind: "help" }
+  | { kind: "version" }
+  | { kind: "update"; channel: UpdateChannel; version?: string };
 
 export function ensureDatabaseDirectory(dbPath: string): void {
   const trimmed = dbPath.trim();
@@ -56,6 +70,180 @@ export function ensureDatabaseDirectory(dbPath: string): void {
       `Unable to create database directory "${parentDir}" for db path "${dbPath}": ${message}`,
     );
   }
+}
+
+function printCliHelp(): void {
+  console.log(`Tyrum gateway
+
+Usage:
+  tyrum
+  tyrum update [--channel stable|beta|dev] [--version <version>]
+  tyrum --version
+  tyrum --help
+
+Notes:
+  - Running without subcommands starts the local gateway.
+  - --version takes precedence over --channel for updates.
+`);
+}
+
+function parseUpdateChannel(raw: string): UpdateChannel {
+  if (raw === "stable" || raw === "beta" || raw === "dev") {
+    return raw;
+  }
+  throw new Error(
+    `invalid update channel '${raw}' (expected stable, beta, or dev)`,
+  );
+}
+
+function normalizeVersionSpecifier(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    throw new Error("update --version requires a non-empty value");
+  }
+
+  const normalized =
+    trimmed.startsWith("v") && trimmed.length > 1 ? trimmed.slice(1) : trimmed;
+
+  if (!/^[0-9A-Za-z][0-9A-Za-z.-]*$/.test(normalized)) {
+    throw new Error(
+      `invalid version '${raw}'. Use release versions like 2026.2.18 or 2026.2.18-beta.1`,
+    );
+  }
+
+  return normalized;
+}
+
+export function parseCliArgs(argv: readonly string[]): CliCommand {
+  if (argv.length === 0) return { kind: "start" };
+
+  const [first, ...rest] = argv;
+  if (!first) return { kind: "start" };
+
+  if (first === "-h" || first === "--help") return { kind: "help" };
+  if (first === "-v" || first === "--version" || first === "version") {
+    return { kind: "version" };
+  }
+  if (first === "start") return { kind: "start" };
+
+  if (first !== "update") {
+    throw new Error(`unknown command '${first}'`);
+  }
+
+  let channel: UpdateChannel = "stable";
+  let version: string | undefined;
+
+  for (let index = 0; index < rest.length; index += 1) {
+    const arg = rest[index];
+    if (!arg) continue;
+
+    if (arg === "--channel") {
+      const value = rest[index + 1];
+      if (!value) {
+        throw new Error("--channel requires a value");
+      }
+      channel = parseUpdateChannel(value);
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--version") {
+      const value = rest[index + 1];
+      if (!value) {
+        throw new Error("--version requires a value");
+      }
+      version = normalizeVersionSpecifier(value);
+      index += 1;
+      continue;
+    }
+
+    if (arg === "-h" || arg === "--help") {
+      return { kind: "help" };
+    }
+
+    throw new Error(`unsupported update argument '${arg}'`);
+  }
+
+  return { kind: "update", channel, version };
+}
+
+function npmExecutableForPlatform(platform: NodeJS.Platform): string {
+  return platform === "win32" ? "npm.cmd" : "npm";
+}
+
+export function resolveGatewayUpdateTarget(
+  channel: UpdateChannel,
+  version?: string,
+): string {
+  if (version && version.length > 0) return version;
+  return UPDATE_CHANNEL_TAG[channel];
+}
+
+async function runGatewayUpdate(
+  channel: UpdateChannel,
+  version?: string,
+): Promise<number> {
+  const target = resolveGatewayUpdateTarget(channel, version);
+  const packageSpec = `@tyrum/gateway@${target}`;
+  const npmCmd = npmExecutableForPlatform(process.platform);
+
+  console.log(`Updating ${packageSpec} ...`);
+
+  const exitCode = await new Promise<number>((resolve, reject) => {
+    const child = spawn(npmCmd, ["install", "-g", packageSpec], {
+      stdio: "inherit",
+    });
+
+    child.once("error", (error) => {
+      reject(error);
+    });
+
+    child.once("exit", (code, signal) => {
+      if (signal) {
+        console.error(`Update process terminated by signal: ${signal}`);
+        resolve(1);
+        return;
+      }
+      resolve(code ?? 1);
+    });
+  });
+
+  if (exitCode === 0) {
+    console.log("Update completed.");
+    return 0;
+  }
+
+  console.error(`Update failed with exit code ${exitCode}.`);
+  return exitCode;
+}
+
+export async function runCli(argv: readonly string[] = process.argv.slice(2)): Promise<number> {
+  let command: CliCommand;
+  try {
+    command = parseCliArgs(argv);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`error: ${message}`);
+    printCliHelp();
+    return 1;
+  }
+
+  if (command.kind === "help") {
+    printCliHelp();
+    return 0;
+  }
+
+  if (command.kind === "version") {
+    console.log(VERSION);
+    return 0;
+  }
+
+  if (command.kind === "update") {
+    return runGatewayUpdate(command.channel, command.version);
+  }
+
+  await main();
+  return 0;
 }
 
 export async function main(): Promise<void> {
@@ -232,5 +420,15 @@ const isMain =
     process.argv[1].endsWith("/index.ts"));
 
 if (isMain) {
-  void main();
+  void runCli(process.argv.slice(2))
+    .then((code) => {
+      if (code !== 0) {
+        process.exit(code);
+      }
+    })
+    .catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`error: ${message}`);
+      process.exit(1);
+    });
 }

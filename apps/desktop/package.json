@@ -11,12 +11,13 @@
     "build:renderer": "vite build",
     "build": "pnpm build:main && pnpm build:preload && pnpm build:renderer",
     "build:gateway": "pnpm --filter @tyrum/gateway build && node ./scripts/stage-gateway-bin.mjs",
-    "dist": "pnpm build:gateway && pnpm build && electron-builder"
+    "dist": "pnpm build:gateway && pnpm build && electron-builder --publish never"
   },
   "dependencies": {
     "@nut-tree-fork/nut-js": "^4.2.6",
     "@tyrum/client": "workspace:*",
     "@tyrum/schemas": "workspace:*",
+    "electron-updater": "^6.6.2",
     "playwright": "^1.58.2",
     "zod": "^4.3.6"
   },
