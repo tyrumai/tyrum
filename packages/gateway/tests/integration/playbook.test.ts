@@ -16,7 +16,9 @@ describe("Playbook routes", () => {
   let app: Hono;
 
   beforeEach(() => {
-    playbooks = loadAllPlaybooks(fixturesDir);
+    playbooks = loadAllPlaybooks(fixturesDir, {
+      onInvalidPlaybook: () => {},
+    });
     runner = new PlaybookRunner();
     app = new Hono();
     app.route("/", createPlaybookRoutes({ playbooks, runner }));
