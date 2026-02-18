@@ -14,38 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  packages:
-    name: Packages
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - run: pnpm install
-
-      - name: Install Playwright (Chromium + system deps)
-        run: pnpm --filter tyrum-desktop exec playwright install --with-deps chromium
-
-      - run: pnpm typecheck
-
-      - name: Test (virtual display)
-        run: xvfb-run -a --server-args="-screen 0 1920x1080x24" pnpm test -- --coverage
-
-      - run: pnpm lint
-
-      - run: pnpm build
-
   desktop-cross-os:
-    name: Desktop + Packages Tests (${{ matrix.os }})
+    name: Validation (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -66,11 +36,21 @@ jobs:
 
       - run: pnpm install
 
-      - name: Build shared test dependencies
-        run: pnpm run pretest
+      - run: pnpm typecheck
+
+      - run: pnpm lint
+
+      - run: pnpm build
 
       - name: Test packages suite
-        run: pnpm exec vitest run packages --passWithNoTests
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            pnpm exec vitest run packages --coverage --passWithNoTests
+          else
+            pnpm exec vitest run packages --passWithNoTests
+          fi
 
       - name: Install Playwright (Chromium)
         shell: bash
