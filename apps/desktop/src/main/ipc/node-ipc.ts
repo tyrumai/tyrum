@@ -16,7 +16,11 @@ let ipcRegistered = false;
 
 function sendToRenderer(channel: string, payload: unknown): void {
   const win = currentWindow;
-  if (!win || win.isDestroyed()) return;
+  if (!win) return;
+  if (win.isDestroyed() || win.webContents.isDestroyed()) {
+    currentWindow = null;
+    return;
+  }
   win.webContents.send(channel, payload);
 }
 
