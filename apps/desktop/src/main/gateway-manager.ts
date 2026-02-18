@@ -116,9 +116,10 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
     const host = opts.host ?? "127.0.0.1";
     const startupLogLines: string[] = [];
 
-    const proc = spawn("node", [opts.gatewayBin], {
+    const proc = spawn(process.execPath, [opts.gatewayBin], {
       env: {
         ...process.env,
+        ELECTRON_RUN_AS_NODE: "1",
         GATEWAY_PORT: String(opts.port),
         GATEWAY_HOST: host,
         GATEWAY_DB_PATH: opts.dbPath,
