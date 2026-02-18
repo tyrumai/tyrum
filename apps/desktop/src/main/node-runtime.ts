@@ -16,7 +16,7 @@ export class NodeRuntime {
   private providers: CapabilityProvider[] = [];
 
   constructor(
-    private config: DesktopNodeConfig,
+    _config: DesktopNodeConfig,
     private _permissions: ResolvedPermissions,
     private callbacks: NodeRuntimeCallbacks,
   ) {}
@@ -93,11 +93,6 @@ export class NodeRuntime {
   }
 
   private getEnabledCapabilities(): ClientCapability[] {
-    const caps: ClientCapability[] = [];
-    if (this.config.capabilities.desktop) caps.push("desktop");
-    if (this.config.capabilities.playwright) caps.push("playwright");
-    if (this.config.capabilities.cli) caps.push("cli");
-    if (this.config.capabilities.http) caps.push("http");
-    return caps;
+    return [...new Set(this.providers.map((provider) => provider.capability))];
   }
 }

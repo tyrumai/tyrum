@@ -14,6 +14,7 @@ export class CliProvider implements CapabilityProvider {
   constructor(
     private allowedCommands: string[],
     private allowedWorkingDirs: string[],
+    private allowlistEnforced = true,
   ) {}
 
   async execute(action: ActionPrimitive): Promise<TaskResult> {
@@ -29,14 +30,14 @@ export class CliProvider implements CapabilityProvider {
     }
 
     // Allowlist enforcement
-    if (!this.allowedCommands.includes(cmd)) {
+    if (this.allowlistEnforced && !this.allowedCommands.includes(cmd)) {
       return {
         success: false,
         error: `Command "${cmd}" is not in the allowlist. Allowed: ${this.allowedCommands.join(", ")}`,
       };
     }
 
-    if (cwd) {
+    if (this.allowlistEnforced && cwd) {
       const resolvedCwd = resolve(cwd);
       const allowed = this.allowedWorkingDirs.some((dir) => {
         const allowedDir = resolve(dir);
