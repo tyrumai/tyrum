@@ -7,6 +7,7 @@ import type { GatewayManager } from "./gateway-manager.js";
 
 let mainWindow: BrowserWindow | null = null;
 let gatewayManager: GatewayManager | null = null;
+let isQuitting = false;
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -41,6 +42,15 @@ app.on("window-all-closed", () => {
 app.on("activate", () => {
   if (mainWindow === null) createWindow();
 });
-app.on("before-quit", async () => {
-  await gatewayManager?.stop();
+app.on("before-quit", (event) => {
+  if (isQuitting) return;
+  isQuitting = true;
+  event.preventDefault();
+  void (async () => {
+    try {
+      await gatewayManager?.stop();
+    } finally {
+      app.quit();
+    }
+  })();
 });
