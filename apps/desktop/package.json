@@ -6,8 +6,8 @@
   "main": "dist/main/index.mjs",
   "scripts": {
     "dev": "electron dist/main/index.mjs",
-    "build:main": "tsdown src/main/index.ts --format esm --outDir dist/main",
-    "build:preload": "tsdown src/preload/index.ts --format cjs --outDir dist/preload",
+    "build:main": "tsdown src/main/index.ts --format esm --outDir dist/main --external electron",
+    "build:preload": "tsdown src/preload/index.ts --format cjs --outDir dist/preload --external electron",
     "build:renderer": "vite build",
     "build": "pnpm build:main && pnpm build:preload && pnpm build:renderer",
     "dist": "pnpm build && electron-builder"

@@ -19,6 +19,9 @@ on:
         required: false
         type: string
 
+permissions:
+  contents: read
+
 concurrency:
   group: install-smoke-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
