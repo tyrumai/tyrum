@@ -1285,13 +1285,98 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
     const body = `
       <div class="page-header">
         <h1>Onboarding Start</h1>
+        <p>Select how this desktop app should connect before continuing setup.</p>
+      </div>
+
+      <ol class="onboarding-stepper">
+        <li class="active">1. Mode</li>
+        <li>2. Persona</li>
+        <li>3. Consent</li>
+      </ol>
+
+      <section class="card">
+        <h2>Connection Mode</h2>
+        <p class="muted">Embedded runs a local gateway automatically. Remote connects this desktop app to an external gateway.</p>
+        <div class="actions">
+          <form method="post" action="/app/actions/onboarding/mode" class="inline" data-mode="embedded">
+            <input type="hidden" name="mode" value="embedded" />
+            <button type="submit">Use Embedded Mode</button>
+          </form>
+          <form method="post" action="/app/actions/onboarding/mode" class="inline" data-mode="remote">
+            <input type="hidden" name="mode" value="remote" />
+            <button type="submit" class="secondary">Use Remote Mode</button>
+          </form>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>What happens next</h2>
+        <p class="muted">Choose Embedded to continue persona + consent onboarding. Choose Remote to stop onboarding and configure a remote connection in Tyrum Desktop.</p>
+      </section>
+
+      <script>
+        (function () {
+          const forms = document.querySelectorAll("form[data-mode]");
+          for (const form of forms) {
+            form.addEventListener("submit", function (event) {
+              const mode = form.getAttribute("data-mode");
+              if (!mode) return;
+              try {
+                const hasDesktopHost = Boolean(window.parent && window.parent !== window);
+                if (hasDesktopHost) {
+                  if (mode === "remote") {
+                    event.preventDefault();
+                  }
+                  window.parent.postMessage({ type: "tyrum:onboarding-mode-selected", mode: mode }, "*");
+                }
+              } catch {
+                // ignore and continue with normal form submission
+              }
+            });
+          }
+        })();
+      </script>
+    `;
+    return c.html(shell("Onboarding Start", "/app/onboarding/start", search, body));
+  });
+
+  app.post("/app/actions/onboarding/mode", async (c) => {
+    const form = await c.req.formData();
+    const mode = form.get("mode")?.toString().trim();
+    if (mode !== "embedded" && mode !== "remote") {
+      return c.redirect(
+        redirectWithMessage(
+          "/app/onboarding/start",
+          "Select Embedded or Remote mode to continue.",
+          "error",
+        ),
+      );
+    }
+
+    if (mode === "embedded") {
+      return c.redirect("/app/onboarding/persona");
+    }
+
+    return c.redirect(
+      redirectWithMessage(
+        "/app",
+        "Remote mode selected. Configure remote connection in Tyrum Desktop.",
+      ),
+    );
+  });
+
+  app.get("/app/onboarding/persona", (c) => {
+    const search = new URL(c.req.url).searchParams;
+    const body = `
+      <div class="page-header">
+        <h1>Onboarding Persona</h1>
         <p>Capture persona defaults and consent in one guided submission.</p>
       </div>
 
       <ol class="onboarding-stepper">
-        <li class="active">1. Persona</li>
-        <li>2. Consent</li>
-        <li>3. Review</li>
+        <li>1. Mode</li>
+        <li class="active">2. Persona</li>
+        <li>3. Consent</li>
       </ol>
 
       <form method="post" action="/app/actions/onboarding/consent">
@@ -1355,10 +1440,10 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
 
       <section class="card">
         <h2>What happens next</h2>
-        <p class="muted">After saving this baseline, continue to the consent checklist and then watcher defaults.</p>
+        <p class="muted">After saving this baseline, continue to the consent checklist.</p>
       </section>
     `;
-    return c.html(shell("Onboarding Start", "/app/onboarding/start", search, body));
+    return c.html(shell("Onboarding Persona", "/app/onboarding/persona", search, body));
   });
 
   app.get("/app/onboarding/consent", (c) => {
