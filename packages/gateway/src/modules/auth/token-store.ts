@@ -9,7 +9,7 @@
 
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { randomUUID } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { timingSafeEqual } from "node:crypto";
 
 const TOKEN_FILENAME = ".admin-token";
@@ -45,7 +45,7 @@ export class TokenStore {
     }
 
     // 3. Generate a new token and persist it
-    this.token = randomUUID();
+    this.token = randomBytes(32).toString("hex");
     await mkdir(this.tyrumHome, { recursive: true });
     await writeFile(tokenPath, this.token + "\n", { mode: 0o600 });
     return this.token;
