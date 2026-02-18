@@ -173,6 +173,23 @@ export function Gateway() {
           setErrorMessage(toErrorMessage(error));
         }
       });
+
+    void api.gateway
+      .getStatus()
+      .then((snapshot) => {
+        if (disposed) return;
+        setGatewayStatus(snapshot.status);
+        setConfig((prev) => ({
+          ...prev,
+          embedded: { ...prev.embedded, port: snapshot.port },
+        }));
+        if (snapshot.status === "running" || snapshot.status === "stopped") {
+          setErrorMessage(null);
+        }
+      })
+      .catch(() => {
+        // Ignore snapshot failures; status events and actions still drive this view.
+      });
     void refreshGatewayUrls();
 
     const unsubscribe = api.onStatusChange((statusRaw) => {

@@ -4,6 +4,7 @@ export interface TyrumDesktopApi {
   gateway: {
     start: () => Promise<{ status: string; port: number }>;
     stop: () => Promise<{ status: string }>;
+    getStatus: () => Promise<{ status: string; port: number }>;
     getUiUrls: () => Promise<{
       embedUrl: string | null;
       displayUrl: string | null;

@@ -1,5 +1,5 @@
 import { ipcMain, type BrowserWindow } from "electron";
-import { GatewayManager } from "../gateway-manager.js";
+import { GatewayManager, type GatewayStatus } from "../gateway-manager.js";
 import { loadConfig, saveConfig } from "../config/store.js";
 import { decryptToken, generateToken, encryptToken } from "../config/token-store.js";
 import { join } from "node:path";
@@ -17,6 +17,21 @@ interface GatewayUiUrls {
   embedUrl: string | null;
   displayUrl: string | null;
   externalUrl: string | null;
+}
+
+interface GatewayStatusSnapshot {
+  status: GatewayStatus;
+  port: number;
+}
+
+export function getGatewayStatusSnapshot(
+  currentStatus: GatewayStatus | undefined,
+  port: number,
+): GatewayStatusSnapshot {
+  return {
+    status: currentStatus ?? "stopped",
+    port,
+  };
 }
 
 function ensureEmbeddedGatewayToken(config: DesktopNodeConfig): string {
@@ -120,6 +135,12 @@ export function registerGatewayIpc(window: BrowserWindow): GatewayManager {
       if (!mgr) return { status: "stopped" };
       await mgr.stop();
       return { status: "stopped" };
+    });
+
+    ipcMain.handle("gateway:status", async () => {
+      const config = loadConfig();
+      const mgr = manager;
+      return getGatewayStatusSnapshot(mgr?.status, config.embedded.port);
     });
 
     ipcMain.handle("gateway:ui-urls", async () => {

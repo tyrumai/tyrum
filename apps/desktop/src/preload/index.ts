@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld("tyrumDesktop", {
   gateway: {
     start: () => ipcRenderer.invoke("gateway:start"),
     stop: () => ipcRenderer.invoke("gateway:stop"),
+    getStatus: () => ipcRenderer.invoke("gateway:status"),
     getUiUrls: () => ipcRenderer.invoke("gateway:ui-urls"),
   },
   node: {

@@ -129,6 +129,22 @@ export function Overview() {
       setStatus((prev) => ({ ...prev, gatewayMode: mode, capabilities, port }));
     });
 
+    void api.gateway
+      .getStatus()
+      .then((snapshot) => {
+        setStatus((prev) => ({
+          ...prev,
+          gatewayStatus: snapshot.status,
+          port: snapshot.port,
+        }));
+        if (snapshot.status === "running" || snapshot.status === "stopped") {
+          setGatewayError(null);
+        }
+      })
+      .catch(() => {
+        // Ignore snapshot failures; status events and user actions still drive UI updates.
+      });
+
     const unsubscribe = api.onStatusChange((s) => {
       const info = s as Partial<StatusInfo>;
       if (
