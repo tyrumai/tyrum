@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getGatewayStatusSnapshot } from "../src/main/ipc/gateway-ipc.js";
+import { getGatewayStatusSnapshot } from "../src/main/ipc/gateway-status.js";
 
 describe("getGatewayStatusSnapshot", () => {
   it("returns running status so newly mounted tabs reflect live gateway state", () => {
