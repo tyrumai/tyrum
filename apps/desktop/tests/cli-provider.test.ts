@@ -87,13 +87,22 @@ describe("CliProvider", () => {
     const result = await provider.execute(
       makeAction({ cmd: "echo", args: ["sub"], cwd: "/tmp/sub" }),
     );
-    // /tmp/sub starts with /tmp so it should be allowed
+    // /tmp/sub is within /tmp so it should be allowed
     // The command itself may fail if /tmp/sub doesn't exist, but the
     // allowlist check should pass. We check that the error is NOT about
     // the working directory allowlist.
     if (!result.success) {
       expect(result.error).not.toContain("not in the allowlist");
     }
+  });
+
+  it("sibling directory with shared prefix is rejected", async () => {
+    const provider = makeProvider(undefined, ["/tmp"]);
+    const result = await provider.execute(
+      makeAction({ cmd: "echo", args: ["nope"], cwd: "/tmpevil" }),
+    );
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("not in the allowlist");
   });
 
   // -- Non-zero exit code returns failure ------------------------------------
