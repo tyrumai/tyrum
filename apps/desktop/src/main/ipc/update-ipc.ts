@@ -30,6 +30,7 @@ export interface ManualReleaseFileResult {
 export interface UpdateIpcOptions {
   beforeInstall?: () => Promise<void>;
   allowQuitForUpdate?: () => void;
+  clearQuitForUpdate?: () => void;
 }
 
 function ensureUpdater(): DesktopUpdaterService {
@@ -126,9 +127,15 @@ export function registerUpdateIpc(
     ipcMain.handle("updates:download", async () => service.downloadUpdate());
 
     ipcMain.handle("updates:install", async () => {
+      service.assertInstallReady();
       await options.beforeInstall?.();
-      options.allowQuitForUpdate?.();
-      return service.installUpdate();
+      try {
+        options.allowQuitForUpdate?.();
+        return service.installUpdate();
+      } catch (error) {
+        options.clearQuitForUpdate?.();
+        throw error;
+      }
     });
 
     ipcMain.handle("updates:open-release-file", async () => {

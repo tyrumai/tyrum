@@ -131,20 +131,9 @@ export function releaseFileDialogExtensions(
   platform: NodeJS.Platform,
 ): readonly string[] {
   const suffixes = ALLOWED_RELEASE_FILE_SUFFIXES[platform] ?? [".appimage", ".tar.gz"];
-  const flattened = new Set<string>();
-  for (const suffix of suffixes) {
-    const normalized = suffix.startsWith(".") ? suffix.slice(1) : suffix;
-    if (normalized.length > 0) {
-      flattened.add(normalized);
-      const segments = normalized.split(".");
-      if (segments.length > 1) {
-        for (const segment of segments) {
-          if (segment.length > 0) flattened.add(segment);
-        }
-      }
-    }
-  }
-  return [...flattened];
+  return suffixes
+    .map((suffix) => (suffix.startsWith(".") ? suffix.slice(1) : suffix))
+    .filter((suffix) => suffix.length > 0);
 }
 
 export function isAllowedReleaseFilePath(
@@ -268,6 +257,13 @@ export class DesktopUpdaterService {
     throw new Error("Updates are only available in packaged desktop builds.");
   }
 
+  assertInstallReady(): void {
+    this.ensurePackagedBuild();
+    if (this.state.stage !== "downloaded") {
+      throw new Error("An update must be downloaded before install.");
+    }
+  }
+
   async checkForUpdates(): Promise<DesktopUpdateState> {
     this.ensurePackagedBuild();
     this.setState({
@@ -313,11 +309,7 @@ export class DesktopUpdaterService {
   }
 
   installUpdate(): DesktopUpdateState {
-    this.ensurePackagedBuild();
-
-    if (this.state.stage !== "downloaded") {
-      throw new Error("An update must be downloaded before install.");
-    }
+    this.assertInstallReady();
 
     this.setState({
       stage: "installing",
