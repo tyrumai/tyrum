@@ -116,6 +116,19 @@ export function Connection() {
       if (remote?.["tokenRef"]) setHasSavedRemoteToken(true);
     });
 
+    void api.gateway
+      .getStatus()
+      .then((snapshot) => {
+        setGatewayStatus(snapshot.status);
+        setPort(snapshot.port);
+        if (snapshot.status === "running" || snapshot.status === "stopped") {
+          setGatewayError(null);
+        }
+      })
+      .catch(() => {
+        // Ignore snapshot failures; live status events and actions still update the view.
+      });
+
     const unsubscribe = api.onStatusChange((s) => {
       const info = s as Record<string, unknown>;
       if (info["gatewayStatus"]) {
