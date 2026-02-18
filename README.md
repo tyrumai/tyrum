@@ -1,10 +1,10 @@
 # Tyrum
 
-Self-hosted autonomous worker agent platform with a single-instance, single-user runtime. The default profile is local-first and runs without application-layer authentication; services bind to localhost by default.
+Self-hosted autonomous worker agent platform with a single-instance, single-user runtime. The default profile is local-first and binds to localhost by default, while requiring a gateway access token for HTTP and WebSocket access.
 
 ## Overview
 - **Goal:** A chat-first autonomous worker agent that can operate software like a human would, while preferring structured interfaces when available and using web/desktop automation as fallback. It produces audit evidence and asks for approvals when needed. “Personal assistant” is the first role, but the same worker can take on other remote-work roles via configuration.
-- **Deployment profile (default):** user-hosted, single-user, localhost-only (`127.0.0.1`) with no auth prompts. Run multiple instances (separate `TYRUM_HOME` + DB) if you want multiple workers.
+- **Deployment profile (default):** user-hosted, single-user, localhost-only (`127.0.0.1`) with required token auth. Run multiple instances (separate `TYRUM_HOME` + DB) if you want multiple workers.
 - **Differentiators:**
   - No hard-coded skills; autonomy emerges from learned memory and generic executors.
   - Approvals + policy gate for spending, PII, and explainability; spend is deny-by-default until configured.
@@ -74,7 +74,7 @@ See `docs/install.md` for full details, version pinning, and update commands.
 
 - `GATEWAY_HOST` defaults to `127.0.0.1`.
 - `GATEWAY_PORT` defaults to `8080`.
-- Binding to non-local interfaces logs a warning because app auth is disabled in the self-hosted profile.
+- Gateway auth token is required on localhost and non-local interfaces (`GATEWAY_TOKEN` env or `${TYRUM_HOME}/.admin-token`, auto-generated if missing).
 - The gateway serves the web UI directly at `/app` and supports WebSocket upgrades on `/ws`.
 
 ## Development Commands

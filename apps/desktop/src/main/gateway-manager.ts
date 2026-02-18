@@ -5,8 +5,7 @@ export interface GatewayManagerOptions {
   gatewayBin: string;
   port: number;
   dbPath: string;
-  wsToken: string;
-  adminToken?: string;
+  accessToken: string;
   host?: string;
 }
 
@@ -123,8 +122,7 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
         GATEWAY_PORT: String(opts.port),
         GATEWAY_HOST: host,
         GATEWAY_DB_PATH: opts.dbPath,
-        GATEWAY_WS_TOKEN: opts.wsToken,
-        TYRUM_ADMIN_TOKEN: opts.adminToken ?? opts.wsToken,
+        GATEWAY_TOKEN: opts.accessToken,
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
