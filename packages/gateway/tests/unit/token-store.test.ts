@@ -30,6 +30,12 @@ describe("TokenStore", () => {
     expect(fileContent.trim()).toBe(token);
   });
 
+  it("generates a 64-character hex token (256-bit entropy)", async () => {
+    const store = new TokenStore(tempDir);
+    const token = await store.initialize();
+    expect(token).toMatch(/^[0-9a-f]{64}$/);
+  });
+
   it("reads token from TYRUM_ADMIN_TOKEN env var", async () => {
     process.env["TYRUM_ADMIN_TOKEN"] = "env-token-123";
 
