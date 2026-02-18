@@ -14,6 +14,7 @@ function createTestServer(): {
   port: number;
   close: () => Promise<void>;
   waitForClient: () => Promise<WsWebSocket>;
+  waitForProtocolHeader: () => Promise<string | string[] | undefined>;
 } {
   const wss = new WebSocketServer({ port: 0 });
   const addr = wss.address();
@@ -22,8 +23,18 @@ function createTestServer(): {
 
   const clientWaiters: Array<(ws: WsWebSocket) => void> = [];
   const pendingClients: WsWebSocket[] = [];
+  const protocolWaiters: Array<(value: string | string[] | undefined) => void> = [];
+  const pendingProtocols: Array<string | string[] | undefined> = [];
 
-  wss.on("connection", (ws) => {
+  wss.on("connection", (ws, req) => {
+    const offeredProtocols = req.headers["sec-websocket-protocol"];
+    const protocolWaiter = protocolWaiters.shift();
+    if (protocolWaiter) {
+      protocolWaiter(offeredProtocols);
+    } else {
+      pendingProtocols.push(offeredProtocols);
+    }
+
     const waiter = clientWaiters.shift();
     if (waiter) {
       waiter(ws);
@@ -40,13 +51,21 @@ function createTestServer(): {
     });
   }
 
+  function waitForProtocolHeader(): Promise<string | string[] | undefined> {
+    const pending = pendingProtocols.shift();
+    if (pending !== undefined) return Promise.resolve(pending);
+    return new Promise<string | string[] | undefined>((resolve) => {
+      protocolWaiters.push(resolve);
+    });
+  }
+
   async function close(): Promise<void> {
     return new Promise<void>((resolve) => {
       wss.close(() => resolve());
     });
   }
 
-  return { wss, url, port, close, waitForClient };
+  return { wss, url, port, close, waitForClient, waitForProtocolHeader };
 }
 
 /** Wait for a JSON message from a ws-library WebSocket. */
@@ -347,7 +366,7 @@ describe("TyrumClient", () => {
     expect(hello2).toEqual({ type: "hello", capabilities: ["cli"] });
   });
 
-  it("appends token to URL without existing query string", async () => {
+  it("sends token in websocket subprotocol metadata", async () => {
     server = createTestServer();
     client = new TyrumClient({
       url: server.url,
@@ -355,10 +374,14 @@ describe("TyrumClient", () => {
       capabilities: [],
     });
 
-    // We verify indirectly that the connection succeeds (token is in URL)
     client.connect();
+    const protocolHeader = await server.waitForProtocolHeader();
     const ws = await server.waitForClient();
     await waitForMessage(ws); // hello arrives = connection succeeded
+    expect(typeof protocolHeader).toBe("string");
+    const offered = String(protocolHeader ?? "");
+    expect(offered).toContain("tyrum-v1");
+    expect(offered).toContain("tyrum-auth.");
     expect(client.connected).toBe(true);
   });
 

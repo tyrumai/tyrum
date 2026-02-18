@@ -15,6 +15,7 @@ export const ActionPrimitiveKind = z.enum([
   "Decide",
   "Web",
   "Android",
+  "Desktop",
   "CLI",
   "Http",
   "Message",
@@ -22,6 +23,7 @@ export const ActionPrimitiveKind = z.enum([
   "Store",
   "Watch",
   "Confirm",
+  "Desktop",
 ]);
 export type ActionPrimitiveKind = z.infer<typeof ActionPrimitiveKind>;
 
@@ -29,12 +31,14 @@ export type ActionPrimitiveKind = z.infer<typeof ActionPrimitiveKind>;
 const REQUIRES_POSTCONDITION = new Set<ActionPrimitiveKind>([
   "Web",
   "Android",
+  "Desktop",
   "CLI",
   "Http",
   "Message",
   "Pay",
   "Store",
   "Watch",
+  "Desktop",
 ]);
 
 /** Returns true when the primitive mutates external state. */

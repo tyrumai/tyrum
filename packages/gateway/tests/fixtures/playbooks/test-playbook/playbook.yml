@@ -1,0 +1,24 @@
+id: test-playbook
+name: Test Playbook
+description: A playbook used in automated tests
+version: "1.0.0"
+steps:
+  - name: Research the topic
+    action: Research
+    args:
+      query: "test query"
+  - name: Send a message
+    action: Message
+    args:
+      to: "user@example.com"
+      body: "Hello from playbook"
+    postcondition: "message was delivered"
+    rollback_hint: "Retry the message"
+  - name: Store the result
+    action: Store
+    args:
+      key: "result"
+      value: "done"
+allowed_domains:
+  - example.com
+consent_boundary: "requires_approval"

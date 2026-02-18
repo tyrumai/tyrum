@@ -45,9 +45,9 @@ export type TyrumClientEvents = {
 // ---------------------------------------------------------------------------
 
 export interface TyrumClientOptions {
-  /** Full WebSocket URL including token query param, e.g. ws://host/ws?token=x */
+  /** Full WebSocket URL, e.g. ws://host/ws */
   url: string;
-  /** Auth token appended as ?token= if the url doesn't already include it. */
+  /** Auth token sent via WebSocket subprotocol metadata. */
   token: string;
   /** Capabilities to advertise in the hello handshake. */
   capabilities: ClientCapability[];
@@ -63,6 +63,26 @@ export interface TyrumClientOptions {
 
 const DEFAULT_MAX_RECONNECT_DELAY = 30_000;
 const BASE_RECONNECT_DELAY = 1_000;
+const WS_BASE_PROTOCOL = "tyrum-v1";
+const WS_AUTH_PROTOCOL_PREFIX = "tyrum-auth.";
+
+function toBase64UrlUtf8(value: string): string {
+  // Node runtime path.
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(value, "utf-8").toString("base64url");
+  }
+
+  // Browser runtime path.
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (const b of bytes) {
+    binary += String.fromCharCode(b);
+  }
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
 
 // ---------------------------------------------------------------------------
 // Client
@@ -161,19 +181,13 @@ export class TyrumClient {
   // Internal
   // -----------------------------------------------------------------------
 
-  private buildUrl(): string {
-    const base = this.opts.url;
-    // Append token if not already present in the URL
-    if (base.includes("token=")) {
-      return base;
-    }
-    const sep = base.includes("?") ? "&" : "?";
-    return `${base}${sep}token=${encodeURIComponent(this.opts.token)}`;
+  private buildProtocols(): string[] {
+    const token = toBase64UrlUtf8(this.opts.token);
+    return [WS_BASE_PROTOCOL, `${WS_AUTH_PROTOCOL_PREFIX}${token}`];
   }
 
   private openSocket(): void {
-    const url = this.buildUrl();
-    this.ws = new WebSocket(url);
+    this.ws = new WebSocket(this.opts.url, this.buildProtocols());
 
     this.ws.addEventListener("open", () => {
       this.reconnectAttempt = 0;

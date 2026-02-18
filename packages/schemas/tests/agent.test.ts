@@ -79,6 +79,22 @@ describe("McpServerSpec", () => {
     expect(parsed.transport).toBe("stdio");
     expect(parsed.command).toBe("node");
   });
+
+  it("parses remote server configuration", () => {
+    const parsed = McpServerSpec.parse({
+      id: "calendar-remote",
+      name: "Calendar MCP (Remote)",
+      enabled: true,
+      transport: "remote",
+      url: "https://mcp.example.com/mcp",
+      headers: {
+        authorization: "Bearer ${MCP_TOKEN}",
+      },
+    });
+
+    expect(parsed.transport).toBe("remote");
+    expect(parsed.url).toBe("https://mcp.example.com/mcp");
+  });
 });
 
 describe("AgentTurnRequest", () => {

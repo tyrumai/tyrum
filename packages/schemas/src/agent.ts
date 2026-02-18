@@ -86,18 +86,29 @@ export const SkillManifest = z.object({
 });
 export type SkillManifest = z.infer<typeof SkillManifest>;
 
-export const McpServerSpec = z.object({
+const McpServerBase = z.object({
   id: z.string().trim().min(1),
   name: z.string().trim().min(1),
   enabled: z.boolean(),
+  timeout_ms: z.number().int().min(100).max(600_000).optional(),
+  scopes: z.array(z.string().trim().min(1)).optional(),
+});
+
+const McpServerStdio = McpServerBase.extend({
   transport: z.literal("stdio").default("stdio"),
   command: z.string().trim().min(1),
   args: z.array(z.string()).optional(),
   env: z.record(z.string(), z.string()).optional(),
   cwd: z.string().trim().min(1).optional(),
-  timeout_ms: z.number().int().min(100).max(600_000).optional(),
-  scopes: z.array(z.string().trim().min(1)).optional(),
 });
+
+const McpServerRemote = McpServerBase.extend({
+  transport: z.literal("remote"),
+  url: z.string().trim().url(),
+  headers: z.record(z.string(), z.string()).optional(),
+});
+
+export const McpServerSpec = z.union([McpServerStdio, McpServerRemote]);
 export type McpServerSpec = z.infer<typeof McpServerSpec>;
 
 export const AgentTurnRequest = z.object({
@@ -130,7 +141,7 @@ export const AgentStatusResponse = z.object({
       id: z.string(),
       name: z.string(),
       enabled: z.boolean(),
-      transport: z.literal("stdio"),
+      transport: z.enum(["stdio", "remote"]),
     }),
   ),
   tools: z.array(z.string()),

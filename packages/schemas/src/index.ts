@@ -83,8 +83,14 @@ export {
   PostconditionReport,
   PostconditionError,
   evaluatePostcondition,
+  checkPostcondition,
 } from "./postcondition.js";
-export type { HttpContext, DomContext, EvaluationContext } from "./postcondition.js";
+export type {
+  HttpContext,
+  DomContext,
+  EvaluationContext,
+  PostconditionCheckResult,
+} from "./postcondition.js";
 
 export {
   ClientCapability,
@@ -101,6 +107,14 @@ export {
   GatewayMessage,
   requiredCapability,
 } from "./protocol.js";
+
+export {
+  DesktopDisplayTarget,
+  DesktopScreenshotArgs,
+  DesktopMouseArgs,
+  DesktopKeyboardArgs,
+  DesktopActionArgs,
+} from "./desktop.js";
 
 export {
   AgentModelConfig,
@@ -121,3 +135,20 @@ export {
   AgentTurnResponse,
   AgentStatusResponse,
 } from "./agent.js";
+
+export {
+  AuditEvent,
+  ChainVerification,
+  ReceiptBundle,
+} from "./audit.js";
+
+export {
+  SecretHandle,
+  SecretStoreRequest,
+} from "./secret.js";
+
+export {
+  PlaybookStep,
+  PlaybookManifest,
+  Playbook,
+} from "./playbook.js";

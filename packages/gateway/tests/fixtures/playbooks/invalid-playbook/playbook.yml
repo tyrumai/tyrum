@@ -1,0 +1,2 @@
+name: Missing required fields
+# no id, no version, no steps — this should fail validation

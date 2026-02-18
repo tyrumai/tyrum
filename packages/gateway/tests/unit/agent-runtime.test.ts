@@ -5,23 +5,15 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
+import { createStubLanguageModel } from "./stub-language-model.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations");
 
-function createFetchStub(reply: string): typeof fetch {
-  return (async () => {
-    return {
-      ok: true,
-      status: 200,
-      text: async () => JSON.stringify({ choices: [{ message: { content: reply } }] }),
-    } as unknown as Response;
-  }) as typeof fetch;
-}
-
 describe("AgentRuntime", () => {
   let homeDir: string | undefined;
   let container: GatewayContainer | undefined;
+  const fetch404 = (async () => new Response("not found", { status: 404 })) as typeof fetch;
 
   afterEach(async () => {
     container?.db.close();
@@ -43,7 +35,8 @@ describe("AgentRuntime", () => {
     const runtime = new AgentRuntime({
       container,
       home: homeDir,
-      fetchImpl: createFetchStub("hello"),
+      languageModel: createStubLanguageModel("hello"),
+      fetchImpl: fetch404,
     });
 
     const result = await runtime.turn({
@@ -83,7 +76,8 @@ describe("AgentRuntime", () => {
     const runtime = new AgentRuntime({
       container,
       home: homeDir,
-      fetchImpl: createFetchStub("hello"),
+      languageModel: createStubLanguageModel("hello"),
+      fetchImpl: fetch404,
       mcpManager:
         mcpManager as unknown as ConstructorParameters<
           typeof AgentRuntime
@@ -133,7 +127,8 @@ describe("AgentRuntime", () => {
     const runtime = new AgentRuntime({
       container,
       home: homeDir,
-      fetchImpl: createFetchStub("hello"),
+      languageModel: createStubLanguageModel("hello"),
+      fetchImpl: fetch404,
       mcpManager:
         mcpManager as unknown as ConstructorParameters<
           typeof AgentRuntime

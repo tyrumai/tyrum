@@ -75,6 +75,29 @@ args:
   );
 }
 
+function messageTextParts(message: unknown): string[] {
+  if (!message || typeof message !== "object") return [];
+  const content = (message as Record<string, unknown>)["content"];
+
+  if (typeof content === "string") {
+    return [content];
+  }
+
+  if (!Array.isArray(content)) {
+    return [];
+  }
+
+  const parts: string[] = [];
+  for (const part of content) {
+    if (!part || typeof part !== "object") continue;
+    const record = part as Record<string, unknown>;
+    if (record["type"] === "text" && typeof record["text"] === "string") {
+      parts.push(record["text"]);
+    }
+  }
+  return parts;
+}
+
 function findSessionPrompt(payload: unknown): string {
   if (!payload || typeof payload !== "object") {
     return "";
@@ -84,16 +107,10 @@ function findSessionPrompt(payload: unknown): string {
     return "";
   }
   for (const message of messages) {
-    if (
-      message &&
-      typeof message === "object" &&
-      (message as Record<string, unknown>)["role"] === "developer" &&
-      typeof (message as Record<string, unknown>)["content"] === "string" &&
-      ((message as Record<string, unknown>)["content"] as string).startsWith(
-        "Session context:",
-      )
-    ) {
-      return (message as Record<string, unknown>)["content"] as string;
+    for (const text of messageTextParts(message)) {
+      if (text.startsWith("Session context:")) {
+        return text;
+      }
     }
   }
   return "";
@@ -239,9 +256,14 @@ describe("agent routes", () => {
     });
     expect(third.status).toBe(200);
 
-    expect(capturedPayloads).toHaveLength(3);
-    const secondPrompt = findSessionPrompt(capturedPayloads[1]);
-    const thirdPrompt = findSessionPrompt(capturedPayloads[2]);
+    // Filter to only LLM chat/completions payloads (have `messages` array),
+    // excluding embedding endpoint calls (have `input` field) added by semantic search.
+    const llmPayloads = capturedPayloads.filter(
+      (p) => p && typeof p === "object" && Array.isArray((p as Record<string, unknown>)["messages"]),
+    );
+    expect(llmPayloads).toHaveLength(3);
+    const secondPrompt = findSessionPrompt(llmPayloads[1]);
+    const thirdPrompt = findSessionPrompt(llmPayloads[2]);
 
     expect(secondPrompt.toLowerCase()).not.toContain("prefer tea");
     expect(thirdPrompt.toLowerCase()).toContain("prefer tea");
