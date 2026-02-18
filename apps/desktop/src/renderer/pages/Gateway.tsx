@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toErrorMessage } from "../lib/errors.js";
 
 interface GatewayConfigShape {
@@ -133,6 +133,13 @@ export function Gateway({
   });
 
   const api = window.tyrumDesktop;
+  const startOnboardingRef = useRef(launchOnboarding);
+
+  useEffect(() => {
+    if (launchOnboarding) {
+      startOnboardingRef.current = true;
+    }
+  }, [launchOnboarding]);
 
   const refreshGatewayUrls = useCallback(async (options?: { startOnboarding?: boolean }) => {
     if (!api) return;
@@ -199,7 +206,7 @@ export function Gateway({
         // Ignore snapshot failures; status events and actions still drive this view.
       });
     void refreshGatewayUrls({
-      startOnboarding: launchOnboarding,
+      startOnboarding: startOnboardingRef.current,
     });
 
     const unsubscribe = api.onStatusChange((statusRaw) => {
@@ -223,7 +230,7 @@ export function Gateway({
 
       if (shouldRefreshUrls) {
         void refreshGatewayUrls({
-          startOnboarding: launchOnboarding,
+          startOnboarding: startOnboardingRef.current,
         });
       }
     });
@@ -232,7 +239,7 @@ export function Gateway({
       disposed = true;
       unsubscribe();
     };
-  }, [api, launchOnboarding, onOnboardingLaunchHandled, refreshGatewayUrls]);
+  }, [api, refreshGatewayUrls]);
 
   useEffect(() => {
     if (!launchOnboarding) {
@@ -241,6 +248,7 @@ export function Gateway({
     if (!gatewayUrls.embedUrl?.includes("next=%2Fapp%2Fonboarding%2Fstart")) {
       return;
     }
+    startOnboardingRef.current = false;
     onOnboardingLaunchHandled?.();
   }, [gatewayUrls.embedUrl, launchOnboarding, onOnboardingLaunchHandled]);
 
