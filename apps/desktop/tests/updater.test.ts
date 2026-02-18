@@ -119,8 +119,11 @@ describe("release file validation", () => {
   });
 
   it("returns reasonable dialog extension hints", () => {
-    expect(releaseFileDialogExtensions("linux")).toContain("appimage");
-    expect(releaseFileDialogExtensions("linux")).toContain("tar.gz");
+    const linuxExtensions = releaseFileDialogExtensions("linux");
+    expect(linuxExtensions).toContain("appimage");
+    expect(linuxExtensions).toContain("tar.gz");
+    expect(linuxExtensions).not.toContain("tar");
+    expect(linuxExtensions).not.toContain("gz");
     expect(releaseFileDialogExtensions("darwin")).toContain("dmg");
   });
 });

@@ -10,6 +10,7 @@ const {
   checkForUpdatesMock,
   downloadUpdateMock,
   quitAndInstallMock,
+  listeners,
 } = vi.hoisted(() => {
   const ipcMainHandleMock = vi.fn();
   const registeredHandlers = new Map<string, (...args: unknown[]) => unknown>();
@@ -33,6 +34,12 @@ const {
       listeners.set(event, handlers);
       return autoUpdaterMock;
     }),
+    emit: (event: string, ...args: unknown[]) => {
+      const handlers = listeners.get(event) ?? [];
+      for (const handler of handlers) {
+        handler(...args);
+      }
+    },
   };
 
   return {
@@ -80,6 +87,7 @@ describe("registerUpdateIpc handlers", () => {
     checkForUpdatesMock.mockReset();
     downloadUpdateMock.mockReset();
     quitAndInstallMock.mockReset();
+    listeners.clear();
     ipcMainHandleMock.mockImplementation(
       (channel: string, handler: (...args: unknown[]) => unknown) => {
         registeredHandlers.set(channel, handler);
@@ -174,5 +182,66 @@ describe("registerUpdateIpc handlers", () => {
     const handler = registeredHandlers.get("updates:open-release-file");
     expect(handler).toBeDefined();
     await expect(handler!({} as never)).rejects.toThrow("not a supported");
+  });
+
+  it("does not run cleanup hooks when install is not ready", async () => {
+    const { registerUpdateIpc } = await import("../src/main/ipc/update-ipc.js");
+    const beforeInstall = vi.fn(async () => {});
+    const allowQuitForUpdate = vi.fn();
+
+    const windowStub = {
+      isDestroyed: () => false,
+      webContents: {
+        isDestroyed: () => false,
+        send: vi.fn(),
+      },
+    } as never;
+
+    registerUpdateIpc(windowStub, {
+      beforeInstall,
+      allowQuitForUpdate,
+    });
+
+    const handler = registeredHandlers.get("updates:install");
+    expect(handler).toBeDefined();
+
+    await expect(handler!({} as never)).rejects.toThrow("must be downloaded");
+    expect(beforeInstall).not.toHaveBeenCalled();
+    expect(allowQuitForUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rolls back quit flags when install fails after cleanup", async () => {
+    const { registerUpdateIpc } = await import("../src/main/ipc/update-ipc.js");
+    const beforeInstall = vi.fn(async () => {});
+    const allowQuitForUpdate = vi.fn();
+    const clearQuitForUpdate = vi.fn();
+
+    quitAndInstallMock.mockImplementation(() => {
+      throw new Error("install failed");
+    });
+
+    const windowStub = {
+      isDestroyed: () => false,
+      webContents: {
+        isDestroyed: () => false,
+        send: vi.fn(),
+      },
+    } as never;
+
+    registerUpdateIpc(windowStub, {
+      beforeInstall,
+      allowQuitForUpdate,
+      clearQuitForUpdate,
+    });
+
+    autoUpdaterMock.emit("update-downloaded", { version: "1.1.0" });
+
+    const handler = registeredHandlers.get("updates:install");
+    expect(handler).toBeDefined();
+
+    await expect(handler!({} as never)).rejects.toThrow("install failed");
+    expect(beforeInstall).toHaveBeenCalledTimes(1);
+    expect(allowQuitForUpdate).toHaveBeenCalledTimes(1);
+    expect(clearQuitForUpdate).toHaveBeenCalledTimes(1);
   });
 });

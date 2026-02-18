@@ -38,6 +38,10 @@ function createWindow(): void {
       isQuittingForUpdate = true;
       isQuitting = true;
     },
+    clearQuitForUpdate: () => {
+      isQuittingForUpdate = false;
+      isQuitting = false;
+    },
   });
 
   if (process.env["VITE_DEV_SERVER_URL"]) {
