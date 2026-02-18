@@ -22,7 +22,7 @@ violations=0
 scan_pattern() {
   local pattern="$1"
   if command -v rg >/dev/null 2>&1; then
-    rg -n --ignore-case --glob "*.md" "$pattern" "$DOCS_DIR"
+    rg -n --ignore-case --no-ignore --hidden --glob "*.md" "$pattern" "$DOCS_DIR"
     return
   fi
 
