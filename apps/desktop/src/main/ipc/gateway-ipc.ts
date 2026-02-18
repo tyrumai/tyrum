@@ -1,5 +1,5 @@
 import { ipcMain, type BrowserWindow } from "electron";
-import { GatewayManager, type GatewayStatus } from "../gateway-manager.js";
+import { GatewayManager } from "../gateway-manager.js";
 import { loadConfig, saveConfig } from "../config/store.js";
 import { decryptToken, generateToken, encryptToken } from "../config/token-store.js";
 import { join } from "node:path";
@@ -7,6 +7,7 @@ import { homedir } from "node:os";
 import { createWindowSender } from "./window-sender.js";
 import { resolveGatewayBinPath } from "../gateway-bin-path.js";
 import type { DesktopNodeConfig } from "../config/schema.js";
+import { getGatewayStatusSnapshot } from "./gateway-status.js";
 
 const sender = createWindowSender();
 
@@ -17,21 +18,6 @@ interface GatewayUiUrls {
   embedUrl: string | null;
   displayUrl: string | null;
   externalUrl: string | null;
-}
-
-interface GatewayStatusSnapshot {
-  status: GatewayStatus;
-  port: number;
-}
-
-export function getGatewayStatusSnapshot(
-  currentStatus: GatewayStatus | undefined,
-  port: number,
-): GatewayStatusSnapshot {
-  return {
-    status: currentStatus ?? "stopped",
-    port,
-  };
 }
 
 function ensureEmbeddedGatewayToken(config: DesktopNodeConfig): string {
