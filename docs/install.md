@@ -81,7 +81,7 @@ GitHub release title format is:
 
 ## Updating
 
-If installed with npm or the installer script:
+In-place update via installed CLI (recommended once `tyrum` is already on PATH):
 
 ```bash
 tyrum update
@@ -98,6 +98,17 @@ Pin to an exact release version:
 ```bash
 tyrum update --version 2026.2.18
 ```
+
+Re-install/update via installer script (useful for fresh bootstrap or PATH repair):
+
+```bash
+curl -fsSL https://get.tyrum.ai/install.sh | bash
+curl -fsSL https://get.tyrum.ai/install.sh | bash -s -- --channel beta
+```
+
+Difference:
+- `tyrum update` uses your existing installed command and updates `@tyrum/gateway` via npm.
+- `install.sh` fetches signed release assets (`SHA256SUMS` verified) and reinstalls globally.
 
 Desktop app updates:
 - The desktop app checks for updates automatically and notifies when one is available.
