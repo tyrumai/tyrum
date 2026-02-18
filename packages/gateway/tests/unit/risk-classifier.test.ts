@@ -203,7 +203,6 @@ describe("RiskClassifier", () => {
       tag_high_threshold: 0.2,
       tag_medium_threshold: 0.8,
     };
-    const classifier = new RiskClassifier(config);
 
     // After normalization: medium=0.2, high=0.8
     // A tag score of 0.3 should be medium (above 0.2, below 0.8)

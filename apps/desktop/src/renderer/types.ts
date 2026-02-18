@@ -25,5 +25,3 @@ declare global {
     tyrumDesktop: TyrumDesktopApi;
   }
 }
-
-export {};
