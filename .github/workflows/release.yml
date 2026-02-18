@@ -1,0 +1,281 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  NODE_VERSION: 24
+  PNPM_VERSION: 10
+
+jobs:
+  package-bundles:
+    name: Package Bundles
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+      channel: ${{ steps.version.outputs.channel }}
+      npm_tag: ${{ steps.version.outputs.npm_tag }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - id: version
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if [[ ! "$TAG" =~ ^v[0-9]{4}\.[0-9]{1,2}\.[0-9]{1,2}(-(beta|dev)\.[0-9]+)?$ ]]; then
+            echo "Invalid tag format: ${TAG}"
+            echo "Expected: vYYYY.M.D, vYYYY.M.D-beta.N, or vYYYY.M.D-dev.N"
+            exit 1
+          fi
+
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "$TAG" == *"-beta."* ]]; then
+            echo "channel=beta" >> "$GITHUB_OUTPUT"
+            echo "npm_tag=next" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          elif [[ "$TAG" == *"-dev."* ]]; then
+            echo "channel=dev" >> "$GITHUB_OUTPUT"
+            echo "npm_tag=dev" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "channel=stable" >> "$GITHUB_OUTPUT"
+            echo "npm_tag=latest" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Apply tag version to workspace manifests
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          node --input-type=module <<'EOF'
+          import { readFileSync, writeFileSync } from "node:fs";
+          import { join } from "node:path";
+
+          const version = process.env.RELEASE_VERSION;
+          if (!version) {
+            throw new Error("RELEASE_VERSION is required");
+          }
+
+          const manifestPaths = [
+            "packages/schemas/package.json",
+            "packages/client/package.json",
+            "packages/gateway/package.json",
+            "apps/desktop/package.json",
+          ];
+
+          const workspacePackageNames = new Set();
+          const manifests = [];
+
+          for (const relativePath of manifestPaths) {
+            const absolutePath = join(process.cwd(), relativePath);
+            const manifest = JSON.parse(readFileSync(absolutePath, "utf8"));
+            manifest.version = version;
+            manifests.push({ relativePath, absolutePath, manifest });
+            if (typeof manifest.name === "string") {
+              workspacePackageNames.add(manifest.name);
+            }
+          }
+
+          const dependencyFields = [
+            "dependencies",
+            "devDependencies",
+            "peerDependencies",
+            "optionalDependencies",
+          ];
+
+          for (const entry of manifests) {
+            for (const field of dependencyFields) {
+              const deps = entry.manifest[field];
+              if (!deps || typeof deps !== "object") continue;
+              for (const depName of Object.keys(deps)) {
+                if (!workspacePackageNames.has(depName)) continue;
+                deps[depName] = version;
+              }
+            }
+
+            writeFileSync(entry.absolutePath, `${JSON.stringify(entry.manifest, null, 2)}\n`);
+            console.log(`Updated ${entry.relativePath} -> ${version}`);
+          }
+          EOF
+
+      - run: pnpm build
+
+      - name: Pack npm tarballs
+        run: |
+          mkdir -p artifacts/npm
+          (cd packages/schemas && pnpm pack --pack-destination ../../artifacts/npm)
+          (cd packages/client && pnpm pack --pack-destination ../../artifacts/npm)
+          (cd packages/gateway && pnpm pack --pack-destination ../../artifacts/npm)
+          ls -lah artifacts/npm
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-packages
+          path: artifacts/npm/*.tgz
+          if-no-files-found: error
+          retention-days: 14
+
+  desktop-bundles:
+    name: Desktop Bundles (${{ matrix.os }})
+    needs: package-bundles
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Apply release version to desktop manifest
+        env:
+          RELEASE_VERSION: ${{ needs.package-bundles.outputs.version }}
+        run: |
+          node --input-type=module <<'EOF'
+          import { readFileSync, writeFileSync } from "node:fs";
+          const path = "apps/desktop/package.json";
+          const pkg = JSON.parse(readFileSync(path, "utf8"));
+          pkg.version = process.env.RELEASE_VERSION;
+          writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
+          console.log(`Updated ${path} -> ${pkg.version}`);
+          EOF
+
+      - name: Build desktop release files
+        run: pnpm --filter tyrum-desktop dist
+
+      - name: Stage desktop artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/desktop
+          found=0
+          while IFS= read -r -d '' file; do
+            cp "$file" artifacts/desktop/
+            found=1
+          done < <(find apps/desktop/release -type f -print0)
+
+          if [[ "$found" -eq 0 ]]; then
+            echo "No desktop artifacts found under apps/desktop/release"
+            exit 1
+          fi
+
+          ls -lah artifacts/desktop
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.os }}
+          path: artifacts/desktop/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-release:
+    name: Publish Release
+    needs: [package-bundles, desktop-bundles]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-packages
+          path: release-assets
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Include installer script
+        run: cp scripts/install.sh release-assets/install.sh
+
+      - name: Generate SHA256 sums
+        run: |
+          set -euo pipefail
+          cd release-assets
+          find . -type f -printf '%P\0' \
+            | LC_ALL=C sort -z \
+            | xargs -0 sha256sum > SHA256SUMS
+          cat SHA256SUMS
+
+      - uses: actions/setup-node@v6
+        if: ${{ secrets.NPM_TOKEN != '' }}
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: https://registry.npmjs.org
+
+      - name: Publish npm packages
+        if: ${{ secrets.NPM_TOKEN != '' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_DIST_TAG: ${{ needs.package-bundles.outputs.npm_tag }}
+          RELEASE_VERSION: ${{ needs.package-bundles.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          declare -A packages=(
+            ["@tyrum/schemas"]="release-assets/tyrum-schemas-${RELEASE_VERSION}.tgz"
+            ["@tyrum/client"]="release-assets/tyrum-client-${RELEASE_VERSION}.tgz"
+            ["@tyrum/gateway"]="release-assets/tyrum-gateway-${RELEASE_VERSION}.tgz"
+          )
+
+          for package_name in "${!packages[@]}"; do
+            package_file="${packages[${package_name}]}"
+            if [[ ! -f "${package_file}" ]]; then
+              echo "Missing package tarball: ${package_file}"
+              exit 1
+            fi
+
+            if npm view "${package_name}@${RELEASE_VERSION}" version >/dev/null 2>&1; then
+              echo "Skipping ${package_name}@${RELEASE_VERSION} (already published)"
+              continue
+            fi
+
+            echo "Publishing ${package_name}@${RELEASE_VERSION} with dist-tag ${NPM_DIST_TAG}"
+            npm publish "${package_file}" --access public --tag "${NPM_DIST_TAG}" --provenance
+          done
+
+      - name: Skip npm publish (token missing)
+        if: ${{ secrets.NPM_TOKEN == '' }}
+        run: echo "NPM_TOKEN is not set; skipping npm publish."
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.package-bundles.outputs.tag }}
+          name: tyrum ${{ needs.package-bundles.outputs.version }}
+          generate_release_notes: true
+          prerelease: ${{ needs.package-bundles.outputs.prerelease == 'true' }}
+          files: |
+            release-assets/*

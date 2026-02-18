@@ -39,6 +39,26 @@ Self-hosted autonomous worker agent platform with a single-instance, single-user
 | `config/` | Runtime configuration (model gateway YAML) |
 | `docs/` | Architecture and design documentation |
 
+## Installation
+
+The gateway can be installed in multiple ways:
+
+1. **One-line installer (recommended):**
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/rhernaus/tyrum/main/scripts/install.sh | bash
+   ```
+   Beta channel:
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/rhernaus/tyrum/main/scripts/install.sh | bash -s -- --channel beta
+   ```
+2. **npm global install:**
+   ```bash
+   npm i -g @tyrum/gateway
+   ```
+3. **Release assets:** download platform installers and package tarballs from GitHub Releases.
+
+See `docs/install.md` for full details, version pinning, and update commands.
+
 ## Getting Started
 
 1. **Read the vision:** Start with `docs/vision.md` to understand goals and architecture.
@@ -93,6 +113,7 @@ Follow these steps to provision the Telegram channel safely across local and sta
 
 ## Key Documents
 - [Vision (Goal)](docs/vision.md)
+- [Install Guide](docs/install.md)
 
 ## Roadmap
 See `docs/vision.md` for architecture and feature details.
