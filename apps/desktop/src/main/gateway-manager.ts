@@ -84,23 +84,48 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
   }
 
   async stop(): Promise<void> {
-    if (!this.process) return;
-    this.stopHealthCheck();
     const proc = this.process;
-    proc.kill("SIGTERM");
-    await new Promise<void>((resolve) => {
-      const timer = setTimeout(() => {
-        proc.kill("SIGKILL");
+    if (!proc) return;
+
+    // Prevent concurrent stop() from double-killing
+    this.process = null;
+    this.stopHealthCheck();
+
+    // If the process already exited, just clean up
+    if (proc.exitCode !== null || proc.signalCode !== null) {
+      this.setStatus("stopped");
+      return;
+    }
+
+    return new Promise<void>((resolve) => {
+      const killTimer = setTimeout(() => {
+        try {
+          proc.kill("SIGKILL");
+        } catch {
+          /* already dead */
+        }
         resolve();
       }, 5_000);
-      timer.unref();
-      proc.on("exit", () => {
-        clearTimeout(timer);
+      killTimer.unref();
+
+      proc.once("exit", () => {
+        clearTimeout(killTimer);
+        this.setStatus("stopped");
         resolve();
       });
+
+      try {
+        proc.kill("SIGTERM");
+      } catch {
+        // Process already exited (ESRCH) — exit event will fire or already fired.
+        // If it already fired before we attached our listener, resolve now.
+        if (proc.exitCode !== null || proc.signalCode !== null) {
+          clearTimeout(killTimer);
+          this.setStatus("stopped");
+          resolve();
+        }
+      }
     });
-    this.process = null;
-    this.setStatus("stopped");
   }
 
   private async waitForHealth(
