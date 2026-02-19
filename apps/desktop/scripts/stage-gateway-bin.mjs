@@ -39,11 +39,34 @@ rmSync(targetDir, { recursive: true, force: true });
 mkdirSync(dirname(targetDir), { recursive: true });
 
 const pnpmCmd = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-const deploy = spawnSync(
+const deployArgsBase = ["--filter", "@tyrum/gateway", "deploy", "--prod"];
+
+let deploy = spawnSync(
   pnpmCmd,
-  ["--filter", "@tyrum/gateway", "deploy", "--prod", targetDir],
-  { stdio: "inherit", cwd: repoRoot },
+  [...deployArgsBase, targetDir],
+  { stdio: "pipe", cwd: repoRoot, encoding: "utf8" },
 );
+
+if (deploy.status !== 0) {
+  const stdout = deploy.stdout ?? "";
+  const stderr = deploy.stderr ?? "";
+  const needsLegacy =
+    stdout.includes("ERR_PNPM_DEPLOY_NONINJECTED_WORKSPACE") ||
+    stderr.includes("ERR_PNPM_DEPLOY_NONINJECTED_WORKSPACE");
+
+  if (needsLegacy) {
+    rmSync(targetDir, { recursive: true, force: true });
+    deploy = spawnSync(
+      pnpmCmd,
+      [...deployArgsBase, "--legacy", targetDir],
+      { stdio: "inherit", cwd: repoRoot },
+    );
+  } else {
+    process.stdout.write(stdout);
+    process.stderr.write(stderr);
+  }
+}
+
 if (deploy.status !== 0) {
   throw new Error(
     `Failed to stage gateway dependencies (pnpm deploy exit code ${String(deploy.status)}).`,

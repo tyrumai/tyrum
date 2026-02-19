@@ -1,0 +1,383 @@
+import { spawn, spawnSync } from "node:child_process";
+import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import { once } from "node:events";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:net";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(__dirname, "../../../../");
+const DESKTOP_MAIN_ENTRYPOINT = resolve(REPO_ROOT, "apps/desktop/dist/main/index.mjs");
+const ELECTRON_BIN = resolve(REPO_ROOT, "apps/desktop/node_modules/.bin/electron");
+const ELECTRON_BIN_WINDOWS = resolve(REPO_ROOT, "apps/desktop/node_modules/.bin/electron.cmd");
+
+interface ElectronProbeResult {
+  available: boolean;
+  reason?: string;
+}
+
+interface LaunchCommand {
+  command: string;
+  args: string[];
+}
+
+interface DesktopConfigShape {
+  version: number;
+  mode: "embedded" | "remote";
+  remote: {
+    wsUrl: string;
+    tokenRef: string;
+  };
+  embedded: {
+    port: number;
+    tokenRef: string;
+    dbPath: string;
+  };
+  permissions: {
+    profile: "safe" | "balanced" | "poweruser";
+    overrides: Record<string, boolean>;
+  };
+  capabilities: {
+    desktop: boolean;
+    playwright: boolean;
+    cli: boolean;
+    http: boolean;
+  };
+  cli: {
+    allowedCommands: string[];
+    allowedWorkingDirs: string[];
+  };
+  web: {
+    allowedDomains: string[];
+    headless: boolean;
+  };
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
+}
+
+function killProcessGroup(pid: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(-pid, signal);
+  } catch (error) {
+    const code =
+      error && typeof error === "object" && "code" in error
+        ? (error as NodeJS.ErrnoException).code
+        : undefined;
+    if (code !== "ESRCH") throw error;
+  }
+}
+
+function pnpmCommand(): string {
+  return process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+}
+
+function electronCommand(): string {
+  return process.platform === "win32" ? ELECTRON_BIN_WINDOWS : ELECTRON_BIN;
+}
+
+function runBuildStep(args: string[], failurePrefix: string): void {
+  const result = spawnSync(pnpmCommand(), args, {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+  });
+
+  if (result.status === 0) return;
+
+  throw new Error(
+    [failurePrefix, result.stdout, result.stderr].filter(Boolean).join("\n"),
+  );
+}
+
+function findCommandPath(command: string): string | undefined {
+  const result = spawnSync("bash", ["-lc", `command -v ${command}`], {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+  });
+
+  if (result.status !== 0) return undefined;
+  const value = result.stdout.trim();
+  return value.length > 0 ? value : undefined;
+}
+
+function ensureBuildArtifacts(): void {
+  runBuildStep(
+    ["--filter", "tyrum-desktop", "build:gateway"],
+    "Failed to stage gateway for Electron smoke test.",
+  );
+  runBuildStep(
+    ["--filter", "@tyrum/gateway", "build"],
+    "Failed to build @tyrum/gateway for Electron smoke test.",
+  );
+  runBuildStep(
+    ["--filter", "tyrum-desktop", "build:main"],
+    "Failed to build tyrum-desktop main process for Electron smoke test.",
+  );
+  runBuildStep(
+    ["--filter", "tyrum-desktop", "build:preload"],
+    "Failed to build tyrum-desktop preload for Electron smoke test.",
+  );
+}
+
+function probeElectronRuntime(): ElectronProbeResult {
+  const result = spawnSync(electronCommand(), ["--version"], {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+  });
+
+  if (result.error) {
+    const reason = result.error.message || String(result.error);
+    return { available: false, reason };
+  }
+
+  if (result.status !== 0) {
+    const reason = [result.stdout, result.stderr]
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+    return {
+      available: false,
+      reason: reason || `electron exited with code ${String(result.status)}`,
+    };
+  }
+
+  return { available: true };
+}
+
+async function findAvailablePort(): Promise<number> {
+  return await new Promise<number>((resolvePort, rejectPort) => {
+    const server = createServer();
+    server.once("error", rejectPort);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      if (!address || typeof address !== "object") {
+        server.close(() => rejectPort(new Error("Unable to allocate free port")));
+        return;
+      }
+      const { port } = address;
+      server.close((error) => {
+        if (error) {
+          rejectPort(error);
+          return;
+        }
+        resolvePort(port);
+      });
+    });
+  });
+}
+
+function writeDesktopConfig(tyrumHome: string, port: number, dbPath: string): void {
+  mkdirSync(tyrumHome, { recursive: true });
+  const configPath = join(tyrumHome, "desktop-node.json");
+  const config: DesktopConfigShape = {
+    version: 1,
+    mode: "embedded",
+    remote: {
+      wsUrl: "ws://127.0.0.1:8080/ws",
+      tokenRef: "",
+    },
+    embedded: {
+      port,
+      tokenRef: "",
+      dbPath,
+    },
+    permissions: {
+      profile: "balanced",
+      overrides: {},
+    },
+    capabilities: {
+      desktop: true,
+      playwright: false,
+      cli: false,
+      http: false,
+    },
+    cli: {
+      allowedCommands: [],
+      allowedWorkingDirs: [],
+    },
+    web: {
+      allowedDomains: [],
+      headless: true,
+    },
+  };
+
+  writeFileSync(configPath, JSON.stringify(config, null, 2), { mode: 0o600 });
+}
+
+function buildElectronLaunch(entrypoint: string, useVirtualDisplay: boolean): LaunchCommand {
+  const electronArgs = ["--disable-gpu", "--no-sandbox", entrypoint];
+  if (useVirtualDisplay) {
+    return {
+      command: XVFB_RUN_PATH!,
+      args: ["-a", electronCommand(), ...electronArgs],
+    };
+  }
+  return {
+    command: electronCommand(),
+    args: electronArgs,
+  };
+}
+
+async function waitForGatewayHealth(
+  url: string,
+  child: ChildProcessWithoutNullStreams,
+  output: () => string,
+  timeoutMs = 30_000,
+): Promise<void> {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      throw new Error(
+        `Electron exited before gateway became healthy (code=${child.exitCode}, signal=${child.signalCode}).\n${output()}`,
+      );
+    }
+
+    try {
+      const response = await fetch(url);
+      if (response.status === 200) {
+        const body = (await response.json()) as { status?: string };
+        if (body.status === "ok") return;
+      }
+    } catch {
+      // Gateway may still be booting.
+    }
+
+    await delay(200);
+  }
+
+  throw new Error(`Gateway did not become healthy within ${timeoutMs}ms.\n${output()}`);
+}
+
+async function waitForGatewayDown(url: string, timeoutMs = 10_000): Promise<void> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      await fetch(url);
+    } catch {
+      return;
+    }
+    await delay(200);
+  }
+  throw new Error(`Gateway still reachable after ${timeoutMs}ms: ${url}`);
+}
+
+async function stopElectronProcess(child: ChildProcessWithoutNullStreams): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+
+  const pid = child.pid;
+  if (!pid) {
+    child.kill("SIGTERM");
+  } else if (process.platform === "win32") {
+    // taskkill /T terminates the target process and all descendants.
+    spawnSync("taskkill", ["/PID", String(pid), "/T"], { stdio: "ignore" });
+  } else {
+    // Use process-group signaling so xvfb-run wrapper + Electron + gateway
+    // receive shutdown signals together.
+    killProcessGroup(pid, "SIGTERM");
+  }
+  const maybeExit = await Promise.race([
+    once(child, "exit"),
+    delay(10_000).then(() => null),
+  ]);
+
+  if (maybeExit !== null) return;
+
+  if (child.exitCode === null && child.signalCode === null) {
+    if (!pid) {
+      child.kill("SIGKILL");
+    } else if (process.platform === "win32") {
+      spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" });
+    } else {
+      killProcessGroup(pid, "SIGKILL");
+    }
+
+    await Promise.race([once(child, "exit"), delay(5_000)]);
+  }
+}
+
+const electronProbe = probeElectronRuntime();
+const XVFB_RUN_PATH = findCommandPath("xvfb-run");
+const NEEDS_VIRTUAL_DISPLAY =
+  process.platform === "linux" && !process.env["DISPLAY"];
+const CAN_LAUNCH_ELECTRON =
+  electronProbe.available && (!NEEDS_VIRTUAL_DISPLAY || XVFB_RUN_PATH !== undefined);
+
+describe("desktop full Electron process smoke", () => {
+  it.skipIf(!CAN_LAUNCH_ELECTRON)(
+    "launches desktop main process and starts embedded gateway",
+    { timeout: 120_000 },
+    async () => {
+      ensureBuildArtifacts();
+
+      const port = await findAvailablePort();
+      const tempRoot = mkdtempSync(join(tmpdir(), "tyrum-electron-smoke-"));
+      const tyrumHome = join(tempRoot, ".tyrum");
+      const dbPath = join(tempRoot, "gateway", "gateway.db");
+      const healthUrl = `http://127.0.0.1:${port}/healthz`;
+      writeDesktopConfig(tyrumHome, port, dbPath);
+
+      let stdout = "";
+      let stderr = "";
+      let gatewayWasHealthy = false;
+      const launch = buildElectronLaunch(
+        DESKTOP_MAIN_ENTRYPOINT,
+        NEEDS_VIRTUAL_DISPLAY,
+      );
+
+      const child = spawn(
+        launch.command,
+        launch.args,
+        {
+          cwd: REPO_ROOT,
+          detached: process.platform !== "win32",
+          env: {
+            ...process.env,
+            TYRUM_HOME: tyrumHome,
+            NODE_ENV: "test",
+            VITE_DEV_SERVER_URL: "about:blank",
+            ELECTRON_DISABLE_SANDBOX: "1",
+          },
+          stdio: ["ignore", "pipe", "pipe"],
+        },
+      );
+
+      child.stdout.setEncoding("utf8");
+      child.stderr.setEncoding("utf8");
+      child.stdout.on("data", (chunk: string) => {
+        stdout += chunk;
+      });
+      child.stderr.on("data", (chunk: string) => {
+        stderr += chunk;
+      });
+
+      const output = () => {
+        const probeReason = electronProbe.reason
+          ? `\nProbe reason: ${electronProbe.reason}`
+          : "";
+        const displayInfo = `\nLaunch: ${launch.command} ${launch.args.join(" ")}`;
+        return `--- stdout ---\n${stdout}\n--- stderr ---\n${stderr}${probeReason}${displayInfo}`;
+      };
+
+      try {
+        await waitForGatewayHealth(healthUrl, child, output);
+        gatewayWasHealthy = true;
+
+        const healthRes = await fetch(healthUrl);
+        expect(healthRes.status).toBe(200);
+        const healthBody = (await healthRes.json()) as { status: string };
+        expect(healthBody.status).toBe("ok");
+      } finally {
+        await stopElectronProcess(child);
+        if (gatewayWasHealthy) {
+          await waitForGatewayDown(healthUrl);
+        }
+        rmSync(tempRoot, { recursive: true, force: true });
+      }
+    },
+  );
+});
