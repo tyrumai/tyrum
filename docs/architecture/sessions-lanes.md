@@ -57,6 +57,12 @@ The execution engine should associate each run with:
 
 Serialization is enforced per `(key, lane)` so concurrent work does not trample shared state, while still allowing independent lanes to progress.
 
+## Distributed serialization (all deployments)
+
+The `(key, lane)` serialization guarantee must be enforced using coordination backed by the StateStore (for example advisory locks or lease rows with expiry).
+
+With a single host and a single worker, these locks are typically uncontested, but they should still be acquired so the system behaves the same when scaled out: at most one run executes for a given `(key, lane)` at a time.
+
 ## Queue modes (target)
 
 Channels can choose how inbound messages are queued:

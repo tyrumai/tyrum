@@ -33,6 +33,15 @@ An opaque reference to a stored secret. Handles are the only representation of s
 - The gateway (or a trusted executor) resolves the handle at the **last responsible moment** and injects the secret into the execution context.
 - Resolution must be **policy-gated** and **audited** (who requested, why, which scope).
 
+## Cluster notes
+
+In a single-host deployment, secret resolution can be local (for example OS keychain, encrypted local store, or environment variables). In multi-process and clustered deployments, secret handling must still preserve the same invariant: **raw secret values are never exposed to the model and are never persisted to the StateStore**.
+
+That implies one of the following patterns:
+
+- **Shared secret provider:** any process that executes steps (workers, trusted executors) can resolve secret handles via a provider reachable over a trusted channel.
+- **Gateway-mediated resolution:** only the gateway resolves handles and injects secrets into a trusted execution context (for example a paired node) without persisting the raw value.
+
 ## Redaction and logging
 
 - Raw secrets must never be written to the database, artifacts, or logs.

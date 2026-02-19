@@ -2,7 +2,9 @@
 
 Status:
 
-The gateway is Tyrum's single long-lived daemon. It is the system's authority for connectivity, policy, validation, routing, orchestration, and persistence.
+The gateway is Tyrum's long-lived service component. It is the system's authority for connectivity, policy enforcement, validation, routing, orchestration, and durable state coordination.
+
+Deployments range from a single host (replica count = 1) to multi-instance clusters (replicated gateway edges and workers). The goal is consistent behavior across topologies: the gateway coordinates execution and event delivery via the StateStore and event backplane regardless of deployment size. See [Scaling and High Availability](../scaling-ha.md).
 
 ## Responsibilities
 
@@ -11,8 +13,8 @@ The gateway is Tyrum's single long-lived daemon. It is the system's authority fo
 - Validate inbound/outbound messages against contracts.
 - Route requests to internal modules or to capable nodes.
 - Emit events for lifecycle, actions, and state changes.
-- Persist essential state (sessions, transcripts, memory, audit logs).
-- Host the **execution engine** (queue, retries, idempotency, pause/resume, evidence capture).
+- Persist essential state (sessions, transcripts, memory, audit logs) via the StateStore.
+- Host the **execution engine** (queue, retries, idempotency, pause/resume, evidence capture). Step execution is performed by workers coordinated via the StateStore (workers may be co-located/in-process or run as separate processes/hosts).
 - Host the **approvals** subsystem and enforce policy at tool boundaries.
 - Integrate with a **secret provider** so raw credentials are never exposed to the model.
 - Host automation triggers (hooks, cron, heartbeat) in a controlled way.
@@ -46,7 +48,7 @@ flowchart TB
   ENG --> AUDIT["Audit/event log"]
   ENG <--> SECRETS["Secret provider"]
 
-  DB[("SQLite state")] <--> MEM
+  DB[("StateStore (SQLite/Postgres)")] <--> MEM
   DB <--> AUDIT
   DB <--> AG
   DB <--> ENG

@@ -51,3 +51,10 @@ Prefer explicit, typed errors over ambiguous strings:
 - `internal`
 
 For operations with side effects, idempotency should be defined up-front so clients can safely retry.
+
+## Retry and idempotency expectations
+
+Distributed systems lose packets and drop connections; retries are expected. Tyrum relies on two related ideas:
+
+- **Transport-level retry (`request_id`):** if a peer does not observe a response, it may retry the same logical request by re-sending it with the same `request_id`. Servers should handle duplicate `request_id` safely according to the request type’s contract.
+- **Side-effect idempotency:** for state-changing operations, the request payload (or the workflow step) may also carry an explicit `idempotency_key` so that retries do not duplicate side effects even under at-least-once execution.

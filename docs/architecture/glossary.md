@@ -39,11 +39,35 @@ A gateway-emitted server-push message that notifies clients of lifecycle, progre
 
 ## Gateway
 
-The single long-lived daemon that owns connectivity, routing, validation, policy, and persistence.
+A long-lived service component that owns edge connectivity, routing, validation, policy enforcement, and durable state coordination. It can be deployed as a single instance or replicated in a cluster.
 
 ## Gateway plugin
 
 An in-process code module loaded by the gateway to extend the system (for example tools, slash commands, and gateway RPC endpoints). Gateway plugins are **trusted** extensions and are not the primary mechanism for per-app/per-vendor integrations (prefer capability providers for that).
+
+## StateStore
+
+The system of record for durable state and logs (sessions, approvals, run/job state, audit). SQLite is the default local backend; HA Postgres (or Postgres-compatible managed databases) are used for scale and availability.
+
+## Backplane
+
+A cross-instance event delivery mechanism used in clustered deployments so workers/schedulers can publish events that the gateway edge instances deliver to their connected clients/nodes.
+
+## Worker
+
+A step execution process that claims work (leases) and performs tool/capability calls. Workers scale horizontally.
+
+## Scheduler
+
+A component that enqueues work from time-based triggers (cron/watchers/heartbeats). In multi-instance deployments, schedulers coordinate using DB-leases to avoid double-fires.
+
+## Lease
+
+A time-bounded claim stored in the StateStore that coordinates ownership of work or schedules across instances.
+
+## Outbox
+
+A durable event log/table used to publish events reliably to the backplane (supporting replay and recovery).
 
 ## Lane
 

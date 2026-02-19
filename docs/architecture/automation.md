@@ -21,3 +21,11 @@ Automation lets Tyrum act on schedules and triggers while keeping behavior obser
 - Automation must be idempotent where possible.
 - Emit events for triggers, actions taken, and outcomes.
 - Apply the same policy and approval gates as interactive runs.
+
+## Scheduler safety (DB-leases)
+
+To keep semantics identical between single-host and clustered deployments, automation triggers use DB-leases stored in the StateStore (with one instance this is typically uncontested):
+
+- **Lease acquisition:** one scheduler instance owns a time-bounded lease for a trigger/schedule shard.
+- **Renewal + takeover:** leases are renewed periodically; on expiry, another instance can take over.
+- **Durable dedupe:** each firing should have a durable unique id so downstream enqueue/execution can dedupe under retries.

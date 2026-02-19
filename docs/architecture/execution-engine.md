@@ -25,6 +25,17 @@ LLMs are good at planning, but they are a poor place to host the control plane f
 - **Evidence and verification:** capture artifacts and validate postconditions (required for state-changing steps when feasible).
 - **Auditability:** emit events for run/step lifecycle and persist a run log suitable for troubleshooting and export.
 
+## Distributed execution (workers)
+
+The execution engine can run co-located with the gateway edge (even in the same OS process) or be split into separate processes/hosts. To minimize surprises when scaling up, the same execution semantics apply in all deployments: workers claim/lease work in the StateStore and publish lifecycle events through the backplane abstraction (see [Scaling and High Availability](./scaling-ha.md)).
+
+Cluster-safe execution typically requires:
+
+- **Claim/lease:** workers claim work with a time-bounded lease recorded in the StateStore so only one worker executes a given attempt at a time.
+- **Idempotency:** side-effecting steps define `idempotency_key` semantics so retries are safe under at-least-once execution.
+- **Lane serialization:** workers acquire a distributed lock/lease keyed by `(session_key, lane)` before executing steps that must be serialized.
+- **Durable outcomes:** attempt results, artifacts, and postcondition evaluations are persisted before emitting “completed” events.
+
 ## Non-responsibilities
 
 - The execution engine does not decide *what* to do from a user message (planning is in the agent/planner).
@@ -76,7 +87,7 @@ flowchart TB
 
   Engine --> Evidence["Artifacts + Postconditions"]
   Engine --> Events["Events/AuditLog"]
-  Engine <--> DB["SQLite state"]
+  Engine <--> DB["StateStore (SQLite/Postgres)"]
 ```
 
 ## Data model sketch (conceptual)
