@@ -8,7 +8,7 @@ import { createServer } from "node:http";
 import { mkdirSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { getRequestListener } from "@hono/node-server";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createContainer } from "./container.js";
@@ -413,11 +413,13 @@ export async function main(): Promise<void> {
 }
 
 // Run when executed directly
-const isMain =
-  process.argv[1] &&
-  (process.argv[1].endsWith("/index.mjs") ||
-    process.argv[1].endsWith("/index.js") ||
-    process.argv[1].endsWith("/index.ts"));
+const isMain = (() => {
+  const entry = process.argv[1];
+  if (!entry) return false;
+
+  const filename = basename(entry);
+  return filename === "index.mjs" || filename === "index.js" || filename === "index.ts";
+})();
 
 if (isMain) {
   void runCli(process.argv.slice(2))
