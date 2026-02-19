@@ -216,6 +216,7 @@ const PRONUNCIATION_MAX_ENTRIES = 32;
 const PRONUNCIATION_MAX_LENGTH = 128;
 const AUTH_COOKIE_NAME = "tyrum_admin_token";
 const AUTH_QUERY_PARAM = "token";
+const APP_PATH_PREFIX = "/app";
 
 // Inline scripts are intentionally minimal; onboarding/settings are server-rendered.
 
@@ -246,6 +247,10 @@ function messageBanner(search: URLSearchParams): string {
   return `<p class="notice ${tone}">${esc(msg)}</p>`;
 }
 
+function matchesPathPrefixSegment(pathname: string, prefix: string): boolean {
+  return pathname === prefix || pathname.startsWith(`${prefix}/`);
+}
+
 function getAuthQueryToken(search: URLSearchParams): string | undefined {
   const token = search.get(AUTH_QUERY_PARAM)?.trim();
   return token ? token : undefined;
@@ -264,7 +269,7 @@ function withAuthToken(path: string, search: URLSearchParams): string {
     return path;
   }
 
-  if (!url.pathname.startsWith("/app")) {
+  if (!matchesPathPrefixSegment(url.pathname, APP_PATH_PREFIX)) {
     return path;
   }
 
@@ -320,12 +325,14 @@ function shell(title: string, activePath: string, search: URLSearchParams, body:
     (() => {
       const token = new URLSearchParams(window.location.search).get("token");
       if (!token) return;
+      const appPrefix = ${JSON.stringify(APP_PATH_PREFIX)};
+      const isAppPath = (pathname) => pathname === appPrefix || pathname.startsWith(appPrefix + "/");
 
       const rewrite = (raw) => {
         try {
           const url = new URL(raw, window.location.origin);
           if (url.origin !== window.location.origin) return raw;
-          if (!url.pathname.startsWith("/app")) return raw;
+          if (!isAppPath(url.pathname)) return raw;
           if (!url.searchParams.has("token")) {
             url.searchParams.set("token", token);
           }
@@ -874,8 +881,16 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
   app.get("/app/auth", (c) => {
     const search = new URL(c.req.url).searchParams;
     const token = search.get(AUTH_QUERY_PARAM)?.trim();
-    const requestedNext = search.get("next") ?? "/app";
-    const nextPath = requestedNext.startsWith("/app") ? requestedNext : "/app";
+    const requestedNext = search.get("next") ?? APP_PATH_PREFIX;
+    let nextPath = APP_PATH_PREFIX;
+    try {
+      const parsedNext = new URL(requestedNext, "http://tyrum.local");
+      if (matchesPathPrefixSegment(parsedNext.pathname, APP_PATH_PREFIX)) {
+        nextPath = `${parsedNext.pathname}${parsedNext.search}${parsedNext.hash}`;
+      }
+    } catch {
+      // Ignore invalid next parameter and fall back to the app root.
+    }
     const nextUrl = withAuthToken(nextPath, search);
     if (!token) {
       return c.redirect(nextUrl);
