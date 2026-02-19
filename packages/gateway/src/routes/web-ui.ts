@@ -6,6 +6,7 @@ import type { WatcherProcessor } from "../modules/watcher/processor.js";
 import type { CanvasDal } from "../modules/canvas/dal.js";
 import type { Playbook } from "@tyrum/schemas";
 import type { PlaybookRunner } from "../modules/playbook/runner.js";
+import { APP_PATH_PREFIX, matchesPathPrefixSegment } from "../app-path.js";
 import {
   buildAuditTaskResponse,
   getPlanTimeline,
@@ -216,7 +217,6 @@ const PRONUNCIATION_MAX_ENTRIES = 32;
 const PRONUNCIATION_MAX_LENGTH = 128;
 const AUTH_COOKIE_NAME = "tyrum_admin_token";
 const AUTH_QUERY_PARAM = "token";
-const APP_PATH_PREFIX = "/app";
 
 // Inline scripts are intentionally minimal; onboarding/settings are server-rendered.
 
@@ -245,10 +245,6 @@ function messageBanner(search: URLSearchParams): string {
   if (!msg) return "";
   const tone = search.get("tone") === "error" ? "error" : "ok";
   return `<p class="notice ${tone}">${esc(msg)}</p>`;
-}
-
-function matchesPathPrefixSegment(pathname: string, prefix: string): boolean {
-  return pathname === prefix || pathname.startsWith(`${prefix}/`);
 }
 
 function getAuthQueryToken(search: URLSearchParams): string | undefined {
