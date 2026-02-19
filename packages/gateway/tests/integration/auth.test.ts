@@ -92,7 +92,11 @@ describe("Auth integration", () => {
         `/app/auth?token=${encodeURIComponent(adminToken)}&next=%2Fapp`,
       );
       expect(bootstrapRes.status).toBe(302);
-      expect(bootstrapRes.headers.get("location")).toBe("/app");
+      const location = bootstrapRes.headers.get("location");
+      expect(location).toBeTruthy();
+      const redirectUrl = new URL(location ?? "/app", "http://localhost");
+      expect(redirectUrl.pathname).toBe("/app");
+      expect(redirectUrl.searchParams.get("token")).toBe(adminToken);
 
       const setCookie = bootstrapRes.headers.get("set-cookie");
       expect(setCookie).toBeTruthy();
