@@ -5,6 +5,10 @@ on:
     branches: [main]
     paths:
       - "docs/**"
+      - "apps/docs/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
       - ".github/workflows/docs-pages.yml"
   workflow_dispatch:
 
@@ -17,6 +21,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+
+      - name: Check docs for internal-only content
+        run: bash scripts/check-public-docs.sh
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build docs site
+        run: pnpm --filter @tyrum/docs build
+
       - name: Create Pages project (idempotent)
         uses: cloudflare/wrangler-action@v3
         continue-on-error: true
@@ -25,10 +48,10 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           packageManager: npm
           command: pages project create tyrum-docs --production-branch=main
-      - name: Publish docs/
+      - name: Publish docs site
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           packageManager: npm
-          command: pages deploy docs --project-name=tyrum-docs --commit-dirty=true
+          command: pages deploy apps/docs/build --project-name=tyrum-docs --commit-dirty=true
