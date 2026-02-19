@@ -1,5 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 export interface GatewayManagerOptions {
   gatewayBin: string;
@@ -29,6 +31,7 @@ const STARTUP_FAILURE_PATTERNS = [
   /address already in use/i,
   /EACCES/i,
   /permission denied/i,
+  /Cannot find package/i,
   /Cannot find module/i,
   /ERR_MODULE_NOT_FOUND/i,
 ];
@@ -114,6 +117,17 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
     this.setStatus("starting");
 
     const host = opts.host ?? "127.0.0.1";
+    const gatewayDir = dirname(opts.gatewayBin);
+    const migrationsDir = (() => {
+      const alongsideGateway = join(gatewayDir, "migrations");
+      if (existsSync(alongsideGateway)) return alongsideGateway;
+
+      // Monorepo layout: packages/gateway/dist/index.mjs -> packages/gateway/migrations
+      const monorepoMigrations = join(gatewayDir, "../migrations");
+      if (existsSync(monorepoMigrations)) return monorepoMigrations;
+
+      return undefined;
+    })();
     const startupLogLines: string[] = [];
 
     const proc = spawn(process.execPath, [opts.gatewayBin], {
@@ -124,6 +138,7 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
         GATEWAY_HOST: host,
         GATEWAY_DB_PATH: opts.dbPath,
         GATEWAY_TOKEN: opts.accessToken,
+        ...(migrationsDir ? { GATEWAY_MIGRATIONS_DIR: migrationsDir } : {}),
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
