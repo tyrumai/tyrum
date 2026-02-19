@@ -12,6 +12,33 @@ Target properties:
 - Session transcripts are stored and can be replayed for troubleshooting.
 - Session identifiers are stable and chosen by Tyrum (not by the model).
 
+## Keys (target)
+
+The gateway uses stable keys to:
+
+- route inbound events into the correct session container
+- serialize execution per lane
+- make audit and replay reliable
+
+### Key scheme
+
+- **Agent sessions**
+  - `agent:<agentId>:<channel>:main`
+  - `agent:<agentId>:<channel>:group:<id>`
+  - `agent:<agentId>:<channel>:channel:<id>`
+- **Cron**
+  - `cron:<jobId>`
+- **Hook**
+  - `hook:<uuid>`
+- **Node**
+  - `node:<nodeId>`
+
+### Notes
+
+- `<agentId>` is the gateway’s internal agent identifier.
+- `<channel>` should identify a specific connector/account instance (not just a channel type) so multiple accounts can coexist.
+- `<id>` is the provider-native thread/container identifier (for example a Telegram chat id).
+
 ## Lanes
 
 Lanes separate concurrent concerns while keeping execution serialized per lane:
@@ -19,6 +46,16 @@ Lanes separate concurrent concerns while keeping execution serialized per lane:
 - `main` — interactive chat
 - `cron` — scheduled work
 - `subagent` — delegated work with a narrower scope
+
+### Relationship to execution runs
+
+The execution engine should associate each run with:
+
+- a **key** (one of the keys above)
+- a **lane** (`main`, `cron`, `subagent`, …)
+- a unique `run_id`
+
+Serialization is enforced per `(key, lane)` so concurrent work does not trample shared state, while still allowing independent lanes to progress.
 
 ## Queue modes (target)
 

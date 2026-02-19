@@ -9,6 +9,13 @@ Tyrum uses a typed WebSocket protocol between the gateway, clients, and nodes. T
 - **Role-aware:** connections declare a `role` (`client` vs `node`) during handshake.
 - **Observable:** important state changes emit events.
 
+The protocol is the primary interface for:
+
+- interactive chat sessions
+- workflow execution progress (runs/steps)
+- approvals (requested/resolved) and resume control
+- node pairing and capability RPC
+
 ## Transport
 
 - Primary transport is WebSocket for low-latency, long-lived connectivity.

@@ -1,17 +1,17 @@
 # Tyrum
 
-Self-hosted autonomous worker agent platform with a single-instance, single-user runtime. The default profile is local-first and binds to localhost by default, while requiring a gateway access token for HTTP and WebSocket access.
+Self-hosted autonomous worker agent platform with a single gateway runtime that can host multiple agents (single operator by default). The default profile is local-first and binds to localhost by default, while requiring a gateway access token for HTTP and WebSocket access.
 
 ## Overview
 - **Goal:** A chat-first autonomous worker agent that can operate software like a human would, while preferring structured interfaces when available and using web/desktop automation as fallback. It produces audit evidence and asks for approvals when needed. “Personal assistant” is the first role, but the same worker can take on other remote-work roles via configuration.
-- **Deployment profile (default):** user-hosted, single-user, localhost-only (`127.0.0.1`) with required token auth. Run multiple instances (separate `TYRUM_HOME` + DB) if you want multiple workers.
+- **Deployment profile (default):** user-hosted, single-operator, localhost-only (`127.0.0.1`) with required token auth. One gateway can host multiple agents; run multiple gateways if you want stronger isolation.
 - **Differentiators:**
   - No hard-coded skills; autonomy emerges from learned memory and generic executors.
   - Approvals + policy gate for spending, PII, and explainability; spend is deny-by-default until configured.
   - Prefer structured interfaces; fall back to web/desktop automation for drop-in “remote worker replacement”.
   - Every action is auditable, reproducible, and backed by minimal constitutional rules.
   - BYOK LLMs via OpenAI-compatible `/v1/*` proxy routes.
-- Full vision (goal), architecture diagrams, and appendices live in `docs/vision.md`.
+- Architecture docs are canonical and live under `docs/architecture/`.
 
 ## Technology Stack
 
@@ -71,7 +71,7 @@ See `docs/install.md` for full details, version pinning, and update commands.
 
 ## Getting Started
 
-1. **Read the vision:** Start with `docs/vision.md` to understand goals and architecture.
+1. **Read the architecture overview:** Start with `docs/architecture/index.md`.
 2. **Install tooling:** Node.js 24.x and pnpm.
 3. **Clone & branch:** Fork/clone the repo, create branches as `<issue-number>-<slug>`.
 4. **Install dependencies:** `pnpm install` from the repo root.
@@ -122,11 +122,11 @@ Follow these steps to provision the Telegram channel safely across local and sta
 - Set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_URL`, and `TELEGRAM_WEBHOOK_SECRET` environment variables before starting the gateway.
 
 ## Key Documents
-- [Vision (Goal)](docs/vision.md)
+- [Architecture Overview](docs/architecture/index.md)
 - [Install Guide](docs/install.md)
 
 ## Roadmap
-See `docs/vision.md` for architecture and feature details.
+See the architecture docs under `docs/architecture/` for current intended design and open gaps.
 
 ## Way of Working
 - **Issue Lifecycle:** All work lives in GitHub Issues with acceptance criteria; the Tyrum project board tracks Backlog → Ready → In Progress → Review → Done.

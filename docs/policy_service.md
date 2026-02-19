@@ -1,6 +1,6 @@
 # Policy Check Service Skeleton
 
-The policy check service provides the constitutional guardrails described in `docs/vision.md` for spend, PII, and legal reviews. The current milestone exposes a stateless HTTP API with static rules to unblock downstream integrations and testing.
+The policy check service provides the constitutional guardrails enforced outside the model for spend, PII, and legal/channel reviews. See the architecture docs for enforcement layering and approvals: [Sandbox and Policy](./architecture/sandbox-policy.md) and [Approvals](./architecture/approvals.md). The current milestone exposes a stateless HTTP API with static rules to unblock downstream integrations and testing.
 
 ## Endpoints
 - `POST /policy/check` – Evaluates a request across spend, PII, and legal guardrails and returns structured rule decisions plus an overall outcome.
@@ -58,7 +58,7 @@ All sections are optional except fields required by each section's schema (for e
 The overall `decision` is `deny` if any rule denies, `escalate` if any rule escalates, and `approve` otherwise.
 
 ## Validation & PII Handling
-- Requests are validated structurally against the policy schema; no user identifier is required in single-user mode.
+- Requests are validated structurally against the policy schema; no user identifier is required in the single-operator local-first profile.
 - Tests live in `packages/gateway/tests/integration/policy.test.ts` and `packages/gateway/tests/integration/plan.test.ts`.
 
 ## Sample Interaction

@@ -31,5 +31,14 @@ This list will be filled as contracts stabilize:
 - Protocol: connect/handshake
 - Protocol: request/response envelope
 - Protocol: event envelope
+- Protocol: workflow run/resume/cancel requests + responses
+- Protocol: approval request + resolution
+- Protocol: execution engine run/step lifecycle events
 - Tools: built-in tool schemas
+- Tools: workflow/playbook runtime tool schema (run/resume envelope)
+- Playbooks: workflow file schema (YAML/JSON) + validation rules
+- Evidence: artifact reference schema
+- Evidence: postcondition schema
+- Secrets: secret handle schema
+- Secrets: secret provider contract (request/resolve/revoke)
 - Plugins: plugin manifest schema
