@@ -125,8 +125,10 @@ export function handleClientMessage(
       }
 
       if (!msg.ok) {
-        deps.onApprovalDecision?.(approvalId, false, msg.error.message);
-        return undefined;
+        return errorEvent(
+          "approval_request_failed",
+          `client error for ${msg.request_id} (${msg.error.code}): ${msg.error.message}`,
+        );
       }
 
       const decision = WsApprovalDecision.safeParse(msg.result ?? {});

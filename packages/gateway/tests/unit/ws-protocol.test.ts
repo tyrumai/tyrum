@@ -198,6 +198,34 @@ describe("handleClientMessage", () => {
     expect(onApprovalDecision).toHaveBeenCalledWith(124, false, "too risky");
   });
 
+  it("does not auto-deny approval.request when client responds ok:false", () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["playwright"]);
+    const client = cm.getClient(id)!;
+    const onApprovalDecision = vi.fn();
+    const deps = makeDeps(cm, { onApprovalDecision });
+
+    const result = handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "approval-200",
+        type: "approval.request",
+        ok: false,
+        error: { code: "invalid_request", message: "payload validation failed" },
+      }),
+      deps,
+    );
+
+    expect(onApprovalDecision).not.toHaveBeenCalled();
+    expect(result).toBeDefined();
+    expect(result!.type).toBe("error");
+    const payload = (result as unknown as { payload: { code: string; message: string } })
+      .payload;
+    expect(payload.code).toBe("approval_request_failed");
+    expect(payload.message).toContain("approval-200");
+    expect(payload.message).toContain("payload validation failed");
+  });
+
   it("returns error when approval.request ok payload is invalid", () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
