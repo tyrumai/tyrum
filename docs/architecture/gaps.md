@@ -64,3 +64,14 @@ This document tracks architecture areas that are still **missing**, **ambiguous*
 - **Tracing/metrics:** what is emitted, where it’s collected, and what SLOs are targeted.
 - **Cost attribution:** how token usage and executor time are attributed per run/step.
 
+## Scaling and high availability
+
+- **StateStore portability:** define the compatibility bar for SQLite vs Postgres (schema features allowed, JSON/array usage, transaction semantics, locking expectations).
+- **Migration story:** how a local SQLite StateStore can be migrated to Postgres (one-time export/import, live dual-write, or “new deployment only”).
+- **Worker claim/lease model:** canonical claim/lease fields, expiry/renewal, poison job handling, and backoff semantics under retries.
+- **Lane serialization mechanism:** how `(session_key, lane)` exclusivity is enforced in multi-instance deployments (advisory locks vs lease rows; failure and takeover behavior).
+- **Event backplane choice:** outbox schema and delivery semantics; how to combine outbox durability with low-latency pub/sub; replay strategy for reconnecting clients.
+- **WebSocket connection routing:** how cross-instance delivery works when a client/node is connected to a different gateway edge instance (connection directory, message routing, and revocation).
+- **Scheduler DB-leases:** how cron/watchers/heartbeat are coordinated to prevent double-fires (sharding, leases, and durable dedupe ids).
+- **Artifact store scaling:** local filesystem vs object store; retention policies; artifact reference formats and export bundles.
+- **HA / failover testing:** define what failures must be tolerated (single instance crash, DB failover, partition) and the expected behavior for in-flight runs and approvals.

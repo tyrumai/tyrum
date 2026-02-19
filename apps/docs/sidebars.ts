@@ -32,6 +32,11 @@ const sidebars: SidebarsConfig = {
           label: "Overview",
         },
         {
+          type: "doc",
+          id: "architecture/scaling-ha",
+          label: "Scaling & HA",
+        },
+        {
           type: "category",
           label: "Runtime Components",
           items: [

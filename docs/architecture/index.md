@@ -13,9 +13,9 @@ flowchart LR
   end
 
   subgraph Runtime["Tyrum runtime"]
-    G["Gateway<br/>(single long-lived daemon)"]
-    DB[("State + logs<br/>SQLite")]
-    EV["Event bus"]
+    G["Gateway<br/>(long-lived service)"]
+    DB[("State + logs<br/>StateStore (SQLite/Postgres)")]
+    EV["Event backplane"]
     ENG["Execution engine"]
     APPR["Approvals"]
     PB["Playbook runtime"]
@@ -48,8 +48,12 @@ flowchart LR
 
 ## Building blocks
 
-- **Gateway:** the long-lived process that owns connections, routing, validation, persistence, and orchestration.
-- **Execution engine:** the job runner that executes workflows with retries, idempotency, pause/resume, and evidence capture.
+- **Gateway:** the long-lived service that owns edge connectivity (WebSocket), routing, and contract validation. See [Gateway](./gateway/index.md).
+- **StateStore:** durable state and logs (SQLite local; Postgres for HA/scale). See [Scaling and high availability](./scaling-ha.md).
+- **Event backplane:** cross-component event delivery (in-process for replica count = 1; shared for clusters). See [Scaling and high availability](./scaling-ha.md) and [Events](./protocol/events.md).
+- **Execution engine:** the durable orchestration runtime (retries, idempotency, pause/resume, evidence). See [Execution engine](./execution-engine.md).
+- **Workers:** step executors that claim work (leases), perform side effects, and publish results/events. See [Execution engine](./execution-engine.md).
+- **Scheduler:** cron/watchers/heartbeat enqueuers coordinated by DB-leases. See [Automation](./automation.md).
 - **Playbooks:** deterministic workflow specs executed by the runtime (approval gates + resume tokens).
 - **Approvals:** durable operator confirmation requests that gate risky actions and pause/resume workflows.
 - **Secrets:** a first-class boundary; raw secrets stay behind a secret provider and are referenced via handles.
@@ -71,6 +75,7 @@ flowchart LR
 
 ## Where to start
 
+- [Scaling and high availability](./scaling-ha.md)
 - [Gateway](./gateway/index.md)
 - [Execution engine](./execution-engine.md)
 - [Playbooks](./playbooks.md)
