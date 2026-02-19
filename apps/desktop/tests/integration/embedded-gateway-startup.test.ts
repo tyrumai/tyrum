@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -11,6 +11,8 @@ import { GatewayManager } from "../../src/main/gateway-manager.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, "../../../../");
 const GATEWAY_BIN = resolve(REPO_ROOT, "packages/gateway/dist/index.mjs");
+const SCHEMAS_DIST = resolve(REPO_ROOT, "packages/schemas/dist/index.mjs");
+const GATEWAY_SRC_ENTRYPOINT = resolve(REPO_ROOT, "packages/gateway/src/index.ts");
 
 function pnpmCommand(): string {
   return process.platform === "win32" ? "pnpm.cmd" : "pnpm";
@@ -50,8 +52,26 @@ function waitForGatewayBuildByAnotherWorker(timeoutMs: number): boolean {
   return existsSync(GATEWAY_BIN);
 }
 
+function gatewayBuildIsStale(): boolean {
+  if (!existsSync(GATEWAY_BIN)) return true;
+
+  const gatewayMtime = statSync(GATEWAY_BIN).mtimeMs;
+
+  if (existsSync(GATEWAY_SRC_ENTRYPOINT)) {
+    const srcMtime = statSync(GATEWAY_SRC_ENTRYPOINT).mtimeMs;
+    if (gatewayMtime < srcMtime) return true;
+  }
+
+  if (existsSync(SCHEMAS_DIST)) {
+    const schemasMtime = statSync(SCHEMAS_DIST).mtimeMs;
+    if (gatewayMtime < schemasMtime) return true;
+  }
+
+  return false;
+}
+
 function ensureGatewayBuild(): void {
-  if (existsSync(GATEWAY_BIN)) return;
+  if (!gatewayBuildIsStale()) return;
 
   const args = ["--filter", "@tyrum/gateway", "build"];
   const result = tryGatewayBuild(pnpmCommand(), args);

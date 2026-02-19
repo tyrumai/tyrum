@@ -14,6 +14,14 @@ export interface ChainableEvent extends HashableEvent {
   event_hash: string | null;
 }
 
+function tryParseJson(raw: string): unknown {
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    return raw;
+  }
+}
+
 /** Compute SHA-256 hash of event data + previous hash for chain integrity. */
 export function computeEventHash(
   eventData: HashableEvent,
@@ -95,7 +103,7 @@ export function exportReceiptBundle(
     plan_id: e.plan_id,
     step_index: e.step_index,
     occurred_at: e.occurred_at,
-    action: e.action,
+    action: tryParseJson(e.action),
     prev_hash: e.prev_hash,
     event_hash: e.event_hash,
   }));

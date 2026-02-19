@@ -24,13 +24,13 @@ This document tracks architecture areas that are still **missing**, **ambiguous*
 
 ## Approvals
 
-- **Approval object model:** required fields, kinds, previews, expiry defaults, and resolution metadata.
-- **Events/contracts:** baseline `approval.request` request/response is implemented; remaining work includes approval list/resolve operations, durable audit events, and stable payload schemas.
+- **Approval object model:** baseline schema is pinned down in `@tyrum/schemas` (`Approval`, `ApprovalResolution`, status/kind enums); remaining work includes preview UX defaults and tightening invariants across run/step identity vs legacy `plan_id`.
+- **Events/contracts:** `approval.request`, `approval.list`, and `approval.resolve` request/response contracts are pinned down; remaining work includes durable approval audit events and stable event payload schemas for “requested/resolved/expired”.
 - **Notification UX:** where/how approvals are surfaced (control panel, channel pings) and deep-link format.
 
 ## Secrets
 
-- **Secret provider API:** create/read/rotate/revoke, handle resolution, and permission model.
+- **Secret provider API:** baseline handle + store/list/resolve/revoke contracts are pinned down; remaining work includes rotate semantics and a permission model.
 - **Backend choices:** OS keychain vs encrypted file vs external password managers; migration story.
 - **Injection path:** how secrets are injected into node executors without leaking into logs/model context.
 - **Redaction pipeline:** guaranteed redaction points for tool output, artifacts, and event payloads.
@@ -38,14 +38,14 @@ This document tracks architecture areas that are still **missing**, **ambiguous*
 ## Evidence and postconditions
 
 - **Postcondition schema:** supported assertion types (DOM, HTTP, filesystem diff, message delivery, etc).
-- **Artifact store:** storage location, retention, export bundles, and references (`artifact://…` or similar).
+- **Artifact store:** storage location, retention, export bundles, and references. Baseline `ArtifactRef` / `artifact://…` contract is pinned down; store + retention are still open.
 - **“Unverifiable” semantics:** how the system reports and blocks dependency chains when verification isn’t possible.
 
 ## Multi-agent routing and isolation
 
 - **Isolation boundaries:** workspace, memory, sessions, tools, and secrets per agent; enforcement mechanism.
 - **Routing rules:** how channel accounts and inbound containers map to `agentId`.
-- **Key taxonomy details:** what exactly `<channel>` and `<id>` are for each connector type.
+- **Key taxonomy details:** baseline key syntax is pinned down (`TyrumKey`); remaining work includes connector-specific conventions for `<channel>` and `<id>`.
 
 ## Client control panel
 

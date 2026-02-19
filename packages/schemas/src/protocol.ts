@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { DateTimeSchema } from "./common.js";
 import { ActionPrimitive, ActionPrimitiveKind } from "./planner.js";
+import { EventScope } from "./scope.js";
+import {
+  ApprovalListRequest,
+  ApprovalListResponse,
+  ApprovalResolveRequest,
+  ApprovalResolveResponse,
+} from "./approval.js";
 
 /** Client capability kinds. */
 export const ClientCapability = z.enum(["playwright", "android", "desktop", "cli", "http"]);
@@ -70,7 +77,7 @@ export const WsEventEnvelope = z
     event_id: z.string().min(1),
     type: z.string().min(1),
     occurred_at: DateTimeSchema,
-    scope: z.unknown().optional(),
+    scope: EventScope.optional(),
     payload: z.unknown(),
   })
   .strict();
@@ -167,6 +174,175 @@ export const WsApprovalDecision = z
   .strict();
 export type WsApprovalDecision = z.infer<typeof WsApprovalDecision>;
 
+export const WsApprovalListPayload = ApprovalListRequest;
+export type WsApprovalListPayload = z.infer<typeof WsApprovalListPayload>;
+
+export const WsApprovalListRequest = WsRequestEnvelope.extend({
+  type: z.literal("approval.list"),
+  payload: WsApprovalListPayload,
+});
+export type WsApprovalListRequest = z.infer<typeof WsApprovalListRequest>;
+
+export const WsApprovalListResult = ApprovalListResponse;
+export type WsApprovalListResult = z.infer<typeof WsApprovalListResult>;
+
+export const WsApprovalResolvePayload = ApprovalResolveRequest;
+export type WsApprovalResolvePayload = z.infer<typeof WsApprovalResolvePayload>;
+
+export const WsApprovalResolveRequest = WsRequestEnvelope.extend({
+  type: z.literal("approval.resolve"),
+  payload: WsApprovalResolvePayload,
+});
+export type WsApprovalResolveRequest = z.infer<typeof WsApprovalResolveRequest>;
+
+export const WsApprovalResolveResult = ApprovalResolveResponse;
+export type WsApprovalResolveResult = z.infer<typeof WsApprovalResolveResult>;
+
+// ---------------------------------------------------------------------------
+// Operation responses (typed)
+// ---------------------------------------------------------------------------
+
+export const WsConnectResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("connect"),
+  result: WsConnectResult,
+});
+export type WsConnectResponseOkEnvelope = z.infer<typeof WsConnectResponseOkEnvelope>;
+
+export const WsConnectResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("connect"),
+});
+export type WsConnectResponseErrEnvelope = z.infer<typeof WsConnectResponseErrEnvelope>;
+
+export const WsConnectResponseEnvelope = z.union([
+  WsConnectResponseOkEnvelope,
+  WsConnectResponseErrEnvelope,
+]);
+export type WsConnectResponseEnvelope = z.infer<typeof WsConnectResponseEnvelope>;
+
+export const WsPingResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("ping"),
+});
+export type WsPingResponseOkEnvelope = z.infer<typeof WsPingResponseOkEnvelope>;
+
+export const WsPingResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("ping"),
+});
+export type WsPingResponseErrEnvelope = z.infer<typeof WsPingResponseErrEnvelope>;
+
+export const WsPingResponseEnvelope = z.union([
+  WsPingResponseOkEnvelope,
+  WsPingResponseErrEnvelope,
+]);
+export type WsPingResponseEnvelope = z.infer<typeof WsPingResponseEnvelope>;
+
+export const WsTaskExecuteResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("task.execute"),
+  result: WsTaskExecuteResult,
+});
+export type WsTaskExecuteResponseOkEnvelope = z.infer<
+  typeof WsTaskExecuteResponseOkEnvelope
+>;
+
+export const WsTaskExecuteResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("task.execute"),
+});
+export type WsTaskExecuteResponseErrEnvelope = z.infer<
+  typeof WsTaskExecuteResponseErrEnvelope
+>;
+
+export const WsTaskExecuteResponseEnvelope = z.union([
+  WsTaskExecuteResponseOkEnvelope,
+  WsTaskExecuteResponseErrEnvelope,
+]);
+export type WsTaskExecuteResponseEnvelope = z.infer<
+  typeof WsTaskExecuteResponseEnvelope
+>;
+
+export const WsApprovalRequestResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("approval.request"),
+  result: WsApprovalDecision,
+});
+export type WsApprovalRequestResponseOkEnvelope = z.infer<
+  typeof WsApprovalRequestResponseOkEnvelope
+>;
+
+export const WsApprovalRequestResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("approval.request"),
+});
+export type WsApprovalRequestResponseErrEnvelope = z.infer<
+  typeof WsApprovalRequestResponseErrEnvelope
+>;
+
+export const WsApprovalRequestResponseEnvelope = z.union([
+  WsApprovalRequestResponseOkEnvelope,
+  WsApprovalRequestResponseErrEnvelope,
+]);
+export type WsApprovalRequestResponseEnvelope = z.infer<
+  typeof WsApprovalRequestResponseEnvelope
+>;
+
+export const WsApprovalListResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("approval.list"),
+  result: WsApprovalListResult,
+});
+export type WsApprovalListResponseOkEnvelope = z.infer<
+  typeof WsApprovalListResponseOkEnvelope
+>;
+
+export const WsApprovalListResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("approval.list"),
+});
+export type WsApprovalListResponseErrEnvelope = z.infer<
+  typeof WsApprovalListResponseErrEnvelope
+>;
+
+export const WsApprovalListResponseEnvelope = z.union([
+  WsApprovalListResponseOkEnvelope,
+  WsApprovalListResponseErrEnvelope,
+]);
+export type WsApprovalListResponseEnvelope = z.infer<
+  typeof WsApprovalListResponseEnvelope
+>;
+
+export const WsApprovalResolveResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("approval.resolve"),
+  result: WsApprovalResolveResult,
+});
+export type WsApprovalResolveResponseOkEnvelope = z.infer<
+  typeof WsApprovalResolveResponseOkEnvelope
+>;
+
+export const WsApprovalResolveResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("approval.resolve"),
+});
+export type WsApprovalResolveResponseErrEnvelope = z.infer<
+  typeof WsApprovalResolveResponseErrEnvelope
+>;
+
+export const WsApprovalResolveResponseEnvelope = z.union([
+  WsApprovalResolveResponseOkEnvelope,
+  WsApprovalResolveResponseErrEnvelope,
+]);
+export type WsApprovalResolveResponseEnvelope = z.infer<
+  typeof WsApprovalResolveResponseEnvelope
+>;
+
+export const WsResponse = z.union([
+  WsConnectResponseOkEnvelope,
+  WsConnectResponseErrEnvelope,
+  WsPingResponseOkEnvelope,
+  WsPingResponseErrEnvelope,
+  WsTaskExecuteResponseOkEnvelope,
+  WsTaskExecuteResponseErrEnvelope,
+  WsApprovalRequestResponseOkEnvelope,
+  WsApprovalRequestResponseErrEnvelope,
+  WsApprovalListResponseOkEnvelope,
+  WsApprovalListResponseErrEnvelope,
+  WsApprovalResolveResponseOkEnvelope,
+  WsApprovalResolveResponseErrEnvelope,
+]);
+export type WsResponse = z.infer<typeof WsResponse>;
+
 export const WsPlanUpdatePayload = z
   .object({
     plan_id: z.string().min(1),
@@ -201,6 +377,8 @@ export const WsRequest = z.discriminatedUnion("type", [
   WsPingRequest,
   WsTaskExecuteRequest,
   WsApprovalRequest,
+  WsApprovalListRequest,
+  WsApprovalResolveRequest,
 ]);
 export type WsRequest = z.infer<typeof WsRequest>;
 
@@ -209,6 +387,9 @@ export const WsEvent = z.discriminatedUnion("type", [
   WsErrorEvent,
 ]);
 export type WsEvent = z.infer<typeof WsEvent>;
+
+export const WsMessage = z.union([WsRequest, WsResponse, WsEvent]);
+export type WsMessage = z.infer<typeof WsMessage>;
 
 /** Maps ActionPrimitiveKind to the required client capability. */
 const CAPABILITY_MAP: Partial<Record<ActionPrimitiveKind, ClientCapability>> = {

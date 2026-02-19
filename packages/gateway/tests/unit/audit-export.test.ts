@@ -60,7 +60,7 @@ describe("exportReceiptBundle", () => {
     expect(e.plan_id).toBe("plan-1");
     expect(e.step_index).toBe(0);
     expect(e.occurred_at).toBe("2025-01-15T10:00:00Z");
-    expect(e.action).toBe('{"step":0}');
+    expect(e.action).toEqual({ step: 0 });
     expect(e.prev_hash).toBeNull();
     expect(e.event_hash).toMatch(/^[0-9a-f]{64}$/);
   });

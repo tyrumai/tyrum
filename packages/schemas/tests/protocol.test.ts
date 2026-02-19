@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  WsApprovalResolveRequest,
+  WsApprovalListRequest,
   WsConnectRequest,
+  WsResponse,
   WsEventEnvelope,
   WsMessageEnvelope,
   WsPingRequest,
@@ -45,6 +48,24 @@ describe("WS envelopes", () => {
     expect(msg.payload.action.type).toBe("Http");
   });
 
+  it("parses approval.list request", () => {
+    const msg = WsApprovalListRequest.parse({
+      request_id: "r-approval-list-1",
+      type: "approval.list",
+      payload: { status: "pending", limit: 25 },
+    });
+    expect(msg.type).toBe("approval.list");
+  });
+
+  it("parses approval.resolve request", () => {
+    const msg = WsApprovalResolveRequest.parse({
+      request_id: "r-approval-resolve-1",
+      type: "approval.resolve",
+      payload: { approval_id: 7, decision: "approved" },
+    });
+    expect(msg.payload.approval_id).toBe(7);
+  });
+
   it("parses generic request envelope", () => {
     const msg = WsRequestEnvelope.parse({
       request_id: "r-4",
@@ -62,6 +83,16 @@ describe("WS envelopes", () => {
       result: { evidence: { http: { status: 200 } } },
     });
     expect(msg.ok).toBe(true);
+  });
+
+  it("parses typed connect response", () => {
+    const msg = WsResponse.parse({
+      request_id: "r-connect-1",
+      type: "connect",
+      ok: true,
+      result: { client_id: "client-1" },
+    });
+    expect(msg.type).toBe("connect");
   });
 
   it("parses response envelope error", () => {
