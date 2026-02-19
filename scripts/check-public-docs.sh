@@ -22,11 +22,11 @@ violations=0
 scan_pattern() {
   local pattern="$1"
   if command -v rg >/dev/null 2>&1; then
-    rg -n --ignore-case --no-ignore --hidden --glob "*.md" "$pattern" "$DOCS_DIR"
+    rg -n --ignore-case --no-ignore --hidden --glob "*.md" --glob "*.html" "$pattern" "$DOCS_DIR"
     return
   fi
 
-  grep -Rni --include "*.md" -- "$pattern" "$DOCS_DIR"
+  grep -Rni --include "*.md" --include "*.html" -- "$pattern" "$DOCS_DIR"
 }
 
 for pattern in "${BLOCKED_PATTERNS[@]}"; do
