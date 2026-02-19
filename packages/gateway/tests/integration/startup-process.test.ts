@@ -1,7 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { once } from "node:events";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -22,27 +22,63 @@ function pnpmCommand(): string {
   return process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 }
 
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function formatBuildFailure(
+  prefix: string,
+  result: ReturnType<typeof spawnSync>,
+): string {
+  const details = [
+    prefix,
+    result.error ? `spawn error: ${result.error.message}` : undefined,
+    result.status === null ? "exit status: null" : `exit status: ${String(result.status)}`,
+    result.stdout,
+    result.stderr,
+  ].filter(Boolean);
+  return details.join("\n");
+}
+
+function tryGatewayBuild(cmd: string, args: string[]): ReturnType<typeof spawnSync> {
+  return spawnSync(cmd, args, {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+  });
+}
+
+function waitForGatewayBuildByAnotherWorker(timeoutMs: number): boolean {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (existsSync(GATEWAY_ENTRYPOINT)) return true;
+    sleepSync(200);
+  }
+  return existsSync(GATEWAY_ENTRYPOINT);
+}
+
 function ensureGatewayBuild(): void {
-  const result = spawnSync(
-    pnpmCommand(),
-    ["--filter", "@tyrum/gateway", "build"],
-    {
-      cwd: REPO_ROOT,
-      encoding: "utf8",
-    },
-  );
+  if (existsSync(GATEWAY_ENTRYPOINT)) return;
 
-  if (result.status === 0) return;
+  const args = ["--filter", "@tyrum/gateway", "build"];
+  const result = tryGatewayBuild(pnpmCommand(), args);
+  if (result.status === 0 || existsSync(GATEWAY_ENTRYPOINT)) return;
+  if (waitForGatewayBuildByAnotherWorker(5_000)) return;
 
-  throw new Error(
-    [
-      "Failed to build @tyrum/gateway before startup test.",
-      result.stdout,
-      result.stderr,
-    ]
-      .filter(Boolean)
-      .join("\n"),
-  );
+  // Fallback when pnpm is not directly on PATH in worker shells.
+  if (result.error?.message.includes("ENOENT")) {
+    const corepackResult = tryGatewayBuild("corepack", ["pnpm", ...args]);
+    if (corepackResult.status === 0 || existsSync(GATEWAY_ENTRYPOINT)) return;
+    if (waitForGatewayBuildByAnotherWorker(5_000)) return;
+
+    throw new Error(
+      formatBuildFailure(
+        "Failed to build @tyrum/gateway before startup test via pnpm/corepack.",
+        corepackResult,
+      ),
+    );
+  }
+
+  throw new Error(formatBuildFailure("Failed to build @tyrum/gateway before startup test.", result));
 }
 
 async function findAvailablePort(): Promise<number> {
