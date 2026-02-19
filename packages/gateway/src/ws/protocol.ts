@@ -105,11 +105,18 @@ export function handleClientMessage(
       const evidenceAndResult = msg.ok
         ? WsTaskExecuteResult.safeParse(msg.result ?? {})
         : undefined;
+      const failureEvidence = !msg.ok
+        ? evidenceFromErrorDetails(msg.error.details)
+        : undefined;
 
       deps.onTaskResult?.(
         msg.request_id,
         msg.ok,
-        evidenceAndResult?.success ? evidenceAndResult.data.evidence : undefined,
+        msg.ok
+          ? evidenceAndResult?.success
+            ? evidenceAndResult.data.evidence
+            : undefined
+          : failureEvidence,
         msg.ok ? undefined : msg.error.message,
       );
       return undefined;
@@ -282,4 +289,11 @@ function parseApprovalId(requestId: string): number | undefined {
   const n = Number.parseInt(raw, 10);
   if (!Number.isInteger(n) || n <= 0) return undefined;
   return n;
+}
+
+function evidenceFromErrorDetails(details: unknown): unknown {
+  if (details === null || typeof details !== "object") {
+    return undefined;
+  }
+  return (details as { evidence?: unknown }).evidence;
 }

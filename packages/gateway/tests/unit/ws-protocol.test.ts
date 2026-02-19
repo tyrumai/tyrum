@@ -155,6 +155,38 @@ describe("handleClientMessage", () => {
     );
   });
 
+  it("dispatches task.execute error response evidence from error details", () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["cli"]);
+    const client = cm.getClient(id)!;
+    const onTaskResult = vi.fn();
+    const deps = makeDeps(cm, { onTaskResult });
+
+    handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "t-3",
+        type: "task.execute",
+        ok: false,
+        error: {
+          code: "task_failed",
+          message: "browser action failed",
+          details: {
+            evidence: { screenshot: "base64...", dom: "<html></html>" },
+          },
+        },
+      }),
+      deps,
+    );
+
+    expect(onTaskResult).toHaveBeenCalledWith(
+      "t-3",
+      false,
+      { screenshot: "base64...", dom: "<html></html>" },
+      "browser action failed",
+    );
+  });
+
   it("dispatches approval.request decision to callback", () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
