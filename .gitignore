@@ -74,3 +74,6 @@ web/.turbo/
 
 # Git worktrees
 .worktrees/
+
+# Internal docs (not public)
+docs/vision.md
