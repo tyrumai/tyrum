@@ -25,6 +25,7 @@ describe("Auth middleware", () => {
     const app = new Hono();
     app.use("*", createAuthMiddleware(tokenStore));
     app.get("/healthz", (c) => c.json({ status: "ok" }));
+    app.get("/app", (c) => c.json({ ok: true }));
     app.get("/app/auth", (c) => c.json({ ok: true }));
     app.get("/api/data", (c) => c.json({ data: "secret" }));
     app.post("/api/action", (c) => c.json({ done: true }));
@@ -77,6 +78,18 @@ describe("Auth middleware", () => {
       `/app/auth?token=${encodeURIComponent(adminToken)}&next=%2Fapp`,
     );
     expect(res.status).toBe(200);
+  });
+
+  it("allows /app route with query token", async () => {
+    const app = buildApp();
+    const res = await app.request(`/app?token=${encodeURIComponent(adminToken)}`);
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects non-app route even when query token is present", async () => {
+    const app = buildApp();
+    const res = await app.request(`/api/data?token=${encodeURIComponent(adminToken)}`);
+    expect(res.status).toBe(401);
   });
 
   it("rejects /app/auth bootstrap with invalid query token", async () => {
