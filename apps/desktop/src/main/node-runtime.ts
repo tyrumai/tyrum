@@ -71,7 +71,7 @@ export class NodeRuntime {
     this.client.on("error", (msg) => {
       this.callbacks.onLog({
         level: "error",
-        message: `Gateway error: ${msg.message}`,
+        message: `Gateway error: ${msg.payload.message}`,
         timestamp: new Date().toISOString(),
       });
     });
