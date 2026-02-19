@@ -20,7 +20,7 @@
       "@develar/schema-utils>ajv": "8.18.0",
       "@develar/schema-utils>ajv-keywords": "5.1.0",
       "dmg-license>ajv": "8.18.0",
-      "minimatch": "10.2.1",
+      "app-builder-lib>minimatch": "10.2.1",
       "tmp": ">=0.2.4"
     },
     "patchedDependencies": {
