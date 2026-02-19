@@ -78,5 +78,9 @@ web/.turbo/
 # Internal docs (not public)
 docs/vision.md
 
+# Docs site artifacts
+apps/docs/.docusaurus/
+apps/docs/build/
+
 # Desktop build artifacts
 apps/desktop/release/
