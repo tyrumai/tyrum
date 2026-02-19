@@ -182,6 +182,40 @@ describe("TyrumClient", () => {
     expect(msg).toEqual(dispatchMsg);
   });
 
+  it("responds with error envelope when task.execute request fails validation", async () => {
+    server = createTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: ["http"],
+      reconnect: false,
+    });
+
+    client.connect();
+    const ws = await server.waitForClient();
+    await acceptConnect(ws);
+
+    ws.send(
+      JSON.stringify({
+        request_id: "task-bad-1",
+        type: "task.execute",
+        payload: {
+          plan_id: "plan-1",
+          step_index: "0",
+          action: { type: "Http", args: { url: "https://example.com" } },
+        },
+      }),
+    );
+
+    const response = (await waitForMessage(ws)) as Record<string, unknown>;
+    expect(response["request_id"]).toBe("task-bad-1");
+    expect(response["type"]).toBe("task.execute");
+    expect(response["ok"]).toBe(false);
+    expect((response["error"] as Record<string, unknown>)["code"]).toBe(
+      "invalid_request",
+    );
+  });
+
   it("emits human_confirmation event", async () => {
     server = createTestServer();
     client = new TyrumClient({
@@ -212,6 +246,41 @@ describe("TyrumClient", () => {
 
     const msg = await received;
     expect(msg).toEqual(confirmMsg);
+  });
+
+  it("responds with error envelope when approval.request fails validation", async () => {
+    server = createTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: [],
+      reconnect: false,
+    });
+
+    client.connect();
+    const ws = await server.waitForClient();
+    await acceptConnect(ws);
+
+    ws.send(
+      JSON.stringify({
+        request_id: "approval-7",
+        type: "approval.request",
+        payload: {
+          approval_id: "7",
+          plan_id: "plan-1",
+          step_index: 0,
+          prompt: "Approve this?",
+        },
+      }),
+    );
+
+    const response = (await waitForMessage(ws)) as Record<string, unknown>;
+    expect(response["request_id"]).toBe("approval-7");
+    expect(response["type"]).toBe("approval.request");
+    expect(response["ok"]).toBe(false);
+    expect((response["error"] as Record<string, unknown>)["code"]).toBe(
+      "invalid_request",
+    );
   });
 
   it("emits plan_update event", async () => {

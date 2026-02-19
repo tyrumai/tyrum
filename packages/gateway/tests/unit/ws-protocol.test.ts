@@ -198,6 +198,31 @@ describe("handleClientMessage", () => {
     expect(onApprovalDecision).toHaveBeenCalledWith(124, false, "too risky");
   });
 
+  it("returns error when approval.request ok payload is invalid", () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["playwright"]);
+    const client = cm.getClient(id)!;
+    const onApprovalDecision = vi.fn();
+    const deps = makeDeps(cm, { onApprovalDecision });
+
+    const result = handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "approval-125",
+        type: "approval.request",
+        ok: true,
+        result: { approved: "yes" },
+      }),
+      deps,
+    );
+
+    expect(onApprovalDecision).not.toHaveBeenCalled();
+    expect(result).toBeDefined();
+    expect(result!.type).toBe("error");
+    const payload = (result as unknown as { payload: { code: string } }).payload;
+    expect(payload.code).toBe("invalid_approval_decision");
+  });
+
   it("updates lastPong on ping response", () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);

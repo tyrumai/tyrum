@@ -124,14 +124,23 @@ export function handleClientMessage(
         );
       }
 
-      const decision = msg.ok
-        ? WsApprovalDecision.safeParse(msg.result ?? {})
-        : undefined;
+      if (!msg.ok) {
+        deps.onApprovalDecision?.(approvalId, false, msg.error.message);
+        return undefined;
+      }
+
+      const decision = WsApprovalDecision.safeParse(msg.result ?? {});
+      if (!decision.success) {
+        return errorEvent(
+          "invalid_approval_decision",
+          `invalid approval decision for ${msg.request_id}: ${decision.error.message}`,
+        );
+      }
 
       deps.onApprovalDecision?.(
         approvalId,
-        msg.ok ? decision?.success ? decision.data.approved : false : false,
-        msg.ok ? decision?.success ? decision.data.reason : undefined : msg.error.message,
+        decision.data.approved,
+        decision.data.reason,
       );
       return undefined;
     }

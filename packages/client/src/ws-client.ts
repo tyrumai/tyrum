@@ -350,6 +350,17 @@ export class TyrumClient {
         const req = WsTaskExecuteRequest.safeParse(msg);
         if (req.success) {
           this.emitter.emit("task_execute", req.data);
+        } else {
+          this.send({
+            request_id: msg.request_id,
+            type: msg.type,
+            ok: false,
+            error: WsError.parse({
+              code: "invalid_request",
+              message: req.error.message,
+              details: { issues: req.error.issues },
+            }),
+          } satisfies WsResponseEnvelope);
         }
         return;
       }
@@ -358,6 +369,17 @@ export class TyrumClient {
         const req = WsApprovalRequest.safeParse(msg);
         if (req.success) {
           this.emitter.emit("approval_request", req.data);
+        } else {
+          this.send({
+            request_id: msg.request_id,
+            type: msg.type,
+            ok: false,
+            error: WsError.parse({
+              code: "invalid_request",
+              message: req.error.message,
+              details: { issues: req.error.issues },
+            }),
+          } satisfies WsResponseEnvelope);
         }
         return;
       }
