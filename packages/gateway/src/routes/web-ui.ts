@@ -6,6 +6,7 @@ import type { WatcherProcessor } from "../modules/watcher/processor.js";
 import type { CanvasDal } from "../modules/canvas/dal.js";
 import type { Playbook } from "@tyrum/schemas";
 import type { PlaybookRunner } from "../modules/playbook/runner.js";
+import { APP_PATH_PREFIX, matchesPathPrefixSegment } from "../app-path.js";
 import {
   buildAuditTaskResponse,
   getPlanTimeline,
@@ -264,7 +265,7 @@ function withAuthToken(path: string, search: URLSearchParams): string {
     return path;
   }
 
-  if (!url.pathname.startsWith("/app")) {
+  if (!matchesPathPrefixSegment(url.pathname, APP_PATH_PREFIX)) {
     return path;
   }
 
@@ -320,12 +321,14 @@ function shell(title: string, activePath: string, search: URLSearchParams, body:
     (() => {
       const token = new URLSearchParams(window.location.search).get("token");
       if (!token) return;
+      const appPrefix = ${JSON.stringify(APP_PATH_PREFIX)};
+      const isAppPath = (pathname) => pathname === appPrefix || pathname.startsWith(appPrefix + "/");
 
       const rewrite = (raw) => {
         try {
           const url = new URL(raw, window.location.origin);
           if (url.origin !== window.location.origin) return raw;
-          if (!url.pathname.startsWith("/app")) return raw;
+          if (!isAppPath(url.pathname)) return raw;
           if (!url.searchParams.has("token")) {
             url.searchParams.set("token", token);
           }
@@ -874,8 +877,16 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
   app.get("/app/auth", (c) => {
     const search = new URL(c.req.url).searchParams;
     const token = search.get(AUTH_QUERY_PARAM)?.trim();
-    const requestedNext = search.get("next") ?? "/app";
-    const nextPath = requestedNext.startsWith("/app") ? requestedNext : "/app";
+    const requestedNext = search.get("next") ?? APP_PATH_PREFIX;
+    let nextPath = APP_PATH_PREFIX;
+    try {
+      const parsedNext = new URL(requestedNext, "http://tyrum.local");
+      if (matchesPathPrefixSegment(parsedNext.pathname, APP_PATH_PREFIX)) {
+        nextPath = `${parsedNext.pathname}${parsedNext.search}${parsedNext.hash}`;
+      }
+    } catch {
+      // Ignore invalid next parameter and fall back to the app root.
+    }
     const nextUrl = withAuthToken(nextPath, search);
     if (!token) {
       return c.redirect(nextUrl);

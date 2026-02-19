@@ -7,6 +7,7 @@
 
 import type { Context, Next } from "hono";
 import { getCookie } from "hono/cookie";
+import { APP_PATH_PREFIX, matchesPathPrefixSegment } from "../../app-path.js";
 import type { TokenStore } from "./token-store.js";
 
 const AUTH_ERROR_BODY = {
@@ -15,7 +16,6 @@ const AUTH_ERROR_BODY = {
 };
 
 const AUTH_COOKIE_NAME = "tyrum_admin_token";
-const APP_PATH_PREFIX = "/app";
 const APP_TOKEN_QUERY_KEY = "token";
 
 function extractBearerToken(authorizationHeader: string | undefined): string | undefined {
@@ -32,7 +32,8 @@ function extractBearerToken(authorizationHeader: string | undefined): string | u
 }
 
 function extractAppQueryToken(c: Context): string | undefined {
-  if (!c.req.path.startsWith(APP_PATH_PREFIX)) {
+  // Guard against prefix-collisions like "/application" or "/appdata".
+  if (!matchesPathPrefixSegment(c.req.path, APP_PATH_PREFIX)) {
     return undefined;
   }
   return c.req.query(APP_TOKEN_QUERY_KEY)?.trim() || undefined;
