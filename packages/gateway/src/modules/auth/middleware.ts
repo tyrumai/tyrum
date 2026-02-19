@@ -1,7 +1,8 @@
 /**
  * HTTP authentication middleware for Hono.
  *
- * Enforces Bearer token authentication on all routes except /healthz.
+ * Enforces token authentication on all routes except /healthz.
+ * Web UI routes under /app may also authenticate via ?token=...
  */
 
 import type { Context, Next } from "hono";
@@ -14,7 +15,8 @@ const AUTH_ERROR_BODY = {
 };
 
 const AUTH_COOKIE_NAME = "tyrum_admin_token";
-const APP_AUTH_PATH = "/app/auth";
+const APP_PATH_PREFIX = "/app";
+const APP_TOKEN_QUERY_KEY = "token";
 
 function extractBearerToken(authorizationHeader: string | undefined): string | undefined {
   if (!authorizationHeader) {
@@ -29,11 +31,11 @@ function extractBearerToken(authorizationHeader: string | undefined): string | u
   return parts[1];
 }
 
-function extractBootstrapToken(c: Context): string | undefined {
-  if (c.req.path !== APP_AUTH_PATH) {
+function extractAppQueryToken(c: Context): string | undefined {
+  if (!c.req.path.startsWith(APP_PATH_PREFIX)) {
     return undefined;
   }
-  return c.req.query("token")?.trim() || undefined;
+  return c.req.query(APP_TOKEN_QUERY_KEY)?.trim() || undefined;
 }
 
 export function createAuthMiddleware(
@@ -45,9 +47,11 @@ export function createAuthMiddleware(
       return next();
     }
 
-    const bootstrapToken = extractBootstrapToken(c);
+    // Accept query-token auth for the web UI path subtree. This keeps
+    // embedded desktop navigation working when third-party cookies are blocked.
+    const appQueryToken = extractAppQueryToken(c);
     const token =
-      bootstrapToken ??
+      appQueryToken ??
       extractBearerToken(c.req.header("authorization")) ??
       getCookie(c, AUTH_COOKIE_NAME);
     if (!token) {

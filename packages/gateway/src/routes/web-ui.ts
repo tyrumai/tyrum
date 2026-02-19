@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { setCookie } from "hono/cookie";
 import type { ApprovalDal } from "../modules/approval/dal.js";
 import type { MemoryDal } from "../modules/memory/dal.js";
@@ -214,6 +214,8 @@ const PVP_EMOJI_OPTIONS = ["never", "sometimes", "often"] as const;
 
 const PRONUNCIATION_MAX_ENTRIES = 32;
 const PRONUNCIATION_MAX_LENGTH = 128;
+const AUTH_COOKIE_NAME = "tyrum_admin_token";
+const AUTH_QUERY_PARAM = "token";
 
 // Inline scripts are intentionally minimal; onboarding/settings are server-rendered.
 
@@ -244,6 +246,36 @@ function messageBanner(search: URLSearchParams): string {
   return `<p class="notice ${tone}">${esc(msg)}</p>`;
 }
 
+function getAuthQueryToken(search: URLSearchParams): string | undefined {
+  const token = search.get(AUTH_QUERY_PARAM)?.trim();
+  return token ? token : undefined;
+}
+
+function withAuthToken(path: string, search: URLSearchParams): string {
+  const token = getAuthQueryToken(search);
+  if (!token) {
+    return path;
+  }
+
+  let url: URL;
+  try {
+    url = new URL(path, "http://tyrum.local");
+  } catch {
+    return path;
+  }
+
+  if (!url.pathname.startsWith("/app")) {
+    return path;
+  }
+
+  if (!url.searchParams.has(AUTH_QUERY_PARAM)) {
+    url.searchParams.set(AUTH_QUERY_PARAM, token);
+  }
+
+  const query = url.searchParams.toString();
+  return `${url.pathname}${query ? `?${query}` : ""}${url.hash}`;
+}
+
 function shell(title: string, activePath: string, search: URLSearchParams, body: string): string {
   const links = [
     ["/app", "Dashboard"],
@@ -260,7 +292,7 @@ function shell(title: string, activePath: string, search: URLSearchParams, body:
   const nav = links
     .map(([href, label]) => {
       const active = activePath === href || activePath.startsWith(`${href}/`);
-      return `<a href="${href}" class="${active ? "active" : ""}">${label}</a>`;
+      return `<a href="${withAuthToken(href, search)}" class="${active ? "active" : ""}">${label}</a>`;
     })
     .join("\n");
 
@@ -284,13 +316,64 @@ function shell(title: string, activePath: string, search: URLSearchParams, body:
       ${body}
     </main>
   </div>
+  <script>
+    (() => {
+      const token = new URLSearchParams(window.location.search).get("token");
+      if (!token) return;
+
+      const rewrite = (raw) => {
+        try {
+          const url = new URL(raw, window.location.origin);
+          if (url.origin !== window.location.origin) return raw;
+          if (!url.pathname.startsWith("/app")) return raw;
+          if (!url.searchParams.has("token")) {
+            url.searchParams.set("token", token);
+          }
+          return url.pathname + (url.search || "") + (url.hash || "");
+        } catch {
+          return raw;
+        }
+      };
+
+      document.querySelectorAll("a[href]").forEach((node) => {
+        const href = node.getAttribute("href");
+        if (!href) return;
+        node.setAttribute("href", rewrite(href));
+      });
+
+      document.querySelectorAll("form[action]").forEach((node) => {
+        const action = node.getAttribute("action");
+        if (!action) return;
+        node.setAttribute("action", rewrite(action));
+      });
+    })();
+  </script>
 </body>
 </html>`;
 }
 
-function redirectWithMessage(path: string, message: string, tone: "ok" | "error" = "ok"): string {
-  const search = new URLSearchParams({ msg: message, tone });
-  return `${path}?${search.toString()}`;
+function redirectWithMessage(
+  path: string,
+  message: string,
+  tone: "ok" | "error" = "ok",
+  search?: URLSearchParams,
+): string {
+  const params = new URLSearchParams({ msg: message, tone });
+  const token = search ? getAuthQueryToken(search) : undefined;
+  if (token) {
+    params.set(AUTH_QUERY_PARAM, token);
+  }
+  return `${path}?${params.toString()}`;
+}
+
+function redirectWithMessageFromRequest(
+  c: Context,
+  path: string,
+  message: string,
+  tone: "ok" | "error" = "ok",
+): string {
+  const search = new URL(c.req.url).searchParams;
+  return redirectWithMessage(path, message, tone, search);
 }
 
 function boolFromForm(input: FormDataEntryValue | null): boolean {
@@ -347,8 +430,6 @@ type PvpViewState = {
   pronunciationDict: PronunciationEntry[];
   version: string | null;
 };
-
-const AUTH_COOKIE_NAME = "tyrum_admin_token";
 
 function extractPamViewState(): PamViewState {
   const profiles = readProfiles();
@@ -729,6 +810,7 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
   const app = new Hono();
 
   app.get("/", (c) => {
+    const search = new URL(c.req.url).searchParams;
     return c.html(`<!doctype html>
 <html lang="en">
 <head>
@@ -743,8 +825,8 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
       <h1>Tyrum</h1>
       <p class="muted">Self-hosted autonomous worker platform. Gateway now serves the full web app directly.</p>
       <div class="actions">
-        <a href="/app"><button type="button">Open App</button></a>
-        <a href="/app/settings"><button type="button" class="secondary">Open Settings</button></a>
+        <a href="${withAuthToken("/app", search)}"><button type="button">Open App</button></a>
+        <a href="${withAuthToken("/app/settings", search)}"><button type="button" class="secondary">Open Settings</button></a>
       </div>
     </div>
   </main>
@@ -791,11 +873,12 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
 
   app.get("/app/auth", (c) => {
     const search = new URL(c.req.url).searchParams;
-    const token = search.get("token")?.trim();
+    const token = search.get(AUTH_QUERY_PARAM)?.trim();
     const requestedNext = search.get("next") ?? "/app";
     const nextPath = requestedNext.startsWith("/app") ? requestedNext : "/app";
+    const nextUrl = withAuthToken(nextPath, search);
     if (!token) {
-      return c.redirect(nextPath);
+      return c.redirect(nextUrl);
     }
     setCookie(c, AUTH_COOKIE_NAME, token, {
       path: "/",
@@ -803,7 +886,7 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
       sameSite: "Strict",
       maxAge: 604800,
     });
-    return c.redirect(nextPath);
+    return c.redirect(nextUrl);
   });
 
   app.get("/app", (c) => {
@@ -895,7 +978,7 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
   app.post("/app/actions/approvals/:id", async (c) => {
     const id = parseInt(c.req.param("id"), 10);
     if (Number.isNaN(id)) {
-      return c.redirect(redirectWithMessage("/app/approvals", "Invalid approval id", "error"));
+      return c.redirect(redirectWithMessageFromRequest(c, "/app/approvals", "Invalid approval id", "error"));
     }
 
     const form = await c.req.formData();
@@ -904,15 +987,15 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
     const denied = decision === "denied";
 
     if (!approved && !denied) {
-      return c.redirect(redirectWithMessage("/app/approvals", "Invalid approval decision", "error"));
+      return c.redirect(redirectWithMessageFromRequest(c, "/app/approvals", "Invalid approval decision", "error"));
     }
 
     const updated = deps.approvalDal.respond(id, approved, form.get("reason")?.toString());
     if (!updated) {
-      return c.redirect(redirectWithMessage("/app/approvals", "Approval not found or already responded", "error"));
+      return c.redirect(redirectWithMessageFromRequest(c, "/app/approvals", "Approval not found or already responded", "error"));
     }
 
-    return c.redirect(redirectWithMessage("/app/approvals", `Approval #${String(id)} ${approved ? "approved" : "denied"}`));
+    return c.redirect(redirectWithMessageFromRequest(c, "/app/approvals", `Approval #${String(id)} ${approved ? "approved" : "denied"}`));
   });
 
   app.get("/app/approvals/:id", (c) => {
@@ -993,12 +1076,13 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
     const id = c.req.param("id");
     const playbook = deps.playbooks.find((entry) => entry.manifest.id === id);
     if (!playbook) {
-      return c.redirect(redirectWithMessage("/app/playbooks", `Playbook '${id}' not found`, "error"));
+      return c.redirect(redirectWithMessageFromRequest(c, "/app/playbooks", `Playbook '${id}' not found`, "error"));
     }
 
     const run = deps.playbookRunner.run(playbook);
     return c.redirect(
-      redirectWithMessage(
+      redirectWithMessageFromRequest(
+        c,
         "/app/playbooks",
         `Playbook ${playbook.manifest.name} executed (${run.steps.length} steps).`,
       ),
@@ -1063,34 +1147,34 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
     const triggerType = form.get("trigger_type")?.toString().trim();
 
     if (!planId || !triggerType) {
-      return c.redirect(redirectWithMessage("/app/watchers", "Plan ID and trigger type are required", "error"));
+      return c.redirect(redirectWithMessageFromRequest(c, "/app/watchers", "Plan ID and trigger type are required", "error"));
     }
 
     const intervalMs = parseInt(form.get("interval_ms")?.toString() ?? "60000", 10);
     const triggerConfig = triggerType === "periodic" ? { intervalMs: Number.isFinite(intervalMs) ? intervalMs : 60000 } : {};
 
     const id = deps.watcherProcessor.createWatcher(planId, triggerType, triggerConfig);
-    return c.redirect(redirectWithMessage("/app/watchers", `Watcher #${String(id)} created.`));
+    return c.redirect(redirectWithMessageFromRequest(c, "/app/watchers", `Watcher #${String(id)} created.`));
   });
 
   app.post("/app/actions/watchers/:id/deactivate", (c) => {
     const id = parseInt(c.req.param("id"), 10);
     if (Number.isNaN(id)) {
-      return c.redirect(redirectWithMessage("/app/watchers", "Invalid watcher id", "error"));
+      return c.redirect(redirectWithMessageFromRequest(c, "/app/watchers", "Invalid watcher id", "error"));
     }
 
     deps.watcherProcessor.deactivateWatcher(id);
-    return c.redirect(redirectWithMessage("/app/watchers", `Watcher #${String(id)} deactivated.`));
+    return c.redirect(redirectWithMessageFromRequest(c, "/app/watchers", `Watcher #${String(id)} deactivated.`));
   });
 
   app.post("/app/actions/watchers/:id/delete", (c) => {
     const id = parseInt(c.req.param("id"), 10);
     if (Number.isNaN(id)) {
-      return c.redirect(redirectWithMessage("/app/watchers", "Invalid watcher id", "error"));
+      return c.redirect(redirectWithMessageFromRequest(c, "/app/watchers", "Invalid watcher id", "error"));
     }
 
     deps.watcherProcessor.deactivateWatcher(id);
-    return c.redirect(redirectWithMessage("/app/watchers", `Watcher #${String(id)} deleted.`));
+    return c.redirect(redirectWithMessageFromRequest(c, "/app/watchers", `Watcher #${String(id)} deleted.`));
   });
 
   app.get("/app/canvas", (c) => {
@@ -1164,22 +1248,22 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
     const form = await c.req.formData();
     const result = buildPamProfileFromForm(form);
     if (!result.ok) {
-      return c.redirect(redirectWithMessage("/app/settings", result.message, "error"));
+      return c.redirect(redirectWithMessageFromRequest(c, "/app/settings", result.message, "error"));
     }
 
     savePamProfile(result.profile);
-    return c.redirect(redirectWithMessage("/app/settings", "Autonomy preferences saved."));
+    return c.redirect(redirectWithMessageFromRequest(c, "/app/settings", "Autonomy preferences saved."));
   });
 
   app.post("/app/actions/settings/pvp", async (c) => {
     const form = await c.req.formData();
     const result = buildPvpProfileFromForm(form);
     if (!result.ok) {
-      return c.redirect(redirectWithMessage("/app/settings", result.message, "error"));
+      return c.redirect(redirectWithMessageFromRequest(c, "/app/settings", result.message, "error"));
     }
 
     savePvpProfile(result.profile);
-    return c.redirect(redirectWithMessage("/app/settings", "Persona preferences saved."));
+    return c.redirect(redirectWithMessageFromRequest(c, "/app/settings", "Persona preferences saved."));
   });
 
   app.post("/app/actions/settings/voice-preview", (c) => {
@@ -1187,7 +1271,8 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
     const pvpProfile = asRecord(profiles.pvp?.profile);
     if (!profiles.pvp?.version) {
       return c.redirect(
-        redirectWithMessage(
+        redirectWithMessageFromRequest(
+          c,
           "/app/settings",
           "Save your persona profile before requesting a preview.",
           "error",
@@ -1199,7 +1284,8 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
     const voiceId = typeof voice?.voice_id === "string" ? voice.voice_id.trim() : "";
     if (!voiceId) {
       return c.redirect(
-        redirectWithMessage(
+        redirectWithMessageFromRequest(
+          c,
           "/app/settings",
           "Set a voice ID before requesting a preview.",
           "error",
@@ -1209,7 +1295,8 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
 
     const preview = previewVoice();
     return c.redirect(
-      redirectWithMessage(
+      redirectWithMessageFromRequest(
+        c,
         "/app/settings",
         `Voice preview generated for '${voiceId}' (${preview.format}, ${preview.audio_base64.length} bytes base64).`,
       ),
@@ -1219,12 +1306,13 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
   app.post("/app/actions/account/:action", (c) => {
     const action = c.req.param("action") === "delete" ? "delete" : c.req.param("action") === "export" ? "export" : null;
     if (!action) {
-      return c.redirect(redirectWithMessage("/app/settings", "Unsupported account action.", "error"));
+      return c.redirect(redirectWithMessageFromRequest(c, "/app/settings", "Unsupported account action.", "error"));
     }
 
     const response = buildAuditTaskResponse(action);
     return c.redirect(
-      redirectWithMessage(
+      redirectWithMessageFromRequest(
+        c,
         "/app/settings",
         `${action === "delete" ? "Delete" : "Export"} request enqueued (${response.task.auditReference}).`,
       ),
@@ -1269,11 +1357,12 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
 
     const integration = setIntegrationPreference(slug, enabled);
     if (!integration) {
-      return c.redirect(redirectWithMessage("/app/linking", `Integration '${slug}' not found`, "error"));
+      return c.redirect(redirectWithMessageFromRequest(c, "/app/linking", `Integration '${slug}' not found`, "error"));
     }
 
     return c.redirect(
-      redirectWithMessage(
+      redirectWithMessageFromRequest(
+        c,
         "/app/linking",
         `${integration.name} ${integration.enabled ? "enabled" : "disabled"}.`,
       ),
@@ -1345,7 +1434,8 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
     const mode = form.get("mode")?.toString().trim();
     if (mode !== "embedded" && mode !== "remote") {
       return c.redirect(
-        redirectWithMessage(
+        redirectWithMessageFromRequest(
+          c,
           "/app/onboarding/start",
           "Select Embedded or Remote mode to continue.",
           "error",
@@ -1354,11 +1444,13 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
     }
 
     if (mode === "embedded") {
-      return c.redirect("/app/onboarding/persona");
+      const search = new URL(c.req.url).searchParams;
+      return c.redirect(withAuthToken("/app/onboarding/persona", search));
     }
 
     return c.redirect(
-      redirectWithMessage(
+      redirectWithMessageFromRequest(
+        c,
         "/app",
         "Remote mode selected. Configure remote connection in Tyrum Desktop.",
       ),
@@ -1514,7 +1606,8 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
 
     const record = persistConsent(selections, calibration);
     return c.redirect(
-      redirectWithMessage(
+      redirectWithMessageFromRequest(
+        c,
         "/app/onboarding/consent",
         `Consent recorded (${record.auditReference}, revision ${String(record.revision)}).`,
       ),
