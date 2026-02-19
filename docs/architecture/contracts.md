@@ -22,17 +22,21 @@ JSON Schema is the default interchange format for contracts. Internally, contrac
 ## Versioning rules (target)
 
 - Backward-compatible changes (add optional fields, widen enums safely) stay within a major version.
-- Breaking changes require a protocol major bump and a clear migration path.
+- While the protocol is still stabilizing, Tyrum may make in-place breaking changes within `tyrum-v1`.
+- Once the protocol is considered stable, breaking changes require a protocol major bump (for example `tyrum-v2`) and a clear migration path.
 
 ## Contract catalog
 
 This list will be filled as contracts stabilize:
 
-- Protocol: connect/handshake
-- Protocol: request/response envelope
-- Protocol: event envelope
-- Protocol: workflow run/resume/cancel requests + responses
-- Protocol: approval request + resolution
+- Protocol: envelopes (`WsRequestEnvelope`, `WsResponseEnvelope`, `WsEventEnvelope`)
+- Protocol: connect handshake (`WsConnectRequest` + connect response result)
+- Protocol: heartbeat (`WsPingRequest` + response)
+- Protocol: capability execution (`WsTaskExecuteRequest` + response result)
+- Protocol: approvals (`WsApprovalRequest` + response decision)
+- Protocol: plan updates (`WsPlanUpdateEvent`)
+- Protocol: error event (`WsErrorEvent`)
+- Protocol (target): workflow run/resume/cancel requests + responses
 - Protocol: execution engine run/step lifecycle events
 - Tools: built-in tool schemas
 - Tools: workflow/playbook runtime tool schema (run/resume envelope)

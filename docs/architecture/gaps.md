@@ -25,7 +25,7 @@ This document tracks architecture areas that are still **missing**, **ambiguous*
 ## Approvals
 
 - **Approval object model:** required fields, kinds, previews, expiry defaults, and resolution metadata.
-- **Events/contracts:** finalized protocol request/response types and event names/payloads.
+- **Events/contracts:** baseline `approval.request` request/response is implemented; remaining work includes approval list/resolve operations, durable audit events, and stable payload schemas.
 - **Notification UX:** where/how approvals are surfaced (control panel, channel pings) and deep-link format.
 
 ## Secrets

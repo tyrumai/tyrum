@@ -6,8 +6,9 @@ Tyrum uses a typed WebSocket protocol between the gateway, clients, and nodes. T
 
 - **Typed:** messages are validated against contracts.
 - **Bidirectional:** requests/responses plus server-push events.
-- **Role-aware:** connections declare a `role` (`client` vs `node`) during handshake.
 - **Observable:** important state changes emit events.
+
+The canonical wire shapes live in `@tyrum/schemas` (`packages/schemas/src/protocol.ts`).
 
 The protocol is the primary interface for:
 
@@ -24,7 +25,7 @@ The protocol is the primary interface for:
 ## Message classes
 
 - **Handshake:** identifies the connecting device and declares capabilities.
-- **Requests/Responses:** client-initiated actions that return a typed response.
+- **Requests/Responses:** peer-initiated actions that return a typed response.
 - **Events:** gateway-emitted notifications (including server-push progress and lifecycle).
 
 ## Next

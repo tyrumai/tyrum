@@ -55,7 +55,7 @@ A capability provider connected to the gateway (`role: node`) that executes devi
 
 ## Request/Response
 
-A typed client-initiated operation and the gateway's typed reply, correlated by `request_id`.
+A typed operation and typed reply correlated by `request_id`. Either peer may initiate a request; the other peer sends the response.
 
 ## Session
 
