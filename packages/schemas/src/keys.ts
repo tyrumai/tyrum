@@ -1,0 +1,183 @@
+import { z } from "zod";
+import { UuidSchema } from "./common.js";
+
+const KeyPart = z
+  .string()
+  .trim()
+  .min(1)
+  .regex(/^[^:]+$/, "key parts must not contain ':'");
+
+export const AgentId = KeyPart;
+export type AgentId = z.infer<typeof AgentId>;
+
+/** Connector/account instance identifier (not just a channel type). */
+export const ChannelKey = KeyPart;
+export type ChannelKey = z.infer<typeof ChannelKey>;
+
+/** Provider-native thread/container id (e.g. Telegram chat id). */
+export const ThreadId = KeyPart;
+export type ThreadId = z.infer<typeof ThreadId>;
+
+export const CronJobId = KeyPart;
+export type CronJobId = z.infer<typeof CronJobId>;
+
+export const NodeId = KeyPart;
+export type NodeId = z.infer<typeof NodeId>;
+
+// ---------------------------------------------------------------------------
+// Key strings (canonical storage / routing form)
+// ---------------------------------------------------------------------------
+
+export const AgentMainKey = z
+  .string()
+  .regex(/^agent:[^:]+:[^:]+:main$/, "agent main key must be agent:<agentId>:<channel>:main");
+export type AgentMainKey = z.infer<typeof AgentMainKey>;
+
+export const AgentGroupKey = z
+  .string()
+  .regex(
+    /^agent:[^:]+:[^:]+:group:[^:]+$/,
+    "agent group key must be agent:<agentId>:<channel>:group:<id>",
+  );
+export type AgentGroupKey = z.infer<typeof AgentGroupKey>;
+
+export const AgentChannelKey = z
+  .string()
+  .regex(
+    /^agent:[^:]+:[^:]+:channel:[^:]+$/,
+    "agent channel key must be agent:<agentId>:<channel>:channel:<id>",
+  );
+export type AgentChannelKey = z.infer<typeof AgentChannelKey>;
+
+export const AgentKey = z.union([AgentMainKey, AgentGroupKey, AgentChannelKey]);
+export type AgentKey = z.infer<typeof AgentKey>;
+
+export const CronKey = z
+  .string()
+  .regex(/^cron:[^:]+$/, "cron key must be cron:<jobId>");
+export type CronKey = z.infer<typeof CronKey>;
+
+export const HookKey = z
+  .string()
+  .refine((value) => {
+    if (!value.startsWith("hook:")) return false;
+    const uuid = value.slice("hook:".length);
+    return UuidSchema.safeParse(uuid).success;
+  }, "hook key must be hook:<uuid>");
+export type HookKey = z.infer<typeof HookKey>;
+
+export const NodeKey = z
+  .string()
+  .regex(/^node:[^:]+$/, "node key must be node:<nodeId>");
+export type NodeKey = z.infer<typeof NodeKey>;
+
+export const TyrumKey = z.union([AgentKey, CronKey, HookKey, NodeKey]);
+export type TyrumKey = z.infer<typeof TyrumKey>;
+
+// ---------------------------------------------------------------------------
+// Lanes and queue modes
+// ---------------------------------------------------------------------------
+
+export const Lane = z.enum(["main", "cron", "subagent"]);
+export type Lane = z.infer<typeof Lane>;
+
+export const QueueMode = z.enum(["collect", "followup", "steer"]);
+export type QueueMode = z.infer<typeof QueueMode>;
+
+// ---------------------------------------------------------------------------
+// Parsed form (convenience for runtime code)
+// ---------------------------------------------------------------------------
+
+export type ParsedTyrumKey =
+  | {
+      kind: "agent";
+      agent_id: AgentId;
+      channel: ChannelKey;
+      thread_kind: "main";
+    }
+  | {
+      kind: "agent";
+      agent_id: AgentId;
+      channel: ChannelKey;
+      thread_kind: "group";
+      id: ThreadId;
+    }
+  | {
+      kind: "agent";
+      agent_id: AgentId;
+      channel: ChannelKey;
+      thread_kind: "channel";
+      id: ThreadId;
+    }
+  | { kind: "cron"; job_id: CronJobId }
+  | { kind: "hook"; uuid: string }
+  | { kind: "node"; node_id: NodeId };
+
+export function parseTyrumKey(key: TyrumKey): ParsedTyrumKey {
+  const parts = key.split(":");
+  const kind = parts[0];
+
+  switch (kind) {
+    case "agent": {
+      const agentId = parts[1];
+      const channel = parts[2];
+      const scope = parts[3];
+      if (!agentId || !channel || !scope) {
+        throw new Error(`invalid agent key: ${key}`);
+      }
+
+      if (scope === "main") {
+        return {
+          kind: "agent",
+          agent_id: AgentId.parse(agentId),
+          channel: ChannelKey.parse(channel),
+          thread_kind: "main",
+        };
+      }
+
+      if (scope === "group" || scope === "channel") {
+        const id = parts[4];
+        if (!id) {
+          throw new Error(`invalid agent key: ${key}`);
+        }
+        return {
+          kind: "agent",
+          agent_id: AgentId.parse(agentId),
+          channel: ChannelKey.parse(channel),
+          thread_kind: scope,
+          id: ThreadId.parse(id),
+        };
+      }
+
+      throw new Error(`invalid agent key scope: ${scope}`);
+    }
+
+    case "cron": {
+      const jobId = parts[1];
+      if (!jobId || parts.length !== 2) {
+        throw new Error(`invalid cron key: ${key}`);
+      }
+      return { kind: "cron", job_id: CronJobId.parse(jobId) };
+    }
+
+    case "hook": {
+      const uuid = parts[1];
+      if (!uuid || parts.length !== 2) {
+        throw new Error(`invalid hook key: ${key}`);
+      }
+      return { kind: "hook", uuid: UuidSchema.parse(uuid) };
+    }
+
+    case "node": {
+      const nodeId = parts[1];
+      if (!nodeId || parts.length !== 2) {
+        throw new Error(`invalid node key: ${key}`);
+      }
+      return { kind: "node", node_id: NodeId.parse(nodeId) };
+    }
+
+    default:
+      throw new Error(`unknown key kind: ${String(kind)}`);
+  }
+}
+

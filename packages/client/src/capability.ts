@@ -42,25 +42,28 @@ export function autoExecute(
     capMap.set(provider.capability, provider);
   }
 
-  client.on("task_dispatch", (msg) => {
-    const required = requiredCapability(msg.action.type);
+  client.on("task_execute", (msg) => {
+    const action = msg.payload.action;
+    const required = requiredCapability(action.type);
     const provider = required ? capMap.get(required) : undefined;
 
     if (!provider) {
-      client.sendTaskResult(
-        msg.task_id,
+      client.respondTaskExecute(
+        msg.request_id,
         false,
         undefined,
-        `no provider for capability: ${required ?? msg.action.type}`,
+        undefined,
+        `no provider for capability: ${required ?? action.type}`,
       );
       return;
     }
 
-    provider.execute(msg.action).then(
+    provider.execute(action).then(
       (result) => {
-        client.sendTaskResult(
-          msg.task_id,
+        client.respondTaskExecute(
+          msg.request_id,
           result.success,
+          undefined,
           result.evidence,
           result.error,
         );
@@ -68,7 +71,7 @@ export function autoExecute(
       (err: unknown) => {
         const errorMsg =
           err instanceof Error ? err.message : String(err);
-        client.sendTaskResult(msg.task_id, false, undefined, errorMsg);
+        client.respondTaskExecute(msg.request_id, false, undefined, undefined, errorMsg);
       },
     );
   });

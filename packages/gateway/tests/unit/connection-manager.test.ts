@@ -89,9 +89,10 @@ describe("ConnectionManager", () => {
     cm.addClient(ws3 as never, ["cli"]);
 
     cm.broadcastToCapable("playwright", {
-      type: "plan_update",
-      plan_id: "p1",
-      status: "running",
+      event_id: "evt-1",
+      type: "plan.update",
+      occurred_at: "2026-02-19T12:00:00Z",
+      payload: { plan_id: "p1", status: "running" },
     });
 
     expect(ws1.send).toHaveBeenCalledOnce();
@@ -103,9 +104,10 @@ describe("ConnectionManager", () => {
       unknown
     >;
     expect(sent).toEqual({
-      type: "plan_update",
-      plan_id: "p1",
-      status: "running",
+      event_id: "evt-1",
+      type: "plan.update",
+      occurred_at: "2026-02-19T12:00:00Z",
+      payload: { plan_id: "p1", status: "running" },
     });
   });
 
@@ -127,7 +129,9 @@ describe("ConnectionManager", () => {
         string,
         unknown
       >;
-      expect(ping).toEqual({ type: "ping" });
+      expect(ping["type"]).toBe("ping");
+      expect(typeof ping["request_id"]).toBe("string");
+      expect(ping["payload"]).toEqual({});
     });
 
     it("evicts clients that have not ponged within timeout", () => {

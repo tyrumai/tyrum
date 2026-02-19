@@ -125,8 +125,8 @@ export function registerNodeIpc(window: BrowserWindow): void {
 
   ipcMain.handle(
     "consent:respond",
-    (_event, planId: string, approved: boolean, reason?: string) => {
-      runtime?.respondToConsent(planId, approved, reason);
+    (_event, requestId: string, approved: boolean, reason?: string) => {
+      runtime?.respondToConsent(requestId, approved, reason);
       return { status: "responded" };
     },
   );

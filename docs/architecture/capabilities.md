@@ -8,7 +8,8 @@ A capability is a named interface a node can provide. Capabilities are the bridg
 
 - **Namespace:** dot-separated, stable names (for example `camera.capture`, `system.shell.exec`).
 - **Operations:** request/response contracts per operation.
-- **Evidence:** optional artifacts returned for audit (screenshots, logs, structured receipts).
+- **Evidence:** artifacts returned for audit (screenshots, logs, structured receipts). State-changing operations should emit evidence when feasible.
+- **Postconditions:** machine-checkable assertions used to verify that a state-changing operation actually succeeded (required when feasible).
 - **Permissions:** explicit scoping so nodes cannot silently escalate.
 
 ## Advertisement and routing

@@ -1,11 +1,12 @@
 import { z } from "zod";
+import { DateTimeSchema } from "./common.js";
 
 export const AuditEvent = z.object({
   id: z.number().int(),
   plan_id: z.string(),
   step_index: z.number().int(),
-  occurred_at: z.string(),
-  action: z.string(),
+  occurred_at: DateTimeSchema,
+  action: z.unknown(),
   prev_hash: z.string().nullable(),
   event_hash: z.string().nullable(),
 });
@@ -23,6 +24,6 @@ export const ReceiptBundle = z.object({
   plan_id: z.string(),
   events: z.array(AuditEvent),
   chain_verification: ChainVerification,
-  exported_at: z.string(),
+  exported_at: DateTimeSchema,
 });
 export type ReceiptBundle = z.infer<typeof ReceiptBundle>;

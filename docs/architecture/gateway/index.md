@@ -12,6 +12,9 @@ The gateway is Tyrum's single long-lived daemon. It is the system's authority fo
 - Route requests to internal modules or to capable nodes.
 - Emit events for lifecycle, actions, and state changes.
 - Persist essential state (sessions, transcripts, memory, audit logs).
+- Host the **execution engine** (queue, retries, idempotency, pause/resume, evidence capture).
+- Host the **approvals** subsystem and enforce policy at tool boundaries.
+- Integrate with a **secret provider** so raw credentials are never exposed to the model.
 - Host automation triggers (hooks, cron, heartbeat) in a controlled way.
 - Provide a stable extension surface (tools, plugins, skills, MCP).
 
@@ -28,20 +31,25 @@ flowchart TB
   HTTP["HTTP API"] --> PROTO
 
   PROTO --> AG["Agent runtime<br/>(loop + lanes)"]
+  PROTO --> ENG["Execution engine<br/>(runs + retries + pause/resume)"]
   PROTO --> CAP["Capability router<br/>(node dispatch)"]
 
-  AG --> TOOLS["Tool runtime"]
+  AG --> ENG
+  ENG --> TOOLS["Tool runtime"]
   TOOLS --> BUILTIN["Built-in tools"]
   TOOLS --> MCP["MCP tools"]
   TOOLS --> PLUGTOOLS["Plugin tools"]
 
-  AG --> POLICY["Policy + approvals"]
-  AG --> MEM["Memory subsystem"]
-  AG --> AUDIT["Audit/event log"]
+  ENG --> POLICY["Policy engine"]
+  ENG --> APPR["Approvals"]
+  ENG --> MEM["Memory subsystem"]
+  ENG --> AUDIT["Audit/event log"]
+  ENG <--> SECRETS["Secret provider"]
 
   DB[("SQLite state")] <--> MEM
   DB <--> AUDIT
   DB <--> AG
+  DB <--> ENG
 
   CAP --> NODES["Connected nodes"]
 ```
@@ -51,3 +59,4 @@ flowchart TB
 - **Client interface:** WebSocket requests/responses + server-push events.
 - **Node interface:** WebSocket with pairing, capability advertisement, and capability RPC.
 - **Extensions:** tool schemas, plugin registration, and (optionally) MCP servers.
+- **Execution/approvals:** requests/events for starting runs, streaming progress, pausing for approval, and resuming with resume tokens.

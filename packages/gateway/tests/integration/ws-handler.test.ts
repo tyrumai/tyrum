@@ -69,7 +69,7 @@ describe("WS handler integration", () => {
     }
   });
 
-  it("accepts connection, completes hello handshake, and registers client", async () => {
+  it("accepts connection, completes connect handshake, and registers client", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
     const tokenStore = new TokenStore(homeDir);
     const adminToken = await tokenStore.initialize();
@@ -100,19 +100,22 @@ describe("WS handler integration", () => {
     clients.push(ws);
     await waitForOpen(ws);
 
-    // Before hello, no clients should be registered
+    // Before connect, no clients should be registered
     expect(connectionManager.getStats().totalClients).toBe(0);
 
-    // Send hello handshake
-    ws.send(JSON.stringify({
-      type: "hello",
-      capabilities: ["playwright"],
-    }));
+    // Send connect handshake
+    ws.send(
+      JSON.stringify({
+        request_id: "r-1",
+        type: "connect",
+        payload: { capabilities: ["playwright"] },
+      }),
+    );
 
-    // Wait briefly for the server to process the hello
+    // Wait briefly for the server to process the connect
     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    // After hello, client should be registered with the right capability
+    // After connect, client should be registered with the right capability
     const stats = connectionManager.getStats();
     expect(stats.totalClients).toBe(1);
     expect(stats.capabilityCounts["playwright"]).toBe(1);

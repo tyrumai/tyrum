@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 interface ConsentRequest {
-  planId: string;
+  requestId: string;
   context: string;
 }
 
@@ -86,8 +86,35 @@ export function ConsentModal() {
     if (!api) return;
 
     const unsubscribe = api.onConsentRequest((req) => {
-      const r = req as ConsentRequest;
-      setRequest(r);
+      const r = req as {
+        request_id?: unknown;
+        payload?: { prompt?: unknown; context?: unknown; plan_id?: unknown; step_index?: unknown };
+      };
+
+      const requestId = typeof r.request_id === "string" ? r.request_id : null;
+      if (!requestId) return;
+
+      const prompt = typeof r.payload?.prompt === "string" ? r.payload.prompt : "Approval requested";
+      const planId = typeof r.payload?.plan_id === "string" ? r.payload.plan_id : undefined;
+      const stepIndex = typeof r.payload?.step_index === "number" ? r.payload.step_index : undefined;
+      const contextValue = r.payload?.context;
+      const contextText =
+        typeof contextValue === "string"
+          ? contextValue
+          : contextValue === undefined
+            ? ""
+            : JSON.stringify(contextValue, null, 2);
+
+      const headerParts = [
+        prompt,
+        planId ? `plan: ${planId}` : null,
+        typeof stepIndex === "number" ? `step: ${stepIndex}` : null,
+      ].filter(Boolean);
+
+      setRequest({
+        requestId,
+        context: `${headerParts.join(" · ")}\n\n${contextText}`.trim(),
+      });
       setReason("");
     });
     return unsubscribe;
@@ -99,7 +126,7 @@ export function ConsentModal() {
     const api = window.tyrumDesktop;
     if (!api) return;
     void api.consentRespond(
-      request.planId,
+      request.requestId,
       approved,
       reason || undefined,
     );

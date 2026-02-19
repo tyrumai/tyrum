@@ -14,6 +14,7 @@ Tools are the gateway's invocable operations used by the agent runtime. Tools ca
 - **memory:** search/get/write operations over durable memory
 - **web:** search/fetch for browsing and extraction (when enabled)
 - **ui:** browser/canvas style surfaces (when enabled)
+- **workflow:** run/resume deterministic workflows (playbooks) with approvals and resume tokens
 - **automation:** cron/heartbeat/hooks/webhooks
 - **messaging:** sending messages to channels
 - **nodes:** node discovery, pairing, and capability routing
@@ -31,4 +32,6 @@ MCP servers expose tool catalogs that Tyrum can call through a standardized inte
 
 - Tool availability is enforced by policy (allowlists/denylists), not by prompt text.
 - High-risk tools should require explicit approvals and/or sandbox constraints.
+- State-changing tools should support **postconditions** and emit **artifacts** suitable for audit.
+- Tools should accept **secret handles**, not raw secret values.
 - Tool outputs should redact secrets and avoid leaking sensitive local data by default.

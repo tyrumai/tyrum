@@ -42,6 +42,16 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: "category",
+          label: "Execution & Guardrails",
+          items: [
+            "architecture/execution-engine",
+            "architecture/playbooks",
+            "architecture/approvals",
+            "architecture/secrets",
+          ],
+        },
+        {
+          type: "category",
           label: "Protocol & Contracts",
           items: [
             "architecture/protocol/index",
@@ -81,6 +91,7 @@ const sidebars: SidebarsConfig = {
             "architecture/multi-agent-routing",
           ],
         },
+        "architecture/gaps",
         "architecture/glossary",
       ],
     },

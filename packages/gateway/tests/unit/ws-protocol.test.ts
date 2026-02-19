@@ -4,11 +4,12 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
+import type { ActionPrimitive } from "@tyrum/schemas";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import {
   handleClientMessage,
   dispatchTask,
-  requestHumanConfirmation,
+  requestApproval,
   sendPlanUpdate,
   NoCapableClientError,
 } from "../../src/ws/protocol.js";
@@ -62,9 +63,8 @@ describe("handleClientMessage", () => {
     const result = handleClientMessage(client, "not json{{{", deps);
     expect(result).toBeDefined();
     expect(result!.type).toBe("error");
-    if (result!.type === "error") {
-      expect(result!.code).toBe("invalid_json");
-    }
+    const payload = (result as unknown as { payload: { code: string } }).payload;
+    expect(payload.code).toBe("invalid_json");
   });
 
   it("returns error for invalid message schema", () => {
@@ -80,12 +80,11 @@ describe("handleClientMessage", () => {
     );
     expect(result).toBeDefined();
     expect(result!.type).toBe("error");
-    if (result!.type === "error") {
-      expect(result!.code).toBe("invalid_message");
-    }
+    const payload = (result as unknown as { payload: { code: string } }).payload;
+    expect(payload.code).toBe("invalid_message");
   });
 
-  it("returns error for unexpected hello", () => {
+  it("returns error response for client-sent request envelopes", () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
@@ -93,17 +92,17 @@ describe("handleClientMessage", () => {
 
     const result = handleClientMessage(
       client,
-      JSON.stringify({ type: "hello", capabilities: ["playwright"] }),
+      JSON.stringify({ request_id: "r-1", type: "connect", payload: { capabilities: ["playwright"] } }),
       deps,
     );
     expect(result).toBeDefined();
-    expect(result!.type).toBe("error");
-    if (result!.type === "error") {
-      expect(result!.code).toBe("unexpected_hello");
-    }
+    expect((result as unknown as { ok: boolean }).ok).toBe(false);
+    expect((result as unknown as { error: { code: string } }).error.code).toBe(
+      "unsupported_request",
+    );
   });
 
-  it("dispatches task_result to callback", () => {
+  it("dispatches task.execute response to callback", () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
@@ -113,10 +112,10 @@ describe("handleClientMessage", () => {
     const result = handleClientMessage(
       client,
       JSON.stringify({
-        type: "task_result",
-        task_id: "t-1",
-        success: true,
-        evidence: { screenshot: "base64..." },
+        request_id: "t-1",
+        type: "task.execute",
+        ok: true,
+        result: { evidence: { screenshot: "base64..." } },
       }),
       deps,
     );
@@ -130,7 +129,7 @@ describe("handleClientMessage", () => {
     );
   });
 
-  it("dispatches task_result with error", () => {
+  it("dispatches task.execute error response", () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["cli"]);
     const client = cm.getClient(id)!;
@@ -140,10 +139,10 @@ describe("handleClientMessage", () => {
     handleClientMessage(
       client,
       JSON.stringify({
-        type: "task_result",
-        task_id: "t-2",
-        success: false,
-        error: "command failed",
+        request_id: "t-2",
+        type: "task.execute",
+        ok: false,
+        error: { code: "task_failed", message: "command failed" },
       }),
       deps,
     );
@@ -156,49 +155,135 @@ describe("handleClientMessage", () => {
     );
   });
 
-  it("dispatches human_response to callback", () => {
+  it("dispatches task.execute error response evidence from error details", () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["cli"]);
+    const client = cm.getClient(id)!;
+    const onTaskResult = vi.fn();
+    const deps = makeDeps(cm, { onTaskResult });
+
+    handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "t-3",
+        type: "task.execute",
+        ok: false,
+        error: {
+          code: "task_failed",
+          message: "browser action failed",
+          details: {
+            evidence: { screenshot: "base64...", dom: "<html></html>" },
+          },
+        },
+      }),
+      deps,
+    );
+
+    expect(onTaskResult).toHaveBeenCalledWith(
+      "t-3",
+      false,
+      { screenshot: "base64...", dom: "<html></html>" },
+      "browser action failed",
+    );
+  });
+
+  it("dispatches approval.request decision to callback", () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
-    const onHumanResponse = vi.fn();
-    const deps = makeDeps(cm, { onHumanResponse });
+    const onApprovalDecision = vi.fn();
+    const deps = makeDeps(cm, { onApprovalDecision });
 
     const result = handleClientMessage(
       client,
       JSON.stringify({
-        type: "human_response",
-        plan_id: "plan-1",
-        approved: true,
+        request_id: "approval-123",
+        type: "approval.request",
+        ok: true,
+        result: { approved: true },
       }),
       deps,
     );
 
     expect(result).toBeUndefined();
-    expect(onHumanResponse).toHaveBeenCalledWith("plan-1", true, undefined);
+    expect(onApprovalDecision).toHaveBeenCalledWith(123, true, undefined);
   });
 
-  it("dispatches human_response with rejection reason", () => {
+  it("dispatches approval.request rejection with reason", () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
-    const onHumanResponse = vi.fn();
-    const deps = makeDeps(cm, { onHumanResponse });
+    const onApprovalDecision = vi.fn();
+    const deps = makeDeps(cm, { onApprovalDecision });
 
     handleClientMessage(
       client,
       JSON.stringify({
-        type: "human_response",
-        plan_id: "plan-2",
-        approved: false,
-        reason: "too risky",
+        request_id: "approval-124",
+        type: "approval.request",
+        ok: true,
+        result: { approved: false, reason: "too risky" },
       }),
       deps,
     );
 
-    expect(onHumanResponse).toHaveBeenCalledWith("plan-2", false, "too risky");
+    expect(onApprovalDecision).toHaveBeenCalledWith(124, false, "too risky");
   });
 
-  it("updates lastPong on pong message", () => {
+  it("does not auto-deny approval.request when client responds ok:false", () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["playwright"]);
+    const client = cm.getClient(id)!;
+    const onApprovalDecision = vi.fn();
+    const deps = makeDeps(cm, { onApprovalDecision });
+
+    const result = handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "approval-200",
+        type: "approval.request",
+        ok: false,
+        error: { code: "invalid_request", message: "payload validation failed" },
+      }),
+      deps,
+    );
+
+    expect(onApprovalDecision).not.toHaveBeenCalled();
+    expect(result).toBeDefined();
+    expect(result!.type).toBe("error");
+    const payload = (result as unknown as { payload: { code: string; message: string } })
+      .payload;
+    expect(payload.code).toBe("approval_request_failed");
+    expect(payload.message).toContain("approval-200");
+    expect(payload.message).toContain("payload validation failed");
+  });
+
+  it("returns error when approval.request ok payload is invalid", () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["playwright"]);
+    const client = cm.getClient(id)!;
+    const onApprovalDecision = vi.fn();
+    const deps = makeDeps(cm, { onApprovalDecision });
+
+    const result = handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "approval-125",
+        type: "approval.request",
+        ok: true,
+        result: { approved: "yes" },
+      }),
+      deps,
+    );
+
+    expect(onApprovalDecision).not.toHaveBeenCalled();
+    expect(result).toBeDefined();
+    expect(result!.type).toBe("error");
+    const payload = (result as unknown as { payload: { code: string } }).payload;
+    expect(payload.code).toBe("invalid_approval_decision");
+  });
+
+  it("updates lastPong on ping response", () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
@@ -210,7 +295,7 @@ describe("handleClientMessage", () => {
     const before = Date.now();
     const result = handleClientMessage(
       client,
-      JSON.stringify({ type: "pong" }),
+      JSON.stringify({ request_id: "ping-1", type: "ping", ok: true }),
       deps,
     );
     const after = Date.now();
@@ -226,7 +311,7 @@ describe("handleClientMessage", () => {
 // ---------------------------------------------------------------------------
 
 describe("dispatchTask", () => {
-  it("sends task_dispatch to a capable client", () => {
+  it("sends task.execute request to a capable client", () => {
     const cm = new ConnectionManager();
     const { ws } = makeClient(cm, ["playwright"]);
     const deps = makeDeps(cm);
@@ -237,9 +322,7 @@ describe("dispatchTask", () => {
     };
 
     const taskId = dispatchTask(action, "plan-1", 0, deps);
-    expect(taskId).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
-    );
+    expect(taskId).toMatch(/^task-[0-9a-f-]{36}$/);
 
     expect(ws.send).toHaveBeenCalledOnce();
     const sent = JSON.parse(ws.send.mock.calls[0]![0] as string) as Record<
@@ -247,10 +330,13 @@ describe("dispatchTask", () => {
       unknown
     >;
     expect(sent).toMatchObject({
-      type: "task_dispatch",
-      task_id: taskId,
-      plan_id: "plan-1",
-      action: { type: "Web", args: { url: "https://example.com" } },
+      request_id: taskId,
+      type: "task.execute",
+      payload: {
+        plan_id: "plan-1",
+        step_index: 0,
+        action: { type: "Web", args: { url: "https://example.com" } },
+      },
     });
   });
 
@@ -301,28 +387,43 @@ describe("dispatchTask", () => {
 });
 
 // ---------------------------------------------------------------------------
-// requestHumanConfirmation
+// requestApproval
 // ---------------------------------------------------------------------------
 
-describe("requestHumanConfirmation", () => {
-  it("sends human_confirmation to the first client", () => {
+describe("requestApproval", () => {
+  it("sends approval.request to the first client", () => {
     const cm = new ConnectionManager();
     const { ws } = makeClient(cm, ["playwright"]);
     const deps = makeDeps(cm);
 
-    requestHumanConfirmation("plan-1", 2, "Approve payment?", { amount: 100 }, deps);
+    requestApproval(
+      {
+        approval_id: 7,
+        plan_id: "plan-1",
+        step_index: 2,
+        prompt: "Approve payment?",
+        context: { amount: 100 },
+        expires_at: null,
+      },
+      deps,
+    );
 
     expect(ws.send).toHaveBeenCalledOnce();
     const sent = JSON.parse(ws.send.mock.calls[0]![0] as string) as Record<
       string,
       unknown
     >;
-    expect(sent).toEqual({
-      type: "human_confirmation",
-      plan_id: "plan-1",
-      step_index: 2,
-      prompt: "Approve payment?",
-      context: { amount: 100 },
+    expect(sent).toMatchObject({
+      request_id: "approval-7",
+      type: "approval.request",
+      payload: {
+        approval_id: 7,
+        plan_id: "plan-1",
+        step_index: 2,
+        prompt: "Approve payment?",
+        context: { amount: 100 },
+        expires_at: null,
+      },
     });
   });
 
@@ -331,7 +432,17 @@ describe("requestHumanConfirmation", () => {
     const deps = makeDeps(cm);
 
     // Should not throw.
-    requestHumanConfirmation("plan-1", 0, "Approve?", null, deps);
+    requestApproval(
+      {
+        approval_id: 1,
+        plan_id: "plan-1",
+        step_index: 0,
+        prompt: "Approve?",
+        context: null,
+        expires_at: null,
+      },
+      deps,
+    );
   });
 });
 
@@ -340,7 +451,7 @@ describe("requestHumanConfirmation", () => {
 // ---------------------------------------------------------------------------
 
 describe("sendPlanUpdate", () => {
-  it("broadcasts plan_update to all connected clients", () => {
+  it("broadcasts plan.update events to all connected clients", () => {
     const cm = new ConnectionManager();
     const { ws: ws1 } = makeClient(cm, ["playwright"]);
     const { ws: ws2 } = makeClient(cm, ["cli"]);
@@ -355,15 +466,17 @@ describe("sendPlanUpdate", () => {
       string,
       unknown
     >;
-    expect(sent).toEqual({
-      type: "plan_update",
+    expect(sent["type"]).toBe("plan.update");
+    expect(typeof sent["event_id"]).toBe("string");
+    expect(typeof sent["occurred_at"]).toBe("string");
+    expect(sent["payload"]).toEqual({
       plan_id: "plan-1",
       status: "executing",
       detail: "step 2 of 5",
     });
   });
 
-  it("sends plan_update without detail", () => {
+  it("sends plan.update without detail", () => {
     const cm = new ConnectionManager();
     const { ws } = makeClient(cm, ["playwright"]);
     const deps = makeDeps(cm);
@@ -374,10 +487,8 @@ describe("sendPlanUpdate", () => {
       string,
       unknown
     >;
-    expect(sent).toMatchObject({
-      type: "plan_update",
-      plan_id: "plan-1",
-      status: "completed",
-    });
+    expect(sent["type"]).toBe("plan.update");
+    expect((sent["payload"] as Record<string, unknown>)["plan_id"]).toBe("plan-1");
+    expect((sent["payload"] as Record<string, unknown>)["status"]).toBe("completed");
   });
 });

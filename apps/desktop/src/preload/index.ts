@@ -47,8 +47,8 @@ contextBridge.exposeInMainWorld("tyrumDesktop", {
       ipcRenderer.removeListener("consent:request", listener);
     };
   },
-  consentRespond: (planId: string, approved: boolean, reason?: string) =>
-    ipcRenderer.invoke("consent:respond", planId, approved, reason),
+  consentRespond: (requestId: string, approved: boolean, reason?: string) =>
+    ipcRenderer.invoke("consent:respond", requestId, approved, reason),
   checkMacPermissions: () => ipcRenderer.invoke("permissions:check-mac"),
   requestMacPermission: (permission: "accessibility" | "screenRecording") =>
     ipcRenderer.invoke("permissions:request-mac", permission),
