@@ -6,7 +6,7 @@
  */
 
 import type { ProtocolDeps } from "../../ws/protocol.js";
-import { requestHumanConfirmation } from "../../ws/protocol.js";
+import { requestApproval } from "../../ws/protocol.js";
 import type { ApprovalRow } from "./dal.js";
 
 /**
@@ -26,11 +26,15 @@ export class WsNotifier implements ApprovalNotifier {
   constructor(private readonly protocolDeps: ProtocolDeps) {}
 
   notify(approval: ApprovalRow): void {
-    requestHumanConfirmation(
-      approval.plan_id,
-      approval.step_index,
-      approval.prompt,
-      approval.context,
+    requestApproval(
+      {
+        approval_id: approval.id,
+        plan_id: approval.plan_id,
+        step_index: approval.step_index,
+        prompt: approval.prompt,
+        context: approval.context,
+        expires_at: approval.expires_at,
+      },
       this.protocolDeps,
     );
   }

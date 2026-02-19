@@ -9,7 +9,7 @@
 import { WebSocketServer } from "ws";
 import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
-import { HelloMessage } from "@tyrum/schemas";
+import { WsConnectRequest, type WsResponseEnvelope } from "@tyrum/schemas";
 import type { ConnectionManager } from "../ws/connection-manager.js";
 import { validateWsToken } from "../ws/auth.js";
 import { handleClientMessage } from "../ws/protocol.js";
@@ -138,7 +138,7 @@ export function createWsHandler(opts: WsRouteOptions): {
       const raw = typeof data === "string" ? data : data.toString("utf-8");
 
       if (clientId === undefined) {
-        // First message must be `hello`.
+        // First message must be `connect`.
         let json: unknown;
         try {
           json = JSON.parse(raw);
@@ -147,14 +147,22 @@ export function createWsHandler(opts: WsRouteOptions): {
           return;
         }
 
-        const parsed = HelloMessage.safeParse(json);
+        const parsed = WsConnectRequest.safeParse(json);
         if (!parsed.success) {
-          ws.close(4003, "expected hello message");
+          ws.close(4003, "expected connect request");
           return;
         }
 
         clearTimeout(helloTimeout);
-        clientId = connectionManager.addClient(ws, parsed.data.capabilities);
+        clientId = connectionManager.addClient(ws, parsed.data.payload.capabilities);
+
+        const connected: WsResponseEnvelope = {
+          request_id: parsed.data.request_id,
+          type: "connect",
+          ok: true,
+          result: { client_id: clientId },
+        };
+        ws.send(JSON.stringify(connected));
 
         ws.on("close", () => {
           connectionManager.removeClient(clientId!);

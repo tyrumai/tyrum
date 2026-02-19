@@ -1,63 +1,106 @@
 import { describe, expect, it } from "vitest";
 import {
-  ClientMessage,
-  GatewayMessage,
+  WsConnectRequest,
+  WsEventEnvelope,
+  WsMessageEnvelope,
+  WsPingRequest,
+  WsPlanUpdateEvent,
+  WsRequestEnvelope,
+  WsResponseEnvelope,
+  WsTaskExecuteRequest,
   requiredCapability,
 } from "../src/protocol.js";
 
-describe("ClientMessage", () => {
-  it("parses hello message", () => {
-    const msg = ClientMessage.parse({
-      type: "hello",
-      capabilities: ["playwright", "http"],
+describe("WS envelopes", () => {
+  it("parses connect request", () => {
+    const msg = WsConnectRequest.parse({
+      request_id: "r-1",
+      type: "connect",
+      payload: { capabilities: ["playwright", "http"] },
     });
-    expect(msg.type).toBe("hello");
-    if (msg.type === "hello") {
-      expect(msg.capabilities).toEqual(["playwright", "http"]);
-    }
+    expect(msg.type).toBe("connect");
+    expect(msg.payload.capabilities).toEqual(["playwright", "http"]);
   });
 
-  it("parses hello message with desktop capability", () => {
-    const msg = ClientMessage.parse({
-      type: "hello",
-      capabilities: ["desktop"],
+  it("parses ping request", () => {
+    const msg = WsPingRequest.parse({
+      request_id: "r-2",
+      type: "ping",
+      payload: {},
     });
-    expect(msg.type).toBe("hello");
-    if (msg.type === "hello") {
-      expect(msg.capabilities).toEqual(["desktop"]);
-    }
-  });
-
-  it("parses task_result message", () => {
-    const msg = ClientMessage.parse({
-      type: "task_result",
-      task_id: "task-1",
-      success: true,
-      evidence: { status: 200 },
-    });
-    expect(msg.type).toBe("task_result");
-  });
-
-  it("parses pong message", () => {
-    const msg = ClientMessage.parse({ type: "pong" });
-    expect(msg.type).toBe("pong");
-  });
-});
-
-describe("GatewayMessage", () => {
-  it("parses task_dispatch message", () => {
-    const msg = GatewayMessage.parse({
-      type: "task_dispatch",
-      task_id: "task-1",
-      plan_id: "plan-1",
-      action: { type: "Http", args: { url: "https://example.com" } },
-    });
-    expect(msg.type).toBe("task_dispatch");
-  });
-
-  it("parses ping message", () => {
-    const msg = GatewayMessage.parse({ type: "ping" });
     expect(msg.type).toBe("ping");
+  });
+
+  it("parses task.execute request", () => {
+    const msg = WsTaskExecuteRequest.parse({
+      request_id: "r-3",
+      type: "task.execute",
+      payload: {
+        plan_id: "plan-1",
+        step_index: 0,
+        action: { type: "Http", args: { url: "https://example.com" } },
+      },
+    });
+    expect(msg.payload.plan_id).toBe("plan-1");
+    expect(msg.payload.action.type).toBe("Http");
+  });
+
+  it("parses generic request envelope", () => {
+    const msg = WsRequestEnvelope.parse({
+      request_id: "r-4",
+      type: "custom.op",
+      payload: { x: 1 },
+    });
+    expect(msg.type).toBe("custom.op");
+  });
+
+  it("parses response envelope ok", () => {
+    const msg = WsResponseEnvelope.parse({
+      request_id: "r-5",
+      type: "task.execute",
+      ok: true,
+      result: { evidence: { http: { status: 200 } } },
+    });
+    expect(msg.ok).toBe(true);
+  });
+
+  it("parses response envelope error", () => {
+    const msg = WsResponseEnvelope.parse({
+      request_id: "r-6",
+      type: "task.execute",
+      ok: false,
+      error: { code: "task_failed", message: "boom" },
+    });
+    expect(msg.ok).toBe(false);
+  });
+
+  it("parses plan.update event", () => {
+    const msg = WsPlanUpdateEvent.parse({
+      event_id: "e-1",
+      type: "plan.update",
+      occurred_at: "2026-02-19T12:00:00Z",
+      payload: { plan_id: "plan-1", status: "running", detail: "step 1" },
+    });
+    expect(msg.payload.plan_id).toBe("plan-1");
+  });
+
+  it("parses generic event envelope", () => {
+    const msg = WsEventEnvelope.parse({
+      event_id: "e-2",
+      type: "something",
+      occurred_at: "2026-02-19T12:00:00Z",
+      payload: { ok: true },
+    });
+    expect(msg.type).toBe("something");
+  });
+
+  it("parses union message envelope", () => {
+    const msg = WsMessageEnvelope.parse({
+      request_id: "r-7",
+      type: "ping",
+      payload: {},
+    });
+    expect("request_id" in msg).toBe(true);
   });
 });
 

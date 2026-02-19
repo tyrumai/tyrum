@@ -6,7 +6,7 @@
  */
 
 import type { WebSocket } from "ws";
-import type { ClientCapability, GatewayMessage } from "@tyrum/schemas";
+import type { ClientCapability, WsEventEnvelope, WsRequestEnvelope } from "@tyrum/schemas";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -39,7 +39,7 @@ export class ConnectionManager {
   private readonly clients = new Map<string, ConnectedClient>();
 
   /**
-   * Register a new client after a successful `hello` handshake.
+   * Register a new client after a successful `connect` handshake.
    *
    * @returns the generated client id (UUID v4).
    */
@@ -73,7 +73,10 @@ export class ConnectionManager {
   }
 
   /** Send a message to every client that advertises `capability`. */
-  broadcastToCapable(capability: ClientCapability, message: GatewayMessage): void {
+  broadcastToCapable(
+    capability: ClientCapability,
+    message: WsRequestEnvelope | WsEventEnvelope,
+  ): void {
     const payload = JSON.stringify(message);
     for (const client of this.clients.values()) {
       if (client.capabilities.includes(capability)) {
@@ -88,7 +91,11 @@ export class ConnectionManager {
    */
   heartbeat(): void {
     const now = Date.now();
-    const pingPayload = JSON.stringify({ type: "ping" as const });
+    const pingPayload = JSON.stringify({
+      request_id: `ping-${crypto.randomUUID()}`,
+      type: "ping",
+      payload: {},
+    } satisfies WsRequestEnvelope);
 
     for (const [id, client] of this.clients) {
       if (now - client.lastPong > HEARTBEAT_TIMEOUT_MS) {

@@ -60,7 +60,7 @@ export class NodeRuntime {
       });
     });
 
-    this.client.on("human_confirmation", (msg) => {
+    this.client.on("approval_request", (msg) => {
       this.callbacks.onConsentRequest(msg);
     });
 
@@ -88,8 +88,8 @@ export class NodeRuntime {
     this.client = null;
   }
 
-  respondToConsent(planId: string, approved: boolean, reason?: string): void {
-    this.client?.sendHumanResponse(planId, approved, reason);
+  respondToConsent(requestId: string, approved: boolean, reason?: string): void {
+    this.client?.respondApprovalRequest(requestId, approved, reason);
   }
 
   private getEnabledCapabilities(): ClientCapability[] {

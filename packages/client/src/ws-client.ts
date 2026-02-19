@@ -18,13 +18,17 @@ const mitt = (
   typeof mittNs.default === "function" ? mittNs.default : mittNs
 ) as unknown as <T extends Record<string, unknown>>() => Emitter<T>;
 
-import { GatewayMessage } from "@tyrum/schemas";
-import type {
-  ClientCapability,
-  TaskDispatchMessage,
-  HumanConfirmationMessage,
-  PlanUpdateMessage,
-  ErrorMessage,
+import type { ClientCapability, WsRequestEnvelope, WsResponseEnvelope } from "@tyrum/schemas";
+import {
+  WsApprovalDecision,
+  WsApprovalRequest,
+  WsConnectResult,
+  WsError,
+  WsErrorEvent,
+  WsMessageEnvelope,
+  WsPlanUpdateEvent,
+  WsTaskExecuteRequest,
+  WsTaskExecuteResult,
 } from "@tyrum/schemas";
 
 // ---------------------------------------------------------------------------
@@ -32,12 +36,12 @@ import type {
 // ---------------------------------------------------------------------------
 
 export type TyrumClientEvents = {
-  connected: undefined;
+  connected: { clientId: string };
   disconnected: { code: number; reason: string };
-  task_dispatch: TaskDispatchMessage;
-  human_confirmation: HumanConfirmationMessage;
-  plan_update: PlanUpdateMessage;
-  error: ErrorMessage;
+  task_execute: WsTaskExecuteRequest;
+  approval_request: WsApprovalRequest;
+  plan_update: WsPlanUpdateEvent;
+  error: WsErrorEvent;
 };
 
 // ---------------------------------------------------------------------------
@@ -93,6 +97,12 @@ export class TyrumClient {
   private readonly opts: Required<TyrumClientOptions>;
 
   private ws: WebSocket | null = null;
+  private ready = false;
+  private clientId: string | null = null;
+  private pending = new Map<
+    string,
+    { resolve: (msg: WsResponseEnvelope) => void; reject: (err: Error) => void }
+  >();
   private reconnectAttempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private intentionalClose = false;
@@ -112,7 +122,11 @@ export class TyrumClient {
 
   /** Whether the underlying WebSocket is currently open. */
   get connected(): boolean {
-    return this.ws?.readyState === WebSocket.OPEN;
+    return (
+      this.ws?.readyState === WebSocket.OPEN &&
+      this.ready &&
+      this.clientId !== null
+    );
   }
 
   /** Subscribe to a typed event. */
@@ -145,36 +159,52 @@ export class TyrumClient {
       this.ws.close(1000, "client disconnect");
       this.ws = null;
     }
+    this.ready = false;
+    this.clientId = null;
+    this.pending.clear();
   }
 
-  /** Report a task execution result back to the gateway. */
-  sendTaskResult(
-    taskId: string,
+  /** Respond to a task.execute request from the gateway. */
+  respondTaskExecute(
+    requestId: string,
     success: boolean,
+    result?: unknown,
     evidence?: unknown,
     error?: string,
   ): void {
-    this.send({
-      type: "task_result",
-      task_id: taskId,
-      success,
-      evidence,
-      error,
-    });
+    const response: WsResponseEnvelope = success
+      ? {
+          request_id: requestId,
+          type: "task.execute",
+          ok: true,
+          result: WsTaskExecuteResult.parse({ result, evidence }),
+        }
+      : {
+          request_id: requestId,
+          type: "task.execute",
+          ok: false,
+          error: WsError.parse({
+            code: "task_failed",
+            message: error ?? "task failed",
+            details: { evidence },
+          }),
+        };
+    this.send(response);
   }
 
-  /** Respond to a human confirmation request. */
-  sendHumanResponse(
-    planId: string,
+  /** Respond to an approval.request from the gateway. */
+  respondApprovalRequest(
+    requestId: string,
     approved: boolean,
     reason?: string,
   ): void {
-    this.send({
-      type: "human_response",
-      plan_id: planId,
-      approved,
-      reason,
-    });
+    const response: WsResponseEnvelope = {
+      request_id: requestId,
+      type: "approval.request",
+      ok: true,
+      result: WsApprovalDecision.parse({ approved, reason }),
+    };
+    this.send(response);
   }
 
   // -----------------------------------------------------------------------
@@ -187,12 +217,14 @@ export class TyrumClient {
   }
 
   private openSocket(): void {
+    this.ready = false;
+    this.clientId = null;
+
     this.ws = new WebSocket(this.opts.url, this.buildProtocols());
 
     this.ws.addEventListener("open", () => {
       this.reconnectAttempt = 0;
-      this.sendHello();
-      this.emitter.emit("connected", undefined);
+      this.sendConnect();
     });
 
     this.ws.addEventListener("message", (event: MessageEvent) => {
@@ -205,6 +237,9 @@ export class TyrumClient {
         reason: event.reason,
       });
       this.ws = null;
+      this.ready = false;
+      this.clientId = null;
+      this.pending.clear();
       if (!this.intentionalClose && this.opts.reconnect) {
         this.scheduleReconnect();
       }
@@ -216,11 +251,38 @@ export class TyrumClient {
     });
   }
 
-  private sendHello(): void {
-    this.send({
-      type: "hello",
-      capabilities: this.opts.capabilities,
+  private sendConnect(): void {
+    const requestId = crypto.randomUUID();
+
+    const request: WsRequestEnvelope = {
+      request_id: requestId,
+      type: "connect",
+      payload: { capabilities: this.opts.capabilities },
+    };
+
+    // connect is a request/response handshake; treat it as the gate for
+    // emitting the `connected` event.
+    this.pending.set(requestId, {
+      resolve: (msg) => {
+        if (!msg.ok) {
+          this.disconnect();
+          return;
+        }
+        const parsed = WsConnectResult.safeParse(msg.result ?? {});
+        if (!parsed.success) {
+          this.disconnect();
+          return;
+        }
+        this.ready = true;
+        this.clientId = parsed.data.client_id;
+        this.emitter.emit("connected", { clientId: parsed.data.client_id });
+      },
+      reject: () => {
+        this.disconnect();
+      },
     });
+
+    this.send(request);
   }
 
   private send(payload: Record<string, unknown>): void {
@@ -237,29 +299,78 @@ export class TyrumClient {
       return; // silently ignore malformed frames
     }
 
-    const parsed = GatewayMessage.safeParse(json);
+    const parsed = WsMessageEnvelope.safeParse(json);
     if (!parsed.success) {
       return;
     }
 
     const msg = parsed.data;
 
+    // Responses (to prior requests)
+    if ("ok" in msg) {
+      const pending = this.pending.get(msg.request_id);
+      if (pending) {
+        this.pending.delete(msg.request_id);
+        pending.resolve(msg);
+      }
+      return;
+    }
+
+    // Events (server push)
+    if ("event_id" in msg) {
+      if (msg.type === "plan.update") {
+        const evt = WsPlanUpdateEvent.safeParse(msg);
+        if (evt.success) {
+          this.emitter.emit("plan_update", evt.data);
+        }
+        return;
+      }
+      if (msg.type === "error") {
+        const evt = WsErrorEvent.safeParse(msg);
+        if (evt.success) {
+          this.emitter.emit("error", evt.data);
+        }
+        return;
+      }
+      return;
+    }
+
+    // Requests (gateway -> client)
     switch (msg.type) {
       case "ping":
-        this.send({ type: "pong" });
-        break;
-      case "task_dispatch":
-        this.emitter.emit("task_dispatch", msg);
-        break;
-      case "human_confirmation":
-        this.emitter.emit("human_confirmation", msg);
-        break;
-      case "plan_update":
-        this.emitter.emit("plan_update", msg);
-        break;
-      case "error":
-        this.emitter.emit("error", msg);
-        break;
+        // heartbeat: reply with an ok response
+        this.send({
+          request_id: msg.request_id,
+          type: "ping",
+          ok: true,
+        } satisfies WsResponseEnvelope);
+        return;
+
+      case "task.execute": {
+        const req = WsTaskExecuteRequest.safeParse(msg);
+        if (req.success) {
+          this.emitter.emit("task_execute", req.data);
+        }
+        return;
+      }
+
+      case "approval.request": {
+        const req = WsApprovalRequest.safeParse(msg);
+        if (req.success) {
+          this.emitter.emit("approval_request", req.data);
+        }
+        return;
+      }
+
+      case "connect":
+        // connect is client-initiated only
+        this.send({
+          request_id: msg.request_id,
+          type: "connect",
+          ok: false,
+          error: { code: "unexpected_connect", message: "connect must be client-initiated" },
+        } satisfies WsResponseEnvelope);
+        return;
     }
   }
 

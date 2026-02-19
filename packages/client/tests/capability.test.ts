@@ -57,6 +57,19 @@ function waitForMessage(ws: WsWebSocket): Promise<unknown> {
   });
 }
 
+async function acceptConnect(ws: WsWebSocket, clientId = "client-1"): Promise<void> {
+  const connect = (await waitForMessage(ws)) as Record<string, unknown>;
+  expect(connect["type"]).toBe("connect");
+  ws.send(
+    JSON.stringify({
+      request_id: String(connect["request_id"]),
+      type: "connect",
+      ok: true,
+      result: { client_id: clientId },
+    }),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -74,7 +87,7 @@ describe("autoExecute", () => {
     }
   });
 
-  it("routes task_dispatch to matching provider and sends result", async () => {
+  it("routes task.execute to matching provider and sends response", async () => {
     server = createTestServer();
     client = new TyrumClient({
       url: server.url,
@@ -95,23 +108,26 @@ describe("autoExecute", () => {
 
     client.connect();
     const ws = await server.waitForClient();
-    await waitForMessage(ws); // hello
+    await acceptConnect(ws);
 
     ws.send(
       JSON.stringify({
-        type: "task_dispatch",
-        task_id: "t-1",
-        plan_id: "p-1",
-        action: { type: "Http", args: { url: "https://example.com" } },
+        request_id: "t-1",
+        type: "task.execute",
+        payload: {
+          plan_id: "p-1",
+          step_index: 0,
+          action: { type: "Http", args: { url: "https://example.com" } },
+        },
       }),
     );
 
     const result = await waitForMessage(ws);
     expect(result).toEqual({
-      type: "task_result",
-      task_id: "t-1",
-      success: true,
-      evidence: { statusCode: 200 },
+      request_id: "t-1",
+      type: "task.execute",
+      ok: true,
+      result: { evidence: { statusCode: 200 } },
     });
   });
 
@@ -129,22 +145,26 @@ describe("autoExecute", () => {
 
     client.connect();
     const ws = await server.waitForClient();
-    await waitForMessage(ws); // hello
+    await acceptConnect(ws);
 
     ws.send(
       JSON.stringify({
-        type: "task_dispatch",
-        task_id: "t-2",
-        plan_id: "p-1",
-        action: { type: "Http", args: {} },
+        request_id: "t-2",
+        type: "task.execute",
+        payload: {
+          plan_id: "p-1",
+          step_index: 0,
+          action: { type: "Http", args: {} },
+        },
       }),
     );
 
     const result = (await waitForMessage(ws)) as Record<string, unknown>;
-    expect(result["type"]).toBe("task_result");
-    expect(result["task_id"]).toBe("t-2");
-    expect(result["success"]).toBe(false);
-    expect(result["error"]).toContain("no provider");
+    expect(result["type"]).toBe("task.execute");
+    expect(result["request_id"]).toBe("t-2");
+    expect(result["ok"]).toBe(false);
+    const error = result["error"] as Record<string, unknown>;
+    expect(String(error["message"])).toContain("no provider");
   });
 
   it("sends error result when provider throws", async () => {
@@ -167,21 +187,25 @@ describe("autoExecute", () => {
 
     client.connect();
     const ws = await server.waitForClient();
-    await waitForMessage(ws); // hello
+    await acceptConnect(ws);
 
     ws.send(
       JSON.stringify({
-        type: "task_dispatch",
-        task_id: "t-3",
-        plan_id: "p-1",
-        action: { type: "Web", args: {} },
+        request_id: "t-3",
+        type: "task.execute",
+        payload: {
+          plan_id: "p-1",
+          step_index: 0,
+          action: { type: "Web", args: {} },
+        },
       }),
     );
 
     const result = (await waitForMessage(ws)) as Record<string, unknown>;
-    expect(result["type"]).toBe("task_result");
-    expect(result["task_id"]).toBe("t-3");
-    expect(result["success"]).toBe(false);
-    expect(result["error"]).toBe("browser crashed");
+    expect(result["type"]).toBe("task.execute");
+    expect(result["request_id"]).toBe("t-3");
+    expect(result["ok"]).toBe(false);
+    const error = result["error"] as Record<string, unknown>;
+    expect(error["message"]).toBe("browser crashed");
   });
 });

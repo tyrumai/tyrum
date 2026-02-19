@@ -158,8 +158,8 @@ describe("E2E smoke test", () => {
     // it returns a PlanResponse).  This exercises the protocol layer.
     const taskDispatchP = new Promise<{ task_id: string; plan_id: string }>(
       (resolve) => {
-        client!.on("task_dispatch", (msg) => {
-          resolve({ task_id: msg.task_id, plan_id: msg.plan_id });
+        client!.on("task_execute", (msg) => {
+          resolve({ task_id: msg.request_id, plan_id: msg.payload.plan_id });
         });
       },
     );
@@ -171,10 +171,13 @@ describe("E2E smoke test", () => {
     const planId = "plan-e2e-1";
     httpClient!.ws.send(
       JSON.stringify({
-        type: "task_dispatch",
-        task_id: taskId,
-        plan_id: planId,
-        action: { type: "Http", args: { url: "https://example.com" } },
+        request_id: taskId,
+        type: "task.execute",
+        payload: {
+          plan_id: planId,
+          step_index: 0,
+          action: { type: "Http", args: { url: "https://example.com" } },
+        },
       }),
     );
 
@@ -184,7 +187,7 @@ describe("E2E smoke test", () => {
     expect(dispatch.plan_id).toBe(planId);
 
     // --- 6. Client sends task_result ---
-    client.sendTaskResult(taskId, true, { statusCode: 200 });
+    client.respondTaskExecute(taskId, true, undefined, { statusCode: 200 });
 
     // Give the server time to process the result
     await delay(50);

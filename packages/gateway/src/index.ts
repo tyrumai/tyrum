@@ -306,18 +306,12 @@ export async function main(): Promise<void> {
   const connectionManager = new ConnectionManager();
   const protocolDeps = {
     connectionManager,
-    onHumanResponse: (
-      planId: string,
+    onApprovalDecision: (
+      approvalId: number,
       approved: boolean,
       reason: string | undefined,
     ) => {
-      const pendingApproval = container.approvalDal
-        .getByPlanId(planId)
-        .find((approval) => approval.status === "pending");
-      if (!pendingApproval) {
-        return;
-      }
-      container.approvalDal.respond(pendingApproval.id, approved, reason);
+      container.approvalDal.respond(approvalId, approved, reason);
     },
   };
   const approvalNotifier = new WsNotifier(protocolDeps);

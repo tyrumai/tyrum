@@ -6,13 +6,19 @@
  */
 
 import {
-  ClientMessage,
   requiredCapability,
+  WsApprovalDecision,
+  WsError,
+  WsMessageEnvelope,
+  WsTaskExecuteResult,
 } from "@tyrum/schemas";
 import type {
   ActionPrimitive,
   ClientCapability,
-  GatewayMessage,
+  WsEventEnvelope,
+  WsRequestEnvelope,
+  WsResponseEnvelope,
+  WsResponseErrEnvelope,
 } from "@tyrum/schemas";
 import type { ConnectedClient } from "./connection-manager.js";
 import type { ConnectionManager } from "./connection-manager.js";
@@ -28,7 +34,7 @@ import type { ConnectionManager } from "./connection-manager.js";
 export interface ProtocolDeps {
   connectionManager: ConnectionManager;
 
-  /** Called when a task_result is received from a client. */
+  /** Called when a task.execute response is received from a client. */
   onTaskResult?: (
     taskId: string,
     success: boolean,
@@ -36,9 +42,9 @@ export interface ProtocolDeps {
     error: string | undefined,
   ) => void;
 
-  /** Called when a human_response is received from a client. */
-  onHumanResponse?: (
-    planId: string,
+  /** Called when an approval.request response is received from a client. */
+  onApprovalDecision?: (
+    approvalId: number,
     approved: boolean,
     reason: string | undefined,
   ) => void;
@@ -68,50 +74,75 @@ export function handleClientMessage(
   client: ConnectedClient,
   raw: string,
   deps: ProtocolDeps,
-): GatewayMessage | undefined {
+): WsResponseEnvelope | WsEventEnvelope | undefined {
   let json: unknown;
   try {
     json = JSON.parse(raw);
   } catch {
-    return {
-      type: "error",
-      code: "invalid_json",
-      message: "message is not valid JSON",
-    };
+    return errorEvent("invalid_json", "message is not valid JSON");
   }
 
-  const parsed = ClientMessage.safeParse(json);
+  const parsed = WsMessageEnvelope.safeParse(json);
   if (!parsed.success) {
-    return {
-      type: "error",
-      code: "invalid_message",
-      message: parsed.error.message,
-    };
+    return errorEvent("invalid_message", parsed.error.message);
   }
 
   const msg = parsed.data;
 
-  switch (msg.type) {
-    case "hello":
-      // hello is handled at the connection layer, not here.
-      return {
-        type: "error",
-        code: "unexpected_hello",
-        message: "hello must be the first message on a new connection",
-      };
+  // Events are gateway-emitted; reject client-sent events.
+  if ("event_id" in msg) {
+    return errorEvent("unexpected_event", "clients must not send events");
+  }
 
-    case "task_result":
-      deps.onTaskResult?.(msg.task_id, msg.success, msg.evidence, msg.error);
-      return undefined;
-
-    case "human_response":
-      deps.onHumanResponse?.(msg.plan_id, msg.approved, msg.reason);
-      return undefined;
-
-    case "pong":
+  // Responses (client -> gateway)
+  if ("ok" in msg) {
+    if (msg.type === "ping" && msg.ok === true) {
       client.lastPong = Date.now();
       return undefined;
+    }
+
+    if (msg.type === "task.execute") {
+      const evidenceAndResult = msg.ok
+        ? WsTaskExecuteResult.safeParse(msg.result ?? {})
+        : undefined;
+
+      deps.onTaskResult?.(
+        msg.request_id,
+        msg.ok,
+        evidenceAndResult?.success ? evidenceAndResult.data.evidence : undefined,
+        msg.ok ? undefined : msg.error.message,
+      );
+      return undefined;
+    }
+
+    if (msg.type === "approval.request") {
+      const approvalId = parseApprovalId(msg.request_id);
+      if (approvalId === undefined) {
+        return errorEvent(
+          "invalid_approval_request_id",
+          "approval response missing or invalid approval request id",
+        );
+      }
+
+      const decision = msg.ok
+        ? WsApprovalDecision.safeParse(msg.result ?? {})
+        : undefined;
+
+      deps.onApprovalDecision?.(
+        approvalId,
+        msg.ok ? decision?.success ? decision.data.approved : false : false,
+        msg.ok ? decision?.success ? decision.data.reason : undefined : msg.error.message,
+      );
+      return undefined;
+    }
+
+    // Unknown response type — ignore.
+    return undefined;
   }
+
+  // Requests (client -> gateway). In the current runtime, we don't accept
+  // post-handshake client requests via WS (use HTTP routes for now).
+  return errorResponse(msg.request_id, msg.type, "unsupported_request", "request not supported");
 }
 
 // ---------------------------------------------------------------------------
@@ -127,7 +158,7 @@ export function handleClientMessage(
 export function dispatchTask(
   action: ActionPrimitive,
   planId: string,
-  _stepIndex: number,
+  stepIndex: number,
   deps: ProtocolDeps,
 ): string {
   const capability = requiredCapability(action.type);
@@ -140,36 +171,38 @@ export function dispatchTask(
     throw new NoCapableClientError(capability);
   }
 
-  const taskId = crypto.randomUUID();
-  const message: GatewayMessage = {
-    type: "task_dispatch",
-    task_id: taskId,
-    plan_id: planId,
-    action,
+  const requestId = `task-${crypto.randomUUID()}`;
+  const message: WsRequestEnvelope = {
+    request_id: requestId,
+    type: "task.execute",
+    payload: { plan_id: planId, step_index: stepIndex, action },
   };
   client.ws.send(JSON.stringify(message));
-  return taskId;
+  return requestId;
 }
 
 /**
- * Send a `human_confirmation` request to the first connected client.
+ * Send an approval.request to the first connected client.
  *
- * Human confirmations are not capability-scoped; any connected client
+ * Approval requests are not capability-scoped; any connected client
  * with a human operator can respond.
  */
-export function requestHumanConfirmation(
-  planId: string,
-  stepIndex: number,
-  prompt: string,
-  context: unknown,
+export function requestApproval(
+  approval: {
+    approval_id: number;
+    plan_id: string;
+    step_index: number;
+    prompt: string;
+    context?: unknown;
+    expires_at?: string | null;
+  },
   deps: ProtocolDeps,
 ): void {
-  const message: GatewayMessage = {
-    type: "human_confirmation",
-    plan_id: planId,
-    step_index: stepIndex,
-    prompt,
-    context,
+  const requestId = `approval-${String(approval.approval_id)}`;
+  const message: WsRequestEnvelope = {
+    request_id: requestId,
+    type: "approval.request",
+    payload: approval,
   };
   const payload = JSON.stringify(message);
 
@@ -190,15 +223,52 @@ export function sendPlanUpdate(
   deps: ProtocolDeps,
   detail?: string,
 ): void {
-  const message: GatewayMessage = {
-    type: "plan_update",
-    plan_id: planId,
-    status,
-    detail,
+  const message: WsEventEnvelope = {
+    event_id: crypto.randomUUID(),
+    type: "plan.update",
+    occurred_at: new Date().toISOString(),
+    payload: {
+      plan_id: planId,
+      status,
+      detail,
+    },
   };
   const payload = JSON.stringify(message);
 
   for (const client of deps.connectionManager.allClients()) {
     client.ws.send(payload);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function errorEvent(code: string, message: string): WsEventEnvelope {
+  return {
+    event_id: crypto.randomUUID(),
+    type: "error",
+    occurred_at: new Date().toISOString(),
+    payload: { code, message },
+  };
+}
+
+function errorResponse(
+  requestId: string,
+  type: string,
+  code: string,
+  message: string,
+  details?: unknown,
+): WsResponseErrEnvelope {
+  const error = WsError.parse({ code, message, details });
+  return { request_id: requestId, type, ok: false, error };
+}
+
+function parseApprovalId(requestId: string): number | undefined {
+  // request_id is `approval-<approval_id>`
+  if (!requestId.startsWith("approval-")) return undefined;
+  const raw = requestId.slice("approval-".length);
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isInteger(n) || n <= 0) return undefined;
+  return n;
 }
