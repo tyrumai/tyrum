@@ -10,7 +10,7 @@
     "build:preload": "tsdown src/preload/index.ts --format cjs --outDir dist/preload --external electron",
     "build:renderer": "vite build",
     "build": "pnpm build:main && pnpm build:preload && pnpm build:renderer",
-    "build:gateway": "pnpm --filter @tyrum/gateway build && node ./scripts/stage-gateway-bin.mjs",
+    "build:gateway": "pnpm --filter @tyrum/schemas build && pnpm --filter @tyrum/gateway build && node ./scripts/stage-gateway-bin.mjs",
     "dist": "pnpm build:gateway && pnpm build && electron-builder --publish never"
   },
   "dependencies": {
@@ -28,7 +28,7 @@
     "@tyrum/gateway": "workspace:*",
     "@vitejs/plugin-react": "^5.1.4",
     "electron": "^40.4.1",
-    "electron-builder": "^26.0.0",
+    "electron-builder": "^26.8.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "vite": "^7.3.0"
