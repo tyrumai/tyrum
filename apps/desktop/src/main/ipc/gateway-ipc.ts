@@ -26,16 +26,25 @@ interface EmbeddedGatewayUiUrlOptions {
 
 let startPromise: Promise<void> | null = null;
 
-export function ensureEmbeddedGatewayToken(config: DesktopNodeConfig): string {
-  const existingTokenRef = config.embedded.tokenRef;
-  if (existingTokenRef) {
-    return decryptToken(existingTokenRef);
-  }
-
+function createAndStoreEmbeddedGatewayToken(config: DesktopNodeConfig): string {
   const token = generateToken();
   config.embedded.tokenRef = encryptToken(token);
   saveConfig(config);
   return token;
+}
+
+export function ensureEmbeddedGatewayToken(config: DesktopNodeConfig): string {
+  const existingTokenRef = config.embedded.tokenRef;
+  if (existingTokenRef) {
+    try {
+      return decryptToken(existingTokenRef);
+    } catch (error) {
+      console.warn("Failed to decrypt embedded gateway token; rotating token.", error);
+      return createAndStoreEmbeddedGatewayToken(config);
+    }
+  }
+
+  return createAndStoreEmbeddedGatewayToken(config);
 }
 
 function toHttpAppUrlFromWsUrl(rawUrl: string): string | null {
