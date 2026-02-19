@@ -20,8 +20,11 @@
       "@develar/schema-utils>ajv": "8.18.0",
       "@develar/schema-utils>ajv-keywords": "5.1.0",
       "dmg-license>ajv": "8.18.0",
+      "file-loader>schema-utils": "4.3.3",
       "minimatch": "10.2.1",
-      "tmp": ">=0.2.4"
+      "null-loader>schema-utils": "4.3.3",
+      "tmp": ">=0.2.4",
+      "url-loader>schema-utils": "4.3.3"
     },
     "patchedDependencies": {
       "@develar/schema-utils@2.6.5": "patches/@develar__schema-utils@2.6.5.patch",
