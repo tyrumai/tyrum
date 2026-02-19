@@ -2,10 +2,21 @@ import { EventEmitter } from "node:events";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BrowserWindow } from "electron";
 
-const { ipcMainHandleMock, registeredHandlers, testState, saveConfigMock } = vi.hoisted(() => ({
+const {
+  ipcMainHandleMock,
+  registeredHandlers,
+  testState,
+  saveConfigMock,
+  decryptTokenMock,
+  generateTokenMock,
+  encryptTokenMock,
+} = vi.hoisted(() => ({
   ipcMainHandleMock: vi.fn(),
   registeredHandlers: new Map<string, (...args: unknown[]) => unknown>(),
   saveConfigMock: vi.fn(),
+  decryptTokenMock: vi.fn(() => "token"),
+  generateTokenMock: vi.fn(() => "generated-token"),
+  encryptTokenMock: vi.fn((token: string) => `enc:${token}`),
   testState: {
     port: 8080,
     mode: "embedded" as "embedded" | "remote",
@@ -54,9 +65,9 @@ vi.mock("../src/main/config/store.js", () => ({
 }));
 
 vi.mock("../src/main/config/token-store.js", () => ({
-  decryptToken: vi.fn(() => "token"),
-  generateToken: vi.fn(() => "generated-token"),
-  encryptToken: vi.fn((token: string) => `enc:${token}`),
+  decryptToken: decryptTokenMock,
+  generateToken: generateTokenMock,
+  encryptToken: encryptTokenMock,
 }));
 
 vi.mock("../src/main/gateway-bin-path.js", () => ({
@@ -70,6 +81,12 @@ describe("registerGatewayIpc handlers", () => {
     testState.mode = "embedded";
     testState.remoteWsUrl = "ws://127.0.0.1:8080/ws";
     saveConfigMock.mockReset();
+    decryptTokenMock.mockReset();
+    decryptTokenMock.mockImplementation(() => "token");
+    generateTokenMock.mockReset();
+    generateTokenMock.mockImplementation(() => "generated-token");
+    encryptTokenMock.mockReset();
+    encryptTokenMock.mockImplementation((token: string) => `enc:${token}`);
     registeredHandlers.clear();
     ipcMainHandleMock.mockReset();
     ipcMainHandleMock.mockImplementation((channel: string, handler: (...args: unknown[]) => unknown) => {
@@ -140,6 +157,43 @@ describe("registerGatewayIpc handlers", () => {
       displayUrl: "http://127.0.0.1:8080/app",
       externalUrl: "http://127.0.0.1:8080/app/auth?token=token&next=%2Fapp",
     });
+  });
+
+  it("rotates embedded token when persisted token cannot be decrypted", async () => {
+    decryptTokenMock.mockImplementationOnce(() => {
+      throw new Error("Error while decrypting the ciphertext provided to safeStorage.decryptString.");
+    });
+
+    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
+
+    const windowStub = {
+      isDestroyed: () => false,
+      webContents: {
+        isDestroyed: () => false,
+        send: vi.fn(),
+      },
+    } as unknown as BrowserWindow;
+
+    registerGatewayIpc(windowStub);
+
+    const uiUrlsHandler = registeredHandlers.get("gateway:ui-urls");
+    expect(uiUrlsHandler).toBeDefined();
+
+    const urls = await uiUrlsHandler!({} as never);
+    expect(urls).toEqual({
+      embedUrl: "http://127.0.0.1:8080/app/auth?token=generated-token&next=%2Fapp",
+      displayUrl: "http://127.0.0.1:8080/app",
+      externalUrl: "http://127.0.0.1:8080/app/auth?token=generated-token&next=%2Fapp",
+    });
+    expect(generateTokenMock).toHaveBeenCalledTimes(1);
+    expect(encryptTokenMock).toHaveBeenCalledWith("generated-token");
+    expect(saveConfigMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        embedded: expect.objectContaining({
+          tokenRef: "enc:generated-token",
+        }),
+      }),
+    );
   });
 
   it("returns onboarding URL targets when requested", async () => {
