@@ -1,12 +1,29 @@
-import { copyFileSync, existsSync, mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import {
+  cpSync,
+  copyFileSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  unlinkSync,
+  rmSync,
+} from "node:fs";
+import { spawnSync } from "node:child_process";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import electronPath from "electron";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const desktopRoot = join(scriptDir, "..");
+const repoRoot = resolve(desktopRoot, "../..");
 
 const sourcePath = join(desktopRoot, "../../packages/gateway/dist/index.mjs");
-const targetPath = join(desktopRoot, "dist/gateway/index.mjs");
+const sourceMapPath = join(desktopRoot, "../../packages/gateway/dist/index.mjs.map");
+const migrationsSourceDir = join(desktopRoot, "../../packages/gateway/migrations");
+
+const targetDir = join(desktopRoot, "dist/gateway");
+const targetPath = join(targetDir, "index.mjs");
+const targetMapPath = join(targetDir, "index.mjs.map");
+const migrationsTargetDir = join(targetDir, "migrations");
 
 if (!existsSync(sourcePath)) {
   throw new Error(
@@ -14,7 +31,98 @@ if (!existsSync(sourcePath)) {
   );
 }
 
-mkdirSync(dirname(targetPath), { recursive: true });
+if (!existsSync(migrationsSourceDir)) {
+  throw new Error(`Gateway migrations directory not found at ${migrationsSourceDir}.`);
+}
+
+rmSync(targetDir, { recursive: true, force: true });
+mkdirSync(dirname(targetDir), { recursive: true });
+
+const pnpmCmd = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+const deploy = spawnSync(
+  pnpmCmd,
+  ["--filter", "@tyrum/gateway", "deploy", "--prod", targetDir],
+  { stdio: "inherit", cwd: repoRoot },
+);
+if (deploy.status !== 0) {
+  throw new Error(
+    `Failed to stage gateway dependencies (pnpm deploy exit code ${String(deploy.status)}).`,
+  );
+}
+
+// pnpm deploy may create workspace symlinks that are valid in-repo but broken
+// inside a packaged app bundle. Remove the known problematic link, but only
+// when it is actually a symlink (in some configurations it may be a directory).
+const problematicGatewayRef = join(
+  targetDir,
+  "node_modules/.pnpm/node_modules/@tyrum/gateway",
+);
+try {
+  if (lstatSync(problematicGatewayRef).isSymbolicLink()) {
+    // Use unlink() for symlinks so we never follow the link target.
+    unlinkSync(problematicGatewayRef);
+  }
+} catch (error) {
+  const code =
+    error && typeof error === "object" && "code" in error
+      ? /** @type {any} */ (error).code
+      : undefined;
+  if (code !== "ENOENT") throw error;
+}
+
+const electronTarget = (() => {
+  const proc = spawnSync(electronPath, ["-p", "process.versions.electron"], {
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (proc.status !== 0) {
+    const reason = proc.stderr?.trim() || proc.error?.message || "unknown error";
+    throw new Error(`Failed to determine Electron target version: ${reason}`);
+  }
+  const raw = proc.stdout.trim();
+  const version = raw.startsWith("v") ? raw.slice(1) : raw;
+  if (!version) {
+    throw new Error(`Failed to determine Electron Node target version (got: ${raw})`);
+  }
+  return version;
+})();
+
+const betterSqlite3Dir = join(targetDir, "node_modules/better-sqlite3");
+const prebuildInstallBin = join(betterSqlite3Dir, "node_modules/.bin/prebuild-install");
+
+// Prefer prebuilt binaries for Electron; fall back to node-gyp rebuild.
+const prebuildInstall = spawnSync(
+  process.platform === "win32" ? `${prebuildInstallBin}.cmd` : prebuildInstallBin,
+  ["--runtime", "electron", "--target", electronTarget, "--arch", process.arch, "--platform", process.platform, "--force"],
+  { cwd: betterSqlite3Dir, stdio: "inherit" },
+);
+if (prebuildInstall.status !== 0) {
+  const rebuild = spawnSync(
+    process.platform === "win32" ? "node-gyp.cmd" : "node-gyp",
+    [
+      "rebuild",
+      "--release",
+      `--target=${electronTarget}`,
+      `--arch=${process.arch}`,
+      "--dist-url=https://electronjs.org/headers",
+    ],
+    { cwd: betterSqlite3Dir, stdio: "inherit" },
+  );
+  if (rebuild.status !== 0) {
+    throw new Error(
+      `Failed to rebuild better-sqlite3 for Electron ${electronTarget} (exit code ${String(
+        rebuild.status,
+      )}).`,
+    );
+  }
+}
+
 copyFileSync(sourcePath, targetPath);
+if (existsSync(sourceMapPath)) {
+  copyFileSync(sourceMapPath, targetMapPath);
+}
+
+cpSync(migrationsSourceDir, migrationsTargetDir, { recursive: true });
 
 console.log(`Staged embedded gateway bundle: ${sourcePath} -> ${targetPath}`);
