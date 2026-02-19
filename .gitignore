@@ -74,3 +74,6 @@ web/.turbo/
 
 # Git worktrees
 .worktrees/
+
+# Desktop build artifacts
+apps/desktop/release/
