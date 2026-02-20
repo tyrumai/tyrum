@@ -2,8 +2,11 @@
 {{- if not (hasPrefix "postgres://" .Values.env.GATEWAY_DB_PATH) }}
 {{- fail "Split mode requires a PostgreSQL database. Please configure env.GATEWAY_DB_PATH with a postgres:// URI." }}
 {{- end }}
-{{- if and .Values.persistence.enabled (not .Values.persistence.existingClaim) }}
-{{- fail "Split mode requires an existing shared PVC (ReadWriteMany). Set persistence.existingClaim or disable persistence and configure S3." }}
+{{- if not .Values.persistence.enabled }}
+{{- fail "Split mode requires persistence.enabled=true for durable agent workspaces." }}
+{{- end }}
+{{- if not .Values.persistence.existingClaim }}
+{{- fail "Split mode requires an existing shared PVC (ReadWriteMany) for agent workspaces. Set persistence.existingClaim." }}
 {{- end }}
 apiVersion: apps/v1
 kind: Deployment
@@ -63,6 +66,13 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           {{- end }}
+          volumeMounts:
+            - name: tyrum-data
+              mountPath: {{ .Values.env.TYRUM_HOME | quote }}
+      volumes:
+        - name: tyrum-data
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim }}
 
 ---
 apiVersion: apps/v1
@@ -120,6 +130,13 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           {{- end }}
+          volumeMounts:
+            - name: tyrum-data
+              mountPath: {{ .Values.env.TYRUM_HOME | quote }}
+      volumes:
+        - name: tyrum-data
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim }}
 
 ---
 apiVersion: apps/v1
@@ -177,4 +194,11 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           {{- end }}
+          volumeMounts:
+            - name: tyrum-data
+              mountPath: {{ .Values.env.TYRUM_HOME | quote }}
+      volumes:
+        - name: tyrum-data
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim }}
 {{- end }}
