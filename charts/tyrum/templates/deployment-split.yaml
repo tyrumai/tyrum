@@ -19,8 +19,16 @@ spec:
         {{- include "tyrum.labels" . | nindent 8 }}
         app.kubernetes.io/component: edge
     spec:
+      {{- if .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- end }}
       containers:
         - name: gateway
+          {{- if .Values.containerSecurityContext }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          {{- end }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args: ["edge"]
@@ -82,8 +90,16 @@ spec:
         {{- include "tyrum.labels" . | nindent 8 }}
         app.kubernetes.io/component: worker
     spec:
+      {{- if .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- end }}
       containers:
         - name: gateway
+          {{- if .Values.containerSecurityContext }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          {{- end }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args: ["worker"]
@@ -142,8 +158,16 @@ spec:
         {{- include "tyrum.labels" . | nindent 8 }}
         app.kubernetes.io/component: scheduler
     spec:
+      {{- if .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- end }}
       containers:
         - name: gateway
+          {{- if .Values.containerSecurityContext }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          {{- end }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args: ["scheduler"]
@@ -181,4 +205,3 @@ spec:
             claimName: {{ default (printf "%s-data" (include "tyrum.fullname" .)) .Values.persistence.existingClaim }}
       {{- end }}
 {{- end }}
-

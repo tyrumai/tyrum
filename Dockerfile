@@ -27,6 +27,11 @@ ENV NODE_ENV=production
 
 EXPOSE 8080
 
+RUN groupadd --system --gid 10001 tyrum \
+  && useradd --system --uid 10001 --gid 10001 --create-home --home-dir /home/tyrum --shell /usr/sbin/nologin tyrum \
+  && install -d -m 0770 -o 10001 -g 10001 /var/lib/tyrum
+
+USER 10001:10001
+
 ENTRYPOINT ["node", "packages/gateway/dist/index.mjs"]
 CMD ["all"]
-

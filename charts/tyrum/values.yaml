@@ -44,6 +44,21 @@ persistence:
 
 resources: {}
 
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  runAsNonRoot: true
+
 split:
   edge:
     replicaCount: 1
@@ -51,4 +66,3 @@ split:
     replicaCount: 1
   scheduler:
     replicaCount: 1
-
