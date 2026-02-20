@@ -84,6 +84,7 @@ flowchart LR
 - [Messages and Sessions](./messages-sessions.md)
 - [Playbooks](./playbooks.md)
 - [Approvals](./approvals.md)
+- [Policy overrides (approve-always)](./policy-overrides.md)
 - [Secrets](./secrets.md)
 - [Provider Auth and Onboarding](./auth.md)
 - [Artifacts](./artifacts.md)
