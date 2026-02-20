@@ -1,7 +1,5 @@
 # Contracts
 
-Status:
-
 Contracts define the shapes and semantics of Tyrum interfaces. They are used to validate:
 
 - WebSocket protocol messages
@@ -11,7 +9,7 @@ Contracts define the shapes and semantics of Tyrum interfaces. They are used to 
 
 ## Contract formats
 
-Tyrum contracts are intended to be:
+Tyrum contracts are:
 
 - **Language-agnostic:** usable by clients in different languages.
 - **Versioned:** change-managed with compatibility rules.
@@ -19,34 +17,29 @@ Tyrum contracts are intended to be:
 
 JSON Schema is the default interchange format for contracts. Internally, contracts may also be represented in code (for example as typed schemas) and exported to JSON Schema for distribution.
 
-## Versioning rules (target)
+## Versioning rules
 
 - Backward-compatible changes (add optional fields, widen enums safely) stay within a major version.
-- While the protocol is still stabilizing, Tyrum may make in-place breaking changes within `tyrum-v1`.
-- Once the protocol is considered stable, breaking changes require a protocol major bump (for example `tyrum-v2`) and a clear migration path.
+- Breaking changes require a new major version for the affected contract family.
+
+For the WebSocket protocol:
+
+- The protocol major version is negotiated via the WebSocket subprotocol (for example `tyrum-v1`).
+- Peers advertise a `protocol_rev` during handshake for feature gating within the major version.
 
 ## Contract catalog
 
-This list will be filled as contracts stabilize:
+Core contract families include:
 
-- Keys/lanes: `TyrumKey`, `Lane`, `QueueMode` (`packages/schemas/src/keys.ts`)
-- Evidence: `ArtifactRef` (`packages/schemas/src/artifact.ts`)
-- Evidence: postconditions (`packages/schemas/src/postcondition.ts`)
-- Secrets: `SecretHandle`, `SecretStoreRequest`, `SecretResolveRequest/Response`, `SecretListResponse`, `SecretRevokeRequest/Response` (`packages/schemas/src/secret.ts`)
-- Approvals (domain): `Approval`, `ApprovalListRequest/Response`, `ApprovalResolveRequest/Response` (`packages/schemas/src/approval.ts`)
-- Execution engine (domain): `ExecutionJob`, `ExecutionRun`, `ExecutionStep`, `ExecutionAttempt` + status enums (`packages/schemas/src/execution.ts`)
-- Nodes/pairing (domain): `NodeIdentity`, `NodePairingRequest` (`packages/schemas/src/node.ts`)
-- Routing: `EventScope` (`packages/schemas/src/scope.ts`)
-- Protocol: base envelopes (`WsRequestEnvelope`, `WsResponseEnvelope`, `WsEventEnvelope`) (`packages/schemas/src/protocol.ts`)
-- Protocol: canonical typed union (`WsRequest`, `WsResponse`, `WsEvent`, `WsMessage`) (`packages/schemas/src/protocol.ts`)
-- Protocol: connect handshake (`WsConnectRequest` + typed connect response envelopes)
-- Protocol: heartbeat (`WsPingRequest` + typed ping response envelopes)
-- Protocol: capability execution (`WsTaskExecuteRequest` + typed task.execute response envelopes)
-- Protocol: approvals (`WsApprovalRequest`, `WsApprovalListRequest`, `WsApprovalResolveRequest` + typed response envelopes)
-- Protocol: plan updates (`WsPlanUpdateEvent`)
-- Protocol: error event (`WsErrorEvent`)
-- Protocol (target): workflow run/resume/cancel requests + responses
-- Tools: built-in tool schemas
-- Tools: workflow/playbook runtime tool schema (run/resume envelope)
-- Playbooks: workflow file schema (YAML/JSON) + validation rules
-- Plugins: plugin manifest schema
+- **Keys and lanes:** `TyrumKey`, `Lane`, `QueueMode` (`packages/schemas/src/keys.ts`)
+- **Execution:** `ExecutionJob`, `ExecutionRun`, `ExecutionStep`, `ExecutionAttempt` + status enums (`packages/schemas/src/execution.ts`)
+- **Approvals:** `Approval` + request/response envelopes (`packages/schemas/src/approval.ts`)
+- **Artifacts and postconditions:** `ArtifactRef` + postcondition contracts (`packages/schemas/src/artifact.ts`, `packages/schemas/src/postcondition.ts`)
+- **Secrets:** `SecretHandle` + provider request/response contracts (`packages/schemas/src/secret.ts`)
+- **Nodes and pairing:** node identity and pairing contracts (`packages/schemas/src/node.ts`)
+- **Policy:** `PolicyBundle` and policy decision outputs (`@tyrum/schemas`)
+- **Protocol envelopes:** request/response/event base envelopes and typed unions (`packages/schemas/src/protocol.ts`)
+- **Protocol operations:** handshake (`connect.init`, `connect.proof`), `ping`, `session.send`, `workflow.run|resume|cancel`, `approval.list|resolve`, `pairing.approve|deny`, `task.execute`
+- **Tools:** built-in tool schemas and the ToolRunner invocation envelope
+- **Playbooks:** workflow file schema (YAML/JSON) and compilation rules
+- **Plugins:** plugin manifests and registration surfaces

@@ -1,7 +1,5 @@
 # Approvals
 
-Status:
-
 Approvals are Tyrum’s durable mechanism for gating risky or side-effecting actions behind explicit operator consent. They are created by policy checks and by the execution engine when a workflow step requires confirmation.
 
 Approvals are **enforcement**, not prompt guidance.
@@ -31,7 +29,18 @@ Approvals are durable records in the StateStore and should behave correctly when
 - **Atomic resolution:** apply `pending → approved|denied|expired` transitions in a single durable write so double-submission is safe.
 - **At-least-once events:** `approval.requested` / `approval.resolved` events may be delivered more than once; clients should dedupe using event ids.
 
-## Approval request shape (conceptual)
+## Interfaces
+
+Approvals are exposed over:
+
+- WebSocket requests/responses plus server-push events (for real-time operator clients)
+- HTTP APIs (for automation and operational tooling)
+
+## Scoping
+
+Approvals are scoped to durable identifiers, including `approval_id` and execution scope (`run_id`, `step_id`, `attempt_id`) plus agent/session identifiers where applicable.
+
+## Approval request shape
 
 An approval request should be explicit about impact and traceability:
 
@@ -63,7 +72,7 @@ When a workflow step requires approval:
 - An approval request is created with a **resume token** referencing the paused state.
 - On approval resolution, the execution engine resumes/cancels the run **without re-running** completed steps.
 
-## Events (conceptual)
+## Events
 
 Approvals should be observable via gateway-emitted events:
 
@@ -81,4 +90,3 @@ The control panel should expose:
 - Approval details (prompt, preview, linked evidence/artifacts)
 - One-tap approve/deny with clear consequences
 - Deep links from notifications into the approval detail view
-

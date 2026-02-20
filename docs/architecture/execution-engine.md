@@ -1,7 +1,5 @@
 # Execution engine
 
-Status:
-
 The execution engine is the gateway subsystem responsible for turning a plan or workflow into **resilient, auditable execution**. It is where reliability guarantees live: retries, idempotency, budgets/timeouts, pause/resume, and evidence capture.
 
 ## Why it exists
@@ -23,6 +21,7 @@ LLMs are good at planning, but they are a poor place to host the control plane f
 - **Budgets and timeouts:** enforce cost/time ceilings per run and per step (including model budgets where applicable).
 - **Concurrency limits:** limit parallelism per agent, per lane, per capability provider, and globally.
 - **Evidence and verification:** capture artifacts and validate postconditions (required for state-changing steps when feasible).
+- **Rollback metadata:** store human-readable rollback hints and optional structured compensation actions (always approval-gated).
 - **Auditability:** emit events for run/step lifecycle and persist a run log suitable for troubleshooting and export.
 
 ## Distributed execution (workers)
@@ -35,6 +34,14 @@ Cluster-safe execution typically requires:
 - **Idempotency:** side-effecting steps define `idempotency_key` semantics so retries are safe under at-least-once execution.
 - **Lane serialization:** workers acquire a distributed lock/lease keyed by `(session_key, lane)` before executing steps that must be serialized.
 - **Durable outcomes:** attempt results, artifacts, and postcondition evaluations are persisted before emitting “completed” events.
+
+Claimable work items carry explicit lease fields (for example `lease_owner` and `lease_expires_at`). Claims are atomic updates, leases are renewed periodically, and takeover occurs safely on expiry.
+
+Lane serialization uses explicit lane lease rows keyed by `(session_key, lane)` with the same expiry/renew/takeover behavior as work leases.
+
+Idempotency is durable dedupe with cached outcomes: when an executor observes a duplicate `(scope, kind, idempotency_key)`, it returns the stored outcome instead of repeating the side effect.
+
+Retry policy is per-step with conservative defaults. Automatic retries apply only when idempotency semantics are enforced for the step.
 
 ## Workspace-backed execution (ToolRunner)
 
@@ -77,6 +84,8 @@ When a run reaches a step that requires approval (or takeover), the engine:
 3. Returns/emits a **resume token** that references the paused state.
 4. Resumes only after the approval is resolved (approved/denied/expired).
 
+Resume tokens are opaque identifiers (random ids) that map to paused-state rows in the StateStore. Tokens support expiry and revocation.
+
 ## Evidence + postconditions (hard rule)
 
 For **state-changing** steps, a postcondition should be defined whenever a verification check is feasible. The engine is responsible for executing and evaluating the postcondition and storing evidence artifacts.
@@ -86,7 +95,11 @@ If a step cannot be verified automatically, the engine must:
 - Mark the outcome as **unverifiable** (not “done”), and
 - Escalate to the operator (approval/takeover) before proceeding with further dependent side effects.
 
-## Topology (conceptual)
+Unverifiable outcomes are represented as a pause with stored reports describing missing evidence; they are not separate terminal statuses.
+
+Postconditions are typed assertion kinds (not arbitrary expression evaluation). The core set stays small and explicit; extensions are registered via plugins/connectors and validated by contracts.
+
+## Topology
 
 ```mermaid
 flowchart TB
@@ -107,7 +120,7 @@ flowchart TB
   ToolRunner --> WorkspaceFs["WorkspaceFs (TYRUM_HOME)"]
 ```
 
-## Data model sketch (conceptual)
+## Data model
 
 - `jobs(id, created_at, trigger_type, trigger_key, agent_id, lane, status, input, ...)`
 - `runs(id, job_id, started_at, finished_at, status, attempt, budgets, ...)`
@@ -115,6 +128,12 @@ flowchart TB
 - `run_step_attempts(id, run_step_id, attempt, started_at, finished_at, status, result, error, artifacts[])`
 
 Exact schemas belong in `@tyrum/schemas` and exported contracts.
+
+## Observability and cost
+
+- Structured logs include stable identifiers: `request_id`, `event_id`, `job_id`, `run_id`, `step_id`, `attempt_id`, and `approval_id`.
+- Cost attribution (model tokens, executor time) is persisted per run/step/attempt so budgets and approvals can be evaluated and UIs can aggregate accurately.
+- Deployments export tracing and metrics via OpenTelemetry.
 
 ## Client/UI expectations
 
@@ -124,4 +143,3 @@ Operator clients should be able to:
 - Inspect per-step evidence (artifacts) and postcondition results.
 - Resolve approvals and resume/cancel paused runs.
 - Request safe retries or rollbacks when supported.
-

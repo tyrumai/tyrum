@@ -1,10 +1,8 @@
 # Workspace
 
-Status:
-
 A workspace is the agent's working directory boundary for tools that read and write files. Workspaces make file operations explicit, containable, and **durable across runs**.
 
-## Properties (target)
+## Properties
 
 - Each agent has a single workspace directory (identified by a `WorkspaceId`).
 - Tools operate relative to that workspace by default.

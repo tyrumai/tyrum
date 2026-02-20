@@ -1,7 +1,5 @@
 # Playbooks (deterministic workflows)
 
-Status:
-
 A playbook is a **durable, reviewable workflow artifact** that the execution engine can run deterministically. Playbooks exist to make multi-step work:
 
 - **Composable:** a single run request executes many steps
@@ -21,7 +19,7 @@ The playbook runtime exposes a small contract that supports two operations:
 - **Run:** start a workflow.
 - **Resume:** continue a paused workflow using a resume token.
 
-### Input shape (conceptual)
+### Input shape
 
 ```json
 {
@@ -44,7 +42,7 @@ Resume:
 }
 ```
 
-### Output envelope (conceptual)
+### Output envelope
 
 The runtime returns an envelope with a **status**:
 
@@ -147,4 +145,3 @@ Some workflows need a “judgment” step (classify, extract, draft) that uses a
 - outputs should be validated when a schema is provided
 
 This supports advanced workflows while keeping safety enforceable outside prompts.
-

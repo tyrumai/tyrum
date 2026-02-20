@@ -1,12 +1,8 @@
 # Scaling and High Availability
 
-Status:
+Tyrum runs as a single-host local installation or as a horizontally scalable deployment with replicated gateway edges, workers, and lease-coordinated schedulers backed by HA Postgres.
 
-This document describes how Tyrum scales from a single-machine install (for example a desktop app with an embedded gateway and a local SQLite database) to a horizontally scalable deployment (replicated gateway edge + workers + lease-based schedulers backed by HA Postgres).
-
-The intent is a **single architecture** with a fixed set of logical components that can be co-located or split across processes/hosts as deployment needs grow.
-
-A core goal is that a single-host deployment behaves like “the cluster, but with 1 of each”: the same coordination primitives (leases and the event backplane) exist in all deployments, and the single-host case is simply uncontested and often implemented in-process.
+The system uses one logical architecture in all deployments. Components may be co-located or split across processes/hosts; coordination primitives (leases and the event backplane) are always present so a single-host deployment behaves like a cluster with one replica.
 
 ## Hard invariants
 
@@ -31,14 +27,40 @@ These are the logical building blocks that appear in all deployments:
 - **Event backplane:** a cross-instance delivery mechanism for events/commands in clustered deployments.
 - **Secret provider:** resolves secret handles to raw values in trusted execution contexts.
 
-## StateStore (SQLite → HA Postgres)
+## Runtime roles
 
-Tyrum is local-first by default and can use SQLite for a single-machine install. Horizontal scaling and HA require a shared StateStore with stronger concurrency and durability semantics (typically Postgres).
+Containerized deployments run three long-lived roles:
 
-- **Local default:** SQLite file, single host.
-- **Scalable/HA:** HA Postgres cluster (3-node) or a Postgres-compatible managed database platform.
+- **`gateway-edge`**: WebSocket/HTTP edge, auth, contract validation, routing, and the execution engine control plane.
+- **`worker`**: claims work and performs step execution (side effects) via tools/nodes/MCP.
+- **`scheduler`**: cron/watchers/heartbeat triggers coordinated by DB leases.
 
-The most important portability discipline is: **treat persisted schemas as contracts**. If you want SQLite and Postgres to be swappable backends, schema changes must be versioned and tested against both backends.
+### Packaging
+
+Tyrum is distributed as container images that run any of the runtime roles via entrypoints/flags. Reference deployment forms include:
+
+- `docker-compose` for single-host installs
+- Helm for clustered installs
+
+## StateStore
+
+The StateStore is the system of record for durable state and logs.
+
+- **Single host:** SQLite file on local disk.
+- **Multi-instance:** HA Postgres cluster (or Postgres-compatible managed database).
+
+Persisted schemas are treated as contracts. Schema changes are versioned and validated against all supported backends.
+
+Split deployments run on Postgres.
+
+Schema change scripts are maintained per backend (SQLite and Postgres) while keeping core tables aligned (sessions, approvals, execution, outbox, routing directory, audit).
+
+### Snapshot export/import
+
+The gateway supports snapshot export/import for the durable tables required to reconstruct sessions and execution:
+
+- exports are consistent (transactional) and include the minimal indexes needed for audit and replay
+- imports preserve stable identifiers (`session_key`, `run_id`, `step_id`, `attempt_id`, `approval_id`, `artifact_id`) and hashes
 
 ## WebSocket-first event delivery (the “WS reality”)
 
@@ -51,14 +73,19 @@ A WebSocket connection is a single long-lived TCP connection. Practically that m
 
 This is not a Tyrum-specific limitation; it is a property of long-lived connections. To keep behavior consistent when scaling up, deployments route updates through an **event backplane** abstraction: in a single-host deployment this may be in-process, while in multi-instance deployments it becomes a shared backplane.
 
-### Event backplane options (capabilities, not mandates)
+### Event backplane
 
-The backplane is a logical requirement; it can be implemented in several ways depending on scale:
+The backplane uses a durable outbox table in the StateStore:
 
-- **In-process backplane:** local pub/sub when components are co-located (replica count = 1). Lowest operational overhead while keeping the same eventing model.
-- **DB outbox + polling:** write events to an outbox table in the StateStore; gateway edges poll and deliver. Simple, durable, and a good starting point.
-- **Postgres `LISTEN/NOTIFY`:** useful for low/medium scale real-time signaling; still typically paired with an outbox for durability.
-- **External pub/sub (Redis/NATS/Kafka):** higher throughput and lower latency; commonly paired with an outbox for replay/recovery.
+- Producers append events/commands to the outbox.
+- Gateway edges poll and deliver outbox items to their connected peers.
+- Consumers treat delivery as at-least-once and dedupe using ids.
+
+Deployments may use low-latency signals (for example Postgres `LISTEN/NOTIFY` or external pub/sub) to reduce polling latency. The outbox remains the durable source of truth and replay log.
+
+### WebSocket routing (connection directory)
+
+Each gateway edge instance heartbeats its active connections (with TTL) into the StateStore, including identity metadata (role, `device_id`) and capability summaries where relevant. Directed dispatch uses the directory to enqueue outbox commands to the owning edge for a given peer.
 
 ## Workers: claim/lease + idempotency + lane locks
 
@@ -95,10 +122,7 @@ To keep the single-host and cluster behaviors aligned while avoiding RWX require
 - **Only ToolRunner mounts the workspace filesystem.**
 - Gateway edge, schedulers, and control-plane workers are otherwise **stateless with respect to workspace POSIX volumes**.
 
-This enables a growth path where:
-
-- A single-host deployment uses a **local ToolRunner subprocess** against the same `TYRUM_HOME`.
-- A clustered deployment uses **sandbox ToolRunner jobs/pods** that mount a per-workspace PVC (RWO) and enforce **single-writer** semantics via StateStore-backed leases/claims.
+ToolRunner runs as a **local subprocess** in single-host deployments and as a **sandboxed job/pod** in clustered deployments. Both forms mount the workspace at `TYRUM_HOME`, execute workspace-backed tools, persist outcomes/artifacts to the StateStore, and exit.
 
 ## Deployment topologies
 
@@ -106,7 +130,7 @@ These are examples of deploying the same logical components in different shapes.
 
 ### Single host (co-located)
 
-All logical components run on one machine, and may run in a single OS process for simplicity. The backplane and leases still exist; they are simply uncontested and often implemented in-process.
+All logical components run on one machine and may run in a single OS process. The backplane and leases are still used; with one replica they are uncontested and can run in-process.
 
 ```mermaid
 flowchart TB
@@ -188,3 +212,12 @@ flowchart TB
   TR2 <--> StateStore
 ```
 
+## Failure and failover validation
+
+Coordination primitives (leases, outbox delivery, approvals, and lane serialization) are exercised by integration tests with an explicit failure matrix, including:
+
+- edge crash/restart while clients are connected
+- worker crash/restart during an in-flight attempt (lease expiry/takeover)
+- scheduler crash/restart (no double-fires; leases transfer)
+- database transient failures and restart/failover behavior
+- network partitions between components (edge↔DB, worker↔DB)

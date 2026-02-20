@@ -1,15 +1,13 @@
 # Events
 
-Status:
-
 Events are gateway-emitted, server-push messages delivered to connected clients (and sometimes nodes). Events make the system observable and keep operator interfaces in sync without polling.
 
 The canonical wire shape lives in `@tyrum/schemas` (`packages/schemas/src/protocol.ts`).
 
-## Event envelope (conceptual)
+## Event envelope
 
 - `event_id`: unique id for dedupe.
-- `type`: event name (for example `plan.update`, `run.updated`, `approval.resolved`).
+- `type`: event name (for example `run.updated`, `approval.requested`, `artifact.created`).
 - `occurred_at`: timestamp.
 - `scope`: routing scope (session, device, or global).
 - `payload`: typed fields defined by a contract.

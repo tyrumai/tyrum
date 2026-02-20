@@ -1,16 +1,18 @@
 # Identity
 
-Status:
-
 Identity is how Tyrum names and scopes authority. Several identities exist in the system, each with a different purpose.
 
-## Identity types (target)
+## Identity types
 
 - **User identity:** the human operator(s) (single-user by default).
 - **Agent identity:** which agent a session belongs to.
 - **Client identity:** which operator device is connected (`role: client`).
 - **Node identity:** which capability provider device is connected (`role: node`).
 - **Channel identity:** which connector/account a message came from.
+
+## Device identities
+
+Client and node identities are device identities derived from a long-lived signing keypair (Ed25519). The public key is the canonical identity material. `device_id` is a deterministic identifier derived from the public key (for example `base32(sha256(pubkey))` with a stable prefix).
 
 ## Why identity matters
 

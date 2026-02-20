@@ -1,13 +1,11 @@
 # Slash Commands
 
-Status:
-
 Slash commands are a client-facing command surface for common actions. Clients translate commands into typed requests to the gateway.
 
 ## Example commands
 
 - `/new` — start a new session or reset context (depending on configuration)
-- `/status` — show current agent/runtime status
+- `/status` — show agent/runtime status
 - `/context list` — list available context sources
 - `/context detail` — show details for a specific context source
 - `/usage tokens` — show token usage and cost telemetry (when available)
