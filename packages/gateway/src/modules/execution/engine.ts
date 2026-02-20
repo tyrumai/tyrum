@@ -341,7 +341,7 @@ export class ExecutionEngine {
         )
         .run(run.job_id);
 
-      // Find next queued step.
+      // Find next incomplete step.
       const next = this.db
         .prepare(
           `SELECT
@@ -354,73 +354,17 @@ export class ExecutionEngine {
              max_attempts,
              timeout_ms
            FROM execution_steps
-           WHERE run_id = ? AND status = 'queued'
+           WHERE run_id = ? AND status IN ('queued', 'running', 'paused')
            ORDER BY step_index ASC
            LIMIT 1`,
         )
         .get(run.run_id) as StepRow | undefined;
 
       if (!next) {
-        // Stale attempt takeover: if a prior worker crashed mid-step,
-        // cancel the stale attempt and re-queue the step.
-        const runningSteps = this.db
-          .prepare(
-            `SELECT step_id
-             FROM execution_steps
-             WHERE run_id = ? AND status = 'running'
-             ORDER BY step_index ASC
-             LIMIT 5`,
-          )
-          .all(run.run_id) as Array<{ step_id: string }>;
-
-        let didRecover = false;
-        for (const step of runningSteps) {
-          const latestAttempt = this.db
-            .prepare(
-              `SELECT attempt_id, lease_expires_at_ms
-               FROM execution_attempts
-               WHERE step_id = ? AND status = 'running'
-               ORDER BY attempt DESC
-               LIMIT 1`,
-            )
-            .get(step.step_id) as
-            | { attempt_id: string; lease_expires_at_ms: number | null }
-            | undefined;
-
-          const expiresAtMs = latestAttempt?.lease_expires_at_ms ?? 0;
-          if (latestAttempt && expiresAtMs <= clock.nowMs) {
-            this.db
-              .prepare(
-                `UPDATE execution_attempts
-                 SET status = 'cancelled', finished_at = ?, error = ?
-                 WHERE attempt_id = ? AND status = 'running'`,
-              )
-              .run(clock.nowIso, "lease expired; takeover", latestAttempt.attempt_id);
-
-            this.db
-              .prepare(
-                `UPDATE execution_steps
-                 SET status = 'queued'
-                 WHERE step_id = ? AND status = 'running'`,
-              )
-              .run(step.step_id);
-            didRecover = true;
-          }
-        }
-
         // Finalize run if all steps are terminal.
         const statuses = this.db
           .prepare("SELECT status FROM execution_steps WHERE run_id = ?")
           .all(run.run_id) as Array<{ status: string }>;
-
-        const hasQueuedOrRunning = statuses.some(
-          (s) => s.status === "queued" || s.status === "running",
-        );
-        const hasPaused = statuses.some((s) => s.status === "paused");
-        if (hasQueuedOrRunning || hasPaused) {
-          // Nothing we can do in this tick.
-          return didRecover ? { kind: "recovered" as const } : { kind: "noop" as const };
-        }
 
         const failed = statuses.some(
           (s) => s.status === "failed" || s.status === "cancelled",
@@ -449,6 +393,48 @@ export class ExecutionEngine {
         });
 
         return { kind: "finalized" as const };
+      }
+
+      if (next.status === "paused") {
+        return { kind: "noop" as const };
+      }
+
+      if (next.status === "running") {
+        // Stale attempt takeover: if a prior worker crashed mid-step,
+        // cancel the stale attempt and re-queue the step.
+        const latestAttempt = this.db
+          .prepare(
+            `SELECT attempt_id, lease_expires_at_ms
+             FROM execution_attempts
+             WHERE step_id = ? AND status = 'running'
+             ORDER BY attempt DESC
+             LIMIT 1`,
+          )
+          .get(next.step_id) as
+          | { attempt_id: string; lease_expires_at_ms: number | null }
+          | undefined;
+
+        const expiresAtMs = latestAttempt?.lease_expires_at_ms ?? 0;
+        if (latestAttempt && expiresAtMs <= clock.nowMs) {
+          this.db
+            .prepare(
+              `UPDATE execution_attempts
+               SET status = 'cancelled', finished_at = ?, error = ?
+               WHERE attempt_id = ? AND status = 'running'`,
+            )
+            .run(clock.nowIso, "lease expired; takeover", latestAttempt.attempt_id);
+
+          this.db
+            .prepare(
+              `UPDATE execution_steps
+               SET status = 'queued'
+               WHERE step_id = ? AND status = 'running'`,
+            )
+            .run(next.step_id);
+          return { kind: "recovered" as const };
+        }
+
+        return { kind: "noop" as const };
       }
 
       const attemptAgg = this.db
