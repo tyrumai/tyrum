@@ -25,6 +25,9 @@ import { OutboxPoller } from "./modules/backplane/outbox-poller.js";
 import { ConnectionManager } from "./ws/connection-manager.js";
 import { createWsHandler } from "./routes/ws.js";
 import { maybeStartOtel } from "./modules/observability/otel.js";
+import { ExecutionEngine, type StepExecutor as ExecutionStepExecutor } from "./modules/execution/engine.js";
+import { createLocalStepExecutor } from "./modules/execution/local-step-executor.js";
+import { startExecutionWorkerLoop } from "./modules/execution/worker-loop.js";
 
 export const VERSION = "0.1.0";
 
@@ -461,13 +464,31 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     console.log(`Tyrum gateway v${VERSION} started in role '${role}'.`);
   }
 
-  // Keep worker role alive until it has a real execution loop.
-  const workerKeepalive =
-    role === "worker"
-      ? setInterval(() => {
-          // intentionally empty
-        }, 60_000)
-      : undefined;
+  const shouldRunWorker = role === "all" || role === "worker";
+  const workerLoop = shouldRunWorker
+    ? (() => {
+        const engine = new ExecutionEngine({
+          db: container.db,
+          redactionEngine: container.redactionEngine,
+          logger,
+        });
+
+        const executor = createLocalStepExecutor({
+          tyrumHome,
+          secretProvider,
+          redactionEngine: container.redactionEngine,
+          artifactStore: container.artifactStore,
+          logger,
+        }) satisfies ExecutionStepExecutor;
+
+        return startExecutionWorkerLoop({
+          engine,
+          workerId: instanceId,
+          executor,
+          logger,
+        });
+      })()
+    : undefined;
 
   let shuttingDown = false;
   const shutdown = (signal: string): void => {
@@ -504,17 +525,16 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     container.watcherProcessor.stop();
     watcherScheduler?.stop();
     outboxPoller?.stop();
+    workerLoop?.stop();
 
     Promise.allSettled([
       closeServer,
       closeWss,
       agentRuntime?.shutdown() ?? Promise.resolve(),
       otel.shutdown(),
+      workerLoop?.done ?? Promise.resolve(),
     ])
       .finally(() => {
-        if (workerKeepalive) {
-          clearInterval(workerKeepalive);
-        }
         clearTimeout(hardExitTimer);
         try {
           container.db.close();

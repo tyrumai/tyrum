@@ -1,7 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { once } from "node:events";
-import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { closeSync, existsSync, mkdtempSync, openSync, rmSync, statSync, unlinkSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -15,6 +15,7 @@ const GATEWAY_ENTRYPOINT = resolve(PACKAGE_ROOT, "dist/index.mjs");
 const GATEWAY_MIGRATIONS_DIR = resolve(PACKAGE_ROOT, "migrations/sqlite");
 const SCHEMAS_DIST = resolve(REPO_ROOT, "packages/schemas/dist/index.mjs");
 const GATEWAY_SRC_ENTRYPOINT = resolve(PACKAGE_ROOT, "src/index.ts");
+const GATEWAY_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
@@ -26,6 +27,39 @@ function pnpmCommand(): string {
 
 function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function acquireGatewayBuildLock(timeoutMs = 60_000): () => void {
+  const startedAt = Date.now();
+  for (;;) {
+    try {
+      const fd = openSync(GATEWAY_BUILD_LOCK, "wx");
+      return () => {
+        try {
+          closeSync(fd);
+        } catch {
+          // ignore
+        }
+        try {
+          unlinkSync(GATEWAY_BUILD_LOCK);
+        } catch {
+          // ignore
+        }
+      };
+    } catch (err) {
+      const code = err && typeof err === "object" ? (err as { code?: string }).code : undefined;
+      if (code !== "EEXIST") {
+        throw err;
+      }
+
+      if (Date.now() - startedAt > timeoutMs) {
+        throw new Error(
+          `Timed out waiting for gateway build lock (${timeoutMs}ms): ${GATEWAY_BUILD_LOCK}`,
+        );
+      }
+      sleepSync(200);
+    }
+  }
 }
 
 function formatBuildFailure(
@@ -180,52 +214,57 @@ describe("gateway startup process", () => {
     "starts the real gateway and serves /healthz",
     { timeout: 60_000 },
     async () => {
-      ensureGatewayBuild();
-
-      const port = await findAvailablePort();
-      const tempRoot = mkdtempSync(join(tmpdir(), "tyrum-gateway-startup-"));
-      const tyrumHome = join(tempRoot, ".tyrum");
-      const dbPath = join(tempRoot, "gateway.db");
-
-      let stdout = "";
-      let stderr = "";
-
-      const child = spawn(process.execPath, [GATEWAY_ENTRYPOINT, "start"], {
-        cwd: REPO_ROOT,
-        env: {
-          ...process.env,
-          GATEWAY_HOST: "127.0.0.1",
-          GATEWAY_PORT: String(port),
-          GATEWAY_DB_PATH: dbPath,
-          GATEWAY_MIGRATIONS_DIR,
-          TYRUM_HOME: tyrumHome,
-          TYRUM_AGENT_ENABLED: "0",
-        },
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-
-      child.stdout.setEncoding("utf8");
-      child.stderr.setEncoding("utf8");
-      child.stdout.on("data", (chunk: string) => {
-        stdout += chunk;
-      });
-      child.stderr.on("data", (chunk: string) => {
-        stderr += chunk;
-      });
-
-      const output = () => `--- stdout ---\n${stdout}\n--- stderr ---\n${stderr}`;
-
+      const releaseBuildLock = acquireGatewayBuildLock();
       try {
-        const healthUrl = `http://127.0.0.1:${port}/healthz`;
-        await waitForGatewayHealth(healthUrl, child, output);
+        ensureGatewayBuild();
 
-        const healthResponse = await fetch(healthUrl);
-        expect(healthResponse.status).toBe(200);
-        const healthBody = (await healthResponse.json()) as { status: string };
-        expect(healthBody.status).toBe("ok");
+        const port = await findAvailablePort();
+        const tempRoot = mkdtempSync(join(tmpdir(), "tyrum-gateway-startup-"));
+        const tyrumHome = join(tempRoot, ".tyrum");
+        const dbPath = join(tempRoot, "gateway.db");
+
+        let stdout = "";
+        let stderr = "";
+
+        const child = spawn(process.execPath, [GATEWAY_ENTRYPOINT, "start"], {
+          cwd: REPO_ROOT,
+          env: {
+            ...process.env,
+            GATEWAY_HOST: "127.0.0.1",
+            GATEWAY_PORT: String(port),
+            GATEWAY_DB_PATH: dbPath,
+            GATEWAY_MIGRATIONS_DIR,
+            TYRUM_HOME: tyrumHome,
+            TYRUM_AGENT_ENABLED: "0",
+          },
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+
+        child.stdout.setEncoding("utf8");
+        child.stderr.setEncoding("utf8");
+        child.stdout.on("data", (chunk: string) => {
+          stdout += chunk;
+        });
+        child.stderr.on("data", (chunk: string) => {
+          stderr += chunk;
+        });
+
+        const output = () => `--- stdout ---\n${stdout}\n--- stderr ---\n${stderr}`;
+
+        try {
+          const healthUrl = `http://127.0.0.1:${port}/healthz`;
+          await waitForGatewayHealth(healthUrl, child, output);
+
+          const healthResponse = await fetch(healthUrl);
+          expect(healthResponse.status).toBe(200);
+          const healthBody = (await healthResponse.json()) as { status: string };
+          expect(healthBody.status).toBe("ok");
+        } finally {
+          await stopChildProcess(child);
+          rmSync(tempRoot, { recursive: true, force: true });
+        }
       } finally {
-        await stopChildProcess(child);
-        rmSync(tempRoot, { recursive: true, force: true });
+        releaseBuildLock();
       }
     },
   );

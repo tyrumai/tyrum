@@ -1,7 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { once } from "node:events";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, mkdirSync, mkdtempSync, openSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -13,6 +13,7 @@ const REPO_ROOT = resolve(__dirname, "../../../../");
 const DESKTOP_MAIN_ENTRYPOINT = resolve(REPO_ROOT, "apps/desktop/dist/main/index.mjs");
 const ELECTRON_BIN = resolve(REPO_ROOT, "apps/desktop/node_modules/.bin/electron");
 const ELECTRON_BIN_WINDOWS = resolve(REPO_ROOT, "apps/desktop/node_modules/.bin/electron.cmd");
+const GATEWAY_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
 
 interface ElectronProbeResult {
   available: boolean;
@@ -58,6 +59,43 @@ interface DesktopConfigShape {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
+}
+
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function acquireGatewayBuildLock(timeoutMs = 120_000): () => void {
+  const startedAt = Date.now();
+  for (;;) {
+    try {
+      const fd = openSync(GATEWAY_BUILD_LOCK, "wx");
+      return () => {
+        try {
+          closeSync(fd);
+        } catch {
+          // ignore
+        }
+        try {
+          unlinkSync(GATEWAY_BUILD_LOCK);
+        } catch {
+          // ignore
+        }
+      };
+    } catch (err) {
+      const code = err && typeof err === "object" ? (err as { code?: string }).code : undefined;
+      if (code !== "EEXIST") {
+        throw err;
+      }
+
+      if (Date.now() - startedAt > timeoutMs) {
+        throw new Error(
+          `Timed out waiting for gateway build lock (${timeoutMs}ms): ${GATEWAY_BUILD_LOCK}`,
+        );
+      }
+      sleepSync(200);
+    }
+  }
 }
 
 function killProcessGroup(pid: number, signal: NodeJS.Signals): void {
@@ -312,7 +350,12 @@ describe("desktop full Electron process smoke", () => {
     "launches desktop main process and starts embedded gateway",
     { timeout: 120_000 },
     async () => {
-      ensureBuildArtifacts();
+      const releaseBuildLock = acquireGatewayBuildLock();
+      try {
+        ensureBuildArtifacts();
+      } finally {
+        releaseBuildLock();
+      }
 
       const port = await findAvailablePort();
       const tempRoot = mkdtempSync(join(tmpdir(), "tyrum-electron-smoke-"));
