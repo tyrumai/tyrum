@@ -5,11 +5,11 @@ describe("toErrorMessage", () => {
   it("strips Electron IPC wrapper prefixes", () => {
     const message = toErrorMessage(
       new Error(
-        "Error invoking remote method 'gateway:start': Error: listen EADDRINUSE: address already in use 127.0.0.1:8080",
+        "Error invoking remote method 'gateway:start': Error: listen EADDRINUSE: address already in use 127.0.0.1:8788",
       ),
     );
     expect(message).toBe(
-      "listen EADDRINUSE: address already in use 127.0.0.1:8080",
+      "listen EADDRINUSE: address already in use 127.0.0.1:8788",
     );
   });
 

@@ -15,7 +15,7 @@ Use this when Tyrum needs to run on a different machine than your local workstat
 Example:
 
 ```bash
-GATEWAY_HOST=0.0.0.0 GATEWAY_PORT=8080 tyrum-gateway
+GATEWAY_HOST=0.0.0.0 GATEWAY_PORT=8788 tyrum-gateway
 ```
 
 ## Security expectations

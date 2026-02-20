@@ -227,7 +227,7 @@ function resolveModelBaseUrl(config: AgentConfigT): string {
   const port =
     process.env["GATEWAY_PORT"]?.trim() ||
     process.env["PORT"]?.trim() ||
-    "8080";
+    "8788";
 
   // Binding addresses like 0.0.0.0 / :: are not connectable as clients.
   const connectHost =

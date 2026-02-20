@@ -118,7 +118,7 @@ export function Overview() {
       const mode = (c?.["mode"] as string) ?? "embedded";
       const embedded = c?.["embedded"] as Record<string, unknown> | undefined;
       const port =
-        typeof embedded?.["port"] === "number" ? (embedded["port"] as number) : 8080;
+        typeof embedded?.["port"] === "number" ? (embedded["port"] as number) : 8788;
       const capabilities: string[] = [];
       const caps = c?.["capabilities"] as Record<string, boolean> | undefined;
       if (caps) {
@@ -165,7 +165,7 @@ export function Overview() {
     if (!api || busy) return;
     setBusy(true);
     setGatewayError(null);
-    const port = status.port > 0 ? status.port : 8080;
+    const port = status.port > 0 ? status.port : 8788;
     try {
       await api.setConfig({
         mode: "embedded",

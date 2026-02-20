@@ -78,12 +78,12 @@ See `docs/install.md` for full details, version pinning, and update commands.
 5. **Run checks:** `pnpm typecheck && pnpm test && pnpm lint`
 6. **Start the gateway:** `pnpm --filter @tyrum/gateway start`
    - To enable singleton agent routes (`/agent/status`, `/agent/turn`), set `TYRUM_AGENT_ENABLED=1`.
-7. **Open the integrated web app:** `http://127.0.0.1:8080/app`
+7. **Open the integrated web app:** `http://127.0.0.1:8788/app`
 
 ### Localhost Safety Defaults
 
 - `GATEWAY_HOST` defaults to `127.0.0.1`.
-- `GATEWAY_PORT` defaults to `8080`.
+- `GATEWAY_PORT` defaults to `8788`.
 - Gateway auth token is required on localhost and non-local interfaces (`GATEWAY_TOKEN` env or `${TYRUM_HOME}/.admin-token`, auto-generated if missing).
 - The gateway serves the web UI directly at `/app` and supports WebSocket upgrades on `/ws`.
 
@@ -99,7 +99,7 @@ See `docs/install.md` for full details, version pinning, and update commands.
 | Build all packages | `pnpm build` |
 | Start gateway | `pnpm --filter @tyrum/gateway start` |
 | Start gateway + agent runtime | `TYRUM_AGENT_ENABLED=1 pnpm --filter @tyrum/gateway start` |
-| Open integrated app | `http://127.0.0.1:8080/app` |
+| Open integrated app | `http://127.0.0.1:8788/app` |
 
 ## Telegram Bot Setup
 

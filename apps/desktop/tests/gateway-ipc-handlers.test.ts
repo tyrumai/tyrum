@@ -18,9 +18,9 @@ const {
   generateTokenMock: vi.fn(() => "generated-token"),
   encryptTokenMock: vi.fn((token: string) => `enc:${token}`),
   testState: {
-    port: 8080,
+    port: 8788,
     mode: "embedded" as "embedded" | "remote",
-    remoteWsUrl: "ws://127.0.0.1:8080/ws",
+    remoteWsUrl: "ws://127.0.0.1:8788/ws",
   },
 }));
 
@@ -77,9 +77,9 @@ vi.mock("../src/main/gateway-bin-path.js", () => ({
 describe("registerGatewayIpc handlers", () => {
   beforeEach(() => {
     vi.resetModules();
-    testState.port = 8080;
+    testState.port = 8788;
     testState.mode = "embedded";
-    testState.remoteWsUrl = "ws://127.0.0.1:8080/ws";
+    testState.remoteWsUrl = "ws://127.0.0.1:8788/ws";
     saveConfigMock.mockReset();
     decryptTokenMock.mockReset();
     decryptTokenMock.mockImplementation(() => "token");
@@ -118,7 +118,7 @@ describe("registerGatewayIpc handlers", () => {
     const startResult = await startHandler!({} as never);
     expect(startResult).toEqual({
       status: "running",
-      port: 8080,
+      port: 8788,
     });
 
     // Simulate elapsed time + tab remount where the renderer asks for a fresh status snapshot.
@@ -153,9 +153,9 @@ describe("registerGatewayIpc handlers", () => {
 
     const urls = await uiUrlsHandler!({} as never);
     expect(urls).toEqual({
-      embedUrl: "http://127.0.0.1:8080/app/auth?token=token&next=%2Fapp",
-      displayUrl: "http://127.0.0.1:8080/app",
-      externalUrl: "http://127.0.0.1:8080/app/auth?token=token&next=%2Fapp",
+      embedUrl: "http://127.0.0.1:8788/app/auth?token=token&next=%2Fapp",
+      displayUrl: "http://127.0.0.1:8788/app",
+      externalUrl: "http://127.0.0.1:8788/app/auth?token=token&next=%2Fapp",
     });
   });
 
@@ -181,9 +181,9 @@ describe("registerGatewayIpc handlers", () => {
 
     const urls = await uiUrlsHandler!({} as never);
     expect(urls).toEqual({
-      embedUrl: "http://127.0.0.1:8080/app/auth?token=generated-token&next=%2Fapp",
-      displayUrl: "http://127.0.0.1:8080/app",
-      externalUrl: "http://127.0.0.1:8080/app/auth?token=generated-token&next=%2Fapp",
+      embedUrl: "http://127.0.0.1:8788/app/auth?token=generated-token&next=%2Fapp",
+      displayUrl: "http://127.0.0.1:8788/app",
+      externalUrl: "http://127.0.0.1:8788/app/auth?token=generated-token&next=%2Fapp",
     });
     expect(generateTokenMock).toHaveBeenCalledTimes(1);
     expect(encryptTokenMock).toHaveBeenCalledWith("generated-token");
@@ -215,10 +215,10 @@ describe("registerGatewayIpc handlers", () => {
     const urls = await uiUrlsHandler!({} as never, { startOnboarding: true });
     expect(urls).toEqual({
       embedUrl:
-        "http://127.0.0.1:8080/app/auth?token=token&next=%2Fapp%2Fonboarding%2Fstart",
-      displayUrl: "http://127.0.0.1:8080/app/onboarding/start",
+        "http://127.0.0.1:8788/app/auth?token=token&next=%2Fapp%2Fonboarding%2Fstart",
+      displayUrl: "http://127.0.0.1:8788/app/onboarding/start",
       externalUrl:
-        "http://127.0.0.1:8080/app/auth?token=token&next=%2Fapp%2Fonboarding%2Fstart",
+        "http://127.0.0.1:8788/app/auth?token=token&next=%2Fapp%2Fonboarding%2Fstart",
     });
   });
 

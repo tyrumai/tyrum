@@ -297,7 +297,7 @@ export async function runShutdownCleanup(
 }
 
 export async function main(role: GatewayRole = "all"): Promise<void> {
-  const port = parseInt(process.env["GATEWAY_PORT"] ?? "8080", 10);
+  const port = parseInt(process.env["GATEWAY_PORT"] ?? "8788", 10);
   const host = process.env["GATEWAY_HOST"]?.trim() || "127.0.0.1";
   const dbPath = process.env["GATEWAY_DB_PATH"] ?? "gateway.db";
   assertSplitRoleUsesPostgres(role, dbPath);

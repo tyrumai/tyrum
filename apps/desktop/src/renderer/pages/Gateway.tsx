@@ -118,8 +118,8 @@ export function Gateway({
 }: GatewayProps) {
   const [config, setConfig] = useState<GatewayConfigShape>({
     mode: "embedded",
-    embedded: { port: 8080 },
-    remote: { wsUrl: "ws://127.0.0.1:8080/ws" },
+    embedded: { port: 8788 },
+    remote: { wsUrl: "ws://127.0.0.1:8788/ws" },
   });
   const [gatewayStatus, setGatewayStatus] = useState("stopped");
   const [busy, setBusy] = useState(false);
@@ -170,11 +170,11 @@ export function Gateway({
             : {};
 
         const embeddedPort =
-          typeof embeddedRaw["port"] === "number" ? embeddedRaw["port"] : 8080;
+          typeof embeddedRaw["port"] === "number" ? embeddedRaw["port"] : 8788;
         const remoteWsUrl =
           typeof remoteRaw["wsUrl"] === "string"
             ? remoteRaw["wsUrl"]
-            : "ws://127.0.0.1:8080/ws";
+            : "ws://127.0.0.1:8788/ws";
 
         if (disposed) return;
         setConfig({

@@ -28,7 +28,7 @@ By default, Tyrum runs local-first and binds to `127.0.0.1`.
 
 Open:
 
-- `http://127.0.0.1:8080/app`
+- `http://127.0.0.1:8788/app`
 
 ## 4. Enable singleton agent routes (optional)
 
@@ -45,5 +45,5 @@ TYRUM_AGENT_ENABLED=1 tyrum-gateway
 Example:
 
 ```bash
-GATEWAY_PORT=8081 tyrum-gateway
+GATEWAY_PORT=8789 tyrum-gateway
 ```

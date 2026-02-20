@@ -10,7 +10,7 @@ docker compose --profile split up -d --build
 
 echo "[smoke] waiting for edge /healthz"
 for _ in $(seq 1 60); do
-  if curl -fsS "http://localhost:8080/healthz" >/dev/null; then
+  if curl -fsS "http://localhost:8788/healthz" >/dev/null; then
     echo "[smoke] healthz ok"
     break
   fi
@@ -78,4 +78,3 @@ await client.end();
 '
 
 echo "[smoke] ok"
-
