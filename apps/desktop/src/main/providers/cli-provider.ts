@@ -136,10 +136,14 @@ export class CliProvider implements CapabilityProvider {
       let stdout = "";
       let stderr = "";
 
+      const stdinStream = child.stdin;
+      // Child may exit before consuming stdin; ignore resulting pipe stream errors.
+      stdinStream?.on("error", () => undefined);
+
       if (stdin !== undefined) {
-        child.stdin?.write(stdin);
+        stdinStream?.write(stdin);
       }
-      child.stdin?.end();
+      stdinStream?.end();
 
       child.stdout?.on("data", (data: Buffer) => {
         if (stdout.length < MAX_OUTPUT_BYTES) stdout += data.toString();
