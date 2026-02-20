@@ -901,6 +901,14 @@ export class ExecutionEngine {
 
     this.db
       .prepare(
+        `UPDATE execution_steps
+         SET status = 'cancelled'
+         WHERE run_id = ? AND status = 'queued'`,
+      )
+      .run(opts.runId);
+
+    this.db
+      .prepare(
         `UPDATE execution_runs
          SET status = 'failed', finished_at = ?
          WHERE run_id = ?`,
