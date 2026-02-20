@@ -40,11 +40,13 @@ Effective policy is the merged result of:
 1. **Deployment policy** (global defaults)
 2. **Agent policy** (agent-scoped overrides)
 3. **Playbook policy** (workflow-scoped overrides)
+4. **Operator policy overrides** (durable “approve always” edits created via approvals; see [Policy overrides](./policy-overrides.md))
 
 Conflict resolution is conservative:
 
 - `deny` wins over `require_approval` wins over `allow`.
-- Narrower scopes may tighten constraints; widening constraints requires an explicit, auditable mechanism (for example an approval-gated override rule).
+- Narrower scopes may tighten constraints.
+- Widening constraints must be explicit and auditable. Operator policy overrides are the standard mechanism for turning `require_approval → allow` for a narrow, tool-scoped pattern. Overrides must not bypass explicit `deny` by default.
 
 ## Policy snapshots
 
@@ -52,6 +54,7 @@ Every execution run carries the effective policy as a snapshot reference:
 
 - The gateway persists a `policy_snapshot_id` and a content hash for the merged policy used to create the run.
 - Exports and audits reference the snapshot so policy decisions remain explainable and replayable.
+- Policy decisions may also record applied `policy_override_id` values when an operator override turns `require_approval → allow`. This keeps “why was this allowed?” answerable without weakening the conservative `deny` precedence.
 
 ## Minimum policy domains
 

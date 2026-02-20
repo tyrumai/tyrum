@@ -39,12 +39,13 @@ Usage is scoped to the current session by default, with agent-wide and deploymen
 Tyrum emits typed events for:
 
 - approvals requested/resolved
+- policy overrides created/revoked/expired
 - runs/steps lifecycle and retries
 - policy decisions (allow/deny/require-approval + reasons + snapshot references)
 - artifacts created/attached/fetched
 - model/provider selection, auth rotation, and fallback decisions
 
-Durable logs include stable ids (`run_id`, `step_id`, `attempt_id`, `approval_id`, `artifact_id`, `policy_snapshot_id`) so operators can correlate UI, DB records, and exported bundles.
+Durable logs include stable ids (`run_id`, `step_id`, `attempt_id`, `approval_id`, `policy_override_id`, `artifact_id`, `policy_snapshot_id`) so operators can correlate UI, DB records, and exported bundles.
 
 ## Provider quota polling
 
@@ -55,4 +56,3 @@ When enabled, Tyrum queries provider usage endpoints using the active auth profi
 - results are never treated as authoritative billing records; they are operator guidance
 
 Provider polling respects policy: usage endpoints are only queried for allowed providers/profiles and never with raw secret values in model context.
-

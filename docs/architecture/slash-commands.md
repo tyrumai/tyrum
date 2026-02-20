@@ -39,6 +39,12 @@ Commands are handled by the gateway (not by the model). This keeps control-plane
 - `/queue <collect|followup|steer|steer_backlog|interrupt>` — set the inbound queue mode for the session.
 - `/send <on|off|inherit>` — set or clear a per-session send policy override (operator-scoped).
 
+### Policy overrides
+
+- `/policy overrides list` — list active and historical policy overrides (filterable by agent/tool/status).
+- `/policy overrides describe <policy_override_id>` — show override scope, pattern, and audit linkage.
+- `/policy overrides revoke <policy_override_id>` — revoke an override (audited, optionally with a reason).
+
 ## Design guidelines
 
 - Prefer unambiguous names (`/context list` over `/ctx`).

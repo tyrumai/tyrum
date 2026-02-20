@@ -50,6 +50,7 @@ An approval request should be explicit about impact and traceability:
 - `scope` (agent/session/run/step identifiers)
 - `risk` and `estimated_cost` (when applicable)
 - `items_preview` (capped, optional)
+- `suggested_overrides` (optional; bounded list of safe “approve always” patterns for tool-policy approvals)
 - `expires_at`
 - `resume_token` (when the approval gates a paused workflow)
 
@@ -57,12 +58,34 @@ An approval request should be explicit about impact and traceability:
 
 Resolutions are durable records:
 
-- `approved: boolean`
+- `outcome` (`approved`, `denied`, or `expired`)
 - `resolved_at`
 - `resolved_by` (client identity / user identity)
 - optional `reason` (operator-provided)
+- optional `mode` (`once` or `always`, only meaningful when `outcome=approved`)
+- optional `policy_override_id` (when `mode=always` creates a durable policy override)
 
 Expired approvals behave like denial unless explicitly configured otherwise.
+
+## Approve once vs approve always
+
+Approvals should support three operator outcomes:
+
+- **Approve once:** resolve the pending approval and resume/cancel the waiting run as normal. No standing authorization is created.
+- **Approve always:** resolve the pending approval and also create a **durable policy override** that allows *future* matching actions without prompting. “Always” should be offered only when the approval includes `suggested_overrides` (or when a domain-specific durable authorization exists, such as node pairing).
+- **Reject:** deny the pending approval (or let it expire), and cancel/keep paused according to policy.
+
+“Approve always” is **enforcement**, not convenience: the override is a durable, auditable record with explicit scope and revocation. See [Policy overrides](./policy-overrides.md).
+
+## Suggested overrides (pattern suggestions)
+
+For tool-policy approvals, the gateway should include `suggested_overrides` so operator clients can offer an “always” option without free-form rule authoring.
+
+Each suggested override is a *tool-specific wildcard pattern* over a well-defined match target (see [Tools](./tools.md)). Suggestions are conservative:
+
+- narrow scope by default (agent and workspace scoped where applicable)
+- prefer prefix patterns over broad wildcards
+- never suggest a rule that would bypass an explicit `deny`
 
 ## Integration with workflows (pause/resume)
 
@@ -78,6 +101,8 @@ Approvals should be observable via gateway-emitted events:
 
 - `approval.requested`
 - `approval.resolved`
+- `policy_override.created` (when `mode=always` creates an override)
+- `policy_override.revoked` / `policy_override.expired`
 - `run.paused` (with reason: approval)
 - `run.resumed`
 - `run.cancelled` (when denied/expired)
@@ -88,5 +113,7 @@ The control panel should expose:
 
 - An **approval queue** (filterable by agent/run/kind)
 - Approval details (prompt, preview, linked evidence/artifacts)
-- One-tap approve/deny with clear consequences
+- Approve **once** / approve **always** / deny with clear consequences
+- “Always” UI that presents the bounded `suggested_overrides` list (scope + match target + pattern) and requires selecting one or more suggestions
+- A policy override inventory (list/describe/revoke) with links back to the approvals and runs that created each override
 - Deep links from notifications into the approval detail view
