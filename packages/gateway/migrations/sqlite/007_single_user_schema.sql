@@ -1,5 +1,3 @@
-BEGIN TRANSACTION;
-
 -- ---------------------------------------------------------------------------
 -- facts
 -- ---------------------------------------------------------------------------
@@ -294,6 +292,3 @@ DROP TABLE watchers_old;
 
 CREATE INDEX watchers_active_idx ON watchers (active);
 CREATE INDEX watchers_plan_id_idx ON watchers (plan_id);
-
-COMMIT;
-

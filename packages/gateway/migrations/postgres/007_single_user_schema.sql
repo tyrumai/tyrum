@@ -1,5 +1,3 @@
-BEGIN;
-
 -- ---------------------------------------------------------------------------
 -- facts
 -- ---------------------------------------------------------------------------
@@ -71,6 +69,3 @@ ALTER TABLE watchers DROP COLUMN IF EXISTS subject_id;
 
 CREATE INDEX IF NOT EXISTS watchers_active_idx ON watchers (active);
 CREATE INDEX IF NOT EXISTS watchers_plan_id_idx ON watchers (plan_id);
-
-COMMIT;
-

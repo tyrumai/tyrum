@@ -18,6 +18,13 @@ export function migrate(db: Database.Database, migrationsDir: string): void {
     )
   `);
 
+  const insertMigration = db.prepare("INSERT INTO _migrations (name) VALUES (?)");
+  const applyMigration = db.transaction((file: string, sql: string) => {
+    // better-sqlite3 Database.exec() — runs SQL, not a shell command
+    db.exec(sql);
+    insertMigration.run(file);
+  });
+
   const applied = new Set(
     db
       .prepare("SELECT name FROM _migrations")
@@ -32,8 +39,7 @@ export function migrate(db: Database.Database, migrationsDir: string): void {
   for (const file of files) {
     if (applied.has(file)) continue;
     const sql = readFileSync(join(migrationsDir, file), "utf-8");
-    // better-sqlite3 Database.exec() — runs SQL, not a shell command
-    db.exec(sql);
-    db.prepare("INSERT INTO _migrations (name) VALUES (?)").run(file);
+    applyMigration(file, sql);
+    applied.add(file);
   }
 }

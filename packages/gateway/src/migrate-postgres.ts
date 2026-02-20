@@ -30,8 +30,19 @@ export async function migratePostgres(
   for (const file of files) {
     if (applied.has(file)) continue;
     const sql = readFileSync(join(migrationsDir, file), "utf-8");
-    await client.query(sql);
-    await client.query("INSERT INTO _migrations (name) VALUES ($1)", [file]);
+    await client.query("BEGIN");
+    try {
+      await client.query(sql);
+      await client.query("INSERT INTO _migrations (name) VALUES ($1)", [file]);
+      await client.query("COMMIT");
+      applied.add(file);
+    } catch (err) {
+      try {
+        await client.query("ROLLBACK");
+      } catch {
+        // ignore rollback errors; surface original failure
+      }
+      throw err;
+    }
   }
 }
-
