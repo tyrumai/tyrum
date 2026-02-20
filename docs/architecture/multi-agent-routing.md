@@ -21,8 +21,9 @@ Inbound events are mapped to an agent via explicit, auditable bindings.
 
 Routing uses the session key conventions described in [Sessions and lanes](./sessions-lanes.md).
 
-- `channel` identifies a connector/account instance (for example `telegram-main`, `whatsapp-family`).
-- Provider-native thread/container identifiers are preserved and stored in the key’s `<id>` portion.
+- `channel` and `account` identify the connector/account instance (`channel=telegram`, `account=work`).
+- Provider-native thread/container identifiers are preserved and stored in the key’s `<id>` portion for groups/channels.
+- Direct-message session keys are chosen using `dm_scope` so multi-user inboxes default to per-sender isolation.
 
 This supports multiple accounts on one gateway while keeping session ids stable.
 

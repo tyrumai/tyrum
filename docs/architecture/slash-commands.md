@@ -2,14 +2,42 @@
 
 Slash commands are a client-facing command surface for common actions. Clients translate commands into typed requests to the gateway.
 
-## Example commands
+Commands are handled by the gateway (not by the model). This keeps control-plane actions deterministic, policy-enforced, and auditable.
 
-- `/new` — start a new session or reset context (depending on configuration)
-- `/status` — show agent/runtime status
-- `/context list` — list available context sources
-- `/context detail` — show details for a specific context source
-- `/usage tokens` — show token usage and cost telemetry (when available)
-- `/compact` — request context compaction
+## Command classes
+
+- **Standalone commands:** a message that is only `/...` runs as a command.
+- **Directives:** certain commands persist per-session settings and are stripped before model inference.
+- **Side-effecting commands:** commands that change state or send messages are subject to policy and may require approvals.
+
+## Common commands (examples)
+
+### Session and execution
+
+- `/new` — start a new session (fresh context and new session id).
+- `/reset` — reset the current session state (policy-defined).
+- `/stop` — cancel the active run and clear queued followups for the current session.
+- `/compact` — request compaction of older history into a summary.
+
+### Context and usage
+
+- `/status` — show runtime + session status (model, lane, queue, policy mode).
+- `/context list` — show a context breakdown summary for the last run.
+- `/context detail` — show a detailed breakdown including tool schema overhead.
+- `/usage` — show current session usage summary (tokens/time/cost).
+- `/usage provider` — show provider-reported usage/quota when available.
+- `/presence` — show connected gateway/client/node presence entries.
+
+### Models and auth
+
+- `/model` — show the current model and available options.
+- `/model <provider/model>` — set the model for the current session.
+- `/model <provider/model>@<profile>` — pin an auth profile for the session.
+
+### Messaging behavior
+
+- `/queue <collect|followup|steer|steer_backlog|interrupt>` — set the inbound queue mode for the session.
+- `/send <on|off|inherit>` — set or clear a per-session send policy override (operator-scoped).
 
 ## Design guidelines
 

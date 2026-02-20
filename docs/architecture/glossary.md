@@ -81,7 +81,7 @@ A typed operation and typed reply correlated by `request_id`. Either peer may in
 
 ## Session
 
-A durable conversation container with transcript history and queued inbound messages.
+A durable conversation container with transcript history and queue state. Session keys and DM scope rules determine which messages share context.
 
 ## Skill
 
@@ -126,3 +126,43 @@ An out-of-process component responsible for storing and retrieving secrets. It r
 ## Secret handle
 
 An opaque reference to a secret stored in the secret provider. Executors and capability providers use handles to obtain the secret value at the last responsible moment; the model never receives the raw value.
+
+## Auth profile
+
+A durable record describing how Tyrum authenticates to a provider (API key or OAuth), represented as metadata plus secret handles. Auth profiles are scoped per agent and participate in deterministic rotation and model failover.
+
+## Context report
+
+A gateway-generated breakdown of what was included in a model call (system prompt sections, injected files, tool schema overhead, and history/tool-result contributions). Context reports are persisted with runs for audit and debugging.
+
+## Debounce
+
+A per-container batching mechanism that coalesces rapid bursts of inbound text messages into a single agent turn within a time window.
+
+## Dedupe
+
+A reliability mechanism that detects and drops duplicate inbound deliveries (for example channel redelivery after reconnect) so they do not start duplicate runs.
+
+## DM scope
+
+A policy that determines how direct messages map to session keys (`shared`, `per_peer`, `per_channel_peer`, `per_account_channel_peer`) to prevent cross-sender context leakage in multi-user inboxes.
+
+## Queue mode
+
+The policy used when a run is already active for a session/lane, controlling whether inbound messages are collected, enqueued for follow-up, steered into the in-flight run, or interrupt the run.
+
+## Markdown IR
+
+An intermediate representation of Markdown used for channel-safe chunking and rendering: plain text plus structured spans for styles, links, and blocks.
+
+## Presence
+
+A best-effort, TTL-bounded view of the gateway, connected clients, and connected nodes, used for operator visibility (“Instances”).
+
+## Typing indicator
+
+A channel-side UX signal sent while a run is active to indicate the system is working. Typing behavior is connector-specific and policy-controlled.
+
+## Usage tracking
+
+Operator-visible accounting of tokens/time/cost per run and provider-reported usage/quota windows when available, exposed via `/usage` and UI panels.
