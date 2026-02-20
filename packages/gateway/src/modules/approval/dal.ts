@@ -29,10 +29,14 @@ interface RawApprovalRow {
   prompt: string;
   context_json: string;
   status: string;
-  created_at: string;
+  created_at: string | Date;
   responded_at: string | null;
   response_reason: string | null;
   expires_at: string | null;
+}
+
+function normalizeTime(value: string | Date): string {
+  return value instanceof Date ? value.toISOString() : value;
 }
 
 function toApprovalRow(raw: RawApprovalRow): ApprovalRow {
@@ -49,7 +53,7 @@ function toApprovalRow(raw: RawApprovalRow): ApprovalRow {
     prompt: raw.prompt,
     context,
     status: raw.status as ApprovalStatus,
-    created_at: raw.created_at,
+    created_at: normalizeTime(raw.created_at),
     responded_at: raw.responded_at,
     response_reason: raw.response_reason,
     expires_at: raw.expires_at,

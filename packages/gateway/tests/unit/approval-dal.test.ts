@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { ApprovalDal } from "../../src/modules/approval/dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
+import type { SqlDb } from "../../src/statestore/types.js";
 
 describe("ApprovalDal", () => {
   let db: SqliteDb | undefined;
@@ -176,5 +177,36 @@ describe("ApprovalDal", () => {
     });
 
     expect(approval.context).toEqual({});
+  });
+
+  it("normalizes created_at when Postgres returns Date", async () => {
+    const createdAt = new Date("2020-01-01T00:00:00.000Z");
+    const row = {
+      id: 123,
+      plan_id: "plan-1",
+      step_index: 0,
+      prompt: "Approve?",
+      context_json: "{}",
+      status: "pending",
+      created_at: createdAt,
+      responded_at: null,
+      response_reason: null,
+      expires_at: null,
+    };
+
+    const stubDb: SqlDb = {
+      kind: "postgres",
+      get: async () => row,
+      all: async () => [],
+      run: async () => ({ changes: 0 }),
+      exec: async () => {},
+      transaction: async (fn) => await fn(stubDb),
+      close: async () => {},
+    };
+
+    const dal = new ApprovalDal(stubDb);
+    const fetched = await dal.getById(123);
+    expect(fetched).toBeDefined();
+    expect(fetched!.created_at).toBe(createdAt.toISOString());
   });
 });
