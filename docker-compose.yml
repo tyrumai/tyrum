@@ -43,6 +43,8 @@ services:
       GATEWAY_DB_PATH: ${GATEWAY_DB_PATH:-postgres://${POSTGRES_USER:-tyrum}:${POSTGRES_PASSWORD:-tyrum}@postgres:5432/${POSTGRES_DB:-tyrum}}
       # In split mode, ensure all services share the same admin token.
       GATEWAY_TOKEN: ${GATEWAY_TOKEN:-tyrum-dev-token}
+      # Split mode should not rely on shared filesystem secrets.
+      TYRUM_SECRET_PROVIDER: env
       # Artifact storage: default to filesystem; set TYRUM_ARTIFACT_STORE=s3 and
       # enable the "minio" profile to use object storage.
       TYRUM_ARTIFACT_STORE: ${TYRUM_ARTIFACT_STORE:-fs}
@@ -57,8 +59,6 @@ services:
       - postgres
     ports:
       - "8080:8080"
-    volumes:
-      - tyrum-data:/var/lib/tyrum
     restart: unless-stopped
 
   tyrum-worker:
@@ -69,6 +69,7 @@ services:
       TYRUM_HOME: /var/lib/tyrum
       GATEWAY_DB_PATH: ${GATEWAY_DB_PATH:-postgres://${POSTGRES_USER:-tyrum}:${POSTGRES_PASSWORD:-tyrum}@postgres:5432/${POSTGRES_DB:-tyrum}}
       GATEWAY_TOKEN: ${GATEWAY_TOKEN:-tyrum-dev-token}
+      TYRUM_SECRET_PROVIDER: env
       TYRUM_ARTIFACT_STORE: ${TYRUM_ARTIFACT_STORE:-fs}
       TYRUM_ARTIFACTS_DIR: /var/lib/tyrum/artifacts
       TYRUM_ARTIFACTS_S3_ENDPOINT: ${TYRUM_ARTIFACTS_S3_ENDPOINT:-http://minio:9000}
@@ -91,6 +92,7 @@ services:
       TYRUM_HOME: /var/lib/tyrum
       GATEWAY_DB_PATH: ${GATEWAY_DB_PATH:-postgres://${POSTGRES_USER:-tyrum}:${POSTGRES_PASSWORD:-tyrum}@postgres:5432/${POSTGRES_DB:-tyrum}}
       GATEWAY_TOKEN: ${GATEWAY_TOKEN:-tyrum-dev-token}
+      TYRUM_SECRET_PROVIDER: env
       TYRUM_ARTIFACT_STORE: ${TYRUM_ARTIFACT_STORE:-fs}
       TYRUM_ARTIFACTS_DIR: /var/lib/tyrum/artifacts
       TYRUM_ARTIFACTS_S3_ENDPOINT: ${TYRUM_ARTIFACTS_S3_ENDPOINT:-http://minio:9000}
@@ -101,8 +103,6 @@ services:
       TYRUM_ARTIFACTS_S3_SECRET_ACCESS_KEY: ${TYRUM_ARTIFACTS_S3_SECRET_ACCESS_KEY:-}
     depends_on:
       - postgres
-    volumes:
-      - tyrum-data:/var/lib/tyrum
     restart: unless-stopped
 
   postgres:

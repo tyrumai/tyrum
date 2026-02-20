@@ -16,6 +16,7 @@ vi.mock("node:child_process", async () => {
 });
 
 import {
+  assertSplitRoleUsesPostgres,
   parseCliArgs,
   resolveGatewayUpdateTarget,
   runCli,
@@ -109,5 +110,23 @@ describe("gateway CLI runCli", () => {
 
     logSpy.mockRestore();
     errSpy.mockRestore();
+  });
+});
+
+describe("gateway split role DB guard", () => {
+  it("allows SQLite when running as single-process 'all'", () => {
+    expect(() => assertSplitRoleUsesPostgres("all", "gateway.db")).not.toThrow();
+  });
+
+  it("rejects SQLite when running as a split role", () => {
+    expect(() => assertSplitRoleUsesPostgres("edge", "gateway.db")).toThrow(
+      /requires Postgres/i,
+    );
+  });
+
+  it("allows Postgres when running as a split role", () => {
+    expect(() =>
+      assertSplitRoleUsesPostgres("worker", "postgres://user:pass@localhost:5432/db"),
+    ).not.toThrow();
   });
 });

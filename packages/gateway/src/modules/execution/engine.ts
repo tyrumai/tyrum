@@ -67,6 +67,7 @@ interface RunnableRunRow {
   lane: string;
   status: "queued" | "running";
   trigger_json: string;
+  workspace_id: string;
 }
 
 interface StepRow {
@@ -269,7 +270,8 @@ export class ExecutionEngine {
          r.key,
          r.lane,
          r.status,
-         j.trigger_json
+         j.trigger_json,
+         j.workspace_id
        FROM execution_runs r
        JOIN execution_jobs j ON j.job_id = r.job_id
        WHERE r.status IN ('running', 'queued')
@@ -292,6 +294,21 @@ export class ExecutionEngine {
         ttlMs: 60_000,
       });
       if (!leaseOk) continue;
+
+      const workspaceOk = await this.tryAcquireWorkspaceLease({
+        workspaceId: run.workspace_id,
+        owner: input.workerId,
+        nowMs,
+        ttlMs: 5_000,
+      });
+      if (!workspaceOk) {
+        await this.releaseLaneLease({
+          key: run.key,
+          lane: run.lane,
+          owner: input.workerId,
+        });
+        continue;
+      }
 
       try {
         const didWork = await this.tickWithLaneLease(run, input, { nowMs, nowIso });
@@ -374,6 +391,12 @@ export class ExecutionEngine {
           `DELETE FROM lane_leases
            WHERE key = ? AND lane = ? AND lease_owner = ?`,
           [run.key, run.lane, input.workerId],
+        );
+
+        await tx.run(
+          `DELETE FROM workspace_leases
+           WHERE workspace_id = ? AND lease_owner = ?`,
+          [run.workspace_id, input.workerId],
         );
 
         return { kind: "finalized" as const };
@@ -510,6 +533,13 @@ export class ExecutionEngine {
         [clock.nowMs + leaseTtlMs, run.key, run.lane, input.workerId],
       );
 
+      await tx.run(
+        `UPDATE workspace_leases
+         SET lease_expires_at_ms = ?
+         WHERE workspace_id = ? AND lease_owner = ?`,
+        [clock.nowMs + leaseTtlMs, run.workspace_id, input.workerId],
+      );
+
       return {
         kind: "claimed" as const,
         runId: run.run_id,
@@ -545,6 +575,7 @@ export class ExecutionEngine {
       timeoutMs,
       runId: outcome.runId,
       jobId: outcome.jobId,
+      workspaceId: run.workspace_id,
       key: outcome.key,
       lane: outcome.lane,
       stepId: outcome.step.step_id,
@@ -564,6 +595,7 @@ export class ExecutionEngine {
     timeoutMs: number;
     runId: string;
     jobId: string;
+    workspaceId: string;
     key: string;
     lane: string;
     stepId: string;
@@ -830,6 +862,7 @@ export class ExecutionEngine {
     stepId: string;
     runId: string;
     jobId: string;
+    workspaceId: string;
     key: string;
     lane: string;
     workerId: string;
@@ -878,6 +911,11 @@ export class ExecutionEngine {
       owner: opts.workerId,
     });
 
+    await this.releaseWorkspaceLease({
+      workspaceId: opts.workspaceId,
+      owner: opts.workerId,
+    });
+
     return true;
   }
 
@@ -886,6 +924,7 @@ export class ExecutionEngine {
       runId: string;
       stepId: string;
       jobId: string;
+      workspaceId: string;
       key: string;
       lane: string;
       workerId: string;
@@ -921,6 +960,11 @@ export class ExecutionEngine {
       lane: opts.lane,
       owner: opts.workerId,
     });
+
+    await this.releaseWorkspaceLease({
+      workspaceId: opts.workspaceId,
+      owner: opts.workerId,
+    });
   }
 
   private async executeWithTimeout(
@@ -947,40 +991,58 @@ export class ExecutionEngine {
   }): Promise<boolean> {
     const expiresAt = opts.nowMs + Math.max(1, opts.ttlMs);
     return await this.db.transaction(async (tx) => {
-      const existing = await tx.get<{
-        lease_owner: string;
-        lease_expires_at_ms: number;
-      }>(
-        `SELECT lease_owner, lease_expires_at_ms
-         FROM lane_leases
-         WHERE key = ? AND lane = ?`,
-        [opts.key, opts.lane],
+      const inserted = await tx.run(
+        `INSERT INTO lane_leases (key, lane, lease_owner, lease_expires_at_ms)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT (key, lane) DO NOTHING`,
+        [opts.key, opts.lane, opts.owner, expiresAt],
       );
+      if (inserted.changes === 1) return true;
 
-      if (!existing) {
-        await tx.run(
-          `INSERT INTO lane_leases (key, lane, lease_owner, lease_expires_at_ms)
-           VALUES (?, ?, ?, ?)`,
-          [opts.key, opts.lane, opts.owner, expiresAt],
-        );
-        return true;
-      }
-
-      const expired = existing.lease_expires_at_ms <= opts.nowMs;
-      const sameOwner = existing.lease_owner === opts.owner;
-
-      if (!expired && !sameOwner) {
-        return false;
-      }
-
-      await tx.run(
+      const updated = await tx.run(
         `UPDATE lane_leases
          SET lease_owner = ?, lease_expires_at_ms = ?
-         WHERE key = ? AND lane = ?`,
-        [opts.owner, expiresAt, opts.key, opts.lane],
+         WHERE key = ? AND lane = ?
+           AND (lease_expires_at_ms <= ? OR lease_owner = ?)`,
+        [opts.owner, expiresAt, opts.key, opts.lane, opts.nowMs, opts.owner],
       );
-      return true;
+      return updated.changes === 1;
     });
+  }
+
+  private async tryAcquireWorkspaceLease(opts: {
+    workspaceId: string;
+    owner: string;
+    nowMs: number;
+    ttlMs: number;
+  }): Promise<boolean> {
+    const expiresAt = opts.nowMs + Math.max(1, opts.ttlMs);
+    return await this.db.transaction(async (tx) => {
+      const inserted = await tx.run(
+        `INSERT INTO workspace_leases (workspace_id, lease_owner, lease_expires_at_ms)
+         VALUES (?, ?, ?)
+         ON CONFLICT (workspace_id) DO NOTHING`,
+        [opts.workspaceId, opts.owner, expiresAt],
+      );
+      if (inserted.changes === 1) return true;
+
+      const updated = await tx.run(
+        `UPDATE workspace_leases
+         SET lease_owner = ?, lease_expires_at_ms = ?
+         WHERE workspace_id = ?
+           AND (lease_expires_at_ms <= ? OR lease_owner = ?)`,
+        [opts.owner, expiresAt, opts.workspaceId, opts.nowMs, opts.owner],
+      );
+      return updated.changes === 1;
+    });
+  }
+
+  private async releaseWorkspaceLease(opts: { workspaceId: string; owner: string }): Promise<void> {
+    await this.db.run(
+      `DELETE FROM workspace_leases
+       WHERE workspace_id = ? AND lease_owner = ?`,
+      [opts.workspaceId, opts.owner],
+    );
   }
 
   private async releaseLaneLease(opts: {

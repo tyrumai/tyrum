@@ -28,6 +28,7 @@ import { maybeStartOtel } from "./modules/observability/otel.js";
 import { ExecutionEngine, type StepExecutor as ExecutionStepExecutor } from "./modules/execution/engine.js";
 import { startExecutionWorkerLoop } from "./modules/execution/worker-loop.js";
 import { createToolRunnerStepExecutor } from "./modules/execution/toolrunner-step-executor.js";
+import { createKubernetesToolRunnerStepExecutor } from "./modules/execution/kubernetes-toolrunner-step-executor.js";
 import { runToolRunnerFromStdio } from "./toolrunner.js";
 
 export const VERSION = "0.1.0";
@@ -73,12 +74,25 @@ function parseGatewayRole(raw: string | undefined): GatewayRole | undefined {
   return undefined;
 }
 
+function isPostgresDbUri(dbPath: string): boolean {
+  return /^postgres(ql)?:\/\//i.test(dbPath.trim());
+}
+
+export function assertSplitRoleUsesPostgres(role: GatewayRole, dbPath: string): void {
+  if (role === "all") return;
+  if (isPostgresDbUri(dbPath)) return;
+  throw new Error(
+    `role '${role}' requires Postgres (set GATEWAY_DB_PATH to a postgres:// URI). ` +
+      `Use 'all' for single-process SQLite deployments.`,
+  );
+}
+
 export function ensureDatabaseDirectory(dbPath: string): void {
   const trimmed = dbPath.trim();
   if (trimmed.length === 0) return;
   if (trimmed === ":memory:") return;
   if (/^file:/i.test(trimmed)) return;
-  if (/^postgres(ql)?:\/\//i.test(trimmed)) return;
+  if (isPostgresDbUri(trimmed)) return;
 
   const parentDir = dirname(trimmed);
   if (parentDir === "." || parentDir === "") return;
@@ -290,7 +304,8 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   const port = parseInt(process.env["GATEWAY_PORT"] ?? "8080", 10);
   const host = process.env["GATEWAY_HOST"]?.trim() || "127.0.0.1";
   const dbPath = process.env["GATEWAY_DB_PATH"] ?? "gateway.db";
-  const defaultMigrationsDir = /^postgres(ql)?:\/\//i.test(dbPath.trim())
+  assertSplitRoleUsesPostgres(role, dbPath);
+  const defaultMigrationsDir = isPostgresDbUri(dbPath)
     ? join(__dirname, "../migrations/postgres")
     : join(__dirname, "../migrations/sqlite");
   const migrationsDir =
@@ -505,10 +520,44 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
           logger,
         });
 
-        const executor = createToolRunnerStepExecutor({
-          entrypoint: fileURLToPath(import.meta.url),
-          logger,
-        }) satisfies ExecutionStepExecutor;
+        const resolveExecutor = (): ExecutionStepExecutor => {
+          const launcherRaw = process.env["TYRUM_TOOLRUNNER_LAUNCHER"]?.trim().toLowerCase();
+          const isKubernetesRuntime = Boolean(process.env["KUBERNETES_SERVICE_HOST"]);
+          const launcher = launcherRaw || (isKubernetesRuntime ? "kubernetes" : "local");
+
+          if (launcher === "kubernetes") {
+            const namespace =
+              process.env["TYRUM_TOOLRUNNER_NAMESPACE"]?.trim() ??
+              process.env["POD_NAMESPACE"]?.trim() ??
+              "default";
+            const image = process.env["TYRUM_TOOLRUNNER_IMAGE"]?.trim();
+            const workspacePvcClaim = process.env["TYRUM_TOOLRUNNER_WORKSPACE_CLAIM"]?.trim();
+            if (!image) {
+              throw new Error("TYRUM_TOOLRUNNER_IMAGE is required when TYRUM_TOOLRUNNER_LAUNCHER=kubernetes");
+            }
+            if (!workspacePvcClaim) {
+              throw new Error(
+                "TYRUM_TOOLRUNNER_WORKSPACE_CLAIM is required when TYRUM_TOOLRUNNER_LAUNCHER=kubernetes",
+              );
+            }
+
+            return createKubernetesToolRunnerStepExecutor({
+              namespace,
+              image,
+              workspacePvcClaim,
+              tyrumHome,
+              logger,
+              jobTtlSeconds: 300,
+            });
+          }
+
+          return createToolRunnerStepExecutor({
+            entrypoint: fileURLToPath(import.meta.url),
+            logger,
+          });
+        };
+
+        const executor = resolveExecutor() satisfies ExecutionStepExecutor;
 
         return startExecutionWorkerLoop({
           engine,

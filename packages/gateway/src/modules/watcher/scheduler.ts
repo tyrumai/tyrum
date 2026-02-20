@@ -19,6 +19,7 @@ interface RawPeriodicWatcherRow {
   trigger_type: string;
   trigger_config: string;
   active: number;
+  last_fired_at_ms?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -46,7 +47,6 @@ export class WatcherScheduler {
   private readonly tickMs: number;
   private readonly keepProcessAlive: boolean;
   private timer: ReturnType<typeof setInterval> | undefined;
-  private readonly lastFired = new Map<number, number>();
 
   constructor(opts: WatcherSchedulerOptions) {
     this.db = opts.db;
@@ -78,6 +78,7 @@ export class WatcherScheduler {
   async tick(): Promise<void> {
     const watchers = await this.getActivePeriodicWatchers();
     const now = Date.now();
+    const nowIso = new Date(now).toISOString();
 
     for (const watcher of watchers) {
       let config: PeriodicTriggerConfig;
@@ -91,12 +92,22 @@ export class WatcherScheduler {
         continue;
       }
 
-      const lastFiredAt = this.lastFired.get(watcher.id) ?? 0;
+      const lastFiredAt = watcher.last_fired_at_ms ?? 0;
       if (now - lastFiredAt < config.intervalMs) {
         continue;
       }
 
-      this.lastFired.set(watcher.id, now);
+      const claimed = await this.db.run(
+        `UPDATE watchers
+         SET last_fired_at_ms = ?, updated_at = ?
+         WHERE id = ? AND trigger_type = 'periodic' AND active = 1
+           AND (last_fired_at_ms IS NULL OR ? - last_fired_at_ms >= ?)`,
+        [now, nowIso, watcher.id, now, config.intervalMs],
+      );
+      if (claimed.changes !== 1) {
+        continue;
+      }
+
       await this.fireWatcher(watcher, now);
     }
   }

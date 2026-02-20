@@ -105,9 +105,10 @@ export async function runToolRunnerFromStdio(): Promise<number> {
 
   let request: ToolRunnerStdioRequest;
   try {
-    const raw = (await readStdinUtf8()).trim();
+    const envPayload = process.env["TYRUM_TOOLRUNNER_PAYLOAD"]?.trim();
+    const raw = envPayload && envPayload.length > 0 ? envPayload : (await readStdinUtf8()).trim();
     if (!raw) {
-      throw new Error("toolrunner expects a JSON request on stdin");
+      throw new Error("toolrunner expects a JSON request on stdin or TYRUM_TOOLRUNNER_PAYLOAD");
     }
     request = JSON.parse(raw) as ToolRunnerStdioRequest;
   } catch (err) {

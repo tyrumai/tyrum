@@ -109,24 +109,20 @@ export class JobQueue {
     const now = new Date().toISOString();
 
     return await this.db.transaction(async (tx) => {
-      const row = await tx.get<JobRow>(
-        `SELECT * FROM jobs
-         WHERE plan_id = ? AND status = 'pending'
-         ORDER BY step_index ASC
-         LIMIT 1`,
-        [planId],
+      const claimed = await tx.get<JobRow>(
+        `UPDATE jobs
+         SET status = 'running', attempt = attempt + 1, started_at = ?
+         WHERE id = (
+           SELECT id FROM jobs
+           WHERE plan_id = ? AND status = 'pending'
+           ORDER BY step_index ASC
+           LIMIT 1
+         ) AND status = 'pending'
+         RETURNING *`,
+        [now, planId],
       );
 
-      if (!row) return undefined;
-
-      await tx.run(
-        `UPDATE jobs SET status = 'running', attempt = attempt + 1, started_at = ?
-         WHERE id = ? AND status = 'pending'`,
-        [now, row.id],
-      );
-
-      const updated = await tx.get<JobRow>("SELECT * FROM jobs WHERE id = ?", [row.id]);
-      return updated ? rowToJob(updated) : undefined;
+      return claimed ? rowToJob(claimed) : undefined;
     });
   }
 
@@ -139,23 +135,15 @@ export class JobQueue {
     const now = new Date().toISOString();
 
     return await this.db.transaction(async (tx) => {
-      const row = await tx.get<JobRow>(
-        `SELECT * FROM jobs
+      const claimed = await tx.get<JobRow>(
+        `UPDATE jobs
+         SET status = 'running', attempt = attempt + 1, started_at = ?
          WHERE id = ? AND status = 'pending'
-         LIMIT 1`,
-        [id],
+         RETURNING *`,
+        [now, id],
       );
 
-      if (!row) return undefined;
-
-      await tx.run(
-        `UPDATE jobs SET status = 'running', attempt = attempt + 1, started_at = ?
-         WHERE id = ? AND status = 'pending'`,
-        [now, row.id],
-      );
-
-      const updated = await tx.get<JobRow>("SELECT * FROM jobs WHERE id = ?", [row.id]);
-      return updated ? rowToJob(updated) : undefined;
+      return claimed ? rowToJob(claimed) : undefined;
     });
   }
 
