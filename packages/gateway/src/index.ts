@@ -11,7 +11,7 @@ import { getRequestListener } from "@hono/node-server";
 import { basename, dirname, join } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { createContainer } from "./container.js";
+import { createContainerAsync } from "./container.js";
 import { createApp } from "./app.js";
 import { AgentRuntime } from "./modules/agent/runtime.js";
 import { TokenStore } from "./modules/auth/token-store.js";
@@ -34,7 +34,7 @@ import { runToolRunnerFromStdio } from "./toolrunner.js";
 export const VERSION = "0.1.0";
 
 // Re-export for library consumers
-export { createContainer } from "./container.js";
+export { createContainer, createContainerAsync } from "./container.js";
 export type { GatewayConfig, GatewayContainer } from "./container.js";
 export { createApp } from "./app.js";
 export { createEventBus } from "./event-bus.js";
@@ -319,7 +319,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
 
   ensureDatabaseDirectory(dbPath);
 
-  const container = await createContainer({
+  const container = await createContainerAsync({
     dbPath,
     migrationsDir,
     modelGatewayConfigPath,

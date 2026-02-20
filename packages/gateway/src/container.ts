@@ -74,7 +74,22 @@ function isPostgresDbUri(dbPath: string): boolean {
   return /^postgres(ql)?:\/\//i.test(dbPath.trim());
 }
 
-export async function createContainer(
+export function createContainer(
+  config: GatewayConfig,
+  opts?: { redactionEngine?: RedactionEngine },
+): GatewayContainer {
+  if (isPostgresDbUri(config.dbPath)) {
+    throw new Error(
+      `createContainer(...) is synchronous and supports only SQLite db paths. ` +
+        `For Postgres (postgres://...), use await createContainerAsync(...).`,
+    );
+  }
+
+  const db = SqliteDb.open({ dbPath: config.dbPath, migrationsDir: config.migrationsDir });
+  return wireContainer(db, config, opts);
+}
+
+export async function createContainerAsync(
   config: GatewayConfig,
   opts?: { redactionEngine?: RedactionEngine },
 ): Promise<GatewayContainer> {
@@ -82,6 +97,14 @@ export async function createContainer(
     ? await PostgresDb.open({ dbUri: config.dbPath, migrationsDir: config.migrationsDir })
     : SqliteDb.open({ dbPath: config.dbPath, migrationsDir: config.migrationsDir });
 
+  return wireContainer(db, config, opts);
+}
+
+function wireContainer(
+  db: SqlDb,
+  config: GatewayConfig,
+  opts?: { redactionEngine?: RedactionEngine },
+): GatewayContainer {
   const memoryDal = new MemoryDalImpl(db);
   const redactionEngine = opts?.redactionEngine ?? new RedactionEngine();
   const logger = new Logger({ base: { service: "tyrum-gateway" } });
