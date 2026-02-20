@@ -13,13 +13,13 @@ Use a unique `TYRUM_HOME` per node to keep databases and runtime state isolated.
 Node A:
 
 ```bash
-TYRUM_HOME=$HOME/.tyrum-a GATEWAY_PORT=8080 tyrum-gateway
+TYRUM_HOME=$HOME/.tyrum-a GATEWAY_PORT=8788 tyrum-gateway
 ```
 
 Node B:
 
 ```bash
-TYRUM_HOME=$HOME/.tyrum-b GATEWAY_PORT=8081 tyrum-gateway
+TYRUM_HOME=$HOME/.tyrum-b GATEWAY_PORT=8789 tyrum-gateway
 ```
 
 ## Recommended structure

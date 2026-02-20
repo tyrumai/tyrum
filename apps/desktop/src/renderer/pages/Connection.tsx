@@ -89,9 +89,9 @@ const infoStyle: React.CSSProperties = {
 export function Connection() {
   const [tab, setTab] = useState<Tab>("embedded");
   const [mode, setMode] = useState<string>("embedded");
-  const [port, setPort] = useState(8080);
+  const [port, setPort] = useState(8788);
   const [gatewayStatus, setGatewayStatus] = useState("stopped");
-  const [remoteUrl, setRemoteUrl] = useState("ws://127.0.0.1:8080/ws");
+  const [remoteUrl, setRemoteUrl] = useState("ws://127.0.0.1:8788/ws");
   const [remoteToken, setRemoteToken] = useState("");
   const [hasSavedRemoteToken, setHasSavedRemoteToken] = useState(false);
   const [nodeStatus, setNodeStatus] = useState("disconnected");

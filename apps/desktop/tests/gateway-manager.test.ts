@@ -58,11 +58,11 @@ describe("GatewayManager", () => {
   it("summarizes startup logs with highest-priority bind errors", () => {
     const reason = summarizeGatewayStartupFailure([
       "Watcher processor and scheduler started",
-      "Error: listen EADDRINUSE: address already in use 127.0.0.1:8080",
+      "Error: listen EADDRINUSE: address already in use 127.0.0.1:8788",
       "at Server.setupListenHandle (node:net:1940:16)",
     ]);
     expect(reason).toBe(
-      "Error: listen EADDRINUSE: address already in use 127.0.0.1:8080",
+      "Error: listen EADDRINUSE: address already in use 127.0.0.1:8788",
     );
   });
 

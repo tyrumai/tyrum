@@ -215,7 +215,7 @@ function writeDesktopConfig(tyrumHome: string, port: number, dbPath: string): vo
     version: 1,
     mode: "embedded",
     remote: {
-      wsUrl: "ws://127.0.0.1:8080/ws",
+      wsUrl: "ws://127.0.0.1:8788/ws",
       tokenRef: "",
     },
     embedded: {

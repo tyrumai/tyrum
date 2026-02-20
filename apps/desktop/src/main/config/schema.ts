@@ -12,17 +12,17 @@ export const DesktopNodeConfig = z.object({
   mode: z.enum(["embedded", "remote"]).default("embedded"),
   remote: z
     .object({
-      wsUrl: z.string().default("ws://127.0.0.1:8080/ws"),
+      wsUrl: z.string().default("ws://127.0.0.1:8788/ws"),
       tokenRef: z.string().default(""),
     })
-    .default({ wsUrl: "ws://127.0.0.1:8080/ws", tokenRef: "" }),
+    .default({ wsUrl: "ws://127.0.0.1:8788/ws", tokenRef: "" }),
   embedded: z
     .object({
-      port: z.number().int().min(1024).max(65535).default(8080),
+      port: z.number().int().min(1024).max(65535).default(8788),
       tokenRef: z.string().default(""),
       dbPath: z.string().default(""),
     })
-    .default({ port: 8080, tokenRef: "", dbPath: "" }),
+    .default({ port: 8788, tokenRef: "", dbPath: "" }),
   permissions: z
     .object({
       profile: PermissionProfile.default("balanced"),

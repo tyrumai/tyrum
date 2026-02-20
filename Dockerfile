@@ -25,7 +25,7 @@ RUN pnpm --filter @tyrum/schemas build \
 
 ENV NODE_ENV=production
 
-EXPOSE 8080
+EXPOSE 8788
 
 RUN groupadd --system --gid 10001 tyrum \
   && useradd --system --uid 10001 --gid 10001 --create-home --home-dir /home/tyrum --shell /usr/sbin/nologin tyrum \

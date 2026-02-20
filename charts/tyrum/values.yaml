@@ -7,7 +7,7 @@ image:
 
 service:
   type: ClusterIP
-  port: 8080
+  port: 8788
 
 gatewayToken:
   # If set, use this secret (key: token). Otherwise create one from value.
@@ -17,7 +17,7 @@ gatewayToken:
 env:
   TYRUM_HOME: /var/lib/tyrum
   GATEWAY_HOST: 0.0.0.0
-  GATEWAY_PORT: "8080"
+  GATEWAY_PORT: "8788"
   GATEWAY_DB_PATH: /var/lib/tyrum/gateway.db
   # Enterprise default per ADR-0007. Values: env|file|keychain
   TYRUM_SECRET_PROVIDER: env

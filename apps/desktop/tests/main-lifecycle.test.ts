@@ -29,7 +29,7 @@ const {
   const registerGatewayIpcMock = vi.fn(() => ({ stop: vi.fn() }));
   const startEmbeddedGatewayFromConfigMock = vi.fn(async () => ({
     status: "running",
-    port: 8080,
+    port: 8788,
   }));
   const configExistsMock = vi.fn(() => true);
   const loadConfigMock = vi.fn(() => ({ mode: "embedded" }));

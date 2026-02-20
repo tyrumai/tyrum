@@ -39,7 +39,7 @@ describe("normalizeConfigPartialForSave", () => {
   it("encrypts embedded.tokenRef while preserving other embedded fields", () => {
     const normalized = normalizeConfigPartialForSave({
       embedded: {
-        port: 8080,
+        port: 8788,
         tokenRef: "embedded-secret-token",
       },
     });
@@ -49,6 +49,6 @@ describe("normalizeConfigPartialForSave", () => {
 
     expect(tokenRef).not.toBe("embedded-secret-token");
     expect(decryptToken(tokenRef)).toBe("embedded-secret-token");
-    expect(embedded["port"]).toBe(8080);
+    expect(embedded["port"]).toBe(8788);
   });
 });
