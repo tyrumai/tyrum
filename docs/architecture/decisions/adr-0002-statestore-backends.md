@@ -6,7 +6,7 @@ Accepted (2026-02-19)
 
 ## Context
 
-Tyrum is **local-first** and currently uses SQLite in the gateway (see `packages/gateway/migrations/*.sql` and the stack in [`README.md`](../../README.md)).
+Tyrum is **local-first** and currently uses SQLite in the gateway (see `packages/gateway/migrations/*.sql` and the technology stack in the repository root `README.md`).
 
 Enterprise/HA deployments require a shared StateStore with stronger concurrency and durability guarantees (typically Postgres). The architecture explicitly targets a “single architecture” that scales from SQLite → Postgres (see [`docs/architecture/scaling-ha.md`](../scaling-ha.md)).
 
@@ -43,4 +43,3 @@ SQLite and Postgres differ materially in SQL features, locking semantics, and su
 
 - We accept that **SQL differs** between SQLite and Postgres, but we require **behavioral parity** for core runtime invariants.
 - Backend-specific features (for example vector search) must have an explicit portability story (feature-flagged, degraded mode, or backend-specific implementation).
-
