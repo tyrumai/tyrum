@@ -278,6 +278,14 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
   return 0;
 }
 
+export async function runShutdownCleanup(
+  cleanupTasks: readonly Promise<unknown>[],
+  closeDb: () => Promise<void>,
+): Promise<void> {
+  await Promise.allSettled(cleanupTasks);
+  await Promise.allSettled([closeDb()]);
+}
+
 export async function main(role: GatewayRole = "all"): Promise<void> {
   const port = parseInt(process.env["GATEWAY_PORT"] ?? "8080", 10);
   const host = process.env["GATEWAY_HOST"]?.trim() || "127.0.0.1";
@@ -548,14 +556,16 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     outboxPoller?.stop();
     workerLoop?.stop();
 
-    Promise.allSettled([
-      closeServer,
-      closeWss,
-      agentRuntime?.shutdown() ?? Promise.resolve(),
-      otel.shutdown(),
-      workerLoop?.done ?? Promise.resolve(),
-      container.db.close(),
-    ])
+    void runShutdownCleanup(
+      [
+        closeServer,
+        closeWss,
+        agentRuntime?.shutdown() ?? Promise.resolve(),
+        otel.shutdown(),
+        workerLoop?.done ?? Promise.resolve(),
+      ],
+      () => container.db.close(),
+    )
       .finally(() => {
         clearTimeout(hardExitTimer);
         process.exit(0);
