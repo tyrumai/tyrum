@@ -335,6 +335,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
           db: container.db,
           memoryDal: container.memoryDal,
           eventBus: container.eventBus,
+          keepProcessAlive: role === "scheduler",
         })
       : undefined;
 

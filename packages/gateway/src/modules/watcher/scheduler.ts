@@ -32,6 +32,11 @@ export interface WatcherSchedulerOptions {
   memoryDal: MemoryDal;
   eventBus: Emitter<GatewayEvents>;
   tickMs?: number;
+  /**
+   * When true, the scheduler interval will keep the Node.js process alive.
+   * Defaults to false so background scheduling doesn't block graceful shutdown.
+   */
+  keepProcessAlive?: boolean;
 }
 
 export class WatcherScheduler {
@@ -39,6 +44,7 @@ export class WatcherScheduler {
   private readonly memoryDal: MemoryDal;
   private readonly eventBus: Emitter<GatewayEvents>;
   private readonly tickMs: number;
+  private readonly keepProcessAlive: boolean;
   private timer: ReturnType<typeof setInterval> | undefined;
   private readonly lastFired = new Map<number, number>();
 
@@ -47,6 +53,7 @@ export class WatcherScheduler {
     this.memoryDal = opts.memoryDal;
     this.eventBus = opts.eventBus;
     this.tickMs = opts.tickMs ?? DEFAULT_TICK_MS;
+    this.keepProcessAlive = opts.keepProcessAlive ?? false;
   }
 
   start(): void {
@@ -54,6 +61,10 @@ export class WatcherScheduler {
     this.timer = setInterval(() => {
       this.tick();
     }, this.tickMs);
+    if (!this.keepProcessAlive) {
+      // Don't prevent process exit (useful in embedded / test scenarios).
+      this.timer.unref();
+    }
   }
 
   stop(): void {

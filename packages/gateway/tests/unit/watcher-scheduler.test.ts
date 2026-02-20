@@ -107,6 +107,36 @@ describe("WatcherScheduler", () => {
     scheduler.stop();
   });
 
+  it("unrefs the interval timer by default (does not keep the process alive)", () => {
+    scheduler.start();
+    try {
+      const timer = (scheduler as unknown as { timer?: NodeJS.Timeout }).timer;
+      expect(timer).toBeDefined();
+      expect(timer!.hasRef()).toBe(false);
+    } finally {
+      scheduler.stop();
+    }
+  });
+
+  it("keeps the interval timer refed when keepProcessAlive is true", () => {
+    const keepAliveScheduler = new WatcherScheduler({
+      db,
+      memoryDal,
+      eventBus,
+      tickMs: 100,
+      keepProcessAlive: true,
+    });
+
+    keepAliveScheduler.start();
+    try {
+      const timer = (keepAliveScheduler as unknown as { timer?: NodeJS.Timeout }).timer;
+      expect(timer).toBeDefined();
+      expect(timer!.hasRef()).toBe(true);
+    } finally {
+      keepAliveScheduler.stop();
+    }
+  });
+
   it("does not fire inactive periodic watchers", () => {
     const id = processor.createWatcher("plan-1", "periodic", {
       intervalMs: 1000,
