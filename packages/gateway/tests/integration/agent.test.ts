@@ -181,11 +181,11 @@ describe("agent routes", () => {
     expect(payload.tools).toContain("tool.fs.read");
   });
 
-  it("requires explicit runtime wiring when agent routes are enabled", async () => {
+  it("does not expose agent routes without an AgentRuntime", async () => {
     const container = await createTestContainer();
-    expect(() => createApp(container)).toThrow(
-      /explicit AgentRuntime when TYRUM_AGENT_ENABLED=1/,
-    );
+    const app = createApp(container);
+    const res = await app.request("/agent/status");
+    expect(res.status).toBe(404);
     await container.db.close();
   });
 

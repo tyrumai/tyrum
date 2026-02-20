@@ -77,7 +77,7 @@ See `docs/install.md` for full details, version pinning, and update commands.
 4. **Install dependencies:** `pnpm install` from the repo root.
 5. **Run checks:** `pnpm typecheck && pnpm test && pnpm lint`
 6. **Start the gateway:** `pnpm --filter @tyrum/gateway start`
-   - To enable singleton agent routes (`/agent/status`, `/agent/turn`), set `TYRUM_AGENT_ENABLED=1`.
+   - Singleton agent routes (`/agent/status`, `/agent/turn`) are enabled by default. Set `TYRUM_AGENT_ENABLED=0` to disable.
 7. **Open the integrated web app:** `http://127.0.0.1:8788/app`
 
 ### Localhost Safety Defaults
@@ -98,7 +98,7 @@ See `docs/install.md` for full details, version pinning, and update commands.
 | Lint | `pnpm lint` |
 | Build all packages | `pnpm build` |
 | Start gateway | `pnpm --filter @tyrum/gateway start` |
-| Start gateway + agent runtime | `TYRUM_AGENT_ENABLED=1 pnpm --filter @tyrum/gateway start` |
+| Start gateway (agents disabled) | `TYRUM_AGENT_ENABLED=0 pnpm --filter @tyrum/gateway start` |
 | Open integrated app | `http://127.0.0.1:8788/app` |
 
 ## Telegram Bot Setup

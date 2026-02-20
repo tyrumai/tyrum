@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { createContainerAsync } from "./container.js";
 import { createApp } from "./app.js";
 import { AgentRuntime } from "./modules/agent/runtime.js";
+import { isAgentEnabled } from "./modules/agent/enabled.js";
 import { TokenStore } from "./modules/auth/token-store.js";
 import { WatcherScheduler } from "./modules/watcher/scheduler.js";
 import { createSecretProviderFromEnv } from "./modules/secret/create-secret-provider.js";
@@ -421,8 +422,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   };
   const approvalNotifier = new WsNotifier(protocolDeps);
 
-  const agentEnabled = process.env["TYRUM_AGENT_ENABLED"] === "1";
-  const agentRuntime = shouldRunEdge && agentEnabled
+  const agentRuntime = shouldRunEdge && isAgentEnabled()
     ? new AgentRuntime({ container, secretProvider, approvalNotifier })
     : undefined;
 

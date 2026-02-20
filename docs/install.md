@@ -51,10 +51,12 @@ Run:
 tyrum
 ```
 
-Enable singleton agent routes:
+Singleton agent routes are enabled by default.
+
+Disable singleton agent routes:
 
 ```bash
-TYRUM_AGENT_ENABLED=1 tyrum
+TYRUM_AGENT_ENABLED=0 tyrum
 ```
 
 ## Option 3: GitHub Releases

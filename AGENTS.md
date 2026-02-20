@@ -29,7 +29,7 @@
   - `GATEWAY_HOST`, `GATEWAY_PORT`
   - `GATEWAY_DB_PATH` (SQLite path or `postgres://...` for split roles)
   - `GATEWAY_TOKEN` (required for HTTP/WS auth)
-  - `TYRUM_HOME`; `TYRUM_AGENT_ENABLED=1` to enable agent routes
+  - `TYRUM_HOME`; set `TYRUM_AGENT_ENABLED=0` to disable agent routes
 
 ## Common commands
 - Install: `pnpm install`
@@ -38,7 +38,7 @@
 - Test: `pnpm test` (coverage: `pnpm test:coverage`, watch: `pnpm test:watch`)
 - Build all workspace packages: `pnpm build`
 - Start gateway: `pnpm --filter @tyrum/gateway start`
-- Start gateway + agent runtime: `TYRUM_AGENT_ENABLED=1 pnpm --filter @tyrum/gateway start`
+- Start gateway (agents disabled): `TYRUM_AGENT_ENABLED=0 pnpm --filter @tyrum/gateway start`
 - Docs site: `pnpm --filter @tyrum/docs start` / `pnpm --filter @tyrum/docs build`
 - Docs public-content gate (CI): `pnpm docs:public-check` (or `bash scripts/check-public-docs.sh`)
 - Split-role + Postgres smoke test: `bash scripts/smoke-postgres-split.sh`

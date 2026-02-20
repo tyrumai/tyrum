@@ -211,7 +211,7 @@ async function waitForGatewayHealth(
 
 describe("gateway startup process", () => {
   it(
-    "starts the real gateway and serves /healthz",
+    "starts the real gateway and serves /healthz and /agent/status",
     { timeout: 60_000 },
     async () => {
       const releaseBuildLock = acquireGatewayBuildLock();
@@ -219,6 +219,7 @@ describe("gateway startup process", () => {
         ensureGatewayBuild();
 
         const port = await findAvailablePort();
+        const gatewayToken = "tyrum-test-token";
         const tempRoot = mkdtempSync(join(tmpdir(), "tyrum-gateway-startup-"));
         const tyrumHome = join(tempRoot, ".tyrum");
         const dbPath = join(tempRoot, "gateway.db");
@@ -234,8 +235,8 @@ describe("gateway startup process", () => {
             GATEWAY_PORT: String(port),
             GATEWAY_DB_PATH: dbPath,
             GATEWAY_MIGRATIONS_DIR,
+            GATEWAY_TOKEN: gatewayToken,
             TYRUM_HOME: tyrumHome,
-            TYRUM_AGENT_ENABLED: "0",
           },
           stdio: ["ignore", "pipe", "pipe"],
         });
@@ -259,6 +260,18 @@ describe("gateway startup process", () => {
           expect(healthResponse.status).toBe(200);
           const healthBody = (await healthResponse.json()) as { status: string };
           expect(healthBody.status).toBe("ok");
+
+          const agentStatusUrl = `http://127.0.0.1:${port}/agent/status`;
+          const agentStatusResponse = await fetch(agentStatusUrl, {
+            headers: {
+              Authorization: `Bearer ${gatewayToken}`,
+            },
+          });
+          expect(agentStatusResponse.status).toBe(200);
+          const agentStatusBody = (await agentStatusResponse.json()) as {
+            enabled: boolean;
+          };
+          expect(agentStatusBody.enabled).toBe(true);
         } finally {
           await stopChildProcess(child);
           rmSync(tempRoot, { recursive: true, force: true });
