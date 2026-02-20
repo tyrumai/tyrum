@@ -1,6 +1,6 @@
 {{- if ne .Values.mode "single" }}
-{{- if not (hasPrefix "postgres://" .Values.env.GATEWAY_DB_PATH) }}
-{{- fail "Split mode requires a PostgreSQL database. Please configure env.GATEWAY_DB_PATH with a postgres:// URI." }}
+{{- if not (regexMatch "(?i)^postgres(ql)?://" (trim (default "" .Values.env.GATEWAY_DB_PATH))) }}
+{{- fail "Split mode requires a PostgreSQL database. Please configure env.GATEWAY_DB_PATH with a postgres:// or postgresql:// URI." }}
 {{- end }}
 {{- if not .Values.persistence.enabled }}
 {{- fail "Split mode requires persistence.enabled=true for durable agent workspaces." }}
