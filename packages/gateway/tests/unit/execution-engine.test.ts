@@ -101,6 +101,45 @@ describe("ExecutionEngine (normalized)", () => {
     expect(job.status).toBe("completed");
   });
 
+  it("records attempt finished_at after started_at", async () => {
+    db = createDatabase(":memory:");
+    migrate(db, migrationsDir);
+
+    let calls = 0;
+    const baseMs = Date.UTC(2025, 0, 1, 0, 0, 0);
+    const engine = new ExecutionEngine({
+      db,
+      clock: () => {
+        calls += 1;
+        const nowMs = baseMs + calls * 1000;
+        return { nowMs, nowIso: new Date(nowMs).toISOString() };
+      },
+    });
+    engine.enqueuePlan({
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-finished-at-1",
+      requestId: "test-req-1",
+      steps: [action("Research")],
+    });
+
+    const mockExecutor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => {
+        return { success: true, result: { ok: true } };
+      }),
+    };
+
+    await drain(engine, "w1", mockExecutor);
+
+    const row = db
+      .prepare("SELECT started_at, finished_at FROM execution_attempts LIMIT 1")
+      .get() as { started_at: string; finished_at: string | null };
+
+    expect(row.finished_at).not.toBeNull();
+    expect(row.finished_at).not.toBe(row.started_at);
+    expect(new Date(row.finished_at!).getTime()).toBeGreaterThan(new Date(row.started_at).getTime());
+  });
+
   it("persists artifact refs returned by the step executor on attempts", async () => {
     db = createDatabase(":memory:");
     migrate(db, migrationsDir);
@@ -463,4 +502,3 @@ describe("ExecutionEngine (normalized)", () => {
     expect(attempts.map((a) => a.status)).toEqual(["cancelled", "succeeded"]);
   });
 });
-

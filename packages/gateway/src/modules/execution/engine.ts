@@ -596,7 +596,6 @@ export class ExecutionEngine {
       attemptNum: outcome.attempt.attemptNum,
       workerId: input.workerId,
       executor: input.executor,
-      clock,
     });
   }
 
@@ -616,7 +615,6 @@ export class ExecutionEngine {
     attemptNum: number;
     workerId: string;
     executor: StepExecutor;
-    clock: ExecutionClock;
   }): Promise<boolean> {
     const wallStartMs = Date.now();
 
@@ -759,7 +757,7 @@ export class ExecutionEngine {
                error = NULL,
                updated_at = excluded.updated_at`,
           )
-          .run(opts.stepId, idempotencyKey, resultJson, opts.clock.nowIso);
+          .run(opts.stepId, idempotencyKey, resultJson, this.clock().nowIso);
       }
       return true;
     }
@@ -777,7 +775,7 @@ export class ExecutionEngine {
       )
       .run(
         status,
-        opts.clock.nowIso,
+        this.clock().nowIso,
         redactedError,
         evidenceJson,
         artifactsJson,
@@ -800,10 +798,7 @@ export class ExecutionEngine {
   }
 
   private markAttemptSucceeded(
-    opts: {
-      attemptId: string;
-      clock: ExecutionClock;
-    },
+    opts: { attemptId: string },
     result: StepResult,
     evidenceJson: string | null,
     postconditionReportJson: string | null,
@@ -829,7 +824,7 @@ export class ExecutionEngine {
          WHERE attempt_id = ?`,
       )
       .run(
-        opts.clock.nowIso,
+        this.clock().nowIso,
         resultJson,
         postconditionReportJson,
         evidenceJson,
@@ -840,7 +835,7 @@ export class ExecutionEngine {
   }
 
   private markAttemptFailed(
-    opts: { attemptId: string; clock: ExecutionClock },
+    opts: { attemptId: string },
     error: string,
     evidenceJson: string | null,
     postconditionReportJson: string | null,
@@ -861,7 +856,7 @@ export class ExecutionEngine {
          WHERE attempt_id = ?`,
       )
       .run(
-        opts.clock.nowIso,
+        this.clock().nowIso,
         this.redactText(error),
         postconditionReportJson,
         evidenceJson,
@@ -880,7 +875,6 @@ export class ExecutionEngine {
     key: string;
     lane: string;
     workerId: string;
-    clock: ExecutionClock;
   }): boolean {
     if (opts.attemptNum < Math.max(1, opts.maxAttempts)) {
       this.db
@@ -907,7 +901,7 @@ export class ExecutionEngine {
          SET status = 'failed', finished_at = ?
          WHERE run_id = ?`,
       )
-      .run(opts.clock.nowIso, opts.runId);
+      .run(this.clock().nowIso, opts.runId);
 
     this.db
       .prepare(
@@ -934,7 +928,6 @@ export class ExecutionEngine {
       key: string;
       lane: string;
       workerId: string;
-      clock: ExecutionClock;
     },
     reason: string,
     detail: string,
@@ -961,7 +954,7 @@ export class ExecutionEngine {
         `INSERT INTO resume_tokens (token, run_id, created_at)
          VALUES (?, ?, ?)`,
       )
-      .run(token, opts.runId, opts.clock.nowIso);
+      .run(token, opts.runId, this.clock().nowIso);
 
     // Keep lane lease held by active worker; it will expire quickly and block
     // only briefly. New work selection also blocks on paused runs.
@@ -1052,4 +1045,3 @@ export class ExecutionEngine {
       .run(opts.key, opts.lane, opts.owner);
   }
 }
-
