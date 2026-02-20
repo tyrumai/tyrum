@@ -58,6 +58,7 @@ flowchart LR
 - **Playbooks:** deterministic workflow specs executed by the runtime (approval gates + resume tokens).
 - **Approvals:** durable operator confirmation requests that gate risky actions and pause/resume workflows.
 - **Secrets:** a first-class boundary; raw secrets stay behind a secret provider and are referenced via handles.
+- **Auth profiles:** provider credentials (API keys/OAuth) expressed as metadata + secret handles for deterministic selection and rotation. See [Provider Auth and Onboarding](./auth.md).
 - **Artifacts:** evidence objects stored outside the StateStore with policy-gated access. See [Artifacts](./artifacts.md).
 - **Client:** an operator interface connected to the gateway (desktop/mobile/CLI/web).
 - **Node:** a capability provider connected to the gateway (desktop/mobile/headless).
@@ -80,11 +81,15 @@ flowchart LR
 - [Scaling and high availability](./scaling-ha.md)
 - [Gateway](./gateway/index.md)
 - [Execution engine](./execution-engine.md)
+- [Messages and Sessions](./messages-sessions.md)
 - [Playbooks](./playbooks.md)
 - [Approvals](./approvals.md)
 - [Secrets](./secrets.md)
+- [Provider Auth and Onboarding](./auth.md)
 - [Artifacts](./artifacts.md)
 - [Sandbox and policy](./sandbox-policy.md)
+- [Observability](./observability.md)
+- [Presence](./presence.md)
 - [Client](./client.md)
 - [Node](./node.md)
 - [Protocol](./protocol/index.md)

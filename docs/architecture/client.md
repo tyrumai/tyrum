@@ -25,6 +25,8 @@ The gateway’s web control panel is a client form that connects over WebSocket 
 - **Session:** a session-centric view rendered as a unified timeline that merges chat, runs/steps/attempts, approvals, and artifacts (reconstructible from durable state; live events stream updates). The UI supports lane filters and surfaces queue-mode semantics as pending input items.
 - **Approvals:** an approval queue (approve/deny) with previews and linked evidence.
 - **Nodes/devices:** pairing requests, connected capability providers, revoke controls.
+- **Instances:** a presence view of connected gateway/client/node instances with TTL-based pruning (see [Presence](./presence.md)).
+- **Context/usage:** context breakdown (`/context`) and usage/quota panels (`/usage`) for operational transparency (see [Observability](./observability.md)).
 - **Settings:** policy defaults, tool allowlists, model config, secrets setup, and automation toggles.
 
 ## What a client is not

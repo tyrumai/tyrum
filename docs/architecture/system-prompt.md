@@ -5,6 +5,7 @@ For each agent run, Tyrum assembles a custom system prompt. The purpose is to pr
 ## Typical sections
 
 - Tooling: tool list with short descriptions
+- Tool schemas: machine-readable contracts for tool invocation (counts toward context)
 - Safety: short guardrail reminder to avoid bypassing oversight
 - Skills (when available): how to load skill instructions on demand
 - Self-update: how to apply config updates and run updates
@@ -17,6 +18,17 @@ For each agent run, Tyrum assembles a custom system prompt. The purpose is to pr
 - Heartbeats: periodic prompt and acknowledgement behavior
 - Runtime: host/OS/node/model/runtime summary
 - Reasoning visibility: visibility level and how it can be toggled (when supported)
+
+## Context report (what the model saw)
+
+For observability, the gateway produces a per-run **context report** that captures:
+
+- injected workspace files (raw vs injected sizes and truncation)
+- system prompt section sizes
+- skill list overhead
+- the largest tool schema contributors
+
+Operator clients expose this via `/context list` and `/context detail` (see [Observability](./observability.md) and [Slash Commands](./slash-commands.md)).
 
 ## Advisory vs enforcement
 

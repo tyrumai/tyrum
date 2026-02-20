@@ -4,7 +4,9 @@ A session is a durable conversation container. A lane is an execution stream wit
 
 ## Sessions
 
-- One primary direct-chat session per agent.
+- Direct messages are scoped to prevent cross-user context leakage.
+- Single-user deployments use a shared direct-chat session for continuity.
+- Multi-user inbox deployments isolate direct chats per sender by default.
 - Session transcripts are stored and can be replayed for troubleshooting.
 - Session identifiers are stable and chosen by Tyrum (not by the model).
 
@@ -16,12 +18,28 @@ The gateway uses stable keys to:
 - serialize execution per lane
 - make audit and replay reliable
 
+## Direct-message scope (secure DM mode)
+
+Tyrum chooses a direct-message scope (`dm_scope`) per agent/channel surface:
+
+- `shared` — all DMs share one session (single-user continuity).
+- `per_peer` — isolate by sender identity (secure DM mode).
+- `per_channel_peer` — isolate by `(channel, sender)`.
+- `per_account_channel_peer` — isolate by `(channel, account, sender)`.
+
+When more than one distinct sender can DM an agent (for example a DM allowlist with multiple entries or an “open DM” policy), Tyrum uses `per_account_channel_peer` by default.
+
+Identity linking can map multiple provider sender ids to a canonical identity so the same person shares a DM session across channels when `dm_scope` is `per_peer`.
+
 ### Key scheme
 
 - **Agent sessions**
-  - `agent:<agentId>:<channel>:main`
-  - `agent:<agentId>:<channel>:group:<id>`
-  - `agent:<agentId>:<channel>:channel:<id>`
+  - Direct (shared): `agent:<agentId>:main`
+  - Direct (per peer): `agent:<agentId>:dm:<peerId>`
+  - Direct (per channel + peer): `agent:<agentId>:<channel>:dm:<peerId>`
+  - Direct (per account + channel + peer): `agent:<agentId>:<channel>:<account>:dm:<peerId>`
+  - Group: `agent:<agentId>:<channel>:<account>:group:<id>`
+  - Channel: `agent:<agentId>:<channel>:<account>:channel:<id>`
 - **Cron**
   - `cron:<jobId>`
 - **Hook**
@@ -32,7 +50,9 @@ The gateway uses stable keys to:
 ### Notes
 
 - `<agentId>` is the gateway’s internal agent identifier.
-- `<channel>` should identify a specific connector/account instance (not just a channel type) so multiple accounts can coexist.
+- `<channel>` is the channel type (for example `telegram`, `whatsapp`, `discord`).
+- `<account>` identifies a configured account/connector instance (for example `default`, `family`, `work`) so multiple accounts can coexist safely.
+- `<peerId>` is the sender identity for DMs (provider-native or canonical identity when identity linking is enabled).
 - `<id>` is the provider-native thread/container identifier (for example a Telegram chat id).
 
 ## Lanes
@@ -61,11 +81,15 @@ With a single host and a single worker, these locks are typically uncontested, b
 
 ## Queue modes
 
-Channels can choose how inbound messages are queued:
+When a run is already active for a `(session_key, lane)`, inbound messages are handled by an explicit queue mode:
 
-- **collect:** coalesce queued messages into a single follow-up turn (default)
-- **followup:** enqueue for the next turn after the active run ends
-- **steer:** inject into the in-flight run at the next tool boundary (cancels pending tool calls after that boundary)
+- **`collect` (default):** coalesce queued messages into a single follow-up turn after the active run ends.
+- **`followup`:** enqueue each message as its own follow-up turn.
+- **`steer`:** inject the new message into the in-flight run at the next tool boundary and cancel pending tool calls for the current assistant message.
+- **`steer_backlog`:** steer now and also preserve the message for a follow-up turn.
+- **`interrupt`:** abort the active run at the next safe boundary and run the newest message.
+
+Queueing is bounded (`cap`, `debounce_ms`, `overflow`) and lane-aware so automation lanes do not trample interactive lanes. Details: [Messages and Sessions](./messages-sessions.md).
 
 ## Command queue
 

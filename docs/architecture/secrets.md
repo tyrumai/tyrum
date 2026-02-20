@@ -74,6 +74,17 @@ Redaction is enforced at persistence and egress boundaries:
 - Web session cookies (stored with explicit expiry metadata)
 - Payment instruments (only if explicitly enabled by the operator and supported by policy)
 
+## Provider credentials and auth profiles
+
+Model-provider credentials (API keys and OAuth tokens) are represented as:
+
+- secret handles stored in the secret provider, and
+- auth profile metadata scoped to an agent (profile id, provider, expiry, labels)
+
+Auth profiles are used for deterministic credential selection, rotation, and multi-account routing without exposing raw secrets to the model.
+
+Details: [Provider Auth and Onboarding](./auth.md).
+
 ## Workflow and approval integration
 
 - Workflows may reference secret handles as parameters.
