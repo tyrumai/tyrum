@@ -66,13 +66,21 @@ describe("ArtifactStore", () => {
       }
       if (cmd instanceof GetObjectCommand) {
         const key = cmd.input.Key ?? "";
-        if (key.endsWith(".json")) {
+        if (key === "artifacts/manifests/55/550e8400-e29b-41d4-a716-446655440000.json") {
           const meta = JSON.stringify({
-            artifact_id: "550e8400-e29b-41d4-a716-446655440000",
-            uri: "artifact://550e8400-e29b-41d4-a716-446655440000",
-            kind: "log",
-            created_at: "2026-02-19T12:00:00.000Z",
-            labels: [],
+            v: 1,
+            ref: {
+              artifact_id: "550e8400-e29b-41d4-a716-446655440000",
+              uri: "artifact://550e8400-e29b-41d4-a716-446655440000",
+              kind: "log",
+              created_at: "2026-02-19T12:00:00.000Z",
+              labels: [],
+              sha256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+              size_bytes: 5,
+              mime_type: "text/plain",
+            },
+            blob_key:
+              "artifacts/blobs/55/550e8400-e29b-41d4-a716-446655440000/2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824.bin",
           });
           return {
             Body: {
@@ -107,7 +115,72 @@ describe("ArtifactStore", () => {
       expect.objectContaining({
         input: expect.objectContaining({
           Bucket: "bucket",
-          Key: "artifacts/55/550e8400-e29b-41d4-a716-446655440000.bin",
+          Key: "artifacts/blobs/55/550e8400-e29b-41d4-a716-446655440000/2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824.bin",
+        }),
+      }),
+    );
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          Bucket: "bucket",
+          Key: "artifacts/manifests/55/550e8400-e29b-41d4-a716-446655440000.json",
+        }),
+      }),
+    );
+
+    const got = await store.get("550e8400-e29b-41d4-a716-446655440000");
+    expect(got).not.toBeNull();
+    expect(got!.body.toString("utf8")).toBe("hello");
+    expect(got!.ref.kind).toBe("log");
+  });
+
+  it("s3 store: get falls back to legacy keys when manifest is missing", async () => {
+    const send = vi.fn(async (cmd: unknown) => {
+      if (cmd instanceof GetObjectCommand) {
+        const key = cmd.input.Key ?? "";
+        if (key === "artifacts/manifests/55/550e8400-e29b-41d4-a716-446655440000.json") {
+          const err = Object.assign(new Error("not found"), { name: "NoSuchKey" });
+          throw err;
+        }
+        if (key.endsWith(".json")) {
+          const meta = JSON.stringify({
+            artifact_id: "550e8400-e29b-41d4-a716-446655440000",
+            uri: "artifact://550e8400-e29b-41d4-a716-446655440000",
+            kind: "log",
+            created_at: "2026-02-19T12:00:00.000Z",
+            labels: [],
+          });
+          return {
+            Body: {
+              transformToByteArray: async () => Buffer.from(meta, "utf8"),
+            },
+          };
+        }
+        return {
+          Body: {
+            transformToByteArray: async () => Buffer.from("legacy-body", "utf8"),
+          },
+        };
+      }
+      throw new Error("unexpected command");
+    });
+
+    const store = new S3ArtifactStore(
+      { send } as unknown as import("@aws-sdk/client-s3").S3Client,
+      "bucket",
+      "artifacts",
+    );
+
+    const got = await store.get("550e8400-e29b-41d4-a716-446655440000");
+    expect(got).not.toBeNull();
+    expect(got!.body.toString("utf8")).toBe("legacy-body");
+    expect(got!.ref.kind).toBe("log");
+
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          Bucket: "bucket",
+          Key: "artifacts/manifests/55/550e8400-e29b-41d4-a716-446655440000.json",
         }),
       }),
     );
@@ -119,11 +192,14 @@ describe("ArtifactStore", () => {
         }),
       }),
     );
-
-    const got = await store.get("550e8400-e29b-41d4-a716-446655440000");
-    expect(got).not.toBeNull();
-    expect(got!.body.toString("utf8")).toBe("hello");
-    expect(got!.ref.kind).toBe("log");
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          Bucket: "bucket",
+          Key: "artifacts/55/550e8400-e29b-41d4-a716-446655440000.bin",
+        }),
+      }),
+    );
   });
 });
 

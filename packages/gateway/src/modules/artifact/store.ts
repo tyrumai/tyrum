@@ -2,7 +2,7 @@ import type { ArtifactKind, ArtifactRef as ArtifactRefT } from "@tyrum/schemas";
 import { randomUUID, createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, PutObjectCommand, S3Client, S3ServiceException } from "@aws-sdk/client-s3";
 import type { RedactionEngine } from "../redaction/engine.js";
 
 export interface ArtifactPutInput {
@@ -24,6 +24,12 @@ export interface ArtifactStore {
   put(input: ArtifactPutInput): Promise<ArtifactRefT>;
   get(artifactId: string): Promise<ArtifactGetResult | null>;
 }
+
+type ArtifactManifestV1 = {
+  v: 1;
+  ref: ArtifactRefT;
+  blob_key: string;
+};
 
 function isTextLikeMime(mimeType: string): boolean {
   const mime = mimeType.toLowerCase();
@@ -153,6 +159,18 @@ async function bodyToBuffer(body: unknown): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
+function isNoSuchKey(err: unknown): boolean {
+  if (err instanceof S3ServiceException) {
+    return err.name === "NoSuchKey";
+  }
+  const name = err && typeof err === "object" ? (err as { name?: string }).name : undefined;
+  const code =
+    err && typeof err === "object"
+      ? ((err as { Code?: string; code?: string }).Code ?? (err as { code?: string }).code)
+      : undefined;
+  return name === "NoSuchKey" || code === "NoSuchKey";
+}
+
 export class S3ArtifactStore implements ArtifactStore {
   private bucketEnsured: Promise<void> | undefined;
 
@@ -163,9 +181,19 @@ export class S3ArtifactStore implements ArtifactStore {
     private readonly redactionEngine?: RedactionEngine,
   ) {}
 
-  private keyFor(artifactId: string, suffix: ".bin" | ".json"): string {
+  private legacyKeyFor(artifactId: string, suffix: ".bin" | ".json"): string {
     const shard = artifactShard(artifactId);
     return `${this.keyPrefix}/${shard}/${artifactId}${suffix}`;
+  }
+
+  private manifestKeyFor(artifactId: string): string {
+    const shard = artifactShard(artifactId);
+    return `${this.keyPrefix}/manifests/${shard}/${artifactId}.json`;
+  }
+
+  private blobKeyFor(artifactId: string, sha256: string): string {
+    const shard = artifactShard(artifactId);
+    return `${this.keyPrefix}/blobs/${shard}/${artifactId}/${sha256}.bin`;
   }
 
   private async ensureBucketOnce(): Promise<void> {
@@ -201,20 +229,24 @@ export class S3ArtifactStore implements ArtifactStore {
       metadata: input.metadata,
     });
 
+    const blobKey = this.blobKeyFor(artifactId, sha256);
+    const manifestKey = this.manifestKeyFor(artifactId);
+
     await this.client.send(
       new PutObjectCommand({
         Bucket: this.bucket,
-        Key: this.keyFor(artifactId, ".bin"),
+        Key: blobKey,
         Body: body,
         ContentType: mimeType ?? "application/octet-stream",
       }),
     );
 
+    const manifest: ArtifactManifestV1 = { v: 1, ref, blob_key: blobKey };
     await this.client.send(
       new PutObjectCommand({
         Bucket: this.bucket,
-        Key: this.keyFor(artifactId, ".json"),
-        Body: JSON.stringify(ref),
+        Key: manifestKey,
+        Body: JSON.stringify(manifest),
         ContentType: "application/json",
       }),
     );
@@ -226,17 +258,44 @@ export class S3ArtifactStore implements ArtifactStore {
     await this.ensureBucketOnce();
 
     try {
+      const manifestRes = await this.client.send(
+        new GetObjectCommand({
+          Bucket: this.bucket,
+          Key: this.manifestKeyFor(artifactId),
+        }),
+      );
+
+      const manifestBuf = await bodyToBuffer(manifestRes.Body);
+      const parsed = JSON.parse(manifestBuf.toString("utf8")) as ArtifactManifestV1;
+      if (!parsed || parsed.v !== 1 || typeof parsed.blob_key !== "string" || !parsed.ref) {
+        throw new Error(`invalid artifact manifest for ${artifactId}`);
+      }
+
+      const dataRes = await this.client.send(
+        new GetObjectCommand({
+          Bucket: this.bucket,
+          Key: parsed.blob_key,
+        }),
+      );
+      const bodyBuf = await bodyToBuffer(dataRes.Body);
+      return { ref: parsed.ref, body: bodyBuf };
+    } catch (err) {
+      if (!isNoSuchKey(err)) throw err;
+    }
+
+    // Legacy fallback: older deployments wrote `<id>.bin` + `<id>.json` directly.
+    try {
       const [metaRes, dataRes] = await Promise.all([
         this.client.send(
           new GetObjectCommand({
             Bucket: this.bucket,
-            Key: this.keyFor(artifactId, ".json"),
+            Key: this.legacyKeyFor(artifactId, ".json"),
           }),
         ),
         this.client.send(
           new GetObjectCommand({
             Bucket: this.bucket,
-            Key: this.keyFor(artifactId, ".bin"),
+            Key: this.legacyKeyFor(artifactId, ".bin"),
           }),
         ),
       ]);
@@ -249,9 +308,7 @@ export class S3ArtifactStore implements ArtifactStore {
       const ref = JSON.parse(metaBuf.toString("utf8")) as ArtifactRefT;
       return { ref, body: bodyBuf };
     } catch (err) {
-      const name = err && typeof err === "object" ? (err as { name?: string }).name : undefined;
-      const code = err && typeof err === "object" ? (err as { Code?: string; code?: string }).Code ?? (err as { code?: string }).code : undefined;
-      if (name === "NoSuchKey" || code === "NoSuchKey") return null;
+      if (isNoSuchKey(err)) return null;
       throw err;
     }
   }
