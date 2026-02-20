@@ -30,10 +30,16 @@ Open:
 
 - `http://127.0.0.1:8788/app`
 
-## 4. Enable singleton agent routes (optional)
+## 4. Singleton agent routes (default on)
 
 ```bash
-TYRUM_AGENT_ENABLED=1 tyrum-gateway
+tyrum-gateway
+```
+
+To disable singleton agent routes:
+
+```bash
+TYRUM_AGENT_ENABLED=0 tyrum-gateway
 ```
 
 ## 5. Common first-time checks

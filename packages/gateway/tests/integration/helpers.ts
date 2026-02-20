@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { createContainer } from "../../src/container.js";
 import { createApp } from "../../src/app.js";
 import type { GatewayContainer } from "../../src/container.js";
+import { isAgentEnabled } from "../../src/modules/agent/enabled.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import type { TokenStore } from "../../src/modules/auth/token-store.js";
 import type { Hono } from "hono";
@@ -32,10 +33,7 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<{
   agentRuntime?: AgentRuntime;
 }> {
   const container = await createTestContainer();
-  const agentRuntime =
-    process.env["TYRUM_AGENT_ENABLED"] === "1"
-      ? new AgentRuntime({ container })
-      : undefined;
+  const agentRuntime = isAgentEnabled() ? new AgentRuntime({ container }) : undefined;
   const app = createApp(container, {
     agentRuntime,
     tokenStore: opts.tokenStore,

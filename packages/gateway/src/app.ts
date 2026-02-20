@@ -108,12 +108,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     app.route("/", createConnectionsRoute(opts.connectionManager));
   }
 
-  if (process.env["TYRUM_AGENT_ENABLED"] === "1") {
-    if (!opts.agentRuntime) {
-      throw new Error(
-        "Agent routes require an explicit AgentRuntime when TYRUM_AGENT_ENABLED=1.",
-      );
-    }
+  if (opts.agentRuntime) {
     app.route("/", createAgentRoutes(opts.agentRuntime));
   }
 
