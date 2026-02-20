@@ -6,7 +6,7 @@ Accepted (2026-02-19)
 
 ## Context
 
-Tyrum is **local-first** and currently uses SQLite in the gateway (see `packages/gateway/migrations/*.sql` and the technology stack in the repository root `README.md`).
+Tyrum is **local-first** and currently uses SQLite in the gateway (see `packages/gateway/migrations/sqlite/001_init.sql` and the technology stack in the repository root `README.md`).
 
 Enterprise/HA deployments require a shared StateStore with stronger concurrency and durability guarantees (typically Postgres). The architecture explicitly targets a “single architecture” that scales from SQLite → Postgres (see [`docs/architecture/scaling-ha.md`](../scaling-ha.md)).
 

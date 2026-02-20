@@ -11,7 +11,7 @@ Approvals are Tyrum’s durable gating mechanism for risky actions (see [`docs/a
 The repository currently has:
 
 - Approval contracts in `@tyrum/schemas` (`packages/schemas/src/approval.ts`).
-- A SQLite `approvals` table and DAL keyed by `plan_id + step_index` (`packages/gateway/migrations/010_approvals.sql`, `packages/gateway/src/modules/approval/dal.ts`).
+- A SQLite `approvals` table and DAL keyed by `plan_id + step_index` (see `packages/gateway/migrations/sqlite/001_init.sql`, `packages/gateway/src/modules/approval/dal.ts`).
 - Web UI routes to list/resolve approvals (`packages/gateway/src/routes/web-ui.ts`, `packages/gateway/src/routes/approval.ts`).
 
 Enterprise deployments require multi-client correctness, HA-safe state transitions, and real-time updates.

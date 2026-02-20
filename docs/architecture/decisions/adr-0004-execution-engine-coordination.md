@@ -11,7 +11,7 @@ The execution engine is responsible for resilient, auditable execution (retries,
 The repository already contains:
 
 - A richer execution contract in `@tyrum/schemas` (`packages/schemas/src/execution.ts`).
-- A simplified SQLite `jobs` table (`packages/gateway/migrations/011_jobs.sql`) used by the current in-process runner.
+- A simplified SQLite `jobs` table (see `packages/gateway/migrations/sqlite/001_init.sql`) used by the current in-process runner.
 
 To support HA workers, we need a durable data model and explicit coordination primitives.
 
