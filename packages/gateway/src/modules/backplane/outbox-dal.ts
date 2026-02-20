@@ -81,7 +81,7 @@ export class OutboxDal {
     this.db
       .prepare(
         `UPDATE outbox_consumers
-         SET last_outbox_id = ?, updated_at = datetime('now')
+         SET last_outbox_id = ?, updated_at = CURRENT_TIMESTAMP
          WHERE consumer_id = ?`,
       )
       .run(lastOutboxId, consumerId);
