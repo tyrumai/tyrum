@@ -16,8 +16,7 @@ import { createApp } from "./app.js";
 import { AgentRuntime } from "./modules/agent/runtime.js";
 import { TokenStore } from "./modules/auth/token-store.js";
 import { WatcherScheduler } from "./modules/watcher/scheduler.js";
-import { EnvSecretProvider, FileSecretProvider, KeychainSecretProvider } from "./modules/secret/provider.js";
-import type { SecretProvider } from "./modules/secret/provider.js";
+import { createSecretProviderFromEnv } from "./modules/secret/create-secret-provider.js";
 import { WsNotifier } from "./modules/approval/notifier.js";
 import { OutboxDal } from "./modules/backplane/outbox-dal.js";
 import { ConnectionDirectoryDal } from "./modules/backplane/connection-directory.js";
@@ -337,26 +336,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   }
 
   // Initialize secret provider (defaults per ADR-0007; override via TYRUM_SECRET_PROVIDER)
-  let secretProvider: SecretProvider;
-  const desiredProvider = process.env["TYRUM_SECRET_PROVIDER"]?.trim().toLowerCase();
-  const isKubernetes = Boolean(process.env["KUBERNETES_SERVICE_HOST"]);
-  const providerKind =
-    desiredProvider === "env" || desiredProvider === "file" || desiredProvider === "keychain"
-      ? desiredProvider
-      : (isKubernetes ? "env" : "file");
-
-  if (providerKind === "env") {
-    secretProvider = new EnvSecretProvider();
-  } else if (providerKind === "keychain") {
-    const secretsPath = join(tyrumHome, "secrets.keychain.json");
-    secretProvider = await KeychainSecretProvider.create(secretsPath);
-  } else {
-    if (!token || token.trim().length === 0) {
-      throw new Error("FileSecretProvider requires a non-empty admin token");
-    }
-    const secretsPath = join(tyrumHome, "secrets.json");
-    secretProvider = await FileSecretProvider.create(secretsPath, token);
-  }
+  const secretProvider = await createSecretProviderFromEnv(tyrumHome, token);
 
   if (container.telegramBot) {
     console.log("Telegram bot initialized");

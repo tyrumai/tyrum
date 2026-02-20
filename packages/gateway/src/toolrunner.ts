@@ -3,13 +3,10 @@ import { ActionPrimitive } from "@tyrum/schemas";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { TokenStore } from "./modules/auth/token-store.js";
-import { EnvSecretProvider, FileSecretProvider, KeychainSecretProvider } from "./modules/secret/provider.js";
-import type { SecretProvider } from "./modules/secret/provider.js";
+import { createSecretProviderFromEnv } from "./modules/secret/create-secret-provider.js";
 import { createLocalStepExecutor } from "./modules/execution/local-step-executor.js";
 import { RedactionEngine } from "./modules/redaction/engine.js";
-import type { ArtifactStore } from "./modules/artifact/store.js";
-import { FsArtifactStore, S3ArtifactStore } from "./modules/artifact/store.js";
-import { S3Client } from "@aws-sdk/client-s3";
+import { createArtifactStoreFromEnv } from "./modules/artifact/create-artifact-store.js";
 import { Logger } from "./modules/observability/logger.js";
 
 interface ToolRunnerStdioRequest {
@@ -29,75 +26,6 @@ function readStdinUtf8(): Promise<string> {
     process.stdin.on("end", () => resolve(data));
     process.stdin.on("error", (err) => reject(err));
   });
-}
-
-function createArtifactStore(
-  tyrumHome: string,
-  redactionEngine: RedactionEngine,
-): ArtifactStore {
-  const kind = process.env["TYRUM_ARTIFACT_STORE"]?.trim() || "fs";
-  const fsDir =
-    process.env["TYRUM_ARTIFACTS_DIR"]?.trim() || join(tyrumHome, "artifacts");
-
-  if (kind === "s3") {
-    const bucket =
-      process.env["TYRUM_ARTIFACTS_S3_BUCKET"]?.trim() || "tyrum-artifacts";
-    const region =
-      process.env["TYRUM_ARTIFACTS_S3_REGION"]?.trim() || "us-east-1";
-    const endpoint = process.env["TYRUM_ARTIFACTS_S3_ENDPOINT"]?.trim() || undefined;
-    const forcePathStyleRaw =
-      process.env["TYRUM_ARTIFACTS_S3_FORCE_PATH_STYLE"]?.trim();
-    const forcePathStyle =
-      forcePathStyleRaw !== undefined
-        ? forcePathStyleRaw === "1" || forcePathStyleRaw.toLowerCase() === "true"
-        : endpoint !== undefined;
-
-    const accessKeyId =
-      process.env["TYRUM_ARTIFACTS_S3_ACCESS_KEY_ID"]?.trim() || undefined;
-    const secretAccessKey =
-      process.env["TYRUM_ARTIFACTS_S3_SECRET_ACCESS_KEY"]?.trim() || undefined;
-    const sessionToken =
-      process.env["TYRUM_ARTIFACTS_S3_SESSION_TOKEN"]?.trim() || undefined;
-
-    const client = new S3Client({
-      region,
-      endpoint,
-      forcePathStyle,
-      credentials:
-        accessKeyId && secretAccessKey
-          ? { accessKeyId, secretAccessKey, sessionToken }
-          : undefined,
-    });
-    return new S3ArtifactStore(client, bucket, "artifacts", redactionEngine);
-  }
-
-  return new FsArtifactStore(fsDir, redactionEngine);
-}
-
-async function createSecretProvider(
-  tyrumHome: string,
-  token: string | undefined,
-): Promise<SecretProvider> {
-  const desiredProvider = process.env["TYRUM_SECRET_PROVIDER"]?.trim().toLowerCase();
-  const isKubernetes = Boolean(process.env["KUBERNETES_SERVICE_HOST"]);
-  const providerKind =
-    desiredProvider === "env" || desiredProvider === "file" || desiredProvider === "keychain"
-      ? desiredProvider
-      : (isKubernetes ? "env" : "file");
-
-  if (providerKind === "env") {
-    return new EnvSecretProvider();
-  }
-  if (providerKind === "keychain") {
-    const secretsPath = join(tyrumHome, "secrets.keychain.json");
-    return await KeychainSecretProvider.create(secretsPath);
-  }
-
-  if (!token || token.trim().length === 0) {
-    throw new Error("FileSecretProvider requires a non-empty admin token");
-  }
-  const secretsPath = join(tyrumHome, "secrets.json");
-  return await FileSecretProvider.create(secretsPath, token);
 }
 
 export async function runToolRunnerFromStdio(): Promise<number> {
@@ -143,8 +71,8 @@ export async function runToolRunnerFromStdio(): Promise<number> {
     const redactionEngine = new RedactionEngine();
     const tokenStore = new TokenStore(tyrumHome);
     const token = await tokenStore.initialize();
-    const secretProvider = await createSecretProvider(tyrumHome, token);
-    const artifactStore = createArtifactStore(tyrumHome, redactionEngine);
+    const secretProvider = await createSecretProviderFromEnv(tyrumHome, token);
+    const artifactStore = createArtifactStoreFromEnv(tyrumHome, redactionEngine);
 
     const executor = createLocalStepExecutor({
       tyrumHome,
@@ -164,4 +92,3 @@ export async function runToolRunnerFromStdio(): Promise<number> {
     return 1;
   }
 }
-
