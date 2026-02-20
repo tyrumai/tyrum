@@ -171,7 +171,6 @@ async function waitForHealthDown(url: string, timeoutMs = 5_000): Promise<void> 
 describe("desktop embedded gateway startup", () => {
   let manager: GatewayManager | undefined;
   let tempRoot: string | undefined;
-  let releaseBuildLock: (() => void) | undefined;
 
   afterEach(async () => {
     if (manager) {
@@ -182,18 +181,18 @@ describe("desktop embedded gateway startup", () => {
       await rm(tempRoot, { recursive: true, force: true });
       tempRoot = undefined;
     }
-    if (releaseBuildLock) {
-      releaseBuildLock();
-      releaseBuildLock = undefined;
-    }
   });
 
   it(
     "starts embedded gateway via GatewayManager and passes health check",
     { timeout: 60_000 },
     async () => {
-      releaseBuildLock = acquireGatewayBuildLock();
-      ensureGatewayBuild();
+      const releaseBuildLock = acquireGatewayBuildLock();
+      try {
+        ensureGatewayBuild();
+      } finally {
+        releaseBuildLock();
+      }
 
       const port = await findAvailablePort();
       tempRoot = await mkdtemp(join(tmpdir(), "tyrum-desktop-gateway-"));

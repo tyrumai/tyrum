@@ -304,7 +304,8 @@ export class ExecutionEngine {
       if (!leaseOk) continue;
 
       try {
-        return await this.tickWithLaneLease(run, input, { nowMs, nowIso });
+        const didWork = await this.tickWithLaneLease(run, input, { nowMs, nowIso });
+        if (didWork) return true;
       } finally {
         // Lane leases are held across the whole run while it's active.
         // The tick function releases on completion/failure. On transient
@@ -372,6 +373,7 @@ export class ExecutionEngine {
           )
           .all(run.run_id) as Array<{ step_id: string }>;
 
+        let didRecover = false;
         for (const step of runningSteps) {
           const latestAttempt = this.db
             .prepare(
@@ -402,6 +404,7 @@ export class ExecutionEngine {
                  WHERE step_id = ? AND status = 'running'`,
               )
               .run(step.step_id);
+            didRecover = true;
           }
         }
 
@@ -416,7 +419,7 @@ export class ExecutionEngine {
         const hasPaused = statuses.some((s) => s.status === "paused");
         if (hasQueuedOrRunning || hasPaused) {
           // Nothing we can do in this tick.
-          return { kind: "noop" as const };
+          return didRecover ? { kind: "recovered" as const } : { kind: "noop" as const };
         }
 
         const failed = statuses.some(
@@ -570,7 +573,8 @@ export class ExecutionEngine {
 
     const outcome = txn();
 
-    if (outcome.kind === "noop") return Promise.resolve(true);
+    if (outcome.kind === "noop") return Promise.resolve(false);
+    if (outcome.kind === "recovered") return Promise.resolve(true);
     if (outcome.kind === "finalized") return Promise.resolve(true);
     if (outcome.kind === "idempotent") return Promise.resolve(true);
 
