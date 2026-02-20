@@ -43,6 +43,7 @@ import { S3Client } from "@aws-sdk/client-s3";
 import { Logger } from "./modules/observability/logger.js";
 import { SqliteDb } from "./statestore/sqlite.js";
 import { PostgresDb } from "./statestore/postgres.js";
+import { isPostgresDbUri } from "./statestore/db-uri.js";
 
 export interface GatewayConfig {
   dbPath: string;
@@ -68,10 +69,6 @@ export interface GatewayContainer {
   artifactStore: ArtifactStore;
   logger: Logger;
   config: GatewayConfig;
-}
-
-function isPostgresDbUri(dbPath: string): boolean {
-  return /^postgres(ql)?:\/\//i.test(dbPath.trim());
 }
 
 export function createContainer(

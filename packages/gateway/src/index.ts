@@ -30,6 +30,7 @@ import { startExecutionWorkerLoop } from "./modules/execution/worker-loop.js";
 import { createToolRunnerStepExecutor } from "./modules/execution/toolrunner-step-executor.js";
 import { createKubernetesToolRunnerStepExecutor } from "./modules/execution/kubernetes-toolrunner-step-executor.js";
 import { runToolRunnerFromStdio } from "./toolrunner.js";
+import { isPostgresDbUri } from "./statestore/db-uri.js";
 
 export const VERSION = "0.1.0";
 
@@ -72,10 +73,6 @@ function parseGatewayRole(raw: string | undefined): GatewayRole | undefined {
     return value;
   }
   return undefined;
-}
-
-function isPostgresDbUri(dbPath: string): boolean {
-  return /^postgres(ql)?:\/\//i.test(dbPath.trim());
 }
 
 export function assertSplitRoleUsesPostgres(role: GatewayRole, dbPath: string): void {
