@@ -6,10 +6,10 @@
  * matching watchers via the event bus.
  */
 
-import type Database from "better-sqlite3";
 import type { Emitter } from "mitt";
 import type { GatewayEvents } from "../../event-bus.js";
 import type { MemoryDal } from "../memory/dal.js";
+import type { SqlDb } from "../../statestore/types.js";
 
 const DEFAULT_TICK_MS = 60_000;
 
@@ -28,7 +28,7 @@ export interface PeriodicTriggerConfig {
 }
 
 export interface WatcherSchedulerOptions {
-  db: Database.Database;
+  db: SqlDb;
   memoryDal: MemoryDal;
   eventBus: Emitter<GatewayEvents>;
   tickMs?: number;
@@ -40,7 +40,7 @@ export interface WatcherSchedulerOptions {
 }
 
 export class WatcherScheduler {
-  private readonly db: Database.Database;
+  private readonly db: SqlDb;
   private readonly memoryDal: MemoryDal;
   private readonly eventBus: Emitter<GatewayEvents>;
   private readonly tickMs: number;
@@ -59,7 +59,7 @@ export class WatcherScheduler {
   start(): void {
     if (this.timer) return;
     this.timer = setInterval(() => {
-      this.tick();
+      void this.tick();
     }, this.tickMs);
     if (!this.keepProcessAlive) {
       // Don't prevent process exit (useful in embedded / test scenarios).
@@ -75,8 +75,8 @@ export class WatcherScheduler {
   }
 
   /** Exposed for testing -- runs one scheduler cycle. */
-  tick(): void {
-    const watchers = this.getActivePeriodicWatchers();
+  async tick(): Promise<void> {
+    const watchers = await this.getActivePeriodicWatchers();
     const now = Date.now();
 
     for (const watcher of watchers) {
@@ -97,22 +97,20 @@ export class WatcherScheduler {
       }
 
       this.lastFired.set(watcher.id, now);
-      this.fireWatcher(watcher, now);
+      await this.fireWatcher(watcher, now);
     }
   }
 
-  private getActivePeriodicWatchers(): RawPeriodicWatcherRow[] {
-    return this.db
-      .prepare(
-        "SELECT * FROM watchers WHERE trigger_type = 'periodic' AND active = 1",
-      )
-      .all() as RawPeriodicWatcherRow[];
+  private async getActivePeriodicWatchers(): Promise<RawPeriodicWatcherRow[]> {
+    return await this.db.all<RawPeriodicWatcherRow>(
+      "SELECT * FROM watchers WHERE trigger_type = 'periodic' AND active = 1",
+    );
   }
 
-  private fireWatcher(watcher: RawPeriodicWatcherRow, now: number): void {
+  private async fireWatcher(watcher: RawPeriodicWatcherRow, now: number): Promise<void> {
     const eventId = `scheduler-${String(watcher.id)}-${String(now)}`;
 
-    this.memoryDal.insertEpisodicEvent(
+    await this.memoryDal.insertEpisodicEvent(
       eventId,
       new Date(now).toISOString(),
       "watcher",

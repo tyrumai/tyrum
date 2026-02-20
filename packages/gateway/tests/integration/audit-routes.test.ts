@@ -1,37 +1,29 @@
-import { describe, expect, it, beforeEach } from "vitest";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Hono } from "hono";
-import { createDatabase } from "../../src/db.js";
-import { migrate } from "../../src/migrate.js";
 import { EventLog } from "../../src/modules/planner/event-log.js";
 import { createAuditRoutes } from "../../src/routes/audit.js";
-import type Database from "better-sqlite3";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const migrationsDir = join(__dirname, "../../migrations/sqlite");
-
-function setupDb(): Database.Database {
-  const db = createDatabase(":memory:");
-  migrate(db, migrationsDir);
-  return db;
-}
+import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
 describe("Audit routes", () => {
-  let db: Database.Database;
+  let db: SqliteDb;
   let eventLog: EventLog;
   let app: Hono;
 
   beforeEach(() => {
-    db = setupDb();
+    db = openTestSqliteDb();
     eventLog = new EventLog(db);
     app = new Hono();
     app.route("/", createAuditRoutes({ db, eventLog }));
   });
 
-  function appendEvents(planId: string, count: number): void {
+  afterEach(async () => {
+    await db.close();
+  });
+
+  async function appendEvents(planId: string, count: number): Promise<void> {
     for (let i = 0; i < count; i++) {
-      eventLog.append({
+      await eventLog.append({
         replayId: `r-${planId}-${String(i)}`,
         planId,
         stepIndex: i,
@@ -43,7 +35,7 @@ describe("Audit routes", () => {
 
   describe("GET /audit/export/:planId", () => {
     it("exports a valid receipt bundle", async () => {
-      appendEvents("plan-1", 3);
+      await appendEvents("plan-1", 3);
 
       const res = await app.request("/audit/export/plan-1", {
         method: "GET",
@@ -74,8 +66,8 @@ describe("Audit routes", () => {
 
   describe("POST /audit/verify", () => {
     it("verifies a valid chain", async () => {
-      appendEvents("plan-1", 3);
-      const events = eventLog.getEventsForVerification("plan-1");
+      await appendEvents("plan-1", 3);
+      const events = await eventLog.getEventsForVerification("plan-1");
 
       const res = await app.request("/audit/verify", {
         method: "POST",
@@ -93,8 +85,8 @@ describe("Audit routes", () => {
     });
 
     it("detects tampered chain", async () => {
-      appendEvents("plan-1", 3);
-      const events = eventLog.getEventsForVerification("plan-1");
+      await appendEvents("plan-1", 3);
+      const events = await eventLog.getEventsForVerification("plan-1");
       events[1]!.action = '{"tampered":true}';
 
       const res = await app.request("/audit/verify", {
@@ -125,7 +117,7 @@ describe("Audit routes", () => {
 
   describe("POST /audit/forget", () => {
     it("deletes events and inserts a deletion event", async () => {
-      appendEvents("plan-1", 3);
+      await appendEvents("plan-1", 3);
 
       const res = await app.request("/audit/forget", {
         method: "POST",
@@ -145,7 +137,7 @@ describe("Audit routes", () => {
       expect(body.deletion_event_id).toBeGreaterThan(0);
 
       // Verify the deletion event exists
-      const remaining = eventLog.getEventsForVerification("plan-1");
+      const remaining = await eventLog.getEventsForVerification("plan-1");
       expect(remaining).toHaveLength(1);
 
       const deletionEvent = remaining[0]!;
@@ -162,10 +154,10 @@ describe("Audit routes", () => {
     });
 
     it("deletion event has valid hash chain", async () => {
-      appendEvents("plan-1", 2);
+      await appendEvents("plan-1", 2);
 
       // Get the last event's hash before forget
-      const eventsBefore = eventLog.getEventsForVerification("plan-1");
+      const eventsBefore = await eventLog.getEventsForVerification("plan-1");
       const lastHashBefore = eventsBefore[eventsBefore.length - 1]!.event_hash;
 
       await app.request("/audit/forget", {
@@ -177,7 +169,7 @@ describe("Audit routes", () => {
         }),
       });
 
-      const remaining = eventLog.getEventsForVerification("plan-1");
+      const remaining = await eventLog.getEventsForVerification("plan-1");
       expect(remaining).toHaveLength(1);
 
       // The deletion event's prev_hash should link to the old chain
@@ -212,8 +204,8 @@ describe("Audit routes", () => {
     });
 
     it("does not affect other plans", async () => {
-      appendEvents("plan-1", 2);
-      appendEvents("plan-2", 2);
+      await appendEvents("plan-1", 2);
+      await appendEvents("plan-2", 2);
 
       await app.request("/audit/forget", {
         method: "POST",
@@ -225,7 +217,7 @@ describe("Audit routes", () => {
       });
 
       // plan-2 should be untouched
-      const plan2Events = eventLog.getEventsForVerification("plan-2");
+      const plan2Events = await eventLog.getEventsForVerification("plan-2");
       expect(plan2Events).toHaveLength(2);
     });
   });

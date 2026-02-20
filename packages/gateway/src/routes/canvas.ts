@@ -41,7 +41,7 @@ export function createCanvasRoutes(canvasDal: CanvasDal): Hono {
       );
     }
 
-    const artifact = canvasDal.publish({
+    const artifact = await canvasDal.publish({
       planId: body.plan_id,
       title: body.title,
       contentType: body.content_type,
@@ -53,9 +53,9 @@ export function createCanvasRoutes(canvasDal: CanvasDal): Hono {
   });
 
   /** Serve the artifact HTML with CSP headers. */
-  app.get("/canvas/:id", (c) => {
+  app.get("/canvas/:id", async (c) => {
     const id = c.req.param("id");
-    const artifact = canvasDal.getById(id);
+    const artifact = await canvasDal.getById(id);
 
     if (!artifact) {
       return c.json(
@@ -70,9 +70,9 @@ export function createCanvasRoutes(canvasDal: CanvasDal): Hono {
   });
 
   /** Metadata-only endpoint. */
-  app.get("/canvas/:id/meta", (c) => {
+  app.get("/canvas/:id/meta", async (c) => {
     const id = c.req.param("id");
-    const artifact = canvasDal.getById(id);
+    const artifact = await canvasDal.getById(id);
 
     if (!artifact) {
       return c.json(

@@ -1,4 +1,4 @@
-import type Database from "better-sqlite3";
+import type { SqlDb } from "../../statestore/types.js";
 
 // --- Row types returned by queries ---
 
@@ -67,7 +67,7 @@ interface RawFactRow {
   source: string;
   observed_at: string;
   confidence: number;
-  created_at: string;
+  created_at: string | Date;
 }
 
 interface RawEpisodicEventRow {
@@ -77,7 +77,7 @@ interface RawEpisodicEventRow {
   channel: string;
   event_type: string;
   payload: string;
-  created_at: string;
+  created_at: string | Date;
 }
 
 interface RawCapabilityMemoryRow {
@@ -93,8 +93,8 @@ interface RawCapabilityMemoryRow {
   success_count: number;
   last_success_at: string | null;
   metadata: string | null;
-  created_at: string;
-  updated_at: string;
+  created_at: string | Date;
+  updated_at: string | Date;
 }
 
 interface RawProfileRow {
@@ -102,8 +102,8 @@ interface RawProfileRow {
   profile_id: string;
   version: string | null;
   profile_data: string;
-  created_at: string;
-  updated_at: string;
+  created_at: string | Date;
+  updated_at: string | Date;
 }
 
 function parseJsonField(raw: string | null): unknown | null {
@@ -111,273 +111,273 @@ function parseJsonField(raw: string | null): unknown | null {
   return JSON.parse(raw) as unknown;
 }
 
+function normalizeTime(value: string | Date): string {
+  return value instanceof Date ? value.toISOString() : value;
+}
+
 export class MemoryDal {
-  constructor(private db: Database.Database) {}
+  constructor(private db: SqlDb) {}
 
   // --- Facts ---
 
-  insertFact(
+  async insertFact(
     factKey: string,
     factValue: unknown,
     source: string,
     observedAt: string,
     confidence: number,
-  ): number {
-    const result = this.db
-      .prepare(
-        `INSERT INTO facts (fact_key, fact_value, source, observed_at, confidence)
-         VALUES (?, ?, ?, ?, ?)`,
-      )
-      .run(
+  ): Promise<number> {
+    const nowIso = new Date().toISOString();
+    const row = await this.db.get<{ id: number }>(
+      `INSERT INTO facts (fact_key, fact_value, source, observed_at, confidence, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       RETURNING id`,
+      [
         factKey,
         JSON.stringify(factValue),
         source,
         observedAt,
         confidence,
-      );
-    return Number(result.lastInsertRowid);
+        nowIso,
+      ],
+    );
+    if (!row) {
+      throw new Error("failed to insert fact");
+    }
+    return Number(row.id);
   }
 
-  getFacts(): FactRow[] {
-    const rows = this.db
-      .prepare("SELECT * FROM facts ORDER BY observed_at DESC")
-      .all() as RawFactRow[];
+  async getFacts(): Promise<FactRow[]> {
+    const rows = await this.db.all<RawFactRow>(
+      "SELECT * FROM facts ORDER BY observed_at DESC",
+    );
     return rows.map((r) => ({
       ...r,
       fact_value: JSON.parse(r.fact_value) as unknown,
+      created_at: normalizeTime(r.created_at),
     }));
   }
 
-  getFactsByKey(factKey: string): FactRow[] {
-    const rows = this.db
-      .prepare(
-        "SELECT * FROM facts WHERE fact_key = ? ORDER BY observed_at DESC",
-      )
-      .all(factKey) as RawFactRow[];
+  async getFactsByKey(factKey: string): Promise<FactRow[]> {
+    const rows = await this.db.all<RawFactRow>(
+      "SELECT * FROM facts WHERE fact_key = ? ORDER BY observed_at DESC",
+      [factKey],
+    );
     return rows.map((r) => ({
       ...r,
       fact_value: JSON.parse(r.fact_value) as unknown,
+      created_at: normalizeTime(r.created_at),
     }));
   }
 
   // --- Episodic Events ---
 
-  insertEpisodicEvent(
+  async insertEpisodicEvent(
     eventId: string,
     occurredAt: string,
     channel: string,
     eventType: string,
     payload: unknown,
-  ): number {
-    const result = this.db
-      .prepare(
-        `INSERT INTO episodic_events (event_id, occurred_at, channel, event_type, payload)
-         VALUES (?, ?, ?, ?, ?)`,
-      )
-      .run(
-        eventId,
-        occurredAt,
-        channel,
-        eventType,
-        JSON.stringify(payload),
-      );
-    return Number(result.lastInsertRowid);
+  ): Promise<number> {
+    const nowIso = new Date().toISOString();
+    const row = await this.db.get<{ id: number }>(
+      `INSERT INTO episodic_events (event_id, occurred_at, channel, event_type, payload, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       RETURNING id`,
+      [eventId, occurredAt, channel, eventType, JSON.stringify(payload), nowIso],
+    );
+    if (!row) {
+      throw new Error("failed to insert episodic event");
+    }
+    return Number(row.id);
   }
 
-  getEpisodicEvents(limit = 100): EpisodicEventRow[] {
-    const rows = this.db
-      .prepare(
-        "SELECT * FROM episodic_events ORDER BY occurred_at DESC LIMIT ?",
-      )
-      .all(limit) as RawEpisodicEventRow[];
+  async getEpisodicEvents(limit = 100): Promise<EpisodicEventRow[]> {
+    const rows = await this.db.all<RawEpisodicEventRow>(
+      "SELECT * FROM episodic_events ORDER BY occurred_at DESC LIMIT ?",
+      [limit],
+    );
     return rows.map((r) => ({
       ...r,
       payload: JSON.parse(r.payload) as unknown,
+      created_at: normalizeTime(r.created_at),
     }));
   }
 
   // --- Capability Memories ---
 
-  upsertCapabilityMemory(
+  async upsertCapabilityMemory(
     capabilityType: string,
     capabilityIdentifier: string,
     executorKind: string,
     data: CapabilityMemoryData,
-  ): { inserted: boolean; successCount: number } {
-    const upsert = this.db.transaction(() => {
-      const existing = this.db
-        .prepare(
-          `SELECT id, success_count FROM capability_memories
-           WHERE capability_type = ? AND capability_identifier = ? AND executor_kind = ?`,
-        )
-        .get(
-          capabilityType,
-          capabilityIdentifier,
-          executorKind,
-        ) as { id: number; success_count: number } | undefined;
+  ): Promise<{ inserted: boolean; successCount: number }> {
+    return await this.db.transaction(async (tx) => {
+      const existing = await tx.get<{ id: number; success_count: number }>(
+        `SELECT id, success_count FROM capability_memories
+         WHERE capability_type = ? AND capability_identifier = ? AND executor_kind = ?`,
+        [capabilityType, capabilityIdentifier, executorKind],
+      );
 
       if (existing) {
         const newCount = existing.success_count + 1;
-        this.db
-          .prepare(
-            `UPDATE capability_memories SET
-              selectors = ?,
-              outcome_metadata = ?,
-              cost_profile = ?,
-              anti_bot_notes = ?,
-              result_summary = ?,
-              success_count = ?,
-              last_success_at = ?,
-              metadata = ?,
-              updated_at = datetime('now')
-            WHERE id = ?`,
-          )
-          .run(
-            data.selectors !== undefined
-              ? JSON.stringify(data.selectors)
-              : null,
-            data.outcomeMetadata !== undefined
-              ? JSON.stringify(data.outcomeMetadata)
-              : null,
-            data.costProfile !== undefined
-              ? JSON.stringify(data.costProfile)
-              : null,
+        const nowIso = new Date().toISOString();
+        await tx.run(
+          `UPDATE capability_memories SET
+            selectors = ?,
+            outcome_metadata = ?,
+            cost_profile = ?,
+            anti_bot_notes = ?,
+            result_summary = ?,
+            success_count = ?,
+            last_success_at = ?,
+            metadata = ?,
+            updated_at = ?
+          WHERE id = ?`,
+          [
+            data.selectors !== undefined ? JSON.stringify(data.selectors) : null,
+            data.outcomeMetadata !== undefined ? JSON.stringify(data.outcomeMetadata) : null,
+            data.costProfile !== undefined ? JSON.stringify(data.costProfile) : null,
             data.antiBotNotes ?? null,
             data.resultSummary ?? null,
             newCount,
             data.lastSuccessAt ?? null,
-            data.metadata !== undefined
-              ? JSON.stringify(data.metadata)
-              : null,
+            data.metadata !== undefined ? JSON.stringify(data.metadata) : null,
+            nowIso,
             existing.id,
-          );
+          ],
+        );
         return { inserted: false, successCount: newCount };
       }
 
-      this.db
-        .prepare(
-          `INSERT INTO capability_memories
-            (capability_type, capability_identifier, executor_kind,
-             selectors, outcome_metadata, cost_profile, anti_bot_notes,
-             result_summary, success_count, last_success_at, metadata)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-        )
-        .run(
+      const nowIso = new Date().toISOString();
+      await tx.run(
+        `INSERT INTO capability_memories
+          (capability_type, capability_identifier, executor_kind,
+           selectors, outcome_metadata, cost_profile, anti_bot_notes,
+           result_summary, success_count, last_success_at, metadata, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
+        [
           capabilityType,
           capabilityIdentifier,
           executorKind,
-          data.selectors !== undefined
-            ? JSON.stringify(data.selectors)
-            : null,
-          data.outcomeMetadata !== undefined
-            ? JSON.stringify(data.outcomeMetadata)
-            : null,
-          data.costProfile !== undefined
-            ? JSON.stringify(data.costProfile)
-            : null,
+          data.selectors !== undefined ? JSON.stringify(data.selectors) : null,
+          data.outcomeMetadata !== undefined ? JSON.stringify(data.outcomeMetadata) : null,
+          data.costProfile !== undefined ? JSON.stringify(data.costProfile) : null,
           data.antiBotNotes ?? null,
           data.resultSummary ?? null,
           data.lastSuccessAt ?? null,
-          data.metadata !== undefined
-            ? JSON.stringify(data.metadata)
-            : null,
-        );
+          data.metadata !== undefined ? JSON.stringify(data.metadata) : null,
+          nowIso,
+          nowIso,
+        ],
+      );
       return { inserted: true, successCount: 1 };
     });
-
-    return upsert();
   }
 
-  getCapabilityMemories(
+  async getCapabilityMemories(
     capabilityType?: string,
-  ): CapabilityMemoryRow[] {
-    let rows: RawCapabilityMemoryRow[];
-    if (capabilityType !== undefined) {
-      rows = this.db
-        .prepare(
+  ): Promise<CapabilityMemoryRow[]> {
+    const rows: RawCapabilityMemoryRow[] = capabilityType !== undefined
+      ? await this.db.all<RawCapabilityMemoryRow>(
           `SELECT * FROM capability_memories
            WHERE capability_type = ?
            ORDER BY updated_at DESC`,
+          [capabilityType],
         )
-        .all(capabilityType) as RawCapabilityMemoryRow[];
-    } else {
-      rows = this.db
-        .prepare(
+      : await this.db.all<RawCapabilityMemoryRow>(
           `SELECT * FROM capability_memories
            ORDER BY updated_at DESC`,
-        )
-        .all() as RawCapabilityMemoryRow[];
-    }
+        );
     return rows.map((r) => ({
       ...r,
       selectors: parseJsonField(r.selectors),
       outcome_metadata: parseJsonField(r.outcome_metadata),
       cost_profile: parseJsonField(r.cost_profile),
       metadata: parseJsonField(r.metadata),
+      created_at: normalizeTime(r.created_at),
+      updated_at: normalizeTime(r.updated_at),
     }));
   }
 
   // --- PAM Profiles ---
 
-  upsertPamProfile(
+  async upsertPamProfile(
     profileId: string,
     version: string | undefined,
     profileData: unknown,
-  ): void {
-    this.db
-      .prepare(
-        `INSERT INTO pam_profiles (profile_id, version, profile_data)
-         VALUES (?, ?, ?)
-         ON CONFLICT(profile_id) DO UPDATE SET
-           version = excluded.version,
-           profile_data = excluded.profile_data,
-           updated_at = datetime('now')`,
-      )
-      .run(profileId, version ?? null, JSON.stringify(profileData));
+  ): Promise<void> {
+    const nowIso = new Date().toISOString();
+    await this.db.run(
+      `INSERT INTO pam_profiles (profile_id, version, profile_data, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(profile_id) DO UPDATE SET
+         version = excluded.version,
+         profile_data = excluded.profile_data,
+         updated_at = ?`,
+      [
+        profileId,
+        version ?? null,
+        JSON.stringify(profileData),
+        nowIso,
+        nowIso,
+        nowIso,
+      ],
+    );
   }
 
-  getPamProfile(profileId: string): ProfileRow | undefined {
-    const row = this.db
-      .prepare(
-        "SELECT * FROM pam_profiles WHERE profile_id = ?",
-      )
-      .get(profileId) as RawProfileRow | undefined;
+  async getPamProfile(profileId: string): Promise<ProfileRow | undefined> {
+    const row = await this.db.get<RawProfileRow>(
+      "SELECT * FROM pam_profiles WHERE profile_id = ?",
+      [profileId],
+    );
     if (!row) return undefined;
     return {
       ...row,
       profile_data: JSON.parse(row.profile_data) as unknown,
+      created_at: normalizeTime(row.created_at),
+      updated_at: normalizeTime(row.updated_at),
     };
   }
 
   // --- PVP Profiles ---
 
-  upsertPvpProfile(
+  async upsertPvpProfile(
     profileId: string,
     version: string | undefined,
     profileData: unknown,
-  ): void {
-    this.db
-      .prepare(
-        `INSERT INTO pvp_profiles (profile_id, version, profile_data)
-         VALUES (?, ?, ?)
-         ON CONFLICT(profile_id) DO UPDATE SET
-           version = excluded.version,
-           profile_data = excluded.profile_data,
-           updated_at = datetime('now')`,
-      )
-      .run(profileId, version ?? null, JSON.stringify(profileData));
+  ): Promise<void> {
+    const nowIso = new Date().toISOString();
+    await this.db.run(
+      `INSERT INTO pvp_profiles (profile_id, version, profile_data, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(profile_id) DO UPDATE SET
+         version = excluded.version,
+         profile_data = excluded.profile_data,
+         updated_at = ?`,
+      [
+        profileId,
+        version ?? null,
+        JSON.stringify(profileData),
+        nowIso,
+        nowIso,
+        nowIso,
+      ],
+    );
   }
 
-  getPvpProfile(profileId: string): ProfileRow | undefined {
-    const row = this.db
-      .prepare(
-        "SELECT * FROM pvp_profiles WHERE profile_id = ?",
-      )
-      .get(profileId) as RawProfileRow | undefined;
+  async getPvpProfile(profileId: string): Promise<ProfileRow | undefined> {
+    const row = await this.db.get<RawProfileRow>(
+      "SELECT * FROM pvp_profiles WHERE profile_id = ?",
+      [profileId],
+    );
     if (!row) return undefined;
     return {
       ...row,
       profile_data: JSON.parse(row.profile_data) as unknown,
+      created_at: normalizeTime(row.created_at),
+      updated_at: normalizeTime(row.updated_at),
     };
   }
 }

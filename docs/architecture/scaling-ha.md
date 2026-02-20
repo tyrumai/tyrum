@@ -25,6 +25,7 @@ These are the logical building blocks that appear in all deployments:
 - **Gateway edge:** WebSocket server, auth, contract validation, routing, event delivery to connected clients/nodes.
 - **Execution engine:** durable run state machine and orchestration (pause/resume, retries, idempotency, budgets).
 - **Workers:** step executors that claim work and perform side effects via tools/nodes/MCP.
+- **ToolRunner:** an execution context that mounts a workspace filesystem and runs tool steps. In a single-host deployment it can be a local subprocess; in a cluster it is typically a sandboxed job/pod.
 - **Schedulers:** cron/watchers/heartbeat triggers that enqueue work (must be cluster-safe; see below).
 - **StateStore:** the system of record for durable state and logs (SQLite locally; Postgres for HA/scale).
 - **Event backplane:** a cross-instance delivery mechanism for events/commands in clustered deployments.
@@ -78,6 +79,27 @@ Schedulers must not double-fire triggers when multiple instances are running. To
 - The lease is renewed periodically; on expiry another instance can take over.
 - Each firing should have a durable, unique `firing_id` so downstream enqueue/execution can dedupe under retries.
 
+## Workspace durability and mount semantics (the `TYRUM_HOME` reality)
+
+Tyrum treats the workspace filesystem as a durable operator-visible surface: an agent can write files and expect them to exist across restarts and future runs.
+
+In single-host deployments this is straightforward: `TYRUM_HOME` is a persistent local directory on disk.
+
+In clustered deployments, **durable workspaces** interact with Kubernetes volume semantics:
+
+- **RWO volumes** can be attached read/write by only one node at a time.
+- If multiple long-lived deployments (edge/worker/scheduler) all mount the same RWO PVC, multi-node clusters can wedge on volume attachment.
+
+To keep the single-host and cluster behaviors aligned while avoiding RWX requirements, Tyrum uses a simple rule:
+
+- **Only ToolRunner mounts the workspace filesystem.**
+- Gateway edge, schedulers, and control-plane workers are otherwise **stateless with respect to workspace POSIX volumes**.
+
+This enables a growth path where:
+
+- A single-host deployment uses a **local ToolRunner subprocess** against the same `TYRUM_HOME`.
+- A clustered deployment uses **sandbox ToolRunner jobs/pods** that mount a per-workspace PVC (RWO) and enforce **single-writer** semantics via StateStore-backed leases/claims.
+
 ## Deployment topologies
 
 These are examples of deploying the same logical components in different shapes.
@@ -92,6 +114,7 @@ flowchart TB
     GatewayEdge[GatewayEdge]
     ExecutionEngine[ExecutionEngine]
     WorkerPool[Workers]
+    ToolRunner[ToolRunner_Local]
     Scheduler["Scheduler (DB_lease)"]
     StateStore["StateStore (SQLite)"]
     Backplane["EventBackplane (in_process_or_outbox)"]
@@ -101,6 +124,8 @@ flowchart TB
     ExecutionEngine <--> StateStore
     WorkerPool <--> StateStore
     Scheduler <--> StateStore
+    WorkerPool --> ToolRunner
+    ToolRunner --> WorkspaceFs["WorkspaceFs (TYRUM_HOME)"]
 
     WorkerPool --> Backplane
     ExecutionEngine --> Backplane
@@ -149,5 +174,17 @@ flowchart TB
   EngineB --> Backplane
   Backplane --> EdgeA
   Backplane --> EdgeB
+
+  subgraph toolrunnerPool[ToolRunners]
+    TR1[ToolRunner_Pod]
+    TR2[ToolRunner_Pod]
+  end
+
+  Worker1 --> TR1
+  Worker2 --> TR2
+  TR1 --> WorkspacePVC1[(WorkspacePVC_RWO)]
+  TR2 --> WorkspacePVC2[(WorkspacePVC_RWO)]
+  TR1 <--> StateStore
+  TR2 <--> StateStore
 ```
 

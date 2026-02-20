@@ -16,7 +16,7 @@ describe("AgentRuntime", () => {
   const fetch404 = (async () => new Response("not found", { status: 404 })) as typeof fetch;
 
   afterEach(async () => {
-    container?.db.close();
+    await container?.db.close();
     container = undefined;
 
     if (homeDir) {
@@ -27,7 +27,7 @@ describe("AgentRuntime", () => {
 
   it("does not report context-available tools as used_tools", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
-    container = createContainer({
+    container = await createContainer({
       dbPath: ":memory:",
       migrationsDir,
     });
@@ -51,7 +51,7 @@ describe("AgentRuntime", () => {
 
   it("reconciles MCP servers when MCP tools become disallowed", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
-    container = createContainer({
+    container = await createContainer({
       dbPath: ":memory:",
       migrationsDir,
     });
@@ -114,7 +114,7 @@ describe("AgentRuntime", () => {
 
   it("shutdown calls McpManager.shutdown()", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
-    container = createContainer({
+    container = await createContainer({
       dbPath: ":memory:",
       migrationsDir,
     });

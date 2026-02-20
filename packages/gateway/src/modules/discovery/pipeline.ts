@@ -95,7 +95,7 @@ export class DiscoveryPipeline {
 
     // Strategy 1: Capability memory (structured API connectors from past successes)
     if (this.deps.capabilityMemorySource) {
-      const capResults = resolveFromCapabilityMemory(
+      const capResults = await resolveFromCapabilityMemory(
         request,
         this.deps.capabilityMemorySource,
       );

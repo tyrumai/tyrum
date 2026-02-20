@@ -5,8 +5,8 @@ import { createTestApp } from "./helpers.js";
 describe("Canvas routes", () => {
   let app: Hono;
 
-  beforeEach(() => {
-    const result = createTestApp();
+  beforeEach(async () => {
+    const result = await createTestApp();
     app = result.app;
   });
 

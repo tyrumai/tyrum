@@ -1,14 +1,8 @@
-import { describe, expect, it, beforeEach } from "vitest";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { createDatabase } from "../../src/db.js";
-import { migrate } from "../../src/migrate.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { VectorDal } from "../../src/modules/memory/vector-dal.js";
 import { EmbeddingPipeline } from "../../src/modules/memory/embedding-pipeline.js";
-import type Database from "better-sqlite3";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const migrationsDir = join(__dirname, "../../migrations/sqlite");
+import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
 function createMockFetch(embeddingVector: number[]) {
   return async (_url: string | URL | Request, _init?: RequestInit) => {
@@ -28,13 +22,16 @@ function createFailingFetch() {
 }
 
 describe("EmbeddingPipeline", () => {
-  let db: Database.Database;
+  let db: SqliteDb;
   let vectorDal: VectorDal;
 
   beforeEach(() => {
-    db = createDatabase(":memory:");
-    migrate(db, migrationsDir);
+    db = openTestSqliteDb();
     vectorDal = new VectorDal(db);
+  });
+
+  afterEach(async () => {
+    await db.close();
   });
 
   describe("embed", () => {
@@ -112,7 +109,7 @@ describe("EmbeddingPipeline", () => {
       const id = await pipeline.embedAndStore("hello world", "greeting", { source: "test" });
       expect(id).toBeTruthy();
 
-      const row = vectorDal.getById(id);
+      const row = await vectorDal.getById(id);
       expect(row).toBeDefined();
       expect(row!.label).toBe("greeting");
       expect(row!.vector).toEqual(mockVector);
@@ -123,9 +120,9 @@ describe("EmbeddingPipeline", () => {
   describe("search", () => {
     it("embeds query and searches stored vectors", async () => {
       // Pre-store some vectors
-      vectorDal.insertEmbedding("doc-a", [1, 0, 0], "test-model");
-      vectorDal.insertEmbedding("doc-b", [0, 1, 0], "test-model");
-      vectorDal.insertEmbedding("doc-c", [0.9, 0.1, 0], "test-model");
+      await vectorDal.insertEmbedding("doc-a", [1, 0, 0], "test-model");
+      await vectorDal.insertEmbedding("doc-b", [0, 1, 0], "test-model");
+      await vectorDal.insertEmbedding("doc-c", [0.9, 0.1, 0], "test-model");
 
       // Mock embed returns [1, 0, 0] for the query
       const pipeline = new EmbeddingPipeline({

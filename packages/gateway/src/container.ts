@@ -4,7 +4,6 @@
  * Creates and wires all module instances from a configuration object.
  */
 
-import type Database from "better-sqlite3";
 import type { EventBus } from "./event-bus.js";
 import type { MemoryDal } from "./modules/memory/dal.js";
 import type { EventLog } from "./modules/planner/event-log.js";
@@ -16,9 +15,8 @@ import type { ApprovalDal } from "./modules/approval/dal.js";
 import type { WatcherProcessor } from "./modules/watcher/processor.js";
 import type { CanvasDal } from "./modules/canvas/dal.js";
 import type { JobQueue } from "./modules/executor/job-queue.js";
+import type { SqlDb } from "./statestore/types.js";
 
-import { createDatabase } from "./db.js";
-import { migrate } from "./migrate.js";
 import { createEventBus } from "./event-bus.js";
 import { MemoryDal as MemoryDalImpl } from "./modules/memory/dal.js";
 import { EventLog as EventLogImpl } from "./modules/planner/event-log.js";
@@ -43,6 +41,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { S3Client } from "@aws-sdk/client-s3";
 import { Logger } from "./modules/observability/logger.js";
+import { SqliteDb } from "./statestore/sqlite.js";
+import { PostgresDb } from "./statestore/postgres.js";
 
 export interface GatewayConfig {
   dbPath: string;
@@ -52,7 +52,7 @@ export interface GatewayConfig {
 }
 
 export interface GatewayContainer {
-  db: Database.Database;
+  db: SqlDb;
   memoryDal: MemoryDal;
   eventLog: EventLog;
   discoveryPipeline: DiscoveryPipeline;
@@ -70,12 +70,17 @@ export interface GatewayContainer {
   config: GatewayConfig;
 }
 
-export function createContainer(
+function isPostgresDbUri(dbPath: string): boolean {
+  return /^postgres(ql)?:\/\//i.test(dbPath.trim());
+}
+
+export async function createContainer(
   config: GatewayConfig,
   opts?: { redactionEngine?: RedactionEngine },
-): GatewayContainer {
-  const db = createDatabase(config.dbPath);
-  migrate(db, config.migrationsDir);
+): Promise<GatewayContainer> {
+  const db = isPostgresDbUri(config.dbPath)
+    ? await PostgresDb.open({ dbUri: config.dbPath, migrationsDir: config.migrationsDir })
+    : SqliteDb.open({ dbPath: config.dbPath, migrationsDir: config.migrationsDir });
 
   const memoryDal = new MemoryDalImpl(db);
   const redactionEngine = opts?.redactionEngine ?? new RedactionEngine();

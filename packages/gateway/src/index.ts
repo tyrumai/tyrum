@@ -26,8 +26,9 @@ import { ConnectionManager } from "./ws/connection-manager.js";
 import { createWsHandler } from "./routes/ws.js";
 import { maybeStartOtel } from "./modules/observability/otel.js";
 import { ExecutionEngine, type StepExecutor as ExecutionStepExecutor } from "./modules/execution/engine.js";
-import { createLocalStepExecutor } from "./modules/execution/local-step-executor.js";
 import { startExecutionWorkerLoop } from "./modules/execution/worker-loop.js";
+import { createToolRunnerStepExecutor } from "./modules/execution/toolrunner-step-executor.js";
+import { runToolRunnerFromStdio } from "./toolrunner.js";
 
 export const VERSION = "0.1.0";
 
@@ -58,6 +59,7 @@ type GatewayRole = "all" | "edge" | "worker" | "scheduler";
 
 type CliCommand =
   | { kind: "start"; role: GatewayRole }
+  | { kind: "toolrunner" }
   | { kind: "help" }
   | { kind: "version" }
   | { kind: "update"; channel: UpdateChannel; version?: string };
@@ -76,6 +78,7 @@ export function ensureDatabaseDirectory(dbPath: string): void {
   if (trimmed.length === 0) return;
   if (trimmed === ":memory:") return;
   if (/^file:/i.test(trimmed)) return;
+  if (/^postgres(ql)?:\/\//i.test(trimmed)) return;
 
   const parentDir = dirname(trimmed);
   if (parentDir === "." || parentDir === "") return;
@@ -95,6 +98,7 @@ function printCliHelp(): void {
 
 Usage:
   tyrum [start|edge|worker|scheduler]
+  tyrum toolrunner
   tyrum update [--channel stable|beta|dev] [--version <version>]
   tyrum --version
   tyrum --help
@@ -148,6 +152,7 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
   if (first === "all" || first === "edge" || first === "worker" || first === "scheduler") {
     return { kind: "start", role: first };
   }
+  if (first === "toolrunner") return { kind: "toolrunner" };
 
   if (first !== "update") {
     throw new Error(`unknown command '${first}'`);
@@ -261,6 +266,10 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
     return 0;
   }
 
+  if (command.kind === "toolrunner") {
+    return runToolRunnerFromStdio();
+  }
+
   if (command.kind === "update") {
     return runGatewayUpdate(command.channel, command.version);
   }
@@ -273,9 +282,11 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   const port = parseInt(process.env["GATEWAY_PORT"] ?? "8080", 10);
   const host = process.env["GATEWAY_HOST"]?.trim() || "127.0.0.1";
   const dbPath = process.env["GATEWAY_DB_PATH"] ?? "gateway.db";
+  const defaultMigrationsDir = /^postgres(ql)?:\/\//i.test(dbPath.trim())
+    ? join(__dirname, "../migrations/postgres")
+    : join(__dirname, "../migrations/sqlite");
   const migrationsDir =
-    process.env["GATEWAY_MIGRATIONS_DIR"] ??
-    join(__dirname, "../migrations/sqlite");
+    process.env["GATEWAY_MIGRATIONS_DIR"] ?? defaultMigrationsDir;
   const modelGatewayConfigPath =
     process.env["MODEL_GATEWAY_CONFIG"] ?? undefined;
 
@@ -285,7 +296,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
 
   ensureDatabaseDirectory(dbPath);
 
-  const container = createContainer({
+  const container = await createContainer({
     dbPath,
     migrationsDir,
     modelGatewayConfigPath,
@@ -374,6 +385,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   const connectionDirectory = new ConnectionDirectoryDal(container.db);
   const protocolDeps = {
     connectionManager,
+    logger,
     cluster: shouldRunEdge
       ? {
           edgeId: instanceId,
@@ -386,13 +398,25 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
       approved: boolean,
       reason: string | undefined,
     ) => {
-      const row = container.approvalDal.respond(approvalId, approved, reason);
-      logger.info("approval.decided", {
-        approval_id: approvalId,
-        approved,
-        status: row?.status ?? "missing",
-        reason,
-      });
+      void container.approvalDal
+        .respond(approvalId, approved, reason)
+        .then((row) => {
+          logger.info("approval.decided", {
+            approval_id: approvalId,
+            approved,
+            status: row?.status ?? "missing",
+            reason,
+          });
+        })
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          logger.error("approval.decide_failed", {
+            approval_id: approvalId,
+            approved,
+            reason,
+            error: message,
+          });
+        });
     },
   };
   const approvalNotifier = new WsNotifier(protocolDeps);
@@ -473,11 +497,8 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
           logger,
         });
 
-        const executor = createLocalStepExecutor({
-          tyrumHome,
-          secretProvider,
-          redactionEngine: container.redactionEngine,
-          artifactStore: container.artifactStore,
+        const executor = createToolRunnerStepExecutor({
+          entrypoint: fileURLToPath(import.meta.url),
           logger,
         }) satisfies ExecutionStepExecutor;
 
@@ -533,14 +554,10 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
       agentRuntime?.shutdown() ?? Promise.resolve(),
       otel.shutdown(),
       workerLoop?.done ?? Promise.resolve(),
+      container.db.close(),
     ])
       .finally(() => {
         clearTimeout(hardExitTimer);
-        try {
-          container.db.close();
-        } catch {
-          // ignore
-        }
         process.exit(0);
       });
   };

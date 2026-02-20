@@ -52,6 +52,7 @@ export class OutboxPoller {
   private readonly pollIntervalMs: number;
   private readonly batchSize: number;
   private timer: ReturnType<typeof setInterval> | undefined;
+  private ticking = false;
 
   constructor(opts: OutboxPollerOptions) {
     this.consumerId = opts.consumerId;
@@ -63,8 +64,10 @@ export class OutboxPoller {
 
   start(): void {
     if (this.timer) return;
-    this.outboxDal.ensureConsumer(this.consumerId);
-    this.timer = setInterval(() => this.tick(), this.pollIntervalMs);
+    void this.outboxDal.ensureConsumer(this.consumerId);
+    this.timer = setInterval(() => {
+      void this.tick();
+    }, this.pollIntervalMs);
   }
 
   stop(): void {
@@ -74,8 +77,11 @@ export class OutboxPoller {
     }
   }
 
-  tick(): void {
-    const rows = this.outboxDal.poll(this.consumerId, this.batchSize);
+  async tick(): Promise<void> {
+    if (this.ticking) return;
+    this.ticking = true;
+    try {
+      const rows = await this.outboxDal.poll(this.consumerId, this.batchSize);
     if (rows.length === 0) return;
 
     for (const row of rows) {
@@ -84,8 +90,11 @@ export class OutboxPoller {
       } catch {
         // Best-effort delivery: don't wedge the consumer.
       } finally {
-        this.outboxDal.ackConsumerCursor(this.consumerId, row.id);
+        await this.outboxDal.ackConsumerCursor(this.consumerId, row.id);
       }
+    }
+    } finally {
+      this.ticking = false;
     }
   }
 

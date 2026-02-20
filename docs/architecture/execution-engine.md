@@ -36,6 +36,20 @@ Cluster-safe execution typically requires:
 - **Lane serialization:** workers acquire a distributed lock/lease keyed by `(session_key, lane)` before executing steps that must be serialized.
 - **Durable outcomes:** attempt results, artifacts, and postcondition evaluations are persisted before emitting “completed” events.
 
+## Workspace-backed execution (ToolRunner)
+
+Many Tyrum steps are filesystem- or process-oriented (for example running a CLI tool in a workspace, reading/writing files, generating evidence artifacts). To keep `TYRUM_HOME` durable across runs while still scaling to multi-node clusters, Tyrum treats workspace access as an explicit execution boundary:
+
+- **ToolRunner** is the execution context that mounts the workspace filesystem and runs side-effecting tools.
+- Workers coordinate work in the StateStore (claims/leases, idempotency, lane serialization) and delegate step execution to ToolRunner.
+
+ToolRunner has deployment-parity implementations:
+
+- **Single-host/desktop:** ToolRunner is a **local subprocess** (or in-process) operating on the local persistent `TYRUM_HOME`.
+- **Cluster/Kubernetes:** ToolRunner is a **sandboxed job/pod** that mounts the workspace PVC (RWO) and writes outcomes back to the StateStore.
+
+This keeps execution semantics identical while ensuring that long-lived edge/scheduler replicas do not need to mount shared workspace volumes.
+
 ## Non-responsibilities
 
 - The execution engine does not decide *what* to do from a user message (planning is in the agent/planner).
@@ -79,7 +93,9 @@ flowchart TB
   Trigger["Trigger (session/cron/hook)"] --> Enqueue["Enqueue job"]
   Enqueue --> Engine["ExecutionEngine"]
 
-  Engine -->|step dispatch| Tools["ToolRuntime"]
+  Engine -->|claim/lease| Worker["Worker"]
+  Worker -->|execute step| ToolRunner["ToolRunner (workspace-mounted)"]
+  ToolRunner --> Tools["ToolRuntime"]
   Tools --> Providers["CapabilityProviders (Node/MCP)"]
 
   Engine -->|pause| Approvals["ApprovalQueue"]
@@ -88,6 +104,7 @@ flowchart TB
   Engine --> Evidence["Artifacts + Postconditions"]
   Engine --> Events["Events/AuditLog"]
   Engine <--> DB["StateStore (SQLite/Postgres)"]
+  ToolRunner --> WorkspaceFs["WorkspaceFs (TYRUM_HOME)"]
 ```
 
 ## Data model sketch (conceptual)

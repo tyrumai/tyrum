@@ -5,7 +5,7 @@
  * and can be queried by the portal or CLI.
  */
 
-import type Database from "better-sqlite3";
+import type { SqlDb } from "../../statestore/types.js";
 
 export type ApprovalStatus = "pending" | "approved" | "denied" | "expired";
 
@@ -65,85 +65,80 @@ export interface CreateApprovalParams {
 }
 
 export class ApprovalDal {
-  constructor(private readonly db: Database.Database) {}
+  constructor(private readonly db: SqlDb) {}
 
   /** Create a new pending approval request. */
-  create(params: CreateApprovalParams): ApprovalRow {
+  async create(params: CreateApprovalParams): Promise<ApprovalRow> {
     const contextJson = JSON.stringify(params.context ?? {});
 
-    const result = this.db
-      .prepare(
-        `INSERT INTO approvals (plan_id, step_index, prompt, context_json, expires_at)
-         VALUES (?, ?, ?, ?, ?)`,
-      )
-      .run(
+    const row = await this.db.get<RawApprovalRow>(
+      `INSERT INTO approvals (plan_id, step_index, prompt, context_json, expires_at)
+       VALUES (?, ?, ?, ?, ?)
+       RETURNING *`,
+      [
         params.planId,
         params.stepIndex,
         params.prompt,
         contextJson,
         params.expiresAt ?? null,
-      );
-
-    const row = this.db
-      .prepare("SELECT * FROM approvals WHERE id = ?")
-      .get(Number(result.lastInsertRowid)) as RawApprovalRow;
-
+      ],
+    );
+    if (!row) {
+      throw new Error("approval insert failed");
+    }
     return toApprovalRow(row);
   }
 
   /** Respond to a pending approval (approve or deny). */
-  respond(
+  async respond(
     id: number,
     approved: boolean,
     reason?: string,
-  ): ApprovalRow | undefined {
+  ): Promise<ApprovalRow | undefined> {
     const status: ApprovalStatus = approved ? "approved" : "denied";
+    const nowIso = new Date().toISOString();
 
-    const changes = this.db
-      .prepare(
-        `UPDATE approvals
-         SET status = ?, responded_at = datetime('now'), response_reason = ?
-         WHERE id = ? AND status = 'pending'`,
-      )
-      .run(status, reason ?? null, id);
-
-    if (changes.changes === 0) return undefined;
-
-    return this.getById(id);
+    const result = await this.db.run(
+      `UPDATE approvals
+       SET status = ?, responded_at = ?, response_reason = ?
+       WHERE id = ? AND status = 'pending'`,
+      [status, nowIso, reason ?? null, id],
+    );
+    if (result.changes === 0) return undefined;
+    return await this.getById(id);
   }
 
   /** Get a single approval by id. */
-  getById(id: number): ApprovalRow | undefined {
-    const row = this.db
-      .prepare("SELECT * FROM approvals WHERE id = ?")
-      .get(id) as RawApprovalRow | undefined;
+  async getById(id: number): Promise<ApprovalRow | undefined> {
+    const row = await this.db.get<RawApprovalRow>(
+      "SELECT * FROM approvals WHERE id = ?",
+      [id],
+    );
 
     return row ? toApprovalRow(row) : undefined;
   }
 
   /** Get all pending approvals, ordered by creation time (oldest first). */
-  getPending(): ApprovalRow[] {
-    return this.getByStatus("pending");
+  async getPending(): Promise<ApprovalRow[]> {
+    return await this.getByStatus("pending");
   }
 
   /** Get approvals filtered by status, ordered by creation time (oldest first). */
-  getByStatus(status: ApprovalStatus): ApprovalRow[] {
-    const rows = this.db
-      .prepare(
-        "SELECT * FROM approvals WHERE status = ? ORDER BY created_at ASC",
-      )
-      .all(status) as RawApprovalRow[];
+  async getByStatus(status: ApprovalStatus): Promise<ApprovalRow[]> {
+    const rows = await this.db.all<RawApprovalRow>(
+      "SELECT * FROM approvals WHERE status = ? ORDER BY created_at ASC",
+      [status],
+    );
 
     return rows.map(toApprovalRow);
   }
 
   /** Get all approvals for a given plan. */
-  getByPlanId(planId: string): ApprovalRow[] {
-    const rows = this.db
-      .prepare(
-        "SELECT * FROM approvals WHERE plan_id = ? ORDER BY step_index ASC",
-      )
-      .all(planId) as RawApprovalRow[];
+  async getByPlanId(planId: string): Promise<ApprovalRow[]> {
+    const rows = await this.db.all<RawApprovalRow>(
+      "SELECT * FROM approvals WHERE plan_id = ? ORDER BY step_index ASC",
+      [planId],
+    );
 
     return rows.map(toApprovalRow);
   }
@@ -152,30 +147,28 @@ export class ApprovalDal {
    * Expire stale approvals whose `expires_at` has passed.
    * @returns the number of approvals expired.
    */
-  expireStale(): number {
-    const result = this.db
-      .prepare(
-        `UPDATE approvals
-         SET status = 'expired', responded_at = datetime('now')
-         WHERE status = 'pending'
-           AND expires_at IS NOT NULL
-           AND datetime(expires_at) <= datetime('now')`,
-      )
-      .run();
-
+  async expireStale(): Promise<number> {
+    const nowIso = new Date().toISOString();
+    const result = await this.db.run(
+      `UPDATE approvals
+       SET status = 'expired', responded_at = ?
+       WHERE status = 'pending'
+         AND expires_at IS NOT NULL
+         AND expires_at <= ?`,
+      [nowIso, nowIso],
+    );
     return result.changes;
   }
 
   /** Expire a single pending approval immediately. */
-  expireById(id: number): ApprovalRow | undefined {
-    this.db
-      .prepare(
-        `UPDATE approvals
-         SET status = 'expired', responded_at = datetime('now')
-         WHERE id = ? AND status = 'pending'`,
-      )
-      .run(id);
-
-    return this.getById(id);
+  async expireById(id: number): Promise<ApprovalRow | undefined> {
+    const nowIso = new Date().toISOString();
+    await this.db.run(
+      `UPDATE approvals
+       SET status = 'expired', responded_at = ?
+       WHERE id = ? AND status = 'pending'`,
+      [nowIso, id],
+    );
+    return await this.getById(id);
   }
 }

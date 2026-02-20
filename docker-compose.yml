@@ -1,7 +1,11 @@
 services:
-  tyrum-edge:
+  # ---------------------------------------------------------------------------
+  # Default: single container (all roles) + SQLite
+  # ---------------------------------------------------------------------------
+
+  tyrum:
     build: .
-    command: ["edge"]
+    command: ["all"]
     environment:
       TYRUM_HOME: /var/lib/tyrum
       GATEWAY_HOST: 0.0.0.0
@@ -23,12 +27,24 @@ services:
       - tyrum-data:/var/lib/tyrum
     restart: unless-stopped
 
-  tyrum-worker:
+  # ---------------------------------------------------------------------------
+  # Optional: split services + Postgres (safe; no split-on-SQLite)
+  # Enable with: docker compose --profile split up
+  # ---------------------------------------------------------------------------
+
+  tyrum-edge:
+    profiles: ["split"]
     build: .
-    command: ["worker"]
+    command: ["edge"]
     environment:
       TYRUM_HOME: /var/lib/tyrum
-      GATEWAY_DB_PATH: /var/lib/tyrum/gateway.db
+      GATEWAY_HOST: 0.0.0.0
+      GATEWAY_PORT: "8080"
+      GATEWAY_DB_PATH: ${GATEWAY_DB_PATH:-postgres://${POSTGRES_USER:-tyrum}:${POSTGRES_PASSWORD:-tyrum}@postgres:5432/${POSTGRES_DB:-tyrum}}
+      # In split mode, ensure all services share the same admin token.
+      GATEWAY_TOKEN: ${GATEWAY_TOKEN:-tyrum-dev-token}
+      # Artifact storage: default to filesystem; set TYRUM_ARTIFACT_STORE=s3 and
+      # enable the "minio" profile to use object storage.
       TYRUM_ARTIFACT_STORE: ${TYRUM_ARTIFACT_STORE:-fs}
       TYRUM_ARTIFACTS_DIR: /var/lib/tyrum/artifacts
       TYRUM_ARTIFACTS_S3_ENDPOINT: ${TYRUM_ARTIFACTS_S3_ENDPOINT:-http://minio:9000}
@@ -37,16 +53,44 @@ services:
       TYRUM_ARTIFACTS_S3_FORCE_PATH_STYLE: ${TYRUM_ARTIFACTS_S3_FORCE_PATH_STYLE:-1}
       TYRUM_ARTIFACTS_S3_ACCESS_KEY_ID: ${TYRUM_ARTIFACTS_S3_ACCESS_KEY_ID:-}
       TYRUM_ARTIFACTS_S3_SECRET_ACCESS_KEY: ${TYRUM_ARTIFACTS_S3_SECRET_ACCESS_KEY:-}
+    depends_on:
+      - postgres
+    ports:
+      - "8080:8080"
+    volumes:
+      - tyrum-data:/var/lib/tyrum
+    restart: unless-stopped
+
+  tyrum-worker:
+    profiles: ["split"]
+    build: .
+    command: ["worker"]
+    environment:
+      TYRUM_HOME: /var/lib/tyrum
+      GATEWAY_DB_PATH: ${GATEWAY_DB_PATH:-postgres://${POSTGRES_USER:-tyrum}:${POSTGRES_PASSWORD:-tyrum}@postgres:5432/${POSTGRES_DB:-tyrum}}
+      GATEWAY_TOKEN: ${GATEWAY_TOKEN:-tyrum-dev-token}
+      TYRUM_ARTIFACT_STORE: ${TYRUM_ARTIFACT_STORE:-fs}
+      TYRUM_ARTIFACTS_DIR: /var/lib/tyrum/artifacts
+      TYRUM_ARTIFACTS_S3_ENDPOINT: ${TYRUM_ARTIFACTS_S3_ENDPOINT:-http://minio:9000}
+      TYRUM_ARTIFACTS_S3_BUCKET: ${TYRUM_ARTIFACTS_S3_BUCKET:-tyrum-artifacts}
+      TYRUM_ARTIFACTS_S3_REGION: ${TYRUM_ARTIFACTS_S3_REGION:-us-east-1}
+      TYRUM_ARTIFACTS_S3_FORCE_PATH_STYLE: ${TYRUM_ARTIFACTS_S3_FORCE_PATH_STYLE:-1}
+      TYRUM_ARTIFACTS_S3_ACCESS_KEY_ID: ${TYRUM_ARTIFACTS_S3_ACCESS_KEY_ID:-}
+      TYRUM_ARTIFACTS_S3_SECRET_ACCESS_KEY: ${TYRUM_ARTIFACTS_S3_SECRET_ACCESS_KEY:-}
+    depends_on:
+      - postgres
     volumes:
       - tyrum-data:/var/lib/tyrum
     restart: unless-stopped
 
   tyrum-scheduler:
+    profiles: ["split"]
     build: .
     command: ["scheduler"]
     environment:
       TYRUM_HOME: /var/lib/tyrum
-      GATEWAY_DB_PATH: /var/lib/tyrum/gateway.db
+      GATEWAY_DB_PATH: ${GATEWAY_DB_PATH:-postgres://${POSTGRES_USER:-tyrum}:${POSTGRES_PASSWORD:-tyrum}@postgres:5432/${POSTGRES_DB:-tyrum}}
+      GATEWAY_TOKEN: ${GATEWAY_TOKEN:-tyrum-dev-token}
       TYRUM_ARTIFACT_STORE: ${TYRUM_ARTIFACT_STORE:-fs}
       TYRUM_ARTIFACTS_DIR: /var/lib/tyrum/artifacts
       TYRUM_ARTIFACTS_S3_ENDPOINT: ${TYRUM_ARTIFACTS_S3_ENDPOINT:-http://minio:9000}
@@ -55,18 +99,19 @@ services:
       TYRUM_ARTIFACTS_S3_FORCE_PATH_STYLE: ${TYRUM_ARTIFACTS_S3_FORCE_PATH_STYLE:-1}
       TYRUM_ARTIFACTS_S3_ACCESS_KEY_ID: ${TYRUM_ARTIFACTS_S3_ACCESS_KEY_ID:-}
       TYRUM_ARTIFACTS_S3_SECRET_ACCESS_KEY: ${TYRUM_ARTIFACTS_S3_SECRET_ACCESS_KEY:-}
+    depends_on:
+      - postgres
     volumes:
       - tyrum-data:/var/lib/tyrum
     restart: unless-stopped
 
-  # Optional Postgres for future HA deployments (wired in `postgres_support`).
   postgres:
     image: postgres:16
-    profiles: ["postgres"]
+    profiles: ["split"]
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
-      POSTGRES_DB: ${POSTGRES_DB:-}
+      POSTGRES_USER: ${POSTGRES_USER:-tyrum}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tyrum}
+      POSTGRES_DB: ${POSTGRES_DB:-tyrum}
     ports:
       - "5432:5432"
     volumes:

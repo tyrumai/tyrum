@@ -24,6 +24,7 @@ import type { ConnectedClient } from "./connection-manager.js";
 import type { ConnectionManager } from "./connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
+import type { Logger } from "../modules/observability/logger.js";
 
 // ---------------------------------------------------------------------------
 // Dependency injection
@@ -35,6 +36,7 @@ import type { ConnectionDirectoryDal } from "../modules/backplane/connection-dir
  */
 export interface ProtocolDeps {
   connectionManager: ConnectionManager;
+  logger?: Logger;
 
   /**
    * Optional cluster router. When configured, the gateway can deliver WS messages
@@ -190,7 +192,7 @@ export function dispatchTask(
   planId: string,
   stepIndex: number,
   deps: ProtocolDeps,
-): string {
+): Promise<string> {
   const capability = requiredCapability(action.type);
   if (capability === undefined) {
     throw new NoCapableClientError(action.type as ClientCapability);
@@ -204,7 +206,8 @@ export function dispatchTask(
     }
 
     const nowMs = Date.now();
-    const candidates = cluster.connectionDirectory.listConnectionsForCapability(
+    return (async (): Promise<string> => {
+      const candidates = await cluster.connectionDirectory.listConnectionsForCapability(
       capability,
       nowMs,
     );
@@ -221,12 +224,13 @@ export function dispatchTask(
       payload: { plan_id: planId, step_index: stepIndex, action },
     };
 
-    cluster.outboxDal.enqueue(
-      "ws.direct",
-      { connection_id: target.connection_id, message },
-      { targetEdgeId: target.edge_id },
-    );
-    return requestId;
+      await cluster.outboxDal.enqueue(
+        "ws.direct",
+        { connection_id: target.connection_id, message },
+        { targetEdgeId: target.edge_id },
+      );
+      return requestId;
+    })();
   }
 
   const requestId = `task-${crypto.randomUUID()}`;
@@ -236,7 +240,7 @@ export function dispatchTask(
     payload: { plan_id: planId, step_index: stepIndex, action },
   };
   client.ws.send(JSON.stringify(message));
-  return requestId;
+  return Promise.resolve(requestId);
 }
 
 /**
@@ -270,17 +274,33 @@ export function requestApproval(
   if (!first.done) {
     first.value.ws.send(payload);
     if (deps.cluster) {
-      deps.cluster.outboxDal.enqueue("ws.broadcast", {
-        source_edge_id: deps.cluster.edgeId,
-        skip_local: true,
-        message,
-      });
+      void deps.cluster.outboxDal
+        .enqueue("ws.broadcast", {
+          source_edge_id: deps.cluster.edgeId,
+          skip_local: true,
+          message,
+        })
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          deps.logger?.error("outbox.enqueue_failed", {
+            topic: "ws.broadcast",
+            error: message,
+          });
+        });
     }
     return;
   }
 
   if (deps.cluster) {
-    deps.cluster.outboxDal.enqueue("ws.broadcast", { message });
+    void deps.cluster.outboxDal
+      .enqueue("ws.broadcast", { message })
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        deps.logger?.error("outbox.enqueue_failed", {
+          topic: "ws.broadcast",
+          error: message,
+        });
+      });
   }
 }
 
@@ -310,11 +330,19 @@ export function sendPlanUpdate(
   }
 
   if (deps.cluster) {
-    deps.cluster.outboxDal.enqueue("ws.broadcast", {
-      source_edge_id: deps.cluster.edgeId,
-      skip_local: true,
-      message,
-    });
+    void deps.cluster.outboxDal
+      .enqueue("ws.broadcast", {
+        source_edge_id: deps.cluster.edgeId,
+        skip_local: true,
+        message,
+      })
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        deps.logger?.error("outbox.enqueue_failed", {
+          topic: "ws.broadcast",
+          error: message,
+        });
+      });
   }
 }
 

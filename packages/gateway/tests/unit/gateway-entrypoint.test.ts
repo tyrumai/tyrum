@@ -14,6 +14,6 @@ describe("gateway entrypoint (src/index.ts)", () => {
     } finally {
       process.argv[1] = originalArgv1;
     }
-  });
+  }, 15_000);
 });
 

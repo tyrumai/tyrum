@@ -14,8 +14,8 @@ import type { Hono } from "hono";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
-export function createTestContainer(): GatewayContainer {
-  return createContainer({
+export async function createTestContainer(): Promise<GatewayContainer> {
+  return await createContainer({
     dbPath: ":memory:",
     migrationsDir,
   });
@@ -26,12 +26,12 @@ export interface TestAppOptions {
   isLocalOnly?: boolean;
 }
 
-export function createTestApp(opts: TestAppOptions = {}): {
+export async function createTestApp(opts: TestAppOptions = {}): Promise<{
   app: Hono;
   container: GatewayContainer;
   agentRuntime?: AgentRuntime;
-} {
-  const container = createTestContainer();
+}> {
+  const container = await createTestContainer();
   const agentRuntime =
     process.env["TYRUM_AGENT_ENABLED"] === "1"
       ? new AgentRuntime({ container })

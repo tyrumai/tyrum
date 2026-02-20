@@ -98,3 +98,4 @@ Resolved by [ADR-0002](./decisions/adr-0002-statestore-backends.md), [ADR-0003](
 - (Resolved) **Scheduler DB-leases:** how cron/watchers/heartbeat are coordinated to prevent double-fires (sharding, leases, and durable dedupe ids).
 - (Resolved) **Artifact store scaling:** local filesystem vs object store; retention policies; artifact reference formats and export bundles.
 - (Resolved) **HA / failover testing:** define what failures must be tolerated (single instance crash, DB failover, partition) and the expected behavior for in-flight runs and approvals.
+- (Open) **Durable workspace storage in clusters:** how `TYRUM_HOME` workspaces remain persistent without requiring RWX mounts, and how ToolRunner/sandbox execution enforces single-writer RWO semantics. (Planned: ADR-0014)

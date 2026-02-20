@@ -7,9 +7,9 @@
  */
 
 import type { Emitter, Handler } from "mitt";
-import type Database from "better-sqlite3";
 import type { GatewayEvents } from "../../event-bus.js";
 import type { MemoryDal } from "../memory/dal.js";
+import type { SqlDb } from "../../statestore/types.js";
 
 // ---------------------------------------------------------------------------
 // Row types
@@ -31,8 +31,8 @@ interface RawWatcherRow {
   trigger_type: string;
   trigger_config: string;
   active: number;
-  created_at: string;
-  updated_at: string;
+  created_at: string | Date;
+  updated_at: string | Date;
 }
 
 // ---------------------------------------------------------------------------
@@ -48,7 +48,7 @@ export interface PlanCompleteTriggerConfig {
 // ---------------------------------------------------------------------------
 
 export interface WatcherProcessorOptions {
-  db: Database.Database;
+  db: SqlDb;
   memoryDal: MemoryDal;
   eventBus: Emitter<GatewayEvents>;
 }
@@ -61,11 +61,13 @@ function parseRow(row: RawWatcherRow): WatcherRow {
   return {
     ...row,
     trigger_config: JSON.parse(row.trigger_config) as unknown,
+    created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+    updated_at: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
   };
 }
 
 export class WatcherProcessor {
-  private readonly db: Database.Database;
+  private readonly db: SqlDb;
   private readonly memoryDal: MemoryDal;
   private readonly eventBus: Emitter<GatewayEvents>;
 
@@ -84,10 +86,10 @@ export class WatcherProcessor {
 
   start(): void {
     this.completedHandler = (event) => {
-      this.onPlanCompleted(event);
+      void this.onPlanCompleted(event);
     };
     this.failedHandler = (event) => {
-      this.onPlanFailed(event);
+      void this.onPlanFailed(event);
     };
 
     this.eventBus.on("plan:completed", this.completedHandler);
@@ -109,30 +111,29 @@ export class WatcherProcessor {
   // Event handlers
   // -----------------------------------------------------------------------
 
-  onPlanCompleted(event: GatewayEvents["plan:completed"]): void {
-    const watchers = this.getActiveWatchersForPlan(event.planId);
+  async onPlanCompleted(event: GatewayEvents["plan:completed"]): Promise<void> {
+    const watchers = await this.getActiveWatchersForPlan(event.planId);
     for (const watcher of watchers) {
-      if (this.evaluateTrigger(watcher, event)) {
-        this.memoryDal.insertEpisodicEvent(
-          `watcher-${String(watcher.id)}-${event.planId}-completed`,
-          new Date().toISOString(),
-          "watcher",
-          "plan_completed",
-          {
-            watcherId: watcher.id,
-            planId: event.planId,
-            stepsExecuted: event.stepsExecuted,
-            triggerType: watcher.trigger_type,
-          },
-        );
-      }
+      if (!this.evaluateTrigger(watcher, event)) continue;
+      await this.memoryDal.insertEpisodicEvent(
+        `watcher-${String(watcher.id)}-${event.planId}-completed`,
+        new Date().toISOString(),
+        "watcher",
+        "plan_completed",
+        {
+          watcherId: watcher.id,
+          planId: event.planId,
+          stepsExecuted: event.stepsExecuted,
+          triggerType: watcher.trigger_type,
+        },
+      );
     }
   }
 
-  onPlanFailed(event: GatewayEvents["plan:failed"]): void {
-    const watchers = this.getActiveWatchersForPlan(event.planId);
+  async onPlanFailed(event: GatewayEvents["plan:failed"]): Promise<void> {
+    const watchers = await this.getActiveWatchersForPlan(event.planId);
     for (const watcher of watchers) {
-      this.memoryDal.insertEpisodicEvent(
+      await this.memoryDal.insertEpisodicEvent(
         `watcher-${String(watcher.id)}-${event.planId}-failed`,
         new Date().toISOString(),
         "watcher",
@@ -145,9 +146,8 @@ export class WatcherProcessor {
         },
       );
 
-      // Deactivate one-shot watchers on failure
       if (watcher.trigger_type === "plan_complete") {
-        this.deactivateWatcher(watcher.id);
+        await this.deactivateWatcher(watcher.id);
       }
     }
   }
@@ -160,43 +160,46 @@ export class WatcherProcessor {
     planId: string,
     triggerType: string,
     triggerConfig: unknown,
-  ): number {
-    const result = this.db
-      .prepare(
-        `INSERT INTO watchers (plan_id, trigger_type, trigger_config)
-         VALUES (?, ?, ?)`,
-      )
-      .run(planId, triggerType, JSON.stringify(triggerConfig));
-    return Number(result.lastInsertRowid);
+  ): Promise<number> {
+    const nowIso = new Date().toISOString();
+    return this.db.transaction(async (tx) => {
+      const row = await tx.get<{ id: number }>(
+        `INSERT INTO watchers (plan_id, trigger_type, trigger_config, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?)
+         RETURNING id`,
+        [planId, triggerType, JSON.stringify(triggerConfig), nowIso, nowIso],
+      );
+      if (!row) {
+        throw new Error("failed to create watcher");
+      }
+      return Number(row.id);
+    });
   }
 
-  listWatchers(): WatcherRow[] {
-    const rows = this.db
-      .prepare(
-        "SELECT * FROM watchers WHERE active = 1 ORDER BY created_at DESC",
-      )
-      .all() as RawWatcherRow[];
+  async listWatchers(): Promise<WatcherRow[]> {
+    const rows = await this.db.all<RawWatcherRow>(
+      "SELECT * FROM watchers WHERE active = 1 ORDER BY created_at DESC",
+    );
     return rows.map(parseRow);
   }
 
-  deactivateWatcher(watcherId: number): void {
-    this.db
-      .prepare(
-        "UPDATE watchers SET active = 0, updated_at = datetime('now') WHERE id = ?",
-      )
-      .run(watcherId);
+  async deactivateWatcher(watcherId: number): Promise<void> {
+    const nowIso = new Date().toISOString();
+    await this.db.run(
+      "UPDATE watchers SET active = 0, updated_at = ? WHERE id = ?",
+      [nowIso, watcherId],
+    );
   }
 
   // -----------------------------------------------------------------------
   // Internal helpers
   // -----------------------------------------------------------------------
 
-  private getActiveWatchersForPlan(planId: string): WatcherRow[] {
-    const rows = this.db
-      .prepare(
-        "SELECT * FROM watchers WHERE plan_id = ? AND active = 1",
-      )
-      .all(planId) as RawWatcherRow[];
+  private async getActiveWatchersForPlan(planId: string): Promise<WatcherRow[]> {
+    const rows = await this.db.all<RawWatcherRow>(
+      "SELECT * FROM watchers WHERE plan_id = ? AND active = 1",
+      [planId],
+    );
     return rows.map(parseRow);
   }
 

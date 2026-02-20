@@ -1,8 +1,8 @@
-import type Database from "better-sqlite3";
 import { computeEventHash } from "../audit/hash-chain.js";
 import type { ChainableEvent } from "../audit/hash-chain.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { Logger } from "../observability/logger.js";
+import type { SqlDb } from "../../statestore/types.js";
 
 export interface NewPlannerEvent {
   replayId: string;
@@ -28,9 +28,13 @@ interface RawPlannerEventRow {
   step_index: number;
   occurred_at: string;
   action: string;
-  created_at: string;
+  created_at: string | Date;
   prev_hash: string | null;
   event_hash: string | null;
+}
+
+function normalizeTime(value: string | Date): string {
+  return value instanceof Date ? value.toISOString() : value;
 }
 
 function rowToEvent(row: RawPlannerEventRow): PersistedPlannerEvent {
@@ -41,18 +45,29 @@ function rowToEvent(row: RawPlannerEventRow): PersistedPlannerEvent {
     stepIndex: row.step_index,
     occurredAt: row.occurred_at,
     action: JSON.parse(row.action) as unknown,
-    createdAt: row.created_at,
+    createdAt: normalizeTime(row.created_at),
   };
+}
+
+function isUniqueViolation(err: unknown): boolean {
+  if (err && typeof err === "object") {
+    const code = (err as { code?: unknown }).code;
+    if (code === "23505") return true; // Postgres unique_violation
+    if (typeof code === "string" && code.toUpperCase().startsWith("SQLITE_CONSTRAINT")) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export class EventLog {
   constructor(
-    private db: Database.Database,
+    private db: SqlDb,
     private readonly redactionEngine?: RedactionEngine,
     private readonly logger?: Logger,
   ) {}
 
-  append(event: NewPlannerEvent): AppendOutcome {
+  async append(event: NewPlannerEvent): Promise<AppendOutcome> {
     if (event.stepIndex < 0) {
       throw new Error(
         `step_index must be non-negative, got ${String(event.stepIndex)}`,
@@ -64,18 +79,11 @@ export class EventLog {
       : event.action;
     const actionJson = JSON.stringify(action);
 
-    // SQLite does not support RETURNING with ON CONFLICT DO NOTHING,
-    // so we use a transaction: attempt insert, detect UNIQUE violation.
-    const doAppend = this.db.transaction((): AppendOutcome => {
-      // Check for existing row with this (plan_id, step_index) combination
-      const existing = this.db
-        .prepare(
-          "SELECT id FROM planner_events WHERE plan_id = ? AND step_index = ?",
-        )
-        .get(event.planId, event.stepIndex) as
-        | { id: number }
-        | undefined;
-
+    return await this.db.transaction(async (tx): Promise<AppendOutcome> => {
+      const existing = await tx.get<{ id: number }>(
+        "SELECT id FROM planner_events WHERE plan_id = ? AND step_index = ?",
+        [event.planId, event.stepIndex],
+      );
       if (existing) {
         this.logger?.debug("event.duplicate", {
           event_id: event.replayId,
@@ -85,13 +93,10 @@ export class EventLog {
         return { kind: "duplicate" };
       }
 
-      // Fetch the last event's hash for this plan to chain
-      const lastRow = this.db
-        .prepare(
-          "SELECT event_hash FROM planner_events WHERE plan_id = ? ORDER BY step_index DESC LIMIT 1",
-        )
-        .get(event.planId) as { event_hash: string | null } | undefined;
-
+      const lastRow = await tx.get<{ event_hash: string | null }>(
+        "SELECT event_hash FROM planner_events WHERE plan_id = ? ORDER BY step_index DESC LIMIT 1",
+        [event.planId],
+      );
       const prevHash = lastRow?.event_hash ?? null;
 
       const eventHash = computeEventHash(
@@ -104,54 +109,59 @@ export class EventLog {
         prevHash,
       );
 
-      const result = this.db
-        .prepare(
+      try {
+        const inserted = await tx.get<RawPlannerEventRow>(
           `INSERT INTO planner_events (replay_id, plan_id, step_index, occurred_at, action, prev_hash, event_hash)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(
-          event.replayId,
-          event.planId,
-          event.stepIndex,
-          event.occurredAt,
-          actionJson,
-          prevHash,
-          eventHash,
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           RETURNING *`,
+          [
+            event.replayId,
+            event.planId,
+            event.stepIndex,
+            event.occurredAt,
+            actionJson,
+            prevHash,
+            eventHash,
+          ],
         );
 
-      const inserted = this.db
-        .prepare("SELECT * FROM planner_events WHERE id = ?")
-        .get(Number(result.lastInsertRowid)) as RawPlannerEventRow;
+        if (!inserted) {
+          throw new Error("planner_events insert returned no row");
+        }
 
-      const persisted = rowToEvent(inserted);
-      this.logger?.debug("event.appended", {
-        event_id: event.replayId,
-        plan_id: event.planId,
-        step_index: event.stepIndex,
-        row_id: persisted.id,
-      });
-      return { kind: "inserted", event: persisted };
+        const persisted = rowToEvent(inserted);
+        this.logger?.debug("event.appended", {
+          event_id: event.replayId,
+          plan_id: event.planId,
+          step_index: event.stepIndex,
+          row_id: persisted.id,
+        });
+        return { kind: "inserted", event: persisted };
+      } catch (err) {
+        if (isUniqueViolation(err)) {
+          this.logger?.debug("event.duplicate", {
+            event_id: event.replayId,
+            plan_id: event.planId,
+            step_index: event.stepIndex,
+          });
+          return { kind: "duplicate" };
+        }
+        throw err;
+      }
     });
-
-    return doAppend();
   }
 
-  eventsForPlan(planId: string): PersistedPlannerEvent[] {
-    const rows = this.db
-      .prepare(
-        "SELECT * FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
-      )
-      .all(planId) as RawPlannerEventRow[];
+  async eventsForPlan(planId: string): Promise<PersistedPlannerEvent[]> {
+    const rows = await this.db.all<RawPlannerEventRow>(
+      "SELECT * FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
+      [planId],
+    );
     return rows.map(rowToEvent);
   }
 
   /** Returns events with hash columns for chain verification. */
-  getEventsForVerification(planId: string): ChainableEvent[] {
-    const rows = this.db
-      .prepare(
-        "SELECT id, plan_id, step_index, occurred_at, action, prev_hash, event_hash FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
-      )
-      .all(planId) as Array<{
+  async getEventsForVerification(planId: string): Promise<ChainableEvent[]> {
+    const rows = await this.db.all<{
       id: number;
       plan_id: string;
       step_index: number;
@@ -159,7 +169,10 @@ export class EventLog {
       action: string;
       prev_hash: string | null;
       event_hash: string | null;
-    }>;
+    }>(
+      "SELECT id, plan_id, step_index, occurred_at, action, prev_hash, event_hash FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
+      [planId],
+    );
     return rows;
   }
 }

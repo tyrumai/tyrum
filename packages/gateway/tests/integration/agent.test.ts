@@ -162,7 +162,7 @@ describe("agent routes", () => {
   });
 
   it("returns singleton status from local workspace", async () => {
-    const { app } = createTestApp();
+    const { app } = await createTestApp();
     const res = await app.request("/agent/status");
 
     expect(res.status).toBe(200);
@@ -182,11 +182,11 @@ describe("agent routes", () => {
   });
 
   it("requires explicit runtime wiring when agent routes are enabled", async () => {
-    const container = createTestContainer();
+    const container = await createTestContainer();
     expect(() => createApp(container)).toThrow(
       /explicit AgentRuntime when TYRUM_AGENT_ENABLED=1/,
     );
-    container.db.close();
+    await container.db.close();
   });
 
   it("separates short-term session context per channel/thread and writes memory files", async () => {
@@ -221,7 +221,7 @@ describe("agent routes", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { app } = createTestApp();
+    const { app } = await createTestApp();
 
     const first = await app.request("/agent/turn", {
       method: "POST",
@@ -294,7 +294,7 @@ describe("agent routes", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { app } = createTestApp();
+    const { app } = await createTestApp();
     const res = await app.request("/agent/turn", {
       method: "POST",
       headers: { "content-type": "application/json" },

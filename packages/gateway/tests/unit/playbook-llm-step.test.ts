@@ -36,7 +36,7 @@ describe("executePlaybookLlmStep", () => {
   let container: GatewayContainer | undefined;
 
   afterEach(async () => {
-    container?.db.close();
+    await container?.db.close();
     container = undefined;
 
     if (homeDir) {
@@ -47,7 +47,7 @@ describe("executePlaybookLlmStep", () => {
 
   async function makeRuntime(fetchImpl: typeof fetch): Promise<AgentRuntime> {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-llm-"));
-    container = createContainer({ dbPath: ":memory:", migrationsDir });
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
 
     // Minimal config: no tools, no skills, no MCP.
     await writeFile(

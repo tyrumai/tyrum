@@ -1,4 +1,3 @@
-import type Database from "better-sqlite3";
 import type {
   ActionPrimitive as ActionPrimitiveT,
   ArtifactRef as ArtifactRefT,
@@ -9,6 +8,7 @@ import type { EvaluationContext } from "@tyrum/schemas";
 import { randomUUID } from "node:crypto";
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { Logger } from "../observability/logger.js";
+import type { SqlDb } from "../../statestore/types.js";
 
 export interface StepResult {
   success: boolean;
@@ -20,7 +20,12 @@ export interface StepResult {
 }
 
 export interface StepExecutor {
-  execute(action: ActionPrimitiveT, planId: string, stepIndex: number): Promise<StepResult>;
+  execute(
+    action: ActionPrimitiveT,
+    planId: string,
+    stepIndex: number,
+    timeoutMs: number,
+  ): Promise<StepResult>;
 }
 
 export interface ExecutionClock {
@@ -51,8 +56,8 @@ export interface WorkerTickInput {
 interface ResumeTokenRow {
   token: string;
   run_id: string;
-  expires_at: string | null;
-  revoked_at: string | null;
+  expires_at: string | Date | null;
+  revoked_at: string | Date | null;
 }
 
 interface RunnableRunRow {
@@ -98,18 +103,14 @@ function parsePlanIdFromTriggerJson(triggerJson: string): string | undefined {
   return undefined;
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 export class ExecutionEngine {
-  private readonly db: Database.Database;
+  private readonly db: SqlDb;
   private readonly clock: ClockFn;
   private readonly redactionEngine?: RedactionEngine;
   private readonly logger?: Logger;
 
   constructor(opts: {
-    db: Database.Database;
+    db: SqlDb;
     clock?: ClockFn;
     redactionEngine?: RedactionEngine;
     logger?: Logger;
@@ -130,7 +131,7 @@ export class ExecutionEngine {
     return this.redactionEngine ? this.redactionEngine.redactText(text).redacted : text;
   }
 
-  enqueuePlan(input: EnqueuePlanInput): EnqueuePlanResult {
+  async enqueuePlan(input: EnqueuePlanInput): Promise<EnqueuePlanResult> {
     const jobId = randomUUID();
     const runId = randomUUID();
 
@@ -150,48 +151,43 @@ export class ExecutionEngine {
       request_id: input.requestId,
     });
 
-    const txn = this.db.transaction(() => {
-      this.db
-        .prepare(
-          `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json, input_json, latest_run_id)
-           VALUES (?, ?, ?, 'queued', ?, ?, ?)`,
-        )
-        .run(jobId, input.key, input.lane, triggerJson, inputJson, runId);
+    await this.db.transaction(async (tx) => {
+      await tx.run(
+        `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json, input_json, latest_run_id)
+         VALUES (?, ?, ?, 'queued', ?, ?, ?)`,
+        [jobId, input.key, input.lane, triggerJson, inputJson, runId],
+      );
 
-      this.db
-        .prepare(
-          `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
-           VALUES (?, ?, ?, ?, 'queued', 1)`,
-        )
-        .run(runId, jobId, input.key, input.lane);
-
-      const insertStep = this.db.prepare(
-        `INSERT INTO execution_steps (
-           step_id,
-           run_id,
-           step_index,
-           status,
-           action_json,
-           idempotency_key,
-           postcondition_json
-         ) VALUES (?, ?, ?, 'queued', ?, ?, ?)`,
+      await tx.run(
+        `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
+         VALUES (?, ?, ?, ?, 'queued', 1)`,
+        [runId, jobId, input.key, input.lane],
       );
 
       for (let idx = 0; idx < input.steps.length; idx += 1) {
         const stepId = randomUUID();
         const action = input.steps[idx]!;
-        insertStep.run(
-          stepId,
-          runId,
-          idx,
-          JSON.stringify(action),
-          action.idempotency_key ?? null,
-          action.postcondition ? JSON.stringify(action.postcondition) : null,
+        await tx.run(
+          `INSERT INTO execution_steps (
+             step_id,
+             run_id,
+             step_index,
+             status,
+             action_json,
+             idempotency_key,
+             postcondition_json
+           ) VALUES (?, ?, ?, 'queued', ?, ?, ?)`,
+          [
+            stepId,
+            runId,
+            idx,
+            JSON.stringify(action),
+            action.idempotency_key ?? null,
+            action.postcondition ? JSON.stringify(action.postcondition) : null,
+          ],
         );
       }
     });
-
-    txn();
     this.logger?.info("execution.enqueue", {
       request_id: input.requestId,
       plan_id: input.planId,
@@ -209,92 +205,86 @@ export class ExecutionEngine {
    *
    * Returns the resumed run id on success, otherwise `undefined`.
    */
-  resumeRun(token: string): string | undefined {
+  async resumeRun(token: string): Promise<string | undefined> {
     const { nowIso } = this.clock();
-    const txn = this.db.transaction(() => {
-      const row = this.db
-        .prepare(
-          `SELECT token, run_id, expires_at, revoked_at
-           FROM resume_tokens
-           WHERE token = ?`,
-        )
-        .get(token) as ResumeTokenRow | undefined;
+    return await this.db.transaction(async (tx) => {
+      const row = await tx.get<ResumeTokenRow>(
+        `SELECT token, run_id, expires_at, revoked_at
+         FROM resume_tokens
+         WHERE token = ?`,
+        [token],
+      );
       if (!row) return undefined;
       if (row.revoked_at) return undefined;
 
       if (row.expires_at) {
-        const expiresAtMs = Date.parse(row.expires_at);
+        const expiresAtMs =
+          row.expires_at instanceof Date
+            ? row.expires_at.getTime()
+            : Date.parse(row.expires_at);
         if (Number.isFinite(expiresAtMs) && Date.now() > expiresAtMs) {
           // Expired token; revoke so it can't be replayed.
-          this.db
-            .prepare(
-              `UPDATE resume_tokens
-               SET revoked_at = ?
-               WHERE token = ? AND revoked_at IS NULL`,
-            )
-            .run(nowIso, token);
+          await tx.run(
+            `UPDATE resume_tokens
+             SET revoked_at = ?
+             WHERE token = ? AND revoked_at IS NULL`,
+            [nowIso, token],
+          );
           return undefined;
         }
       }
 
-      this.db
-        .prepare(
-          `UPDATE resume_tokens
-           SET revoked_at = ?
-           WHERE token = ? AND revoked_at IS NULL`,
-        )
-        .run(nowIso, token);
+      await tx.run(
+        `UPDATE resume_tokens
+         SET revoked_at = ?
+         WHERE token = ? AND revoked_at IS NULL`,
+        [nowIso, token],
+      );
 
-      this.db
-        .prepare(
-          `UPDATE execution_runs
-           SET status = 'queued', paused_reason = NULL, paused_detail = NULL
-           WHERE run_id = ? AND status = 'paused'`,
-        )
-        .run(row.run_id);
+      await tx.run(
+        `UPDATE execution_runs
+         SET status = 'queued', paused_reason = NULL, paused_detail = NULL
+         WHERE run_id = ? AND status = 'paused'`,
+        [row.run_id],
+      );
 
-      this.db
-        .prepare(
-          `UPDATE execution_steps
-           SET status = 'queued'
-           WHERE run_id = ? AND status = 'paused'`,
-        )
-        .run(row.run_id);
+      await tx.run(
+        `UPDATE execution_steps
+         SET status = 'queued'
+         WHERE run_id = ? AND status = 'paused'`,
+        [row.run_id],
+      );
 
       return row.run_id;
     });
-
-    return txn();
   }
 
   async workerTick(input: WorkerTickInput): Promise<boolean> {
     const { nowMs, nowIso } = this.clock();
 
-    const candidates = this.db
-      .prepare(
-        `SELECT
-           r.run_id,
-           r.job_id,
-           r.key,
-           r.lane,
-           r.status,
-           j.trigger_json
-         FROM execution_runs r
-         JOIN execution_jobs j ON j.job_id = r.job_id
-         WHERE r.status IN ('running', 'queued')
-           AND NOT EXISTS (
-             SELECT 1 FROM execution_runs p
-             WHERE p.key = r.key AND p.lane = r.lane AND p.status = 'paused'
-           )
-         ORDER BY
-           CASE r.status WHEN 'running' THEN 0 ELSE 1 END,
-           r.created_at ASC
-         LIMIT 10`,
-      )
-      .all() as RunnableRunRow[];
+    const candidates = await this.db.all<RunnableRunRow>(
+      `SELECT
+         r.run_id,
+         r.job_id,
+         r.key,
+         r.lane,
+         r.status,
+         j.trigger_json
+       FROM execution_runs r
+       JOIN execution_jobs j ON j.job_id = r.job_id
+       WHERE r.status IN ('running', 'queued')
+         AND NOT EXISTS (
+           SELECT 1 FROM execution_runs p
+           WHERE p.key = r.key AND p.lane = r.lane AND p.status = 'paused'
+         )
+       ORDER BY
+         CASE r.status WHEN 'running' THEN 0 ELSE 1 END,
+         r.created_at ASC
+       LIMIT 10`,
+    );
 
     for (const run of candidates) {
-      const leaseOk = this.tryAcquireLaneLease({
+      const leaseOk = await this.tryAcquireLaneLease({
         key: run.key,
         lane: run.lane,
         owner: input.workerId,
@@ -316,81 +306,75 @@ export class ExecutionEngine {
     return false;
   }
 
-  private tickWithLaneLease(
+  private async tickWithLaneLease(
     run: RunnableRunRow,
     input: WorkerTickInput,
     clock: ExecutionClock,
   ): Promise<boolean> {
-    const txn = this.db.transaction(() => {
-      // Ensure run is in running state.
+    const outcome = await this.db.transaction(async (tx) => {
       if (run.status === "queued") {
-        this.db
-          .prepare(
-            `UPDATE execution_runs
-             SET status = 'running', started_at = ?
-             WHERE run_id = ? AND status = 'queued'`,
-          )
-          .run(clock.nowIso, run.run_id);
+        await tx.run(
+          `UPDATE execution_runs
+           SET status = 'running', started_at = ?
+           WHERE run_id = ? AND status = 'queued'`,
+          [clock.nowIso, run.run_id],
+        );
       }
 
-      this.db
-        .prepare(
-          `UPDATE execution_jobs
-           SET status = 'running'
-           WHERE job_id = ? AND status = 'queued'`,
-        )
-        .run(run.job_id);
+      await tx.run(
+        `UPDATE execution_jobs
+         SET status = 'running'
+         WHERE job_id = ? AND status = 'queued'`,
+        [run.job_id],
+      );
 
       // Find next incomplete step.
-      const next = this.db
-        .prepare(
-          `SELECT
-             step_id,
-             step_index,
-             status,
-             action_json,
-             idempotency_key,
-             postcondition_json,
-             max_attempts,
-             timeout_ms
-           FROM execution_steps
-           WHERE run_id = ? AND status IN ('queued', 'running', 'paused')
-           ORDER BY step_index ASC
-           LIMIT 1`,
-        )
-        .get(run.run_id) as StepRow | undefined;
+      const next = await tx.get<StepRow>(
+        `SELECT
+           step_id,
+           step_index,
+           status,
+           action_json,
+           idempotency_key,
+           postcondition_json,
+           max_attempts,
+           timeout_ms
+         FROM execution_steps
+         WHERE run_id = ? AND status IN ('queued', 'running', 'paused')
+         ORDER BY step_index ASC
+         LIMIT 1`,
+        [run.run_id],
+      );
 
       if (!next) {
         // Finalize run if all steps are terminal.
-        const statuses = this.db
-          .prepare("SELECT status FROM execution_steps WHERE run_id = ?")
-          .all(run.run_id) as Array<{ status: string }>;
-
+        const statuses = await tx.all<{ status: string }>(
+          "SELECT status FROM execution_steps WHERE run_id = ?",
+          [run.run_id],
+        );
         const failed = statuses.some(
           (s) => s.status === "failed" || s.status === "cancelled",
         );
 
-        this.db
-          .prepare(
-            `UPDATE execution_runs
-             SET status = ?, finished_at = ?
-             WHERE run_id = ? AND status != 'paused'`,
-          )
-          .run(failed ? "failed" : "succeeded", clock.nowIso, run.run_id);
+        await tx.run(
+          `UPDATE execution_runs
+           SET status = ?, finished_at = ?
+           WHERE run_id = ? AND status != 'paused'`,
+          [failed ? "failed" : "succeeded", clock.nowIso, run.run_id],
+        );
 
-        this.db
-          .prepare(
-            `UPDATE execution_jobs
-             SET status = ?
-             WHERE job_id = ?`,
-          )
-          .run(failed ? "failed" : "completed", run.job_id);
+        await tx.run(
+          `UPDATE execution_jobs
+           SET status = ?
+           WHERE job_id = ?`,
+          [failed ? "failed" : "completed", run.job_id],
+        );
 
-        this.releaseLaneLease({
-          key: run.key,
-          lane: run.lane,
-          owner: input.workerId,
-        });
+        await tx.run(
+          `DELETE FROM lane_leases
+           WHERE key = ? AND lane = ? AND lease_owner = ?`,
+          [run.key, run.lane, input.workerId],
+        );
 
         return { kind: "finalized" as const };
       }
@@ -402,145 +386,129 @@ export class ExecutionEngine {
       if (next.status === "running") {
         // Stale attempt takeover: if a prior worker crashed mid-step,
         // cancel the stale attempt and re-queue the step.
-        const latestAttempt = this.db
-          .prepare(
-            `SELECT attempt_id, lease_expires_at_ms
-             FROM execution_attempts
-             WHERE step_id = ? AND status = 'running'
-             ORDER BY attempt DESC
-             LIMIT 1`,
-          )
-          .get(next.step_id) as
-          | { attempt_id: string; lease_expires_at_ms: number | null }
-          | undefined;
+        const latestAttempt = await tx.get<{
+          attempt_id: string;
+          lease_expires_at_ms: number | null;
+        }>(
+          `SELECT attempt_id, lease_expires_at_ms
+           FROM execution_attempts
+           WHERE step_id = ? AND status = 'running'
+           ORDER BY attempt DESC
+           LIMIT 1`,
+          [next.step_id],
+        );
 
         const expiresAtMs = latestAttempt?.lease_expires_at_ms ?? 0;
         if (latestAttempt && expiresAtMs <= clock.nowMs) {
-          this.db
-            .prepare(
-              `UPDATE execution_attempts
-               SET status = 'cancelled', finished_at = ?, error = ?
-               WHERE attempt_id = ? AND status = 'running'`,
-            )
-            .run(clock.nowIso, "lease expired; takeover", latestAttempt.attempt_id);
+          await tx.run(
+            `UPDATE execution_attempts
+             SET status = 'cancelled', finished_at = ?, error = ?
+             WHERE attempt_id = ? AND status = 'running'`,
+            [clock.nowIso, "lease expired; takeover", latestAttempt.attempt_id],
+          );
 
-          this.db
-            .prepare(
-              `UPDATE execution_steps
-               SET status = 'queued'
-               WHERE step_id = ? AND status = 'running'`,
-            )
-            .run(next.step_id);
+          await tx.run(
+            `UPDATE execution_steps
+             SET status = 'queued'
+             WHERE step_id = ? AND status = 'running'`,
+            [next.step_id],
+          );
           return { kind: "recovered" as const };
         }
 
         return { kind: "noop" as const };
       }
 
-      const attemptAgg = this.db
-        .prepare(
-          "SELECT COALESCE(MAX(attempt), 0) AS n FROM execution_attempts WHERE step_id = ?",
-        )
-        .get(next.step_id) as { n: number };
-
-      const attemptNum = attemptAgg.n + 1;
+      const attemptAgg = await tx.get<{ n: number }>(
+        "SELECT COALESCE(MAX(attempt), 0) AS n FROM execution_attempts WHERE step_id = ?",
+        [next.step_id],
+      );
+      const attemptNum = (attemptAgg?.n ?? 0) + 1;
       const attemptId = randomUUID();
 
       const leaseTtlMs = Math.max(30_000, next.timeout_ms + 10_000);
 
-      // Idempotency short-circuit: if a prior attempt already produced a
-      // succeeded outcome for this (step_id, idempotency_key), skip execution
-      // and record a synthetic succeeded attempt for auditability.
       if (next.idempotency_key) {
-        const record = this.db
-          .prepare(
-            `SELECT status, result_json
-             FROM idempotency_records
-             WHERE scope_key = ? AND kind = 'step' AND idempotency_key = ?`,
-          )
-          .get(next.step_id, next.idempotency_key) as
-          | { status: string; result_json: string | null }
-          | undefined;
+        const record = await tx.get<{ status: string; result_json: string | null }>(
+          `SELECT status, result_json
+           FROM idempotency_records
+           WHERE scope_key = ? AND kind = 'step' AND idempotency_key = ?`,
+          [next.step_id, next.idempotency_key],
+        );
 
         if (record?.status === "succeeded") {
-          const updated = this.db
-            .prepare(
-              `UPDATE execution_steps
-               SET status = 'succeeded'
-               WHERE step_id = ? AND status = 'queued'`,
-            )
-            .run(next.step_id);
+          const updated = await tx.run(
+            `UPDATE execution_steps
+             SET status = 'succeeded'
+             WHERE step_id = ? AND status = 'queued'`,
+            [next.step_id],
+          );
           if (updated.changes === 1) {
-            this.db
-              .prepare(
-                `INSERT INTO execution_attempts (
-                   attempt_id,
-                   step_id,
-                   attempt,
-                   status,
-                   started_at,
-                   finished_at,
-                   artifacts_json,
-                   result_json,
-                   error
-                 ) VALUES (?, ?, ?, 'succeeded', ?, ?, '[]', ?, NULL)`,
-              )
-              .run(
+            await tx.run(
+              `INSERT INTO execution_attempts (
+                 attempt_id,
+                 step_id,
+                 attempt,
+                 status,
+                 started_at,
+                 finished_at,
+                 artifacts_json,
+                 result_json,
+                 error
+               ) VALUES (?, ?, ?, 'succeeded', ?, ?, '[]', ?, NULL)`,
+              [
                 attemptId,
                 next.step_id,
                 attemptNum,
                 clock.nowIso,
                 clock.nowIso,
                 record.result_json ?? null,
-              );
+              ],
+            );
 
             return { kind: "idempotent" as const };
           }
         }
       }
 
-      const updated = this.db
-        .prepare(
-          `UPDATE execution_steps
-           SET status = 'running'
-           WHERE step_id = ? AND status = 'queued'`,
-        )
-        .run(next.step_id);
+      const updated = await tx.run(
+        `UPDATE execution_steps
+         SET status = 'running'
+         WHERE step_id = ? AND status = 'queued'`,
+        [next.step_id],
+      );
 
       if (updated.changes !== 1) {
         return { kind: "noop" as const };
       }
 
-      this.db
-        .prepare(
-          `INSERT INTO execution_attempts (
-             attempt_id,
-             step_id,
-             attempt,
-             status,
-             started_at,
-             artifacts_json,
-             lease_owner,
-             lease_expires_at_ms
-           ) VALUES (?, ?, ?, 'running', ?, '[]', ?, ?)`,
-        )
-        .run(
+      await tx.run(
+        `INSERT INTO execution_attempts (
+           attempt_id,
+           step_id,
+           attempt,
+           status,
+           started_at,
+           artifacts_json,
+           lease_owner,
+           lease_expires_at_ms
+         ) VALUES (?, ?, ?, 'running', ?, '[]', ?, ?)`,
+        [
           attemptId,
           next.step_id,
           attemptNum,
           clock.nowIso,
           input.workerId,
           clock.nowMs + leaseTtlMs,
-        );
+        ],
+      );
 
-      // Extend the lane lease to cover the expected attempt runtime.
-      this.db
-        .prepare(
-          `UPDATE lane_leases
-           SET lease_expires_at_ms = ?
-           WHERE key = ? AND lane = ? AND lease_owner = ?`,
-        )
-        .run(clock.nowMs + leaseTtlMs, run.key, run.lane, input.workerId);
+      await tx.run(
+        `UPDATE lane_leases
+         SET lease_expires_at_ms = ?
+         WHERE key = ? AND lane = ? AND lease_owner = ?`,
+        [clock.nowMs + leaseTtlMs, run.key, run.lane, input.workerId],
+      );
 
       return {
         kind: "claimed" as const,
@@ -557,12 +525,10 @@ export class ExecutionEngine {
       };
     });
 
-    const outcome = txn();
-
-    if (outcome.kind === "noop") return Promise.resolve(false);
-    if (outcome.kind === "recovered") return Promise.resolve(true);
-    if (outcome.kind === "finalized") return Promise.resolve(true);
-    if (outcome.kind === "idempotent") return Promise.resolve(true);
+    if (outcome.kind === "noop") return false;
+    if (outcome.kind === "recovered") return true;
+    if (outcome.kind === "finalized") return true;
+    if (outcome.kind === "idempotent") return true;
 
     const planId =
       parsePlanIdFromTriggerJson(outcome.triggerJson) ?? outcome.runId;
@@ -570,7 +536,7 @@ export class ExecutionEngine {
     const action = JSON.parse(outcome.step.action_json) as ActionPrimitiveT;
     const timeoutMs = Math.max(1, outcome.step.timeout_ms);
 
-    return this.executeAttempt({
+    return await this.executeAttempt({
       planId,
       stepIndex: outcome.step.step_index,
       action,
@@ -660,8 +626,15 @@ export class ExecutionEngine {
             if (err.kind === "missing_evidence") {
               // Pause the run for manual intervention.
               const detail = `postcondition missing evidence: ${err.message}`;
-              this.markAttemptSucceeded(opts, result, evidenceJson, null, artifactsJson, costJson);
-              this.pauseRunAndStep(opts, "manual", detail);
+              await this.markAttemptSucceeded(
+                opts,
+                result,
+                evidenceJson,
+                null,
+                artifactsJson,
+                costJson,
+              );
+              await this.pauseRunAndStep(opts, "manual", detail);
               this.logger?.info("execution.attempt.paused", {
                 job_id: opts.jobId,
                 run_id: opts.runId,
@@ -680,7 +653,7 @@ export class ExecutionEngine {
 
       if (postconditionError) {
         // Treat postcondition failure as a step failure (retryable).
-        this.markAttemptFailed(
+        await this.markAttemptFailed(
           opts,
           postconditionError,
           evidenceJson,
@@ -696,10 +669,10 @@ export class ExecutionEngine {
           status: "failed",
           error: this.redactText(postconditionError),
         });
-        return this.maybeRetryOrFailStep(opts);
+        return await this.maybeRetryOrFailStep(opts);
       }
 
-      this.markAttemptSucceeded(
+      await this.markAttemptSucceeded(
         opts,
         result,
         evidenceJson,
@@ -716,13 +689,12 @@ export class ExecutionEngine {
         duration_ms: wallDurationMs,
         cost,
       });
-      this.db
-        .prepare(
-          `UPDATE execution_steps
-           SET status = 'succeeded'
-           WHERE step_id = ?`,
-        )
-        .run(opts.stepId);
+      await this.db.run(
+        `UPDATE execution_steps
+         SET status = 'succeeded'
+         WHERE step_id = ?`,
+        [opts.stepId],
+      );
 
       const idempotencyKey = opts.action.idempotency_key?.trim();
       if (idempotencyKey) {
@@ -730,24 +702,23 @@ export class ExecutionEngine {
           result.result !== undefined
             ? JSON.stringify(this.redactUnknown(result.result))
             : null;
-        this.db
-          .prepare(
-            `INSERT INTO idempotency_records (
-               scope_key,
-               kind,
-               idempotency_key,
-               status,
-               result_json,
-               error,
-               updated_at
-             ) VALUES (?, 'step', ?, 'succeeded', ?, NULL, ?)
-             ON CONFLICT (scope_key, kind, idempotency_key) DO UPDATE SET
-               status = excluded.status,
-               result_json = excluded.result_json,
-               error = NULL,
-               updated_at = excluded.updated_at`,
-          )
-          .run(opts.stepId, idempotencyKey, resultJson, this.clock().nowIso);
+        await this.db.run(
+          `INSERT INTO idempotency_records (
+             scope_key,
+             kind,
+             idempotency_key,
+             status,
+             result_json,
+             error,
+             updated_at
+           ) VALUES (?, 'step', ?, 'succeeded', ?, NULL, ?)
+           ON CONFLICT (scope_key, kind, idempotency_key) DO UPDATE SET
+             status = excluded.status,
+             result_json = excluded.result_json,
+             error = NULL,
+             updated_at = excluded.updated_at`,
+          [opts.stepId, idempotencyKey, resultJson, this.clock().nowIso],
+        );
       }
       return true;
     }
@@ -757,13 +728,11 @@ export class ExecutionEngine {
     const timedOut = error.toLowerCase().includes("timed out");
     const status = timedOut ? "timed_out" : "failed";
 
-    this.db
-      .prepare(
-        `UPDATE execution_attempts
-         SET status = ?, finished_at = ?, result_json = NULL, error = ?, metadata_json = ?, artifacts_json = ?, cost_json = ?
-         WHERE attempt_id = ?`,
-      )
-      .run(
+    await this.db.run(
+      `UPDATE execution_attempts
+       SET status = ?, finished_at = ?, result_json = NULL, error = ?, metadata_json = ?, artifacts_json = ?, cost_json = ?
+       WHERE attempt_id = ?`,
+      [
         status,
         this.clock().nowIso,
         redactedError,
@@ -771,7 +740,8 @@ export class ExecutionEngine {
         artifactsJson,
         costJson,
         opts.attemptId,
-      );
+      ],
+    );
 
     this.logger?.info("execution.attempt.failed", {
       job_id: opts.jobId,
@@ -784,36 +754,34 @@ export class ExecutionEngine {
       cost,
     });
 
-    return this.maybeRetryOrFailStep(opts);
+    return await this.maybeRetryOrFailStep(opts);
   }
 
-  private markAttemptSucceeded(
+  private async markAttemptSucceeded(
     opts: { attemptId: string },
     result: StepResult,
     evidenceJson: string | null,
     postconditionReportJson: string | null,
     artifactsJson: string,
     costJson: string,
-  ): void {
+  ): Promise<void> {
     const resultJson =
       result.result !== undefined
         ? JSON.stringify(this.redactUnknown(result.result))
         : null;
 
-    this.db
-      .prepare(
-        `UPDATE execution_attempts
-         SET status = 'succeeded',
-             finished_at = ?,
-             result_json = ?,
-             error = NULL,
-             postcondition_report_json = ?,
-             metadata_json = ?,
-             artifacts_json = ?,
-             cost_json = ?
-         WHERE attempt_id = ?`,
-      )
-      .run(
+    await this.db.run(
+      `UPDATE execution_attempts
+       SET status = 'succeeded',
+           finished_at = ?,
+           result_json = ?,
+           error = NULL,
+           postcondition_report_json = ?,
+           metadata_json = ?,
+           artifacts_json = ?,
+           cost_json = ?
+       WHERE attempt_id = ?`,
+      [
         this.clock().nowIso,
         resultJson,
         postconditionReportJson,
@@ -821,31 +789,30 @@ export class ExecutionEngine {
         artifactsJson,
         costJson,
         opts.attemptId,
-      );
+      ],
+    );
   }
 
-  private markAttemptFailed(
+  private async markAttemptFailed(
     opts: { attemptId: string },
     error: string,
     evidenceJson: string | null,
     postconditionReportJson: string | null,
     artifactsJson: string,
     costJson: string,
-  ): void {
-    this.db
-      .prepare(
-        `UPDATE execution_attempts
-         SET status = 'failed',
-             finished_at = ?,
-             result_json = NULL,
-             error = ?,
-             postcondition_report_json = ?,
-             metadata_json = ?,
-             artifacts_json = ?,
-             cost_json = ?
-         WHERE attempt_id = ?`,
-      )
-      .run(
+  ): Promise<void> {
+    await this.db.run(
+      `UPDATE execution_attempts
+       SET status = 'failed',
+           finished_at = ?,
+           result_json = NULL,
+           error = ?,
+           postcondition_report_json = ?,
+           metadata_json = ?,
+           artifacts_json = ?,
+           cost_json = ?
+       WHERE attempt_id = ?`,
+      [
         this.clock().nowIso,
         this.redactText(error),
         postconditionReportJson,
@@ -853,10 +820,11 @@ export class ExecutionEngine {
         artifactsJson,
         costJson,
         opts.attemptId,
-      );
+      ],
+    );
   }
 
-  private maybeRetryOrFailStep(opts: {
+  private async maybeRetryOrFailStep(opts: {
     attemptNum: number;
     maxAttempts: number;
     stepId: string;
@@ -865,51 +833,46 @@ export class ExecutionEngine {
     key: string;
     lane: string;
     workerId: string;
-  }): boolean {
+  }): Promise<boolean> {
     if (opts.attemptNum < Math.max(1, opts.maxAttempts)) {
-      this.db
-        .prepare(
-          `UPDATE execution_steps
-           SET status = 'queued'
-           WHERE step_id = ?`,
-        )
-        .run(opts.stepId);
+      await this.db.run(
+        `UPDATE execution_steps
+         SET status = 'queued'
+         WHERE step_id = ?`,
+        [opts.stepId],
+      );
       return true;
     }
 
-    this.db
-      .prepare(
-        `UPDATE execution_steps
-         SET status = 'failed'
-         WHERE step_id = ?`,
-      )
-      .run(opts.stepId);
+    await this.db.run(
+      `UPDATE execution_steps
+       SET status = 'failed'
+       WHERE step_id = ?`,
+      [opts.stepId],
+    );
 
-    this.db
-      .prepare(
-        `UPDATE execution_steps
-         SET status = 'cancelled'
-         WHERE run_id = ? AND status = 'queued'`,
-      )
-      .run(opts.runId);
+    await this.db.run(
+      `UPDATE execution_steps
+       SET status = 'cancelled'
+       WHERE run_id = ? AND status = 'queued'`,
+      [opts.runId],
+    );
 
-    this.db
-      .prepare(
-        `UPDATE execution_runs
-         SET status = 'failed', finished_at = ?
-         WHERE run_id = ?`,
-      )
-      .run(this.clock().nowIso, opts.runId);
+    await this.db.run(
+      `UPDATE execution_runs
+       SET status = 'failed', finished_at = ?
+       WHERE run_id = ?`,
+      [this.clock().nowIso, opts.runId],
+    );
 
-    this.db
-      .prepare(
-        `UPDATE execution_jobs
-         SET status = 'failed'
-         WHERE job_id = ?`,
-      )
-      .run(opts.jobId);
+    await this.db.run(
+      `UPDATE execution_jobs
+       SET status = 'failed'
+       WHERE job_id = ?`,
+      [opts.jobId],
+    );
 
-    this.releaseLaneLease({
+    await this.releaseLaneLease({
       key: opts.key,
       lane: opts.lane,
       owner: opts.workerId,
@@ -918,7 +881,7 @@ export class ExecutionEngine {
     return true;
   }
 
-  private pauseRunAndStep(
+  private async pauseRunAndStep(
     opts: {
       runId: string;
       stepId: string;
@@ -929,34 +892,31 @@ export class ExecutionEngine {
     },
     reason: string,
     detail: string,
-  ): void {
-    this.db
-      .prepare(
-        `UPDATE execution_runs
-         SET status = 'paused', paused_reason = ?, paused_detail = ?
-         WHERE run_id = ?`,
-      )
-      .run(reason, this.redactText(detail), opts.runId);
+  ): Promise<void> {
+    await this.db.run(
+      `UPDATE execution_runs
+       SET status = 'paused', paused_reason = ?, paused_detail = ?
+       WHERE run_id = ?`,
+      [reason, this.redactText(detail), opts.runId],
+    );
 
-    this.db
-      .prepare(
-        `UPDATE execution_steps
-         SET status = 'paused'
-         WHERE step_id = ?`,
-      )
-      .run(opts.stepId);
+    await this.db.run(
+      `UPDATE execution_steps
+       SET status = 'paused'
+       WHERE step_id = ?`,
+      [opts.stepId],
+    );
 
     const token = `resume-${randomUUID()}`;
-    this.db
-      .prepare(
-        `INSERT INTO resume_tokens (token, run_id, created_at)
-         VALUES (?, ?, ?)`,
-      )
-      .run(token, opts.runId, this.clock().nowIso);
+    await this.db.run(
+      `INSERT INTO resume_tokens (token, run_id, created_at)
+       VALUES (?, ?, ?)`,
+      [token, opts.runId, this.clock().nowIso],
+    );
 
     // Keep lane lease held by active worker; it will expire quickly and block
     // only briefly. New work selection also blocks on paused runs.
-    this.releaseLaneLease({
+    await this.releaseLaneLease({
       key: opts.key,
       lane: opts.lane,
       owner: opts.workerId,
@@ -971,46 +931,38 @@ export class ExecutionEngine {
     timeoutMs: number,
   ): Promise<StepResult> {
     try {
-      const result = await Promise.race([
-        executor.execute(action, planId, stepIndex),
-        sleep(timeoutMs).then((): StepResult => ({
-          success: false,
-          error: `job timed out after ${timeoutMs}ms`,
-        })),
-      ]);
-      return result;
+      return await executor.execute(action, planId, stepIndex, timeoutMs);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { success: false, error: message };
     }
   }
 
-  private tryAcquireLaneLease(opts: {
+  private async tryAcquireLaneLease(opts: {
     key: string;
     lane: string;
     owner: string;
     nowMs: number;
     ttlMs: number;
-  }): boolean {
+  }): Promise<boolean> {
     const expiresAt = opts.nowMs + Math.max(1, opts.ttlMs);
-    const txn = this.db.transaction(() => {
-      const existing = this.db
-        .prepare(
-          `SELECT lease_owner, lease_expires_at_ms
-           FROM lane_leases
-           WHERE key = ? AND lane = ?`,
-        )
-        .get(opts.key, opts.lane) as
-        | { lease_owner: string; lease_expires_at_ms: number }
-        | undefined;
+    return await this.db.transaction(async (tx) => {
+      const existing = await tx.get<{
+        lease_owner: string;
+        lease_expires_at_ms: number;
+      }>(
+        `SELECT lease_owner, lease_expires_at_ms
+         FROM lane_leases
+         WHERE key = ? AND lane = ?`,
+        [opts.key, opts.lane],
+      );
 
       if (!existing) {
-        this.db
-          .prepare(
-            `INSERT INTO lane_leases (key, lane, lease_owner, lease_expires_at_ms)
-             VALUES (?, ?, ?, ?)`,
-          )
-          .run(opts.key, opts.lane, opts.owner, expiresAt);
+        await tx.run(
+          `INSERT INTO lane_leases (key, lane, lease_owner, lease_expires_at_ms)
+           VALUES (?, ?, ?, ?)`,
+          [opts.key, opts.lane, opts.owner, expiresAt],
+        );
         return true;
       }
 
@@ -1021,25 +973,25 @@ export class ExecutionEngine {
         return false;
       }
 
-      this.db
-        .prepare(
-          `UPDATE lane_leases
-           SET lease_owner = ?, lease_expires_at_ms = ?
-           WHERE key = ? AND lane = ?`,
-        )
-        .run(opts.owner, expiresAt, opts.key, opts.lane);
+      await tx.run(
+        `UPDATE lane_leases
+         SET lease_owner = ?, lease_expires_at_ms = ?
+         WHERE key = ? AND lane = ?`,
+        [opts.owner, expiresAt, opts.key, opts.lane],
+      );
       return true;
     });
-
-    return txn();
   }
 
-  private releaseLaneLease(opts: { key: string; lane: string; owner: string }): void {
-    this.db
-      .prepare(
-        `DELETE FROM lane_leases
-         WHERE key = ? AND lane = ? AND lease_owner = ?`,
-      )
-      .run(opts.key, opts.lane, opts.owner);
+  private async releaseLaneLease(opts: {
+    key: string;
+    lane: string;
+    owner: string;
+  }): Promise<void> {
+    await this.db.run(
+      `DELETE FROM lane_leases
+       WHERE key = ? AND lane = ? AND lease_owner = ?`,
+      [opts.key, opts.lane, opts.owner],
+    );
   }
 }

@@ -1,5 +1,5 @@
-import type Database from "better-sqlite3";
 import type { ClientCapability } from "@tyrum/schemas";
+import type { SqlDb } from "../../statestore/types.js";
 
 export interface ConnectionDirectoryRow {
   connection_id: string;
@@ -40,87 +40,85 @@ function toRow(raw: RawConnectionDirectoryRow): ConnectionDirectoryRow {
 }
 
 export class ConnectionDirectoryDal {
-  constructor(private readonly db: Database.Database) {}
+  constructor(private readonly db: SqlDb) {}
 
-  upsertConnection(params: {
+  async upsertConnection(params: {
     connectionId: string;
     edgeId: string;
     capabilities: readonly ClientCapability[];
     nowMs: number;
     ttlMs: number;
-  }): void {
+  }): Promise<void> {
     const expiresAtMs = params.nowMs + params.ttlMs;
-    this.db
-      .prepare(
-        `INSERT INTO connection_directory (
-           connection_id,
-           edge_id,
-           capabilities_json,
-           connected_at_ms,
-           last_seen_at_ms,
-           expires_at_ms
-         ) VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT(connection_id) DO UPDATE SET
-           edge_id = excluded.edge_id,
-           capabilities_json = excluded.capabilities_json,
-           last_seen_at_ms = excluded.last_seen_at_ms,
-           expires_at_ms = excluded.expires_at_ms`,
-      )
-      .run(
+    await this.db.run(
+      `INSERT INTO connection_directory (
+         connection_id,
+         edge_id,
+         capabilities_json,
+         connected_at_ms,
+         last_seen_at_ms,
+         expires_at_ms
+       ) VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(connection_id) DO UPDATE SET
+         edge_id = excluded.edge_id,
+         capabilities_json = excluded.capabilities_json,
+         last_seen_at_ms = excluded.last_seen_at_ms,
+         expires_at_ms = excluded.expires_at_ms`,
+      [
         params.connectionId,
         params.edgeId,
         JSON.stringify(params.capabilities ?? []),
         params.nowMs,
         params.nowMs,
         expiresAtMs,
-      );
+      ],
+    );
   }
 
-  touchConnection(params: {
+  async touchConnection(params: {
     connectionId: string;
     nowMs: number;
     ttlMs: number;
-  }): void {
+  }): Promise<void> {
     const expiresAtMs = params.nowMs + params.ttlMs;
-    this.db
-      .prepare(
-        `UPDATE connection_directory
-         SET last_seen_at_ms = ?, expires_at_ms = ?
-         WHERE connection_id = ?`,
-      )
-      .run(params.nowMs, expiresAtMs, params.connectionId);
+    await this.db.run(
+      `UPDATE connection_directory
+       SET last_seen_at_ms = ?, expires_at_ms = ?
+       WHERE connection_id = ?`,
+      [params.nowMs, expiresAtMs, params.connectionId],
+    );
   }
 
-  removeConnection(connectionId: string): void {
-    this.db
-      .prepare("DELETE FROM connection_directory WHERE connection_id = ?")
-      .run(connectionId);
+  async removeConnection(connectionId: string): Promise<void> {
+    await this.db.run(
+      "DELETE FROM connection_directory WHERE connection_id = ?",
+      [connectionId],
+    );
   }
 
-  cleanupExpired(nowMs: number): number {
-    const result = this.db
-      .prepare("DELETE FROM connection_directory WHERE expires_at_ms <= ?")
-      .run(nowMs);
-    return result.changes;
+  async cleanupExpired(nowMs: number): Promise<number> {
+    return (await this.db.run(
+      "DELETE FROM connection_directory WHERE expires_at_ms <= ?",
+      [nowMs],
+    )).changes;
   }
 
-  listNonExpired(nowMs: number): ConnectionDirectoryRow[] {
-    const rows = this.db
-      .prepare(
-        `SELECT *
-         FROM connection_directory
-         WHERE expires_at_ms > ?
-         ORDER BY last_seen_at_ms DESC`,
-      )
-      .all(nowMs) as RawConnectionDirectoryRow[];
+  async listNonExpired(nowMs: number): Promise<ConnectionDirectoryRow[]> {
+    const rows = await this.db.all<RawConnectionDirectoryRow>(
+      `SELECT *
+       FROM connection_directory
+       WHERE expires_at_ms > ?
+       ORDER BY last_seen_at_ms DESC`,
+      [nowMs],
+    );
     return rows.map(toRow);
   }
 
-  listConnectionsForCapability(
+  async listConnectionsForCapability(
     capability: ClientCapability,
     nowMs: number,
-  ): ConnectionDirectoryRow[] {
-    const rows = this.listNonExpired(nowMs);
+  ): Promise<ConnectionDirectoryRow[]> {
+    const rows = await this.listNonExpired(nowMs);
     return rows.filter((r) => r.capabilities.includes(capability));
   }
 }

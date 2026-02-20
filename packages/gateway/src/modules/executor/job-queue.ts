@@ -4,9 +4,9 @@
  * Job lifecycle: pending -> running -> completed | failed | paused | cancelled
  */
 
-import type Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
 import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/schemas";
+import type { SqlDb } from "../../statestore/types.js";
 
 export type JobStatus = "pending" | "running" | "completed" | "failed" | "paused" | "cancelled";
 
@@ -61,40 +61,42 @@ function rowToJob(row: JobRow): Job {
 }
 
 export class JobQueue {
-  constructor(private readonly db: Database.Database) {}
+  constructor(private readonly db: SqlDb) {}
 
-  enqueue(
+  async enqueue(
     planId: string,
     stepIndex: number,
     action: ActionPrimitiveT,
     opts?: { maxAttempts?: number; timeoutMs?: number },
-  ): Job {
+  ): Promise<Job> {
     const id = `job-${randomUUID()}`;
     const maxAttempts = opts?.maxAttempts ?? 3;
     const timeoutMs = opts?.timeoutMs ?? 30_000;
     const actionJson = JSON.stringify(action);
 
-    this.db
-      .prepare(
-        `INSERT INTO jobs (id, plan_id, step_index, action_json, status, attempt, max_attempts, timeout_ms)
-         VALUES (?, ?, ?, ?, 'pending', 0, ?, ?)`,
-      )
-      .run(id, planId, stepIndex, actionJson, maxAttempts, timeoutMs);
+    await this.db.run(
+      `INSERT INTO jobs (id, plan_id, step_index, action_json, status, attempt, max_attempts, timeout_ms)
+       VALUES (?, ?, ?, ?, 'pending', 0, ?, ?)`,
+      [id, planId, stepIndex, actionJson, maxAttempts, timeoutMs],
+    );
 
-    return this.getById(id)!;
+    const created = await this.getById(id);
+    if (!created) {
+      throw new Error(`failed to create job '${id}'`);
+    }
+    return created;
   }
 
-  getById(id: string): Job | undefined {
-    const row = this.db
-      .prepare("SELECT * FROM jobs WHERE id = ?")
-      .get(id) as JobRow | undefined;
+  async getById(id: string): Promise<Job | undefined> {
+    const row = await this.db.get<JobRow>("SELECT * FROM jobs WHERE id = ?", [id]);
     return row ? rowToJob(row) : undefined;
   }
 
-  getByPlanId(planId: string): Job[] {
-    const rows = this.db
-      .prepare("SELECT * FROM jobs WHERE plan_id = ? ORDER BY step_index ASC")
-      .all(planId) as JobRow[];
+  async getByPlanId(planId: string): Promise<Job[]> {
+    const rows = await this.db.all<JobRow>(
+      "SELECT * FROM jobs WHERE plan_id = ? ORDER BY step_index ASC",
+      [planId],
+    );
     return rows.map(rowToJob);
   }
 
@@ -103,32 +105,29 @@ export class JobQueue {
    * Uses a transaction to prevent TOCTOU races under concurrent access.
    * Returns undefined if no pending jobs remain.
    */
-  dequeue(planId: string): Job | undefined {
+  async dequeue(planId: string): Promise<Job | undefined> {
     const now = new Date().toISOString();
 
-    const txn = this.db.transaction(() => {
-      const row = this.db
-        .prepare(
-          `SELECT * FROM jobs
-           WHERE plan_id = ? AND status = 'pending'
-           ORDER BY step_index ASC
-           LIMIT 1`,
-        )
-        .get(planId) as JobRow | undefined;
+    return await this.db.transaction(async (tx) => {
+      const row = await tx.get<JobRow>(
+        `SELECT * FROM jobs
+         WHERE plan_id = ? AND status = 'pending'
+         ORDER BY step_index ASC
+         LIMIT 1`,
+        [planId],
+      );
 
       if (!row) return undefined;
 
-      this.db
-        .prepare(
-          `UPDATE jobs SET status = 'running', attempt = attempt + 1, started_at = ?
-           WHERE id = ? AND status = 'pending'`,
-        )
-        .run(now, row.id);
+      await tx.run(
+        `UPDATE jobs SET status = 'running', attempt = attempt + 1, started_at = ?
+         WHERE id = ? AND status = 'pending'`,
+        [now, row.id],
+      );
 
-      return this.getById(row.id);
+      const updated = await tx.get<JobRow>("SELECT * FROM jobs WHERE id = ?", [row.id]);
+      return updated ? rowToJob(updated) : undefined;
     });
-
-    return txn();
   }
 
   /**
@@ -136,89 +135,80 @@ export class JobQueue {
    * Uses a transaction to prevent TOCTOU races.
    * Returns undefined if the job is not found or not pending.
    */
-  dequeueById(id: string): Job | undefined {
+  async dequeueById(id: string): Promise<Job | undefined> {
     const now = new Date().toISOString();
 
-    const txn = this.db.transaction(() => {
-      const row = this.db
-        .prepare(
-          `SELECT * FROM jobs
-           WHERE id = ? AND status = 'pending'
-           LIMIT 1`,
-        )
-        .get(id) as JobRow | undefined;
+    return await this.db.transaction(async (tx) => {
+      const row = await tx.get<JobRow>(
+        `SELECT * FROM jobs
+         WHERE id = ? AND status = 'pending'
+         LIMIT 1`,
+        [id],
+      );
 
       if (!row) return undefined;
 
-      this.db
-        .prepare(
-          `UPDATE jobs SET status = 'running', attempt = attempt + 1, started_at = ?
-           WHERE id = ? AND status = 'pending'`,
-        )
-        .run(now, row.id);
+      await tx.run(
+        `UPDATE jobs SET status = 'running', attempt = attempt + 1, started_at = ?
+         WHERE id = ? AND status = 'pending'`,
+        [now, row.id],
+      );
 
-      return this.getById(row.id);
+      const updated = await tx.get<JobRow>("SELECT * FROM jobs WHERE id = ?", [row.id]);
+      return updated ? rowToJob(updated) : undefined;
     });
-
-    return txn();
   }
 
-  markCompleted(id: string, result: unknown): void {
+  async markCompleted(id: string, result: unknown): Promise<void> {
     const now = new Date().toISOString();
     const resultJson = result != null ? JSON.stringify(result) : null;
 
-    this.db
-      .prepare(
-        `UPDATE jobs SET status = 'completed', completed_at = ?, result_json = ?
-         WHERE id = ?`,
-      )
-      .run(now, resultJson, id);
+    await this.db.run(
+      `UPDATE jobs SET status = 'completed', completed_at = ?, result_json = ?
+       WHERE id = ?`,
+      [now, resultJson, id],
+    );
   }
 
-  markFailed(id: string, error: string): void {
+  async markFailed(id: string, error: string): Promise<void> {
     const now = new Date().toISOString();
 
-    this.db
-      .prepare(
-        `UPDATE jobs SET status = 'failed', completed_at = ?, error = ?
-         WHERE id = ?`,
-      )
-      .run(now, error, id);
+    await this.db.run(
+      `UPDATE jobs SET status = 'failed', completed_at = ?, error = ?
+       WHERE id = ?`,
+      [now, error, id],
+    );
   }
 
-  markPaused(id: string): void {
-    this.db
-      .prepare("UPDATE jobs SET status = 'paused' WHERE id = ?")
-      .run(id);
+  async markPaused(id: string): Promise<void> {
+    await this.db.run("UPDATE jobs SET status = 'paused' WHERE id = ?", [id]);
   }
 
-  markCancelled(id: string): void {
+  async markCancelled(id: string): Promise<void> {
     const now = new Date().toISOString();
 
-    this.db
-      .prepare(
-        `UPDATE jobs SET status = 'cancelled', completed_at = ?
-         WHERE id = ?`,
-      )
-      .run(now, id);
+    await this.db.run(
+      `UPDATE jobs SET status = 'cancelled', completed_at = ?
+       WHERE id = ?`,
+      [now, id],
+    );
   }
 
   /**
    * Reset a failed job back to pending for retry, if it has attempts remaining.
    * Returns true if the job was reset, false if max attempts reached.
    */
-  retryIfPossible(id: string): boolean {
-    const job = this.getById(id);
+  async retryIfPossible(id: string): Promise<boolean> {
+    const job = await this.getById(id);
     if (!job) return false;
 
     if (job.attempt >= job.max_attempts) return false;
 
-    this.db
-      .prepare(
-        `UPDATE jobs SET status = 'pending', error = NULL, started_at = NULL
-         WHERE id = ?`,
-      )
-      .run(id);
+    await this.db.run(
+      `UPDATE jobs SET status = 'pending', error = NULL, started_at = NULL
+       WHERE id = ?`,
+      [id],
+    );
 
     return true;
   }
@@ -226,14 +216,13 @@ export class JobQueue {
   /**
    * Cancel all pending/running jobs for a plan.
    */
-  cancelAllForPlan(planId: string): void {
+  async cancelAllForPlan(planId: string): Promise<void> {
     const now = new Date().toISOString();
 
-    this.db
-      .prepare(
-        `UPDATE jobs SET status = 'cancelled', completed_at = ?
-         WHERE plan_id = ? AND status IN ('pending', 'running')`,
-      )
-      .run(now, planId);
+    await this.db.run(
+      `UPDATE jobs SET status = 'cancelled', completed_at = ?
+       WHERE plan_id = ? AND status IN ('pending', 'running')`,
+      [now, planId],
+    );
   }
 }

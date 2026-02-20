@@ -91,7 +91,7 @@ async function waitForPendingApproval(
 ): Promise<ApprovalRow> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const pending = container.approvalDal.getPending();
+    const pending = await container.approvalDal.getPending();
     if (pending.length > 0) {
       return pending[0]!;
     }
@@ -105,7 +105,7 @@ describe("Tool execution loop", () => {
   let container: GatewayContainer | undefined;
 
   afterEach(async () => {
-    container?.db.close();
+    await container?.db.close();
     container = undefined;
 
     if (homeDir) {
@@ -116,7 +116,7 @@ describe("Tool execution loop", () => {
 
   it("executes tool calls and returns the final reply", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
-    container = createContainer({ dbPath: ":memory:", migrationsDir });
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
 
     // Create a file for tool.fs.read to read
     await writeFile(join(homeDir, "notes.txt"), "important notes", "utf-8");
@@ -183,7 +183,7 @@ describe("Tool execution loop", () => {
 
   it("queues high-risk tool calls and resumes after approval", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
-    container = createContainer({ dbPath: ":memory:", migrationsDir });
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
 
     await writeFile(
       join(homeDir, "agent.yml"),
@@ -246,7 +246,7 @@ describe("Tool execution loop", () => {
     expect(pending.prompt).toContain("tool.exec");
     expect(pending.status).toBe("pending");
 
-    const updated = container.approvalDal.respond(
+    const updated = await container.approvalDal.respond(
       pending.id,
       true,
       "approved in test",
@@ -260,7 +260,7 @@ describe("Tool execution loop", () => {
 
   it("does not execute high-risk tool when approval is denied", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
-    container = createContainer({ dbPath: ":memory:", migrationsDir });
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
 
     await writeFile(
       join(homeDir, "agent.yml"),
@@ -320,7 +320,7 @@ describe("Tool execution loop", () => {
     });
 
     const pending = await waitForPendingApproval(container);
-    const updated = container.approvalDal.respond(
+    const updated = await container.approvalDal.respond(
       pending.id,
       false,
       "denied in test",
@@ -335,7 +335,7 @@ describe("Tool execution loop", () => {
 
   it("returns final reply when LLM returns no tool_calls (single-shot)", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
-    container = createContainer({ dbPath: ":memory:", migrationsDir });
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
 
     const fetchStub = createSimpleFetchStub("just a reply");
 
@@ -366,7 +366,7 @@ describe("Tool execution loop", () => {
 
   it("populates used_tools across multiple tool calls", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
-    container = createContainer({ dbPath: ":memory:", migrationsDir });
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
 
     await writeFile(join(homeDir, "a.txt"), "file A", "utf-8");
 
@@ -489,18 +489,29 @@ describe("Tool execution loop", () => {
     });
 
     const autoApproveTimer = setInterval(() => {
-      for (const approval of container!.approvalDal.getPending()) {
-        container!.approvalDal.respond(approval.id, true, "approved in test");
-      }
+      void (async () => {
+        const c = container;
+        if (!c) return;
+        const pending = await c.approvalDal.getPending();
+        for (const approval of pending) {
+          await c.approvalDal.respond(approval.id, true, "approved in test");
+        }
+      })().catch(() => {
+        // ignore (tests may tear down while timer is running)
+      });
     }, 20);
     autoApproveTimer.unref();
 
-    const result = await runtime.turn({
-      channel: "test",
-      thread_id: "thread-3",
-      message: "read a file and fetch a url",
-    });
-    clearInterval(autoApproveTimer);
+    let result: Awaited<ReturnType<AgentRuntime["turn"]>>;
+    try {
+      result = await runtime.turn({
+        channel: "test",
+        thread_id: "thread-3",
+        message: "read a file and fetch a url",
+      });
+    } finally {
+      clearInterval(autoApproveTimer);
+    }
 
     expect(result.reply).toBe("done with both tools");
     expect(result.used_tools).toContain("tool.fs.read");
@@ -510,7 +521,7 @@ describe("Tool execution loop", () => {
 
   it("respects maxSteps and stops looping", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
-    container = createContainer({ dbPath: ":memory:", migrationsDir });
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
 
     await writeFile(
       join(homeDir, "agent.yml"),
@@ -584,18 +595,29 @@ describe("Tool execution loop", () => {
     });
 
     const autoApproveTimer = setInterval(() => {
-      for (const approval of container!.approvalDal.getPending()) {
-        container!.approvalDal.respond(approval.id, true, "approved in test");
-      }
+      void (async () => {
+        const c = container;
+        if (!c) return;
+        const pending = await c.approvalDal.getPending();
+        for (const approval of pending) {
+          await c.approvalDal.respond(approval.id, true, "approved in test");
+        }
+      })().catch(() => {
+        // ignore (tests may tear down while timer is running)
+      });
     }, 20);
     autoApproveTimer.unref();
 
-    const result = await runtime.turn({
-      channel: "test",
-      thread_id: "thread-4",
-      message: "run something",
-    });
-    clearInterval(autoApproveTimer);
+    let result: Awaited<ReturnType<AgentRuntime["turn"]>>;
+    try {
+      result = await runtime.turn({
+        channel: "test",
+        thread_id: "thread-4",
+        message: "run something",
+      });
+    } finally {
+      clearInterval(autoApproveTimer);
+    }
 
     // Should stop after maxSteps and return the default "No assistant response"
     expect(result.reply).toBe("No assistant response returned.");

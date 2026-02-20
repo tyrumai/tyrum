@@ -24,7 +24,7 @@ describe("Auth integration", () => {
     beforeEach(async () => {
       const tokenStore = new TokenStore(tempDir);
       adminToken = await tokenStore.initialize();
-      const result = createTestApp({ tokenStore, isLocalOnly: false });
+      const result = await createTestApp({ tokenStore, isLocalOnly: false });
       app = result.app;
     });
 
@@ -63,7 +63,7 @@ describe("Auth integration", () => {
     beforeEach(async () => {
       const tokenStore = new TokenStore(tempDir);
       adminToken = await tokenStore.initialize();
-      const result = createTestApp({ tokenStore, isLocalOnly: true });
+      const result = await createTestApp({ tokenStore, isLocalOnly: true });
       app = result.app;
     });
 

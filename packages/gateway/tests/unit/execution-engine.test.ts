@@ -1,18 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import type { ActionPrimitive } from "@tyrum/schemas";
-import { createDatabase } from "../../src/db.js";
-import { migrate } from "../../src/migrate.js";
 import {
   ExecutionEngine,
   type StepExecutor,
   type StepResult,
 } from "../../src/modules/execution/engine.js";
 import { RedactionEngine } from "../../src/modules/redaction/engine.js";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const migrationsDir = join(__dirname, "../../migrations/sqlite");
+import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
 function action(type: ActionPrimitive["type"], args?: Record<string, unknown>): ActionPrimitive {
   return {
@@ -30,19 +25,18 @@ async function drain(engine: ExecutionEngine, workerId: string, executor: StepEx
 }
 
 describe("ExecutionEngine (normalized)", () => {
-  let db: ReturnType<typeof createDatabase> | undefined;
+  let db: SqliteDb | undefined;
 
-  afterEach(() => {
-    db?.close();
+  afterEach(async () => {
+    await db?.close();
     db = undefined;
   });
 
-  it("creates normalized execution records for a plan", () => {
-    db = createDatabase(":memory:");
-    migrate(db, migrationsDir);
+  it("creates normalized execution records for a plan", async () => {
+    db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    const { jobId, runId } = engine.enqueuePlan({
+    const { jobId, runId } = await engine.enqueuePlan({
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-test-1",
@@ -50,31 +44,33 @@ describe("ExecutionEngine (normalized)", () => {
       steps: [action("Research"), action("Message", { body: "hi" })],
     });
 
-    const jobCount = db
-      .prepare("SELECT COUNT(*) AS n FROM execution_jobs WHERE job_id = ?")
-      .get(jobId) as { n: number };
-    expect(jobCount.n).toBe(1);
+    const jobCount = await db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM execution_jobs WHERE job_id = ?",
+      [jobId],
+    );
+    expect(jobCount!.n).toBe(1);
 
-    const runCount = db
-      .prepare("SELECT COUNT(*) AS n FROM execution_runs WHERE run_id = ?")
-      .get(runId) as { n: number };
-    expect(runCount.n).toBe(1);
+    const runCount = await db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM execution_runs WHERE run_id = ?",
+      [runId],
+    );
+    expect(runCount!.n).toBe(1);
 
-    const stepCount = db
-      .prepare("SELECT COUNT(*) AS n FROM execution_steps WHERE run_id = ?")
-      .get(runId) as { n: number };
-    expect(stepCount.n).toBe(2);
+    const stepCount = await db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM execution_steps WHERE run_id = ?",
+      [runId],
+    );
+    expect(stepCount!.n).toBe(2);
   });
 
   it("worker executes a 2-step plan and completes the run", async () => {
-    db = createDatabase(":memory:");
-    migrate(db, migrationsDir);
+    db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({
       db,
       clock: () => ({ nowMs: Date.now(), nowIso: new Date().toISOString() }),
     });
-    engine.enqueuePlan({
+    await engine.enqueuePlan({
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-test-2",
@@ -90,20 +86,19 @@ describe("ExecutionEngine (normalized)", () => {
 
     await drain(engine, "w1", mockExecutor);
 
-    const run = db
-      .prepare("SELECT status FROM execution_runs LIMIT 1")
-      .get() as { status: string };
-    expect(run.status).toBe("succeeded");
+    const run = await db.get<{ status: string }>(
+      "SELECT status FROM execution_runs LIMIT 1",
+    );
+    expect(run!.status).toBe("succeeded");
 
-    const job = db
-      .prepare("SELECT status FROM execution_jobs LIMIT 1")
-      .get() as { status: string };
-    expect(job.status).toBe("completed");
+    const job = await db.get<{ status: string }>(
+      "SELECT status FROM execution_jobs LIMIT 1",
+    );
+    expect(job!.status).toBe("completed");
   });
 
   it("records attempt finished_at after started_at", async () => {
-    db = createDatabase(":memory:");
-    migrate(db, migrationsDir);
+    db = openTestSqliteDb();
 
     let calls = 0;
     const baseMs = Date.UTC(2025, 0, 1, 0, 0, 0);
@@ -115,7 +110,7 @@ describe("ExecutionEngine (normalized)", () => {
         return { nowMs, nowIso: new Date(nowMs).toISOString() };
       },
     });
-    engine.enqueuePlan({
+    await engine.enqueuePlan({
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-finished-at-1",
@@ -131,21 +126,20 @@ describe("ExecutionEngine (normalized)", () => {
 
     await drain(engine, "w1", mockExecutor);
 
-    const row = db
-      .prepare("SELECT started_at, finished_at FROM execution_attempts LIMIT 1")
-      .get() as { started_at: string; finished_at: string | null };
+    const row = await db.get<{ started_at: string; finished_at: string | null }>(
+      "SELECT started_at, finished_at FROM execution_attempts LIMIT 1",
+    );
 
-    expect(row.finished_at).not.toBeNull();
-    expect(row.finished_at).not.toBe(row.started_at);
-    expect(new Date(row.finished_at!).getTime()).toBeGreaterThan(new Date(row.started_at).getTime());
+    expect(row!.finished_at).not.toBeNull();
+    expect(row!.finished_at).not.toBe(row!.started_at);
+    expect(new Date(row!.finished_at!).getTime()).toBeGreaterThan(new Date(row!.started_at).getTime());
   });
 
   it("persists artifact refs returned by the step executor on attempts", async () => {
-    db = createDatabase(":memory:");
-    migrate(db, migrationsDir);
+    db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    engine.enqueuePlan({
+    await engine.enqueuePlan({
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-artifacts-1",
@@ -169,24 +163,23 @@ describe("ExecutionEngine (normalized)", () => {
 
     await drain(engine, "w1", mockExecutor);
 
-    const row = db
-      .prepare("SELECT artifacts_json FROM execution_attempts LIMIT 1")
-      .get() as { artifacts_json: string };
-    const artifacts = JSON.parse(row.artifacts_json) as Array<{ uri: string; kind: string }>;
+    const row = await db.get<{ artifacts_json: string }>(
+      "SELECT artifacts_json FROM execution_attempts LIMIT 1",
+    );
+    const artifacts = JSON.parse(row!.artifacts_json) as Array<{ uri: string; kind: string }>;
     expect(artifacts).toHaveLength(1);
     expect(artifacts[0]!.uri).toBe(artifactRef.uri);
     expect(artifacts[0]!.kind).toBe(artifactRef.kind);
   });
 
   it("redacts registered secrets from persisted attempt results", async () => {
-    db = createDatabase(":memory:");
-    migrate(db, migrationsDir);
+    db = openTestSqliteDb();
 
     const redaction = new RedactionEngine();
     redaction.registerSecrets(["secret-XYZ"]);
 
     const engine = new ExecutionEngine({ db, redactionEngine: redaction });
-    const { runId } = engine.enqueuePlan({
+    const { runId } = await engine.enqueuePlan({
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-redact-1",
@@ -205,21 +198,19 @@ describe("ExecutionEngine (normalized)", () => {
 
     await drain(engine, "w1", mockExecutor);
 
-    const row = db
-      .prepare(
-        "SELECT result_json FROM execution_attempts WHERE step_id IN (SELECT step_id FROM execution_steps WHERE run_id = ?) LIMIT 1",
-      )
-      .get(runId) as { result_json: string };
-    expect(row.result_json).toContain("[REDACTED]");
-    expect(row.result_json).not.toContain("secret-XYZ");
+    const row = await db.get<{ result_json: string }>(
+      "SELECT result_json FROM execution_attempts WHERE step_id IN (SELECT step_id FROM execution_steps WHERE run_id = ?) LIMIT 1",
+      [runId],
+    );
+    expect(row!.result_json).toContain("[REDACTED]");
+    expect(row!.result_json).not.toContain("secret-XYZ");
   });
 
   it("persists per-attempt cost attribution when provided", async () => {
-    db = createDatabase(":memory:");
-    migrate(db, migrationsDir);
+    db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    const { runId } = engine.enqueuePlan({
+    const { runId } = await engine.enqueuePlan({
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-cost-1",
@@ -239,23 +230,21 @@ describe("ExecutionEngine (normalized)", () => {
 
     await drain(engine, "w1", mockExecutor);
 
-    const row = db
-      .prepare(
-        "SELECT cost_json FROM execution_attempts WHERE step_id IN (SELECT step_id FROM execution_steps WHERE run_id = ?) LIMIT 1",
-      )
-      .get(runId) as { cost_json: string | null };
-    expect(row.cost_json).toBeTruthy();
-    const cost = JSON.parse(row.cost_json!) as { total_tokens?: number; duration_ms?: number };
+    const row = await db.get<{ cost_json: string | null }>(
+      "SELECT cost_json FROM execution_attempts WHERE step_id IN (SELECT step_id FROM execution_steps WHERE run_id = ?) LIMIT 1",
+      [runId],
+    );
+    expect(row!.cost_json).toBeTruthy();
+    const cost = JSON.parse(row!.cost_json!) as { total_tokens?: number; duration_ms?: number };
     expect(cost.total_tokens).toBe(30);
     expect(typeof cost.duration_ms).toBe("number");
   });
 
   it("retries a failed step until it succeeds (within max_attempts)", async () => {
-    db = createDatabase(":memory:");
-    migrate(db, migrationsDir);
+    db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    const { runId } = engine.enqueuePlan({
+    const { runId } = await engine.enqueuePlan({
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-retry-1",
@@ -263,7 +252,7 @@ describe("ExecutionEngine (normalized)", () => {
       steps: [action("Research")],
     });
 
-    db.prepare("UPDATE execution_steps SET max_attempts = 2 WHERE run_id = ?").run(runId);
+    await db.run("UPDATE execution_steps SET max_attempts = 2 WHERE run_id = ?", [runId]);
 
     let callCount = 0;
     const mockExecutor: StepExecutor = {
@@ -276,23 +265,23 @@ describe("ExecutionEngine (normalized)", () => {
 
     await drain(engine, "w1", mockExecutor);
 
-    const attemptRows = db
-      .prepare("SELECT attempt, status FROM execution_attempts ORDER BY attempt ASC")
-      .all() as Array<{ attempt: number; status: string }>;
+    const attemptRows = await db.all<{ attempt: number; status: string }>(
+      "SELECT attempt, status FROM execution_attempts ORDER BY attempt ASC",
+    );
     expect(attemptRows.map((r) => r.status)).toEqual(["failed", "succeeded"]);
 
-    const step = db
-      .prepare("SELECT status FROM execution_steps WHERE run_id = ?")
-      .get(runId) as { status: string };
-    expect(step.status).toBe("succeeded");
+    const step = await db.get<{ status: string }>(
+      "SELECT status FROM execution_steps WHERE run_id = ?",
+      [runId],
+    );
+    expect(step!.status).toBe("succeeded");
   });
 
   it("pauses a run when postcondition is missing evidence and issues a resume token", async () => {
-    db = createDatabase(":memory:");
-    migrate(db, migrationsDir);
+    db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    const { runId } = engine.enqueuePlan({
+    const { runId } = await engine.enqueuePlan({
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-pause-1",
@@ -315,30 +304,32 @@ describe("ExecutionEngine (normalized)", () => {
 
     await drain(engine, "w1", mockExecutor);
 
-    const run = db
-      .prepare("SELECT status, paused_reason FROM execution_runs WHERE run_id = ?")
-      .get(runId) as { status: string; paused_reason: string | null };
-    expect(run.status).toBe("paused");
-    expect(run.paused_reason).toBe("manual");
+    const run = await db.get<{ status: string; paused_reason: string | null }>(
+      "SELECT status, paused_reason FROM execution_runs WHERE run_id = ?",
+      [runId],
+    );
+    expect(run!.status).toBe("paused");
+    expect(run!.paused_reason).toBe("manual");
 
-    const step = db
-      .prepare("SELECT status FROM execution_steps WHERE run_id = ?")
-      .get(runId) as { status: string };
-    expect(step.status).toBe("paused");
+    const step = await db.get<{ status: string }>(
+      "SELECT status FROM execution_steps WHERE run_id = ?",
+      [runId],
+    );
+    expect(step!.status).toBe("paused");
 
-    const tokenRow = db
-      .prepare("SELECT token, run_id, revoked_at FROM resume_tokens WHERE run_id = ?")
-      .get(runId) as { token: string; run_id: string; revoked_at: string | null };
-    expect(tokenRow.run_id).toBe(runId);
-    expect(tokenRow.revoked_at).toBeNull();
+    const tokenRow = await db.get<{ token: string; run_id: string; revoked_at: string | null }>(
+      "SELECT token, run_id, revoked_at FROM resume_tokens WHERE run_id = ?",
+      [runId],
+    );
+    expect(tokenRow!.run_id).toBe(runId);
+    expect(tokenRow!.revoked_at).toBeNull();
   });
 
   it("resumes a paused run using a resume token", async () => {
-    db = createDatabase(":memory:");
-    migrate(db, migrationsDir);
+    db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    const { runId } = engine.enqueuePlan({
+    const { runId } = await engine.enqueuePlan({
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-resume-1",
@@ -360,11 +351,11 @@ describe("ExecutionEngine (normalized)", () => {
 
     await drain(engine, "w1", pausingExecutor);
 
-    const token = (db
-      .prepare("SELECT token FROM resume_tokens WHERE run_id = ?")
-      .get(runId) as { token: string }).token;
+    const token = (
+      await db.get<{ token: string }>("SELECT token FROM resume_tokens WHERE run_id = ?", [runId])
+    )!.token;
 
-    const resumed = engine.resumeRun(token);
+    const resumed = await engine.resumeRun(token);
     expect(resumed).toBe(runId);
 
     const resumingExecutor: StepExecutor = {
@@ -375,23 +366,24 @@ describe("ExecutionEngine (normalized)", () => {
 
     await drain(engine, "w1", resumingExecutor);
 
-    const run = db
-      .prepare("SELECT status FROM execution_runs WHERE run_id = ?")
-      .get(runId) as { status: string };
-    expect(run.status).toBe("succeeded");
+    const run = await db.get<{ status: string }>(
+      "SELECT status FROM execution_runs WHERE run_id = ?",
+      [runId],
+    );
+    expect(run!.status).toBe("succeeded");
 
-    const tokenRow = db
-      .prepare("SELECT revoked_at FROM resume_tokens WHERE token = ?")
-      .get(token) as { revoked_at: string | null };
-    expect(tokenRow.revoked_at).not.toBeNull();
+    const tokenRow = await db.get<{ revoked_at: string | null }>(
+      "SELECT revoked_at FROM resume_tokens WHERE token = ?",
+      [token],
+    );
+    expect(tokenRow!.revoked_at).not.toBeNull();
   });
 
   it("short-circuits execution when an idempotency record already succeeded", async () => {
-    db = createDatabase(":memory:");
-    migrate(db, migrationsDir);
+    db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    const { runId } = engine.enqueuePlan({
+    const { runId } = await engine.enqueuePlan({
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-idem-1",
@@ -399,14 +391,16 @@ describe("ExecutionEngine (normalized)", () => {
       steps: [{ ...action("Research"), idempotency_key: "idem-1" }],
     });
 
-    const stepRow = db
-      .prepare("SELECT step_id, idempotency_key FROM execution_steps WHERE run_id = ?")
-      .get(runId) as { step_id: string; idempotency_key: string };
+    const stepRow = await db.get<{ step_id: string; idempotency_key: string }>(
+      "SELECT step_id, idempotency_key FROM execution_steps WHERE run_id = ?",
+      [runId],
+    );
 
-    db.prepare(
+    await db.run(
       `INSERT INTO idempotency_records (scope_key, kind, idempotency_key, status, result_json)
        VALUES (?, 'step', ?, 'succeeded', ?)`,
-    ).run(stepRow.step_id, stepRow.idempotency_key, JSON.stringify({ cached: true }));
+      [stepRow!.step_id, stepRow!.idempotency_key, JSON.stringify({ cached: true })],
+    );
 
     const mockExecutor: StepExecutor = {
       execute: vi.fn(async (): Promise<StepResult> => {
@@ -418,19 +412,19 @@ describe("ExecutionEngine (normalized)", () => {
 
     expect(mockExecutor.execute).not.toHaveBeenCalled();
 
-    const attempt = db
-      .prepare("SELECT status, result_json FROM execution_attempts WHERE step_id = ?")
-      .get(stepRow.step_id) as { status: string; result_json: string | null };
-    expect(attempt.status).toBe("succeeded");
-    expect(JSON.parse(attempt.result_json ?? "{}")).toEqual({ cached: true });
+    const attempt = await db.get<{ status: string; result_json: string | null }>(
+      "SELECT status, result_json FROM execution_attempts WHERE step_id = ?",
+      [stepRow!.step_id],
+    );
+    expect(attempt!.status).toBe("succeeded");
+    expect(JSON.parse(attempt!.result_json ?? "{}")).toEqual({ cached: true });
   });
 
   it("writes idempotency outcomes for succeeded steps", async () => {
-    db = createDatabase(":memory:");
-    migrate(db, migrationsDir);
+    db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    const { runId } = engine.enqueuePlan({
+    const { runId } = await engine.enqueuePlan({
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-idem-write-1",
@@ -438,9 +432,10 @@ describe("ExecutionEngine (normalized)", () => {
       steps: [{ ...action("Research"), idempotency_key: "idem-write-1" }],
     });
 
-    const stepRow = db
-      .prepare("SELECT step_id, idempotency_key FROM execution_steps WHERE run_id = ?")
-      .get(runId) as { step_id: string; idempotency_key: string };
+    const stepRow = await db.get<{ step_id: string; idempotency_key: string }>(
+      "SELECT step_id, idempotency_key FROM execution_steps WHERE run_id = ?",
+      [runId],
+    );
 
     const mockExecutor: StepExecutor = {
       execute: vi.fn(async (): Promise<StepResult> => {
@@ -450,25 +445,21 @@ describe("ExecutionEngine (normalized)", () => {
 
     await drain(engine, "w1", mockExecutor);
 
-    const record = db
-      .prepare(
-        `SELECT status, result_json
+    const record = await db.get<{ status: string; result_json: string | null }>(
+      `SELECT status, result_json
          FROM idempotency_records
          WHERE scope_key = ? AND kind = 'step' AND idempotency_key = ?`,
-      )
-      .get(stepRow.step_id, stepRow.idempotency_key) as
-      | { status: string; result_json: string | null }
-      | undefined;
+      [stepRow!.step_id, stepRow!.idempotency_key],
+    );
     expect(record?.status).toBe("succeeded");
     expect(JSON.parse(record?.result_json ?? "{}")).toEqual({ ok: true });
   });
 
   it("takes over a stale running attempt by cancelling it and re-queuing the step", async () => {
-    db = createDatabase(":memory:");
-    migrate(db, migrationsDir);
+    db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    const { runId } = engine.enqueuePlan({
+    const { runId } = await engine.enqueuePlan({
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-takeover-1",
@@ -476,17 +467,19 @@ describe("ExecutionEngine (normalized)", () => {
       steps: [action("Research")],
     });
 
-    const step = db
-      .prepare("SELECT step_id FROM execution_steps WHERE run_id = ?")
-      .get(runId) as { step_id: string };
+    const step = await db.get<{ step_id: string }>(
+      "SELECT step_id FROM execution_steps WHERE run_id = ?",
+      [runId],
+    );
 
     // Simulate a prior worker that crashed mid-attempt.
-    db.prepare("UPDATE execution_steps SET status = 'running' WHERE step_id = ?").run(step.step_id);
-    db.prepare(
+    await db.run("UPDATE execution_steps SET status = 'running' WHERE step_id = ?", [step!.step_id]);
+    await db.run(
       `INSERT INTO execution_attempts (
          attempt_id, step_id, attempt, status, started_at, artifacts_json, lease_owner, lease_expires_at_ms
        ) VALUES (?, ?, 1, 'running', ?, '[]', 'dead-worker', ?)`,
-    ).run("attempt-1", step.step_id, new Date().toISOString(), Date.now() - 1);
+      ["attempt-1", step!.step_id, new Date().toISOString(), Date.now() - 1],
+    );
 
     const mockExecutor: StepExecutor = {
       execute: vi.fn(async (): Promise<StepResult> => {
@@ -496,9 +489,10 @@ describe("ExecutionEngine (normalized)", () => {
 
     await drain(engine, "w1", mockExecutor);
 
-    const attempts = db
-      .prepare("SELECT attempt, status FROM execution_attempts WHERE step_id = ? ORDER BY attempt ASC")
-      .all(step.step_id) as Array<{ attempt: number; status: string }>;
+    const attempts = await db.all<{ attempt: number; status: string }>(
+      "SELECT attempt, status FROM execution_attempts WHERE step_id = ? ORDER BY attempt ASC",
+      [step!.step_id],
+    );
     expect(attempts.map((a) => a.status)).toEqual(["cancelled", "succeeded"]);
   });
 });

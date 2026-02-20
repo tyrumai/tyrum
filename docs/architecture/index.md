@@ -53,6 +53,7 @@ flowchart LR
 - **Event backplane:** cross-component event delivery (in-process for replica count = 1; shared for clusters). See [Scaling and high availability](./scaling-ha.md) and [Events](./protocol/events.md).
 - **Execution engine:** the durable orchestration runtime (retries, idempotency, pause/resume, evidence). See [Execution engine](./execution-engine.md).
 - **Workers:** step executors that claim work (leases), perform side effects, and publish results/events. See [Execution engine](./execution-engine.md).
+- **ToolRunner:** a workspace-mounted execution context that runs filesystem/CLI tools. In single-host deployments it can be a local subprocess; in clusters it is typically a sandboxed job/pod. See [Scaling and high availability](./scaling-ha.md).
 - **Scheduler:** cron/watchers/heartbeat enqueuers coordinated by DB-leases. See [Automation](./automation.md).
 - **Playbooks:** deterministic workflow specs executed by the runtime (approval gates + resume tokens).
 - **Approvals:** durable operator confirmation requests that gate risky actions and pause/resume workflows.

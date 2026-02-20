@@ -25,7 +25,7 @@ export function createWatcherRoutes(processor: WatcherProcessor): Hono {
       );
     }
 
-    const id = processor.createWatcher(
+    const id = await processor.createWatcher(
       body.plan_id,
       body.trigger_type,
       body.trigger_config ?? {},
@@ -34,8 +34,8 @@ export function createWatcherRoutes(processor: WatcherProcessor): Hono {
     return c.json({ id, plan_id: body.plan_id, trigger_type: body.trigger_type }, 201);
   });
 
-  watcher.get("/watchers", (c) => {
-    const watchers = processor.listWatchers();
+  watcher.get("/watchers", async (c) => {
+    const watchers = await processor.listWatchers();
     return c.json({ watchers });
   });
 
@@ -50,13 +50,13 @@ export function createWatcherRoutes(processor: WatcherProcessor): Hono {
 
     const body = (await c.req.json()) as { active?: boolean };
     if (body.active === false) {
-      processor.deactivateWatcher(watcherId);
+      await processor.deactivateWatcher(watcherId);
     }
 
     return c.json({ id: watcherId, updated: true });
   });
 
-  watcher.delete("/watchers/:id", (c) => {
+  watcher.delete("/watchers/:id", async (c) => {
     const watcherId = parseInt(c.req.param("id"), 10);
     if (isNaN(watcherId)) {
       return c.json(
@@ -65,7 +65,7 @@ export function createWatcherRoutes(processor: WatcherProcessor): Hono {
       );
     }
 
-    processor.deactivateWatcher(watcherId);
+    await processor.deactivateWatcher(watcherId);
     return c.json({ id: watcherId, deleted: true });
   });
 

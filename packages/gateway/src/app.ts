@@ -118,7 +118,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   }
 
   // Model proxy routes are optional — only register if config path is set
-  if (container.config.modelGatewayConfigPath) {
+  if (container.config?.modelGatewayConfigPath) {
     try {
       const modelProxy = createModelProxyRoutes(
         container.config.modelGatewayConfigPath,

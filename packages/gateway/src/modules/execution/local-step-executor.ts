@@ -181,7 +181,12 @@ class LocalStepExecutor implements StepExecutor {
     this.logger = opts.logger;
   }
 
-  async execute(action: ActionPrimitiveT, planId: string, stepIndex: number): Promise<StepResult> {
+  async execute(
+    action: ActionPrimitiveT,
+    planId: string,
+    stepIndex: number,
+    timeoutMs: number,
+  ): Promise<StepResult> {
     const { resolved, secrets } = await resolveSecrets(action.args ?? {}, this.secretProvider);
     if (secrets.length > 0) {
       this.redactionEngine?.registerSecrets(secrets);
@@ -189,9 +194,21 @@ class LocalStepExecutor implements StepExecutor {
 
     switch (action.type) {
       case "Http":
-        return this.executeHttp(action, resolved as Record<string, unknown>, planId, stepIndex);
+        return this.executeHttp(
+          action,
+          resolved as Record<string, unknown>,
+          planId,
+          stepIndex,
+          timeoutMs,
+        );
       case "CLI":
-        return this.executeCli(action, resolved as Record<string, unknown>, planId, stepIndex);
+        return this.executeCli(
+          action,
+          resolved as Record<string, unknown>,
+          planId,
+          stepIndex,
+          timeoutMs,
+        );
       default:
         return { success: false, error: `unsupported action type: ${action.type}` };
     }
@@ -202,6 +219,7 @@ class LocalStepExecutor implements StepExecutor {
     args: Record<string, unknown>,
     _planId: string,
     _stepIndex: number,
+    stepTimeoutMs: number,
   ): Promise<StepResult> {
     const url = typeof args["url"] === "string" ? args["url"] : undefined;
     if (!url) return { success: false, error: "missing required argument: url" };
@@ -218,9 +236,10 @@ class LocalStepExecutor implements StepExecutor {
     const headers = parseHeaderObject(args["headers"]) ?? {};
     const body = typeof args["body"] === "string" ? args["body"] : undefined;
     const timeoutMsRaw = args["timeout_ms"];
+    const stepCapMs = Math.max(1, Math.floor(stepTimeoutMs));
     const timeoutMs = typeof timeoutMsRaw === "number" && Number.isFinite(timeoutMsRaw)
-      ? Math.max(1, Math.min(300_000, Math.floor(timeoutMsRaw)))
-      : DEFAULT_HTTP_TIMEOUT_MS;
+      ? Math.max(1, Math.min(stepCapMs, Math.min(300_000, Math.floor(timeoutMsRaw))))
+      : Math.min(stepCapMs, DEFAULT_HTTP_TIMEOUT_MS);
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -275,6 +294,7 @@ class LocalStepExecutor implements StepExecutor {
     args: Record<string, unknown>,
     planId: string,
     stepIndex: number,
+    stepTimeoutMs: number,
   ): Promise<StepResult> {
     const cmd = typeof args["cmd"] === "string" ? args["cmd"] : undefined;
     if (!cmd) return { success: false, error: "missing required argument: cmd" };
@@ -286,10 +306,11 @@ class LocalStepExecutor implements StepExecutor {
     const cwdRaw = typeof args["cwd"] === "string" ? args["cwd"] : ".";
     const cwd = assertSandboxed(this.tyrumHome, cwdRaw);
 
+    const stepCapMs = Math.max(1, Math.floor(stepTimeoutMs));
     const timeoutMsRaw = args["timeout_ms"];
     const timeoutMs = typeof timeoutMsRaw === "number" && Number.isFinite(timeoutMsRaw)
-      ? Math.max(1, Math.min(MAX_EXEC_TIMEOUT_MS, Math.floor(timeoutMsRaw)))
-      : DEFAULT_EXEC_TIMEOUT_MS;
+      ? Math.max(1, Math.min(stepCapMs, Math.min(MAX_EXEC_TIMEOUT_MS, Math.floor(timeoutMsRaw))))
+      : Math.min(stepCapMs, DEFAULT_EXEC_TIMEOUT_MS);
 
     const output = await new Promise<{
       exitCode: number | null;

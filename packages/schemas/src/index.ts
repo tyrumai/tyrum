@@ -217,6 +217,8 @@ export {
   ThreadId,
   CronJobId,
   NodeId,
+  WorkspaceId,
+  DEFAULT_WORKSPACE_ID,
   AgentMainKey,
   AgentGroupKey,
   AgentChannelKey,

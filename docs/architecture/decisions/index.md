@@ -19,4 +19,5 @@ This section captures the **accepted architecture decisions** (ADRs) that close 
 - [ADR-0011: Control panel UX semantics](./adr-0011-control-panel-ux.md)
 - [ADR-0012: Multi-agent routing and isolation](./adr-0012-multi-agent-routing.md)
 - [ADR-0013: HA and failover testing strategy](./adr-0013-ha-failover-testing.md)
+- [ADR-0014: Durable workspaces and ToolRunner boundary](./adr-0014-durable-workspaces-and-toolrunner.md)
 
