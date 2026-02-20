@@ -22,6 +22,8 @@ import type {
 } from "@tyrum/schemas";
 import type { ConnectedClient } from "./connection-manager.js";
 import type { ConnectionManager } from "./connection-manager.js";
+import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
+import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
 
 // ---------------------------------------------------------------------------
 // Dependency injection
@@ -33,6 +35,16 @@ import type { ConnectionManager } from "./connection-manager.js";
  */
 export interface ProtocolDeps {
   connectionManager: ConnectionManager;
+
+  /**
+   * Optional cluster router. When configured, the gateway can deliver WS messages
+   * to peers connected to other edge instances via the DB outbox + polling backplane.
+   */
+  cluster?: {
+    edgeId: string;
+    outboxDal: OutboxDal;
+    connectionDirectory: ConnectionDirectoryDal;
+  };
 
   /** Called when a task.execute response is received from a client. */
   onTaskResult?: (
@@ -186,7 +198,35 @@ export function dispatchTask(
 
   const client = deps.connectionManager.getClientForCapability(capability);
   if (!client) {
-    throw new NoCapableClientError(capability);
+    const cluster = deps.cluster;
+    if (!cluster) {
+      throw new NoCapableClientError(capability);
+    }
+
+    const nowMs = Date.now();
+    const candidates = cluster.connectionDirectory.listConnectionsForCapability(
+      capability,
+      nowMs,
+    );
+    const target =
+      candidates.find((c) => c.edge_id !== cluster.edgeId) ?? candidates[0];
+    if (!target || target.edge_id === cluster.edgeId) {
+      throw new NoCapableClientError(capability);
+    }
+
+    const requestId = `task-${crypto.randomUUID()}`;
+    const message: WsRequestEnvelope = {
+      request_id: requestId,
+      type: "task.execute",
+      payload: { plan_id: planId, step_index: stepIndex, action },
+    };
+
+    cluster.outboxDal.enqueue(
+      "ws.direct",
+      { connection_id: target.connection_id, message },
+      { targetEdgeId: target.edge_id },
+    );
+    return requestId;
   }
 
   const requestId = `task-${crypto.randomUUID()}`;
@@ -229,6 +269,18 @@ export function requestApproval(
   const first = iter.next();
   if (!first.done) {
     first.value.ws.send(payload);
+    if (deps.cluster) {
+      deps.cluster.outboxDal.enqueue("ws.broadcast", {
+        source_edge_id: deps.cluster.edgeId,
+        skip_local: true,
+        message,
+      });
+    }
+    return;
+  }
+
+  if (deps.cluster) {
+    deps.cluster.outboxDal.enqueue("ws.broadcast", { message });
   }
 }
 
@@ -255,6 +307,14 @@ export function sendPlanUpdate(
 
   for (const client of deps.connectionManager.allClients()) {
     client.ws.send(payload);
+  }
+
+  if (deps.cluster) {
+    deps.cluster.outboxDal.enqueue("ws.broadcast", {
+      source_edge_id: deps.cluster.edgeId,
+      skip_local: true,
+      message,
+    });
   }
 }
 

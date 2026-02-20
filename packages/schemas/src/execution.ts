@@ -47,6 +47,32 @@ export const ExecutionAttemptStatus = z.enum([
 ]);
 export type ExecutionAttemptStatus = z.infer<typeof ExecutionAttemptStatus>;
 
+/**
+ * Attempt-level cost attribution.
+ *
+ * This is intentionally permissive and optional; not all executors can report
+ * all fields (e.g., token usage may be missing for non-LLM steps).
+ */
+export const AttemptCost = z
+  .object({
+    /** Wall-clock duration for the attempt (end - start). */
+    duration_ms: z.number().int().nonnegative().optional(),
+    /** Token counts for LLM-backed steps (when available). */
+    input_tokens: z.number().int().nonnegative().optional(),
+    output_tokens: z.number().int().nonnegative().optional(),
+    total_tokens: z.number().int().nonnegative().optional(),
+    /** Cost in micro-dollars (USD * 1e6) when pricing is known. */
+    usd_micros: z.number().int().nonnegative().optional(),
+    /** Optional model identifier (e.g. "gpt-4.1-mini"). */
+    model: z.string().trim().min(1).optional(),
+    /** Optional provider identifier (e.g. "openai", "anthropic"). */
+    provider: z.string().trim().min(1).optional(),
+    /** Extra executor/provider-specific metadata. */
+    metadata: z.unknown().optional(),
+  })
+  .strict();
+export type AttemptCost = z.infer<typeof AttemptCost>;
+
 export const ExecutionJobStatus = z.enum([
   "queued",
   "running",
@@ -175,6 +201,7 @@ export const ExecutionAttempt = z
     error: z.string().nullable(),
     postcondition_report: PostconditionReport.optional(),
     artifacts: z.array(ArtifactRef).default([]),
+    cost: AttemptCost.optional(),
     metadata: z.unknown().optional(),
   })
   .strict();

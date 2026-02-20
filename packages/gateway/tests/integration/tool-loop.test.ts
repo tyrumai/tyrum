@@ -8,7 +8,7 @@ import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import type { ApprovalRow } from "../../src/modules/approval/dal.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const migrationsDir = join(__dirname, "../../migrations");
+const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
 /**
  * Creates a fetch stub that simulates an LLM server.

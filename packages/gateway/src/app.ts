@@ -28,6 +28,7 @@ import type { TokenStore } from "./modules/auth/token-store.js";
 import type { SecretProvider } from "./modules/secret/provider.js";
 import { createAuthMiddleware } from "./modules/auth/middleware.js";
 import type { ConnectionManager } from "./ws/connection-manager.js";
+import { randomUUID } from "node:crypto";
 
 export interface AppOptions {
   agentRuntime?: AgentRuntime;
@@ -46,6 +47,32 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   if (opts.tokenStore) {
     app.use("*", createAuthMiddleware(opts.tokenStore));
   }
+
+  // Baseline structured request logging with stable request_id.
+  app.use("*", async (c, next) => {
+    const startedAt = Date.now();
+    const requestId =
+      c.req.header("x-request-id")?.trim() || `req-${randomUUID()}`;
+    c.header("x-request-id", requestId);
+
+    container.logger.debug("http.request", {
+      request_id: requestId,
+      method: c.req.method,
+      path: c.req.path,
+    });
+
+    try {
+      await next();
+    } finally {
+      container.logger.debug("http.response", {
+        request_id: requestId,
+        method: c.req.method,
+        path: c.req.path,
+        status: c.res.status,
+        duration_ms: Math.max(0, Date.now() - startedAt),
+      });
+    }
+  });
 
   // Register all routes
   app.route("/", createHealthRoute({ isLocalOnly }));

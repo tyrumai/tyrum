@@ -10,6 +10,7 @@ import type { TaggedContent } from "./provenance.js";
 import { tagContent } from "./provenance.js";
 import { sanitizeForModel } from "./sanitizer.js";
 import type { SecretProvider } from "../secret/provider.js";
+import type { RedactionEngine } from "../redaction/engine.js";
 
 const MAX_RESPONSE_BYTES = 32_768;
 const HTTP_TIMEOUT_MS = 30_000;
@@ -311,6 +312,7 @@ export class ToolExecutor {
     private readonly fetchImpl: typeof fetch,
     private readonly secretProvider?: SecretProvider,
     private readonly dnsLookup: DnsLookupFn = defaultDnsLookup,
+    private readonly redactionEngine?: RedactionEngine,
   ) {}
 
   async execute(
@@ -321,6 +323,7 @@ export class ToolExecutor {
     try {
       // Resolve secret handle references in args
       const { resolved: resolvedArgs, secrets } = await this.resolveSecrets(args);
+      this.redactionEngine?.registerSecrets(secrets);
 
       let result: ToolResult;
 
@@ -358,8 +361,29 @@ export class ToolExecutor {
       }
 
       // Redact any resolved secret values from the output
-      if (secrets.length > 0 && result.output) {
-        result = { ...result, output: this.redactValues(result.output, secrets) };
+      if (secrets.length > 0) {
+        const redact = (text: string): string => {
+          if (this.redactionEngine) {
+            return this.redactionEngine.redactText(text).redacted;
+          }
+          return this.redactValues(text, secrets);
+        };
+
+        if (result.output) {
+          result = { ...result, output: redact(result.output) };
+        }
+        if (result.error) {
+          result = { ...result, error: redact(result.error) };
+        }
+        if (result.provenance) {
+          result = {
+            ...result,
+            provenance: {
+              ...result.provenance,
+              content: redact(result.provenance.content),
+            },
+          };
+        }
       }
 
       return result;

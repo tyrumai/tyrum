@@ -1,0 +1,7 @@
+apiVersion: v2
+name: tyrum
+description: Tyrum gateway deployment (edge/worker/scheduler)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+

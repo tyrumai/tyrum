@@ -492,6 +492,8 @@ export class AgentRuntime {
       mcpSpecMap,
       this.fetchImpl,
       this.opts.secretProvider,
+      undefined,
+      this.opts.container.redactionEngine,
     );
 
     const usedTools = new Set<string>();
@@ -689,6 +691,16 @@ export class AgentRuntime {
         thread_id: context.threadId,
       },
       expiresAt: new Date(deadline).toISOString(),
+    });
+
+    this.opts.container.logger.info("approval.created", {
+      approval_id: approval.id,
+      plan_id: context.planId,
+      step_index: stepIndex,
+      tool_id: tool.id,
+      tool_risk: tool.risk,
+      tool_call_id: toolCallId,
+      expires_at: approval.expires_at,
     });
 
     this.approvalNotifier.notify(approval);

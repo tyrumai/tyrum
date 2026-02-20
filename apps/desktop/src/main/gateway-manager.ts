@@ -120,11 +120,17 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
     const gatewayDir = dirname(opts.gatewayBin);
     const migrationsDir = (() => {
       const alongsideGateway = join(gatewayDir, "migrations");
-      if (existsSync(alongsideGateway)) return alongsideGateway;
+      if (existsSync(alongsideGateway)) {
+        const sqliteDir = join(alongsideGateway, "sqlite");
+        return existsSync(sqliteDir) ? sqliteDir : alongsideGateway;
+      }
 
       // Monorepo layout: packages/gateway/dist/index.mjs -> packages/gateway/migrations
       const monorepoMigrations = join(gatewayDir, "../migrations");
-      if (existsSync(monorepoMigrations)) return monorepoMigrations;
+      if (existsSync(monorepoMigrations)) {
+        const sqliteDir = join(monorepoMigrations, "sqlite");
+        return existsSync(sqliteDir) ? sqliteDir : monorepoMigrations;
+      }
 
       return undefined;
     })();

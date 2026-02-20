@@ -8,7 +8,7 @@ import { EmbeddingPipeline } from "../../src/modules/memory/embedding-pipeline.j
 import type Database from "better-sqlite3";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const migrationsDir = join(__dirname, "../../migrations");
+const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
 function createMockFetch(embeddingVector: number[]) {
   return async (_url: string | URL | Request, _init?: RequestInit) => {

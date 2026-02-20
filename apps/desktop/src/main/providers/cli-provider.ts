@@ -8,6 +8,28 @@ import type { CapabilityProvider, TaskResult } from "@tyrum/client";
 const MAX_OUTPUT_BYTES = 1_000_000; // 1MB output cap
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+type OutputKind = "text" | "json";
+
+function outputKindFromArgs(args: Record<string, unknown>): OutputKind | undefined {
+  const direct = args["output"];
+  const meta =
+    args["__playbook"] &&
+    typeof args["__playbook"] === "object" &&
+    !Array.isArray(args["__playbook"])
+      ? (args["__playbook"] as Record<string, unknown>)["output"]
+      : undefined;
+  const output = meta ?? direct;
+
+  if (output === "json") return "json";
+  if (output === "text") return "text";
+  if (output && typeof output === "object" && !Array.isArray(output)) {
+    const type = (output as Record<string, unknown>)["type"];
+    if (type === "json") return "json";
+    if (type === "text") return "text";
+  }
+  return undefined;
+}
+
 function normalizeLines(values: string[]): string[] {
   return values
     .map((value) => value.trim())
@@ -50,6 +72,8 @@ export class CliProvider implements CapabilityProvider {
     const cmd = args["cmd"] as string | undefined;
     const cmdArgs = (args["args"] as string[] | undefined) ?? [];
     const cwd = args["cwd"] as string | undefined;
+    const stdin = args["stdin"] as string | undefined;
+    const outputKind = outputKindFromArgs(args);
     const timeoutMs =
       (args["timeout_ms"] as number | undefined) ?? DEFAULT_TIMEOUT_MS;
 
@@ -106,11 +130,16 @@ export class CliProvider implements CapabilityProvider {
         cwd,
         timeout: timeoutMs,
         env: { ...process.env },
-        stdio: ["ignore", "pipe", "pipe"],
+        stdio: ["pipe", "pipe", "pipe"],
       });
 
       let stdout = "";
       let stderr = "";
+
+      if (stdin !== undefined) {
+        child.stdin?.write(stdin);
+      }
+      child.stdin?.end();
 
       child.stdout?.on("data", (data: Buffer) => {
         if (stdout.length < MAX_OUTPUT_BYTES) stdout += data.toString();
@@ -138,19 +167,32 @@ export class CliProvider implements CapabilityProvider {
           return;
         }
 
+        // Output contract enforcement (json output must parse).
+        let jsonContext: unknown;
+        let jsonParseError: string | undefined;
+        try {
+          jsonContext = JSON.parse(stdout);
+        } catch (err) {
+          jsonParseError = err instanceof Error ? err.message : String(err);
+        }
+
+        if (outputKind === "json") {
+          if (jsonParseError) {
+            evidence.json_parse_error = jsonParseError;
+            resolveResult({
+              success: false,
+              evidence,
+              error: `Output contract violated: expected JSON stdout`,
+            });
+            return;
+          }
+          evidence.json = jsonContext;
+        }
+
         // Evaluate postcondition if present
         if (action.postcondition != null) {
-          // Try to parse stdout as JSON for json_path assertions
-          let jsonContext: unknown;
-          try {
-            jsonContext = JSON.parse(stdout);
-          } catch {
-            // stdout is not JSON — that's fine, json_path assertions will
-            // fail with missing_evidence which checkPostcondition handles
-          }
-
           const evalContext: EvaluationContext = {
-            json: jsonContext,
+            json: jsonParseError ? undefined : jsonContext,
           };
 
           const postcondResult = checkPostcondition(

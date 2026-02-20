@@ -10,7 +10,7 @@ import type { GatewayEvents } from "../../src/event-bus.js";
 import type Database from "better-sqlite3";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const migrationsDir = join(__dirname, "../../migrations");
+const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
 function setupDb(): Database.Database {
   const db = createDatabase(":memory:");

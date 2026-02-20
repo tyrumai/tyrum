@@ -184,6 +184,8 @@ export {
   SecretHandle,
   SecretStoreRequest,
   SecretProviderKind,
+  SecretRotateRequest,
+  SecretRotateResponse,
   SecretResolveRequest,
   SecretResolveResponse,
   SecretListResponse,
@@ -202,6 +204,8 @@ export {
 } from "./node.js";
 
 export {
+  PlaybookOutputKind,
+  PlaybookOutputSpec,
   PlaybookStep,
   PlaybookManifest,
   Playbook,
@@ -263,4 +267,5 @@ export {
   ExecutionRun,
   ExecutionStep,
   ExecutionAttempt,
+  AttemptCost,
 } from "./execution.js";

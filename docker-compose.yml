@@ -1,0 +1,111 @@
+services:
+  tyrum-edge:
+    build: .
+    command: ["edge"]
+    environment:
+      TYRUM_HOME: /var/lib/tyrum
+      GATEWAY_HOST: 0.0.0.0
+      GATEWAY_PORT: "8080"
+      GATEWAY_DB_PATH: /var/lib/tyrum/gateway.db
+      # Artifact storage: default to filesystem; set TYRUM_ARTIFACT_STORE=s3 and
+      # enable the "minio" profile to use object storage.
+      TYRUM_ARTIFACT_STORE: ${TYRUM_ARTIFACT_STORE:-fs}
+      TYRUM_ARTIFACTS_DIR: /var/lib/tyrum/artifacts
+      TYRUM_ARTIFACTS_S3_ENDPOINT: ${TYRUM_ARTIFACTS_S3_ENDPOINT:-http://minio:9000}
+      TYRUM_ARTIFACTS_S3_BUCKET: ${TYRUM_ARTIFACTS_S3_BUCKET:-tyrum-artifacts}
+      TYRUM_ARTIFACTS_S3_REGION: ${TYRUM_ARTIFACTS_S3_REGION:-us-east-1}
+      TYRUM_ARTIFACTS_S3_FORCE_PATH_STYLE: ${TYRUM_ARTIFACTS_S3_FORCE_PATH_STYLE:-1}
+      TYRUM_ARTIFACTS_S3_ACCESS_KEY_ID: ${TYRUM_ARTIFACTS_S3_ACCESS_KEY_ID:-tyrum}
+      TYRUM_ARTIFACTS_S3_SECRET_ACCESS_KEY: ${TYRUM_ARTIFACTS_S3_SECRET_ACCESS_KEY:-tyrum-password}
+    ports:
+      - "8080:8080"
+    volumes:
+      - tyrum-data:/var/lib/tyrum
+    restart: unless-stopped
+
+  tyrum-worker:
+    build: .
+    command: ["worker"]
+    environment:
+      TYRUM_HOME: /var/lib/tyrum
+      GATEWAY_DB_PATH: /var/lib/tyrum/gateway.db
+      TYRUM_ARTIFACT_STORE: ${TYRUM_ARTIFACT_STORE:-fs}
+      TYRUM_ARTIFACTS_DIR: /var/lib/tyrum/artifacts
+      TYRUM_ARTIFACTS_S3_ENDPOINT: ${TYRUM_ARTIFACTS_S3_ENDPOINT:-http://minio:9000}
+      TYRUM_ARTIFACTS_S3_BUCKET: ${TYRUM_ARTIFACTS_S3_BUCKET:-tyrum-artifacts}
+      TYRUM_ARTIFACTS_S3_REGION: ${TYRUM_ARTIFACTS_S3_REGION:-us-east-1}
+      TYRUM_ARTIFACTS_S3_FORCE_PATH_STYLE: ${TYRUM_ARTIFACTS_S3_FORCE_PATH_STYLE:-1}
+      TYRUM_ARTIFACTS_S3_ACCESS_KEY_ID: ${TYRUM_ARTIFACTS_S3_ACCESS_KEY_ID:-tyrum}
+      TYRUM_ARTIFACTS_S3_SECRET_ACCESS_KEY: ${TYRUM_ARTIFACTS_S3_SECRET_ACCESS_KEY:-tyrum-password}
+    volumes:
+      - tyrum-data:/var/lib/tyrum
+    restart: unless-stopped
+
+  tyrum-scheduler:
+    build: .
+    command: ["scheduler"]
+    environment:
+      TYRUM_HOME: /var/lib/tyrum
+      GATEWAY_DB_PATH: /var/lib/tyrum/gateway.db
+      TYRUM_ARTIFACT_STORE: ${TYRUM_ARTIFACT_STORE:-fs}
+      TYRUM_ARTIFACTS_DIR: /var/lib/tyrum/artifacts
+      TYRUM_ARTIFACTS_S3_ENDPOINT: ${TYRUM_ARTIFACTS_S3_ENDPOINT:-http://minio:9000}
+      TYRUM_ARTIFACTS_S3_BUCKET: ${TYRUM_ARTIFACTS_S3_BUCKET:-tyrum-artifacts}
+      TYRUM_ARTIFACTS_S3_REGION: ${TYRUM_ARTIFACTS_S3_REGION:-us-east-1}
+      TYRUM_ARTIFACTS_S3_FORCE_PATH_STYLE: ${TYRUM_ARTIFACTS_S3_FORCE_PATH_STYLE:-1}
+      TYRUM_ARTIFACTS_S3_ACCESS_KEY_ID: ${TYRUM_ARTIFACTS_S3_ACCESS_KEY_ID:-tyrum}
+      TYRUM_ARTIFACTS_S3_SECRET_ACCESS_KEY: ${TYRUM_ARTIFACTS_S3_SECRET_ACCESS_KEY:-tyrum-password}
+    volumes:
+      - tyrum-data:/var/lib/tyrum
+    restart: unless-stopped
+
+  # Optional Postgres for future HA deployments (wired in `postgres_support`).
+  postgres:
+    image: postgres:16
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_USER: tyrum
+      POSTGRES_PASSWORD: tyrum
+      POSTGRES_DB: tyrum
+    ports:
+      - "5432:5432"
+    volumes:
+      - tyrum-postgres:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  # Optional S3-compatible object store for artifacts (wired in `secrets_artifacts_redaction`).
+  minio:
+    image: minio/minio:latest
+    profiles: ["minio"]
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: tyrum
+      MINIO_ROOT_PASSWORD: tyrum-password
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - tyrum-minio:/data
+    restart: unless-stopped
+
+  minio-init:
+    image: minio/mc:latest
+    profiles: ["minio"]
+    depends_on:
+      - minio
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        set -eu;
+        until mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"; do sleep 1; done;
+        mc mb -p local/tyrum-artifacts || true;
+        exit 0;
+    environment:
+      MINIO_ROOT_USER: tyrum
+      MINIO_ROOT_PASSWORD: tyrum-password
+
+volumes:
+  tyrum-data:
+  tyrum-postgres:
+  tyrum-minio:
+

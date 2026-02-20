@@ -11,7 +11,7 @@ import {
 import type { ActionPrimitive } from "@tyrum/schemas";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const migrationsDir = join(__dirname, "../../migrations");
+const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
 function testStep(type: string, args?: Record<string, unknown>): ActionPrimitive {
   return {

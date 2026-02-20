@@ -16,11 +16,15 @@ import { createApp } from "./app.js";
 import { AgentRuntime } from "./modules/agent/runtime.js";
 import { TokenStore } from "./modules/auth/token-store.js";
 import { WatcherScheduler } from "./modules/watcher/scheduler.js";
-import { EnvSecretProvider, FileSecretProvider } from "./modules/secret/provider.js";
+import { EnvSecretProvider, FileSecretProvider, KeychainSecretProvider } from "./modules/secret/provider.js";
 import type { SecretProvider } from "./modules/secret/provider.js";
 import { WsNotifier } from "./modules/approval/notifier.js";
+import { OutboxDal } from "./modules/backplane/outbox-dal.js";
+import { ConnectionDirectoryDal } from "./modules/backplane/connection-directory.js";
+import { OutboxPoller } from "./modules/backplane/outbox-poller.js";
 import { ConnectionManager } from "./ws/connection-manager.js";
 import { createWsHandler } from "./routes/ws.js";
+import { maybeStartOtel } from "./modules/observability/otel.js";
 
 export const VERSION = "0.1.0";
 
@@ -47,11 +51,22 @@ const UPDATE_CHANNEL_TAG: Record<UpdateChannel, string> = {
 
 type UpdateChannel = "stable" | "beta" | "dev";
 
+type GatewayRole = "all" | "edge" | "worker" | "scheduler";
+
 type CliCommand =
-  | { kind: "start" }
+  | { kind: "start"; role: GatewayRole }
   | { kind: "help" }
   | { kind: "version" }
   | { kind: "update"; channel: UpdateChannel; version?: string };
+
+function parseGatewayRole(raw: string | undefined): GatewayRole | undefined {
+  const value = raw?.trim().toLowerCase();
+  if (!value) return undefined;
+  if (value === "all" || value === "edge" || value === "worker" || value === "scheduler") {
+    return value;
+  }
+  return undefined;
+}
 
 export function ensureDatabaseDirectory(dbPath: string): void {
   const trimmed = dbPath.trim();
@@ -76,13 +91,14 @@ function printCliHelp(): void {
   console.log(`Tyrum gateway
 
 Usage:
-  tyrum
+  tyrum [start|edge|worker|scheduler]
   tyrum update [--channel stable|beta|dev] [--version <version>]
   tyrum --version
   tyrum --help
 
 Notes:
-  - Running without subcommands starts the local gateway.
+  - Running without subcommands starts all roles (edge + worker + scheduler).
+  - You can also set TYRUM_ROLE=all|edge|worker|scheduler.
   - --version takes precedence over --channel for updates.
 `);
 }
@@ -115,16 +131,20 @@ function normalizeVersionSpecifier(raw: string): string {
 }
 
 export function parseCliArgs(argv: readonly string[]): CliCommand {
-  if (argv.length === 0) return { kind: "start" };
+  const envRole = parseGatewayRole(process.env["TYRUM_ROLE"]) ?? "all";
+  if (argv.length === 0) return { kind: "start", role: envRole };
 
   const [first, ...rest] = argv;
-  if (!first) return { kind: "start" };
+  if (!first) return { kind: "start", role: envRole };
 
   if (first === "-h" || first === "--help") return { kind: "help" };
   if (first === "-v" || first === "--version" || first === "version") {
     return { kind: "version" };
   }
-  if (first === "start") return { kind: "start" };
+  if (first === "start") return { kind: "start", role: envRole };
+  if (first === "all" || first === "edge" || first === "worker" || first === "scheduler") {
+    return { kind: "start", role: first };
+  }
 
   if (first !== "update") {
     throw new Error(`unknown command '${first}'`);
@@ -242,16 +262,17 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
     return runGatewayUpdate(command.channel, command.version);
   }
 
-  await main();
+  await main(command.role);
   return 0;
 }
 
-export async function main(): Promise<void> {
+export async function main(role: GatewayRole = "all"): Promise<void> {
   const port = parseInt(process.env["GATEWAY_PORT"] ?? "8080", 10);
   const host = process.env["GATEWAY_HOST"]?.trim() || "127.0.0.1";
   const dbPath = process.env["GATEWAY_DB_PATH"] ?? "gateway.db";
   const migrationsDir =
-    process.env["GATEWAY_MIGRATIONS_DIR"] ?? join(__dirname, "../migrations");
+    process.env["GATEWAY_MIGRATIONS_DIR"] ??
+    join(__dirname, "../migrations/sqlite");
   const modelGatewayConfigPath =
     process.env["MODEL_GATEWAY_CONFIG"] ?? undefined;
 
@@ -265,6 +286,7 @@ export async function main(): Promise<void> {
     dbPath,
     migrationsDir,
     modelGatewayConfigPath,
+    tyrumHome,
   });
 
   // Initialize auth token store
@@ -280,78 +302,171 @@ export async function main(): Promise<void> {
     console.log("---");
   }
 
-  // Initialize secret provider — use FileSecretProvider when token is available
+  // Initialize secret provider (defaults per ADR-0007; override via TYRUM_SECRET_PROVIDER)
   let secretProvider: SecretProvider;
-  if (token) {
+  const desiredProvider = process.env["TYRUM_SECRET_PROVIDER"]?.trim().toLowerCase();
+  const isKubernetes = Boolean(process.env["KUBERNETES_SERVICE_HOST"]);
+  const providerKind =
+    desiredProvider === "env" || desiredProvider === "file" || desiredProvider === "keychain"
+      ? desiredProvider
+      : (isKubernetes ? "env" : "file");
+
+  if (providerKind === "env") {
+    secretProvider = new EnvSecretProvider();
+  } else if (providerKind === "keychain") {
+    const secretsPath = join(tyrumHome, "secrets.keychain.json");
+    secretProvider = await KeychainSecretProvider.create(secretsPath);
+  } else {
+    if (!token || token.trim().length === 0) {
+      throw new Error("FileSecretProvider requires a non-empty admin token");
+    }
     const secretsPath = join(tyrumHome, "secrets.json");
     secretProvider = await FileSecretProvider.create(secretsPath, token);
-  } else {
-    secretProvider = new EnvSecretProvider();
   }
 
   if (container.telegramBot) {
     console.log("Telegram bot initialized");
   }
 
-  // Start watcher processor (event bus subscriptions) and scheduler (periodic tick)
-  container.watcherProcessor.start();
-  const watcherScheduler = new WatcherScheduler({
-    db: container.db,
-    memoryDal: container.memoryDal,
-    eventBus: container.eventBus,
+  // Start role-specific background components.
+  const watcherScheduler =
+    role === "all" || role === "scheduler"
+      ? new WatcherScheduler({
+          db: container.db,
+          memoryDal: container.memoryDal,
+          eventBus: container.eventBus,
+        })
+      : undefined;
+
+  if (role === "all" || role === "edge") {
+    container.watcherProcessor.start();
+  }
+  if (watcherScheduler) {
+    watcherScheduler.start();
+  }
+
+  const instanceId =
+    process.env["TYRUM_INSTANCE_ID"]?.trim() || `gw-${crypto.randomUUID()}`;
+  const logger = container.logger.child({
+    role,
+    instance_id: instanceId,
+    version: VERSION,
   });
-  watcherScheduler.start();
-  console.log("Watcher processor and scheduler started");
+  logger.info("gateway.instance", { instance_id: instanceId });
+
+  const otel = await maybeStartOtel({
+    serviceName: "tyrum-gateway",
+    serviceVersion: VERSION,
+    instanceId,
+  });
+  if (otel.enabled) {
+    logger.info("otel.started");
+  }
+
+  const shouldRunEdge = role === "all" || role === "edge";
 
   const connectionManager = new ConnectionManager();
+  const outboxDal = new OutboxDal(container.db, container.redactionEngine);
+  const connectionDirectory = new ConnectionDirectoryDal(container.db);
   const protocolDeps = {
     connectionManager,
+    cluster: shouldRunEdge
+      ? {
+          edgeId: instanceId,
+          outboxDal,
+          connectionDirectory,
+        }
+      : undefined,
     onApprovalDecision: (
       approvalId: number,
       approved: boolean,
       reason: string | undefined,
     ) => {
-      container.approvalDal.respond(approvalId, approved, reason);
+      const row = container.approvalDal.respond(approvalId, approved, reason);
+      logger.info("approval.decided", {
+        approval_id: approvalId,
+        approved,
+        status: row?.status ?? "missing",
+        reason,
+      });
     },
   };
   const approvalNotifier = new WsNotifier(protocolDeps);
 
   const agentEnabled = process.env["TYRUM_AGENT_ENABLED"] === "1";
-  const agentRuntime = agentEnabled
+  const agentRuntime = shouldRunEdge && agentEnabled
     ? new AgentRuntime({ container, secretProvider, approvalNotifier })
     : undefined;
 
-  const app = createApp(container, {
-    agentRuntime,
-    tokenStore,
-    secretProvider,
-    isLocalOnly,
-    connectionManager,
-  });
+  const app = shouldRunEdge
+    ? createApp(container, {
+        agentRuntime,
+        tokenStore,
+        secretProvider,
+        isLocalOnly,
+        connectionManager,
+      })
+    : undefined;
 
   // --- WebSocket handler ---
-  const wsHandler = createWsHandler({
-    connectionManager,
-    protocolDeps,
-    tokenStore,
-  });
+  const wsHandler = shouldRunEdge
+    ? createWsHandler({
+        connectionManager,
+        protocolDeps,
+        tokenStore,
+        cluster: {
+          instanceId,
+          connectionDirectory,
+        },
+      })
+    : undefined;
+
+  const outboxPoller = shouldRunEdge
+    ? new OutboxPoller({
+        consumerId: instanceId,
+        outboxDal,
+        connectionManager,
+      })
+    : undefined;
+  outboxPoller?.start();
 
   // --- HTTP server with WS upgrade support ---
-  const listener = getRequestListener(app.fetch);
-  const server = createServer(listener);
+  const server = shouldRunEdge && app && wsHandler
+    ? (() => {
+        const listener = getRequestListener(app.fetch);
+        const s = createServer(listener);
 
-  server.on("upgrade", (req, socket, head) => {
-    const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
-    if (pathname === "/ws") {
-      wsHandler.handleUpgrade(req, socket, head);
-    } else {
-      socket.destroy();
-    }
-  });
+        s.on("upgrade", (req, socket, head) => {
+          const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
+          if (pathname === "/ws") {
+            wsHandler.handleUpgrade(req, socket, head);
+          } else {
+            socket.destroy();
+          }
+        });
 
-  server.listen(port, host, () => {
-    console.log(`Gateway v${VERSION} listening on http://${host}:${port}`);
-  });
+        s.listen(port, host, () => {
+          logger.info("gateway.listen", {
+            host,
+            port,
+            url: `http://${host}:${port}`,
+          });
+        });
+        return s;
+      })()
+    : undefined;
+
+  if (!shouldRunEdge) {
+    console.log(`Tyrum gateway v${VERSION} started in role '${role}'.`);
+  }
+
+  // Keep worker role alive until it has a real execution loop.
+  const workerKeepalive =
+    role === "worker"
+      ? setInterval(() => {
+          // intentionally empty
+        }, 60_000)
+      : undefined;
 
   let shuttingDown = false;
   const shutdown = (signal: string): void => {
@@ -367,16 +482,18 @@ export async function main(): Promise<void> {
 
     const closeServer = new Promise<void>((resolve) => {
       try {
+        if (!server) return resolve();
         server.close(() => resolve());
       } catch {
         resolve();
       }
     });
 
-    wsHandler.stopHeartbeat();
+    wsHandler?.stopHeartbeat();
 
     const closeWss = new Promise<void>((resolve) => {
       try {
+        if (!wsHandler) return resolve();
         wsHandler.wss.close(() => resolve());
       } catch {
         resolve();
@@ -384,14 +501,19 @@ export async function main(): Promise<void> {
     });
 
     container.watcherProcessor.stop();
-    watcherScheduler.stop();
+    watcherScheduler?.stop();
+    outboxPoller?.stop();
 
     Promise.allSettled([
       closeServer,
       closeWss,
       agentRuntime?.shutdown() ?? Promise.resolve(),
+      otel.shutdown(),
     ])
       .finally(() => {
+        if (workerKeepalive) {
+          clearInterval(workerKeepalive);
+        }
         clearTimeout(hardExitTimer);
         try {
           container.db.close();

@@ -54,8 +54,6 @@ export class WatcherScheduler {
     this.timer = setInterval(() => {
       this.tick();
     }, this.tickMs);
-    // Don't prevent process exit
-    this.timer.unref();
   }
 
   stop(): void {

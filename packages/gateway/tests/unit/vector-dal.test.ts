@@ -7,7 +7,7 @@ import { VectorDal } from "../../src/modules/memory/vector-dal.js";
 import type Database from "better-sqlite3";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const migrationsDir = join(__dirname, "../../migrations");
+const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
 describe("VectorDal", () => {
   let db: Database.Database;

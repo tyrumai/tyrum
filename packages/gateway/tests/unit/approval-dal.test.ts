@@ -6,7 +6,7 @@ import { migrate } from "../../src/migrate.js";
 import { ApprovalDal } from "../../src/modules/approval/dal.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const migrationsDir = join(__dirname, "../../migrations");
+const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
 describe("ApprovalDal", () => {
   let db: Database.Database | undefined;

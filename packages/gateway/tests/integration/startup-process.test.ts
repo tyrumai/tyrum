@@ -12,7 +12,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = resolve(__dirname, "../..");
 const REPO_ROOT = resolve(PACKAGE_ROOT, "../..");
 const GATEWAY_ENTRYPOINT = resolve(PACKAGE_ROOT, "dist/index.mjs");
-const GATEWAY_MIGRATIONS_DIR = resolve(PACKAGE_ROOT, "migrations");
+const GATEWAY_MIGRATIONS_DIR = resolve(PACKAGE_ROOT, "migrations/sqlite");
 const SCHEMAS_DIST = resolve(REPO_ROOT, "packages/schemas/dist/index.mjs");
 const GATEWAY_SRC_ENTRYPOINT = resolve(PACKAGE_ROOT, "src/index.ts");
 

@@ -31,7 +31,12 @@ function mockChildExit(exitCode: number): EventEmitter {
 
 describe("gateway CLI argument parsing", () => {
   it("defaults to start when no args are provided", () => {
-    expect(parseCliArgs([])).toEqual({ kind: "start" });
+    const prev = process.env["TYRUM_ROLE"];
+    delete process.env["TYRUM_ROLE"];
+    expect(parseCliArgs([])).toEqual({ kind: "start", role: "all" });
+    if (typeof prev === "string") {
+      process.env["TYRUM_ROLE"] = prev;
+    }
   });
 
   it("parses update channel flag", () => {
@@ -52,6 +57,12 @@ describe("gateway CLI argument parsing", () => {
 
   it("rejects unknown commands", () => {
     expect(() => parseCliArgs(["nope"])).toThrow("unknown command");
+  });
+
+  it("parses role subcommands", () => {
+    expect(parseCliArgs(["edge"])).toEqual({ kind: "start", role: "edge" });
+    expect(parseCliArgs(["worker"])).toEqual({ kind: "start", role: "worker" });
+    expect(parseCliArgs(["scheduler"])).toEqual({ kind: "start", role: "scheduler" });
   });
 });
 

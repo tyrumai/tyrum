@@ -7,7 +7,7 @@ import { CanvasDal } from "../../src/modules/canvas/dal.js";
 import type Database from "better-sqlite3";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const migrationsDir = join(__dirname, "../../migrations");
+const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
 describe("CanvasDal", () => {
   let db: Database.Database;

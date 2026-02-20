@@ -1,6 +1,8 @@
 import type Database from "better-sqlite3";
 import { computeEventHash } from "../audit/hash-chain.js";
 import type { ChainableEvent } from "../audit/hash-chain.js";
+import type { RedactionEngine } from "../redaction/engine.js";
+import type { Logger } from "../observability/logger.js";
 
 export interface NewPlannerEvent {
   replayId: string;
@@ -44,7 +46,11 @@ function rowToEvent(row: RawPlannerEventRow): PersistedPlannerEvent {
 }
 
 export class EventLog {
-  constructor(private db: Database.Database) {}
+  constructor(
+    private db: Database.Database,
+    private readonly redactionEngine?: RedactionEngine,
+    private readonly logger?: Logger,
+  ) {}
 
   append(event: NewPlannerEvent): AppendOutcome {
     if (event.stepIndex < 0) {
@@ -53,7 +59,10 @@ export class EventLog {
       );
     }
 
-    const actionJson = JSON.stringify(event.action);
+    const action = this.redactionEngine
+      ? this.redactionEngine.redactUnknown(event.action).redacted
+      : event.action;
+    const actionJson = JSON.stringify(action);
 
     // SQLite does not support RETURNING with ON CONFLICT DO NOTHING,
     // so we use a transaction: attempt insert, detect UNIQUE violation.
@@ -68,6 +77,11 @@ export class EventLog {
         | undefined;
 
       if (existing) {
+        this.logger?.debug("event.duplicate", {
+          event_id: event.replayId,
+          plan_id: event.planId,
+          step_index: event.stepIndex,
+        });
         return { kind: "duplicate" };
       }
 
@@ -109,7 +123,14 @@ export class EventLog {
         .prepare("SELECT * FROM planner_events WHERE id = ?")
         .get(Number(result.lastInsertRowid)) as RawPlannerEventRow;
 
-      return { kind: "inserted", event: rowToEvent(inserted) };
+      const persisted = rowToEvent(inserted);
+      this.logger?.debug("event.appended", {
+        event_id: event.replayId,
+        plan_id: event.planId,
+        step_index: event.stepIndex,
+        row_id: persisted.id,
+      });
+      return { kind: "inserted", event: persisted };
     });
 
     return doAppend();

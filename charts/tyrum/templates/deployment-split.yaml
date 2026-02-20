@@ -1,0 +1,184 @@
+{{- if ne .Values.mode "single" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "tyrum.fullname" . }}-edge
+  labels:
+    {{- include "tyrum.labels" . | nindent 4 }}
+    app.kubernetes.io/component: edge
+spec:
+  replicas: {{ .Values.split.edge.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/name: {{ include "tyrum.name" . }}
+      app.kubernetes.io/component: edge
+  template:
+    metadata:
+      labels:
+        {{- include "tyrum.labels" . | nindent 8 }}
+        app.kubernetes.io/component: edge
+    spec:
+      containers:
+        - name: gateway
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["edge"]
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+          env:
+            {{- range $k, $v := .Values.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+            - name: GATEWAY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (printf "%s-gateway-token" (include "tyrum.fullname" .)) .Values.gatewayToken.existingSecret }}
+                  key: token
+            {{- if .Values.otel.enabled }}
+            - name: TYRUM_OTEL_ENABLED
+              value: "1"
+            {{- if .Values.otel.otlpEndpoint }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.otel.otlpEndpoint | quote }}
+            {{- end }}
+            {{- end }}
+          {{- if .Values.resources }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- end }}
+          {{- if .Values.persistence.enabled }}
+          volumeMounts:
+            - name: tyrum-data
+              mountPath: {{ .Values.env.TYRUM_HOME | quote }}
+          {{- end }}
+      {{- if .Values.persistence.enabled }}
+      volumes:
+        - name: tyrum-data
+          persistentVolumeClaim:
+            claimName: {{ default (printf "%s-data" (include "tyrum.fullname" .)) .Values.persistence.existingClaim }}
+      {{- end }}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "tyrum.fullname" . }}-worker
+  labels:
+    {{- include "tyrum.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.split.worker.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/name: {{ include "tyrum.name" . }}
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        {{- include "tyrum.labels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+    spec:
+      containers:
+        - name: gateway
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["worker"]
+          env:
+            {{- range $k, $v := .Values.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+            - name: GATEWAY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (printf "%s-gateway-token" (include "tyrum.fullname" .)) .Values.gatewayToken.existingSecret }}
+                  key: token
+            {{- if .Values.otel.enabled }}
+            - name: TYRUM_OTEL_ENABLED
+              value: "1"
+            {{- if .Values.otel.otlpEndpoint }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.otel.otlpEndpoint | quote }}
+            {{- end }}
+            {{- end }}
+          {{- if .Values.resources }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- end }}
+          {{- if .Values.persistence.enabled }}
+          volumeMounts:
+            - name: tyrum-data
+              mountPath: {{ .Values.env.TYRUM_HOME | quote }}
+          {{- end }}
+      {{- if .Values.persistence.enabled }}
+      volumes:
+        - name: tyrum-data
+          persistentVolumeClaim:
+            claimName: {{ default (printf "%s-data" (include "tyrum.fullname" .)) .Values.persistence.existingClaim }}
+      {{- end }}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "tyrum.fullname" . }}-scheduler
+  labels:
+    {{- include "tyrum.labels" . | nindent 4 }}
+    app.kubernetes.io/component: scheduler
+spec:
+  replicas: {{ .Values.split.scheduler.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/name: {{ include "tyrum.name" . }}
+      app.kubernetes.io/component: scheduler
+  template:
+    metadata:
+      labels:
+        {{- include "tyrum.labels" . | nindent 8 }}
+        app.kubernetes.io/component: scheduler
+    spec:
+      containers:
+        - name: gateway
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["scheduler"]
+          env:
+            {{- range $k, $v := .Values.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+            - name: GATEWAY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (printf "%s-gateway-token" (include "tyrum.fullname" .)) .Values.gatewayToken.existingSecret }}
+                  key: token
+            {{- if .Values.otel.enabled }}
+            - name: TYRUM_OTEL_ENABLED
+              value: "1"
+            {{- if .Values.otel.otlpEndpoint }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.otel.otlpEndpoint | quote }}
+            {{- end }}
+            {{- end }}
+          {{- if .Values.resources }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- end }}
+          {{- if .Values.persistence.enabled }}
+          volumeMounts:
+            - name: tyrum-data
+              mountPath: {{ .Values.env.TYRUM_HOME | quote }}
+          {{- end }}
+      {{- if .Values.persistence.enabled }}
+      volumes:
+        - name: tyrum-data
+          persistentVolumeClaim:
+            claimName: {{ default (printf "%s-data" (include "tyrum.fullname" .)) .Values.persistence.existingClaim }}
+      {{- end }}
+{{- end }}
+

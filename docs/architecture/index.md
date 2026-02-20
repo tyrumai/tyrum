@@ -84,5 +84,6 @@ flowchart LR
 - [Client](./client.md)
 - [Node](./node.md)
 - [Protocol](./protocol/index.md)
+- [Architecture decisions (ADRs)](./decisions/index.md)
 - [Architecture gaps / open questions](./gaps.md)
 - [Glossary](./glossary.md)

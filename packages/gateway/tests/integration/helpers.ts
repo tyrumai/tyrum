@@ -12,7 +12,7 @@ import type { TokenStore } from "../../src/modules/auth/token-store.js";
 import type { Hono } from "hono";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const migrationsDir = join(__dirname, "../../migrations");
+const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
 export function createTestContainer(): GatewayContainer {
   return createContainer({

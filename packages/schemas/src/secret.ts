@@ -8,7 +8,7 @@ export const SecretHandle = z
   .object({
     handle_id: z.string().min(1),
     provider: SecretProviderKind,
-    scope: z.string().min(1),
+    scope: z.string().trim().min(1),
     created_at: DateTimeSchema,
   })
   .strict();
@@ -16,12 +16,27 @@ export type SecretHandle = z.infer<typeof SecretHandle>;
 
 export const SecretStoreRequest = z
   .object({
-    scope: z.string().min(1),
-    value: z.string().min(1),
+    scope: z.string().trim().min(1),
+    value: z.string().optional(),
     provider: SecretProviderKind.default("env"),
   })
   .strict();
 export type SecretStoreRequest = z.infer<typeof SecretStoreRequest>;
+
+export const SecretRotateRequest = z
+  .object({
+    value: z.string().trim().min(1),
+  })
+  .strict();
+export type SecretRotateRequest = z.infer<typeof SecretRotateRequest>;
+
+export const SecretRotateResponse = z
+  .object({
+    revoked: z.boolean(),
+    handle: SecretHandle,
+  })
+  .strict();
+export type SecretRotateResponse = z.infer<typeof SecretRotateResponse>;
 
 export const SecretResolveRequest = z
   .object({

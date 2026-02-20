@@ -36,11 +36,19 @@ import { TelegramBot as TelegramBotImpl } from "./modules/ingress/telegram-bot.j
 import { WatcherProcessor as WatcherProcessorImpl } from "./modules/watcher/processor.js";
 import { CanvasDal as CanvasDalImpl } from "./modules/canvas/dal.js";
 import { JobQueue as JobQueueImpl } from "./modules/executor/job-queue.js";
+import { RedactionEngine } from "./modules/redaction/engine.js";
+import type { ArtifactStore } from "./modules/artifact/store.js";
+import { FsArtifactStore, S3ArtifactStore } from "./modules/artifact/store.js";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { S3Client } from "@aws-sdk/client-s3";
+import { Logger } from "./modules/observability/logger.js";
 
 export interface GatewayConfig {
   dbPath: string;
   migrationsDir: string;
   modelGatewayConfigPath?: string;
+  tyrumHome?: string;
 }
 
 export interface GatewayContainer {
@@ -56,15 +64,23 @@ export interface GatewayContainer {
   watcherProcessor: WatcherProcessor;
   canvasDal: CanvasDal;
   jobQueue: JobQueue;
+  redactionEngine: RedactionEngine;
+  artifactStore: ArtifactStore;
+  logger: Logger;
   config: GatewayConfig;
 }
 
-export function createContainer(config: GatewayConfig): GatewayContainer {
+export function createContainer(
+  config: GatewayConfig,
+  opts?: { redactionEngine?: RedactionEngine },
+): GatewayContainer {
   const db = createDatabase(config.dbPath);
   migrate(db, config.migrationsDir);
 
   const memoryDal = new MemoryDalImpl(db);
-  const eventLog = new EventLogImpl(db);
+  const redactionEngine = opts?.redactionEngine ?? new RedactionEngine();
+  const logger = new Logger({ base: { service: "tyrum-gateway" } });
+  const eventLog = new EventLogImpl(db, redactionEngine, logger);
   const connectorCache = new InMemoryConnectorCache();
   const discoveryPipeline = new DiscoveryPipelineImpl(connectorCache, {
     capabilityMemorySource: memoryDal,
@@ -82,6 +98,8 @@ export function createContainer(config: GatewayConfig): GatewayContainer {
   const canvasDal = new CanvasDalImpl(db);
   const jobQueue = new JobQueueImpl(db);
 
+  const artifactStore = createArtifactStore(config, redactionEngine);
+
   return {
     db,
     memoryDal,
@@ -95,6 +113,57 @@ export function createContainer(config: GatewayConfig): GatewayContainer {
     watcherProcessor,
     canvasDal,
     jobQueue,
+    redactionEngine,
+    artifactStore,
+    logger,
     config,
   };
+}
+
+function createArtifactStore(
+  config: GatewayConfig,
+  redactionEngine: RedactionEngine,
+): ArtifactStore {
+  const kind = process.env["TYRUM_ARTIFACT_STORE"]?.trim() || "fs";
+  const tyrumHome =
+    config.tyrumHome ??
+    process.env["TYRUM_HOME"]?.trim() ??
+    join(homedir(), ".tyrum");
+  const fsDir =
+    process.env["TYRUM_ARTIFACTS_DIR"]?.trim() || join(tyrumHome, "artifacts");
+
+  if (kind === "s3") {
+    const bucket =
+      process.env["TYRUM_ARTIFACTS_S3_BUCKET"]?.trim() || "tyrum-artifacts";
+    const region =
+      process.env["TYRUM_ARTIFACTS_S3_REGION"]?.trim() ||
+      "us-east-1";
+    const endpoint = process.env["TYRUM_ARTIFACTS_S3_ENDPOINT"]?.trim() || undefined;
+    const forcePathStyleRaw =
+      process.env["TYRUM_ARTIFACTS_S3_FORCE_PATH_STYLE"]?.trim();
+    const forcePathStyle =
+      forcePathStyleRaw !== undefined
+        ? forcePathStyleRaw === "1" || forcePathStyleRaw.toLowerCase() === "true"
+        : endpoint !== undefined;
+
+    const accessKeyId =
+      process.env["TYRUM_ARTIFACTS_S3_ACCESS_KEY_ID"]?.trim() || undefined;
+    const secretAccessKey =
+      process.env["TYRUM_ARTIFACTS_S3_SECRET_ACCESS_KEY"]?.trim() || undefined;
+    const sessionToken =
+      process.env["TYRUM_ARTIFACTS_S3_SESSION_TOKEN"]?.trim() || undefined;
+
+    const client = new S3Client({
+      region,
+      endpoint,
+      forcePathStyle,
+      credentials:
+        accessKeyId && secretAccessKey
+          ? { accessKeyId, secretAccessKey, sessionToken }
+          : undefined,
+    });
+    return new S3ArtifactStore(client, bucket, "artifacts", redactionEngine);
+  }
+
+  return new FsArtifactStore(fsDir, redactionEngine);
 }

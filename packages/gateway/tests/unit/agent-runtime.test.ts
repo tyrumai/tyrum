@@ -8,7 +8,7 @@ import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import { createStubLanguageModel } from "./stub-language-model.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const migrationsDir = join(__dirname, "../../migrations");
+const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
 describe("AgentRuntime", () => {
   let homeDir: string | undefined;

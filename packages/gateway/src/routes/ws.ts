@@ -15,6 +15,7 @@ import { validateWsToken } from "../ws/auth.js";
 import { handleClientMessage } from "../ws/protocol.js";
 import type { ProtocolDeps } from "../ws/protocol.js";
 import type { TokenStore } from "../modules/auth/token-store.js";
+import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -84,6 +85,11 @@ export interface WsRouteOptions {
   connectionManager: ConnectionManager;
   protocolDeps: ProtocolDeps;
   tokenStore: TokenStore;
+  cluster?: {
+    instanceId: string;
+    connectionDirectory: ConnectionDirectoryDal;
+    connectionTtlMs?: number;
+  };
 }
 
 /**
@@ -98,6 +104,8 @@ export function createWsHandler(opts: WsRouteOptions): {
   stopHeartbeat: () => void;
 } {
   const { connectionManager, protocolDeps, tokenStore } = opts;
+  const cluster = opts.cluster;
+  const connectionTtlMs = cluster?.connectionTtlMs ?? 30_000;
 
   const wss = new WebSocketServer({
     noServer: true,
@@ -107,6 +115,17 @@ export function createWsHandler(opts: WsRouteOptions): {
   // --- heartbeat timer ---
   const heartbeatTimer = setInterval(() => {
     connectionManager.heartbeat();
+    if (cluster) {
+      const nowMs = Date.now();
+      for (const client of connectionManager.allClients()) {
+        cluster.connectionDirectory.touchConnection({
+          connectionId: client.id,
+          nowMs,
+          ttlMs: connectionTtlMs,
+        });
+      }
+      cluster.connectionDirectory.cleanupExpired(nowMs);
+    }
   }, HEARTBEAT_INTERVAL_MS);
 
   // Prevent the timer from keeping the process alive.
@@ -155,6 +174,16 @@ export function createWsHandler(opts: WsRouteOptions): {
 
         clearTimeout(helloTimeout);
         clientId = connectionManager.addClient(ws, parsed.data.payload.capabilities);
+        if (cluster) {
+          const nowMs = Date.now();
+          cluster.connectionDirectory.upsertConnection({
+            connectionId: clientId,
+            edgeId: cluster.instanceId,
+            capabilities: parsed.data.payload.capabilities,
+            nowMs,
+            ttlMs: connectionTtlMs,
+          });
+        }
 
         const connected: WsResponseEnvelope = {
           request_id: parsed.data.request_id,
@@ -166,6 +195,9 @@ export function createWsHandler(opts: WsRouteOptions): {
 
         ws.on("close", () => {
           connectionManager.removeClient(clientId!);
+          if (cluster) {
+            cluster.connectionDirectory.removeConnection(clientId!);
+          }
         });
 
         return;

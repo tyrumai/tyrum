@@ -6,7 +6,7 @@ import { JobQueue } from "../../src/modules/executor/job-queue.js";
 import type { ActionPrimitive } from "@tyrum/schemas";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const migrationsDir = join(__dirname, "../../migrations");
+const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
 function testAction(overrides?: Partial<ActionPrimitive>): ActionPrimitive {
   return {

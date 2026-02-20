@@ -6,7 +6,7 @@ import { migrate } from "../../src/migrate.js";
 import { SessionDal, formatSessionId } from "../../src/modules/agent/session-dal.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const migrationsDir = join(__dirname, "../../migrations");
+const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
 describe("SessionDal", () => {
   let db: Database.Database | undefined;
