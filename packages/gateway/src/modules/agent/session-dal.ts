@@ -191,11 +191,13 @@ export class SessionDal {
   async deleteExpired(ttlDays: number): Promise<number> {
     const safeTtl = Math.max(1, ttlDays);
     const threshold = new Date(Date.now() - safeTtl * 24 * 60 * 60 * 1000).toISOString();
-    const result = await this.db.run(
-      `DELETE FROM sessions
-       WHERE updated_at < ?`,
-      [threshold],
-    );
+    const deleteSql =
+      this.db.kind === "sqlite"
+        ? `DELETE FROM sessions
+           WHERE datetime(updated_at) < datetime(?)`
+        : `DELETE FROM sessions
+           WHERE updated_at < ?`;
+    const result = await this.db.run(deleteSql, [threshold]);
     return result.changes;
   }
 }

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { SessionDal, formatSessionId } from "../../src/modules/agent/session-dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
@@ -70,6 +70,36 @@ describe("SessionDal", () => {
 
     expect(removed).toBe(1);
     expect(row).toBeUndefined();
+  });
+
+  it("keeps newer legacy-format timestamps on threshold date", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-02-20T12:00:00.000Z"));
+
+      const dal = createDal();
+      const stale = await dal.getOrCreate("mattermost", "stale");
+      const fresh = await dal.getOrCreate("mattermost", "fresh");
+
+      await db!.run(
+        "UPDATE sessions SET updated_at = ? WHERE session_id = ?",
+        ["2026-01-21 11:59:59", stale.session_id],
+      );
+      await db!.run(
+        "UPDATE sessions SET updated_at = ? WHERE session_id = ?",
+        ["2026-01-21 13:00:00", fresh.session_id],
+      );
+
+      const removed = await dal.deleteExpired(30);
+      const staleRow = await dal.getById(stale.session_id);
+      const freshRow = await dal.getById(fresh.session_id);
+
+      expect(removed).toBe(1);
+      expect(staleRow).toBeUndefined();
+      expect(freshRow).toBeDefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
