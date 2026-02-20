@@ -204,4 +204,47 @@ describe("CliProvider", () => {
     expect(typeof evidence.duration_ms).toBe("number");
     expect((evidence.duration_ms as number)).toBeGreaterThanOrEqual(0);
   });
+
+  it("enforces output=json by failing on non-JSON stdout", async () => {
+    const provider = makeProvider();
+    const result = await provider.execute(
+      makeAction({ cmd: "echo", args: ["not-json"], output: "json" }),
+    );
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("expected JSON");
+  });
+
+  it("passes stdin through to the command", async () => {
+    const provider = new CliProvider(["node -e"], ["*"], true);
+    const script =
+      "process.stdin.setEncoding('utf8');" +
+      "let d='';" +
+      "process.stdin.on('data', c => { d += c; });" +
+      "process.stdin.on('end', () => { process.stdout.write(d); });";
+
+    const result = await provider.execute(
+      makeAction({
+        cmd: "node",
+        args: ["-e", script],
+        stdin: "hello",
+      }),
+    );
+    expect(result.success).toBe(true);
+    const evidence = result.evidence as Record<string, unknown>;
+    expect(evidence.stdout).toBe("hello");
+  });
+
+  it("when output=json, includes parsed json evidence", async () => {
+    const provider = new CliProvider(["node -e"], ["*"], true);
+    const result = await provider.execute(
+      makeAction({
+        cmd: "node",
+        args: ["-e", "console.log(JSON.stringify({ a: 1 }))"],
+        output: "json",
+      }),
+    );
+    expect(result.success).toBe(true);
+    const evidence = result.evidence as Record<string, unknown>;
+    expect(evidence.json).toEqual({ a: 1 });
+  });
 });

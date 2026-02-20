@@ -184,6 +184,8 @@ export {
   SecretHandle,
   SecretStoreRequest,
   SecretProviderKind,
+  SecretRotateRequest,
+  SecretRotateResponse,
   SecretResolveRequest,
   SecretResolveResponse,
   SecretListResponse,
@@ -202,6 +204,8 @@ export {
 } from "./node.js";
 
 export {
+  PlaybookOutputKind,
+  PlaybookOutputSpec,
   PlaybookStep,
   PlaybookManifest,
   Playbook,
@@ -213,6 +217,8 @@ export {
   ThreadId,
   CronJobId,
   NodeId,
+  WorkspaceId,
+  DEFAULT_WORKSPACE_ID,
   AgentMainKey,
   AgentGroupKey,
   AgentChannelKey,
@@ -263,4 +269,5 @@ export {
   ExecutionRun,
   ExecutionStep,
   ExecutionAttempt,
+  AttemptCost,
 } from "./execution.js";

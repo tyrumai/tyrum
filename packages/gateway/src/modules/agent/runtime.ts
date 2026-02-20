@@ -15,7 +15,7 @@ import { AgentStatusResponse, AgentTurnResponse } from "@tyrum/schemas";
 import type { GatewayContainer } from "../../container.js";
 import { ensureWorkspaceInitialized, resolveTyrumHome } from "./home.js";
 import { MarkdownMemoryStore } from "./markdown-memory.js";
-import { SessionDal, type SessionMessage } from "./session-dal.js";
+import { SessionDal, type SessionMessage, type SessionRow } from "./session-dal.js";
 import {
   loadAgentConfig,
   loadEnabledMcpServers,
@@ -310,7 +310,7 @@ export class AgentRuntime {
     if (now < this.cleanupAtMs) {
       return;
     }
-    this.sessionDal.deleteExpired(ttlDays);
+    void this.sessionDal.deleteExpired(ttlDays);
     this.cleanupAtMs = now + 60 * 60 * 1000;
   }
 
@@ -427,7 +427,7 @@ export class AgentRuntime {
 
   private async prepareTurn(input: AgentTurnRequestT): Promise<{
     ctx: AgentLoadedContext;
-    session: ReturnType<SessionDal["getOrCreate"]>;
+    session: SessionRow;
     model: LanguageModel;
     toolSet: ToolSet;
     usedTools: Set<string>;
@@ -436,7 +436,7 @@ export class AgentRuntime {
     const ctx = await this.loadContext();
     this.maybeCleanupSessions(ctx.config.sessions.ttl_days);
 
-    const session = this.sessionDal.getOrCreate(input.channel, input.thread_id);
+    const session = await this.sessionDal.getOrCreate(input.channel, input.thread_id);
     const wantsMcpTools = ctx.config.tools.allow.some(
       (entry) => entry === "*" || entry === "mcp*" || entry.startsWith("mcp."),
     );
@@ -492,6 +492,8 @@ export class AgentRuntime {
       mcpSpecMap,
       this.fetchImpl,
       this.opts.secretProvider,
+      undefined,
+      this.opts.container.redactionEngine,
     );
 
     const usedTools = new Set<string>();
@@ -550,21 +552,21 @@ export class AgentRuntime {
 
   private async finalizeTurn(
     ctx: AgentLoadedContext,
-    session: ReturnType<SessionDal["getOrCreate"]>,
+    session: SessionRow,
     input: AgentTurnRequestT,
     reply: string,
     usedTools: Set<string>,
   ): Promise<AgentTurnResponseT> {
     const nowIso = new Date().toISOString();
 
-    const updated = this.sessionDal.appendTurn(
+    const updated = await this.sessionDal.appendTurn(
       session.session_id,
       input.message,
       reply,
       ctx.config.sessions.max_turns,
       nowIso,
     );
-    this.sessionDal.updateSummary(
+    await this.sessionDal.updateSummary(
       session.session_id,
       summarizeTurns(updated.turns),
     );
@@ -674,7 +676,7 @@ export class AgentRuntime {
     reason?: string;
   }> {
     const deadline = Date.now() + this.approvalWaitMs;
-    const approval = this.approvalDal.create({
+    const approval = await this.approvalDal.create({
       planId: context.planId,
       stepIndex,
       prompt: `Approve execution of '${tool.id}' (risk=${tool.risk})`,
@@ -691,11 +693,21 @@ export class AgentRuntime {
       expiresAt: new Date(deadline).toISOString(),
     });
 
+    this.opts.container.logger.info("approval.created", {
+      approval_id: approval.id,
+      plan_id: context.planId,
+      step_index: stepIndex,
+      tool_id: tool.id,
+      tool_risk: tool.risk,
+      tool_call_id: toolCallId,
+      expires_at: approval.expires_at,
+    });
+
     this.approvalNotifier.notify(approval);
 
     while (Date.now() < deadline) {
-      this.approvalDal.expireStale();
-      const current = this.approvalDal.getById(approval.id);
+      await this.approvalDal.expireStale();
+      const current = await this.approvalDal.getById(approval.id);
       if (!current) {
         return {
           approved: false,
@@ -727,7 +739,7 @@ export class AgentRuntime {
       await new Promise((resolve) => setTimeout(resolve, sleepMs));
     }
 
-    const expired = this.approvalDal.expireById(approval.id);
+    const expired = await this.approvalDal.expireById(approval.id);
     return {
       approved: false,
       status: "expired",

@@ -1,4 +1,4 @@
-import type Database from "better-sqlite3";
+import type { SqlDb } from "../../statestore/types.js";
 
 export interface SessionMessage {
   role: "user" | "assistant";
@@ -22,8 +22,8 @@ interface RawSessionRow {
   thread_id: string;
   summary: string;
   turns_json: string;
-  created_at: string;
-  updated_at: string;
+  created_at: string | Date;
+  updated_at: string | Date;
 }
 
 function parseTurns(raw: string): SessionMessage[] {
@@ -56,14 +56,18 @@ function parseTurns(raw: string): SessionMessage[] {
 }
 
 function toSessionRow(raw: RawSessionRow): SessionRow {
+  const createdAt =
+    raw.created_at instanceof Date ? raw.created_at.toISOString() : raw.created_at;
+  const updatedAt =
+    raw.updated_at instanceof Date ? raw.updated_at.toISOString() : raw.updated_at;
   return {
     session_id: raw.session_id,
     channel: raw.channel,
     thread_id: raw.thread_id,
     summary: raw.summary,
     turns: parseTurns(raw.turns_json),
-    created_at: raw.created_at,
-    updated_at: raw.updated_at,
+    created_at: createdAt,
+    updated_at: updatedAt,
   };
 }
 
@@ -78,27 +82,27 @@ export function formatLegacySessionId(channel: string, threadId: string): string
 }
 
 export class SessionDal {
-  constructor(private readonly db: Database.Database) {}
+  constructor(private readonly db: SqlDb) {}
 
-  getOrCreate(channel: string, threadId: string): SessionRow {
+  async getOrCreate(channel: string, threadId: string): Promise<SessionRow> {
     const sessionId = formatSessionId(channel, threadId);
-    const existing = this.getById(sessionId);
+    const existing = await this.getById(sessionId);
     if (existing) {
       return existing;
     }
 
     const legacyId = formatLegacySessionId(channel, threadId);
     if (legacyId !== sessionId) {
-      const legacy = this.getById(legacyId);
+      const legacy = await this.getById(legacyId);
       if (legacy) {
-        const conflict = this.getById(sessionId);
+        const conflict = await this.getById(sessionId);
         if (!conflict) {
-          this.db
-            .prepare(
-              "UPDATE sessions SET session_id = ?, updated_at = datetime('now') WHERE session_id = ?",
-            )
-            .run(sessionId, legacyId);
-          const migrated = this.getById(sessionId);
+          const nowIso = new Date().toISOString();
+          await this.db.run(
+            "UPDATE sessions SET session_id = ?, updated_at = ? WHERE session_id = ?",
+            [sessionId, nowIso, legacyId],
+          );
+          const migrated = await this.getById(sessionId);
           if (migrated) {
             return migrated;
           }
@@ -107,38 +111,39 @@ export class SessionDal {
       }
     }
 
-    this.db
-      .prepare(
-        `INSERT INTO sessions (session_id, channel, thread_id, summary, turns_json)
-         VALUES (?, ?, ?, '', '[]')`,
-      )
-      .run(sessionId, channel, threadId);
+    const nowIso = new Date().toISOString();
+    await this.db.run(
+      `INSERT INTO sessions (session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
+       VALUES (?, ?, ?, '', '[]', ?, ?)`,
+      [sessionId, channel, threadId, nowIso, nowIso],
+    );
 
-    const created = this.getById(sessionId);
+    const created = await this.getById(sessionId);
     if (!created) {
       throw new Error(`failed to create session '${sessionId}'`);
     }
     return created;
   }
 
-  getById(sessionId: string): SessionRow | undefined {
-    const row = this.db
-      .prepare("SELECT * FROM sessions WHERE session_id = ?")
-      .get(sessionId) as RawSessionRow | undefined;
+  async getById(sessionId: string): Promise<SessionRow | undefined> {
+    const row = await this.db.get<RawSessionRow>(
+      "SELECT * FROM sessions WHERE session_id = ?",
+      [sessionId],
+    );
     if (!row) {
       return undefined;
     }
     return toSessionRow(row);
   }
 
-  appendTurn(
+  async appendTurn(
     sessionId: string,
     userMessage: string,
     assistantMessage: string,
     maxTurns: number,
     timestamp: string,
-  ): SessionRow {
-    const session = this.getById(sessionId);
+  ): Promise<SessionRow> {
+    const session = await this.getById(sessionId);
     if (!session) {
       throw new Error(`session '${sessionId}' not found`);
     }
@@ -158,40 +163,41 @@ export class SessionDal {
     const maxMessages = Math.max(1, maxTurns) * 2;
     const bounded = turns.slice(-maxMessages);
 
-    this.db
-      .prepare(
-        `UPDATE sessions
-         SET turns_json = ?, updated_at = datetime('now')
-         WHERE session_id = ?`,
-      )
-      .run(JSON.stringify(bounded), sessionId);
+    const nowIso = new Date().toISOString();
+    await this.db.run(
+      `UPDATE sessions
+       SET turns_json = ?, updated_at = ?
+       WHERE session_id = ?`,
+      [JSON.stringify(bounded), nowIso, sessionId],
+    );
 
-    const updated = this.getById(sessionId);
+    const updated = await this.getById(sessionId);
     if (!updated) {
       throw new Error(`session '${sessionId}' missing after update`);
     }
     return updated;
   }
 
-  updateSummary(sessionId: string, summary: string): void {
-    this.db
-      .prepare(
-        `UPDATE sessions
-         SET summary = ?, updated_at = datetime('now')
-         WHERE session_id = ?`,
-      )
-      .run(summary, sessionId);
+  async updateSummary(sessionId: string, summary: string): Promise<void> {
+    const nowIso = new Date().toISOString();
+    await this.db.run(
+      `UPDATE sessions
+       SET summary = ?, updated_at = ?
+       WHERE session_id = ?`,
+      [summary, nowIso, sessionId],
+    );
   }
 
-  deleteExpired(ttlDays: number): number {
+  async deleteExpired(ttlDays: number): Promise<number> {
     const safeTtl = Math.max(1, ttlDays);
-    const result = this.db
-      .prepare(
-        `DELETE FROM sessions
-         WHERE datetime(updated_at) < datetime('now', '-' || ? || ' days')`,
-      )
-      .run(String(safeTtl));
-
+    const threshold = new Date(Date.now() - safeTtl * 24 * 60 * 60 * 1000).toISOString();
+    const deleteSql =
+      this.db.kind === "sqlite"
+        ? `DELETE FROM sessions
+           WHERE datetime(updated_at) < datetime(?)`
+        : `DELETE FROM sessions
+           WHERE updated_at < ?`;
+    const result = await this.db.run(deleteSql, [threshold]);
     return result.changes;
   }
 }

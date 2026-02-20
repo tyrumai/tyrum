@@ -1,7 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { Hono } from "hono";
 import { createSecretRoutes } from "../../src/routes/secret.js";
-import { EnvSecretProvider } from "../../src/modules/secret/provider.js";
+import { EnvSecretProvider, FileSecretProvider } from "../../src/modules/secret/provider.js";
+import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 describe("Secret routes (integration)", () => {
   function setup() {
@@ -27,6 +30,21 @@ describe("Secret routes (integration)", () => {
     expect(body.handle.scope).toBe("MY_API_KEY");
     // Value must never be in the response
     expect(JSON.stringify(body)).not.toContain("super-secret-123");
+  });
+
+  it("POST /secrets supports env handles without sending a value", async () => {
+    const { app } = setup();
+
+    const res = await app.request("/secrets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scope: "MY_API_KEY" }),
+    });
+
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { handle: { provider: string; scope: string } };
+    expect(body.handle.provider).toBe("env");
+    expect(body.handle.scope).toBe("MY_API_KEY");
   });
 
   it("GET /secrets lists stored handles", async () => {
@@ -86,6 +104,24 @@ describe("Secret routes (integration)", () => {
     expect(res.status).toBe(404);
   });
 
+  it("POST /secrets/:id/rotate rejects rotation for env provider", async () => {
+    const { app } = setup();
+
+    const storeRes = await app.request("/secrets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scope: "ROTATE_ME", value: "v1" }),
+    });
+    const { handle } = (await storeRes.json()) as { handle: { handle_id: string } };
+
+    const rotateRes = await app.request(`/secrets/${handle.handle_id}/rotate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value: "v2" }),
+    });
+    expect(rotateRes.status).toBe(400);
+  });
+
   it("POST /secrets rejects invalid body", async () => {
     const { app } = setup();
 
@@ -124,5 +160,74 @@ describe("Secret routes (integration)", () => {
     const list2 = await app.request("/secrets");
     const list2Body = (await list2.json()) as { handles: unknown[] };
     expect(list2Body.handles).toHaveLength(0);
+  });
+});
+
+describe("Secret routes (integration) — file provider rotation", () => {
+  let tempDir: string;
+  let secretsPath: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "tyrum-secret-route-test-"));
+    secretsPath = join(tempDir, ".secrets.enc");
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  async function setupFile() {
+    const provider = await FileSecretProvider.create(
+      secretsPath,
+      "test-admin-token-for-testing",
+    );
+    const app = new Hono();
+    app.route("/", createSecretRoutes(provider));
+    return { app, provider };
+  }
+
+  it("POST /secrets/:id/rotate revokes old handle and returns a new handle", async () => {
+    const { app, provider } = await setupFile();
+
+    const storeRes = await app.request("/secrets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scope: "DB_PASSWORD", value: "v1" }),
+    });
+    expect(storeRes.status).toBe(201);
+    const { handle: oldHandle } = (await storeRes.json()) as {
+      handle: { handle_id: string; scope: string };
+    };
+
+    const rotateRes = await app.request(`/secrets/${oldHandle.handle_id}/rotate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value: "v2" }),
+    });
+    expect(rotateRes.status).toBe(201);
+    const rotateBody = (await rotateRes.json()) as {
+      revoked: boolean;
+      handle: { handle_id: string; scope: string };
+    };
+    expect(rotateBody.revoked).toBe(true);
+    expect(rotateBody.handle.handle_id).not.toBe(oldHandle.handle_id);
+    expect(rotateBody.handle.scope).toBe(oldHandle.scope);
+
+    // Old handle should no longer resolve; new handle should resolve to v2.
+    const oldResolved = await provider.resolve({
+      handle_id: oldHandle.handle_id,
+      provider: "file",
+      scope: oldHandle.scope,
+      created_at: new Date().toISOString(),
+    });
+    expect(oldResolved).toBeNull();
+
+    const newResolved = await provider.resolve({
+      handle_id: rotateBody.handle.handle_id,
+      provider: "file",
+      scope: rotateBody.handle.scope,
+      created_at: new Date().toISOString(),
+    });
+    expect(newResolved).toBe("v2");
   });
 });

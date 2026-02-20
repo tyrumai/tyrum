@@ -53,6 +53,7 @@ const sidebars: SidebarsConfig = {
             "architecture/playbooks",
             "architecture/approvals",
             "architecture/secrets",
+            "architecture/artifacts",
           ],
         },
         {
@@ -96,7 +97,6 @@ const sidebars: SidebarsConfig = {
             "architecture/multi-agent-routing",
           ],
         },
-        "architecture/gaps",
         "architecture/glossary",
       ],
     },

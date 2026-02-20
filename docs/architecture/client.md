@@ -1,7 +1,5 @@
 # Client
 
-Status:
-
 A client is an operator interface that connects to the gateway and participates in sessions. Clients are where humans read events, send requests, approve actions, and manage connected nodes.
 
 ## Client forms
@@ -24,9 +22,8 @@ A client is an operator interface that connects to the gateway and participates 
 
 The gateway’s web control panel is a client form that connects over WebSocket and provides operator oversight. At minimum it should expose:
 
-- **Chat:** a session-centric chat UI for interacting with an agent.
+- **Session:** a session-centric view rendered as a unified timeline that merges chat, runs/steps/attempts, approvals, and artifacts (reconstructible from durable state; live events stream updates). The UI supports lane filters and surfaces queue-mode semantics as pending input items.
 - **Approvals:** an approval queue (approve/deny) with previews and linked evidence.
-- **Audit timeline:** a live event feed with per-step artifacts and postcondition results.
 - **Nodes/devices:** pairing requests, connected capability providers, revoke controls.
 - **Settings:** policy defaults, tool allowlists, model config, secrets setup, and automation toggles.
 

@@ -225,7 +225,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
     // autoExecute handles it, runs the provider, sends task_result back.
     // The WS handler calls handleClientMessage which invokes onTaskResult
     // from the protocolDeps wired in startServer -- captured in srv.taskResults.
-    const taskId = dispatchTask(
+    const taskId = await dispatchTask(
       {
         type: "Desktop",
         args: { op: "screenshot", display: "primary", format: "png" },
@@ -261,7 +261,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
     const desktopProvider = new DesktopProvider(new MockDesktopBackend(), permissions, async () => true);
     autoExecute(client, [desktopProvider]);
 
-    const taskId = dispatchTask(
+    const taskId = await dispatchTask(
       {
         type: "Desktop",
         args: { op: "mouse", action: "click", x: 100, y: 200 },
@@ -295,7 +295,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
     const cliProvider = new CliProvider(["echo"], ["/tmp"]);
     autoExecute(client, [cliProvider]);
 
-    const taskId = dispatchTask(
+    const taskId = await dispatchTask(
       {
         type: "CLI",
         args: { cmd: "rm", args: ["-rf", "/"] },
@@ -329,7 +329,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
     const cliProvider = new CliProvider(["echo"], ["/tmp"]);
     autoExecute(client, [cliProvider]);
 
-    const taskId = dispatchTask(
+    const taskId = await dispatchTask(
       {
         type: "CLI",
         args: { cmd: "echo", args: ["hello", "world"] },

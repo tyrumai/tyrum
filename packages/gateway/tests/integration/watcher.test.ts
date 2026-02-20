@@ -1,40 +1,32 @@
-import { describe, expect, it, beforeEach } from "vitest";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Hono } from "hono";
 import mitt from "mitt";
-import { createDatabase } from "../../src/db.js";
-import { migrate } from "../../src/migrate.js";
 import { MemoryDal } from "../../src/modules/memory/dal.js";
 import { WatcherProcessor } from "../../src/modules/watcher/processor.js";
 import { WatcherScheduler } from "../../src/modules/watcher/scheduler.js";
 import { createWatcherRoutes } from "../../src/routes/watcher.js";
 import type { GatewayEvents } from "../../src/event-bus.js";
-import type Database from "better-sqlite3";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const migrationsDir = join(__dirname, "../../migrations");
-
-function setupDb(): Database.Database {
-  const db = createDatabase(":memory:");
-  migrate(db, migrationsDir);
-  return db;
-}
+import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
 describe("Watcher routes + scheduler integration", () => {
-  let db: Database.Database;
+  let db: SqliteDb;
   let memoryDal: MemoryDal;
   let eventBus: ReturnType<typeof mitt<GatewayEvents>>;
   let processor: WatcherProcessor;
   let app: Hono;
 
   beforeEach(() => {
-    db = setupDb();
+    db = openTestSqliteDb();
     memoryDal = new MemoryDal(db);
     eventBus = mitt<GatewayEvents>();
     processor = new WatcherProcessor({ db, memoryDal, eventBus });
     app = new Hono();
     app.route("/", createWatcherRoutes(processor));
+  });
+
+  afterEach(async () => {
+    await db.close();
   });
 
   it("POST /watchers creates a watcher", async () => {
@@ -55,8 +47,8 @@ describe("Watcher routes + scheduler integration", () => {
   });
 
   it("GET /watchers lists active watchers", async () => {
-    processor.createWatcher("plan-1", "periodic", { intervalMs: 30000 });
-    processor.createWatcher("plan-2", "plan_complete", { planId: "plan-2" });
+    await processor.createWatcher("plan-1", "periodic", { intervalMs: 30000 });
+    await processor.createWatcher("plan-2", "plan_complete", { planId: "plan-2" });
 
     const res = await app.request("/watchers", { method: "GET" });
     expect(res.status).toBe(200);
@@ -67,7 +59,7 @@ describe("Watcher routes + scheduler integration", () => {
   });
 
   it("PATCH /watchers/:id deactivates a watcher", async () => {
-    const id = processor.createWatcher("plan-1", "periodic", {
+    const id = await processor.createWatcher("plan-1", "periodic", {
       intervalMs: 30000,
     });
 
@@ -78,11 +70,11 @@ describe("Watcher routes + scheduler integration", () => {
     });
 
     expect(res.status).toBe(200);
-    expect(processor.listWatchers()).toHaveLength(0);
+    expect(await processor.listWatchers()).toHaveLength(0);
   });
 
   it("DELETE /watchers/:id deactivates a watcher", async () => {
-    const id = processor.createWatcher("plan-1", "periodic", {
+    const id = await processor.createWatcher("plan-1", "periodic", {
       intervalMs: 30000,
     });
 
@@ -91,7 +83,7 @@ describe("Watcher routes + scheduler integration", () => {
     });
 
     expect(res.status).toBe(200);
-    expect(processor.listWatchers()).toHaveLength(0);
+    expect(await processor.listWatchers()).toHaveLength(0);
   });
 
   it("POST /watchers returns 400 for missing fields", async () => {
@@ -124,10 +116,10 @@ describe("Watcher routes + scheduler integration", () => {
       eventBus,
       tickMs: 100,
     });
-    scheduler.tick();
+    await scheduler.tick();
 
     // Verify episodic event was created
-    const events = memoryDal.getEpisodicEvents();
+    const events = await memoryDal.getEpisodicEvents();
     expect(events).toHaveLength(1);
     expect(events[0]!.event_type).toBe("periodic_fired");
   });

@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, statSync } from "node:fs";
+import { closeSync, existsSync, openSync, statSync, unlinkSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -13,6 +13,7 @@ const REPO_ROOT = resolve(__dirname, "../../../../");
 const GATEWAY_BIN = resolve(REPO_ROOT, "packages/gateway/dist/index.mjs");
 const SCHEMAS_DIST = resolve(REPO_ROOT, "packages/schemas/dist/index.mjs");
 const GATEWAY_SRC_ENTRYPOINT = resolve(REPO_ROOT, "packages/gateway/src/index.ts");
+const GATEWAY_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
 
 function pnpmCommand(): string {
   return process.platform === "win32" ? "pnpm.cmd" : "pnpm";
@@ -20,6 +21,39 @@ function pnpmCommand(): string {
 
 function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function acquireGatewayBuildLock(timeoutMs = 60_000): () => void {
+  const startedAt = Date.now();
+  for (;;) {
+    try {
+      const fd = openSync(GATEWAY_BUILD_LOCK, "wx");
+      return () => {
+        try {
+          closeSync(fd);
+        } catch {
+          // ignore
+        }
+        try {
+          unlinkSync(GATEWAY_BUILD_LOCK);
+        } catch {
+          // ignore
+        }
+      };
+    } catch (err) {
+      const code = err && typeof err === "object" ? (err as { code?: string }).code : undefined;
+      if (code !== "EEXIST") {
+        throw err;
+      }
+
+      if (Date.now() - startedAt > timeoutMs) {
+        throw new Error(
+          `Timed out waiting for gateway build lock (${timeoutMs}ms): ${GATEWAY_BUILD_LOCK}`,
+        );
+      }
+      sleepSync(200);
+    }
+  }
 }
 
 function formatBuildFailure(
@@ -153,7 +187,12 @@ describe("desktop embedded gateway startup", () => {
     "starts embedded gateway via GatewayManager and passes health check",
     { timeout: 60_000 },
     async () => {
-      ensureGatewayBuild();
+      const releaseBuildLock = acquireGatewayBuildLock();
+      try {
+        ensureGatewayBuild();
+      } finally {
+        releaseBuildLock();
+      }
 
       const port = await findAvailablePort();
       tempRoot = await mkdtemp(join(tmpdir(), "tyrum-desktop-gateway-"));

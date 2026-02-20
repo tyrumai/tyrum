@@ -27,4 +27,19 @@ describe("ensureDatabaseDirectory", () => {
   it("is a no-op for sqlite file URI paths", () => {
     expect(() => ensureDatabaseDirectory("file:gateway.db?mode=memory")).not.toThrow();
   });
+
+  it("is a no-op for Postgres db URIs", () => {
+    const root = mkdtempSync(join(tmpdir(), "tyrum-gateway-dburi-"));
+    const previousCwd = process.cwd();
+    try {
+      process.chdir(root);
+      expect(() =>
+        ensureDatabaseDirectory("postgres://user:pass@localhost:5432/db"),
+      ).not.toThrow();
+      expect(existsSync(join(root, "postgres:"))).toBe(false);
+    } finally {
+      process.chdir(previousCwd);
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });

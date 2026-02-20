@@ -11,7 +11,7 @@ import {
 import type { ActionPrimitive } from "@tyrum/schemas";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const migrationsDir = join(__dirname, "../../migrations");
+const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
 function testStep(type: string, args?: Record<string, unknown>): ActionPrimitive {
   return {
@@ -23,13 +23,13 @@ function testStep(type: string, args?: Record<string, unknown>): ActionPrimitive
 describe("ExecutionRunner", () => {
   let container: GatewayContainer | undefined;
 
-  afterEach(() => {
-    container?.db.close();
+  afterEach(async () => {
+    await container?.db.close();
     container = undefined;
   });
 
   it("executes a 2-step plan with mock tool results", async () => {
-    container = createContainer({ dbPath: ":memory:", migrationsDir });
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
     const jobQueue = new JobQueue(container.db);
 
     const completedEvents: string[] = [];
@@ -69,7 +69,7 @@ describe("ExecutionRunner", () => {
     expect(mockExecutor.execute).toHaveBeenCalledTimes(2);
 
     // Verify jobs are completed
-    const jobs = jobQueue.getByPlanId("plan-test-1");
+    const jobs = await jobQueue.getByPlanId("plan-test-1");
     expect(jobs).toHaveLength(2);
     expect(jobs[0]!.status).toBe("completed");
     expect(jobs[1]!.status).toBe("completed");
@@ -79,7 +79,7 @@ describe("ExecutionRunner", () => {
   });
 
   it("handles step failure with retry then success", async () => {
-    container = createContainer({ dbPath: ":memory:", migrationsDir });
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
     const jobQueue = new JobQueue(container.db);
 
     const runner = new ExecutionRunner(
@@ -111,7 +111,7 @@ describe("ExecutionRunner", () => {
   });
 
   it("fails plan after exhausting all retries", async () => {
-    container = createContainer({ dbPath: ":memory:", migrationsDir });
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
     const jobQueue = new JobQueue(container.db);
 
     const failedEvents: string[] = [];
@@ -149,7 +149,7 @@ describe("ExecutionRunner", () => {
   });
 
   it("passes postcondition when evidence matches", async () => {
-    container = createContainer({ dbPath: ":memory:", migrationsDir });
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
     const jobQueue = new JobQueue(container.db);
 
     const completedEvents: string[] = [];
@@ -188,14 +188,14 @@ describe("ExecutionRunner", () => {
 
     await runner.executePlan("plan-postcond-pass", steps, mockExecutor);
 
-    const jobs = jobQueue.getByPlanId("plan-postcond-pass");
+    const jobs = await jobQueue.getByPlanId("plan-postcond-pass");
     expect(jobs).toHaveLength(1);
     expect(jobs[0]!.status).toBe("completed");
     expect(completedEvents).toContain("plan-postcond-pass");
   });
 
   it("fails step when postcondition does not match", async () => {
-    container = createContainer({ dbPath: ":memory:", migrationsDir });
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
     const jobQueue = new JobQueue(container.db);
 
     const failedEvents: string[] = [];
@@ -237,14 +237,14 @@ describe("ExecutionRunner", () => {
     // All retries exhausted since postcondition always fails (same evidence each time)
     expect(failedEvents).toContain("plan-postcond-fail");
 
-    const jobs = jobQueue.getByPlanId("plan-postcond-fail");
+    const jobs = await jobQueue.getByPlanId("plan-postcond-fail");
     expect(jobs).toHaveLength(1);
     expect(jobs[0]!.status).toBe("failed");
     expect(jobs[0]!.error).toContain("postcondition failed");
   });
 
   it("retry re-dequeues the same job, not a different step", async () => {
-    container = createContainer({ dbPath: ":memory:", migrationsDir });
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
     const jobQueue = new JobQueue(container.db);
 
     const completedEvents: string[] = [];
@@ -294,7 +294,7 @@ describe("ExecutionRunner", () => {
     // Step 0 was called twice (fail + retry), step 1 once => 3 total
     expect(mockExecutor.execute).toHaveBeenCalledTimes(3);
 
-    const jobs = jobQueue.getByPlanId("plan-retry-same");
+    const jobs = await jobQueue.getByPlanId("plan-retry-same");
     expect(jobs).toHaveLength(2);
 
     // Both jobs should be completed
@@ -311,7 +311,7 @@ describe("ExecutionRunner", () => {
   });
 
   it("handles empty plan (0 steps)", async () => {
-    container = createContainer({ dbPath: ":memory:", migrationsDir });
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
     const jobQueue = new JobQueue(container.db);
 
     const completedEvents: string[] = [];
@@ -339,7 +339,7 @@ describe("ExecutionRunner", () => {
     // Empty plan should succeed immediately (PlanStateMachine handles this)
     // No completion event because the machine goes to succeeded but
     // the loop doesn't run, so no explicit event is emitted for 0-step plans.
-    const jobs = jobQueue.getByPlanId("plan-empty-1");
+    const jobs = await jobQueue.getByPlanId("plan-empty-1");
     expect(jobs).toHaveLength(0);
   });
 });

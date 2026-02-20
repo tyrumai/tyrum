@@ -490,6 +490,15 @@ export function createPlanRoutes(
       ...outcome,
     };
 
+    container.logger.info("plan.created", {
+      request_id: response.request_id,
+      plan_id: response.plan_id,
+      trace_id: response.trace_id,
+      policy_decision: policyDecision.decision,
+      outcome_status: outcome.status,
+      steps_count: outcome.status === "success" ? outcome.steps.length : 0,
+    });
+
     return c.json(response);
   });
 

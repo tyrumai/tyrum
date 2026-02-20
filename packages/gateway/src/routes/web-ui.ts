@@ -900,11 +900,16 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
     return c.redirect(nextUrl);
   });
 
-  app.get("/app", (c) => {
+  app.get("/app", async (c) => {
     const search = new URL(c.req.url).searchParams;
-    const pending = deps.approvalDal.getByStatus("pending").length;
-    const events = deps.memoryDal.getEpisodicEvents(20).length;
-    const watchers = deps.watcherProcessor.listWatchers().length;
+    const [approvals, episodicEvents, watcherRows] = await Promise.all([
+      deps.approvalDal.getByStatus("pending"),
+      deps.memoryDal.getEpisodicEvents(20),
+      deps.watcherProcessor.listWatchers(),
+    ]);
+    const pending = approvals.length;
+    const events = episodicEvents.length;
+    const watchers = watcherRows.length;
 
     const body = `
       <div class="page-header">
@@ -921,9 +926,9 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
     return c.html(shell("Dashboard", "/app", search, body));
   });
 
-  app.get("/app/activity", (c) => {
+  app.get("/app/activity", async (c) => {
     const search = new URL(c.req.url).searchParams;
-    const events = deps.memoryDal.getEpisodicEvents(100);
+    const events = await deps.memoryDal.getEpisodicEvents(100);
     const rows = events
       .map(
         (event) => `<tr>
@@ -951,9 +956,9 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
     return c.html(shell("Activity", "/app/activity", search, body));
   });
 
-  app.get("/app/approvals", (c) => {
+  app.get("/app/approvals", async (c) => {
     const search = new URL(c.req.url).searchParams;
-    const approvals = deps.approvalDal.getByStatus("pending");
+    const approvals = await deps.approvalDal.getByStatus("pending");
 
     const list = approvals
       .map(
@@ -1001,7 +1006,7 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
       return c.redirect(redirectWithMessageFromRequest(c, "/app/approvals", "Invalid approval decision", "error"));
     }
 
-    const updated = deps.approvalDal.respond(id, approved, form.get("reason")?.toString());
+    const updated = await deps.approvalDal.respond(id, approved, form.get("reason")?.toString());
     if (!updated) {
       return c.redirect(redirectWithMessageFromRequest(c, "/app/approvals", "Approval not found or already responded", "error"));
     }
@@ -1009,14 +1014,14 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
     return c.redirect(redirectWithMessageFromRequest(c, "/app/approvals", `Approval #${String(id)} ${approved ? "approved" : "denied"}`));
   });
 
-  app.get("/app/approvals/:id", (c) => {
+  app.get("/app/approvals/:id", async (c) => {
     const search = new URL(c.req.url).searchParams;
     const id = parseInt(c.req.param("id"), 10);
     if (Number.isNaN(id)) {
       return c.html(shell("Approval", "/app/approvals", search, "<h1>Approval</h1><p class='notice error'>Invalid approval id</p>"), 400);
     }
 
-    const approval = deps.approvalDal.getById(id);
+    const approval = await deps.approvalDal.getById(id);
     if (!approval) {
       return c.html(shell("Approval", "/app/approvals", search, "<h1>Approval</h1><p class='notice error'>Approval not found</p>"), 404);
     }
@@ -1100,9 +1105,9 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
     );
   });
 
-  app.get("/app/watchers", (c) => {
+  app.get("/app/watchers", async (c) => {
     const search = new URL(c.req.url).searchParams;
-    const watchers = deps.watcherProcessor.listWatchers();
+    const watchers = await deps.watcherProcessor.listWatchers();
 
     const list = watchers
       .map(
@@ -1164,33 +1169,33 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
     const intervalMs = parseInt(form.get("interval_ms")?.toString() ?? "60000", 10);
     const triggerConfig = triggerType === "periodic" ? { intervalMs: Number.isFinite(intervalMs) ? intervalMs : 60000 } : {};
 
-    const id = deps.watcherProcessor.createWatcher(planId, triggerType, triggerConfig);
+    const id = await deps.watcherProcessor.createWatcher(planId, triggerType, triggerConfig);
     return c.redirect(redirectWithMessageFromRequest(c, "/app/watchers", `Watcher #${String(id)} created.`));
   });
 
-  app.post("/app/actions/watchers/:id/deactivate", (c) => {
+  app.post("/app/actions/watchers/:id/deactivate", async (c) => {
     const id = parseInt(c.req.param("id"), 10);
     if (Number.isNaN(id)) {
       return c.redirect(redirectWithMessageFromRequest(c, "/app/watchers", "Invalid watcher id", "error"));
     }
 
-    deps.watcherProcessor.deactivateWatcher(id);
+    await deps.watcherProcessor.deactivateWatcher(id);
     return c.redirect(redirectWithMessageFromRequest(c, "/app/watchers", `Watcher #${String(id)} deactivated.`));
   });
 
-  app.post("/app/actions/watchers/:id/delete", (c) => {
+  app.post("/app/actions/watchers/:id/delete", async (c) => {
     const id = parseInt(c.req.param("id"), 10);
     if (Number.isNaN(id)) {
       return c.redirect(redirectWithMessageFromRequest(c, "/app/watchers", "Invalid watcher id", "error"));
     }
 
-    deps.watcherProcessor.deactivateWatcher(id);
+    await deps.watcherProcessor.deactivateWatcher(id);
     return c.redirect(redirectWithMessageFromRequest(c, "/app/watchers", `Watcher #${String(id)} deleted.`));
   });
 
-  app.get("/app/canvas", (c) => {
+  app.get("/app/canvas", async (c) => {
     const search = new URL(c.req.url).searchParams;
-    const artifacts = deps.canvasDal.listRecent(100);
+    const artifacts = await deps.canvasDal.listRecent(100);
 
     const rows = artifacts
       .map(
@@ -1219,10 +1224,10 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
     return c.html(shell("Canvas", "/app/canvas", search, body));
   });
 
-  app.get("/app/canvas/:id", (c) => {
+  app.get("/app/canvas/:id", async (c) => {
     const search = new URL(c.req.url).searchParams;
     const id = c.req.param("id");
-    const artifact = deps.canvasDal.getById(id);
+    const artifact = await deps.canvasDal.getById(id);
 
     if (!artifact) {
       return c.html(

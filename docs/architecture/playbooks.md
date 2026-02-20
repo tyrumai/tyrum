@@ -1,7 +1,5 @@
 # Playbooks (deterministic workflows)
 
-Status:
-
 A playbook is a **durable, reviewable workflow artifact** that the execution engine can run deterministically. Playbooks exist to make multi-step work:
 
 - **Composable:** a single run request executes many steps
@@ -21,7 +19,7 @@ The playbook runtime exposes a small contract that supports two operations:
 - **Run:** start a workflow.
 - **Resume:** continue a paused workflow using a resume token.
 
-### Input shape (conceptual)
+### Input shape
 
 ```json
 {
@@ -44,7 +42,7 @@ Resume:
 }
 ```
 
-### Output envelope (conceptual)
+### Output envelope
 
 The runtime returns an envelope with a **status**:
 
@@ -80,19 +78,33 @@ args:
     default: "family"
 steps:
   - id: collect
-    command: inbox list --json
+    command: cli inbox list --json
+    output: json
   - id: categorize
-    command: inbox categorize --json
+    command: cli inbox categorize --json
+    output: json
     stdin: $collect.stdout
   - id: approve
-    command: inbox apply --approve
+    command: cli inbox apply --approve
     stdin: $categorize.stdout
     approval: required
   - id: execute
-    command: inbox apply --execute
+    command: cli inbox apply --execute
     stdin: $categorize.stdout
     condition: $approve.approved
 ```
+
+### Command namespaces (required)
+
+`steps[].command` is interpreted via an explicit namespace prefix and compiled into typed runtime actions. This avoids unsafe implicit behavior (for example “shell by accident”).
+
+Examples:
+
+- `cli …` → command runs via the CLI capability/tooling (never an implicit OS shell).
+- `http …` → HTTP request action.
+- `web …` → browser automation action.
+- `mcp …` → MCP tool invocation.
+- `node …` → node RPC / capability call.
 
 ### Step data passing
 
@@ -101,7 +113,7 @@ Steps can reference prior step outputs, for example:
 - `stdin: $stepId.stdout` (raw output)
 - `stdin: $stepId.json` (parsed JSON output)
 
-The runtime is responsible for enforcing output caps and for refusing ambiguous/non-JSON output when a step declares JSON.
+The runtime is responsible for enforcing output caps and for refusing ambiguous/non-JSON output when a step declares JSON (via `output: json` and/or an explicit output schema).
 
 ### Approval gates
 
@@ -125,12 +137,11 @@ The playbook runtime must enforce:
 
 ## Optional: JSON-only LLM steps
 
-Some workflows need a constrained “judgment” step (classify, extract, draft) without giving the model general tool access. The workflow runtime may support an optional step kind that:
+Some workflows need a “judgment” step (classify, extract, draft) that uses a model and may call tools. Tyrum allows LLM steps, but they must remain **budgeted** and **enforced** like any other execution:
 
-- accepts `{ prompt, input, schema }`
-- runs a model with **JSON-only output**
-- validates output against `schema`
-- exposes **no tools** during the call
+- tool access must be explicitly allowed (allowlist / policy)
+- risky tool calls may require approvals
+- budgets/timeouts apply (including a maximum tool-call count)
+- outputs should be validated when a schema is provided
 
-This keeps workflows predictable while still allowing narrow LLM assistance.
-
+This supports advanced workflows while keeping safety enforceable outside prompts.

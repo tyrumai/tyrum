@@ -16,6 +16,7 @@ vi.mock("node:child_process", async () => {
 });
 
 import {
+  assertSplitRoleUsesPostgres,
   parseCliArgs,
   resolveGatewayUpdateTarget,
   runCli,
@@ -31,7 +32,12 @@ function mockChildExit(exitCode: number): EventEmitter {
 
 describe("gateway CLI argument parsing", () => {
   it("defaults to start when no args are provided", () => {
-    expect(parseCliArgs([])).toEqual({ kind: "start" });
+    const prev = process.env["TYRUM_ROLE"];
+    delete process.env["TYRUM_ROLE"];
+    expect(parseCliArgs([])).toEqual({ kind: "start", role: "all" });
+    if (typeof prev === "string") {
+      process.env["TYRUM_ROLE"] = prev;
+    }
   });
 
   it("parses update channel flag", () => {
@@ -52,6 +58,12 @@ describe("gateway CLI argument parsing", () => {
 
   it("rejects unknown commands", () => {
     expect(() => parseCliArgs(["nope"])).toThrow("unknown command");
+  });
+
+  it("parses role subcommands", () => {
+    expect(parseCliArgs(["edge"])).toEqual({ kind: "start", role: "edge" });
+    expect(parseCliArgs(["worker"])).toEqual({ kind: "start", role: "worker" });
+    expect(parseCliArgs(["scheduler"])).toEqual({ kind: "start", role: "scheduler" });
   });
 });
 
@@ -98,5 +110,23 @@ describe("gateway CLI runCli", () => {
 
     logSpy.mockRestore();
     errSpy.mockRestore();
+  });
+});
+
+describe("gateway split role DB guard", () => {
+  it("allows SQLite when running as single-process 'all'", () => {
+    expect(() => assertSplitRoleUsesPostgres("all", "gateway.db")).not.toThrow();
+  });
+
+  it("rejects SQLite when running as a split role", () => {
+    expect(() => assertSplitRoleUsesPostgres("edge", "gateway.db")).toThrow(
+      /requires Postgres/i,
+    );
+  });
+
+  it("allows Postgres when running as a split role", () => {
+    expect(() =>
+      assertSplitRoleUsesPostgres("worker", "postgres://user:pass@localhost:5432/db"),
+    ).not.toThrow();
   });
 });

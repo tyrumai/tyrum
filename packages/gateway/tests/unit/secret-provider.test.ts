@@ -2,7 +2,11 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdtempSync, rmSync, existsSync } from "node:fs";
-import { EnvSecretProvider, FileSecretProvider } from "../../src/modules/secret/provider.js";
+import {
+  EnvSecretProvider,
+  FileSecretProvider,
+  KeychainSecretProvider,
+} from "../../src/modules/secret/provider.js";
 
 describe("EnvSecretProvider", () => {
   let provider: EnvSecretProvider;
@@ -155,5 +159,64 @@ describe("FileSecretProvider", () => {
 
     const provider2 = await FileSecretProvider.create(secretsPath, "token-beta");
     await expect(() => provider2.resolve(handle)).rejects.toThrow();
+  });
+});
+
+describe("KeychainSecretProvider", () => {
+  let tempDir: string;
+  let secretsPath: string;
+
+  const safeStorage = {
+    isEncryptionAvailable: () => true,
+    encryptString: (value: string) => Buffer.from(`enc:${value}`, "utf8"),
+    decryptString: (buf: Buffer) => {
+      const raw = buf.toString("utf8");
+      if (!raw.startsWith("enc:")) {
+        throw new Error("invalid ciphertext");
+      }
+      return raw.slice("enc:".length);
+    },
+  };
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "tyrum-keychain-secret-test-"));
+    secretsPath = join(tempDir, ".secrets.keychain.json");
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("stores and resolves secrets via safeStorage-backed encryption", async () => {
+    const provider = await KeychainSecretProvider.create(secretsPath, safeStorage);
+    const handle = await provider.store("API_KEY", "super-secret");
+    expect(handle.provider).toBe("keychain");
+    expect(handle.scope).toBe("API_KEY");
+    expect(await provider.resolve(handle)).toBe("super-secret");
+  });
+
+  it("persists handles to disk and survives restart", async () => {
+    const provider1 = await KeychainSecretProvider.create(secretsPath, safeStorage);
+    const handle = await provider1.store("DB_PASS", "p@ss");
+
+    const provider2 = await KeychainSecretProvider.create(secretsPath, safeStorage);
+    expect((await provider2.list()).map((h) => h.handle_id)).toContain(handle.handle_id);
+    expect(await provider2.resolve(handle)).toBe("p@ss");
+  });
+
+  it("revoke removes handle", async () => {
+    const provider = await KeychainSecretProvider.create(secretsPath, safeStorage);
+    const handle = await provider.store("X", "y");
+    expect(await provider.revoke(handle.handle_id)).toBe(true);
+    expect(await provider.resolve(handle)).toBeNull();
+    expect(await provider.list()).toHaveLength(0);
+  });
+
+  it("throws when encryption is unavailable", async () => {
+    const providerPromise = KeychainSecretProvider.create(secretsPath, {
+      ...safeStorage,
+      isEncryptionAvailable: () => false,
+    });
+    await expect(providerPromise).rejects.toThrow(/encryption/i);
   });
 });

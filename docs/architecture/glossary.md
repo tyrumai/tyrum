@@ -1,7 +1,5 @@
 # Glossary
 
-Status:
-
 ## Agent
 
 A configured runtime identity that owns sessions, a workspace, enabled tools/skills, and memory.
@@ -119,7 +117,7 @@ Audit evidence produced by a run (for example screenshots, diffs, receipts, logs
 
 ## Postcondition
 
-A machine-checkable assertion that proves a step’s intended effect occurred (or that it did not). Postconditions are required for state-changing steps whenever a check is feasible.
+A machine-checkable assertion that proves a step’s expected effect occurred (or that it did not). Postconditions are required for state-changing steps whenever a check is feasible.
 
 ## Secret provider
 

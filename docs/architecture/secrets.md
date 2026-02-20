@@ -1,12 +1,10 @@
 # Secrets
 
-Status:
-
 Secrets are a first-class architecture concept in Tyrum. The system is designed so that **the model never receives raw secret values** (passwords, API keys, tokens, card numbers).
 
 Instead, secrets are managed by a **secret provider** and referenced via **secret handles**.
 
-## Goals
+## Requirements
 
 - Keep raw secrets out of model context and out of logs by default.
 - Make secret access explicit, scoped, auditable, and revocable.
@@ -27,11 +25,26 @@ An opaque reference to a stored secret. Handles are the only representation of s
 - persisted state
 - audit logs
 
+## Provider selection
+
+Deployments use different default providers:
+
+- **Desktop:** OS keychain provider.
+- **Kubernetes:** environment-backed provider (Kubernetes Secret → env).
+- **Single host (non-keychain):** encrypted file-backed provider (volume-mounted).
+
 ## Access model
 
 - Tools and capability providers that need credentials receive a **secret handle**, not a secret value.
 - The gateway (or a trusted executor) resolves the handle at the **last responsible moment** and injects the secret into the execution context.
 - Resolution must be **policy-gated** and **audited** (who requested, why, which scope).
+
+## Rotation and revocation
+
+Secret handles support rotation:
+
+- rotate creates a new secret version and updates the handle mapping
+- revoke invalidates access and forces failures in dependent steps until updated
 
 ## Cluster notes
 
@@ -48,6 +61,12 @@ That implies one of the following patterns:
 - Tool outputs and error messages must be redacted before being persisted or shown to clients.
 - Debug/verbose modes must still redact secrets.
 
+Redaction is enforced at persistence and egress boundaries:
+
+- before DB writes and outbox/event payloads
+- before artifact persistence
+- before rendering outputs in operator clients
+
 ## Typical secret types
 
 - Channel connector tokens (Telegram bot token, webhook secrets)
@@ -59,4 +78,3 @@ That implies one of the following patterns:
 
 - Workflows may reference secret handles as parameters.
 - Any step that requires resolving a secret handle should be eligible for approval gating depending on risk and configured policy.
-

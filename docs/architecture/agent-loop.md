@@ -1,10 +1,8 @@
 # Agent Loop
 
-Status:
-
 An agent loop is the end-to-end path from an inbound message to a final reply and/or actions. The gateway is responsible for keeping loop execution consistent and auditable.
 
-## Loop stages (target)
+## Loop stages
 
 ```mermaid
 flowchart TB
@@ -16,12 +14,12 @@ flowchart TB
   OUT --> PERSIST["Persist state<br/>(transcripts, events, memory)"]
 ```
 
-## Serialization guarantee (target)
+## Serialization guarantee
 
 - Runs are serialized per session key (and lane) to prevent tool and transcript races.
 - This keeps session history consistent and makes replay/audit more reliable.
 
-## Entry points (conceptual)
+## Entry points
 
 - Gateway RPC: `agent` and `agent.wait` (or equivalent HTTP endpoints)
 - Channel ingress: a message mapped into a session enqueue

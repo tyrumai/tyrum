@@ -1,10 +1,8 @@
 # Gateway
 
-Status:
-
 The gateway is Tyrum's long-lived service component. It is the system's authority for connectivity, policy enforcement, validation, routing, orchestration, and durable state coordination.
 
-Deployments range from a single host (replica count = 1) to multi-instance clusters (replicated gateway edges and workers). The goal is consistent behavior across topologies: the gateway coordinates execution and event delivery via the StateStore and event backplane regardless of deployment size. See [Scaling and High Availability](../scaling-ha.md).
+Deployments range from a single host (replica count = 1) to multi-instance clusters (replicated gateway edges and workers). The gateway coordinates execution and event delivery via the StateStore and event backplane across deployment sizes. See [Scaling and High Availability](../scaling-ha.md).
 
 ## Responsibilities
 
@@ -25,7 +23,7 @@ Deployments range from a single host (replica count = 1) to multi-instance clust
 - The gateway should not perform device-specific automation directly. Device and UI automation live behind node capabilities.
 - The gateway should not require a specific client UI; multiple clients can exist concurrently.
 
-## Internal topology (conceptual)
+## Internal topology
 
 ```mermaid
 flowchart TB

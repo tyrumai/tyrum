@@ -9,10 +9,10 @@ const PLAN_ID = "3a1c9f77-2f6b-4f2f-a1a3-bc9471d8e852";
 describe("gateway-hosted web API + UI", () => {
   let app: Hono;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     resetLocalStoreForTesting();
     resetConsentStore();
-    app = createTestApp().app;
+    app = (await createTestApp()).app;
   });
 
   it("serves /app dashboard and does not expose /portal redirects", async () => {

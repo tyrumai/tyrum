@@ -1,0 +1,68 @@
+mode: single
+
+image:
+  repository: tyrum/gateway
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080
+
+gatewayToken:
+  # If set, use this secret (key: token). Otherwise create one from value.
+  existingSecret: ""
+  value: ""
+
+env:
+  TYRUM_HOME: /var/lib/tyrum
+  GATEWAY_HOST: 0.0.0.0
+  GATEWAY_PORT: "8080"
+  GATEWAY_DB_PATH: /var/lib/tyrum/gateway.db
+  # Enterprise default per ADR-0007. Values: env|file|keychain
+  TYRUM_SECRET_PROVIDER: env
+  # Artifacts: default fs; set to s3 with the S3 env vars below.
+  TYRUM_ARTIFACT_STORE: fs
+  TYRUM_ARTIFACTS_DIR: /var/lib/tyrum/artifacts
+  TYRUM_ARTIFACTS_S3_ENDPOINT: ""
+  TYRUM_ARTIFACTS_S3_BUCKET: tyrum-artifacts
+  TYRUM_ARTIFACTS_S3_REGION: us-east-1
+  TYRUM_ARTIFACTS_S3_FORCE_PATH_STYLE: "1"
+  TYRUM_ARTIFACTS_S3_ACCESS_KEY_ID: ""
+  TYRUM_ARTIFACTS_S3_SECRET_ACCESS_KEY: ""
+
+otel:
+  enabled: false
+  otlpEndpoint: ""
+
+persistence:
+  enabled: true
+  existingClaim: ""
+  storageClassName: ""
+  accessModes: ["ReadWriteOnce"]
+  size: 1Gi
+
+resources: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  runAsNonRoot: true
+
+split:
+  edge:
+    replicaCount: 1
+  worker:
+    replicaCount: 1
+  scheduler:
+    replicaCount: 1

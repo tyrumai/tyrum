@@ -14,7 +14,7 @@ export function createApprovalRoutes(approvalDal: ApprovalDal): Hono {
   const app = new Hono();
 
   /** List approvals. Defaults to pending; use ?status= to filter. */
-  app.get("/approvals", (c) => {
+  app.get("/approvals", async (c) => {
     const status = c.req.query("status") as ApprovalStatus | undefined;
 
     if (status && !VALID_STATUSES.has(status)) {
@@ -27,12 +27,12 @@ export function createApprovalRoutes(approvalDal: ApprovalDal): Hono {
       );
     }
 
-    const approvals = approvalDal.getByStatus(status ?? "pending");
+    const approvals = await approvalDal.getByStatus(status ?? "pending");
     return c.json({ approvals });
   });
 
   /** Get a single approval by id. */
-  app.get("/approvals/:id", (c) => {
+  app.get("/approvals/:id", async (c) => {
     const id = parseInt(c.req.param("id"), 10);
     if (isNaN(id)) {
       return c.json(
@@ -41,7 +41,7 @@ export function createApprovalRoutes(approvalDal: ApprovalDal): Hono {
       );
     }
 
-    const approval = approvalDal.getById(id);
+    const approval = await approvalDal.getById(id);
     if (!approval) {
       return c.json(
         { error: "not_found", message: `approval ${String(id)} not found` },
@@ -85,7 +85,7 @@ export function createApprovalRoutes(approvalDal: ApprovalDal): Hono {
       );
     }
 
-    const updated = approvalDal.respond(id, isApproved, body.reason);
+    const updated = await approvalDal.respond(id, isApproved, body.reason);
     if (!updated) {
       return c.json(
         {
@@ -100,7 +100,7 @@ export function createApprovalRoutes(approvalDal: ApprovalDal): Hono {
   });
 
   /** Preview the context of a pending approval. */
-  app.get("/approvals/:id/preview", (c) => {
+  app.get("/approvals/:id/preview", async (c) => {
     const id = parseInt(c.req.param("id"), 10);
     if (isNaN(id)) {
       return c.json(
@@ -109,7 +109,7 @@ export function createApprovalRoutes(approvalDal: ApprovalDal): Hono {
       );
     }
 
-    const approval = approvalDal.getById(id);
+    const approval = await approvalDal.getById(id);
     if (!approval) {
       return c.json(
         { error: "not_found", message: `approval ${String(id)} not found` },

@@ -4,7 +4,6 @@
 
 import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
-import type Database from "better-sqlite3";
 import type { EventLog } from "../modules/planner/event-log.js";
 import {
   verifyChain,
@@ -12,9 +11,10 @@ import {
   computeEventHash,
 } from "../modules/audit/hash-chain.js";
 import type { ChainableEvent } from "../modules/audit/hash-chain.js";
+import type { SqlDb } from "../statestore/types.js";
 
 export interface AuditRouteDeps {
-  db: Database.Database;
+  db: SqlDb;
   eventLog: EventLog;
 }
 
@@ -22,9 +22,9 @@ export function createAuditRoutes(deps: AuditRouteDeps): Hono {
   const audit = new Hono();
 
   /** Export a receipt bundle for a plan. */
-  audit.get("/audit/export/:planId", (c) => {
+  audit.get("/audit/export/:planId", async (c) => {
     const planId = c.req.param("planId");
-    const events = deps.eventLog.getEventsForVerification(planId);
+    const events = await deps.eventLog.getEventsForVerification(planId);
 
     if (events.length === 0) {
       return c.json(
@@ -74,20 +74,20 @@ export function createAuditRoutes(deps: AuditRouteDeps): Hono {
     const { entity_type, entity_id } = body;
 
     // We treat entity_id as a plan_id for planner_events
-    const result = forgetEvents(deps, entity_type, entity_id);
+    const result = await forgetEvents(deps, entity_type, entity_id);
     return c.json(result);
   });
 
   return audit;
 }
 
-function forgetEvents(
+async function forgetEvents(
   deps: AuditRouteDeps,
   entityType: string,
   entityId: string,
-): { deleted_count: number; deletion_event_id: number } {
+): Promise<{ deleted_count: number; deletion_event_id: number }> {
   // Find events to delete
-  const events = deps.eventLog.getEventsForVerification(entityId);
+  const events = await deps.eventLog.getEventsForVerification(entityId);
 
   if (events.length === 0) {
     return { deleted_count: 0, deletion_event_id: 0 };
@@ -101,9 +101,9 @@ function forgetEvents(
   const maxStepIndex = Math.max(...events.map((e) => e.step_index));
 
   // Delete the events from the table
-  const deletedCount = deps.db
-    .prepare("DELETE FROM planner_events WHERE plan_id = ?")
-    .run(entityId).changes;
+  const deletedCount = (
+    await deps.db.run("DELETE FROM planner_events WHERE plan_id = ?", [entityId])
+  ).changes;
 
   // Insert a deletion event that links to the chain
   const deletionAction = JSON.stringify({
@@ -127,12 +127,11 @@ function forgetEvents(
     prevHash,
   );
 
-  const result = deps.db
-    .prepare(
-      `INSERT INTO planner_events (replay_id, plan_id, step_index, occurred_at, action, prev_hash, event_hash)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
+  const result = await deps.db.get<{ id: number }>(
+    `INSERT INTO planner_events (replay_id, plan_id, step_index, occurred_at, action, prev_hash, event_hash)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     RETURNING id`,
+    [
       `deletion-${randomUUID()}`,
       entityId,
       deletionStepIndex,
@@ -140,10 +139,14 @@ function forgetEvents(
       deletionAction,
       prevHash,
       eventHash,
-    );
+    ],
+  );
+  if (!result) {
+    throw new Error("failed to insert deletion event");
+  }
 
   return {
     deleted_count: deletedCount,
-    deletion_event_id: Number(result.lastInsertRowid),
+    deletion_event_id: result.id,
   };
 }

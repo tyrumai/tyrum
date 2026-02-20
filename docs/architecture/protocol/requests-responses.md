@@ -1,29 +1,22 @@
 # Requests and Responses
 
-Status:
-
 Requests are typed operations initiated by either peer (gateway, client, or node). Responses are typed replies correlated by `request_id`.
 
 The canonical wire shapes live in `@tyrum/schemas` (`packages/schemas/src/protocol.ts`).
 
-## Request envelope (conceptual)
+## Request envelope
 
 - `request_id`: unique id for correlation and safe retries.
-- `type`: the operation name (for example `connect`, `task.execute`, `workflow.run`).
+- `type`: the operation name (for example `connect.init`, `task.execute`, `workflow.run`).
 - `payload`: typed input fields defined by a contract.
 - `trace`: optional metadata for observability (span ids, origin, timing).
 
-## Current request types (implemented)
+## Request types
 
-These are the operations currently implemented in the TypeScript gateway + client:
+The gateway, clients, and nodes support these request types:
 
-- `connect` — client→gateway handshake. Payload includes `capabilities` (and optionally `client_id`).
-- `ping` — gateway→client heartbeat request (client replies with a response `ok: true`).
-- `task.execute` — gateway→capable peer request to execute an `ActionPrimitive`. Payload includes `plan_id`, `step_index`, and `action`.
-- `approval.request` — gateway→client request for an approval decision. Payload includes `approval_id`, `plan_id`, `step_index`, `prompt`, `context`, and optional `expires_at`.
-
-## Common request types (target / conceptual)
-
+- `connect.init` / `connect.proof` — handshake and device proof (see [Handshake](./handshake.md)).
+- `ping` — gateway heartbeat request (peer replies with `ok: true`).
 - `session.send` — send a message into a session (chat input).
 - `workflow.run` — start a deterministic workflow run (playbook file or inline pipeline).
 - `workflow.resume` — resume a paused workflow run using a resume token (after an approval decision).
@@ -31,8 +24,9 @@ These are the operations currently implemented in the TypeScript gateway + clien
 - `approval.list` — list pending approvals.
 - `approval.resolve` — approve/deny an approval request (may resume/cancel a run).
 - `pairing.approve` / `pairing.deny` — resolve a node pairing request.
+- `task.execute` — request a capability/tool execution for a specific attempt. Payload includes `run_id`, `step_id`, `attempt_id`, and the `ActionPrimitive`.
 
-## Response envelope (conceptual)
+## Response envelope
 
 - `request_id`: echoes the request id.
 - `type`: echoes the operation name (useful for debugging and routing).

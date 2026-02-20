@@ -7,6 +7,8 @@ import {
   SecretRevokeRequest,
   SecretRevokeResponse,
   SecretStoreRequest,
+  SecretRotateRequest,
+  SecretRotateResponse,
 } from "../src/index.js";
 
 describe("Secret contracts", () => {
@@ -22,11 +24,28 @@ describe("Secret contracts", () => {
 
   it("parses store request", () => {
     const req = SecretStoreRequest.parse({
-      scope: "MY_API_KEY",
+      scope: "  MY_API_KEY  ",
       value: "secret",
       provider: "env",
     });
     expect(req.scope).toBe("MY_API_KEY");
+  });
+
+  it("parses rotate request/response", () => {
+    const req = SecretRotateRequest.parse({ value: "  new-secret  " });
+    expect(req.value).toBe("new-secret");
+
+    const res = SecretRotateResponse.parse({
+      revoked: true,
+      handle: {
+        handle_id: "h-2",
+        provider: "file",
+        scope: "DB_PASSWORD",
+        created_at: "2026-02-19T12:00:00Z",
+      },
+    });
+    expect(res.revoked).toBe(true);
+    expect(res.handle.handle_id).toBe("h-2");
   });
 
   it("parses resolve request/response", () => {

@@ -6,10 +6,10 @@
  * matching watchers via the event bus.
  */
 
-import type Database from "better-sqlite3";
 import type { Emitter } from "mitt";
 import type { GatewayEvents } from "../../event-bus.js";
 import type { MemoryDal } from "../memory/dal.js";
+import type { SqlDb } from "../../statestore/types.js";
 
 const DEFAULT_TICK_MS = 60_000;
 
@@ -19,6 +19,7 @@ interface RawPeriodicWatcherRow {
   trigger_type: string;
   trigger_config: string;
   active: number;
+  last_fired_at_ms?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -28,34 +29,42 @@ export interface PeriodicTriggerConfig {
 }
 
 export interface WatcherSchedulerOptions {
-  db: Database.Database;
+  db: SqlDb;
   memoryDal: MemoryDal;
   eventBus: Emitter<GatewayEvents>;
   tickMs?: number;
+  /**
+   * When true, the scheduler interval will keep the Node.js process alive.
+   * Defaults to false so background scheduling doesn't block graceful shutdown.
+   */
+  keepProcessAlive?: boolean;
 }
 
 export class WatcherScheduler {
-  private readonly db: Database.Database;
+  private readonly db: SqlDb;
   private readonly memoryDal: MemoryDal;
   private readonly eventBus: Emitter<GatewayEvents>;
   private readonly tickMs: number;
+  private readonly keepProcessAlive: boolean;
   private timer: ReturnType<typeof setInterval> | undefined;
-  private readonly lastFired = new Map<number, number>();
 
   constructor(opts: WatcherSchedulerOptions) {
     this.db = opts.db;
     this.memoryDal = opts.memoryDal;
     this.eventBus = opts.eventBus;
     this.tickMs = opts.tickMs ?? DEFAULT_TICK_MS;
+    this.keepProcessAlive = opts.keepProcessAlive ?? false;
   }
 
   start(): void {
     if (this.timer) return;
     this.timer = setInterval(() => {
-      this.tick();
+      void this.tick();
     }, this.tickMs);
-    // Don't prevent process exit
-    this.timer.unref();
+    if (!this.keepProcessAlive) {
+      // Don't prevent process exit (useful in embedded / test scenarios).
+      this.timer.unref();
+    }
   }
 
   stop(): void {
@@ -66,9 +75,10 @@ export class WatcherScheduler {
   }
 
   /** Exposed for testing -- runs one scheduler cycle. */
-  tick(): void {
-    const watchers = this.getActivePeriodicWatchers();
+  async tick(): Promise<void> {
+    const watchers = await this.getActivePeriodicWatchers();
     const now = Date.now();
+    const nowIso = new Date(now).toISOString();
 
     for (const watcher of watchers) {
       let config: PeriodicTriggerConfig;
@@ -82,28 +92,36 @@ export class WatcherScheduler {
         continue;
       }
 
-      const lastFiredAt = this.lastFired.get(watcher.id) ?? 0;
+      const lastFiredAt = watcher.last_fired_at_ms ?? 0;
       if (now - lastFiredAt < config.intervalMs) {
         continue;
       }
 
-      this.lastFired.set(watcher.id, now);
-      this.fireWatcher(watcher, now);
+      const claimed = await this.db.run(
+        `UPDATE watchers
+         SET last_fired_at_ms = ?, updated_at = ?
+         WHERE id = ? AND trigger_type = 'periodic' AND active = 1
+           AND (last_fired_at_ms IS NULL OR ? - last_fired_at_ms >= ?)`,
+        [now, nowIso, watcher.id, now, config.intervalMs],
+      );
+      if (claimed.changes !== 1) {
+        continue;
+      }
+
+      await this.fireWatcher(watcher, now);
     }
   }
 
-  private getActivePeriodicWatchers(): RawPeriodicWatcherRow[] {
-    return this.db
-      .prepare(
-        "SELECT * FROM watchers WHERE trigger_type = 'periodic' AND active = 1",
-      )
-      .all() as RawPeriodicWatcherRow[];
+  private async getActivePeriodicWatchers(): Promise<RawPeriodicWatcherRow[]> {
+    return await this.db.all<RawPeriodicWatcherRow>(
+      "SELECT * FROM watchers WHERE trigger_type = 'periodic' AND active = 1",
+    );
   }
 
-  private fireWatcher(watcher: RawPeriodicWatcherRow, now: number): void {
+  private async fireWatcher(watcher: RawPeriodicWatcherRow, now: number): Promise<void> {
     const eventId = `scheduler-${String(watcher.id)}-${String(now)}`;
 
-    this.memoryDal.insertEpisodicEvent(
+    await this.memoryDal.insertEpisodicEvent(
       eventId,
       new Date(now).toISOString(),
       "watcher",

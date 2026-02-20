@@ -24,6 +24,25 @@ export type CronJobId = z.infer<typeof CronJobId>;
 export const NodeId = KeyPart;
 export type NodeId = z.infer<typeof NodeId>;
 
+/**
+ * Workspace identifier.
+ *
+ * We constrain this to a DNS-label compatible format so it can be used safely
+ * in Kubernetes resource names (for example PVC names) and filesystem paths.
+ */
+export const WorkspaceId = z
+  .string()
+  .trim()
+  .min(1)
+  .max(63)
+  .regex(
+    /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/,
+    "workspace id must be a DNS-label (lowercase alnum and '-')",
+  );
+export type WorkspaceId = z.infer<typeof WorkspaceId>;
+
+export const DEFAULT_WORKSPACE_ID = "default" as const;
+
 // ---------------------------------------------------------------------------
 // Key strings (canonical storage / routing form)
 // ---------------------------------------------------------------------------

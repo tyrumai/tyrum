@@ -15,6 +15,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { createServer } from "node:http";
 import type { Server } from "node:http";
 import { getRequestListener } from "@hono/node-server";
+import type { Hono } from "hono";
 import { createTestApp, minimalPlanRequest } from "./helpers.js";
 import { createWsHandler } from "../../src/routes/ws.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
@@ -32,7 +33,7 @@ function delay(ms: number): Promise<void> {
 
 /** Start a real HTTP server + WebSocket on a random port. */
 async function startServer(
-  app: ReturnType<typeof createTestApp>["app"],
+  app: Hono,
 ): Promise<{
   server: Server;
   port: number;
@@ -116,7 +117,7 @@ describe("E2E smoke test", () => {
   });
 
   it("full plan → dispatch → result → healthz flow", async () => {
-    const { app } = createTestApp();
+    const { app } = await createTestApp();
     const srv = await startServer(app);
     httpServer = srv.server;
     stopHeartbeat = srv.stopHeartbeat;

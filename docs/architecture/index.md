@@ -1,8 +1,6 @@
 # Architecture
 
-Status:
-
-This section describes Tyrum's intended architecture. Some details may differ from the current implementation.
+Tyrum is a WebSocket-first autonomous worker agent platform built around a long-lived gateway that coordinates durable execution, approvals, and audit evidence.
 
 ## High-level topology
 
@@ -15,6 +13,7 @@ flowchart LR
   subgraph Runtime["Tyrum runtime"]
     G["Gateway<br/>(long-lived service)"]
     DB[("State + logs<br/>StateStore (SQLite/Postgres)")]
+    AS[("Artifact store<br/>(FS/S3-compatible)")]
     EV["Event backplane"]
     ENG["Execution engine"]
     APPR["Approvals"]
@@ -35,6 +34,7 @@ flowchart LR
   C <--> |"WebSocket<br/>requests/responses + events"| G
   N <--> |"WebSocket<br/>capability RPC + events"| G
   G <--> DB
+  ENG <--> AS
   G --> EV
   EV --> C
   G --> ENG
@@ -53,10 +53,12 @@ flowchart LR
 - **Event backplane:** cross-component event delivery (in-process for replica count = 1; shared for clusters). See [Scaling and high availability](./scaling-ha.md) and [Events](./protocol/events.md).
 - **Execution engine:** the durable orchestration runtime (retries, idempotency, pause/resume, evidence). See [Execution engine](./execution-engine.md).
 - **Workers:** step executors that claim work (leases), perform side effects, and publish results/events. See [Execution engine](./execution-engine.md).
+- **ToolRunner:** a workspace-mounted execution context that runs filesystem/CLI tools. In single-host deployments it can be a local subprocess; in clusters it is typically a sandboxed job/pod. See [Scaling and high availability](./scaling-ha.md).
 - **Scheduler:** cron/watchers/heartbeat enqueuers coordinated by DB-leases. See [Automation](./automation.md).
 - **Playbooks:** deterministic workflow specs executed by the runtime (approval gates + resume tokens).
 - **Approvals:** durable operator confirmation requests that gate risky actions and pause/resume workflows.
 - **Secrets:** a first-class boundary; raw secrets stay behind a secret provider and are referenced via handles.
+- **Artifacts:** evidence objects stored outside the StateStore with policy-gated access. See [Artifacts](./artifacts.md).
 - **Client:** an operator interface connected to the gateway (desktop/mobile/CLI/web).
 - **Node:** a capability provider connected to the gateway (desktop/mobile/headless).
 - **Protocol:** typed WebSocket messages (requests/responses and server-push events).
@@ -81,8 +83,11 @@ flowchart LR
 - [Playbooks](./playbooks.md)
 - [Approvals](./approvals.md)
 - [Secrets](./secrets.md)
+- [Artifacts](./artifacts.md)
+- [Sandbox and policy](./sandbox-policy.md)
 - [Client](./client.md)
 - [Node](./node.md)
 - [Protocol](./protocol/index.md)
-- [Architecture gaps / open questions](./gaps.md)
+- [Workspace](./workspace.md)
+- [Sessions and lanes](./sessions-lanes.md)
 - [Glossary](./glossary.md)

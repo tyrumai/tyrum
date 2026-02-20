@@ -79,7 +79,6 @@ describe("Playbook routes", () => {
       expect(body.steps).toHaveLength(3);
       expect(body.steps[0]!.type).toBe("Research");
       expect(body.steps[1]!.type).toBe("Message");
-      expect(body.steps[1]!.postcondition).toBe("message was delivered");
       expect(body.steps[2]!.type).toBe("Store");
       expect(body.created_at).toBeDefined();
     });

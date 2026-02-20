@@ -1,7 +1,5 @@
 # Channels
 
-Status:
-
 Channels are message transports that connect Tyrum to external chat surfaces. A channel connector normalizes inbound messages into session events and sends outbound messages when the agent replies.
 
 ## Channel types (examples)

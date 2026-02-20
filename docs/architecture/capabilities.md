@@ -1,10 +1,8 @@
 # Capabilities
 
-Status:
-
 A capability is a named interface a node can provide. Capabilities are the bridge between "what the agent wants to do" and "what a device can safely execute".
 
-## Capability shape (conceptual)
+## Capability shape
 
 - **Namespace:** dot-separated, stable names (for example `camera.capture`, `system.shell.exec`).
 - **Operations:** request/response contracts per operation.

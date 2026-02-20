@@ -311,7 +311,7 @@ describe("handleClientMessage", () => {
 // ---------------------------------------------------------------------------
 
 describe("dispatchTask", () => {
-  it("sends task.execute request to a capable client", () => {
+  it("sends task.execute request to a capable client", async () => {
     const cm = new ConnectionManager();
     const { ws } = makeClient(cm, ["playwright"]);
     const deps = makeDeps(cm);
@@ -321,7 +321,7 @@ describe("dispatchTask", () => {
       args: { url: "https://example.com" },
     };
 
-    const taskId = dispatchTask(action, "plan-1", 0, deps);
+    const taskId = await dispatchTask(action, "plan-1", 0, deps);
     expect(taskId).toMatch(/^task-[0-9a-f-]{36}$/);
 
     expect(ws.send).toHaveBeenCalledOnce();

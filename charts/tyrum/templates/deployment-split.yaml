@@ -1,0 +1,196 @@
+{{- if ne .Values.mode "single" }}
+{{- if not (regexMatch "(?i)^postgres(ql)?://" (trim (default "" .Values.env.GATEWAY_DB_PATH))) }}
+{{- fail "Split mode requires a PostgreSQL database. Please configure env.GATEWAY_DB_PATH with a postgres:// or postgresql:// URI." }}
+{{- end }}
+{{- if not .Values.persistence.enabled }}
+{{- fail "Split mode requires persistence.enabled=true for durable agent workspaces (mounted only by ToolRunner jobs)." }}
+{{- end }}
+{{- $workspaceClaim := default (printf "%s-data" (include "tyrum.fullname" .)) .Values.persistence.existingClaim }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "tyrum.fullname" . }}-edge
+  labels:
+    {{- include "tyrum.labels" . | nindent 4 }}
+    app.kubernetes.io/component: edge
+spec:
+  replicas: {{ .Values.split.edge.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/name: {{ include "tyrum.name" . }}
+      app.kubernetes.io/component: edge
+  template:
+    metadata:
+      labels:
+        {{- include "tyrum.labels" . | nindent 8 }}
+        app.kubernetes.io/component: edge
+    spec:
+      serviceAccountName: {{ include "tyrum.fullname" . }}
+      {{- if .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: gateway
+          {{- if .Values.containerSecurityContext }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          {{- end }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["edge"]
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+          env:
+            {{- range $k, $v := .Values.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+            - name: GATEWAY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (printf "%s-gateway-token" (include "tyrum.fullname" .)) .Values.gatewayToken.existingSecret }}
+                  key: token
+            {{- if .Values.otel.enabled }}
+            - name: TYRUM_OTEL_ENABLED
+              value: "1"
+            {{- if .Values.otel.otlpEndpoint }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.otel.otlpEndpoint | quote }}
+            {{- end }}
+            {{- end }}
+          {{- if .Values.resources }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- end }}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "tyrum.fullname" . }}-worker
+  labels:
+    {{- include "tyrum.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.split.worker.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/name: {{ include "tyrum.name" . }}
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        {{- include "tyrum.labels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+    spec:
+      serviceAccountName: {{ include "tyrum.fullname" . }}
+      {{- if .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: gateway
+          {{- if .Values.containerSecurityContext }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          {{- end }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["worker"]
+          env:
+            {{- range $k, $v := .Values.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+            - name: GATEWAY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (printf "%s-gateway-token" (include "tyrum.fullname" .)) .Values.gatewayToken.existingSecret }}
+                  key: token
+            {{- if .Values.otel.enabled }}
+            - name: TYRUM_OTEL_ENABLED
+              value: "1"
+            {{- if .Values.otel.otlpEndpoint }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.otel.otlpEndpoint | quote }}
+            {{- end }}
+            {{- end }}
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: TYRUM_TOOLRUNNER_LAUNCHER
+              value: "kubernetes"
+            - name: TYRUM_TOOLRUNNER_NAMESPACE
+              value: {{ .Release.Namespace | quote }}
+            - name: TYRUM_TOOLRUNNER_IMAGE
+              value: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+            - name: TYRUM_TOOLRUNNER_WORKSPACE_CLAIM
+              value: {{ $workspaceClaim | quote }}
+          {{- if .Values.resources }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- end }}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "tyrum.fullname" . }}-scheduler
+  labels:
+    {{- include "tyrum.labels" . | nindent 4 }}
+    app.kubernetes.io/component: scheduler
+spec:
+  replicas: {{ .Values.split.scheduler.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/name: {{ include "tyrum.name" . }}
+      app.kubernetes.io/component: scheduler
+  template:
+    metadata:
+      labels:
+        {{- include "tyrum.labels" . | nindent 8 }}
+        app.kubernetes.io/component: scheduler
+    spec:
+      serviceAccountName: {{ include "tyrum.fullname" . }}
+      {{- if .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: gateway
+          {{- if .Values.containerSecurityContext }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          {{- end }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["scheduler"]
+          env:
+            {{- range $k, $v := .Values.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+            - name: GATEWAY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (printf "%s-gateway-token" (include "tyrum.fullname" .)) .Values.gatewayToken.existingSecret }}
+                  key: token
+            {{- if .Values.otel.enabled }}
+            - name: TYRUM_OTEL_ENABLED
+              value: "1"
+            {{- if .Values.otel.otlpEndpoint }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.otel.otlpEndpoint | quote }}
+            {{- end }}
+            {{- end }}
+          {{- if .Values.resources }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- end }}
+{{- end }}

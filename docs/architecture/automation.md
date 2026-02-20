@@ -1,10 +1,8 @@
 # Automation
 
-Status:
-
 Automation lets Tyrum act on schedules and triggers while keeping behavior observable and policy-gated.
 
-## Primitives (target)
+## Primitives
 
 - **Hooks:** small scripts that run on gateway lifecycle events (for example session start/stop, reset, command events).
 - **Webhooks:** an HTTP endpoint for external triggers (scoped and authenticated).
@@ -24,7 +22,7 @@ Automation lets Tyrum act on schedules and triggers while keeping behavior obser
 
 ## Scheduler safety (DB-leases)
 
-To keep semantics identical between single-host and clustered deployments, automation triggers use DB-leases stored in the StateStore (with one instance this is typically uncontested):
+Automation triggers use DB-leases stored in the StateStore:
 
 - **Lease acquisition:** one scheduler instance owns a time-bounded lease for a trigger/schedule shard.
 - **Renewal + takeover:** leases are renewed periodically; on expiry, another instance can take over.

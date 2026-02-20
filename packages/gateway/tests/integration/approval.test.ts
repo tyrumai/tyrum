@@ -5,8 +5,8 @@ import { createTestApp } from "./helpers.js";
 describe("Approval routes", () => {
   let app: Hono;
 
-  beforeEach(() => {
-    const result = createTestApp();
+  beforeEach(async () => {
+    const result = await createTestApp();
     app = result.app;
   });
 
@@ -30,16 +30,16 @@ describe("Approval routes", () => {
 
 describe("Approval routes (with DAL access)", () => {
   let app: Hono;
-  let container: ReturnType<typeof createTestApp>["container"];
+  let container: Awaited<ReturnType<typeof createTestApp>>["container"];
 
-  beforeEach(() => {
-    const result = createTestApp();
+  beforeEach(async () => {
+    const result = await createTestApp();
     app = result.app;
     container = result.container;
   });
 
   it("creates an approval via DAL, lists it via route", async () => {
-    container.approvalDal.create({
+    await container.approvalDal.create({
       planId: "plan-1",
       stepIndex: 0,
       prompt: "Allow web scrape?",
@@ -57,7 +57,7 @@ describe("Approval routes (with DAL access)", () => {
   });
 
   it("gets a single approval by id", async () => {
-    const created = container.approvalDal.create({
+    const created = await container.approvalDal.create({
       planId: "plan-1",
       stepIndex: 0,
       prompt: "Approve?",
@@ -72,7 +72,7 @@ describe("Approval routes (with DAL access)", () => {
   });
 
   it("responds to a pending approval (approve)", async () => {
-    const created = container.approvalDal.create({
+    const created = await container.approvalDal.create({
       planId: "plan-1",
       stepIndex: 0,
       prompt: "Approve?",
@@ -93,7 +93,7 @@ describe("Approval routes (with DAL access)", () => {
   });
 
   it("responds to a pending approval (deny)", async () => {
-    const created = container.approvalDal.create({
+    const created = await container.approvalDal.create({
       planId: "plan-1",
       stepIndex: 0,
       prompt: "Approve?",
@@ -114,7 +114,7 @@ describe("Approval routes (with DAL access)", () => {
   });
 
   it("returns 404 when responding to already-responded approval", async () => {
-    const created = container.approvalDal.create({
+    const created = await container.approvalDal.create({
       planId: "plan-1",
       stepIndex: 0,
       prompt: "Approve?",
@@ -136,7 +136,7 @@ describe("Approval routes (with DAL access)", () => {
   });
 
   it("returns 400 when approved field is missing", async () => {
-    const created = container.approvalDal.create({
+    const created = await container.approvalDal.create({
       planId: "plan-1",
       stepIndex: 0,
       prompt: "Approve?",
@@ -152,7 +152,7 @@ describe("Approval routes (with DAL access)", () => {
   });
 
   it("previews an approval context", async () => {
-    const created = container.approvalDal.create({
+    const created = await container.approvalDal.create({
       planId: "plan-1",
       stepIndex: 2,
       prompt: "Approve payment?",
@@ -172,18 +172,18 @@ describe("Approval routes (with DAL access)", () => {
   });
 
   it("approved approvals are excluded from pending list", async () => {
-    const a1 = container.approvalDal.create({
+    const a1 = await container.approvalDal.create({
       planId: "plan-1",
       stepIndex: 0,
       prompt: "First?",
     });
-    container.approvalDal.create({
+    await container.approvalDal.create({
       planId: "plan-1",
       stepIndex: 1,
       prompt: "Second?",
     });
 
-    container.approvalDal.respond(a1.id, true);
+    await container.approvalDal.respond(a1.id, true);
 
     const res = await app.request("/approvals");
     expect(res.status).toBe(200);

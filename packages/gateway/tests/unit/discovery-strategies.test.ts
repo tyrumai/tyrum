@@ -32,7 +32,7 @@ function makeRow(overrides: Partial<CapabilityMemoryRow> = {}): CapabilityMemory
 
 function makeSource(rows: CapabilityMemoryRow[]): CapabilityMemorySource {
   return {
-    getCapabilityMemories() {
+    async getCapabilityMemories() {
       return rows;
     },
   };
@@ -47,9 +47,9 @@ function makeRequest(overrides: Partial<DiscoveryRequest> = {}): DiscoveryReques
 }
 
 describe("CapabilityMemoryStrategy", () => {
-  it("returns matching capability memories", () => {
+  it("returns matching capability memories", async () => {
     const source = makeSource([makeRow()]);
-    const results = resolveFromCapabilityMemory(makeRequest(), source);
+    const results = await resolveFromCapabilityMemory(makeRequest(), source);
 
     expect(results).toHaveLength(1);
     expect(results[0].strategy).toBe("structured_api");
@@ -58,7 +58,7 @@ describe("CapabilityMemoryStrategy", () => {
     expect(results[0].label).toBe("web_scrape:playwright");
   });
 
-  it("ranks by success_count weighted by recency", () => {
+  it("ranks by success_count weighted by recency", async () => {
     const recent = makeRow({
       id: 1,
       capability_identifier: "recent.com",
@@ -72,7 +72,7 @@ describe("CapabilityMemoryStrategy", () => {
       last_success_at: new Date(Date.now() - 30 * 86400000).toISOString(),
     });
     const source = makeSource([old, recent]);
-    const results = resolveFromCapabilityMemory(makeRequest(), source);
+    const results = await resolveFromCapabilityMemory(makeRequest(), source);
 
     expect(results).toHaveLength(2);
     // Old entry has high success_count but decayed recency
@@ -84,37 +84,40 @@ describe("CapabilityMemoryStrategy", () => {
     expect(results[1].connector_url).toBe("https://recent.com");
   });
 
-  it("returns empty for no matches", () => {
+  it("returns empty for no matches", async () => {
     const source = makeSource([makeRow({ capability_type: "api_call" })]);
-    const results = resolveFromCapabilityMemory(makeRequest({ query: "zzz_nonexistent" }), source);
+    const results = await resolveFromCapabilityMemory(
+      makeRequest({ query: "zzz_nonexistent" }),
+      source,
+    );
     expect(results).toHaveLength(0);
   });
 
-  it("respects max_results", () => {
+  it("respects max_results", async () => {
     const rows = Array.from({ length: 10 }, (_, i) =>
       makeRow({ id: i, capability_identifier: `site${i}.com` }),
     );
     const source = makeSource(rows);
-    const results = resolveFromCapabilityMemory(
+    const results = await resolveFromCapabilityMemory(
       makeRequest({ max_results: 3 }),
       source,
     );
     expect(results).toHaveLength(3);
   });
 
-  it("preserves URL if identifier is already a URL", () => {
+  it("preserves URL if identifier is already a URL", async () => {
     const source = makeSource([
       makeRow({ capability_identifier: "https://api.example.com/v2" }),
     ]);
-    const results = resolveFromCapabilityMemory(makeRequest(), source);
+    const results = await resolveFromCapabilityMemory(makeRequest(), source);
     expect(results[0].connector_url).toBe("https://api.example.com/v2");
   });
 
-  it("includes metadata in results", () => {
+  it("includes metadata in results", async () => {
     const source = makeSource([
       makeRow({ success_count: 7, result_summary: "Got price data" }),
     ]);
-    const results = resolveFromCapabilityMemory(makeRequest(), source);
+    const results = await resolveFromCapabilityMemory(makeRequest(), source);
     const meta = results[0].metadata as Record<string, unknown>;
     expect(meta.success_count).toBe(7);
     expect(meta.result_summary).toBe("Got price data");

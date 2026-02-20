@@ -5,7 +5,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import type Database from "better-sqlite3";
+import type { SqlDb } from "../../statestore/types.js";
 
 export interface CanvasArtifactRow {
   id: string;
@@ -24,7 +24,7 @@ interface RawCanvasArtifactRow {
   content_type: string;
   html_content: string;
   metadata_json: string;
-  created_at: string;
+  created_at: string | Date;
 }
 
 function toArtifactRow(raw: RawCanvasArtifactRow): CanvasArtifactRow {
@@ -41,7 +41,7 @@ function toArtifactRow(raw: RawCanvasArtifactRow): CanvasArtifactRow {
     content_type: raw.content_type,
     html_content: raw.html_content,
     metadata,
-    created_at: raw.created_at,
+    created_at: raw.created_at instanceof Date ? raw.created_at.toISOString() : raw.created_at,
   };
 }
 
@@ -56,10 +56,10 @@ export interface PublishArtifactParams {
 }
 
 export class CanvasDal {
-  constructor(private readonly db: Database.Database) {}
+  constructor(private readonly db: SqlDb) {}
 
   /** Store a new canvas artifact. Returns the created row. */
-  publish(params: PublishArtifactParams): CanvasArtifactRow {
+  async publish(params: PublishArtifactParams): Promise<CanvasArtifactRow> {
     if (!ALLOWED_CONTENT_TYPES.has(params.contentType)) {
       throw new Error(
         `Invalid content_type: ${params.contentType}. Allowed: text/html, text/plain`,
@@ -68,53 +68,54 @@ export class CanvasDal {
 
     const id = randomUUID();
     const metadataJson = JSON.stringify(params.metadata ?? {});
+    const nowIso = new Date().toISOString();
 
-    this.db
-      .prepare(
-        `INSERT INTO canvas_artifacts (id, plan_id, title, content_type, html_content, metadata_json)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
+    const row = await this.db.get<RawCanvasArtifactRow>(
+      `INSERT INTO canvas_artifacts (id, plan_id, title, content_type, html_content, metadata_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       RETURNING *`,
+      [
         id,
         params.planId ?? null,
         params.title,
         params.contentType,
         params.htmlContent,
         metadataJson,
-      );
-
-    const row = this.db
-      .prepare("SELECT * FROM canvas_artifacts WHERE id = ?")
-      .get(id) as RawCanvasArtifactRow;
-
+        nowIso,
+      ],
+    );
+    if (!row) {
+      throw new Error("failed to publish canvas artifact");
+    }
     return toArtifactRow(row);
   }
 
   /** Get a single artifact by id. */
-  getById(id: string): CanvasArtifactRow | undefined {
-    const row = this.db
-      .prepare("SELECT * FROM canvas_artifacts WHERE id = ?")
-      .get(id) as RawCanvasArtifactRow | undefined;
+  async getById(id: string): Promise<CanvasArtifactRow | undefined> {
+    const row = await this.db.get<RawCanvasArtifactRow>(
+      "SELECT * FROM canvas_artifacts WHERE id = ?",
+      [id],
+    );
 
     return row ? toArtifactRow(row) : undefined;
   }
 
   /** List all artifacts for a given plan, ordered by creation time. */
-  listByPlan(planId: string): CanvasArtifactRow[] {
-    const rows = this.db
-      .prepare(
-        "SELECT * FROM canvas_artifacts WHERE plan_id = ? ORDER BY created_at ASC",
-      )
-      .all(planId) as RawCanvasArtifactRow[];
+  async listByPlan(planId: string): Promise<CanvasArtifactRow[]> {
+    const rows = await this.db.all<RawCanvasArtifactRow>(
+      "SELECT * FROM canvas_artifacts WHERE plan_id = ? ORDER BY created_at ASC",
+      [planId],
+    );
 
     return rows.map(toArtifactRow);
   }
 
   /** List most recent artifacts, newest first. */
-  listRecent(limit = 50): CanvasArtifactRow[] {
-    const rows = this.db
-      .prepare("SELECT * FROM canvas_artifacts ORDER BY created_at DESC LIMIT ?")
-      .all(limit) as RawCanvasArtifactRow[];
+  async listRecent(limit = 50): Promise<CanvasArtifactRow[]> {
+    const rows = await this.db.all<RawCanvasArtifactRow>(
+      "SELECT * FROM canvas_artifacts ORDER BY created_at DESC LIMIT ?",
+      [limit],
+    );
     return rows.map(toArtifactRow);
   }
 }

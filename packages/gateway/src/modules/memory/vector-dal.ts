@@ -6,7 +6,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import type Database from "better-sqlite3";
+import type { SqlDb } from "../../statestore/types.js";
 
 export interface VectorRow {
   id: number;
@@ -25,7 +25,11 @@ interface RawVectorRow {
   label: string | null;
   metadata: string | null;
   vector_data: string | null;
-  created_at: string;
+  created_at: string | Date;
+}
+
+function normalizeTime(value: string | Date): string {
+  return value instanceof Date ? value.toISOString() : value;
 }
 
 function toVectorRow(raw: RawVectorRow): VectorRow {
@@ -50,7 +54,7 @@ function toVectorRow(raw: RawVectorRow): VectorRow {
     label: raw.label,
     metadata,
     vector,
-    created_at: raw.created_at,
+    created_at: normalizeTime(raw.created_at),
   };
 }
 
@@ -78,45 +82,42 @@ function cosineSimilarity(a: number[], b: number[]): number {
 }
 
 export class VectorDal {
-  constructor(private readonly db: Database.Database) {}
+  constructor(private readonly db: SqlDb) {}
 
   /** Insert a vector embedding. Returns the embedding_id. */
-  insertEmbedding(
+  async insertEmbedding(
     label: string,
     vector: number[],
     model: string,
     metadata?: unknown,
-  ): string {
+  ): Promise<string> {
     const embeddingId = randomUUID();
 
-    this.db
-      .prepare(
-        `INSERT INTO vector_metadata (embedding_id, embedding_model, label, metadata, vector_data)
-         VALUES (?, ?, ?, ?, ?)`,
-      )
-      .run(
+    await this.db.run(
+      `INSERT INTO vector_metadata (embedding_id, embedding_model, label, metadata, vector_data)
+       VALUES (?, ?, ?, ?, ?)`,
+      [
         embeddingId,
         model,
         label,
         metadata !== undefined ? JSON.stringify(metadata) : null,
         JSON.stringify(vector),
-      );
+      ],
+    );
 
     return embeddingId;
   }
 
   /** Search by cosine similarity. Returns top K matches sorted by similarity descending. */
-  searchByCosineSimilarity(
+  async searchByCosineSimilarity(
     queryVector: number[],
     topK: number,
-  ): VectorSearchResult[] {
-    const rows = this.db
-      .prepare(
-        `SELECT * FROM vector_metadata
-         WHERE vector_data IS NOT NULL
-         ORDER BY created_at DESC`,
-      )
-      .all() as RawVectorRow[];
+  ): Promise<VectorSearchResult[]> {
+    const rows = await this.db.all<RawVectorRow>(
+      `SELECT * FROM vector_metadata
+       WHERE vector_data IS NOT NULL
+       ORDER BY created_at DESC`,
+    );
 
     const scored: VectorSearchResult[] = [];
 
@@ -132,27 +133,28 @@ export class VectorDal {
   }
 
   /** Delete all embeddings with the given label. Returns the number of rows deleted. */
-  deleteByLabel(label: string): number {
-    const result = this.db
-      .prepare("DELETE FROM vector_metadata WHERE label = ?")
-      .run(label);
-    return result.changes;
+  async deleteByLabel(label: string): Promise<number> {
+    return (await this.db.run(
+      "DELETE FROM vector_metadata WHERE label = ?",
+      [label],
+    )).changes;
   }
 
   /** Get a single embedding by its embedding_id. */
-  getById(embeddingId: string): VectorRow | undefined {
-    const raw = this.db
-      .prepare("SELECT * FROM vector_metadata WHERE embedding_id = ?")
-      .get(embeddingId) as RawVectorRow | undefined;
+  async getById(embeddingId: string): Promise<VectorRow | undefined> {
+    const raw = await this.db.get<RawVectorRow>(
+      "SELECT * FROM vector_metadata WHERE embedding_id = ?",
+      [embeddingId],
+    );
 
     return raw ? toVectorRow(raw) : undefined;
   }
 
   /** List all embeddings, ordered by creation time descending. */
-  list(): VectorRow[] {
-    const rows = this.db
-      .prepare("SELECT * FROM vector_metadata ORDER BY created_at DESC, id DESC")
-      .all() as RawVectorRow[];
+  async list(): Promise<VectorRow[]> {
+    const rows = await this.db.all<RawVectorRow>(
+      "SELECT * FROM vector_metadata ORDER BY created_at DESC, id DESC",
+    );
     return rows.map(toVectorRow);
   }
 }

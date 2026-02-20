@@ -8,6 +8,7 @@ import {
   ExecutionRunStatus,
   ExecutionStep,
   ExecutionStepStatus,
+  AttemptCost,
 } from "../src/index.js";
 
 describe("Execution engine contracts", () => {
@@ -75,6 +76,19 @@ describe("Execution engine contracts", () => {
     });
     expect(attempt.status).toBe("succeeded");
     expect(attempt.artifacts).toHaveLength(1);
+  });
+
+  it("parses attempt cost attribution", () => {
+    const cost = AttemptCost.parse({
+      duration_ms: 1234,
+      input_tokens: 10,
+      output_tokens: 20,
+      total_tokens: 30,
+      usd_micros: 123_000,
+      model: "gpt-4.1-mini",
+      provider: "openai",
+    });
+    expect(cost.total_tokens).toBe(30);
   });
 
   it("exports stable status enums", () => {

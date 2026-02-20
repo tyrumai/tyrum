@@ -22,6 +22,9 @@ import type {
 } from "@tyrum/schemas";
 import type { ConnectedClient } from "./connection-manager.js";
 import type { ConnectionManager } from "./connection-manager.js";
+import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
+import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
+import type { Logger } from "../modules/observability/logger.js";
 
 // ---------------------------------------------------------------------------
 // Dependency injection
@@ -33,6 +36,17 @@ import type { ConnectionManager } from "./connection-manager.js";
  */
 export interface ProtocolDeps {
   connectionManager: ConnectionManager;
+  logger?: Logger;
+
+  /**
+   * Optional cluster router. When configured, the gateway can deliver WS messages
+   * to peers connected to other edge instances via the DB outbox + polling backplane.
+   */
+  cluster?: {
+    edgeId: string;
+    outboxDal: OutboxDal;
+    connectionDirectory: ConnectionDirectoryDal;
+  };
 
   /** Called when a task.execute response is received from a client. */
   onTaskResult?: (
@@ -178,7 +192,7 @@ export function dispatchTask(
   planId: string,
   stepIndex: number,
   deps: ProtocolDeps,
-): string {
+): Promise<string> {
   const capability = requiredCapability(action.type);
   if (capability === undefined) {
     throw new NoCapableClientError(action.type as ClientCapability);
@@ -186,7 +200,37 @@ export function dispatchTask(
 
   const client = deps.connectionManager.getClientForCapability(capability);
   if (!client) {
-    throw new NoCapableClientError(capability);
+    const cluster = deps.cluster;
+    if (!cluster) {
+      throw new NoCapableClientError(capability);
+    }
+
+    const nowMs = Date.now();
+    return (async (): Promise<string> => {
+      const candidates = await cluster.connectionDirectory.listConnectionsForCapability(
+      capability,
+      nowMs,
+    );
+    const target =
+      candidates.find((c) => c.edge_id !== cluster.edgeId) ?? candidates[0];
+    if (!target || target.edge_id === cluster.edgeId) {
+      throw new NoCapableClientError(capability);
+    }
+
+    const requestId = `task-${crypto.randomUUID()}`;
+    const message: WsRequestEnvelope = {
+      request_id: requestId,
+      type: "task.execute",
+      payload: { plan_id: planId, step_index: stepIndex, action },
+    };
+
+      await cluster.outboxDal.enqueue(
+        "ws.direct",
+        { connection_id: target.connection_id, message },
+        { targetEdgeId: target.edge_id },
+      );
+      return requestId;
+    })();
   }
 
   const requestId = `task-${crypto.randomUUID()}`;
@@ -196,7 +240,7 @@ export function dispatchTask(
     payload: { plan_id: planId, step_index: stepIndex, action },
   };
   client.ws.send(JSON.stringify(message));
-  return requestId;
+  return Promise.resolve(requestId);
 }
 
 /**
@@ -229,6 +273,34 @@ export function requestApproval(
   const first = iter.next();
   if (!first.done) {
     first.value.ws.send(payload);
+    if (deps.cluster) {
+      void deps.cluster.outboxDal
+        .enqueue("ws.broadcast", {
+          source_edge_id: deps.cluster.edgeId,
+          skip_local: true,
+          message,
+        })
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          deps.logger?.error("outbox.enqueue_failed", {
+            topic: "ws.broadcast",
+            error: message,
+          });
+        });
+    }
+    return;
+  }
+
+  if (deps.cluster) {
+    void deps.cluster.outboxDal
+      .enqueue("ws.broadcast", { message })
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        deps.logger?.error("outbox.enqueue_failed", {
+          topic: "ws.broadcast",
+          error: message,
+        });
+      });
   }
 }
 
@@ -255,6 +327,22 @@ export function sendPlanUpdate(
 
   for (const client of deps.connectionManager.allClients()) {
     client.ws.send(payload);
+  }
+
+  if (deps.cluster) {
+    void deps.cluster.outboxDal
+      .enqueue("ws.broadcast", {
+        source_edge_id: deps.cluster.edgeId,
+        skip_local: true,
+        message,
+      })
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        deps.logger?.error("outbox.enqueue_failed", {
+          topic: "ws.broadcast",
+          error: message,
+        });
+      });
   }
 }
 

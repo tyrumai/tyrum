@@ -72,7 +72,7 @@ export class ExecutionRunner {
     this.planTimeoutMs = opts?.planTimeoutMs ?? DEFAULT_PLAN_TIMEOUT_MS;
 
     this.eventBus.on("plan:failed", ({ planId }) => {
-      this.jobQueue.cancelAllForPlan(planId);
+      void this.jobQueue.cancelAllForPlan(planId);
     });
   }
 
@@ -107,7 +107,7 @@ export class ExecutionRunner {
         .join("; ");
       machine.apply({ kind: "policy_denied", detail });
       this.eventBus.emit("plan:failed", { planId, reason: "policy_denied" });
-      this.logEvent(planId, 0, { event: "policy_denied", detail });
+      await this.logEvent(planId, 0, { event: "policy_denied", detail });
       return;
     }
 
@@ -117,7 +117,7 @@ export class ExecutionRunner {
     for (let i = 0; i < steps.length; i++) {
       const step = steps[i]!;
       const timeoutMs = Math.min(this.maxJobTimeoutMs, DEFAULT_MAX_JOB_TIMEOUT_MS);
-      this.jobQueue.enqueue(planId, i, step, { timeoutMs });
+      await this.jobQueue.enqueue(planId, i, step, { timeoutMs });
     }
 
     // Process jobs sequentially
@@ -131,19 +131,19 @@ export class ExecutionRunner {
           stepIndex,
           detail: "plan timeout exceeded",
         });
-        this.jobQueue.cancelAllForPlan(planId);
+        await this.jobQueue.cancelAllForPlan(planId);
         this.eventBus.emit("plan:failed", { planId, reason: "plan_timeout" });
-        this.logEvent(planId, stepIndex, { event: "plan_timeout" });
+        await this.logEvent(planId, stepIndex, { event: "plan_timeout" });
         return;
       }
 
       // Check if plan is paused
       if (this.paused.has(planId)) {
-        const job = this.jobQueue.dequeue(planId);
+        const job = await this.jobQueue.dequeue(planId);
         if (job) {
-          this.jobQueue.markPaused(job.id);
+          await this.jobQueue.markPaused(job.id);
         }
-        this.logEvent(planId, stepIndex, { event: "paused" });
+        await this.logEvent(planId, stepIndex, { event: "paused" });
         return;
       }
 
@@ -152,7 +152,7 @@ export class ExecutionRunner {
         break;
       }
 
-      const job = this.jobQueue.dequeue(planId);
+      const job = await this.jobQueue.dequeue(planId);
       if (!job) {
         break;
       }
@@ -178,7 +178,7 @@ export class ExecutionRunner {
         stepsExecuted: steps.length,
       });
       if (steps.length > 0) {
-        this.logEvent(planId, steps.length - 1, {
+        await this.logEvent(planId, steps.length - 1, {
           event: "plan_completed",
           stepsExecuted: steps.length,
         });
@@ -219,25 +219,25 @@ export class ExecutionRunner {
         if (!postconditionResult.passed) {
           // Treat postcondition failure as a step failure
           const errorDetail = postconditionResult.error ?? "postcondition failed";
-          this.jobQueue.markFailed(currentJob.id, errorDetail);
-          this.logEvent(planId, stepIndex, {
+          await this.jobQueue.markFailed(currentJob.id, errorDetail);
+          await this.logEvent(planId, stepIndex, {
             event: "postcondition_failed",
             error: errorDetail,
           });
 
           // Try retry on postcondition failure
-          const canRetry = this.jobQueue.retryIfPossible(currentJob.id);
+          const canRetry = await this.jobQueue.retryIfPossible(currentJob.id);
           if (canRetry) {
-            const retryJob = this.jobQueue.getById(currentJob.id);
+            const retryJob = await this.jobQueue.getById(currentJob.id);
             if (retryJob) {
               const backoff = retryBackoffMs(retryJob.attempt);
-              this.logEvent(planId, stepIndex, {
+              await this.logEvent(planId, stepIndex, {
                 event: "retry",
                 attempt: retryJob.attempt,
                 backoffMs: backoff,
               });
               await sleep(backoff);
-              const freshJob = this.jobQueue.dequeueById(currentJob.id);
+              const freshJob = await this.jobQueue.dequeueById(currentJob.id);
               if (freshJob) {
                 currentJob = freshJob;
                 continue;
@@ -252,16 +252,16 @@ export class ExecutionRunner {
             detail: errorDetail,
           });
           this.eventBus.emit("plan:failed", { planId, reason: "postcondition_failed" });
-          this.logEvent(planId, stepIndex, {
+          await this.logEvent(planId, stepIndex, {
             event: "step_failed",
             error: errorDetail,
           });
           return false;
         }
 
-        this.jobQueue.markCompleted(currentJob.id, result.result);
+        await this.jobQueue.markCompleted(currentJob.id, result.result);
         machine.apply({ kind: "postcondition_satisfied", stepIndex });
-        this.logEvent(planId, stepIndex, {
+        await this.logEvent(planId, stepIndex, {
           event: "step_completed",
           result: result.result,
         });
@@ -270,22 +270,22 @@ export class ExecutionRunner {
 
       // Step failed
       const errorDetail = result.error ?? "unknown error";
-      this.jobQueue.markFailed(currentJob.id, errorDetail);
+      await this.jobQueue.markFailed(currentJob.id, errorDetail);
 
       // Try retry
-      const canRetry = this.jobQueue.retryIfPossible(currentJob.id);
+      const canRetry = await this.jobQueue.retryIfPossible(currentJob.id);
       if (canRetry) {
-        const retryJob = this.jobQueue.getById(currentJob.id);
+        const retryJob = await this.jobQueue.getById(currentJob.id);
         if (retryJob) {
           const backoff = retryBackoffMs(retryJob.attempt);
-          this.logEvent(planId, stepIndex, {
+          await this.logEvent(planId, stepIndex, {
             event: "retry",
             attempt: retryJob.attempt,
             backoffMs: backoff,
           });
           await sleep(backoff);
 
-          const freshJob = this.jobQueue.dequeueById(currentJob.id);
+          const freshJob = await this.jobQueue.dequeueById(currentJob.id);
           if (freshJob) {
             currentJob = freshJob;
             continue;
@@ -300,7 +300,7 @@ export class ExecutionRunner {
         detail: errorDetail,
       });
       this.eventBus.emit("plan:failed", { planId, reason: "executor_failed" });
-      this.logEvent(planId, stepIndex, {
+      await this.logEvent(planId, stepIndex, {
         event: "step_failed",
         error: errorDetail,
       });
@@ -345,8 +345,8 @@ export class ExecutionRunner {
     this.paused.delete(planId);
   }
 
-  private logEvent(planId: string, stepIndex: number, action: unknown): void {
-    this.eventLog.append({
+  private async logEvent(planId: string, stepIndex: number, action: unknown): Promise<void> {
+    await this.eventLog.append({
       replayId: randomUUID(),
       planId,
       stepIndex,

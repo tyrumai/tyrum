@@ -15,6 +15,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getRequestListener } from "@hono/node-server";
+import type { Hono } from "hono";
 import { createTestApp } from "./helpers.js";
 import { createWsHandler } from "../../src/routes/ws.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
@@ -30,7 +31,7 @@ function delay(ms: number): Promise<void> {
 }
 
 /** Start a real HTTP server with WebSocket upgrade on a random port. */
-async function startServer(app: ReturnType<typeof createTestApp>["app"]): Promise<{
+async function startServer(app: Hono): Promise<{
   server: Server;
   port: number;
   adminToken: string;
@@ -96,7 +97,7 @@ describe("WebSocket upgrade", () => {
   });
 
   it("connects via WebSocket and completes hello handshake", async () => {
-    const { app } = createTestApp();
+    const { app } = await createTestApp();
     const srv = await startServer(app);
     httpServer = srv.server;
     tokenHome = srv.tokenHome;
@@ -128,7 +129,7 @@ describe("WebSocket upgrade", () => {
   });
 
   it("registers client capabilities correctly in ConnectionManager", async () => {
-    const { app } = createTestApp();
+    const { app } = await createTestApp();
     const srv = await startServer(app);
     httpServer = srv.server;
     tokenHome = srv.tokenHome;
@@ -162,7 +163,7 @@ describe("WebSocket upgrade", () => {
   });
 
   it("destroys socket for non-/ws upgrade requests", async () => {
-    const { app } = createTestApp();
+    const { app } = await createTestApp();
     const srv = await startServer(app);
     httpServer = srv.server;
     tokenHome = srv.tokenHome;
@@ -186,7 +187,7 @@ describe("WebSocket upgrade", () => {
   });
 
   it("serves HTTP requests alongside WebSocket upgrades", async () => {
-    const { app } = createTestApp();
+    const { app } = await createTestApp();
     const srv = await startServer(app);
     httpServer = srv.server;
     tokenHome = srv.tokenHome;

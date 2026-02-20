@@ -10,8 +10,8 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
 
   // --- Facts ---
 
-  memory.get("/memory/facts", (c) => {
-    const facts = memoryDal.getFacts();
+  memory.get("/memory/facts", async (c) => {
+    const facts = await memoryDal.getFacts();
     return c.json({ facts });
   });
 
@@ -44,7 +44,7 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
       );
     }
 
-    const id = memoryDal.insertFact(
+    const id = await memoryDal.insertFact(
       fact_key,
       fact_value,
       source,
@@ -56,8 +56,8 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
 
   // --- Episodic Events ---
 
-  memory.get("/memory/events", (c) => {
-    const events = memoryDal.getEpisodicEvents();
+  memory.get("/memory/events", async (c) => {
+    const events = await memoryDal.getEpisodicEvents();
     return c.json({ events });
   });
 
@@ -90,7 +90,7 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
       );
     }
 
-    const id = memoryDal.insertEpisodicEvent(
+    const id = await memoryDal.insertEpisodicEvent(
       event_id,
       occurred_at,
       channel,
@@ -102,9 +102,9 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
 
   // --- Capability Memories ---
 
-  memory.get("/memory/capabilities", (c) => {
+  memory.get("/memory/capabilities", async (c) => {
     const capabilityType = c.req.query("capability_type");
-    const capabilities = memoryDal.getCapabilityMemories(capabilityType);
+    const capabilities = await memoryDal.getCapabilityMemories(capabilityType);
     return c.json({ capabilities });
   });
 
@@ -146,7 +146,7 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
       );
     }
 
-    const result = memoryDal.upsertCapabilityMemory(
+    const result = await memoryDal.upsertCapabilityMemory(
       capability_type,
       capability_identifier,
       executor_kind,

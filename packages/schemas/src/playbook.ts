@@ -1,26 +1,82 @@
 import { z } from "zod";
-import { ActionPrimitiveKind } from "./planner.js";
+
+/**
+ * Playbook steps are authored as `command` strings and compiled into typed
+ * runtime actions by the gateway.
+ */
+
+export const PlaybookOutputKind = z.enum(["text", "json"]);
+export type PlaybookOutputKind = z.infer<typeof PlaybookOutputKind>;
+
+export const PlaybookOutputSpec = z.union([
+  PlaybookOutputKind,
+  z
+    .object({
+      type: PlaybookOutputKind,
+      schema: z.unknown().optional(),
+    })
+    .strict(),
+]);
+export type PlaybookOutputSpec = z.infer<typeof PlaybookOutputSpec>;
+
+export const PlaybookApprovalSpec = z.enum(["required"]);
+export type PlaybookApprovalSpec = z.infer<typeof PlaybookApprovalSpec>;
 
 /** A single step within a playbook. */
-export const PlaybookStep = z.object({
-  name: z.string(),
-  action: ActionPrimitiveKind,
-  args: z.record(z.string(), z.unknown()).default({}),
-  postcondition: z.string().optional(),
-  rollback_hint: z.string().optional(),
-});
+export const PlaybookStep = z
+  .object({
+    /** Stable step identifier used for referencing prior outputs. */
+    id: z.string().trim().min(1),
+    /** Optional human-readable label. */
+    name: z.string().trim().min(1).optional(),
+    /**
+     * Namespaced command string compiled by the runtime.
+     * Example: `cli git status`, `http GET https://example.com`.
+     */
+    command: z.string().trim().min(1),
+    /** Optional stdin reference, e.g. `$stepId.stdout` or `$stepId.json`. */
+    stdin: z.string().trim().min(1).optional(),
+    /** Optional condition expression for skipping this step. */
+    condition: z.string().trim().min(1).optional(),
+    /** Optional approval gate. */
+    approval: PlaybookApprovalSpec.optional(),
+    /** Declared output contract for parsing and caps. */
+    output: PlaybookOutputSpec.optional(),
+    /** Optional postcondition spec evaluated against step evidence. */
+    postcondition: z.unknown().optional(),
+    /** Operator-facing rollback guidance for reversible steps. */
+    rollback_hint: z.string().trim().min(1).optional(),
+  })
+  .strict();
 export type PlaybookStep = z.infer<typeof PlaybookStep>;
 
 /** Top-level playbook manifest parsed from YAML. */
-export const PlaybookManifest = z.object({
-  id: z.string(),
-  name: z.string(),
-  description: z.string().optional(),
-  version: z.string(),
-  steps: z.array(PlaybookStep).min(1),
-  allowed_domains: z.array(z.string()).optional(),
-  consent_boundary: z.string().optional(),
-});
+export const PlaybookManifest = z
+  .object({
+    id: z.string().trim().min(1),
+    name: z.string().trim().min(1),
+    description: z.string().trim().min(1).optional(),
+    version: z.string().trim().min(1),
+    args: z.record(z.string(), z.unknown()).optional(),
+    steps: z.array(PlaybookStep).min(1),
+    allowed_domains: z.array(z.string().trim().min(1)).optional(),
+    consent_boundary: z.string().trim().min(1).optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const seen = new Set<string>();
+    for (const step of value.steps) {
+      const id = step.id;
+      if (seen.has(id)) {
+        ctx.addIssue({
+          code: "custom",
+          message: `duplicate step id '${id}'`,
+          path: ["steps"],
+        });
+      }
+      seen.add(id);
+    }
+  });
 export type PlaybookManifest = z.infer<typeof PlaybookManifest>;
 
 /** A loaded playbook with filesystem metadata. */

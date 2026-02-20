@@ -67,7 +67,7 @@ export class EmbeddingPipeline {
     metadata?: unknown,
   ): Promise<string> {
     const vector = await this.embed(text);
-    return this.vectorDal.insertEmbedding(label, vector, this.model, metadata);
+    return await this.vectorDal.insertEmbedding(label, vector, this.model, metadata);
   }
 
   /** Embed a query and search for similar vectors. Returns top K results. */
@@ -76,6 +76,6 @@ export class EmbeddingPipeline {
     topK: number,
   ): Promise<VectorSearchResult[]> {
     const queryVector = await this.embed(queryText);
-    return this.vectorDal.searchByCosineSimilarity(queryVector, topK);
+    return await this.vectorDal.searchByCosineSimilarity(queryVector, topK);
   }
 }

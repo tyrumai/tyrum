@@ -2,8 +2,7 @@ id: second-playbook
 name: Second Playbook
 version: "2.0.0"
 steps:
-  - name: Make HTTP request
-    action: Http
-    args:
-      url: "https://api.example.com/data"
-      method: GET
+  - id: http
+    name: Make HTTP request
+    command: http GET https://api.example.com/data
+    output: json

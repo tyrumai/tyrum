@@ -4,7 +4,6 @@
  * Creates and wires all module instances from a configuration object.
  */
 
-import type Database from "better-sqlite3";
 import type { EventBus } from "./event-bus.js";
 import type { MemoryDal } from "./modules/memory/dal.js";
 import type { EventLog } from "./modules/planner/event-log.js";
@@ -16,9 +15,8 @@ import type { ApprovalDal } from "./modules/approval/dal.js";
 import type { WatcherProcessor } from "./modules/watcher/processor.js";
 import type { CanvasDal } from "./modules/canvas/dal.js";
 import type { JobQueue } from "./modules/executor/job-queue.js";
+import type { SqlDb } from "./statestore/types.js";
 
-import { createDatabase } from "./db.js";
-import { migrate } from "./migrate.js";
 import { createEventBus } from "./event-bus.js";
 import { MemoryDal as MemoryDalImpl } from "./modules/memory/dal.js";
 import { EventLog as EventLogImpl } from "./modules/planner/event-log.js";
@@ -36,15 +34,25 @@ import { TelegramBot as TelegramBotImpl } from "./modules/ingress/telegram-bot.j
 import { WatcherProcessor as WatcherProcessorImpl } from "./modules/watcher/processor.js";
 import { CanvasDal as CanvasDalImpl } from "./modules/canvas/dal.js";
 import { JobQueue as JobQueueImpl } from "./modules/executor/job-queue.js";
+import { RedactionEngine } from "./modules/redaction/engine.js";
+import type { ArtifactStore } from "./modules/artifact/store.js";
+import { createArtifactStoreFromEnv } from "./modules/artifact/create-artifact-store.js";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { Logger } from "./modules/observability/logger.js";
+import { SqliteDb } from "./statestore/sqlite.js";
+import { PostgresDb } from "./statestore/postgres.js";
+import { isPostgresDbUri } from "./statestore/db-uri.js";
 
 export interface GatewayConfig {
   dbPath: string;
   migrationsDir: string;
   modelGatewayConfigPath?: string;
+  tyrumHome?: string;
 }
 
 export interface GatewayContainer {
-  db: Database.Database;
+  db: SqlDb;
   memoryDal: MemoryDal;
   eventLog: EventLog;
   discoveryPipeline: DiscoveryPipeline;
@@ -56,15 +64,47 @@ export interface GatewayContainer {
   watcherProcessor: WatcherProcessor;
   canvasDal: CanvasDal;
   jobQueue: JobQueue;
+  redactionEngine: RedactionEngine;
+  artifactStore: ArtifactStore;
+  logger: Logger;
   config: GatewayConfig;
 }
 
-export function createContainer(config: GatewayConfig): GatewayContainer {
-  const db = createDatabase(config.dbPath);
-  migrate(db, config.migrationsDir);
+export function createContainer(
+  config: GatewayConfig,
+  opts?: { redactionEngine?: RedactionEngine },
+): GatewayContainer {
+  if (isPostgresDbUri(config.dbPath)) {
+    throw new Error(
+      `createContainer(...) is synchronous and supports only SQLite db paths. ` +
+        `For Postgres (postgres://...), use await createContainerAsync(...).`,
+    );
+  }
 
+  const db = SqliteDb.open({ dbPath: config.dbPath, migrationsDir: config.migrationsDir });
+  return wireContainer(db, config, opts);
+}
+
+export async function createContainerAsync(
+  config: GatewayConfig,
+  opts?: { redactionEngine?: RedactionEngine },
+): Promise<GatewayContainer> {
+  const db = isPostgresDbUri(config.dbPath)
+    ? await PostgresDb.open({ dbUri: config.dbPath, migrationsDir: config.migrationsDir })
+    : SqliteDb.open({ dbPath: config.dbPath, migrationsDir: config.migrationsDir });
+
+  return wireContainer(db, config, opts);
+}
+
+function wireContainer(
+  db: SqlDb,
+  config: GatewayConfig,
+  opts?: { redactionEngine?: RedactionEngine },
+): GatewayContainer {
   const memoryDal = new MemoryDalImpl(db);
-  const eventLog = new EventLogImpl(db);
+  const redactionEngine = opts?.redactionEngine ?? new RedactionEngine();
+  const logger = new Logger({ base: { service: "tyrum-gateway" } });
+  const eventLog = new EventLogImpl(db, redactionEngine, logger);
   const connectorCache = new InMemoryConnectorCache();
   const discoveryPipeline = new DiscoveryPipelineImpl(connectorCache, {
     capabilityMemorySource: memoryDal,
@@ -82,6 +122,12 @@ export function createContainer(config: GatewayConfig): GatewayContainer {
   const canvasDal = new CanvasDalImpl(db);
   const jobQueue = new JobQueueImpl(db);
 
+  const tyrumHome =
+    config.tyrumHome ??
+    process.env["TYRUM_HOME"]?.trim() ??
+    join(homedir(), ".tyrum");
+  const artifactStore = createArtifactStoreFromEnv(tyrumHome, redactionEngine);
+
   return {
     db,
     memoryDal,
@@ -95,6 +141,9 @@ export function createContainer(config: GatewayConfig): GatewayContainer {
     watcherProcessor,
     canvasDal,
     jobQueue,
+    redactionEngine,
+    artifactStore,
+    logger,
     config,
   };
 }
