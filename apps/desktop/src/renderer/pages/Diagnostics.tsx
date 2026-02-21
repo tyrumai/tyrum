@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { toErrorMessage } from "../lib/errors.js";
+import { colors, heading, card, sectionTitle, btn as btnFn, labelRow, labelKey, labelValue } from "../theme.js";
 
 interface CheckItem {
   label: string;
@@ -39,55 +40,12 @@ interface ManualReleaseFileResult {
   message: string | null;
 }
 
-const headingStyle: React.CSSProperties = {
-  fontSize: 22,
-  fontWeight: 700,
-  marginBottom: 20,
-};
-
-const cardStyle: React.CSSProperties = {
-  background: "#ffffff",
-  borderRadius: 8,
-  padding: 20,
-  marginBottom: 16,
-  boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
-};
-
-const sectionTitle: React.CSSProperties = {
-  fontSize: 15,
-  fontWeight: 600,
-  marginBottom: 12,
-  color: "#374151",
-};
-
-const labelRowStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 12,
-  padding: "6px 0",
-  borderBottom: "1px solid #f3f4f6",
-};
-
-const labelKeyStyle: React.CSSProperties = {
-  fontSize: 12,
-  color: "#6b7280",
-  textTransform: "uppercase",
-  letterSpacing: "0.04em",
-};
-
-const labelValueStyle: React.CSSProperties = {
-  fontSize: 13,
-  color: "#1f2937",
-  fontWeight: 600,
-};
-
 const checkRowStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 10,
   padding: "8px 0",
-  borderBottom: "1px solid #f3f4f6",
+  borderBottom: `1px solid ${colors.border}`,
 };
 
 const STATUS_ICONS: Record<string, { symbol: string; color: string }> = {
@@ -113,25 +71,6 @@ function iconStyle(status: string): React.CSSProperties {
     flexShrink: 0,
   };
 }
-
-const btnStyle: React.CSSProperties = {
-  padding: "8px 20px",
-  borderRadius: 6,
-  border: "none",
-  fontSize: 14,
-  fontWeight: 600,
-  cursor: "pointer",
-  background: "#6c63ff",
-  color: "#fff",
-  marginTop: 12,
-};
-
-const secondaryBtnStyle: React.CSSProperties = {
-  ...btnStyle,
-  background: "#e5e7eb",
-  color: "#374151",
-  marginRight: 8,
-};
 
 const UPDATE_STAGE_LABEL: Record<DesktopUpdateState["stage"], string> = {
   idle: "Idle",
@@ -386,9 +325,9 @@ export function Diagnostics() {
 
   return (
     <div>
-      <h1 style={headingStyle}>Diagnostics</h1>
+      <h1 style={heading}>Diagnostics</h1>
 
-      <div style={cardStyle}>
+      <div style={card}>
         <div style={sectionTitle}>Environment Checks</div>
         {checks.map((check) => {
           const si = STATUS_ICONS[check.status] ?? STATUS_ICONS["pending"]!;
@@ -399,25 +338,25 @@ export function Diagnostics() {
                 <div style={{ fontSize: 14, fontWeight: 500 }}>
                   {check.label}
                 </div>
-                <div style={{ fontSize: 12, color: "#6b7280" }}>
+                <div style={{ fontSize: 12, color: colors.fgMuted }}>
                   {check.detail}
                 </div>
               </div>
             </div>
           );
         })}
-        <button style={btnStyle} onClick={runChecks} disabled={running}>
+        <button style={{ ...btnFn("primary"), marginTop: 12 }} onClick={runChecks} disabled={running}>
           {running ? "Running..." : "Re-run Checks"}
         </button>
         <div style={{ ...sectionTitle, marginTop: 18, marginBottom: 8 }}>
           Permission Requests (User initiated)
         </div>
-        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 8 }}>
+        <div style={{ fontSize: 12, color: colors.fgMuted, marginBottom: 8 }}>
           Diagnostics checks never request permissions automatically. Use these
           buttons to request permissions when needed.
         </div>
         <button
-          style={secondaryBtnStyle}
+          style={{ ...btnFn("secondary"), marginRight: 8 }}
           onClick={() => requestPermission("accessibility")}
           disabled={requestingPermission !== null}
         >
@@ -426,7 +365,7 @@ export function Diagnostics() {
             : "Request Accessibility"}
         </button>
         <button
-          style={secondaryBtnStyle}
+          style={{ ...btnFn("secondary"), marginRight: 8 }}
           onClick={() => requestPermission("screenRecording")}
           disabled={requestingPermission !== null}
         >
@@ -435,45 +374,45 @@ export function Diagnostics() {
             : "Request Screen Recording"}
         </button>
         {permissionActionNote && (
-          <div style={{ fontSize: 12, color: "#6b7280", marginTop: 10 }}>
+          <div style={{ fontSize: 12, color: colors.fgMuted, marginTop: 10 }}>
             {permissionActionNote}
           </div>
         )}
       </div>
 
-      <div style={cardStyle}>
+      <div style={card}>
         <div style={sectionTitle}>Desktop Updates</div>
-        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 10 }}>
+        <div style={{ fontSize: 12, color: colors.fgMuted, marginBottom: 10 }}>
           Update checks run automatically at startup. Download and install require
           explicit user actions.
         </div>
 
-        <div style={labelRowStyle}>
-          <span style={labelKeyStyle}>Current version</span>
-          <span style={labelValueStyle}>{updateState.currentVersion}</span>
+        <div style={labelRow}>
+          <span style={labelKey}>Current version</span>
+          <span style={labelValue}>{updateState.currentVersion}</span>
         </div>
-        <div style={labelRowStyle}>
-          <span style={labelKeyStyle}>Status</span>
-          <span style={labelValueStyle}>
+        <div style={labelRow}>
+          <span style={labelKey}>Status</span>
+          <span style={labelValue}>
             {UPDATE_STAGE_LABEL[updateState.stage] ?? updateState.stage}
           </span>
         </div>
         {updateState.availableVersion && (
-          <div style={labelRowStyle}>
-            <span style={labelKeyStyle}>Available version</span>
-            <span style={labelValueStyle}>{updateState.availableVersion}</span>
+          <div style={labelRow}>
+            <span style={labelKey}>Available version</span>
+            <span style={labelValue}>{updateState.availableVersion}</span>
           </div>
         )}
         {updateState.progressPercent != null && (
-          <div style={labelRowStyle}>
-            <span style={labelKeyStyle}>Download progress</span>
-            <span style={labelValueStyle}>
+          <div style={labelRow}>
+            <span style={labelKey}>Download progress</span>
+            <span style={labelValue}>
               {Math.round(updateState.progressPercent)}%
             </span>
           </div>
         )}
         {updateState.message && (
-          <div style={{ fontSize: 12, color: "#b91c1c", marginTop: 8 }}>
+          <div style={{ fontSize: 12, color: colors.error, marginTop: 8 }}>
             {updateState.message}
           </div>
         )}
@@ -482,10 +421,11 @@ export function Diagnostics() {
             style={{
               marginTop: 10,
               padding: "8px 10px",
-              background: "#f9fafb",
+              background: colors.bgSubtle,
               borderRadius: 6,
               fontSize: 12,
-              color: "#4b5563",
+              color: colors.fgMuted,
+              border: `1px solid ${colors.border}`,
               whiteSpace: "pre-wrap",
             }}
           >
@@ -495,7 +435,7 @@ export function Diagnostics() {
 
         <div style={{ marginTop: 12 }}>
           <button
-            style={btnStyle}
+            style={btnFn("primary")}
             onClick={checkForUpdates}
             disabled={updateBusy !== null}
           >
@@ -504,21 +444,21 @@ export function Diagnostics() {
         </div>
         <div style={{ marginTop: 8 }}>
           <button
-            style={secondaryBtnStyle}
+            style={{ ...btnFn("secondary"), marginRight: 8 }}
             onClick={downloadUpdate}
             disabled={updateBusy !== null || updateState.stage !== "available"}
           >
             {updateBusy === "download" ? "Downloading..." : "Download Update"}
           </button>
           <button
-            style={secondaryBtnStyle}
+            style={{ ...btnFn("secondary"), marginRight: 8 }}
             onClick={installUpdate}
             disabled={updateBusy !== null || updateState.stage !== "downloaded"}
           >
             {updateBusy === "install" ? "Installing..." : "Install Update"}
           </button>
           <button
-            style={secondaryBtnStyle}
+            style={{ ...btnFn("secondary"), marginRight: 8 }}
             onClick={openManualReleaseFile}
             disabled={updateBusy !== null}
           >
@@ -526,7 +466,7 @@ export function Diagnostics() {
           </button>
         </div>
         {updateActionNote && (
-          <div style={{ fontSize: 12, color: "#6b7280", marginTop: 10 }}>
+          <div style={{ fontSize: 12, color: colors.fgMuted, marginTop: 10 }}>
             {updateActionNote}
           </div>
         )}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toErrorMessage } from "../lib/errors.js";
+import { colors, fonts, heading, card, btn, statusDot, STATUS_COLORS } from "../theme.js";
 
 interface GatewayConfigShape {
   mode: "embedded" | "remote";
@@ -18,20 +19,6 @@ interface GatewayProps {
   onOnboardingLaunchHandled?: () => void;
 }
 
-const headingStyle: React.CSSProperties = {
-  fontSize: 22,
-  fontWeight: 700,
-  marginBottom: 20,
-};
-
-const cardStyle: React.CSSProperties = {
-  background: "#ffffff",
-  borderRadius: 8,
-  padding: 16,
-  marginBottom: 12,
-  boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
-};
-
 const toolbarStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
@@ -41,40 +28,20 @@ const toolbarStyle: React.CSSProperties = {
 };
 
 const urlStyle: React.CSSProperties = {
-  fontFamily: "monospace",
+  fontFamily: fonts.mono,
   fontSize: 12,
-  color: "#6b7280",
-  background: "#f3f4f6",
+  color: colors.fgMuted,
+  background: colors.bgSubtle,
   borderRadius: 6,
   padding: "6px 8px",
   maxWidth: "100%",
+  border: `1px solid ${colors.border}`,
 };
 
-function buttonStyle(
-  variant: "primary" | "danger" | "secondary",
-): React.CSSProperties {
-  const palette = {
-    primary: { bg: "#6c63ff", color: "#fff" },
-    danger: { bg: "#ef4444", color: "#fff" },
-    secondary: { bg: "#e5e7eb", color: "#374151" },
-  };
-  const p = palette[variant];
-  return {
-    border: "none",
-    borderRadius: 6,
-    padding: "7px 12px",
-    cursor: "pointer",
-    fontSize: 13,
-    fontWeight: 600,
-    background: p.bg,
-    color: p.color,
-  };
-}
-
 const frameShellStyle: React.CSSProperties = {
-  background: "#ffffff",
+  background: colors.bgCard,
   borderRadius: 8,
-  boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
+  border: `1px solid ${colors.border}`,
   height: "calc(100vh - 215px)",
   minHeight: 420,
   overflow: "hidden",
@@ -86,30 +53,13 @@ const iframeStyle: React.CSSProperties = {
   width: "100%",
   height: "100%",
   border: "none",
-  background: "#ffffff",
+  background: colors.bgCard,
 };
 
 const placeholderStyle: React.CSSProperties = {
   padding: 20,
   fontSize: 14,
-  color: "#6b7280",
-};
-
-const statusDotStyle = (color: string): React.CSSProperties => ({
-  display: "inline-block",
-  width: 10,
-  height: 10,
-  borderRadius: "50%",
-  background: color,
-  marginRight: 8,
-  verticalAlign: "middle",
-});
-
-const STATUS_COLORS: Record<string, string> = {
-  running: "#22c55e",
-  starting: "#eab308",
-  error: "#ef4444",
-  stopped: "#9ca3af",
+  color: colors.fgMuted,
 };
 
 export function Gateway({
@@ -349,41 +299,41 @@ export function Gateway({
 
   return (
     <div>
-      <h1 style={headingStyle}>Gateway</h1>
+      <h1 style={heading}>Gateway</h1>
 
-      <div style={cardStyle}>
+      <div style={card}>
         <div style={toolbarStyle}>
           <span
-            style={statusDotStyle(STATUS_COLORS[gatewayStatus] ?? STATUS_COLORS["stopped"]!)}
+            style={statusDot(STATUS_COLORS[gatewayStatus] ?? STATUS_COLORS["stopped"]!)}
           />
           <strong style={{ marginRight: 8 }}>
             {gatewayStatus.charAt(0).toUpperCase() + gatewayStatus.slice(1)}
           </strong>
           {config.mode === "embedded" ? (
             gatewayStatus === "running" || gatewayStatus === "starting" ? (
-              <button style={buttonStyle("danger")} onClick={stopGateway} disabled={busy}>
+              <button style={btn("danger")} onClick={stopGateway} disabled={busy}>
                 {busy ? "Stopping..." : "Stop Gateway"}
               </button>
             ) : (
-              <button style={buttonStyle("primary")} onClick={startGateway} disabled={busy}>
+              <button style={btn("primary")} onClick={startGateway} disabled={busy}>
                 {busy ? "Starting..." : "Start Gateway"}
               </button>
             )
           ) : (
-            <span style={{ color: "#6b7280", fontSize: 13 }}>
+            <span style={{ color: colors.fgMuted, fontSize: 13 }}>
               Remote mode (no local start/stop)
             </span>
           )}
 
           <button
-            style={buttonStyle("secondary")}
+            style={btn("secondary")}
             onClick={() => setReloadKey((k) => k + 1)}
             disabled={!canEmbed}
           >
             Reload
           </button>
           <button
-            style={buttonStyle("secondary")}
+            style={btn("secondary")}
             onClick={openInBrowser}
             disabled={!externalUrl || openingExternal}
           >
@@ -395,7 +345,7 @@ export function Gateway({
           {appDisplayUrl ?? "No valid Gateway URL available"}
         </div>
         {errorMessage && (
-          <div style={{ color: "#b91c1c", marginTop: 10, fontSize: 13 }}>
+          <div style={{ color: colors.error, marginTop: 10, fontSize: 13 }}>
             Reason: {errorMessage}
           </div>
         )}

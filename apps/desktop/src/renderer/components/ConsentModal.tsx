@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { colors, fonts, textarea as textareaBase } from "../theme.js";
 
 interface ConsentRequest {
   requestId: string;
@@ -8,7 +9,7 @@ interface ConsentRequest {
 const overlayStyle: React.CSSProperties = {
   position: "fixed",
   inset: 0,
-  background: "rgba(0, 0, 0, 0.5)",
+  background: "rgba(0, 0, 0, 0.7)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -16,24 +17,26 @@ const overlayStyle: React.CSSProperties = {
 };
 
 const modalStyle: React.CSSProperties = {
-  background: "#ffffff",
+  background: colors.bgCard,
   borderRadius: 8,
   padding: 24,
   maxWidth: 480,
   width: "90%",
   boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
-  fontFamily: "system-ui, -apple-system, sans-serif",
+  fontFamily: fonts.sans,
+  border: `1px solid ${colors.border}`,
+  color: colors.fg,
 };
 
 const titleStyle: React.CSSProperties = {
   fontSize: 18,
   fontWeight: 700,
   marginBottom: 12,
-  color: "#1a1a2e",
+  color: colors.fg,
 };
 
 const contextStyle: React.CSSProperties = {
-  background: "#f5f5f7",
+  background: colors.bgSubtle,
   borderRadius: 6,
   padding: 12,
   fontSize: 13,
@@ -42,20 +45,15 @@ const contextStyle: React.CSSProperties = {
   marginBottom: 16,
   maxHeight: 200,
   overflowY: "auto",
-  border: "1px solid #e0e0e5",
+  border: `1px solid ${colors.border}`,
+  color: colors.fgMuted,
 };
 
 const textareaStyle: React.CSSProperties = {
-  width: "100%",
-  minHeight: 60,
-  borderRadius: 6,
-  border: "1px solid #d0d0d5",
-  padding: 8,
-  fontSize: 13,
+  ...textareaBase,
   fontFamily: "inherit",
-  resize: "vertical",
+  minHeight: 60,
   marginBottom: 16,
-  boxSizing: "border-box",
 };
 
 const buttonRowStyle: React.CSSProperties = {
@@ -72,7 +70,7 @@ function buttonStyle(variant: "approve" | "deny"): React.CSSProperties {
     fontSize: 14,
     fontWeight: 600,
     cursor: "pointer",
-    background: variant === "approve" ? "#22c55e" : "#ef4444",
+    background: variant === "approve" ? colors.success : colors.error,
     color: "#ffffff",
   };
 }

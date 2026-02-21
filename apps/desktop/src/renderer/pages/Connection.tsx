@@ -1,90 +1,8 @@
 import { useEffect, useState } from "react";
 import { toErrorMessage } from "../lib/errors.js";
+import { colors, heading, card, label as labelStyle, input, btn, info, tabRow, tab as tabStyle } from "../theme.js";
 
 type Tab = "embedded" | "remote";
-
-const cardStyle: React.CSSProperties = {
-  background: "#ffffff",
-  borderRadius: 8,
-  padding: 20,
-  marginBottom: 16,
-  boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
-};
-
-const headingStyle: React.CSSProperties = {
-  fontSize: 22,
-  fontWeight: 700,
-  marginBottom: 20,
-};
-
-const tabRowStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 0,
-  marginBottom: 16,
-  borderBottom: "2px solid #e5e7eb",
-};
-
-function tabStyle(active: boolean): React.CSSProperties {
-  return {
-    padding: "10px 20px",
-    cursor: "pointer",
-    fontSize: 14,
-    fontWeight: active ? 600 : 400,
-    color: active ? "#6c63ff" : "#6b7280",
-    borderBottom: active ? "2px solid #6c63ff" : "2px solid transparent",
-    marginBottom: -2,
-    background: "none",
-    border: "none",
-    borderBottomStyle: "solid",
-    borderBottomWidth: 2,
-    borderBottomColor: active ? "#6c63ff" : "transparent",
-  };
-}
-
-const labelStyle: React.CSSProperties = {
-  fontSize: 13,
-  fontWeight: 600,
-  color: "#374151",
-  marginBottom: 4,
-  marginTop: 12,
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "8px 12px",
-  borderRadius: 6,
-  border: "1px solid #d1d5db",
-  fontSize: 14,
-  fontFamily: "inherit",
-  boxSizing: "border-box",
-};
-
-function btnStyle(variant: "primary" | "danger" | "secondary"): React.CSSProperties {
-  const colors = {
-    primary: { bg: "#6c63ff", color: "#fff" },
-    danger: { bg: "#ef4444", color: "#fff" },
-    secondary: { bg: "#e5e7eb", color: "#374151" },
-  };
-  const c = colors[variant];
-  return {
-    padding: "8px 20px",
-    borderRadius: 6,
-    border: "none",
-    fontSize: 14,
-    fontWeight: 600,
-    cursor: "pointer",
-    background: c.bg,
-    color: c.color,
-    marginRight: 8,
-    marginTop: 12,
-  };
-}
-
-const infoStyle: React.CSSProperties = {
-  fontSize: 13,
-  color: "#6b7280",
-  marginTop: 8,
-};
 
 export function Connection() {
   const [tab, setTab] = useState<Tab>("embedded");
@@ -210,9 +128,9 @@ export function Connection() {
 
   return (
     <div>
-      <h1 style={headingStyle}>Connection</h1>
+      <h1 style={heading}>Connection</h1>
 
-      <div style={tabRowStyle}>
+      <div style={tabRow}>
         <button style={tabStyle(tab === "embedded")} onClick={() => setTab("embedded")}>
           Embedded
         </button>
@@ -222,10 +140,10 @@ export function Connection() {
       </div>
 
       {tab === "embedded" && (
-        <div style={cardStyle}>
-          <div style={labelStyle}>Port</div>
+        <div style={card}>
+          <div style={{ ...labelStyle, marginTop: 12 }}>Port</div>
           <input
-            style={inputStyle}
+            style={input}
             type="number"
             value={port}
             onChange={(e) => setPort(Number(e.target.value))}
@@ -235,21 +153,21 @@ export function Connection() {
 
           <div>
             {gatewayStatus === "stopped" || gatewayStatus === "error" ? (
-              <button style={btnStyle("primary")} onClick={startGateway} disabled={busy}>
+              <button style={{ ...btn("primary"), marginRight: 8, marginTop: 12 }} onClick={startGateway} disabled={busy}>
                 {busy ? "Starting..." : "Start Gateway"}
               </button>
             ) : (
-              <button style={btnStyle("danger")} onClick={stopGateway} disabled={busy}>
+              <button style={{ ...btn("danger"), marginRight: 8, marginTop: 12 }} onClick={stopGateway} disabled={busy}>
                 {busy ? "Stopping..." : "Stop Gateway"}
               </button>
             )}
           </div>
 
-          <div style={infoStyle}>
+          <div style={info}>
             Status: {gatewayStatus} {mode === "embedded" ? "(active mode)" : ""}
           </div>
           {gatewayError && (
-            <div style={{ ...infoStyle, color: "#b91c1c", marginTop: 6 }}>
+            <div style={{ ...info, color: colors.error, marginTop: 6 }}>
               Reason: {gatewayError}
             </div>
           )}
@@ -257,43 +175,43 @@ export function Connection() {
       )}
 
       {tab === "remote" && (
-        <div style={cardStyle}>
-          <div style={labelStyle}>Gateway WebSocket URL</div>
+        <div style={card}>
+          <div style={{ ...labelStyle, marginTop: 12 }}>Gateway WebSocket URL</div>
           <input
-            style={inputStyle}
+            style={input}
             type="text"
             value={remoteUrl}
             onChange={(e) => setRemoteUrl(e.target.value)}
             placeholder="ws://host:port/ws"
           />
 
-          <div style={labelStyle}>Token</div>
+          <div style={{ ...labelStyle, marginTop: 12 }}>Token</div>
           <input
-            style={inputStyle}
+            style={input}
             type="password"
             value={remoteToken}
             onChange={(e) => setRemoteToken(e.target.value)}
             placeholder="Bearer token"
           />
           {hasSavedRemoteToken && remoteToken.trim() === "" && (
-            <div style={infoStyle}>
+            <div style={info}>
               A token is already saved. Leave blank to reuse it, or enter a new token to replace it.
             </div>
           )}
 
           <div>
             {nodeStatus === "disconnected" || nodeStatus === "error" ? (
-              <button style={btnStyle("primary")} onClick={connectNode} disabled={busy}>
+              <button style={{ ...btn("primary"), marginRight: 8, marginTop: 12 }} onClick={connectNode} disabled={busy}>
                 {busy ? "Connecting..." : "Connect"}
               </button>
             ) : (
-              <button style={btnStyle("danger")} onClick={disconnectNode} disabled={busy}>
+              <button style={{ ...btn("danger"), marginRight: 8, marginTop: 12 }} onClick={disconnectNode} disabled={busy}>
                 {busy ? "Disconnecting..." : "Disconnect"}
               </button>
             )}
           </div>
 
-          <div style={infoStyle}>Node status: {nodeStatus}</div>
+          <div style={info}>Node status: {nodeStatus}</div>
         </div>
       )}
     </div>

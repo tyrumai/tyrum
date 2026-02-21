@@ -1,4 +1,79 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+
 :root {
-  --ifm-color-primary: #2563eb;
+  --ifm-color-primary: #6366f1;
+  --ifm-color-primary-dark: #4f46e5;
+  --ifm-color-primary-darker: #4338ca;
+  --ifm-color-primary-darkest: #3730a3;
+  --ifm-color-primary-light: #818cf8;
+  --ifm-color-primary-lighter: #a5b4fc;
+  --ifm-color-primary-lightest: #c7d2fe;
   --ifm-code-font-size: 0.9em;
+  --ifm-font-family-base: 'Inter', system-ui, -apple-system, sans-serif;
+  --ifm-font-family-monospace: 'JetBrains Mono', 'SF Mono', monospace;
+  --ifm-heading-font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+[data-theme='dark'] {
+  --ifm-background-color: #000;
+  --ifm-background-surface-color: #0a0a0a;
+  --ifm-color-primary: #6366f1;
+  --ifm-color-primary-dark: #4f46e5;
+  --ifm-color-primary-darker: #4338ca;
+  --ifm-color-primary-darkest: #3730a3;
+  --ifm-color-primary-light: #818cf8;
+  --ifm-color-primary-lighter: #a5b4fc;
+  --ifm-color-primary-lightest: #c7d2fe;
+  --ifm-font-color-base: #ededed;
+  --ifm-font-color-secondary: #888;
+  --ifm-heading-color: #ededed;
+  --ifm-navbar-background-color: rgba(0, 0, 0, 0.8);
+  --ifm-navbar-link-color: #888;
+  --ifm-navbar-link-hover-color: #ededed;
+  --ifm-footer-background-color: #000;
+  --ifm-footer-color: #666;
+  --ifm-footer-link-color: #888;
+  --ifm-footer-title-color: #ededed;
+  --ifm-toc-border-color: #1a1a1a;
+  --ifm-color-emphasis-300: #1a1a1a;
+  --ifm-hr-background-color: #1a1a1a;
+  --ifm-table-border-color: #1a1a1a;
+  --ifm-code-background: #0a0a0a;
+  --docusaurus-highlighted-code-line-bg: rgba(99, 102, 241, 0.1);
+}
+
+.navbar,
+.navbar-sidebar {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+[data-theme='dark'] .navbar {
+  border-bottom: 1px solid #1a1a1a;
+}
+
+[data-theme='dark'] .navbar__title {
+  color: #fff;
+  font-weight: 800;
+}
+
+[data-theme='dark'] .footer {
+  border-top: 1px solid #1a1a1a;
+}
+
+[data-theme='dark'] .menu__link {
+  color: #888;
+}
+
+[data-theme='dark'] .menu__link--active,
+[data-theme='dark'] .menu__link:hover {
+  color: #ededed;
+}
+
+[data-theme='dark'] .table-of-contents__link {
+  color: #666;
+}
+
+[data-theme='dark'] .table-of-contents__link--active {
+  color: #ededed;
 }

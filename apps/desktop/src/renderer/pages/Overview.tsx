@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { toErrorMessage } from "../lib/errors.js";
+import { colors, heading, card, label, value, badge, btn, statusDot, STATUS_COLORS } from "../theme.js";
 
 interface StatusInfo {
   gatewayMode: string;
@@ -7,85 +8,6 @@ interface StatusInfo {
   port: number;
   capabilities: string[];
   uptime: number;
-}
-
-const STATUS_COLORS: Record<string, string> = {
-  running: "#22c55e",
-  starting: "#eab308",
-  error: "#ef4444",
-  stopped: "#9ca3af",
-};
-
-const cardStyle: React.CSSProperties = {
-  background: "#ffffff",
-  borderRadius: 8,
-  padding: 20,
-  marginBottom: 16,
-  boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
-};
-
-const headingStyle: React.CSSProperties = {
-  fontSize: 22,
-  fontWeight: 700,
-  marginBottom: 20,
-};
-
-const labelStyle: React.CSSProperties = {
-  fontSize: 12,
-  fontWeight: 600,
-  color: "#6b7280",
-  textTransform: "uppercase" as const,
-  letterSpacing: "0.05em",
-  marginBottom: 4,
-};
-
-const valueStyle: React.CSSProperties = {
-  fontSize: 16,
-  fontWeight: 500,
-  marginBottom: 16,
-};
-
-function statusDot(color: string): React.CSSProperties {
-  return {
-    display: "inline-block",
-    width: 10,
-    height: 10,
-    borderRadius: "50%",
-    background: color,
-    marginRight: 8,
-    verticalAlign: "middle",
-  };
-}
-
-const badgeStyle: React.CSSProperties = {
-  display: "inline-block",
-  padding: "4px 10px",
-  borderRadius: 12,
-  background: "#e0e7ff",
-  color: "#3730a3",
-  fontSize: 12,
-  fontWeight: 600,
-  marginRight: 6,
-  marginBottom: 6,
-};
-
-function btnStyle(variant: "primary" | "danger"): React.CSSProperties {
-  const colors = {
-    primary: { bg: "#6c63ff", color: "#fff" },
-    danger: { bg: "#ef4444", color: "#fff" },
-  };
-  const c = colors[variant];
-  return {
-    padding: "8px 20px",
-    borderRadius: 6,
-    border: "none",
-    fontSize: 14,
-    fontWeight: 600,
-    cursor: "pointer",
-    background: c.bg,
-    color: c.color,
-    marginBottom: 14,
-  };
 }
 
 function formatUptime(seconds: number): string {
@@ -158,7 +80,7 @@ export function Overview() {
     return unsubscribe;
   }, []);
 
-  const color = STATUS_COLORS[status.gatewayStatus] ?? "#9ca3af";
+  const color = STATUS_COLORS[status.gatewayStatus] ?? colors.neutral;
   const api = window.tyrumDesktop;
 
   const startGateway = async () => {
@@ -202,35 +124,35 @@ export function Overview() {
 
   return (
     <div>
-      <h1 style={headingStyle}>Overview</h1>
+      <h1 style={heading}>Overview</h1>
 
-      <div style={cardStyle}>
-        <div style={labelStyle}>Gateway Status</div>
-        <div style={valueStyle}>
+      <div style={card}>
+        <div style={label}>Gateway Status</div>
+        <div style={value}>
           <span style={statusDot(color)} />
           {status.gatewayStatus.charAt(0).toUpperCase() +
             status.gatewayStatus.slice(1)}
         </div>
 
         {(status.gatewayStatus === "stopped" || status.gatewayStatus === "error") && (
-          <button style={btnStyle("primary")} onClick={startGateway} disabled={busy}>
+          <button style={{ ...btn("primary"), marginBottom: 14 }} onClick={startGateway} disabled={busy}>
             {busy ? "Starting..." : "Start Gateway"}
           </button>
         )}
         {(status.gatewayStatus === "running" || status.gatewayStatus === "starting") && (
-          <button style={btnStyle("danger")} onClick={stopGateway} disabled={busy}>
+          <button style={{ ...btn("danger"), marginBottom: 14 }} onClick={stopGateway} disabled={busy}>
             {busy ? "Stopping..." : "Stop Gateway"}
           </button>
         )}
 
         {gatewayError && (
-          <div style={{ marginBottom: 16, color: "#b91c1c", fontSize: 13 }}>
+          <div style={{ marginBottom: 16, color: colors.error, fontSize: 13 }}>
             Reason: {gatewayError}
           </div>
         )}
 
-        <div style={labelStyle}>Mode</div>
-        <div style={valueStyle}>
+        <div style={label}>Mode</div>
+        <div style={value}>
           {status.gatewayMode === "embedded"
             ? "Embedded Gateway"
             : "Remote Gateway"}
@@ -238,29 +160,29 @@ export function Overview() {
 
         {status.port > 0 && (
           <>
-            <div style={labelStyle}>Port</div>
-            <div style={valueStyle}>{status.port}</div>
+            <div style={label}>Port</div>
+            <div style={value}>{status.port}</div>
           </>
         )}
 
         {status.uptime > 0 && (
           <>
-            <div style={labelStyle}>Uptime</div>
-            <div style={valueStyle}>{formatUptime(status.uptime)}</div>
+            <div style={label}>Uptime</div>
+            <div style={value}>{formatUptime(status.uptime)}</div>
           </>
         )}
       </div>
 
-      <div style={cardStyle}>
-        <div style={labelStyle}>Connected Capabilities</div>
+      <div style={card}>
+        <div style={label}>Connected Capabilities</div>
         <div style={{ marginTop: 8 }}>
           {status.capabilities.length === 0 ? (
-            <span style={{ color: "#9ca3af", fontSize: 14 }}>
+            <span style={{ color: colors.neutral, fontSize: 14 }}>
               No capabilities enabled
             </span>
           ) : (
             status.capabilities.map((cap) => (
-              <span key={cap} style={badgeStyle}>
+              <span key={cap} style={badge}>
                 {cap}
               </span>
             ))
