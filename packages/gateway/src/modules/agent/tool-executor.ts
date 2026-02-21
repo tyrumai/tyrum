@@ -12,6 +12,7 @@ import { sanitizeForModel } from "./sanitizer.js";
 import type { SecretProvider } from "../secret/provider.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { PolicyBundleManager } from "../policy/bundle.js";
+import type { Logger } from "../observability/logger.js";
 
 const MAX_RESPONSE_BYTES = 32_768;
 const HTTP_TIMEOUT_MS = 30_000;
@@ -307,6 +308,7 @@ export interface ToolResult {
 
 export class ToolExecutor {
   private readonly policyBundleManager?: PolicyBundleManager;
+  private readonly logger?: Logger;
 
   constructor(
     private readonly home: string,
@@ -317,8 +319,10 @@ export class ToolExecutor {
     private readonly dnsLookup: DnsLookupFn = defaultDnsLookup,
     private readonly redactionEngine?: RedactionEngine,
     policyBundleManager?: PolicyBundleManager,
+    logger?: Logger,
   ) {
     this.policyBundleManager = policyBundleManager;
+    this.logger = logger;
   }
 
   async execute(
@@ -709,6 +713,18 @@ export class ToolExecutor {
       return { resolved: args, secrets: [] };
     }
 
+    // Policy gate: check if secret resolution is allowed
+    if (this.policyBundleManager) {
+      const decision = this.policyBundleManager.evaluate("secrets");
+      if (decision.action === "deny") {
+        this.logger?.warn("secret resolution denied by policy", {
+          domain: "secrets",
+          detail: decision.detail,
+        });
+        throw new Error(`Secret resolution denied by policy: ${decision.detail}`);
+      }
+    }
+
     const secrets: string[] = [];
 
     const walk = async (value: unknown): Promise<unknown> => {
@@ -722,9 +738,18 @@ export class ToolExecutor {
           ? await this.secretProvider!.resolve(handle)
           : null;
         if (resolved !== null) {
+          // Audit: log secret resolution (handle_id only, never the value)
+          this.logger?.info("secret resolved", {
+            handle_id: handleId,
+            scope: handle?.scope,
+          });
           secrets.push(resolved);
           return resolved;
         }
+        this.logger?.warn("secret resolution failed", {
+          handle_id: handleId,
+          reason: handle ? "resolve_returned_null" : "handle_not_found",
+        });
         return value;
       }
       if (Array.isArray(value)) {

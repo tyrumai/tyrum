@@ -7,6 +7,7 @@ import { ToolExecutor } from "../../src/modules/agent/tool-executor.js";
 import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
 import type { SecretProvider } from "../../src/modules/secret/provider.js";
 import type { SecretHandle } from "@tyrum/schemas";
+import type { PolicyBundleManager } from "../../src/modules/policy/bundle.js";
 
 function stubMcpManager(): McpManager {
   return {
@@ -241,6 +242,56 @@ describe("ToolExecutor secret resolution", () => {
     // The file read should still work
     expect(result.output).toContain('<data source="tool">');
     expect(result.output).toContain("content");
+  });
+
+  it("denies secret resolution when policy blocks secrets domain", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tool-executor-secret-"));
+
+    const mockFetch = vi.fn(async () => ({
+      text: async () => "ok",
+    })) as unknown as typeof fetch;
+
+    const secrets = new Map([["handle-abc", "my-api-key-value"]]);
+    const provider = stubSecretProvider(secrets);
+
+    const policyManager = {
+      evaluate: vi.fn((domain: string) => {
+        if (domain === "secrets") {
+          return { action: "deny" as const, detail: "secrets access not allowed" };
+        }
+        return { action: "allow" as const };
+      }),
+      addBundle: vi.fn(),
+      getMergedRules: vi.fn(() => []),
+      getBundles: vi.fn(() => []),
+      clear: vi.fn(),
+      toJSON: vi.fn(() => ({})),
+    } as unknown as PolicyBundleManager;
+
+    const executor = new ToolExecutor(
+      homeDir,
+      stubMcpManager(),
+      new Map(),
+      mockFetch,
+      provider,
+      allowPublicDnsLookup,
+      undefined, // redactionEngine
+      policyManager,
+    );
+
+    const result = await executor.execute(
+      "tool.http.fetch",
+      "call-policy-deny",
+      {
+        url: "https://api.example.com",
+        headers: { Authorization: "secret:handle-abc" },
+      },
+    );
+
+    // The fetch should NOT have been called
+    expect(mockFetch).not.toHaveBeenCalled();
+    // Result should contain the policy denial error
+    expect(result.error).toContain("Secret resolution denied by policy");
   });
 
   it("redacts multiple secret values from output", async () => {
