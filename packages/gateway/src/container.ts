@@ -20,6 +20,8 @@ import type { NodeDal } from "./modules/node/dal.js";
 import type { PolicySnapshotDal } from "./modules/policy/snapshot-dal.js";
 import type { AuthProfileDal } from "./modules/model/auth-profile-dal.js";
 import type { ContextReportDal } from "./modules/context/report-dal.js";
+import type { ModelCatalogService } from "./modules/model/catalog-service.js";
+import type { PluginRegistry } from "./modules/plugin/registry.js";
 import type { SqlDb } from "./statestore/types.js";
 import { PolicyBundleManager } from "./modules/policy/bundle.js";
 
@@ -45,6 +47,8 @@ import { NodeDal as NodeDalImpl } from "./modules/node/dal.js";
 import { PolicySnapshotDal as PolicySnapshotDalImpl } from "./modules/policy/snapshot-dal.js";
 import { AuthProfileDal as AuthProfileDalImpl } from "./modules/model/auth-profile-dal.js";
 import { ContextReportDal as ContextReportDalImpl } from "./modules/context/report-dal.js";
+import { ModelCatalogService as ModelCatalogServiceImpl } from "./modules/model/catalog-service.js";
+import { PluginRegistry as PluginRegistryImpl } from "./modules/plugin/registry.js";
 import { RedactionEngine } from "./modules/redaction/engine.js";
 import type { ArtifactStore } from "./modules/artifact/store.js";
 import type { ArtifactMetadataDal } from "./modules/artifact/metadata-dal.js";
@@ -86,6 +90,8 @@ export interface GatewayContainer {
   authProfileDal: AuthProfileDal;
   policyBundleManager: PolicyBundleManager;
   contextReportDal: ContextReportDal;
+  modelCatalog: ModelCatalogService;
+  pluginRegistry: PluginRegistry;
   logger: Logger;
   config: GatewayConfig;
 }
@@ -154,6 +160,10 @@ function wireContainer(
   const authProfileDal = new AuthProfileDalImpl(db);
   const policyBundleManager = new PolicyBundleManager();
   const contextReportDal = new ContextReportDalImpl(db);
+  const modelCatalog = new ModelCatalogServiceImpl({
+    cacheDir: join(tyrumHome, "cache"),
+  });
+  const pluginRegistry = new PluginRegistryImpl(logger);
 
   return {
     db,
@@ -177,6 +187,8 @@ function wireContainer(
     authProfileDal,
     policyBundleManager,
     contextReportDal,
+    modelCatalog,
+    pluginRegistry,
     logger,
     config,
   };
