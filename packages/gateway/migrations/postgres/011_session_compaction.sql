@@ -1,0 +1,2 @@
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS compacted_summary TEXT DEFAULT '';
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS compaction_count INTEGER DEFAULT 0;

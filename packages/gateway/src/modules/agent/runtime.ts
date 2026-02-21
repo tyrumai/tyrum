@@ -26,6 +26,7 @@ import { selectToolDirectory, type ToolDescriptor } from "./tools.js";
 import { McpManager } from "./mcp-manager.js";
 import { ToolExecutor } from "./tool-executor.js";
 import { tagContent } from "./provenance.js";
+import { shouldCompact, compactSession } from "./compaction.js";
 import { sanitizeForModel, containsInjectionPatterns } from "./sanitizer.js";
 import type { SecretProvider } from "../secret/provider.js";
 import { VectorDal, type VectorSearchResult } from "../memory/vector-dal.js";
@@ -83,8 +84,12 @@ function trimTo(value: string, max: number): string {
   return `${value.slice(0, max - 3)}...`;
 }
 
-function formatSessionContext(summary: string, turns: SessionMessage[]): string {
+function formatSessionContext(summary: string, turns: SessionMessage[], compactedSummary?: string): string {
   const lines: string[] = [];
+
+  if (compactedSummary && compactedSummary.trim().length > 0) {
+    lines.push(`Compacted context:\n${compactedSummary.trim()}`);
+  }
 
   if (summary.trim().length > 0) {
     lines.push(`Summary: ${summary.trim()}`);
@@ -509,7 +514,7 @@ export class AgentRuntime {
       },
     );
 
-    const sessionCtx = formatSessionContext(session.summary, session.turns);
+    const sessionCtx = formatSessionContext(session.summary, session.turns, session.compacted_summary);
     const memoryCtx = mergeMemoryPrompts(
       formatMemoryPrompt(memoryHits),
       formatSemanticMemoryPrompt(semanticHits),
@@ -570,6 +575,39 @@ export class AgentRuntime {
       session.session_id,
       summarizeTurns(updated.turns),
     );
+
+    // Session compaction — LLM-based summarization of older turns
+    const compactionEnabled = (() => {
+      const raw = process.env["TYRUM_SESSION_COMPACTION"]?.trim().toLowerCase();
+      if (!raw) return true; // default on
+      return !["0", "false", "off", "no"].includes(raw);
+    })();
+
+    if (compactionEnabled && shouldCompact(updated.turns, ctx.config.sessions.compaction)) {
+      try {
+        const model = await this.resolveModel(ctx.config);
+        const result = await compactSession({
+          turns: updated.turns,
+          previousSummary: updated.compacted_summary,
+          config: ctx.config.sessions.compaction,
+          generateFn: async (opts) => {
+            const genResult = await generateText({
+              model,
+              system: opts.system,
+              prompt: opts.prompt,
+            });
+            return { text: genResult.text };
+          },
+        });
+        await this.sessionDal.updateCompaction(
+          session.session_id,
+          result.summary,
+          result.remainingTurns,
+        );
+      } catch {
+        // Compaction failure is non-fatal — session continues with full history
+      }
+    }
 
     let memoryWritten = false;
     if (ctx.config.memory.markdown_enabled) {

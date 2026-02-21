@@ -12,6 +12,8 @@ export interface SessionRow {
   thread_id: string;
   summary: string;
   turns: SessionMessage[];
+  compacted_summary: string;
+  compaction_count: number;
   created_at: string;
   updated_at: string;
 }
@@ -22,6 +24,8 @@ interface RawSessionRow {
   thread_id: string;
   summary: string;
   turns_json: string;
+  compacted_summary: string | null;
+  compaction_count: number | null;
   created_at: string | Date;
   updated_at: string | Date;
 }
@@ -66,6 +70,8 @@ function toSessionRow(raw: RawSessionRow): SessionRow {
     thread_id: raw.thread_id,
     summary: raw.summary,
     turns: parseTurns(raw.turns_json),
+    compacted_summary: raw.compacted_summary ?? "",
+    compaction_count: raw.compaction_count ?? 0,
     created_at: createdAt,
     updated_at: updatedAt,
   };
@@ -185,6 +191,20 @@ export class SessionDal {
        SET summary = ?, updated_at = ?
        WHERE session_id = ?`,
       [summary, nowIso, sessionId],
+    );
+  }
+
+  async updateCompaction(
+    sessionId: string,
+    compactedSummary: string,
+    remainingTurns: SessionMessage[],
+  ): Promise<void> {
+    const nowIso = new Date().toISOString();
+    await this.db.run(
+      `UPDATE sessions
+       SET compacted_summary = ?, turns_json = ?, compaction_count = compaction_count + 1, updated_at = ?
+       WHERE session_id = ?`,
+      [compactedSummary, JSON.stringify(remainingTurns), nowIso, sessionId],
     );
   }
 

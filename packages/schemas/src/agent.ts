@@ -30,10 +30,18 @@ export const TypingConfig = z.object({
 });
 export type TypingConfig = z.infer<typeof TypingConfig>;
 
+export const CompactionConfig = z.object({
+  enabled: z.boolean().default(true),
+  preserve_recent: z.number().int().min(2).max(50).default(6),
+  trigger_message_count: z.number().int().min(6).max(1000).default(20),
+});
+export type CompactionConfig = z.infer<typeof CompactionConfig>;
+
 export const AgentSessionConfig = z.object({
   ttl_days: z.number().int().min(1).max(365).default(30),
   max_turns: z.number().int().min(1).max(500).default(20),
   typing: TypingConfig.default({ mode: "message", refresh_interval_ms: 3000 }),
+  compaction: CompactionConfig.default({ enabled: true, preserve_recent: 6, trigger_message_count: 20 }),
 });
 export type AgentSessionConfig = z.infer<typeof AgentSessionConfig>;
 
@@ -47,7 +55,7 @@ export const AgentConfig = z.object({
   skills: AgentSkillConfig.default({ enabled: [] }),
   mcp: AgentMcpConfig.default({ enabled: [] }),
   tools: AgentToolConfig.default({ allow: [] }),
-  sessions: AgentSessionConfig.default({ ttl_days: 30, max_turns: 20, typing: { mode: "message", refresh_interval_ms: 3000 } }),
+  sessions: AgentSessionConfig.default({ ttl_days: 30, max_turns: 20, typing: { mode: "message", refresh_interval_ms: 3000 }, compaction: { enabled: true, preserve_recent: 6, trigger_message_count: 20 } }),
   memory: AgentMemoryConfig.default({ markdown_enabled: true }),
 });
 export type AgentConfig = z.infer<typeof AgentConfig>;
