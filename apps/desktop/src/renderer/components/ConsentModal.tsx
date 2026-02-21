@@ -51,6 +51,7 @@ const contextStyle: React.CSSProperties = {
 
 const textareaStyle: React.CSSProperties = {
   ...textareaBase,
+  fontFamily: "inherit",
   minHeight: 60,
   marginBottom: 16,
 };
