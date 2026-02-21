@@ -1,13 +1,14 @@
 import { readFile, rm, mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkgPath = join(__dirname, "../package.json");
 const pkgRaw = await readFile(pkgPath, "utf-8");
 const pkg = JSON.parse(pkgRaw);
 
-const dist = await import(join(__dirname, "../dist/index.mjs"));
+const distPath = join(__dirname, "../dist/index.mjs");
+const dist = await import(pathToFileURL(distPath).href);
 const outDir = join(__dirname, "../dist/jsonschema");
 
 await rm(outDir, { recursive: true, force: true });
@@ -54,4 +55,3 @@ if (errors.length > 0) {
   // eslint-disable-next-line no-console
   console.warn(`[schemas] JSON Schema export skipped ${errors.length} exports (see catalog.json errors)`);
 }
-
