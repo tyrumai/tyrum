@@ -43,6 +43,7 @@ import type { ConnectionManager } from "./ws/connection-manager.js";
 import type { EventPublisher } from "./modules/backplane/event-publisher.js";
 import { DedupeDal } from "./modules/connector/dedupe-dal.js";
 import { ConnectorPipeline } from "./modules/connector/pipeline.js";
+import { readBooleanEnv } from "./env/boolean-env.js";
 import { randomUUID } from "node:crypto";
 
 export interface AppOptions {
@@ -105,11 +106,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   app.route("/", createHealthRoute({ isLocalOnly }));
   app.route("/", policy);
   app.route("/", createMemoryRoutes(container.memoryDal));
-  const connectorPipelineEnabled = (() => {
-    const raw = process.env["TYRUM_CONNECTOR_PIPELINE"]?.trim().toLowerCase();
-    if (!raw) return false; // default off
-    return ["1", "true", "on", "yes"].includes(raw);
-  })();
+  const connectorPipelineEnabled = readBooleanEnv("TYRUM_CONNECTOR_PIPELINE", false); // default off
 
   const connectorPipeline = connectorPipelineEnabled
     ? new ConnectorPipeline({ dedupeDal: new DedupeDal(container.db) })
@@ -158,11 +155,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     app.route("/", createConnectionsRoute(opts.connectionManager));
   }
 
-  const observabilityEnabled = (() => {
-    const raw = process.env["TYRUM_OBSERVABILITY_ENDPOINTS"]?.trim().toLowerCase();
-    if (!raw) return true;
-    return !["0", "false", "off", "no"].includes(raw);
-  })();
+  const observabilityEnabled = readBooleanEnv("TYRUM_OBSERVABILITY_ENDPOINTS", true);
 
   if (observabilityEnabled) {
     app.route("/", createObservabilityRoutes({
@@ -180,41 +173,25 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   app.route("/", createSchemaRoutes());
   app.route("/", createCatalogRoutes({ modelCatalog: container.modelCatalog }));
 
-  const presenceEnabled = (() => {
-    const raw = process.env["TYRUM_PRESENCE"]?.trim().toLowerCase();
-    if (!raw) return true; // default on
-    return !["0", "false", "off", "no"].includes(raw);
-  })();
+  const presenceEnabled = readBooleanEnv("TYRUM_PRESENCE", true); // default on
 
   if (presenceEnabled) {
     app.route("/", createPresenceRoutes(container.presenceDal));
   }
 
-  const workflowApiEnabled = (() => {
-    const raw = process.env["TYRUM_WORKFLOW_API"]?.trim().toLowerCase();
-    if (!raw) return true; // default on
-    return !["0", "false", "off", "no"].includes(raw);
-  })();
+  const workflowApiEnabled = readBooleanEnv("TYRUM_WORKFLOW_API", true); // default on
 
   if (workflowApiEnabled) {
     app.route("/", createWorkflowRoutes({ db: container.db, eventPublisher: opts.eventPublisher }));
   }
 
-  const nodePairingEnabled = (() => {
-    const raw = process.env["TYRUM_NODE_PAIRING"]?.trim().toLowerCase();
-    if (!raw) return false; // default off
-    return ["1", "true", "on", "yes"].includes(raw);
-  })();
+  const nodePairingEnabled = readBooleanEnv("TYRUM_NODE_PAIRING", false); // default off
 
   if (nodePairingEnabled) {
     app.route("/", createNodeRoutes({ nodeDal: container.nodeDal }));
   }
 
-  const policyV2Enabled = (() => {
-    const raw = process.env["TYRUM_POLICY_ENFORCE"]?.trim().toLowerCase();
-    if (!raw) return false; // default off (observe-only)
-    return ["1", "true", "on", "yes"].includes(raw);
-  })();
+  const policyV2Enabled = readBooleanEnv("TYRUM_POLICY_ENFORCE", false); // default off (observe-only)
 
   if (policyV2Enabled) {
     app.route("/", createPolicyV2Routes({
@@ -229,11 +206,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     eventPublisher: opts.eventPublisher,
   }));
 
-  const authProfilesEnabled = (() => {
-    const raw = process.env["TYRUM_AUTH_PROFILES"]?.trim().toLowerCase();
-    if (!raw) return false; // default off
-    return ["1", "true", "on", "yes"].includes(raw);
-  })();
+  const authProfilesEnabled = readBooleanEnv("TYRUM_AUTH_PROFILES", false); // default off
 
   if (authProfilesEnabled) {
     app.route("/", createModelRoutes({
@@ -242,11 +215,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     }));
   }
 
-  const pluginsEnabled = (() => {
-    const raw = process.env["TYRUM_PLUGINS"]?.trim().toLowerCase();
-    if (!raw) return false; // default off
-    return ["1", "true", "on", "yes"].includes(raw);
-  })();
+  const pluginsEnabled = readBooleanEnv("TYRUM_PLUGINS", false); // default off
 
   if (pluginsEnabled) {
     app.route("/", createPluginRoutes({ pluginRegistry: container.pluginRegistry }));
