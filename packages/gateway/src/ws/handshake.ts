@@ -6,6 +6,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { verifyDeviceProof } from "./device-identity.js";
 
 export type HandshakeState = "waiting" | "challenged" | "connected" | "failed";
 
@@ -31,6 +32,8 @@ export class HandshakeStateMachine {
   private state: HandshakeState = "waiting";
   private challenge: HandshakeChallenge | undefined;
   private deviceId: string | undefined;
+  private publicKeyHex: string | undefined;
+  private role: string | undefined;
   private protocolRev: string | undefined;
 
   getState(): HandshakeState {
@@ -43,6 +46,8 @@ export class HandshakeStateMachine {
   handleInit(payload: {
     protocol_rev?: string;
     device_id?: string;
+    public_key?: string;
+    role?: string;
     capabilities?: string[];
   }): HandshakeResult {
     if (this.state !== "waiting") {
@@ -51,6 +56,8 @@ export class HandshakeStateMachine {
 
     this.protocolRev = payload.protocol_rev ?? "v2";
     this.deviceId = payload.device_id;
+    this.publicKeyHex = payload.public_key;
+    this.role = payload.role;
 
     // If no device_id, skip challenge and complete immediately
     if (!payload.device_id) {
@@ -106,11 +113,23 @@ export class HandshakeStateMachine {
       return { state: "failed", error: "challenge_expired" };
     }
 
-    // For now, accept any proof (actual crypto verification will be added when device keys are implemented)
-    // In production, this would verify: sign(challenge, device_private_key) == proof
     if (!payload.proof || payload.proof.length === 0) {
       this.state = "failed";
       return { state: "failed", error: "empty_proof" };
+    }
+
+    // Verify Ed25519 signature when public key is available
+    if (this.publicKeyHex) {
+      const valid = verifyDeviceProof(payload.proof, this.publicKeyHex, {
+        challenge: this.challenge.challenge,
+        protocol_rev: this.protocolRev ?? "v2",
+        role: this.role ?? "client",
+        device_id: this.deviceId ?? "",
+      });
+      if (!valid) {
+        this.state = "failed";
+        return { state: "failed", error: "invalid_proof" };
+      }
     }
 
     this.state = "connected";
@@ -127,6 +146,8 @@ export class HandshakeStateMachine {
     this.state = "waiting";
     this.challenge = undefined;
     this.deviceId = undefined;
+    this.publicKeyHex = undefined;
+    this.role = undefined;
     this.protocolRev = undefined;
   }
 }
