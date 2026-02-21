@@ -35,15 +35,33 @@ export function shouldCompact(
   return turns.length >= config.trigger_message_count;
 }
 
+const TOOL_RESULT_MARKER = /\[tool[_-]result\b/i;
+
+/** Truncate large tool-result content in a turn. */
+function pruneToolResults(content: string, maxChars: number): string {
+  if (content.length <= maxChars || !TOOL_RESULT_MARKER.test(content)) {
+    return content;
+  }
+  return content.slice(0, maxChars) + "\n[...tool result truncated]";
+}
+
 /** Build the user prompt for the compaction LLM call. */
 export function buildCompactionPrompt(
   turns: SessionMessage[],
   preserveRecent: number,
   previousSummary: string,
+  toolResultMaxChars?: number,
 ): { olderTurns: SessionMessage[]; recentTurns: SessionMessage[]; prompt: string } {
   const splitAt = Math.max(0, turns.length - preserveRecent);
   const olderTurns = turns.slice(0, splitAt);
   const recentTurns = turns.slice(splitAt);
+
+  // Prune large tool results in older turns before building the prompt
+  const maxChars = toolResultMaxChars ?? 2048;
+  const prunedOlderTurns = olderTurns.map((turn) => ({
+    ...turn,
+    content: pruneToolResults(turn.content, maxChars),
+  }));
 
   const parts: string[] = [];
 
@@ -52,7 +70,7 @@ export function buildCompactionPrompt(
   }
 
   parts.push("Conversation to summarize:");
-  for (const turn of olderTurns) {
+  for (const turn of prunedOlderTurns) {
     parts.push(`[${turn.role}] ${turn.content}`);
   }
 
@@ -78,6 +96,7 @@ export async function compactSession(
     turns,
     config.preserve_recent,
     previousSummary,
+    config.tool_result_max_chars,
   );
 
   const result = await generateFn({

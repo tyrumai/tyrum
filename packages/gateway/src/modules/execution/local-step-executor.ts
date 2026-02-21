@@ -186,6 +186,7 @@ class LocalStepExecutor implements StepExecutor {
     planId: string,
     stepIndex: number,
     timeoutMs: number,
+    signal?: AbortSignal,
   ): Promise<StepResult> {
     const { resolved, secrets } = await resolveSecrets(action.args ?? {}, this.secretProvider);
     if (secrets.length > 0) {
@@ -200,6 +201,7 @@ class LocalStepExecutor implements StepExecutor {
           planId,
           stepIndex,
           timeoutMs,
+          signal,
         );
       case "CLI":
         return this.executeCli(
@@ -208,6 +210,7 @@ class LocalStepExecutor implements StepExecutor {
           planId,
           stepIndex,
           timeoutMs,
+          signal,
         );
       default:
         return { success: false, error: `unsupported action type: ${action.type}` };
@@ -220,6 +223,7 @@ class LocalStepExecutor implements StepExecutor {
     _planId: string,
     _stepIndex: number,
     stepTimeoutMs: number,
+    externalSignal?: AbortSignal,
   ): Promise<StepResult> {
     const url = typeof args["url"] === "string" ? args["url"] : undefined;
     if (!url) return { success: false, error: "missing required argument: url" };
@@ -241,15 +245,18 @@ class LocalStepExecutor implements StepExecutor {
       ? Math.max(1, Math.min(stepCapMs, Math.min(300_000, Math.floor(timeoutMsRaw))))
       : Math.min(stepCapMs, DEFAULT_HTTP_TIMEOUT_MS);
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const timeoutController = new AbortController();
+    const timeout = setTimeout(() => timeoutController.abort(), timeoutMs);
+    const composedSignal = externalSignal
+      ? AbortSignal.any([externalSignal, timeoutController.signal])
+      : timeoutController.signal;
 
     try {
       const response = await fetch(url, {
         method,
         headers,
         body,
-        signal: controller.signal,
+        signal: composedSignal,
       });
 
       const contentType = response.headers.get("content-type");
@@ -295,6 +302,7 @@ class LocalStepExecutor implements StepExecutor {
     planId: string,
     stepIndex: number,
     stepTimeoutMs: number,
+    externalSignal?: AbortSignal,
   ): Promise<StepResult> {
     const cmd = typeof args["cmd"] === "string" ? args["cmd"] : undefined;
     if (!cmd) return { success: false, error: "missing required argument: cmd" };
@@ -367,8 +375,19 @@ class LocalStepExecutor implements StepExecutor {
       }, timeoutMs);
       timer.unref();
 
+      // Kill child process on external abort signal.
+      const onAbort = () => {
+        try {
+          child.kill("SIGTERM");
+        } catch {
+          // ignore
+        }
+      };
+      externalSignal?.addEventListener("abort", onAbort, { once: true });
+
       child.once("close", (exitCode, signal) => {
         clearTimeout(timer);
+        externalSignal?.removeEventListener("abort", onAbort);
         resolvePromise({
           exitCode,
           signal,

@@ -61,6 +61,7 @@ interface ModelRoute {
 interface ModelGatewayState {
   routes: Map<string, ModelRoute>;
   timeoutMs: number;
+  onUpstreamResponse?: (modelName: string, headers: Headers) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -292,6 +293,9 @@ export function createModelProxyRoutesFromState(
         502,
       );
     }
+
+    // Notify caller of upstream response headers (e.g. for quota tracking)
+    state.onUpstreamResponse?.(modelName, upstreamResponse.headers);
 
     // Determine if streaming
     const isStream =

@@ -1,9 +1,11 @@
 import { Hono } from "hono";
 import type { AuthProfileDal } from "../modules/model/auth-profile-dal.js";
+import type { EventPublisher } from "../modules/backplane/event-publisher.js";
 import { randomUUID } from "node:crypto";
 
 export interface ModelRouteDeps {
   authProfileDal: AuthProfileDal;
+  eventPublisher?: EventPublisher;
 }
 
 export function createModelRoutes(deps: ModelRouteDeps): Hono {
@@ -22,14 +24,21 @@ export function createModelRoutes(deps: ModelRouteDeps): Hono {
     if (!body.provider) {
       return c.json({ error: "invalid_request", message: "provider is required" }, 400);
     }
+    const profileId = randomUUID();
     const profile = await deps.authProfileDal.create({
-      profileId: randomUUID(),
+      profileId,
       provider: body.provider,
       label: body.label,
       secretHandle: body.secret_handle,
       priority: body.priority,
       metadata: body.metadata,
     });
+
+    void deps.eventPublisher?.publish("auth_profile.created", {
+      profile_id: profileId,
+      provider: body.provider,
+    }).catch(() => {});
+
     return c.json({ profile }, 201);
   });
 
@@ -41,6 +50,12 @@ export function createModelRoutes(deps: ModelRouteDeps): Hono {
       return c.json({ error: "not_found", message: "profile not found" }, 404);
     }
     await deps.authProfileDal.deactivate(profileId);
+
+    void deps.eventPublisher?.publish("auth_profile.updated", {
+      profile_id: profileId,
+      action: "rotated",
+    }).catch(() => {});
+
     return c.json({ rotated: true, profile_id: profileId });
   });
 
@@ -48,6 +63,11 @@ export function createModelRoutes(deps: ModelRouteDeps): Hono {
   app.delete("/model/profiles/:id", async (c) => {
     const profileId = c.req.param("id");
     await deps.authProfileDal.deactivate(profileId);
+
+    void deps.eventPublisher?.publish("auth_profile.deleted", {
+      profile_id: profileId,
+    }).catch(() => {});
+
     return c.json({ deactivated: true });
   });
 

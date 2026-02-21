@@ -81,7 +81,7 @@ export function chunkIrNodes(
   return chunks;
 }
 
-function estimateNodeSize(node: IrNode): number {
+export function estimateNodeSize(node: IrNode): number {
   let size = 0;
 
   if (node.content) {

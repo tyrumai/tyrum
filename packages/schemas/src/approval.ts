@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { DateTimeSchema } from "./common.js";
 import { Lane, TyrumKey } from "./keys.js";
+import { PolicyOverride } from "./policy.js";
 
 export const ApprovalStatus = z.enum([
   "pending",
@@ -56,6 +57,9 @@ export const Approval = z
     created_at: DateTimeSchema,
     expires_at: DateTimeSchema.nullable().optional(),
     resolution: ApprovalResolution.nullable(),
+    estimated_cost_micros: z.number().int().nonnegative().optional(),
+    items_preview: z.array(z.string()).optional(),
+    suggested_overrides: z.array(PolicyOverride).optional(),
   })
   .strict()
   .superRefine((value, ctx) => {

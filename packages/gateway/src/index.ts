@@ -26,6 +26,8 @@ import { ConnectionDirectoryDal } from "./modules/backplane/connection-directory
 import { OutboxPoller } from "./modules/backplane/outbox-poller.js";
 import { EventConsumer } from "./modules/backplane/event-consumer.js";
 import { ApprovalExpiryDaemon } from "./modules/approval/expiry-daemon.js";
+import { RetentionDaemon } from "./modules/retention/daemon.js";
+import { WatcherFiredSubscriber } from "./modules/watcher/fired-subscriber.js";
 import { ConnectionManager } from "./ws/connection-manager.js";
 import { SlashCommandRegistry } from "./ws/slash-commands.js";
 import { registerBuiltinCommands } from "./ws/builtin-commands.js";
@@ -360,12 +362,36 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
         })
       : undefined;
 
+  // Watcher fired subscriber — bridges scheduler firings to execution engine
+  const watcherFiredSubscriber =
+    role === "all" || role === "scheduler"
+      ? (() => {
+          const enqueueEngine = new ExecutionEngine({
+            db: container.db,
+            redactionEngine: container.redactionEngine,
+          });
+          return new WatcherFiredSubscriber({
+            db: container.db,
+            eventBus: container.eventBus,
+            engine: enqueueEngine,
+          });
+        })()
+      : undefined;
+
+  // Retention daemon — prunes old rows on a schedule
+  const retentionDaemon =
+    role === "all" || role === "edge"
+      ? new RetentionDaemon({ db: container.db })
+      : undefined;
+
   if (role === "all" || role === "edge") {
     container.watcherProcessor.start();
   }
   if (watcherScheduler) {
     watcherScheduler.start();
   }
+  watcherFiredSubscriber?.start();
+  retentionDaemon?.start();
 
   const instanceId =
     process.env["TYRUM_INSTANCE_ID"]?.trim() || `gw-${crypto.randomUUID()}`;
@@ -628,6 +654,8 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
 
     container.watcherProcessor.stop();
     watcherScheduler?.stop();
+    watcherFiredSubscriber?.stop();
+    retentionDaemon?.stop();
     outboxPoller?.stop();
     workerLoop?.stop();
 

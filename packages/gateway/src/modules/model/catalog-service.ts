@@ -26,6 +26,16 @@ const PROVIDER_ENV_MAP: Record<string, string[]> = {
   cerebras: ["CEREBRAS_API_KEY"],
 };
 
+export interface QuotaInfo {
+  modelId: string;
+  remaining?: number;
+  limit?: number;
+  retryAfterSeconds?: number;
+  updatedAt: number;
+}
+
+const QUOTA_TTL_MS = 60_000; // 1 minute
+
 export interface CatalogServiceOpts {
   cacheDir: string;
   refreshIntervalMs?: number;
@@ -34,6 +44,7 @@ export interface CatalogServiceOpts {
 export class ModelCatalogService {
   private providers = new Map<string, CatalogProviderT>();
   private models = new Map<string, { model: CatalogModelT; providerId: string }>();
+  private quotaCache = new Map<string, QuotaInfo>();
   private lastRefresh = 0;
   private readonly cacheFile: string;
   private readonly refreshInterval: number;
@@ -76,6 +87,48 @@ export class ModelCatalogService {
   /** True if the cache is stale and should be refreshed. */
   get isStale(): boolean {
     return Date.now() - this.lastRefresh > this.refreshInterval;
+  }
+
+  /** Parse rate-limit headers from an upstream provider response. */
+  updateQuotaFromHeaders(modelId: string, headers: Headers): void {
+    const remaining = headers.get("x-ratelimit-remaining");
+    const limit = headers.get("x-ratelimit-limit");
+    const retryAfter = headers.get("retry-after");
+
+    if (remaining == null && limit == null && retryAfter == null) {
+      return; // no rate-limit headers present
+    }
+
+    const info: QuotaInfo = {
+      modelId,
+      updatedAt: Date.now(),
+    };
+
+    if (remaining != null) {
+      const n = parseInt(remaining, 10);
+      if (!Number.isNaN(n)) info.remaining = n;
+    }
+    if (limit != null) {
+      const n = parseInt(limit, 10);
+      if (!Number.isNaN(n)) info.limit = n;
+    }
+    if (retryAfter != null) {
+      const n = parseInt(retryAfter, 10);
+      if (!Number.isNaN(n)) info.retryAfterSeconds = n;
+    }
+
+    this.quotaCache.set(modelId, info);
+  }
+
+  /** Get cached quota info for a model, or undefined if expired/missing. */
+  getQuotaInfo(modelId: string): QuotaInfo | undefined {
+    const info = this.quotaCache.get(modelId);
+    if (!info) return undefined;
+    if (Date.now() - info.updatedAt > QUOTA_TTL_MS) {
+      this.quotaCache.delete(modelId);
+      return undefined;
+    }
+    return info;
   }
 
   /**

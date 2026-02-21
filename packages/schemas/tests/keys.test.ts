@@ -64,6 +64,23 @@ describe("TyrumKey", () => {
   });
 });
 
+describe("AgentDmKey", () => {
+  it("parses agent DM key", () => {
+    const key = TyrumKey.parse("agent:a1:discord-1:dm:user-42");
+    expect(parseTyrumKey(key)).toEqual({
+      kind: "agent",
+      agent_id: "a1",
+      channel: "discord-1",
+      thread_kind: "dm",
+      peer_id: "user-42",
+    });
+  });
+
+  it("rejects DM key without peer_id", () => {
+    expect(() => TyrumKey.parse("agent:a1:discord-1:dm:")).toThrow();
+  });
+});
+
 describe("HookKey", () => {
   it("rejects non-uuid hook keys", () => {
     expect(() => HookKey.parse("hook:not-a-uuid")).toThrow();

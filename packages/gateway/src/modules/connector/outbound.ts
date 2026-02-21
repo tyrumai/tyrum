@@ -1,4 +1,5 @@
 import type { SqlDb } from "../../statestore/types.js";
+import type { EventPublisher } from "../backplane/event-publisher.js";
 
 export interface OutboundMessage {
   idempotency_key: string;
@@ -13,7 +14,14 @@ export interface OutboundResult {
 }
 
 export class OutboundSender {
-  constructor(private readonly db: SqlDb) {}
+  private readonly eventPublisher?: EventPublisher;
+
+  constructor(
+    private readonly db: SqlDb,
+    opts?: { eventPublisher?: EventPublisher },
+  ) {
+    this.eventPublisher = opts?.eventPublisher;
+  }
 
   /**
    * Send a message with idempotency. If the key was already used successfully,
@@ -59,6 +67,12 @@ export class OutboundSender {
         "UPDATE outbound_idempotency SET status = 'completed', completed_at = ?, result_json = ? WHERE idempotency_key = ? AND channel = ?",
         [nowIso, JSON.stringify(result ?? null), message.idempotency_key, message.channel],
       );
+
+      void this.eventPublisher?.publish("message.outbound", {
+        channel: message.channel,
+        idempotency_key: message.idempotency_key,
+      }).catch(() => {});
+
       return { success: true, result };
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);

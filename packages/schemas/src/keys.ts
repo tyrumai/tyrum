@@ -68,7 +68,15 @@ export const AgentChannelKey = z
   );
 export type AgentChannelKey = z.infer<typeof AgentChannelKey>;
 
-export const AgentKey = z.union([AgentMainKey, AgentGroupKey, AgentChannelKey]);
+export const AgentDmKey = z
+  .string()
+  .regex(
+    /^agent:[^:]+:[^:]+:dm:[^:]+$/,
+    "agent DM key must be agent:<agentId>:<channel>:dm:<peerId>",
+  );
+export type AgentDmKey = z.infer<typeof AgentDmKey>;
+
+export const AgentKey = z.union([AgentMainKey, AgentGroupKey, AgentChannelKey, AgentDmKey]);
 export type AgentKey = z.infer<typeof AgentKey>;
 
 export const CronKey = z
@@ -128,6 +136,13 @@ export type ParsedTyrumKey =
       thread_kind: "channel";
       id: ThreadId;
     }
+  | {
+      kind: "agent";
+      agent_id: AgentId;
+      channel: ChannelKey;
+      thread_kind: "dm";
+      peer_id: ThreadId;
+    }
   | { kind: "cron"; job_id: CronJobId }
   | { kind: "hook"; uuid: string }
   | { kind: "node"; node_id: NodeId };
@@ -165,6 +180,20 @@ export function parseTyrumKey(key: TyrumKey): ParsedTyrumKey {
           channel: ChannelKey.parse(channel),
           thread_kind: scope,
           id: ThreadId.parse(id),
+        };
+      }
+
+      if (scope === "dm") {
+        const peerId = parts[4];
+        if (!peerId) {
+          throw new Error(`invalid agent key: ${key}`);
+        }
+        return {
+          kind: "agent",
+          agent_id: AgentId.parse(agentId),
+          channel: ChannelKey.parse(channel),
+          thread_kind: "dm",
+          peer_id: ThreadId.parse(peerId),
         };
       }
 

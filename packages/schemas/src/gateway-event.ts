@@ -27,6 +27,15 @@ export const GatewayEventKind = z.enum([
   "artifact.fetched",
   "policy_override.created",
   "policy_override.revoked",
+  "secret.resolved",
+  "secret.rotated",
+  "secret.revoked",
+  "auth_profile.created",
+  "auth_profile.updated",
+  "auth_profile.deleted",
+  "model.selected",
+  "message.outbound",
+  "agent.routed",
 ]);
 export type GatewayEventKind = z.infer<typeof GatewayEventKind>;
 
@@ -78,6 +87,7 @@ export const WatcherFiredPayload = z
     plan_id: z.string().min(1).optional(),
     run_id: ExecutionRunId.optional(),
     trigger_type: z.string().min(1),
+    firing_id: UuidSchema.optional(),
   })
   .strict();
 export type WatcherFiredPayload = z.infer<typeof WatcherFiredPayload>;

@@ -42,5 +42,18 @@ export function createCatalogRoutes(deps: CatalogRouteDeps): Hono {
     return c.json(model);
   });
 
+  /** GET /models/catalog/:modelId/quota — cached rate-limit info */
+  app.get("/models/catalog/:modelId/quota", (c) => {
+    const modelId = c.req.param("modelId");
+    const quota = catalog.getQuotaInfo(modelId);
+    if (!quota) {
+      return c.json(
+        { error: "not_found", message: `No quota info cached for model '${modelId}'` },
+        404,
+      );
+    }
+    return c.json(quota);
+  });
+
   return app;
 }

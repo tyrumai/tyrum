@@ -110,3 +110,31 @@ jobs:
         if: runner.os != 'Linux'
         shell: bash
         run: pnpm exec vitest run apps/desktop/tests --passWithNoTests
+
+  schema-compat:
+    name: Schema Compatibility Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build schemas
+        run: pnpm --filter @tyrum/schemas build
+
+      - name: Generate schema snapshot
+        run: node packages/schemas/scripts/snapshot-schemas.mjs > /tmp/schemas-pr.json
+
+      - name: Compare with committed snapshot
+        run: node packages/schemas/scripts/diff-schemas.mjs packages/schemas/snapshots/current.json /tmp/schemas-pr.json

@@ -68,6 +68,13 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     app.use("*", createAuthMiddleware(opts.tokenStore));
   }
 
+  // Contract version header for schema compatibility tracking
+  const CONTRACT_VERSION = "0.1.0";
+  app.use("*", async (c, next) => {
+    c.header("X-Tyrum-Contract-Version", CONTRACT_VERSION);
+    await next();
+  });
+
   // Baseline structured request logging with stable request_id.
   app.use("*", async (c, next) => {
     const startedAt = Date.now();
@@ -141,7 +148,10 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   app.route("/", createWebApiRoutes());
 
   if (opts.secretProvider) {
-    app.route("/", createSecretRoutes(opts.secretProvider));
+    app.route("/", createSecretRoutes({
+      secretProvider: opts.secretProvider,
+      eventPublisher: opts.eventPublisher,
+    }));
   }
 
   if (opts.connectionManager) {
@@ -226,7 +236,10 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   })();
 
   if (authProfilesEnabled) {
-    app.route("/", createModelRoutes({ authProfileDal: container.authProfileDal }));
+    app.route("/", createModelRoutes({
+      authProfileDal: container.authProfileDal,
+      eventPublisher: opts.eventPublisher,
+    }));
   }
 
   const pluginsEnabled = (() => {

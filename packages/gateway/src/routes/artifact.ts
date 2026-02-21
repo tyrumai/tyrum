@@ -16,11 +16,19 @@ export interface ArtifactRouteDeps {
 export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
   const app = new Hono();
 
+  // TODO(ARI-83a27ca2): For S3 deployments, generate presigned URLs instead of proxying.
   app.get("/artifacts/:id", async (c) => {
     const artifactId = c.req.param("id");
     const meta = await deps.artifactMetadataDal.getById(artifactId);
     if (!meta) {
       return c.json({ error: "not_found", message: "artifact not found" }, 404);
+    }
+
+    // Agent-id scoping: deny cross-agent access when header is present
+    const requestAgentId = c.req.header("X-Tyrum-Agent-Id");
+    const metaAgentId = (meta as unknown as Record<string, unknown>)["agent_id"];
+    if (requestAgentId && metaAgentId && requestAgentId !== metaAgentId) {
+      return c.json({ error: "forbidden", message: "agent_id mismatch" }, 403);
     }
 
     // Emit audit event for artifact fetch

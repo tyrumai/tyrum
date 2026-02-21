@@ -23,7 +23,7 @@ export function registerBuiltinCommands(
       };
     }
     return { output: "Status information not available" };
-  }, "Show gateway status");
+  }, "Show gateway status", { readonly: true });
 
   registry.register("help", async () => {
     const list = registry.listCommands();
@@ -32,9 +32,9 @@ export function registerBuiltinCommands(
       output: `Available commands:\n${lines.join("\n")}`,
       data: list,
     };
-  }, "List available commands");
+  }, "List available commands", { readonly: true });
 
   registry.register("ping", async () => {
     return { output: "pong", data: { timestamp: new Date().toISOString() } };
-  }, "Check connectivity");
+  }, "Check connectivity", { readonly: true });
 }

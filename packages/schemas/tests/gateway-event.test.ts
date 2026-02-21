@@ -172,6 +172,15 @@ describe("WatcherFiredPayload", () => {
     expect(p.trigger_type).toBe("cron");
   });
 
+  it("accepts optional firing_id", () => {
+    const p = WatcherFiredPayload.parse({
+      watcher_id: 1,
+      trigger_type: "cron",
+      firing_id: UUID,
+    });
+    expect(p.firing_id).toBe(UUID);
+  });
+
   it("rejects missing trigger_type", () => {
     expect(() => WatcherFiredPayload.parse({ watcher_id: 1 })).toThrow();
   });
@@ -185,4 +194,30 @@ describe("WatcherFiredPayload", () => {
       }),
     ).toThrow();
   });
+});
+
+describe("Run 8 event kinds", () => {
+  const newKinds = [
+    "secret.resolved",
+    "secret.rotated",
+    "secret.revoked",
+    "auth_profile.created",
+    "auth_profile.updated",
+    "auth_profile.deleted",
+    "model.selected",
+    "message.outbound",
+    "agent.routed",
+  ] as const;
+
+  for (const kind of newKinds) {
+    it(`accepts ${kind}`, () => {
+      const env = GatewayEventEnvelope.parse({
+        event_id: UUID,
+        kind,
+        occurred_at: NOW,
+        payload: {},
+      });
+      expect(env.kind).toBe(kind);
+    });
+  }
 });

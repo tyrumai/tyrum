@@ -3,6 +3,8 @@
  * When TYRUM_MULTI_AGENT is off, always returns 'default'.
  */
 
+import type { EventPublisher } from "../backplane/event-publisher.js";
+
 const DEFAULT_AGENT_ID = "default";
 
 export function isMultiAgentEnabled(): boolean {
@@ -41,4 +43,17 @@ export function withAgentScope(
     query: `${query} WHERE agent_id = ?`,
     params: [...params, resolved],
   };
+}
+
+/**
+ * Emit an agent.routed audit event when multi-agent routing occurs.
+ * No-op when TYRUM_MULTI_AGENT is disabled.
+ */
+export function emitRoutingEvent(
+  eventPublisher: EventPublisher | undefined,
+  opts: { from_agent_id: string; to_agent_id: string; reason?: string },
+): void {
+  if (!isMultiAgentEnabled()) return;
+  if (!eventPublisher) return;
+  void eventPublisher.publish("agent.routed", opts).catch(() => {});
 }

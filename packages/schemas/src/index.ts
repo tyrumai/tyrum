@@ -264,6 +264,7 @@ export {
   AgentMainKey,
   AgentGroupKey,
   AgentChannelKey,
+  AgentDmKey,
   AgentKey,
   CronKey,
   HookKey,

@@ -52,6 +52,7 @@ export const ActionPrimitive = z.object({
   args: ActionArguments.default({}),
   postcondition: ActionPostcondition.optional(),
   idempotency_key: z.string().optional(),
+  rollback_hint: z.string().trim().min(1).optional(),
 });
 export type ActionPrimitive = z.infer<typeof ActionPrimitive>;
 

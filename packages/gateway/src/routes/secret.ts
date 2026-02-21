@@ -8,8 +8,15 @@
 import { Hono } from "hono";
 import { SecretRotateRequest, SecretStoreRequest } from "@tyrum/schemas";
 import { EnvSecretProvider, type SecretProvider } from "../modules/secret/provider.js";
+import type { EventPublisher } from "../modules/backplane/event-publisher.js";
 
-export function createSecretRoutes(secretProvider: SecretProvider): Hono {
+export interface SecretRouteDeps {
+  secretProvider: SecretProvider;
+  eventPublisher?: EventPublisher;
+}
+
+export function createSecretRoutes(deps: SecretRouteDeps): Hono {
+  const { secretProvider, eventPublisher } = deps;
   const app = new Hono();
 
   /** Store a new secret and return its handle (never the value). */
@@ -65,6 +72,8 @@ export function createSecretRoutes(secretProvider: SecretProvider): Hono {
       );
     }
 
+    void eventPublisher?.publish("secret.revoked", { handle_id: handleId }).catch(() => {});
+
     return c.json({ revoked: true });
   });
 
@@ -107,6 +116,13 @@ export function createSecretRoutes(secretProvider: SecretProvider): Hono {
 
     const handle = await secretProvider.store(existing.scope, parsed.data.value);
     const revoked = await secretProvider.revoke(handleId);
+
+    void eventPublisher?.publish("secret.rotated", {
+      old_handle_id: handleId,
+      new_handle_id: handle.handle_id,
+      scope: existing.scope,
+    }).catch(() => {});
+
     return c.json({ revoked, handle }, 201);
   });
 

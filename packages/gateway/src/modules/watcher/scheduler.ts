@@ -1,17 +1,20 @@
 /**
- * Watcher scheduler — periodic tick for time-based watchers.
+ * Watcher scheduler -- periodic tick for time-based watchers.
  *
- * Queries active periodic watchers on each tick, evaluates whether
- * their interval has elapsed since last fire, and creates plans for
- * matching watchers via the event bus.
+ * Uses per-watcher leases to safely coordinate across multiple
+ * gateway instances.  Each fired watcher gets a unique firing_id
+ * recorded in the watcher_firings table.
  */
 
 import type { Emitter } from "mitt";
 import type { GatewayEvents } from "../../event-bus.js";
 import type { MemoryDal } from "../memory/dal.js";
 import type { SqlDb } from "../../statestore/types.js";
+import type { PolicyBundleManager } from "../policy/bundle.js";
+import type { Logger } from "../observability/logger.js";
 
 const DEFAULT_TICK_MS = 60_000;
+const DEFAULT_LEASE_MS = 120_000;
 
 interface RawPeriodicWatcherRow {
   id: number;
@@ -33,11 +36,15 @@ export interface WatcherSchedulerOptions {
   memoryDal: MemoryDal;
   eventBus: Emitter<GatewayEvents>;
   tickMs?: number;
+  leaseMs?: number;
+  schedulerOwner?: string;
   /**
    * When true, the scheduler interval will keep the Node.js process alive.
    * Defaults to false so background scheduling doesn't block graceful shutdown.
    */
   keepProcessAlive?: boolean;
+  policyBundleManager?: PolicyBundleManager;
+  logger?: Logger;
 }
 
 export class WatcherScheduler {
@@ -45,7 +52,11 @@ export class WatcherScheduler {
   private readonly memoryDal: MemoryDal;
   private readonly eventBus: Emitter<GatewayEvents>;
   private readonly tickMs: number;
+  private readonly leaseMs: number;
+  private readonly schedulerOwner: string;
   private readonly keepProcessAlive: boolean;
+  private readonly policyBundleManager?: PolicyBundleManager;
+  private readonly logger?: Logger;
   private timer: ReturnType<typeof setInterval> | undefined;
 
   constructor(opts: WatcherSchedulerOptions) {
@@ -53,7 +64,11 @@ export class WatcherScheduler {
     this.memoryDal = opts.memoryDal;
     this.eventBus = opts.eventBus;
     this.tickMs = opts.tickMs ?? DEFAULT_TICK_MS;
+    this.leaseMs = opts.leaseMs ?? DEFAULT_LEASE_MS;
+    this.schedulerOwner = opts.schedulerOwner ?? crypto.randomUUID();
     this.keepProcessAlive = opts.keepProcessAlive ?? false;
+    this.policyBundleManager = opts.policyBundleManager;
+    this.logger = opts.logger;
   }
 
   start(): void {
@@ -79,6 +94,7 @@ export class WatcherScheduler {
     const watchers = await this.getActivePeriodicWatchers();
     const now = Date.now();
     const nowIso = new Date(now).toISOString();
+    const leaseExpiry = now + this.leaseMs;
 
     for (const watcher of watchers) {
       let config: PeriodicTriggerConfig;
@@ -97,14 +113,17 @@ export class WatcherScheduler {
         continue;
       }
 
-      const claimed = await this.db.run(
+      // Acquire lease for this watcher
+      const leased = await this.db.run(
         `UPDATE watchers
-         SET last_fired_at_ms = ?, updated_at = ?
+         SET scheduler_owner = ?, scheduler_lease_expires_at_ms = ?,
+             last_fired_at_ms = ?, updated_at = ?
          WHERE id = ? AND trigger_type = 'periodic' AND active = 1
-           AND (last_fired_at_ms IS NULL OR ? - last_fired_at_ms >= ?)`,
-        [now, nowIso, watcher.id, now, config.intervalMs],
+           AND (last_fired_at_ms IS NULL OR ? - last_fired_at_ms >= ?)
+           AND (scheduler_owner IS NULL OR scheduler_lease_expires_at_ms < ?)`,
+        [this.schedulerOwner, leaseExpiry, now, nowIso, watcher.id, now, config.intervalMs, now],
       );
-      if (claimed.changes !== 1) {
+      if (leased.changes !== 1) {
         continue;
       }
 
@@ -119,7 +138,31 @@ export class WatcherScheduler {
   }
 
   private async fireWatcher(watcher: RawPeriodicWatcherRow, now: number): Promise<void> {
+    // Policy gate: check if automation is allowed
+    if (this.policyBundleManager) {
+      const decision = this.policyBundleManager.evaluate("automation", {
+        watcher_id: watcher.id,
+        trigger_type: "periodic",
+      });
+      if (decision.action === "deny") {
+        this.logger?.warn("watcher.fire_denied_by_policy", {
+          watcher_id: watcher.id,
+          plan_id: watcher.plan_id,
+          detail: decision.detail,
+        });
+        return;
+      }
+    }
+
+    const firingId = crypto.randomUUID();
     const eventId = `scheduler-${String(watcher.id)}-${String(now)}`;
+
+    // Record firing in watcher_firings table
+    await this.db.run(
+      `INSERT INTO watcher_firings (firing_id, watcher_id, status, created_at)
+       VALUES (?, ?, 'pending', ?)`,
+      [firingId, watcher.id, new Date(now).toISOString()],
+    );
 
     await this.memoryDal.insertEpisodicEvent(
       eventId,
@@ -130,6 +173,7 @@ export class WatcherScheduler {
         watcherId: watcher.id,
         planId: watcher.plan_id,
         triggerType: "periodic",
+        firingId,
       },
     );
 
@@ -137,6 +181,7 @@ export class WatcherScheduler {
       watcherId: watcher.id,
       planId: watcher.plan_id,
       triggerType: "periodic",
+      firingId,
     });
   }
 }

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { DateTimeSchema } from "./common.js";
-import { TyrumKey, Lane } from "./keys.js";
+import { TyrumKey, Lane, QueueMode } from "./keys.js";
 import { ActionPrimitive } from "./planner.js";
 import { ExecutionRunId, ExecutionRunStatus, ExecutionTrigger } from "./execution.js";
 
@@ -12,6 +12,7 @@ export const WorkflowRunRequest = z
     trigger: ExecutionTrigger,
     idempotency_key: z.string().trim().min(1).optional(),
     budget_tokens: z.number().int().positive().optional(),
+    queue_mode: QueueMode.optional(),
     metadata: z.unknown().optional(),
   })
   .strict();

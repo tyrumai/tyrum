@@ -325,6 +325,18 @@ export class ToolExecutor {
     this.logger = logger;
   }
 
+  /**
+   * Filter a list of tool IDs, removing any denied by policy.
+   * Returns only the tool IDs that are allowed.
+   */
+  filterByPolicy(toolIds: readonly string[]): string[] {
+    if (!this.policyBundleManager) return [...toolIds];
+    return toolIds.filter((id) => {
+      const result = this.policyBundleManager!.evaluate("tools", { tool_id: id });
+      return result.action !== "deny";
+    });
+  }
+
   async execute(
     toolId: string,
     toolCallId: string,

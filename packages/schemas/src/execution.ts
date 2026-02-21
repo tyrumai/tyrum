@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { DateTimeSchema, UuidSchema } from "./common.js";
-import { Lane, TyrumKey } from "./keys.js";
+import { Lane, QueueMode, TyrumKey } from "./keys.js";
 import { ActionPrimitive } from "./planner.js";
 import { ArtifactRef } from "./artifact.js";
 import { PostconditionReport } from "./postcondition.js";
@@ -170,6 +170,9 @@ export const ExecutionRun = z
     created_at: DateTimeSchema,
     started_at: DateTimeSchema.nullable(),
     finished_at: DateTimeSchema.nullable(),
+    budget_tokens: z.number().int().positive().nullable().optional(),
+    spent_tokens: z.number().int().nonnegative().nullable().optional(),
+    queue_mode: QueueMode.nullable().optional(),
   })
   .strict();
 export type ExecutionRun = z.infer<typeof ExecutionRun>;
@@ -185,6 +188,8 @@ export const ExecutionStep = z
     idempotency_key: z.string().trim().min(1).optional(),
     postcondition: z.unknown().optional(),
     approval_id: z.number().int().positive().optional(),
+    rollback_hint: z.string().trim().min(1).optional(),
+    policy_snapshot_id: z.string().optional(),
   })
   .strict();
 export type ExecutionStep = z.infer<typeof ExecutionStep>;

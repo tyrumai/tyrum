@@ -23,7 +23,7 @@ export type GatewayEvents = {
   "plan:completed": { planId: string; stepsExecuted: number };
   "plan:failed": { planId: string; reason: string };
   "plan:escalated": { planId: string; stepIndex: number };
-  "watcher:fired": { watcherId: number; planId: string; triggerType: string };
+  "watcher:fired": { watcherId: number; planId: string; triggerType: string; firingId?: string };
   "gateway:event": { eventId: string; kind: string; payload: unknown };
   "approval:resolved": { approvalId: number; approved: boolean; reason?: string };
 };

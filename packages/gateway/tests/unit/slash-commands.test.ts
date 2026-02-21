@@ -136,8 +136,8 @@ describe("SlashCommandRegistry", () => {
 
       const list = registry.listCommands();
       expect(list).toHaveLength(2);
-      expect(list).toContainEqual({ name: "/help", description: "Show help" });
-      expect(list).toContainEqual({ name: "/status", description: "Show status" });
+      expect(list).toContainEqual({ name: "/help", description: "Show help", readonly: false });
+      expect(list).toContainEqual({ name: "/status", description: "Show status", readonly: false });
     });
 
     it("returns empty array when no commands registered", () => {

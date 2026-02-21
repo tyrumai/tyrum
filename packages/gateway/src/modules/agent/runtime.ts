@@ -33,6 +33,7 @@ import { VectorDal, type VectorSearchResult } from "../memory/vector-dal.js";
 import { EmbeddingPipeline } from "../memory/embedding-pipeline.js";
 import type { ApprovalNotifier } from "../approval/notifier.js";
 import type { ApprovalDal, ApprovalStatus } from "../approval/dal.js";
+import type { EventPublisher } from "../backplane/event-publisher.js";
 
 const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_APPROVAL_WAIT_MS = 120_000;
@@ -77,6 +78,7 @@ export interface AgentRuntimeOptions {
   approvalWaitMs?: number;
   /** Poll interval while waiting for human approval. */
   approvalPollMs?: number;
+  eventPublisher?: EventPublisher;
 }
 
 function trimTo(value: string, max: number): string {
@@ -544,6 +546,13 @@ export class AgentRuntime {
     ];
 
     const model = await this.resolveModel(ctx.config);
+
+    // Audit: emit model.selected event
+    void this.opts.eventPublisher?.publish("model.selected", {
+      model: ctx.config.model.model,
+      session_id: session.session_id,
+      channel: input.channel,
+    }).catch(() => {});
 
     return {
       ctx,

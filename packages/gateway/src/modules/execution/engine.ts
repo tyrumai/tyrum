@@ -2,6 +2,7 @@ import type {
   ActionPrimitive as ActionPrimitiveT,
   ArtifactRef as ArtifactRefT,
   AttemptCost as AttemptCostT,
+  QueueMode as QueueModeT,
 } from "@tyrum/schemas";
 import { evaluatePostcondition, PostconditionError } from "@tyrum/schemas";
 import type { EvaluationContext } from "@tyrum/schemas";
@@ -26,6 +27,7 @@ export interface StepExecutor {
     planId: string,
     stepIndex: number,
     timeoutMs: number,
+    signal?: AbortSignal,
   ): Promise<StepResult>;
 }
 
@@ -42,6 +44,9 @@ export interface EnqueuePlanInput {
   planId: string;
   requestId: string;
   steps: ActionPrimitiveT[];
+  budget_tokens?: number;
+  queue_mode?: QueueModeT;
+  policySnapshotId?: string;
 }
 
 export interface EnqueuePlanResult {
@@ -80,6 +85,8 @@ interface StepRow {
   postcondition_json: string | null;
   max_attempts: number;
   timeout_ms: number;
+  rollback_hint: string | null;
+  policy_snapshot_id: string | null;
 }
 
 function defaultClock(): ExecutionClock {
@@ -125,6 +132,7 @@ export class ExecutionEngine {
   private readonly maxQueueDepth: number;
   private readonly maxConcurrentRuns: number;
   private readonly modelCatalog?: CostLookup;
+  private readonly activeControllers = new Map<string, AbortController>();
 
   constructor(opts: {
     db: SqlDb;
@@ -171,6 +179,13 @@ export class ExecutionEngine {
   }
 
   async enqueuePlan(input: EnqueuePlanInput): Promise<EnqueuePlanResult> {
+    const queueMode: QueueModeT = input.queue_mode ?? "collect";
+
+    // Steer mode: cancel all queued runs and abort running run on same key+lane.
+    if (queueMode === "steer") {
+      await this.applySteerMode(input.key, input.lane);
+    }
+
     if (this.maxQueueDepth > 0) {
       const depth = await this.getQueueDepth();
       if (depth >= this.maxQueueDepth) {
@@ -211,9 +226,9 @@ export class ExecutionEngine {
       );
 
       await tx.run(
-        `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
-         VALUES (?, ?, ?, ?, 'queued', 1)`,
-        [runId, jobId, input.key, input.lane],
+        `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt, budget_tokens, queue_mode)
+         VALUES (?, ?, ?, ?, 'queued', 1, ?, ?)`,
+        [runId, jobId, input.key, input.lane, input.budget_tokens ?? null, queueMode],
       );
 
       for (let idx = 0; idx < input.steps.length; idx += 1) {
@@ -227,8 +242,10 @@ export class ExecutionEngine {
              status,
              action_json,
              idempotency_key,
-             postcondition_json
-           ) VALUES (?, ?, ?, 'queued', ?, ?, ?)`,
+             postcondition_json,
+             rollback_hint,
+             policy_snapshot_id
+           ) VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, ?)`,
           [
             stepId,
             runId,
@@ -236,6 +253,8 @@ export class ExecutionEngine {
             JSON.stringify(action),
             action.idempotency_key ?? null,
             action.postcondition ? JSON.stringify(action.postcondition) : null,
+            action.rollback_hint ?? null,
+            input.policySnapshotId ?? null,
           ],
         );
       }
@@ -248,8 +267,49 @@ export class ExecutionEngine {
       key: input.key,
       lane: input.lane,
       steps_count: input.steps.length,
+      budget_tokens: input.budget_tokens ?? null,
+      queue_mode: queueMode,
     });
     return { jobId, runId };
+  }
+
+  /**
+   * Cancel a run by marking it cancelled in the DB and aborting any in-flight step.
+   *
+   * Returns true if the run was successfully cancelled.
+   */
+  async cancelRun(runId: string): Promise<boolean> {
+    const { nowIso } = this.clock();
+
+    const result = await this.db.run(
+      `UPDATE execution_runs SET status = 'cancelled', finished_at = ?
+       WHERE run_id = ? AND status IN ('queued', 'running', 'paused')`,
+      [nowIso, runId],
+    );
+
+    if ((result.changes ?? 0) === 0) return false;
+
+    await this.db.run(
+      `UPDATE execution_steps SET status = 'cancelled'
+       WHERE run_id = ? AND status IN ('queued', 'running', 'paused')`,
+      [runId],
+    );
+
+    await this.db.run(
+      `UPDATE execution_jobs SET status = 'cancelled'
+       WHERE job_id = (SELECT job_id FROM execution_runs WHERE run_id = ?)`,
+      [runId],
+    );
+
+    // Abort any in-flight step execution via AbortController.
+    const controller = this.activeControllers.get(runId);
+    if (controller) {
+      controller.abort();
+      this.activeControllers.delete(runId);
+    }
+
+    this.logger?.info("execution.run.cancelled", { run_id: runId });
+    return true;
   }
 
   /**
@@ -418,7 +478,9 @@ export class ExecutionEngine {
            idempotency_key,
            postcondition_json,
            max_attempts,
-           timeout_ms
+           timeout_ms,
+           rollback_hint,
+           policy_snapshot_id
          FROM execution_steps
          WHERE run_id = ? AND status IN ('queued', 'running', 'paused')
          ORDER BY step_index ASC
@@ -623,6 +685,15 @@ export class ExecutionEngine {
     if (outcome.kind === "finalized") return true;
     if (outcome.kind === "idempotent") return true;
 
+    // Re-check run status before executing (AbortSignal / cancellation support).
+    const preCheck = await this.db.get<{ status: string }>(
+      `SELECT status FROM execution_runs WHERE run_id = ?`,
+      [outcome.runId],
+    );
+    if (preCheck && preCheck.status === "cancelled") {
+      return true;
+    }
+
     const planId =
       parsePlanIdFromTriggerJson(outcome.triggerJson) ?? outcome.runId;
 
@@ -646,6 +717,7 @@ export class ExecutionEngine {
       attemptNum: outcome.attempt.attemptNum,
       workerId: input.workerId,
       executor: input.executor,
+      rollbackHint: outcome.step.rollback_hint,
     });
   }
 
@@ -666,8 +738,13 @@ export class ExecutionEngine {
     attemptNum: number;
     workerId: string;
     executor: StepExecutor;
+    rollbackHint: string | null;
   }): Promise<boolean> {
     const wallStartMs = Date.now();
+
+    // Create AbortController for this step execution.
+    const abortController = new AbortController();
+    this.activeControllers.set(opts.runId, abortController);
 
     this.logger?.info("execution.attempt.start", {
       plan_id: opts.planId,
@@ -683,13 +760,19 @@ export class ExecutionEngine {
       action_type: opts.action.type,
     });
 
-    const result = await this.executeWithTimeout(
-      opts.executor,
-      opts.action,
-      opts.planId,
-      opts.stepIndex,
-      opts.timeoutMs,
-    );
+    let result: StepResult;
+    try {
+      result = await this.executeWithTimeout(
+        opts.executor,
+        opts.action,
+        opts.planId,
+        opts.stepIndex,
+        opts.timeoutMs,
+        abortController.signal,
+      );
+    } finally {
+      this.activeControllers.delete(opts.runId);
+    }
     const wallDurationMs = Math.max(0, Date.now() - wallStartMs);
 
     const evidenceJson =
@@ -703,6 +786,57 @@ export class ExecutionEngine {
     });
     const enrichedCost = this.modelCatalog ? enrichAttemptCost(cost as AttemptCostT, this.modelCatalog) : cost;
     const costJson = JSON.stringify(enrichedCost);
+
+    // Budget enforcement: atomically increment spent_tokens.
+    const totalTokens = (result.cost?.total_tokens ?? 0);
+    if (totalTokens > 0) {
+      const budgetRow = await this.db.get<{ budget_tokens: number | null; spent_tokens: number }>(
+        `UPDATE execution_runs SET spent_tokens = spent_tokens + ?
+         WHERE run_id = ? RETURNING budget_tokens, spent_tokens`,
+        [totalTokens, opts.runId],
+      );
+
+      if (
+        budgetRow &&
+        budgetRow.budget_tokens !== null &&
+        budgetRow.spent_tokens >= budgetRow.budget_tokens
+      ) {
+        this.logger?.warn("execution.budget_exceeded", {
+          run_id: opts.runId,
+          budget_tokens: budgetRow.budget_tokens,
+          spent_tokens: budgetRow.spent_tokens,
+        });
+
+        // Record the attempt result first.
+        if (result.success) {
+          await this.markAttemptSucceeded(opts, result, evidenceJson, null, artifactsJson, costJson);
+          await this.db.run(
+            `UPDATE execution_steps SET status = 'succeeded' WHERE step_id = ?`,
+            [opts.stepId],
+          );
+        } else {
+          await this.markAttemptFailed(opts, result.error ?? "unknown", evidenceJson, null, artifactsJson, costJson);
+        }
+
+        // Fail the run with budget_exceeded.
+        await this.db.run(
+          `UPDATE execution_steps SET status = 'cancelled' WHERE run_id = ? AND status = 'queued'`,
+          [opts.runId],
+        );
+        await this.db.run(
+          `UPDATE execution_runs SET status = 'failed', finished_at = ?, paused_reason = 'budget_exceeded'
+           WHERE run_id = ?`,
+          [this.clock().nowIso, opts.runId],
+        );
+        await this.db.run(
+          `UPDATE execution_jobs SET status = 'failed' WHERE job_id = ?`,
+          [opts.jobId],
+        );
+        await this.releaseLaneLease({ key: opts.key, lane: opts.lane, owner: opts.workerId });
+        await this.releaseWorkspaceLease({ workspaceId: opts.workspaceId, owner: opts.workerId });
+        return true;
+      }
+    }
 
     if (result.success) {
       // Postcondition evaluation (pause on missing evidence).
@@ -848,6 +982,7 @@ export class ExecutionEngine {
       error: redactedError,
       duration_ms: wallDurationMs,
       cost,
+      rollback_hint: opts.rollbackHint,
     });
 
     return await this.maybeRetryOrFailStep(opts);
@@ -930,6 +1065,7 @@ export class ExecutionEngine {
     key: string;
     lane: string;
     workerId: string;
+    rollbackHint: string | null;
   }): Promise<boolean> {
     if (opts.attemptNum < Math.max(1, opts.maxAttempts)) {
       await this.db.run(
@@ -968,6 +1104,14 @@ export class ExecutionEngine {
        WHERE job_id = ?`,
       [opts.jobId],
     );
+
+    if (opts.rollbackHint) {
+      this.logger?.warn("execution.step.failed_with_rollback_hint", {
+        run_id: opts.runId,
+        step_id: opts.stepId,
+        rollback_hint: opts.rollbackHint,
+      });
+    }
 
     await this.releaseLaneLease({
       key: opts.key,
@@ -1037,12 +1181,26 @@ export class ExecutionEngine {
     planId: string,
     stepIndex: number,
     timeoutMs: number,
+    signal?: AbortSignal,
   ): Promise<StepResult> {
     try {
-      return await executor.execute(action, planId, stepIndex, timeoutMs);
+      return await executor.execute(action, planId, stepIndex, timeoutMs, signal);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { success: false, error: message };
+    }
+  }
+
+  /** Steer mode: cancel all queued/running runs on the same key+lane. */
+  private async applySteerMode(key: string, lane: string): Promise<void> {
+    const runs = await this.db.all<{ run_id: string; status: string }>(
+      `SELECT run_id, status FROM execution_runs
+       WHERE key = ? AND lane = ? AND status IN ('queued', 'running')`,
+      [key, lane],
+    );
+
+    for (const run of runs) {
+      await this.cancelRun(run.run_id);
     }
   }
 

@@ -112,6 +112,7 @@ function stepToPrimitive(
       args: withPlaybookMeta({ query: rest }, playbookId, step),
       postcondition: step.postcondition,
       idempotency_key,
+      rollback_hint: step.rollback_hint,
     };
   }
 
@@ -131,6 +132,7 @@ function stepToPrimitive(
       ),
       postcondition: step.postcondition,
       idempotency_key,
+      rollback_hint: step.rollback_hint,
     };
   }
 
@@ -141,6 +143,7 @@ function stepToPrimitive(
       args: withPlaybookMeta(args, playbookId, step),
       postcondition: step.postcondition,
       idempotency_key,
+      rollback_hint: step.rollback_hint,
     };
   }
 
@@ -151,6 +154,7 @@ function stepToPrimitive(
       args: withPlaybookMeta(args, playbookId, step),
       postcondition: step.postcondition,
       idempotency_key,
+      rollback_hint: step.rollback_hint,
     };
   }
 
@@ -166,6 +170,7 @@ function stepToPrimitive(
       args: withPlaybookMeta({ cmd, args: cmdArgs }, playbookId, step),
       postcondition: step.postcondition,
       idempotency_key,
+      rollback_hint: step.rollback_hint,
     };
   }
 
@@ -186,6 +191,7 @@ function stepToPrimitive(
         args: withPlaybookMeta({ op: "navigate", url }, playbookId, step),
         postcondition: step.postcondition,
         idempotency_key,
+        rollback_hint: step.rollback_hint,
       };
     }
 
@@ -199,6 +205,7 @@ function stepToPrimitive(
         args: withPlaybookMeta({ op: "click", selector }, playbookId, step),
         postcondition: step.postcondition,
         idempotency_key,
+        rollback_hint: step.rollback_hint,
       };
     }
 
@@ -213,6 +220,7 @@ function stepToPrimitive(
         args: withPlaybookMeta({ op: "fill", selector, value }, playbookId, step),
         postcondition: step.postcondition,
         idempotency_key,
+        rollback_hint: step.rollback_hint,
       };
     }
 
@@ -222,6 +230,7 @@ function stepToPrimitive(
         args: withPlaybookMeta({ op: "snapshot" }, playbookId, step),
         postcondition: step.postcondition,
         idempotency_key,
+        rollback_hint: step.rollback_hint,
       };
     }
 
@@ -230,6 +239,7 @@ function stepToPrimitive(
       args: withPlaybookMeta({ op }, playbookId, step),
       postcondition: step.postcondition,
       idempotency_key,
+      rollback_hint: step.rollback_hint,
     };
   }
 
@@ -239,6 +249,7 @@ function stepToPrimitive(
       args: withPlaybookMeta({ prompt: rest }, playbookId, step),
       postcondition: step.postcondition,
       idempotency_key,
+      rollback_hint: step.rollback_hint,
     };
   }
 

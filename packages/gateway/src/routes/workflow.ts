@@ -6,10 +6,12 @@ import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../statestore/types.js";
 import type { EventPublisher } from "../modules/backplane/event-publisher.js";
+import type { ExecutionEngine } from "../modules/execution/engine.js";
 
 export interface WorkflowRouteDeps {
   db: SqlDb;
   eventPublisher?: EventPublisher;
+  engine?: ExecutionEngine;
 }
 
 export function createWorkflowRoutes(deps: WorkflowRouteDeps): Hono {
@@ -23,6 +25,8 @@ export function createWorkflowRoutes(deps: WorkflowRouteDeps): Hono {
       steps?: unknown[];
       trigger?: unknown;
       idempotency_key?: string;
+      budget_tokens?: number;
+      queue_mode?: string;
     };
 
     if (
@@ -44,6 +48,10 @@ export function createWorkflowRoutes(deps: WorkflowRouteDeps): Hono {
     const jobId = randomUUID();
     const runId = randomUUID();
     const lane = body.lane ?? "main";
+    const budgetTokens = typeof body.budget_tokens === "number" && body.budget_tokens > 0
+      ? body.budget_tokens
+      : null;
+    const queueMode = body.queue_mode ?? "collect";
 
     const trigger = body.trigger ?? {
       kind: "api",
@@ -67,18 +75,21 @@ export function createWorkflowRoutes(deps: WorkflowRouteDeps): Hono {
         );
 
         await tx.run(
-          `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
-           VALUES (?, ?, ?, ?, 'queued', 1)`,
-          [runId, jobId, body.key, lane],
+          `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt, budget_tokens, queue_mode)
+           VALUES (?, ?, ?, ?, 'queued', 1, ?, ?)`,
+          [runId, jobId, body.key, lane, budgetTokens, queueMode],
         );
 
         for (let i = 0; i < body.steps!.length; i++) {
           const stepId = randomUUID();
-          const step = body.steps![i];
+          const step = body.steps![i] as Record<string, unknown> | undefined;
+          const rollbackHint = step && typeof step["rollback_hint"] === "string"
+            ? step["rollback_hint"]
+            : null;
           await tx.run(
-            `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json, max_attempts, timeout_ms)
-             VALUES (?, ?, ?, 'queued', ?, 3, 30000)`,
-            [stepId, runId, i, JSON.stringify(step)],
+            `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json, max_attempts, timeout_ms, rollback_hint)
+             VALUES (?, ?, ?, 'queued', ?, 3, 30000, ?)`,
+            [stepId, runId, i, JSON.stringify(step), rollbackHint],
           );
         }
 
@@ -199,23 +210,34 @@ export function createWorkflowRoutes(deps: WorkflowRouteDeps): Hono {
       );
     }
 
-    const nowIso = new Date().toISOString();
-    const result = await deps.db.run(
-      "UPDATE execution_runs SET status = 'cancelled', finished_at = ? WHERE run_id = ? AND status IN ('queued', 'running', 'paused')",
-      [nowIso, body.run_id],
-    );
+    // Use engine.cancelRun() if available (signals in-flight steps).
+    if (deps.engine) {
+      const cancelled = await deps.engine.cancelRun(body.run_id);
+      if (!cancelled) {
+        return c.json(
+          { error: "not_found", message: "run not found or already finished" },
+          404,
+        );
+      }
+    } else {
+      const nowIso = new Date().toISOString();
+      const result = await deps.db.run(
+        "UPDATE execution_runs SET status = 'cancelled', finished_at = ? WHERE run_id = ? AND status IN ('queued', 'running', 'paused')",
+        [nowIso, body.run_id],
+      );
 
-    if ((result.changes ?? 0) === 0) {
-      return c.json(
-        { error: "not_found", message: "run not found or already finished" },
-        404,
+      if ((result.changes ?? 0) === 0) {
+        return c.json(
+          { error: "not_found", message: "run not found or already finished" },
+          404,
+        );
+      }
+
+      await deps.db.run(
+        "UPDATE execution_steps SET status = 'cancelled' WHERE run_id = ? AND status IN ('queued', 'running', 'paused')",
+        [body.run_id],
       );
     }
-
-    await deps.db.run(
-      "UPDATE execution_steps SET status = 'cancelled' WHERE run_id = ? AND status IN ('queued', 'running', 'paused')",
-      [body.run_id],
-    );
 
     if (deps.eventPublisher) {
       await deps.eventPublisher.publish("run.cancelled", {
