@@ -23,8 +23,6 @@ INSERT INTO sessions__new (
   summary,
   turns_json,
   workspace_id,
-  compacted_summary,
-  compaction_count,
   created_at,
   updated_at
 )
@@ -36,8 +34,6 @@ SELECT
   summary,
   turns_json,
   workspace_id,
-  compacted_summary,
-  compaction_count,
   created_at,
   updated_at
 FROM sessions;
@@ -49,4 +45,3 @@ ALTER TABLE sessions__new RENAME TO sessions;
 CREATE INDEX IF NOT EXISTS sessions_updated_idx ON sessions (updated_at DESC);
 CREATE INDEX IF NOT EXISTS sessions_workspace_id_idx ON sessions (workspace_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_agent ON sessions (agent_id);
-

@@ -17,9 +17,10 @@ export function enrichAttemptCost(cost: AttemptCostT, lookup: CostLookup): Attem
   const model = lookup.getModel(cost.model);
   if (!model?.cost) return cost;
 
-  const usdMicros = Math.round(
-    (inputTokens * model.cost.input + outputTokens * model.cost.output) * 1_000_000,
-  );
+  // models.dev expresses `model.cost.*` in USD per 1M tokens.
+  // `usd_micros` is USD * 1e6, so the 1M-token denominator cancels out:
+  // usd_micros = tokens * (USD / 1M tokens) * 1e6 = tokens * USD_per_1M
+  const usdMicros = Math.round(inputTokens * model.cost.input + outputTokens * model.cost.output);
 
   return { ...cost, usd_micros: usdMicros };
 }

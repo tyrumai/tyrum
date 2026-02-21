@@ -1,6 +1,9 @@
 -- capability_memories should be isolated per agent.
 
 ALTER TABLE capability_memories
+  ADD COLUMN IF NOT EXISTS agent_id TEXT NOT NULL DEFAULT 'default';
+
+ALTER TABLE capability_memories
   DROP CONSTRAINT IF EXISTS capability_memories_unique;
 
 ALTER TABLE capability_memories
@@ -10,4 +13,3 @@ ALTER TABLE capability_memories
     executor_kind,
     agent_id
   );
-

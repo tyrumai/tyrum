@@ -32,7 +32,6 @@ INSERT INTO capability_memories__new (
   success_count,
   last_success_at,
   metadata,
-  agent_id,
   created_at,
   updated_at
 )
@@ -49,7 +48,6 @@ SELECT
   success_count,
   last_success_at,
   metadata,
-  agent_id,
   created_at,
   updated_at
 FROM capability_memories;
@@ -61,4 +59,3 @@ ALTER TABLE capability_memories__new RENAME TO capability_memories;
 CREATE INDEX IF NOT EXISTS capability_memories_type_idx ON capability_memories (capability_type);
 CREATE INDEX IF NOT EXISTS capability_memories_success_idx ON capability_memories (last_success_at DESC);
 CREATE INDEX IF NOT EXISTS idx_capability_memories_agent ON capability_memories (agent_id);
-

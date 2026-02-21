@@ -14,12 +14,13 @@ describe("enrichAttemptCost", () => {
   it("enriches cost when model found in catalog", () => {
     const cost: AttemptCostT = { model: "gpt-4", input_tokens: 100, output_tokens: 50 };
     const lookup = makeLookup({
-      "gpt-4": { cost: { input: 0.00003, output: 0.00006 } },
+      // models.dev style: USD per 1M tokens
+      "gpt-4": { cost: { input: 30, output: 60 } },
     });
 
     const result = enrichAttemptCost(cost, lookup);
 
-    // (100 * 0.00003 + 50 * 0.00006) * 1_000_000 = (0.003 + 0.003) * 1_000_000 = 6000
+    // (100 * 30 + 50 * 60) micros = (3000 + 3000) = 6000
     expect(result.usd_micros).toBe(6000);
     expect(result.model).toBe("gpt-4");
     expect(result.input_tokens).toBe(100);
@@ -29,7 +30,7 @@ describe("enrichAttemptCost", () => {
   it("skips enrichment when usd_micros already set", () => {
     const cost: AttemptCostT = { model: "gpt-4", input_tokens: 100, output_tokens: 50, usd_micros: 42 };
     const lookup = makeLookup({
-      "gpt-4": { cost: { input: 0.00003, output: 0.00006 } },
+      "gpt-4": { cost: { input: 30, output: 60 } },
     });
 
     const result = enrichAttemptCost(cost, lookup);
@@ -51,7 +52,7 @@ describe("enrichAttemptCost", () => {
   it("handles missing token counts (no enrichment for 0 tokens)", () => {
     const cost: AttemptCostT = { model: "gpt-4" };
     const lookup = makeLookup({
-      "gpt-4": { cost: { input: 0.00003, output: 0.00006 } },
+      "gpt-4": { cost: { input: 30, output: 60 } },
     });
 
     const result = enrichAttemptCost(cost, lookup);
