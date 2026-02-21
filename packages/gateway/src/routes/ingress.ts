@@ -87,7 +87,7 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
         text: normalized.message.content.kind === "text"
           ? normalized.message.content.text
           : normalized.message.content.caption ?? "",
-        sender: normalized.sender?.display_name,
+        sender: normalized.message.sender?.first_name,
         timestamp: normalized.message.timestamp,
       };
 

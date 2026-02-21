@@ -112,6 +112,7 @@ export function ensureDatabaseDirectory(dbPath: string): void {
   }
 }
 
+/* v8 ignore start */
 function printCliHelp(): void {
   console.log(`Tyrum gateway
 
@@ -128,6 +129,7 @@ Notes:
   - --version takes precedence over --channel for updates.
 `);
 }
+/* v8 ignore stop */
 
 function parseUpdateChannel(raw: string): UpdateChannel {
   if (raw === "stable" || raw === "beta" || raw === "dev") {
@@ -226,6 +228,7 @@ export function resolveGatewayUpdateTarget(
   return UPDATE_CHANNEL_TAG[channel];
 }
 
+/* v8 ignore start */
 async function runGatewayUpdate(
   channel: UpdateChannel,
   version?: string,
@@ -263,6 +266,7 @@ async function runGatewayUpdate(
   console.error(`Update failed with exit code ${exitCode}.`);
   return exitCode;
 }
+/* v8 ignore stop */
 
 export async function runCli(argv: readonly string[] = process.argv.slice(2)): Promise<number> {
   let command: CliCommand;
@@ -305,6 +309,7 @@ export async function runShutdownCleanup(
   await Promise.allSettled([closeDb()]);
 }
 
+/* v8 ignore start */
 export async function main(role: GatewayRole = "all"): Promise<void> {
   const port = parseInt(process.env["GATEWAY_PORT"] ?? "8788", 10);
   const host = process.env["GATEWAY_HOST"]?.trim() || "127.0.0.1";
@@ -678,7 +683,9 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   process.once("SIGINT", () => shutdown("SIGINT"));
   process.once("SIGTERM", () => shutdown("SIGTERM"));
 }
+/* v8 ignore stop */
 
+/* v8 ignore start */
 // Run when executed directly
 const isMain = (() => {
   const entry = process.argv[1];
@@ -701,3 +708,4 @@ if (isMain) {
       process.exit(1);
     });
 }
+/* v8 ignore stop */

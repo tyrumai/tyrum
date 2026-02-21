@@ -120,4 +120,38 @@ describe("filterMutableKeys", () => {
     const result = filterMutableKeys({}, ALLOWED);
     expect(result).toEqual({});
   });
+
+  it("handles deeply nested objects (3+ levels) — keeps only allowed leaf paths", () => {
+    const DEEP_ALLOWED = new Set(["a.b.c.d"]);
+    const result = filterMutableKeys(
+      { a: { b: { c: { d: "deep-value", e: "blocked" }, x: 1 } } },
+      DEEP_ALLOWED,
+    );
+    expect(result).toEqual({ a: { b: { c: { d: "deep-value" } } } });
+  });
+
+  it("treats arrays as leaf values (not recursed into)", () => {
+    const result = filterMutableKeys(
+      { cli: { allowedCommands: ["git", "ls", "cat"] } },
+      ALLOWED,
+    );
+    expect(result).toEqual({ cli: { allowedCommands: ["git", "ls", "cat"] } });
+  });
+
+  it("treats null as a leaf value", () => {
+    // null at an allowed path should be kept as-is
+    const result = filterMutableKeys(
+      { mode: null },
+      ALLOWED,
+    );
+    expect(result).toEqual({ mode: null });
+  });
+
+  it("drops null at a disallowed path", () => {
+    const result = filterMutableKeys(
+      { version: null },
+      ALLOWED,
+    );
+    expect(result).toEqual({});
+  });
 });

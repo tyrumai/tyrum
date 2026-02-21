@@ -62,7 +62,7 @@ export function createPolicyV2Routes(deps: PolicyV2RouteDeps): Hono {
         400,
       );
     }
-    const result = deps.bundleManager.evaluate(body.domain, body.context);
+    const result = deps.bundleManager.evaluate(body.domain, body.context as Record<string, unknown> | undefined);
     return c.json(result);
   });
 
