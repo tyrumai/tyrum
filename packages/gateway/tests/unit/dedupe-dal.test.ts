@@ -37,6 +37,15 @@ describe("DedupeDal", () => {
     expect(result).toBe(false);
   });
 
+  it("record stores the same message_id independently per channel", async () => {
+    const dal = createDal();
+    await dal.record("msg-1", "telegram", 3_600_000);
+    await dal.record("msg-1", "discord", 3_600_000);
+
+    expect(await dal.isDuplicate("msg-1", "telegram")).toBe(true);
+    expect(await dal.isDuplicate("msg-1", "discord")).toBe(true);
+  });
+
   it("record is idempotent", async () => {
     const dal = createDal();
     await dal.record("msg-1", "telegram", 3_600_000);

@@ -497,10 +497,11 @@ CREATE TABLE IF NOT EXISTS node_capabilities (
 -- inbound_dedupe
 --------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS inbound_dedupe (
-  message_id TEXT PRIMARY KEY,
+  message_id TEXT NOT NULL,
   channel TEXT NOT NULL,
   received_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  expires_at TIMESTAMPTZ NOT NULL
+  expires_at TIMESTAMPTZ NOT NULL,
+  PRIMARY KEY (message_id, channel)
 );
 
 CREATE INDEX IF NOT EXISTS idx_inbound_dedupe_expires ON inbound_dedupe (expires_at);
