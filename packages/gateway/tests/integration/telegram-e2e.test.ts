@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 import { createIngressRoutes } from "../../src/routes/ingress.js";
 import { TelegramBot } from "../../src/modules/ingress/telegram-bot.js";
-import type { AgentRuntime } from "../../src/modules/agent/runtime.js";
+import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 
 function makeTelegramUpdate(text: string, chatId = 123) {
   return {
@@ -24,6 +24,10 @@ function mockFetch(): typeof fetch {
     text: () => Promise.resolve('{"ok":true}'),
     json: () => Promise.resolve({ ok: true }),
   }) as unknown as typeof fetch;
+}
+
+function makeAgents(runtime: unknown): AgentRegistry {
+  return { getRuntime: async () => runtime } as unknown as AgentRegistry;
 }
 
 describe("Telegram E2E: webhook -> agent -> reply", () => {
@@ -52,12 +56,12 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
         used_tools: [],
         memory_written: false,
       }),
-    } as unknown as AgentRuntime;
+    };
 
     const app = new Hono();
     app.route(
       "/",
-      createIngressRoutes({ telegramBot: bot, agentRuntime: mockRuntime }),
+      createIngressRoutes({ telegramBot: bot, agents: makeAgents(mockRuntime) }),
     );
 
     const res = await app.request("/ingress/telegram", {
@@ -99,12 +103,12 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
 
     const mockRuntime = {
       turn: vi.fn().mockRejectedValue(new Error("LLM unavailable")),
-    } as unknown as AgentRuntime;
+    };
 
     const app = new Hono();
     app.route(
       "/",
-      createIngressRoutes({ telegramBot: bot, agentRuntime: mockRuntime }),
+      createIngressRoutes({ telegramBot: bot, agents: makeAgents(mockRuntime) }),
     );
 
     const res = await app.request("/ingress/telegram", {
@@ -158,12 +162,12 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
 
     const mockRuntime = {
       turn: vi.fn(),
-    } as unknown as AgentRuntime;
+    };
 
     const app = new Hono();
     app.route(
       "/",
-      createIngressRoutes({ telegramBot: bot, agentRuntime: mockRuntime }),
+      createIngressRoutes({ telegramBot: bot, agents: makeAgents(mockRuntime) }),
     );
 
     const update = {
@@ -198,12 +202,12 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
 
     const mockRuntime = {
       turn: vi.fn(),
-    } as unknown as AgentRuntime;
+    };
 
     const app = new Hono();
     app.route(
       "/",
-      createIngressRoutes({ telegramBot: bot, agentRuntime: mockRuntime }),
+      createIngressRoutes({ telegramBot: bot, agents: makeAgents(mockRuntime) }),
     );
 
     const res = await app.request("/ingress/telegram", {
@@ -222,12 +226,12 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
 
     const mockRuntime = {
       turn: vi.fn(),
-    } as unknown as AgentRuntime;
+    };
 
     const app = new Hono();
     app.route(
       "/",
-      createIngressRoutes({ telegramBot: bot, agentRuntime: mockRuntime }),
+      createIngressRoutes({ telegramBot: bot, agents: makeAgents(mockRuntime) }),
     );
 
     const res = await app.request("/ingress/telegram", {
@@ -251,12 +255,12 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
 
     const mockRuntime = {
       turn: vi.fn(),
-    } as unknown as AgentRuntime;
+    };
 
     const app = new Hono();
     app.route(
       "/",
-      createIngressRoutes({ telegramBot: bot, agentRuntime: mockRuntime }),
+      createIngressRoutes({ telegramBot: bot, agents: makeAgents(mockRuntime) }),
     );
 
     const res = await app.request("/ingress/telegram", {

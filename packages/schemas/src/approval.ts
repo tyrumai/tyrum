@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { DateTimeSchema } from "./common.js";
 import { Lane, TyrumKey } from "./keys.js";
+import { PolicyOverride } from "./policy-bundle.js";
 
 export const ApprovalStatus = z.enum([
   "pending",
@@ -103,6 +104,18 @@ export const ApprovalResolveRequest = z
     approval_id: z.number().int().positive(),
     decision: ApprovalDecision,
     reason: z.string().optional(),
+    mode: z.enum(["once", "always"]).optional(),
+    overrides: z
+      .array(
+        z
+          .object({
+            tool_id: z.string().trim().min(1),
+            pattern: z.string().trim().min(1),
+            workspace_id: z.string().trim().min(1).optional(),
+          })
+          .strict(),
+      )
+      .optional(),
   })
   .strict();
 export type ApprovalResolveRequest = z.infer<typeof ApprovalResolveRequest>;
@@ -110,7 +123,7 @@ export type ApprovalResolveRequest = z.infer<typeof ApprovalResolveRequest>;
 export const ApprovalResolveResponse = z
   .object({
     approval: Approval,
+    created_overrides: z.array(PolicyOverride).optional(),
   })
   .strict();
 export type ApprovalResolveResponse = z.infer<typeof ApprovalResolveResponse>;
-

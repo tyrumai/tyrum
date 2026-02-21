@@ -10,7 +10,7 @@
   },
   "files": ["dist"],
   "scripts": {
-    "build": "tsdown src/index.ts --format esm --dts && node ./scripts/write-dts-entry.mjs && node ./scripts/write-runtime-entry.mjs"
+    "build": "tsdown src/index.ts --format esm --dts && node ./scripts/write-dts-entry.mjs && node ./scripts/write-runtime-entry.mjs && node ./scripts/export-jsonschema.mjs"
   },
   "dependencies": {
     "zod": "^4.3.6"

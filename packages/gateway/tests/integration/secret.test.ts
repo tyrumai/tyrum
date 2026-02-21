@@ -10,7 +10,12 @@ describe("Secret routes (integration)", () => {
   function setup() {
     const provider = new EnvSecretProvider();
     const app = new Hono();
-    app.route("/", createSecretRoutes(provider));
+    app.route(
+      "/",
+      createSecretRoutes({
+        secretProviderForAgent: async () => provider,
+      }),
+    );
     return { app, provider };
   }
 
@@ -182,7 +187,12 @@ describe("Secret routes (integration) — file provider rotation", () => {
       "test-admin-token-for-testing",
     );
     const app = new Hono();
-    app.route("/", createSecretRoutes(provider));
+    app.route(
+      "/",
+      createSecretRoutes({
+        secretProviderForAgent: async () => provider,
+      }),
+    );
     return { app, provider };
   }
 

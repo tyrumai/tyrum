@@ -8,7 +8,14 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { readFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { parse as parseYaml } from "yaml";
+import type { SecretProvider } from "../modules/secret/provider.js";
+import type { AuthProfileDal, AuthProfileRow } from "../modules/models/auth-profile-dal.js";
+import type { SessionProviderPinDal } from "../modules/models/session-pin-dal.js";
+import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
+import type { Logger } from "../modules/observability/logger.js";
+import type { WsEventEnvelope } from "@tyrum/schemas";
 
 // ---------------------------------------------------------------------------
 // Configuration types
@@ -28,6 +35,7 @@ interface ModelConfig {
   capabilities?: string[];
   max_total_tokens?: number;
   cost_ceiling_usd?: number;
+  fallback_models?: string[];
 }
 
 interface DefaultsConfig {
@@ -56,11 +64,25 @@ interface ModelRoute {
   capabilities: string[];
   maxTotalTokens?: number;
   costCeilingUsd?: number;
+  fallbackModels?: string[];
 }
 
 interface ModelGatewayState {
   routes: Map<string, ModelRoute>;
   timeoutMs: number;
+}
+
+export interface ModelProxyDeps {
+  auth?: {
+    authProfileDal: AuthProfileDal;
+    pinDal: SessionProviderPinDal;
+    secretProviderForAgent: (agentId: string) => Promise<SecretProvider>;
+    logger?: Logger;
+    wsCluster?: {
+      edgeId: string;
+      outboxDal: OutboxDal;
+    };
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -164,6 +186,7 @@ export function loadModelGatewayConfig(configPath: string): ModelGatewayState {
         capabilities: cfg.capabilities ?? [],
         maxTotalTokens: cfg.max_total_tokens,
         costCeilingUsd: cfg.cost_ceiling_usd,
+        fallbackModels: cfg.fallback_models,
       });
     }
   }
@@ -181,15 +204,51 @@ export function loadModelGatewayConfig(configPath: string): ModelGatewayState {
 // Route factory
 // ---------------------------------------------------------------------------
 
-export function createModelProxyRoutes(configPath: string): Hono {
+export function createModelProxyRoutes(configPath: string, deps?: ModelProxyDeps): Hono {
   const state = loadModelGatewayConfig(configPath);
-  return createModelProxyRoutesFromState(state);
+  return createModelProxyRoutesFromState(state, deps);
 }
 
 export function createModelProxyRoutesFromState(
   state: ModelGatewayState,
+  deps?: ModelProxyDeps,
 ): Hono {
   const proxy = new Hono();
+
+  function isAuthProfilesEnabled(): boolean {
+    const raw = process.env["TYRUM_AUTH_PROFILES_ENABLED"]?.trim().toLowerCase();
+    return Boolean(raw && !["0", "false", "off", "no"].includes(raw));
+  }
+
+  function emitEvent(evt: WsEventEnvelope): void {
+    const ws = deps?.auth?.wsCluster;
+    if (!ws) return;
+    void ws.outboxDal.enqueue("ws.broadcast", {
+      source_edge_id: ws.edgeId,
+      skip_local: false,
+      message: evt,
+    }).catch(() => {
+      // ignore
+    });
+  }
+
+  async function resolveSecretHandleValue(agentId: string, handleId: string): Promise<string | null> {
+    const resolver = deps?.auth?.secretProviderForAgent;
+    if (!resolver) return null;
+    const provider = await resolver(agentId);
+    const handles = await provider.list();
+    const handle = handles.find((h) => h.handle_id === handleId);
+    if (!handle) return null;
+    return await provider.resolve(handle);
+  }
+
+  function isTransientStatus(status: number): boolean {
+    return status === 429 || status === 502 || status === 503 || status === 504 || status >= 500;
+  }
+
+  function isAuthInvalidStatus(status: number): boolean {
+    return status === 401 || status === 403;
+  }
 
   // Health endpoint showing configured models
   proxy.get("/v1/models", (c) => {
@@ -242,55 +301,220 @@ export function createModelProxyRoutesFromState(
     const originalPath = new URL(c.req.url).pathname;
     const upstreamUrl = route.baseUrl.replace(/\/$/, "") + originalPath;
 
-    // Build forwarded headers
-    const forwardHeaders = new Headers();
+    const baseForwardHeaders = new Headers();
     for (const [name, value] of Object.entries(c.req.header())) {
-      if (typeof value === "string" && !HOP_BY_HOP_HEADERS.has(name.toLowerCase())) {
-        // Skip authorization — we'll apply route-specific auth
-        if (name.toLowerCase() !== "authorization") {
-          forwardHeaders.set(name, value);
-        }
+      if (typeof value !== "string") continue;
+      const lower = name.toLowerCase();
+      if (HOP_BY_HOP_HEADERS.has(lower)) continue;
+      // Skip authorization — we'll apply route-specific auth.
+      if (lower === "authorization") continue;
+      // Never forward internal metadata headers to upstream providers.
+      if (lower.startsWith("x-tyrum-")) continue;
+
+      baseForwardHeaders.set(name, value);
+    }
+    baseForwardHeaders.set("Content-Type", "application/json");
+
+    const agentId = c.req.header("x-tyrum-agent-id")?.trim() || "default";
+    const sessionId = c.req.header("x-tyrum-session-id")?.trim() || undefined;
+
+    async function attemptWithProfile(profile: AuthProfileRow): Promise<Response | undefined> {
+      const secretHandles = profile.secret_handles ?? {};
+      const handleId =
+        profile.type === "api_key"
+          ? secretHandles["api_key_handle"]
+          : profile.type === "token"
+            ? secretHandles["token_handle"]
+            : secretHandles["access_token_handle"];
+      if (!handleId) return undefined;
+
+      const token = await resolveSecretHandleValue(agentId, handleId);
+      if (!token) {
+        // Missing secret material; skip (operator may re-store).
+        deps?.auth?.logger?.warn("model_proxy.auth_profile_secret_missing", {
+          profile_id: profile.profile_id,
+          provider: profile.provider,
+        });
+        return undefined;
+      }
+
+      const forwardHeaders = new Headers(baseForwardHeaders);
+      forwardHeaders.set("Authorization", `Bearer ${token}`);
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), state.timeoutMs);
+      try {
+        return await fetch(upstreamUrl, {
+          method: "POST",
+          headers: forwardHeaders,
+          body: new Uint8Array(bodyBytes),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
       }
     }
 
-    // Apply route auth
-    switch (route.auth.kind) {
-      case "bearer":
-        forwardHeaders.set("Authorization", `Bearer ${route.auth.token}`);
-        break;
-      case "static":
-        forwardHeaders.set(route.auth.header, route.auth.value);
-        break;
-      case "none":
-        break;
+    async function attemptWithLegacyAuth(targetRoute: ModelRoute): Promise<Response> {
+      const forwardHeaders = new Headers(baseForwardHeaders);
+
+      // Apply route auth (legacy YAML config)
+      switch (targetRoute.auth.kind) {
+        case "bearer":
+          forwardHeaders.set("Authorization", `Bearer ${targetRoute.auth.token}`);
+          break;
+        case "static":
+          forwardHeaders.set(targetRoute.auth.header, targetRoute.auth.value);
+          break;
+        case "none":
+          break;
+      }
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), state.timeoutMs);
+      try {
+        return await fetch(upstreamUrl, {
+          method: "POST",
+          headers: forwardHeaders,
+          body: new Uint8Array(bodyBytes),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
     }
 
-    forwardHeaders.set("Content-Type", "application/json");
+    let upstreamResponse: Response | undefined;
+    let usedProfileId: string | undefined;
 
-    // Forward request to upstream
-    let upstreamResponse: Response;
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(
-        () => controller.abort(),
-        state.timeoutMs,
-      );
-
-      upstreamResponse = await fetch(upstreamUrl, {
-        method: "POST",
-        headers: forwardHeaders,
-        body: new Uint8Array(bodyBytes),
-        signal: controller.signal,
+    if (deps?.auth && isAuthProfilesEnabled()) {
+      const nowMs = Date.now();
+      const eligible = await deps.auth.authProfileDal.listEligibleForProvider({
+        agentId,
+        provider: route.target,
+        nowMs,
       });
 
-      clearTimeout(timeout);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : String(err);
+      let pinnedId: string | undefined;
+      if (sessionId) {
+        const pin = await deps.auth.pinDal.get({ agentId, sessionId, provider: route.target });
+        pinnedId = pin?.profile_id;
+      }
+
+      const ordered = pinnedId
+        ? [...eligible].sort((a, b) => (a.profile_id === pinnedId ? -1 : b.profile_id === pinnedId ? 1 : 0))
+        : eligible;
+
+      let lastErr: unknown;
+      for (const profile of ordered) {
+        let res: Response | undefined;
+        try {
+          res = await attemptWithProfile(profile);
+        } catch (err) {
+          lastErr = err;
+          const cooldownMs = 30_000;
+          await deps.auth.authProfileDal.setCooldown(profile.profile_id, { untilMs: nowMs + cooldownMs });
+          emitEvent({
+            event_id: randomUUID(),
+            type: "model.auth_profile.cooldown",
+            occurred_at: new Date().toISOString(),
+            payload: { provider: route.target, profile_id: profile.profile_id, cooldown_ms: cooldownMs },
+          });
+          continue;
+        }
+
+        if (!res) continue;
+        if (res.ok) {
+          upstreamResponse = res;
+          usedProfileId = profile.profile_id;
+          break;
+        }
+
+        if (isAuthInvalidStatus(res.status)) {
+          await deps.auth.authProfileDal.disableProfile(profile.profile_id, { reason: `upstream_auth_${String(res.status)}` });
+          emitEvent({
+            event_id: randomUUID(),
+            type: "model.auth_profile.disabled",
+            occurred_at: new Date().toISOString(),
+            payload: { provider: route.target, profile_id: profile.profile_id, status: res.status },
+          });
+          continue;
+        }
+
+        if (isTransientStatus(res.status)) {
+          const cooldownMs = res.status === 429 ? 60_000 : 15_000;
+          await deps.auth.authProfileDal.setCooldown(profile.profile_id, { untilMs: nowMs + cooldownMs });
+          emitEvent({
+            event_id: randomUUID(),
+            type: "model.auth_profile.cooldown",
+            occurred_at: new Date().toISOString(),
+            payload: { provider: route.target, profile_id: profile.profile_id, status: res.status, cooldown_ms: cooldownMs },
+          });
+          continue;
+        }
+
+        upstreamResponse = res;
+        usedProfileId = profile.profile_id;
+        break;
+      }
+
+      if (!upstreamResponse) {
+        // All profiles failed or none available; fall back to legacy config.
+        try {
+          upstreamResponse = await attemptWithLegacyAuth(route);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return c.json(
+            { error: `upstream request failed for model '${modelName}': ${message}` },
+            502,
+          );
+        }
+        if (lastErr) {
+          deps.auth.logger?.warn("model_proxy.auth_profiles_failed", {
+            provider: route.target,
+            model: modelName,
+            error: lastErr instanceof Error ? lastErr.message : String(lastErr),
+          });
+        }
+      }
+    } else {
+      // Legacy auth-only path.
+      try {
+        upstreamResponse = await attemptWithLegacyAuth(route);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return c.json(
+          { error: `upstream request failed for model '${modelName}': ${message}` },
+          502,
+        );
+      }
+    }
+
+    if (!upstreamResponse) {
       return c.json(
-        { error: `upstream request failed for model '${modelName}': ${message}` },
+        { error: `upstream request failed for model '${modelName}': no response` },
         502,
       );
+    }
+
+    if (deps?.auth && isAuthProfilesEnabled() && sessionId && usedProfileId && upstreamResponse.ok) {
+      try {
+        const pin = await deps.auth.pinDal.upsert({
+          agentId,
+          sessionId,
+          provider: route.target,
+          profileId: usedProfileId,
+        });
+        emitEvent({
+          event_id: randomUUID(),
+          type: "model.auth_profile.pinned",
+          occurred_at: new Date().toISOString(),
+          payload: { provider: route.target, model: modelName, pin },
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        deps.auth.logger?.warn("model_proxy.pin_failed", { provider: route.target, model: modelName, error: message });
+      }
     }
 
     // Determine if streaming

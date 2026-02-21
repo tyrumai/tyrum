@@ -43,6 +43,7 @@ const config: Config = {
           sidebarPath: sidebarsPath,
           showLastUpdateAuthor: false,
           showLastUpdateTime: false,
+          exclude: ["**/node_modules/**", "**/dist/**"],
         },
         blog: false,
         theme: {

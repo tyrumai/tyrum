@@ -54,26 +54,26 @@ function makeClient(
 // ---------------------------------------------------------------------------
 
 describe("handleClientMessage", () => {
-  it("returns error for invalid JSON", () => {
+  it("returns error for invalid JSON", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
     const deps = makeDeps(cm);
 
-    const result = handleClientMessage(client, "not json{{{", deps);
+    const result = await handleClientMessage(client, "not json{{{", deps);
     expect(result).toBeDefined();
     expect(result!.type).toBe("error");
     const payload = (result as unknown as { payload: { code: string } }).payload;
     expect(payload.code).toBe("invalid_json");
   });
 
-  it("returns error for invalid message schema", () => {
+  it("returns error for invalid message schema", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
     const deps = makeDeps(cm);
 
-    const result = handleClientMessage(
+    const result = await handleClientMessage(
       client,
       JSON.stringify({ type: "unknown_type" }),
       deps,
@@ -84,13 +84,13 @@ describe("handleClientMessage", () => {
     expect(payload.code).toBe("invalid_message");
   });
 
-  it("returns error response for client-sent request envelopes", () => {
+  it("returns error response for client-sent request envelopes", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
     const deps = makeDeps(cm);
 
-    const result = handleClientMessage(
+    const result = await handleClientMessage(
       client,
       JSON.stringify({ request_id: "r-1", type: "connect", payload: { capabilities: ["playwright"] } }),
       deps,
@@ -102,14 +102,14 @@ describe("handleClientMessage", () => {
     );
   });
 
-  it("dispatches task.execute response to callback", () => {
+  it("dispatches task.execute response to callback", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
     const onTaskResult = vi.fn();
     const deps = makeDeps(cm, { onTaskResult });
 
-    const result = handleClientMessage(
+    const result = await handleClientMessage(
       client,
       JSON.stringify({
         request_id: "t-1",
@@ -129,14 +129,14 @@ describe("handleClientMessage", () => {
     );
   });
 
-  it("dispatches task.execute error response", () => {
+  it("dispatches task.execute error response", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["cli"]);
     const client = cm.getClient(id)!;
     const onTaskResult = vi.fn();
     const deps = makeDeps(cm, { onTaskResult });
 
-    handleClientMessage(
+    await handleClientMessage(
       client,
       JSON.stringify({
         request_id: "t-2",
@@ -155,14 +155,14 @@ describe("handleClientMessage", () => {
     );
   });
 
-  it("dispatches task.execute error response evidence from error details", () => {
+  it("dispatches task.execute error response evidence from error details", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["cli"]);
     const client = cm.getClient(id)!;
     const onTaskResult = vi.fn();
     const deps = makeDeps(cm, { onTaskResult });
 
-    handleClientMessage(
+    await handleClientMessage(
       client,
       JSON.stringify({
         request_id: "t-3",
@@ -187,14 +187,14 @@ describe("handleClientMessage", () => {
     );
   });
 
-  it("dispatches approval.request decision to callback", () => {
+  it("dispatches approval.request decision to callback", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
     const onApprovalDecision = vi.fn();
     const deps = makeDeps(cm, { onApprovalDecision });
 
-    const result = handleClientMessage(
+    const result = await handleClientMessage(
       client,
       JSON.stringify({
         request_id: "approval-123",
@@ -209,14 +209,14 @@ describe("handleClientMessage", () => {
     expect(onApprovalDecision).toHaveBeenCalledWith(123, true, undefined);
   });
 
-  it("dispatches approval.request rejection with reason", () => {
+  it("dispatches approval.request rejection with reason", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
     const onApprovalDecision = vi.fn();
     const deps = makeDeps(cm, { onApprovalDecision });
 
-    handleClientMessage(
+    await handleClientMessage(
       client,
       JSON.stringify({
         request_id: "approval-124",
@@ -230,14 +230,14 @@ describe("handleClientMessage", () => {
     expect(onApprovalDecision).toHaveBeenCalledWith(124, false, "too risky");
   });
 
-  it("does not auto-deny approval.request when client responds ok:false", () => {
+  it("does not auto-deny approval.request when client responds ok:false", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
     const onApprovalDecision = vi.fn();
     const deps = makeDeps(cm, { onApprovalDecision });
 
-    const result = handleClientMessage(
+    const result = await handleClientMessage(
       client,
       JSON.stringify({
         request_id: "approval-200",
@@ -258,14 +258,14 @@ describe("handleClientMessage", () => {
     expect(payload.message).toContain("payload validation failed");
   });
 
-  it("returns error when approval.request ok payload is invalid", () => {
+  it("returns error when approval.request ok payload is invalid", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
     const onApprovalDecision = vi.fn();
     const deps = makeDeps(cm, { onApprovalDecision });
 
-    const result = handleClientMessage(
+    const result = await handleClientMessage(
       client,
       JSON.stringify({
         request_id: "approval-125",
@@ -283,7 +283,7 @@ describe("handleClientMessage", () => {
     expect(payload.code).toBe("invalid_approval_decision");
   });
 
-  it("updates lastPong on ping response", () => {
+  it("updates lastPong on ping response", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
@@ -293,7 +293,7 @@ describe("handleClientMessage", () => {
     client.lastPong = 1000;
 
     const before = Date.now();
-    const result = handleClientMessage(
+    const result = await handleClientMessage(
       client,
       JSON.stringify({ request_id: "ping-1", type: "ping", ok: true }),
       deps,
@@ -303,6 +303,97 @@ describe("handleClientMessage", () => {
     expect(result).toBeUndefined();
     expect(client.lastPong).toBeGreaterThanOrEqual(before);
     expect(client.lastPong).toBeLessThanOrEqual(after);
+  });
+
+  it("handles approval.list requests when approvalDal is configured", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["playwright"]);
+    const client = cm.getClient(id)!;
+
+    const approvalDal = {
+      getPending: vi.fn(async () => {
+        return [
+          {
+            id: 1,
+            plan_id: "p-1",
+            step_index: 0,
+            prompt: "Approve?",
+            context: { x: 1 },
+            status: "pending",
+            created_at: "2026-02-20 22:00:00",
+            responded_at: null,
+            response_reason: null,
+            expires_at: null,
+          },
+        ];
+      }),
+      getByStatus: vi.fn(async () => []),
+      respond: vi.fn(async () => undefined),
+    };
+
+    const deps = makeDeps(cm, { approvalDal: approvalDal as never });
+
+    const result = await handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "r-1",
+        type: "approval.list",
+        payload: {},
+      }),
+      deps,
+    );
+
+    expect(result).toBeDefined();
+    expect((result as unknown as { ok: boolean }).ok).toBe(true);
+    const res = result as unknown as { result: { approvals: Array<{ approval_id: number; created_at: string; resolution: unknown }> } };
+    expect(res.result.approvals[0]!.approval_id).toBe(1);
+    expect(res.result.approvals[0]!.created_at).toContain("T");
+    expect(res.result.approvals[0]!.created_at).toContain("Z");
+    expect(res.result.approvals[0]!.resolution).toBeNull();
+  });
+
+  it("handles approval.resolve requests when approvalDal is configured", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["playwright"]);
+    const client = cm.getClient(id)!;
+
+    const approvalDal = {
+      getPending: vi.fn(async () => []),
+      getByStatus: vi.fn(async () => []),
+      respond: vi.fn(async () => {
+        return {
+          id: 2,
+          plan_id: "p-2",
+          step_index: 1,
+          prompt: "Ok?",
+          context: {},
+          status: "approved",
+          created_at: "2026-02-20 22:00:00",
+          responded_at: "2026-02-20 22:00:05",
+          response_reason: "looks good",
+          expires_at: null,
+        };
+      }),
+    };
+
+    const deps = makeDeps(cm, { approvalDal: approvalDal as never });
+
+    const result = await handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "r-2",
+        type: "approval.resolve",
+        payload: { approval_id: 2, decision: "approved", reason: "looks good" },
+      }),
+      deps,
+    );
+
+    expect(result).toBeDefined();
+    expect((result as unknown as { ok: boolean }).ok).toBe(true);
+    const res = result as unknown as { result: { approval: { approval_id: number; status: string; resolution: { decision: string } } } };
+    expect(res.result.approval.approval_id).toBe(2);
+    expect(res.result.approval.status).toBe("approved");
+    expect(res.result.approval.resolution.decision).toBe("approved");
   });
 });
 
@@ -338,6 +429,89 @@ describe("dispatchTask", () => {
         action: { type: "Web", args: { url: "https://example.com" } },
       },
     });
+  });
+
+  it("does not dispatch to an unpaired node", async () => {
+    const cm = new ConnectionManager();
+    const nodeWs = createMockWs();
+    cm.addClient(nodeWs as never, ["cli"] as never, {
+      id: "node-1",
+      role: "node",
+      deviceId: "dev_test",
+      protocolRev: 2,
+    });
+
+    const deps = makeDeps(cm, {
+      nodePairingDal: {
+        getByNodeId: async () => ({ status: "pending" }) as never,
+      } as never,
+    });
+
+    const action: ActionPrimitive = {
+      type: "CLI",
+      args: { command: "echo hi" },
+    };
+
+    await expect(dispatchTask(action, "plan-1", 0, deps)).rejects.toBeInstanceOf(
+      NoCapableClientError,
+    );
+    expect(nodeWs.send).not.toHaveBeenCalled();
+  });
+
+  it("dispatches to a paired node and prefers nodes over legacy clients", async () => {
+    const cm = new ConnectionManager();
+    const nodeWs = createMockWs();
+    cm.addClient(nodeWs as never, ["cli"] as never, {
+      id: "node-1",
+      role: "node",
+      deviceId: "dev_test",
+      protocolRev: 2,
+    });
+    const { ws: legacyWs } = makeClient(cm, ["cli"]);
+
+    const deps = makeDeps(cm, {
+      nodePairingDal: {
+        getByNodeId: async () => ({ status: "approved" }) as never,
+      } as never,
+    });
+
+    const action: ActionPrimitive = {
+      type: "CLI",
+      args: { command: "echo hi" },
+    };
+
+    const taskId = await dispatchTask(action, "plan-1", 0, deps);
+    expect(taskId).toMatch(/^task-[0-9a-f-]{36}$/);
+    expect(nodeWs.send).toHaveBeenCalledOnce();
+    expect(legacyWs.send).not.toHaveBeenCalled();
+  });
+
+  it("falls back to legacy clients when nodes are unpaired", async () => {
+    const cm = new ConnectionManager();
+    const nodeWs = createMockWs();
+    cm.addClient(nodeWs as never, ["cli"] as never, {
+      id: "node-1",
+      role: "node",
+      deviceId: "dev_test",
+      protocolRev: 2,
+    });
+    const { ws: legacyWs } = makeClient(cm, ["cli"]);
+
+    const deps = makeDeps(cm, {
+      nodePairingDal: {
+        getByNodeId: async () => ({ status: "pending" }) as never,
+      } as never,
+    });
+
+    const action: ActionPrimitive = {
+      type: "CLI",
+      args: { command: "echo hi" },
+    };
+
+    const taskId = await dispatchTask(action, "plan-1", 0, deps);
+    expect(taskId).toMatch(/^task-[0-9a-f-]{36}$/);
+    expect(nodeWs.send).not.toHaveBeenCalled();
+    expect(legacyWs.send).toHaveBeenCalledOnce();
   });
 
   it("throws NoCapableClientError when no client has the capability", () => {

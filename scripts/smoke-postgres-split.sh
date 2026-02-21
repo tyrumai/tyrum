@@ -5,8 +5,18 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 cd "$ROOT_DIR"
 
+cleanup() {
+  if [[ "${TYRUM_SMOKE_KEEP_RUNNING:-}" == "1" ]]; then
+    echo "[smoke] leaving containers running (TYRUM_SMOKE_KEEP_RUNNING=1)"
+    return
+  fi
+  docker compose --profile split down >/dev/null 2>&1 || true
+}
+
+trap cleanup EXIT
+
 echo "[smoke] starting split profile (edge/worker/scheduler + postgres)"
-docker compose --profile split up -d --build
+docker compose --profile split up -d --build postgres tyrum-edge tyrum-worker tyrum-scheduler
 
 echo "[smoke] waiting for edge /healthz"
 for _ in $(seq 1 60); do
@@ -17,42 +27,50 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 
-echo "[smoke] enqueueing one execution job into Postgres (via worker container)"
-docker compose --profile split exec -T tyrum-worker node --input-type=module -e '
-import { Client } from "pg";
-import { randomUUID } from "node:crypto";
+echo "[smoke] enqueueing one execution run via workflow API (and polling Postgres)"
+ docker compose --profile split exec -T -w /app/packages/gateway tyrum-worker node --input-type=module -e '
+ import { Client } from "pg";
+ import { randomUUID } from "node:crypto";
 
 const dbUri = process.env.GATEWAY_DB_PATH;
 if (!dbUri) throw new Error("GATEWAY_DB_PATH is not set in tyrum-worker");
+const token = process.env.GATEWAY_TOKEN;
+if (!token) throw new Error("GATEWAY_TOKEN is not set in tyrum-worker");
 
 const client = new Client({ connectionString: dbUri });
 await client.connect();
 
-const jobId = `job-smoke-${randomUUID()}`;
-const runId = `run-smoke-${randomUUID()}`;
-const stepId = `step-smoke-${randomUUID()}`;
-
-const triggerJson = JSON.stringify({ metadata: { plan_id: "smoke-postgres-split" } });
-const actionJson = JSON.stringify({
-  type: "CLI",
-  args: { cmd: "echo", args: ["hello-from-postgres-split-smoke"], cwd: "." },
+const workflowRes = await fetch("http://tyrum-edge:8788/workflow/run", {
+  method: "POST",
+  headers: {
+    authorization: `Bearer ${token}`,
+    "content-type": "application/json",
+  },
+  body: JSON.stringify({
+    key: "agent:default:smoke:main",
+    lane: "main",
+    plan_id: "smoke-postgres-split",
+    request_id: `req-smoke-${randomUUID()}`,
+    steps: [
+      {
+        type: "CLI",
+        args: { cmd: "echo", args: ["hello-from-postgres-split-smoke"], cwd: "." },
+        idempotency_key: `smoke-${randomUUID()}`,
+      },
+    ],
+  }),
 });
 
-await client.query(
-  `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json, input_json, latest_run_id)
-   VALUES ($1, $2, $3, ''queued'', $4, NULL, $5)`,
-  [jobId, "smoke", "default", triggerJson, runId],
-);
-await client.query(
-  `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
-   VALUES ($1, $2, $3, $4, ''queued'', 1)`,
-  [runId, jobId, "smoke", "default"],
-);
-await client.query(
-  `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json, max_attempts, timeout_ms)
-   VALUES ($1, $2, 0, ''queued'', $3, 1, 30000)`,
-  [stepId, runId, actionJson],
-);
+if (!workflowRes.ok) {
+  const text = await workflowRes.text().catch(() => "<no body>");
+  throw new Error(`[smoke] workflow.run failed: status=${workflowRes.status} body=${text}`);
+}
+
+const data = await workflowRes.json();
+const runId = data.run_id;
+if (typeof runId !== "string" || runId.length === 0) {
+  throw new Error(`[smoke] workflow.run response missing run_id: ${JSON.stringify(data)}`);
+}
 
 const deadlineMs = Date.now() + 120_000;
 for (;;) {

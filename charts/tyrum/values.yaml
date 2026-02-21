@@ -19,6 +19,8 @@ env:
   GATEWAY_HOST: 0.0.0.0
   GATEWAY_PORT: "8788"
   GATEWAY_DB_PATH: /var/lib/tyrum/gateway.db
+  # Enable durable workflow APIs and engine-backed WS control plane.
+  TYRUM_ENGINE_API_ENABLED: "1"
   # Enterprise default per ADR-0007. Values: env|file|keychain
   TYRUM_SECRET_PROVIDER: env
   # Artifacts: default fs; set to s3 with the S3 env vars below.

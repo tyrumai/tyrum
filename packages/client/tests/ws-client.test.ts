@@ -315,6 +315,117 @@ describe("TyrumClient", () => {
     expect(msg).toEqual(updateMsg);
   });
 
+  it("sends approval.list request and returns typed result", async () => {
+    server = createTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: [],
+      reconnect: false,
+    });
+
+    client.connect();
+    const ws = await server.waitForClient();
+    await acceptConnect(ws);
+    await delay(10);
+
+    const pending = client.approvalList({ limit: 100 });
+    const req = (await waitForMessage(ws)) as Record<string, unknown>;
+    expect(req["type"]).toBe("approval.list");
+    expect(typeof req["request_id"]).toBe("string");
+
+    ws.send(
+      JSON.stringify({
+        request_id: req["request_id"],
+        type: "approval.list",
+        ok: true,
+        result: { approvals: [] },
+      }),
+    );
+
+    const res = await pending;
+    expect(res.approvals).toEqual([]);
+  });
+
+  it("sends approval.resolve request and returns typed result", async () => {
+    server = createTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: [],
+      reconnect: false,
+    });
+
+    client.connect();
+    const ws = await server.waitForClient();
+    await acceptConnect(ws);
+    await delay(10);
+
+    const pending = client.approvalResolve({ approval_id: 7, decision: "approved" });
+    const req = (await waitForMessage(ws)) as Record<string, unknown>;
+    expect(req["type"]).toBe("approval.resolve");
+    expect(typeof req["request_id"]).toBe("string");
+
+    ws.send(
+      JSON.stringify({
+        request_id: req["request_id"],
+        type: "approval.resolve",
+        ok: true,
+        result: {
+          approval: {
+            approval_id: 7,
+            kind: "other",
+            status: "approved",
+            prompt: "ok?",
+            created_at: "2026-02-20T00:00:00Z",
+            resolution: {
+              decision: "approved",
+              resolved_at: "2026-02-20T00:00:01Z",
+            },
+          },
+        },
+      }),
+    );
+
+    const res = await pending;
+    expect(res.approval.approval_id).toBe(7);
+    expect(res.approval.status).toBe("approved");
+  });
+
+  it("dedupes events by event_id", async () => {
+    server = createTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: [],
+    });
+
+    let calls = 0;
+    client.on("plan_update", () => {
+      calls += 1;
+    });
+
+    client.connect();
+    const ws = await server.waitForClient();
+    await acceptConnect(ws);
+
+    const updateMsg = {
+      event_id: "evt-dup-1",
+      type: "plan.update",
+      occurred_at: "2026-02-19T12:00:00Z",
+      payload: {
+        plan_id: "plan-1",
+        status: "running",
+      },
+    };
+
+    ws.send(JSON.stringify(updateMsg));
+    ws.send(JSON.stringify(updateMsg));
+
+    await delay(25);
+    expect(calls).toBe(1);
+  });
+
   it("emits error event for error messages", async () => {
     server = createTestServer();
     client = new TyrumClient({

@@ -34,6 +34,12 @@ describe("WatcherScheduler", () => {
     const events = await memoryDal.getEpisodicEvents();
     expect(events).toHaveLength(1);
     expect(events[0]!.event_type).toBe("periodic_fired");
+
+    const firings = await db.all<{ status: string }>(
+      "SELECT status FROM watcher_firings",
+    );
+    expect(firings).toHaveLength(1);
+    expect(firings[0]!.status).toBe("enqueued");
   });
 
   it("does not fire if interval has not elapsed", async () => {

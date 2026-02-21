@@ -7,14 +7,38 @@
 
 import {
   requiredCapability,
+  ApprovalListRequest,
+  ApprovalListResponse,
+  ApprovalResolveRequest,
+  ApprovalResolveResponse,
+  parseTyrumKey,
   WsApprovalDecision,
   WsError,
+  WsApprovalListRequest,
+  WsApprovalResolveRequest,
+  WsSessionSendRequest,
+  WsSessionSendResult,
+  WsCommandExecuteRequest,
+  WsCommandExecuteResult,
+  WsWorkflowRunRequest,
+  WsWorkflowRunResult,
+  WsWorkflowResumeRequest,
+  WsWorkflowResumeResult,
+  WsWorkflowCancelRequest,
+  WsWorkflowCancelResult,
+  WsPairingApproveRequest,
+  WsPairingDenyRequest,
+  WsPairingRevokeRequest,
+  WsPairingResolveResult,
+  WsPresenceBeaconRequest,
+  WsPresenceBeaconResult,
   WsMessageEnvelope,
   WsTaskExecuteResult,
 } from "@tyrum/schemas";
 import type {
   ActionPrimitive,
   ClientCapability,
+  Approval as ApprovalT,
   WsEventEnvelope,
   WsRequestEnvelope,
   WsResponseEnvelope,
@@ -24,7 +48,19 @@ import type { ConnectedClient } from "./connection-manager.js";
 import type { ConnectionManager } from "./connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
+import type { ApprovalDal } from "../modules/approval/dal.js";
+import { toApprovalContract } from "../modules/approval/to-contract.js";
+import type { PresenceDal } from "../modules/presence/dal.js";
+import type { ContextReportDal } from "../modules/context/report-dal.js";
+import type { PolicyOverrideDal } from "../modules/policy/override-dal.js";
+import type { NodePairingDal } from "../modules/node/pairing-dal.js";
+import type { AgentRegistry } from "../modules/agent/registry.js";
+import type { ExecutionEngine } from "../modules/execution/engine.js";
+import type { PolicyService } from "../modules/policy/service.js";
+import type { PluginRegistry } from "../modules/plugins/registry.js";
 import type { Logger } from "../modules/observability/logger.js";
+import type { SqlDb, StateStoreKind } from "../statestore/types.js";
+import { executeCommand } from "../modules/commands/dispatcher.js";
 
 // ---------------------------------------------------------------------------
 // Dependency injection
@@ -37,6 +73,25 @@ import type { Logger } from "../modules/observability/logger.js";
 export interface ProtocolDeps {
   connectionManager: ConnectionManager;
   logger?: Logger;
+  db?: SqlDb;
+  contextReportDal?: ContextReportDal;
+  runtime?: {
+    version: string;
+    instanceId: string;
+    role: string;
+    dbKind: StateStoreKind;
+    isExposed: boolean;
+    otelEnabled: boolean;
+  };
+  approvalDal?: ApprovalDal;
+  presenceDal?: PresenceDal;
+  policyOverrideDal?: PolicyOverrideDal;
+  nodePairingDal?: NodePairingDal;
+  agents?: AgentRegistry;
+  engine?: ExecutionEngine;
+  policyService?: PolicyService;
+  plugins?: PluginRegistry;
+  presenceTtlMs?: number;
 
   /**
    * Optional cluster router. When configured, the gateway can deliver WS messages
@@ -84,11 +139,11 @@ export class NoCapableClientError extends Error {
  *
  * @returns an error message to send back, or `undefined` on success.
  */
-export function handleClientMessage(
+export async function handleClientMessage(
   client: ConnectedClient,
   raw: string,
   deps: ProtocolDeps,
-): WsResponseEnvelope | WsEventEnvelope | undefined {
+): Promise<WsResponseEnvelope | WsEventEnvelope | undefined> {
   let json: unknown;
   try {
     json = JSON.parse(raw);
@@ -174,7 +229,634 @@ export function handleClientMessage(
 
   // Requests (client -> gateway). In the current runtime, we don't accept
   // post-handshake client requests via WS (use HTTP routes for now).
-  return errorResponse(msg.request_id, msg.type, "unsupported_request", "request not supported");
+  if (msg.type === "approval.list") {
+    if (!deps.approvalDal) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unsupported_request",
+        "approval.list not supported",
+      );
+    }
+    const parsedReq = WsApprovalListRequest.safeParse(msg);
+    if (!parsedReq.success) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "invalid_request",
+        parsedReq.error.message,
+        { issues: parsedReq.error.issues },
+      );
+    }
+
+    const filter = ApprovalListRequest.parse(parsedReq.data.payload);
+    const status = filter.status;
+    const limit = Math.max(1, Math.min(500, filter.limit));
+
+    const rows =
+      status === undefined
+        ? await deps.approvalDal.getPending()
+        : status === "cancelled"
+          ? []
+          : await deps.approvalDal.getByStatus(status);
+
+    const approvals = rows
+      .map(toApprovalContract)
+      .filter((a): a is ApprovalT => Boolean(a))
+      .filter((a) => {
+        if (filter.kind && filter.kind.length > 0 && !filter.kind.includes(a.kind)) {
+          return false;
+        }
+        if (filter.key && a.scope?.key !== filter.key) return false;
+        if (filter.lane && a.scope?.lane !== filter.lane) return false;
+        if (filter.run_id && a.scope?.run_id !== filter.run_id) return false;
+        return true;
+      })
+      .slice(0, limit);
+    const result = ApprovalListResponse.parse({ approvals, next_cursor: undefined });
+    return { request_id: msg.request_id, type: msg.type, ok: true, result };
+  }
+
+  if (msg.type === "approval.resolve") {
+    if (!deps.approvalDal) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unsupported_request",
+        "approval.resolve not supported",
+      );
+    }
+    const parsedReq = WsApprovalResolveRequest.safeParse(msg);
+    if (!parsedReq.success) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "invalid_request",
+        parsedReq.error.message,
+        { issues: parsedReq.error.issues },
+      );
+    }
+
+    const req = ApprovalResolveRequest.parse(parsedReq.data.payload);
+
+    let createdOverrides: unknown[] | undefined;
+    if (req.decision === "approved" && req.mode === "always") {
+      if (!deps.policyOverrideDal) {
+        return errorResponse(
+          msg.request_id,
+          msg.type,
+          "unsupported_request",
+          "policy overrides not supported",
+        );
+      }
+
+      const existing = await deps.approvalDal.getById(req.approval_id);
+      if (!existing || existing.status !== "pending") {
+        return errorResponse(
+          msg.request_id,
+          msg.type,
+          "not_found",
+          `approval ${String(req.approval_id)} not found or already responded`,
+        );
+      }
+
+      const suggested = extractSuggestedOverrides(existing.context);
+      const selected = Array.isArray(req.overrides) ? req.overrides : [];
+      if (selected.length === 0) {
+        return errorResponse(
+          msg.request_id,
+          msg.type,
+          "invalid_request",
+          "mode=always requires selecting overrides",
+        );
+      }
+
+      const allowed = new Set(
+        suggested.map((s) => `${s.tool_id}::${s.pattern}::${s.workspace_id ?? ""}`),
+      );
+      for (const sel of selected) {
+        const key = `${sel.tool_id}::${sel.pattern}::${sel.workspace_id ?? ""}`;
+        if (!allowed.has(key)) {
+          return errorResponse(
+            msg.request_id,
+            msg.type,
+            "invalid_request",
+            "requested overrides must be selected from suggested_overrides",
+          );
+        }
+      }
+
+      const agentId = extractAgentId(existing.context) ?? "default";
+      const snapshotId = extractPolicySnapshotId(existing.context);
+      const createdBy = { kind: "ws" };
+
+      createdOverrides = [];
+      for (const sel of selected) {
+        const row = await deps.policyOverrideDal.create({
+          agentId,
+          workspaceId: sel.workspace_id,
+          toolId: sel.tool_id,
+          pattern: sel.pattern,
+          createdBy,
+          createdFromApprovalId: existing.id,
+          createdFromPolicySnapshotId: snapshotId,
+        });
+        createdOverrides.push(row);
+        broadcastEvent(
+          {
+            event_id: crypto.randomUUID(),
+            type: "policy_override.created",
+            occurred_at: new Date().toISOString(),
+            payload: { override: row },
+          },
+          deps,
+        );
+      }
+    }
+
+    const updated = await deps.approvalDal.respond(
+      req.approval_id,
+      req.decision === "approved",
+      req.reason,
+    );
+    if (!updated) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "not_found",
+        `approval ${String(req.approval_id)} not found`,
+      );
+    }
+
+    if (deps.engine && updated.resume_token && updated.run_id) {
+      try {
+        if (req.decision === "approved") {
+          await deps.engine.resumeRun(updated.resume_token);
+        } else {
+          await deps.engine.cancelRun(updated.run_id, req.reason ?? "approval denied");
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        deps.logger?.error("approval.engine_action_failed", {
+          approval_id: updated.id,
+          decision: req.decision,
+          run_id: updated.run_id,
+          error: message,
+        });
+      }
+    }
+
+    const approval = toApprovalContract(updated);
+    if (!approval) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "invalid_state",
+        `approval ${String(updated.id)} could not be converted to contract`,
+      );
+    }
+    const result = ApprovalResolveResponse.parse({
+      approval,
+      created_overrides: createdOverrides,
+    });
+
+    broadcastEvent(
+      {
+        event_id: crypto.randomUUID(),
+        type: "approval.resolved",
+        occurred_at: new Date().toISOString(),
+        payload: { approval },
+      },
+      deps,
+    );
+    return { request_id: msg.request_id, type: msg.type, ok: true, result };
+  }
+
+  if (msg.type === "pairing.approve" || msg.type === "pairing.deny" || msg.type === "pairing.revoke") {
+    if (client.role !== "client") {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unauthorized",
+        "only operator clients may resolve pairings",
+      );
+    }
+    if (!deps.nodePairingDal) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unsupported_request",
+        "pairing resolution not supported",
+      );
+    }
+
+    const parsedReq =
+      msg.type === "pairing.approve"
+        ? WsPairingApproveRequest.safeParse(msg)
+        : msg.type === "pairing.deny"
+          ? WsPairingDenyRequest.safeParse(msg)
+          : WsPairingRevokeRequest.safeParse(msg);
+    if (!parsedReq.success) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "invalid_request",
+        parsedReq.error.message,
+        { issues: parsedReq.error.issues },
+      );
+    }
+
+    const pairingId = parsedReq.data.payload.pairing_id;
+    const reason =
+      typeof (parsedReq.data.payload as { reason?: unknown }).reason === "string"
+        ? String((parsedReq.data.payload as { reason?: unknown }).reason)
+        : undefined;
+
+    const resolvedBy = {
+      kind: "ws",
+      client_id: client.id,
+      device_id: client.device_id,
+    };
+
+    const pairing =
+      msg.type === "pairing.revoke"
+        ? await deps.nodePairingDal.revoke({
+            pairingId,
+            reason,
+            resolvedBy,
+          })
+        : await deps.nodePairingDal.resolve({
+            pairingId,
+            decision: msg.type === "pairing.approve" ? "approved" : "denied",
+            reason,
+            resolvedBy,
+          });
+
+    if (!pairing) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "not_found",
+        `pairing ${String(pairingId)} not found or not resolvable`,
+      );
+    }
+
+    broadcastEvent(
+      {
+        event_id: crypto.randomUUID(),
+        type: "pairing.resolved",
+        occurred_at: new Date().toISOString(),
+        payload: { pairing },
+      },
+      deps,
+    );
+
+    const result = WsPairingResolveResult.parse({ pairing });
+    return { request_id: msg.request_id, type: msg.type, ok: true, result };
+  }
+
+  if (msg.type === "session.send") {
+    if (client.role !== "client") {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unauthorized",
+        "only operator clients may send session messages",
+      );
+    }
+    if (!deps.agents) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unsupported_request",
+        "session.send not supported",
+      );
+    }
+    const parsedReq = WsSessionSendRequest.safeParse(msg);
+    if (!parsedReq.success) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "invalid_request",
+        parsedReq.error.message,
+        { issues: parsedReq.error.issues },
+      );
+    }
+
+    try {
+      const agentId = parsedReq.data.payload.agent_id ?? "default";
+      const runtime = await deps.agents.getRuntime(agentId);
+      const res = await runtime.turn({
+        channel: parsedReq.data.payload.channel,
+        thread_id: parsedReq.data.payload.thread_id,
+        message: parsedReq.data.payload.content,
+        metadata: { source: "ws", request_id: msg.request_id },
+      });
+      const result = WsSessionSendResult.parse({
+        session_id: res.session_id,
+        assistant_message: res.reply,
+      });
+      return { request_id: msg.request_id, type: msg.type, ok: true, result };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "agent_runtime_error",
+        message,
+      );
+    }
+  }
+
+  if (msg.type === "command.execute") {
+    if (client.role !== "client") {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unauthorized",
+        "only operator clients may execute commands",
+      );
+    }
+
+    const parsedReq = WsCommandExecuteRequest.safeParse(msg);
+    if (!parsedReq.success) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "invalid_request",
+        parsedReq.error.message,
+        { issues: parsedReq.error.issues },
+      );
+    }
+
+    const res = await executeCommand(parsedReq.data.payload.command, {
+      runtime: deps.runtime,
+      connectionManager: deps.connectionManager,
+      db: deps.db,
+      approvalDal: deps.approvalDal,
+      presenceDal: deps.presenceDal,
+      nodePairingDal: deps.nodePairingDal,
+      policyService: deps.policyService,
+      policyOverrideDal: deps.policyOverrideDal,
+      contextReportDal: deps.contextReportDal,
+      plugins: deps.plugins,
+    });
+
+    const result = WsCommandExecuteResult.parse({
+      output: res.output,
+      data: res.data,
+    });
+    return { request_id: msg.request_id, type: msg.type, ok: true, result };
+  }
+
+  if (msg.type === "workflow.run") {
+    if (client.role !== "client") {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unauthorized",
+        "only operator clients may run workflows",
+      );
+    }
+    if (!deps.engine || (!deps.policyService && !deps.agents)) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unsupported_request",
+        "workflow.run not supported",
+      );
+    }
+    const parsedReq = WsWorkflowRunRequest.safeParse(msg);
+    if (!parsedReq.success) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "invalid_request",
+        parsedReq.error.message,
+        { issues: parsedReq.error.issues },
+      );
+    }
+    try {
+      const planId =
+        parsedReq.data.payload.plan_id ?? `plan-${crypto.randomUUID()}`;
+      const requestId =
+        parsedReq.data.payload.request_id ?? `req-${crypto.randomUUID()}`;
+
+      const keyParsed = parseTyrumKey(parsedReq.data.payload.key);
+      const agentId = keyParsed.kind === "agent" ? keyParsed.agent_id : "default";
+      const policy = deps.agents ? deps.agents.getPolicyService(agentId) : deps.policyService!;
+      const effectivePolicy = await policy.loadEffectiveBundle();
+      const snapshot = await policy.getOrCreateSnapshot(effectivePolicy.bundle);
+
+      const res = await deps.engine.enqueuePlan({
+        key: parsedReq.data.payload.key,
+        lane: parsedReq.data.payload.lane,
+        planId,
+        requestId,
+        steps: parsedReq.data.payload.steps,
+        policySnapshotId: snapshot.policy_snapshot_id,
+        budgets: parsedReq.data.payload.budgets,
+      });
+
+      const result = WsWorkflowRunResult.parse({
+        job_id: res.jobId,
+        run_id: res.runId,
+        plan_id: planId,
+        request_id: requestId,
+        key: parsedReq.data.payload.key,
+        lane: parsedReq.data.payload.lane,
+        steps_count: parsedReq.data.payload.steps.length,
+      });
+
+      return { request_id: msg.request_id, type: msg.type, ok: true, result };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "internal_error",
+        message,
+      );
+    }
+  }
+
+  if (msg.type === "workflow.resume") {
+    if (client.role !== "client") {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unauthorized",
+        "only operator clients may resume workflows",
+      );
+    }
+    if (!deps.engine) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unsupported_request",
+        "workflow.resume not supported",
+      );
+    }
+    const parsedReq = WsWorkflowResumeRequest.safeParse(msg);
+    if (!parsedReq.success) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "invalid_request",
+        parsedReq.error.message,
+        { issues: parsedReq.error.issues },
+      );
+    }
+
+    const runId = await deps.engine.resumeRun(parsedReq.data.payload.token);
+    if (!runId) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "not_found",
+        "resume token not found",
+      );
+    }
+
+    const result = WsWorkflowResumeResult.parse({ run_id: runId });
+    return { request_id: msg.request_id, type: msg.type, ok: true, result };
+  }
+
+  if (msg.type === "workflow.cancel") {
+    if (client.role !== "client") {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unauthorized",
+        "only operator clients may cancel workflows",
+      );
+    }
+    if (!deps.engine) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unsupported_request",
+        "workflow.cancel not supported",
+      );
+    }
+    const parsedReq = WsWorkflowCancelRequest.safeParse(msg);
+    if (!parsedReq.success) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "invalid_request",
+        parsedReq.error.message,
+        { issues: parsedReq.error.issues },
+      );
+    }
+
+    const outcome = await deps.engine.cancelRun(
+      parsedReq.data.payload.run_id,
+      parsedReq.data.payload.reason,
+    );
+    if (outcome === "not_found") {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "not_found",
+        "run not found",
+      );
+    }
+
+    const result = WsWorkflowCancelResult.parse({
+      run_id: parsedReq.data.payload.run_id,
+      cancelled: outcome === "cancelled",
+    });
+    return { request_id: msg.request_id, type: msg.type, ok: true, result };
+  }
+
+  if (msg.type === "presence.beacon") {
+    if (!deps.presenceDal || !client.device_id) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unsupported_request",
+        "presence.beacon not supported",
+      );
+    }
+    const parsedReq = WsPresenceBeaconRequest.safeParse(msg);
+    if (!parsedReq.success) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "invalid_request",
+        parsedReq.error.message,
+        { issues: parsedReq.error.issues },
+      );
+    }
+
+    const nowMs = Date.now();
+    const ttlMs = deps.presenceTtlMs ?? 60_000;
+    const row = await deps.presenceDal.upsert({
+      instanceId: client.device_id,
+      role: client.role,
+      connectionId: client.id,
+      host: parsedReq.data.payload.host ?? null,
+      ip: parsedReq.data.payload.ip ?? null,
+      version: parsedReq.data.payload.version ?? null,
+      mode: parsedReq.data.payload.mode ?? null,
+      lastInputSeconds: parsedReq.data.payload.last_input_seconds ?? null,
+      metadata: parsedReq.data.payload.metadata ?? {},
+      nowMs,
+      ttlMs,
+    });
+
+    const entry = {
+      instance_id: row.instance_id,
+      role: row.role,
+      host: row.host ?? undefined,
+      ip: row.ip ?? undefined,
+      version: row.version ?? undefined,
+      mode: (row.mode ?? undefined) as string | undefined,
+      last_seen_at: new Date(row.last_seen_at_ms).toISOString(),
+      last_input_seconds: row.last_input_seconds ?? undefined,
+      reason: "periodic" as const,
+      metadata: row.metadata,
+    };
+
+    // Broadcast best-effort presence update.
+    const evt = {
+      event_id: crypto.randomUUID(),
+      type: "presence.upserted",
+      occurred_at: new Date().toISOString(),
+      payload: { entry },
+    } satisfies WsEventEnvelope;
+
+    for (const peer of deps.connectionManager.allClients()) {
+      try {
+        peer.ws.send(JSON.stringify(evt));
+      } catch {
+        // ignore
+      }
+    }
+    if (deps.cluster) {
+      void deps.cluster.outboxDal.enqueue(
+        "ws.broadcast",
+        {
+          source_edge_id: deps.cluster.edgeId,
+          skip_local: true,
+          message: evt,
+        },
+      ).catch(() => {
+        // ignore
+      });
+    }
+
+    const result = WsPresenceBeaconResult.parse({ entry });
+    return { request_id: msg.request_id, type: msg.type, ok: true, result };
+  }
+
+  return errorResponse(
+    msg.request_id,
+    msg.type,
+    "unsupported_request",
+    "request not supported",
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -198,8 +880,14 @@ export function dispatchTask(
     throw new NoCapableClientError(action.type as ClientCapability);
   }
 
-  const client = deps.connectionManager.getClientForCapability(capability);
-  if (!client) {
+  const localCandidates: ConnectedClient[] = [];
+  for (const c of deps.connectionManager.allClients()) {
+    if (c.capabilities.includes(capability)) {
+      localCandidates.push(c);
+    }
+  }
+
+  if (localCandidates.length === 0) {
     const cluster = deps.cluster;
     if (!cluster) {
       throw new NoCapableClientError(capability);
@@ -208,21 +896,37 @@ export function dispatchTask(
     const nowMs = Date.now();
     return (async (): Promise<string> => {
       const candidates = await cluster.connectionDirectory.listConnectionsForCapability(
-      capability,
-      nowMs,
-    );
-    const target =
-      candidates.find((c) => c.edge_id !== cluster.edgeId) ?? candidates[0];
-    if (!target || target.edge_id === cluster.edgeId) {
-      throw new NoCapableClientError(capability);
-    }
+        capability,
+        nowMs,
+      );
 
-    const requestId = `task-${crypto.randomUUID()}`;
-    const message: WsRequestEnvelope = {
-      request_id: requestId,
-      type: "task.execute",
-      payload: { plan_id: planId, step_index: stepIndex, action },
-    };
+      const eligibleNodes = deps.nodePairingDal
+        ? (
+            await Promise.all(
+              candidates
+                .filter((c) => c.role === "node" && typeof c.device_id === "string" && c.device_id.trim().length > 0)
+                .map(async (c) => {
+                  const pairing = await deps.nodePairingDal!.getByNodeId(c.device_id!);
+                  return pairing?.status === "approved" ? c : null;
+                }),
+            )
+          ).filter((c): c is NonNullable<(typeof candidates)[number]> => c !== null)
+        : [];
+
+      const eligibleClients = candidates.filter((c) => c.role === "client");
+      const eligible = [...eligibleNodes, ...eligibleClients];
+
+      const target = eligible.find((c) => c.edge_id !== cluster.edgeId) ?? eligible[0];
+      if (!target || target.edge_id === cluster.edgeId) {
+        throw new NoCapableClientError(capability);
+      }
+
+      const requestId = `task-${crypto.randomUUID()}`;
+      const message: WsRequestEnvelope = {
+        request_id: requestId,
+        type: "task.execute",
+        payload: { plan_id: planId, step_index: stepIndex, action },
+      };
 
       await cluster.outboxDal.enqueue(
         "ws.direct",
@@ -233,14 +937,81 @@ export function dispatchTask(
     })();
   }
 
-  const requestId = `task-${crypto.randomUUID()}`;
-  const message: WsRequestEnvelope = {
-    request_id: requestId,
-    type: "task.execute",
-    payload: { plan_id: planId, step_index: stepIndex, action },
-  };
-  client.ws.send(JSON.stringify(message));
-  return Promise.resolve(requestId);
+  return (async (): Promise<string> => {
+    const eligibleNodes: ConnectedClient[] = [];
+    const eligibleClients: ConnectedClient[] = [];
+
+    for (const c of localCandidates) {
+      if (c.role !== "node") {
+        eligibleClients.push(c);
+        continue;
+      }
+
+      const nodeId = c.device_id;
+      if (!nodeId || !deps.nodePairingDal) continue;
+      const pairing = await deps.nodePairingDal.getByNodeId(nodeId);
+      if (pairing?.status === "approved") {
+        eligibleNodes.push(c);
+      }
+    }
+
+    const selected = eligibleNodes[0] ?? eligibleClients[0];
+    if (!selected) {
+      const cluster = deps.cluster;
+      if (!cluster) {
+        throw new NoCapableClientError(capability);
+      }
+
+      const nowMs = Date.now();
+      const candidates = await cluster.connectionDirectory.listConnectionsForCapability(
+        capability,
+        nowMs,
+      );
+
+      const eligibleNodes2 = deps.nodePairingDal
+        ? (
+            await Promise.all(
+              candidates
+                .filter((c) => c.role === "node" && typeof c.device_id === "string" && c.device_id.trim().length > 0)
+                .map(async (c) => {
+                  const pairing = await deps.nodePairingDal!.getByNodeId(c.device_id!);
+                  return pairing?.status === "approved" ? c : null;
+                }),
+            )
+          ).filter((c): c is NonNullable<(typeof candidates)[number]> => c !== null)
+        : [];
+      const eligibleClients2 = candidates.filter((c) => c.role === "client");
+      const eligible2 = [...eligibleNodes2, ...eligibleClients2];
+
+      const target = eligible2.find((c) => c.edge_id !== cluster.edgeId) ?? eligible2[0];
+      if (!target || target.edge_id === cluster.edgeId) {
+        throw new NoCapableClientError(capability);
+      }
+
+      const requestId = `task-${crypto.randomUUID()}`;
+      const message: WsRequestEnvelope = {
+        request_id: requestId,
+        type: "task.execute",
+        payload: { plan_id: planId, step_index: stepIndex, action },
+      };
+
+      await cluster.outboxDal.enqueue(
+        "ws.direct",
+        { connection_id: target.connection_id, message },
+        { targetEdgeId: target.edge_id },
+      );
+      return requestId;
+    }
+
+    const requestId = `task-${crypto.randomUUID()}`;
+    const message: WsRequestEnvelope = {
+      request_id: requestId,
+      type: "task.execute",
+      payload: { plan_id: planId, step_index: stepIndex, action },
+    };
+    selected.ws.send(JSON.stringify(message));
+    return requestId;
+  })();
 }
 
 /**
@@ -377,6 +1148,72 @@ function parseApprovalId(requestId: string): number | undefined {
   const n = Number.parseInt(raw, 10);
   if (!Number.isInteger(n) || n <= 0) return undefined;
   return n;
+}
+
+function broadcastEvent(evt: WsEventEnvelope, deps: ProtocolDeps): void {
+  const payload = JSON.stringify(evt);
+  for (const peer of deps.connectionManager.allClients()) {
+    try {
+      peer.ws.send(payload);
+    } catch {
+      // ignore
+    }
+  }
+  if (deps.cluster) {
+    void deps.cluster.outboxDal
+      .enqueue("ws.broadcast", {
+        source_edge_id: deps.cluster.edgeId,
+        skip_local: true,
+        message: evt,
+      })
+      .catch(() => {
+        // ignore
+      });
+  }
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function extractSuggestedOverrides(approvalContext: unknown): Array<{ tool_id: string; pattern: string; workspace_id?: string }> {
+  if (!isObject(approvalContext)) return [];
+  const policy = approvalContext["policy"];
+  if (!isObject(policy)) return [];
+  const suggested = policy["suggested_overrides"];
+  if (!Array.isArray(suggested)) return [];
+
+  const out: Array<{ tool_id: string; pattern: string; workspace_id?: string }> = [];
+  for (const entry of suggested) {
+    if (!isObject(entry)) continue;
+    const toolId = entry["tool_id"];
+    const pattern = entry["pattern"];
+    const workspaceId = entry["workspace_id"];
+    if (typeof toolId === "string" && typeof pattern === "string") {
+      out.push({
+        tool_id: toolId,
+        pattern,
+        workspace_id: typeof workspaceId === "string" ? workspaceId : undefined,
+      });
+    }
+  }
+  return out;
+}
+
+function extractPolicySnapshotId(approvalContext: unknown): string | undefined {
+  if (!isObject(approvalContext)) return undefined;
+  const policy = approvalContext["policy"];
+  if (!isObject(policy)) return undefined;
+  const value = policy["policy_snapshot_id"];
+  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+}
+
+function extractAgentId(approvalContext: unknown): string | undefined {
+  if (!isObject(approvalContext)) return undefined;
+  const policy = approvalContext["policy"];
+  if (!isObject(policy)) return undefined;
+  const value = policy["agent_id"];
+  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
 }
 
 function evidenceFromErrorDetails(details: unknown): unknown {

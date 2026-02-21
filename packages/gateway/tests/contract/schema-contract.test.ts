@@ -49,6 +49,7 @@ describe("StateStore schema contract (sqlite vs postgres)", () => {
         "pam_profiles",
         "pvp_profiles",
         "watchers",
+        "watcher_firings",
         "sessions",
         "approvals",
         "jobs",
@@ -56,10 +57,22 @@ describe("StateStore schema contract (sqlite vs postgres)", () => {
         "outbox",
         "outbox_consumers",
         "connection_directory",
+        "presence_entries",
+        "node_pairings",
+        "policy_snapshots",
+        "policy_overrides",
+        "auth_profiles",
+        "session_provider_pins",
+        "context_reports",
+        "secret_resolutions",
         "execution_jobs",
         "execution_runs",
         "execution_steps",
         "execution_attempts",
+        "execution_artifacts",
+        "channel_inbox",
+        "channel_outbox",
+        "concurrency_slots",
         "lane_leases",
         "idempotency_records",
         "resume_tokens",
@@ -76,4 +89,3 @@ describe("StateStore schema contract (sqlite vs postgres)", () => {
     }
   });
 });
-

@@ -84,7 +84,7 @@ describe("ApprovalDal", () => {
     expect(updated!.response_reason).toBe("too risky");
   });
 
-  it("returns undefined when responding to already-responded approval", async () => {
+  it("is idempotent when responding to already-responded approval", async () => {
     const dal = createDal();
     const created = await dal.create({
       planId: "plan-1",
@@ -94,7 +94,8 @@ describe("ApprovalDal", () => {
 
     await dal.respond(created.id, true);
     const second = await dal.respond(created.id, false);
-    expect(second).toBeUndefined();
+    expect(second).toBeDefined();
+    expect(second!.status).toBe("approved");
 
     // Original response is preserved
     const fetched = await dal.getById(created.id);

@@ -7,10 +7,17 @@
 
 import type { SqlDb } from "../../statestore/types.js";
 
-export type ApprovalStatus = "pending" | "approved" | "denied" | "expired";
+export type ApprovalStatus = "pending" | "approved" | "denied" | "expired" | "cancelled";
 
 export interface ApprovalRow {
   id: number;
+  kind: string;
+  agent_id: string | null;
+  workspace_id: string;
+  key: string | null;
+  lane: string | null;
+  run_id: string | null;
+  resume_token: string | null;
   plan_id: string;
   step_index: number;
   prompt: string;
@@ -24,18 +31,30 @@ export interface ApprovalRow {
 
 interface RawApprovalRow {
   id: number;
+  kind: string;
+  agent_id: string | null;
+  workspace_id: string;
+  key: string | null;
+  lane: string | null;
+  run_id: string | null;
+  resume_token: string | null;
   plan_id: string;
   step_index: number;
   prompt: string;
   context_json: string;
   status: string;
   created_at: string | Date;
-  responded_at: string | null;
+  responded_at: string | Date | null;
   response_reason: string | null;
-  expires_at: string | null;
+  expires_at: string | Date | null;
 }
 
 function normalizeTime(value: string | Date): string {
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+function normalizeMaybeTime(value: string | Date | null): string | null {
+  if (value === null) return null;
   return value instanceof Date ? value.toISOString() : value;
 }
 
@@ -48,15 +67,22 @@ function toApprovalRow(raw: RawApprovalRow): ApprovalRow {
   }
   return {
     id: raw.id,
+    kind: raw.kind,
+    agent_id: raw.agent_id,
+    workspace_id: raw.workspace_id,
+    key: raw.key,
+    lane: raw.lane,
+    run_id: raw.run_id,
+    resume_token: raw.resume_token,
     plan_id: raw.plan_id,
     step_index: raw.step_index,
     prompt: raw.prompt,
     context,
     status: raw.status as ApprovalStatus,
     created_at: normalizeTime(raw.created_at),
-    responded_at: raw.responded_at,
+    responded_at: normalizeMaybeTime(raw.responded_at),
     response_reason: raw.response_reason,
-    expires_at: raw.expires_at,
+    expires_at: normalizeMaybeTime(raw.expires_at),
   };
 }
 
@@ -64,6 +90,13 @@ export interface CreateApprovalParams {
   planId: string;
   stepIndex: number;
   prompt: string;
+  kind?: string;
+  agentId?: string;
+  workspaceId?: string;
+  key?: string;
+  lane?: string;
+  runId?: string;
+  resumeToken?: string;
   context?: unknown;
   expiresAt?: string;
 }
@@ -74,10 +107,30 @@ export class ApprovalDal {
   /** Create a new pending approval request. */
   async create(params: CreateApprovalParams): Promise<ApprovalRow> {
     const contextJson = JSON.stringify(params.context ?? {});
+    const kind = params.kind?.trim() || "other";
+    const agentId = params.agentId?.trim() || null;
+    const workspaceId = params.workspaceId?.trim() || "default";
+    const key = params.key?.trim() || null;
+    const lane = params.lane?.trim() || null;
+    const runId = params.runId?.trim() || null;
+    const resumeToken = params.resumeToken?.trim() || null;
 
     const row = await this.db.get<RawApprovalRow>(
-      `INSERT INTO approvals (plan_id, step_index, prompt, context_json, expires_at)
-       VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO approvals (
+         plan_id,
+         step_index,
+         prompt,
+         context_json,
+         expires_at,
+         kind,
+         agent_id,
+         workspace_id,
+         key,
+         lane,
+         run_id,
+         resume_token
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        RETURNING *`,
       [
         params.planId,
@@ -85,6 +138,13 @@ export class ApprovalDal {
         params.prompt,
         contextJson,
         params.expiresAt ?? null,
+        kind,
+        agentId,
+        workspaceId,
+        key,
+        lane,
+        runId,
+        resumeToken,
       ],
     );
     if (!row) {
@@ -102,14 +162,38 @@ export class ApprovalDal {
     const status: ApprovalStatus = approved ? "approved" : "denied";
     const nowIso = new Date().toISOString();
 
-    const result = await this.db.run(
-      `UPDATE approvals
-       SET status = ?, responded_at = ?, response_reason = ?
-       WHERE id = ? AND status = 'pending'`,
-      [status, nowIso, reason ?? null, id],
-    );
-    if (result.changes === 0) return undefined;
-    return await this.getById(id);
+    return await this.db.transaction(async (tx) => {
+      const existing = await tx.get<RawApprovalRow>(
+        "SELECT * FROM approvals WHERE id = ?",
+        [id],
+      );
+      if (!existing) return undefined;
+
+      if (existing.status !== "pending") {
+        return toApprovalRow(existing);
+      }
+
+      const result = await tx.run(
+        `UPDATE approvals
+         SET status = ?, responded_at = ?, response_reason = ?
+         WHERE id = ? AND status = 'pending'`,
+        [status, nowIso, reason ?? null, id],
+      );
+
+      if (result.changes === 0) {
+        const current = await tx.get<RawApprovalRow>(
+          "SELECT * FROM approvals WHERE id = ?",
+          [id],
+        );
+        return current ? toApprovalRow(current) : undefined;
+      }
+
+      const updated = await tx.get<RawApprovalRow>(
+        "SELECT * FROM approvals WHERE id = ?",
+        [id],
+      );
+      return updated ? toApprovalRow(updated) : undefined;
+    });
   }
 
   /** Get a single approval by id. */

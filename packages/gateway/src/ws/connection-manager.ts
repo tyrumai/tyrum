@@ -15,6 +15,9 @@ import type { ClientCapability, WsEventEnvelope, WsRequestEnvelope } from "@tyru
 export interface ConnectedClient {
   readonly id: string;
   readonly ws: WebSocket;
+  readonly role: "client" | "node";
+  readonly device_id?: string;
+  readonly protocol_rev: number;
   readonly capabilities: readonly ClientCapability[];
   lastPong: number;
 }
@@ -43,11 +46,23 @@ export class ConnectionManager {
    *
    * @returns the generated client id (UUID v4).
    */
-  addClient(ws: WebSocket, capabilities: readonly ClientCapability[]): string {
-    const id = crypto.randomUUID();
+  addClient(
+    ws: WebSocket,
+    capabilities: readonly ClientCapability[],
+    opts?: {
+      id?: string;
+      role?: "client" | "node";
+      deviceId?: string;
+      protocolRev?: number;
+    },
+  ): string {
+    const id = opts?.id ?? crypto.randomUUID();
     const client: ConnectedClient = {
       id,
       ws,
+      role: opts?.role ?? "client",
+      device_id: opts?.deviceId,
+      protocol_rev: opts?.protocolRev ?? 1,
       capabilities,
       lastPong: Date.now(),
     };

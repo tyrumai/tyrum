@@ -11,6 +11,7 @@ services:
       GATEWAY_HOST: 0.0.0.0
       GATEWAY_PORT: "8788"
       GATEWAY_DB_PATH: /var/lib/tyrum/gateway.db
+      TYRUM_ENGINE_API_ENABLED: "1"
       # Artifact storage: default to filesystem; set TYRUM_ARTIFACT_STORE=s3 and
       # enable the "minio" profile to use object storage.
       TYRUM_ARTIFACT_STORE: ${TYRUM_ARTIFACT_STORE:-fs}
@@ -40,6 +41,7 @@ services:
       TYRUM_HOME: /var/lib/tyrum
       GATEWAY_HOST: 0.0.0.0
       GATEWAY_PORT: "8788"
+      TYRUM_ENGINE_API_ENABLED: "1"
       GATEWAY_DB_PATH: ${GATEWAY_DB_PATH:-postgres://${POSTGRES_USER:-tyrum}:${POSTGRES_PASSWORD:-tyrum}@postgres:5432/${POSTGRES_DB:-tyrum}}
       # In split mode, ensure all services share the same admin token.
       GATEWAY_TOKEN: ${GATEWAY_TOKEN:-tyrum-dev-token}

@@ -73,6 +73,24 @@ export const AttemptCost = z
   .strict();
 export type AttemptCost = z.infer<typeof AttemptCost>;
 
+/**
+ * Run-level budgets (optional).
+ *
+ * Budgets are ceilings: when exceeded, execution pauses with reason "budget"
+ * (and can be overridden by an operator approval).
+ */
+export const ExecutionBudgets = z
+  .object({
+    /** Maximum cost for the run in USD micros (USD * 1e6). */
+    max_usd_micros: z.number().int().nonnegative().optional(),
+    /** Maximum wall-clock duration for the run (ms since started_at). */
+    max_duration_ms: z.number().int().positive().optional(),
+    /** Maximum total LLM tokens consumed by the run (when available). */
+    max_total_tokens: z.number().int().nonnegative().optional(),
+  })
+  .strict();
+export type ExecutionBudgets = z.infer<typeof ExecutionBudgets>;
+
 export const ExecutionJobStatus = z.enum([
   "queued",
   "running",
@@ -170,6 +188,11 @@ export const ExecutionRun = z
     created_at: DateTimeSchema,
     started_at: DateTimeSchema.nullable(),
     finished_at: DateTimeSchema.nullable(),
+    paused_reason: ExecutionPauseReason.optional(),
+    paused_detail: z.string().optional(),
+    policy_snapshot_id: UuidSchema.optional(),
+    budgets: ExecutionBudgets.optional(),
+    budget_overridden_at: DateTimeSchema.nullable().optional(),
   })
   .strict();
 export type ExecutionRun = z.infer<typeof ExecutionRun>;
@@ -206,4 +229,3 @@ export const ExecutionAttempt = z
   })
   .strict();
 export type ExecutionAttempt = z.infer<typeof ExecutionAttempt>;
-

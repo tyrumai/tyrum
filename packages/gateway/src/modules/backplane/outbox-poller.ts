@@ -1,11 +1,13 @@
 import type { WsEventEnvelope, WsRequestEnvelope } from "@tyrum/schemas";
 import type { ConnectionManager } from "../../ws/connection-manager.js";
 import type { OutboxDal, OutboxRow } from "./outbox-dal.js";
+import type { Logger } from "../observability/logger.js";
 
 export interface OutboxPollerOptions {
   consumerId: string;
   outboxDal: OutboxDal;
   connectionManager: ConnectionManager;
+  logger?: Logger;
   pollIntervalMs?: number;
   batchSize?: number;
 }
@@ -49,6 +51,7 @@ export class OutboxPoller {
   private readonly consumerId: string;
   private readonly outboxDal: OutboxDal;
   private readonly connectionManager: ConnectionManager;
+  private readonly logger?: Logger;
   private readonly pollIntervalMs: number;
   private readonly batchSize: number;
   private timer: ReturnType<typeof setInterval> | undefined;
@@ -58,15 +61,28 @@ export class OutboxPoller {
     this.consumerId = opts.consumerId;
     this.outboxDal = opts.outboxDal;
     this.connectionManager = opts.connectionManager;
+    this.logger = opts.logger;
     this.pollIntervalMs = opts.pollIntervalMs ?? 500;
     this.batchSize = opts.batchSize ?? 200;
   }
 
   start(): void {
     if (this.timer) return;
-    void this.outboxDal.ensureConsumer(this.consumerId);
+    void this.outboxDal.ensureConsumer(this.consumerId).catch((err) => {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger?.error("outbox.ensure_consumer_failed", {
+        consumer_id: this.consumerId,
+        error: message,
+      });
+    });
     this.timer = setInterval(() => {
-      void this.tick();
+      void this.tick().catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger?.error("outbox.tick_failed", {
+          consumer_id: this.consumerId,
+          error: message,
+        });
+      });
     }, this.pollIntervalMs);
   }
 
@@ -81,18 +97,46 @@ export class OutboxPoller {
     if (this.ticking) return;
     this.ticking = true;
     try {
-      const rows = await this.outboxDal.poll(this.consumerId, this.batchSize);
-    if (rows.length === 0) return;
-
-    for (const row of rows) {
+      let rows: OutboxRow[];
       try {
-        this.processRow(row);
-      } catch {
-        // Best-effort delivery: don't wedge the consumer.
-      } finally {
-        await this.outboxDal.ackConsumerCursor(this.consumerId, row.id);
+        rows = await this.outboxDal.poll(this.consumerId, this.batchSize);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger?.error("outbox.poll_failed", {
+          consumer_id: this.consumerId,
+          error: message,
+        });
+        return;
       }
-    }
+      if (rows.length === 0) return;
+
+      for (const row of rows) {
+        try {
+          this.processRow(row);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          this.logger?.error("outbox.process_failed", {
+            outbox_id: row.id,
+            topic: row.topic,
+            error: message,
+          });
+          // At-least-once semantics: don't ack cursor on failure so the row can be retried.
+          return;
+        }
+
+        try {
+          await this.outboxDal.ackConsumerCursor(this.consumerId, row.id);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          this.logger?.error("outbox.ack_failed", {
+            outbox_id: row.id,
+            topic: row.topic,
+            error: message,
+          });
+          // Cursor is not advanced; retry on next tick.
+          return;
+        }
+      }
     } finally {
       this.ticking = false;
     }
@@ -106,7 +150,16 @@ export class OutboxPoller {
 
       const payload = JSON.stringify(parsed.message);
       for (const client of this.connectionManager.allClients()) {
-        client.ws.send(payload);
+        try {
+          client.ws.send(payload);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          this.logger?.warn("outbox.ws_send_failed", {
+            topic: row.topic,
+            connection_id: client.id,
+            error: message,
+          });
+        }
       }
       return;
     }
@@ -116,9 +169,17 @@ export class OutboxPoller {
       if (!parsed) return;
       const client = this.connectionManager.getClient(parsed.connection_id);
       if (!client) return;
-      client.ws.send(JSON.stringify(parsed.message));
+      try {
+        client.ws.send(JSON.stringify(parsed.message));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger?.warn("outbox.ws_send_failed", {
+          topic: row.topic,
+          connection_id: client.id,
+          error: message,
+        });
+      }
       return;
     }
   }
 }
-

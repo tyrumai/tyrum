@@ -1,7 +1,8 @@
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { mkdir, access, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 function fileExists(path: string): Promise<boolean> {
   return access(path, constants.F_OK)
@@ -11,6 +12,14 @@ function fileExists(path: string): Promise<boolean> {
 
 export function resolveTyrumHome(): string {
   const fromEnv = process.env["TYRUM_HOME"]?.trim();
+  if (fromEnv && fromEnv.length > 0) {
+    return fromEnv;
+  }
+  return join(homedir(), ".tyrum");
+}
+
+export function resolveUserTyrumHome(): string {
+  const fromEnv = process.env["TYRUM_USER_HOME"]?.trim();
   if (fromEnv && fromEnv.length > 0) {
     return fromEnv;
   }
@@ -27,6 +36,16 @@ export function resolveIdentityPath(home = resolveTyrumHome()): string {
 
 export function resolveSkillsDir(home = resolveTyrumHome()): string {
   return join(home, "skills");
+}
+
+export function resolveUserSkillsDir(userHome = resolveUserTyrumHome()): string {
+  return join(userHome, "skills");
+}
+
+export function resolveBundledSkillsDir(): string {
+  // packages/gateway/src/modules/agent/home.ts -> packages/gateway/skills
+  const here = dirname(fileURLToPath(import.meta.url));
+  return join(here, "../../../skills");
 }
 
 export function resolveMcpDir(home = resolveTyrumHome()): string {

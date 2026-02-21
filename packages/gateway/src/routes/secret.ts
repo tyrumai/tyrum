@@ -9,7 +9,15 @@ import { Hono } from "hono";
 import { SecretRotateRequest, SecretStoreRequest } from "@tyrum/schemas";
 import { EnvSecretProvider, type SecretProvider } from "../modules/secret/provider.js";
 
-export function createSecretRoutes(secretProvider: SecretProvider): Hono {
+export interface SecretRouteDeps {
+  secretProviderForAgent: (agentId: string) => Promise<SecretProvider>;
+}
+
+function agentIdFromReq(c: { req: { query: (key: string) => string | undefined; header: (key: string) => string | undefined } }): string {
+  return c.req.query("agent_id")?.trim() || c.req.header("x-tyrum-agent-id")?.trim() || "default";
+}
+
+export function createSecretRoutes(deps: SecretRouteDeps): Hono {
   const app = new Hono();
 
   /** Store a new secret and return its handle (never the value). */
@@ -33,6 +41,14 @@ export function createSecretRoutes(secretProvider: SecretProvider): Hono {
     // is informational; we always delegate to the wired SecretProvider.
     void provider;
 
+    let secretProvider: SecretProvider;
+    try {
+      secretProvider = await deps.secretProviderForAgent(agentIdFromReq(c));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: "invalid_request", message }, 400);
+    }
+
     if (!(secretProvider instanceof EnvSecretProvider) && (!value || value.trim().length === 0)) {
       return c.json(
         {
@@ -49,6 +65,13 @@ export function createSecretRoutes(secretProvider: SecretProvider): Hono {
 
   /** List all secret handles (never values). */
   app.get("/secrets", async (c) => {
+    let secretProvider: SecretProvider;
+    try {
+      secretProvider = await deps.secretProviderForAgent(agentIdFromReq(c));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: "invalid_request", message }, 400);
+    }
     const handles = await secretProvider.list();
     return c.json({ handles });
   });
@@ -56,6 +79,13 @@ export function createSecretRoutes(secretProvider: SecretProvider): Hono {
   /** Revoke a secret by handle ID. */
   app.delete("/secrets/:id", async (c) => {
     const handleId = c.req.param("id");
+    let secretProvider: SecretProvider;
+    try {
+      secretProvider = await deps.secretProviderForAgent(agentIdFromReq(c));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: "invalid_request", message }, 400);
+    }
     const revoked = await secretProvider.revoke(handleId);
 
     if (!revoked) {
@@ -74,6 +104,13 @@ export function createSecretRoutes(secretProvider: SecretProvider): Hono {
    */
   app.post("/secrets/:id/rotate", async (c) => {
     const handleId = c.req.param("id");
+    let secretProvider: SecretProvider;
+    try {
+      secretProvider = await deps.secretProviderForAgent(agentIdFromReq(c));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: "invalid_request", message }, 400);
+    }
     const handles = await secretProvider.list();
     const existing = handles.find((h) => h.handle_id === handleId);
     if (!existing) {

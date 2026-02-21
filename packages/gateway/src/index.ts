@@ -13,7 +13,6 @@ import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createContainerAsync } from "./container.js";
 import { createApp } from "./app.js";
-import { AgentRuntime } from "./modules/agent/runtime.js";
 import { isAgentEnabled } from "./modules/agent/enabled.js";
 import { TokenStore } from "./modules/auth/token-store.js";
 import { WatcherScheduler } from "./modules/watcher/scheduler.js";
@@ -23,18 +22,23 @@ import { OutboxDal } from "./modules/backplane/outbox-dal.js";
 import { ConnectionDirectoryDal } from "./modules/backplane/connection-directory.js";
 import { OutboxPoller } from "./modules/backplane/outbox-poller.js";
 import { ConnectionManager } from "./ws/connection-manager.js";
+import type { ProtocolDeps } from "./ws/protocol.js";
 import { createWsHandler } from "./routes/ws.js";
 import { maybeStartOtel } from "./modules/observability/otel.js";
 import { ExecutionEngine, type StepExecutor as ExecutionStepExecutor } from "./modules/execution/engine.js";
 import { startExecutionWorkerLoop } from "./modules/execution/worker-loop.js";
+import { isChannelPipelineEnabled, TelegramChannelProcessor } from "./modules/channels/telegram.js";
 import { createToolRunnerStepExecutor } from "./modules/execution/toolrunner-step-executor.js";
 import { createKubernetesToolRunnerStepExecutor } from "./modules/execution/kubernetes-toolrunner-step-executor.js";
 import { runToolRunnerFromStdio } from "./toolrunner.js";
 import { isPostgresDbUri } from "./statestore/db-uri.js";
-
-export const VERSION = "0.1.0";
+import { VERSION } from "./version.js";
+import { resolveUserTyrumHome } from "./modules/agent/home.js";
+import { PluginRegistry } from "./modules/plugins/registry.js";
+import { AgentRegistry } from "./modules/agent/registry.js";
 
 // Re-export for library consumers
+export { VERSION } from "./version.js";
 export { createContainer, createContainerAsync } from "./container.js";
 export type { GatewayConfig, GatewayContainer } from "./container.js";
 export { createApp } from "./app.js";
@@ -380,13 +384,39 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   }
 
   const shouldRunEdge = role === "all" || role === "edge";
+  const engineApiEnabledRaw = process.env["TYRUM_ENGINE_API_ENABLED"]?.trim();
+  const engineApiEnabled =
+    engineApiEnabledRaw &&
+    !["0", "false", "off", "no"].includes(engineApiEnabledRaw.toLowerCase());
 
   const connectionManager = new ConnectionManager();
   const outboxDal = new OutboxDal(container.db, container.redactionEngine);
   const connectionDirectory = new ConnectionDirectoryDal(container.db);
-  const protocolDeps = {
+  const protocolDeps: ProtocolDeps = {
     connectionManager,
     logger,
+    db: container.db,
+    contextReportDal: container.contextReportDal,
+    runtime: {
+      version: VERSION,
+      instanceId,
+      role,
+      dbKind: container.db.kind,
+      isExposed: !isLocalOnly,
+      otelEnabled: otel.enabled,
+    },
+    approvalDal: container.approvalDal,
+    presenceDal: container.presenceDal,
+    policyOverrideDal: container.policyOverrideDal,
+    nodePairingDal: container.nodePairingDal,
+    engine: shouldRunEdge && engineApiEnabled
+      ? new ExecutionEngine({
+          db: container.db,
+          redactionEngine: container.redactionEngine,
+          logger,
+        })
+      : undefined,
+    policyService: shouldRunEdge && engineApiEnabled ? container.policyService : undefined,
     cluster: shouldRunEdge
       ? {
           edgeId: instanceId,
@@ -401,13 +431,33 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     ) => {
       void container.approvalDal
         .respond(approvalId, approved, reason)
-        .then((row) => {
+        .then(async (row) => {
           logger.info("approval.decided", {
             approval_id: approvalId,
             approved,
             status: row?.status ?? "missing",
             reason,
           });
+
+          if (!row || !protocolDeps.engine || !row.resume_token || !row.run_id) {
+            return;
+          }
+
+          try {
+            if (approved) {
+              await protocolDeps.engine.resumeRun(row.resume_token);
+            } else {
+              await protocolDeps.engine.cancelRun(row.run_id, reason ?? "approval denied");
+            }
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.error("approval.engine_action_failed", {
+              approval_id: approvalId,
+              approved,
+              run_id: row.run_id,
+              error: message,
+            });
+          }
         })
         .catch((err) => {
           const message = err instanceof Error ? err.message : String(err);
@@ -422,17 +472,52 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   };
   const approvalNotifier = new WsNotifier(protocolDeps);
 
-  const agentRuntime = shouldRunEdge && isAgentEnabled()
-    ? new AgentRuntime({ container, secretProvider, approvalNotifier })
+  const plugins = shouldRunEdge
+    ? await PluginRegistry.load({
+        home: tyrumHome,
+        userHome: resolveUserTyrumHome(),
+        logger,
+        container,
+      })
     : undefined;
+  protocolDeps.plugins = plugins;
+
+  const agents =
+    shouldRunEdge && isAgentEnabled()
+      ? new AgentRegistry({
+          container,
+          baseHome: tyrumHome,
+          gatewayToken: token,
+          defaultSecretProvider: secretProvider,
+          defaultPolicyService: container.policyService,
+          approvalNotifier,
+          plugins,
+          logger,
+        })
+      : undefined;
+  protocolDeps.agents = agents;
 
   const app = shouldRunEdge
     ? createApp(container, {
-        agentRuntime,
+        agents,
+        plugins,
         tokenStore,
         secretProvider,
         isLocalOnly,
         connectionManager,
+        connectionDirectory,
+        wsCluster: shouldRunEdge
+          ? {
+              edgeId: instanceId,
+              outboxDal,
+            }
+          : undefined,
+        runtime: {
+          version: VERSION,
+          instanceId,
+          role,
+          otelEnabled: otel.enabled,
+        },
       })
     : undefined;
 
@@ -442,6 +527,8 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
         connectionManager,
         protocolDeps,
         tokenStore,
+        presenceDal: container.presenceDal,
+        nodePairingDal: container.nodePairingDal,
         cluster: {
           instanceId,
           connectionDirectory,
@@ -454,9 +541,27 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
         consumerId: instanceId,
         outboxDal,
         connectionManager,
+        logger,
       })
     : undefined;
   outboxPoller?.start();
+
+  const telegramProcessor =
+    shouldRunEdge &&
+    agents &&
+    container.telegramBot &&
+    isChannelPipelineEnabled()
+      ? new TelegramChannelProcessor({
+          db: container.db,
+          agents,
+          telegramBot: container.telegramBot,
+          owner: instanceId,
+          logger,
+          approvalDal: container.approvalDal,
+          approvalNotifier,
+        })
+      : undefined;
+  telegramProcessor?.start();
 
   // --- HTTP server with WS upgrade support ---
   const server = shouldRunEdge && app && wsHandler
@@ -580,13 +685,14 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     container.watcherProcessor.stop();
     watcherScheduler?.stop();
     outboxPoller?.stop();
+    telegramProcessor?.stop();
     workerLoop?.stop();
 
     void runShutdownCleanup(
       [
         closeServer,
         closeWss,
-        agentRuntime?.shutdown() ?? Promise.resolve(),
+        agents?.shutdown() ?? Promise.resolve(),
         otel.shutdown(),
         workerLoop?.done ?? Promise.resolve(),
       ],

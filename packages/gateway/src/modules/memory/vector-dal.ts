@@ -84,19 +84,26 @@ function cosineSimilarity(a: number[], b: number[]): number {
 export class VectorDal {
   constructor(private readonly db: SqlDb) {}
 
+  private normalizeAgentId(agentId?: string): string {
+    const trimmed = agentId?.trim();
+    return trimmed && trimmed.length > 0 ? trimmed : "default";
+  }
+
   /** Insert a vector embedding. Returns the embedding_id. */
   async insertEmbedding(
     label: string,
     vector: number[],
     model: string,
     metadata?: unknown,
+    agentId?: string,
   ): Promise<string> {
     const embeddingId = randomUUID();
 
     await this.db.run(
-      `INSERT INTO vector_metadata (embedding_id, embedding_model, label, metadata, vector_data)
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO vector_metadata (agent_id, embedding_id, embedding_model, label, metadata, vector_data)
+       VALUES (?, ?, ?, ?, ?, ?)`,
       [
+        this.normalizeAgentId(agentId),
         embeddingId,
         model,
         label,
@@ -112,11 +119,14 @@ export class VectorDal {
   async searchByCosineSimilarity(
     queryVector: number[],
     topK: number,
+    agentId?: string,
   ): Promise<VectorSearchResult[]> {
     const rows = await this.db.all<RawVectorRow>(
       `SELECT * FROM vector_metadata
-       WHERE vector_data IS NOT NULL
+       WHERE agent_id = ?
+         AND vector_data IS NOT NULL
        ORDER BY created_at DESC`,
+      [this.normalizeAgentId(agentId)],
     );
 
     const scored: VectorSearchResult[] = [];
@@ -133,10 +143,10 @@ export class VectorDal {
   }
 
   /** Delete all embeddings with the given label. Returns the number of rows deleted. */
-  async deleteByLabel(label: string): Promise<number> {
+  async deleteByLabel(label: string, agentId?: string): Promise<number> {
     return (await this.db.run(
-      "DELETE FROM vector_metadata WHERE label = ?",
-      [label],
+      "DELETE FROM vector_metadata WHERE agent_id = ? AND label = ?",
+      [this.normalizeAgentId(agentId), label],
     )).changes;
   }
 
@@ -151,9 +161,10 @@ export class VectorDal {
   }
 
   /** List all embeddings, ordered by creation time descending. */
-  async list(): Promise<VectorRow[]> {
+  async list(agentId?: string): Promise<VectorRow[]> {
     const rows = await this.db.all<RawVectorRow>(
-      "SELECT * FROM vector_metadata ORDER BY created_at DESC, id DESC",
+      "SELECT * FROM vector_metadata WHERE agent_id = ? ORDER BY created_at DESC, id DESC",
+      [this.normalizeAgentId(agentId)],
     );
     return rows.map(toVectorRow);
   }

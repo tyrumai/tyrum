@@ -17,6 +17,8 @@ import {
   resolveAgentConfigPath,
   resolveIdentityPath,
   resolveSkillsDir,
+  resolveUserSkillsDir,
+  resolveBundledSkillsDir,
   resolveMcpDir,
 } from "./home.js";
 import { parseFrontmatterDocument } from "./frontmatter.js";
@@ -66,11 +68,17 @@ export async function loadEnabledSkills(
   home: string,
   config: AgentConfigT,
 ): Promise<SkillManifestT[]> {
-  const skillsDir = resolveSkillsDir(home);
   const loaded: SkillManifestT[] = [];
 
+  const workspaceSkillsDir = resolveSkillsDir(home);
+  const userSkillsDir = resolveUserSkillsDir();
+  const bundledSkillsDir = resolveBundledSkillsDir();
+
   for (const skillId of config.skills.enabled) {
-    const manifest = await loadSkillFromDir(skillsDir, skillId);
+    const manifest =
+      (await loadSkillFromDir(workspaceSkillsDir, skillId)) ??
+      (await loadSkillFromDir(userSkillsDir, skillId)) ??
+      (await loadSkillFromDir(bundledSkillsDir, skillId));
     if (manifest) {
       loaded.push(manifest);
     }

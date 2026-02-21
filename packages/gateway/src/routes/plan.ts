@@ -165,7 +165,7 @@ function buildPlanSteps(
 }
 
 function buildPolicyEscalation(decision: PolicyDecision): PlanEscalation {
-  let relevantRules = decision.rules.filter((r) => r.outcome === "escalate");
+  let relevantRules = decision.rules.filter((r) => r.outcome === "require_approval");
   if (relevantRules.length === 0) {
     relevantRules = decision.rules;
   }
@@ -352,7 +352,7 @@ export function createPlanRoutes(
     let outcome: PlanOutcome;
 
     switch (policyDecision.decision) {
-      case "approve": {
+      case "allow": {
         // Build success steps (discovery is in-process and returns empty
         // resolutions in the simplified pipeline, so we use fallback path)
         const steps = buildPlanSteps(request, spendDirective);
@@ -416,7 +416,7 @@ export function createPlanRoutes(
         break;
       }
 
-      case "escalate":
+      case "require_approval":
         outcome = {
           status: "escalate",
           escalation: buildPolicyEscalation(policyDecision),

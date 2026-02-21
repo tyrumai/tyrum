@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ActionPrimitive } from "@tyrum/schemas";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   ExecutionEngine,
   type StepExecutor,
@@ -22,6 +25,10 @@ async function drain(engine: ExecutionEngine, workerId: string, executor: StepEx
     if (!worked) return;
   }
   throw new Error("worker did not become idle after 25 ticks");
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 describe("ExecutionEngine (normalized)", () => {
@@ -97,6 +104,69 @@ describe("ExecutionEngine (normalized)", () => {
     expect(job!.status).toBe("completed");
   });
 
+  it("pauses when a run budget is exceeded and resumes after approval", async () => {
+    db = openTestSqliteDb();
+
+    const engine = new ExecutionEngine({
+      db,
+      clock: () => ({ nowMs: Date.now(), nowIso: new Date().toISOString() }),
+    });
+    await engine.enqueuePlan({
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-budget-1",
+      requestId: "test-req-1",
+      budgets: { max_usd_micros: 5 },
+      steps: [action("Research"), action("Research")],
+    });
+
+    let calls = 0;
+    const mockExecutor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => {
+        calls += 1;
+        if (calls === 1) {
+          return { success: true, result: { ok: true }, cost: { usd_micros: 10 } };
+        }
+        return { success: true, result: { ok: true } };
+      }),
+    };
+
+    // First tick executes step 0 and records cost.
+    expect(await engine.workerTick({ workerId: "w1", executor: mockExecutor })).toBe(true);
+    expect((mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(1);
+
+    // Second tick pauses before starting step 1 due to the run budget.
+    expect(await engine.workerTick({ workerId: "w1", executor: mockExecutor })).toBe(true);
+    expect((mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(1);
+
+    const runPaused = await db.get<{ status: string; paused_reason: string | null }>(
+      "SELECT status, paused_reason FROM execution_runs LIMIT 1",
+    );
+    expect(runPaused?.status).toBe("paused");
+    expect(runPaused?.paused_reason).toBe("budget");
+
+    const approval = await db.get<{ id: number; kind: string; resume_token: string | null }>(
+      "SELECT id, kind, resume_token FROM approvals WHERE status = 'pending' ORDER BY id ASC LIMIT 1",
+    );
+    expect(approval?.kind).toBe("budget");
+    expect(approval?.resume_token).toBeTruthy();
+
+    await engine.resumeRun(approval!.resume_token!);
+
+    const runResumed = await db.get<{ status: string; budget_overridden_at: string | null }>(
+      "SELECT status, budget_overridden_at FROM execution_runs LIMIT 1",
+    );
+    expect(runResumed?.status).toBe("queued");
+    expect(runResumed?.budget_overridden_at).toBeTruthy();
+
+    await drain(engine, "w1", mockExecutor);
+
+    const runDone = await db.get<{ status: string }>(
+      "SELECT status FROM execution_runs LIMIT 1",
+    );
+    expect(runDone?.status).toBe("succeeded");
+  });
+
   it("records attempt finished_at after started_at", async () => {
     db = openTestSqliteDb();
 
@@ -139,7 +209,7 @@ describe("ExecutionEngine (normalized)", () => {
     db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    await engine.enqueuePlan({
+    const { runId } = await engine.enqueuePlan({
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-artifacts-1",
@@ -170,6 +240,27 @@ describe("ExecutionEngine (normalized)", () => {
     expect(artifacts).toHaveLength(1);
     expect(artifacts[0]!.uri).toBe(artifactRef.uri);
     expect(artifacts[0]!.kind).toBe(artifactRef.kind);
+
+    const attempt = await db.get<{ attempt_id: string; step_id: string }>(
+      "SELECT attempt_id, step_id FROM execution_attempts LIMIT 1",
+    );
+    const metadata = await db.get<{
+      workspace_id: string;
+      agent_id: string | null;
+      run_id: string;
+      step_id: string;
+      attempt_id: string;
+      kind: string;
+    }>(
+      "SELECT workspace_id, agent_id, run_id, step_id, attempt_id, kind FROM execution_artifacts WHERE artifact_id = ?",
+      [artifactRef.artifact_id],
+    );
+    expect(metadata?.workspace_id).toBe("default");
+    expect(metadata?.agent_id).toBe("agent-1");
+    expect(metadata?.run_id).toBe(runId);
+    expect(metadata?.step_id).toBe(attempt!.step_id);
+    expect(metadata?.attempt_id).toBe(attempt!.attempt_id);
+    expect(metadata?.kind).toBe(artifactRef.kind);
   });
 
   it("redacts registered secrets from persisted attempt results", async () => {
@@ -277,6 +368,53 @@ describe("ExecutionEngine (normalized)", () => {
     expect(step!.status).toBe("succeeded");
   });
 
+  it("requires approval to retry a state-changing step without an idempotency_key", async () => {
+    db = openTestSqliteDb();
+
+    const engine = new ExecutionEngine({ db });
+    const { runId } = await engine.enqueuePlan({
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-retry-approval-1",
+      requestId: "test-req-1",
+      steps: [action("CLI")],
+    });
+
+    await db.run("UPDATE execution_steps SET max_attempts = 2 WHERE run_id = ?", [runId]);
+
+    let callCount = 0;
+    const mockExecutor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => {
+        callCount += 1;
+        if (callCount === 1) return { success: false, error: "transient" };
+        return { success: true, result: { ok: true } };
+      }),
+    };
+
+    // First tick runs step 0 and fails; engine pauses for a retry approval.
+    expect(await engine.workerTick({ workerId: "w1", executor: mockExecutor })).toBe(true);
+    expect((mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(1);
+
+    const approval = await db.get<{ kind: string; resume_token: string | null }>(
+      "SELECT kind, resume_token FROM approvals WHERE run_id = ? ORDER BY id DESC LIMIT 1",
+      [runId],
+    );
+    expect(approval?.kind).toBe("retry");
+    expect(approval?.resume_token).toBeTruthy();
+
+    await engine.resumeRun(approval!.resume_token!);
+
+    await drain(engine, "w1", mockExecutor);
+
+    expect((mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(2);
+
+    const run = await db.get<{ status: string }>(
+      "SELECT status FROM execution_runs WHERE run_id = ?",
+      [runId],
+    );
+    expect(run?.status).toBe("succeeded");
+  });
+
   it("pauses a run when postcondition is missing evidence and issues a resume token", async () => {
     db = openTestSqliteDb();
 
@@ -309,7 +447,7 @@ describe("ExecutionEngine (normalized)", () => {
       [runId],
     );
     expect(run!.status).toBe("paused");
-    expect(run!.paused_reason).toBe("manual");
+    expect(run!.paused_reason).toBe("takeover");
 
     const step = await db.get<{ status: string }>(
       "SELECT status FROM execution_steps WHERE run_id = ?",
@@ -323,6 +461,25 @@ describe("ExecutionEngine (normalized)", () => {
     );
     expect(tokenRow!.run_id).toBe(runId);
     expect(tokenRow!.revoked_at).toBeNull();
+
+    const approvalRow = await db.get<{
+      id: number;
+      kind: string;
+      status: string;
+      run_id: string | null;
+      resume_token: string | null;
+    }>("SELECT id, kind, status, run_id, resume_token FROM approvals WHERE run_id = ?", [runId]);
+    expect(approvalRow).toBeTruthy();
+    expect(approvalRow!.kind).toBe("takeover");
+    expect(approvalRow!.status).toBe("pending");
+    expect(approvalRow!.run_id).toBe(runId);
+    expect(approvalRow!.resume_token).toBe(tokenRow!.token);
+
+    const stepApproval = await db.get<{ approval_id: number | null }>(
+      "SELECT approval_id FROM execution_steps WHERE run_id = ?",
+      [runId],
+    );
+    expect(stepApproval!.approval_id).toBe(approvalRow!.id);
   });
 
   it("resumes a paused run using a resume token", async () => {
@@ -494,5 +651,93 @@ describe("ExecutionEngine (normalized)", () => {
       [step!.step_id],
     );
     expect(attempts.map((a) => a.status)).toEqual(["cancelled", "succeeded"]);
+  });
+
+  it("enforces global concurrency limits using durable slots", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "tyrum-concurrency-"));
+    const dbPath = join(dir, "gateway.db");
+
+    const dbA = openTestSqliteDb(dbPath);
+    const dbB = openTestSqliteDb(dbPath);
+
+    try {
+      const engineA = new ExecutionEngine({ db: dbA, concurrencyLimits: { global: 1 } });
+      const engineB = new ExecutionEngine({ db: dbB, concurrencyLimits: { global: 1 } });
+
+      const { runId: run1 } = await engineA.enqueuePlan({
+        key: "agent:default:ui:thread-1",
+        lane: "main",
+        planId: "plan-concurrency-1",
+        requestId: "req-1",
+        steps: [action("CLI")],
+      });
+      const { runId: run2 } = await engineA.enqueuePlan({
+        key: "agent:default:ui:thread-2",
+        lane: "main",
+        planId: "plan-concurrency-2",
+        requestId: "req-2",
+        steps: [action("CLI")],
+      });
+
+      // Use distinct workspaces so the workspace lease doesn't serialize the test runs.
+      await dbA.run(
+        "UPDATE execution_jobs SET workspace_id = ? WHERE job_id = (SELECT job_id FROM execution_runs WHERE run_id = ?)",
+        ["ws-1", run1],
+      );
+      await dbA.run(
+        "UPDATE execution_jobs SET workspace_id = ? WHERE job_id = (SELECT job_id FROM execution_runs WHERE run_id = ?)",
+        ["ws-2", run2],
+      );
+
+      let unblock: ((value: StepResult) => void) | undefined;
+      const blocked = new Promise<StepResult>((resolve) => {
+        unblock = resolve;
+      });
+      const blockingExecutor: StepExecutor = {
+        execute: vi.fn(async () => {
+          return await blocked;
+        }),
+      };
+
+      const fastExecutor: StepExecutor = {
+        execute: vi.fn(async (): Promise<StepResult> => ({ success: true, result: { ok: true } })),
+      };
+
+      const tick1 = engineA.workerTick({ workerId: "w1", executor: blockingExecutor });
+
+      // Wait for the first attempt to be claimed and marked running.
+      for (let i = 0; i < 50; i += 1) {
+        const running = await dbB.get<{ n: number }>(
+          `SELECT COUNT(*) AS n
+           FROM execution_attempts a
+           JOIN execution_steps s ON s.step_id = a.step_id
+           WHERE s.run_id = ? AND a.status = 'running'`,
+          [run1],
+        );
+        if ((running?.n ?? 0) === 1) break;
+        await delay(10);
+      }
+
+      const slotInUse = await dbB.get<{ n: number }>(
+        `SELECT COUNT(*) AS n
+         FROM concurrency_slots
+         WHERE scope = 'global' AND scope_id = 'global' AND attempt_id IS NOT NULL`,
+      );
+      expect(slotInUse?.n).toBe(1);
+
+      // Second worker cannot claim a new attempt while the global slot is held.
+      const tick2Blocked = await engineB.workerTick({ workerId: "w2", executor: fastExecutor });
+      expect(tick2Blocked).toBe(false);
+
+      unblock?.({ success: true, result: { ok: true } });
+      await tick1;
+
+      const tick2NowRuns = await engineB.workerTick({ workerId: "w2", executor: fastExecutor });
+      expect(tick2NowRuns).toBe(true);
+    } finally {
+      await dbA.close();
+      await dbB.close();
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

@@ -19,9 +19,20 @@ const mitt = (
 ) as unknown as <T extends Record<string, unknown>>() => Emitter<T>;
 
 import type { ClientCapability, WsRequestEnvelope, WsResponseEnvelope } from "@tyrum/schemas";
+import type { WsApprovalListResult as WsApprovalListResultT } from "@tyrum/schemas";
+import type { WsApprovalResolveResult as WsApprovalResolveResultT } from "@tyrum/schemas";
+import type { WsCommandExecuteResult as WsCommandExecuteResultT } from "@tyrum/schemas";
+import type { WsPeerRole } from "@tyrum/schemas";
 import {
   WsApprovalDecision,
   WsApprovalRequest,
+  WsApprovalListResult,
+  type WsApprovalListPayload,
+  WsApprovalResolveResult,
+  type WsApprovalResolvePayload,
+  WsCommandExecuteResult,
+  WsConnectInitResult,
+  WsConnectProofResult,
   WsConnectResult,
   WsError,
   WsErrorEvent,
@@ -55,10 +66,39 @@ export interface TyrumClientOptions {
   token: string;
   /** Capabilities to advertise in the hello handshake. */
   capabilities: ClientCapability[];
+  /**
+   * Whether to use the vNext `connect.init/connect.proof` handshake.
+   * Defaults to `false` (legacy `connect`).
+   */
+  useDeviceProof?: boolean;
+  /** Peer role for vNext handshake. Defaults to `client`. */
+  role?: WsPeerRole;
+  /** Protocol revision for vNext handshake. Defaults to 2. */
+  protocolRev?: number;
+  /**
+   * Ed25519 key material for vNext handshake (DER, base64url).
+   *
+   * - `publicKey`: SPKI DER (base64url)
+   * - `privateKey`: PKCS8 DER (base64url)
+   */
+  device?: {
+    publicKey: string;
+    privateKey: string;
+    deviceId?: string;
+    label?: string;
+    platform?: string;
+    version?: string;
+    mode?: string;
+  };
   /** Whether to auto-reconnect on unexpected close. Defaults to `true`. */
   reconnect?: boolean;
   /** Upper bound for reconnect backoff delay in milliseconds. Defaults to 30 000. */
   maxReconnectDelay?: number;
+  /**
+   * Maximum number of recent event ids to keep for deduplication.
+   * Defaults to 1000.
+   */
+  maxSeenEventIds?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -67,8 +107,117 @@ export interface TyrumClientOptions {
 
 const DEFAULT_MAX_RECONNECT_DELAY = 30_000;
 const BASE_RECONNECT_DELAY = 1_000;
+const DEFAULT_MAX_SEEN_EVENT_IDS = 1_000;
 const WS_BASE_PROTOCOL = "tyrum-v1";
 const WS_AUTH_PROTOCOL_PREFIX = "tyrum-auth.";
+const DEFAULT_PROTOCOL_REV = 2;
+
+const BASE32_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
+
+function base32LowerNoPad(bytes: Uint8Array): string {
+  let bits = 0;
+  let value = 0;
+  let out = "";
+  for (const byte of bytes) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      out += BASE32_ALPHABET[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+  if (bits > 0) {
+    out += BASE32_ALPHABET[(value << (5 - bits)) & 31];
+  }
+  return out;
+}
+
+function toBase64UrlBytes(value: Uint8Array): string {
+  // Node runtime path.
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(value).toString("base64url");
+  }
+
+  // Browser runtime path.
+  let binary = "";
+  for (const b of value) {
+    binary += String.fromCharCode(b);
+  }
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function fromBase64Url(value: string): Uint8Array {
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(value, "base64url");
+  }
+
+  const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const buf = bytes.buffer;
+  if (buf instanceof ArrayBuffer) {
+    return buf.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  }
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
+async function sha256(bytes: Uint8Array): Promise<Uint8Array> {
+  if (!globalThis.crypto?.subtle) {
+    throw new Error("WebCrypto subtle API not available");
+  }
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", toArrayBuffer(bytes));
+  return new Uint8Array(digest);
+}
+
+async function computeDeviceId(pubkeyDer: Uint8Array): Promise<string> {
+  const digest = await sha256(pubkeyDer);
+  return `dev_${base32LowerNoPad(digest)}`;
+}
+
+function buildConnectProofTranscript(input: {
+  protocolRev: number;
+  role: WsPeerRole;
+  deviceId: string;
+  connectionId: string;
+  challenge: string;
+}): Uint8Array {
+  const text =
+    `tyrum-connect-proof\n` +
+    `protocol_rev=${String(input.protocolRev)}\n` +
+    `role=${input.role}\n` +
+    `device_id=${input.deviceId}\n` +
+    `connection_id=${input.connectionId}\n` +
+    `challenge=${input.challenge}\n`;
+  return new TextEncoder().encode(text);
+}
+
+async function signEd25519Pkcs8(privateKeyDer: Uint8Array, message: Uint8Array): Promise<Uint8Array> {
+  if (!globalThis.crypto?.subtle) {
+    throw new Error("WebCrypto subtle API not available");
+  }
+  const key = await globalThis.crypto.subtle.importKey(
+    "pkcs8",
+    toArrayBuffer(privateKeyDer),
+    { name: "Ed25519" },
+    false,
+    ["sign"],
+  );
+  const sig = await globalThis.crypto.subtle.sign({ name: "Ed25519" }, key, toArrayBuffer(message));
+  return new Uint8Array(sig);
+}
 
 function toBase64UrlUtf8(value: string): string {
   // Node runtime path.
@@ -94,11 +243,20 @@ function toBase64UrlUtf8(value: string): string {
 
 export class TyrumClient {
   private readonly emitter: Emitter<TyrumClientEvents>;
-  private readonly opts: Required<TyrumClientOptions>;
+  private readonly opts: TyrumClientOptions & {
+    reconnect: boolean;
+    maxReconnectDelay: number;
+    maxSeenEventIds: number;
+    useDeviceProof: boolean;
+    role: WsPeerRole;
+    protocolRev: number;
+  };
 
   private ws: WebSocket | null = null;
   private ready = false;
   private clientId: string | null = null;
+  private seenEventIds = new Set<string>();
+  private seenEventIdOrder: string[] = [];
   private pending = new Map<
     string,
     { resolve: (msg: WsResponseEnvelope) => void; reject: (err: Error) => void }
@@ -110,8 +268,12 @@ export class TyrumClient {
   constructor(options: TyrumClientOptions) {
     this.emitter = mitt<TyrumClientEvents>();
     this.opts = {
+      useDeviceProof: false,
+      role: "client",
+      protocolRev: DEFAULT_PROTOCOL_REV,
       reconnect: true,
       maxReconnectDelay: DEFAULT_MAX_RECONNECT_DELAY,
+      maxSeenEventIds: DEFAULT_MAX_SEEN_EVENT_IDS,
       ...options,
     };
   }
@@ -207,6 +369,21 @@ export class TyrumClient {
     this.send(response);
   }
 
+  /** List approvals via WS control-plane request (requires gateway support). */
+  approvalList(payload: WsApprovalListPayload = { limit: 100 }): Promise<WsApprovalListResultT> {
+    return this.request("approval.list", payload, WsApprovalListResult);
+  }
+
+  /** Resolve an approval via WS control-plane request (requires gateway support). */
+  approvalResolve(payload: WsApprovalResolvePayload): Promise<WsApprovalResolveResultT> {
+    return this.request("approval.resolve", payload, WsApprovalResolveResult);
+  }
+
+  /** Execute a slash-command via WS control-plane request (gateway-handled). */
+  commandExecute(command: string): Promise<WsCommandExecuteResultT> {
+    return this.request("command.execute", { command }, WsCommandExecuteResult);
+  }
+
   // -----------------------------------------------------------------------
   // Internal
   // -----------------------------------------------------------------------
@@ -252,6 +429,14 @@ export class TyrumClient {
   }
 
   private sendConnect(): void {
+    if (this.opts.useDeviceProof && this.opts.device) {
+      void this.sendConnectWithDeviceProof();
+      return;
+    }
+    this.sendLegacyConnect();
+  }
+
+  private sendLegacyConnect(): void {
     const requestId = crypto.randomUUID();
 
     const request: WsRequestEnvelope = {
@@ -285,10 +470,168 @@ export class TyrumClient {
     this.send(request);
   }
 
+  private async sendConnectWithDeviceProof(): Promise<void> {
+    try {
+      const device = this.opts.device;
+      if (!device) {
+        this.sendLegacyConnect();
+        return;
+      }
+      const pubkey = device.publicKey.trim();
+      const privkey = device.privateKey.trim();
+      if (!pubkey || !privkey) {
+        this.disconnect();
+        return;
+      }
+
+      const pubkeyDer = fromBase64Url(pubkey);
+      const deviceId = device.deviceId?.trim() || (await computeDeviceId(pubkeyDer));
+      const role = this.opts.role;
+      const protocolRev = this.opts.protocolRev;
+
+      const requestId = crypto.randomUUID();
+      const request: WsRequestEnvelope = {
+        request_id: requestId,
+        type: "connect.init",
+        payload: {
+          protocol_rev: protocolRev,
+          role,
+          device: {
+            device_id: deviceId,
+            pubkey,
+            label: device.label,
+            platform: device.platform,
+            version: device.version,
+            mode: device.mode,
+          },
+          capabilities: this.opts.capabilities.map((id) => ({ id })),
+        },
+      };
+
+      this.pending.set(requestId, {
+        resolve: (msg) => {
+          void this.handleConnectInitResponse(msg, {
+            deviceId,
+            role,
+            protocolRev,
+            privateKey: privkey,
+          });
+        },
+        reject: () => this.disconnect(),
+      });
+
+      this.send(request);
+    } catch {
+      this.disconnect();
+    }
+  }
+
+  private async handleConnectInitResponse(
+    msg: WsResponseEnvelope,
+    ctx: { deviceId: string; role: WsPeerRole; protocolRev: number; privateKey: string },
+  ): Promise<void> {
+    if (!msg.ok) {
+      this.disconnect();
+      return;
+    }
+    const parsed = WsConnectInitResult.safeParse(msg.result ?? {});
+    if (!parsed.success) {
+      this.disconnect();
+      return;
+    }
+
+    try {
+      const transcript = buildConnectProofTranscript({
+        protocolRev: ctx.protocolRev,
+        role: ctx.role,
+        deviceId: ctx.deviceId,
+        connectionId: parsed.data.connection_id,
+        challenge: parsed.data.challenge,
+      });
+      const signature = await signEd25519Pkcs8(fromBase64Url(ctx.privateKey), transcript);
+      const proof = toBase64UrlBytes(signature);
+
+      const requestId = crypto.randomUUID();
+      const request: WsRequestEnvelope = {
+        request_id: requestId,
+        type: "connect.proof",
+        payload: { connection_id: parsed.data.connection_id, proof },
+      };
+
+      this.pending.set(requestId, {
+        resolve: (msg2) => {
+          if (!msg2.ok) {
+            this.disconnect();
+            return;
+          }
+          const parsed2 = WsConnectProofResult.safeParse(msg2.result ?? {});
+          if (!parsed2.success) {
+            this.disconnect();
+            return;
+          }
+          this.ready = true;
+          this.clientId = parsed2.data.client_id;
+          this.emitter.emit("connected", { clientId: parsed2.data.client_id });
+        },
+        reject: () => this.disconnect(),
+      });
+
+      this.send(request);
+    } catch {
+      this.disconnect();
+    }
+  }
+
   private send(payload: Record<string, unknown>): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(payload));
     }
+  }
+
+  private request<T>(
+    type: string,
+    payload: unknown,
+    schema: { safeParse: (input: unknown) => { success: true; data: T } | { success: false; error: { message: string } } },
+    timeoutMs = 30_000,
+  ): Promise<T> {
+    if (this.ws?.readyState !== WebSocket.OPEN) {
+      return Promise.reject(new Error("WebSocket is not connected"));
+    }
+    if (!this.ready) {
+      return Promise.reject(new Error("WebSocket handshake not completed"));
+    }
+
+    const requestId = crypto.randomUUID();
+    const request: WsRequestEnvelope = { request_id: requestId, type, payload };
+
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(requestId);
+        reject(new Error(`${type} timed out`));
+      }, timeoutMs);
+
+      this.pending.set(requestId, {
+        resolve: (msg) => {
+          clearTimeout(timer);
+          if (!msg.ok) {
+            reject(new Error(`${type} failed: ${msg.error.code}: ${msg.error.message}`));
+            return;
+          }
+          const parsed = schema.safeParse(msg.result ?? {});
+          if (!parsed.success) {
+            reject(new Error(`${type} returned invalid result: ${parsed.error.message}`));
+            return;
+          }
+          resolve(parsed.data);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      });
+
+      this.send(request);
+    });
   }
 
   private handleMessage(raw: string): void {
@@ -318,6 +661,9 @@ export class TyrumClient {
 
     // Events (server push)
     if ("event_id" in msg) {
+      if (!this.markEventSeen(msg.event_id)) {
+        return;
+      }
       if (msg.type === "plan.update") {
         const evt = WsPlanUpdateEvent.safeParse(msg);
         if (evt.success) {
@@ -393,6 +739,16 @@ export class TyrumClient {
           error: { code: "unexpected_connect", message: "connect must be client-initiated" },
         } satisfies WsResponseEnvelope);
         return;
+
+      case "connect.init":
+      case "connect.proof":
+        this.send({
+          request_id: msg.request_id,
+          type: msg.type,
+          ok: false,
+          error: { code: "unexpected_connect", message: `${msg.type} must be client-initiated` },
+        } satisfies WsResponseEnvelope);
+        return;
     }
   }
 
@@ -413,5 +769,22 @@ export class TyrumClient {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+  }
+
+  private markEventSeen(eventId: string): boolean {
+    if (this.seenEventIds.has(eventId)) return false;
+
+    this.seenEventIds.add(eventId);
+    this.seenEventIdOrder.push(eventId);
+
+    const max = Math.max(1, this.opts.maxSeenEventIds);
+    while (this.seenEventIdOrder.length > max) {
+      const oldest = this.seenEventIdOrder.shift();
+      if (oldest) {
+        this.seenEventIds.delete(oldest);
+      }
+    }
+
+    return true;
   }
 }

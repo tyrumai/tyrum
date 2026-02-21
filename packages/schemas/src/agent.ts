@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AgentId, WorkspaceId } from "./keys.js";
 
 export const AgentModelConfig = z.object({
   model: z.string().trim().min(1),
@@ -112,6 +113,8 @@ export const McpServerSpec = z.union([McpServerStdio, McpServerRemote]);
 export type McpServerSpec = z.infer<typeof McpServerSpec>;
 
 export const AgentTurnRequest = z.object({
+  agent_id: AgentId.optional(),
+  workspace_id: WorkspaceId.optional(),
   channel: z.string().trim().min(1),
   thread_id: z.string().trim().min(1),
   message: z.string().trim().min(1),
