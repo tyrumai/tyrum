@@ -71,4 +71,17 @@ describe("PresenceDal", () => {
     expect(entries).toHaveLength(1);
     expect(entries[0]!.client_id).toBe("new-client");
   });
+
+  it("provides default timestamps in SQLite", async () => {
+    db = openTestSqliteDb();
+
+    await db.run("INSERT INTO presence_entries (client_id) VALUES (?)", ["client-min"]);
+    const row = await db.get<{ connected_at: string; last_seen_at: string }>(
+      "SELECT connected_at, last_seen_at FROM presence_entries WHERE client_id = ?",
+      ["client-min"],
+    );
+    expect(row).toBeDefined();
+    expect(row!.connected_at.length).toBeGreaterThan(0);
+    expect(row!.last_seen_at.length).toBeGreaterThan(0);
+  });
 });

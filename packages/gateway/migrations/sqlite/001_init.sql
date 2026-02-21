@@ -432,8 +432,8 @@ CREATE TABLE IF NOT EXISTS presence_entries (
   node_id TEXT,
   agent_id TEXT,
   capabilities_json TEXT NOT NULL DEFAULT '[]',
-  connected_at TEXT NOT NULL,
-  last_seen_at TEXT NOT NULL,
+  connected_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  last_seen_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   metadata_json TEXT
 );
 
