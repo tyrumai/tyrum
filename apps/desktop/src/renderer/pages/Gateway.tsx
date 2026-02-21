@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toErrorMessage } from "../lib/errors.js";
-import { colors, fonts, heading, card, btn, statusDot, STATUS_COLORS, info } from "../theme.js";
+import { colors, fonts, heading, card, btn, statusDot, STATUS_COLORS } from "../theme.js";
 
 interface GatewayConfigShape {
   mode: "embedded" | "remote";

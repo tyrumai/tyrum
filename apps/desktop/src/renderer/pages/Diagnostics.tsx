@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toErrorMessage } from "../lib/errors.js";
-import { colors, heading, card, sectionTitle, btn as btnFn, labelRow, labelKey, labelValue, help } from "../theme.js";
+import { colors, heading, card, sectionTitle, btn as btnFn, labelRow, labelKey, labelValue } from "../theme.js";
 
 interface CheckItem {
   label: string;

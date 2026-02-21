@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { colors, fonts, heading, tabRow, tab } from "../theme.js";
+import { colors, fonts, heading, tabRow, tab as tabStyle } from "../theme.js";
 
 type LogTab = "gateway" | "node";
 
@@ -143,13 +143,13 @@ export function Logs() {
 
       <div style={tabRow}>
         <button
-          style={tab(tab === "gateway")}
+          style={tabStyle(tab === "gateway")}
           onClick={() => setTab("gateway")}
         >
           Gateway
         </button>
         <button
-          style={tab(tab === "node")}
+          style={tabStyle(tab === "node")}
           onClick={() => setTab("node")}
         >
           Node
