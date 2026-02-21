@@ -13,6 +13,7 @@ import {
   WsConnectInitRequest,
   WsConnectProofRequest,
   WsConnectRequest,
+  deviceIdFromSha256Digest,
   type ClientCapability,
   type WsPeerRole,
   type WsResponseEnvelope,
@@ -36,31 +37,6 @@ const HEARTBEAT_INTERVAL_MS = 5_000;
 const WS_BASE_PROTOCOL = "tyrum-v1";
 const WS_AUTH_PROTOCOL_PREFIX = "tyrum-auth.";
 const GATEWAY_PROTOCOL_REV = 2;
-
-const BASE32_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
-
-function base32LowerNoPad(buf: Buffer): string {
-  let bits = 0;
-  let value = 0;
-  let out = "";
-  for (const byte of buf) {
-    value = (value << 8) | byte;
-    bits += 8;
-    while (bits >= 5) {
-      out += BASE32_ALPHABET[(value >>> (bits - 5)) & 31];
-      bits -= 5;
-    }
-  }
-  if (bits > 0) {
-    out += BASE32_ALPHABET[(value << (5 - bits)) & 31];
-  }
-  return out;
-}
-
-function computeDeviceId(pubkeyDer: Buffer): string {
-  const digest = createHash("sha256").update(pubkeyDer).digest();
-  return `dev_${base32LowerNoPad(digest)}`;
-}
 
 function buildConnectProofTranscript(input: {
   protocolRev: number;
@@ -325,7 +301,9 @@ export function createWsHandler(opts: WsRouteOptions): {
           }
 
           const pubkeyDer = Buffer.from(init.data.payload.device.pubkey, "base64url");
-          const expectedDeviceId = computeDeviceId(pubkeyDer);
+          const expectedDeviceId = deviceIdFromSha256Digest(
+            createHash("sha256").update(pubkeyDer).digest(),
+          );
           if (expectedDeviceId !== init.data.payload.device.device_id) {
             ws.close(4006, "device_id mismatch");
             return;

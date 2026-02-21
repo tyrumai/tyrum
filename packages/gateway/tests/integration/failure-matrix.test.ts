@@ -5,6 +5,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
+import { deviceIdFromSha256Digest } from "@tyrum/schemas";
 
 import type { StepExecutor, StepResult } from "../../src/modules/execution/engine.js";
 import { ExecutionEngine } from "../../src/modules/execution/engine.js";
@@ -77,28 +78,9 @@ function waitForJsonMessageMatching(
   });
 }
 
-const BASE32_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
-function base32LowerNoPad(buf: Buffer): string {
-  let bits = 0;
-  let value = 0;
-  let out = "";
-  for (const byte of buf) {
-    value = (value << 8) | byte;
-    bits += 8;
-    while (bits >= 5) {
-      out += BASE32_ALPHABET[(value >>> (bits - 5)) & 31];
-      bits -= 5;
-    }
-  }
-  if (bits > 0) {
-    out += BASE32_ALPHABET[(value << (5 - bits)) & 31];
-  }
-  return out;
-}
-
 function computeDeviceId(pubkeyDer: Buffer): string {
   const digest = createHash("sha256").update(pubkeyDer).digest();
-  return `dev_${base32LowerNoPad(digest)}`;
+  return deviceIdFromSha256Digest(digest);
 }
 
 function buildTranscript(input: {

@@ -24,6 +24,7 @@ import type { WsApprovalResolveResult as WsApprovalResolveResultT } from "@tyrum
 import type { WsCommandExecuteResult as WsCommandExecuteResultT } from "@tyrum/schemas";
 import type { WsPeerRole } from "@tyrum/schemas";
 import {
+  deviceIdFromSha256Digest,
   WsApprovalDecision,
   WsApprovalRequest,
   WsApprovalListResult,
@@ -112,26 +113,6 @@ const WS_BASE_PROTOCOL = "tyrum-v1";
 const WS_AUTH_PROTOCOL_PREFIX = "tyrum-auth.";
 const DEFAULT_PROTOCOL_REV = 2;
 
-const BASE32_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
-
-function base32LowerNoPad(bytes: Uint8Array): string {
-  let bits = 0;
-  let value = 0;
-  let out = "";
-  for (const byte of bytes) {
-    value = (value << 8) | byte;
-    bits += 8;
-    while (bits >= 5) {
-      out += BASE32_ALPHABET[(value >>> (bits - 5)) & 31];
-      bits -= 5;
-    }
-  }
-  if (bits > 0) {
-    out += BASE32_ALPHABET[(value << (5 - bits)) & 31];
-  }
-  return out;
-}
-
 function toBase64UrlBytes(value: Uint8Array): string {
   // Node runtime path.
   if (typeof Buffer !== "undefined") {
@@ -184,7 +165,7 @@ async function sha256(bytes: Uint8Array): Promise<Uint8Array> {
 
 async function computeDeviceId(pubkeyDer: Uint8Array): Promise<string> {
   const digest = await sha256(pubkeyDer);
-  return `dev_${base32LowerNoPad(digest)}`;
+  return deviceIdFromSha256Digest(digest);
 }
 
 function buildConnectProofTranscript(input: {

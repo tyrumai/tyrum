@@ -417,3 +417,5 @@ export {
   PluginPermissions,
   PluginManifest,
 } from "./plugin.js";
+
+export { base32LowerNoPad, deviceIdFromSha256Digest } from "./device-id.js";
