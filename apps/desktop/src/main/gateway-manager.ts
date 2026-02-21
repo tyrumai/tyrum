@@ -52,43 +52,6 @@ function isStartupNoiseLine(line: string): boolean {
   return STARTUP_NOISE_PATTERNS.some((pattern) => pattern.test(line));
 }
 
-function isPostgresDbUri(raw: string): boolean {
-  const value = raw.trim().toLowerCase();
-  return value.startsWith("postgres://") || value.startsWith("postgresql://");
-}
-
-function resolveGatewayMigrationsDir(opts: {
-  gatewayDir: string;
-  dbPath: string;
-  moduleDir: string;
-}): string | undefined {
-  const kind = isPostgresDbUri(opts.dbPath) ? "postgres" : "sqlite";
-  const initMigration = "001_init.sql";
-  const baseCandidates = [
-    join(opts.gatewayDir, "migrations"),
-    // Monorepo layout: packages/gateway/dist/index.mjs -> packages/gateway/migrations
-    join(opts.gatewayDir, "../migrations"),
-    // Desktop monorepo fallback: apps/desktop/{src|dist}/main -> packages/gateway/migrations
-    join(opts.moduleDir, "../../../../packages/gateway/migrations"),
-  ];
-
-  let fallback: string | undefined;
-
-  for (const baseDir of baseCandidates) {
-    if (!existsSync(baseDir)) continue;
-    const kindDir = join(baseDir, kind);
-    const candidate = existsSync(kindDir) ? kindDir : baseDir;
-
-    fallback ??= candidate;
-
-    if (existsSync(join(candidate, initMigration))) {
-      return candidate;
-    }
-  }
-
-  return fallback;
-}
-
 export function summarizeGatewayStartupFailure(
   startupLogLines: string[],
 ): string | undefined {
@@ -155,11 +118,22 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
 
     const host = opts.host ?? "127.0.0.1";
     const gatewayDir = dirname(opts.gatewayBin);
-    const migrationsDir = resolveGatewayMigrationsDir({
-      gatewayDir,
-      dbPath: opts.dbPath,
-      moduleDir: import.meta.dirname,
-    });
+    const migrationsDir = (() => {
+      const alongsideGateway = join(gatewayDir, "migrations");
+      if (existsSync(alongsideGateway)) {
+        const sqliteDir = join(alongsideGateway, "sqlite");
+        return existsSync(sqliteDir) ? sqliteDir : alongsideGateway;
+      }
+
+      // Monorepo layout: packages/gateway/dist/index.mjs -> packages/gateway/migrations
+      const monorepoMigrations = join(gatewayDir, "../migrations");
+      if (existsSync(monorepoMigrations)) {
+        const sqliteDir = join(monorepoMigrations, "sqlite");
+        return existsSync(sqliteDir) ? sqliteDir : monorepoMigrations;
+      }
+
+      return undefined;
+    })();
     const startupLogLines: string[] = [];
 
     const proc = spawn(process.execPath, [opts.gatewayBin], {

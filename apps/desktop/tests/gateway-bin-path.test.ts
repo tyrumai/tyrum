@@ -17,16 +17,6 @@ describe("resolveGatewayBinPath", () => {
     "gateway",
     "index.mjs",
   );
-  const distGatewayInitMigration = join(
-    "/repo",
-    "apps",
-    "desktop",
-    "dist",
-    "gateway",
-    "migrations",
-    "sqlite",
-    "001_init.sql",
-  );
   const monorepoGateway = join(
     "/repo",
     "packages",
@@ -51,20 +41,10 @@ describe("resolveGatewayBinPath", () => {
     const result = resolveGatewayBinPath({
       moduleDir,
       isPackaged: false,
-      exists: (path) => path === distGateway || path === distGatewayInitMigration,
+      exists: (path) => path === distGateway,
     });
 
     expect(result).toBe(distGateway);
-  });
-
-  it("falls back to monorepo gateway when staged gateway is stale", () => {
-    const result = resolveGatewayBinPath({
-      moduleDir,
-      isPackaged: false,
-      exists: (path) => path === distGateway || path === monorepoGateway,
-    });
-
-    expect(result).toBe(monorepoGateway);
   });
 
   it("falls back to monorepo gateway bundle", () => {
