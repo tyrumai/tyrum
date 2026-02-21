@@ -344,7 +344,7 @@ export class ToolExecutor {
   ): Promise<ToolResult> {
     // Policy enforcement
     if (this.policyBundleManager) {
-      const policyResult = this.policyBundleManager.evaluate("tools");
+      const policyResult = this.policyBundleManager.evaluate("tools", { tool_id: toolId });
       if (policyResult.action === "deny") {
         return {
           tool_call_id: toolCallId,

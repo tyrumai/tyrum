@@ -9,6 +9,7 @@ import {
   isBlockedUrl,
   resolvesToBlockedAddress,
 } from "../../src/modules/agent/tool-executor.js";
+import { PolicyBundleManager } from "../../src/modules/policy/bundle.js";
 import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
 import type { McpServerSpec } from "@tyrum/schemas";
 
@@ -436,6 +437,47 @@ describe("ToolExecutor", () => {
       );
 
       expect(result.error).toBeTruthy();
+    });
+  });
+
+  describe("policy enforcement", () => {
+    it("denies execution when a tool_id-specific policy rule matches", async () => {
+      homeDir = await mkdtemp(join(tmpdir(), "tool-executor-"));
+
+      const policyBundleManager = new PolicyBundleManager();
+      policyBundleManager.addBundle({
+        precedence: "deployment",
+        rules: [
+          {
+            domain: "tools",
+            action: "deny",
+            priority: 0,
+            conditions: { tool_id: "tool.exec" },
+            description: "tool.exec is blocked",
+          },
+        ],
+      });
+
+      const executor = new ToolExecutor(
+        homeDir,
+        stubMcpManager(),
+        new Map(),
+        fetch,
+        undefined,
+        undefined,
+        undefined,
+        policyBundleManager,
+      );
+
+      const result = await executor.execute(
+        "tool.exec",
+        "call-policy-1",
+        { command: "echo should-not-run" },
+      );
+
+      expect(result.output).toBe("");
+      expect(result.error).toContain("Tool execution denied by policy");
+      expect(result.error).toContain("tool.exec is blocked");
     });
   });
 });
