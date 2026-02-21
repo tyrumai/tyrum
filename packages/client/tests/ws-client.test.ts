@@ -686,6 +686,29 @@ describe("TyrumClient", () => {
     await acceptConnect(ws2);
   });
 
+  it("reconnects when socket closes during handshake", async () => {
+    server = createTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: ["cli"],
+      reconnect: true,
+      maxReconnectDelay: 500,
+    });
+
+    client.connect();
+    const ws1 = await server.waitForClient();
+
+    // Wait for connect.init, then close before responding.
+    const init = (await waitForMessage(ws1)) as Record<string, unknown>;
+    expect(init["type"]).toBe("connect.init");
+    ws1.close(1001, "gone");
+
+    // Client should reconnect and complete a new handshake.
+    const ws2 = await server.waitForClient();
+    await acceptConnect(ws2);
+  });
+
   it("sends token in websocket subprotocol metadata", async () => {
     server = createTestServer();
     client = new TyrumClient({

@@ -43,6 +43,7 @@ const config: Config = {
           sidebarPath: sidebarsPath,
           showLastUpdateAuthor: false,
           showLastUpdateTime: false,
+          exclude: ["**/architecture-gap-closure/**"],
         },
         blog: false,
         theme: {

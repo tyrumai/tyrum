@@ -103,6 +103,18 @@ const ED25519_SPKI_PREFIX_HEX = "302a300506032b6570032100";
 const EVENT_ID_DEDUPE_MAX = 2_000;
 const EVENT_ID_DEDUPE_TTL_MS = 10 * 60_000;
 
+function extractEd25519RawPublicKeyFromSpki(spkiDer: Uint8Array): Uint8Array {
+  const prefix = Buffer.from(ED25519_SPKI_PREFIX_HEX, "hex");
+  const spkiBuf = Buffer.from(spkiDer);
+  if (
+    spkiBuf.length !== prefix.length + 32 ||
+    !spkiBuf.subarray(0, prefix.length).equals(prefix)
+  ) {
+    throw new Error("unexpected ed25519 spki encoding");
+  }
+  return spkiBuf.subarray(prefix.length);
+}
+
 function toBase64UrlUtf8(value: string): string {
   // Node runtime path.
   if (typeof Buffer !== "undefined") {
@@ -240,7 +252,6 @@ async function loadOrCreateNodeDeviceIdentity(params: {
   const {
     createPrivateKey,
     createPublicKey,
-    createHash,
     generateKeyPairSync,
     sign,
   } = await import("node:crypto");
@@ -263,6 +274,8 @@ async function loadOrCreateNodeDeviceIdentity(params: {
   let spkiDer: Uint8Array;
   let pkcs8Der: Uint8Array;
   let deviceId: string;
+  let pubkeyRaw: Uint8Array | undefined;
+  let derivedId: string | undefined;
 
   if (stored) {
     spkiDer = fromBase64UrlBytes(stored.spki_der_b64url);
@@ -275,14 +288,9 @@ async function loadOrCreateNodeDeviceIdentity(params: {
     spkiDer = spki;
     pkcs8Der = pkcs8;
 
-    const prefix = Buffer.from(ED25519_SPKI_PREFIX_HEX, "hex");
-    const spkiBuf = Buffer.from(spkiDer);
-    if (spkiBuf.length !== prefix.length + 32 || !spkiBuf.subarray(0, prefix.length).equals(prefix)) {
-      throw new Error("unexpected ed25519 spki encoding");
-    }
-    const pubkeyRaw = spkiBuf.subarray(prefix.length);
-    const digest = createHash("sha256").update(pubkeyRaw).digest();
-    deviceId = `dev-${base32Encode(digest)}`;
+    pubkeyRaw = extractEd25519RawPublicKeyFromSpki(spkiDer);
+    deviceId = await deriveDeviceId(pubkeyRaw);
+    derivedId = deviceId;
 
     const record: StoredDeviceKeyV1 = {
       v: 1,
@@ -296,15 +304,8 @@ async function loadOrCreateNodeDeviceIdentity(params: {
     });
   }
 
-  const prefix = Buffer.from(ED25519_SPKI_PREFIX_HEX, "hex");
-  const spkiBuf = Buffer.from(spkiDer);
-  if (spkiBuf.length !== prefix.length + 32 || !spkiBuf.subarray(0, prefix.length).equals(prefix)) {
-    throw new Error("unexpected ed25519 spki encoding");
-  }
-  const pubkeyRaw = spkiBuf.subarray(prefix.length);
-
-  const digest = createHash("sha256").update(pubkeyRaw).digest();
-  const derivedId = `dev-${base32Encode(digest)}`;
+  pubkeyRaw ??= extractEd25519RawPublicKeyFromSpki(spkiDer);
+  derivedId ??= await deriveDeviceId(pubkeyRaw);
   if (derivedId !== deviceId) {
     throw new Error("stored device_id does not match derived pubkey hash");
   }
@@ -726,6 +727,12 @@ export class TyrumClient {
         role: this.opts.role,
       });
     } catch {
+      // If the socket closed (or was replaced) during handshake, the close handler
+      // already schedules reconnect. Calling disconnect() here would set
+      // intentionalClose and cancel auto-reconnect.
+      if (this.ws !== ws || ws.readyState !== WebSocket.OPEN) {
+        return;
+      }
       this.disconnect();
     }
   }
