@@ -2,14 +2,14 @@
 
 ## 1) Run execution brief
 
-Date (UTC): 2026-02-21T17:00:55Z  
-Git HEAD: 1a826cbe47c89c380ff0defdbff31c86f7f398a2
+Date (UTC): 2026-02-21T17:12:35Z  
+Git HEAD: add8d944fb41dc49bb5c8ad4e93dd5e2347d8875
 
-- Goal (this run): Commit the implemented architecture gap closures, re-validate repo health (`pnpm typecheck && pnpm test && pnpm lint`), and finalize the durable gap-closure docs (`STATE.md`, `REPORT.md`, `LOG.md`).
+- Goal (this run): Rebase the gap-closure work onto `origin/main`, re-run baseline validations, and update the durable gap-closure docs to reflect the rebased commit SHAs.
 - Non-goals: Big-bang refactors; changing protocol major versions; writing progress artifacts into `docs/architecture/`.
 - Constraints: Node 24 + pnpm workspace; incremental & reversible changes; do not bypass lint/type/test gates; product not in use yet (no migration shadow modes required).
-- Plan: Confirm docs + traceability are consistent → commit stabilized code → run baseline validations → update durable docs.
-- Risks & rollback: Changes are large but now committed and covered by tests; roll back by reverting commit `1a826cb` and re-running validations.
+- Plan: `git fetch origin` → `git rebase origin/main` → run `pnpm typecheck && pnpm test && pnpm lint` → update STATE/REPORT/LOG with new HEAD and evidence.
+- Risks & rollback: Rebase rewrites commit SHAs; roll back by reverting commits `4ad53ba`, `5bcdee7`, `add8d94` (and any follow-up doc-only commits) and re-running validations.
 
 ## 2) Docs ingested
 
@@ -703,11 +703,11 @@ Columns: ARI ID • Requirement • Tags • Status • Evidence • Notes
   - `pnpm test` → exit 0 (1035 passed, 1 skipped)
   - `pnpm lint` → exit 0 (0 warnings/errors)
 
-### Finalization (2026-02-21T17:00:55Z)
+### Finalization after rebase (2026-02-21T17:12:35Z)
 
-- Committed implementation: `1a826cb` (feat: close architecture gaps).
-- Baseline validations at HEAD `1a826cb`: `pnpm typecheck` → exit 0; `pnpm test` → exit 0 (1035 passed, 1 skipped); `pnpm lint` → exit 0.
-- Updated durable docs: `docs/architecture-gap-closure/STATE.md`, `docs/architecture-gap-closure/REPORT.md`, `docs/architecture-gap-closure/LOG.md`.
+- Rebased commits: `4ad53ba` (feat: implement architecture gap plan), `5bcdee7` (feat: close architecture gaps), `add8d94` (docs: add architecture gap closure artifacts).
+- Baseline validations at HEAD `add8d94`: `pnpm typecheck` → exit 0; `pnpm test` → exit 0 (1035 passed, 1 skipped); `pnpm lint` → exit 0.
+- Updated durable docs: `docs/architecture-gap-closure/STATE.md`, `docs/architecture-gap-closure/REPORT.md`, `docs/architecture-gap-closure/LOG.md` (this section).
 
 ## 10) Risks, mitigations, rollback overview
 

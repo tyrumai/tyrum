@@ -1,7 +1,7 @@
 # Architecture Gap Closure — STATE
 
-Last updated: 2026-02-21T17:00:55Z  
-Git HEAD: 1a826cbe47c89c380ff0defdbff31c86f7f398a2
+Last updated: 2026-02-21T17:12:35Z  
+Git HEAD: add8d944fb41dc49bb5c8ad4e93dd5e2347d8875
 
 ## Docs ingested (docs/architecture)
 
@@ -97,7 +97,8 @@ Git HEAD: 1a826cbe47c89c380ff0defdbff31c86f7f398a2
   - New DB migration `011_policy_overrides.sql` (sqlite + postgres) adds `policy_overrides` and approval resolution columns.
   - New DB migration `012_artifacts.sql` (sqlite + postgres) adds `artifacts` metadata table and indexes.
   - New DB migration `013_agent_scope_memory.sql` (sqlite + postgres) scopes durable memory tables by `agent_id`.
-- Rollback notes: revert commit `1a826cb` and re-run `pnpm typecheck && pnpm test && pnpm lint`.
+- Rollback notes: revert commits `4ad53ba`, `5bcdee7`, `add8d94` and re-run `pnpm typecheck && pnpm test && pnpm lint`.
+- Note: This branch was rebased onto `origin/main` (commit hashes in older log entries may no longer exist on this branch; see `docs/architecture-gap-closure/LOG.md`).
 
 ## Working tree (uncommitted)
 
