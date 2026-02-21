@@ -11,6 +11,8 @@ import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
 import { WsConnectRequest, WsConnectInitRequest, WsConnectProofRequest, type ClientCapability, type WsResponseEnvelope } from "@tyrum/schemas";
 import type { ConnectionManager } from "../ws/connection-manager.js";
+import type { PresenceDal } from "../modules/presence/dal.js";
+import type { EventPublisher } from "../modules/backplane/event-publisher.js";
 import { validateWsToken } from "../ws/auth.js";
 import { handleClientMessage } from "../ws/protocol.js";
 import type { ProtocolDeps } from "../ws/protocol.js";
@@ -86,6 +88,8 @@ export interface WsRouteOptions {
   connectionManager: ConnectionManager;
   protocolDeps: ProtocolDeps;
   tokenStore: TokenStore;
+  presenceDal?: PresenceDal;
+  eventPublisher?: EventPublisher;
   cluster?: {
     instanceId: string;
     connectionDirectory: ConnectionDirectoryDal;
@@ -126,6 +130,9 @@ export function createWsHandler(opts: WsRouteOptions): {
         });
       }
       cluster.connectionDirectory.cleanupExpired(nowMs);
+    }
+    if (opts.presenceDal) {
+      void opts.presenceDal.cleanup(30_000).catch(() => { /* best-effort */ });
     }
   }, HEARTBEAT_INTERVAL_MS);
 
@@ -182,11 +189,32 @@ export function createWsHandler(opts: WsRouteOptions): {
         });
       }
 
+      // Track presence
+      if (opts.presenceDal) {
+        void opts.presenceDal.upsert({
+          clientId: id,
+          capabilities: [...capabilities],
+        }).catch(() => { /* best-effort */ });
+      }
+
+      // Publish presence.online event
+      void opts.eventPublisher?.publish("presence.online", {
+        client_id: id,
+        capabilities: [...capabilities],
+      }).catch(() => { /* best-effort */ });
+
       ws.on("close", () => {
         connectionManager.removeClient(id);
         if (cluster) {
           cluster.connectionDirectory.removeConnection(id);
         }
+        if (opts.presenceDal) {
+          void opts.presenceDal.remove(id).catch(() => { /* best-effort */ });
+        }
+        // Publish presence.offline event
+        void opts.eventPublisher?.publish("presence.offline", {
+          client_id: id,
+        }).catch(() => { /* best-effort */ });
       });
     }
 

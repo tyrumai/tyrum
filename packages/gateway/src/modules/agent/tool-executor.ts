@@ -11,6 +11,7 @@ import { tagContent } from "./provenance.js";
 import { sanitizeForModel } from "./sanitizer.js";
 import type { SecretProvider } from "../secret/provider.js";
 import type { RedactionEngine } from "../redaction/engine.js";
+import type { PolicyBundleManager } from "../policy/bundle.js";
 
 const MAX_RESPONSE_BYTES = 32_768;
 const HTTP_TIMEOUT_MS = 30_000;
@@ -305,6 +306,8 @@ export interface ToolResult {
 }
 
 export class ToolExecutor {
+  private readonly policyBundleManager?: PolicyBundleManager;
+
   constructor(
     private readonly home: string,
     private readonly mcpManager: McpManager,
@@ -313,13 +316,28 @@ export class ToolExecutor {
     private readonly secretProvider?: SecretProvider,
     private readonly dnsLookup: DnsLookupFn = defaultDnsLookup,
     private readonly redactionEngine?: RedactionEngine,
-  ) {}
+    policyBundleManager?: PolicyBundleManager,
+  ) {
+    this.policyBundleManager = policyBundleManager;
+  }
 
   async execute(
     toolId: string,
     toolCallId: string,
     args: unknown,
   ): Promise<ToolResult> {
+    // Policy enforcement
+    if (this.policyBundleManager) {
+      const policyResult = this.policyBundleManager.evaluate("tools");
+      if (policyResult.action === "deny") {
+        return {
+          tool_call_id: toolCallId,
+          output: "",
+          error: `Tool execution denied by policy: ${policyResult.detail}`,
+        };
+      }
+    }
+
     try {
       // Resolve secret handle references in args
       const { resolved: resolvedArgs, secrets } = await this.resolveSecrets(args);

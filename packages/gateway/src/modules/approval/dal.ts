@@ -20,6 +20,10 @@ export interface ApprovalRow {
   responded_at: string | null;
   response_reason: string | null;
   expires_at: string | null;
+  run_id: string | null;
+  step_id: string | null;
+  attempt_id: string | null;
+  resume_token: string | null;
 }
 
 interface RawApprovalRow {
@@ -33,6 +37,10 @@ interface RawApprovalRow {
   responded_at: string | null;
   response_reason: string | null;
   expires_at: string | null;
+  run_id: string | null;
+  step_id: string | null;
+  attempt_id: string | null;
+  resume_token: string | null;
 }
 
 function normalizeTime(value: string | Date): string {
@@ -57,6 +65,10 @@ function toApprovalRow(raw: RawApprovalRow): ApprovalRow {
     responded_at: raw.responded_at,
     response_reason: raw.response_reason,
     expires_at: raw.expires_at,
+    run_id: raw.run_id,
+    step_id: raw.step_id,
+    attempt_id: raw.attempt_id,
+    resume_token: raw.resume_token,
   };
 }
 
@@ -66,6 +78,10 @@ export interface CreateApprovalParams {
   prompt: string;
   context?: unknown;
   expiresAt?: string;
+  runId?: string;
+  stepId?: string;
+  attemptId?: string;
+  resumeToken?: string;
 }
 
 export class ApprovalDal {
@@ -76,8 +92,8 @@ export class ApprovalDal {
     const contextJson = JSON.stringify(params.context ?? {});
 
     const row = await this.db.get<RawApprovalRow>(
-      `INSERT INTO approvals (plan_id, step_index, prompt, context_json, expires_at)
-       VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO approvals (plan_id, step_index, prompt, context_json, expires_at, run_id, step_id, attempt_id, resume_token)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
        RETURNING *`,
       [
         params.planId,
@@ -85,6 +101,10 @@ export class ApprovalDal {
         params.prompt,
         contextJson,
         params.expiresAt ?? null,
+        params.runId ?? null,
+        params.stepId ?? null,
+        params.attemptId ?? null,
+        params.resumeToken ?? null,
       ],
     );
     if (!row) {

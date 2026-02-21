@@ -3,6 +3,7 @@
  */
 
 import type { SqlDb } from "../../statestore/types.js";
+import { resolveAgentId, withAgentScope } from "../agent/agent-scope.js";
 
 export interface ArtifactMetadataRow {
   artifact_id: string;
@@ -84,14 +85,15 @@ export class ArtifactMetadataDal {
     uri: string;
     labels?: string[];
     metadata?: unknown;
+    agentId?: string;
   }): Promise<ArtifactMetadataRow> {
     const nowIso = new Date().toISOString();
     const labelsJson = JSON.stringify(entry.labels ?? []);
     const metadataJson = entry.metadata !== undefined ? JSON.stringify(entry.metadata) : null;
 
     const row = await this.db.get<RawArtifactMetadataRow>(
-      `INSERT INTO artifact_metadata (artifact_id, run_id, step_id, attempt_id, kind, mime_type, size_bytes, sha256, uri, labels_json, created_at, metadata_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO artifact_metadata (artifact_id, run_id, step_id, attempt_id, kind, mime_type, size_bytes, sha256, uri, labels_json, created_at, metadata_json, agent_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        RETURNING *`,
       [
         entry.artifactId,
@@ -106,6 +108,7 @@ export class ArtifactMetadataDal {
         labelsJson,
         nowIso,
         metadataJson,
+        resolveAgentId(entry.agentId),
       ],
     );
     if (!row) {
@@ -122,18 +125,28 @@ export class ArtifactMetadataDal {
     return row ? toArtifactMetadataRow(row) : undefined;
   }
 
-  async listByRun(runId: string): Promise<ArtifactMetadataRow[]> {
-    const rows = await this.db.all<RawArtifactMetadataRow>(
-      "SELECT * FROM artifact_metadata WHERE run_id = ? ORDER BY created_at ASC",
+  async listByRun(runId: string, agentId?: string): Promise<ArtifactMetadataRow[]> {
+    const scoped = withAgentScope(
+      "SELECT * FROM artifact_metadata WHERE run_id = ?",
+      agentId ?? "",
       [runId],
+    );
+    const rows = await this.db.all<RawArtifactMetadataRow>(
+      `${scoped.query} ORDER BY created_at ASC`,
+      scoped.params,
     );
     return rows.map(toArtifactMetadataRow);
   }
 
-  async listByStep(stepId: string): Promise<ArtifactMetadataRow[]> {
-    const rows = await this.db.all<RawArtifactMetadataRow>(
-      "SELECT * FROM artifact_metadata WHERE step_id = ? ORDER BY created_at ASC",
+  async listByStep(stepId: string, agentId?: string): Promise<ArtifactMetadataRow[]> {
+    const scoped = withAgentScope(
+      "SELECT * FROM artifact_metadata WHERE step_id = ?",
+      agentId ?? "",
       [stepId],
+    );
+    const rows = await this.db.all<RawArtifactMetadataRow>(
+      `${scoped.query} ORDER BY created_at ASC`,
+      scoped.params,
     );
     return rows.map(toArtifactMetadataRow);
   }

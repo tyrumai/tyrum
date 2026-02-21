@@ -8,11 +8,13 @@
 import type { ApprovalDal } from "./dal.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { EventBus } from "../../event-bus.js";
+import type { EventPublisher } from "../backplane/event-publisher.js";
 
 export interface ApprovalResolverDeps {
   approvalDal: ApprovalDal;
   db: SqlDb;
   eventBus: EventBus;
+  eventPublisher?: EventPublisher;
 }
 
 export class ApprovalResolver {
@@ -33,13 +35,16 @@ export class ApprovalResolver {
     const approval = await this.deps.approvalDal.getById(event.approvalId);
     if (!approval) return;
 
-    // Check if this approval has an associated run_id and resume_token
-    // (these are the new columns added by the migration)
-    const row = await this.deps.db.get<{ run_id: string | null; resume_token: string | null }>(
-      "SELECT run_id, resume_token FROM approvals WHERE id = ?",
-      [event.approvalId],
-    );
-    if (!row?.run_id || !row?.resume_token) return;
+    if (!approval.run_id || !approval.resume_token) return;
+    const row = { run_id: approval.run_id, resume_token: approval.resume_token };
+
+    // Publish durable event
+    void this.deps.eventPublisher?.publish("approval.resolved", {
+      approval_id: event.approvalId,
+      approved: event.approved,
+      reason: event.reason,
+      run_id: row.run_id,
+    }).catch(() => { /* best-effort */ });
 
     if (event.approved) {
       // Resume the paused run
@@ -78,25 +83,31 @@ export class ApprovalResolver {
     resumeToken: string;
     expiresAt?: string;
   }): Promise<void> {
-    // Create approval with execution context
+    // Create approval with all execution columns in a single insert
     const approval = await this.deps.approvalDal.create({
       planId: params.runId,
       stepIndex: 0,
       prompt: params.prompt,
       context: params.context,
       expiresAt: params.expiresAt,
+      runId: params.runId,
+      stepId: params.stepId,
+      attemptId: params.attemptId,
+      resumeToken: params.resumeToken,
     });
-
-    // Link the approval to the execution run
-    await this.deps.db.run(
-      "UPDATE approvals SET run_id = ?, step_id = ?, attempt_id = ?, resume_token = ? WHERE id = ?",
-      [params.runId, params.stepId, params.attemptId ?? null, params.resumeToken, approval.id],
-    );
 
     // Pause the run
     await this.deps.db.run(
       "UPDATE execution_runs SET status = 'paused', paused_reason = 'approval', paused_detail = ? WHERE run_id = ?",
       [JSON.stringify({ approval_id: approval.id }), params.runId],
     );
+
+    // Publish durable event
+    void this.deps.eventPublisher?.publish("approval.requested", {
+      approval_id: approval.id,
+      run_id: params.runId,
+      step_id: params.stepId,
+      prompt: params.prompt,
+    }).catch(() => { /* best-effort */ });
   }
 }

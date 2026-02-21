@@ -2,6 +2,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { mkdir, access, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
+import { SkillResolver } from "../skill/resolver.js";
 
 function fileExists(path: string): Promise<boolean> {
   return access(path, constants.F_OK)
@@ -70,6 +71,16 @@ const DEFAULT_CORE_MEMORY_MD = `# MEMORY
 ## Learned Preferences
 
 `;
+
+/**
+ * Create a SkillResolver with the user layer from the given TYRUM_HOME.
+ * The resolver supports layered overrides: bundled → user → workspace.
+ */
+export function createSkillResolver(home = resolveTyrumHome()): SkillResolver {
+  const resolver = new SkillResolver();
+  resolver.addLayer("user", resolveSkillsDir(home));
+  return resolver;
+}
 
 export async function ensureWorkspaceInitialized(home = resolveTyrumHome()): Promise<void> {
   const skillsDir = resolveSkillsDir(home);

@@ -25,7 +25,6 @@ import { createWorkflowRoutes } from "./routes/workflow.js";
 import { createNodeRoutes } from "./routes/node.js";
 import { createPolicyV2Routes } from "./routes/policy-v2.js";
 import { createModelRoutes } from "./routes/model.js";
-import { PolicyBundleManager } from "./modules/policy/bundle.js";
 import { PlaybookRunner } from "./modules/playbook/runner.js";
 import { createWebApiRoutes } from "./routes/web-api.js";
 import { createWebUiRoutes } from "./routes/web-ui.js";
@@ -36,6 +35,9 @@ import type { TokenStore } from "./modules/auth/token-store.js";
 import type { SecretProvider } from "./modules/secret/provider.js";
 import { createAuthMiddleware } from "./modules/auth/middleware.js";
 import type { ConnectionManager } from "./ws/connection-manager.js";
+import type { EventPublisher } from "./modules/backplane/event-publisher.js";
+import { DedupeDal } from "./modules/connector/dedupe-dal.js";
+import { ConnectorPipeline } from "./modules/connector/pipeline.js";
 import { randomUUID } from "node:crypto";
 
 export interface AppOptions {
@@ -45,6 +47,7 @@ export interface AppOptions {
   playbooks?: Playbook[];
   isLocalOnly?: boolean;
   connectionManager?: ConnectionManager;
+  eventPublisher?: EventPublisher;
   version?: string;
   startedAt?: number;
   role?: string;
@@ -89,15 +92,29 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   app.route("/", createHealthRoute({ isLocalOnly }));
   app.route("/", policy);
   app.route("/", createMemoryRoutes(container.memoryDal));
+  const connectorPipelineEnabled = (() => {
+    const raw = process.env["TYRUM_CONNECTOR_PIPELINE"]?.trim().toLowerCase();
+    if (!raw) return false; // default off
+    return ["1", "true", "on", "yes"].includes(raw);
+  })();
+
+  const connectorPipeline = connectorPipelineEnabled
+    ? new ConnectorPipeline({ dedupeDal: new DedupeDal(container.db) })
+    : undefined;
+
   app.route(
     "/",
     createIngressRoutes({
       telegramBot: container.telegramBot,
       agentRuntime: opts.agentRuntime,
+      connectorPipeline,
     }),
   );
   app.route("/", createPlanRoutes(container));
-  app.route("/", createApprovalRoutes(container.approvalDal));
+  app.route("/", createApprovalRoutes({
+    approvalDal: container.approvalDal,
+    eventBus: container.eventBus,
+  }));
   app.route("/", createWatcherRoutes(container.watcherProcessor));
   app.route("/", createCanvasRoutes(container.canvasDal));
   app.route("/", createAuditRoutes({ db: container.db, eventLog: container.eventLog }));
@@ -157,7 +174,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   })();
 
   if (workflowApiEnabled) {
-    app.route("/", createWorkflowRoutes({ db: container.db }));
+    app.route("/", createWorkflowRoutes({ db: container.db, eventPublisher: opts.eventPublisher }));
   }
 
   const nodePairingEnabled = (() => {
@@ -177,9 +194,8 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   })();
 
   if (policyV2Enabled) {
-    const bundleManager = new PolicyBundleManager();
     app.route("/", createPolicyV2Routes({
-      bundleManager,
+      bundleManager: container.policyBundleManager,
       snapshotDal: container.policySnapshotDal,
     }));
   }

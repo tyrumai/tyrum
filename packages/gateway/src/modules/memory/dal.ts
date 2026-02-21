@@ -1,4 +1,5 @@
 import type { SqlDb } from "../../statestore/types.js";
+import { resolveAgentId, withAgentScope } from "../agent/agent-scope.js";
 
 // --- Row types returned by queries ---
 
@@ -126,11 +127,12 @@ export class MemoryDal {
     source: string,
     observedAt: string,
     confidence: number,
+    agentId?: string,
   ): Promise<number> {
     const nowIso = new Date().toISOString();
     const row = await this.db.get<{ id: number }>(
-      `INSERT INTO facts (fact_key, fact_value, source, observed_at, confidence, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO facts (fact_key, fact_value, source, observed_at, confidence, created_at, agent_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
        RETURNING id`,
       [
         factKey,
@@ -139,6 +141,7 @@ export class MemoryDal {
         observedAt,
         confidence,
         nowIso,
+        resolveAgentId(agentId),
       ],
     );
     if (!row) {
@@ -147,9 +150,15 @@ export class MemoryDal {
     return Number(row.id);
   }
 
-  async getFacts(): Promise<FactRow[]> {
+  async getFacts(agentId?: string): Promise<FactRow[]> {
+    const base = withAgentScope(
+      "SELECT * FROM facts",
+      agentId ?? "",
+      [],
+    );
     const rows = await this.db.all<RawFactRow>(
-      "SELECT * FROM facts ORDER BY observed_at DESC",
+      `${base.query} ORDER BY observed_at DESC`,
+      base.params,
     );
     return rows.map((r) => ({
       ...r,
@@ -158,10 +167,15 @@ export class MemoryDal {
     }));
   }
 
-  async getFactsByKey(factKey: string): Promise<FactRow[]> {
-    const rows = await this.db.all<RawFactRow>(
-      "SELECT * FROM facts WHERE fact_key = ? ORDER BY observed_at DESC",
+  async getFactsByKey(factKey: string, agentId?: string): Promise<FactRow[]> {
+    const base = withAgentScope(
+      "SELECT * FROM facts WHERE fact_key = ?",
+      agentId ?? "",
       [factKey],
+    );
+    const rows = await this.db.all<RawFactRow>(
+      `${base.query} ORDER BY observed_at DESC`,
+      base.params,
     );
     return rows.map((r) => ({
       ...r,
@@ -178,13 +192,14 @@ export class MemoryDal {
     channel: string,
     eventType: string,
     payload: unknown,
+    agentId?: string,
   ): Promise<number> {
     const nowIso = new Date().toISOString();
     const row = await this.db.get<{ id: number }>(
-      `INSERT INTO episodic_events (event_id, occurred_at, channel, event_type, payload, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO episodic_events (event_id, occurred_at, channel, event_type, payload, created_at, agent_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
        RETURNING id`,
-      [eventId, occurredAt, channel, eventType, JSON.stringify(payload), nowIso],
+      [eventId, occurredAt, channel, eventType, JSON.stringify(payload), nowIso, resolveAgentId(agentId)],
     );
     if (!row) {
       throw new Error("failed to insert episodic event");
@@ -192,10 +207,15 @@ export class MemoryDal {
     return Number(row.id);
   }
 
-  async getEpisodicEvents(limit = 100): Promise<EpisodicEventRow[]> {
+  async getEpisodicEvents(limit = 100, agentId?: string): Promise<EpisodicEventRow[]> {
+    const base = withAgentScope(
+      "SELECT * FROM episodic_events",
+      agentId ?? "",
+      [],
+    );
     const rows = await this.db.all<RawEpisodicEventRow>(
-      "SELECT * FROM episodic_events ORDER BY occurred_at DESC LIMIT ?",
-      [limit],
+      `${base.query} ORDER BY occurred_at DESC LIMIT ?`,
+      [...base.params, limit],
     );
     return rows.map((r) => ({
       ...r,
@@ -211,12 +231,18 @@ export class MemoryDal {
     capabilityIdentifier: string,
     executorKind: string,
     data: CapabilityMemoryData,
+    agentId?: string,
   ): Promise<{ inserted: boolean; successCount: number }> {
     return await this.db.transaction(async (tx) => {
-      const existing = await tx.get<{ id: number; success_count: number }>(
+      const scopedLookup = withAgentScope(
         `SELECT id, success_count FROM capability_memories
          WHERE capability_type = ? AND capability_identifier = ? AND executor_kind = ?`,
+        agentId ?? "",
         [capabilityType, capabilityIdentifier, executorKind],
+      );
+      const existing = await tx.get<{ id: number; success_count: number }>(
+        scopedLookup.query,
+        scopedLookup.params,
       );
 
       if (existing) {
@@ -255,8 +281,8 @@ export class MemoryDal {
         `INSERT INTO capability_memories
           (capability_type, capability_identifier, executor_kind,
            selectors, outcome_metadata, cost_profile, anti_bot_notes,
-           result_summary, success_count, last_success_at, metadata, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
+           result_summary, success_count, last_success_at, metadata, created_at, updated_at, agent_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
         [
           capabilityType,
           capabilityIdentifier,
@@ -270,6 +296,7 @@ export class MemoryDal {
           data.metadata !== undefined ? JSON.stringify(data.metadata) : null,
           nowIso,
           nowIso,
+          resolveAgentId(agentId),
         ],
       );
       return { inserted: true, successCount: 1 };
@@ -278,18 +305,33 @@ export class MemoryDal {
 
   async getCapabilityMemories(
     capabilityType?: string,
+    agentId?: string,
   ): Promise<CapabilityMemoryRow[]> {
-    const rows: RawCapabilityMemoryRow[] = capabilityType !== undefined
-      ? await this.db.all<RawCapabilityMemoryRow>(
-          `SELECT * FROM capability_memories
-           WHERE capability_type = ?
-           ORDER BY updated_at DESC`,
-          [capabilityType],
-        )
-      : await this.db.all<RawCapabilityMemoryRow>(
-          `SELECT * FROM capability_memories
-           ORDER BY updated_at DESC`,
-        );
+    let baseQuery: string;
+    let baseParams: unknown[];
+
+    if (capabilityType !== undefined) {
+      const scoped = withAgentScope(
+        "SELECT * FROM capability_memories WHERE capability_type = ?",
+        agentId ?? "",
+        [capabilityType],
+      );
+      baseQuery = scoped.query;
+      baseParams = scoped.params;
+    } else {
+      const scoped = withAgentScope(
+        "SELECT * FROM capability_memories",
+        agentId ?? "",
+        [],
+      );
+      baseQuery = scoped.query;
+      baseParams = scoped.params;
+    }
+
+    const rows = await this.db.all<RawCapabilityMemoryRow>(
+      `${baseQuery} ORDER BY updated_at DESC`,
+      baseParams,
+    );
     return rows.map((r) => ({
       ...r,
       selectors: parseJsonField(r.selectors),
@@ -383,27 +425,33 @@ export class MemoryDal {
 
   // --- Delete methods ---
 
-  async deleteFact(id: number): Promise<boolean> {
-    const result = await this.db.run(
+  async deleteFact(id: number, agentId?: string): Promise<boolean> {
+    const scoped = withAgentScope(
       "DELETE FROM facts WHERE id = ?",
+      agentId ?? "",
       [id],
     );
+    const result = await this.db.run(scoped.query, scoped.params);
     return (result.changes ?? 0) > 0;
   }
 
-  async deleteEpisodicEvent(id: number): Promise<boolean> {
-    const result = await this.db.run(
+  async deleteEpisodicEvent(id: number, agentId?: string): Promise<boolean> {
+    const scoped = withAgentScope(
       "DELETE FROM episodic_events WHERE id = ?",
+      agentId ?? "",
       [id],
     );
+    const result = await this.db.run(scoped.query, scoped.params);
     return (result.changes ?? 0) > 0;
   }
 
-  async deleteCapabilityMemory(id: number): Promise<boolean> {
-    const result = await this.db.run(
+  async deleteCapabilityMemory(id: number, agentId?: string): Promise<boolean> {
+    const scoped = withAgentScope(
       "DELETE FROM capability_memories WHERE id = ?",
+      agentId ?? "",
       [id],
     );
+    const result = await this.db.run(scoped.query, scoped.params);
     return (result.changes ?? 0) > 0;
   }
 }

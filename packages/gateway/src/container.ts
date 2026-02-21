@@ -20,6 +20,7 @@ import type { NodeDal } from "./modules/node/dal.js";
 import type { PolicySnapshotDal } from "./modules/policy/snapshot-dal.js";
 import type { AuthProfileDal } from "./modules/model/auth-profile-dal.js";
 import type { SqlDb } from "./statestore/types.js";
+import { PolicyBundleManager } from "./modules/policy/bundle.js";
 
 import { createEventBus } from "./event-bus.js";
 import { MemoryDal as MemoryDalImpl } from "./modules/memory/dal.js";
@@ -81,6 +82,7 @@ export interface GatewayContainer {
   nodeDal: NodeDal;
   policySnapshotDal: PolicySnapshotDal;
   authProfileDal: AuthProfileDal;
+  policyBundleManager: PolicyBundleManager;
   logger: Logger;
   config: GatewayConfig;
 }
@@ -147,6 +149,7 @@ function wireContainer(
   const nodeDal = new NodeDalImpl(db);
   const policySnapshotDal = new PolicySnapshotDalImpl(db);
   const authProfileDal = new AuthProfileDalImpl(db);
+  const policyBundleManager = new PolicyBundleManager();
 
   return {
     db,
@@ -168,6 +171,7 @@ function wireContainer(
     nodeDal,
     policySnapshotDal,
     authProfileDal,
+    policyBundleManager,
     logger,
     config,
   };

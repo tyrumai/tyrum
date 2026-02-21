@@ -19,10 +19,14 @@ import { TokenStore } from "./modules/auth/token-store.js";
 import { WatcherScheduler } from "./modules/watcher/scheduler.js";
 import { createSecretProviderFromEnv } from "./modules/secret/create-secret-provider.js";
 import { WsNotifier } from "./modules/approval/notifier.js";
+import { ApprovalResolver } from "./modules/approval/resolver.js";
 import { OutboxDal } from "./modules/backplane/outbox-dal.js";
+import { EventPublisher } from "./modules/backplane/event-publisher.js";
 import { ConnectionDirectoryDal } from "./modules/backplane/connection-directory.js";
 import { OutboxPoller } from "./modules/backplane/outbox-poller.js";
 import { ConnectionManager } from "./ws/connection-manager.js";
+import { SlashCommandRegistry } from "./ws/slash-commands.js";
+import { registerBuiltinCommands } from "./ws/builtin-commands.js";
 import { createWsHandler } from "./routes/ws.js";
 import { maybeStartOtel } from "./modules/observability/otel.js";
 import { ExecutionEngine, type StepExecutor as ExecutionStepExecutor } from "./modules/execution/engine.js";
@@ -383,10 +387,24 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
 
   const connectionManager = new ConnectionManager();
   const outboxDal = new OutboxDal(container.db, container.redactionEngine);
+  const eventPublisher = new EventPublisher(outboxDal);
   const connectionDirectory = new ConnectionDirectoryDal(container.db);
+
+  // Slash command registry
+  const slashCommands = new SlashCommandRegistry();
+  const startedAtMs = Date.now();
+  registerBuiltinCommands(slashCommands, {
+    getStatus: async () => ({
+      version: VERSION,
+      uptime: Date.now() - startedAtMs,
+      clients: connectionManager.getStats().totalClients,
+    }),
+  });
+
   const protocolDeps = {
     connectionManager,
     logger,
+    slashCommands,
     cluster: shouldRunEdge
       ? {
           edgeId: instanceId,
@@ -408,6 +426,13 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
             status: row?.status ?? "missing",
             reason,
           });
+          if (row) {
+            container.eventBus.emit("approval:resolved", {
+              approvalId,
+              approved,
+              reason,
+            });
+          }
         })
         .catch((err) => {
           const message = err instanceof Error ? err.message : String(err);
@@ -422,6 +447,15 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   };
   const approvalNotifier = new WsNotifier(protocolDeps);
 
+  // Start the approval resolver to bridge approval decisions to execution runs
+  const approvalResolver = new ApprovalResolver({
+    approvalDal: container.approvalDal,
+    db: container.db,
+    eventBus: container.eventBus,
+    eventPublisher,
+  });
+  approvalResolver.start();
+
   const agentRuntime = shouldRunEdge && isAgentEnabled()
     ? new AgentRuntime({ container, secretProvider, approvalNotifier })
     : undefined;
@@ -433,6 +467,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
         secretProvider,
         isLocalOnly,
         connectionManager,
+        eventPublisher,
       })
     : undefined;
 
@@ -442,6 +477,8 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
         connectionManager,
         protocolDeps,
         tokenStore,
+        presenceDal: container.presenceDal,
+        eventPublisher,
         cluster: {
           instanceId,
           connectionDirectory,

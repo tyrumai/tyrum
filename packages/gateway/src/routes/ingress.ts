@@ -10,10 +10,12 @@ import {
 } from "../modules/ingress/telegram.js";
 import type { TelegramBot } from "../modules/ingress/telegram-bot.js";
 import type { AgentRuntime } from "../modules/agent/runtime.js";
+import type { ConnectorPipeline, NormalizedMessage } from "../modules/connector/pipeline.js";
 
 export interface IngressDeps {
   telegramBot?: TelegramBot;
   agentRuntime?: AgentRuntime;
+  connectorPipeline?: ConnectorPipeline;
 }
 
 const TELEGRAM_SECRET_HEADER = "x-telegram-bot-api-secret-token";
@@ -74,6 +76,26 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
         );
       }
       throw err;
+    }
+
+    // If connector pipeline is configured, run dedup
+    if (deps.connectorPipeline) {
+      const pipelineMsg: NormalizedMessage = {
+        message_id: normalized.message.id,
+        channel: "telegram",
+        thread_id: normalized.thread.id,
+        text: normalized.message.content.kind === "text"
+          ? normalized.message.content.text
+          : normalized.message.content.caption ?? "",
+        sender: normalized.sender?.display_name,
+        timestamp: normalized.message.timestamp,
+      };
+
+      const result = await deps.connectorPipeline.ingest(pipelineMsg);
+      if (result === null) {
+        // Duplicate or debounced — acknowledge without processing
+        return c.json({ ok: true });
+      }
     }
 
     // If no agent runtime, return normalized message (legacy behavior)

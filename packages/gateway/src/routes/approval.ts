@@ -7,10 +7,17 @@
 
 import { Hono } from "hono";
 import type { ApprovalDal, ApprovalStatus } from "../modules/approval/dal.js";
+import type { EventBus } from "../event-bus.js";
 
 const VALID_STATUSES = new Set<ApprovalStatus>(["pending", "approved", "denied", "expired"]);
 
-export function createApprovalRoutes(approvalDal: ApprovalDal): Hono {
+export interface ApprovalRouteDeps {
+  approvalDal: ApprovalDal;
+  eventBus?: EventBus;
+}
+
+export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
+  const { approvalDal, eventBus } = deps;
   const app = new Hono();
 
   /** List approvals. Defaults to pending; use ?status= to filter. */
@@ -95,6 +102,12 @@ export function createApprovalRoutes(approvalDal: ApprovalDal): Hono {
         404,
       );
     }
+
+    eventBus?.emit("approval:resolved", {
+      approvalId: id,
+      approved: isApproved,
+      reason: body.reason,
+    });
 
     return c.json({ approval: updated });
   });

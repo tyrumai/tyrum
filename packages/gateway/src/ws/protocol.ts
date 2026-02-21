@@ -22,6 +22,7 @@ import type {
 } from "@tyrum/schemas";
 import type { ConnectedClient } from "./connection-manager.js";
 import type { ConnectionManager } from "./connection-manager.js";
+import type { SlashCommandRegistry } from "./slash-commands.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
 import type { Logger } from "../modules/observability/logger.js";
@@ -62,6 +63,9 @@ export interface ProtocolDeps {
     approved: boolean,
     reason: string | undefined,
   ) => void;
+
+  /** Slash command registry for handling client /command requests. */
+  slashCommands?: SlashCommandRegistry;
 }
 
 // ---------------------------------------------------------------------------
@@ -169,6 +173,30 @@ export function handleClientMessage(
     }
 
     // Unknown response type — ignore.
+    return undefined;
+  }
+
+  // Slash command requests
+  if (msg.type === "slash.execute" && deps.slashCommands) {
+    const payload = msg.payload as { input?: string } | undefined;
+    const input = typeof payload?.input === "string" ? payload.input : "";
+    // Use async-send pattern (same as onApprovalDecision)
+    void deps.slashCommands.execute(input, client.id).then((result) => {
+      client.ws.send(JSON.stringify({
+        request_id: msg.request_id,
+        type: "slash.execute",
+        ok: true,
+        result,
+      }));
+    }).catch((err) => {
+      const message = err instanceof Error ? err.message : String(err);
+      client.ws.send(JSON.stringify({
+        request_id: msg.request_id,
+        type: "slash.execute",
+        ok: false,
+        error: { code: "slash_error", message },
+      }));
+    });
     return undefined;
   }
 
