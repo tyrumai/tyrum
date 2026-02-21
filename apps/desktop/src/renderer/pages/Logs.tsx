@@ -28,7 +28,7 @@ const logContainerStyle: React.CSSProperties = {
 };
 
 const LEVEL_COLORS: Record<string, string> = {
-  info: "#60a5fa",
+  info: "#818cf8",
   warn: "#eab308",
   error: "#ef4444",
   debug: "#9ca3af",
