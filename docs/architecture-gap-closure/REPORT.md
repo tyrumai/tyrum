@@ -2,13 +2,14 @@
 
 ## 1. Run Execution Brief
 
-- **Git HEAD**: 0ace604 (`feat/gap-closure-p0`)
+- **Git HEAD**: addb970 (`feat/gap-closure-p0`)
 - **Date**: 2026-02-21
-- **Goal**: Ingest all 40 architecture docs, audit codebase, produce ARI + traceability matrix, identify remaining gaps after prior gap-closure commits, and implement high-priority fixes.
-- **Non-goals**: Rewriting architecture docs; adding speculative features; big-bang refactors.
+- **Goal**: Continue gap closure: implement remaining P0 backlog items (policy conditions, context reports, snapshot export, queue overflow, typing modes).
+- **Non-goals**: Rewriting architecture docs; adding speculative features; big-bang refactors; features requiring LLM integration or external API access.
 - **Constraints**: pnpm monorepo, strict ESM TypeScript, Node 24, SQLite+Postgres dual target.
-- **Plan**: (1) Read all docs, (2) Audit codebase, (3) Gap analysis, (4) Write state files, (5) Implement top-priority items.
+- **Plan**: (1) Complete uncommitted policy conditions work, (2) Implement context report DAL + routes, (3) Implement snapshot export, (4) Add queue overflow handling, (5) Add typing mode schemas.
 - **Risks**: Feature flag misuse; database migration ordering; type-level regressions.
+- **Results**: 5 PLAN items closed, 24 new tests, 1332 total tests passing (up from 1309).
 
 ## 2. Docs Ingested
 
@@ -611,20 +612,51 @@ Completed:
 | 10 | PLAN-544c57a9 | Provider quota polling | Low | Backlog |
 | 11 | PLAN-808fd445 | Client UI timeline + SPA | Low | Backlog |
 
-## 9. Implementation Journal (THIS RUN)
+## 9. Implementation Journal
 
-### PLAN-a1b2c3d4: Device identity Ed25519 verification
+### Run 1 (prior context)
 
-**Mini Execution Brief:**
-- Goal: Replace STUB in `ws/device-identity.ts` with real Ed25519 key derivation and proof verification
-- Non-goals: Key storage/management; certificate chain
-- Plan: Use Node.js crypto Ed25519 support; derive device_id from public key; verify proof signature
-- Risks: Breaking existing handshake tests → ensure backward compat
-- Rollback: Keep non-strict handshake default
+#### PLAN-a1b2c3d4: Device identity Ed25519 verification
 
-**Changes made:**
-- `packages/gateway/src/ws/device-identity.ts` — Implemented `deriveDeviceId()` (base32-encoded SHA-256 of public key) and `verifyDeviceProof()` (Ed25519 signature verification binding nonce + transcript)
-- `packages/gateway/tests/unit/device-identity.test.ts` — Extended with tests for real Ed25519 keypairs
+- Replaced STUB in `ws/device-identity.ts` with real Ed25519 crypto
+- Added `deriveDeviceId()`, `buildTranscript()`, `verifyDeviceProof()` + 11 tests
+
+#### PLAN-9babdeb8: Secret resolution policy gate + audit
+
+- Added policy check + structured audit logging in `tool-executor.ts`
+- 1 test for policy deny blocking secret resolution
+
+### Run 2 (this context)
+
+#### PLAN-e5f6a7b8: Policy condition evaluation (d9ad66f)
+
+- Goal: Evaluate rule conditions against runtime context in `PolicyBundleManager.evaluate()`
+- Changes: Added `matchesConditions()` helper, context parameter on `evaluate()`
+- Tests: 5 new condition-matching tests (filter by context, skip w/o context, unconditional always matches, multi-key conditions, mixed conditional/unconditional)
+
+#### PLAN-c9d0e1f2: Context report per run (5b03e19)
+
+- Goal: Schema + DAL + routes for per-run context reports (what the model "saw")
+- Changes: `ContextReportData` Zod schema, `context_reports` migration (SQLite + Postgres), `ContextReportDal` with create/getByRunId/list, `/context/list` + `/context/detail/:run_id` routes, container wiring
+- Tests: 5 DAL tests
+
+#### PLAN-e7f8a9b0: Snapshot export (6f1296a)
+
+- Goal: Transactional dump of durable tables via `GET /snapshot/export`
+- Changes: `exportSnapshot()` function with 21 durable tables, `/snapshot/export` route, `/snapshot/import` stubbed with 501
+- Tests: 5 snapshot export tests
+
+#### PLAN-e1f2a3b4: Queue overflow handling (ade7eda)
+
+- Goal: Configurable queue depth limit + observability
+- Changes: `maxQueueDepth` opt-in on `ExecutionEngine`, `QueueOverflowError`, `getQueueDepth()`, `queue_depth` in `/status`
+- Tests: 3 tests (depth reporting, overflow rejection, unlimited mode)
+
+#### PLAN-a7b8c9d0: Typing modes schema (addb970)
+
+- Goal: Define the four architecture-specified typing modes
+- Changes: `TypingMode` enum (`never`/`message`/`thinking`/`instant`), `TypingConfig` (mode + refresh_interval_ms), added to `AgentSessionConfig`
+- Tests: 6 schema tests
 
 ## 10. Risks, Mitigations, Rollback
 
@@ -639,26 +671,50 @@ Completed:
 
 ## 11. Open Questions / Unverifiable Items
 
-1. **Device identity encoding prefix**: Docs say "stable prefix" — what prefix? Using `tyrum-` for now.
+1. ~~**Device identity encoding prefix**~~: RESOLVED — using `tyrum-` prefix with base32(sha256(pubkey)).
 2. **Plugin code execution model**: Docs say "validate via contracts" but don't specify sandboxing for plugin code. Deferred.
 3. **Client UI direction**: Server-rendered /app vs SPA replacement. Requires product decision.
-4. **Snapshot scope**: Which tables to export? Privacy/redaction requirements? Requires data classification review.
+4. ~~**Snapshot scope**~~: RESOLVED — exporting 21 durable tables; skipping transient/operational tables.
 5. **Queue modes steer_backlog and interrupt**: Semantics described in docs but no existing code pattern. Requires design.
+6. **Compaction/pruning**: Requires LLM-driven summarization — deferred pending runtime integration design.
+7. **Provider quota polling**: Requires external API integration — deferred.
+8. **JSON Schema export**: `zod-to-json-schema` available as transitive dep but not direct — needs explicit dependency addition.
 
 ## 12. Appendix: Commands Run + Outcomes
 
+### Run 1
+
 ```
-# Repo health check
 git status --porcelain → ?? .claude/, ?? RALPH_PROMPT.md, ?? docs/gap-analysis.md
-git log --oneline -5 → HEAD at 0ace604
-
-# Build schemas
-npx tsc --build packages/schemas/tsconfig.json → OK (no errors)
-
-# Typecheck gateway
+npx tsc --build packages/schemas/tsconfig.json → OK
 npx tsc --noEmit --project packages/gateway/tsconfig.json → 8 pre-existing errors only
-  (runtime.ts:441, engine.ts:658/660/679, runner.ts:253×2, secret.ts:24/102)
+npx vitest run --config vitest.config.ts → 1297 tests, 0 failures → 1309 after implementations
+```
 
-# Run tests
-npx vitest run --config vitest.config.ts → 160 passed, 1 skipped, 1297 tests, 0 failures
+### Run 2
+
+```
+# Baseline
+git diff --stat → 2 files uncommitted (bundle.ts + STATE.md)
+npx vitest run policy-bundle.test.ts → 1 failure (fixed test using conditions)
+npx vitest run policy-bundle.test.ts → 19 pass (5 new condition tests)
+npx vitest run → 1314 pass, 0 fail
+
+# Context report feature
+npx tsc --build packages/schemas/tsconfig.json → OK
+npx vitest run context-report-dal.test.ts → 5 pass
+npx vitest run → 1319 pass, 0 fail
+
+# Snapshot export
+npx vitest run snapshot-export.test.ts → 5 pass (after fixing session schema)
+npx vitest run → 1324 pass, 0 fail
+
+# Queue overflow
+npx vitest run execution-engine.test.ts → 15 pass (3 new)
+npx vitest run → 1327 pass, 0 fail
+
+# Typing modes
+npx tsc --build packages/schemas/tsconfig.json → OK (after fixing default)
+npx vitest run agent.test.ts → 11 pass (6 new)
+npx vitest run → 1332 pass, 0 fail
 ```
