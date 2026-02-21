@@ -1022,6 +1022,9 @@ export class AgentRuntime {
     const approval = await this.approvalDal.create({
       planId: context.planId,
       stepIndex,
+      kind: "workflow_step",
+      agentId: this.agentId,
+      workspaceId: this.workspaceId,
       prompt: `Approve execution of '${tool.id}' (risk=${tool.risk})`,
       context: {
         source: "agent-tool-execution",

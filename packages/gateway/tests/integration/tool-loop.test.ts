@@ -230,6 +230,8 @@ describe("Tool execution loop", () => {
     const runtime = new AgentRuntime({
       container,
       home: homeDir,
+      agentId: "agent-test",
+      workspaceId: "ws-test",
       fetchImpl: fetchStub,
       mcpManager: mcpManager as unknown as ConstructorParameters<
         typeof AgentRuntime
@@ -246,6 +248,9 @@ describe("Tool execution loop", () => {
 
     const pending = await waitForPendingApproval(container);
     expect(pending.prompt).toContain("tool.exec");
+    expect(pending.kind).toBe("workflow_step");
+    expect(pending.agent_id).toBe("agent-test");
+    expect(pending.workspace_id).toBe("ws-test");
     expect(pending.status).toBe("pending");
 
     const updated = await container.approvalDal.respond(
