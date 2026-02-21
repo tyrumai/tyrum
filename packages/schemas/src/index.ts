@@ -330,3 +330,11 @@ export {
 } from "./workflow.js";
 
 export { SlashCommandPayload, SlashCommandResult } from "./slash-command.js";
+
+export {
+  ContextSectionSize,
+  WorkspaceFileEntry,
+  ToolSchemaEntry,
+  ContextReportData,
+  ContextReport,
+} from "./context-report.js";

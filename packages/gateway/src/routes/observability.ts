@@ -6,11 +6,13 @@ import { Hono } from "hono";
 import type { SqlDb } from "../statestore/types.js";
 import type { MemoryDal } from "../modules/memory/dal.js";
 import type { ConnectionManager } from "../ws/connection-manager.js";
+import type { ContextReportDal } from "../modules/context/report-dal.js";
 
 export interface ObservabilityDeps {
   db: SqlDb;
   memoryDal: MemoryDal;
   connectionManager?: ConnectionManager;
+  contextReportDal?: ContextReportDal;
   version: string;
   startedAt: number;
   role: string;
@@ -84,6 +86,39 @@ export function createObservabilityRoutes(deps: ObservabilityDeps): Hono {
       sessions: {
         total: sessionCount?.n ?? 0,
       },
+    });
+  });
+
+  app.get("/context/list", async (c) => {
+    if (!deps.contextReportDal) {
+      return c.json({ reports: [] });
+    }
+    const limit = Math.min(Number(c.req.query("limit") || 50), 200);
+    const offset = Math.max(Number(c.req.query("offset") || 0), 0);
+    const rows = await deps.contextReportDal.list(limit, offset);
+    return c.json({
+      reports: rows.map((r) => ({
+        report_id: r.report_id,
+        run_id: r.run_id,
+        created_at: r.created_at,
+      })),
+    });
+  });
+
+  app.get("/context/detail/:run_id", async (c) => {
+    if (!deps.contextReportDal) {
+      return c.json({ error: "context reports not enabled" }, 501);
+    }
+    const runId = c.req.param("run_id");
+    const row = await deps.contextReportDal.getByRunId(runId);
+    if (!row) {
+      return c.json({ error: "no context report for this run" }, 404);
+    }
+    return c.json({
+      report_id: row.report_id,
+      run_id: row.run_id,
+      created_at: row.created_at,
+      report: JSON.parse(row.report_json),
     });
   });
 

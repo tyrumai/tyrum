@@ -151,6 +151,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       db: container.db,
       memoryDal: container.memoryDal,
       connectionManager: opts.connectionManager,
+      contextReportDal: container.contextReportDal,
       version: opts.version ?? "unknown",
       startedAt: opts.startedAt ?? Date.now(),
       role: opts.role ?? "all",

@@ -19,6 +19,7 @@ import type { PresenceDal } from "./modules/presence/dal.js";
 import type { NodeDal } from "./modules/node/dal.js";
 import type { PolicySnapshotDal } from "./modules/policy/snapshot-dal.js";
 import type { AuthProfileDal } from "./modules/model/auth-profile-dal.js";
+import type { ContextReportDal } from "./modules/context/report-dal.js";
 import type { SqlDb } from "./statestore/types.js";
 import { PolicyBundleManager } from "./modules/policy/bundle.js";
 
@@ -43,6 +44,7 @@ import { PresenceDal as PresenceDalImpl } from "./modules/presence/dal.js";
 import { NodeDal as NodeDalImpl } from "./modules/node/dal.js";
 import { PolicySnapshotDal as PolicySnapshotDalImpl } from "./modules/policy/snapshot-dal.js";
 import { AuthProfileDal as AuthProfileDalImpl } from "./modules/model/auth-profile-dal.js";
+import { ContextReportDal as ContextReportDalImpl } from "./modules/context/report-dal.js";
 import { RedactionEngine } from "./modules/redaction/engine.js";
 import type { ArtifactStore } from "./modules/artifact/store.js";
 import type { ArtifactMetadataDal } from "./modules/artifact/metadata-dal.js";
@@ -83,6 +85,7 @@ export interface GatewayContainer {
   policySnapshotDal: PolicySnapshotDal;
   authProfileDal: AuthProfileDal;
   policyBundleManager: PolicyBundleManager;
+  contextReportDal: ContextReportDal;
   logger: Logger;
   config: GatewayConfig;
 }
@@ -150,6 +153,7 @@ function wireContainer(
   const policySnapshotDal = new PolicySnapshotDalImpl(db);
   const authProfileDal = new AuthProfileDalImpl(db);
   const policyBundleManager = new PolicyBundleManager();
+  const contextReportDal = new ContextReportDalImpl(db);
 
   return {
     db,
@@ -172,6 +176,7 @@ function wireContainer(
     policySnapshotDal,
     authProfileDal,
     policyBundleManager,
+    contextReportDal,
     logger,
     config,
   };
