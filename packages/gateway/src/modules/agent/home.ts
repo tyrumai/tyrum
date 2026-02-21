@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { mkdir, access, writeFile } from "node:fs/promises";
-import { constants } from "node:fs";
+import { constants, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 function fileExists(path: string): Promise<boolean> {
@@ -43,9 +43,34 @@ export function resolveUserSkillsDir(userHome = resolveUserTyrumHome()): string 
 }
 
 export function resolveBundledSkillsDir(): string {
-  // packages/gateway/src/modules/agent/home.ts -> packages/gateway/skills
   const here = dirname(fileURLToPath(import.meta.url));
-  return join(here, "../../../skills");
+  return resolveBundledSkillsDirFrom(here);
+}
+
+function isDirectory(path: string): boolean {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+export function resolveBundledSkillsDirFrom(startDir: string): string {
+  // We cannot rely on the source tree depth because tsdown bundles the gateway
+  // into `dist/index.mjs`, making `import.meta.url` point at `dist/`.
+  //
+  // Instead, walk up until we find a `skills/` directory.
+  let current = startDir;
+  for (let i = 0; i < 10; i += 1) {
+    const candidate = join(current, "skills");
+    if (isDirectory(candidate)) return candidate;
+    const parent = dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+
+  // Fallback to the historical source layout.
+  return join(startDir, "../../../skills");
 }
 
 export function resolveMcpDir(home = resolveTyrumHome()): string {
