@@ -201,13 +201,92 @@ describe("PolicyBundleManager", () => {
     // Use different conditions so both rules survive merge deduplication
     mgr.addBundle({
       rules: [
-        { domain: "spend", action: "require_approval", priority: 1, conditions: { max: 100 } },
-        { domain: "spend", action: "deny", priority: 2, conditions: { max: 500 } },
+        { domain: "spend", action: "require_approval", priority: 1, conditions: { category: "payments" } },
+        { domain: "spend", action: "deny", priority: 2, conditions: { region: "EU" } },
       ],
       precedence: "deployment",
     });
-    const result = mgr.evaluate("spend");
+    // Pass context that satisfies both conditions
+    const result = mgr.evaluate("spend", { category: "payments", region: "EU" });
     expect(result.action).toBe("deny");
+  });
+
+  // -----------------------------------------------------------------------
+  // evaluate — context / condition matching
+  // -----------------------------------------------------------------------
+
+  it("filters rules by conditions when context is provided", () => {
+    mgr = new PolicyBundleManager();
+    mgr.addBundle({
+      rules: [
+        { domain: "spend", action: "deny", priority: 1, conditions: { region: "EU" } },
+        { domain: "spend", action: "allow", priority: 2, conditions: { region: "US" } },
+      ],
+      precedence: "deployment",
+    });
+    // Only the EU-deny rule should match
+    const result = mgr.evaluate("spend", { region: "EU" });
+    expect(result.action).toBe("deny");
+  });
+
+  it("skips conditional rules when no context is provided", () => {
+    mgr = new PolicyBundleManager();
+    mgr.addBundle({
+      rules: [
+        { domain: "spend", action: "deny", priority: 1, conditions: { region: "EU" } },
+      ],
+      precedence: "deployment",
+    });
+    // No context → conditional rule doesn't match → default allow
+    const result = mgr.evaluate("spend");
+    expect(result.action).toBe("allow");
+    expect(result.detail).toContain("No policy rules");
+  });
+
+  it("unconditional rules always match regardless of context", () => {
+    mgr = new PolicyBundleManager();
+    mgr.addBundle({
+      rules: [rule("spend", "deny", 1, "always deny")],
+      precedence: "deployment",
+    });
+    const result = mgr.evaluate("spend", { region: "US" });
+    expect(result.action).toBe("deny");
+    expect(result.detail).toBe("always deny");
+  });
+
+  it("matches rule only when all condition keys are satisfied", () => {
+    mgr = new PolicyBundleManager();
+    mgr.addBundle({
+      rules: [
+        { domain: "spend", action: "deny", priority: 1, conditions: { region: "EU", tier: "enterprise" } },
+      ],
+      precedence: "deployment",
+    });
+    // Only one key matches → rule should NOT match
+    const partial = mgr.evaluate("spend", { region: "EU", tier: "free" });
+    expect(partial.action).toBe("allow");
+
+    // Both keys match → rule should match
+    const full = mgr.evaluate("spend", { region: "EU", tier: "enterprise" });
+    expect(full.action).toBe("deny");
+  });
+
+  it("mixes conditional and unconditional rules correctly", () => {
+    mgr = new PolicyBundleManager();
+    mgr.addBundle({
+      rules: [
+        { domain: "spend", action: "deny", priority: 1, conditions: { region: "EU" } },
+        rule("spend", "require_approval", 2, "default approval"),
+      ],
+      precedence: "deployment",
+    });
+    // Non-EU context: only unconditional rule matches → require_approval
+    const nonEu = mgr.evaluate("spend", { region: "US" });
+    expect(nonEu.action).toBe("require_approval");
+
+    // EU context: both rules match, deny wins
+    const eu = mgr.evaluate("spend", { region: "EU" });
+    expect(eu.action).toBe("deny");
   });
 
   // -----------------------------------------------------------------------

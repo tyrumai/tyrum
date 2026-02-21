@@ -57,9 +57,18 @@ export class PolicyBundleManager {
     return merged;
   }
 
-  /** Evaluate a domain against the merged rules. */
-  evaluate(domain: string, _context?: unknown): PolicyEvalResult {
-    const rules = this.getMergedRules().filter((r) => r.domain === domain);
+  /**
+   * Evaluate a domain against the merged rules.
+   *
+   * When `context` is provided, only rules whose `conditions` match the
+   * context are considered. A rule matches when every key in its conditions
+   * object equals the corresponding key in the context (shallow equality).
+   * Rules with no conditions always match.
+   */
+  evaluate(domain: string, context?: Record<string, unknown>): PolicyEvalResult {
+    const allRules = this.getMergedRules().filter((r) => r.domain === domain);
+    const rules = allRules.filter((r) => matchesConditions(r.conditions, context));
+
     if (rules.length === 0) {
       return {
         action: "allow",
@@ -109,6 +118,30 @@ export class PolicyBundleManager {
   clear(): void {
     this.bundles = [];
   }
+}
+
+/**
+ * Check whether a rule's conditions match the provided context.
+ *
+ * - No conditions (undefined/null) → always matches.
+ * - Empty object → always matches.
+ * - Otherwise, every key in conditions must exist in context with
+ *   strict equality (===). This is a simple, predictable matcher
+ *   that avoids regex or deep comparison.
+ */
+function matchesConditions(
+  conditions: unknown,
+  context?: Record<string, unknown>,
+): boolean {
+  if (conditions == null) return true;
+  if (typeof conditions !== "object" || Array.isArray(conditions)) return true;
+
+  const cond = conditions as Record<string, unknown>;
+  const keys = Object.keys(cond);
+  if (keys.length === 0) return true;
+  if (!context) return false;
+
+  return keys.every((k) => context[k] === cond[k]);
 }
 
 function precedenceOrder(p: string): number {
