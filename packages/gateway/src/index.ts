@@ -661,6 +661,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     watcherScheduler?.stop();
     watcherFiredSubscriber?.stop();
     retentionDaemon?.stop();
+    approvalExpiryDaemon?.stop();
     outboxPoller?.stop();
     workerLoop?.stop();
 

@@ -23,6 +23,32 @@ describe("ApprovalExpiryDaemon", () => {
     expect(result).toBe(3);
   });
 
+  it("unrefs the interval timer so it won't keep the process alive", () => {
+    const dal = mockApprovalDal();
+    const daemon = new ApprovalExpiryDaemon({ approvalDal: dal as never, intervalMs: 100_000 });
+
+    const unref = vi.fn();
+    const handle = { unref } as unknown as ReturnType<typeof setInterval>;
+
+    const setIntervalSpy = vi
+      .spyOn(globalThis, "setInterval")
+      .mockReturnValue(handle as never);
+    const clearIntervalSpy = vi
+      .spyOn(globalThis, "clearInterval")
+      .mockImplementation(() => {});
+
+    try {
+      daemon.start();
+      expect(setIntervalSpy).toHaveBeenCalledOnce();
+      expect(unref).toHaveBeenCalledOnce();
+      daemon.stop();
+      expect(clearIntervalSpy).toHaveBeenCalledWith(handle as never);
+    } finally {
+      setIntervalSpy.mockRestore();
+      clearIntervalSpy.mockRestore();
+    }
+  });
+
   it("start/stop manages the interval timer", () => {
     const dal = mockApprovalDal();
     const daemon = new ApprovalExpiryDaemon({ approvalDal: dal as never, intervalMs: 100_000 });

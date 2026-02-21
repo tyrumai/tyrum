@@ -28,6 +28,7 @@ export class ApprovalExpiryDaemon {
     this.timer = setInterval(() => {
       void this.tick();
     }, this.intervalMs);
+    this.timer.unref();
   }
 
   stop(): void {
