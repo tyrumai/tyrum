@@ -7,11 +7,21 @@
 
 import { Hono } from "hono";
 import type { ApprovalDal, ApprovalStatus } from "../modules/approval/dal.js";
+import { resolveAndApplyApproval } from "../modules/approval/apply.js";
+import type { ExecutionEngine } from "../modules/execution/engine.js";
+import type { Logger } from "../modules/observability/logger.js";
+import type { WsEventPublisher } from "../modules/approval/apply.js";
 
 const VALID_STATUSES = new Set<ApprovalStatus>(["pending", "approved", "denied", "expired"]);
 
-export function createApprovalRoutes(approvalDal: ApprovalDal): Hono {
+export function createApprovalRoutes(opts: {
+  approvalDal: ApprovalDal;
+  executionEngine?: Pick<ExecutionEngine, "resumeRun" | "cancelRunByResumeToken">;
+  wsPublisher?: WsEventPublisher;
+  logger?: Logger;
+}): Hono {
   const app = new Hono();
+  const approvalDal = opts.approvalDal;
 
   /** List approvals. Defaults to pending; use ?status= to filter. */
   app.get("/approvals", async (c) => {
@@ -85,18 +95,40 @@ export function createApprovalRoutes(approvalDal: ApprovalDal): Hono {
       );
     }
 
-    const updated = await approvalDal.respond(id, isApproved, body.reason);
-    if (!updated) {
+    const decision = isApproved ? ("approved" as const) : ("denied" as const);
+    const result = await resolveAndApplyApproval({
+      approvalDal,
+      executionEngine: opts.executionEngine,
+      wsPublisher: opts.wsPublisher,
+      logger: opts.logger,
+      approvalId: id,
+      decision,
+      reason: body.reason,
+    });
+
+    if (result.kind === "not_found") {
+      return c.json({ error: "not_found", message: `approval ${String(id)} not found` }, 404);
+    }
+
+    if (result.kind === "pending") {
       return c.json(
-        {
-          error: "not_found",
-          message: `approval ${String(id)} not found or already responded`,
-        },
-        404,
+        { error: "conflict", message: `approval ${String(id)} is still pending`, approval: result.approval },
+        409,
       );
     }
 
-    return c.json({ approval: updated });
+    if (result.kind === "conflict") {
+      return c.json(
+        {
+          error: "conflict",
+          message: `approval ${String(id)} already resolved as '${result.approval.status}'`,
+          approval: result.approval,
+        },
+        409,
+      );
+    }
+
+    return c.json({ approval: result.approval, applied: result.applied });
   });
 
   /** Preview the context of a pending approval. */

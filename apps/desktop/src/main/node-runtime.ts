@@ -16,7 +16,7 @@ export class NodeRuntime {
   private providers: CapabilityProvider[] = [];
 
   constructor(
-    _config: DesktopNodeConfig,
+    private config: DesktopNodeConfig,
     private _permissions: ResolvedPermissions,
     private callbacks: NodeRuntimeCallbacks,
   ) {}
@@ -40,7 +40,14 @@ export class NodeRuntime {
 
     const capabilities = this.getEnabledCapabilities();
 
-    this.client = new TyrumClient({ url: wsUrl, token, capabilities });
+    this.client = new TyrumClient({
+      url: wsUrl,
+      token,
+      capabilities,
+      role: "node",
+      deviceLabel: "tyrum-desktop",
+      devicePlatform: `desktop/${String(this.config.mode)}`,
+    });
 
     this.client.on("connected", () => {
       this.callbacks.onStatusChange({ connected: true });
@@ -66,6 +73,15 @@ export class NodeRuntime {
 
     this.client.on("plan_update", (msg) => {
       this.callbacks.onPlanUpdate(msg);
+    });
+
+    this.client.on("pairing_approved", (msg) => {
+      this.client?.setToken(msg.payload.scoped_token);
+      this.callbacks.onLog({
+        level: "info",
+        message: "Received scoped node token; reconnecting",
+        timestamp: new Date().toISOString(),
+      });
     });
 
     this.client.on("error", (msg) => {

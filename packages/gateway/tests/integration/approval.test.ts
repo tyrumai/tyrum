@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { Hono } from "hono";
 import { createTestApp } from "./helpers.js";
+import { createHash } from "node:crypto";
 
 describe("Approval routes", () => {
   let app: Hono;
@@ -31,11 +32,13 @@ describe("Approval routes", () => {
 describe("Approval routes (with DAL access)", () => {
   let app: Hono;
   let container: Awaited<ReturnType<typeof createTestApp>>["container"];
+  let executionEngine: Awaited<ReturnType<typeof createTestApp>>["executionEngine"];
 
   beforeEach(async () => {
     const result = await createTestApp();
     app = result.app;
     container = result.container;
+    executionEngine = result.executionEngine;
   });
 
   it("creates an approval via DAL, lists it via route", async () => {
@@ -87,6 +90,7 @@ describe("Approval routes (with DAL access)", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       approval: { status: string; response_reason: string };
+      applied?: unknown;
     };
     expect(body.approval.status).toBe("approved");
     expect(body.approval.response_reason).toBe("looks safe");
@@ -108,12 +112,13 @@ describe("Approval routes (with DAL access)", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       approval: { status: string; response_reason: string };
+      applied?: unknown;
     };
     expect(body.approval.status).toBe("denied");
     expect(body.approval.response_reason).toBe("too risky");
   });
 
-  it("returns 404 when responding to already-responded approval", async () => {
+  it("returns 409 when responding with a conflicting decision", async () => {
     const created = await container.approvalDal.create({
       planId: "plan-1",
       stepIndex: 0,
@@ -132,7 +137,7 @@ describe("Approval routes (with DAL access)", () => {
       body: JSON.stringify({ approved: false }),
     });
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(409);
   });
 
   it("returns 400 when approved field is missing", async () => {
@@ -149,6 +154,94 @@ describe("Approval routes (with DAL access)", () => {
     });
 
     expect(res.status).toBe(400);
+  });
+
+  it("applies approval decision by resuming a paused execution run", async () => {
+    const bundle = {
+      version: 1,
+      tools: { allow: [], deny: [], require_approval: [], default: "allow" },
+      actions: { allow: [], deny: [], require_approval: ["Http"], default: "allow" },
+      network: {
+        egress: {
+          allow_hosts: ["*"],
+          deny_hosts: [],
+          require_approval_hosts: [],
+          default: "require_approval",
+        },
+      },
+      secrets: {
+        resolve: {
+          allow: [],
+          deny: [],
+          require_approval: ["*"],
+          default: "require_approval",
+        },
+      },
+    };
+    const contentJson = JSON.stringify(bundle);
+    const contentHash = createHash("sha256").update(contentJson, "utf-8").digest("hex");
+    const nowIso = new Date().toISOString();
+
+    await container.db.run(
+      `INSERT INTO policy_bundles (
+         scope_kind,
+         scope_id,
+         version,
+         format,
+         content_json,
+         content_hash,
+         updated_at
+       ) VALUES ('deployment', 'default', 1, 'json', ?, ?, ?)
+       ON CONFLICT (scope_kind, scope_id) DO UPDATE SET
+         version = excluded.version,
+         format = excluded.format,
+         content_json = excluded.content_json,
+         content_hash = excluded.content_hash,
+         updated_at = excluded.updated_at`,
+      [contentJson, contentHash, nowIso],
+    );
+
+    const { runId } = await executionEngine.enqueuePlan({
+      key: "hook:00000000-0000-4000-8000-000000000001",
+      lane: "main",
+      planId: "plan-approval-apply-1",
+      requestId: "test-req-apply-1",
+      steps: [{ type: "Http", args: { url: "https://example.com" } }],
+    });
+
+    await executionEngine.workerTick({
+      workerId: "w1",
+      executor: {
+        execute: async () => {
+          return { success: true, result: { ok: true } };
+        },
+      },
+    });
+
+    const pending = await container.approvalDal.getPending();
+    expect(pending).toHaveLength(1);
+    const approval = pending[0]!;
+
+    const paused = await container.db.get<{ status: string }>(
+      "SELECT status FROM execution_runs WHERE run_id = ?",
+      [runId],
+    );
+    expect(paused!.status).toBe("paused");
+
+    const res = await app.request(`/approvals/${String(approval.id)}/respond`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision: "approved" }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { applied?: { resumed_run_id?: string } };
+    expect(body.applied?.resumed_run_id).toBe(runId);
+
+    const run = await container.db.get<{ status: string }>(
+      "SELECT status FROM execution_runs WHERE run_id = ?",
+      [runId],
+    );
+    expect(run!.status).toBe("queued");
   });
 
   it("previews an approval context", async () => {

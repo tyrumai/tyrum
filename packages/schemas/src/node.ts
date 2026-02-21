@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { DateTimeSchema } from "./common.js";
 import { NodeId } from "./keys.js";
-import { ClientCapability } from "./protocol.js";
+import { ClientCapability } from "./capabilities.js";
 
 export const NodeIdentity = z
   .object({
@@ -58,4 +58,3 @@ export const NodePairingRequest = z
     }
   });
 export type NodePairingRequest = z.infer<typeof NodePairingRequest>;
-

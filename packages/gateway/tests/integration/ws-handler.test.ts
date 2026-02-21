@@ -1,61 +1,26 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createServer, type Server } from "node:http";
-import { WebSocket } from "ws";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { createWsHandler } from "../../src/routes/ws.js";
 import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-
-function authProtocols(token: string): string[] {
-  return [
-    "tyrum-v1",
-    `tyrum-auth.${Buffer.from(token, "utf-8").toString("base64url")}`,
-  ];
-}
-
-function waitForOpen(ws: WebSocket): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (ws.readyState === WebSocket.OPEN) {
-      resolve();
-      return;
-    }
-    const timer = setTimeout(() => reject(new Error("open timeout")), 5_000);
-    ws.once("open", () => {
-      clearTimeout(timer);
-      resolve();
-    });
-    ws.once("error", (err) => {
-      clearTimeout(timer);
-      reject(err);
-    });
-  });
-}
-
-function waitForClose(ws: WebSocket): Promise<{ code: number; reason: string }> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("close timeout")), 5_000);
-    ws.once("close", (code, reason) => {
-      clearTimeout(timer);
-      resolve({ code, reason: reason.toString("utf-8") });
-    });
-  });
-}
+import { TyrumClient } from "../../../client/src/ws-client.js";
+import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
 describe("WS handler integration", () => {
   let server: Server | undefined;
+  let db: SqliteDb | undefined;
   let homeDir: string | undefined;
-  let clients: WebSocket[] = [];
+
+  beforeEach(() => {
+    // Ensure other test files don't leak fake timers into this integration suite.
+    vi.useRealTimers();
+  });
 
   afterEach(async () => {
-    for (const ws of clients) {
-      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-        ws.close();
-      }
-    }
-    clients = [];
-
     if (server) {
       await new Promise<void>((resolve) => {
         server!.close(() => resolve());
@@ -67,9 +32,13 @@ describe("WS handler integration", () => {
       await rm(homeDir, { recursive: true, force: true });
       homeDir = undefined;
     }
+
+    await db?.close();
+    db = undefined;
   });
 
   it("accepts connection, completes connect handshake, and registers client", async () => {
+    db = openTestSqliteDb();
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
     const tokenStore = new TokenStore(homeDir);
     const adminToken = await tokenStore.initialize();
@@ -79,6 +48,7 @@ describe("WS handler integration", () => {
       connectionManager,
       protocolDeps: { connectionManager },
       tokenStore,
+      db,
     });
 
     server = createServer();
@@ -93,27 +63,21 @@ describe("WS handler integration", () => {
       });
     });
 
-    const ws = new WebSocket(
-      `ws://127.0.0.1:${port}/ws`,
-      authProtocols(adminToken),
-    );
-    clients.push(ws);
-    await waitForOpen(ws);
-
     // Before connect, no clients should be registered
     expect(connectionManager.getStats().totalClients).toBe(0);
 
-    // Send connect handshake
-    ws.send(
-      JSON.stringify({
-        request_id: "r-1",
-        type: "connect",
-        payload: { capabilities: ["playwright"] },
-      }),
-    );
-
-    // Wait briefly for the server to process the connect
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    const client = new TyrumClient({
+      url: `ws://127.0.0.1:${port}/ws`,
+      token: adminToken,
+      capabilities: ["playwright"],
+      reconnect: false,
+      tyrumHome: homeDir,
+    });
+    const connectedP = new Promise<void>((resolve) => {
+      client.on("connected", () => resolve());
+    });
+    client.connect();
+    await connectedP;
 
     // After connect, client should be registered with the right capability
     const stats = connectionManager.getStats();
@@ -121,13 +85,15 @@ describe("WS handler integration", () => {
     expect(stats.capabilityCounts["playwright"]).toBe(1);
 
     // Verify we can find a client for the playwright capability
-    const client = connectionManager.getClientForCapability("playwright");
-    expect(client).toBeDefined();
+    const connectedClient = connectionManager.getClientForCapability("playwright");
+    expect(connectedClient).toBeDefined();
 
+    client.disconnect();
     stopHeartbeat();
   });
 
   it("rejects connection with invalid token", async () => {
+    db = openTestSqliteDb();
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
     const tokenStore = new TokenStore(homeDir);
     await tokenStore.initialize();
@@ -137,6 +103,7 @@ describe("WS handler integration", () => {
       connectionManager,
       protocolDeps: { connectionManager },
       tokenStore,
+      db,
     });
 
     server = createServer();
@@ -151,14 +118,20 @@ describe("WS handler integration", () => {
       });
     });
 
-    // Connect with bad token
-    const ws = new WebSocket(
-      `ws://127.0.0.1:${port}/ws`,
-      authProtocols("bad-token"),
-    );
-    clients.push(ws);
+    const client = new TyrumClient({
+      url: `ws://127.0.0.1:${port}/ws`,
+      token: "bad-token",
+      capabilities: [],
+      reconnect: false,
+      tyrumHome: homeDir,
+    });
 
-    const { code } = await waitForClose(ws);
+    const disconnectedP = new Promise<{ code: number; reason: string }>((resolve) => {
+      client.on("disconnected", resolve);
+    });
+
+    client.connect();
+    const { code } = await disconnectedP;
     expect(code).toBe(4001);
 
     stopHeartbeat();

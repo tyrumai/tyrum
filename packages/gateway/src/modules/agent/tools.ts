@@ -114,6 +114,18 @@ const BUILTIN_TOOL_REGISTRY: readonly ToolDescriptor[] = [
   },
 ];
 
+const BUILTIN_TOOL_ID_SET: ReadonlySet<string> = new Set(
+  BUILTIN_TOOL_REGISTRY.map((t) => t.id),
+);
+
+export function builtinToolDescriptors(): readonly ToolDescriptor[] {
+  return BUILTIN_TOOL_REGISTRY;
+}
+
+export function builtinToolIds(): ReadonlySet<string> {
+  return BUILTIN_TOOL_ID_SET;
+}
+
 export function isToolAllowed(allowlist: readonly string[], toolId: string): boolean {
   for (const entry of allowlist) {
     if (entry === "*") return true;

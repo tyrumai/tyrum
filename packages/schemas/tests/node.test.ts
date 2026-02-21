@@ -33,10 +33,9 @@ describe("EventScope", () => {
   it("parses key scope", () => {
     const scope = EventScope.parse({
       kind: "key",
-      key: "agent:agent-1:telegram-1:main",
+      key: "agent:agent-1:main",
       lane: "main",
     });
     expect(scope.kind).toBe("key");
   });
 });
-

@@ -1,6 +1,9 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { WebSocketServer } from "ws";
 import type { WebSocket as WsWebSocket } from "ws";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { TyrumClient } from "../src/ws-client.js";
 
 // ---------------------------------------------------------------------------
@@ -77,22 +80,44 @@ function waitForMessage(ws: WsWebSocket): Promise<unknown> {
   });
 }
 
-async function acceptConnect(ws: WsWebSocket, clientId = "client-1"): Promise<{ request_id: string }> {
-  const connect = (await waitForMessage(ws)) as Record<string, unknown>;
-  expect(connect["type"]).toBe("connect");
-  expect(typeof connect["request_id"]).toBe("string");
-  const requestId = String(connect["request_id"]);
+let connectionSeq = 0;
+
+async function acceptConnect(
+  ws: WsWebSocket,
+): Promise<{ connection_id: string; init: Record<string, unknown> }> {
+  const init = (await waitForMessage(ws)) as Record<string, unknown>;
+  expect(init["type"]).toBe("connect.init");
+  expect(typeof init["request_id"]).toBe("string");
+  const initRequestId = String(init["request_id"]);
+
+  connectionSeq += 1;
+  const connectionId = `conn-${connectionSeq}`;
+  const challenge = `nonce-${connectionSeq}`;
 
   ws.send(
     JSON.stringify({
-      request_id: requestId,
-      type: "connect",
+      request_id: initRequestId,
+      type: "connect.init",
       ok: true,
-      result: { client_id: clientId },
+      result: { connection_id: connectionId, challenge },
     }),
   );
 
-  return { request_id: requestId };
+  const proof = (await waitForMessage(ws)) as Record<string, unknown>;
+  expect(proof["type"]).toBe("connect.proof");
+  expect(typeof proof["request_id"]).toBe("string");
+  expect((proof["payload"] as Record<string, unknown>)["connection_id"]).toBe(connectionId);
+
+  ws.send(
+    JSON.stringify({
+      request_id: String(proof["request_id"]),
+      type: "connect.proof",
+      ok: true,
+      result: {},
+    }),
+  );
+
+  return { connection_id: connectionId, init };
 }
 
 /** Small delay helper. */
@@ -107,6 +132,14 @@ function delay(ms: number): Promise<void> {
 describe("TyrumClient", () => {
   let server: ReturnType<typeof createTestServer> | undefined;
   let client: TyrumClient | undefined;
+  let tyrumHome: string | undefined;
+  let prevTyrumHome: string | undefined;
+
+  beforeEach(async () => {
+    tyrumHome = await mkdtemp(join(tmpdir(), "tyrum-client-test-"));
+    prevTyrumHome = process.env["TYRUM_HOME"];
+    process.env["TYRUM_HOME"] = tyrumHome;
+  });
 
   afterEach(async () => {
     client?.disconnect();
@@ -115,6 +148,16 @@ describe("TyrumClient", () => {
       await server.close();
       server = undefined;
     }
+    if (tyrumHome) {
+      await rm(tyrumHome, { recursive: true, force: true });
+      tyrumHome = undefined;
+    }
+    if (prevTyrumHome === undefined) {
+      delete process.env["TYRUM_HOME"];
+    } else {
+      process.env["TYRUM_HOME"] = prevTyrumHome;
+    }
+    prevTyrumHome = undefined;
   });
 
   it("connects and sends hello with capabilities", async () => {
@@ -123,13 +166,18 @@ describe("TyrumClient", () => {
       url: server.url,
       token: "test-token",
       capabilities: ["playwright", "http"],
+      tyrumHome,
     });
 
     client.connect();
     const ws = await server.waitForClient();
-    const connect = (await waitForMessage(ws)) as Record<string, unknown>;
-    expect(connect["type"]).toBe("connect");
-    expect(connect["payload"]).toEqual({ capabilities: ["playwright", "http"] });
+    const { init } = await acceptConnect(ws);
+    expect((init["payload"] as Record<string, unknown>)["role"]).toBe("client");
+    expect((init["payload"] as Record<string, unknown>)["protocol_rev"]).toBe(1);
+    expect((init["payload"] as Record<string, unknown>)["capabilities"]).toEqual([
+      { name: "playwright" },
+      { name: "http" },
+    ]);
   });
 
   it("responds to ping with pong", async () => {
@@ -138,6 +186,7 @@ describe("TyrumClient", () => {
       url: server.url,
       token: "t",
       capabilities: [],
+      tyrumHome,
     });
 
     client.connect();
@@ -151,12 +200,109 @@ describe("TyrumClient", () => {
     expect(pong).toEqual({ request_id: "ping-1", type: "ping", ok: true });
   });
 
+  it("sessionSend sends session.send and returns the parsed result", async () => {
+    server = createTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: [],
+      tyrumHome,
+    });
+
+    const connectedP = new Promise<void>((resolve) => {
+      client!.on("connected", () => resolve());
+    });
+
+    client.connect();
+    const ws = await server.waitForClient();
+    await acceptConnect(ws);
+    await connectedP;
+
+    const sendP = client.sessionSend({
+      channel: "internal",
+      thread_id: "thread-1",
+      message: "hello",
+    });
+
+    const req = (await waitForMessage(ws)) as Record<string, unknown>;
+    expect(req["type"]).toBe("session.send");
+    const requestId = String(req["request_id"]);
+    ws.send(
+      JSON.stringify({
+        request_id: requestId,
+        type: "session.send",
+        ok: true,
+        result: {
+          reply: "hi",
+          session_id: "internal:thread-1",
+          used_tools: [],
+          memory_written: false,
+        },
+      }),
+    );
+
+    await expect(sendP).resolves.toEqual({
+      reply: "hi",
+      session_id: "internal:thread-1",
+      used_tools: [],
+      memory_written: false,
+    });
+  });
+
+  it("workflowRun sends workflow.run and returns the parsed result", async () => {
+    server = createTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: [],
+      tyrumHome,
+    });
+
+    const connectedP = new Promise<void>((resolve) => {
+      client!.on("connected", () => resolve());
+    });
+
+    client.connect();
+    const ws = await server.waitForClient();
+    await acceptConnect(ws);
+    await connectedP;
+
+    const runP = client.workflowRun({
+      key: "hook:00000000-0000-4000-8000-000000000001",
+      lane: "main",
+      pipeline: "steps:\n  - id: one\n    command: cli echo hello\n",
+    });
+
+    const req = (await waitForMessage(ws)) as Record<string, unknown>;
+    expect(req["type"]).toBe("workflow.run");
+    const requestId = String(req["request_id"]);
+    ws.send(
+      JSON.stringify({
+        request_id: requestId,
+        type: "workflow.run",
+        ok: true,
+        result: {
+          job_id: "job-1",
+          run_id: "00000000-0000-4000-8000-000000000002",
+          plan_id: `wf-${requestId}`,
+        },
+      }),
+    );
+
+    await expect(runP).resolves.toEqual({
+      job_id: "job-1",
+      run_id: "00000000-0000-4000-8000-000000000002",
+      plan_id: `wf-${requestId}`,
+    });
+  });
+
   it("emits task_dispatch event", async () => {
     server = createTestServer();
     client = new TyrumClient({
       url: server.url,
       token: "t",
       capabilities: ["http"],
+      tyrumHome,
     });
 
     const received = new Promise<unknown>((resolve) => {
@@ -171,8 +317,9 @@ describe("TyrumClient", () => {
       request_id: "task-1",
       type: "task.execute",
       payload: {
-        plan_id: "plan-1",
-        step_index: 0,
+        run_id: "00000000-0000-4000-8000-000000000001",
+        step_id: "00000000-0000-4000-8000-000000000002",
+        attempt_id: "00000000-0000-4000-8000-000000000003",
         action: { type: "Http", args: { url: "https://example.com" } },
       },
     };
@@ -189,6 +336,7 @@ describe("TyrumClient", () => {
       token: "t",
       capabilities: ["http"],
       reconnect: false,
+      tyrumHome,
     });
 
     client.connect();
@@ -200,8 +348,9 @@ describe("TyrumClient", () => {
         request_id: "task-bad-1",
         type: "task.execute",
         payload: {
-          plan_id: "plan-1",
-          step_index: "0",
+          run_id: "not-a-uuid",
+          step_id: "00000000-0000-4000-8000-000000000002",
+          attempt_id: "00000000-0000-4000-8000-000000000003",
           action: { type: "Http", args: { url: "https://example.com" } },
         },
       }),
@@ -313,6 +462,38 @@ describe("TyrumClient", () => {
 
     const msg = await received;
     expect(msg).toEqual(updateMsg);
+  });
+
+  it("emits pairing_approved event", async () => {
+    server = createTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: [],
+    });
+
+    const received = new Promise<unknown>((resolve) => {
+      client!.on("pairing_approved", resolve);
+    });
+
+    client.connect();
+    const ws = await server.waitForClient();
+    await acceptConnect(ws);
+
+    const approvedMsg = {
+      event_id: "evt-pair-1",
+      type: "pairing.approved",
+      occurred_at: "2026-02-19T12:00:00Z",
+      payload: {
+        node_id: "node-1",
+        scoped_token: "scoped-token-123",
+        capabilities: ["cli"],
+      },
+    };
+    ws.send(JSON.stringify(approvedMsg));
+
+    const msg = await received;
+    expect(msg).toEqual(approvedMsg);
   });
 
   it("emits error event for error messages", async () => {
@@ -454,34 +635,14 @@ describe("TyrumClient", () => {
 
     client.connect();
     const ws1 = await server.waitForClient();
-    const connect1 = (await waitForMessage(ws1)) as Record<string, unknown>;
-    expect(connect1["type"]).toBe("connect");
-    expect(connect1["payload"]).toEqual({ capabilities: ["cli"] });
-    ws1.send(
-      JSON.stringify({
-        request_id: String(connect1["request_id"]),
-        type: "connect",
-        ok: true,
-        result: { client_id: "client-1" },
-      }),
-    );
+    await acceptConnect(ws1);
 
     // Force-close from server (1001 = "going away" — 1006 is reserved)
     ws1.close(1001, "gone");
 
     // Client should reconnect — wait for a second connection
     const ws2 = await server.waitForClient();
-    const connect2 = (await waitForMessage(ws2)) as Record<string, unknown>;
-    expect(connect2["type"]).toBe("connect");
-    expect(connect2["payload"]).toEqual({ capabilities: ["cli"] });
-    ws2.send(
-      JSON.stringify({
-        request_id: String(connect2["request_id"]),
-        type: "connect",
-        ok: true,
-        result: { client_id: "client-2" },
-      }),
-    );
+    await acceptConnect(ws2);
   });
 
   it("sends token in websocket subprotocol metadata", async () => {

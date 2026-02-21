@@ -16,7 +16,7 @@ describe("Approval contracts", () => {
       prompt: "Approve deployment?",
       context: { env: "prod" },
       scope: {
-        key: "agent:agent-1:telegram-1:main",
+        key: "agent:agent-1:main",
         lane: "main",
         run_id: "run-123",
         step_index: 2,
@@ -52,4 +52,3 @@ describe("Approval contracts", () => {
     expect(ApprovalKind.options).toContain("workflow_step");
   });
 });
-

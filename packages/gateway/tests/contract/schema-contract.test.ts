@@ -63,6 +63,8 @@ describe("StateStore schema contract (sqlite vs postgres)", () => {
         "lane_leases",
         "idempotency_records",
         "resume_tokens",
+        "channel_inbound_messages",
+        "channel_outbound_sends",
       ] as const;
 
       for (const table of tables) {
@@ -76,4 +78,3 @@ describe("StateStore schema contract (sqlite vs postgres)", () => {
     }
   });
 });
-

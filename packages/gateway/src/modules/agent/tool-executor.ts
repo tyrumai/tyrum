@@ -11,6 +11,8 @@ import { tagContent } from "./provenance.js";
 import { sanitizeForModel } from "./sanitizer.js";
 import type { SecretProvider } from "../secret/provider.js";
 import type { RedactionEngine } from "../redaction/engine.js";
+import type { EventLog } from "../planner/event-log.js";
+import type { PluginToolHandler } from "../plugins/manager.js";
 
 const MAX_RESPONSE_BYTES = 32_768;
 const HTTP_TIMEOUT_MS = 30_000;
@@ -304,7 +306,15 @@ export interface ToolResult {
   provenance?: TaggedContent;
 }
 
+export interface ToolExecutorAudit {
+  planId: string;
+  eventLog: EventLog;
+}
+
 export class ToolExecutor {
+  private auditStepIndex = 1_000_000_000;
+  private readonly pluginHandlers?: ReadonlyMap<string, PluginToolHandler>;
+
   constructor(
     private readonly home: string,
     private readonly mcpManager: McpManager,
@@ -313,7 +323,11 @@ export class ToolExecutor {
     private readonly secretProvider?: SecretProvider,
     private readonly dnsLookup: DnsLookupFn = defaultDnsLookup,
     private readonly redactionEngine?: RedactionEngine,
-  ) {}
+    private readonly audit?: ToolExecutorAudit,
+    pluginHandlers?: ReadonlyMap<string, PluginToolHandler>,
+  ) {
+    this.pluginHandlers = pluginHandlers;
+  }
 
   async execute(
     toolId: string,
@@ -322,7 +336,7 @@ export class ToolExecutor {
   ): Promise<ToolResult> {
     try {
       // Resolve secret handle references in args
-      const { resolved: resolvedArgs, secrets } = await this.resolveSecrets(args);
+      const { resolved: resolvedArgs, secrets } = await this.resolveSecrets(args, { toolId, toolCallId });
       this.redactionEngine?.registerSecrets(secrets);
 
       let result: ToolResult;
@@ -351,6 +365,23 @@ export class ToolExecutor {
             };
             break;
           default:
+            if (this.pluginHandlers?.has(toolId)) {
+              const handler = this.pluginHandlers.get(toolId);
+              if (handler) {
+                const out = await handler(resolvedArgs);
+                if (typeof out === "string") {
+                  result = { tool_call_id: toolCallId, output: out };
+                } else {
+                  result = {
+                    tool_call_id: toolCallId,
+                    output: out.output ?? "",
+                    error: out.error,
+                    provenance: out.provenance,
+                  };
+                }
+                break;
+              }
+            }
             result = {
               tool_call_id: toolCallId,
               output: "",
@@ -686,6 +717,7 @@ export class ToolExecutor {
    */
   private async resolveSecrets(
     args: unknown,
+    ctx: { toolId: string; toolCallId: string },
   ): Promise<{ resolved: unknown; secrets: string[] }> {
     if (!this.secretProvider) {
       return { resolved: args, secrets: [] };
@@ -700,9 +732,12 @@ export class ToolExecutor {
         // scope (needed by EnvSecretProvider) is populated correctly.
         const allHandles = await this.secretProvider!.list();
         const handle = allHandles.find((h) => h.handle_id === handleId);
-        const resolved = handle
-          ? await this.secretProvider!.resolve(handle)
-          : null;
+        const resolved = handle ? await this.secretProvider!.resolve(handle) : null;
+        await this.auditSecretResolution(ctx, {
+          handleId,
+          handle,
+          outcome: resolved !== null ? "resolved" : "unresolved",
+        });
         if (resolved !== null) {
           secrets.push(resolved);
           return resolved;
@@ -725,6 +760,34 @@ export class ToolExecutor {
 
     const resolved = await walk(args);
     return { resolved, secrets };
+  }
+
+  private async auditSecretResolution(
+    ctx: { toolId: string; toolCallId: string },
+    input: {
+      handleId: string;
+      handle?: { provider: string; scope: string } | undefined;
+      outcome: "resolved" | "unresolved";
+    },
+  ): Promise<void> {
+    if (!this.audit) return;
+
+    const stepIndex = this.auditStepIndex++;
+    await this.audit.eventLog.append({
+      replayId: `secret-resolution-${ctx.toolCallId}-${input.handleId}-${String(stepIndex)}`,
+      planId: this.audit.planId,
+      stepIndex,
+      occurredAt: new Date().toISOString(),
+      action: {
+        type: "secret.resolution",
+        tool_id: ctx.toolId,
+        tool_call_id: ctx.toolCallId,
+        handle_id: input.handleId,
+        provider: input.handle?.provider ?? null,
+        scope: input.handle?.scope ?? null,
+        outcome: input.outcome,
+      },
+    });
   }
 
   /** Replace all occurrences of secret values in text with [REDACTED]. */

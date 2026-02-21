@@ -45,7 +45,16 @@ function makeClient(
   capabilities: string[],
 ): { id: string; ws: MockWebSocket } {
   const ws = createMockWs();
-  const id = cm.addClient(ws as never, capabilities as never);
+  const id = `conn-${crypto.randomUUID()}`;
+  const instanceId = `dev-${"a".repeat(8)}`;
+  cm.addClient({
+    connectionId: id,
+    ws: ws as never,
+    role: "client",
+    instanceId,
+    device: { device_id: instanceId, pubkey: "pubkey" },
+    capabilities: capabilities as never,
+  });
   return { id, ws };
 }
 
@@ -54,26 +63,26 @@ function makeClient(
 // ---------------------------------------------------------------------------
 
 describe("handleClientMessage", () => {
-  it("returns error for invalid JSON", () => {
+  it("returns error for invalid JSON", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
     const deps = makeDeps(cm);
 
-    const result = handleClientMessage(client, "not json{{{", deps);
+    const result = await handleClientMessage(client, "not json{{{", deps);
     expect(result).toBeDefined();
     expect(result!.type).toBe("error");
     const payload = (result as unknown as { payload: { code: string } }).payload;
     expect(payload.code).toBe("invalid_json");
   });
 
-  it("returns error for invalid message schema", () => {
+  it("returns error for invalid message schema", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
     const deps = makeDeps(cm);
 
-    const result = handleClientMessage(
+    const result = await handleClientMessage(
       client,
       JSON.stringify({ type: "unknown_type" }),
       deps,
@@ -84,15 +93,15 @@ describe("handleClientMessage", () => {
     expect(payload.code).toBe("invalid_message");
   });
 
-  it("returns error response for client-sent request envelopes", () => {
+  it("returns error response for client-sent request envelopes", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
     const deps = makeDeps(cm);
 
-    const result = handleClientMessage(
+    const result = await handleClientMessage(
       client,
-      JSON.stringify({ request_id: "r-1", type: "connect", payload: { capabilities: ["playwright"] } }),
+      JSON.stringify({ request_id: "r-1", type: "connect.init", payload: {} }),
       deps,
     );
     expect(result).toBeDefined();
@@ -102,14 +111,87 @@ describe("handleClientMessage", () => {
     );
   });
 
-  it("dispatches task.execute response to callback", () => {
+  it("handles session.send by calling the agent runtime", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["playwright"]);
+    const client = cm.getClient(id)!;
+
+    const turn = vi.fn().mockResolvedValue({
+      reply: "hi",
+      session_id: "internal:thread-1",
+      used_tools: [],
+      memory_written: false,
+    });
+
+    const deps = makeDeps(cm, {
+      agentRuntime: { turn } as never,
+    });
+
+    const result = await handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "r-session-1",
+        type: "session.send",
+        payload: { channel: "internal", thread_id: "thread-1", message: "hello" },
+      }),
+      deps,
+    );
+
+    expect(result).toBeDefined();
+    expect((result as unknown as { ok: boolean }).ok).toBe(true);
+    expect(turn).toHaveBeenCalledTimes(1);
+  });
+
+  it("handles workflow.run by enqueuing an execution plan", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["playwright"]);
+    const client = cm.getClient(id)!;
+
+    const enqueuePlan = vi.fn().mockResolvedValue({
+      jobId: "job-1",
+      runId: "00000000-0000-4000-8000-000000000001",
+    });
+
+    const deps = makeDeps(cm, {
+      executionEngine: {
+        enqueuePlan,
+        resumeRun: vi.fn(),
+        cancelRunByResumeToken: vi.fn(),
+        cancelRun: vi.fn(),
+      } as never,
+    });
+
+    const result = await handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "r-workflow-run-1",
+        type: "workflow.run",
+        payload: {
+          key: "hook:00000000-0000-4000-8000-000000000002",
+          lane: "main",
+          pipeline: `id: demo\nname: Demo\nversion: 0.0.0\nsteps:\n  - id: one\n    command: cli echo hello\n`,
+        },
+      }),
+      deps,
+    );
+
+    expect(result).toBeDefined();
+    expect((result as unknown as { ok: boolean }).ok).toBe(true);
+    const ok = result as unknown as { result: { job_id: string; run_id: string; plan_id: string } };
+    expect(ok.result.job_id).toBe("job-1");
+    expect(ok.result.run_id).toBe("00000000-0000-4000-8000-000000000001");
+    expect(ok.result.plan_id.startsWith("wf-")).toBe(true);
+    expect(enqueuePlan).toHaveBeenCalledTimes(1);
+  });
+
+  it("dispatches task.execute response to callback", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
     const onTaskResult = vi.fn();
     const deps = makeDeps(cm, { onTaskResult });
 
-    const result = handleClientMessage(
+    const result = await handleClientMessage(
       client,
       JSON.stringify({
         request_id: "t-1",
@@ -129,14 +211,14 @@ describe("handleClientMessage", () => {
     );
   });
 
-  it("dispatches task.execute error response", () => {
+  it("dispatches task.execute error response", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["cli"]);
     const client = cm.getClient(id)!;
     const onTaskResult = vi.fn();
     const deps = makeDeps(cm, { onTaskResult });
 
-    handleClientMessage(
+    await handleClientMessage(
       client,
       JSON.stringify({
         request_id: "t-2",
@@ -155,14 +237,14 @@ describe("handleClientMessage", () => {
     );
   });
 
-  it("dispatches task.execute error response evidence from error details", () => {
+  it("dispatches task.execute error response evidence from error details", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["cli"]);
     const client = cm.getClient(id)!;
     const onTaskResult = vi.fn();
     const deps = makeDeps(cm, { onTaskResult });
 
-    handleClientMessage(
+    await handleClientMessage(
       client,
       JSON.stringify({
         request_id: "t-3",
@@ -187,14 +269,14 @@ describe("handleClientMessage", () => {
     );
   });
 
-  it("dispatches approval.request decision to callback", () => {
+  it("dispatches approval.request decision to callback", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
     const onApprovalDecision = vi.fn();
     const deps = makeDeps(cm, { onApprovalDecision });
 
-    const result = handleClientMessage(
+    const result = await handleClientMessage(
       client,
       JSON.stringify({
         request_id: "approval-123",
@@ -209,14 +291,14 @@ describe("handleClientMessage", () => {
     expect(onApprovalDecision).toHaveBeenCalledWith(123, true, undefined);
   });
 
-  it("dispatches approval.request rejection with reason", () => {
+  it("dispatches approval.request rejection with reason", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
     const onApprovalDecision = vi.fn();
     const deps = makeDeps(cm, { onApprovalDecision });
 
-    handleClientMessage(
+    await handleClientMessage(
       client,
       JSON.stringify({
         request_id: "approval-124",
@@ -230,14 +312,14 @@ describe("handleClientMessage", () => {
     expect(onApprovalDecision).toHaveBeenCalledWith(124, false, "too risky");
   });
 
-  it("does not auto-deny approval.request when client responds ok:false", () => {
+  it("does not auto-deny approval.request when client responds ok:false", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
     const onApprovalDecision = vi.fn();
     const deps = makeDeps(cm, { onApprovalDecision });
 
-    const result = handleClientMessage(
+    const result = await handleClientMessage(
       client,
       JSON.stringify({
         request_id: "approval-200",
@@ -258,14 +340,14 @@ describe("handleClientMessage", () => {
     expect(payload.message).toContain("payload validation failed");
   });
 
-  it("returns error when approval.request ok payload is invalid", () => {
+  it("returns error when approval.request ok payload is invalid", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
     const onApprovalDecision = vi.fn();
     const deps = makeDeps(cm, { onApprovalDecision });
 
-    const result = handleClientMessage(
+    const result = await handleClientMessage(
       client,
       JSON.stringify({
         request_id: "approval-125",
@@ -283,7 +365,7 @@ describe("handleClientMessage", () => {
     expect(payload.code).toBe("invalid_approval_decision");
   });
 
-  it("updates lastPong on ping response", () => {
+  it("updates lastPong on ping response", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
     const client = cm.getClient(id)!;
@@ -293,7 +375,7 @@ describe("handleClientMessage", () => {
     client.lastPong = 1000;
 
     const before = Date.now();
-    const result = handleClientMessage(
+    const result = await handleClientMessage(
       client,
       JSON.stringify({ request_id: "ping-1", type: "ping", ok: true }),
       deps,
@@ -321,7 +403,15 @@ describe("dispatchTask", () => {
       args: { url: "https://example.com" },
     };
 
-    const taskId = await dispatchTask(action, "plan-1", 0, deps);
+    const taskId = await dispatchTask(
+      action,
+      {
+        runId: "00000000-0000-4000-8000-000000000001",
+        stepId: "00000000-0000-4000-8000-000000000002",
+        attemptId: "00000000-0000-4000-8000-000000000003",
+      },
+      deps,
+    );
     expect(taskId).toMatch(/^task-[0-9a-f-]{36}$/);
 
     expect(ws.send).toHaveBeenCalledOnce();
@@ -333,8 +423,9 @@ describe("dispatchTask", () => {
       request_id: taskId,
       type: "task.execute",
       payload: {
-        plan_id: "plan-1",
-        step_index: 0,
+        run_id: "00000000-0000-4000-8000-000000000001",
+        step_id: "00000000-0000-4000-8000-000000000002",
+        attempt_id: "00000000-0000-4000-8000-000000000003",
         action: { type: "Web", args: { url: "https://example.com" } },
       },
     });
@@ -350,7 +441,11 @@ describe("dispatchTask", () => {
       args: {},
     };
 
-    expect(() => dispatchTask(action, "plan-1", 0, deps)).toThrow(
+    expect(() => dispatchTask(action, {
+      runId: "00000000-0000-4000-8000-000000000001",
+      stepId: "00000000-0000-4000-8000-000000000002",
+      attemptId: "00000000-0000-4000-8000-000000000003",
+    }, deps)).toThrow(
       NoCapableClientError,
     );
   });
@@ -364,7 +459,11 @@ describe("dispatchTask", () => {
       args: {},
     };
 
-    expect(() => dispatchTask(action, "plan-1", 0, deps)).toThrow(
+    expect(() => dispatchTask(action, {
+      runId: "00000000-0000-4000-8000-000000000001",
+      stepId: "00000000-0000-4000-8000-000000000002",
+      attemptId: "00000000-0000-4000-8000-000000000003",
+    }, deps)).toThrow(
       NoCapableClientError,
     );
   });
@@ -380,7 +479,11 @@ describe("dispatchTask", () => {
       args: {},
     };
 
-    expect(() => dispatchTask(action, "plan-1", 0, deps)).toThrow(
+    expect(() => dispatchTask(action, {
+      runId: "00000000-0000-4000-8000-000000000001",
+      stepId: "00000000-0000-4000-8000-000000000002",
+      attemptId: "00000000-0000-4000-8000-000000000003",
+    }, deps)).toThrow(
       NoCapableClientError,
     );
   });

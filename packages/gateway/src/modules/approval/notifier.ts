@@ -6,8 +6,10 @@
  */
 
 import type { ProtocolDeps } from "../../ws/protocol.js";
-import { requestApproval } from "../../ws/protocol.js";
+import { publishEvent, requestApproval } from "../../ws/protocol.js";
+import { randomUUID } from "node:crypto";
 import type { ApprovalRow } from "./dal.js";
+import { runIdFromContext, toSchemaApproval } from "./schema.js";
 
 /**
  * An ApprovalNotifier sends a notification about a pending approval
@@ -26,6 +28,40 @@ export class WsNotifier implements ApprovalNotifier {
   constructor(private readonly protocolDeps: ProtocolDeps) {}
 
   notify(approval: ApprovalRow): void {
+    const nowIso = new Date().toISOString();
+    const schemaApproval = toSchemaApproval(approval);
+
+    // Emit an approval.requested event for observability (best-effort).
+    publishEvent(
+      {
+        event_id: randomUUID(),
+        type: "approval.requested",
+        occurred_at: nowIso,
+        payload: { approval: schemaApproval },
+      },
+      this.protocolDeps,
+      { targetRole: "client" },
+    );
+
+    const runId = runIdFromContext(approval.context);
+    if (runId) {
+      publishEvent(
+        {
+          event_id: randomUUID(),
+          type: "run.paused",
+          occurred_at: nowIso,
+          payload: {
+            run_id: runId,
+            reason: "approval",
+            detail: approval.prompt,
+            approval_id: approval.id,
+          },
+        },
+        this.protocolDeps,
+        { targetRole: "client" },
+      );
+    }
+
     requestApproval(
       {
         approval_id: approval.id,

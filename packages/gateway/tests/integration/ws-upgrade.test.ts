@@ -21,6 +21,7 @@ import { createWsHandler } from "../../src/routes/ws.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { TyrumClient } from "../../../client/src/ws-client.js";
+import type { SqlDb } from "../../src/statestore/types.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -31,7 +32,7 @@ function delay(ms: number): Promise<void> {
 }
 
 /** Start a real HTTP server with WebSocket upgrade on a random port. */
-async function startServer(app: Hono): Promise<{
+async function startServer(app: Hono, db: SqlDb): Promise<{
   server: Server;
   port: number;
   adminToken: string;
@@ -48,6 +49,7 @@ async function startServer(app: Hono): Promise<{
     connectionManager,
     protocolDeps: { connectionManager },
     tokenStore,
+    db,
   });
 
   const requestListener = getRequestListener(app.fetch);
@@ -97,8 +99,8 @@ describe("WebSocket upgrade", () => {
   });
 
   it("connects via WebSocket and completes hello handshake", async () => {
-    const { app } = await createTestApp();
-    const srv = await startServer(app);
+    const { app, container } = await createTestApp();
+    const srv = await startServer(app, container.db);
     httpServer = srv.server;
     tokenHome = srv.tokenHome;
     stopHeartbeat = srv.stopHeartbeat;
@@ -108,6 +110,7 @@ describe("WebSocket upgrade", () => {
       token: srv.adminToken,
       capabilities: ["playwright", "http"],
       reconnect: false,
+      tyrumHome: srv.tokenHome,
     });
 
     const connectedP = new Promise<void>((resolve) => {
@@ -141,6 +144,7 @@ describe("WebSocket upgrade", () => {
       token: srv.adminToken,
       capabilities: ["cli"],
       reconnect: false,
+      tyrumHome: srv.tokenHome,
     });
 
     const connectedP = new Promise<void>((resolve) => {
@@ -205,6 +209,7 @@ describe("WebSocket upgrade", () => {
       token: srv.adminToken,
       capabilities: ["http"],
       reconnect: false,
+      tyrumHome: srv.tokenHome,
     });
 
     const connectedP = new Promise<void>((resolve) => {

@@ -2,10 +2,16 @@ import type {
   ActionPrimitive as ActionPrimitiveT,
   ArtifactRef as ArtifactRefT,
   AttemptCost as AttemptCostT,
+  ProvenanceTag as ProvenanceTagT,
 } from "@tyrum/schemas";
 import { evaluatePostcondition, PostconditionError } from "@tyrum/schemas";
 import type { EvaluationContext } from "@tyrum/schemas";
+import { ProvenanceTag, TyrumKey, parseTyrumKey } from "@tyrum/schemas";
 import { randomUUID } from "node:crypto";
+import { evaluateAction } from "../policy-bundle/evaluate.js";
+import { PolicyBundleService } from "../policy-bundle/service.js";
+import { ApprovalDal } from "../approval/dal.js";
+import type { ApprovalNotifier } from "../approval/notifier.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { Logger } from "../observability/logger.js";
 import type { SqlDb } from "../../statestore/types.js";
@@ -41,6 +47,8 @@ export interface EnqueuePlanInput {
   planId: string;
   requestId: string;
   steps: ActionPrimitiveT[];
+  playbookId?: string;
+  provenanceSources?: ProvenanceTagT[];
 }
 
 export interface EnqueuePlanResult {
@@ -66,6 +74,8 @@ interface RunnableRunRow {
   key: string;
   lane: string;
   status: "queued" | "running";
+  policy_snapshot_id: string | null;
+  policy_snapshot_hash: string | null;
   trigger_json: string;
   workspace_id: string;
 }
@@ -77,9 +87,16 @@ interface StepRow {
   action_json: string;
   idempotency_key: string | null;
   postcondition_json: string | null;
+  approval_id: number | null;
   max_attempts: number;
   timeout_ms: number;
 }
+
+const NOOP_APPROVAL_NOTIFIER: ApprovalNotifier = {
+  notify(_approval) {
+    // no-op
+  },
+};
 
 function defaultClock(): ExecutionClock {
   const now = new Date();
@@ -104,22 +121,72 @@ function parsePlanIdFromTriggerJson(triggerJson: string): string | undefined {
   return undefined;
 }
 
+function parsePolicyContextFromTriggerJson(triggerJson: string): {
+  agentId?: string;
+  playbookId?: string;
+  provenanceSources?: ProvenanceTagT[];
+} {
+  try {
+    const parsed = JSON.parse(triggerJson) as unknown;
+    if (!parsed || typeof parsed !== "object") return {};
+    const metadata = (parsed as Record<string, unknown>)["metadata"];
+    if (!metadata || typeof metadata !== "object") return {};
+
+    const record = metadata as Record<string, unknown>;
+    const agentId = typeof record["agent_id"] === "string" ? record["agent_id"] : undefined;
+    const playbookId = typeof record["playbook_id"] === "string" ? record["playbook_id"] : undefined;
+    const rawSources = record["provenance_sources"];
+    const sources = Array.isArray(rawSources) ? rawSources : undefined;
+    const parsedSources = sources
+      ? sources
+          .map((s) => (typeof s === "string" ? s : undefined))
+          .filter((s): s is ProvenanceTagT => (s ? ProvenanceTag.safeParse(s).success : false))
+      : undefined;
+
+    return {
+      agentId,
+      playbookId,
+      provenanceSources: parsedSources && parsedSources.length > 0 ? parsedSources : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+function tryParseAgentIdFromKey(key: string): string | undefined {
+  const parsed = TyrumKey.safeParse(key);
+  if (!parsed.success) return undefined;
+  try {
+    const res = parseTyrumKey(parsed.data);
+    return res.kind === "agent" ? res.agent_id : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export class ExecutionEngine {
   private readonly db: SqlDb;
   private readonly clock: ClockFn;
   private readonly redactionEngine?: RedactionEngine;
   private readonly logger?: Logger;
+  private readonly policyBundleService: PolicyBundleService;
+  private readonly approvalNotifier: ApprovalNotifier;
 
   constructor(opts: {
     db: SqlDb;
     clock?: ClockFn;
     redactionEngine?: RedactionEngine;
     logger?: Logger;
+    policyBundleService?: PolicyBundleService;
+    approvalNotifier?: ApprovalNotifier;
   }) {
     this.db = opts.db;
     this.clock = opts.clock ?? defaultClock;
     this.redactionEngine = opts.redactionEngine;
     this.logger = opts.logger;
+    this.policyBundleService =
+      opts.policyBundleService ?? new PolicyBundleService(opts.db, { logger: opts.logger });
+    this.approvalNotifier = opts.approvalNotifier ?? NOOP_APPROVAL_NOTIFIER;
   }
 
   private redactUnknown<T>(value: T): T {
@@ -133,8 +200,30 @@ export class ExecutionEngine {
   }
 
   async enqueuePlan(input: EnqueuePlanInput): Promise<EnqueuePlanResult> {
+    const existing = await this.db.get<{ job_id: string; latest_run_id: string | null }>(
+      "SELECT job_id, latest_run_id FROM execution_jobs WHERE request_id = ?",
+      [input.requestId],
+    );
+    if (existing?.latest_run_id) {
+      this.logger?.info("execution.enqueue.idempotent", {
+        request_id: input.requestId,
+        plan_id: input.planId,
+        job_id: existing.job_id,
+        run_id: existing.latest_run_id,
+        key: input.key,
+        lane: input.lane,
+      });
+      return { jobId: existing.job_id, runId: existing.latest_run_id };
+    }
+
     const jobId = randomUUID();
     const runId = randomUUID();
+    const agentId = tryParseAgentIdFromKey(input.key);
+    const snapshot = await this.policyBundleService.getOrCreateSnapshot({
+      agentId,
+      playbookId: input.playbookId,
+      createdBy: input.planId,
+    });
 
     const trigger = {
       kind: "session",
@@ -143,6 +232,9 @@ export class ExecutionEngine {
       metadata: {
         plan_id: input.planId,
         request_id: input.requestId,
+        agent_id: agentId ?? null,
+        playbook_id: input.playbookId ?? null,
+        provenance_sources: input.provenanceSources ?? null,
       },
     };
 
@@ -152,43 +244,71 @@ export class ExecutionEngine {
       request_id: input.requestId,
     });
 
-    await this.db.transaction(async (tx) => {
-      await tx.run(
-        `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json, input_json, latest_run_id)
-         VALUES (?, ?, ?, 'queued', ?, ?, ?)`,
-        [jobId, input.key, input.lane, triggerJson, inputJson, runId],
-      );
-
-      await tx.run(
-        `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
-         VALUES (?, ?, ?, ?, 'queued', 1)`,
-        [runId, jobId, input.key, input.lane],
-      );
-
-      for (let idx = 0; idx < input.steps.length; idx += 1) {
-        const stepId = randomUUID();
-        const action = input.steps[idx]!;
+    try {
+      await this.db.transaction(async (tx) => {
         await tx.run(
-          `INSERT INTO execution_steps (
-             step_id,
-             run_id,
-             step_index,
-             status,
-             action_json,
-             idempotency_key,
-             postcondition_json
-           ) VALUES (?, ?, ?, 'queued', ?, ?, ?)`,
-          [
-            stepId,
-            runId,
-            idx,
-            JSON.stringify(action),
-            action.idempotency_key ?? null,
-            action.postcondition ? JSON.stringify(action.postcondition) : null,
-          ],
+          `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json, input_json, latest_run_id, request_id)
+           VALUES (?, ?, ?, 'queued', ?, ?, ?, ?)`,
+          [jobId, input.key, input.lane, triggerJson, inputJson, runId, input.requestId],
         );
+
+        await tx.run(
+          `INSERT INTO execution_runs (
+             run_id,
+             job_id,
+             key,
+             lane,
+             status,
+             attempt,
+             policy_snapshot_id,
+             policy_snapshot_hash
+           )
+           VALUES (?, ?, ?, ?, 'queued', 1, ?, ?)`,
+          [runId, jobId, input.key, input.lane, snapshot.policySnapshotId, snapshot.contentHash],
+        );
+
+        for (let idx = 0; idx < input.steps.length; idx += 1) {
+          const stepId = randomUUID();
+          const action = input.steps[idx]!;
+          await tx.run(
+            `INSERT INTO execution_steps (
+               step_id,
+               run_id,
+               step_index,
+               status,
+               action_json,
+               idempotency_key,
+               postcondition_json
+             ) VALUES (?, ?, ?, 'queued', ?, ?, ?)`,
+            [
+              stepId,
+              runId,
+              idx,
+              JSON.stringify(action),
+              action.idempotency_key ?? null,
+              action.postcondition ? JSON.stringify(action.postcondition) : null,
+            ],
+          );
+        }
+      });
+    } catch (err) {
+      const current = await this.db.get<{ job_id: string; latest_run_id: string | null }>(
+        "SELECT job_id, latest_run_id FROM execution_jobs WHERE request_id = ?",
+        [input.requestId],
+      );
+      if (current?.latest_run_id) {
+        this.logger?.info("execution.enqueue.idempotent", {
+          request_id: input.requestId,
+          plan_id: input.planId,
+          job_id: current.job_id,
+          run_id: current.latest_run_id,
+          key: input.key,
+          lane: input.lane,
+        });
+        return { jobId: current.job_id, runId: current.latest_run_id };
       }
-    });
+      throw err;
+    }
     this.logger?.info("execution.enqueue", {
       request_id: input.requestId,
       plan_id: input.planId,
@@ -235,6 +355,27 @@ export class ExecutionEngine {
         }
       }
 
+      const pausedStep = await tx.get<{ approval_id: number | null }>(
+        `SELECT approval_id
+         FROM execution_steps
+         WHERE run_id = ? AND status = 'paused'
+         ORDER BY step_index ASC
+         LIMIT 1`,
+        [row.run_id],
+      );
+
+      if (pausedStep?.approval_id) {
+        const approval = await tx.get<{ status: string }>(
+          "SELECT status FROM approvals WHERE id = ?",
+          [pausedStep.approval_id],
+        );
+        if (approval?.status !== "approved") {
+          // Approval-gated pause: do not revoke the token so it can be used
+          // after the approval is resolved.
+          return undefined;
+        }
+      }
+
       await tx.run(
         `UPDATE resume_tokens
          SET revoked_at = ?
@@ -260,6 +401,174 @@ export class ExecutionEngine {
     });
   }
 
+  /**
+   * Cancel a paused run using an opaque resume token.
+   *
+   * Returns the cancelled run id on success, otherwise `undefined`.
+   *
+   * Note: cancellation is currently supported for paused runs only (to avoid
+   * racing in-flight attempt execution without cooperative cancellation).
+   */
+  async cancelRunByResumeToken(token: string, reason?: string): Promise<string | undefined> {
+    const { nowIso } = this.clock();
+    return await this.db.transaction(async (tx) => {
+      const row = await tx.get<ResumeTokenRow>(
+        `SELECT token, run_id, expires_at, revoked_at
+         FROM resume_tokens
+         WHERE token = ?`,
+        [token],
+      );
+      if (!row) return undefined;
+
+      if (row.expires_at) {
+        const expiresAtMs =
+          row.expires_at instanceof Date
+            ? row.expires_at.getTime()
+            : Date.parse(row.expires_at);
+        if (Number.isFinite(expiresAtMs) && Date.now() > expiresAtMs) {
+          await tx.run(
+            `UPDATE resume_tokens
+             SET revoked_at = ?
+             WHERE token = ? AND revoked_at IS NULL`,
+            [nowIso, token],
+          );
+          return undefined;
+        }
+      }
+
+      const run = await tx.get<{ run_id: string; job_id: string; status: string }>(
+        `SELECT run_id, job_id, status
+         FROM execution_runs
+         WHERE run_id = ?`,
+        [row.run_id],
+      );
+      if (!run) return undefined;
+
+      if (run.status === "cancelled") {
+        await tx.run(
+          `UPDATE resume_tokens
+           SET revoked_at = ?
+           WHERE run_id = ? AND revoked_at IS NULL`,
+          [nowIso, run.run_id],
+        );
+        return run.run_id;
+      }
+
+      if (run.status !== "paused") {
+        return undefined;
+      }
+
+      await tx.run(
+        `UPDATE resume_tokens
+         SET revoked_at = ?
+         WHERE run_id = ? AND revoked_at IS NULL`,
+        [nowIso, run.run_id],
+      );
+
+      await tx.run(
+        `UPDATE execution_steps
+         SET status = 'cancelled'
+         WHERE run_id = ? AND status IN ('queued', 'paused')`,
+        [run.run_id],
+      );
+
+      await tx.run(
+        `UPDATE execution_runs
+         SET status = 'cancelled', finished_at = ?, paused_reason = NULL, paused_detail = NULL
+         WHERE run_id = ? AND status = 'paused'`,
+        [nowIso, run.run_id],
+      );
+
+      await tx.run(
+        `UPDATE execution_jobs
+         SET status = 'cancelled'
+         WHERE job_id = ? AND status IN ('queued', 'running')`,
+        [run.job_id],
+      );
+
+      if (reason && reason.trim().length > 0) {
+        this.logger?.info("execution.cancelled", {
+          run_id: run.run_id,
+          job_id: run.job_id,
+          reason: this.redactText(reason),
+        });
+      } else {
+        this.logger?.info("execution.cancelled", { run_id: run.run_id, job_id: run.job_id });
+      }
+
+      return run.run_id;
+    });
+  }
+
+  /**
+   * Cancel a run by id.
+   *
+   * Returns the cancelled run id on success, otherwise `undefined`.
+   */
+  async cancelRun(runId: string, reason?: string): Promise<string | undefined> {
+    const { nowIso } = this.clock();
+    return await this.db.transaction(async (tx) => {
+      const run = await tx.get<{ run_id: string; job_id: string; status: string }>(
+        `SELECT run_id, job_id, status
+         FROM execution_runs
+         WHERE run_id = ?`,
+        [runId],
+      );
+      if (!run) return undefined;
+
+      if (run.status === "cancelled") return run.run_id;
+
+      if (run.status === "running") {
+        // Avoid racing in-flight attempts without cooperative cancellation.
+        return undefined;
+      }
+
+      if (run.status !== "paused" && run.status !== "queued") {
+        return undefined;
+      }
+
+      await tx.run(
+        `UPDATE resume_tokens
+         SET revoked_at = ?
+         WHERE run_id = ? AND revoked_at IS NULL`,
+        [nowIso, run.run_id],
+      );
+
+      await tx.run(
+        `UPDATE execution_steps
+         SET status = 'cancelled'
+         WHERE run_id = ? AND status IN ('queued', 'paused')`,
+        [run.run_id],
+      );
+
+      await tx.run(
+        `UPDATE execution_runs
+         SET status = 'cancelled', finished_at = ?, paused_reason = NULL, paused_detail = NULL
+         WHERE run_id = ? AND status IN ('paused', 'queued')`,
+        [nowIso, run.run_id],
+      );
+
+      await tx.run(
+        `UPDATE execution_jobs
+         SET status = 'cancelled'
+         WHERE job_id = ? AND status IN ('queued', 'running')`,
+        [run.job_id],
+      );
+
+      if (reason && reason.trim().length > 0) {
+        this.logger?.info("execution.cancelled", {
+          run_id: run.run_id,
+          job_id: run.job_id,
+          reason: this.redactText(reason),
+        });
+      } else {
+        this.logger?.info("execution.cancelled", { run_id: run.run_id, job_id: run.job_id });
+      }
+
+      return run.run_id;
+    });
+  }
+
   async workerTick(input: WorkerTickInput): Promise<boolean> {
     const { nowMs, nowIso } = this.clock();
 
@@ -270,6 +579,8 @@ export class ExecutionEngine {
          r.key,
          r.lane,
          r.status,
+         r.policy_snapshot_id,
+         r.policy_snapshot_hash,
          j.trigger_json,
          j.workspace_id
        FROM execution_runs r
@@ -328,6 +639,96 @@ export class ExecutionEngine {
     input: WorkerTickInput,
     clock: ExecutionClock,
   ): Promise<boolean> {
+    const planId =
+      parsePlanIdFromTriggerJson(run.trigger_json) ?? run.run_id;
+    const policyCtx = parsePolicyContextFromTriggerJson(run.trigger_json);
+    const provenance = policyCtx.provenanceSources
+      ? { sources: policyCtx.provenanceSources }
+      : undefined;
+
+    let policy = undefined as Awaited<ReturnType<PolicyBundleService["getSnapshotById"]>> | undefined;
+    let policySnapshotId = run.policy_snapshot_id;
+    let policySnapshotHash = run.policy_snapshot_hash;
+
+    if (!policySnapshotId || !policySnapshotHash) {
+      const snap = await this.policyBundleService.getOrCreateSnapshot({
+        agentId: policyCtx.agentId,
+        playbookId: policyCtx.playbookId,
+        createdBy: planId,
+      });
+      policy = snap.policy;
+      policySnapshotId = snap.policySnapshotId;
+      policySnapshotHash = snap.contentHash;
+
+      await this.db.run(
+        `UPDATE execution_runs
+         SET policy_snapshot_id = ?, policy_snapshot_hash = ?
+         WHERE run_id = ? AND (policy_snapshot_id IS NULL OR policy_snapshot_hash IS NULL)`,
+        [policySnapshotId, policySnapshotHash, run.run_id],
+      );
+    } else {
+      policy = await this.policyBundleService.getSnapshotById(policySnapshotId);
+    }
+
+    if (!policySnapshotId || !policySnapshotHash || !policy) {
+      this.logger?.error("execution.policy_snapshot_missing", {
+        run_id: run.run_id,
+        job_id: run.job_id,
+        plan_id: planId,
+        policy_snapshot_id: policySnapshotId ?? null,
+        policy_snapshot_hash: policySnapshotHash ?? null,
+      });
+
+      const nextStep = await this.db.get<Pick<StepRow, "step_id">>(
+        `SELECT step_id
+         FROM execution_steps
+         WHERE run_id = ? AND status IN ('queued', 'running', 'paused')
+         ORDER BY step_index ASC
+         LIMIT 1`,
+        [run.run_id],
+      );
+
+      if (nextStep?.step_id) {
+        await this.pauseRunAndStep(
+          {
+            runId: run.run_id,
+            stepId: nextStep.step_id,
+            jobId: run.job_id,
+            workspaceId: run.workspace_id,
+            key: run.key,
+            lane: run.lane,
+            workerId: input.workerId,
+          },
+          "internal",
+          "policy snapshot missing; manual intervention required",
+        );
+      } else {
+        await this.db.run(
+          `UPDATE execution_runs
+           SET status = 'failed', finished_at = ?
+           WHERE run_id = ?`,
+          [clock.nowIso, run.run_id],
+        );
+        await this.db.run(
+          `UPDATE execution_jobs
+           SET status = 'failed'
+           WHERE job_id = ?`,
+          [run.job_id],
+        );
+        await this.releaseLaneLease({
+          key: run.key,
+          lane: run.lane,
+          owner: input.workerId,
+        });
+        await this.releaseWorkspaceLease({
+          workspaceId: run.workspace_id,
+          owner: input.workerId,
+        });
+      }
+
+      return true;
+    }
+
     const outcome = await this.db.transaction(async (tx) => {
       if (run.status === "queued") {
         await tx.run(
@@ -346,22 +747,23 @@ export class ExecutionEngine {
       );
 
       // Find next incomplete step.
-      const next = await tx.get<StepRow>(
-        `SELECT
-           step_id,
-           step_index,
-           status,
-           action_json,
-           idempotency_key,
-           postcondition_json,
-           max_attempts,
-           timeout_ms
-         FROM execution_steps
-         WHERE run_id = ? AND status IN ('queued', 'running', 'paused')
-         ORDER BY step_index ASC
-         LIMIT 1`,
-        [run.run_id],
-      );
+	      const next = await tx.get<StepRow>(
+	        `SELECT
+	           step_id,
+	           step_index,
+	           status,
+	           action_json,
+	           idempotency_key,
+	           postcondition_json,
+	           approval_id,
+	           max_attempts,
+	           timeout_ms
+	         FROM execution_steps
+	         WHERE run_id = ? AND status IN ('queued', 'running', 'paused')
+	         ORDER BY step_index ASC
+	         LIMIT 1`,
+	        [run.run_id],
+	      );
 
       if (!next) {
         // Finalize run if all steps are terminal.
@@ -442,61 +844,315 @@ export class ExecutionEngine {
         return { kind: "noop" as const };
       }
 
-      const attemptAgg = await tx.get<{ n: number }>(
-        "SELECT COALESCE(MAX(attempt), 0) AS n FROM execution_attempts WHERE step_id = ?",
-        [next.step_id],
-      );
-      const attemptNum = (attemptAgg?.n ?? 0) + 1;
-      const attemptId = randomUUID();
+	      const attemptAgg = await tx.get<{ n: number }>(
+	        "SELECT COALESCE(MAX(attempt), 0) AS n FROM execution_attempts WHERE step_id = ?",
+	        [next.step_id],
+	      );
+	      const attemptNum = (attemptAgg?.n ?? 0) + 1;
+	      const attemptId = randomUUID();
 
-      const leaseTtlMs = Math.max(30_000, next.timeout_ms + 10_000);
+	      const leaseTtlMs = Math.max(30_000, next.timeout_ms + 10_000);
 
-      if (next.idempotency_key) {
-        const record = await tx.get<{ status: string; result_json: string | null }>(
-          `SELECT status, result_json
-           FROM idempotency_records
-           WHERE scope_key = ? AND kind = 'step' AND idempotency_key = ?`,
-          [next.step_id, next.idempotency_key],
-        );
+	      if (next.idempotency_key) {
+	        const record = await tx.get<{ status: string; result_json: string | null }>(
+	          `SELECT status, result_json
+	           FROM idempotency_records
+	           WHERE scope_key = ? AND kind = 'step' AND idempotency_key = ?`,
+	          [next.step_id, next.idempotency_key],
+	        );
 
-        if (record?.status === "succeeded") {
-          const updated = await tx.run(
-            `UPDATE execution_steps
-             SET status = 'succeeded'
-             WHERE step_id = ? AND status = 'queued'`,
-            [next.step_id],
-          );
-          if (updated.changes === 1) {
-            await tx.run(
-              `INSERT INTO execution_attempts (
-                 attempt_id,
-                 step_id,
-                 attempt,
-                 status,
-                 started_at,
-                 finished_at,
-                 artifacts_json,
-                 result_json,
-                 error
-               ) VALUES (?, ?, ?, 'succeeded', ?, ?, '[]', ?, NULL)`,
-              [
-                attemptId,
-                next.step_id,
-                attemptNum,
-                clock.nowIso,
-                clock.nowIso,
-                record.result_json ?? null,
-              ],
-            );
+	        if (record?.status === "succeeded") {
+	          const updated = await tx.run(
+	            `UPDATE execution_steps
+	             SET status = 'succeeded'
+	             WHERE step_id = ? AND status = 'queued'`,
+	            [next.step_id],
+	          );
+	          if (updated.changes === 1) {
+	            await tx.run(
+	              `INSERT INTO execution_attempts (
+	                 attempt_id,
+	                 step_id,
+	                 attempt,
+	                 status,
+	                 started_at,
+	                 finished_at,
+	                 artifacts_json,
+	                 result_json,
+	                 error
+	               ) VALUES (?, ?, ?, 'succeeded', ?, ?, '[]', ?, NULL)`,
+	              [
+	                attemptId,
+	                next.step_id,
+	                attemptNum,
+	                clock.nowIso,
+	                clock.nowIso,
+	                record.result_json ?? null,
+	              ],
+	            );
 
-            return { kind: "idempotent" as const };
-          }
-        }
-      }
+	            return { kind: "idempotent" as const };
+	          }
+	        }
+	      }
 
-      const updated = await tx.run(
-        `UPDATE execution_steps
-         SET status = 'running'
+	      let action: ActionPrimitiveT;
+	      try {
+	        action = JSON.parse(next.action_json) as ActionPrimitiveT;
+	      } catch {
+	        const error = "invalid action_json";
+	        await tx.run(
+	          `UPDATE execution_steps
+	           SET status = 'failed'
+	           WHERE step_id = ? AND status = 'queued'`,
+	          [next.step_id],
+	        );
+	        await tx.run(
+	          `INSERT INTO execution_attempts (
+	             attempt_id,
+	             step_id,
+	             attempt,
+	             status,
+	             started_at,
+	             finished_at,
+	             artifacts_json,
+	             result_json,
+	             error
+	           ) VALUES (?, ?, ?, 'failed', ?, ?, '[]', NULL, ?)`,
+	          [attemptId, next.step_id, attemptNum, clock.nowIso, clock.nowIso, error],
+	        );
+	        await tx.run(
+	          `UPDATE execution_runs
+	           SET status = 'failed', finished_at = ?
+	           WHERE run_id = ?`,
+	          [clock.nowIso, run.run_id],
+	        );
+	        await tx.run(
+	          `UPDATE execution_jobs
+	           SET status = 'failed'
+	           WHERE job_id = ?`,
+	          [run.job_id],
+	        );
+	        await tx.run(
+	          `DELETE FROM lane_leases
+	           WHERE key = ? AND lane = ? AND lease_owner = ?`,
+	          [run.key, run.lane, input.workerId],
+	        );
+	        await tx.run(
+	          `DELETE FROM workspace_leases
+	           WHERE workspace_id = ? AND lease_owner = ?`,
+	          [run.workspace_id, input.workerId],
+	        );
+	        return { kind: "policy_denied" as const, error };
+	      }
+
+	      const policyEval = evaluateAction(policy, action, provenance);
+
+	      if (policyEval.decision === "deny") {
+	        const error = policyEval.reasons.map((r) => r.message).join("; ") || "action denied by policy";
+	        await tx.run(
+	          `UPDATE execution_steps
+	           SET status = 'failed'
+	           WHERE step_id = ? AND status = 'queued'`,
+	          [next.step_id],
+	        );
+	        await tx.run(
+	          `INSERT INTO execution_attempts (
+	             attempt_id,
+	             step_id,
+	             attempt,
+	             status,
+	             started_at,
+	             finished_at,
+	             artifacts_json,
+	             result_json,
+	             error,
+	             metadata_json
+	           ) VALUES (?, ?, ?, 'failed', ?, ?, '[]', NULL, ?, ?)`,
+	          [
+	            attemptId,
+	            next.step_id,
+	            attemptNum,
+	            clock.nowIso,
+	            clock.nowIso,
+	            error,
+	            JSON.stringify({ policy: { decision: policyEval.decision, reasons: policyEval.reasons } }),
+	          ],
+	        );
+	        await tx.run(
+	          `UPDATE execution_steps
+	           SET status = 'cancelled'
+	           WHERE run_id = ? AND status = 'queued'`,
+	          [run.run_id],
+	        );
+	        await tx.run(
+	          `UPDATE execution_runs
+	           SET status = 'failed', finished_at = ?
+	           WHERE run_id = ?`,
+	          [clock.nowIso, run.run_id],
+	        );
+	        await tx.run(
+	          `UPDATE execution_jobs
+	           SET status = 'failed'
+	           WHERE job_id = ?`,
+	          [run.job_id],
+	        );
+	        await tx.run(
+	          `DELETE FROM lane_leases
+	           WHERE key = ? AND lane = ? AND lease_owner = ?`,
+	          [run.key, run.lane, input.workerId],
+	        );
+	        await tx.run(
+	          `DELETE FROM workspace_leases
+	           WHERE workspace_id = ? AND lease_owner = ?`,
+	          [run.workspace_id, input.workerId],
+	        );
+	        return { kind: "policy_denied" as const, error };
+	      }
+
+	      if (policyEval.decision === "require_approval") {
+	        const existingApprovalId = next.approval_id;
+	        if (existingApprovalId) {
+	          const row = await tx.get<{ status: string }>(
+	            "SELECT status FROM approvals WHERE id = ?",
+	            [existingApprovalId],
+	          );
+	          const status = row?.status;
+	          if (status === "approved") {
+	            // Allow this step to proceed; it has an approved gate.
+	          } else if (status === "denied" || status === "expired") {
+	            const error = `approval ${String(existingApprovalId)} is ${status}`;
+	            await tx.run(
+	              `UPDATE execution_steps
+	               SET status = 'cancelled'
+	               WHERE step_id = ? AND status = 'queued'`,
+	              [next.step_id],
+	            );
+	            await tx.run(
+	              `UPDATE execution_steps
+	               SET status = 'cancelled'
+	               WHERE run_id = ? AND status = 'queued'`,
+	              [run.run_id],
+	            );
+	            await tx.run(
+	              `UPDATE execution_runs
+	               SET status = 'cancelled', finished_at = ?
+	               WHERE run_id = ?`,
+	              [clock.nowIso, run.run_id],
+	            );
+	            await tx.run(
+	              `UPDATE execution_jobs
+	               SET status = 'cancelled'
+	               WHERE job_id = ?`,
+	              [run.job_id],
+	            );
+	            await tx.run(
+	              `DELETE FROM lane_leases
+	               WHERE key = ? AND lane = ? AND lease_owner = ?`,
+	              [run.key, run.lane, input.workerId],
+	            );
+	            await tx.run(
+	              `DELETE FROM workspace_leases
+	               WHERE workspace_id = ? AND lease_owner = ?`,
+	              [run.workspace_id, input.workerId],
+	            );
+	            return { kind: "policy_denied" as const, error };
+	          } else {
+	            await tx.run(
+	              `UPDATE execution_runs
+	               SET status = 'paused', paused_reason = ?, paused_detail = ?
+	               WHERE run_id = ?`,
+	              ["approval", this.redactText(`waiting for approval ${String(existingApprovalId)}`), run.run_id],
+	            );
+	            await tx.run(
+	              `UPDATE execution_steps
+	               SET status = 'paused'
+	               WHERE step_id = ? AND status = 'queued'`,
+	              [next.step_id],
+	            );
+	            const token = `resume-${randomUUID()}`;
+	            await tx.run(
+	              `INSERT INTO resume_tokens (token, run_id, created_at)
+	               VALUES (?, ?, ?)`,
+	              [token, run.run_id, clock.nowIso],
+	            );
+	            await tx.run(
+	              `DELETE FROM lane_leases
+	               WHERE key = ? AND lane = ? AND lease_owner = ?`,
+	              [run.key, run.lane, input.workerId],
+	            );
+	            await tx.run(
+	              `DELETE FROM workspace_leases
+	               WHERE workspace_id = ? AND lease_owner = ?`,
+	              [run.workspace_id, input.workerId],
+	            );
+	            return { kind: "paused" as const };
+	          }
+	        } else {
+	          const token = `resume-${randomUUID()}`;
+	          const prompt =
+	            policyEval.reasons.length > 0
+	              ? `Approve workflow step '${action.type}' (${policyEval.reasons.map((r) => r.message).join("; ")})`
+	              : `Approve workflow step '${action.type}'`;
+
+	          const approval = await new ApprovalDal(tx).create({
+	            planId,
+	            stepIndex: next.step_index,
+	            prompt,
+	            context: {
+	              source: "execution-engine-policy",
+	              kind: "workflow_step",
+	              run_id: run.run_id,
+	              step_id: next.step_id,
+	              key: run.key,
+	              lane: run.lane,
+	              workspace_id: run.workspace_id,
+	              action,
+	              resume_token: token,
+	              policy: {
+	                snapshot_id: policySnapshotId,
+	                snapshot_hash: policySnapshotHash,
+	                decision: policyEval.decision,
+	                reasons: policyEval.reasons,
+	              },
+	            },
+	          });
+
+	          await tx.run(
+	            `UPDATE execution_runs
+	             SET status = 'paused', paused_reason = ?, paused_detail = ?
+	             WHERE run_id = ?`,
+	            ["approval", this.redactText(prompt), run.run_id],
+	          );
+	          await tx.run(
+	            `UPDATE execution_steps
+	             SET status = 'paused', approval_id = ?
+	             WHERE step_id = ? AND status = 'queued'`,
+	            [approval.id, next.step_id],
+	          );
+	          await tx.run(
+	            `INSERT INTO resume_tokens (token, run_id, created_at)
+	             VALUES (?, ?, ?)`,
+	            [token, run.run_id, clock.nowIso],
+	          );
+	          await tx.run(
+	            `DELETE FROM lane_leases
+	             WHERE key = ? AND lane = ? AND lease_owner = ?`,
+	            [run.key, run.lane, input.workerId],
+	          );
+	          await tx.run(
+	            `DELETE FROM workspace_leases
+	             WHERE workspace_id = ? AND lease_owner = ?`,
+	            [run.workspace_id, input.workerId],
+	          );
+
+	          return { kind: "paused" as const, approval };
+	        }
+	      }
+
+	      const updated = await tx.run(
+	        `UPDATE execution_steps
+	         SET status = 'running'
          WHERE step_id = ? AND status = 'queued'`,
         [next.step_id],
       );
@@ -540,51 +1196,81 @@ export class ExecutionEngine {
         [clock.nowMs + leaseTtlMs, run.workspace_id, input.workerId],
       );
 
-      return {
-        kind: "claimed" as const,
-        runId: run.run_id,
-        jobId: run.job_id,
-        key: run.key,
-        lane: run.lane,
-        triggerJson: run.trigger_json,
-        step: next,
-        attempt: {
-          attemptId,
-          attemptNum,
-        },
-      };
-    });
+	      return {
+	        kind: "claimed" as const,
+	        runId: run.run_id,
+	        jobId: run.job_id,
+	        key: run.key,
+	        lane: run.lane,
+	        triggerJson: run.trigger_json,
+	        step: next,
+	        action,
+	        attempt: {
+	          attemptId,
+	          attemptNum,
+	        },
+	      };
+	    });
 
-    if (outcome.kind === "noop") return false;
-    if (outcome.kind === "recovered") return true;
-    if (outcome.kind === "finalized") return true;
-    if (outcome.kind === "idempotent") return true;
+	    if (outcome.kind === "noop") return false;
+	    if (outcome.kind === "recovered") return true;
+	    if (outcome.kind === "finalized") return true;
+	    if (outcome.kind === "idempotent") return true;
 
-    const planId =
-      parsePlanIdFromTriggerJson(outcome.triggerJson) ?? outcome.runId;
+	    if (outcome.kind === "policy_denied") {
+	      this.logger?.info("execution.attempt.denied", {
+	        job_id: run.job_id,
+	        run_id: run.run_id,
+	        plan_id: planId,
+	        error: this.redactText(outcome.error),
+	      });
+	      return true;
+	    }
 
-    const action = JSON.parse(outcome.step.action_json) as ActionPrimitiveT;
-    const timeoutMs = Math.max(1, outcome.step.timeout_ms);
+	    if (outcome.kind === "paused") {
+	      if (outcome.approval) {
+	        this.logger?.info("approval.created", {
+	          approval_id: outcome.approval.id,
+	          plan_id: outcome.approval.plan_id,
+	          step_index: outcome.approval.step_index,
+	          expires_at: outcome.approval.expires_at,
+	        });
+	        try {
+	          this.approvalNotifier.notify(outcome.approval);
+	        } catch {
+	          // best-effort
+	        }
+	      }
+	      this.logger?.info("execution.attempt.paused", {
+	        job_id: run.job_id,
+	        run_id: run.run_id,
+	        plan_id: planId,
+	        reason: "approval",
+	      });
+	      return true;
+	    }
 
-    return await this.executeAttempt({
-      planId,
-      stepIndex: outcome.step.step_index,
-      action,
-      postconditionJson: outcome.step.postcondition_json,
-      maxAttempts: outcome.step.max_attempts,
-      timeoutMs,
-      runId: outcome.runId,
+	    const timeoutMs = Math.max(1, outcome.step.timeout_ms);
+
+	    return await this.executeAttempt({
+	      planId,
+	      stepIndex: outcome.step.step_index,
+	      action: outcome.action,
+	      postconditionJson: outcome.step.postcondition_json,
+	      maxAttempts: outcome.step.max_attempts,
+	      timeoutMs,
+	      runId: outcome.runId,
       jobId: outcome.jobId,
       workspaceId: run.workspace_id,
       key: outcome.key,
       lane: outcome.lane,
       stepId: outcome.step.step_id,
-      attemptId: outcome.attempt.attemptId,
-      attemptNum: outcome.attempt.attemptNum,
-      workerId: input.workerId,
-      executor: input.executor,
-    });
-  }
+	      attemptId: outcome.attempt.attemptId,
+	      attemptNum: outcome.attempt.attemptNum,
+	      workerId: input.workerId,
+	      executor: input.executor,
+	    });
+	  }
 
   private async executeAttempt(opts: {
     planId: string;
@@ -634,10 +1320,11 @@ export class ExecutionEngine {
         ? JSON.stringify(this.redactUnknown(result.evidence))
         : null;
     const artifactsJson = JSON.stringify(this.redactUnknown(result.artifacts ?? []));
-    const cost = this.redactUnknown({
-      ...(result.cost ?? {}),
-      duration_ms: result.cost?.duration_ms ?? wallDurationMs,
-    });
+    const cost = this.redactUnknown(
+      result.cost
+        ? { ...result.cost, duration_ms: result.cost?.duration_ms ?? wallDurationMs }
+        : { duration_ms: wallDurationMs },
+    );
     const costJson = JSON.stringify(cost);
 
     if (result.success) {
@@ -931,7 +1618,7 @@ export class ExecutionEngine {
     },
     reason: string,
     detail: string,
-  ): Promise<void> {
+  ): Promise<string> {
     await this.db.run(
       `UPDATE execution_runs
        SET status = 'paused', paused_reason = ?, paused_detail = ?
@@ -965,6 +1652,8 @@ export class ExecutionEngine {
       workspaceId: opts.workspaceId,
       owner: opts.workerId,
     });
+
+    return token;
   }
 
   private async executeWithTimeout(

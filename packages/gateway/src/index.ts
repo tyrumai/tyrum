@@ -9,12 +9,13 @@ import { mkdirSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { getRequestListener } from "@hono/node-server";
 import { basename, dirname, join } from "node:path";
-import { homedir } from "node:os";
+import { homedir, hostname } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createContainerAsync } from "./container.js";
 import { createApp } from "./app.js";
 import { AgentRuntime } from "./modules/agent/runtime.js";
 import { isAgentEnabled } from "./modules/agent/enabled.js";
+import { builtinToolIds } from "./modules/agent/tools.js";
 import { TokenStore } from "./modules/auth/token-store.js";
 import { WatcherScheduler } from "./modules/watcher/scheduler.js";
 import { createSecretProviderFromEnv } from "./modules/secret/create-secret-provider.js";
@@ -31,6 +32,12 @@ import { createToolRunnerStepExecutor } from "./modules/execution/toolrunner-ste
 import { createKubernetesToolRunnerStepExecutor } from "./modules/execution/kubernetes-toolrunner-step-executor.js";
 import { runToolRunnerFromStdio } from "./toolrunner.js";
 import { isPostgresDbUri } from "./statestore/db-uri.js";
+import { PresenceDal } from "./modules/presence/dal.js";
+import { PresenceService } from "./modules/presence/service.js";
+import { resolveAndApplyApproval, type WsEventPublisher } from "./modules/approval/apply.js";
+import { publishEvent, type ProtocolDeps } from "./ws/protocol.js";
+import { ChannelWorker } from "./modules/channels/worker.js";
+import { PluginManager } from "./modules/plugins/manager.js";
 
 export const VERSION = "0.1.0";
 
@@ -298,6 +305,7 @@ export async function runShutdownCleanup(
 }
 
 export async function main(role: GatewayRole = "all"): Promise<void> {
+  const startedAtMs = Date.now();
   const port = parseInt(process.env["GATEWAY_PORT"] ?? "8788", 10);
   const host = process.env["GATEWAY_HOST"]?.trim() || "127.0.0.1";
   const dbPath = process.env["GATEWAY_DB_PATH"] ?? "gateway.db";
@@ -339,35 +347,36 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   // Initialize secret provider (defaults per ADR-0007; override via TYRUM_SECRET_PROVIDER)
   const secretProvider = await createSecretProviderFromEnv(tyrumHome, token);
 
-  if (container.telegramBot) {
-    console.log("Telegram bot initialized");
-  }
+	  if (container.telegramBot) {
+	    console.log("Telegram bot initialized");
+	  }
 
-  // Start role-specific background components.
-  const watcherScheduler =
-    role === "all" || role === "scheduler"
-      ? new WatcherScheduler({
-          db: container.db,
-          memoryDal: container.memoryDal,
-          eventBus: container.eventBus,
-          keepProcessAlive: role === "scheduler",
-        })
-      : undefined;
+	  const instanceId =
+	    process.env["TYRUM_INSTANCE_ID"]?.trim() || `gw-${crypto.randomUUID()}`;
+
+	  // Start role-specific background components.
+	  const watcherScheduler =
+	    role === "all" || role === "scheduler"
+	      ? new WatcherScheduler({
+	          db: container.db,
+	          memoryDal: container.memoryDal,
+	          eventBus: container.eventBus,
+	          leaseOwner: instanceId,
+	          keepProcessAlive: role === "scheduler",
+	        })
+	      : undefined;
 
   if (role === "all" || role === "edge") {
     container.watcherProcessor.start();
   }
-  if (watcherScheduler) {
-    watcherScheduler.start();
-  }
-
-  const instanceId =
-    process.env["TYRUM_INSTANCE_ID"]?.trim() || `gw-${crypto.randomUUID()}`;
-  const logger = container.logger.child({
-    role,
-    instance_id: instanceId,
-    version: VERSION,
-  });
+	  if (watcherScheduler) {
+	    watcherScheduler.start();
+	  }
+	  const logger = container.logger.child({
+	    role,
+	    instance_id: instanceId,
+	    version: VERSION,
+	  });
   logger.info("gateway.instance", { instance_id: instanceId });
 
   const otel = await maybeStartOtel({
@@ -380,13 +389,59 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   }
 
   const shouldRunEdge = role === "all" || role === "edge";
+  const shouldRunWorker = role === "all" || role === "worker";
 
   const connectionManager = new ConnectionManager();
   const outboxDal = new OutboxDal(container.db, container.redactionEngine);
   const connectionDirectory = new ConnectionDirectoryDal(container.db);
-  const protocolDeps = {
-    connectionManager,
-    logger,
+
+  const presenceTtlMsRaw = process.env["TYRUM_PRESENCE_TTL_MS"]?.trim();
+  const presenceMaxEntriesRaw = process.env["TYRUM_PRESENCE_MAX_ENTRIES"]?.trim();
+  const presenceTtlMs = presenceTtlMsRaw ? Number.parseInt(presenceTtlMsRaw, 10) : 60_000;
+  const presenceMaxEntries = presenceMaxEntriesRaw ? Number.parseInt(presenceMaxEntriesRaw, 10) : 1_000;
+  const presenceTtlMsSafe = Number.isFinite(presenceTtlMs) ? Math.max(5_000, presenceTtlMs) : 60_000;
+  const presenceMaxEntriesSafe = Number.isFinite(presenceMaxEntries) ? Math.max(1, presenceMaxEntries) : 1_000;
+
+  const presenceDal = shouldRunEdge ? new PresenceDal(container.db) : undefined;
+  const presence = shouldRunEdge && presenceDal
+    ? new PresenceService(
+        presenceDal,
+        {
+          ttlMs: presenceTtlMsSafe,
+          maxEntries: presenceMaxEntriesSafe,
+        },
+        logger,
+      )
+    : undefined;
+
+  if (presence) {
+    await presence.seedGatewaySelf({
+      instanceId,
+      host: hostname(),
+      version: VERSION,
+    });
+
+    const refreshMs = Math.max(5_000, Math.min(30_000, Math.floor(presenceTtlMsSafe / 2)));
+    const selfTimer = setInterval(() => {
+      void presence.seedGatewaySelf({
+        instanceId,
+        host: hostname(),
+        version: VERSION,
+      }).catch(() => {
+        // best-effort
+      });
+    }, refreshMs);
+    selfTimer.unref();
+	  }
+
+	  let wsPublisher: WsEventPublisher | undefined;
+
+	  const protocolDeps: ProtocolDeps = {
+	    connectionManager,
+	    logger,
+	    presence,
+	    approvalDal: shouldRunEdge ? container.approvalDal : undefined,
+    executionEngine: undefined,
     cluster: shouldRunEdge
       ? {
           edgeId: instanceId,
@@ -394,47 +449,127 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
           connectionDirectory,
         }
       : undefined,
-    onApprovalDecision: (
-      approvalId: number,
-      approved: boolean,
-      reason: string | undefined,
-    ) => {
-      void container.approvalDal
-        .respond(approvalId, approved, reason)
-        .then((row) => {
-          logger.info("approval.decided", {
-            approval_id: approvalId,
-            approved,
-            status: row?.status ?? "missing",
-            reason,
-          });
-        })
-        .catch((err) => {
-          const message = err instanceof Error ? err.message : String(err);
-          logger.error("approval.decide_failed", {
-            approval_id: approvalId,
-            approved,
-            reason,
-            error: message,
-          });
+	    onApprovalDecision: (
+	      approvalId: number,
+	      approved: boolean,
+	      reason: string | undefined,
+	    ) => {
+	      void (async () => {
+	        const decision = approved ? ("approved" as const) : ("denied" as const);
+	        const result = await resolveAndApplyApproval({
+	          approvalDal: container.approvalDal,
+	          executionEngine: protocolDeps.executionEngine,
+	          wsPublisher,
+	          logger,
+	          approvalId,
+	          decision,
+	          reason,
+	        });
+
+	        const status =
+	          result.kind === "not_found" ? "missing" : result.approval.status;
+	        logger.info("approval.decided", {
+	          approval_id: approvalId,
+	          decision,
+	          status,
+	          reason,
+	          result_kind: result.kind,
+	        });
+	      })().catch((err) => {
+	        const message = err instanceof Error ? err.message : String(err);
+	        logger.error("approval.decide_failed", {
+	          approval_id: approvalId,
+          approved,
+          reason,
+          error: message,
         });
+      });
     },
   };
   const approvalNotifier = new WsNotifier(protocolDeps);
 
-  const agentRuntime = shouldRunEdge && isAgentEnabled()
-    ? new AgentRuntime({ container, secretProvider, approvalNotifier })
-    : undefined;
+  const executionEngine =
+    shouldRunWorker || shouldRunEdge
+      ? new ExecutionEngine({
+          db: container.db,
+          redactionEngine: container.redactionEngine,
+          logger,
+          approvalNotifier,
+        })
+      : undefined;
+  if (executionEngine) {
+    protocolDeps.executionEngine = executionEngine;
+  }
 
-  const app = shouldRunEdge
-    ? createApp(container, {
-        agentRuntime,
-        tokenStore,
-        secretProvider,
-        isLocalOnly,
-        connectionManager,
+  const pluginsEnabledRaw = process.env["TYRUM_PLUGINS_ENABLED"]?.trim().toLowerCase();
+  const pluginsEnabled = pluginsEnabledRaw === "1" || pluginsEnabledRaw === "true" || pluginsEnabledRaw === "yes";
+
+  const pluginManager = shouldRunEdge
+    ? new PluginManager(join(tyrumHome, "plugins"), {
+        enabled: pluginsEnabled,
+        logger,
+        reservedToolIds: builtinToolIds(),
       })
     : undefined;
+  await pluginManager?.load();
+
+  const agentRuntime = shouldRunEdge && isAgentEnabled()
+    ? new AgentRuntime({ container, secretProvider, approvalNotifier, pluginManager })
+    : undefined;
+	  if (agentRuntime) {
+	    protocolDeps.agentRuntime = agentRuntime;
+	  }
+
+  const channelDebounceMsRaw = process.env["TYRUM_CHANNEL_DEBOUNCE_MS"]?.trim();
+  const channelTickMsRaw = process.env["TYRUM_CHANNEL_TICK_MS"]?.trim();
+  const channelDebounceMs = channelDebounceMsRaw ? Number.parseInt(channelDebounceMsRaw, 10) : undefined;
+  const channelTickMs = channelTickMsRaw ? Number.parseInt(channelTickMsRaw, 10) : undefined;
+
+  const channelWorker = shouldRunEdge
+    ? new ChannelWorker({
+        db: container.db,
+        memoryDal: container.memoryDal,
+        agentRuntime,
+        telegramBot: container.telegramBot,
+        approvalDal: container.approvalDal,
+        approvalNotifier,
+        logger,
+        leaseOwner: instanceId,
+        debounceMs: Number.isFinite(channelDebounceMs) ? channelDebounceMs : undefined,
+        tickMs: Number.isFinite(channelTickMs) ? channelTickMs : undefined,
+      })
+    : undefined;
+  channelWorker?.start();
+
+	  wsPublisher = shouldRunEdge
+	    ? {
+	        publish: (evt, opts) => publishEvent(evt, protocolDeps, opts),
+	      }
+	    : undefined;
+
+	  const app = shouldRunEdge
+	    ? createApp(container, {
+	        agentRuntime,
+        channelWorker,
+        pluginManager,
+	        executionEngine,
+	        wsPublisher,
+	        tokenStore,
+	        secretProvider,
+	        isLocalOnly,
+	        connectionManager,
+	        presence: presenceDal
+	          ? {
+	              dal: presenceDal,
+	              instanceId,
+	              startedAtMs,
+	              role,
+	              version: VERSION,
+	              modelGatewayConfigPath: container.config?.modelGatewayConfigPath,
+	            }
+	          : undefined,
+	      })
+	    : undefined;
 
   // --- WebSocket handler ---
   const wsHandler = shouldRunEdge
@@ -442,6 +577,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
         connectionManager,
         protocolDeps,
         tokenStore,
+        db: container.db,
         cluster: {
           instanceId,
           connectionDirectory,
@@ -488,15 +624,8 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     console.log(`Tyrum gateway v${VERSION} started in role '${role}'.`);
   }
 
-  const shouldRunWorker = role === "all" || role === "worker";
   const workerLoop = shouldRunWorker
     ? (() => {
-        const engine = new ExecutionEngine({
-          db: container.db,
-          redactionEngine: container.redactionEngine,
-          logger,
-        });
-
         const resolveExecutor = (): ExecutionStepExecutor => {
           const launcherRaw = process.env["TYRUM_TOOLRUNNER_LAUNCHER"]?.trim().toLowerCase();
           const isKubernetesRuntime = Boolean(process.env["KUBERNETES_SERVICE_HOST"]);
@@ -537,7 +666,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
         const executor = resolveExecutor() satisfies ExecutionStepExecutor;
 
         return startExecutionWorkerLoop({
-          engine,
+          engine: executionEngine!,
           workerId: instanceId,
           executor,
           logger,
@@ -580,6 +709,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     container.watcherProcessor.stop();
     watcherScheduler?.stop();
     outboxPoller?.stop();
+    channelWorker?.stop();
     workerLoop?.stop();
 
     void runShutdownCleanup(

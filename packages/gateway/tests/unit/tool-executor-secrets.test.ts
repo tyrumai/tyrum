@@ -7,6 +7,9 @@ import { ToolExecutor } from "../../src/modules/agent/tool-executor.js";
 import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
 import type { SecretProvider } from "../../src/modules/secret/provider.js";
 import type { SecretHandle } from "@tyrum/schemas";
+import { EventLog } from "../../src/modules/planner/event-log.js";
+import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
 function stubMcpManager(): McpManager {
   return {
@@ -37,12 +40,15 @@ async function allowPublicDnsLookup() {
 
 describe("ToolExecutor secret resolution", () => {
   let homeDir: string | undefined;
+  let db: SqliteDb | undefined;
 
   afterEach(async () => {
     if (homeDir) {
       await rm(homeDir, { recursive: true, force: true });
       homeDir = undefined;
     }
+    await db?.close();
+    db = undefined;
   });
 
   it("resolves secret: prefixed arg values before execution", async () => {
@@ -82,6 +88,45 @@ describe("ToolExecutor secret resolution", () => {
         }),
       }),
     );
+  });
+
+  it("emits a secret resolution audit event without logging raw values", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tool-executor-secret-audit-"));
+    db = openTestSqliteDb();
+
+    const eventLog = new EventLog(db);
+
+    const mockFetch = vi.fn(async () => ({
+      text: async () => "api-response",
+    })) as unknown as typeof fetch;
+
+    const secrets = new Map([["handle-abc", "my-api-key-value"]]);
+    const provider = stubSecretProvider(secrets);
+
+    const executor = new ToolExecutor(
+      homeDir,
+      stubMcpManager(),
+      new Map(),
+      mockFetch,
+      provider,
+      allowPublicDnsLookup,
+      undefined,
+      { planId: "plan-secret-audit-1", eventLog },
+    );
+
+    await executor.execute(
+      "tool.http.fetch",
+      "call-audit-1",
+      {
+        url: "https://api.example.com",
+        headers: { Authorization: "secret:handle-abc" },
+      },
+    );
+
+    const events = await eventLog.eventsForPlan("plan-secret-audit-1");
+    const secretEvents = events.filter((e) => (e.action as { type?: string }).type === "secret.resolution");
+    expect(secretEvents.length).toBe(1);
+    expect(JSON.stringify(secretEvents[0]!.action)).not.toContain("my-api-key-value");
   });
 
   it("redacts resolved secret values from tool output", async () => {

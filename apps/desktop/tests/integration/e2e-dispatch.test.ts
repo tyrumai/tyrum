@@ -41,6 +41,14 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function makeExecutionIds(): { runId: string; stepId: string; attemptId: string } {
+  return {
+    runId: crypto.randomUUID(),
+    stepId: crypto.randomUUID(),
+    attemptId: crypto.randomUUID(),
+  };
+}
+
 async function waitForCapabilities(
   connectionManager: ConnectionManager,
   capabilities: ReadonlyArray<"desktop" | "cli" | "playwright" | "http" | "android">,
@@ -112,6 +120,7 @@ async function startServer(): Promise<{
     connectionManager,
     protocolDeps,
     tokenStore,
+    db: container.db,
   });
 
   const requestListener = getRequestListener(app.fetch);
@@ -148,6 +157,7 @@ async function startServer(): Promise<{
 async function connectClient(
   port: number,
   token: string,
+  tyrumHome: string,
   capabilities: Array<"desktop" | "cli" | "playwright" | "http" | "android">,
   connectionManager: ConnectionManager,
 ): Promise<TyrumClient> {
@@ -156,6 +166,7 @@ async function connectClient(
     token,
     capabilities,
     reconnect: false,
+    tyrumHome,
   });
 
   const connectedP = new Promise<void>((resolve) => {
@@ -206,6 +217,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
     client = await connectClient(
       srv.port,
       srv.adminToken,
+      srv.tokenHome,
       ["desktop", "cli"],
       srv.connectionManager,
     );
@@ -230,8 +242,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
         type: "Desktop",
         args: { op: "screenshot", display: "primary", format: "png" },
       },
-      "plan-1",
-      0,
+      makeExecutionIds(),
       { connectionManager: srv.connectionManager },
     );
 
@@ -254,6 +265,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
     client = await connectClient(
       srv.port,
       srv.adminToken,
+      srv.tokenHome,
       ["desktop"],
       srv.connectionManager,
     );
@@ -266,8 +278,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
         type: "Desktop",
         args: { op: "mouse", action: "click", x: 100, y: 200 },
       },
-      "plan-2",
-      0,
+      makeExecutionIds(),
       { connectionManager: srv.connectionManager },
     );
 
@@ -287,6 +298,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
     client = await connectClient(
       srv.port,
       srv.adminToken,
+      srv.tokenHome,
       ["cli"],
       srv.connectionManager,
     );
@@ -300,8 +312,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
         type: "CLI",
         args: { cmd: "rm", args: ["-rf", "/"] },
       },
-      "plan-3",
-      0,
+      makeExecutionIds(),
       { connectionManager: srv.connectionManager },
     );
 
@@ -322,6 +333,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
     client = await connectClient(
       srv.port,
       srv.adminToken,
+      srv.tokenHome,
       ["cli"],
       srv.connectionManager,
     );
@@ -334,8 +346,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
         type: "CLI",
         args: { cmd: "echo", args: ["hello", "world"] },
       },
-      "plan-4",
-      0,
+      makeExecutionIds(),
       { connectionManager: srv.connectionManager },
     );
 

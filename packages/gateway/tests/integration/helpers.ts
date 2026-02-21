@@ -9,6 +9,7 @@ import { createApp } from "../../src/app.js";
 import type { GatewayContainer } from "../../src/container.js";
 import { isAgentEnabled } from "../../src/modules/agent/enabled.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
+import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import type { TokenStore } from "../../src/modules/auth/token-store.js";
 import type { Hono } from "hono";
 
@@ -31,15 +32,18 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<{
   app: Hono;
   container: GatewayContainer;
   agentRuntime?: AgentRuntime;
+  executionEngine: ExecutionEngine;
 }> {
   const container = await createTestContainer();
   const agentRuntime = isAgentEnabled() ? new AgentRuntime({ container }) : undefined;
+  const executionEngine = new ExecutionEngine({ db: container.db, logger: container.logger });
   const app = createApp(container, {
     agentRuntime,
+    executionEngine,
     tokenStore: opts.tokenStore,
     isLocalOnly: opts.isLocalOnly,
   });
-  return { app, container, agentRuntime };
+  return { app, container, agentRuntime, executionEngine };
 }
 
 /**
@@ -59,6 +63,7 @@ export function minimalPlanRequest(overrides?: Record<string, unknown>): Record<
         thread_id: "thread-1",
         source: "telegram",
         content: { kind: "text", text: "help me" },
+        provenance: ["user"],
         timestamp: new Date().toISOString(),
         pii_fields: [],
       },

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import mitt from "mitt";
 import { MemoryDal } from "../../src/modules/memory/dal.js";
 import { WatcherProcessor } from "../../src/modules/watcher/processor.js";
@@ -140,5 +140,43 @@ describe("WatcherScheduler", () => {
 
     const events = await memoryDal.getEpisodicEvents();
     expect(events).toHaveLength(0);
+  });
+
+  it("prevents double-firing across two scheduler replicas using DB leases", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-02-21T00:00:00Z"));
+
+      await processor.createWatcher("plan-1", "periodic", { intervalMs: 1000 });
+
+      const scheduler1 = new WatcherScheduler({
+        db,
+        memoryDal,
+        eventBus,
+        tickMs: 100,
+        leaseOwner: "sched-1",
+      });
+      const scheduler2 = new WatcherScheduler({
+        db,
+        memoryDal,
+        eventBus,
+        tickMs: 100,
+        leaseOwner: "sched-2",
+      });
+
+      await Promise.all([scheduler1.tick(), scheduler2.tick()]);
+
+      const events = await memoryDal.getEpisodicEvents();
+      expect(events).toHaveLength(1);
+      expect(events[0]!.event_type).toBe("periodic_fired");
+
+      const firings = await db.all<{ firing_id: string }>(
+        "SELECT firing_id FROM trigger_firings",
+      );
+      expect(firings).toHaveLength(1);
+      expect(firings[0]!.firing_id).toContain("periodic-");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

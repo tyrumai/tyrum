@@ -6,25 +6,63 @@
  */
 
 import {
+  PlaybookManifest,
   requiredCapability,
   WsApprovalDecision,
   WsError,
+  WsApprovalListRequest,
+  WsApprovalListResult,
+  WsApprovalResolveRequest,
+  WsApprovalResolveResult,
   WsMessageEnvelope,
+  WsPresenceBeaconRequest,
+  WsSessionSendRequest,
+  WsSessionSendResult,
   WsTaskExecuteResult,
+  WsWorkflowRunRequest,
+  WsWorkflowRunResult,
+  WsWorkflowCancelRequest,
+  WsWorkflowCancelResult,
+  WsWorkflowResumeRequest,
+  WsWorkflowResumeResult,
+  WsPairingApproveRequest,
+  WsPairingApproveResult,
+  WsPairingDenyRequest,
+  WsPairingDenyResult,
+  WsPairingRevokeRequest,
+  WsPairingRevokeResult,
 } from "@tyrum/schemas";
 import type {
   ActionPrimitive,
   ClientCapability,
+  ExecutionAttemptId,
+  ExecutionRunId,
+  ExecutionStepId,
+  Approval as ApprovalT,
+  ApprovalKind as ApprovalKindT,
   WsEventEnvelope,
   WsRequestEnvelope,
   WsResponseEnvelope,
   WsResponseErrEnvelope,
 } from "@tyrum/schemas";
+import { parse as parseYaml } from "yaml";
+import { statSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { resolve as resolvePath, join as joinPath } from "node:path";
 import type { ConnectedClient } from "./connection-manager.js";
 import type { ConnectionManager } from "./connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
+import type { ApprovalDal, ApprovalStatus as ApprovalStatusT } from "../modules/approval/dal.js";
+import { resolveAndApplyApproval } from "../modules/approval/apply.js";
+import { toSchemaApproval } from "../modules/approval/schema.js";
+import type { ExecutionEngine } from "../modules/execution/engine.js";
+import type { NodePairingService } from "../modules/node/pairing-service.js";
+import type { NodeTokenDal } from "../modules/node/token-dal.js";
 import type { Logger } from "../modules/observability/logger.js";
+import type { PresenceService } from "../modules/presence/service.js";
+import type { AgentRuntime } from "../modules/agent/runtime.js";
+import { PlaybookRunner } from "../modules/playbook/runner.js";
 
 // ---------------------------------------------------------------------------
 // Dependency injection
@@ -37,6 +75,25 @@ import type { Logger } from "../modules/observability/logger.js";
 export interface ProtocolDeps {
   connectionManager: ConnectionManager;
   logger?: Logger;
+  presence?: PresenceService;
+
+  /** Optional agent runtime for interactive chat requests. Enables session.send. */
+  agentRuntime?: Pick<AgentRuntime, "turn">;
+
+  /** Optional approval queue data access. Enables approval.list + approval.resolve. */
+  approvalDal?: ApprovalDal;
+
+  /** Optional workflow control surface. Enables workflow.run + workflow.resume + workflow.cancel. */
+  executionEngine?: Pick<
+    ExecutionEngine,
+    "enqueuePlan" | "resumeRun" | "cancelRunByResumeToken" | "cancelRun"
+  >;
+
+  /** Optional node pairing service. Enables pairing.approve + pairing.deny. */
+  nodePairingService?: NodePairingService;
+
+  /** Optional node token DAL. Enables pairing.revoke invalidation. */
+  nodeTokenDal?: Pick<NodeTokenDal, "revokeAllForNode">;
 
   /**
    * Optional cluster router. When configured, the gateway can deliver WS messages
@@ -88,31 +145,36 @@ export function handleClientMessage(
   client: ConnectedClient,
   raw: string,
   deps: ProtocolDeps,
-): WsResponseEnvelope | WsEventEnvelope | undefined {
+): Promise<WsResponseEnvelope | WsEventEnvelope | undefined> {
   let json: unknown;
   try {
     json = JSON.parse(raw);
   } catch {
-    return errorEvent("invalid_json", "message is not valid JSON");
+    return Promise.resolve(errorEvent("invalid_json", "message is not valid JSON"));
   }
 
   const parsed = WsMessageEnvelope.safeParse(json);
   if (!parsed.success) {
-    return errorEvent("invalid_message", parsed.error.message);
+    return Promise.resolve(errorEvent("invalid_message", parsed.error.message));
   }
 
   const msg = parsed.data;
 
   // Events are gateway-emitted; reject client-sent events.
   if ("event_id" in msg) {
-    return errorEvent("unexpected_event", "clients must not send events");
+    return Promise.resolve(errorEvent("unexpected_event", "clients must not send events"));
   }
 
   // Responses (client -> gateway)
   if ("ok" in msg) {
     if (msg.type === "ping" && msg.ok === true) {
       client.lastPong = Date.now();
-      return undefined;
+      return deps.presence
+        ? deps.presence
+            .touchFromHeartbeat(client)
+            .then(() => undefined)
+            .catch(() => undefined)
+        : Promise.resolve(undefined);
     }
 
     if (msg.type === "task.execute") {
@@ -133,30 +195,36 @@ export function handleClientMessage(
           : failureEvidence,
         msg.ok ? undefined : msg.error.message,
       );
-      return undefined;
+      return Promise.resolve(undefined);
     }
 
     if (msg.type === "approval.request") {
       const approvalId = parseApprovalId(msg.request_id);
       if (approvalId === undefined) {
-        return errorEvent(
-          "invalid_approval_request_id",
-          "approval response missing or invalid approval request id",
+        return Promise.resolve(
+          errorEvent(
+            "invalid_approval_request_id",
+            "approval response missing or invalid approval request id",
+          ),
         );
       }
 
       if (!msg.ok) {
-        return errorEvent(
-          "approval_request_failed",
-          `client error for ${msg.request_id} (${msg.error.code}): ${msg.error.message}`,
+        return Promise.resolve(
+          errorEvent(
+            "approval_request_failed",
+            `client error for ${msg.request_id} (${msg.error.code}): ${msg.error.message}`,
+          ),
         );
       }
 
       const decision = WsApprovalDecision.safeParse(msg.result ?? {});
       if (!decision.success) {
-        return errorEvent(
-          "invalid_approval_decision",
-          `invalid approval decision for ${msg.request_id}: ${decision.error.message}`,
+        return Promise.resolve(
+          errorEvent(
+            "invalid_approval_decision",
+            `invalid approval decision for ${msg.request_id}: ${decision.error.message}`,
+          ),
         );
       }
 
@@ -165,16 +233,640 @@ export function handleClientMessage(
         decision.data.approved,
         decision.data.reason,
       );
-      return undefined;
+      return Promise.resolve(undefined);
     }
 
     // Unknown response type — ignore.
-    return undefined;
+    return Promise.resolve(undefined);
   }
 
-  // Requests (client -> gateway). In the current runtime, we don't accept
-  // post-handshake client requests via WS (use HTTP routes for now).
-  return errorResponse(msg.request_id, msg.type, "unsupported_request", "request not supported");
+  // Requests (client -> gateway)
+  if (msg.type === "session.send") {
+    const req = WsSessionSendRequest.safeParse(msg);
+    if (!req.success) {
+      return Promise.resolve(
+        errorResponse(msg.request_id, msg.type, "contract_error", req.error.message, {
+          issues: req.error.issues,
+        }),
+      );
+    }
+    if (client.role !== "client") {
+      return Promise.resolve(
+        errorResponse(req.data.request_id, req.data.type, "forbidden", "only clients may send session messages"),
+      );
+    }
+    if (!deps.agentRuntime) {
+      return Promise.resolve(
+        errorResponse(req.data.request_id, req.data.type, "unsupported_request", "agent runtime not enabled"),
+      );
+    }
+
+    return deps.agentRuntime
+      .turn({
+        channel: req.data.payload.channel,
+        thread_id: req.data.payload.thread_id,
+        message: req.data.payload.message,
+        metadata: req.data.payload.metadata,
+      })
+      .then((result) => {
+        return {
+          request_id: req.data.request_id,
+          type: req.data.type,
+          ok: true,
+          result: WsSessionSendResult.parse(result),
+        } satisfies WsResponseEnvelope;
+      })
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        return errorResponse(req.data.request_id, req.data.type, "internal", message);
+      });
+  }
+
+  if (msg.type === "workflow.run") {
+    const req = WsWorkflowRunRequest.safeParse(msg);
+    if (!req.success) {
+      return Promise.resolve(
+        errorResponse(msg.request_id, msg.type, "contract_error", req.error.message, {
+          issues: req.error.issues,
+        }),
+      );
+    }
+    if (client.role !== "client") {
+      return Promise.resolve(
+        errorResponse(req.data.request_id, req.data.type, "forbidden", "only clients may start workflows"),
+      );
+    }
+    if (!deps.executionEngine) {
+      return Promise.resolve(
+        errorResponse(req.data.request_id, req.data.type, "unsupported_request", "workflow execution not enabled"),
+      );
+    }
+
+    return compileWorkflow(req.data.payload.pipeline)
+      .then(({ playbookId, steps }) => {
+        const planId = `wf-${req.data.request_id}`;
+        return deps.executionEngine!
+          .enqueuePlan({
+            key: req.data.payload.key,
+            lane: req.data.payload.lane,
+            planId,
+            requestId: req.data.request_id,
+            playbookId,
+            provenanceSources: ["user"],
+            steps,
+          })
+          .then(({ jobId, runId }) => {
+            return {
+              request_id: req.data.request_id,
+              type: req.data.type,
+              ok: true,
+              result: WsWorkflowRunResult.parse({ job_id: jobId, run_id: runId, plan_id: planId }),
+            } satisfies WsResponseEnvelope;
+          });
+      })
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        return errorResponse(req.data.request_id, req.data.type, "internal", message);
+      });
+  }
+
+  if (msg.type === "pairing.approve") {
+    const req = WsPairingApproveRequest.safeParse(msg);
+    if (!req.success) {
+      return Promise.resolve(
+        errorResponse(msg.request_id, msg.type, "contract_error", req.error.message, {
+          issues: req.error.issues,
+        }),
+      );
+    }
+    if (client.role !== "client") {
+      return Promise.resolve(
+        errorResponse(req.data.request_id, req.data.type, "forbidden", "only clients may approve pairings"),
+      );
+    }
+    if (!deps.nodePairingService) {
+      return Promise.resolve(
+        errorResponse(req.data.request_id, req.data.type, "unsupported_request", "node pairing not enabled"),
+      );
+    }
+
+    return deps.nodePairingService
+      .resolve({
+        nodeId: req.data.payload.node_id,
+        decision: "approved",
+        reason: req.data.payload.reason,
+        resolvedBy: { instance_id: client.instance_id },
+      })
+      .then((pairing) => {
+        if (!pairing) {
+          return errorResponse(req.data.request_id, req.data.type, "not_found", "pairing request not found");
+        }
+
+        // Force reconnect so approved nodes re-handshake with effective capabilities.
+        closeNodeConnections(req.data.payload.node_id, deps);
+
+        broadcastEvent(
+          {
+            event_id: crypto.randomUUID(),
+            type: "pairing.resolved",
+            occurred_at: new Date().toISOString(),
+            payload: { pairing },
+          },
+          deps,
+          { targetRole: "client" },
+        );
+
+        return {
+          request_id: req.data.request_id,
+          type: req.data.type,
+          ok: true,
+          result: WsPairingApproveResult.parse({ pairing }),
+        } satisfies WsResponseEnvelope;
+      })
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        return errorResponse(req.data.request_id, req.data.type, "internal", message);
+      });
+  }
+
+  if (msg.type === "pairing.deny") {
+    const req = WsPairingDenyRequest.safeParse(msg);
+    if (!req.success) {
+      return Promise.resolve(
+        errorResponse(msg.request_id, msg.type, "contract_error", req.error.message, {
+          issues: req.error.issues,
+        }),
+      );
+    }
+    if (client.role !== "client") {
+      return Promise.resolve(
+        errorResponse(req.data.request_id, req.data.type, "forbidden", "only clients may deny pairings"),
+      );
+    }
+    if (!deps.nodePairingService) {
+      return Promise.resolve(
+        errorResponse(req.data.request_id, req.data.type, "unsupported_request", "node pairing not enabled"),
+      );
+    }
+
+    return deps.nodePairingService
+      .resolve({
+        nodeId: req.data.payload.node_id,
+        decision: "denied",
+        reason: req.data.payload.reason,
+        resolvedBy: { instance_id: client.instance_id },
+      })
+      .then((pairing) => {
+        if (!pairing) {
+          return errorResponse(req.data.request_id, req.data.type, "not_found", "pairing request not found");
+        }
+
+        closeNodeConnections(req.data.payload.node_id, deps);
+
+        broadcastEvent(
+          {
+            event_id: crypto.randomUUID(),
+            type: "pairing.resolved",
+            occurred_at: new Date().toISOString(),
+            payload: { pairing },
+          },
+          deps,
+          { targetRole: "client" },
+        );
+
+        return {
+          request_id: req.data.request_id,
+          type: req.data.type,
+          ok: true,
+          result: WsPairingDenyResult.parse({ pairing }),
+        } satisfies WsResponseEnvelope;
+      })
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        return errorResponse(req.data.request_id, req.data.type, "internal", message);
+      });
+  }
+
+  if (msg.type === "pairing.revoke") {
+    const req = WsPairingRevokeRequest.safeParse(msg);
+    if (!req.success) {
+      return Promise.resolve(
+        errorResponse(msg.request_id, msg.type, "contract_error", req.error.message, {
+          issues: req.error.issues,
+        }),
+      );
+    }
+    if (client.role !== "client") {
+      return Promise.resolve(
+        errorResponse(req.data.request_id, req.data.type, "forbidden", "only clients may revoke pairings"),
+      );
+    }
+    if (!deps.nodePairingService) {
+      return Promise.resolve(
+        errorResponse(req.data.request_id, req.data.type, "unsupported_request", "node pairing not enabled"),
+      );
+    }
+
+    return deps.nodePairingService
+      .resolve({
+        nodeId: req.data.payload.node_id,
+        decision: "revoked",
+        reason: req.data.payload.reason,
+        resolvedBy: { instance_id: client.instance_id },
+      })
+      .then(async (pairing) => {
+        if (!pairing) {
+          return errorResponse(req.data.request_id, req.data.type, "not_found", "pairing request not found");
+        }
+
+        if (deps.nodeTokenDal) {
+          await deps.nodeTokenDal
+            .revokeAllForNode({ nodeId: req.data.payload.node_id })
+            .catch(() => {
+              // best-effort
+            });
+        }
+
+        closeNodeConnections(req.data.payload.node_id, deps);
+
+        broadcastEvent(
+          {
+            event_id: crypto.randomUUID(),
+            type: "pairing.resolved",
+            occurred_at: new Date().toISOString(),
+            payload: { pairing },
+          },
+          deps,
+          { targetRole: "client" },
+        );
+
+        return {
+          request_id: req.data.request_id,
+          type: req.data.type,
+          ok: true,
+          result: WsPairingRevokeResult.parse({ pairing }),
+        } satisfies WsResponseEnvelope;
+      })
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        return errorResponse(req.data.request_id, req.data.type, "internal", message);
+      });
+  }
+
+  if (msg.type === "approval.list") {
+    const req = WsApprovalListRequest.safeParse(msg);
+    if (!req.success) {
+      return Promise.resolve(
+        errorResponse(msg.request_id, msg.type, "contract_error", req.error.message, {
+          issues: req.error.issues,
+        }),
+      );
+    }
+    if (client.role !== "client") {
+      return Promise.resolve(
+        errorResponse(req.data.request_id, req.data.type, "forbidden", "only clients may list approvals"),
+      );
+    }
+    if (!deps.approvalDal) {
+      return Promise.resolve(
+        errorResponse(req.data.request_id, req.data.type, "unsupported_request", "approvals not enabled"),
+      );
+    }
+
+    const status = req.data.payload.status ?? "pending";
+    if (status === "cancelled") {
+      return Promise.resolve({
+        request_id: req.data.request_id,
+        type: req.data.type,
+        ok: true,
+        result: WsApprovalListResult.parse({ approvals: [], next_cursor: undefined }),
+      } satisfies WsResponseEnvelope);
+    }
+
+    return listApprovals(deps.approvalDal, req.data.payload)
+      .then((result) => {
+        return {
+          request_id: req.data.request_id,
+          type: req.data.type,
+          ok: true,
+          result: WsApprovalListResult.parse(result),
+        } satisfies WsResponseEnvelope;
+      })
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        return errorResponse(req.data.request_id, req.data.type, "internal", message);
+      });
+  }
+
+  if (msg.type === "approval.resolve") {
+    const req = WsApprovalResolveRequest.safeParse(msg);
+    if (!req.success) {
+      return Promise.resolve(
+        errorResponse(msg.request_id, msg.type, "contract_error", req.error.message, {
+          issues: req.error.issues,
+        }),
+      );
+    }
+    if (client.role !== "client") {
+      return Promise.resolve(
+        errorResponse(req.data.request_id, req.data.type, "forbidden", "only clients may resolve approvals"),
+      );
+    }
+    if (!deps.approvalDal) {
+      return Promise.resolve(
+        errorResponse(req.data.request_id, req.data.type, "unsupported_request", "approvals not enabled"),
+      );
+    }
+
+    const decision = req.data.payload.decision;
+    const reason = req.data.payload.reason;
+    const approvalId = req.data.payload.approval_id;
+
+    const wsPublisher = {
+      publish: (evt: WsEventEnvelope, opts?: { targetRole?: "client" | "node" }) =>
+        publishEvent(evt, deps, opts),
+    };
+
+    return resolveAndApplyApproval({
+      approvalDal: deps.approvalDal,
+      executionEngine: deps.executionEngine,
+      wsPublisher,
+      logger: deps.logger,
+      approvalId,
+      decision,
+      reason,
+    })
+      .then((resolution) => {
+        if (resolution.kind === "not_found") {
+          return errorResponse(req.data.request_id, req.data.type, "not_found", "approval not found");
+        }
+        if (resolution.kind === "pending") {
+          return errorResponse(req.data.request_id, req.data.type, "conflict", "approval is still pending");
+        }
+        if (resolution.kind === "conflict") {
+          return errorResponse(
+            req.data.request_id,
+            req.data.type,
+            "conflict",
+            `approval already resolved as '${resolution.approval.status}'`,
+            { approval: toSchemaApproval(resolution.approval) },
+          );
+        }
+
+        const updated = toSchemaApproval(resolution.approval);
+        return {
+          request_id: req.data.request_id,
+          type: req.data.type,
+          ok: true,
+          result: WsApprovalResolveResult.parse({ approval: updated }),
+        } satisfies WsResponseEnvelope;
+      })
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        return errorResponse(req.data.request_id, req.data.type, "internal", message);
+      });
+  }
+
+  if (msg.type === "workflow.resume") {
+    const req = WsWorkflowResumeRequest.safeParse(msg);
+    if (!req.success) {
+      return Promise.resolve(
+        errorResponse(msg.request_id, msg.type, "contract_error", req.error.message, {
+          issues: req.error.issues,
+        }),
+      );
+    }
+    if (client.role !== "client") {
+      return Promise.resolve(
+        errorResponse(req.data.request_id, req.data.type, "forbidden", "only clients may resume workflows"),
+      );
+    }
+    if (!deps.executionEngine) {
+      return Promise.resolve(
+        errorResponse(req.data.request_id, req.data.type, "unsupported_request", "workflow control not enabled"),
+      );
+    }
+
+    return deps.executionEngine
+      .resumeRun(req.data.payload.resume_token)
+      .then((runId) => {
+        if (!runId) {
+          return errorResponse(req.data.request_id, req.data.type, "not_found", "resume token not found or not resumable");
+        }
+
+        broadcastEvent(
+          {
+            event_id: crypto.randomUUID(),
+            type: "run.resumed",
+            occurred_at: new Date().toISOString(),
+            payload: { run_id: runId },
+          },
+          deps,
+          { targetRole: "client" },
+        );
+
+        return {
+          request_id: req.data.request_id,
+          type: req.data.type,
+          ok: true,
+          result: WsWorkflowResumeResult.parse({ run_id: runId }),
+        } satisfies WsResponseEnvelope;
+      })
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        return errorResponse(req.data.request_id, req.data.type, "internal", message);
+      });
+  }
+
+  if (msg.type === "workflow.cancel") {
+    const req = WsWorkflowCancelRequest.safeParse(msg);
+    if (!req.success) {
+      return Promise.resolve(
+        errorResponse(msg.request_id, msg.type, "contract_error", req.error.message, {
+          issues: req.error.issues,
+        }),
+      );
+    }
+    if (client.role !== "client") {
+      return Promise.resolve(
+        errorResponse(req.data.request_id, req.data.type, "forbidden", "only clients may cancel workflows"),
+      );
+    }
+    if (!deps.executionEngine) {
+      return Promise.resolve(
+        errorResponse(req.data.request_id, req.data.type, "unsupported_request", "workflow control not enabled"),
+      );
+    }
+
+    if (req.data.payload.resume_token) {
+      return deps.executionEngine
+        .cancelRunByResumeToken(req.data.payload.resume_token, req.data.payload.reason)
+        .then((runId) => {
+          if (!runId) {
+            return errorResponse(req.data.request_id, req.data.type, "not_found", "resume token not found or not cancellable");
+          }
+
+          broadcastEvent(
+            {
+              event_id: crypto.randomUUID(),
+              type: "run.cancelled",
+              occurred_at: new Date().toISOString(),
+              payload: { run_id: runId },
+            },
+            deps,
+            { targetRole: "client" },
+          );
+
+          return {
+            request_id: req.data.request_id,
+            type: req.data.type,
+            ok: true,
+            result: WsWorkflowCancelResult.parse({ run_id: runId }),
+          } satisfies WsResponseEnvelope;
+        })
+        .catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err);
+          return errorResponse(req.data.request_id, req.data.type, "internal", message);
+        });
+    }
+
+    return deps.executionEngine
+      .cancelRun(req.data.payload.run_id!, req.data.payload.reason)
+      .then((runId) => {
+        if (!runId) {
+          return errorResponse(req.data.request_id, req.data.type, "not_found", "run not found or not cancellable");
+        }
+
+        broadcastEvent(
+          {
+            event_id: crypto.randomUUID(),
+            type: "run.cancelled",
+            occurred_at: new Date().toISOString(),
+            payload: { run_id: runId },
+          },
+          deps,
+          { targetRole: "client" },
+        );
+
+        return {
+          request_id: req.data.request_id,
+          type: req.data.type,
+          ok: true,
+          result: WsWorkflowCancelResult.parse({ run_id: runId }),
+        } satisfies WsResponseEnvelope;
+      })
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        return errorResponse(req.data.request_id, req.data.type, "internal", message);
+      });
+  }
+
+  if (msg.type === "presence.beacon") {
+    const req = WsPresenceBeaconRequest.safeParse(msg);
+    if (!req.success) {
+      return Promise.resolve(
+        errorResponse(msg.request_id, msg.type, "contract_error", req.error.message, {
+          issues: req.error.issues,
+        }),
+      );
+    }
+    if (!deps.presence) {
+      return Promise.resolve(
+        errorResponse(req.data.request_id, req.data.type, "unsupported_request", "presence not enabled"),
+      );
+    }
+
+    return deps.presence
+      .applyBeacon(client, req.data.payload)
+      .then((entry) => {
+        broadcastEvent(
+          {
+            event_id: crypto.randomUUID(),
+            type: "presence.upsert",
+            occurred_at: new Date().toISOString(),
+            payload: { entry },
+          },
+          deps,
+          { targetRole: "client" },
+        );
+
+        return {
+          request_id: req.data.request_id,
+          type: req.data.type,
+          ok: true,
+          result: {},
+        } satisfies WsResponseEnvelope;
+      })
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        return errorResponse(req.data.request_id, req.data.type, "internal", message);
+      });
+  }
+
+  return Promise.resolve(
+    errorResponse(msg.request_id, msg.type, "unsupported_request", "request not supported"),
+  );
+}
+
+async function compileWorkflow(pipeline: string): Promise<{
+  playbookId: string;
+  steps: ActionPrimitive[];
+}> {
+  const trimmed = pipeline.trim();
+  const nowIso = new Date().toISOString();
+
+  const manifest = await (async (): Promise<unknown> => {
+    if (trimmed.startsWith("/")) {
+      const abs = resolvePath(trimmed);
+      let path = abs;
+      try {
+        if (statSync(abs).isDirectory()) {
+          path = joinPath(abs, "playbook.yml");
+        }
+      } catch {
+        // ignore; readFile will throw
+      }
+      const raw = await readFile(path, "utf-8");
+      return parseYaml(raw) as unknown;
+    }
+
+    const parsed = parseYaml(trimmed) as unknown;
+    if (Array.isArray(parsed)) {
+      return {
+        id: `inline-${crypto.randomUUID()}`,
+        name: "Inline workflow",
+        version: "0.0.0",
+        steps: parsed,
+      };
+    }
+    if (parsed && typeof parsed === "object") {
+      const record = parsed as Record<string, unknown>;
+      return {
+        ...record,
+        id: typeof record["id"] === "string" && record["id"].trim().length > 0
+          ? record["id"]
+          : `inline-${crypto.randomUUID()}`,
+        name: typeof record["name"] === "string" && record["name"].trim().length > 0
+          ? record["name"]
+          : "Inline workflow",
+        version: typeof record["version"] === "string" && record["version"].trim().length > 0
+          ? record["version"]
+          : "0.0.0",
+      };
+    }
+    throw new Error("invalid workflow pipeline (expected YAML/JSON object or steps array)");
+  })();
+
+  const validated = PlaybookManifest.parse(manifest);
+
+  const runner = new PlaybookRunner();
+  const compiled = runner.run({
+    manifest: validated,
+    file_path: trimmed.startsWith("/") ? resolvePath(trimmed) : "<inline>",
+    loaded_at: nowIso,
+  });
+
+  return { playbookId: compiled.playbook_id, steps: compiled.steps };
 }
 
 // ---------------------------------------------------------------------------
@@ -189,8 +881,7 @@ export function handleClientMessage(
  */
 export function dispatchTask(
   action: ActionPrimitive,
-  planId: string,
-  stepIndex: number,
+  ids: { runId: ExecutionRunId; stepId: ExecutionStepId; attemptId: ExecutionAttemptId },
   deps: ProtocolDeps,
 ): Promise<string> {
   const capability = requiredCapability(action.type);
@@ -221,7 +912,7 @@ export function dispatchTask(
     const message: WsRequestEnvelope = {
       request_id: requestId,
       type: "task.execute",
-      payload: { plan_id: planId, step_index: stepIndex, action },
+      payload: { run_id: ids.runId, step_id: ids.stepId, attempt_id: ids.attemptId, action },
     };
 
       await cluster.outboxDal.enqueue(
@@ -237,7 +928,7 @@ export function dispatchTask(
   const message: WsRequestEnvelope = {
     request_id: requestId,
     type: "task.execute",
-    payload: { plan_id: planId, step_index: stepIndex, action },
+    payload: { run_id: ids.runId, step_id: ids.stepId, attempt_id: ids.attemptId, action },
   };
   client.ws.send(JSON.stringify(message));
   return Promise.resolve(requestId);
@@ -278,6 +969,7 @@ export function requestApproval(
         .enqueue("ws.broadcast", {
           source_edge_id: deps.cluster.edgeId,
           skip_local: true,
+          target_role: "client",
           message,
         })
         .catch((err) => {
@@ -293,7 +985,7 @@ export function requestApproval(
 
   if (deps.cluster) {
     void deps.cluster.outboxDal
-      .enqueue("ws.broadcast", { message })
+      .enqueue("ws.broadcast", { target_role: "client", message })
       .catch((err) => {
         const message = err instanceof Error ? err.message : String(err);
         deps.logger?.error("outbox.enqueue_failed", {
@@ -334,6 +1026,7 @@ export function sendPlanUpdate(
       .enqueue("ws.broadcast", {
         source_edge_id: deps.cluster.edgeId,
         skip_local: true,
+        target_role: "client",
         message,
       })
       .catch((err) => {
@@ -344,6 +1037,14 @@ export function sendPlanUpdate(
         });
       });
   }
+}
+
+export function publishEvent(
+  evt: WsEventEnvelope,
+  deps: ProtocolDeps,
+  opts?: { targetRole?: "client" | "node" },
+): void {
+  broadcastEvent(evt, deps, opts);
 }
 
 // ---------------------------------------------------------------------------
@@ -357,6 +1058,35 @@ function errorEvent(code: string, message: string): WsEventEnvelope {
     occurred_at: new Date().toISOString(),
     payload: { code, message },
   };
+}
+
+function broadcastEvent(
+  evt: WsEventEnvelope,
+  deps: ProtocolDeps,
+  opts?: { targetRole?: "client" | "node" },
+): void {
+  const payload = JSON.stringify(evt);
+  for (const c of deps.connectionManager.allClients()) {
+    if (opts?.targetRole && c.role !== opts.targetRole) continue;
+    c.ws.send(payload);
+  }
+
+  if (deps.cluster) {
+    void deps.cluster.outboxDal
+      .enqueue("ws.broadcast", {
+        source_edge_id: deps.cluster.edgeId,
+        skip_local: true,
+        target_role: opts?.targetRole,
+        message: evt,
+      })
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        deps.logger?.error("outbox.enqueue_failed", {
+          topic: "ws.broadcast",
+          error: message,
+        });
+      });
+  }
 }
 
 function errorResponse(
@@ -384,4 +1114,62 @@ function evidenceFromErrorDetails(details: unknown): unknown {
     return undefined;
   }
   return (details as { evidence?: unknown }).evidence;
+}
+
+async function listApprovals(
+  dal: ApprovalDal,
+  payload: {
+    status?: string;
+    kind?: ApprovalKindT[];
+    key?: string;
+    lane?: string;
+    run_id?: string;
+    limit: number;
+    cursor?: string;
+  },
+): Promise<{ approvals: ApprovalT[]; next_cursor?: string }> {
+  const status = (payload.status ?? "pending") as ApprovalStatusT;
+  const limit = Math.max(1, Math.min(500, payload.limit ?? 100));
+
+  const cursorRaw = payload.cursor?.trim();
+  const cursorId =
+    cursorRaw && /^[0-9]+$/.test(cursorRaw) ? Number(cursorRaw) : undefined;
+
+  const page = await dal.listByStatusDesc(status, { limit, cursorId });
+  const mapped = page.map(toSchemaApproval);
+
+  const filtered = mapped.filter((approval) => {
+    if (payload.kind && payload.kind.length > 0 && !payload.kind.includes(approval.kind)) {
+      return false;
+    }
+    if (payload.run_id && approval.scope?.run_id !== payload.run_id) {
+      return false;
+    }
+    if (payload.key && approval.scope?.key !== payload.key) {
+      return false;
+    }
+    if (payload.lane && approval.scope?.lane !== payload.lane) {
+      return false;
+    }
+    return true;
+  });
+
+  const nextCursor = page.length === limit ? String(page[page.length - 1]!.id) : undefined;
+
+  return {
+    approvals: filtered,
+    next_cursor: nextCursor,
+  };
+}
+
+function closeNodeConnections(nodeId: string, deps: ProtocolDeps): void {
+  for (const peer of deps.connectionManager.allClients()) {
+    if (peer.role !== "node") continue;
+    if (peer.instance_id !== nodeId) continue;
+    try {
+      peer.ws.close(1012, "pairing resolved; reconnect");
+    } catch {
+      // best-effort
+    }
+  }
 }

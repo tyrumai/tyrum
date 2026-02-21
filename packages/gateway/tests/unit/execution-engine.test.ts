@@ -37,7 +37,7 @@ describe("ExecutionEngine (normalized)", () => {
 
     const engine = new ExecutionEngine({ db });
     const { jobId, runId } = await engine.enqueuePlan({
-      key: "agent:agent-1:telegram-1:group:thread-1",
+      key: "agent:agent-1:telegram:default:group:thread-1",
       lane: "main",
       planId: "plan-test-1",
       requestId: "test-req-1",
@@ -71,7 +71,7 @@ describe("ExecutionEngine (normalized)", () => {
       clock: () => ({ nowMs: Date.now(), nowIso: new Date().toISOString() }),
     });
     await engine.enqueuePlan({
-      key: "agent:agent-1:telegram-1:group:thread-1",
+      key: "agent:agent-1:telegram:default:group:thread-1",
       lane: "main",
       planId: "plan-test-2",
       requestId: "test-req-1",
@@ -111,7 +111,7 @@ describe("ExecutionEngine (normalized)", () => {
       },
     });
     await engine.enqueuePlan({
-      key: "agent:agent-1:telegram-1:group:thread-1",
+      key: "agent:agent-1:telegram:default:group:thread-1",
       lane: "main",
       planId: "plan-finished-at-1",
       requestId: "test-req-1",
@@ -140,7 +140,7 @@ describe("ExecutionEngine (normalized)", () => {
 
     const engine = new ExecutionEngine({ db });
     await engine.enqueuePlan({
-      key: "agent:agent-1:telegram-1:group:thread-1",
+      key: "agent:agent-1:telegram:default:group:thread-1",
       lane: "main",
       planId: "plan-artifacts-1",
       requestId: "test-req-1",
@@ -180,7 +180,7 @@ describe("ExecutionEngine (normalized)", () => {
 
     const engine = new ExecutionEngine({ db, redactionEngine: redaction });
     const { runId } = await engine.enqueuePlan({
-      key: "agent:agent-1:telegram-1:group:thread-1",
+      key: "agent:agent-1:telegram:default:group:thread-1",
       lane: "main",
       planId: "plan-redact-1",
       requestId: "test-req-1",
@@ -211,7 +211,7 @@ describe("ExecutionEngine (normalized)", () => {
 
     const engine = new ExecutionEngine({ db });
     const { runId } = await engine.enqueuePlan({
-      key: "agent:agent-1:telegram-1:group:thread-1",
+      key: "agent:agent-1:telegram:default:group:thread-1",
       lane: "main",
       planId: "plan-cost-1",
       requestId: "test-req-1",
@@ -245,7 +245,7 @@ describe("ExecutionEngine (normalized)", () => {
 
     const engine = new ExecutionEngine({ db });
     const { runId } = await engine.enqueuePlan({
-      key: "agent:agent-1:telegram-1:group:thread-1",
+      key: "agent:agent-1:telegram:default:group:thread-1",
       lane: "main",
       planId: "plan-retry-1",
       requestId: "test-req-1",
@@ -282,7 +282,7 @@ describe("ExecutionEngine (normalized)", () => {
 
     const engine = new ExecutionEngine({ db });
     const { runId } = await engine.enqueuePlan({
-      key: "agent:agent-1:telegram-1:group:thread-1",
+      key: "agent:agent-1:telegram:default:group:thread-1",
       lane: "main",
       planId: "plan-pause-1",
       requestId: "test-req-1",
@@ -330,7 +330,7 @@ describe("ExecutionEngine (normalized)", () => {
 
     const engine = new ExecutionEngine({ db });
     const { runId } = await engine.enqueuePlan({
-      key: "agent:agent-1:telegram-1:group:thread-1",
+      key: "agent:agent-1:telegram:default:group:thread-1",
       lane: "main",
       planId: "plan-resume-1",
       requestId: "test-req-1",
@@ -384,7 +384,7 @@ describe("ExecutionEngine (normalized)", () => {
 
     const engine = new ExecutionEngine({ db });
     const { runId } = await engine.enqueuePlan({
-      key: "agent:agent-1:telegram-1:group:thread-1",
+      key: "agent:agent-1:telegram:default:group:thread-1",
       lane: "main",
       planId: "plan-idem-1",
       requestId: "test-req-1",
@@ -425,7 +425,7 @@ describe("ExecutionEngine (normalized)", () => {
 
     const engine = new ExecutionEngine({ db });
     const { runId } = await engine.enqueuePlan({
-      key: "agent:agent-1:telegram-1:group:thread-1",
+      key: "agent:agent-1:telegram:default:group:thread-1",
       lane: "main",
       planId: "plan-idem-write-1",
       requestId: "test-req-1",
@@ -460,7 +460,7 @@ describe("ExecutionEngine (normalized)", () => {
 
     const engine = new ExecutionEngine({ db });
     const { runId } = await engine.enqueuePlan({
-      key: "agent:agent-1:telegram-1:group:thread-1",
+      key: "agent:agent-1:telegram:default:group:thread-1",
       lane: "main",
       planId: "plan-takeover-1",
       requestId: "test-req-1",

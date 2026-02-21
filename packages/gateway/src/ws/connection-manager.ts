@@ -6,7 +6,13 @@
  */
 
 import type { WebSocket } from "ws";
-import type { ClientCapability, WsEventEnvelope, WsRequestEnvelope } from "@tyrum/schemas";
+import type {
+  ClientCapability,
+  DeviceDescriptor,
+  PeerRole,
+  WsEventEnvelope,
+  WsRequestEnvelope,
+} from "@tyrum/schemas";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -15,6 +21,9 @@ import type { ClientCapability, WsEventEnvelope, WsRequestEnvelope } from "@tyru
 export interface ConnectedClient {
   readonly id: string;
   readonly ws: WebSocket;
+  readonly role: PeerRole;
+  readonly instance_id: string;
+  readonly device: DeviceDescriptor;
   readonly capabilities: readonly ClientCapability[];
   lastPong: number;
 }
@@ -39,16 +48,26 @@ export class ConnectionManager {
   private readonly clients = new Map<string, ConnectedClient>();
 
   /**
-   * Register a new client after a successful `connect` handshake.
+   * Register a new peer after a successful handshake.
    *
-   * @returns the generated client id (UUID v4).
+   * @returns the connection id.
    */
-  addClient(ws: WebSocket, capabilities: readonly ClientCapability[]): string {
-    const id = crypto.randomUUID();
+  addClient(params: {
+    connectionId: string;
+    ws: WebSocket;
+    role: PeerRole;
+    instanceId: string;
+    device: DeviceDescriptor;
+    capabilities: readonly ClientCapability[];
+  }): string {
+    const id = params.connectionId;
     const client: ConnectedClient = {
       id,
-      ws,
-      capabilities,
+      ws: params.ws,
+      role: params.role,
+      instance_id: params.instanceId,
+      device: params.device,
+      capabilities: params.capabilities,
       lastPong: Date.now(),
     };
     this.clients.set(id, client);

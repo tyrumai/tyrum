@@ -42,5 +42,22 @@ describe("OutboxDal", () => {
     await outbox.ackConsumerCursor("edge-a", a[a.length - 1]!.id);
     expect(await outbox.poll("edge-a", 100)).toHaveLength(0);
   });
-});
 
+  it("persists consumer cursors across edge restarts", async () => {
+    const outbox = setup();
+
+    await outbox.enqueue("ws.broadcast", { seq: 1 });
+    const first = await outbox.poll("edge-a", 100);
+    expect(first).toHaveLength(1);
+    await outbox.ackConsumerCursor("edge-a", first[0]!.id);
+
+    // New instance simulates a restarted edge process.
+    const restarted = new OutboxDal(db!);
+    expect(await restarted.poll("edge-a", 100)).toHaveLength(0);
+
+    await restarted.enqueue("ws.broadcast", { seq: 2 });
+    const second = await restarted.poll("edge-a", 100);
+    expect(second).toHaveLength(1);
+    expect((second[0]!.payload as { seq: number }).seq).toBe(2);
+  });
+});

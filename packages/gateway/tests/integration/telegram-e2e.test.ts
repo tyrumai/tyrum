@@ -3,6 +3,11 @@ import { Hono } from "hono";
 import { createIngressRoutes } from "../../src/routes/ingress.js";
 import { TelegramBot } from "../../src/modules/ingress/telegram-bot.js";
 import type { AgentRuntime } from "../../src/modules/agent/runtime.js";
+import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import { MemoryDal } from "../../src/modules/memory/dal.js";
+import { ApprovalDal } from "../../src/modules/approval/dal.js";
+import { ChannelWorker } from "../../src/modules/channels/worker.js";
+import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
 function makeTelegramUpdate(text: string, chatId = 123) {
   return {
@@ -28,12 +33,22 @@ function mockFetch(): typeof fetch {
 
 describe("Telegram E2E: webhook -> agent -> reply", () => {
   const originalWebhookSecret = process.env["TELEGRAM_WEBHOOK_SECRET"];
+  let db: SqliteDb | undefined;
+  let memoryDal: MemoryDal | undefined;
+  let approvalDal: ApprovalDal | undefined;
 
   beforeEach(() => {
     process.env["TELEGRAM_WEBHOOK_SECRET"] = "test-telegram-secret";
+    db = openTestSqliteDb();
+    memoryDal = new MemoryDal(db);
+    approvalDal = new ApprovalDal(db);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await db?.close();
+    db = undefined;
+    memoryDal = undefined;
+    approvalDal = undefined;
     if (originalWebhookSecret === undefined) {
       delete process.env["TELEGRAM_WEBHOOK_SECRET"];
     } else {
@@ -54,10 +69,24 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
       }),
     } as unknown as AgentRuntime;
 
+    const channelWorker = new ChannelWorker({
+      db: db!,
+      memoryDal: memoryDal!,
+      agentRuntime: mockRuntime,
+      telegramBot: bot,
+      approvalDal: approvalDal!,
+      debounceMs: 0,
+      tickMs: 10_000,
+    });
+
     const app = new Hono();
     app.route(
       "/",
-      createIngressRoutes({ telegramBot: bot, agentRuntime: mockRuntime }),
+      createIngressRoutes({
+        telegramBot: bot,
+        agentRuntime: mockRuntime,
+        channelWorker,
+      }),
     );
 
     const res = await app.request("/ingress/telegram", {
@@ -70,14 +99,16 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     });
 
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { ok: boolean; session_id: string };
+    const body = (await res.json()) as { ok: boolean; status: string };
     expect(body.ok).toBe(true);
-    expect(body.session_id).toBe("session-abc");
+    expect(body.status).toBe("queued");
+
+    await channelWorker.tick();
 
     // Verify agent was called with correct params
     expect(mockRuntime.turn).toHaveBeenCalledWith({
       channel: "telegram",
-      thread_id: "123",
+      thread_id: "agent:default:telegram:default:dm:999",
       message: "Help me",
     });
 
@@ -101,10 +132,24 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
       turn: vi.fn().mockRejectedValue(new Error("LLM unavailable")),
     } as unknown as AgentRuntime;
 
+    const channelWorker = new ChannelWorker({
+      db: db!,
+      memoryDal: memoryDal!,
+      agentRuntime: mockRuntime,
+      telegramBot: bot,
+      approvalDal: approvalDal!,
+      debounceMs: 0,
+      tickMs: 10_000,
+    });
+
     const app = new Hono();
     app.route(
       "/",
-      createIngressRoutes({ telegramBot: bot, agentRuntime: mockRuntime }),
+      createIngressRoutes({
+        telegramBot: bot,
+        agentRuntime: mockRuntime,
+        channelWorker,
+      }),
     );
 
     const res = await app.request("/ingress/telegram", {
@@ -117,9 +162,11 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     });
 
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { ok: boolean; error: string };
+    const body = (await res.json()) as { ok: boolean; status: string };
     expect(body.ok).toBe(true);
-    expect(body.error).toBe("agent_error");
+    expect(body.status).toBe("queued");
+
+    await channelWorker.tick();
 
     // Verify error message was sent to user
     expect(fetchFn).toHaveBeenCalledOnce();

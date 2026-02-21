@@ -10,9 +10,17 @@ const KeyPart = z
 export const AgentId = KeyPart;
 export type AgentId = z.infer<typeof AgentId>;
 
-/** Connector/account instance identifier (not just a channel type). */
+/** Channel type identifier (e.g. `telegram`, `slack`). */
 export const ChannelKey = KeyPart;
 export type ChannelKey = z.infer<typeof ChannelKey>;
+
+/** Connector/account instance identifier (e.g. `default`, `work`). */
+export const AccountId = KeyPart;
+export type AccountId = z.infer<typeof AccountId>;
+
+/** Provider-native peer id for direct messages (e.g. Telegram user id). */
+export const PeerId = KeyPart;
+export type PeerId = z.infer<typeof PeerId>;
 
 /** Provider-native thread/container id (e.g. Telegram chat id). */
 export const ThreadId = KeyPart;
@@ -49,26 +57,57 @@ export const DEFAULT_WORKSPACE_ID = "default" as const;
 
 export const AgentMainKey = z
   .string()
-  .regex(/^agent:[^:]+:[^:]+:main$/, "agent main key must be agent:<agentId>:<channel>:main");
+  .regex(/^agent:[^:]+:main$/, "agent main key must be agent:<agentId>:main");
 export type AgentMainKey = z.infer<typeof AgentMainKey>;
+
+export const AgentDmPerPeerKey = z
+  .string()
+  .regex(
+    /^agent:[^:]+:dm:[^:]+$/,
+    "agent dm key must be agent:<agentId>:dm:<peerId>",
+  );
+export type AgentDmPerPeerKey = z.infer<typeof AgentDmPerPeerKey>;
+
+export const AgentDmPerChannelPeerKey = z
+  .string()
+  .regex(
+    /^agent:[^:]+:[^:]+:dm:[^:]+$/,
+    "agent dm key must be agent:<agentId>:<channel>:dm:<peerId>",
+  );
+export type AgentDmPerChannelPeerKey = z.infer<typeof AgentDmPerChannelPeerKey>;
+
+export const AgentDmPerAccountChannelPeerKey = z
+  .string()
+  .regex(
+    /^agent:[^:]+:[^:]+:[^:]+:dm:[^:]+$/,
+    "agent dm key must be agent:<agentId>:<channel>:<account>:dm:<peerId>",
+  );
+export type AgentDmPerAccountChannelPeerKey = z.infer<typeof AgentDmPerAccountChannelPeerKey>;
+
+export const AgentDmKey = z.union([
+  AgentDmPerPeerKey,
+  AgentDmPerChannelPeerKey,
+  AgentDmPerAccountChannelPeerKey,
+]);
+export type AgentDmKey = z.infer<typeof AgentDmKey>;
 
 export const AgentGroupKey = z
   .string()
   .regex(
-    /^agent:[^:]+:[^:]+:group:[^:]+$/,
-    "agent group key must be agent:<agentId>:<channel>:group:<id>",
+    /^agent:[^:]+:[^:]+:[^:]+:group:[^:]+$/,
+    "agent group key must be agent:<agentId>:<channel>:<account>:group:<id>",
   );
 export type AgentGroupKey = z.infer<typeof AgentGroupKey>;
 
 export const AgentChannelKey = z
   .string()
   .regex(
-    /^agent:[^:]+:[^:]+:channel:[^:]+$/,
-    "agent channel key must be agent:<agentId>:<channel>:channel:<id>",
+    /^agent:[^:]+:[^:]+:[^:]+:channel:[^:]+$/,
+    "agent channel key must be agent:<agentId>:<channel>:<account>:channel:<id>",
   );
 export type AgentChannelKey = z.infer<typeof AgentChannelKey>;
 
-export const AgentKey = z.union([AgentMainKey, AgentGroupKey, AgentChannelKey]);
+export const AgentKey = z.union([AgentMainKey, AgentDmKey, AgentGroupKey, AgentChannelKey]);
 export type AgentKey = z.infer<typeof AgentKey>;
 
 export const CronKey = z
@@ -100,7 +139,7 @@ export type TyrumKey = z.infer<typeof TyrumKey>;
 export const Lane = z.enum(["main", "cron", "subagent"]);
 export type Lane = z.infer<typeof Lane>;
 
-export const QueueMode = z.enum(["collect", "followup", "steer"]);
+export const QueueMode = z.enum(["collect", "followup", "steer", "steer_backlog", "interrupt"]);
 export type QueueMode = z.infer<typeof QueueMode>;
 
 // ---------------------------------------------------------------------------
@@ -111,13 +150,21 @@ export type ParsedTyrumKey =
   | {
       kind: "agent";
       agent_id: AgentId;
-      channel: ChannelKey;
       thread_kind: "main";
     }
   | {
       kind: "agent";
       agent_id: AgentId;
+      thread_kind: "dm";
+      peer_id: PeerId;
+      channel?: ChannelKey;
+      account_id?: AccountId;
+    }
+  | {
+      kind: "agent";
+      agent_id: AgentId;
       channel: ChannelKey;
+      account_id: AccountId;
       thread_kind: "group";
       id: ThreadId;
     }
@@ -125,6 +172,7 @@ export type ParsedTyrumKey =
       kind: "agent";
       agent_id: AgentId;
       channel: ChannelKey;
+      account_id: AccountId;
       thread_kind: "channel";
       id: ThreadId;
     }
@@ -139,36 +187,77 @@ export function parseTyrumKey(key: TyrumKey): ParsedTyrumKey {
   switch (kind) {
     case "agent": {
       const agentId = parts[1];
-      const channel = parts[2];
-      const scope = parts[3];
-      if (!agentId || !channel || !scope) {
+      const scope = parts[2];
+      if (!agentId || !scope) {
         throw new Error(`invalid agent key: ${key}`);
       }
 
-      if (scope === "main") {
+      if (scope === "main" && parts.length === 3) {
         return {
           kind: "agent",
           agent_id: AgentId.parse(agentId),
-          channel: ChannelKey.parse(channel),
           thread_kind: "main",
         };
       }
 
-      if (scope === "group" || scope === "channel") {
-        const id = parts[4];
-        if (!id) {
-          throw new Error(`invalid agent key: ${key}`);
-        }
+      if (scope === "dm" && parts.length === 4) {
+        const peerId = parts[3];
+        if (!peerId) throw new Error(`invalid agent dm key: ${key}`);
         return {
           kind: "agent",
           agent_id: AgentId.parse(agentId),
-          channel: ChannelKey.parse(channel),
-          thread_kind: scope,
-          id: ThreadId.parse(id),
+          thread_kind: "dm",
+          peer_id: PeerId.parse(peerId),
         };
       }
 
-      throw new Error(`invalid agent key scope: ${scope}`);
+      // agent:<agentId>:<channel>:dm:<peerId>
+      if (parts.length === 5 && parts[3] === "dm") {
+        const channel = parts[2];
+        const peerId = parts[4];
+        if (!channel || !peerId) throw new Error(`invalid agent dm key: ${key}`);
+        return {
+          kind: "agent",
+          agent_id: AgentId.parse(agentId),
+          thread_kind: "dm",
+          channel: ChannelKey.parse(channel),
+          peer_id: PeerId.parse(peerId),
+        };
+      }
+
+      if (parts.length === 6) {
+        const channel = parts[2];
+        const account = parts[3];
+        const scope6 = parts[4];
+        const id = parts[5];
+        if (!channel || !account || !scope6 || !id) {
+          throw new Error(`invalid agent key: ${key}`);
+        }
+
+        if (scope6 === "dm") {
+          return {
+            kind: "agent",
+            agent_id: AgentId.parse(agentId),
+            thread_kind: "dm",
+            channel: ChannelKey.parse(channel),
+            account_id: AccountId.parse(account),
+            peer_id: PeerId.parse(id),
+          };
+        }
+
+        if (scope6 === "group" || scope6 === "channel") {
+          return {
+            kind: "agent",
+            agent_id: AgentId.parse(agentId),
+            channel: ChannelKey.parse(channel),
+            account_id: AccountId.parse(account),
+            thread_kind: scope6,
+            id: ThreadId.parse(id),
+          };
+        }
+      }
+
+      throw new Error(`invalid agent key: ${key}`);
     }
 
     case "cron": {
@@ -199,4 +288,3 @@ export function parseTyrumKey(key: TyrumKey): ParsedTyrumKey {
       throw new Error(`unknown key kind: ${String(kind)}`);
   }
 }
-

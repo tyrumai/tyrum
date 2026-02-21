@@ -1,11 +1,14 @@
 import { Hono, type Context } from "hono";
 import { setCookie } from "hono/cookie";
 import type { ApprovalDal } from "../modules/approval/dal.js";
+import { resolveAndApplyApproval, type WsEventPublisher } from "../modules/approval/apply.js";
 import type { MemoryDal } from "../modules/memory/dal.js";
 import type { WatcherProcessor } from "../modules/watcher/processor.js";
 import type { CanvasDal } from "../modules/canvas/dal.js";
 import type { Playbook } from "@tyrum/schemas";
 import type { PlaybookRunner } from "../modules/playbook/runner.js";
+import type { ExecutionEngine } from "../modules/execution/engine.js";
+import type { Logger } from "../modules/observability/logger.js";
 import { APP_PATH_PREFIX, matchesPathPrefixSegment } from "../app-path.js";
 import {
   buildAuditTaskResponse,
@@ -30,6 +33,9 @@ export interface WebUiDeps {
   playbooks: Playbook[];
   playbookRunner: PlaybookRunner;
   isLocalOnly: boolean;
+  executionEngine?: Pick<ExecutionEngine, "resumeRun" | "cancelRunByResumeToken">;
+  wsPublisher?: WsEventPublisher;
+  logger?: Logger;
 }
 
 const BASE_STYLE = `
@@ -991,11 +997,11 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
     return c.html(shell("Approvals", "/app/approvals", search, body));
   });
 
-  app.post("/app/actions/approvals/:id", async (c) => {
-    const id = parseInt(c.req.param("id"), 10);
-    if (Number.isNaN(id)) {
-      return c.redirect(redirectWithMessageFromRequest(c, "/app/approvals", "Invalid approval id", "error"));
-    }
+	  app.post("/app/actions/approvals/:id", async (c) => {
+	    const id = parseInt(c.req.param("id"), 10);
+	    if (Number.isNaN(id)) {
+	      return c.redirect(redirectWithMessageFromRequest(c, "/app/approvals", "Invalid approval id", "error"));
+	    }
 
     const form = await c.req.formData();
     const decision = String(form.get("decision") ?? "");
@@ -1006,13 +1012,27 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
       return c.redirect(redirectWithMessageFromRequest(c, "/app/approvals", "Invalid approval decision", "error"));
     }
 
-    const updated = await deps.approvalDal.respond(id, approved, form.get("reason")?.toString());
-    if (!updated) {
-      return c.redirect(redirectWithMessageFromRequest(c, "/app/approvals", "Approval not found or already responded", "error"));
-    }
+	    const result = await resolveAndApplyApproval({
+	      approvalDal: deps.approvalDal,
+	      executionEngine: deps.executionEngine,
+	      wsPublisher: deps.wsPublisher,
+	      logger: deps.logger,
+	      approvalId: id,
+	      decision: approved ? "approved" : "denied",
+	      reason: form.get("reason")?.toString(),
+	    });
+	    if (result.kind === "not_found") {
+	      return c.redirect(redirectWithMessageFromRequest(c, "/app/approvals", "Approval not found", "error"));
+	    }
+	    if (result.kind === "pending") {
+	      return c.redirect(redirectWithMessageFromRequest(c, "/app/approvals", "Approval is still pending", "error"));
+	    }
+	    if (result.kind === "conflict") {
+	      return c.redirect(redirectWithMessageFromRequest(c, "/app/approvals", `Approval already resolved as '${result.approval.status}'`, "error"));
+	    }
 
-    return c.redirect(redirectWithMessageFromRequest(c, "/app/approvals", `Approval #${String(id)} ${approved ? "approved" : "denied"}`));
-  });
+	    return c.redirect(redirectWithMessageFromRequest(c, "/app/approvals", `Approval #${String(id)} ${approved ? "approved" : "denied"}`));
+	  });
 
   app.get("/app/approvals/:id", async (c) => {
     const search = new URL(c.req.url).searchParams;

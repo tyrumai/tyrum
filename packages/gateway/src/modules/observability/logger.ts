@@ -55,18 +55,17 @@ export class Logger {
     this.emit("error", msg, fields);
   }
 
-  private emit(level: Exclude<LogLevel, "silent">, msg: string, fields?: LogFields): void {
+  private emit(level: Exclude<LogLevel, "silent">, msg: string, fields: LogFields = {}): void {
     if (!shouldEmit(this.level, level)) return;
     const record = {
       ts: new Date().toISOString(),
       level,
       msg,
       ...this.base,
-      ...(fields ?? {}),
+      ...fields,
     };
     // Structured logs by default (JSON lines).
     // eslint-disable-next-line no-console
     console.log(JSON.stringify(record));
   }
 }
-

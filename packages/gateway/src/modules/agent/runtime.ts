@@ -1,12 +1,17 @@
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { generateText, jsonSchema, stepCountIs, streamText, tool as aiTool } from "ai";
 import type { LanguageModel, Tool, ToolSet } from "ai";
+import { parse as parseYaml } from "yaml";
 import type {
   AgentStatusResponse as AgentStatusResponseT,
   AgentTurnRequest as AgentTurnRequestT,
   AgentTurnResponse as AgentTurnResponseT,
   AgentConfig as AgentConfigT,
+  ContextReport as ContextReportT,
+  ContextReportSection as ContextReportSectionT,
+  ToolSchemaContributor as ToolSchemaContributorT,
   McpServerSpec as McpServerSpecT,
   SkillManifest as SkillManifestT,
   IdentityPack as IdentityPackT,
@@ -32,6 +37,10 @@ import { VectorDal, type VectorSearchResult } from "../memory/vector-dal.js";
 import { EmbeddingPipeline } from "../memory/embedding-pipeline.js";
 import type { ApprovalNotifier } from "../approval/notifier.js";
 import type { ApprovalDal, ApprovalStatus } from "../approval/dal.js";
+import { PolicyBundleService } from "../policy-bundle/service.js";
+import type { PolicyEvaluation } from "../policy-bundle/evaluate.js";
+import { ContextReportDal } from "../observability/context-report-dal.js";
+import type { PluginManager } from "../plugins/manager.js";
 
 const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_APPROVAL_WAIT_MS = 120_000;
@@ -67,6 +76,8 @@ export interface AgentRuntimeOptions {
   /** Override the language model (useful for testing). */
   languageModel?: LanguageModel;
   mcpManager?: McpManager;
+  policyBundleService?: PolicyBundleService;
+  pluginManager?: PluginManager;
   /** Maximum tool/LLM steps per turn (AI SDK step budget). */
   maxSteps?: number;
   secretProvider?: SecretProvider;
@@ -263,6 +274,9 @@ export class AgentRuntime {
   private readonly fetchImpl: typeof fetch;
   private readonly languageModelOverride?: LanguageModel;
   private readonly mcpManager: McpManager;
+  private readonly policyBundleService: PolicyBundleService;
+  private readonly pluginManager?: PluginManager;
+  private readonly contextReportDal: ContextReportDal;
   private readonly approvalDal: ApprovalDal;
   private readonly approvalNotifier: ApprovalNotifier;
   private readonly approvalWaitMs: number;
@@ -276,6 +290,11 @@ export class AgentRuntime {
     this.fetchImpl = opts.fetchImpl ?? fetch;
     this.languageModelOverride = opts.languageModel;
     this.mcpManager = opts.mcpManager ?? new McpManager();
+    this.policyBundleService =
+      opts.policyBundleService ??
+      new PolicyBundleService(opts.container.db, { logger: opts.container.logger });
+    this.pluginManager = opts.pluginManager;
+    this.contextReportDal = new ContextReportDal(opts.container.db);
     this.approvalDal = opts.approvalDal ?? opts.container.approvalDal;
     this.approvalNotifier = opts.approvalNotifier ?? NOOP_APPROVAL_NOTIFIER;
     this.approvalWaitMs = Math.max(1_000, opts.approvalWaitMs ?? DEFAULT_APPROVAL_WAIT_MS);
@@ -314,17 +333,39 @@ export class AgentRuntime {
     this.cleanupAtMs = now + 60 * 60 * 1000;
   }
 
-  private async resolveModel(config: AgentConfigT): Promise<LanguageModel> {
+  private async resolveModel(
+    config: AgentConfigT,
+    opts?: { sessionId?: string; planId?: string },
+  ): Promise<LanguageModel> {
     if (this.languageModelOverride) {
       return this.languageModelOverride;
     }
 
     const baseUrl = resolveModelBaseUrl(config);
+    const baseFetch = this.fetchImpl;
+    const sessionId = opts?.sessionId;
+    const planId = opts?.planId;
+    const agentId = process.env["TYRUM_AGENT_ID"]?.trim();
+
+    const fetchWithHeaders: typeof fetch = (input, init) => {
+      const headers = new Headers(init?.headers ?? {});
+      if (sessionId && !headers.has("x-tyrum-session-id")) {
+        headers.set("x-tyrum-session-id", sessionId);
+      }
+      if (agentId && !headers.has("x-tyrum-agent-id")) {
+        headers.set("x-tyrum-agent-id", agentId);
+      }
+      if (planId && !headers.has("x-tyrum-plan-id")) {
+        headers.set("x-tyrum-plan-id", planId);
+      }
+      return baseFetch(input, { ...init, headers });
+    };
+
     const provider = createOpenAICompatible({
       name: "tyrum",
       apiKey: "",
       baseURL: baseUrl,
-      fetch: this.fetchImpl,
+      fetch: sessionId || agentId || planId ? fetchWithHeaders : baseFetch,
     });
 
     return provider.languageModel(config.model.model);
@@ -380,7 +421,7 @@ export class AgentRuntime {
     finalize: () => Promise<AgentTurnResponseT>;
   }> {
     const prepared = await this.prepareTurn(input);
-    const { ctx, session, model, toolSet, usedTools, userContent } = prepared;
+    const { ctx, session, planId, model, toolSet, usedTools, userContent, tools } = prepared;
 
     const streamResult = streamText({
       model,
@@ -396,9 +437,23 @@ export class AgentRuntime {
     });
 
     const finalize = async (): Promise<AgentTurnResponseT> => {
+      const startedAtMs = Date.now();
       const result = await streamResult;
       const reply = (await result.text) || "No assistant response returned.";
-      return this.finalizeTurn(ctx, session, input, reply, usedTools);
+      const response = await this.finalizeTurn(ctx, session, input, reply, usedTools);
+      const durationMs = Math.max(0, Date.now() - startedAtMs);
+
+      await this.persistContextReport({
+        ctx,
+        session,
+        planId,
+        userContent,
+        tools,
+        usage: (result as unknown as { usage?: unknown }).usage,
+        durationMs,
+      });
+
+      return response;
     };
 
     return { streamResult, sessionId: session.session_id, finalize };
@@ -406,8 +461,9 @@ export class AgentRuntime {
 
   async turn(input: AgentTurnRequestT): Promise<AgentTurnResponseT> {
     const prepared = await this.prepareTurn(input);
-    const { ctx, session, model, toolSet, usedTools, userContent } = prepared;
+    const { ctx, session, planId, model, toolSet, usedTools, userContent, tools } = prepared;
 
+    const startedAtMs = Date.now();
     const result = await generateText({
       model,
       system: `${formatIdentityPrompt(ctx.identity)}\n\n${DATA_TAG_SAFETY_PROMPT}`,
@@ -422,14 +478,29 @@ export class AgentRuntime {
     });
 
     const reply = result.text || "No assistant response returned.";
-    return this.finalizeTurn(ctx, session, input, reply, usedTools);
+    const response = await this.finalizeTurn(ctx, session, input, reply, usedTools);
+    const durationMs = Math.max(0, Date.now() - startedAtMs);
+
+    await this.persistContextReport({
+      ctx,
+      session,
+      planId,
+      userContent,
+      tools,
+      usage: (result as unknown as { usage?: unknown }).usage,
+      durationMs,
+    });
+
+    return response;
   }
 
   private async prepareTurn(input: AgentTurnRequestT): Promise<{
     ctx: AgentLoadedContext;
     session: SessionRow;
+    planId: string;
     model: LanguageModel;
     toolSet: ToolSet;
+    tools: readonly ToolDescriptor[];
     usedTools: Set<string>;
     userContent: Array<{ type: "text"; text: string }>;
   }> {
@@ -473,10 +544,12 @@ export class AgentRuntime {
       semanticSearchPromise,
     ]);
 
+    const pluginTools = this.pluginManager?.getToolDescriptors() ?? [];
+
     const tools = selectToolDirectory(
       input.message,
       ctx.config.tools.allow,
-      mcpTools,
+      [...mcpTools, ...pluginTools],
       8,
     );
 
@@ -486,6 +559,8 @@ export class AgentRuntime {
       mcpSpecMap.set(server.id, server);
     }
 
+    const planId = `agent-turn-${session.session_id}-${randomUUID()}`;
+
     const toolExecutor = new ToolExecutor(
       this.home,
       this.mcpManager,
@@ -494,6 +569,8 @@ export class AgentRuntime {
       this.opts.secretProvider,
       undefined,
       this.opts.container.redactionEngine,
+      { planId, eventLog: this.opts.container.eventLog },
+      this.pluginManager?.getToolHandlers(),
     );
 
     const usedTools = new Set<string>();
@@ -502,7 +579,7 @@ export class AgentRuntime {
       toolExecutor,
       usedTools,
       {
-        planId: `agent-turn-${session.session_id}-${randomUUID()}`,
+        planId,
         sessionId: session.session_id,
         channel: input.channel,
         threadId: input.thread_id,
@@ -538,13 +615,18 @@ export class AgentRuntime {
       },
     ];
 
-    const model = await this.resolveModel(ctx.config);
+    const model = await this.resolveModel(ctx.config, {
+      sessionId: session.session_id,
+      planId,
+    });
 
     return {
       ctx,
       session,
+      planId,
       model,
       toolSet,
+      tools,
       usedTools,
       userContent,
     };
@@ -625,13 +707,26 @@ export class AgentRuntime {
         inputSchema: jsonSchema(schema),
         execute: async (args: unknown) => {
           const toolCallId = `tc-${randomUUID()}`;
-          if (toolDesc.requires_confirmation) {
+          const policyEval = await this.policyBundleService.evaluateToolCall(toolDesc.id, args);
+
+          if (policyEval.decision === "deny") {
+            return JSON.stringify({
+              error: `tool '${toolDesc.id}' denied by policy`,
+              policy: policyEval,
+            });
+          }
+
+          const requiresApproval =
+            toolDesc.requires_confirmation || policyEval.decision === "require_approval";
+
+          if (requiresApproval) {
             const decision = await this.awaitApprovalForToolExecution(
               toolDesc,
               args,
               toolCallId,
               toolExecutionContext,
               approvalStepIndex++,
+              policyEval.decision === "allow" ? undefined : policyEval,
             );
             if (!decision.approved) {
               return JSON.stringify({
@@ -669,6 +764,7 @@ export class AgentRuntime {
     toolCallId: string,
     context: ToolExecutionContext,
     stepIndex: number,
+    policy?: PolicyEvaluation,
   ): Promise<{
     approved: boolean;
     status: ApprovalStatus;
@@ -676,16 +772,20 @@ export class AgentRuntime {
     reason?: string;
   }> {
     const deadline = Date.now() + this.approvalWaitMs;
+    const prompt = policy
+      ? `Approve execution of '${tool.id}' (risk=${tool.risk}, policy=${policy.decision})`
+      : `Approve execution of '${tool.id}' (risk=${tool.risk})`;
     const approval = await this.approvalDal.create({
       planId: context.planId,
       stepIndex,
-      prompt: `Approve execution of '${tool.id}' (risk=${tool.risk})`,
+      prompt,
       context: {
         source: "agent-tool-execution",
         tool_id: tool.id,
         tool_risk: tool.risk,
         tool_call_id: toolCallId,
         args,
+        policy,
         session_id: context.sessionId,
         channel: context.channel,
         thread_id: context.threadId,
@@ -746,5 +846,172 @@ export class AgentRuntime {
       approvalId: approval.id,
       reason: expired?.response_reason ?? "approval timed out",
     };
+  }
+
+  private estimateTokens(bytes: number): number {
+    const safe = Number.isFinite(bytes) ? Math.max(0, bytes) : 0;
+    // Rough heuristic: ~4 bytes/token for English-ish content.
+    return Math.ceil(safe / 4);
+  }
+
+  private section(name: string, text: string): ContextReportSectionT {
+    const bytes = Buffer.byteLength(text, "utf8");
+    return {
+      name,
+      bytes,
+      est_tokens: this.estimateTokens(bytes),
+    };
+  }
+
+  private extractUsageTotals(usage: unknown): {
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+  } {
+    if (!usage || typeof usage !== "object") return {};
+    const u = usage as Record<string, unknown>;
+
+    // AI SDK v3 shape (nested totals)
+    const inputObj = u["inputTokens"] as Record<string, unknown> | undefined;
+    const outputObj = u["outputTokens"] as Record<string, unknown> | undefined;
+    const inputTotalNested = typeof inputObj?.["total"] === "number" ? inputObj["total"] : undefined;
+    const outputTotalNested = typeof outputObj?.["total"] === "number" ? outputObj["total"] : undefined;
+
+    // AI SDK v2-ish / OpenAI style (flat totals)
+    const promptTokens = typeof u["promptTokens"] === "number" ? (u["promptTokens"] as number) : undefined;
+    const completionTokens =
+      typeof u["completionTokens"] === "number" ? (u["completionTokens"] as number) : undefined;
+    const totalTokensFlat =
+      typeof u["totalTokens"] === "number" ? (u["totalTokens"] as number) : undefined;
+
+    // Snake_case fallback (internal schemas)
+    const inputTokensSnake = typeof u["input_tokens"] === "number" ? (u["input_tokens"] as number) : undefined;
+    const outputTokensSnake =
+      typeof u["output_tokens"] === "number" ? (u["output_tokens"] as number) : undefined;
+    const totalTokensSnake =
+      typeof u["total_tokens"] === "number" ? (u["total_tokens"] as number) : undefined;
+
+    const inputTotal = inputTotalNested ?? promptTokens ?? inputTokensSnake;
+    const outputTotal = outputTotalNested ?? completionTokens ?? outputTokensSnake;
+    const total =
+      totalTokensFlat ??
+      totalTokensSnake ??
+      (typeof inputTotal === "number" || typeof outputTotal === "number"
+        ? (inputTotal ?? 0) + (outputTotal ?? 0)
+        : undefined);
+
+    return {
+      inputTokens: inputTotal,
+      outputTokens: outputTotal,
+      totalTokens: total,
+    };
+  }
+
+  private async resolveModelMetadata(modelName: string): Promise<{ provider?: string; authProfile?: string }> {
+    const configPath = this.opts.container.config?.modelGatewayConfigPath;
+    if (!configPath) return {};
+    try {
+      const raw = await readFile(configPath, "utf8");
+      const cfg = (parseYaml(raw) ?? {}) as Record<string, unknown>;
+      const models = (cfg["models"] ?? {}) as Record<string, unknown>;
+      const modelCfg = (models[modelName] ?? {}) as Record<string, unknown>;
+      const provider = typeof modelCfg["target"] === "string" ? modelCfg["target"] : undefined;
+      const authProfile =
+        typeof modelCfg["auth_profile"] === "string" ? modelCfg["auth_profile"] : undefined;
+      return { provider, authProfile };
+    } catch {
+      return {};
+    }
+  }
+
+  private async persistContextReport(params: {
+    ctx: AgentLoadedContext;
+    session: SessionRow;
+    planId: string;
+    userContent: Array<{ type: "text"; text: string }>;
+    tools: readonly ToolDescriptor[];
+    usage: unknown;
+    durationMs: number;
+  }): Promise<void> {
+    const systemPrompt = formatIdentityPrompt(params.ctx.identity);
+
+    const systemSections: ContextReportSectionT[] = [
+      this.section("identity", systemPrompt),
+      this.section("safety", DATA_TAG_SAFETY_PROMPT),
+    ];
+
+    const messageSections: ContextReportSectionT[] = [];
+    const labels = ["skills", "tools", "session_context", "memory", "user_message"];
+    for (let i = 0; i < params.userContent.length; i += 1) {
+      const item = params.userContent[i];
+      if (!item) continue;
+      const label = labels[i] ?? `user_${i}`;
+      messageSections.push(this.section(label, item.text));
+    }
+
+    const schemaContribs: ToolSchemaContributorT[] = params.tools.map((tool) => {
+      const schema = tool.inputSchema ?? { type: "object", additionalProperties: true };
+      const bytes = Buffer.byteLength(JSON.stringify(schema), "utf8");
+      return {
+        tool_id: tool.id,
+        schema_bytes: bytes,
+        est_tokens: this.estimateTokens(bytes),
+      };
+    });
+
+    schemaContribs.sort((a, b) => b.schema_bytes - a.schema_bytes);
+    const largestSchemas = schemaContribs.slice(0, 10);
+
+    const toolSchemaBytes = schemaContribs.reduce((sum, s) => sum + s.schema_bytes, 0);
+    const toolSchemaTokens = schemaContribs.reduce((sum, s) => sum + s.est_tokens, 0);
+
+    const totalBytes =
+      systemSections.reduce((sum, s) => sum + s.bytes, 0) +
+      messageSections.reduce((sum, s) => sum + s.bytes, 0) +
+      toolSchemaBytes;
+    const totalTokens =
+      systemSections.reduce((sum, s) => sum + s.est_tokens, 0) +
+      messageSections.reduce((sum, s) => sum + s.est_tokens, 0) +
+      toolSchemaTokens;
+
+    const createdAt = new Date().toISOString();
+    const usageTotals = this.extractUsageTotals(params.usage);
+    const modelName = params.ctx.config.model.model;
+    const meta = await this.resolveModelMetadata(modelName);
+
+    const report: ContextReportT = {
+      context_report_id: `ctxr-${randomUUID()}`,
+      plan_id: params.planId,
+      session_id: params.session.session_id,
+      created_at: createdAt,
+      totals: {
+        total_bytes: totalBytes,
+        total_est_tokens: totalTokens,
+      },
+      system: {
+        sections: systemSections,
+      },
+      messages: {
+        sections: messageSections,
+      },
+      tools: {
+        total_tools: params.tools.length,
+        largest_schemas: largestSchemas,
+      },
+      files: {
+        injected_files: [],
+      },
+      usage: {
+        duration_ms: params.durationMs,
+        input_tokens: usageTotals.inputTokens,
+        output_tokens: usageTotals.outputTokens,
+        total_tokens: usageTotals.totalTokens,
+        model: modelName,
+        provider: meta.provider,
+        auth_profile: meta.authProfile,
+      },
+    };
+
+    await this.contextReportDal.upsert(report);
   }
 }

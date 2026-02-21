@@ -228,6 +228,7 @@ export function normalizeUpdate(
     thread_id: thread.id,
     source: "telegram",
     content,
+    provenance: sender && !sender.is_bot ? ["user"] : ["connector"],
     sender,
     timestamp,
     edited_timestamp: editedTimestamp,

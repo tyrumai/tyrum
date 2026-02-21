@@ -1,6 +1,9 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { WebSocketServer } from "ws";
 import type { WebSocket as WsWebSocket } from "ws";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { TyrumClient } from "../src/ws-client.js";
 import { autoExecute } from "../src/capability.js";
 import type { CapabilityProvider } from "../src/capability.js";
@@ -58,14 +61,27 @@ function waitForMessage(ws: WsWebSocket): Promise<unknown> {
 }
 
 async function acceptConnect(ws: WsWebSocket, clientId = "client-1"): Promise<void> {
-  const connect = (await waitForMessage(ws)) as Record<string, unknown>;
-  expect(connect["type"]).toBe("connect");
+  const init = (await waitForMessage(ws)) as Record<string, unknown>;
+  expect(init["type"]).toBe("connect.init");
+  const initRequestId = String(init["request_id"]);
+
   ws.send(
     JSON.stringify({
-      request_id: String(connect["request_id"]),
-      type: "connect",
+      request_id: initRequestId,
+      type: "connect.init",
       ok: true,
-      result: { client_id: clientId },
+      result: { connection_id: clientId, challenge: "nonce" },
+    }),
+  );
+
+  const proof = (await waitForMessage(ws)) as Record<string, unknown>;
+  expect(proof["type"]).toBe("connect.proof");
+  ws.send(
+    JSON.stringify({
+      request_id: String(proof["request_id"]),
+      type: "connect.proof",
+      ok: true,
+      result: {},
     }),
   );
 }
@@ -77,6 +93,14 @@ async function acceptConnect(ws: WsWebSocket, clientId = "client-1"): Promise<vo
 describe("autoExecute", () => {
   let server: ReturnType<typeof createTestServer> | undefined;
   let client: TyrumClient | undefined;
+  let tyrumHome: string | undefined;
+  let prevTyrumHome: string | undefined;
+
+  beforeEach(async () => {
+    tyrumHome = await mkdtemp(join(tmpdir(), "tyrum-client-capability-"));
+    prevTyrumHome = process.env["TYRUM_HOME"];
+    process.env["TYRUM_HOME"] = tyrumHome;
+  });
 
   afterEach(async () => {
     client?.disconnect();
@@ -85,6 +109,16 @@ describe("autoExecute", () => {
       await server.close();
       server = undefined;
     }
+    if (tyrumHome) {
+      await rm(tyrumHome, { recursive: true, force: true });
+      tyrumHome = undefined;
+    }
+    if (prevTyrumHome === undefined) {
+      delete process.env["TYRUM_HOME"];
+    } else {
+      process.env["TYRUM_HOME"] = prevTyrumHome;
+    }
+    prevTyrumHome = undefined;
   });
 
   it("routes task.execute to matching provider and sends response", async () => {
@@ -115,8 +149,9 @@ describe("autoExecute", () => {
         request_id: "t-1",
         type: "task.execute",
         payload: {
-          plan_id: "p-1",
-          step_index: 0,
+          run_id: "00000000-0000-4000-8000-000000000001",
+          step_id: "00000000-0000-4000-8000-000000000002",
+          attempt_id: "00000000-0000-4000-8000-000000000003",
           action: { type: "Http", args: { url: "https://example.com" } },
         },
       }),
@@ -152,8 +187,9 @@ describe("autoExecute", () => {
         request_id: "t-2",
         type: "task.execute",
         payload: {
-          plan_id: "p-1",
-          step_index: 0,
+          run_id: "00000000-0000-4000-8000-000000000001",
+          step_id: "00000000-0000-4000-8000-000000000002",
+          attempt_id: "00000000-0000-4000-8000-000000000003",
           action: { type: "Http", args: {} },
         },
       }),
@@ -194,8 +230,9 @@ describe("autoExecute", () => {
         request_id: "t-3",
         type: "task.execute",
         payload: {
-          plan_id: "p-1",
-          step_index: 0,
+          run_id: "00000000-0000-4000-8000-000000000001",
+          step_id: "00000000-0000-4000-8000-000000000002",
+          attempt_id: "00000000-0000-4000-8000-000000000003",
           action: { type: "Web", args: {} },
         },
       }),

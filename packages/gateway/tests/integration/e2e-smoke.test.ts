@@ -14,14 +14,19 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { createServer } from "node:http";
 import type { Server } from "node:http";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { getRequestListener } from "@hono/node-server";
 import type { Hono } from "hono";
 import { createTestApp, minimalPlanRequest } from "./helpers.js";
 import { createWsHandler } from "../../src/routes/ws.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
+import { dispatchTask } from "../../src/ws/protocol.js";
 import type { ProtocolDeps } from "../../src/ws/protocol.js";
 import { TyrumClient } from "../../../client/src/ws-client.js";
 import { TokenStore } from "../../src/modules/auth/token-store.js";
+import type { SqlDb } from "../../src/statestore/types.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -34,10 +39,12 @@ function delay(ms: number): Promise<void> {
 /** Start a real HTTP server + WebSocket on a random port. */
 async function startServer(
   app: Hono,
+  db: SqlDb,
 ): Promise<{
   server: Server;
   port: number;
   adminToken: string;
+  tokenHome: string;
   connectionManager: ConnectionManager;
   stopHeartbeat: () => void;
   taskResults: Array<{
@@ -63,13 +70,15 @@ async function startServer(
   };
 
   // Use a real token store to enforce WS authentication.
-  const tokenStore = new TokenStore("/tmp/tyrum-e2e-test-" + Date.now());
+  const tokenHome = await mkdtemp(join(tmpdir(), "tyrum-e2e-smoke-"));
+  const tokenStore = new TokenStore(tokenHome);
   const adminToken = await tokenStore.initialize();
 
   const { handleUpgrade, stopHeartbeat } = createWsHandler({
     connectionManager,
     protocolDeps,
     tokenStore,
+    db,
   });
 
   const requestListener = getRequestListener(app.fetch);
@@ -90,6 +99,7 @@ async function startServer(
     server,
     port,
     adminToken,
+    tokenHome,
     connectionManager,
     stopHeartbeat,
     taskResults,
@@ -104,6 +114,7 @@ describe("E2E smoke test", () => {
   let httpServer: Server | undefined;
   let client: TyrumClient | undefined;
   let stopHeartbeat: (() => void) | undefined;
+  let tokenHome: string | undefined;
 
   afterEach(async () => {
     client?.disconnect();
@@ -114,13 +125,18 @@ describe("E2E smoke test", () => {
       await new Promise<void>((resolve) => httpServer!.close(() => resolve()));
       httpServer = undefined;
     }
+    if (tokenHome) {
+      await rm(tokenHome, { recursive: true, force: true });
+      tokenHome = undefined;
+    }
   });
 
   it("full plan → dispatch → result → healthz flow", async () => {
-    const { app } = await createTestApp();
-    const srv = await startServer(app);
+    const { app, container } = await createTestApp();
+    const srv = await startServer(app, container.db);
     httpServer = srv.server;
     stopHeartbeat = srv.stopHeartbeat;
+    tokenHome = srv.tokenHome;
 
     const baseUrl = `http://127.0.0.1:${srv.port}`;
 
@@ -130,6 +146,7 @@ describe("E2E smoke test", () => {
       token: srv.adminToken,
       capabilities: ["playwright", "http"],
       reconnect: false,
+      tyrumHome: srv.tokenHome,
     });
 
     const connectedP = new Promise<void>((resolve) => {
@@ -157,35 +174,42 @@ describe("E2E smoke test", () => {
     // We dispatch directly via the connection manager (the /plan route
     // orchestrator does not dispatch over WS in the current TS impl;
     // it returns a PlanResponse).  This exercises the protocol layer.
-    const taskDispatchP = new Promise<{ task_id: string; plan_id: string }>(
+    const taskDispatchP = new Promise<{
+      task_id: string;
+      run_id: string;
+      step_id: string;
+      attempt_id: string;
+    }>(
       (resolve) => {
         client!.on("task_execute", (msg) => {
-          resolve({ task_id: msg.request_id, plan_id: msg.payload.plan_id });
+          resolve({
+            task_id: msg.request_id,
+            run_id: msg.payload.run_id,
+            step_id: msg.payload.step_id,
+            attempt_id: msg.payload.attempt_id,
+          });
         });
       },
     );
 
-    const httpClient = srv.connectionManager.getClientForCapability("http");
-    expect(httpClient).toBeDefined();
+    const ids = {
+      runId: crypto.randomUUID(),
+      stepId: crypto.randomUUID(),
+      attemptId: crypto.randomUUID(),
+    };
 
-    const taskId = crypto.randomUUID();
-    const planId = "plan-e2e-1";
-    httpClient!.ws.send(
-      JSON.stringify({
-        request_id: taskId,
-        type: "task.execute",
-        payload: {
-          plan_id: planId,
-          step_index: 0,
-          action: { type: "Http", args: { url: "https://example.com" } },
-        },
-      }),
+    const taskId = await dispatchTask(
+      { type: "Http", args: { url: "https://example.com" } },
+      ids,
+      { connectionManager: srv.connectionManager },
     );
 
     // --- 5. Client receives task_dispatch ---
     const dispatch = await taskDispatchP;
     expect(dispatch.task_id).toBe(taskId);
-    expect(dispatch.plan_id).toBe(planId);
+    expect(dispatch.run_id).toBe(ids.runId);
+    expect(dispatch.step_id).toBe(ids.stepId);
+    expect(dispatch.attempt_id).toBe(ids.attemptId);
 
     // --- 6. Client sends task_result ---
     client.respondTaskExecute(taskId, true, undefined, { statusCode: 200 });

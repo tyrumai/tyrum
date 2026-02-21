@@ -9,6 +9,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { readFileSync } from "node:fs";
 import { parse as parseYaml } from "yaml";
+import type { AuthProfileService } from "../modules/auth-profiles/service.js";
 
 // ---------------------------------------------------------------------------
 // Configuration types
@@ -181,13 +182,17 @@ export function loadModelGatewayConfig(configPath: string): ModelGatewayState {
 // Route factory
 // ---------------------------------------------------------------------------
 
-export function createModelProxyRoutes(configPath: string): Hono {
+export function createModelProxyRoutes(
+  configPath: string,
+  deps?: { authProfileService?: AuthProfileService },
+): Hono {
   const state = loadModelGatewayConfig(configPath);
-  return createModelProxyRoutesFromState(state);
+  return createModelProxyRoutesFromState(state, deps);
 }
 
 export function createModelProxyRoutesFromState(
   state: ModelGatewayState,
+  deps?: { authProfileService?: AuthProfileService },
 ): Hono {
   const proxy = new Hono();
 
@@ -253,10 +258,36 @@ export function createModelProxyRoutesFromState(
       }
     }
 
-    // Apply route auth
+    // Optional dynamic auth profile selection (DB-backed), pinned per session.
+    if (deps?.authProfileService) {
+      const sessionId = c.req.header("x-tyrum-session-id")?.trim();
+      const agentId =
+        c.req.header("x-tyrum-agent-id")?.trim() ||
+        process.env["TYRUM_AGENT_ID"]?.trim() ||
+        "default";
+
+      if (sessionId && sessionId.length > 0) {
+        try {
+          const selected = await deps.authProfileService.resolveBearerToken({
+            agentId,
+            provider: route.target,
+            sessionId,
+          });
+          if (selected?.token) {
+            forwardHeaders.set("Authorization", `Bearer ${selected.token}`);
+          }
+        } catch {
+          // Best-effort; fall back to static config auth.
+        }
+      }
+    }
+
+    // Apply route auth (legacy config fallback).
     switch (route.auth.kind) {
       case "bearer":
-        forwardHeaders.set("Authorization", `Bearer ${route.auth.token}`);
+        if (!forwardHeaders.has("authorization")) {
+          forwardHeaders.set("Authorization", `Bearer ${route.auth.token}`);
+        }
         break;
       case "static":
         forwardHeaders.set(route.auth.header, route.auth.value);

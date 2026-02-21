@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ProvenanceTag } from "./provenance.js";
 
 /** Source channel for a normalized message. */
 export const MessageSource = z.enum(["telegram"]);
@@ -82,6 +83,7 @@ export const NormalizedMessage = z.object({
   thread_id: z.string(),
   source: MessageSource,
   content: MessageContent,
+  provenance: z.array(ProvenanceTag).min(1),
   sender: SenderMetadata.optional(),
   timestamp: z.string().datetime(),
   edited_timestamp: z.string().datetime().optional(),

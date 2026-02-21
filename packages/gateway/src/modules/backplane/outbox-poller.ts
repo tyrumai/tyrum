@@ -27,17 +27,27 @@ function parseDirectPayload(payload: unknown): { connection_id: string; message:
 
 function parseBroadcastPayload(
   payload: unknown,
-): { message: WsEnvelope; source_edge_id?: string; skip_local?: boolean } | undefined {
+): {
+  message: WsEnvelope;
+  source_edge_id?: string;
+  skip_local?: boolean;
+  target_role?: "client" | "node";
+} | undefined {
   if (!isObject(payload)) return undefined;
 
   const maybeMessage = payload["message"];
   if (isObject(maybeMessage)) {
     const sourceEdgeId = payload["source_edge_id"];
     const skipLocal = payload["skip_local"];
+    const targetRoleRaw = payload["target_role"];
     return {
       message: maybeMessage as WsEnvelope,
       source_edge_id: typeof sourceEdgeId === "string" ? sourceEdgeId : undefined,
       skip_local: typeof skipLocal === "boolean" ? skipLocal : undefined,
+      target_role:
+        targetRoleRaw === "client" || targetRoleRaw === "node"
+          ? targetRoleRaw
+          : undefined,
     };
   }
 
@@ -106,6 +116,7 @@ export class OutboxPoller {
 
       const payload = JSON.stringify(parsed.message);
       for (const client of this.connectionManager.allClients()) {
+        if (parsed.target_role && client.role !== parsed.target_role) continue;
         client.ws.send(payload);
       }
       return;
@@ -121,4 +132,3 @@ export class OutboxPoller {
     }
   }
 }
-

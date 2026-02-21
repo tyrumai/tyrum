@@ -34,6 +34,7 @@ describe("NormalizedMessage", () => {
       thread_id: "chat-123",
       source: "telegram",
       content: { kind: "text", text: "Hello, world!" },
+      provenance: ["user"],
       timestamp: "2025-10-05T16:31:09Z",
     });
     expect(msg.content.kind).toBe("text");
@@ -48,6 +49,7 @@ describe("NormalizedMessage", () => {
       thread_id: "chat-123",
       source: "telegram",
       content: { kind: "media_placeholder", media_kind: "photo", caption: "A sunset" },
+      provenance: ["user"],
       timestamp: "2025-10-05T16:31:09Z",
     });
     expect(msg.content.kind).toBe("media_placeholder");
@@ -67,6 +69,7 @@ describe("NormalizedThreadMessage", () => {
         thread_id: "chat-123",
         source: "telegram" as const,
         content: { kind: "text" as const, text: "Test" },
+        provenance: ["user"] as const,
         timestamp: "2025-10-05T16:31:09Z",
         pii_fields: [],
       },

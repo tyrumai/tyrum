@@ -3,6 +3,7 @@ import { NodeRuntime } from "../node-runtime.js";
 import { loadConfig } from "../config/store.js";
 import { resolvePermissions } from "../config/permissions.js";
 import { decryptToken } from "../config/token-store.js";
+import { createHash } from "node:crypto";
 import { DesktopProvider } from "../providers/desktop-provider.js";
 import { PlaywrightProvider } from "../providers/playwright-provider.js";
 import { CliProvider } from "../providers/cli-provider.js";
@@ -19,6 +20,12 @@ const sender = createWindowSender();
 let runtime: NodeRuntime | null = null;
 let playwrightBackend: RealPlaywrightBackend | null = null;
 let ipcRegistered = false;
+
+function deriveNodeEnrollmentToken(adminToken: string): string {
+  return createHash("sha256")
+    .update(`tyrum-node-enrollment-v1|${adminToken}`, "utf-8")
+    .digest("hex");
+}
 
 function toNodeStatusString(status: { connected: boolean; code?: number }): string {
   if (status.connected) return "connected";
@@ -72,7 +79,7 @@ export function registerNodeIpc(window: BrowserWindow): void {
       await startEmbeddedGatewayFromConfig();
       config = loadConfig();
       wsUrl = `ws://127.0.0.1:${config.embedded.port}/ws`;
-      token = ensureEmbeddedGatewayToken(config);
+      token = deriveNodeEnrollmentToken(ensureEmbeddedGatewayToken(config));
     } else {
       wsUrl = config.remote.wsUrl;
       token = config.remote.tokenRef ? decryptToken(config.remote.tokenRef) : "";

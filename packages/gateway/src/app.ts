@@ -18,6 +18,13 @@ import { createAuditRoutes } from "./routes/audit.js";
 import { createSecretRoutes } from "./routes/secret.js";
 import { createPlaybookRoutes } from "./routes/playbook.js";
 import { createConnectionsRoute } from "./routes/connections.js";
+import { createPresenceRoutes } from "./routes/presence.js";
+import { createContextRoutes } from "./routes/context.js";
+import { createUsageRoutes } from "./routes/usage.js";
+import { createPolicyBundleRoutes } from "./routes/policy-bundles.js";
+import { createAuthProfileRoutes } from "./routes/auth-profiles.js";
+import { createOAuthRoutes } from "./routes/oauth.js";
+import { createPluginRoutes } from "./routes/plugins.js";
 import { PlaybookRunner } from "./modules/playbook/runner.js";
 import { createWebApiRoutes } from "./routes/web-api.js";
 import { createWebUiRoutes } from "./routes/web-ui.js";
@@ -29,14 +36,32 @@ import type { SecretProvider } from "./modules/secret/provider.js";
 import { createAuthMiddleware } from "./modules/auth/middleware.js";
 import type { ConnectionManager } from "./ws/connection-manager.js";
 import { randomUUID } from "node:crypto";
+import type { PresenceDal } from "./modules/presence/dal.js";
+import type { ExecutionEngine } from "./modules/execution/engine.js";
+import type { WsEventPublisher } from "./modules/approval/apply.js";
+import { AuthProfileService } from "./modules/auth-profiles/service.js";
+import type { ChannelWorker } from "./modules/channels/worker.js";
+import type { PluginManager } from "./modules/plugins/manager.js";
 
 export interface AppOptions {
   agentRuntime?: AgentRuntime;
+  channelWorker?: ChannelWorker;
+  pluginManager?: PluginManager;
   tokenStore?: TokenStore;
   secretProvider?: SecretProvider;
   playbooks?: Playbook[];
   isLocalOnly?: boolean;
+  executionEngine?: Pick<ExecutionEngine, "resumeRun" | "cancelRunByResumeToken">;
+  wsPublisher?: WsEventPublisher;
   connectionManager?: ConnectionManager;
+  presence?: {
+    dal: PresenceDal;
+    instanceId: string;
+    startedAtMs: number;
+    role: "all" | "edge" | "worker" | "scheduler";
+    version: string;
+    modelGatewayConfigPath?: string;
+  };
 }
 
 export function createApp(container: GatewayContainer, opts: AppOptions = {}): Hono {
@@ -83,10 +108,19 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     createIngressRoutes({
       telegramBot: container.telegramBot,
       agentRuntime: opts.agentRuntime,
+      channelWorker: opts.channelWorker,
     }),
   );
   app.route("/", createPlanRoutes(container));
-  app.route("/", createApprovalRoutes(container.approvalDal));
+  app.route(
+    "/",
+    createApprovalRoutes({
+      approvalDal: container.approvalDal,
+      executionEngine: opts.executionEngine,
+      wsPublisher: opts.wsPublisher,
+      logger: container.logger,
+    }),
+  );
   app.route("/", createWatcherRoutes(container.watcherProcessor));
   app.route("/", createCanvasRoutes(container.canvasDal));
   app.route("/", createAuditRoutes({ db: container.db, eventLog: container.eventLog }));
@@ -100,6 +134,26 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   // Gateway-hosted web API compatibility layer for former Next handlers.
   app.route("/", createWebApiRoutes());
 
+  // Auth profile management (uses secret handles, never raw credential values).
+  app.route(
+    "/",
+    createAuthProfileRoutes({
+      db: container.db,
+      secretProvider: opts.secretProvider,
+      logger: container.logger,
+    }),
+  );
+
+  // OAuth helper endpoints (device-code flow).
+  app.route(
+    "/",
+    createOAuthRoutes({
+      db: container.db,
+      secretProvider: opts.secretProvider,
+      logger: container.logger,
+    }),
+  );
+
   if (opts.secretProvider) {
     app.route("/", createSecretRoutes(opts.secretProvider));
   }
@@ -108,6 +162,33 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     app.route("/", createConnectionsRoute(opts.connectionManager));
   }
 
+  if (opts.presence) {
+    app.route(
+      "/",
+      createPresenceRoutes({
+        db: container.db,
+        presenceDal: opts.presence.dal,
+        instanceId: opts.presence.instanceId,
+        startedAtMs: opts.presence.startedAtMs,
+        role: opts.presence.role,
+        version: opts.presence.version,
+        modelGatewayConfigPath: opts.presence.modelGatewayConfigPath,
+        agentRuntime: opts.agentRuntime,
+        connectionManager: opts.connectionManager,
+      }),
+    );
+  }
+
+  // Context and usage surfaces (operator observability).
+  app.route("/", createContextRoutes({ db: container.db }));
+  app.route("/", createUsageRoutes({ db: container.db }));
+
+  // Policy bundle management (deployment/agent/playbook policy composition).
+  app.route("/", createPolicyBundleRoutes({ db: container.db, logger: container.logger }));
+
+  // Plugin discovery (disabled by default; tools-only extension point).
+  app.route("/", createPluginRoutes(opts.pluginManager));
+
   if (opts.agentRuntime) {
     app.route("/", createAgentRoutes(opts.agentRuntime));
   }
@@ -115,8 +196,12 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   // Model proxy routes are optional — only register if config path is set
   if (container.config?.modelGatewayConfigPath) {
     try {
+      const authProfileService = opts.secretProvider
+        ? new AuthProfileService(container.db, opts.secretProvider, container.logger)
+        : undefined;
       const modelProxy = createModelProxyRoutes(
         container.config.modelGatewayConfigPath,
+        { authProfileService },
       );
       app.route("/", modelProxy);
     } catch {
@@ -138,6 +223,9 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       playbooks,
       playbookRunner,
       isLocalOnly,
+      executionEngine: opts.executionEngine,
+      wsPublisher: opts.wsPublisher,
+      logger: container.logger,
     }),
   );
 

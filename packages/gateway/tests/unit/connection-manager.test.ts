@@ -24,19 +24,34 @@ function createMockWs(): MockWebSocket {
   };
 }
 
+let seq = 0;
+function addTestClient(
+  cm: ConnectionManager,
+  ws: MockWebSocket,
+  capabilities: Array<"desktop" | "cli" | "playwright" | "http" | "android">,
+): string {
+  seq += 1;
+  const connectionId = `conn-${seq}`;
+  const instanceId = `dev-aaaaaaa${String.fromCharCode(96 + seq)}`;
+  return cm.addClient({
+    connectionId,
+    ws: ws as never,
+    role: "client",
+    instanceId,
+    device: { device_id: instanceId, pubkey: "pubkey" },
+    capabilities,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 describe("ConnectionManager", () => {
-  it("addClient returns a UUID and the client is retrievable", () => {
+  it("addClient registers the client and it is retrievable", () => {
     const cm = new ConnectionManager();
     const ws = createMockWs();
-    const id = cm.addClient(ws as never, ["playwright"]);
-
-    expect(id).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
-    );
+    const id = addTestClient(cm, ws, ["playwright"]);
 
     const client = cm.getClient(id);
     expect(client).toBeDefined();
@@ -46,7 +61,7 @@ describe("ConnectionManager", () => {
 
   it("removeClient evicts the client", () => {
     const cm = new ConnectionManager();
-    const id = cm.addClient(createMockWs() as never, ["cli"]);
+    const id = addTestClient(cm, createMockWs(), ["cli"]);
     cm.removeClient(id);
 
     expect(cm.getClient(id)).toBeUndefined();
@@ -55,8 +70,8 @@ describe("ConnectionManager", () => {
 
   it("getClientForCapability returns matching client", () => {
     const cm = new ConnectionManager();
-    cm.addClient(createMockWs() as never, ["playwright"]);
-    cm.addClient(createMockWs() as never, ["cli", "http"]);
+    addTestClient(cm, createMockWs(), ["playwright"]);
+    addTestClient(cm, createMockWs(), ["cli", "http"]);
 
     const playwrightClient = cm.getClientForCapability("playwright");
     expect(playwrightClient).toBeDefined();
@@ -73,7 +88,7 @@ describe("ConnectionManager", () => {
 
   it("getClientForCapability returns undefined when no match", () => {
     const cm = new ConnectionManager();
-    cm.addClient(createMockWs() as never, ["playwright"]);
+    addTestClient(cm, createMockWs(), ["playwright"]);
 
     expect(cm.getClientForCapability("android")).toBeUndefined();
   });
@@ -84,9 +99,9 @@ describe("ConnectionManager", () => {
     const ws2 = createMockWs();
     const ws3 = createMockWs();
 
-    cm.addClient(ws1 as never, ["playwright"]);
-    cm.addClient(ws2 as never, ["playwright", "cli"]);
-    cm.addClient(ws3 as never, ["cli"]);
+    addTestClient(cm, ws1, ["playwright"]);
+    addTestClient(cm, ws2, ["playwright", "cli"]);
+    addTestClient(cm, ws3, ["cli"]);
 
     cm.broadcastToCapable("playwright", {
       event_id: "evt-1",
@@ -117,8 +132,8 @@ describe("ConnectionManager", () => {
       const ws1 = createMockWs();
       const ws2 = createMockWs();
 
-      cm.addClient(ws1 as never, ["playwright"]);
-      cm.addClient(ws2 as never, ["cli"]);
+      addTestClient(cm, ws1, ["playwright"]);
+      addTestClient(cm, ws2, ["cli"]);
 
       cm.heartbeat();
 
@@ -137,7 +152,7 @@ describe("ConnectionManager", () => {
     it("evicts clients that have not ponged within timeout", () => {
       const cm = new ConnectionManager();
       const ws = createMockWs();
-      const id = cm.addClient(ws as never, ["playwright"]);
+      const id = addTestClient(cm, ws, ["playwright"]);
 
       // Simulate a stale client by setting lastPong to the past.
       const client = cm.getClient(id);
@@ -154,7 +169,7 @@ describe("ConnectionManager", () => {
     it("keeps fresh clients alive", () => {
       const cm = new ConnectionManager();
       const ws = createMockWs();
-      const id = cm.addClient(ws as never, ["playwright"]);
+      const id = addTestClient(cm, ws, ["playwright"]);
 
       // Client just ponged.
       const client = cm.getClient(id);
@@ -172,9 +187,9 @@ describe("ConnectionManager", () => {
   describe("getStats", () => {
     it("returns correct totals and capability counts", () => {
       const cm = new ConnectionManager();
-      cm.addClient(createMockWs() as never, ["playwright", "cli"]);
-      cm.addClient(createMockWs() as never, ["playwright"]);
-      cm.addClient(createMockWs() as never, ["http"]);
+      addTestClient(cm, createMockWs(), ["playwright", "cli"]);
+      addTestClient(cm, createMockWs(), ["playwright"]);
+      addTestClient(cm, createMockWs(), ["http"]);
 
       const stats = cm.getStats();
       expect(stats.totalClients).toBe(3);
@@ -195,8 +210,8 @@ describe("ConnectionManager", () => {
 
   it("allClients iterates all clients", () => {
     const cm = new ConnectionManager();
-    const id1 = cm.addClient(createMockWs() as never, ["playwright"]);
-    const id2 = cm.addClient(createMockWs() as never, ["cli"]);
+    const id1 = addTestClient(cm, createMockWs(), ["playwright"]);
+    const id2 = addTestClient(cm, createMockWs(), ["cli"]);
 
     const ids = [...cm.allClients()].map((c) => c.id);
     expect(ids).toContain(id1);

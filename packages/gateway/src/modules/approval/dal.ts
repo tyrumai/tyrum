@@ -30,13 +30,19 @@ interface RawApprovalRow {
   context_json: string;
   status: string;
   created_at: string | Date;
-  responded_at: string | null;
+  responded_at: string | Date | null;
   response_reason: string | null;
-  expires_at: string | null;
+  expires_at: string | Date | null;
 }
 
 function normalizeTime(value: string | Date): string {
-  return value instanceof Date ? value.toISOString() : value;
+  const raw = value instanceof Date ? value.toISOString() : value;
+  // Legacy SQLite defaults use `datetime('now')` which yields `YYYY-MM-DD HH:MM:SS`.
+  // Zod DateTimeSchema requires ISO-8601 (e.g. `YYYY-MM-DDTHH:MM:SSZ`).
+  if (/^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?$/.test(raw)) {
+    return `${raw.replace(" ", "T")}Z`;
+  }
+  return raw;
 }
 
 function toApprovalRow(raw: RawApprovalRow): ApprovalRow {
@@ -54,9 +60,9 @@ function toApprovalRow(raw: RawApprovalRow): ApprovalRow {
     context,
     status: raw.status as ApprovalStatus,
     created_at: normalizeTime(raw.created_at),
-    responded_at: raw.responded_at,
+    responded_at: raw.responded_at ? normalizeTime(raw.responded_at) : null,
     response_reason: raw.response_reason,
-    expires_at: raw.expires_at,
+    expires_at: raw.expires_at ? normalizeTime(raw.expires_at) : null,
   };
 }
 
@@ -74,10 +80,11 @@ export class ApprovalDal {
   /** Create a new pending approval request. */
   async create(params: CreateApprovalParams): Promise<ApprovalRow> {
     const contextJson = JSON.stringify(params.context ?? {});
+    const nowIso = new Date().toISOString();
 
     const row = await this.db.get<RawApprovalRow>(
-      `INSERT INTO approvals (plan_id, step_index, prompt, context_json, expires_at)
-       VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO approvals (plan_id, step_index, prompt, context_json, expires_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)
        RETURNING *`,
       [
         params.planId,
@@ -85,6 +92,7 @@ export class ApprovalDal {
         params.prompt,
         contextJson,
         params.expiresAt ?? null,
+        nowIso,
       ],
     );
     if (!row) {
@@ -134,6 +142,33 @@ export class ApprovalDal {
       [status],
     );
 
+    return rows.map(toApprovalRow);
+  }
+
+  /**
+   * List approvals by status, ordered by id (newest first).
+   *
+   * Intended for paginated control-plane queries.
+   */
+  async listByStatusDesc(
+    status: ApprovalStatus,
+    opts?: { limit?: number; cursorId?: number },
+  ): Promise<ApprovalRow[]> {
+    const limit = Math.max(1, Math.min(500, opts?.limit ?? 100));
+    const cursorId = opts?.cursorId;
+
+    let sql = "SELECT * FROM approvals WHERE status = ?";
+    const params: unknown[] = [status];
+
+    if (cursorId !== undefined && Number.isFinite(cursorId)) {
+      sql += " AND id < ?";
+      params.push(cursorId);
+    }
+
+    sql += " ORDER BY id DESC LIMIT ?";
+    params.push(limit);
+
+    const rows = await this.db.all<RawApprovalRow>(sql, params);
     return rows.map(toApprovalRow);
   }
 

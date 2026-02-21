@@ -10,10 +10,12 @@ import {
 } from "../modules/ingress/telegram.js";
 import type { TelegramBot } from "../modules/ingress/telegram-bot.js";
 import type { AgentRuntime } from "../modules/agent/runtime.js";
+import type { ChannelWorker } from "../modules/channels/worker.js";
 
 export interface IngressDeps {
   telegramBot?: TelegramBot;
   agentRuntime?: AgentRuntime;
+  channelWorker?: ChannelWorker;
 }
 
 const TELEGRAM_SECRET_HEADER = "x-telegram-bot-api-secret-token";
@@ -79,6 +81,41 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
     // If no agent runtime, return normalized message (legacy behavior)
     if (!deps.agentRuntime || !deps.telegramBot) {
       return c.json(normalized);
+    }
+
+    if (deps.channelWorker) {
+      const chatId = normalized.thread.id;
+      const content = normalized.message.content;
+      const text =
+        content.kind === "text" ? content.text : content.caption ?? "";
+      const hasAttachment = content.kind !== "text";
+
+      if (!text) {
+        return c.json({ ok: true });
+      }
+
+      const sender = normalized.message.sender;
+      const receivedAtMs = (() => {
+        const parsed = Date.parse(normalized.message.timestamp);
+        return Number.isFinite(parsed) ? parsed : Date.now();
+      })();
+
+      const accountId = process.env["TELEGRAM_ACCOUNT_ID"]?.trim() || "default";
+
+      const queued = await deps.channelWorker.enqueueTelegramInbound({
+        accountId,
+        containerId: chatId,
+        messageId: normalized.message.id,
+        threadKind: normalized.thread.kind,
+        senderId: sender?.id,
+        senderIsBot: sender?.is_bot ?? true,
+        provenance: normalized.message.provenance,
+        text,
+        hasAttachment,
+        receivedAtMs,
+      });
+
+      return c.json({ ok: true, status: queued.kind });
     }
 
     // Extract text from the normalized message
