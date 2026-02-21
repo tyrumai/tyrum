@@ -11,6 +11,7 @@ describe("WatcherProcessor", () => {
   let memoryDal: MemoryDal;
   let eventBus: ReturnType<typeof mitt<GatewayEvents>>;
   let processor: WatcherProcessor;
+  const agentId = "default";
 
   beforeEach(() => {
     db = openTestSqliteDb();
@@ -28,7 +29,7 @@ describe("WatcherProcessor", () => {
 
     await processor.onPlanCompleted({ planId: "plan-1", stepsExecuted: 5 });
 
-    const events = await memoryDal.getEpisodicEvents();
+    const events = await memoryDal.getEpisodicEvents(agentId);
     expect(events).toHaveLength(1);
     expect(events[0]!.event_type).toBe("plan_completed");
   });
@@ -38,7 +39,7 @@ describe("WatcherProcessor", () => {
 
     await processor.onPlanFailed({ planId: "plan-1", reason: "timeout" });
 
-    const events = await memoryDal.getEpisodicEvents();
+    const events = await memoryDal.getEpisodicEvents(agentId);
     expect(events).toHaveLength(1);
     expect(events[0]!.event_type).toBe("plan_failed");
     expect(await processor.listWatchers()).toHaveLength(0);
@@ -68,7 +69,7 @@ describe("WatcherProcessor", () => {
 
     eventBus.emit("plan:completed", { planId: "plan-1", stepsExecuted: 3 });
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(await memoryDal.getEpisodicEvents()).toHaveLength(1);
+    expect(await memoryDal.getEpisodicEvents(agentId)).toHaveLength(1);
 
     processor.stop();
   });

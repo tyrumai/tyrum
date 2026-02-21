@@ -517,6 +517,7 @@ describe("Tool execution loop", () => {
     expect(result.used_tools).toContain("tool.fs.read");
     expect(result.used_tools).toContain("tool.http.fetch");
     expect(result.used_tools).toHaveLength(2);
+    expect(result.provenance_sources).toEqual(["user", "tool", "web"]);
   });
 
   it("respects maxSteps and stops looping", async () => {

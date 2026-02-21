@@ -1,4 +1,4 @@
-import { Approval, ApprovalKind } from "@tyrum/schemas";
+import { Approval, ApprovalKind, ApprovalSuggestedOverride } from "@tyrum/schemas";
 import type {
   Approval as ApprovalT,
   ApprovalDecision,
@@ -51,6 +51,14 @@ export function toSchemaApproval(row: ApprovalRow): ApprovalT {
     }
   }
 
+  let suggestedOverrides: unknown = undefined;
+  if (ctx && typeof ctx === "object") {
+    suggestedOverrides = (ctx as Record<string, unknown>)["suggested_overrides"];
+  }
+  const suggestedParsed = suggestedOverrides
+    ? ApprovalSuggestedOverride.array().max(10).safeParse(suggestedOverrides)
+    : { success: false as const };
+
   const resolution =
     row.status === "pending"
       ? null
@@ -60,7 +68,11 @@ export function toSchemaApproval(row: ApprovalRow): ApprovalT {
               ? ("approved" as ApprovalDecision)
               : ("denied" as ApprovalDecision),
           resolved_at: row.responded_at ?? row.created_at,
+          resolved_by: row.resolved_by ?? undefined,
           reason: row.response_reason ?? (row.status === "expired" ? "expired" : undefined),
+          mode: row.status === "approved" ? row.response_mode ?? undefined : undefined,
+          policy_override_id:
+            row.status === "approved" ? row.policy_override_id ?? undefined : undefined,
         };
 
   return Approval.parse({
@@ -70,9 +82,9 @@ export function toSchemaApproval(row: ApprovalRow): ApprovalT {
     prompt: row.prompt,
     context: row.context,
     scope: toApprovalScope(row),
+    suggested_overrides: suggestedParsed.success ? suggestedParsed.data : undefined,
     created_at: row.created_at,
     expires_at: row.expires_at,
     resolution,
   });
 }
-

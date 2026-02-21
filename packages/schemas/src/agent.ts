@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ProvenanceTag } from "./provenance.js";
 
 export const AgentModelConfig = z.object({
   model: z.string().trim().min(1),
@@ -124,6 +125,7 @@ export const AgentTurnResponse = z.object({
   session_id: z.string(),
   used_tools: z.array(z.string()).default([]),
   memory_written: z.boolean().default(false),
+  provenance_sources: z.array(ProvenanceTag).min(1).optional(),
 });
 export type AgentTurnResponse = z.infer<typeof AgentTurnResponse>;
 

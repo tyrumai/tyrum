@@ -51,6 +51,8 @@ export {
   PolicyBundle,
 } from "./policy-bundle.js";
 
+export { PolicyOverrideStatus, PolicyOverride } from "./policy-overrides.js";
+
 export { ProvenanceTag } from "./provenance.js";
 
 export {
@@ -241,6 +243,12 @@ export {
   WsApprovalRequestedEvent,
   WsApprovalResolvedPayload,
   WsApprovalResolvedEvent,
+  WsPolicyOverrideCreatedPayload,
+  WsPolicyOverrideCreatedEvent,
+  WsPolicyOverrideRevokedPayload,
+  WsPolicyOverrideRevokedEvent,
+  WsPolicyOverrideExpiredPayload,
+  WsPolicyOverrideExpiredEvent,
   WsRunPausedPayload,
   WsRunPausedEvent,
   WsRunResumedPayload,
@@ -372,7 +380,10 @@ export {
 export {
   ApprovalStatus,
   ApprovalKind,
+  ApprovalMode,
   ApprovalScope,
+  ApprovalSuggestedOverride,
+  ApprovalOverrideSelection,
   ApprovalDecision,
   ApprovalResolution,
   Approval,

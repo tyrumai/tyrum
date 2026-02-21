@@ -15,6 +15,7 @@ import type { ApprovalNotifier } from "../approval/notifier.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { Logger } from "../observability/logger.js";
 import type { SqlDb } from "../../statestore/types.js";
+import { ArtifactDal } from "../artifact/dal.js";
 
 export interface StepResult {
   success: boolean;
@@ -171,6 +172,7 @@ export class ExecutionEngine {
   private readonly logger?: Logger;
   private readonly policyBundleService: PolicyBundleService;
   private readonly approvalNotifier: ApprovalNotifier;
+  private readonly artifactDal: ArtifactDal;
 
   constructor(opts: {
     db: SqlDb;
@@ -179,6 +181,7 @@ export class ExecutionEngine {
     logger?: Logger;
     policyBundleService?: PolicyBundleService;
     approvalNotifier?: ApprovalNotifier;
+    artifactDal?: ArtifactDal;
   }) {
     this.db = opts.db;
     this.clock = opts.clock ?? defaultClock;
@@ -187,6 +190,7 @@ export class ExecutionEngine {
     this.policyBundleService =
       opts.policyBundleService ?? new PolicyBundleService(opts.db, { logger: opts.logger });
     this.approvalNotifier = opts.approvalNotifier ?? NOOP_APPROVAL_NOTIFIER;
+    this.artifactDal = opts.artifactDal ?? new ArtifactDal(opts.db);
   }
 
   private redactUnknown<T>(value: T): T {
@@ -197,6 +201,41 @@ export class ExecutionEngine {
 
   private redactText(text: string): string {
     return this.redactionEngine ? this.redactionEngine.redactText(text).redacted : text;
+  }
+
+  private async persistAttemptArtifactsMetadata(input: {
+    key: string;
+    workspaceId: string;
+    runId: string;
+    stepId: string;
+    attemptId: string;
+    planId: string;
+    artifacts: readonly ArtifactRefT[] | undefined;
+  }): Promise<void> {
+    if (!input.artifacts || input.artifacts.length === 0) return;
+    const agentId = tryParseAgentIdFromKey(input.key) ?? "default";
+
+    try {
+      for (const ref of input.artifacts) {
+        await this.artifactDal.upsertMetadata({
+          ref,
+          agentId,
+          workspaceId: input.workspaceId,
+          runId: input.runId,
+          stepId: input.stepId,
+          attemptId: input.attemptId,
+          createdBy: input.planId,
+        });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger?.error("artifact.metadata_persist_failed", {
+        error: message,
+        run_id: input.runId,
+        step_id: input.stepId,
+        attempt_id: input.attemptId,
+      });
+    }
   }
 
   async enqueuePlan(input: EnqueuePlanInput): Promise<EnqueuePlanResult> {
@@ -1353,6 +1392,15 @@ export class ExecutionEngine {
                 artifactsJson,
                 costJson,
               );
+              await this.persistAttemptArtifactsMetadata({
+                key: opts.key,
+                workspaceId: opts.workspaceId,
+                runId: opts.runId,
+                stepId: opts.stepId,
+                attemptId: opts.attemptId,
+                planId: opts.planId,
+                artifacts: result.artifacts,
+              });
               await this.pauseRunAndStep(opts, "manual", detail);
               this.logger?.info("execution.attempt.paused", {
                 job_id: opts.jobId,
@@ -1380,6 +1428,15 @@ export class ExecutionEngine {
           artifactsJson,
           costJson,
         );
+        await this.persistAttemptArtifactsMetadata({
+          key: opts.key,
+          workspaceId: opts.workspaceId,
+          runId: opts.runId,
+          stepId: opts.stepId,
+          attemptId: opts.attemptId,
+          planId: opts.planId,
+          artifacts: result.artifacts,
+        });
         this.logger?.info("execution.attempt.failed", {
           job_id: opts.jobId,
           run_id: opts.runId,
@@ -1399,6 +1456,15 @@ export class ExecutionEngine {
         artifactsJson,
         costJson,
       );
+      await this.persistAttemptArtifactsMetadata({
+        key: opts.key,
+        workspaceId: opts.workspaceId,
+        runId: opts.runId,
+        stepId: opts.stepId,
+        attemptId: opts.attemptId,
+        planId: opts.planId,
+        artifacts: result.artifacts,
+      });
       this.logger?.info("execution.attempt.succeeded", {
         job_id: opts.jobId,
         run_id: opts.runId,
@@ -1461,6 +1527,16 @@ export class ExecutionEngine {
         opts.attemptId,
       ],
     );
+
+    await this.persistAttemptArtifactsMetadata({
+      key: opts.key,
+      workspaceId: opts.workspaceId,
+      runId: opts.runId,
+      stepId: opts.stepId,
+      attemptId: opts.attemptId,
+      planId: opts.planId,
+      artifacts: result.artifacts,
+    });
 
     this.logger?.info("execution.attempt.failed", {
       job_id: opts.jobId,

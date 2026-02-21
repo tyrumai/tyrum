@@ -2,6 +2,8 @@ import { Hono, type Context } from "hono";
 import { setCookie } from "hono/cookie";
 import type { ApprovalDal } from "../modules/approval/dal.js";
 import { resolveAndApplyApproval, type WsEventPublisher } from "../modules/approval/apply.js";
+import type { PolicyOverrideDal } from "../modules/policy-overrides/dal.js";
+import { toSchemaPolicyOverride } from "../modules/policy-overrides/schema.js";
 import type { MemoryDal } from "../modules/memory/dal.js";
 import type { WatcherProcessor } from "../modules/watcher/processor.js";
 import type { CanvasDal } from "../modules/canvas/dal.js";
@@ -10,6 +12,7 @@ import type { PlaybookRunner } from "../modules/playbook/runner.js";
 import type { ExecutionEngine } from "../modules/execution/engine.js";
 import type { Logger } from "../modules/observability/logger.js";
 import { APP_PATH_PREFIX, matchesPathPrefixSegment } from "../app-path.js";
+import { randomUUID } from "node:crypto";
 import {
   buildAuditTaskResponse,
   getPlanTimeline,
@@ -27,6 +30,7 @@ import {
 
 export interface WebUiDeps {
   approvalDal: ApprovalDal;
+  policyOverrideDal: PolicyOverrideDal;
   memoryDal: MemoryDal;
   watcherProcessor: WatcherProcessor;
   canvasDal: CanvasDal;
@@ -287,6 +291,7 @@ function shell(title: string, activePath: string, search: URLSearchParams, body:
   const links = [
     ["/app", "Dashboard"],
     ["/app/approvals", "Approvals"],
+    ["/app/policy-overrides", "Policy Overrides"],
     ["/app/activity", "Activity"],
     ["/app/playbooks", "Playbooks"],
     ["/app/watchers", "Watchers"],
@@ -908,9 +913,14 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
 
   app.get("/app", async (c) => {
     const search = new URL(c.req.url).searchParams;
+    const agentId =
+      search.get("agent_id")?.trim() ||
+      c.req.header("x-tyrum-agent-id")?.trim() ||
+      process.env["TYRUM_AGENT_ID"]?.trim() ||
+      "default";
     const [approvals, episodicEvents, watcherRows] = await Promise.all([
       deps.approvalDal.getByStatus("pending"),
-      deps.memoryDal.getEpisodicEvents(20),
+      deps.memoryDal.getEpisodicEvents(agentId, 20),
       deps.watcherProcessor.listWatchers(),
     ]);
     const pending = approvals.length;
@@ -934,7 +944,12 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
 
   app.get("/app/activity", async (c) => {
     const search = new URL(c.req.url).searchParams;
-    const events = await deps.memoryDal.getEpisodicEvents(100);
+    const agentId =
+      search.get("agent_id")?.trim() ||
+      c.req.header("x-tyrum-agent-id")?.trim() ||
+      process.env["TYRUM_AGENT_ID"]?.trim() ||
+      "default";
+    const events = await deps.memoryDal.getEpisodicEvents(agentId, 100);
     const rows = events
       .map(
         (event) => `<tr>
@@ -1005,12 +1020,37 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
 
     const form = await c.req.formData();
     const decision = String(form.get("decision") ?? "");
+    const mode = String(form.get("mode") ?? "").trim();
     const approved = decision === "approved";
     const denied = decision === "denied";
 
     if (!approved && !denied) {
       return c.redirect(redirectWithMessageFromRequest(c, "/app/approvals", "Invalid approval decision", "error"));
     }
+
+    const selectedOverrideRaw = form.get("selected_override")?.toString();
+    const selectedOverride =
+      approved && mode === "always" && selectedOverrideRaw
+        ? (() => {
+            try {
+              const decoded = decodeURIComponent(selectedOverrideRaw);
+              const parsed = JSON.parse(decoded) as unknown;
+              if (!parsed || typeof parsed !== "object") return undefined;
+              const record = parsed as Record<string, unknown>;
+              const toolId = typeof record["tool_id"] === "string" ? record["tool_id"] : undefined;
+              const pattern = typeof record["pattern"] === "string" ? record["pattern"] : undefined;
+              if (!toolId || !pattern) return undefined;
+              return { tool_id: toolId, pattern };
+            } catch {
+              return undefined;
+            }
+          })()
+        : undefined;
+
+    const resolvedBy = {
+      source: "web-ui",
+      user_agent: c.req.header("user-agent") ?? undefined,
+    };
 
 	    const result = await resolveAndApplyApproval({
 	      approvalDal: deps.approvalDal,
@@ -1020,6 +1060,9 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
 	      approvalId: id,
 	      decision: approved ? "approved" : "denied",
 	      reason: form.get("reason")?.toString(),
+	      mode: mode === "always" ? "always" : undefined,
+	      selectedOverride,
+	      resolvedBy,
 	    });
 	    if (result.kind === "not_found") {
 	      return c.redirect(redirectWithMessageFromRequest(c, "/app/approvals", "Approval not found", "error"));
@@ -1027,11 +1070,15 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
 	    if (result.kind === "pending") {
 	      return c.redirect(redirectWithMessageFromRequest(c, "/app/approvals", "Approval is still pending", "error"));
 	    }
+	    if (result.kind === "invalid_request") {
+	      return c.redirect(redirectWithMessageFromRequest(c, "/app/approvals", result.message, "error"));
+	    }
 	    if (result.kind === "conflict") {
 	      return c.redirect(redirectWithMessageFromRequest(c, "/app/approvals", `Approval already resolved as '${result.approval.status}'`, "error"));
 	    }
 
-	    return c.redirect(redirectWithMessageFromRequest(c, "/app/approvals", `Approval #${String(id)} ${approved ? "approved" : "denied"}`));
+	    const verb = approved ? (mode === "always" ? "approved always" : "approved") : "denied";
+	    return c.redirect(redirectWithMessageFromRequest(c, "/app/approvals", `Approval #${String(id)} ${verb}`));
 	  });
 
   app.get("/app/approvals/:id", async (c) => {
@@ -1046,18 +1093,74 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
       return c.html(shell("Approval", "/app/approvals", search, "<h1>Approval</h1><p class='notice error'>Approval not found</p>"), 404);
     }
 
+    const ctxRecord =
+      approval.context && typeof approval.context === "object"
+        ? (approval.context as Record<string, unknown>)
+        : {};
+	    const suggestedRaw = ctxRecord["suggested_overrides"];
+	    type SuggestedOverrideOption = {
+	      toolId: string;
+	      pattern: string;
+	      agentId: string | undefined;
+	      workspaceId: string | undefined;
+	    };
+	    const suggested: SuggestedOverrideOption[] = Array.isArray(suggestedRaw)
+	      ? suggestedRaw.flatMap((s): SuggestedOverrideOption[] => {
+	          if (!s || typeof s !== "object") return [];
+	          const rec = s as Record<string, unknown>;
+	          const toolId = typeof rec["tool_id"] === "string" ? rec["tool_id"] : undefined;
+	          const pattern = typeof rec["pattern"] === "string" ? rec["pattern"] : undefined;
+	          if (!toolId || !pattern) return [];
+	          const agentId = typeof rec["agent_id"] === "string" ? rec["agent_id"] : undefined;
+	          const workspaceId = typeof rec["workspace_id"] === "string" ? rec["workspace_id"] : undefined;
+	          return [{ toolId, pattern, agentId, workspaceId }];
+	        })
+	      : [];
+
+    const approveOnceForm = `<form class="inline" method="post" action="/app/actions/approvals/${String(approval.id)}">
+            <input type="hidden" name="decision" value="approved" />
+            <button type="submit">Approve once</button>
+          </form>`;
+
+    const approveAlwaysForm =
+      suggested.length > 0
+        ? `<form class="inline" method="post" action="/app/actions/approvals/${String(approval.id)}">
+            <input type="hidden" name="decision" value="approved" />
+            <input type="hidden" name="mode" value="always" />
+            <details>
+              <summary class="muted" style="cursor: pointer;">Approve always (create policy override)</summary>
+              <div style="margin-top: 10px;">
+                ${suggested
+                  .map((s, idx) => {
+                    const selection = encodeURIComponent(
+                      JSON.stringify({ tool_id: s.toolId, pattern: s.pattern }),
+                    );
+                    const label = `${s.toolId}: ${s.pattern}${s.agentId ? ` (agent=${s.agentId})` : ""}${s.workspaceId ? ` (workspace=${s.workspaceId})` : ""}`;
+                    return `<label style="display:block; margin: 6px 0;"><input type="radio" name="selected_override" value="${esc(selection)}" ${idx === 0 ? "checked" : ""} /> ${esc(label)}</label>`;
+                  })
+                  .join("")}
+                <div class="actions" style="margin-top: 10px;">
+                  <button type="submit">Approve always</button>
+                </div>
+              </div>
+            </details>
+          </form>`
+        : "";
+
     const actions = approval.status === "pending"
       ? `<div class="actions">
-          <form class="inline" method="post" action="/app/actions/approvals/${String(approval.id)}">
-            <input type="hidden" name="decision" value="approved" />
-            <button type="submit">Approve</button>
-          </form>
+          ${approveOnceForm}
+          ${approveAlwaysForm}
           <form class="inline" method="post" action="/app/actions/approvals/${String(approval.id)}">
             <input type="hidden" name="decision" value="denied" />
             <button class="danger" type="submit">Deny</button>
           </form>
         </div>`
       : "";
+
+    const overrideLink = approval.policy_override_id
+      ? `<a href="${withAuthToken(`/app/policy-overrides/${encodeURIComponent(approval.policy_override_id)}`, search)}">${esc(approval.policy_override_id)}</a>`
+      : "-";
 
     const body = `
       <div class="page-header"><h1>Approval #${String(approval.id)}</h1></div>
@@ -1068,6 +1171,8 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
           <strong>Step</strong><span>${String(approval.step_index)}</span>
           <strong>Created</strong><span>${fmtDate(approval.created_at)}</span>
           <strong>Responded</strong><span>${fmtDate(approval.responded_at)}</span>
+          <strong>Mode</strong><span>${esc(approval.response_mode ?? "-")}</span>
+          <strong>Policy override</strong><span>${overrideLink}</span>
         </div>
         <h2>Prompt</h2>
         <p>${esc(approval.prompt)}</p>
@@ -1079,6 +1184,154 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
     `;
 
     return c.html(shell(`Approval ${approval.id}`, "/app/approvals", search, body));
+  });
+
+  app.get("/app/policy-overrides", async (c) => {
+    const search = new URL(c.req.url).searchParams;
+    const statusRaw = search.get("status")?.trim();
+    const status =
+      statusRaw === "active" || statusRaw === "revoked" || statusRaw === "expired"
+        ? statusRaw
+        : statusRaw
+          ? null
+          : undefined;
+
+    if (status === null) {
+      return c.html(
+        shell(
+          "Policy Overrides",
+          "/app/policy-overrides",
+          search,
+          "<h1>Policy overrides</h1><p class='notice error'>Invalid status filter</p>",
+        ),
+        400,
+      );
+    }
+
+    const overrides = await deps.policyOverrideDal.list({ status, limit: 200 });
+    const rows = overrides
+      .map((override) => {
+        const detailsHref = withAuthToken(
+          `/app/policy-overrides/${encodeURIComponent(override.policy_override_id)}`,
+          search,
+        );
+        const revokeForm =
+          override.status === "active"
+            ? `<form class="inline" method="post" action="/app/actions/policy-overrides/${encodeURIComponent(override.policy_override_id)}/revoke">
+                <button class="danger" type="submit">Revoke</button>
+              </form>`
+            : "";
+
+        return `<tr>
+          <td><a href="${detailsHref}">${esc(override.policy_override_id)}</a></td>
+          <td>${esc(override.status)}</td>
+          <td>${esc(override.agent_id)}</td>
+          <td>${esc(override.tool_id)}</td>
+          <td><code>${esc(override.pattern)}</code></td>
+          <td>${fmtDate(override.created_at)}</td>
+          <td>${revokeForm}</td>
+        </tr>`;
+      })
+      .join("");
+
+    const body = `
+      <div class="page-header">
+        <h1>Policy overrides</h1>
+        <p>Durable “approve always” rules created from approvals.</p>
+      </div>
+      <div class="card">
+        <table>
+          <thead><tr><th>ID</th><th>Status</th><th>Agent</th><th>Tool</th><th>Pattern</th><th>Created</th><th>Actions</th></tr></thead>
+          <tbody>${rows || "<tr><td colspan='7' class='muted'>No overrides.</td></tr>"}</tbody>
+        </table>
+      </div>
+    `;
+    return c.html(shell("Policy Overrides", "/app/policy-overrides", search, body));
+  });
+
+  app.post("/app/actions/policy-overrides/:id/revoke", async (c) => {
+    const id = c.req.param("id")?.trim();
+    if (!id) {
+      return c.redirect(redirectWithMessageFromRequest(c, "/app/policy-overrides", "Invalid policy override id", "error"));
+    }
+
+    const revokedBy = {
+      source: "web-ui",
+      user_agent: c.req.header("user-agent") ?? undefined,
+    };
+
+    const override = await deps.policyOverrideDal.revoke({
+      policyOverrideId: id,
+      revokedBy,
+    });
+    if (!override) {
+      return c.redirect(redirectWithMessageFromRequest(c, "/app/policy-overrides", "Policy override not found", "error"));
+    }
+
+    if (deps.wsPublisher && override.status === "revoked") {
+      const nowIso = new Date().toISOString();
+      deps.wsPublisher.publish(
+        {
+          event_id: randomUUID(),
+          type: "policy_override.revoked",
+          occurred_at: nowIso,
+          payload: { policy_override: toSchemaPolicyOverride(override) },
+        },
+        { targetRole: "client" },
+      );
+    }
+
+    return c.redirect(
+      redirectWithMessageFromRequest(
+        c,
+        "/app/policy-overrides",
+        `Policy override ${id} revoked`,
+      ),
+    );
+  });
+
+  app.get("/app/policy-overrides/:id", async (c) => {
+    const search = new URL(c.req.url).searchParams;
+    const id = c.req.param("id")?.trim();
+    if (!id) {
+      return c.html(shell("Policy override", "/app/policy-overrides", search, "<h1>Policy override</h1><p class='notice error'>Invalid override id</p>"), 400);
+    }
+
+    const override = await deps.policyOverrideDal.getById(id);
+    if (!override) {
+      return c.html(shell("Policy override", "/app/policy-overrides", search, "<h1>Policy override</h1><p class='notice error'>Override not found</p>"), 404);
+    }
+
+    const revokeAction =
+      override.status === "active"
+        ? `<form class="inline" method="post" action="/app/actions/policy-overrides/${encodeURIComponent(override.policy_override_id)}/revoke">
+            <button class="danger" type="submit">Revoke</button>
+          </form>`
+        : "";
+
+    const body = `
+      <div class="page-header"><h1>Policy override</h1></div>
+      <div class="card">
+        <div class="kv">
+          <strong>ID</strong><span>${esc(override.policy_override_id)}</span>
+          <strong>Status</strong><span>${esc(override.status)}</span>
+          <strong>Agent</strong><span>${esc(override.agent_id)}</span>
+          <strong>Workspace</strong><span>${esc(override.workspace_id ?? "-")}</span>
+          <strong>Tool</strong><span>${esc(override.tool_id)}</span>
+          <strong>Pattern</strong><span><code>${esc(override.pattern)}</code></span>
+          <strong>Created</strong><span>${fmtDate(override.created_at)}</span>
+          <strong>From approval</strong><span>${override.created_from_approval_id ? esc(String(override.created_from_approval_id)) : "-"}</span>
+          <strong>Policy snapshot</strong><span>${esc(override.created_from_policy_snapshot_id ?? "-")}</span>
+          <strong>Revoked</strong><span>${fmtDate(override.revoked_at)}</span>
+          <strong>Reason</strong><span>${esc(override.revoked_reason ?? "-")}</span>
+        </div>
+        ${revokeAction}
+        <h2>Raw record</h2>
+        <pre><code>${formatJson(override)}</code></pre>
+      </div>
+      <p><a href="${withAuthToken("/app/policy-overrides", search)}">Back to overrides</a></p>
+    `;
+    return c.html(shell("Policy override", "/app/policy-overrides", search, body));
   });
 
   app.get("/app/playbooks", (c) => {

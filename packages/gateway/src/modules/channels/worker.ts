@@ -4,11 +4,17 @@ import type { SqlDb } from "../../statestore/types.js";
 import type { MemoryDal } from "../memory/dal.js";
 import type { AgentRuntime } from "../agent/runtime.js";
 import type { TelegramBot } from "../ingress/telegram-bot.js";
-import { base32Encode, type ProvenanceTag } from "@tyrum/schemas";
+import {
+  base32Encode,
+  ProvenanceTag as ProvenanceTagSchema,
+  QueueMode as QueueModeSchema,
+  type ProvenanceTag,
+  type QueueMode,
+} from "@tyrum/schemas";
 import { PolicyBundleService } from "../policy-bundle/service.js";
 import type { ApprovalDal } from "../approval/dal.js";
 import type { ApprovalNotifier } from "../approval/notifier.js";
-import { ChannelInboxDal } from "./inbox-dal.js";
+import { ChannelInboxDal, type QueueOverflowPolicy } from "./inbox-dal.js";
 import { ChannelOutboxDal, type OutboundSendRow } from "./outbox-dal.js";
 import { formatAgentSessionKey, type DmScope, type ContainerKind } from "./session-key.js";
 import { chunkMarkdownIr, parseMarkdownToIr, renderTelegramHtml } from "../formatting/markdown-ir.js";
@@ -33,7 +39,13 @@ function parseProvenance(value: unknown): ProvenanceTag[] {
     const raw =
       typeof value === "string" ? (JSON.parse(value) as unknown) : value;
     if (!Array.isArray(raw)) return [];
-    return raw.filter((v): v is ProvenanceTag => typeof v === "string") as ProvenanceTag[];
+    const out: ProvenanceTag[] = [];
+    for (const entry of raw) {
+      if (typeof entry !== "string") continue;
+      const parsed = ProvenanceTagSchema.safeParse(entry);
+      if (parsed.success) out.push(parsed.data);
+    }
+    return out;
   } catch {
     return [];
   }
@@ -64,6 +76,39 @@ function normalizeDmScope(raw: string | undefined): DmScope | undefined {
     default:
       return undefined;
   }
+}
+
+function normalizeQueueMode(raw: string | undefined): QueueMode | undefined {
+  const value = raw?.trim().toLowerCase();
+  if (!value) return undefined;
+  const parsed = QueueModeSchema.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
+}
+
+function normalizeOverflowPolicy(raw: string | undefined): QueueOverflowPolicy | undefined {
+  const value = raw?.trim().toLowerCase();
+  switch (value) {
+    case "drop_oldest":
+    case "drop_newest":
+    case "summarize_dropped":
+      return value;
+    default:
+      return undefined;
+  }
+}
+
+function normalizeQueueCap(raw: string | undefined): number | undefined {
+  if (!raw) return undefined;
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isFinite(n)) return undefined;
+  return Math.max(1, Math.min(500, n));
+}
+
+function normalizeSummaryMaxChars(raw: string | undefined): number | undefined {
+  if (!raw) return undefined;
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isFinite(n)) return undefined;
+  return Math.max(200, Math.min(20_000, n));
 }
 
 function deriveIdempotencyKey(parts: readonly string[]): string {
@@ -114,6 +159,15 @@ export interface ChannelWorkerOptions {
   tickMs?: number;
   /** When true, the interval keeps the Node.js process alive. Defaults to false. */
   keepProcessAlive?: boolean;
+
+  /** Queue mode applied when multiple inbound messages are pending for a container. Defaults to "collect". */
+  queueMode?: QueueMode;
+  /** Max pending inbound messages per container (cap). Defaults to 50. */
+  queueCap?: number;
+  /** Overflow policy when cap is exceeded. Defaults to "drop_oldest". */
+  queueOverflow?: QueueOverflowPolicy;
+  /** Max chars for synthesized overflow summaries. Defaults to 2400. */
+  queueSummaryMaxChars?: number;
 }
 
 export class ChannelWorker {
@@ -131,6 +185,11 @@ export class ChannelWorker {
   private readonly telegramMaxChars: number;
   private readonly tickMs: number;
   private readonly keepProcessAlive: boolean;
+  private readonly agentId: string;
+  private readonly queueMode: QueueMode;
+  private readonly queueCap: number;
+  private readonly queueOverflow: QueueOverflowPolicy;
+  private readonly queueSummaryMaxChars: number;
 
   private readonly inboxDal: ChannelInboxDal;
   private readonly outboxDal: ChannelOutboxDal;
@@ -153,6 +212,27 @@ export class ChannelWorker {
     this.telegramMaxChars = Math.max(500, Math.floor(opts.telegramMaxChars ?? 3_800));
     this.tickMs = Math.max(50, Math.floor(opts.tickMs ?? 250));
     this.keepProcessAlive = opts.keepProcessAlive ?? false;
+    this.agentId = process.env["TYRUM_AGENT_ID"]?.trim() || "default";
+    this.queueMode =
+      opts.queueMode ??
+      normalizeQueueMode(process.env["TYRUM_CHANNEL_QUEUE_MODE"]) ??
+      normalizeQueueMode(process.env["TYRUM_QUEUE_MODE"]) ??
+      "collect";
+    this.queueCap =
+      opts.queueCap ??
+      normalizeQueueCap(process.env["TYRUM_CHANNEL_QUEUE_CAP"]) ??
+      normalizeQueueCap(process.env["TYRUM_QUEUE_CAP"]) ??
+      50;
+    this.queueOverflow =
+      opts.queueOverflow ??
+      normalizeOverflowPolicy(process.env["TYRUM_CHANNEL_QUEUE_OVERFLOW"]) ??
+      normalizeOverflowPolicy(process.env["TYRUM_QUEUE_OVERFLOW"]) ??
+      "drop_oldest";
+    this.queueSummaryMaxChars =
+      opts.queueSummaryMaxChars ??
+      normalizeSummaryMaxChars(process.env["TYRUM_CHANNEL_QUEUE_SUMMARY_MAX_CHARS"]) ??
+      normalizeSummaryMaxChars(process.env["TYRUM_QUEUE_SUMMARY_MAX_CHARS"]) ??
+      2400;
 
     this.inboxDal = new ChannelInboxDal(opts.db);
     this.outboxDal = new ChannelOutboxDal(opts.db);
@@ -198,7 +278,12 @@ export class ChannelWorker {
     text?: string;
     hasAttachment: boolean;
     receivedAtMs: number;
-  }): Promise<{ kind: "deduped" | "queued"; droppedOldest?: number }> {
+  }): Promise<{
+    kind: "deduped" | "queued" | "dropped";
+    dropped?: number;
+    overflowPolicy?: QueueOverflowPolicy;
+    summarized?: boolean;
+  }> {
     const result = await this.inboxDal.enqueueMessage(
       {
         channel: "telegram",
@@ -213,12 +298,17 @@ export class ChannelWorker {
         hasAttachment: opts.hasAttachment,
         receivedAtMs: opts.receivedAtMs,
       },
-      { cap: 50 },
+      {
+        cap: this.queueCap,
+        overflow: this.queueOverflow,
+        summarizeMaxChars: this.queueSummaryMaxChars,
+      },
     );
 
     const occurredAt = new Date().toISOString();
     if (result.kind === "deduped") {
       await this.memoryDal.insertEpisodicEvent(
+        this.agentId,
         `channel-inbound-deduped-${randomUUID()}`,
         occurredAt,
         "telegram",
@@ -233,8 +323,9 @@ export class ChannelWorker {
       return { kind: "deduped" };
     }
 
-    if (result.droppedOldest > 0) {
+    if (result.dropped > 0) {
       await this.memoryDal.insertEpisodicEvent(
+        this.agentId,
         `channel-inbound-overflow-${randomUUID()}`,
         occurredAt,
         "telegram",
@@ -243,12 +334,19 @@ export class ChannelWorker {
           channel: "telegram",
           account_id: opts.accountId,
           container_id: opts.containerId,
-          dropped_oldest: result.droppedOldest,
+          dropped: result.dropped,
+          overflow_policy: result.overflowPolicy,
+          summarized: result.summarized,
         },
       );
     }
 
-    return { kind: "queued", droppedOldest: result.droppedOldest };
+    return {
+      kind: result.kind,
+      dropped: result.dropped,
+      overflowPolicy: result.overflowPolicy,
+      summarized: result.summarized,
+    };
   }
 
   private async tryAcquireLease(nowMs: number): Promise<boolean> {
@@ -307,8 +405,8 @@ export class ChannelWorker {
          WHERE channel = ? AND account_id = ? AND container_id = ?
            AND status = 'pending'
          ORDER BY received_at_ms ASC
-         LIMIT 50`,
-        [channel, accountId, containerId],
+         LIMIT ?`,
+        [channel, accountId, containerId, this.queueCap],
       );
       if (rows.length === 0) return [];
 
@@ -350,6 +448,39 @@ export class ChannelWorker {
     });
   }
 
+  private async markClaimedMessages(opts: {
+    channel: string;
+    accountId: string;
+    containerId: string;
+    messageIds: readonly string[];
+    status: "completed" | "failed" | "dropped";
+    nowMs: number;
+    error: string | null;
+  }): Promise<void> {
+    if (opts.messageIds.length === 0) return;
+    const nowIso = new Date().toISOString();
+    const placeholders = opts.messageIds.map(() => "?").join(", ");
+    await this.db.run(
+      `UPDATE channel_inbound_messages
+       SET status = ?, processed_at_ms = ?, updated_at = ?, error = ?,
+           processing_owner = NULL, processing_expires_at_ms = NULL
+       WHERE channel = ? AND account_id = ? AND container_id = ?
+         AND status = 'processing' AND processing_owner = ?
+         AND message_id IN (${placeholders})`,
+      [
+        opts.status,
+        opts.nowMs,
+        nowIso,
+        opts.error,
+        opts.channel,
+        opts.accountId,
+        opts.containerId,
+        this.leaseOwner,
+        ...opts.messageIds,
+      ],
+    );
+  }
+
   private async processContainer(
     channel: string,
     accountId: string,
@@ -359,31 +490,68 @@ export class ChannelWorker {
     const claimed = await this.claimPendingMessages(channel, accountId, containerId, nowMs);
     if (claimed.length === 0) return;
 
-    const messageIds = claimed.map((m) => m.message_id);
-    const first = claimed[0]!;
-
-    const combined = claimed
-      .map((m) => m.text ?? "")
-      .map((t) => t.trim())
-      .filter((t) => t.length > 0)
-      .join("\n");
-
     const occurredAt = new Date().toISOString();
+    const first = claimed[0]!;
+    const newest = claimed[claimed.length - 1]!;
 
-    if (!combined) {
-      await this.db.run(
-        `UPDATE channel_inbound_messages
-         SET status = 'completed', processed_at_ms = ?, updated_at = ?, error = ?
-         WHERE channel = ? AND account_id = ? AND container_id = ?
-           AND status = 'processing' AND processing_owner = ?`,
-        [nowMs, occurredAt, "empty message", channel, accountId, containerId, this.leaseOwner],
+    const mode = this.queueMode;
+    const dropIds: string[] = [];
+    const groups: RawInboundRow[][] = [];
+
+    switch (mode) {
+      case "collect":
+        groups.push(claimed);
+        break;
+      case "followup":
+        for (const msg of claimed) groups.push([msg]);
+        break;
+      case "interrupt":
+      case "steer": {
+        groups.push([newest]);
+        dropIds.push(...claimed.slice(0, -1).map((m) => m.message_id));
+        break;
+      }
+      case "steer_backlog": {
+        groups.push([newest]);
+        const rest = claimed.slice(0, -1);
+        if (rest.length > 0) groups.push(rest);
+        break;
+      }
+      default:
+        groups.push(claimed);
+        break;
+    }
+
+    if (dropIds.length > 0) {
+      await this.markClaimedMessages({
+        channel,
+        accountId,
+        containerId,
+        messageIds: dropIds,
+        status: "dropped",
+        nowMs,
+        error: `queue mode ${mode}`,
+      });
+
+      await this.memoryDal.insertEpisodicEvent(
+        this.agentId,
+        `channel-inbound-queue-drop-${randomUUID()}`,
+        occurredAt,
+        channel,
+        "channel_inbound_queue_drop",
+        {
+          channel,
+          account_id: accountId,
+          container_id: containerId,
+          queue_mode: mode,
+          dropped: dropIds.length,
+        },
       );
-      return;
     }
 
     const containerKind = mapThreadKind(first.thread_kind);
 
-    const agentId = process.env["TYRUM_AGENT_ID"]?.trim() || "default";
+    const agentId = this.agentId;
     const dmScope =
       normalizeDmScope(process.env["TELEGRAM_DM_SCOPE"]) ??
       normalizeDmScope(process.env["TYRUM_DM_SCOPE"]) ??
@@ -400,129 +568,156 @@ export class ChannelWorker {
       dmScope,
     });
 
-    let reply: string;
-    let runtimeSessionId: string | undefined;
+    for (const group of groups) {
+      const messageIds = group.map((m) => m.message_id);
+      const combined = group
+        .map((m) => m.text ?? "")
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0)
+        .join("\n");
 
-    try {
-      const res = await this.agentRuntime!.turn({
-        channel,
-        thread_id: sessionKey,
-        message: combined,
-      });
-      reply = res.reply;
-      runtimeSessionId = res.session_id;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.logger?.error("channel.inbound.agent_failed", {
-        channel,
-        account_id: accountId,
-        container_id: containerId,
-        error: message,
-      });
-      reply = "Sorry, something went wrong. Please try again later.";
-    }
+      if (!combined) {
+        await this.markClaimedMessages({
+          channel,
+          accountId,
+          containerId,
+          messageIds,
+          status: "completed",
+          nowMs,
+          error: "empty message",
+        });
+        continue;
+      }
 
-    const batchKey = deriveIdempotencyKey([channel, accountId, containerId, ...messageIds]);
-    const idempotencyKey = `reply:${channel}:${accountId}:${containerId}:${batchKey}`;
+      let reply: string;
+      let runtimeSessionId: string | undefined;
 
-    const provenanceSources = Array.from(
-      new Set(
-        claimed.flatMap((m) => parseProvenance(m.provenance_json)),
-      ),
-    );
+      const inboundProvenanceSources = Array.from(
+        new Set(group.flatMap((m) => parseProvenance(m.provenance_json))),
+      );
+      let derivedProvenanceSources = inboundProvenanceSources;
 
-    const policy = await this.policyBundleService.evaluateAction(
-      {
-        type: "Message",
-        args: {
+      try {
+        const res = await this.agentRuntime!.turn({
+          channel,
+          thread_id: sessionKey,
+          message: combined,
+          metadata: {
+            provenance_sources: inboundProvenanceSources,
+          },
+        });
+        reply = res.reply;
+        runtimeSessionId = res.session_id;
+        if (res.provenance_sources && res.provenance_sources.length > 0) {
+          derivedProvenanceSources = res.provenance_sources;
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger?.error("channel.inbound.agent_failed", {
           channel,
           account_id: accountId,
           container_id: containerId,
-          body: reply,
-        },
-        idempotency_key: idempotencyKey,
-      },
-      { agentId, provenance: { sources: provenanceSources } },
-    );
+          error: message,
+        });
+        reply = "Sorry, something went wrong. Please try again later.";
+      }
 
-    let sendStatus: "pending" | "awaiting_approval" | "denied" = "pending";
-    let approvalId: number | undefined;
+      const batchKey = deriveIdempotencyKey([channel, accountId, containerId, ...messageIds]);
+      const idempotencyKey = `reply:${channel}:${accountId}:${containerId}:${batchKey}`;
 
-    if (policy.decision === "deny") {
-      sendStatus = "denied";
-    } else if (policy.decision === "require_approval") {
-      sendStatus = "awaiting_approval";
-
-      const approval = await this.approvalDal.create({
-        planId: `channel-send-${batchKey}`,
-        stepIndex: 0,
-        prompt: `Approve sending message to ${channel} (${containerId})`,
-        context: {
-          kind: "channel_send",
-          channel,
-          account_id: accountId,
-          container_id: containerId,
+      const policy = await this.policyBundleService.evaluateAction(
+        {
+          type: "Message",
+          args: {
+            channel,
+            account_id: accountId,
+            container_id: containerId,
+            body: reply,
+          },
           idempotency_key: idempotencyKey,
+        },
+        { agentId, provenance: { sources: derivedProvenanceSources } },
+      );
+
+      let sendStatus: "pending" | "awaiting_approval" | "denied" = "pending";
+      let approvalId: number | undefined;
+
+      if (policy.decision === "deny") {
+        sendStatus = "denied";
+      } else if (policy.decision === "require_approval") {
+        sendStatus = "awaiting_approval";
+
+        const approval = await this.approvalDal.create({
+          planId: `channel-send-${batchKey}`,
+          stepIndex: 0,
+          prompt: `Approve sending message to ${channel} (${containerId})`,
+          context: {
+            kind: "channel_send",
+            channel,
+            account_id: accountId,
+            container_id: containerId,
+            idempotency_key: idempotencyKey,
+            session_key: sessionKey,
+            session_id: runtimeSessionId ?? null,
+            provenance_sources: derivedProvenanceSources,
+            body_preview: reply.slice(0, 400),
+            policy,
+          },
+          expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(),
+        });
+        approvalId = approval.id;
+        try {
+          this.approvalNotifier?.notify(approval);
+        } catch {
+          // best-effort
+        }
+      }
+
+      const sendId = `send-${randomUUID()}`;
+      const replyToMessageId = messageIds.length > 0 ? messageIds[messageIds.length - 1] : undefined;
+
+      await this.outboxDal.enqueueSend({
+        id: sendId,
+        channel,
+        accountId,
+        containerId,
+        replyToMessageId,
+        body: reply,
+        idempotencyKey,
+        status: sendStatus,
+        approvalId,
+        nowMs,
+      });
+
+      await this.markClaimedMessages({
+        channel,
+        accountId,
+        containerId,
+        messageIds,
+        status: "completed",
+        nowMs,
+        error: null,
+      });
+
+      await this.memoryDal.insertEpisodicEvent(
+        this.agentId,
+        `channel-inbound-processed-${randomUUID()}`,
+        occurredAt,
+        channel,
+        "channel_inbound_processed",
+        {
+          channel,
+          account_id: accountId,
+          container_id: containerId,
           session_key: sessionKey,
           session_id: runtimeSessionId ?? null,
-          body_preview: reply.slice(0, 400),
+          message_ids: messageIds,
+          queue_mode: mode,
+          outbox_send_id: sendId,
           policy,
         },
-        expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(),
-      });
-      approvalId = approval.id;
-      try {
-        this.approvalNotifier?.notify(approval);
-      } catch {
-        // best-effort
-      }
+      );
     }
-
-    const sendId = `send-${randomUUID()}`;
-
-    const replyToMessageId = (() => {
-      const lastId = messageIds[messageIds.length - 1];
-      if (!lastId) return undefined;
-      return lastId;
-    })();
-
-    await this.outboxDal.enqueueSend({
-      id: sendId,
-      channel,
-      accountId,
-      containerId,
-      replyToMessageId,
-      body: reply,
-      idempotencyKey,
-      status: sendStatus,
-      approvalId,
-      nowMs,
-    });
-
-    await this.db.run(
-      `UPDATE channel_inbound_messages
-       SET status = 'completed', processed_at_ms = ?, updated_at = ?, error = NULL
-       WHERE channel = ? AND account_id = ? AND container_id = ?
-         AND status = 'processing' AND processing_owner = ?`,
-      [nowMs, occurredAt, channel, accountId, containerId, this.leaseOwner],
-    );
-
-    await this.memoryDal.insertEpisodicEvent(
-      `channel-inbound-processed-${randomUUID()}`,
-      occurredAt,
-      channel,
-      "channel_inbound_processed",
-      {
-        channel,
-        account_id: accountId,
-        container_id: containerId,
-        session_key: sessionKey,
-        session_id: runtimeSessionId ?? null,
-        message_ids: messageIds,
-        outbox_send_id: sendId,
-        policy,
-      },
-    );
   }
 
   private async processOutbound(nowMs: number): Promise<void> {
@@ -546,6 +741,7 @@ export class ChannelWorker {
             const chunked = chunkMarkdownIr(tokens, this.telegramMaxChars);
             if (chunked.degraded) {
               void this.memoryDal.insertEpisodicEvent(
+                this.agentId,
                 `formatting-degraded-${randomUUID()}`,
                 new Date().toISOString(),
                 send.channel,
@@ -566,6 +762,7 @@ export class ChannelWorker {
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             void this.memoryDal.insertEpisodicEvent(
+              this.agentId,
               `formatting-fallback-${randomUUID()}`,
               new Date().toISOString(),
               send.channel,
@@ -601,6 +798,7 @@ export class ChannelWorker {
 
         await this.outboxDal.markSent(send.id, lastReceipt ?? { ok: true }, nowMs);
         await this.memoryDal.insertEpisodicEvent(
+          this.agentId,
           `channel-outbound-sent-${randomUUID()}`,
           new Date().toISOString(),
           send.channel,
@@ -619,6 +817,7 @@ export class ChannelWorker {
         const message = err instanceof Error ? err.message : String(err);
         await this.outboxDal.markFailed(send.id, message, nowMs);
         await this.memoryDal.insertEpisodicEvent(
+          this.agentId,
           `channel-outbound-failed-${randomUUID()}`,
           new Date().toISOString(),
           send.channel,

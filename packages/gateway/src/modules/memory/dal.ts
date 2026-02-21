@@ -121,6 +121,7 @@ export class MemoryDal {
   // --- Facts ---
 
   async insertFact(
+    agentId: string,
     factKey: string,
     factValue: unknown,
     source: string,
@@ -129,10 +130,11 @@ export class MemoryDal {
   ): Promise<number> {
     const nowIso = new Date().toISOString();
     const row = await this.db.get<{ id: number }>(
-      `INSERT INTO facts (fact_key, fact_value, source, observed_at, confidence, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO facts (agent_id, fact_key, fact_value, source, observed_at, confidence, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
        RETURNING id`,
       [
+        agentId,
         factKey,
         JSON.stringify(factValue),
         source,
@@ -147,9 +149,10 @@ export class MemoryDal {
     return Number(row.id);
   }
 
-  async getFacts(): Promise<FactRow[]> {
+  async getFacts(agentId: string): Promise<FactRow[]> {
     const rows = await this.db.all<RawFactRow>(
-      "SELECT * FROM facts ORDER BY observed_at DESC",
+      "SELECT * FROM facts WHERE agent_id = ? ORDER BY observed_at DESC",
+      [agentId],
     );
     return rows.map((r) => ({
       ...r,
@@ -158,10 +161,10 @@ export class MemoryDal {
     }));
   }
 
-  async getFactsByKey(factKey: string): Promise<FactRow[]> {
+  async getFactsByKey(agentId: string, factKey: string): Promise<FactRow[]> {
     const rows = await this.db.all<RawFactRow>(
-      "SELECT * FROM facts WHERE fact_key = ? ORDER BY observed_at DESC",
-      [factKey],
+      "SELECT * FROM facts WHERE agent_id = ? AND fact_key = ? ORDER BY observed_at DESC",
+      [agentId, factKey],
     );
     return rows.map((r) => ({
       ...r,
@@ -173,6 +176,7 @@ export class MemoryDal {
   // --- Episodic Events ---
 
   async insertEpisodicEvent(
+    agentId: string,
     eventId: string,
     occurredAt: string,
     channel: string,
@@ -181,10 +185,10 @@ export class MemoryDal {
   ): Promise<number> {
     const nowIso = new Date().toISOString();
     const row = await this.db.get<{ id: number }>(
-      `INSERT INTO episodic_events (event_id, occurred_at, channel, event_type, payload, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO episodic_events (agent_id, event_id, occurred_at, channel, event_type, payload, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
        RETURNING id`,
-      [eventId, occurredAt, channel, eventType, JSON.stringify(payload), nowIso],
+      [agentId, eventId, occurredAt, channel, eventType, JSON.stringify(payload), nowIso],
     );
     if (!row) {
       throw new Error("failed to insert episodic event");
@@ -192,10 +196,10 @@ export class MemoryDal {
     return Number(row.id);
   }
 
-  async getEpisodicEvents(limit = 100): Promise<EpisodicEventRow[]> {
+  async getEpisodicEvents(agentId: string, limit = 100): Promise<EpisodicEventRow[]> {
     const rows = await this.db.all<RawEpisodicEventRow>(
-      "SELECT * FROM episodic_events ORDER BY occurred_at DESC LIMIT ?",
-      [limit],
+      "SELECT * FROM episodic_events WHERE agent_id = ? ORDER BY occurred_at DESC LIMIT ?",
+      [agentId, limit],
     );
     return rows.map((r) => ({
       ...r,
@@ -207,6 +211,7 @@ export class MemoryDal {
   // --- Capability Memories ---
 
   async upsertCapabilityMemory(
+    agentId: string,
     capabilityType: string,
     capabilityIdentifier: string,
     executorKind: string,
@@ -215,8 +220,8 @@ export class MemoryDal {
     return await this.db.transaction(async (tx) => {
       const existing = await tx.get<{ id: number; success_count: number }>(
         `SELECT id, success_count FROM capability_memories
-         WHERE capability_type = ? AND capability_identifier = ? AND executor_kind = ?`,
-        [capabilityType, capabilityIdentifier, executorKind],
+         WHERE agent_id = ? AND capability_type = ? AND capability_identifier = ? AND executor_kind = ?`,
+        [agentId, capabilityType, capabilityIdentifier, executorKind],
       );
 
       if (existing) {
@@ -253,11 +258,12 @@ export class MemoryDal {
       const nowIso = new Date().toISOString();
       await tx.run(
         `INSERT INTO capability_memories
-          (capability_type, capability_identifier, executor_kind,
+          (agent_id, capability_type, capability_identifier, executor_kind,
            selectors, outcome_metadata, cost_profile, anti_bot_notes,
            result_summary, success_count, last_success_at, metadata, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
         [
+          agentId,
           capabilityType,
           capabilityIdentifier,
           executorKind,
@@ -277,18 +283,21 @@ export class MemoryDal {
   }
 
   async getCapabilityMemories(
+    agentId: string,
     capabilityType?: string,
   ): Promise<CapabilityMemoryRow[]> {
     const rows: RawCapabilityMemoryRow[] = capabilityType !== undefined
       ? await this.db.all<RawCapabilityMemoryRow>(
           `SELECT * FROM capability_memories
-           WHERE capability_type = ?
+           WHERE agent_id = ? AND capability_type = ?
            ORDER BY updated_at DESC`,
-          [capabilityType],
+          [agentId, capabilityType],
         )
       : await this.db.all<RawCapabilityMemoryRow>(
           `SELECT * FROM capability_memories
+           WHERE agent_id = ?
            ORDER BY updated_at DESC`,
+          [agentId],
         );
     return rows.map((r) => ({
       ...r,
@@ -304,19 +313,21 @@ export class MemoryDal {
   // --- PAM Profiles ---
 
   async upsertPamProfile(
+    agentId: string,
     profileId: string,
     version: string | undefined,
     profileData: unknown,
   ): Promise<void> {
     const nowIso = new Date().toISOString();
     await this.db.run(
-      `INSERT INTO pam_profiles (profile_id, version, profile_data, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(profile_id) DO UPDATE SET
+      `INSERT INTO pam_profiles (agent_id, profile_id, version, profile_data, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(agent_id, profile_id) DO UPDATE SET
          version = excluded.version,
          profile_data = excluded.profile_data,
          updated_at = ?`,
       [
+        agentId,
         profileId,
         version ?? null,
         JSON.stringify(profileData),
@@ -327,10 +338,10 @@ export class MemoryDal {
     );
   }
 
-  async getPamProfile(profileId: string): Promise<ProfileRow | undefined> {
+  async getPamProfile(agentId: string, profileId: string): Promise<ProfileRow | undefined> {
     const row = await this.db.get<RawProfileRow>(
-      "SELECT * FROM pam_profiles WHERE profile_id = ?",
-      [profileId],
+      "SELECT * FROM pam_profiles WHERE agent_id = ? AND profile_id = ?",
+      [agentId, profileId],
     );
     if (!row) return undefined;
     return {
@@ -344,19 +355,21 @@ export class MemoryDal {
   // --- PVP Profiles ---
 
   async upsertPvpProfile(
+    agentId: string,
     profileId: string,
     version: string | undefined,
     profileData: unknown,
   ): Promise<void> {
     const nowIso = new Date().toISOString();
     await this.db.run(
-      `INSERT INTO pvp_profiles (profile_id, version, profile_data, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(profile_id) DO UPDATE SET
+      `INSERT INTO pvp_profiles (agent_id, profile_id, version, profile_data, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(agent_id, profile_id) DO UPDATE SET
          version = excluded.version,
          profile_data = excluded.profile_data,
          updated_at = ?`,
       [
+        agentId,
         profileId,
         version ?? null,
         JSON.stringify(profileData),
@@ -367,10 +380,10 @@ export class MemoryDal {
     );
   }
 
-  async getPvpProfile(profileId: string): Promise<ProfileRow | undefined> {
+  async getPvpProfile(agentId: string, profileId: string): Promise<ProfileRow | undefined> {
     const row = await this.db.get<RawProfileRow>(
-      "SELECT * FROM pvp_profiles WHERE profile_id = ?",
-      [profileId],
+      "SELECT * FROM pvp_profiles WHERE agent_id = ? AND profile_id = ?",
+      [agentId, profileId],
     );
     if (!row) return undefined;
     return {

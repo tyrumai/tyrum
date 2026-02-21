@@ -8,6 +8,7 @@
 import type { SqlDb } from "../../statestore/types.js";
 
 export type ApprovalStatus = "pending" | "approved" | "denied" | "expired";
+export type ApprovalMode = "once" | "always";
 
 export interface ApprovalRow {
   id: number;
@@ -19,6 +20,9 @@ export interface ApprovalRow {
   created_at: string;
   responded_at: string | null;
   response_reason: string | null;
+  response_mode: ApprovalMode | null;
+  policy_override_id: string | null;
+  resolved_by: unknown;
   expires_at: string | null;
 }
 
@@ -32,6 +36,9 @@ interface RawApprovalRow {
   created_at: string | Date;
   responded_at: string | Date | null;
   response_reason: string | null;
+  response_mode: string | null;
+  policy_override_id: string | null;
+  resolved_by_json: string | null;
   expires_at: string | Date | null;
 }
 
@@ -52,6 +59,18 @@ function toApprovalRow(raw: RawApprovalRow): ApprovalRow {
   } catch {
     // leave as empty object
   }
+
+  let resolvedBy: unknown = undefined;
+  try {
+    resolvedBy = raw.resolved_by_json ? (JSON.parse(raw.resolved_by_json) as unknown) : undefined;
+  } catch {
+    resolvedBy = undefined;
+  }
+
+  const mode =
+    raw.response_mode === "once" || raw.response_mode === "always"
+      ? (raw.response_mode as ApprovalMode)
+      : null;
   return {
     id: raw.id,
     plan_id: raw.plan_id,
@@ -62,6 +81,9 @@ function toApprovalRow(raw: RawApprovalRow): ApprovalRow {
     created_at: normalizeTime(raw.created_at),
     responded_at: raw.responded_at ? normalizeTime(raw.responded_at) : null,
     response_reason: raw.response_reason,
+    response_mode: mode,
+    policy_override_id: raw.policy_override_id ?? null,
+    resolved_by: resolvedBy,
     expires_at: raw.expires_at ? normalizeTime(raw.expires_at) : null,
   };
 }
@@ -76,6 +98,10 @@ export interface CreateApprovalParams {
 
 export class ApprovalDal {
   constructor(private readonly db: SqlDb) {}
+
+  async transaction<T>(fn: (tx: SqlDb) => Promise<T>): Promise<T> {
+    return this.db.transaction(fn);
+  }
 
   /** Create a new pending approval request. */
   async create(params: CreateApprovalParams): Promise<ApprovalRow> {
@@ -106,15 +132,28 @@ export class ApprovalDal {
     id: number,
     approved: boolean,
     reason?: string,
+    opts?: {
+      mode?: ApprovalMode;
+      policyOverrideId?: string;
+      resolvedBy?: unknown;
+    },
   ): Promise<ApprovalRow | undefined> {
     const status: ApprovalStatus = approved ? "approved" : "denied";
     const nowIso = new Date().toISOString();
+    const mode = approved ? opts?.mode ?? null : null;
+    const policyOverrideId = approved ? opts?.policyOverrideId ?? null : null;
+    const resolvedByJson = opts?.resolvedBy ? JSON.stringify(opts.resolvedBy) : null;
 
     const result = await this.db.run(
       `UPDATE approvals
-       SET status = ?, responded_at = ?, response_reason = ?
+       SET status = ?,
+           responded_at = ?,
+           response_reason = ?,
+           response_mode = ?,
+           policy_override_id = ?,
+           resolved_by_json = ?
        WHERE id = ? AND status = 'pending'`,
-      [status, nowIso, reason ?? null, id],
+      [status, nowIso, reason ?? null, mode, policyOverrideId, resolvedByJson, id],
     );
     if (result.changes === 0) return undefined;
     return await this.getById(id);

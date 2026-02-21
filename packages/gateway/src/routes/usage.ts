@@ -5,9 +5,15 @@
  */
 
 import { Hono } from "hono";
+import { readFileSync } from "node:fs";
 import type { SqlDb } from "../statestore/types.js";
 import { AttemptCost, UsageResponse } from "@tyrum/schemas";
 import { ContextReportDal } from "../modules/observability/context-report-dal.js";
+import { PolicyBundleService } from "../modules/policy-bundle/service.js";
+import type { AuthProfileService } from "../modules/auth-profiles/service.js";
+import { ProviderUsageService, providerUsagePollingEnabled } from "../modules/observability/provider-usage.js";
+import type { AgentRuntime } from "../modules/agent/runtime.js";
+import { parse as parseYaml } from "yaml";
 
 function sumOr(a: number, b: number | undefined): number {
   return a + (b ?? 0);
@@ -23,15 +29,40 @@ function parseCostJson(raw: string): unknown | null {
 
 export interface UsageRouteOptions {
   db: SqlDb;
+  modelGatewayConfigPath?: string;
+  authProfileService?: AuthProfileService;
+  agentRuntime?: Pick<AgentRuntime, "status">;
 }
 
 export function createUsageRoutes(opts: UsageRouteOptions): Hono {
   const app = new Hono();
   const contextDal = new ContextReportDal(opts.db);
+  const providerUsageService = new ProviderUsageService({
+    policyBundleService: new PolicyBundleService(opts.db),
+    authProfileService: opts.authProfileService,
+  });
+
+  function parseModelGatewayProvider(
+    configPath: string,
+    modelName: string,
+  ): string | undefined {
+    const raw = readFileSync(configPath, "utf8");
+    const cfg = (parseYaml(raw) ?? {}) as Record<string, unknown>;
+    const models = (cfg["models"] ?? {}) as Record<string, unknown>;
+    const modelCfg = (models[modelName] ?? {}) as Record<string, unknown>;
+    const provider = typeof modelCfg["target"] === "string" ? modelCfg["target"] : undefined;
+    return provider?.trim().length ? provider.trim() : undefined;
+  }
 
   app.get("/usage", async (c) => {
+    const agentId =
+      c.req.header("x-tyrum-agent-id")?.trim() ||
+      process.env["TYRUM_AGENT_ID"]?.trim() ||
+      "default";
+
     const sessionId = c.req.query("session_id")?.trim();
     const scopeSessionId = sessionId && sessionId.length > 0 ? sessionId : undefined;
+    const providerQuery = c.req.query("provider")?.trim();
 
     // Agent usage: derived from context reports (per LLM inference).
     const contextReports = await contextDal.list({
@@ -90,6 +121,27 @@ export function createUsageRoutes(opts: UsageRouteOptions): Hono {
       execDurationMs = sumOr(execDurationMs, parsed.data.duration_ms);
     }
 
+    let provider = providerQuery && providerQuery.length > 0 ? providerQuery : undefined;
+    if (!provider && opts.agentRuntime && opts.modelGatewayConfigPath) {
+      try {
+        const status = await opts.agentRuntime.status(true);
+        const modelName = status.enabled ? status.model.model : undefined;
+        if (modelName) {
+          provider = parseModelGatewayProvider(opts.modelGatewayConfigPath, modelName);
+        }
+      } catch {
+        // best-effort
+      }
+    }
+
+    const providerUsage = await providerUsageService.getUsage({
+      enabled: providerUsagePollingEnabled(),
+      modelGatewayConfigPath: opts.modelGatewayConfigPath,
+      provider,
+      sessionId: scopeSessionId,
+      agentId,
+    });
+
     const payload = UsageResponse.parse({
       scope: { session_id: scopeSessionId },
       agent: {
@@ -108,7 +160,10 @@ export function createUsageRoutes(opts: UsageRouteOptions): Hono {
         duration_ms: execDurationMs,
       },
       provider: {
-        status: "disabled",
+        status: providerUsage.status,
+        cached_at: providerUsage.cachedAt,
+        error: providerUsage.error,
+        data: providerUsage.data,
       },
     });
 
@@ -117,4 +172,3 @@ export function createUsageRoutes(opts: UsageRouteOptions): Hono {
 
   return app;
 }
-

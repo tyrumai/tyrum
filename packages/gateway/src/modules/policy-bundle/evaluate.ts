@@ -13,6 +13,7 @@ export interface PolicyReason {
 export interface PolicyEvaluation {
   decision: PolicyDecision;
   reasons: PolicyReason[];
+  policy_override_ids?: string[];
 }
 
 export interface PolicyProvenanceContext {
@@ -38,10 +39,13 @@ function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function matchesGlob(pattern: string, value: string): boolean {
+export function matchesGlob(pattern: string, value: string): boolean {
   if (pattern === "*") return true;
-  if (!pattern.includes("*")) return pattern === value;
-  const re = new RegExp(`^${escapeRegex(pattern).replace(/\\\*/g, ".*")}$`);
+  const hasWildcards = pattern.includes("*") || pattern.includes("?");
+  if (!hasWildcards) return pattern === value;
+  const re = new RegExp(
+    `^${escapeRegex(pattern).replace(/\\\*/g, ".*").replace(/\\\?/g, ".")}$`,
+  );
   return re.test(value);
 }
 
@@ -81,7 +85,8 @@ function hostMatches(pattern: string, hostname: string): boolean {
   if (p === "*") return true;
 
   // Convenience: treat "example.com" as suffix match for subdomains.
-  if (!p.includes("*")) {
+  const hasGlob = p.includes("*") || p.includes("?");
+  if (!hasGlob) {
     if (h === p) return true;
     return h.endsWith(`.${p}`);
   }

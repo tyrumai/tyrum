@@ -139,7 +139,7 @@ describe("ExecutionEngine (normalized)", () => {
     db = openTestSqliteDb();
 
     const engine = new ExecutionEngine({ db });
-    await engine.enqueuePlan({
+    const { runId } = await engine.enqueuePlan({
       key: "agent:agent-1:telegram:default:group:thread-1",
       lane: "main",
       planId: "plan-artifacts-1",
@@ -170,6 +170,24 @@ describe("ExecutionEngine (normalized)", () => {
     expect(artifacts).toHaveLength(1);
     expect(artifacts[0]!.uri).toBe(artifactRef.uri);
     expect(artifacts[0]!.kind).toBe(artifactRef.kind);
+
+    const meta = await db.get<{
+      artifact_id: string;
+      agent_id: string;
+      workspace_id: string;
+      run_id: string | null;
+      attempt_id: string | null;
+      kind: string;
+    }>("SELECT artifact_id, agent_id, workspace_id, run_id, attempt_id, kind FROM artifacts WHERE artifact_id = ?", [
+      artifactRef.artifact_id,
+    ]);
+    expect(meta).toBeDefined();
+    expect(meta!.artifact_id).toBe(artifactRef.artifact_id);
+    expect(meta!.agent_id).toBe("agent-1");
+    expect(meta!.workspace_id).toBe("default");
+    expect(meta!.run_id).toBe(runId);
+    expect(meta!.attempt_id).not.toBeNull();
+    expect(meta!.kind).toBe(artifactRef.kind);
   });
 
   it("redacts registered secrets from persisted attempt results", async () => {

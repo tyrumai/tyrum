@@ -16,9 +16,13 @@ import type { Logger } from "../observability/logger.js";
 import {
   evaluateAction,
   evaluateToolCall,
+  matchesGlob,
   type PolicyEvaluation,
   type PolicyProvenanceContext,
 } from "./evaluate.js";
+import { PolicyOverrideDal } from "../policy-overrides/dal.js";
+import { computeToolMatchTarget } from "../policy-overrides/match-target.js";
+import { resolveAgentHome } from "../agent/home.js";
 
 export type PolicyScopeKind = "deployment" | "agent" | "playbook";
 
@@ -219,6 +223,7 @@ function parsePolicyContent(raw: string, format: PolicyFormat): unknown {
 export class PolicyBundleService {
   private readonly cacheTtlMs: number;
   private readonly logger?: Logger;
+  private readonly policyOverrideDal: PolicyOverrideDal;
 
   private envLoaded = false;
   private deploymentCache:
@@ -231,6 +236,7 @@ export class PolicyBundleService {
   ) {
     this.cacheTtlMs = Math.max(0, opts?.cacheTtlMs ?? 5_000);
     this.logger = opts?.logger;
+    this.policyOverrideDal = new PolicyOverrideDal(db);
   }
 
   async evaluateToolCall(
@@ -238,6 +244,7 @@ export class PolicyBundleService {
     args: unknown,
     opts?: {
       agentId?: string;
+      workspaceId?: string;
       playbookId?: string;
       provenance?: PolicyProvenanceContext;
     },
@@ -246,7 +253,39 @@ export class PolicyBundleService {
       agentId: opts?.agentId,
       playbookId: opts?.playbookId,
     });
-    return evaluateToolCall(policy, toolId, args, opts?.provenance);
+    const baseline = evaluateToolCall(policy, toolId, args, opts?.provenance);
+
+    if (baseline.decision !== "require_approval") {
+      return baseline;
+    }
+
+    const agentId = opts?.agentId;
+    if (!agentId) return baseline;
+
+    const matchTarget = computeToolMatchTarget(toolId, args, { home: resolveAgentHome(agentId) });
+    if (!matchTarget) return baseline;
+
+    const overrides = await this.policyOverrideDal.listActiveForTool({
+      agentId,
+      workspaceId: opts?.workspaceId ?? null,
+      toolId,
+    });
+
+    const matches = overrides.filter((o) => matchesGlob(o.pattern, matchTarget));
+    if (matches.length === 0) return baseline;
+
+    return {
+      decision: "allow",
+      reasons: [
+        ...baseline.reasons,
+        {
+          domain: "tool",
+          code: "policy_override",
+          message: `policy override(s) applied for tool '${toolId}'`,
+        },
+      ],
+      policy_override_ids: matches.map((m) => m.policy_override_id),
+    };
   }
 
   async evaluateAction(

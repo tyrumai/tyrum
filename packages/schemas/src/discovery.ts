@@ -4,6 +4,7 @@ export const DiscoveryStrategy = z.enum(["mcp", "structured_api", "generic_http"
 export type DiscoveryStrategy = z.infer<typeof DiscoveryStrategy>;
 
 export const DiscoveryRequest = z.object({
+  agent_id: z.string().trim().min(1).optional(),
   query: z.string(),
   target_url: z.string().url().optional(),
   preferred_strategy: DiscoveryStrategy.optional(),

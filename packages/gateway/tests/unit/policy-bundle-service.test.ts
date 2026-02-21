@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { PolicyBundle } from "@tyrum/schemas";
 import type { ActionPrimitive } from "@tyrum/schemas";
 import { PolicyBundleService } from "../../src/modules/policy-bundle/service.js";
+import { PolicyOverrideDal } from "../../src/modules/policy-overrides/dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
@@ -247,6 +248,91 @@ describe("PolicyBundleService (composition + snapshots)", () => {
     expect(same.contentHash).toBe(snapshot.contentHash);
   });
 
+  it("supports ? as a single-character wildcard in policy matching", async () => {
+    db = openTestSqliteDb();
+    const service = new PolicyBundleService(db);
+
+    await service.setBundle({
+      scopeKind: "deployment",
+      scopeId: "default",
+      bundle: PolicyBundle.parse({
+        version: 1,
+        tools: { allow: [], deny: [], require_approval: ["svc-??"], default: "deny" },
+        actions: { allow: [], deny: [], require_approval: [], default: "allow" },
+        network: { egress: { allow_hosts: ["*"], deny_hosts: [], require_approval_hosts: [], default: "allow" } },
+        secrets: { resolve: { allow: [], deny: [], require_approval: [], default: "allow" } },
+        provenance: { rules: [] },
+      }),
+    });
+
+    const match = await service.evaluateToolCall("svc-ab", {});
+    expect(match.decision).toBe("require_approval");
+
+    const tooShort = await service.evaluateToolCall("svc-a", {});
+    expect(tooShort.decision).toBe("deny");
+
+    const tooLong = await service.evaluateToolCall("svc-abc", {});
+    expect(tooLong.decision).toBe("deny");
+  });
+
+  it("treats * as zero-or-more characters in policy matching", async () => {
+    db = openTestSqliteDb();
+    const service = new PolicyBundleService(db);
+
+    await service.setBundle({
+      scopeKind: "deployment",
+      scopeId: "default",
+      bundle: PolicyBundle.parse({
+        version: 1,
+        tools: { allow: [], deny: [], require_approval: ["svc-*"], default: "deny" },
+        actions: { allow: [], deny: [], require_approval: [], default: "allow" },
+        network: { egress: { allow_hosts: ["*"], deny_hosts: [], require_approval_hosts: [], default: "allow" } },
+        secrets: { resolve: { allow: [], deny: [], require_approval: [], default: "allow" } },
+        provenance: { rules: [] },
+      }),
+    });
+
+    const emptySuffix = await service.evaluateToolCall("svc-", {});
+    expect(emptySuffix.decision).toBe("require_approval");
+
+    const nonEmptySuffix = await service.evaluateToolCall("svc-abc", {});
+    expect(nonEmptySuffix.decision).toBe("require_approval");
+
+    const nonMatch = await service.evaluateToolCall("svc", {});
+    expect(nonMatch.decision).toBe("deny");
+  });
+
+  it("supports ? as a single-character wildcard in network host matching", async () => {
+    db = openTestSqliteDb();
+    const service = new PolicyBundleService(db);
+
+    await service.setBundle({
+      scopeKind: "deployment",
+      scopeId: "default",
+      bundle: PolicyBundle.parse({
+        version: 1,
+        tools: { allow: [], deny: [], require_approval: [], default: "allow" },
+        actions: { allow: [], deny: [], require_approval: [], default: "allow" },
+        network: {
+          egress: {
+            allow_hosts: ["api?.example.com"],
+            deny_hosts: [],
+            require_approval_hosts: [],
+            default: "deny",
+          },
+        },
+        secrets: { resolve: { allow: [], deny: [], require_approval: [], default: "allow" } },
+        provenance: { rules: [] },
+      }),
+    });
+
+    const allowed = await service.evaluateAction(action("Http", { url: "https://api1.example.com/test" }));
+    expect(allowed.decision).toBe("allow");
+
+    const denied = await service.evaluateAction(action("Http", { url: "https://api12.example.com/test" }));
+    expect(denied.decision).toBe("deny");
+  });
+
   it("evaluates provenance-aware action rules conservatively", async () => {
     db = openTestSqliteDb();
     const service = new PolicyBundleService(db);
@@ -286,5 +372,76 @@ describe("PolicyBundleService (composition + snapshots)", () => {
     expect(conservative.decision).toBe("require_approval");
     expect(conservative.reasons.some((r) => r.code === "missing_provenance")).toBe(true);
   });
-});
 
+  it("applies policy overrides only to relax require_approval -> allow", async () => {
+    db = openTestSqliteDb();
+    const service = new PolicyBundleService(db);
+    const overrides = new PolicyOverrideDal(db);
+
+    await service.setBundle({
+      scopeKind: "deployment",
+      scopeId: "default",
+      bundle: PolicyBundle.parse({
+        version: 1,
+        tools: { allow: [], deny: [], require_approval: [], default: "require_approval" },
+        actions: { allow: [], deny: [], require_approval: [], default: "allow" },
+        network: { egress: { allow_hosts: ["*"], deny_hosts: [], require_approval_hosts: [], default: "allow" } },
+        secrets: { resolve: { allow: [], deny: [], require_approval: [], default: "allow" } },
+        provenance: { rules: [] },
+      }),
+    });
+
+    const created = await overrides.create({
+      policyOverrideId: "pov-test-1",
+      agentId: "agent-1",
+      workspaceId: "default",
+      toolId: "tool.exec",
+      pattern: "git status --porcelain",
+      createdBy: { source: "test" },
+    });
+
+    const res = await service.evaluateToolCall(
+      "tool.exec",
+      { command: "git   status   --porcelain" },
+      { agentId: "agent-1", workspaceId: "default" },
+    );
+    expect(res.decision).toBe("allow");
+    expect(res.policy_override_ids).toEqual([created.policy_override_id]);
+  });
+
+  it("does not allow policy overrides to bypass explicit deny", async () => {
+    db = openTestSqliteDb();
+    const service = new PolicyBundleService(db);
+    const overrides = new PolicyOverrideDal(db);
+
+    await service.setBundle({
+      scopeKind: "deployment",
+      scopeId: "default",
+      bundle: PolicyBundle.parse({
+        version: 1,
+        tools: { allow: [], deny: ["tool.exec"], require_approval: [], default: "allow" },
+        actions: { allow: [], deny: [], require_approval: [], default: "allow" },
+        network: { egress: { allow_hosts: ["*"], deny_hosts: [], require_approval_hosts: [], default: "allow" } },
+        secrets: { resolve: { allow: [], deny: [], require_approval: [], default: "allow" } },
+        provenance: { rules: [] },
+      }),
+    });
+
+    await overrides.create({
+      policyOverrideId: "pov-test-2",
+      agentId: "agent-1",
+      workspaceId: "default",
+      toolId: "tool.exec",
+      pattern: "git status --porcelain",
+      createdBy: { source: "test" },
+    });
+
+    const res = await service.evaluateToolCall(
+      "tool.exec",
+      { command: "git status --porcelain" },
+      { agentId: "agent-1", workspaceId: "default" },
+    );
+    expect(res.decision).toBe("deny");
+    expect(res.policy_override_ids).toBeUndefined();
+  });
+});

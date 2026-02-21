@@ -109,6 +109,7 @@ describe("AuthProfileService", () => {
       baseUrl: "https://upstream.example.com/v1/",
       auth: { kind: "none" as const },
       capabilities: ["chat"],
+      fallbackChain: [],
     });
 
     const app = createModelProxyRoutesFromState({ routes, timeoutMs: 20_000 }, { authProfileService: service });

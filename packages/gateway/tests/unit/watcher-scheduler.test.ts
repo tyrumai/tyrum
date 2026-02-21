@@ -13,6 +13,7 @@ describe("WatcherScheduler", () => {
   let eventBus: ReturnType<typeof mitt<GatewayEvents>>;
   let processor: WatcherProcessor;
   let scheduler: WatcherScheduler;
+  const agentId = "default";
 
   beforeEach(() => {
     db = openTestSqliteDb();
@@ -31,7 +32,7 @@ describe("WatcherScheduler", () => {
 
     await scheduler.tick();
 
-    const events = await memoryDal.getEpisodicEvents();
+    const events = await memoryDal.getEpisodicEvents(agentId);
     expect(events).toHaveLength(1);
     expect(events[0]!.event_type).toBe("periodic_fired");
   });
@@ -42,7 +43,7 @@ describe("WatcherScheduler", () => {
     await scheduler.tick();
     await scheduler.tick(); // second tick, interval not yet elapsed
 
-    const events = await memoryDal.getEpisodicEvents();
+    const events = await memoryDal.getEpisodicEvents(agentId);
     expect(events).toHaveLength(1); // only fired once
   });
 
@@ -55,7 +56,7 @@ describe("WatcherScheduler", () => {
 
     await scheduler.tick();
 
-    const events = await memoryDal.getEpisodicEvents();
+    const events = await memoryDal.getEpisodicEvents(agentId);
     expect(events).toHaveLength(0);
   });
 
@@ -65,7 +66,7 @@ describe("WatcherScheduler", () => {
 
     await scheduler.tick();
 
-    const events = await memoryDal.getEpisodicEvents();
+    const events = await memoryDal.getEpisodicEvents(agentId);
     expect(events).toHaveLength(0);
   });
 
@@ -74,7 +75,7 @@ describe("WatcherScheduler", () => {
 
     await scheduler.tick();
 
-    const events = await memoryDal.getEpisodicEvents();
+    const events = await memoryDal.getEpisodicEvents(agentId);
     expect(events).toHaveLength(0);
   });
 
@@ -138,7 +139,7 @@ describe("WatcherScheduler", () => {
 
     await scheduler.tick();
 
-    const events = await memoryDal.getEpisodicEvents();
+    const events = await memoryDal.getEpisodicEvents(agentId);
     expect(events).toHaveLength(0);
   });
 
@@ -166,7 +167,7 @@ describe("WatcherScheduler", () => {
 
       await Promise.all([scheduler1.tick(), scheduler2.tick()]);
 
-      const events = await memoryDal.getEpisodicEvents();
+      const events = await memoryDal.getEpisodicEvents(agentId);
       expect(events).toHaveLength(1);
       expect(events[0]!.event_type).toBe("periodic_fired");
 

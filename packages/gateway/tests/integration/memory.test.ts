@@ -38,6 +38,50 @@ describe("Memory CRUD routes", () => {
       expect(body.facts[0]!.fact_value).toBe("Alice");
     });
 
+    it("scopes facts by agent_id", async () => {
+      const createA = await app.request("/memory/facts?agent_id=agent-a", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fact_key: "name",
+          fact_value: "Alice",
+          source: "user",
+          observed_at: "2025-01-15T10:00:00Z",
+          confidence: 0.9,
+        }),
+      });
+      expect(createA.status).toBe(201);
+
+      const createB = await app.request("/memory/facts?agent_id=agent-b", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fact_key: "name",
+          fact_value: "Bob",
+          source: "user",
+          observed_at: "2025-01-15T10:00:00Z",
+          confidence: 0.9,
+        }),
+      });
+      expect(createB.status).toBe(201);
+
+      const getA = await app.request("/memory/facts?agent_id=agent-a");
+      expect(getA.status).toBe(200);
+      const bodyA = (await getA.json()) as {
+        facts: Array<{ fact_key: string; fact_value: unknown }>;
+      };
+      expect(bodyA.facts).toHaveLength(1);
+      expect(bodyA.facts[0]!.fact_value).toBe("Alice");
+
+      const getB = await app.request("/memory/facts?agent_id=agent-b");
+      expect(getB.status).toBe(200);
+      const bodyB = (await getB.json()) as {
+        facts: Array<{ fact_key: string; fact_value: unknown }>;
+      };
+      expect(bodyB.facts).toHaveLength(1);
+      expect(bodyB.facts[0]!.fact_value).toBe("Bob");
+    });
+
     it("returns empty array when no facts exist", async () => {
       const res = await app.request("/memory/facts");
       expect(res.status).toBe(200);

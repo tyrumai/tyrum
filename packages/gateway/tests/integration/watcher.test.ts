@@ -15,6 +15,7 @@ describe("Watcher routes + scheduler integration", () => {
   let eventBus: ReturnType<typeof mitt<GatewayEvents>>;
   let processor: WatcherProcessor;
   let app: Hono;
+  const agentId = "default";
 
   beforeEach(() => {
     db = openTestSqliteDb();
@@ -119,7 +120,7 @@ describe("Watcher routes + scheduler integration", () => {
     await scheduler.tick();
 
     // Verify episodic event was created
-    const events = await memoryDal.getEpisodicEvents();
+    const events = await memoryDal.getEpisodicEvents(agentId);
     expect(events).toHaveLength(1);
     expect(events[0]!.event_type).toBe("periodic_fired");
   });

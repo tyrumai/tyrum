@@ -219,5 +219,24 @@ export class AuthProfileDal {
       [JSON.stringify(opts.secretHandles ?? {}), opts.expiresAt ?? null, nowIso, opts.profileId],
     );
   }
-}
 
+  async setCooldown(profileId: string, cooldownUntil: string | null): Promise<void> {
+    const nowIso = new Date().toISOString();
+    await this.db.run(
+      `UPDATE auth_profiles
+       SET cooldown_until = ?, updated_at = ?
+       WHERE profile_id = ?`,
+      [cooldownUntil, nowIso, profileId],
+    );
+  }
+
+  async disable(profileId: string, reason: string): Promise<void> {
+    const nowIso = new Date().toISOString();
+    await this.db.run(
+      `UPDATE auth_profiles
+       SET disabled_at = ?, disabled_reason = ?, updated_at = ?
+       WHERE profile_id = ?`,
+      [nowIso, reason, nowIso, profileId],
+    );
+  }
+}

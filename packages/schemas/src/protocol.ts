@@ -19,6 +19,7 @@ import {
   ApprovalResolveRequest,
   ApprovalResolveResponse,
 } from "./approval.js";
+import { PolicyOverride } from "./policy-overrides.js";
 
 export const ClientCapability = ClientCapabilitySchema;
 export type ClientCapability = z.infer<typeof ClientCapabilitySchema>;
@@ -870,6 +871,39 @@ export const WsApprovalResolvedEvent = WsEventEnvelope.extend({
 });
 export type WsApprovalResolvedEvent = z.infer<typeof WsApprovalResolvedEvent>;
 
+export const WsPolicyOverrideCreatedPayload = z
+  .object({ policy_override: PolicyOverride })
+  .strict();
+export type WsPolicyOverrideCreatedPayload = z.infer<typeof WsPolicyOverrideCreatedPayload>;
+
+export const WsPolicyOverrideCreatedEvent = WsEventEnvelope.extend({
+  type: z.literal("policy_override.created"),
+  payload: WsPolicyOverrideCreatedPayload,
+});
+export type WsPolicyOverrideCreatedEvent = z.infer<typeof WsPolicyOverrideCreatedEvent>;
+
+export const WsPolicyOverrideRevokedPayload = z
+  .object({ policy_override: PolicyOverride })
+  .strict();
+export type WsPolicyOverrideRevokedPayload = z.infer<typeof WsPolicyOverrideRevokedPayload>;
+
+export const WsPolicyOverrideRevokedEvent = WsEventEnvelope.extend({
+  type: z.literal("policy_override.revoked"),
+  payload: WsPolicyOverrideRevokedPayload,
+});
+export type WsPolicyOverrideRevokedEvent = z.infer<typeof WsPolicyOverrideRevokedEvent>;
+
+export const WsPolicyOverrideExpiredPayload = z
+  .object({ policy_override: PolicyOverride })
+  .strict();
+export type WsPolicyOverrideExpiredPayload = z.infer<typeof WsPolicyOverrideExpiredPayload>;
+
+export const WsPolicyOverrideExpiredEvent = WsEventEnvelope.extend({
+  type: z.literal("policy_override.expired"),
+  payload: WsPolicyOverrideExpiredPayload,
+});
+export type WsPolicyOverrideExpiredEvent = z.infer<typeof WsPolicyOverrideExpiredEvent>;
+
 export const WsRunPausedPayload = z
   .object({
     run_id: ExecutionRunId,
@@ -942,6 +976,9 @@ export const WsEvent = z.discriminatedUnion("type", [
   WsPairingResolvedEvent,
   WsApprovalRequestedEvent,
   WsApprovalResolvedEvent,
+  WsPolicyOverrideCreatedEvent,
+  WsPolicyOverrideRevokedEvent,
+  WsPolicyOverrideExpiredEvent,
   WsRunPausedEvent,
   WsRunResumedEvent,
   WsRunCancelledEvent,

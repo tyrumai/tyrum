@@ -179,6 +179,59 @@ export class AuthProfileService {
     return undefined;
   }
 
+  async rotateBearerToken(opts: {
+    agentId: string;
+    provider: string;
+    sessionId: string;
+    failedProfileId: string;
+    failure: "rate_limit" | "transient" | "auth" | "quota";
+  }): Promise<{ profileId: string; token: string } | undefined> {
+    const nowMs = Date.now();
+
+    switch (opts.failure) {
+      case "auth":
+        await this.dal.disable(opts.failedProfileId, "auth_failed");
+        break;
+      case "quota":
+        await this.dal.disable(opts.failedProfileId, "quota_exhausted");
+        break;
+      case "rate_limit":
+      case "transient": {
+        const cooldownMs = opts.failure === "rate_limit" ? 60_000 : 30_000;
+        const untilIso = new Date(nowMs + cooldownMs).toISOString();
+        await this.dal.setCooldown(opts.failedProfileId, untilIso);
+        break;
+      }
+      default:
+        break;
+    }
+
+    const pinnedId = await this.dal.getPinnedProfileId(opts.sessionId, opts.provider);
+    if (pinnedId === opts.failedProfileId) {
+      await this.dal.clearPinnedProfileId(opts.sessionId, opts.provider);
+    }
+
+    const candidates = await this.dal.list({ agentId: opts.agentId, provider: opts.provider });
+    for (const profile of candidates) {
+      if (profile.profile_id === opts.failedProfileId) continue;
+      if (!isActiveProfile(profile, nowMs)) continue;
+      const token = await this.resolveTokenForProfile(profile);
+      if (!token) continue;
+
+      await this.dal.setPinnedProfileId(opts.sessionId, opts.provider, profile.profile_id);
+      this.logger?.info("auth_profile.rotated", {
+        session_id: opts.sessionId,
+        provider: opts.provider,
+        profile_id: profile.profile_id,
+        failure: opts.failure,
+      });
+
+      return { profileId: profile.profile_id, token };
+    }
+
+    return undefined;
+  }
+
   private async resolveTokenForProfile(profile: AuthProfileT): Promise<string | null> {
     if (profile.type === "api_key") {
       return await this.secretProvider.resolve(profile.secret_handles.api_key);

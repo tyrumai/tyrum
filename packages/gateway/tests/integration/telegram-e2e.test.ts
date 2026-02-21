@@ -110,6 +110,7 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
       channel: "telegram",
       thread_id: "agent:default:telegram:default:dm:999",
       message: "Help me",
+      metadata: { provenance_sources: ["user"] },
     });
 
     // Verify bot sent the reply

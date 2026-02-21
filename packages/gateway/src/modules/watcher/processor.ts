@@ -112,10 +112,12 @@ export class WatcherProcessor {
   // -----------------------------------------------------------------------
 
   async onPlanCompleted(event: GatewayEvents["plan:completed"]): Promise<void> {
+    const agentId = process.env["TYRUM_AGENT_ID"]?.trim() || "default";
     const watchers = await this.getActiveWatchersForPlan(event.planId);
     for (const watcher of watchers) {
       if (!this.evaluateTrigger(watcher, event)) continue;
       await this.memoryDal.insertEpisodicEvent(
+        agentId,
         `watcher-${String(watcher.id)}-${event.planId}-completed`,
         new Date().toISOString(),
         "watcher",
@@ -131,9 +133,11 @@ export class WatcherProcessor {
   }
 
   async onPlanFailed(event: GatewayEvents["plan:failed"]): Promise<void> {
+    const agentId = process.env["TYRUM_AGENT_ID"]?.trim() || "default";
     const watchers = await this.getActiveWatchersForPlan(event.planId);
     for (const watcher of watchers) {
       await this.memoryDal.insertEpisodicEvent(
+        agentId,
         `watcher-${String(watcher.id)}-${event.planId}-failed`,
         new Date().toISOString(),
         "watcher",

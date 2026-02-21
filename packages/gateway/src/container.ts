@@ -12,6 +12,7 @@ import type { RiskClassifier } from "./modules/risk/classifier.js";
 import type { SessionDal } from "./modules/agent/session-dal.js";
 import type { TelegramBot } from "./modules/ingress/telegram-bot.js";
 import type { ApprovalDal } from "./modules/approval/dal.js";
+import type { PolicyOverrideDal } from "./modules/policy-overrides/dal.js";
 import type { WatcherProcessor } from "./modules/watcher/processor.js";
 import type { CanvasDal } from "./modules/canvas/dal.js";
 import type { JobQueue } from "./modules/executor/job-queue.js";
@@ -21,6 +22,7 @@ import { createEventBus } from "./event-bus.js";
 import { MemoryDal as MemoryDalImpl } from "./modules/memory/dal.js";
 import { EventLog as EventLogImpl } from "./modules/planner/event-log.js";
 import { ApprovalDal as ApprovalDalImpl } from "./modules/approval/dal.js";
+import { PolicyOverrideDal as PolicyOverrideDalImpl } from "./modules/policy-overrides/dal.js";
 import {
   DiscoveryPipeline as DiscoveryPipelineImpl,
   InMemoryConnectorCache,
@@ -61,6 +63,7 @@ export interface GatewayContainer {
   eventBus: EventBus;
   telegramBot?: TelegramBot;
   approvalDal: ApprovalDal;
+  policyOverrideDal: PolicyOverrideDal;
   watcherProcessor: WatcherProcessor;
   canvasDal: CanvasDal;
   jobQueue: JobQueue;
@@ -118,6 +121,7 @@ function wireContainer(
     ? new TelegramBotImpl(telegramToken)
     : undefined;
   const approvalDal = new ApprovalDalImpl(db);
+  const policyOverrideDal = new PolicyOverrideDalImpl(db);
   const watcherProcessor = new WatcherProcessorImpl({ db, memoryDal, eventBus });
   const canvasDal = new CanvasDalImpl(db);
   const jobQueue = new JobQueueImpl(db);
@@ -138,6 +142,7 @@ function wireContainer(
     eventBus,
     telegramBot,
     approvalDal,
+    policyOverrideDal,
     watcherProcessor,
     canvasDal,
     jobQueue,

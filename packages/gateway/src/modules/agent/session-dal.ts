@@ -84,23 +84,27 @@ export function formatLegacySessionId(channel: string, threadId: string): string
 export class SessionDal {
   constructor(private readonly db: SqlDb) {}
 
-  async getOrCreate(channel: string, threadId: string): Promise<SessionRow> {
-    const sessionId = formatSessionId(channel, threadId);
+  async getOrCreate(agentId: string, channel: string, threadId: string): Promise<SessionRow> {
+    const agentPart = encodeURIComponent(agentId);
+    const sessionId = `agent:${agentPart}:${formatSessionId(channel, threadId)}`;
     const existing = await this.getById(sessionId);
     if (existing) {
       return existing;
     }
 
-    const legacyId = formatLegacySessionId(channel, threadId);
-    if (legacyId !== sessionId) {
-      const legacy = await this.getById(legacyId);
-      if (legacy) {
+    // Best-effort migrations from pre-agent-namespaced ids for the default agent.
+    if (agentId === "default") {
+      const legacyNoAgent = formatLegacySessionId(channel, threadId);
+      const encodedNoAgent = formatSessionId(channel, threadId);
+      for (const priorId of [encodedNoAgent, legacyNoAgent]) {
+        const legacy = await this.getById(priorId);
+        if (!legacy) continue;
         const conflict = await this.getById(sessionId);
         if (!conflict) {
           const nowIso = new Date().toISOString();
           await this.db.run(
             "UPDATE sessions SET session_id = ?, updated_at = ? WHERE session_id = ?",
-            [sessionId, nowIso, legacyId],
+            [sessionId, nowIso, priorId],
           );
           const migrated = await this.getById(sessionId);
           if (migrated) {

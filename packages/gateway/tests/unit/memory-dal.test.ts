@@ -6,6 +6,7 @@ import type { SqliteDb } from "../../src/statestore/sqlite.js";
 describe("MemoryDal", () => {
   let db: SqliteDb;
   let dal: MemoryDal;
+  const agentId = "default";
 
   beforeEach(() => {
     db = openTestSqliteDb();
@@ -21,6 +22,7 @@ describe("MemoryDal", () => {
   describe("facts", () => {
     it("inserts and retrieves a fact", async () => {
       const id = await dal.insertFact(
+        agentId,
         "preferred_language",
         "TypeScript",
         "user_input",
@@ -29,7 +31,7 @@ describe("MemoryDal", () => {
       );
       expect(id).toBeGreaterThan(0);
 
-      const facts = await dal.getFacts();
+      const facts = await dal.getFacts(agentId);
       expect(facts).toHaveLength(1);
       expect(facts[0]!.fact_key).toBe("preferred_language");
       expect(facts[0]!.fact_value).toBe("TypeScript");
@@ -38,6 +40,7 @@ describe("MemoryDal", () => {
 
     it("retrieves facts by key", async () => {
       await dal.insertFact(
+        agentId,
         "name",
         "Alice",
         "profile",
@@ -45,6 +48,7 @@ describe("MemoryDal", () => {
         1.0,
       );
       await dal.insertFact(
+        agentId,
         "email",
         "alice@example.com",
         "profile",
@@ -52,6 +56,7 @@ describe("MemoryDal", () => {
         1.0,
       );
       await dal.insertFact(
+        agentId,
         "name",
         "Alice Smith",
         "updated_profile",
@@ -59,14 +64,14 @@ describe("MemoryDal", () => {
         0.95,
       );
 
-      const namesFacts = await dal.getFactsByKey("name");
+      const namesFacts = await dal.getFactsByKey(agentId, "name");
       expect(namesFacts).toHaveLength(2);
       expect(namesFacts[0]!.fact_value).toBe("Alice Smith");
       expect(namesFacts[1]!.fact_value).toBe("Alice");
     });
 
     it("returns empty array when no facts exist", async () => {
-      const facts = await dal.getFacts();
+      const facts = await dal.getFacts(agentId);
       expect(facts).toEqual([]);
     });
   });
@@ -76,6 +81,7 @@ describe("MemoryDal", () => {
   describe("episodic events", () => {
     it("inserts and retrieves an episodic event", async () => {
       const id = await dal.insertEpisodicEvent(
+        agentId,
         "evt-001",
         "2025-01-15T10:00:00Z",
         "web",
@@ -84,7 +90,7 @@ describe("MemoryDal", () => {
       );
       expect(id).toBeGreaterThan(0);
 
-      const events = await dal.getEpisodicEvents();
+      const events = await dal.getEpisodicEvents(agentId);
       expect(events).toHaveLength(1);
       expect(events[0]!.event_id).toBe("evt-001");
       expect(events[0]!.payload).toEqual({ url: "https://example.com" });
@@ -92,6 +98,7 @@ describe("MemoryDal", () => {
 
     it("rejects duplicate event_id", async () => {
       await dal.insertEpisodicEvent(
+        agentId,
         "evt-dup",
         "2025-01-15T10:00:00Z",
         "web",
@@ -101,6 +108,7 @@ describe("MemoryDal", () => {
 
       await expect(
         dal.insertEpisodicEvent(
+          agentId,
           "evt-dup",
           "2025-01-15T10:01:00Z",
           "web",
@@ -113,6 +121,7 @@ describe("MemoryDal", () => {
     it("respects limit parameter", async () => {
       for (let i = 0; i < 5; i++) {
         await dal.insertEpisodicEvent(
+          agentId,
           `evt-${String(i)}`,
           `2025-01-15T10:0${String(i)}:00Z`,
           "web",
@@ -121,7 +130,7 @@ describe("MemoryDal", () => {
         );
       }
 
-      const limited = await dal.getEpisodicEvents(3);
+      const limited = await dal.getEpisodicEvents(agentId, 3);
       expect(limited).toHaveLength(3);
     });
   });
@@ -131,6 +140,7 @@ describe("MemoryDal", () => {
   describe("capability memories", () => {
     it("inserts a new capability memory", async () => {
       const result = await dal.upsertCapabilityMemory(
+        agentId,
         "web_login",
         "example.com",
         "playwright",
@@ -147,6 +157,7 @@ describe("MemoryDal", () => {
 
     it("updates existing capability memory and increments count", async () => {
       await dal.upsertCapabilityMemory(
+        agentId,
         "web_login",
         "example.com",
         "playwright",
@@ -154,6 +165,7 @@ describe("MemoryDal", () => {
       );
 
       const result = await dal.upsertCapabilityMemory(
+        agentId,
         "web_login",
         "example.com",
         "playwright",
@@ -166,23 +178,25 @@ describe("MemoryDal", () => {
 
     it("retrieves capability memories filtered by type", async () => {
       await dal.upsertCapabilityMemory(
+        agentId,
         "web_login",
         "example.com",
         "playwright",
         {},
       );
       await dal.upsertCapabilityMemory(
+        agentId,
         "api_call",
         "weather_api",
         "http",
         {},
       );
 
-      const webMemories = await dal.getCapabilityMemories("web_login");
+      const webMemories = await dal.getCapabilityMemories(agentId, "web_login");
       expect(webMemories).toHaveLength(1);
       expect(webMemories[0]!.capability_type).toBe("web_login");
 
-      const allMemories = await dal.getCapabilityMemories();
+      const allMemories = await dal.getCapabilityMemories(agentId);
       expect(allMemories).toHaveLength(2);
     });
   });
@@ -191,11 +205,11 @@ describe("MemoryDal", () => {
 
   describe("PAM profiles", () => {
     it("inserts and retrieves a PAM profile", async () => {
-      await dal.upsertPamProfile("default", "v1", {
+      await dal.upsertPamProfile(agentId, "default", "v1", {
         autonomy_level: "supervised",
       });
 
-      const profile = await dal.getPamProfile("default");
+      const profile = await dal.getPamProfile(agentId, "default");
       expect(profile).toBeDefined();
       expect(profile!.version).toBe("v1");
       expect(profile!.profile_data).toEqual({
@@ -204,14 +218,14 @@ describe("MemoryDal", () => {
     });
 
     it("upserts an existing PAM profile", async () => {
-      await dal.upsertPamProfile("default", "v1", {
+      await dal.upsertPamProfile(agentId, "default", "v1", {
         autonomy_level: "supervised",
       });
-      await dal.upsertPamProfile("default", "v2", {
+      await dal.upsertPamProfile(agentId, "default", "v2", {
         autonomy_level: "autonomous",
       });
 
-      const profile = await dal.getPamProfile("default");
+      const profile = await dal.getPamProfile(agentId, "default");
       expect(profile!.version).toBe("v2");
       expect(profile!.profile_data).toEqual({
         autonomy_level: "autonomous",
@@ -223,12 +237,12 @@ describe("MemoryDal", () => {
 
   describe("PVP profiles", () => {
     it("inserts and retrieves a PVP profile", async () => {
-      await dal.upsertPvpProfile("persona-a", "v1", {
+      await dal.upsertPvpProfile(agentId, "persona-a", "v1", {
         tone: "formal",
         language: "en",
       });
 
-      const profile = await dal.getPvpProfile("persona-a");
+      const profile = await dal.getPvpProfile(agentId, "persona-a");
       expect(profile).toBeDefined();
       expect(profile!.profile_data).toEqual({
         tone: "formal",
@@ -237,14 +251,14 @@ describe("MemoryDal", () => {
     });
 
     it("upserts an existing PVP profile", async () => {
-      await dal.upsertPvpProfile("persona-a", "v1", {
+      await dal.upsertPvpProfile(agentId, "persona-a", "v1", {
         tone: "formal",
       });
-      await dal.upsertPvpProfile("persona-a", "v2", {
+      await dal.upsertPvpProfile(agentId, "persona-a", "v2", {
         tone: "casual",
       });
 
-      const profile = await dal.getPvpProfile("persona-a");
+      const profile = await dal.getPvpProfile(agentId, "persona-a");
       expect(profile!.version).toBe("v2");
       expect(profile!.profile_data).toEqual({ tone: "casual" });
     });

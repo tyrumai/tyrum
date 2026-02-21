@@ -17,6 +17,22 @@ export function resolveTyrumHome(): string {
   return join(homedir(), ".tyrum");
 }
 
+function safeAgentPart(agentId: string): string {
+  const trimmed = agentId.trim();
+  if (trimmed.length === 0) return "default";
+  // Keep deterministic and path-safe (no slashes).
+  return trimmed.replaceAll("/", "_").replaceAll("\\", "_");
+}
+
+/**
+ * Resolve an agent-specific home directory rooted under {@link resolveTyrumHome}.
+ *
+ * This scopes agent workspace, skills, memory, etc. per `agent_id`.
+ */
+export function resolveAgentHome(agentId: string, baseHome = resolveTyrumHome()): string {
+  return join(baseHome, "agents", safeAgentPart(agentId));
+}
+
 export function resolveAgentConfigPath(home = resolveTyrumHome()): string {
   return join(home, "agent.yml");
 }

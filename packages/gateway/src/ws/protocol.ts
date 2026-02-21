@@ -581,6 +581,14 @@ export function handleClientMessage(
     const decision = req.data.payload.decision;
     const reason = req.data.payload.reason;
     const approvalId = req.data.payload.approval_id;
+    const mode = req.data.payload.mode;
+    const selectedOverride = req.data.payload.selected_override;
+
+    const resolvedBy = {
+      connection_id: client.id,
+      instance_id: client.instance_id,
+      device: client.device,
+    };
 
     const wsPublisher = {
       publish: (evt: WsEventEnvelope, opts?: { targetRole?: "client" | "node" }) =>
@@ -595,10 +603,16 @@ export function handleClientMessage(
       approvalId,
       decision,
       reason,
+      mode,
+      selectedOverride,
+      resolvedBy,
     })
       .then((resolution) => {
         if (resolution.kind === "not_found") {
           return errorResponse(req.data.request_id, req.data.type, "not_found", "approval not found");
+        }
+        if (resolution.kind === "invalid_request") {
+          return errorResponse(req.data.request_id, req.data.type, "invalid_request", resolution.message);
         }
         if (resolution.kind === "pending") {
           return errorResponse(req.data.request_id, req.data.type, "conflict", "approval is still pending");

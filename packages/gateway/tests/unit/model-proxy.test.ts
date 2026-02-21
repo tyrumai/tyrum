@@ -285,6 +285,28 @@ models:
     expect(route.costCeilingUsd).toBe(5.0);
   });
 
+  it("parses fallback_chain on models", () => {
+    const configPath = join(dir, "config.yaml");
+    writeFileSync(
+      configPath,
+      `
+models:
+  gpt-4:
+    target: openai
+    endpoint: https://api.openai.com/v1
+    fallback_chain:
+      - gpt-4-mini
+  gpt-4-mini:
+    target: openai
+    endpoint: https://api.openai.com/v1
+`,
+    );
+
+    const state = loadModelGatewayConfig(configPath);
+    const route = state.routes.get("gpt-4")!;
+    expect(route.fallbackChain).toEqual(["gpt-4-mini"]);
+  });
+
   it("config with no auth_profiles key does not error", () => {
     const configPath = join(dir, "config.yaml");
     writeFileSync(
@@ -326,6 +348,7 @@ describe("createModelProxyRoutesFromState", () => {
       auth: overrides.auth ?? { kind: "none" },
       capabilities: ["chat"],
       maxTotalTokens: 4096,
+      fallbackChain: [],
     });
     return {
       routes,
@@ -445,6 +468,94 @@ describe("createModelProxyRoutesFromState", () => {
     const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0]!;
     const headers = fetchCall[1].headers as Headers;
     expect(headers.get("x-api-key")).toBe("my-key");
+  });
+
+  it("rotates auth profiles on retryable failures (429) before falling back", async () => {
+    const authProfileService = {
+      resolveBearerToken: vi.fn(async () => ({ profileId: "p1", token: "t1" })),
+      rotateBearerToken: vi.fn(async () => ({ profileId: "p2", token: "t2" })),
+    } as unknown as { resolveBearerToken: unknown; rotateBearerToken: unknown };
+
+    globalThis.fetch = vi.fn(async (_url: string, init?: RequestInit) => {
+      const headers = init?.headers as Headers;
+      const auth = headers.get("authorization");
+      if (auth === "Bearer t1") {
+        return new Response(JSON.stringify({ error: "rate_limit" }), {
+          status: 429,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ choices: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as unknown as typeof fetch;
+
+    const app = createModelProxyRoutesFromState(makeState(), {
+      authProfileService: authProfileService as unknown as never,
+    });
+    const res = await app.request("/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({ model: "test-model", messages: [] }),
+      headers: {
+        "Content-Type": "application/json",
+        "x-tyrum-session-id": "sess-1",
+        "x-tyrum-agent-id": "default",
+      },
+    });
+
+    expect(res.status).toBe(200);
+    expect((authProfileService.rotateBearerToken as ReturnType<typeof vi.fn>)).toHaveBeenCalled();
+
+    const calls = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+    const firstHeaders = calls[0]![1]!.headers as Headers;
+    const secondHeaders = calls[1]![1]!.headers as Headers;
+    expect(firstHeaders.get("authorization")).toBe("Bearer t1");
+    expect(secondHeaders.get("authorization")).toBe("Bearer t2");
+  });
+
+  it("falls back to the next model in fallback_chain after retryable failures", async () => {
+    globalThis.fetch = vi.fn(async (_url: string, init?: RequestInit) => {
+      const raw = init?.body as Uint8Array;
+      const body = JSON.parse(new TextDecoder().decode(raw)) as { model?: string };
+      if (body.model === "model-a") {
+        return new Response(JSON.stringify({ error: "upstream_down" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ id: "ok", choices: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as unknown as typeof fetch;
+
+    const routes = new Map();
+    routes.set("model-a", {
+      target: "test",
+      baseUrl: "https://a.example.com",
+      auth: { kind: "none" },
+      capabilities: ["chat"],
+      fallbackChain: ["model-b"],
+    });
+    routes.set("model-b", {
+      target: "test",
+      baseUrl: "https://b.example.com",
+      auth: { kind: "none" },
+      capabilities: ["chat"],
+      fallbackChain: [],
+    });
+
+    const app = createModelProxyRoutesFromState({ routes, timeoutMs: 20_000 });
+    const res = await app.request("/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({ model: "model-a", messages: [] }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("x-tyrum-model-used")).toBe("model-b");
   });
 
   it("returns 502 when upstream fetch throws", async () => {

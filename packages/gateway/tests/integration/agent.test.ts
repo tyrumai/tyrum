@@ -6,13 +6,15 @@ import { createApp } from "../../src/app.js";
 import { createTestApp, createTestContainer } from "./helpers.js";
 
 async function writeWorkspace(home: string): Promise<void> {
-  await mkdir(home, { recursive: true });
-  await mkdir(join(home, "skills/file-reader"), { recursive: true });
-  await mkdir(join(home, "mcp/calendar"), { recursive: true });
-  await mkdir(join(home, "memory"), { recursive: true });
+  const agentHome = join(home, "agents/default");
+
+  await mkdir(agentHome, { recursive: true });
+  await mkdir(join(agentHome, "skills/file-reader"), { recursive: true });
+  await mkdir(join(agentHome, "mcp/calendar"), { recursive: true });
+  await mkdir(join(agentHome, "memory"), { recursive: true });
 
   await writeFile(
-    join(home, "agent.yml"),
+    join(agentHome, "agent.yml"),
     `model:
   model: frontier-gpt-4o
   base_url: http://llm.test/v1
@@ -36,7 +38,7 @@ memory:
   );
 
   await writeFile(
-    join(home, "IDENTITY.md"),
+    join(agentHome, "IDENTITY.md"),
     `---
 name: Tyrum Local
 description: local identity
@@ -49,7 +51,7 @@ You are a precise local assistant.
   );
 
   await writeFile(
-    join(home, "skills/file-reader/SKILL.md"),
+    join(agentHome, "skills/file-reader/SKILL.md"),
     `---
 id: file-reader
 name: File Reader
@@ -62,7 +64,7 @@ Always inspect files before proposing changes.
   );
 
   await writeFile(
-    join(home, "mcp/calendar/server.yml"),
+    join(agentHome, "mcp/calendar/server.yml"),
     `id: calendar
 name: Calendar MCP
 enabled: true
@@ -268,7 +270,7 @@ describe("agent routes", () => {
     expect(secondPrompt.toLowerCase()).not.toContain("prefer tea");
     expect(thirdPrompt.toLowerCase()).toContain("prefer tea");
 
-    const memoryFiles = await readdir(join(homeDir!, "memory"));
+    const memoryFiles = await readdir(join(homeDir!, "agents/default/memory"));
     expect(memoryFiles).toContain("MEMORY.md");
     expect(memoryFiles.some((name) => /^\d{4}-\d{2}-\d{2}\.md$/.test(name))).toBe(true);
   });
@@ -278,7 +280,7 @@ describe("agent routes", () => {
     process.env["GATEWAY_PORT"] = "8080";
 
     await writeFile(
-      join(homeDir!, "agent.yml"),
+      join(homeDir!, "agents/default/agent.yml"),
       `model:\n  model: frontier-gpt-4o\nskills:\n  enabled: []\nmcp:\n  enabled: []\ntools:\n  allow:\n    - tool.fs.read\nsessions:\n  ttl_days: 30\n  max_turns: 20\nmemory:\n  markdown_enabled: false\n`,
       "utf-8",
     );

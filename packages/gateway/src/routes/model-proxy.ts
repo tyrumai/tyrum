@@ -29,6 +29,7 @@ interface ModelConfig {
   capabilities?: string[];
   max_total_tokens?: number;
   cost_ceiling_usd?: number;
+  fallback_chain?: string[];
 }
 
 interface DefaultsConfig {
@@ -57,6 +58,7 @@ interface ModelRoute {
   capabilities: string[];
   maxTotalTokens?: number;
   costCeilingUsd?: number;
+  fallbackChain: string[];
 }
 
 interface ModelGatewayState {
@@ -165,6 +167,11 @@ export function loadModelGatewayConfig(configPath: string): ModelGatewayState {
         capabilities: cfg.capabilities ?? [],
         maxTotalTokens: cfg.max_total_tokens,
         costCeilingUsd: cfg.cost_ceiling_usd,
+        fallbackChain: Array.isArray(cfg.fallback_chain)
+          ? cfg.fallback_chain
+              .map((v) => (typeof v === "string" ? v.trim() : ""))
+              .filter((v) => v.length > 0)
+          : [],
       });
     }
   }
@@ -206,6 +213,7 @@ export function createModelProxyRoutesFromState(
         capabilities: route.capabilities,
         max_total_tokens: route.maxTotalTokens,
         cost_ceiling_usd: route.costCeilingUsd,
+        fallback_chain: route.fallbackChain,
       }),
     );
     return c.json({
@@ -220,137 +228,236 @@ export function createModelProxyRoutesFromState(
     const bodyBytes = await c.req.arrayBuffer();
     const bodyText = new TextDecoder().decode(bodyBytes);
 
-    let parsed: { model?: string; stream?: boolean };
+    let parsedBody: Record<string, unknown>;
     try {
-      parsed = JSON.parse(bodyText) as { model?: string; stream?: boolean };
+      parsedBody = JSON.parse(bodyText) as Record<string, unknown>;
     } catch {
       return c.json({ error: "invalid JSON payload" }, 400);
     }
 
-    const modelName = parsed.model;
-    if (!modelName || typeof modelName !== "string") {
-      return c.json(
-        { error: "request body missing 'model' field" },
-        400,
-      );
+    const requestedModel = parsedBody["model"];
+    if (!requestedModel || typeof requestedModel !== "string") {
+      return c.json({ error: "request body missing 'model' field" }, 400);
     }
 
-    const route = state.routes.get(modelName);
-    if (!route) {
-      return c.json(
-        { error: `model '${modelName}' is not configured` },
-        404,
-      );
+    const requestedRoute = state.routes.get(requestedModel);
+    if (!requestedRoute) {
+      return c.json({ error: `model '${requestedModel}' is not configured` }, 404);
     }
 
-    // Build upstream URL using the original path
+    const streamRequested = parsedBody["stream"] === true;
+    const originalBody = new Uint8Array(bodyBytes);
+
+    const modelCandidates: string[] = [];
+    for (const entry of [requestedModel, ...requestedRoute.fallbackChain]) {
+      if (typeof entry !== "string") continue;
+      const trimmed = entry.trim();
+      if (trimmed.length === 0) continue;
+      if (!modelCandidates.includes(trimmed)) modelCandidates.push(trimmed);
+    }
+
+    const sessionId = c.req.header("x-tyrum-session-id")?.trim();
+    const agentId =
+      c.req.header("x-tyrum-agent-id")?.trim() ||
+      process.env["TYRUM_AGENT_ID"]?.trim() ||
+      "default";
+
     const originalPath = new URL(c.req.url).pathname;
-    const upstreamUrl = route.baseUrl.replace(/\/$/, "") + originalPath;
 
-    // Build forwarded headers
-    const forwardHeaders = new Headers();
+    const baseHeaders = new Headers();
     for (const [name, value] of Object.entries(c.req.header())) {
-      if (typeof value === "string" && !HOP_BY_HOP_HEADERS.has(name.toLowerCase())) {
-        // Skip authorization — we'll apply route-specific auth
-        if (name.toLowerCase() !== "authorization") {
-          forwardHeaders.set(name, value);
-        }
+      if (typeof value !== "string") continue;
+      if (HOP_BY_HOP_HEADERS.has(name.toLowerCase())) continue;
+      if (name.toLowerCase() === "authorization") continue;
+      baseHeaders.set(name, value);
+    }
+    baseHeaders.set("Content-Type", "application/json");
+
+    function classifyFailure(status: number): {
+      failure: "rate_limit" | "transient" | "auth" | "quota" | "other";
+      retryable: boolean;
+    } {
+      if (status === 401 || status === 403) return { failure: "auth", retryable: true };
+      if (status === 402) return { failure: "quota", retryable: true };
+      if (status === 408) return { failure: "transient", retryable: true };
+      if (status === 429) return { failure: "rate_limit", retryable: true };
+      if (status >= 500) return { failure: "transient", retryable: true };
+      return { failure: "other", retryable: false };
+    }
+
+    async function fetchUpstream(
+      upstreamUrl: string,
+      headers: Headers,
+      body: Uint8Array,
+    ): Promise<Response> {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), state.timeoutMs);
+      try {
+        return await fetch(upstreamUrl, {
+          method: "POST",
+          headers,
+          body: Buffer.from(body),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
       }
     }
 
-    // Optional dynamic auth profile selection (DB-backed), pinned per session.
-    if (deps?.authProfileService) {
-      const sessionId = c.req.header("x-tyrum-session-id")?.trim();
-      const agentId =
-        c.req.header("x-tyrum-agent-id")?.trim() ||
-        process.env["TYRUM_AGENT_ID"]?.trim() ||
-        "default";
+    let lastFailure:
+      | { kind: "http"; status: number; headers: Headers; body: Uint8Array }
+      | { kind: "fetch"; error: string }
+      | undefined;
 
-      if (sessionId && sessionId.length > 0) {
+    for (const modelName of modelCandidates) {
+      const route = state.routes.get(modelName);
+      if (!route) {
+        lastFailure = {
+          kind: "fetch",
+          error: `fallback model '${modelName}' is not configured`,
+        };
+        continue;
+      }
+
+      const upstreamUrl = route.baseUrl.replace(/\/$/, "") + originalPath;
+      const body =
+        modelName === requestedModel
+          ? originalBody
+          : new TextEncoder().encode(JSON.stringify({ ...parsedBody, model: modelName }));
+
+      const buildResponse = async (upstreamResponse: Response): Promise<Response> => {
+        const isStream =
+          streamRequested ||
+          upstreamResponse.headers
+            .get("content-type")
+            ?.startsWith("text/event-stream") === true;
+
+        const responseHeaders = new Headers();
+        upstreamResponse.headers.forEach((value, name) => {
+          if (!RESPONSE_SKIP_HEADERS.has(name.toLowerCase())) {
+            responseHeaders.set(name, value);
+          }
+        });
+        responseHeaders.set("x-tyrum-model-used", modelName);
+        responseHeaders.set("x-tyrum-provider-used", route.target);
+
+        if (isStream && upstreamResponse.body) {
+          return new Response(upstreamResponse.body, {
+            status: upstreamResponse.status,
+            headers: responseHeaders,
+          });
+        }
+
+        const responseBytes = await upstreamResponse.arrayBuffer();
+        return new Response(new Uint8Array(responseBytes), {
+          status: upstreamResponse.status,
+          headers: responseHeaders,
+        });
+      };
+
+      const attemptWithHeaders = async (headers: Headers): Promise<Response | null> => {
         try {
-          const selected = await deps.authProfileService.resolveBearerToken({
+          const res = await fetchUpstream(upstreamUrl, headers, body);
+          if (res.ok) {
+            return await buildResponse(res);
+          }
+          const bytes = new Uint8Array(await res.arrayBuffer());
+          lastFailure = { kind: "http", status: res.status, headers: res.headers, body: bytes };
+          return null;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          lastFailure = { kind: "fetch", error: message };
+          return null;
+        }
+      };
+
+      const shouldTryFallbackModel = (failure: typeof lastFailure): boolean => {
+        if (!failure) return false;
+        if (failure.kind === "fetch") return true;
+        return classifyFailure(failure.status).retryable;
+      };
+
+      // 1) Rotate DB-backed auth profiles within provider (preferred).
+      if (deps?.authProfileService && sessionId) {
+        let selected: { profileId: string; token: string } | undefined;
+        try {
+          selected = await deps.authProfileService.resolveBearerToken({
             agentId,
             provider: route.target,
             sessionId,
           });
-          if (selected?.token) {
-            forwardHeaders.set("Authorization", `Bearer ${selected.token}`);
-          }
         } catch {
-          // Best-effort; fall back to static config auth.
+          selected = undefined;
         }
+
+        while (selected?.token) {
+          const headers = new Headers(baseHeaders);
+          headers.set("Authorization", `Bearer ${selected.token}`);
+          const ok = await attemptWithHeaders(headers);
+          if (ok) return ok;
+
+          if (lastFailure?.kind !== "http") break;
+          const classification = classifyFailure(lastFailure.status);
+          if (classification.failure === "other") break;
+
+          try {
+            selected = await deps.authProfileService.rotateBearerToken({
+              agentId,
+              provider: route.target,
+              sessionId,
+              failedProfileId: selected.profileId,
+              failure: classification.failure,
+            });
+          } catch {
+            selected = undefined;
+          }
+        }
+      }
+
+      // 2) Legacy static auth from config (best-effort fallback).
+      {
+        const headers = new Headers(baseHeaders);
+        switch (route.auth.kind) {
+          case "bearer":
+            headers.set("Authorization", `Bearer ${route.auth.token}`);
+            break;
+          case "static":
+            headers.set(route.auth.header, route.auth.value);
+            break;
+          case "none":
+            break;
+        }
+
+        const ok = await attemptWithHeaders(headers);
+        if (ok) return ok;
+      }
+
+      // Only continue to the next model if the failure is retryable.
+      if (!shouldTryFallbackModel(lastFailure)) {
+        break;
       }
     }
 
-    // Apply route auth (legacy config fallback).
-    switch (route.auth.kind) {
-      case "bearer":
-        if (!forwardHeaders.has("authorization")) {
-          forwardHeaders.set("Authorization", `Bearer ${route.auth.token}`);
-        }
-        break;
-      case "static":
-        forwardHeaders.set(route.auth.header, route.auth.value);
-        break;
-      case "none":
-        break;
+    if (!lastFailure) {
+      return c.json({ error: "no upstream attempts were made" }, 502);
     }
 
-    forwardHeaders.set("Content-Type", "application/json");
-
-    // Forward request to upstream
-    let upstreamResponse: Response;
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(
-        () => controller.abort(),
-        state.timeoutMs,
-      );
-
-      upstreamResponse = await fetch(upstreamUrl, {
-        method: "POST",
-        headers: forwardHeaders,
-        body: new Uint8Array(bodyBytes),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeout);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : String(err);
+    if (lastFailure.kind === "fetch") {
       return c.json(
-        { error: `upstream request failed for model '${modelName}': ${message}` },
+        { error: `upstream request failed for model '${requestedModel}': ${lastFailure.error}` },
         502,
       );
     }
 
-    // Determine if streaming
-    const isStream =
-      parsed.stream === true ||
-      upstreamResponse.headers
-        .get("content-type")
-        ?.startsWith("text/event-stream") === true;
-
-    // Build response headers (filter hop-by-hop)
     const responseHeaders = new Headers();
-    upstreamResponse.headers.forEach((value, name) => {
+    lastFailure.headers.forEach((value, name) => {
       if (!RESPONSE_SKIP_HEADERS.has(name.toLowerCase())) {
         responseHeaders.set(name, value);
       }
     });
 
-    if (isStream && upstreamResponse.body) {
-      // Stream the response through
-      return new Response(upstreamResponse.body, {
-        status: upstreamResponse.status,
-        headers: responseHeaders,
-      });
-    }
-
-    // Buffered response
-    const responseBytes = await upstreamResponse.arrayBuffer();
-    return new Response(new Uint8Array(responseBytes), {
-      status: upstreamResponse.status,
+    return new Response(Buffer.from(lastFailure.body), {
+      status: lastFailure.status,
       headers: responseHeaders,
     });
   };

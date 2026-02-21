@@ -76,6 +76,8 @@ export function createApprovalRoutes(opts: {
       decision?: "approved" | "denied";
       approved?: boolean;
       reason?: string;
+      mode?: "once" | "always";
+      selected_override?: { tool_id: string; pattern: string };
     };
 
     // Accept either { decision: "approved"|"denied" } or legacy { approved: boolean }
@@ -96,6 +98,10 @@ export function createApprovalRoutes(opts: {
     }
 
     const decision = isApproved ? ("approved" as const) : ("denied" as const);
+    const resolvedBy = {
+      source: "http",
+      user_agent: c.req.header("user-agent") ?? undefined,
+    };
     const result = await resolveAndApplyApproval({
       approvalDal,
       executionEngine: opts.executionEngine,
@@ -104,6 +110,9 @@ export function createApprovalRoutes(opts: {
       approvalId: id,
       decision,
       reason: body.reason,
+      mode: body.mode,
+      selectedOverride: body.selected_override,
+      resolvedBy,
     });
 
     if (result.kind === "not_found") {
@@ -115,6 +124,10 @@ export function createApprovalRoutes(opts: {
         { error: "conflict", message: `approval ${String(id)} is still pending`, approval: result.approval },
         409,
       );
+    }
+
+    if (result.kind === "invalid_request") {
+      return c.json({ error: "invalid_request", message: result.message }, 400);
     }
 
     if (result.kind === "conflict") {

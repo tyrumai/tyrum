@@ -100,6 +100,8 @@ const BASE_RECONNECT_DELAY = 1_000;
 const WS_BASE_PROTOCOL = "tyrum-v1";
 const WS_AUTH_PROTOCOL_PREFIX = "tyrum-auth.";
 const ED25519_SPKI_PREFIX_HEX = "302a300506032b6570032100";
+const EVENT_ID_DEDUPE_MAX = 2_000;
+const EVENT_ID_DEDUPE_TTL_MS = 10 * 60_000;
 
 function toBase64UrlUtf8(value: string): string {
   // Node runtime path.
@@ -343,6 +345,7 @@ export class TyrumClient {
   private reconnectAttempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private intentionalClose = false;
+  private readonly recentEventIds = new Map<string, number>();
 
   constructor(options: TyrumClientOptions) {
     this.emitter = mitt<TyrumClientEvents>();
@@ -760,6 +763,9 @@ export class TyrumClient {
 
     // Events (server push)
     if ("event_id" in msg) {
+      if (this.shouldDropEvent(msg.event_id)) {
+        return;
+      }
       if (msg.type === "pairing.approved") {
         const evt = WsPairingApprovedEvent.safeParse(msg);
         if (evt.success) {
@@ -844,6 +850,29 @@ export class TyrumClient {
         } satisfies WsResponseEnvelope);
         return;
     }
+  }
+
+  private shouldDropEvent(eventId: string): boolean {
+    const nowMs = Date.now();
+    const cutoff = nowMs - EVENT_ID_DEDUPE_TTL_MS;
+    for (const [id, ts] of this.recentEventIds) {
+      if (ts >= cutoff) break;
+      this.recentEventIds.delete(id);
+    }
+
+    if (this.recentEventIds.has(eventId)) {
+      return true;
+    }
+
+    this.recentEventIds.set(eventId, nowMs);
+    if (this.recentEventIds.size > EVENT_ID_DEDUPE_MAX) {
+      const first = this.recentEventIds.keys().next().value as string | undefined;
+      if (first) {
+        this.recentEventIds.delete(first);
+      }
+    }
+
+    return false;
   }
 
   private scheduleReconnect(): void {

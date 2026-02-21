@@ -18,17 +18,17 @@ describe("SessionDal", () => {
 
   it("creates and retrieves sessions by channel/thread", async () => {
     const dal = createDal();
-    const first = await dal.getOrCreate("telegram", "dm-1");
-    const second = await dal.getOrCreate("telegram", "dm-1");
+    const first = await dal.getOrCreate("default", "telegram", "dm-1");
+    const second = await dal.getOrCreate("default", "telegram", "dm-1");
 
-    expect(first.session_id).toBe("telegram:dm-1");
+    expect(first.session_id).toBe("agent:default:telegram:dm-1");
     expect(second.session_id).toBe(first.session_id);
     expect(second.turns).toEqual([]);
   });
 
   it("stores bounded turn history", async () => {
     const dal = createDal();
-    const session = await dal.getOrCreate("discord", "thread-42");
+    const session = await dal.getOrCreate("default", "discord", "thread-42");
 
     await dal.appendTurn(
       session.session_id,
@@ -59,7 +59,7 @@ describe("SessionDal", () => {
 
   it("deletes expired sessions using ttl days", async () => {
     const dal = createDal();
-    const session = await dal.getOrCreate("mattermost", "ops");
+    const session = await dal.getOrCreate("default", "mattermost", "ops");
     await db!.run(
       "UPDATE sessions SET updated_at = datetime('now', '-40 days') WHERE session_id = ?",
       [session.session_id],
@@ -78,8 +78,8 @@ describe("SessionDal", () => {
       vi.setSystemTime(new Date("2026-02-20T12:00:00.000Z"));
 
       const dal = createDal();
-      const stale = await dal.getOrCreate("mattermost", "stale");
-      const fresh = await dal.getOrCreate("mattermost", "fresh");
+      const stale = await dal.getOrCreate("default", "mattermost", "stale");
+      const fresh = await dal.getOrCreate("default", "mattermost", "fresh");
 
       await db!.run(
         "UPDATE sessions SET updated_at = ? WHERE session_id = ?",

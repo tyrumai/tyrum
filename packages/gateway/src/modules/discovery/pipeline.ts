@@ -81,7 +81,8 @@ export class DiscoveryPipeline {
   ) {}
 
   async discover(request: DiscoveryRequest): Promise<DiscoveryOutcome> {
-    const cacheKey = `discovery:${request.query}`;
+    const agentId = request.agent_id?.trim() || "default";
+    const cacheKey = `discovery:${agentId}:${request.query}`;
 
     const cached = this.cache.get(cacheKey);
     if (cached != null) {

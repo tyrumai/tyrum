@@ -32,7 +32,7 @@ function makeRow(overrides: Partial<CapabilityMemoryRow> = {}): CapabilityMemory
 
 function makeSource(rows: CapabilityMemoryRow[]): CapabilityMemorySource {
   return {
-    async getCapabilityMemories() {
+    async getCapabilityMemories(_agentId: string) {
       return rows;
     },
   };

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { WebSocketServer } from "ws";
 import type { WebSocket as WsWebSocket } from "ws";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -462,6 +462,47 @@ describe("TyrumClient", () => {
 
     const msg = await received;
     expect(msg).toEqual(updateMsg);
+  });
+
+  it("deduplicates events by event_id", async () => {
+    server = createTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: [],
+    });
+
+    const handler = vi.fn();
+    const received = new Promise<void>((resolve) => {
+      client!.on("plan_update", (evt) => {
+        handler(evt);
+        resolve();
+      });
+    });
+
+    client.connect();
+    const ws = await server.waitForClient();
+    await acceptConnect(ws);
+
+    const updateMsg = {
+      event_id: "evt-1",
+      type: "plan.update",
+      occurred_at: "2026-02-19T12:00:00Z",
+      payload: {
+        plan_id: "plan-1",
+        status: "running",
+        detail: "step 2 of 4",
+      },
+    };
+
+    ws.send(JSON.stringify(updateMsg));
+    ws.send(JSON.stringify(updateMsg));
+
+    await received;
+    await delay(25);
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler.mock.calls[0]![0]).toEqual(updateMsg);
   });
 
   it("emits pairing_approved event", async () => {

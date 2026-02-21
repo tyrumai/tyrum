@@ -168,8 +168,10 @@ export class WatcherScheduler {
     firingId: string,
   ): Promise<void> {
     const eventId = firingId;
+    const agentId = process.env["TYRUM_AGENT_ID"]?.trim() || "default";
 
     await this.memoryDal.insertEpisodicEvent(
+      agentId,
       eventId,
       new Date(occurredAtMs).toISOString(),
       "watcher",

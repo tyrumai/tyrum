@@ -14,6 +14,7 @@ import { createAgentRoutes } from "./routes/agent.js";
 import { createApprovalRoutes } from "./routes/approval.js";
 import { createWatcherRoutes } from "./routes/watcher.js";
 import { createCanvasRoutes } from "./routes/canvas.js";
+import { createArtifactRoutes } from "./routes/artifacts.js";
 import { createAuditRoutes } from "./routes/audit.js";
 import { createSecretRoutes } from "./routes/secret.js";
 import { createPlaybookRoutes } from "./routes/playbook.js";
@@ -22,6 +23,7 @@ import { createPresenceRoutes } from "./routes/presence.js";
 import { createContextRoutes } from "./routes/context.js";
 import { createUsageRoutes } from "./routes/usage.js";
 import { createPolicyBundleRoutes } from "./routes/policy-bundles.js";
+import { createPolicyOverrideRoutes } from "./routes/policy-overrides.js";
 import { createAuthProfileRoutes } from "./routes/auth-profiles.js";
 import { createOAuthRoutes } from "./routes/oauth.js";
 import { createPluginRoutes } from "./routes/plugins.js";
@@ -67,6 +69,9 @@ export interface AppOptions {
 export function createApp(container: GatewayContainer, opts: AppOptions = {}): Hono {
   const app = new Hono();
   const isLocalOnly = opts.isLocalOnly ?? true;
+  const authProfileService = opts.secretProvider
+    ? new AuthProfileService(container.db, opts.secretProvider, container.logger)
+    : undefined;
 
   // Apply auth middleware if a token store is provided
   if (opts.tokenStore) {
@@ -123,6 +128,14 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   );
   app.route("/", createWatcherRoutes(container.watcherProcessor));
   app.route("/", createCanvasRoutes(container.canvasDal));
+  app.route(
+    "/",
+    createArtifactRoutes({
+      db: container.db,
+      artifactStore: container.artifactStore,
+      logger: container.logger,
+    }),
+  );
   app.route("/", createAuditRoutes({ db: container.db, eventLog: container.eventLog }));
 
   // Playbook routes — load from TYRUM_HOME/playbooks or use pre-loaded set
@@ -181,10 +194,28 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
 
   // Context and usage surfaces (operator observability).
   app.route("/", createContextRoutes({ db: container.db }));
-  app.route("/", createUsageRoutes({ db: container.db }));
+  app.route(
+    "/",
+    createUsageRoutes({
+      db: container.db,
+      modelGatewayConfigPath: container.config?.modelGatewayConfigPath,
+      authProfileService,
+      agentRuntime: opts.agentRuntime,
+    }),
+  );
 
   // Policy bundle management (deployment/agent/playbook policy composition).
   app.route("/", createPolicyBundleRoutes({ db: container.db, logger: container.logger }));
+
+  // Durable policy overrides (approve-always) inventory and revocation.
+  app.route(
+    "/",
+    createPolicyOverrideRoutes({
+      policyOverrideDal: container.policyOverrideDal,
+      wsPublisher: opts.wsPublisher,
+      logger: container.logger,
+    }),
+  );
 
   // Plugin discovery (disabled by default; tools-only extension point).
   app.route("/", createPluginRoutes(opts.pluginManager));
@@ -196,9 +227,6 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   // Model proxy routes are optional — only register if config path is set
   if (container.config?.modelGatewayConfigPath) {
     try {
-      const authProfileService = opts.secretProvider
-        ? new AuthProfileService(container.db, opts.secretProvider, container.logger)
-        : undefined;
       const modelProxy = createModelProxyRoutes(
         container.config.modelGatewayConfigPath,
         { authProfileService },
@@ -217,6 +245,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     "/",
     createWebUiRoutes({
       approvalDal: container.approvalDal,
+      policyOverrideDal: container.policyOverrideDal,
       memoryDal: container.memoryDal,
       watcherProcessor: container.watcherProcessor,
       canvasDal: container.canvasDal,

@@ -24,6 +24,7 @@ function createFailingFetch() {
 describe("EmbeddingPipeline", () => {
   let db: SqliteDb;
   let vectorDal: VectorDal;
+  const agentId = "default";
 
   beforeEach(() => {
     db = openTestSqliteDb();
@@ -51,6 +52,7 @@ describe("EmbeddingPipeline", () => {
 
       const pipeline = new EmbeddingPipeline({
         vectorDal,
+        agentId,
         baseUrl: "http://localhost:8080/v1",
         model: "text-embedding-3",
         fetchImpl: mockFetch as typeof fetch,
@@ -66,6 +68,7 @@ describe("EmbeddingPipeline", () => {
     it("throws on non-OK response", async () => {
       const pipeline = new EmbeddingPipeline({
         vectorDal,
+        agentId,
         baseUrl: "http://localhost:8080/v1",
         model: "model",
         fetchImpl: createFailingFetch() as typeof fetch,
@@ -86,6 +89,7 @@ describe("EmbeddingPipeline", () => {
 
       const pipeline = new EmbeddingPipeline({
         vectorDal,
+        agentId,
         baseUrl: "http://localhost:8080",
         model: "model",
         fetchImpl: mockFetch as typeof fetch,
@@ -101,6 +105,7 @@ describe("EmbeddingPipeline", () => {
       const mockVector = [1.0, 0.0, 0.0];
       const pipeline = new EmbeddingPipeline({
         vectorDal,
+        agentId,
         baseUrl: "http://localhost:8080/v1",
         model: "test-model",
         fetchImpl: createMockFetch(mockVector) as typeof fetch,
@@ -109,7 +114,7 @@ describe("EmbeddingPipeline", () => {
       const id = await pipeline.embedAndStore("hello world", "greeting", { source: "test" });
       expect(id).toBeTruthy();
 
-      const row = await vectorDal.getById(id);
+      const row = await vectorDal.getById(agentId, id);
       expect(row).toBeDefined();
       expect(row!.label).toBe("greeting");
       expect(row!.vector).toEqual(mockVector);
@@ -120,13 +125,14 @@ describe("EmbeddingPipeline", () => {
   describe("search", () => {
     it("embeds query and searches stored vectors", async () => {
       // Pre-store some vectors
-      await vectorDal.insertEmbedding("doc-a", [1, 0, 0], "test-model");
-      await vectorDal.insertEmbedding("doc-b", [0, 1, 0], "test-model");
-      await vectorDal.insertEmbedding("doc-c", [0.9, 0.1, 0], "test-model");
+      await vectorDal.insertEmbedding(agentId, "doc-a", [1, 0, 0], "test-model");
+      await vectorDal.insertEmbedding(agentId, "doc-b", [0, 1, 0], "test-model");
+      await vectorDal.insertEmbedding(agentId, "doc-c", [0.9, 0.1, 0], "test-model");
 
       // Mock embed returns [1, 0, 0] for the query
       const pipeline = new EmbeddingPipeline({
         vectorDal,
+        agentId,
         baseUrl: "http://localhost:8080/v1",
         model: "test-model",
         fetchImpl: createMockFetch([1, 0, 0]) as typeof fetch,
@@ -142,6 +148,7 @@ describe("EmbeddingPipeline", () => {
     it("returns empty when no vectors stored", async () => {
       const pipeline = new EmbeddingPipeline({
         vectorDal,
+        agentId,
         baseUrl: "http://localhost:8080/v1",
         model: "test-model",
         fetchImpl: createMockFetch([1, 0, 0]) as typeof fetch,
@@ -172,6 +179,7 @@ describe("EmbeddingPipeline", () => {
 
       const pipeline = new EmbeddingPipeline({
         vectorDal,
+        agentId,
         baseUrl: "http://localhost:8080/v1",
         model: "test-model",
         fetchImpl: mockFetch as typeof fetch,

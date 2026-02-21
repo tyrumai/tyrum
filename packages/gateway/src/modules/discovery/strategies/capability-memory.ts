@@ -8,7 +8,7 @@ import type { DiscoveryRequest, DiscoveryResolution } from "@tyrum/schemas";
 import type { CapabilityMemoryRow } from "../../memory/dal.js";
 
 export interface CapabilityMemorySource {
-  getCapabilityMemories(capabilityType?: string): Promise<CapabilityMemoryRow[]>;
+  getCapabilityMemories(agentId: string, capabilityType?: string): Promise<CapabilityMemoryRow[]>;
 }
 
 /** Weight factor applied per day of age — older entries score lower. */
@@ -46,7 +46,8 @@ export async function resolveFromCapabilityMemory(
   request: DiscoveryRequest,
   source: CapabilityMemorySource,
 ): Promise<DiscoveryResolution[]> {
-  const rows = await source.getCapabilityMemories();
+  const agentId = request.agent_id?.trim() || "default";
+  const rows = await source.getCapabilityMemories(agentId);
   const matches = rows.filter((row) => matchesQuery(row, request.query));
 
   const scored = matches.map((row) => ({

@@ -15,10 +15,11 @@ import type {
   McpServerSpec as McpServerSpecT,
   SkillManifest as SkillManifestT,
   IdentityPack as IdentityPackT,
+  ProvenanceTag as ProvenanceTagT,
 } from "@tyrum/schemas";
-import { AgentStatusResponse, AgentTurnResponse } from "@tyrum/schemas";
+import { AgentStatusResponse, AgentTurnResponse, ProvenanceTag } from "@tyrum/schemas";
 import type { GatewayContainer } from "../../container.js";
-import { ensureWorkspaceInitialized, resolveTyrumHome } from "./home.js";
+import { ensureWorkspaceInitialized, resolveAgentHome } from "./home.js";
 import { MarkdownMemoryStore } from "./markdown-memory.js";
 import { SessionDal, type SessionMessage, type SessionRow } from "./session-dal.js";
 import {
@@ -41,6 +42,8 @@ import { PolicyBundleService } from "../policy-bundle/service.js";
 import type { PolicyEvaluation } from "../policy-bundle/evaluate.js";
 import { ContextReportDal } from "../observability/context-report-dal.js";
 import type { PluginManager } from "../plugins/manager.js";
+import { resolveWorkspaceId } from "../workspace/id.js";
+import { computeToolMatchTarget, suggestPolicyOverridesForToolCall } from "../policy-overrides/match-target.js";
 
 const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_APPROVAL_WAIT_MS = 120_000;
@@ -66,6 +69,9 @@ interface ToolExecutionContext {
   sessionId: string;
   channel: string;
   threadId: string;
+  agentId: string;
+  workspaceId: string;
+  provenanceSources: Set<ProvenanceTagT>;
 }
 
 export interface AgentRuntimeOptions {
@@ -92,6 +98,53 @@ export interface AgentRuntimeOptions {
 function trimTo(value: string, max: number): string {
   if (value.length <= max) return value;
   return `${value.slice(0, max - 3)}...`;
+}
+
+function resolveAgentId(env: NodeJS.ProcessEnv = process.env): string {
+  const raw = env["TYRUM_AGENT_ID"]?.trim();
+  return raw && raw.length > 0 ? raw : "default";
+}
+
+function parseTurnProvenanceSources(
+  metadata: AgentTurnRequestT["metadata"],
+): ProvenanceTagT[] {
+  const raw = metadata?.["provenance_sources"];
+  if (!Array.isArray(raw)) return ["user"];
+
+  const out: ProvenanceTagT[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== "string") continue;
+    const parsed = ProvenanceTag.safeParse(entry);
+    if (parsed.success) out.push(parsed.data);
+  }
+
+  return out.length > 0 ? out : ["user"];
+}
+
+function pickPrimaryProvenanceSource(sources: readonly ProvenanceTagT[]): ProvenanceTagT {
+  if (sources.includes("connector")) return "connector";
+  if (sources.includes("web")) return "web";
+  if (sources.includes("email")) return "email";
+  if (sources.includes("tool")) return "tool";
+  if (sources.includes("system")) return "system";
+  if (sources.includes("memory")) return "memory";
+  if (sources.includes("semantic-memory")) return "semantic-memory";
+  return "user";
+}
+
+function normalizeProvenanceSources(
+  sources: Iterable<ProvenanceTagT>,
+): ProvenanceTagT[] {
+  const order = ProvenanceTag.options as unknown as ProvenanceTagT[];
+  const rank = new Map<ProvenanceTagT, number>();
+  for (let i = 0; i < order.length; i++) {
+    const value = order[i];
+    if (value) rank.set(value, i);
+  }
+
+  return Array.from(new Set(sources)).sort((a, b) => {
+    return (rank.get(a) ?? 999) - (rank.get(b) ?? 999);
+  });
 }
 
 function formatSessionContext(summary: string, turns: SessionMessage[]): string {
@@ -285,7 +338,8 @@ export class AgentRuntime {
   private cleanupAtMs = 0;
 
   constructor(private readonly opts: AgentRuntimeOptions) {
-    this.home = opts.home ?? resolveTyrumHome();
+    const agentId = resolveAgentId();
+    this.home = opts.home ?? resolveAgentHome(agentId);
     this.sessionDal = opts.sessionDal ?? opts.container.sessionDal;
     this.fetchImpl = opts.fetchImpl ?? fetch;
     this.languageModelOverride = opts.languageModel;
@@ -421,7 +475,8 @@ export class AgentRuntime {
     finalize: () => Promise<AgentTurnResponseT>;
   }> {
     const prepared = await this.prepareTurn(input);
-    const { ctx, session, planId, model, toolSet, usedTools, userContent, tools } = prepared;
+    const { ctx, session, planId, model, toolSet, usedTools, provenanceSources, userContent, tools, agentId } =
+      prepared;
 
     const streamResult = streamText({
       model,
@@ -440,7 +495,15 @@ export class AgentRuntime {
       const startedAtMs = Date.now();
       const result = await streamResult;
       const reply = (await result.text) || "No assistant response returned.";
-      const response = await this.finalizeTurn(ctx, session, input, reply, usedTools);
+      const response = await this.finalizeTurn(
+        ctx,
+        session,
+        input,
+        reply,
+        usedTools,
+        provenanceSources,
+        agentId,
+      );
       const durationMs = Math.max(0, Date.now() - startedAtMs);
 
       await this.persistContextReport({
@@ -461,7 +524,8 @@ export class AgentRuntime {
 
   async turn(input: AgentTurnRequestT): Promise<AgentTurnResponseT> {
     const prepared = await this.prepareTurn(input);
-    const { ctx, session, planId, model, toolSet, usedTools, userContent, tools } = prepared;
+    const { ctx, session, planId, model, toolSet, usedTools, provenanceSources, userContent, tools, agentId } =
+      prepared;
 
     const startedAtMs = Date.now();
     const result = await generateText({
@@ -478,7 +542,15 @@ export class AgentRuntime {
     });
 
     const reply = result.text || "No assistant response returned.";
-    const response = await this.finalizeTurn(ctx, session, input, reply, usedTools);
+    const response = await this.finalizeTurn(
+      ctx,
+      session,
+      input,
+      reply,
+      usedTools,
+      provenanceSources,
+      agentId,
+    );
     const durationMs = Math.max(0, Date.now() - startedAtMs);
 
     await this.persistContextReport({
@@ -495,19 +567,31 @@ export class AgentRuntime {
   }
 
   private async prepareTurn(input: AgentTurnRequestT): Promise<{
-    ctx: AgentLoadedContext;
-    session: SessionRow;
-    planId: string;
-    model: LanguageModel;
-    toolSet: ToolSet;
-    tools: readonly ToolDescriptor[];
-    usedTools: Set<string>;
-    userContent: Array<{ type: "text"; text: string }>;
-  }> {
-    const ctx = await this.loadContext();
-    this.maybeCleanupSessions(ctx.config.sessions.ttl_days);
+	    ctx: AgentLoadedContext;
+	    session: SessionRow;
+	    planId: string;
+	    model: LanguageModel;
+	    toolSet: ToolSet;
+	    tools: readonly ToolDescriptor[];
+	    usedTools: Set<string>;
+      provenanceSources: Set<ProvenanceTagT>;
+      agentId: string;
+	    userContent: Array<{ type: "text"; text: string }>;
+		  }> {
+		    const agentId = resolveAgentId();
+		    const workspaceId = resolveWorkspaceId().toString();
+		    const initialProvenanceSources = parseTurnProvenanceSources(input.metadata);
+		    const provenanceSources = new Set<ProvenanceTagT>(initialProvenanceSources);
+		    const primarySource = pickPrimaryProvenanceSource(initialProvenanceSources);
+		    const inputForModel =
+		      primarySource === "user" || primarySource === "system"
+		        ? input.message
+		        : sanitizeForModel(tagContent(input.message, primarySource, false));
 
-    const session = await this.sessionDal.getOrCreate(input.channel, input.thread_id);
+	    const ctx = await this.loadContext();
+	    this.maybeCleanupSessions(ctx.config.sessions.ttl_days);
+
+	    const session = await this.sessionDal.getOrCreate(agentId, input.channel, input.thread_id);
     const wantsMcpTools = ctx.config.tools.allow.some(
       (entry) => entry === "*" || entry === "mcp*" || entry.startsWith("mcp."),
     );
@@ -520,6 +604,7 @@ export class AgentRuntime {
         const embeddingBaseUrl = resolveModelBaseUrl(ctx.config);
         const embeddingPipeline = new EmbeddingPipeline({
           vectorDal,
+          agentId,
           baseUrl: embeddingBaseUrl,
           model: ctx.config.model.model,
           fetchImpl: this.fetchImpl,
@@ -559,7 +644,7 @@ export class AgentRuntime {
       mcpSpecMap.set(server.id, server);
     }
 
-    const planId = `agent-turn-${session.session_id}-${randomUUID()}`;
+	    const planId = `agent-turn-${session.session_id}-${randomUUID()}`;
 
     const toolExecutor = new ToolExecutor(
       this.home,
@@ -574,17 +659,20 @@ export class AgentRuntime {
     );
 
     const usedTools = new Set<string>();
-    const toolSet = this.buildToolSet(
-      tools,
-      toolExecutor,
-      usedTools,
-      {
-        planId,
-        sessionId: session.session_id,
-        channel: input.channel,
-        threadId: input.thread_id,
-      },
-    );
+	    const toolSet = this.buildToolSet(
+	      tools,
+	      toolExecutor,
+	      usedTools,
+	      {
+	        planId,
+	        sessionId: session.session_id,
+	        channel: input.channel,
+	        threadId: input.thread_id,
+	        agentId,
+	        workspaceId,
+	        provenanceSources,
+	      },
+	    );
 
     const sessionCtx = formatSessionContext(session.summary, session.turns);
     const memoryCtx = mergeMemoryPrompts(
@@ -609,11 +697,11 @@ export class AgentRuntime {
         type: "text",
         text: `Long-term memory matches:\n${memoryCtx}`,
       },
-      {
-        type: "text",
-        text: input.message,
-      },
-    ];
+	      {
+	        type: "text",
+	        text: inputForModel,
+	      },
+	    ];
 
     const model = await this.resolveModel(ctx.config, {
       sessionId: session.session_id,
@@ -628,6 +716,8 @@ export class AgentRuntime {
       toolSet,
       tools,
       usedTools,
+      provenanceSources,
+      agentId,
       userContent,
     };
   }
@@ -638,6 +728,8 @@ export class AgentRuntime {
     input: AgentTurnRequestT,
     reply: string,
     usedTools: Set<string>,
+    provenanceSources: Set<ProvenanceTagT>,
+    agentId: string,
   ): Promise<AgentTurnResponseT> {
     const nowIso = new Date().toISOString();
 
@@ -673,6 +765,7 @@ export class AgentRuntime {
     }
 
     this.opts.container.memoryDal.insertEpisodicEvent(
+      agentId,
       `agent-turn-${randomUUID()}`,
       nowIso,
       input.channel,
@@ -687,6 +780,7 @@ export class AgentRuntime {
       session_id: session.session_id,
       used_tools: Array.from(usedTools),
       memory_written: memoryWritten,
+      provenance_sources: normalizeProvenanceSources(provenanceSources),
     });
   }
 
@@ -707,7 +801,11 @@ export class AgentRuntime {
         inputSchema: jsonSchema(schema),
         execute: async (args: unknown) => {
           const toolCallId = `tc-${randomUUID()}`;
-          const policyEval = await this.policyBundleService.evaluateToolCall(toolDesc.id, args);
+          const policyEval = await this.policyBundleService.evaluateToolCall(toolDesc.id, args, {
+            agentId: toolExecutionContext.agentId,
+            workspaceId: toolExecutionContext.workspaceId,
+            provenance: { sources: Array.from(toolExecutionContext.provenanceSources) },
+          });
 
           if (policyEval.decision === "deny") {
             return JSON.stringify({
@@ -716,8 +814,7 @@ export class AgentRuntime {
             });
           }
 
-          const requiresApproval =
-            toolDesc.requires_confirmation || policyEval.decision === "require_approval";
+          const requiresApproval = policyEval.decision === "require_approval";
 
           if (requiresApproval) {
             const decision = await this.awaitApprovalForToolExecution(
@@ -741,6 +838,11 @@ export class AgentRuntime {
           usedTools.add(toolDesc.id);
           const res = await toolExecutor.execute(toolDesc.id, toolCallId, args);
           let content = res.error ? JSON.stringify({ error: res.error }) : res.output;
+
+          toolExecutionContext.provenanceSources.add("tool");
+          if (res.provenance) {
+            toolExecutionContext.provenanceSources.add(res.provenance.source);
+          }
 
           if (
             res.provenance &&
@@ -775,6 +877,28 @@ export class AgentRuntime {
     const prompt = policy
       ? `Approve execution of '${tool.id}' (risk=${tool.risk}, policy=${policy.decision})`
       : `Approve execution of '${tool.id}' (risk=${tool.risk})`;
+
+    const suggestedOverrides =
+      policy?.decision === "require_approval"
+        ? suggestPolicyOverridesForToolCall({
+            toolId: tool.id,
+            args,
+            agentId: context.agentId,
+            workspaceId: context.workspaceId,
+            home: this.home,
+          })
+        : [];
+
+    const matchTarget = computeToolMatchTarget(tool.id, args, { home: this.home });
+
+    const snapshot =
+      policy?.decision === "require_approval"
+        ? await this.policyBundleService.getOrCreateSnapshot({
+            agentId: context.agentId,
+            createdBy: "approval",
+          })
+        : undefined;
+
     const approval = await this.approvalDal.create({
       planId: context.planId,
       stepIndex,
@@ -786,6 +910,13 @@ export class AgentRuntime {
         tool_call_id: toolCallId,
         args,
         policy,
+        tool_match_target: matchTarget,
+        suggested_overrides: suggestedOverrides.length > 0 ? suggestedOverrides : undefined,
+        policy_snapshot_id: snapshot?.policySnapshotId,
+        policy_snapshot_hash: snapshot?.contentHash,
+        agent_id: context.agentId,
+        workspace_id: context.workspaceId,
+        provenance_sources: Array.from(context.provenanceSources),
         session_id: context.sessionId,
         channel: context.channel,
         thread_id: context.threadId,

@@ -45,7 +45,7 @@ describe("DiscoveryPipeline", () => {
   it("returns resolutions from capability memory strategy", async () => {
     const pipeline = new DiscoveryPipeline(new InMemoryConnectorCache(), {
       capabilityMemorySource: {
-        getCapabilityMemories: () => [makeRow()],
+        getCapabilityMemories: async (_agentId: string) => [makeRow()],
       },
     });
 
@@ -72,7 +72,7 @@ describe("DiscoveryPipeline", () => {
   it("merges results from both strategies", async () => {
     const pipeline = new DiscoveryPipeline(new InMemoryConnectorCache(), {
       capabilityMemorySource: {
-        getCapabilityMemories: () => [makeRow()],
+        getCapabilityMemories: async (_agentId: string) => [makeRow()],
       },
       mcpToolSource: {
         listTools: () => [
@@ -92,7 +92,7 @@ describe("DiscoveryPipeline", () => {
   it("caches results on cache hit", async () => {
     const pipeline = new DiscoveryPipeline(new InMemoryConnectorCache(), {
       capabilityMemorySource: {
-        getCapabilityMemories: () => [makeRow()],
+        getCapabilityMemories: async (_agentId: string) => [makeRow()],
       },
     });
 
@@ -108,7 +108,7 @@ describe("DiscoveryPipeline", () => {
     let callCount = 0;
     const pipeline = new DiscoveryPipeline(new InMemoryConnectorCache(), {
       capabilityMemorySource: {
-        getCapabilityMemories: () => {
+        getCapabilityMemories: async (_agentId: string) => {
           callCount++;
           return [];
         },
@@ -132,7 +132,7 @@ describe("DiscoveryPipeline", () => {
     }));
 
     const pipeline = new DiscoveryPipeline(new InMemoryConnectorCache(), {
-      capabilityMemorySource: { getCapabilityMemories: () => rows },
+      capabilityMemorySource: { getCapabilityMemories: async (_agentId: string) => rows },
       mcpToolSource: { listTools: () => tools },
     });
 
@@ -143,7 +143,7 @@ describe("DiscoveryPipeline", () => {
   it("assigns sequential ranks after merge", async () => {
     const pipeline = new DiscoveryPipeline(new InMemoryConnectorCache(), {
       capabilityMemorySource: {
-        getCapabilityMemories: () => [makeRow()],
+        getCapabilityMemories: async (_agentId: string) => [makeRow()],
       },
       mcpToolSource: {
         listTools: () => [

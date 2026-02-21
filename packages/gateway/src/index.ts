@@ -466,8 +466,12 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
 	          reason,
 	        });
 
-	        const status =
-	          result.kind === "not_found" ? "missing" : result.approval.status;
+		        const status =
+		          result.kind === "not_found"
+		            ? "missing"
+		            : result.kind === "invalid_request"
+		              ? "invalid_request"
+		              : result.approval.status;
 	        logger.info("approval.decided", {
 	          approval_id: approvalId,
 	          decision,
@@ -590,6 +594,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
         consumerId: instanceId,
         outboxDal,
         connectionManager,
+        logger,
       })
     : undefined;
   outboxPoller?.start();

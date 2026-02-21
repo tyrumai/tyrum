@@ -8,14 +8,24 @@ import type { MemoryDal } from "../modules/memory/dal.js";
 export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
   const memory = new Hono();
 
+  function resolveAgentId(req: { query: (name: string) => string | undefined; header: (name: string) => string | undefined }): string {
+    const fromQuery = req.query("agent_id")?.trim();
+    if (fromQuery) return fromQuery;
+    const fromHeader = req.header("x-tyrum-agent-id")?.trim();
+    if (fromHeader) return fromHeader;
+    return process.env["TYRUM_AGENT_ID"]?.trim() || "default";
+  }
+
   // --- Facts ---
 
   memory.get("/memory/facts", async (c) => {
-    const facts = await memoryDal.getFacts();
+    const agentId = resolveAgentId(c.req);
+    const facts = await memoryDal.getFacts(agentId);
     return c.json({ facts });
   });
 
   memory.post("/memory/facts", async (c) => {
+    const agentId = resolveAgentId(c.req);
     const body = (await c.req.json()) as {
       fact_key?: string;
       fact_value?: unknown;
@@ -45,6 +55,7 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
     }
 
     const id = await memoryDal.insertFact(
+      agentId,
       fact_key,
       fact_value,
       source,
@@ -57,11 +68,13 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
   // --- Episodic Events ---
 
   memory.get("/memory/events", async (c) => {
-    const events = await memoryDal.getEpisodicEvents();
+    const agentId = resolveAgentId(c.req);
+    const events = await memoryDal.getEpisodicEvents(agentId);
     return c.json({ events });
   });
 
   memory.post("/memory/events", async (c) => {
+    const agentId = resolveAgentId(c.req);
     const body = (await c.req.json()) as {
       event_id?: string;
       occurred_at?: string;
@@ -91,6 +104,7 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
     }
 
     const id = await memoryDal.insertEpisodicEvent(
+      agentId,
       event_id,
       occurred_at,
       channel,
@@ -103,12 +117,14 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
   // --- Capability Memories ---
 
   memory.get("/memory/capabilities", async (c) => {
+    const agentId = resolveAgentId(c.req);
     const capabilityType = c.req.query("capability_type");
-    const capabilities = await memoryDal.getCapabilityMemories(capabilityType);
+    const capabilities = await memoryDal.getCapabilityMemories(agentId, capabilityType);
     return c.json({ capabilities });
   });
 
   memory.post("/memory/capabilities", async (c) => {
+    const agentId = resolveAgentId(c.req);
     const body = (await c.req.json()) as {
       capability_type?: string;
       capability_identifier?: string;
@@ -147,6 +163,7 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
     }
 
     const result = await memoryDal.upsertCapabilityMemory(
+      agentId,
       capability_type,
       capability_identifier,
       executor_kind,

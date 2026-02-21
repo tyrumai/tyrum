@@ -7,7 +7,8 @@
  */
 
 /** Content origin categories. */
-export type ProvenanceTag = "user" | "email" | "web" | "tool" | "memory" | "semantic-memory";
+export type { ProvenanceTag } from "@tyrum/schemas";
+import type { ProvenanceTag } from "@tyrum/schemas";
 
 /** Content wrapped with provenance metadata. */
 export interface TaggedContent {
@@ -17,7 +18,7 @@ export interface TaggedContent {
 }
 
 /** Sources that are trusted by default (direct human input, local memory). */
-const TRUSTED_SOURCES = new Set<ProvenanceTag>(["user", "memory", "semantic-memory"]);
+const TRUSTED_SOURCES = new Set<ProvenanceTag>(["user", "system", "memory", "semantic-memory"]);
 
 /**
  * Wrap content with provenance metadata.
