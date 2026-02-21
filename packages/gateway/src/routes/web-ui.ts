@@ -41,8 +41,8 @@ const BASE_STYLE = `
   --text: #101827;
   --muted: #5a6475;
   --border: #ced8ea;
-  --primary: #0b69c8;
-  --primary-strong: #0a4f97;
+  --primary: #6366f1;
+  --primary-strong: #4f46e5;
   --danger: #b91c1c;
   --success: #0f766e;
   --shadow: 0 8px 24px rgba(16, 24, 39, 0.08);
