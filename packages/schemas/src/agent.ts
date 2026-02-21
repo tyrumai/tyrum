@@ -21,9 +21,19 @@ export const AgentToolConfig = z.object({
 });
 export type AgentToolConfig = z.infer<typeof AgentToolConfig>;
 
+export const TypingMode = z.enum(["never", "message", "thinking", "instant"]);
+export type TypingMode = z.infer<typeof TypingMode>;
+
+export const TypingConfig = z.object({
+  mode: TypingMode.default("message"),
+  refresh_interval_ms: z.number().int().min(0).max(30000).default(3000),
+});
+export type TypingConfig = z.infer<typeof TypingConfig>;
+
 export const AgentSessionConfig = z.object({
   ttl_days: z.number().int().min(1).max(365).default(30),
   max_turns: z.number().int().min(1).max(500).default(20),
+  typing: TypingConfig.default({ mode: "message", refresh_interval_ms: 3000 }),
 });
 export type AgentSessionConfig = z.infer<typeof AgentSessionConfig>;
 
@@ -37,7 +47,7 @@ export const AgentConfig = z.object({
   skills: AgentSkillConfig.default({ enabled: [] }),
   mcp: AgentMcpConfig.default({ enabled: [] }),
   tools: AgentToolConfig.default({ allow: [] }),
-  sessions: AgentSessionConfig.default({ ttl_days: 30, max_turns: 20 }),
+  sessions: AgentSessionConfig.default({ ttl_days: 30, max_turns: 20, typing: { mode: "message", refresh_interval_ms: 3000 } }),
   memory: AgentMemoryConfig.default({ markdown_enabled: true }),
 });
 export type AgentConfig = z.infer<typeof AgentConfig>;

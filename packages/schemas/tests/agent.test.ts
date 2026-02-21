@@ -5,6 +5,8 @@ import {
   SkillManifest,
   McpServerSpec,
   AgentTurnRequest,
+  TypingMode,
+  TypingConfig,
 } from "../src/index.js";
 
 describe("AgentConfig", () => {
@@ -21,7 +23,39 @@ describe("AgentConfig", () => {
     expect(parsed.tools.allow).toEqual([]);
     expect(parsed.sessions.ttl_days).toBe(30);
     expect(parsed.sessions.max_turns).toBe(20);
+    expect(parsed.sessions.typing.mode).toBe("message");
+    expect(parsed.sessions.typing.refresh_interval_ms).toBe(3000);
     expect(parsed.memory.markdown_enabled).toBe(true);
+  });
+});
+
+describe("TypingMode", () => {
+  it("accepts all four typing modes", () => {
+    for (const mode of ["never", "message", "thinking", "instant"] as const) {
+      expect(TypingMode.parse(mode)).toBe(mode);
+    }
+  });
+
+  it("rejects invalid typing mode", () => {
+    expect(TypingMode.safeParse("auto").success).toBe(false);
+  });
+});
+
+describe("TypingConfig", () => {
+  it("applies defaults", () => {
+    const parsed = TypingConfig.parse({});
+    expect(parsed.mode).toBe("message");
+    expect(parsed.refresh_interval_ms).toBe(3000);
+  });
+
+  it("accepts custom values", () => {
+    const parsed = TypingConfig.parse({ mode: "instant", refresh_interval_ms: 1000 });
+    expect(parsed.mode).toBe("instant");
+    expect(parsed.refresh_interval_ms).toBe(1000);
+  });
+
+  it("rejects out-of-range refresh interval", () => {
+    expect(TypingConfig.safeParse({ refresh_interval_ms: 50000 }).success).toBe(false);
   });
 });
 

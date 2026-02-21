@@ -188,6 +188,8 @@ export {
 } from "./desktop.js";
 
 export {
+  TypingMode,
+  TypingConfig,
   AgentModelConfig,
   AgentSkillConfig,
   AgentMcpConfig,
