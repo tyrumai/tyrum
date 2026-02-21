@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DedupeDal } from "../../src/modules/connector/dedupe-dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
+import type { SqlDb } from "../../src/statestore/types.js";
 
 describe("DedupeDal", () => {
   let db: SqliteDb | undefined;
@@ -36,13 +37,35 @@ describe("DedupeDal", () => {
     expect(result).toBe(false);
   });
 
-  it("record is idempotent (INSERT OR IGNORE)", async () => {
+  it("record is idempotent", async () => {
     const dal = createDal();
     await dal.record("msg-1", "telegram", 3_600_000);
     // Should not throw on duplicate insert
     await dal.record("msg-1", "telegram", 3_600_000);
     const result = await dal.isDuplicate("msg-1", "telegram");
     expect(result).toBe(true);
+  });
+
+  it("record uses ON CONFLICT DO NOTHING for Postgres compatibility", async () => {
+    const run = vi.fn(async () => ({ changes: 0 }));
+
+    const stubDb: SqlDb = {
+      kind: "postgres",
+      get: vi.fn(async () => undefined),
+      all: vi.fn(async () => []),
+      run,
+      exec: vi.fn(async () => {}),
+      transaction: vi.fn(async (fn) => fn(stubDb)),
+      close: vi.fn(async () => {}),
+    };
+
+    const dal = new DedupeDal(stubDb);
+    await dal.record("msg-1", "telegram", 3_600_000);
+
+    expect(run).toHaveBeenCalledTimes(1);
+    const [sql] = run.mock.calls[0]!;
+    expect(sql).toContain("ON CONFLICT DO NOTHING");
+    expect(sql).not.toContain("OR IGNORE");
   });
 
   it("cleanup removes expired records", async () => {

@@ -20,7 +20,9 @@ export class DedupeDal {
   ): Promise<void> {
     const expiresAt = new Date(Date.now() + ttlMs).toISOString();
     await this.db.run(
-      "INSERT OR IGNORE INTO inbound_dedupe (message_id, channel, expires_at) VALUES (?, ?, ?)",
+      `INSERT INTO inbound_dedupe (message_id, channel, expires_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT DO NOTHING`,
       [messageId, channel, expiresAt],
     );
   }
