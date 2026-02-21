@@ -89,6 +89,19 @@ describe("multi-agent isolation", () => {
     expect(row?.agent_id).toBe("default");
   });
 
+  it("agent_id column exists with default value on sessions", async () => {
+    db = openTestSqliteDb();
+    await db.run(
+      "INSERT INTO sessions (session_id, channel, thread_id) VALUES (?, ?, ?)",
+      ["telegram:dm-1", "telegram", "dm-1"],
+    );
+    const row = await db.get<{ agent_id: string }>(
+      "SELECT agent_id FROM sessions WHERE session_id = ?",
+      ["telegram:dm-1"],
+    );
+    expect(row?.agent_id).toBe("default");
+  });
+
   it("different agents can have separate facts", async () => {
     db = openTestSqliteDb();
     await db.run(
@@ -112,5 +125,23 @@ describe("multi-agent isolation", () => {
     );
     expect(agentBFacts).toHaveLength(1);
     expect(agentBFacts[0]?.fact_value).toBe("value-b");
+  });
+
+  it("different agents can have separate sessions", async () => {
+    db = openTestSqliteDb();
+    await db.run(
+      "INSERT INTO sessions (session_id, channel, thread_id, agent_id) VALUES (?, ?, ?, ?)",
+      ["telegram:dm-1", "telegram", "dm-1", "agent-a"],
+    );
+    await db.run(
+      "INSERT INTO sessions (session_id, channel, thread_id, agent_id) VALUES (?, ?, ?, ?)",
+      ["telegram:dm-1", "telegram", "dm-1", "agent-b"],
+    );
+
+    const rows = await db.all<{ agent_id: string }>(
+      "SELECT agent_id FROM sessions WHERE session_id = ? ORDER BY agent_id",
+      ["telegram:dm-1"],
+    );
+    expect(rows.map((r) => r.agent_id)).toEqual(["agent-a", "agent-b"]);
   });
 });

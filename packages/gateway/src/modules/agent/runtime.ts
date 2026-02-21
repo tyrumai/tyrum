@@ -34,6 +34,7 @@ import { EmbeddingPipeline } from "../memory/embedding-pipeline.js";
 import type { ApprovalNotifier } from "../approval/notifier.js";
 import type { ApprovalDal, ApprovalStatus } from "../approval/dal.js";
 import type { EventPublisher } from "../backplane/event-publisher.js";
+import { readBooleanEnv } from "../../env/boolean-env.js";
 
 const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_APPROVAL_WAIT_MS = 120_000;
@@ -586,11 +587,7 @@ export class AgentRuntime {
     );
 
     // Session compaction — LLM-based summarization of older turns
-    const compactionEnabled = (() => {
-      const raw = process.env["TYRUM_SESSION_COMPACTION"]?.trim().toLowerCase();
-      if (!raw) return true; // default on
-      return !["0", "false", "off", "no"].includes(raw);
-    })();
+    const compactionEnabled = readBooleanEnv("TYRUM_SESSION_COMPACTION", true);
 
     if (compactionEnabled && shouldCompact(updated.turns, ctx.config.sessions.compaction)) {
       try {

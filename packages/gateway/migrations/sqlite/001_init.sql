@@ -148,7 +148,8 @@ CREATE INDEX IF NOT EXISTS watchers_last_fired_at_ms_idx ON watchers (last_fired
 -- sessions
 --------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS sessions (
-  session_id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  agent_id TEXT NOT NULL DEFAULT 'default',
   channel TEXT NOT NULL,
   thread_id TEXT NOT NULL,
   summary TEXT NOT NULL DEFAULT '',
@@ -157,11 +158,13 @@ CREATE TABLE IF NOT EXISTS sessions (
   compacted_summary TEXT DEFAULT '',
   compaction_count INTEGER DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (session_id, agent_id)
 );
 
 CREATE INDEX IF NOT EXISTS sessions_updated_idx ON sessions (updated_at DESC);
 CREATE INDEX IF NOT EXISTS sessions_workspace_id_idx ON sessions (workspace_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_agent ON sessions (agent_id);
 
 --------------------------------------------------------------------------------
 -- approvals

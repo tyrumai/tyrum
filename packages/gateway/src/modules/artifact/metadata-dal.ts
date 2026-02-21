@@ -16,6 +16,7 @@ export interface ArtifactMetadataRow {
   sha256: string | null;
   uri: string;
   labels: string[];
+  agent_id: string;
   created_at: string;
   metadata: unknown | null;
 }
@@ -31,6 +32,7 @@ interface RawArtifactMetadataRow {
   sha256: string | null;
   uri: string;
   labels_json: string;
+  agent_id: string;
   created_at: string | Date;
   metadata_json: string | null;
 }
@@ -65,6 +67,7 @@ function toArtifactMetadataRow(raw: RawArtifactMetadataRow): ArtifactMetadataRow
     sha256: raw.sha256,
     uri: raw.uri,
     labels,
+    agent_id: raw.agent_id,
     created_at: normalizeTime(raw.created_at),
     metadata,
   };

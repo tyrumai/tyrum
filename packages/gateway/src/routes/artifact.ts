@@ -26,8 +26,7 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
 
     // Agent-id scoping: deny cross-agent access when header is present
     const requestAgentId = c.req.header("X-Tyrum-Agent-Id");
-    const metaAgentId = (meta as unknown as Record<string, unknown>)["agent_id"];
-    if (requestAgentId && metaAgentId && requestAgentId !== metaAgentId) {
+    if (requestAgentId && requestAgentId !== meta.agent_id) {
       return c.json({ error: "forbidden", message: "agent_id mismatch" }, 403);
     }
 
@@ -39,7 +38,8 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
 
     const wantBlob = c.req.query("content") === "true";
     if (!wantBlob) {
-      return c.json({ artifact: meta });
+      const { agent_id: _agentId, ...artifact } = meta;
+      return c.json({ artifact });
     }
 
     // Stream the artifact content
@@ -60,15 +60,22 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
   app.get("/artifacts", async (c) => {
     const runId = c.req.query("run_id");
     const stepId = c.req.query("step_id");
+    const requestAgentId = c.req.header("X-Tyrum-Agent-Id");
 
     if (runId) {
-      const artifacts = await deps.artifactMetadataDal.listByRun(runId);
-      return c.json({ artifacts });
+      const artifacts = requestAgentId
+        ? await deps.artifactMetadataDal.listByRun(runId, requestAgentId)
+        : await deps.artifactMetadataDal.listByRun(runId);
+      const publicArtifacts = artifacts.map(({ agent_id: _agentId, ...artifact }) => artifact);
+      return c.json({ artifacts: publicArtifacts });
     }
 
     if (stepId) {
-      const artifacts = await deps.artifactMetadataDal.listByStep(stepId);
-      return c.json({ artifacts });
+      const artifacts = requestAgentId
+        ? await deps.artifactMetadataDal.listByStep(stepId, requestAgentId)
+        : await deps.artifactMetadataDal.listByStep(stepId);
+      const publicArtifacts = artifacts.map(({ agent_id: _agentId, ...artifact }) => artifact);
+      return c.json({ artifacts: publicArtifacts });
     }
 
     return c.json({ error: "invalid_request", message: "run_id or step_id query parameter required" }, 400);

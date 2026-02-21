@@ -26,6 +26,33 @@ describe("SessionDal", () => {
     expect(second.turns).toEqual([]);
   });
 
+  it("isolates sessions by agent_id when multi-agent is enabled", async () => {
+    const prev = process.env["TYRUM_MULTI_AGENT"];
+    process.env["TYRUM_MULTI_AGENT"] = "1";
+    try {
+      const dal = createDal();
+      const a = await dal.getOrCreate("telegram", "dm-1", "agent-a");
+      const b = await dal.getOrCreate("telegram", "dm-1", "agent-b");
+
+      expect(a.session_id).toBe("telegram:dm-1");
+      expect(b.session_id).toBe("telegram:dm-1");
+      expect(a.agent_id).toBe("agent-a");
+      expect(b.agent_id).toBe("agent-b");
+
+      await dal.appendTurn(a.session_id, "u1", "a1", 20, "2026-02-17T00:00:00.000Z", "agent-a");
+      const fetchedA = await dal.getById(a.session_id, "agent-a");
+      const fetchedB = await dal.getById(b.session_id, "agent-b");
+      expect(fetchedA?.turns).toHaveLength(2);
+      expect(fetchedB?.turns).toHaveLength(0);
+    } finally {
+      if (prev === undefined) {
+        delete process.env["TYRUM_MULTI_AGENT"];
+      } else {
+        process.env["TYRUM_MULTI_AGENT"] = prev;
+      }
+    }
+  });
+
   it("stores bounded turn history", async () => {
     const dal = createDal();
     const session = await dal.getOrCreate("discord", "thread-42");

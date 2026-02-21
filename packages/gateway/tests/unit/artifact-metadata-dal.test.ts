@@ -5,9 +5,15 @@ import { ArtifactMetadataDal } from "../../src/modules/artifact/metadata-dal.js"
 
 describe("ArtifactMetadataDal", () => {
   let db: SqliteDb | undefined;
+  const originalEnv = process.env["TYRUM_MULTI_AGENT"];
 
   afterEach(async () => {
     if (db) { await db.close(); db = undefined; }
+    if (originalEnv === undefined) {
+      delete process.env["TYRUM_MULTI_AGENT"];
+    } else {
+      process.env["TYRUM_MULTI_AGENT"] = originalEnv;
+    }
   });
 
   it("insert and getById round-trip", async () => {
@@ -24,10 +30,28 @@ describe("ArtifactMetadataDal", () => {
     expect(row.artifact_id).toBe("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
     expect(row.kind).toBe("screenshot");
     expect(row.labels).toEqual(["test"]);
+    expect(row.agent_id).toBe("default");
 
     const fetched = await dal.getById("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
     expect(fetched).toBeDefined();
     expect(fetched!.mime_type).toBe("image/png");
+    expect(fetched!.agent_id).toBe("default");
+  });
+
+  it("respects agent_id when multi-agent is enabled", async () => {
+    process.env["TYRUM_MULTI_AGENT"] = "1";
+    db = openTestSqliteDb();
+    const dal = new ArtifactMetadataDal(db);
+    const row = await dal.insert({
+      artifactId: "a-agent",
+      kind: "log",
+      uri: "artifact://a0000000-0000-0000-0000-000000000000",
+      agentId: "agent-a",
+    });
+    expect(row.agent_id).toBe("agent-a");
+
+    const fetched = await dal.getById("a-agent");
+    expect(fetched?.agent_id).toBe("agent-a");
   });
 
   it("getById returns undefined for missing", async () => {

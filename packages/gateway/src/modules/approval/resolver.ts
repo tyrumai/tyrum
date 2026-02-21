@@ -24,8 +24,15 @@ export class ApprovalResolver {
 
   /** Start listening for approval:resolved events to trigger run resume. */
   start(): void {
-    this.deps.eventBus.on("approval:resolved", async (event) => {
-      await this.handleResolved(event);
+    this.deps.eventBus.on("approval:resolved", (event) => {
+      void this.handleResolved(event).catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        // Avoid crashing the process on unhandled promise rejections.
+        console.error("approval.resolver.handleResolved_failed", {
+          approval_id: event.approvalId,
+          error: message,
+        });
+      });
     });
   }
 

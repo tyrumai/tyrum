@@ -1,4 +1,5 @@
 import type { SqlDb } from "../../statestore/types.js";
+import { resolveAgentId } from "./agent-scope.js";
 
 export interface SessionMessage {
   role: "user" | "assistant";
@@ -8,6 +9,7 @@ export interface SessionMessage {
 
 export interface SessionRow {
   session_id: string;
+  agent_id: string;
   channel: string;
   thread_id: string;
   summary: string;
@@ -20,6 +22,7 @@ export interface SessionRow {
 
 interface RawSessionRow {
   session_id: string;
+  agent_id: string;
   channel: string;
   thread_id: string;
   summary: string;
@@ -66,6 +69,7 @@ function toSessionRow(raw: RawSessionRow): SessionRow {
     raw.updated_at instanceof Date ? raw.updated_at.toISOString() : raw.updated_at;
   return {
     session_id: raw.session_id,
+    agent_id: raw.agent_id,
     channel: raw.channel,
     thread_id: raw.thread_id,
     summary: raw.summary,
@@ -90,25 +94,26 @@ export function formatLegacySessionId(channel: string, threadId: string): string
 export class SessionDal {
   constructor(private readonly db: SqlDb) {}
 
-  async getOrCreate(channel: string, threadId: string): Promise<SessionRow> {
+  async getOrCreate(channel: string, threadId: string, agentId?: string): Promise<SessionRow> {
+    const resolvedAgentId = resolveAgentId(agentId);
     const sessionId = formatSessionId(channel, threadId);
-    const existing = await this.getById(sessionId);
+    const existing = await this.getById(sessionId, resolvedAgentId);
     if (existing) {
       return existing;
     }
 
     const legacyId = formatLegacySessionId(channel, threadId);
     if (legacyId !== sessionId) {
-      const legacy = await this.getById(legacyId);
+      const legacy = await this.getById(legacyId, resolvedAgentId);
       if (legacy) {
-        const conflict = await this.getById(sessionId);
+        const conflict = await this.getById(sessionId, resolvedAgentId);
         if (!conflict) {
           const nowIso = new Date().toISOString();
           await this.db.run(
-            "UPDATE sessions SET session_id = ?, updated_at = ? WHERE session_id = ?",
-            [sessionId, nowIso, legacyId],
+            "UPDATE sessions SET session_id = ?, updated_at = ? WHERE session_id = ? AND agent_id = ?",
+            [sessionId, nowIso, legacyId, resolvedAgentId],
           );
-          const migrated = await this.getById(sessionId);
+          const migrated = await this.getById(sessionId, resolvedAgentId);
           if (migrated) {
             return migrated;
           }
@@ -119,22 +124,23 @@ export class SessionDal {
 
     const nowIso = new Date().toISOString();
     await this.db.run(
-      `INSERT INTO sessions (session_id, channel, thread_id, summary, turns_json, created_at, updated_at)
-       VALUES (?, ?, ?, '', '[]', ?, ?)`,
-      [sessionId, channel, threadId, nowIso, nowIso],
+      `INSERT INTO sessions (session_id, agent_id, channel, thread_id, summary, turns_json, created_at, updated_at)
+       VALUES (?, ?, ?, ?, '', '[]', ?, ?)`,
+      [sessionId, resolvedAgentId, channel, threadId, nowIso, nowIso],
     );
 
-    const created = await this.getById(sessionId);
+    const created = await this.getById(sessionId, resolvedAgentId);
     if (!created) {
       throw new Error(`failed to create session '${sessionId}'`);
     }
     return created;
   }
 
-  async getById(sessionId: string): Promise<SessionRow | undefined> {
+  async getById(sessionId: string, agentId?: string): Promise<SessionRow | undefined> {
+    const resolvedAgentId = resolveAgentId(agentId);
     const row = await this.db.get<RawSessionRow>(
-      "SELECT * FROM sessions WHERE session_id = ?",
-      [sessionId],
+      "SELECT * FROM sessions WHERE session_id = ? AND agent_id = ?",
+      [sessionId, resolvedAgentId],
     );
     if (!row) {
       return undefined;
@@ -148,8 +154,10 @@ export class SessionDal {
     assistantMessage: string,
     maxTurns: number,
     timestamp: string,
+    agentId?: string,
   ): Promise<SessionRow> {
-    const session = await this.getById(sessionId);
+    const resolvedAgentId = resolveAgentId(agentId);
+    const session = await this.getById(sessionId, resolvedAgentId);
     if (!session) {
       throw new Error(`session '${sessionId}' not found`);
     }
@@ -173,24 +181,25 @@ export class SessionDal {
     await this.db.run(
       `UPDATE sessions
        SET turns_json = ?, updated_at = ?
-       WHERE session_id = ?`,
-      [JSON.stringify(bounded), nowIso, sessionId],
+       WHERE session_id = ? AND agent_id = ?`,
+      [JSON.stringify(bounded), nowIso, sessionId, resolvedAgentId],
     );
 
-    const updated = await this.getById(sessionId);
+    const updated = await this.getById(sessionId, resolvedAgentId);
     if (!updated) {
       throw new Error(`session '${sessionId}' missing after update`);
     }
     return updated;
   }
 
-  async updateSummary(sessionId: string, summary: string): Promise<void> {
+  async updateSummary(sessionId: string, summary: string, agentId?: string): Promise<void> {
+    const resolvedAgentId = resolveAgentId(agentId);
     const nowIso = new Date().toISOString();
     await this.db.run(
       `UPDATE sessions
        SET summary = ?, updated_at = ?
-       WHERE session_id = ?`,
-      [summary, nowIso, sessionId],
+       WHERE session_id = ? AND agent_id = ?`,
+      [summary, nowIso, sessionId, resolvedAgentId],
     );
   }
 
@@ -198,13 +207,15 @@ export class SessionDal {
     sessionId: string,
     compactedSummary: string,
     remainingTurns: SessionMessage[],
+    agentId?: string,
   ): Promise<void> {
+    const resolvedAgentId = resolveAgentId(agentId);
     const nowIso = new Date().toISOString();
     await this.db.run(
       `UPDATE sessions
        SET compacted_summary = ?, turns_json = ?, compaction_count = compaction_count + 1, updated_at = ?
-       WHERE session_id = ?`,
-      [compactedSummary, JSON.stringify(remainingTurns), nowIso, sessionId],
+       WHERE session_id = ? AND agent_id = ?`,
+      [compactedSummary, JSON.stringify(remainingTurns), nowIso, sessionId, resolvedAgentId],
     );
   }
 

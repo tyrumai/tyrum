@@ -4,13 +4,12 @@
  */
 
 import type { EventPublisher } from "../backplane/event-publisher.js";
+import { readBooleanEnv } from "../../env/boolean-env.js";
 
 const DEFAULT_AGENT_ID = "default";
 
 export function isMultiAgentEnabled(): boolean {
-  const raw = process.env["TYRUM_MULTI_AGENT"]?.trim().toLowerCase();
-  if (!raw) return false;
-  return ["1", "true", "on", "yes"].includes(raw);
+  return readBooleanEnv("TYRUM_MULTI_AGENT", false);
 }
 
 export function resolveAgentId(agentId?: string): string {
