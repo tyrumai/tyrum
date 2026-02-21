@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Sidebar } from "./Sidebar.js";
+import { colors, fonts } from "../theme.js";
 
 interface LayoutProps {
   currentPage: string;
@@ -10,9 +11,9 @@ interface LayoutProps {
 const containerStyle: React.CSSProperties = {
   display: "flex",
   height: "100%",
-  fontFamily: "system-ui, -apple-system, sans-serif",
-  background: "#f5f5f7",
-  color: "#1a1a2e",
+  fontFamily: fonts.sans,
+  background: colors.bg,
+  color: colors.fg,
 };
 
 const mainStyle: React.CSSProperties = {

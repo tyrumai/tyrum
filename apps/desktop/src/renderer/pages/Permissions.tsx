@@ -6,6 +6,7 @@ import {
   type CapFlags,
   type Profile,
 } from "../lib/permission-profile.js";
+import { colors, heading, card, sectionTitle, btn as btnFn, help, warn, toggleRow, toggleLabel, textarea, statusBadge, label as themeLabel } from "../theme.js";
 
 const PROFILES: { id: Profile; label: string; description: string }[] = [
   {
@@ -28,119 +29,19 @@ const PROFILES: { id: Profile; label: string; description: string }[] = [
   },
 ];
 
-const cardStyle: React.CSSProperties = {
-  background: "#ffffff",
-  borderRadius: 8,
-  padding: 20,
-  marginBottom: 16,
-  boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
-};
-
-const headingStyle: React.CSSProperties = {
-  fontSize: 22,
-  fontWeight: 700,
-  marginBottom: 20,
-};
-
-const sectionTitle: React.CSSProperties = {
-  fontSize: 15,
-  fontWeight: 600,
-  marginBottom: 12,
-  color: "#374151",
-};
-
-const radioLabelStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "flex-start",
-  gap: 10,
-  padding: "10px 12px",
-  borderRadius: 6,
-  cursor: "pointer",
-  marginBottom: 4,
-};
-
 function radioLabelActiveStyle(active: boolean): React.CSSProperties {
   return {
-    ...radioLabelStyle,
-    background: active ? "#eef2ff" : "transparent",
-    border: active ? "1px solid #c7d2fe" : "1px solid transparent",
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 10,
+    padding: "10px 12px",
+    borderRadius: 6,
+    cursor: "pointer",
+    marginBottom: 4,
+    background: active ? colors.primaryDim : "transparent",
+    border: active ? `1px solid ${colors.primary}` : "1px solid transparent",
   };
 }
-
-const descStyle: React.CSSProperties = {
-  fontSize: 12,
-  color: "#6b7280",
-  lineHeight: 1.4,
-  marginTop: 2,
-};
-
-const toggleRowStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  padding: "8px 0",
-  borderBottom: "1px solid #f3f4f6",
-};
-
-const toggleLabelStyle: React.CSSProperties = {
-  fontSize: 14,
-  color: "#374151",
-};
-
-const textareaStyle: React.CSSProperties = {
-  width: "100%",
-  minHeight: 80,
-  borderRadius: 6,
-  border: "1px solid #d1d5db",
-  padding: 8,
-  fontSize: 13,
-  fontFamily: "monospace",
-  resize: "vertical",
-  boxSizing: "border-box",
-  marginTop: 4,
-};
-
-const labelStyle: React.CSSProperties = {
-  fontSize: 13,
-  fontWeight: 600,
-  color: "#374151",
-  marginBottom: 4,
-  marginTop: 12,
-};
-
-const btnStyle: React.CSSProperties = {
-  padding: "8px 20px",
-  borderRadius: 6,
-  border: "none",
-  fontSize: 14,
-  fontWeight: 600,
-  cursor: "pointer",
-  background: "#6c63ff",
-  color: "#fff",
-  marginTop: 16,
-};
-
-const statusBadgeStyle: React.CSSProperties = {
-  display: "inline-block",
-  fontSize: 12,
-  fontWeight: 700,
-  borderRadius: 999,
-  padding: "3px 10px",
-  marginLeft: 8,
-};
-
-const helpStyle: React.CSSProperties = {
-  fontSize: 12,
-  color: "#6b7280",
-  lineHeight: 1.5,
-  marginTop: 8,
-};
-
-const warningStyle: React.CSSProperties = {
-  fontSize: 12,
-  color: "#b91c1c",
-  marginTop: 8,
-};
 
 interface CliConfig {
   allowedCommands: string[];
@@ -230,9 +131,9 @@ export function Permissions() {
 
   return (
     <div>
-      <h1 style={headingStyle}>Permissions</h1>
+      <h1 style={heading}>Permissions</h1>
 
-      <div style={cardStyle}>
+      <div style={card}>
         <div style={sectionTitle}>Security Profile</div>
         {PROFILES.map((p) => (
           <label key={p.id} style={radioLabelActiveStyle(profile === p.id)}>
@@ -246,15 +147,15 @@ export function Permissions() {
             />
             <div>
               <div style={{ fontWeight: 600, fontSize: 14 }}>{p.label}</div>
-              <div style={descStyle}>{p.description}</div>
+              <div style={{ fontSize: 12, color: colors.fgMuted, lineHeight: 1.4, marginTop: 2 }}>{p.description}</div>
             </div>
           </label>
         ))}
       </div>
 
-      <div style={cardStyle}>
+      <div style={card}>
         <div style={sectionTitle}>Capabilities</div>
-        <div style={helpStyle}>
+        <div style={help}>
           Switching profile applies recommended capability defaults for that
           profile. You can still adjust these before saving.
         </div>
@@ -266,8 +167,8 @@ export function Permissions() {
             ["http", "HTTP (network requests)"],
           ] as const
         ).map(([key, label]) => (
-          <div key={key} style={toggleRowStyle}>
-            <span style={toggleLabelStyle}>{label}</span>
+          <div key={key} style={toggleRow}>
+            <span style={toggleLabel}>{label}</span>
             <input
               type="checkbox"
               checked={capabilities[key]}
@@ -277,23 +178,23 @@ export function Permissions() {
         ))}
       </div>
 
-      <div style={cardStyle}>
+      <div style={card}>
         <div style={sectionTitle}>CLI Allowlist</div>
-        <div style={helpStyle}>
+        <div style={help}>
           Enforcement:
           <span
             style={{
-              ...statusBadgeStyle,
-              background: cliAllowlistActive ? "#fee2e2" : "#dcfce7",
-              color: cliAllowlistActive ? "#b91c1c" : "#166534",
+              ...statusBadge,
+              background: cliAllowlistActive ? "rgba(239,68,68,0.15)" : "rgba(34,197,94,0.15)",
+              color: cliAllowlistActive ? colors.error : colors.success,
             }}
           >
             {cliAllowlistActive ? "active (default deny)" : "inactive (default allow)"}
           </span>
         </div>
-        <div style={labelStyle}>Allowed Commands (one per line)</div>
+        <div style={{ ...themeLabel, marginBottom: 4, marginTop: 12 }}>Allowed Commands (one per line)</div>
         <textarea
-          style={textareaStyle}
+          style={textarea}
           value={cli.allowedCommands.join("\n")}
           disabled={!cliAllowlistActive}
           onChange={(e) =>
@@ -304,7 +205,7 @@ export function Permissions() {
           }
           placeholder="git status&#10;node --version&#10;*"
         />
-        <div style={helpStyle}>
+        <div style={help}>
           <div>- Use one rule per line.</div>
           <div>- `*` allows all commands.</div>
           <div>
@@ -314,13 +215,13 @@ export function Permissions() {
           <div>- A bare command (for example `git`) allows all its subcommands.</div>
         </div>
         {cliAllowlistActive && cli.allowedCommands.length === 0 && (
-          <div style={warningStyle}>
+          <div style={warn}>
             CLI allowlist is active and empty, so command execution is default deny.
           </div>
         )}
-        <div style={labelStyle}>Allowed Working Directories (one per line)</div>
+        <div style={{ ...themeLabel, marginBottom: 4, marginTop: 12 }}>Allowed Working Directories (one per line)</div>
         <textarea
-          style={textareaStyle}
+          style={textarea}
           value={cli.allowedWorkingDirs.join("\n")}
           disabled={!cliAllowlistActive}
           onChange={(e) =>
@@ -331,30 +232,30 @@ export function Permissions() {
           }
           placeholder="/home/user/projects&#10;*"
         />
-        <div style={helpStyle}>
+        <div style={help}>
           <div>
             - `*` allows any working directory when CLI allowlist enforcement is active.
           </div>
         </div>
       </div>
 
-      <div style={cardStyle}>
+      <div style={card}>
         <div style={sectionTitle}>Web / Playwright</div>
-        <div style={helpStyle}>
+        <div style={help}>
           Enforcement:
           <span
             style={{
-              ...statusBadgeStyle,
-              background: webAllowlistActive ? "#fee2e2" : "#dcfce7",
-              color: webAllowlistActive ? "#b91c1c" : "#166534",
+              ...statusBadge,
+              background: webAllowlistActive ? "rgba(239,68,68,0.15)" : "rgba(34,197,94,0.15)",
+              color: webAllowlistActive ? colors.error : colors.success,
             }}
           >
             {webAllowlistActive ? "active (default deny)" : "inactive (default allow)"}
           </span>
         </div>
-        <div style={labelStyle}>Allowed Domains (one per line)</div>
+        <div style={{ ...themeLabel, marginBottom: 4, marginTop: 12 }}>Allowed Domains (one per line)</div>
         <textarea
-          style={textareaStyle}
+          style={textarea}
           value={web.allowedDomains.join("\n")}
           disabled={!webAllowlistActive}
           onChange={(e) =>
@@ -365,18 +266,18 @@ export function Permissions() {
           }
           placeholder="example.com&#10;docs.example.com&#10;*"
         />
-        <div style={helpStyle}>
+        <div style={help}>
           <div>- Use one domain per line.</div>
           <div>- Subdomains are allowed automatically.</div>
           <div>- `*` allows all domains.</div>
         </div>
         {webAllowlistActive && web.allowedDomains.length === 0 && (
-          <div style={warningStyle}>
+          <div style={warn}>
             Domain allowlist is active and empty, so web navigation is default deny.
           </div>
         )}
-        <div style={toggleRowStyle}>
-          <span style={toggleLabelStyle}>Headless mode</span>
+        <div style={toggleRow}>
+          <span style={toggleLabel}>Headless mode</span>
           <input
             type="checkbox"
             checked={web.headless}
@@ -387,10 +288,10 @@ export function Permissions() {
         </div>
       </div>
 
-      <button style={btnStyle} onClick={save}>
+      <button style={{ ...btnFn("primary"), marginTop: 16 }} onClick={save}>
         {saved ? "Saved!" : "Save Permissions"}
       </button>
-      {saveError && <div style={warningStyle}>Save failed: {saveError}</div>}
+      {saveError && <div style={warn}>Save failed: {saveError}</div>}
     </div>
   );
 }

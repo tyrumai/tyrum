@@ -66,6 +66,10 @@ const config: Config = {
         },
       ],
     },
+    colorMode: {
+      defaultMode: "dark",
+      respectPrefersColorScheme: true,
+    },
     mermaid: {
       theme: { light: "neutral", dark: "dark" },
     },

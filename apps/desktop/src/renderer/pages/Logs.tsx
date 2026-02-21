@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { colors, fonts, heading, tabRow, tab } from "../theme.js";
 
 type LogTab = "gateway" | "node";
 
@@ -13,45 +14,17 @@ interface LogEntry {
 const MAX_ENTRIES = 500;
 let nextId = 0;
 
-const headingStyle: React.CSSProperties = {
-  fontSize: 22,
-  fontWeight: 700,
-  marginBottom: 20,
-};
-
-const tabRowStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 0,
-  marginBottom: 16,
-  borderBottom: "2px solid #e5e7eb",
-};
-
-function tabStyle(active: boolean): React.CSSProperties {
-  return {
-    padding: "10px 20px",
-    cursor: "pointer",
-    fontSize: 14,
-    fontWeight: active ? 600 : 400,
-    color: active ? "#6c63ff" : "#6b7280",
-    background: "none",
-    border: "none",
-    borderBottomStyle: "solid" as const,
-    borderBottomWidth: 2,
-    borderBottomColor: active ? "#6c63ff" : "transparent",
-    marginBottom: -2,
-  };
-}
-
 const logContainerStyle: React.CSSProperties = {
-  background: "#1a1a2e",
+  background: colors.bgSubtle,
   borderRadius: 8,
   padding: 12,
   minHeight: 400,
   maxHeight: "calc(100vh - 200px)",
   overflowY: "auto",
-  fontFamily: "monospace",
+  fontFamily: fonts.mono,
   fontSize: 12,
   lineHeight: 1.6,
+  border: `1px solid ${colors.border}`,
 };
 
 const LEVEL_COLORS: Record<string, string> = {
@@ -63,7 +36,7 @@ const LEVEL_COLORS: Record<string, string> = {
 
 function entryStyle(level: string): React.CSSProperties {
   return {
-    color: LEVEL_COLORS[level] ?? "#e0e0e0",
+    color: LEVEL_COLORS[level] ?? colors.fg,
     whiteSpace: "pre-wrap" as const,
     wordBreak: "break-all" as const,
     padding: "1px 0",
@@ -71,12 +44,12 @@ function entryStyle(level: string): React.CSSProperties {
 }
 
 const timestampStyle: React.CSSProperties = {
-  color: "#6b7280",
+  color: colors.fgMuted,
   marginRight: 8,
 };
 
 const levelStyle = (level: string): React.CSSProperties => ({
-  color: LEVEL_COLORS[level] ?? "#e0e0e0",
+  color: LEVEL_COLORS[level] ?? colors.fg,
   fontWeight: 700,
   marginRight: 8,
   textTransform: "uppercase" as const,
@@ -85,7 +58,7 @@ const levelStyle = (level: string): React.CSSProperties => ({
 });
 
 const emptyStyle: React.CSSProperties = {
-  color: "#6b7280",
+  color: colors.fgMuted,
   textAlign: "center" as const,
   padding: 40,
   fontSize: 14,
@@ -94,12 +67,12 @@ const emptyStyle: React.CSSProperties = {
 const clearBtnStyle: React.CSSProperties = {
   padding: "6px 16px",
   borderRadius: 6,
-  border: "1px solid #d1d5db",
+  border: `1px solid ${colors.border}`,
   fontSize: 13,
   fontWeight: 500,
   cursor: "pointer",
-  background: "#ffffff",
-  color: "#374151",
+  background: "transparent",
+  color: colors.fg,
   marginLeft: "auto",
 };
 
@@ -162,21 +135,21 @@ export function Logs() {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
-        <h1 style={{ ...headingStyle, marginBottom: 0 }}>Logs</h1>
+        <h1 style={{ ...heading, marginBottom: 0 }}>Logs</h1>
         <button style={clearBtnStyle} onClick={clearLogs}>
           Clear
         </button>
       </div>
 
-      <div style={tabRowStyle}>
+      <div style={tabRow}>
         <button
-          style={tabStyle(tab === "gateway")}
+          style={tab(tab === "gateway")}
           onClick={() => setTab("gateway")}
         >
           Gateway
         </button>
         <button
-          style={tabStyle(tab === "node")}
+          style={tab(tab === "node")}
           onClick={() => setTab("node")}
         >
           Node
