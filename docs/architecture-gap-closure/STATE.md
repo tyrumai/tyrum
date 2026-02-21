@@ -1,7 +1,7 @@
 # Architecture Gap Closure — State
 
-**Last updated**: 2026-02-21T12:30:00Z
-**Git HEAD**: 4a0c78f (feat/gap-closure-p0)
+**Last updated**: 2026-02-21T12:40:00Z
+**Git HEAD**: eb23aa3 (feat/gap-closure-p0)
 
 ## Docs Ingested (40 files)
 
@@ -30,9 +30,9 @@ docs/architecture/system-prompt.md, docs/architecture/tools.md
 
 | Status | Count |
 |--------|-------|
-| Implemented | 122 |
-| Partially Implemented | 31 |
-| Missing | 4 |
+| Implemented | 127 |
+| Partially Implemented | 28 |
+| Missing | 2 |
 | **Total** | **157** |
 
 ## Active Backlog (ordered by priority)
@@ -60,6 +60,11 @@ docs/architecture/system-prompt.md, docs/architecture/tools.md
 - [x] PLAN-r6-concurrency: Execution engine concurrency limits (maxConcurrentRuns) **DONE run 6**
 - [x] PLAN-r6-overrides: Policy overrides (table, DAL, wildcard, bundle eval, routes) **DONE run 6**
 - [x] PLAN-r6-authagent: Auth profiles agent_id scoping (migration 012 + DAL) **DONE run 6**
+- [x] PLAN-r7-artaudit: Artifact fetch audit events (event kind + emission) **DONE run 7**
+- [x] PLAN-r7-memflush: Pre-compaction memory flush hook **DONE run 7**
+- [x] PLAN-r7-always: Approve-always override creation from approval route **DONE run 7**
+- [x] PLAN-r7-overrideevt: Override audit events (create + revoke) **DONE run 7**
+- [x] PLAN-r7-expiry: Approval expiry background daemon **DONE run 7**
 
 ## Open Questions / Blockers
 
@@ -83,7 +88,7 @@ docs/architecture/system-prompt.md, docs/architecture/tools.md
   - `TYRUM_PLUGINS` (default OFF, opt-in)
   - `TYRUM_SPA_UI` (default OFF, opt-in)
 - No database migration rollback needed (all additive ALTER TABLE + CREATE TABLE)
-- Tests: 1396 pass, 0 fail (1297 baseline → 1309 run 1 → 1332 run 2 → 1358 run 3 → 1362 run 4 → 1374 run 5 → 1396 run 6)
+- Tests: 1403 pass, 0 fail (1297 baseline → 1309 run 1 → 1332 run 2 → 1358 run 3 → 1362 run 4 → 1374 run 5 → 1396 run 6 → 1403 run 7)
 - Typecheck: Only pre-existing errors (engine.ts, runner.ts, secret.ts, policy-v2.ts, catalog-service.ts)
 - Web-UI typecheck: 0 errors; Vite build: 66 modules, 269 kB JS + 4.6 kB CSS
 
@@ -135,3 +140,12 @@ docs/architecture/system-prompt.md, docs/architecture/tools.md
 | 4a0c78f | Execution engine concurrency limits (maxConcurrentRuns) | 3 |
 | 4a0c78f | Policy overrides (table, DAL, wildcard, bundle eval, routes) | 16 |
 | 4a0c78f | Auth profiles agent_id scoping (migration 012 + DAL) | 3 |
+
+### Run 7
+| Commit | Feature | Tests Added |
+|--------|---------|-------------|
+| eb23aa3 | Artifact fetch audit events | 3 |
+| eb23aa3 | Pre-compaction memory flush hook | 1 |
+| eb23aa3 | Approve-always override creation | 0 |
+| eb23aa3 | Override audit events (create + revoke) | 0 |
+| eb23aa3 | Approval expiry background daemon | 3 |

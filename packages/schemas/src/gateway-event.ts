@@ -24,6 +24,9 @@ export const GatewayEventKind = z.enum([
   "presence.online",
   "presence.offline",
   "watcher.fired",
+  "artifact.fetched",
+  "policy_override.created",
+  "policy_override.revoked",
 ]);
 export type GatewayEventKind = z.infer<typeof GatewayEventKind>;
 

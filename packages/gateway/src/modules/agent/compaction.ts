@@ -17,6 +17,8 @@ export interface CompactSessionOpts {
     system: string;
     prompt: string;
   }) => Promise<{ text: string }>;
+  /** Optional pre-compaction hook to flush pending memory writes. */
+  flushMemory?: () => Promise<void>;
 }
 
 export interface CompactSessionResult {
@@ -66,6 +68,11 @@ export async function compactSession(
   opts: CompactSessionOpts,
 ): Promise<CompactSessionResult> {
   const { turns, previousSummary, config, generateFn } = opts;
+
+  // Flush pending memory writes before compacting so no data is lost.
+  if (opts.flushMemory) {
+    await opts.flushMemory();
+  }
 
   const { recentTurns, prompt } = buildCompactionPrompt(
     turns,

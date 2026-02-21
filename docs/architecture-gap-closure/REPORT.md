@@ -9,7 +9,7 @@
 - **Constraints**: pnpm monorepo, strict ESM TypeScript, Node 24, SQLite+Postgres dual target.
 - **Plan**: Run 1 (Ed25519 + secret policy), Run 2 (conditions, context reports, snapshot, queue overflow, typing modes), Run 3 (JSON Schema, model catalog, compaction, plugin runtime, SPA scaffold).
 - **Risks**: Feature flag misuse; database migration ordering; type-level regressions; external API compatibility (models.dev).
-- **Results**: All 16 PLAN items closed + 6 verification-driven gap closures in run 6, 83 new tests across 6 runs, 1396 total tests passing (up from 1297 baseline). Run 4: SPA page migration (+4 tests → 1362). Run 5: snapshot import, cost tracking, SPA panels, WS approval events (+12 tests → 1374). Run 6: Ed25519 wiring, policy overrides, EventConsumer dedupe, connector policy gate, concurrency limits, auth profiles agent_id (+22 tests → 1396).
+- **Results**: All 16 PLAN items closed + 11 verification-driven gap closures in runs 6-7, 106 new tests across 7 runs, 1403 total tests passing (up from 1297 baseline). Run 4: SPA page migration (+4 tests → 1362). Run 5: snapshot import, cost tracking, SPA panels, WS approval events (+12 tests → 1374). Run 6: Ed25519 wiring, policy overrides, EventConsumer dedupe, connector policy gate, concurrency limits, auth profiles agent_id (+22 tests → 1396). Run 7: artifact fetch audit, pre-compaction flush, approve-always overrides, override audit events, approval expiry daemon (+7 tests → 1403).
 
 ## 2. Docs Ingested
 
@@ -173,9 +173,9 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 
 | Status | Count |
 |--------|-------|
-| Implemented | 122 |
-| Partially Implemented | 31 |
-| Missing | 4 |
+| Implemented | 127 |
+| Partially Implemented | 28 |
+| Missing | 2 |
 | **Total** | **157** |
 
 ## 6. Traceability Matrix
@@ -255,8 +255,8 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 | ARI-1db5f9cc | Durable approval records | data | Implemented | `approvals` table + DAL |
 | ARI-3abf93d6 | Atomic approval resolution | data | Implemented | Single UPDATE WHERE status='pending' |
 | ARI-051ac325 | Idempotent resolution | design | Implemented | Atomic state transition prevents double-submit |
-| ARI-528a1a0e | Expired → denial | design | Partial | Expiry column exists; automatic expiry daemon not implemented |
-| ARI-f9b002d7 | Approve-once/approve-always/reject | design | Partial | Basic approve/deny; no standing policy override creation |
+| ARI-528a1a0e | Expired → denial | design | Implemented | `ApprovalExpiryDaemon` runs periodic `expireStale()` (30s default); wired in `index.ts` for edge role |
+| ARI-f9b002d7 | Approve-once/approve-always/reject | design | Implemented | `routes/approval.ts` accepts `mode: "always"` + `agent_id/tool_id/pattern` to create standing `PolicyOverrideDal` override on approval |
 | ARI-52282815 | Suggested overrides | design | Implemented | `PolicyOverrideDal` CRUD; `ApprovalResolveRequest` has `mode: once|always`; `bundle.ts` evaluates overrides |
 | ARI-5f8539ab | Approval request shape (impact, traceability) | interface | Partial | Has core fields; missing estimated_cost, items_preview, suggested_overrides |
 | ARI-ca165747 | Resume without re-running | design | Implemented | `approval/resolver.ts` + workflow resume logic |
@@ -283,7 +283,7 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 | ARI-b482cbd0 | Override evaluation order | security | Implemented | Bundle evaluate order |
 | ARI-e32f4e6d | Override durable record | data | Implemented | `policy_overrides` table (migration 012); `PolicyOverrideDal` with create/revoke/expire/list |
 | ARI-5a942bf2 | Wildcard grammar | design | Implemented | `policy/wildcard.ts` `matchesWildcard()` with `*` (zero+) and `?` (one) grammar; used in `bundle.ts` override evaluation |
-| ARI-524b557b | Override audit events | ops | Partial | policy_override.created event type exists in schema |
+| ARI-524b557b | Override audit events | ops | Implemented | `policy_override.created` and `policy_override.revoked` events in `GatewayEventKind`; emitted via `eventPublisher` in `routes/policy-override.ts` |
 
 ### Secrets
 
@@ -354,7 +354,7 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 | ARI-ba71388d | Fetched through gateway only | security | Implemented | `routes/artifact.ts` GET /artifacts/:id |
 | ARI-7265e9ce | Authorization on fetch | security | Partial | Auth middleware; no per-artifact policy check |
 | ARI-83a27ca2 | Signed URLs after auth | security | Partial | S3 store exists; no signed URL generation |
-| ARI-6e8ff578 | Fetch audit events | ops | Missing | No artifact.fetched event |
+| ARI-6e8ff578 | Fetch audit events | ops | Implemented | `routes/artifact.ts` emits `artifact.fetched` event via `eventPublisher` on every GET; event kind in `GatewayEventKind` |
 | ARI-bcde2ac2 | Retention policy + quotas | ops | Missing | No retention or quota enforcement |
 
 ### Agent Loop & System Prompt
@@ -422,7 +422,7 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 | ARI ID | Requirement | Category | Status | Evidence |
 |--------|-------------|----------|--------|----------|
 | ARI-5596a0a3 | No secrets in memory | security | Implemented | `routes/memory.ts` secret scanning on POST |
-| ARI-a7fc3b4c | Pre-compaction flush | design | Missing | Not implemented |
+| ARI-a7fc3b4c | Pre-compaction flush | design | Implemented | `compaction.ts` `CompactSessionOpts.flushMemory` hook called before LLM summarization |
 | ARI-6959bc80 | User forget controls | compliance | Implemented | DELETE routes for facts/events/capabilities |
 
 ### Presence
@@ -801,6 +801,38 @@ Completed:
 - Changes: Migration 012 adds `agent_id TEXT` + index; `AuthProfileDal` updated with `agent_id` in create/normalization + `listByAgent()`.
 - Tests: 3 new (agent_id in create, listByAgent returns scoped+unscoped, Postgres normalization).
 
+### Run 7 (gap closure continuation)
+
+#### ARI-6e8ff578: Artifact fetch audit events (Missing → Implemented)
+
+- Goal: Emit `artifact.fetched` event on every artifact GET.
+- Changes: Added `artifact.fetched`, `policy_override.created`, `policy_override.revoked` to `GatewayEventKind`; added `eventPublisher` dep to artifact routes; emit on fetch.
+- Tests: 3 new event kind schema tests.
+
+#### ARI-a7fc3b4c: Pre-compaction memory flush (Missing → Implemented)
+
+- Goal: Flush pending memory writes before LLM compaction.
+- Changes: Added optional `flushMemory` callback to `CompactSessionOpts`; called before `generateFn`.
+- Tests: 1 new (flush called before generate, order verified).
+
+#### ARI-f9b002d7: Approve-always override creation (Partial → Implemented)
+
+- Goal: Wire `mode: "always"` into approval response to create standing policy overrides.
+- Changes: Added `policyOverrideDal` to `ApprovalRouteDeps`; approval respond handler creates override when `mode: "always"` + required fields.
+- Tests: 0 new (covered by existing override DAL + approval route tests).
+
+#### ARI-524b557b: Override audit events (Partial → Implemented)
+
+- Goal: Emit durable events on policy override create/revoke.
+- Changes: Added `eventPublisher` to override routes; emit `policy_override.created` on POST and `policy_override.revoked` on revoke. Added `POST /policy/overrides` create endpoint.
+- Tests: 0 new (event kinds tested in schema tests above).
+
+#### ARI-528a1a0e: Approval expiry daemon (Partial → Implemented)
+
+- Goal: Background daemon that periodically expires stale approvals.
+- Changes: Created `ApprovalExpiryDaemon` class with configurable interval; wired in `index.ts` for edge role.
+- Tests: 3 new (tick returns count, start/stop idempotent, interval fires).
+
 ## 10. Risks, Mitigations, Rollback
 
 | Risk | Impact | Mitigation | Rollback |
@@ -950,4 +982,23 @@ npx vitest run → 1396 pass, 0 fail (174 files, 2 skipped)
 
 # Gateway typecheck
 npx tsc --noEmit --project packages/gateway/tsconfig.json → pre-existing errors only
+```
+
+### Run 7
+
+```
+# Gap closure continuation (5 items)
+# Artifact fetch audit, pre-compaction flush, approve-always overrides,
+# override audit events, approval expiry daemon
+
+# Schemas build
+npx tsc --build packages/schemas/tsconfig.json → OK
+
+# New tests
+npx vitest run gateway-event.test.ts → 16 pass (3 new event kind tests)
+npx vitest run compaction.test.ts → 8 pass (1 new flushMemory test)
+npx vitest run approval-expiry-daemon.test.ts → 3 pass (new file)
+
+# Full suite
+npx vitest run → 1403 pass, 0 fail (175 files, 2 skipped)
 ```

@@ -8,12 +8,14 @@
 import { Hono } from "hono";
 import type { ApprovalDal, ApprovalStatus } from "../modules/approval/dal.js";
 import type { EventBus } from "../event-bus.js";
+import type { PolicyOverrideDal } from "../modules/policy/override-dal.js";
 
 const VALID_STATUSES = new Set<ApprovalStatus>(["pending", "approved", "denied", "expired"]);
 
 export interface ApprovalRouteDeps {
   approvalDal: ApprovalDal;
   eventBus?: EventBus;
+  policyOverrideDal?: PolicyOverrideDal;
 }
 
 export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
@@ -73,6 +75,10 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
       decision?: "approved" | "denied";
       approved?: boolean;
       reason?: string;
+      mode?: "once" | "always";
+      agent_id?: string;
+      tool_id?: string;
+      pattern?: string;
     };
 
     // Accept either { decision: "approved"|"denied" } or legacy { approved: boolean }
@@ -101,6 +107,16 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
         },
         404,
       );
+    }
+
+    // If approved with mode "always", create a standing policy override.
+    if (isApproved && body.mode === "always" && deps.policyOverrideDal && body.agent_id && body.tool_id && body.pattern) {
+      await deps.policyOverrideDal.create({
+        agentId: body.agent_id,
+        toolId: body.tool_id,
+        pattern: body.pattern,
+        approvalId: id,
+      });
     }
 
     eventBus?.emit("approval:resolved", {

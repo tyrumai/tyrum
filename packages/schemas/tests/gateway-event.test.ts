@@ -130,6 +130,38 @@ describe("ApprovalLifecyclePayload", () => {
   });
 });
 
+describe("New event kinds", () => {
+  it("accepts artifact.fetched", () => {
+    const env = GatewayEventEnvelope.parse({
+      event_id: UUID,
+      kind: "artifact.fetched",
+      occurred_at: NOW,
+      payload: { artifact_id: "art-1" },
+    });
+    expect(env.kind).toBe("artifact.fetched");
+  });
+
+  it("accepts policy_override.created", () => {
+    const env = GatewayEventEnvelope.parse({
+      event_id: UUID,
+      kind: "policy_override.created",
+      occurred_at: NOW,
+      payload: {},
+    });
+    expect(env.kind).toBe("policy_override.created");
+  });
+
+  it("accepts policy_override.revoked", () => {
+    const env = GatewayEventEnvelope.parse({
+      event_id: UUID,
+      kind: "policy_override.revoked",
+      occurred_at: NOW,
+      payload: {},
+    });
+    expect(env.kind).toBe("policy_override.revoked");
+  });
+});
+
 describe("WatcherFiredPayload", () => {
   it("parses valid payload", () => {
     const p = WatcherFiredPayload.parse({

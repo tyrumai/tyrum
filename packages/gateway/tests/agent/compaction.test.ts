@@ -69,6 +69,28 @@ describe("compactSession", () => {
     expect(result.summary).toBe("Compacted summary.");
     expect(result.remainingTurns).toHaveLength(6);
   });
+
+  it("calls flushMemory before generating summary", async () => {
+    const callOrder: string[] = [];
+    const flushMemory = vi.fn().mockImplementation(async () => {
+      callOrder.push("flush");
+    });
+    const generateFn = vi.fn().mockImplementation(async () => {
+      callOrder.push("generate");
+      return { text: "Summary." };
+    });
+
+    await compactSession({
+      turns: makeTurns(20),
+      previousSummary: "",
+      config: defaultConfig,
+      generateFn,
+      flushMemory,
+    });
+
+    expect(flushMemory).toHaveBeenCalledOnce();
+    expect(callOrder).toEqual(["flush", "generate"]);
+  });
 });
 
 describe("SessionDal.updateCompaction", () => {

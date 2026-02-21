@@ -120,6 +120,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   app.route("/", createApprovalRoutes({
     approvalDal: container.approvalDal,
     eventBus: container.eventBus,
+    policyOverrideDal: container.policyOverrideDal,
   }));
   app.route("/", createWatcherRoutes(container.watcherProcessor));
   app.route("/", createCanvasRoutes(container.canvasDal));
@@ -127,6 +128,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   app.route("/", createArtifactRoutes({
     artifactMetadataDal: container.artifactMetadataDal,
     artifactStore: container.artifactStore,
+    eventPublisher: opts.eventPublisher,
   }));
 
   // Playbook routes — load from TYRUM_HOME/playbooks or use pre-loaded set
@@ -214,6 +216,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   // Policy override routes (always on — overrides are a core audit object)
   app.route("/", createPolicyOverrideRoutes({
     policyOverrideDal: container.policyOverrideDal,
+    eventPublisher: opts.eventPublisher,
   }));
 
   const authProfilesEnabled = (() => {

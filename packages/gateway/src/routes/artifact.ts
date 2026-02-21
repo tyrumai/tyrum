@@ -5,10 +5,12 @@
 import { Hono } from "hono";
 import type { ArtifactMetadataDal } from "../modules/artifact/metadata-dal.js";
 import type { ArtifactStore } from "../modules/artifact/store.js";
+import type { EventPublisher } from "../modules/backplane/event-publisher.js";
 
 export interface ArtifactRouteDeps {
   artifactMetadataDal: ArtifactMetadataDal;
   artifactStore: ArtifactStore;
+  eventPublisher?: EventPublisher;
 }
 
 export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
@@ -20,6 +22,12 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
     if (!meta) {
       return c.json({ error: "not_found", message: "artifact not found" }, 404);
     }
+
+    // Emit audit event for artifact fetch
+    void deps.eventPublisher?.publish("artifact.fetched", {
+      artifact_id: artifactId,
+      run_id: meta.run_id,
+    }).catch(() => { /* best-effort */ });
 
     const wantBlob = c.req.query("content") === "true";
     if (!wantBlob) {

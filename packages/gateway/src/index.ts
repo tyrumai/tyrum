@@ -25,6 +25,7 @@ import { EventPublisher } from "./modules/backplane/event-publisher.js";
 import { ConnectionDirectoryDal } from "./modules/backplane/connection-directory.js";
 import { OutboxPoller } from "./modules/backplane/outbox-poller.js";
 import { EventConsumer } from "./modules/backplane/event-consumer.js";
+import { ApprovalExpiryDaemon } from "./modules/approval/expiry-daemon.js";
 import { ConnectionManager } from "./ws/connection-manager.js";
 import { SlashCommandRegistry } from "./ws/slash-commands.js";
 import { registerBuiltinCommands } from "./ws/builtin-commands.js";
@@ -498,6 +499,12 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
       })
     : undefined;
   outboxPoller?.start();
+
+  // Approval expiry daemon — periodically converts stale pending approvals to expired.
+  const approvalExpiryDaemon = shouldRunEdge
+    ? new ApprovalExpiryDaemon({ approvalDal: container.approvalDal })
+    : undefined;
+  approvalExpiryDaemon?.start();
 
   // --- HTTP server with WS upgrade support ---
   const server = shouldRunEdge && app && wsHandler
