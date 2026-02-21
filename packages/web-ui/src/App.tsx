@@ -1,28 +1,42 @@
-import { BrowserRouter, Routes, Route, Link, Navigate } from "react-router";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router";
+import { Layout } from "./components/Layout.js";
 import { Dashboard } from "./pages/Dashboard.js";
-
-function Layout({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ fontFamily: "system-ui, sans-serif", padding: "1rem" }}>
-      <nav style={{ borderBottom: "1px solid #e5e7eb", paddingBottom: "0.5rem", marginBottom: "1rem" }}>
-        <Link to="/app" style={{ marginRight: "1rem", textDecoration: "none", fontWeight: "bold" }}>
-          Tyrum
-        </Link>
-      </nav>
-      <main>{children}</main>
-    </div>
-  );
-}
+import { Activity } from "./pages/Activity.js";
+import { ApprovalList } from "./pages/ApprovalList.js";
+import { ApprovalDetail } from "./pages/ApprovalDetail.js";
+import { PlanTimeline } from "./pages/PlanTimeline.js";
+import { Playbooks } from "./pages/Playbooks.js";
+import { Watchers } from "./pages/Watchers.js";
+import { CanvasList } from "./pages/CanvasList.js";
+import { CanvasDetail } from "./pages/CanvasDetail.js";
+import { Settings } from "./pages/Settings.js";
+import { Linking } from "./pages/Linking.js";
+import { OnboardingStart } from "./pages/OnboardingStart.js";
+import { OnboardingPersona } from "./pages/OnboardingPersona.js";
+import { OnboardingConsent } from "./pages/OnboardingConsent.js";
 
 export function App() {
   return (
     <BrowserRouter>
-      <Layout>
-        <Routes>
-          <Route path="/app" element={<Dashboard />} />
-          <Route path="/app/*" element={<Navigate to="/app" replace />} />
-        </Routes>
-      </Layout>
+      <Routes>
+        <Route path="/app" element={<Layout />}>
+          <Route index element={<Dashboard />} />
+          <Route path="approvals" element={<ApprovalList />} />
+          <Route path="approvals/:id" element={<ApprovalDetail />} />
+          <Route path="activity" element={<Activity />} />
+          <Route path="plans/:planId/timeline" element={<PlanTimeline />} />
+          <Route path="playbooks" element={<Playbooks />} />
+          <Route path="watchers" element={<Watchers />} />
+          <Route path="canvas" element={<CanvasList />} />
+          <Route path="canvas/:id" element={<CanvasDetail />} />
+          <Route path="settings" element={<Settings />} />
+          <Route path="linking" element={<Linking />} />
+          <Route path="onboarding/start" element={<OnboardingStart />} />
+          <Route path="onboarding/persona" element={<OnboardingPersona />} />
+          <Route path="onboarding/consent" element={<OnboardingConsent />} />
+          <Route path="*" element={<Navigate to="/app" replace />} />
+        </Route>
+      </Routes>
     </BrowserRouter>
   );
 }

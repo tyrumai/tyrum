@@ -11,6 +11,12 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": "http://localhost:8788",
+      "/approvals": "http://localhost:8788",
+      "/memory": "http://localhost:8788",
+      "/watchers": "http://localhost:8788",
+      "/playbooks": "http://localhost:8788",
+      "/canvas": "http://localhost:8788",
+      "/healthz": "http://localhost:8788",
     },
   },
 });

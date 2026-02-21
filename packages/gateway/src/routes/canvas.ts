@@ -11,6 +11,30 @@ const ALLOWED_CONTENT_TYPES = new Set(["text/html", "text/plain"]);
 export function createCanvasRoutes(canvasDal: CanvasDal): Hono {
   const app = new Hono();
 
+  /** List recent canvas artifacts (metadata only). */
+  app.get("/canvas", async (c) => {
+    const limitParam = c.req.query("limit");
+    let limit = 50;
+    if (limitParam) {
+      const parsed = parseInt(limitParam, 10);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        limit = Math.min(parsed, 500);
+      }
+    }
+
+    const artifacts = await canvasDal.listRecent(limit);
+    return c.json({
+      artifacts: artifacts.map((a) => ({
+        id: a.id,
+        plan_id: a.plan_id,
+        title: a.title,
+        content_type: a.content_type,
+        metadata: a.metadata,
+        created_at: a.created_at,
+      })),
+    });
+  });
+
   /** Publish a new canvas artifact. */
   app.post("/canvas/publish", async (c) => {
     const body = (await c.req.json()) as {
