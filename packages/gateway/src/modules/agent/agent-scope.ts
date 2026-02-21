@@ -18,10 +18,6 @@ export function resolveAgentId(agentId?: string): string {
   return agentId?.trim() || DEFAULT_AGENT_ID;
 }
 
-export function agentScopeClause(_paramIndex: number): string {
-  return `agent_id = ?`;
-}
-
 /**
  * Append agent_id filter to a WHERE clause.
  * If multi-agent is disabled, this is a no-op (filter is always 'default').
