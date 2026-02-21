@@ -6,8 +6,8 @@
   --text: #101827;
   --muted: #5a6475;
   --border: #ced8ea;
-  --primary: #0b69c8;
-  --primary-strong: #0a4f97;
+  --primary: #6366f1;
+  --primary-strong: #4f46e5;
   --danger: #b91c1c;
   --success: #0f766e;
   --shadow: 0 8px 24px rgba(16, 24, 39, 0.08);
@@ -51,8 +51,8 @@ a:hover { text-decoration: underline; }
   border: 1px solid transparent;
 }
 .nav a.active {
-  background: #e7f1ff;
-  border-color: #bfd8ff;
+  background: #eef2ff;
+  border-color: #c7d2fe;
   color: var(--primary-strong);
   font-weight: 600;
 }
@@ -84,7 +84,7 @@ input, textarea, select {
   background: #fff;
 }
 input:focus, textarea:focus, select:focus {
-  outline: 2px solid #94c2ff;
+  outline: 2px solid #a5b4fc;
   outline-offset: 1px;
 }
 textarea { min-height: 120px; }
@@ -99,9 +99,9 @@ button {
 button:hover { filter: brightness(0.95); }
 button.secondary { background: #374151; }
 button.ghost {
-  background: #f0f6ff;
-  color: #0b4a87;
-  border: 1px solid #bdd6fb;
+  background: #eef2ff;
+  color: var(--primary-strong);
+  border: 1px solid #c7d2fe;
 }
 button.danger { background: var(--danger); }
 button:disabled { opacity: 0.65; cursor: not-allowed; }
@@ -118,7 +118,7 @@ pre { padding: 10px; overflow: auto; }
 .inline { display: inline; }
 .settings-columns { display: grid; gap: 14px; grid-template-columns: 1fr; }
 .settings-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
-.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: #edf3ff; color: #204a7a; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: #eef2ff; color: var(--primary-strong); }
 .dictionary-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 10px; }
 .dictionary-row {
   border: 1px solid #d7e2f1;
@@ -151,7 +151,7 @@ pre { padding: 10px; overflow: auto; }
   padding: 4px 10px;
   font-size: 13px;
 }
-.onboarding-stepper li.active { background: #e7f1ff; border-color: #b8d2fb; color: #0a4f97; font-weight: 600; }
+.onboarding-stepper li.active { background: #eef2ff; border-color: #a5b4fc; color: var(--primary-strong); font-weight: 600; }
 .spinner {
   display: inline-block;
   width: 24px;

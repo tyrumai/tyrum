@@ -25,6 +25,7 @@ export async function createTestContainer(): Promise<GatewayContainer> {
 export interface TestAppOptions {
   tokenStore?: TokenStore;
   isLocalOnly?: boolean;
+  spaDistDir?: string;
 }
 
 export async function createTestApp(opts: TestAppOptions = {}): Promise<{
@@ -38,6 +39,7 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<{
     agentRuntime,
     tokenStore: opts.tokenStore,
     isLocalOnly: opts.isLocalOnly,
+    spaDistDir: opts.spaDistDir,
   });
   return { app, container, agentRuntime };
 }

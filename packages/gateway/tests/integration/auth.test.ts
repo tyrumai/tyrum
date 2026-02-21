@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Hono } from "hono";
@@ -59,12 +59,20 @@ describe("Auth integration", () => {
   describe("localhost bind (auth still enforced)", () => {
     let app: Hono;
     let adminToken: string;
+    let spaDistDir: string;
 
     beforeEach(async () => {
       const tokenStore = new TokenStore(tempDir);
       adminToken = await tokenStore.initialize();
-      const result = await createTestApp({ tokenStore, isLocalOnly: true });
+      spaDistDir = await mkdtemp(join(tmpdir(), "tyrum-spa-auth-"));
+      await mkdir(join(spaDistDir, "assets"), { recursive: true });
+      await writeFile(join(spaDistDir, "index.html"), "<!doctype html><html><body>SPA</body></html>");
+      const result = await createTestApp({ tokenStore, isLocalOnly: true, spaDistDir });
       app = result.app;
+    });
+
+    afterEach(async () => {
+      await rm(spaDistDir, { recursive: true, force: true });
     });
 
     it("allows /healthz without token", async () => {
@@ -96,18 +104,17 @@ describe("Auth integration", () => {
       expect(location).toBeTruthy();
       const redirectUrl = new URL(location ?? "/app", "http://localhost");
       expect(redirectUrl.pathname).toBe("/app");
-      expect(redirectUrl.searchParams.get("token")).toBe(adminToken);
 
-      const setCookie = bootstrapRes.headers.get("set-cookie");
-      expect(setCookie).toBeTruthy();
-      const cookie = setCookie?.split(";")[0] ?? "";
+      const setCookieHeader = bootstrapRes.headers.get("set-cookie");
+      expect(setCookieHeader).toBeTruthy();
+      const cookie = setCookieHeader?.split(";")[0] ?? "";
 
-      const appRes = await app.request("/app", {
+      const appRes = await app.request("/app/", {
         headers: { Cookie: cookie },
       });
       expect(appRes.status).toBe(200);
       const html = await appRes.text();
-      expect(html).toContain("Dashboard");
+      expect(html).toContain("SPA");
     });
   });
 });

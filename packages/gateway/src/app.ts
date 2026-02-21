@@ -28,7 +28,6 @@ import { createPolicyOverrideRoutes } from "./routes/policy-override.js";
 import { createModelRoutes } from "./routes/model.js";
 import { PlaybookRunner } from "./modules/playbook/runner.js";
 import { createWebApiRoutes } from "./routes/web-api.js";
-import { createWebUiRoutes } from "./routes/web-ui.js";
 import { createSnapshotRoutes } from "./routes/snapshot.js";
 import { createSchemaRoutes } from "./routes/schema.js";
 import { createCatalogRoutes } from "./routes/catalog.js";
@@ -57,6 +56,7 @@ export interface AppOptions {
   version?: string;
   startedAt?: number;
   role?: string;
+  spaDistDir?: string;
 }
 
 export function createApp(container: GatewayContainer, opts: AppOptions = {}): Hono {
@@ -271,32 +271,11 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     }
   }
 
-  // Gateway-hosted web UI — SPA or server-rendered.
-  const spaEnabled = (() => {
-    const raw = process.env["TYRUM_SPA_UI"]?.trim().toLowerCase();
-    if (!raw) return false; // default off
-    return ["1", "true", "on", "yes"].includes(raw);
-  })();
-
-  if (spaEnabled) {
-    const distDir = process.env["TYRUM_SPA_DIST_DIR"]?.trim() || "";
-    if (distDir) {
-      app.route("/", createSpaRoutes({ distDir }));
-    }
+  // Gateway-hosted SPA web UI
+  const spaDistDir = opts.spaDistDir ?? process.env["TYRUM_SPA_DIST_DIR"]?.trim() ?? "";
+  if (spaDistDir) {
+    app.route("/", createSpaRoutes({ distDir: spaDistDir }));
   }
-
-  app.route(
-    "/",
-    createWebUiRoutes({
-      approvalDal: container.approvalDal,
-      memoryDal: container.memoryDal,
-      watcherProcessor: container.watcherProcessor,
-      canvasDal: container.canvasDal,
-      playbooks,
-      playbookRunner,
-      isLocalOnly,
-    }),
-  );
 
   return app;
 }

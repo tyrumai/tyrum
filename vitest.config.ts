@@ -31,8 +31,6 @@ export default defineConfig({
         "packages/gateway/src/modules/execution/kubernetes-toolrunner-step-executor.ts",
         // Pure type definitions (zero runtime code)
         "**/*.d.ts",
-        // Server-rendered HTML templates (view layer, no business logic)
-        "packages/gateway/src/routes/web-ui.ts",
       ],
       thresholds: {
         lines: 75,

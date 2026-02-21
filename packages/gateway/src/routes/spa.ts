@@ -85,5 +85,8 @@ export function createSpaRoutes(deps: SpaRouteDeps): Hono {
   // Redirect bare /app to /app/
   app.get("/app", (c) => c.redirect("/app/"));
 
+  // Landing page → SPA
+  app.get("/", (c) => c.redirect("/app/"));
+
   return app;
 }
