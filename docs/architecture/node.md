@@ -45,6 +45,14 @@ Pairing binds a node device identity to an explicit authorization record:
 
 The scoped token issued to the node reflects these constraints. Capability execution requests are authorized against the node’s pairing record and the effective policy snapshot for the run.
 
+## Feature flag
+
+`TYRUM_NODE_PAIRING` (default off). When off, nodes connect using the client-declared capability model. When on, `role: node` connections require pairing approval before receiving tasks. Desktop updates should ship before the flag is enabled.
+
 ## Revocation
 
 Revocation removes the pairing authorization and invalidates scoped tokens. A revoked node can reconnect, but it cannot execute capabilities until re-paired.
+
+## Design rationale
+
+Explicit pairing replaces implicit trust-by-connection. Each node gets operator-approved, scoped capabilities stored in a `node_capabilities` table per `device_id`. Immediate revocation prevents compromised devices from continuing to execute. The pairing model builds on the cryptographic device identity from the handshake protocol. Risk: operator fatigue from pairing requests in large deployments; future enhancement: auto-approve rules for known device_id prefixes.

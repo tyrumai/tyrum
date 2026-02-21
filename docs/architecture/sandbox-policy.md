@@ -25,6 +25,13 @@ Policy rules can depend on provenance (for example: “deny shell when the input
 
 Policy is represented as a declarative, versioned configuration bundle (`PolicyBundle`) stored as data (YAML/JSON) and validated like other contracts.
 
+Each rule in a PolicyBundle specifies:
+
+- `domain`: one of egress, secrets, messaging, tools, artifacts (extensible).
+- `action`: deny | require_approval | allow.
+- `conditions`: optional predicates (scope patterns, amount thresholds, PII categories).
+- `priority`: integer for ordering within a domain.
+
 Policy evaluation is deterministic and produces one of:
 
 - `allow`
@@ -67,13 +74,41 @@ A `PolicyBundle` covers at minimum:
 - **Artifacts:** retention defaults and artifact fetch authorization hooks.
 - **Provenance rules:** policy decisions based on input provenance.
 
+### Rollout and migration
+
+`TYRUM_POLICY_ENFORCE` (default off) enables enforcement per domain, allowing incremental activation. When off, the engine logs every policy decision but does not block actions (observe-only mode). Four built-in rules (spend_limit, pii_guardrail, legal_compliance, connector_scope) are expressed as a default deployment bundle, preserving existing behavior until enforcement is enabled.
+
 ## Sandboxing baseline
 
 Sandboxing is the runtime enforcement layer that limits what executors can do even when policy allows an action:
 
-- workspace boundary enforcement (no traversal outside the workspace mount)
+- workspace boundary enforcement in `tool-executor.ts` (no traversal outside the workspace mount) — always active regardless of deployment target
 - least-privilege process/container defaults (no ambient host access)
-- optional hardened mode (seccomp/AppArmor/container restrictions) for high-risk deployments
+
+OS-level sandboxing (namespaces, seccomp, AppArmor) is a deployment concern. The gateway does not attempt to load seccomp filters or call `prctl(2)` at runtime. Instead, deployment manifests (Helm charts, Docker Compose, systemd units) apply appropriate restrictions.
+
+### Reference security profiles
+
+The Helm chart ships with secure defaults for the tool-runner deployment:
+
+```yaml
+securityContext:
+  runAsNonRoot: true
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+  seccompProfile:
+    type: RuntimeDefault
+```
+
+AppArmor annotation for additional confinement:
+
+```yaml
+annotations:
+  container.apparmor.security.beta.kubernetes.io/toolrunner: runtime/default
+```
+
+Operators are responsible for reviewing and adapting these profiles to their environment. Custom seccomp profiles with explicit syscall allowlists provide the strongest confinement for high-risk deployments.
 
 ## Auditability
 
@@ -81,3 +116,9 @@ Policy decisions and sandbox denials are observable:
 
 - policy evaluation results (decision + reasons + snapshot reference) are attached to run/step/attempt records where relevant
 - significant enforcement actions emit events suitable for operator UIs and export
+
+## Design rationale
+
+Declarative bundles decouple policy authoring from code deploys, allowing operators to tailor policy without redeploys. Deny-wins precedence prevents lower-priority scopes (playbook, agent) from weakening deployment-level security. Snapshot-at-run-start ensures audit can reconstruct which policies applied even after bundle updates. Observe-only mode reduces risk of accidental lockout during rollout. Misconfigured bundles could silently allow denied actions — mitigated by deny-wins semantics, observe-only mode, and bundle validation at load time.
+
+Workspace path boundary enforcement is the application-layer first line of defense. OS-level sandboxing is layered on top as a deployment concern because deployment environments vary widely and container runtimes/orchestrators are best positioned to apply restrictions.

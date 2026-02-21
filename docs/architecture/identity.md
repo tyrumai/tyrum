@@ -12,7 +12,7 @@ Identity is how Tyrum names and scopes authority. Several identities exist in th
 
 ## Device identities
 
-Client and node identities are device identities derived from a long-lived signing keypair (Ed25519). The public key is the canonical identity material. `device_id` is a deterministic identifier derived from the public key (for example `base32(sha256(pubkey))` with a stable prefix).
+Client and node identities are device identities derived from a long-lived signing keypair (Ed25519). The public key is the canonical identity material. `device_id` is a deterministic identifier derived from the public key (for example `base32(sha256(pubkey))` with a stable prefix). Keypair generation is a client/node responsibility; key management introduces backup and re-pairing UX considerations.
 
 ## Why identity matters
 

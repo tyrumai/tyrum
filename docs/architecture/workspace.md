@@ -25,6 +25,6 @@ This avoids requiring RWX network filesystems while still supporting multi-node 
 
 ## Safety expectations
 
-- Enforce path boundaries (no arbitrary filesystem traversal).
+- Enforce path boundaries (no arbitrary filesystem traversal). Workspace path boundary enforcement in `tool-executor.ts` is the application-layer first line of defense and is always active regardless of deployment target. OS-level sandboxing is layered on top as a deployment concern (see [Sandbox and policy](./sandbox-policy.md)).
 - Redact secrets and avoid logging sensitive file content.
 - Make destructive operations require explicit confirmation where appropriate.

@@ -41,6 +41,14 @@ The gateway validates the gateway access token during the WS upgrade using WebSo
 - `tyrum-v1`
 - `tyrum-auth.<base64url(token)>`
 
+## Legacy compatibility
+
+The gateway accepts both legacy `connect` (rev 1, no cryptographic proof) and the `connect.init`/`connect.proof` flow (rev 2+) concurrently. This dual-stack approach avoids breaking existing clients during migration. `TYRUM_STRICT_HANDSHAKE` (default off) enforces new-only mode when all clients have adopted rev 2+.
+
 ## Pairing hook (nodes)
 
 Nodes require pairing approval before they can execute capabilities. Pairing binds a node device identity to a trust level and a scoped capability allowlist, and it can be revoked at any time.
+
+## Design rationale
+
+Cryptographic proof of device identity enables stable audit trails, presence tracking, and revocation. Key management on the client side introduces UX complexity (key backup, re-pairing after key loss). Strict enforcement timing depends on accurate adoption telemetry; premature enforcement breaks lagging clients. These risks are mitigated by observe-mode telemetry, per-client revision logging, and gradual rollout of `TYRUM_STRICT_HANDSHAKE`.

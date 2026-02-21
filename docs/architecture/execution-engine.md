@@ -135,6 +135,24 @@ Exact schemas belong in `@tyrum/schemas` and exported contracts.
 - Cost attribution (model tokens, executor time) is persisted per run/step/attempt so budgets and approvals can be evaluated and UIs can aggregate accurately.
 - Deployments export tracing and metrics via OpenTelemetry.
 
+## API surface
+
+The execution engine is exposed through HTTP routes and WebSocket request types:
+
+**HTTP routes:**
+- `POST /workflow/run` — enqueue a new execution run (accepts steps, lane, key).
+- `POST /workflow/resume` — resume a paused run with a resume token.
+- `POST /workflow/cancel` — cancel a running or paused run.
+- `GET /workflow/runs` — list runs with filtering (status, lane, date range).
+- `GET /workflow/runs/:id` — get run detail including steps and current state.
+
+**WebSocket request types** (mirror the HTTP routes):
+- `workflow.run`, `workflow.resume`, `workflow.cancel`
+
+Budget accuracy depends on cost reporting from step executors. Conservative default budgets and operator alerts on high-cost runs mitigate underreporting.
+
+`TYRUM_WORKFLOW_API` (default on). The legacy plan runner remains available during migration but is not exposed through the new routes.
+
 ## Client/UI expectations
 
 Operator clients should be able to:
@@ -143,3 +161,7 @@ Operator clients should be able to:
 - Inspect per-step evidence (artifacts) and postcondition results.
 - Resolve approvals and resume/cancel paused runs.
 - Request safe retries or rollbacks when supported.
+
+## Design rationale
+
+Exposing execution through HTTP and WebSocket APIs enables UIs, connectors, and playbooks to orchestrate work through a stable interface. Budget enforcement prevents runaway cost from long-running or looping runs. Per-lane concurrency limits protect shared infrastructure from noisy neighbors. Risk: event storms from high-throughput lanes could overwhelm the outbox — mitigated by batched polling, backpressure on event consumers, and per-lane rate limiting.

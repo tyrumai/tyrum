@@ -14,6 +14,7 @@ A capability is a named interface a node can provide. Capabilities are the bridg
 
 - Nodes advertise the capabilities they support during handshake.
 - The gateway routes capability requests to a node that is paired and authorized for that capability.
+- Paired node capabilities are stored in a `node_capabilities` table scoped by `device_id`. The gateway enforces these capabilities when routing tasks, replacing client-declared capabilities for paired nodes.
 
 ## Examples
 

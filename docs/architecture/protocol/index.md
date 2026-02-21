@@ -31,7 +31,11 @@ The protocol works across gateway restarts and multi-instance deployments:
 
 ## Protocol revisions
 
-The handshake includes a `protocol_rev` integer. A connection is accepted only when the peer and gateway agree on the same revision. The protocol uses run-scoped identifiers (`run_id`, `step_id`, `attempt_id`) and avoids ambiguous plan identifiers.
+The handshake includes a `protocol_rev` integer. A `PROTOCOL_REVISIONS` map in schemas defines the minimum and maximum supported revisions; the gateway rejects unsupported clients with a clear error. A connection is accepted only when the peer and gateway agree on the same revision.
+
+Revision negotiation avoids big-bang client migration and lets the protocol evolve incrementally. Each revision is self-describing. `TYRUM_STRICT_HANDSHAKE` (default off) enforces new-only mode once adoption telemetry confirms legacy traffic has dropped to zero.
+
+The protocol uses run-scoped identifiers (`run_id`, `step_id`, `attempt_id`) and avoids ambiguous plan identifiers.
 
 ## Message classes
 
