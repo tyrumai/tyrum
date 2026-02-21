@@ -491,7 +491,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   approvalResolver.start();
 
   const agentRuntime = shouldRunEdge && isAgentEnabled()
-    ? new AgentRuntime({ container, secretProvider, approvalNotifier })
+    ? new AgentRuntime({ container, secretProvider, approvalNotifier, eventPublisher })
     : undefined;
 
   const app = shouldRunEdge
