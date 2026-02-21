@@ -123,6 +123,7 @@ export class ExecutionEngine {
   private readonly redactionEngine?: RedactionEngine;
   private readonly logger?: Logger;
   private readonly maxQueueDepth: number;
+  private readonly maxConcurrentRuns: number;
   private readonly modelCatalog?: CostLookup;
 
   constructor(opts: {
@@ -131,6 +132,7 @@ export class ExecutionEngine {
     redactionEngine?: RedactionEngine;
     logger?: Logger;
     maxQueueDepth?: number;
+    maxConcurrentRuns?: number;
     modelCatalog?: CostLookup;
   }) {
     this.db = opts.db;
@@ -138,6 +140,7 @@ export class ExecutionEngine {
     this.redactionEngine = opts.redactionEngine;
     this.logger = opts.logger;
     this.maxQueueDepth = opts.maxQueueDepth ?? 0; // 0 = unlimited (default-off)
+    this.maxConcurrentRuns = opts.maxConcurrentRuns ?? 0; // 0 = unlimited (default-off)
     this.modelCatalog = opts.modelCatalog;
   }
 
@@ -155,6 +158,14 @@ export class ExecutionEngine {
   async getQueueDepth(): Promise<number> {
     const row = await this.db.get<{ n: number }>(
       `SELECT COUNT(*) AS n FROM execution_runs WHERE status IN ('queued', 'running')`,
+    );
+    return row?.n ?? 0;
+  }
+
+  /** Count of runs currently in running status (for concurrency limiting). */
+  async getRunningCount(): Promise<number> {
+    const row = await this.db.get<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM execution_runs WHERE status = 'running'`,
     );
     return row?.n ?? 0;
   }
@@ -301,6 +312,18 @@ export class ExecutionEngine {
   }
 
   async workerTick(input: WorkerTickInput): Promise<boolean> {
+    // Concurrency limit: skip starting new runs if at capacity
+    if (this.maxConcurrentRuns > 0) {
+      const running = await this.getRunningCount();
+      if (running >= this.maxConcurrentRuns) {
+        this.logger?.info("execution.concurrency_limit_reached", {
+          running_count: running,
+          max_concurrent_runs: this.maxConcurrentRuns,
+        });
+        return false;
+      }
+    }
+
     const { nowMs, nowIso } = this.clock();
 
     const candidates = await this.db.all<RunnableRunRow>(

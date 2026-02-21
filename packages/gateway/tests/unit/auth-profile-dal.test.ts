@@ -177,6 +177,7 @@ describe("AuthProfileDal", () => {
       failure_count: 0,
       created_at: createdAt,
       metadata: null,
+      agent_id: null,
     };
 
     const stubDb: SqlDb = {
@@ -193,5 +194,40 @@ describe("AuthProfileDal", () => {
     const fetched = await dal.getById("prof-pg");
     expect(fetched).toBeDefined();
     expect(fetched!.created_at).toBe(createdAt.toISOString());
+  });
+
+  // -----------------------------------------------------------------------
+  // agent_id scoping
+  // -----------------------------------------------------------------------
+
+  it("creates a profile with agent_id", async () => {
+    const dal = createDal();
+    const profile = await dal.create({
+      profileId: "prof-agent",
+      provider: "openai",
+      agentId: "agent-42",
+    });
+    expect(profile.agent_id).toBe("agent-42");
+  });
+
+  it("listByAgent returns agent-scoped and unscoped profiles", async () => {
+    const dal = createDal();
+    await dal.create({ profileId: "prof-global", provider: "openai" });
+    await dal.create({ profileId: "prof-a1", provider: "openai", agentId: "a1" });
+    await dal.create({ profileId: "prof-a2", provider: "openai", agentId: "a2" });
+
+    const a1Profiles = await dal.listByAgent("a1");
+    expect(a1Profiles).toHaveLength(2); // prof-global + prof-a1
+    expect(a1Profiles.map((p) => p.profile_id).sort()).toEqual(["prof-a1", "prof-global"]);
+  });
+
+  it("listByAgent excludes other agent profiles", async () => {
+    const dal = createDal();
+    await dal.create({ profileId: "prof-a1", provider: "openai", agentId: "a1" });
+    await dal.create({ profileId: "prof-a2", provider: "openai", agentId: "a2" });
+
+    const a1Profiles = await dal.listByAgent("a1");
+    expect(a1Profiles).toHaveLength(1);
+    expect(a1Profiles[0]!.profile_id).toBe("prof-a1");
   });
 });

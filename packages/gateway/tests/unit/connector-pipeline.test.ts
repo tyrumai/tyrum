@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { ConnectorPipeline } from "../../src/modules/connector/pipeline.js";
 import type { NormalizedMessage } from "../../src/modules/connector/pipeline.js";
 import { DedupeDal } from "../../src/modules/connector/dedupe-dal.js";
+import { PolicyBundleManager } from "../../src/modules/policy/bundle.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
@@ -87,5 +88,39 @@ describe("ConnectorPipeline", () => {
     expect(r1).toBeNull();
     // Second promise should resolve to the second message
     expect(r2).toEqual(msg2);
+  });
+
+  // -----------------------------------------------------------------------
+  // Policy gate
+  // -----------------------------------------------------------------------
+
+  it("rejects messages when policy denies messaging domain", async () => {
+    db = openTestSqliteDb();
+    const dedupeDal = new DedupeDal(db);
+    const policyBundleManager = new PolicyBundleManager();
+    policyBundleManager.addBundle({
+      rules: [{ domain: "messaging", action: "deny", priority: 1, description: "blocked" }],
+      precedence: "deployment",
+    });
+    const pipeline = new ConnectorPipeline({ dedupeDal, policyBundleManager });
+
+    const msg = makeMessage();
+    const result = await pipeline.ingest(msg);
+    expect(result).toBeNull();
+  });
+
+  it("allows messages when policy allows messaging domain", async () => {
+    db = openTestSqliteDb();
+    const dedupeDal = new DedupeDal(db);
+    const policyBundleManager = new PolicyBundleManager();
+    policyBundleManager.addBundle({
+      rules: [{ domain: "messaging", action: "allow", priority: 1 }],
+      precedence: "deployment",
+    });
+    const pipeline = new ConnectorPipeline({ dedupeDal, policyBundleManager });
+
+    const msg = makeMessage();
+    const result = await pipeline.ingest(msg);
+    expect(result).toEqual(msg);
   });
 });

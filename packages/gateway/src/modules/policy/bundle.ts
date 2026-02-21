@@ -8,6 +8,8 @@
  */
 
 import type { PolicyRule } from "@tyrum/schemas";
+import type { PolicyOverrideRow } from "./override-dal.js";
+import { matchesWildcard } from "./wildcard.js";
 
 export interface PolicyBundleConfig {
   rules: PolicyRule[];
@@ -20,6 +22,14 @@ export interface PolicyEvalResult {
   action: "allow" | "deny" | "require_approval";
   detail: string;
   rule?: PolicyRule;
+  /** IDs of policy overrides that converted require_approval → allow. */
+  applied_override_ids?: string[];
+}
+
+/** Context for override matching (tool_id + match_target). */
+export interface OverrideContext {
+  tool_id: string;
+  match_target: string;
 }
 
 export class PolicyBundleManager {
@@ -64,8 +74,18 @@ export class PolicyBundleManager {
    * context are considered. A rule matches when every key in its conditions
    * object equals the corresponding key in the context (shallow equality).
    * Rules with no conditions always match.
+   *
+   * When `overrides` and `overrideContext` are provided and the base result
+   * is `require_approval`, matching active overrides convert it to `allow`.
    */
-  evaluate(domain: string, context?: Record<string, unknown>): PolicyEvalResult {
+  evaluate(
+    domain: string,
+    context?: Record<string, unknown>,
+    opts?: {
+      overrides?: PolicyOverrideRow[];
+      overrideContext?: OverrideContext;
+    },
+  ): PolicyEvalResult {
     const allRules = this.getMergedRules().filter((r) => r.domain === domain);
     const rules = allRules.filter((r) => matchesConditions(r.conditions, context));
 
@@ -76,7 +96,7 @@ export class PolicyBundleManager {
       };
     }
 
-    // deny > require_approval > allow
+    // deny > require_approval > allow (overrides cannot relax deny)
     const denyRule = rules.find((r) => r.action === "deny");
     if (denyRule) {
       return {
@@ -88,6 +108,24 @@ export class PolicyBundleManager {
 
     const approvalRule = rules.find((r) => r.action === "require_approval");
     if (approvalRule) {
+      // Check for matching active policy overrides
+      if (opts?.overrides && opts.overrideContext) {
+        const matching = opts.overrides.filter(
+          (o) =>
+            o.status === "active" &&
+            o.tool_id === opts.overrideContext!.tool_id &&
+            matchesWildcard(o.pattern, opts.overrideContext!.match_target),
+        );
+        if (matching.length > 0) {
+          return {
+            action: "allow",
+            detail: `Allowed by policy override(s) for '${domain}'`,
+            rule: approvalRule,
+            applied_override_ids: matching.map((o) => o.policy_override_id),
+          };
+        }
+      }
+
       return {
         action: "require_approval",
         detail:

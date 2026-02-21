@@ -2,6 +2,7 @@ import type { WsEventEnvelope, WsRequestEnvelope } from "@tyrum/schemas";
 import type { ConnectionManager } from "../../ws/connection-manager.js";
 import type { OutboxDal, OutboxRow } from "./outbox-dal.js";
 import { GATEWAY_EVENT_TOPIC } from "./event-publisher.js";
+import type { EventConsumer } from "./event-consumer.js";
 
 export interface OutboxPollerOptions {
   consumerId: string;
@@ -10,6 +11,7 @@ export interface OutboxPollerOptions {
   pollIntervalMs?: number;
   batchSize?: number;
   onGatewayEvent?: (event: unknown) => void | Promise<void>;
+  eventConsumer?: EventConsumer;
 }
 
 type WsEnvelope = WsEventEnvelope | WsRequestEnvelope;
@@ -54,6 +56,7 @@ export class OutboxPoller {
   private readonly pollIntervalMs: number;
   private readonly batchSize: number;
   private readonly onGatewayEvent?: (event: unknown) => void | Promise<void>;
+  private readonly eventConsumer?: EventConsumer;
   private timer: ReturnType<typeof setInterval> | undefined;
   private ticking = false;
 
@@ -64,6 +67,7 @@ export class OutboxPoller {
     this.pollIntervalMs = opts.pollIntervalMs ?? 500;
     this.batchSize = opts.batchSize ?? 200;
     this.onGatewayEvent = opts.onGatewayEvent;
+    this.eventConsumer = opts.eventConsumer;
   }
 
   start(): void {
@@ -103,6 +107,12 @@ export class OutboxPoller {
   }
 
   private processRow(row: OutboxRow): void {
+    // Consumer-side deduplication by event_id
+    if (this.eventConsumer) {
+      const eventId = extractEventId(row);
+      if (eventId && this.eventConsumer.isDuplicate(eventId)) return;
+    }
+
     if (row.topic === "ws.broadcast") {
       const parsed = parseBroadcastPayload(row.payload);
       if (!parsed) return;
@@ -129,5 +139,23 @@ export class OutboxPoller {
       return;
     }
   }
+}
+
+/** Extract event_id from an outbox row payload for deduplication. */
+function extractEventId(row: OutboxRow): string | undefined {
+  if (!isObject(row.payload)) return undefined;
+
+  // ws.broadcast / ws.direct: event_id is inside the nested message envelope
+  const message = row.payload["message"];
+  if (isObject(message)) {
+    const eventId = message["event_id"];
+    if (typeof eventId === "string") return eventId;
+  }
+
+  // gateway.event: event_id is at the top level
+  const eventId = row.payload["event_id"];
+  if (typeof eventId === "string") return eventId;
+
+  return undefined;
 }
 

@@ -322,4 +322,109 @@ describe("PolicyBundleManager", () => {
     expect(mgr.getBundles()).toHaveLength(0);
     expect(mgr.getMergedRules()).toEqual([]);
   });
+
+  // -----------------------------------------------------------------------
+  // evaluate — policy overrides (require_approval → allow)
+  // -----------------------------------------------------------------------
+
+  it("override converts require_approval to allow when pattern matches", () => {
+    mgr = new PolicyBundleManager();
+    mgr.addBundle({
+      rules: [rule("tools", "require_approval", 1, "needs approval")],
+      precedence: "agent",
+    });
+
+    const overrides = [
+      {
+        policy_override_id: "ov-1",
+        status: "active" as const,
+        agent_id: "a1",
+        workspace_id: null,
+        tool_id: "shell.exec",
+        pattern: "/workspace/*",
+        created_at: new Date().toISOString(),
+        created_by: null,
+        created_from_approval_id: null,
+        created_from_policy_snapshot_id: null,
+        expires_at: null,
+        revoked_at: null,
+        revoked_by: null,
+        revoked_reason: null,
+      },
+    ];
+
+    const result = mgr.evaluate("tools", undefined, {
+      overrides,
+      overrideContext: { tool_id: "shell.exec", match_target: "/workspace/foo" },
+    });
+    expect(result.action).toBe("allow");
+    expect(result.applied_override_ids).toEqual(["ov-1"]);
+  });
+
+  it("override does NOT relax deny", () => {
+    mgr = new PolicyBundleManager();
+    mgr.addBundle({
+      rules: [rule("tools", "deny", 1, "blocked")],
+      precedence: "deployment",
+    });
+
+    const overrides = [
+      {
+        policy_override_id: "ov-2",
+        status: "active" as const,
+        agent_id: "a1",
+        workspace_id: null,
+        tool_id: "shell.exec",
+        pattern: "*",
+        created_at: new Date().toISOString(),
+        created_by: null,
+        created_from_approval_id: null,
+        created_from_policy_snapshot_id: null,
+        expires_at: null,
+        revoked_at: null,
+        revoked_by: null,
+        revoked_reason: null,
+      },
+    ];
+
+    const result = mgr.evaluate("tools", undefined, {
+      overrides,
+      overrideContext: { tool_id: "shell.exec", match_target: "/anything" },
+    });
+    expect(result.action).toBe("deny");
+    expect(result.applied_override_ids).toBeUndefined();
+  });
+
+  it("override not applied when pattern doesn't match", () => {
+    mgr = new PolicyBundleManager();
+    mgr.addBundle({
+      rules: [rule("tools", "require_approval", 1)],
+      precedence: "agent",
+    });
+
+    const overrides = [
+      {
+        policy_override_id: "ov-3",
+        status: "active" as const,
+        agent_id: "a1",
+        workspace_id: null,
+        tool_id: "shell.exec",
+        pattern: "/safe/*",
+        created_at: new Date().toISOString(),
+        created_by: null,
+        created_from_approval_id: null,
+        created_from_policy_snapshot_id: null,
+        expires_at: null,
+        revoked_at: null,
+        revoked_by: null,
+        revoked_reason: null,
+      },
+    ];
+
+    const result = mgr.evaluate("tools", undefined, {
+      overrides,
+      overrideContext: { tool_id: "shell.exec", match_target: "/danger/foo" },
+    });
+    expect(result.action).toBe("require_approval");
+  });
 });

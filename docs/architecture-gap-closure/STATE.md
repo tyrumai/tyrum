@@ -1,7 +1,7 @@
 # Architecture Gap Closure — State
 
-**Last updated**: 2026-02-21T11:48:00Z
-**Git HEAD**: 13e99dd (feat/gap-closure-p0)
+**Last updated**: 2026-02-21T12:30:00Z
+**Git HEAD**: 4a0c78f (feat/gap-closure-p0)
 
 ## Docs Ingested (40 files)
 
@@ -30,10 +30,10 @@ docs/architecture/system-prompt.md, docs/architecture/tools.md
 
 | Status | Count |
 |--------|-------|
-| Implemented | 134 |
-| Partially Implemented | 20 |
-| Missing | 5 |
-| **Total** | **159** |
+| Implemented | 122 |
+| Partially Implemented | 31 |
+| Missing | 4 |
+| **Total** | **157** |
 
 ## Active Backlog (ordered by priority)
 
@@ -54,6 +54,12 @@ docs/architecture/system-prompt.md, docs/architecture/tools.md
 - [x] PLAN-a8b9c0d1: Cost tracking integration (model catalog enrichment + /usage aggregates) **DONE run 5**
 - [x] PLAN-b2c3d4e5: SPA operational panels (Presence, Context, ContextDetail, Usage) **DONE run 5**
 - [x] PLAN-d6e7f8a9: WS approval event broadcasting (approval.pending + approval.resolved) **DONE run 5**
+- [x] PLAN-r6-ed25519: Wire Ed25519 public_key through protocol schema + WS route **DONE run 6**
+- [x] PLAN-r6-eventconsumer: Wire EventConsumer dedupe into OutboxPoller **DONE run 6**
+- [x] PLAN-r6-connpolicy: Connector policy gate in pipeline.ingest() **DONE run 6**
+- [x] PLAN-r6-concurrency: Execution engine concurrency limits (maxConcurrentRuns) **DONE run 6**
+- [x] PLAN-r6-overrides: Policy overrides (table, DAL, wildcard, bundle eval, routes) **DONE run 6**
+- [x] PLAN-r6-authagent: Auth profiles agent_id scoping (migration 012 + DAL) **DONE run 6**
 
 ## Open Questions / Blockers
 
@@ -77,8 +83,8 @@ docs/architecture/system-prompt.md, docs/architecture/tools.md
   - `TYRUM_PLUGINS` (default OFF, opt-in)
   - `TYRUM_SPA_UI` (default OFF, opt-in)
 - No database migration rollback needed (all additive ALTER TABLE + CREATE TABLE)
-- Tests: 1374 pass, 0 fail (1297 baseline → 1309 run 1 → 1332 run 2 → 1358 run 3 → 1362 run 4 → 1374 run 5)
-- Typecheck: Only pre-existing errors (engine.ts, runner.ts, secret.ts, policy-v2.ts)
+- Tests: 1396 pass, 0 fail (1297 baseline → 1309 run 1 → 1332 run 2 → 1358 run 3 → 1362 run 4 → 1374 run 5 → 1396 run 6)
+- Typecheck: Only pre-existing errors (engine.ts, runner.ts, secret.ts, policy-v2.ts, catalog-service.ts)
 - Web-UI typecheck: 0 errors; Vite build: 66 modules, 269 kB JS + 4.6 kB CSS
 
 ## Implementation Journal
@@ -119,3 +125,13 @@ docs/architecture/system-prompt.md, docs/architecture/tools.md
 | 13e99dd | Cost tracking (model catalog enrichment, /usage aggregates) | 4 |
 | 13e99dd | SPA operational panels (Presence, Context, ContextDetail, Usage) | 0 |
 | 13e99dd | WS approval events (approval.pending, approval.resolved, broadcast) | 3 |
+
+### Run 6
+| Commit | Feature | Tests Added |
+|--------|---------|-------------|
+| 4a0c78f | Wire Ed25519 public_key through protocol + WS route | 0 |
+| 4a0c78f | Wire EventConsumer dedupe into OutboxPoller | 0 |
+| 4a0c78f | Connector policy gate in pipeline.ingest() | 2 |
+| 4a0c78f | Execution engine concurrency limits (maxConcurrentRuns) | 3 |
+| 4a0c78f | Policy overrides (table, DAL, wildcard, bundle eval, routes) | 16 |
+| 4a0c78f | Auth profiles agent_id scoping (migration 012 + DAL) | 3 |

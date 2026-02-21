@@ -11,6 +11,7 @@ export interface AuthProfileRow {
   failure_count: number;
   created_at: string;
   metadata: unknown;
+  agent_id: string | null;
 }
 
 interface RawAuthProfileRow {
@@ -24,6 +25,7 @@ interface RawAuthProfileRow {
   failure_count: number;
   created_at: string | Date;
   metadata: string | null;
+  agent_id: string | null;
 }
 
 function normalizeTime(value: string | Date): string {
@@ -46,6 +48,7 @@ function toAuthProfileRow(raw: RawAuthProfileRow): AuthProfileRow {
     failure_count: raw.failure_count,
     created_at: normalizeTime(raw.created_at),
     metadata,
+    agent_id: raw.agent_id ?? null,
   };
 }
 
@@ -59,13 +62,14 @@ export class AuthProfileDal {
     secretHandle?: string;
     priority?: number;
     metadata?: unknown;
+    agentId?: string;
   }): Promise<AuthProfileRow> {
     const metadataJson = params.metadata ? JSON.stringify(params.metadata) : null;
     const row = await this.db.get<RawAuthProfileRow>(
-      `INSERT INTO model_auth_profiles (profile_id, provider, label, secret_handle, priority, metadata)
-       VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO model_auth_profiles (profile_id, provider, label, secret_handle, priority, metadata, agent_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
        RETURNING *`,
-      [params.profileId, params.provider, params.label ?? null, params.secretHandle ?? null, params.priority ?? 0, metadataJson],
+      [params.profileId, params.provider, params.label ?? null, params.secretHandle ?? null, params.priority ?? 0, metadataJson, params.agentId ?? null],
     );
     if (!row) throw new Error("profile insert failed");
     return toAuthProfileRow(row);
@@ -91,6 +95,15 @@ export class AuthProfileDal {
     const rows = await this.db.all<RawAuthProfileRow>(
       "SELECT * FROM model_auth_profiles ORDER BY provider, priority ASC",
       [],
+    );
+    return rows.map(toAuthProfileRow);
+  }
+
+  /** List profiles scoped to a specific agent_id (includes unscoped profiles). */
+  async listByAgent(agentId: string): Promise<AuthProfileRow[]> {
+    const rows = await this.db.all<RawAuthProfileRow>(
+      "SELECT * FROM model_auth_profiles WHERE (agent_id = ? OR agent_id IS NULL) AND is_active = 1 ORDER BY priority ASC, failure_count ASC",
+      [agentId],
     );
     return rows.map(toAuthProfileRow);
   }

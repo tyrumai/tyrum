@@ -24,6 +24,7 @@ import { OutboxDal } from "./modules/backplane/outbox-dal.js";
 import { EventPublisher } from "./modules/backplane/event-publisher.js";
 import { ConnectionDirectoryDal } from "./modules/backplane/connection-directory.js";
 import { OutboxPoller } from "./modules/backplane/outbox-poller.js";
+import { EventConsumer } from "./modules/backplane/event-consumer.js";
 import { ConnectionManager } from "./ws/connection-manager.js";
 import { SlashCommandRegistry } from "./ws/slash-commands.js";
 import { registerBuiltinCommands } from "./ws/builtin-commands.js";
@@ -487,11 +488,13 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
       })
     : undefined;
 
+  const eventConsumer = new EventConsumer();
   const outboxPoller = shouldRunEdge
     ? new OutboxPoller({
         consumerId: instanceId,
         outboxDal,
         connectionManager,
+        eventConsumer,
       })
     : undefined;
   outboxPoller?.start();

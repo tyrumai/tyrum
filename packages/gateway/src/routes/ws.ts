@@ -272,6 +272,7 @@ export function createWsHandler(opts: WsRouteOptions): {
             protocol_rev: parsed.data.payload.protocol_rev,
             device_id: parsed.data.payload.device_id,
             capabilities: parsed.data.payload.capabilities,
+            public_key: parsed.data.payload.public_key,
           });
 
           if (result.state === "connected") {

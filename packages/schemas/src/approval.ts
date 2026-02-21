@@ -98,11 +98,15 @@ export const ApprovalListResponse = z
   .strict();
 export type ApprovalListResponse = z.infer<typeof ApprovalListResponse>;
 
+export const ApprovalMode = z.enum(["once", "always"]);
+export type ApprovalMode = z.infer<typeof ApprovalMode>;
+
 export const ApprovalResolveRequest = z
   .object({
     approval_id: z.number().int().positive(),
     decision: ApprovalDecision,
     reason: z.string().optional(),
+    mode: ApprovalMode.default("once"),
   })
   .strict();
 export type ApprovalResolveRequest = z.infer<typeof ApprovalResolveRequest>;

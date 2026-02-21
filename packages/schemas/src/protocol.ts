@@ -216,6 +216,7 @@ export const WsConnectInitPayload = z
     protocol_rev: ProtocolRev,
     capabilities: z.array(ClientCapability).default([]),
     device_id: z.string().min(1).optional(),
+    public_key: z.string().min(1).optional(),
     metadata: z.unknown().optional(),
   })
   .strict();

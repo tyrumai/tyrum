@@ -24,6 +24,7 @@ import { createArtifactRoutes } from "./routes/artifact.js";
 import { createWorkflowRoutes } from "./routes/workflow.js";
 import { createNodeRoutes } from "./routes/node.js";
 import { createPolicyV2Routes } from "./routes/policy-v2.js";
+import { createPolicyOverrideRoutes } from "./routes/policy-override.js";
 import { createModelRoutes } from "./routes/model.js";
 import { PlaybookRunner } from "./modules/playbook/runner.js";
 import { createWebApiRoutes } from "./routes/web-api.js";
@@ -209,6 +210,11 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       snapshotDal: container.policySnapshotDal,
     }));
   }
+
+  // Policy override routes (always on — overrides are a core audit object)
+  app.route("/", createPolicyOverrideRoutes({
+    policyOverrideDal: container.policyOverrideDal,
+  }));
 
   const authProfilesEnabled = (() => {
     const raw = process.env["TYRUM_AUTH_PROFILES"]?.trim().toLowerCase();

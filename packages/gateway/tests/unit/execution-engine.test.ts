@@ -564,4 +564,94 @@ describe("ExecutionEngine (normalized)", () => {
 
     expect(await engine.getQueueDepth()).toBe(5);
   });
+
+  // -----------------------------------------------------------------------
+  // Concurrency limits
+  // -----------------------------------------------------------------------
+
+  it("getRunningCount reports number of running runs", async () => {
+    db = openTestSqliteDb();
+    const engine = new ExecutionEngine({ db });
+
+    // Enqueue 2 plans
+    await engine.enqueuePlan({
+      key: "agent:a1:ch1:group:t1",
+      lane: "main",
+      planId: "plan-conc-1",
+      requestId: "req-c1",
+      steps: [action("Research")],
+    });
+    await engine.enqueuePlan({
+      key: "agent:a2:ch2:group:t2",
+      lane: "main",
+      planId: "plan-conc-2",
+      requestId: "req-c2",
+      steps: [action("Research")],
+    });
+
+    // Both queued, none running
+    expect(await engine.getRunningCount()).toBe(0);
+  });
+
+  it("workerTick returns false when maxConcurrentRuns is reached", async () => {
+    db = openTestSqliteDb();
+    const engine = new ExecutionEngine({ db, maxConcurrentRuns: 1 });
+
+    // Enqueue two plans
+    await engine.enqueuePlan({
+      key: "agent:a1:ch1:group:t1",
+      lane: "main",
+      planId: "plan-cc-1",
+      requestId: "req-cc1",
+      steps: [action("Research")],
+    });
+    await engine.enqueuePlan({
+      key: "agent:a2:ch2:group:t2",
+      lane: "main",
+      planId: "plan-cc-2",
+      requestId: "req-cc2",
+      steps: [action("Research")],
+    });
+
+    // A long-running executor that never finishes
+    const neverExecutor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => {
+        return { success: true, result: { ok: true } };
+      }),
+    };
+
+    // First tick should start one run
+    const first = await engine.workerTick({ workerId: "w1", executor: neverExecutor });
+    expect(first).toBe(true);
+
+    // Manually force the first run into running status (it might be there already)
+    await db.run("UPDATE execution_runs SET status = 'running' WHERE status = 'queued' LIMIT 1");
+
+    // Second tick should be blocked by concurrency limit
+    const second = await engine.workerTick({ workerId: "w2", executor: neverExecutor });
+    expect(second).toBe(false);
+  });
+
+  it("unlimited concurrency when maxConcurrentRuns is 0", async () => {
+    db = openTestSqliteDb();
+    const engine = new ExecutionEngine({ db, maxConcurrentRuns: 0 });
+
+    await engine.enqueuePlan({
+      key: "agent:a1:ch1:group:t1",
+      lane: "main",
+      planId: "plan-unlim-1",
+      requestId: "req-u1",
+      steps: [action("Research")],
+    });
+
+    const neverExecutor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => {
+        return { success: true, result: { ok: true } };
+      }),
+    };
+
+    // Should work fine regardless
+    const result = await engine.workerTick({ workerId: "w1", executor: neverExecutor });
+    expect(result).toBe(true);
+  });
 });

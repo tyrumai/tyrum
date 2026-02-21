@@ -44,6 +44,8 @@ export {
   PolicyPrecedence,
   PolicyRule,
   PolicyBundle,
+  PolicyOverrideStatus,
+  PolicyOverride,
 } from "./policy.js";
 
 export {
@@ -290,6 +292,7 @@ export {
   Approval,
   ApprovalListRequest,
   ApprovalListResponse,
+  ApprovalMode,
   ApprovalResolveRequest,
   ApprovalResolveResponse,
 } from "./approval.js";

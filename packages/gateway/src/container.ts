@@ -18,6 +18,7 @@ import type { JobQueue } from "./modules/executor/job-queue.js";
 import type { PresenceDal } from "./modules/presence/dal.js";
 import type { NodeDal } from "./modules/node/dal.js";
 import type { PolicySnapshotDal } from "./modules/policy/snapshot-dal.js";
+import type { PolicyOverrideDal } from "./modules/policy/override-dal.js";
 import type { AuthProfileDal } from "./modules/model/auth-profile-dal.js";
 import type { ContextReportDal } from "./modules/context/report-dal.js";
 import type { ModelCatalogService } from "./modules/model/catalog-service.js";
@@ -45,6 +46,7 @@ import { JobQueue as JobQueueImpl } from "./modules/executor/job-queue.js";
 import { PresenceDal as PresenceDalImpl } from "./modules/presence/dal.js";
 import { NodeDal as NodeDalImpl } from "./modules/node/dal.js";
 import { PolicySnapshotDal as PolicySnapshotDalImpl } from "./modules/policy/snapshot-dal.js";
+import { PolicyOverrideDal as PolicyOverrideDalImpl } from "./modules/policy/override-dal.js";
 import { AuthProfileDal as AuthProfileDalImpl } from "./modules/model/auth-profile-dal.js";
 import { ContextReportDal as ContextReportDalImpl } from "./modules/context/report-dal.js";
 import { ModelCatalogService as ModelCatalogServiceImpl } from "./modules/model/catalog-service.js";
@@ -87,6 +89,7 @@ export interface GatewayContainer {
   artifactMetadataDal: ArtifactMetadataDal;
   nodeDal: NodeDal;
   policySnapshotDal: PolicySnapshotDal;
+  policyOverrideDal: PolicyOverrideDal;
   authProfileDal: AuthProfileDal;
   policyBundleManager: PolicyBundleManager;
   contextReportDal: ContextReportDal;
@@ -157,6 +160,7 @@ function wireContainer(
   const artifactMetadataDal = new ArtifactMetadataDalImpl(db);
   const nodeDal = new NodeDalImpl(db);
   const policySnapshotDal = new PolicySnapshotDalImpl(db);
+  const policyOverrideDal = new PolicyOverrideDalImpl(db);
   const authProfileDal = new AuthProfileDalImpl(db);
   const policyBundleManager = new PolicyBundleManager();
   const contextReportDal = new ContextReportDalImpl(db);
@@ -184,6 +188,7 @@ function wireContainer(
     artifactMetadataDal,
     nodeDal,
     policySnapshotDal,
+    policyOverrideDal,
     authProfileDal,
     policyBundleManager,
     contextReportDal,

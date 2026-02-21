@@ -31,6 +31,7 @@ const DURABLE_TABLES = [
   "policy_snapshots",
   "model_auth_profiles",
   "context_reports",
+  "policy_overrides",
 ] as const;
 
 export interface SnapshotBundle {

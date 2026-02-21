@@ -1,4 +1,5 @@
 import type { DedupeDal } from "./dedupe-dal.js";
+import type { PolicyBundleManager } from "../policy/bundle.js";
 
 export interface NormalizedMessage {
   message_id: string;
@@ -13,12 +14,14 @@ export interface ConnectorPipelineOpts {
   dedupeDal: DedupeDal;
   dedupeTtlMs?: number;
   debounceDurationMs?: number;
+  policyBundleManager?: PolicyBundleManager;
 }
 
 export class ConnectorPipeline {
   private readonly dedupeDal: DedupeDal;
   private readonly dedupeTtlMs: number;
   private readonly debounceDurationMs: number;
+  private readonly policyBundleManager?: PolicyBundleManager;
   private readonly debounceTimers = new Map<string, NodeJS.Timeout>();
   private readonly pendingMessages = new Map<string, NormalizedMessage>();
   private readonly pendingResolvers = new Map<
@@ -30,6 +33,7 @@ export class ConnectorPipeline {
     this.dedupeDal = opts.dedupeDal;
     this.dedupeTtlMs = opts.dedupeTtlMs ?? 3_600_000; // 1 hour default
     this.debounceDurationMs = opts.debounceDurationMs ?? 0; // no debounce by default
+    this.policyBundleManager = opts.policyBundleManager;
   }
 
   /**
@@ -37,6 +41,14 @@ export class ConnectorPipeline {
    * Returns the message if it should be processed, or null if filtered (duplicate/debounced).
    */
   async ingest(message: NormalizedMessage): Promise<NormalizedMessage | null> {
+    // Step 0: Policy gate — connectors must not bypass policy
+    if (this.policyBundleManager) {
+      const decision = this.policyBundleManager.evaluate("messaging", {
+        channel: message.channel,
+      });
+      if (decision.action === "deny") return null;
+    }
+
     // Step 1: Deduplicate
     const isDup = await this.dedupeDal.isDuplicate(
       message.message_id,

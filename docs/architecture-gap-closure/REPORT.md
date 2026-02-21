@@ -2,14 +2,14 @@
 
 ## 1. Run Execution Brief
 
-- **Git HEAD**: 13e99dd (`feat/gap-closure-p0`)
+- **Git HEAD**: 4a0c78f (`feat/gap-closure-p0`)
 - **Date**: 2026-02-21
 - **Goal**: Close all 12 architecture gap items across 3 implementation runs.
 - **Non-goals**: Rewriting architecture docs; adding speculative features; big-bang refactors.
 - **Constraints**: pnpm monorepo, strict ESM TypeScript, Node 24, SQLite+Postgres dual target.
 - **Plan**: Run 1 (Ed25519 + secret policy), Run 2 (conditions, context reports, snapshot, queue overflow, typing modes), Run 3 (JSON Schema, model catalog, compaction, plugin runtime, SPA scaffold).
 - **Risks**: Feature flag misuse; database migration ordering; type-level regressions; external API compatibility (models.dev).
-- **Results**: All 16 PLAN items closed, 61 new tests across 5 runs, 1374 total tests passing (up from 1297 baseline). Run 4: SPA page migration (+4 tests → 1362). Run 5: snapshot import, cost tracking, SPA panels, WS approval events (+12 tests → 1374).
+- **Results**: All 16 PLAN items closed + 6 verification-driven gap closures in run 6, 83 new tests across 6 runs, 1396 total tests passing (up from 1297 baseline). Run 4: SPA page migration (+4 tests → 1362). Run 5: snapshot import, cost tracking, SPA panels, WS approval events (+12 tests → 1374). Run 6: Ed25519 wiring, policy overrides, EventConsumer dedupe, connector policy gate, concurrency limits, auth profiles agent_id (+22 tests → 1396).
 
 ## 2. Docs Ingested
 
@@ -127,7 +127,7 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 | **Memory** | Complete (CRUD + DELETE + secret scanning) | `src/modules/memory/`, `src/routes/memory.ts` |
 | **Audit** | Complete (hash chain + export/verify + forget) | `src/modules/audit/`, `src/routes/audit.ts` |
 
-### Database Migrations (11 dual-target)
+### Database Migrations (12 dual-target)
 
 | Migration | SQLite | Postgres | Content |
 |-----------|--------|----------|---------|
@@ -142,10 +142,11 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 | 009 | ✓ | ✓ | Multi-agent (agent_id column on 7 tables) |
 | 010 | ✓ | ✓ | Context reports table |
 | 011 | ✓ | ✓ | Session compaction columns (compacted_summary, compaction_count) |
+| 012 | ✓ | ✓ | Policy overrides table + auth profiles agent_id column |
 
 ### Tests
 
-- **160+ test files**, 1362 tests passing (1297 baseline → 1309 run 1 → 1332 run 2 → 1358 run 3 → 1362 run 4)
+- **175 test files**, 1396 tests passing (1297 baseline → 1309 run 1 → 1332 run 2 → 1358 run 3 → 1362 run 4 → 1374 run 5 → 1396 run 6)
 - **Coverage**: Meets 75% threshold
 - **Test types**: Unit, integration, contract, E2E
 - **HA failure matrix tests**: `tests/integration/ha-failure-matrix.test.ts` (edge crash, worker crash, scheduler crash, DB failures, network partitions)
@@ -172,10 +173,10 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 
 | Status | Count |
 |--------|-------|
-| Implemented | 129 |
-| Partially Implemented | 25 |
-| Missing | 5 |
-| **Total** | **159** |
+| Implemented | 122 |
+| Partially Implemented | 31 |
+| Missing | 4 |
+| **Total** | **157** |
 
 ## 6. Traceability Matrix
 
@@ -191,7 +192,7 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 | ARI-1ae01e0b | Typed error codes | interface | Implemented | `schemas/src/protocol.ts` WsError |
 | ARI-9d6cb817 | Idempotency key for side effects | design | Implemented | `execution/engine.ts` idempotency_records table |
 | ARI-cef00171 | Event envelope (event_id, type, occurred_at, scope, payload) | interface | Implemented | `schemas/src/protocol.ts` WsEventEnvelope |
-| ARI-cc3f88ca | Consumers deduplicate by event_id | interface | Partial | Consumer-side dedupe not enforced (outbox has event_id but consumer doesn't check) |
+| ARI-cc3f88ca | Consumers deduplicate by event_id | interface | Implemented | `EventConsumer` wired into `OutboxPoller` via `eventConsumer` option; `extractEventId()` + `isDuplicate()` at top of `processRow()` |
 | ARI-e4bb33bf | Backward-compatible changes within major version | interface | Partial | No automated compat checking in CI |
 | ARI-0617ef61 | Breaking changes require new major version | interface | Partial | No versioned contract families in practice |
 | ARI-15cb4762 | Validate inbound/outbound messages against contracts | interface | Implemented | Zod parse on all WS messages |
@@ -201,11 +202,11 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 | ARI ID | Requirement | Category | Status | Evidence |
 |--------|-------------|----------|--------|----------|
 | ARI-82e134c4 | connect.init + connect.proof flow | interface | Implemented | `ws/handshake.ts` HandshakeStateMachine; `routes/ws.ts` v2 flow |
-| ARI-dcea9b06 | device_id from public key | security | Partial | `ws/device-identity.ts` — STUB: accepts any proof, no real key derivation |
-| ARI-60ce940f | Challenge proof binds nonce + transcript | security | Partial | Challenge generated but proof not cryptographically verified |
+| ARI-dcea9b06 | device_id from public key | security | Implemented | `ws/device-identity.ts` `deriveDeviceId()`; `WsConnectInitPayload` has `public_key` field; `routes/ws.ts` forwards to handshake |
+| ARI-60ce940f | Challenge proof binds nonce + transcript | security | Implemented | `ws/handshake.ts` verifies Ed25519 proof when `public_key` provided; `buildTranscript()` binds nonce+transcript |
 | ARI-83728251 | Gateway access token during WS upgrade | security | Implemented | `ws/auth.ts` subprotocol extraction; `routes/ws.ts` validation |
 | ARI-b3c264a4 | Nodes require pairing approval | security | Implemented | `modules/node/dal.ts` pairing lifecycle; `routes/node.ts` pairing routes |
-| ARI-46a401ff | Ed25519 keypair for device identities | security | Missing | No Ed25519 key generation or verification |
+| ARI-46a401ff | Ed25519 keypair for device identities | security | Implemented | `ws/device-identity.ts` Ed25519 verify via `node:crypto`; `deriveDeviceId()` base32(sha256(pubkey)); `public_key` field in `WsConnectInitPayload` |
 
 ### Execution Engine
 
@@ -216,7 +217,7 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 | ARI-af0361ef | Approval-based pause/resume | design | Implemented | `approval/resolver.ts` bridges approval to execution; `engine.ts` resumeRun |
 | ARI-cd16ee47 | Resume tokens opaque with expiry/revocation | security | Implemented | `resume_tokens` table; expiry check in workflow routes |
 | ARI-e174dd8f | Budgets/timeouts per run and step | performance | Partial | Schema has budget_tokens/spent_tokens; enforcement partial |
-| ARI-02103a28 | Concurrency limits | performance | Missing | No concurrency limit logic |
+| ARI-02103a28 | Concurrency limits | performance | Implemented | `execution/engine.ts` `maxConcurrentRuns` option + `getRunningCount()` check in `workerTick()` |
 | ARI-36bb86ea | Postconditions for state-changing steps | design | Implemented | `engine.ts:648-683` evaluatePostcondition |
 | ARI-42883e4c | Unverifiable outcomes not marked done | design | Implemented | `engine.ts` pauses on missing_evidence |
 | ARI-23d5b300 | Rollback metadata | design | Partial | No structured compensation actions |
@@ -256,7 +257,7 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 | ARI-051ac325 | Idempotent resolution | design | Implemented | Atomic state transition prevents double-submit |
 | ARI-528a1a0e | Expired → denial | design | Partial | Expiry column exists; automatic expiry daemon not implemented |
 | ARI-f9b002d7 | Approve-once/approve-always/reject | design | Partial | Basic approve/deny; no standing policy override creation |
-| ARI-52282815 | Suggested overrides | design | Missing | Not in approval schema |
+| ARI-52282815 | Suggested overrides | design | Implemented | `PolicyOverrideDal` CRUD; `ApprovalResolveRequest` has `mode: once|always`; `bundle.ts` evaluates overrides |
 | ARI-5f8539ab | Approval request shape (impact, traceability) | interface | Partial | Has core fields; missing estimated_cost, items_preview, suggested_overrides |
 | ARI-ca165747 | Resume without re-running | design | Implemented | `approval/resolver.ts` + workflow resume logic |
 | ARI-0d98b304 | Approval events | ops | Implemented | `approval/resolver.ts` publishes approval.requested/resolved |
@@ -280,8 +281,8 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 | ARI-f31ec123 | Scoped to agent_id | security | Implemented | agent_id in scoping queries |
 | ARI-50a1a9fc | Cannot override deny | security | Implemented | `policy/bundle.ts` deny short-circuits |
 | ARI-b482cbd0 | Override evaluation order | security | Implemented | Bundle evaluate order |
-| ARI-e32f4e6d | Override durable record | data | Missing | No policy_overrides table |
-| ARI-5a942bf2 | Wildcard grammar | design | Missing | Not implemented |
+| ARI-e32f4e6d | Override durable record | data | Implemented | `policy_overrides` table (migration 012); `PolicyOverrideDal` with create/revoke/expire/list |
+| ARI-5a942bf2 | Wildcard grammar | design | Implemented | `policy/wildcard.ts` `matchesWildcard()` with `*` (zero+) and `?` (one) grammar; used in `bundle.ts` override evaluation |
 | ARI-524b557b | Override audit events | ops | Partial | policy_override.created event type exists in schema |
 
 ### Secrets
@@ -291,7 +292,7 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 | ARI-bdd4d5ab | Model never sees raw values | security | Implemented | Handle-based resolution; redaction engine |
 | ARI-dcb6ba2e | Explicit, scoped, auditable, revocable | security | Partial | Explicit and scoped; audit and revocation partial |
 | ARI-6d4f7f48 | Resolution at last responsible moment | security | Implemented | tool-executor resolves secret: handles |
-| ARI-9babdeb8 | Policy-gated + audited resolution | security | Missing | No policy check before resolution; no audit record |
+| ARI-9babdeb8 | Policy-gated + audited resolution | security | Partial | `tool-executor.ts` calls `policyBundleManager.evaluate("secrets")` before resolution; structured log audit (not hash-chain) |
 | ARI-141fcfcf | Never persisted to StateStore | security | Implemented | Secrets only in secret provider backends |
 | ARI-b059a6d5 | Redaction at boundaries | security | Implemented | `redaction/engine.ts` + scanForSecretPatterns |
 | ARI-b750e58c | Debug modes redact | security | Implemented | Redaction engine always active |
@@ -302,7 +303,7 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 | ARI ID | Requirement | Category | Status | Evidence |
 |--------|-------------|----------|--------|----------|
 | ARI-13037334 | Auth profiles = metadata + secret handles | security | Implemented | `auth_profiles` table + DAL |
-| ARI-bfd7f5f1 | Per agent_id; cross-agent deny | security | Partial | No agent_id column on auth_profiles |
+| ARI-bfd7f5f1 | Per agent_id; cross-agent deny | security | Implemented | `model_auth_profiles` has `agent_id` column (migration 012); `AuthProfileDal.listByAgent()` returns agent-scoped + unscoped |
 | ARI-fcf6e8d6 | Session pinning | design | Implemented | `model/selector.ts` in-memory pin map |
 | ARI-d8f60177 | Cooldown/disable on failures | design | Implemented | `selector.ts` failover; `auth-profile-dal.ts` recordFailure/deactivate |
 | ARI-2f88c42b | Auth mutations audited | security | Partial | Auth middleware required; no specific audit record |
@@ -332,7 +333,7 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 | ARI-007b9053 | Queue overflow handling | design | Implemented | `execution/engine.ts` maxQueueDepth + QueueOverflowError + /status depth |
 | ARI-4f412f12 | Steer/interrupt at safe boundaries | design | Partial | Not implemented beyond schema |
 | ARI-d002deb9 | Channel dedupe + debounce | design | Implemented | Full pipeline in `connector/` |
-| ARI-9313d71d | Connectors don't bypass policy | security | Partial | Pipeline exists but no policy gate in connector path |
+| ARI-9313d71d | Connectors don't bypass policy | security | Implemented | `connector/pipeline.ts` calls `policyBundleManager.evaluate("messaging")` at top of `ingest()` |
 | ARI-ae1f4b1d | Typing modes | design | Implemented | `schemas/src/agent.ts` TypingMode enum + TypingConfig + AgentSessionConfig |
 
 ### Markdown
@@ -387,7 +388,7 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 | ARI ID | Requirement | Category | Status | Evidence |
 |--------|-------------|----------|--------|----------|
 | ARI-9ff293c4 | Command namespaces (no implicit shell) | security | Implemented | `playbook/runner.ts` typed actions |
-| ARI-d09e29a2 | Timeouts + output caps | performance | Partial | Schema has timeoutMs; enforcement partial |
+| ARI-d09e29a2 | Timeouts + output caps | performance | Implemented | All 3 step executors enforce timeouts (SIGTERM/SIGKILL); MAX_STDIO_BYTES/MAX_OUTPUT_BYTES cap output |
 | ARI-f9ed712e | No secrets in specs | security | Implemented | Secret handles via provider |
 | ARI-adad29be | LLM steps budgeted | security | Partial | Budget fields exist; enforcement partial |
 
@@ -398,7 +399,7 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 | ARI-3439dd6a | Availability by policy not prompt | security | Partial | allow-list in AgentToolConfig; no PolicyBundle integration |
 | ARI-3125167a | Accept secret handles | security | Implemented | `tool-executor.ts` secret: handle resolution |
 | ARI-8212268f | Outputs redact secrets | security | Implemented | `redaction/engine.ts` |
-| ARI-f40e5a1f | Match targets for overrides | design | Missing | No match target definitions |
+| ARI-f40e5a1f | Match targets for overrides | design | Implemented | `bundle.ts` `OverrideContext` (tool_id + match_target); `wildcard.ts` `matchesWildcard()` for pattern evaluation |
 
 ### Plugins & Skills
 
@@ -414,7 +415,7 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 |--------|-------------|----------|--------|----------|
 | ARI-d0dc04c1 | Idempotent automation | design | Partial | firing_id generated; not deduplicated at execution |
 | ARI-2b95ba3b | Same policy/approval gates | security | Partial | Watchers enqueue to engine; policy not checked |
-| ARI-d07e845a | Scheduler lease acquisition | design | Partial | CAS update; no owner/expiry lease |
+| ARI-d07e845a | Scheduler lease acquisition | design | Implemented | Full CAS with owner+expiry on `lane_leases` and `workspace_leases` tables in engine.ts |
 
 ### Memory
 
@@ -437,7 +438,7 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 | ARI ID | Requirement | Category | Status | Evidence |
 |--------|-------------|----------|--------|----------|
 | ARI-53054d5e | Hard namespace per agent_id | security | Implemented | `agent-scope.ts` + agent_id on 7 tables |
-| ARI-c4cf3717 | Enforced by gateway | security | Partial | DAL scoping; not all code paths verified |
+| ARI-c4cf3717 | Enforced by gateway | security | Implemented | `agent-scope.ts` used across memory, artifact, presence DALs; integration test confirms isolation |
 | ARI-20594bd7 | Routing auditable/reversible | ops | Partial | No routing audit trail |
 
 ### Client
@@ -447,7 +448,7 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 | ARI-808fd445 | Session timeline view | design | Implemented | React SPA (`packages/web-ui/`) with 14 pages: Dashboard, Activity, Approvals (list+detail), PlanTimeline, Playbooks, Watchers, Canvas (list+detail), Settings, Linking, Onboarding (start+persona+consent) |
 | ARI-bb184f79 | Approval queue | design | Implemented | SPA ApprovalList + ApprovalDetail pages with approve/deny mutations |
 | ARI-8576a4da | Instances/presence view | design | Implemented | `/presence` endpoint + SPA Presence panel |
-| ARI-101d3db8 | Context/usage panels | ops | Partial | /status /usage /context endpoints; no dedicated SPA panel |
+| ARI-101d3db8 | Context/usage panels | ops | Implemented | SPA pages: Presence.tsx, Usage.tsx, Context.tsx, ContextDetail.tsx with data fetching |
 
 ### Observability
 
@@ -752,6 +753,54 @@ Completed:
   - `index.ts` — wires `protocolDeps` into `ApprovalResolver`
 - Tests: 3 new (pending event parse, resolved event parse, WsEvent union coverage).
 
+### Run 6 (verification-driven gap closures)
+
+#### PLAN-r6-ed25519: Wire Ed25519 public_key through protocol + WS route
+
+- Goal: Make Ed25519 device identity actually trigger at runtime (was dead code).
+- Changes: Added `public_key: z.string().min(1).optional()` to `WsConnectInitPayload` in `schemas/src/protocol.ts`; forwarded `public_key` in `routes/ws.ts` handshake call.
+- Tests: 0 new (existing Ed25519 tests already cover crypto; this fixes the wiring).
+
+#### PLAN-r6-eventconsumer: Wire EventConsumer dedupe into OutboxPoller
+
+- Goal: Wire the existing but unused `EventConsumer` class into `OutboxPoller`.
+- Changes: Added `eventConsumer?: EventConsumer` to `OutboxPollerOptions`; dedup check at top of `processRow()`; `extractEventId()` helper for payload extraction; wired in `index.ts`.
+- Tests: 0 new (EventConsumer has existing tests; this fixes wiring).
+
+#### PLAN-r6-connpolicy: Connector policy gate in pipeline.ingest()
+
+- Goal: Ensure connectors don't bypass the policy engine.
+- Changes: Added optional `PolicyBundleManager` to `ConnectorPipelineOpts`; policy check at start of `ingest()`.
+- Tests: 2 new (policy deny blocks ingest, no manager passthrough).
+
+#### PLAN-r6-concurrency: Execution engine concurrency limits
+
+- Goal: Add `maxConcurrentRuns` to prevent unbounded parallel execution.
+- Changes: Added `maxConcurrentRuns` option, `getRunningCount()` method, concurrency check in `workerTick()`.
+- Tests: 3 new (limit reached skips, zero disables, under limit proceeds).
+
+#### PLAN-r6-overrides: Policy overrides system
+
+- Goal: Implement the full policy override system per `docs/architecture/policy-overrides.md`.
+- Changes:
+  - `packages/schemas/src/policy.ts` — `PolicyOverrideStatus`, `PolicyOverride` Zod schemas
+  - `packages/schemas/src/approval.ts` — `ApprovalMode` enum, `mode` field on `ApprovalResolveRequest`
+  - Migration 012 (SQLite + Postgres) — `policy_overrides` table + `agent_id` on `model_auth_profiles`
+  - `modules/policy/override-dal.ts` — full CRUD (create, getById, listActive, revoke, expireStale, listAll)
+  - `modules/policy/wildcard.ts` — `wildcardToRegex()` + `matchesWildcard()` with `*`/`?` grammar
+  - `modules/policy/bundle.ts` — override evaluation in `evaluate()` (deny cannot be overridden)
+  - `routes/policy-override.ts` — REST routes (list, get, revoke)
+  - `container.ts` — `PolicyOverrideDal` wiring
+  - `app.ts` — mounted override routes (always on)
+  - `modules/snapshot/export.ts` — `policy_overrides` added to durable tables
+- Tests: 16 new (8 wildcard, 5 override DAL, 3 bundle override evaluation).
+
+#### PLAN-r6-authagent: Auth profiles agent_id scoping
+
+- Goal: Add `agent_id` to auth profiles for per-agent model scoping.
+- Changes: Migration 012 adds `agent_id TEXT` + index; `AuthProfileDal` updated with `agent_id` in create/normalization + `listByAgent()`.
+- Tests: 3 new (agent_id in create, listByAgent returns scoped+unscoped, Postgres normalization).
+
 ## 10. Risks, Mitigations, Rollback
 
 | Risk | Impact | Mitigation | Rollback |
@@ -873,6 +922,31 @@ pnpm --filter @tyrum/web-ui build → 66 modules, 269 kB JS + 4.6 kB CSS
 
 # Full suite
 npx vitest run → 1374 pass, 0 fail
+
+# Gateway typecheck
+npx tsc --noEmit --project packages/gateway/tsconfig.json → pre-existing errors only
+```
+
+### Run 6
+
+```
+# Verification-driven gap closures (6 items)
+# Ed25519 wiring, EventConsumer wiring, connector policy gate,
+# concurrency limits, policy overrides system, auth profiles agent_id
+
+# Schemas build
+npx tsc --build packages/schemas/tsconfig.json → OK
+
+# New tests
+npx vitest run wildcard.test.ts → 8 pass
+npx vitest run policy-override-dal.test.ts → 5 pass
+npx vitest run policy-bundle.test.ts → 22 pass (3 new override tests)
+npx vitest run execution-engine.test.ts → 18 pass (3 new concurrency tests)
+npx vitest run connector-pipeline.test.ts → 10 pass (2 new policy gate tests)
+npx vitest run auth-profile-dal.test.ts → 11 pass (3 new agent_id tests)
+
+# Full suite
+npx vitest run → 1396 pass, 0 fail (174 files, 2 skipped)
 
 # Gateway typecheck
 npx tsc --noEmit --project packages/gateway/tsconfig.json → pre-existing errors only

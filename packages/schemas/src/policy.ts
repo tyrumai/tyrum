@@ -117,3 +117,30 @@ export const PolicyBundle = z
   })
   .strict();
 export type PolicyBundle = z.infer<typeof PolicyBundle>;
+
+// ---------------------------------------------------------------------------
+// Policy overrides (approve-always durable records)
+// ---------------------------------------------------------------------------
+
+export const PolicyOverrideStatus = z.enum(["active", "revoked", "expired"]);
+export type PolicyOverrideStatus = z.infer<typeof PolicyOverrideStatus>;
+
+export const PolicyOverride = z
+  .object({
+    policy_override_id: z.string().trim().min(1),
+    status: PolicyOverrideStatus,
+    agent_id: z.string().trim().min(1),
+    workspace_id: z.string().trim().min(1).optional(),
+    tool_id: z.string().trim().min(1),
+    pattern: z.string().min(1),
+    created_at: z.string(),
+    created_by: z.string().optional(),
+    created_from_approval_id: z.number().int().positive().optional(),
+    created_from_policy_snapshot_id: z.number().int().positive().optional(),
+    expires_at: z.string().nullable().optional(),
+    revoked_at: z.string().nullable().optional(),
+    revoked_by: z.string().nullable().optional(),
+    revoked_reason: z.string().nullable().optional(),
+  })
+  .strict();
+export type PolicyOverride = z.infer<typeof PolicyOverride>;
