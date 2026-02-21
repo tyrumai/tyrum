@@ -14,6 +14,10 @@ import { Linking } from "./pages/Linking.js";
 import { OnboardingStart } from "./pages/OnboardingStart.js";
 import { OnboardingPersona } from "./pages/OnboardingPersona.js";
 import { OnboardingConsent } from "./pages/OnboardingConsent.js";
+import { Presence } from "./pages/Presence.js";
+import { Usage } from "./pages/Usage.js";
+import { Context } from "./pages/Context.js";
+import { ContextDetail } from "./pages/ContextDetail.js";
 
 export function App() {
   return (
@@ -34,6 +38,10 @@ export function App() {
           <Route path="onboarding/start" element={<OnboardingStart />} />
           <Route path="onboarding/persona" element={<OnboardingPersona />} />
           <Route path="onboarding/consent" element={<OnboardingConsent />} />
+          <Route path="presence" element={<Presence />} />
+          <Route path="usage" element={<Usage />} />
+          <Route path="context" element={<Context />} />
+          <Route path="context/:runId" element={<ContextDetail />} />
           <Route path="*" element={<Navigate to="/app" replace />} />
         </Route>
       </Routes>

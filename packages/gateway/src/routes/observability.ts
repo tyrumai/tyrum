@@ -57,6 +57,19 @@ export function createObservabilityRoutes(deps: ObservabilityDeps): Hono {
         (SELECT COUNT(*) FROM execution_attempts) AS total_attempts`,
     );
 
+    const costRow = await deps.db.get<{
+      total_input_tokens: number;
+      total_output_tokens: number;
+      total_usd_micros: number;
+    }>(
+      `SELECT
+        COALESCE(SUM(json_extract(cost_json, '$.input_tokens')), 0) AS total_input_tokens,
+        COALESCE(SUM(json_extract(cost_json, '$.output_tokens')), 0) AS total_output_tokens,
+        COALESCE(SUM(json_extract(cost_json, '$.usd_micros')), 0) AS total_usd_micros
+      FROM execution_attempts
+      WHERE cost_json IS NOT NULL`,
+    );
+
     return c.json({
       runs: {
         total: row?.total_runs ?? 0,
@@ -65,6 +78,11 @@ export function createObservabilityRoutes(deps: ObservabilityDeps): Hono {
       },
       steps: { total: row?.total_steps ?? 0 },
       attempts: { total: row?.total_attempts ?? 0 },
+      cost: {
+        total_input_tokens: costRow?.total_input_tokens ?? 0,
+        total_output_tokens: costRow?.total_output_tokens ?? 0,
+        total_usd_micros: costRow?.total_usd_micros ?? 0,
+      },
     });
   });
 

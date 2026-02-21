@@ -9,12 +9,14 @@ import type { ApprovalDal } from "./dal.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { EventBus } from "../../event-bus.js";
 import type { EventPublisher } from "../backplane/event-publisher.js";
+import { sendApprovalUpdate, type ProtocolDeps } from "../../ws/protocol.js";
 
 export interface ApprovalResolverDeps {
   approvalDal: ApprovalDal;
   db: SqlDb;
   eventBus: EventBus;
   eventPublisher?: EventPublisher;
+  protocolDeps?: ProtocolDeps;
 }
 
 export class ApprovalResolver {
@@ -45,6 +47,15 @@ export class ApprovalResolver {
       reason: event.reason,
       run_id: row.run_id,
     }).catch(() => { /* best-effort */ });
+
+    if (this.deps.protocolDeps) {
+      sendApprovalUpdate("approval.resolved", {
+        approval_id: event.approvalId,
+        approved: event.approved,
+        reason: event.reason,
+        run_id: row.run_id,
+      }, this.deps.protocolDeps);
+    }
 
     if (event.approved) {
       // Resume the paused run
@@ -109,5 +120,15 @@ export class ApprovalResolver {
       step_id: params.stepId,
       prompt: params.prompt,
     }).catch(() => { /* best-effort */ });
+
+    if (this.deps.protocolDeps) {
+      sendApprovalUpdate("approval.pending", {
+        approval_id: approval.id,
+        plan_id: params.runId,
+        step_index: 0,
+        prompt: params.prompt,
+        run_id: params.runId,
+      }, this.deps.protocolDeps);
+    }
   }
 }

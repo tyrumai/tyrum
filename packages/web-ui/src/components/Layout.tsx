@@ -10,6 +10,9 @@ const NAV_LINKS = [
   ["/app/settings", "Settings"],
   ["/app/linking", "Linking"],
   ["/app/onboarding/start", "Onboarding"],
+  ["/app/presence", "Presence"],
+  ["/app/context", "Context"],
+  ["/app/usage", "Usage"],
 ] as const;
 
 export function Layout() {

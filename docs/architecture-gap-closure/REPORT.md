@@ -2,14 +2,14 @@
 
 ## 1. Run Execution Brief
 
-- **Git HEAD**: 7df2167 (`feat/gap-closure-p0`)
+- **Git HEAD**: 13e99dd (`feat/gap-closure-p0`)
 - **Date**: 2026-02-21
 - **Goal**: Close all 12 architecture gap items across 3 implementation runs.
 - **Non-goals**: Rewriting architecture docs; adding speculative features; big-bang refactors.
 - **Constraints**: pnpm monorepo, strict ESM TypeScript, Node 24, SQLite+Postgres dual target.
 - **Plan**: Run 1 (Ed25519 + secret policy), Run 2 (conditions, context reports, snapshot, queue overflow, typing modes), Run 3 (JSON Schema, model catalog, compaction, plugin runtime, SPA scaffold).
 - **Risks**: Feature flag misuse; database migration ordering; type-level regressions; external API compatibility (models.dev).
-- **Results**: All 12 PLAN items closed, 49 new tests across 3 runs, 1358 total tests passing (up from 1297 baseline).
+- **Results**: All 16 PLAN items closed, 61 new tests across 5 runs, 1374 total tests passing (up from 1297 baseline). Run 4: SPA page migration (+4 tests → 1362). Run 5: snapshot import, cost tracking, SPA panels, WS approval events (+12 tests → 1374).
 
 ## 2. Docs Ingested
 
@@ -145,7 +145,7 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 
 ### Tests
 
-- **160+ test files**, 1358 tests passing (1297 baseline → 1309 run 1 → 1332 run 2 → 1358 run 3)
+- **160+ test files**, 1362 tests passing (1297 baseline → 1309 run 1 → 1332 run 2 → 1358 run 3 → 1362 run 4)
 - **Coverage**: Meets 75% threshold
 - **Test types**: Unit, integration, contract, E2E
 - **HA failure matrix tests**: `tests/integration/ha-failure-matrix.test.ts` (edge crash, worker crash, scheduler crash, DB failures, network partitions)
@@ -225,7 +225,7 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 | ARI-837942ee | Durable outcomes before events | data | Implemented | Transaction-based persistence in engine + workflow routes |
 | ARI-b47a50e7 | Idempotency is durable dedupe | design | Implemented | `idempotency_records` table with ON CONFLICT |
 | ARI-2f503457 | Retry policy per-step | design | Implemented | `engine.ts` maybeRetryOrFailStep |
-| ARI-3150d824 | Cost attribution per run/step/attempt | ops | Partial | `execution_attempts` has cost columns; not fully populated |
+| ARI-3150d824 | Cost attribution per run/step/attempt | ops | Implemented | `cost-enrichment.ts` enriches from model catalog; `/usage` aggregates |
 | ARI-8dd6c4a0 | Structured logs with stable identifiers | ops | Implemented | Logger class with field inheritance |
 | ARI-3a538638 | OpenTelemetry export | ops | Implemented | `observability/otel.ts` OTLP trace exporter |
 
@@ -241,7 +241,7 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 | ARI-5e7836f2 | Connection directory with TTL | design | Implemented | `connection_directory` table |
 | ARI-6abb3a00 | Scheduler DB-leases + firing_id | design | Partial | CAS update (no owner/expiry lease); firing_id not deduplicated at execution layer |
 | ARI-98580432 | Only ToolRunner mounts workspace | deploy | Implemented | K8s ToolRunner + workspace leases |
-| ARI-aff4c9d5 | Snapshot export/import | data | Partial | `routes/snapshot.ts` export implemented; import stubbed 501 |
+| ARI-aff4c9d5 | Snapshot export/import | data | Implemented | `snapshot/export.ts` + `snapshot/import.ts` with round-trip validation |
 | ARI-de47207a | Failure/failover validation matrix | testing | Implemented | `tests/integration/ha-failure-matrix.test.ts` |
 | ARI-3091e498 | Workspace persistence | deploy | Implemented | TYRUM_HOME filesystem persistence |
 | ARI-7c1e0962 | Workspace path boundary | security | Implemented | `tool-executor.ts` path sandbox |
@@ -444,10 +444,10 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 
 | ARI ID | Requirement | Category | Status | Evidence |
 |--------|-------------|----------|--------|----------|
-| ARI-808fd445 | Session timeline view | design | Partial | React SPA scaffold created (`packages/web-ui/`); pages not yet migrated |
-| ARI-bb184f79 | Approval queue | design | Partial | HTTP approval CRUD; no WS-connected queue UI |
-| ARI-8576a4da | Instances/presence view | design | Partial | /presence endpoint; no UI panel |
-| ARI-101d3db8 | Context/usage panels | ops | Partial | /status /usage /context endpoints; no UI panel |
+| ARI-808fd445 | Session timeline view | design | Implemented | React SPA (`packages/web-ui/`) with 14 pages: Dashboard, Activity, Approvals (list+detail), PlanTimeline, Playbooks, Watchers, Canvas (list+detail), Settings, Linking, Onboarding (start+persona+consent) |
+| ARI-bb184f79 | Approval queue | design | Implemented | SPA ApprovalList + ApprovalDetail pages with approve/deny mutations |
+| ARI-8576a4da | Instances/presence view | design | Implemented | `/presence` endpoint + SPA Presence panel |
+| ARI-101d3db8 | Context/usage panels | ops | Partial | /status /usage /context endpoints; no dedicated SPA panel |
 
 ### Observability
 
@@ -614,6 +614,11 @@ Completed:
 | 10 | PLAN-a3b4c5d6 | Session compaction | Medium | **Done run 3** |
 | 11 | PLAN-a5b6c7d8 | Plugin runtime (code execution) | Low | **Done run 3** |
 | 12 | PLAN-c3d4e5f6 | Client SPA scaffold | Low | **Done run 3** |
+| 13 | PLAN-d4e5f6a7 | SPA page-by-page migration | Low | **Done run 4** |
+| 14 | PLAN-f5a6b7c8 | Snapshot import endpoint | Low | **Done run 5** |
+| 15 | PLAN-a8b9c0d1 | Cost tracking integration | Low | **Done run 5** |
+| 16 | PLAN-b2c3d4e5 | SPA operational panels | Low | **Done run 5** |
+| 17 | PLAN-d6e7f8a9 | WS approval event broadcasting | Low | **Done run 5** |
 
 ## 9. Implementation Journal
 
@@ -692,6 +697,60 @@ Completed:
 - Goal: React SPA scaffold replacing server-rendered web-ui.ts (Phase 1 only).
 - Changes: `packages/web-ui/` package (React 19, Vite 6, React Router 7), `routes/spa.ts` (static asset serving with immutable cache + SPA fallback), mounted in `app.ts` behind `TYRUM_SPA_UI` flag (default OFF).
 - Tests: 3 new (SPA fallback HTML, static JS serving, 404 for missing).
+
+### Run 4 (this context)
+
+#### PLAN-d4e5f6a7: SPA page-by-page migration (bde2697)
+
+- Goal: Complete page-by-page replacement of all 14 server-rendered web-ui.ts pages with React SPA components.
+- Changes:
+  - **Infrastructure**: `styles/globals.css` (extracted BASE_STYLE), `lib/api.ts` (apiFetch wrapper with 401 redirect), `hooks/useApi.ts` (data-fetching hook), `lib/format.ts` (formatDate/formatJson), 7 shared components (Layout, PageHeader, Card, Notice, LoadingSpinner, EmptyState, OnboardingStepper)
+  - **14 pages**: Dashboard, Activity, ApprovalList, ApprovalDetail, PlanTimeline, Playbooks, Watchers, CanvasList, CanvasDetail, Settings, Linking, OnboardingStart, OnboardingPersona, OnboardingConsent
+  - **Router**: Full route tree in App.tsx with nested Layout + Outlet pattern
+  - **Gateway**: `/app/auth` cookie-setting handler in `spa.ts` (before SPA fallback), `GET /canvas` list endpoint in `canvas.ts` (metadata-only, limit cap 500), Vite proxy expanded (7 API prefixes)
+- Tests: 4 new (canvas list: empty, metadata-only, limit, max cap).
+- Verification: TypeScript clean, Vite build (62 modules, 263 kB JS + 4.6 kB CSS), 4/4 tests pass.
+
+### Run 5 (this context)
+
+#### PLAN-f5a6b7c8: Snapshot import endpoint
+
+- Goal: Implement `POST /snapshot/import` to restore a previously exported `SnapshotBundle`.
+- Changes:
+  - `modules/snapshot/import.ts` — `importSnapshot()`: validates version, restricts to DURABLE_TABLES, transaction-based delete+insert in dependency order
+  - `routes/snapshot.ts` — replaced 501 stub with working handler, requires `confirm: true` body field
+- Tests: 5 new (round-trip, empty tables, version rejection, confirm gate, unknown table rejection).
+
+#### PLAN-a8b9c0d1: Cost tracking integration
+
+- Goal: Enrich per-attempt cost data with model catalog pricing and expose cost aggregates.
+- Changes:
+  - `modules/execution/cost-enrichment.ts` — `enrichAttemptCost()` pure function, looks up model in catalog
+  - `modules/execution/engine.ts` — wired cost enrichment after attempt cost recording
+  - `index.ts` — passes `modelCatalog` to engine constructor
+  - `routes/observability.ts` — `/usage` now returns `cost` aggregates (total_input_tokens, total_output_tokens, total_usd_micros)
+- Tests: 4 new (enrichment, skip-if-set, skip-if-missing, graceful fallback).
+
+#### PLAN-b2c3d4e5: SPA operational panels
+
+- Goal: Add 4 new SPA pages for operational visibility.
+- Changes:
+  - `pages/Presence.tsx` — table of connected clients from `/presence`
+  - `pages/Usage.tsx` — stat cards from `/usage` + `/status`
+  - `pages/Context.tsx` — summary cards + report list from `/context` + `/context/list`
+  - `pages/ContextDetail.tsx` — detail view from `/context/detail/:run_id`
+  - `App.tsx` — 4 new routes; `Layout.tsx` — 3 new nav links; `vite.config.ts` — proxy entries
+- Tests: 0 (SPA pages are UI-only, covered by existing endpoint tests).
+
+#### PLAN-d6e7f8a9: WS approval event broadcasting
+
+- Goal: Broadcast approval lifecycle events to all connected WS clients.
+- Changes:
+  - `schemas/protocol.ts` — `WsApprovalPendingPayload`, `WsApprovalPendingEvent`, `WsApprovalResolvedPayload`, `WsApprovalResolvedEvent`; added to `WsEvent` union
+  - `ws/protocol.ts` — `sendApprovalUpdate()` following `sendPlanUpdate()` pattern
+  - `modules/approval/resolver.ts` — calls `sendApprovalUpdate()` on create and resolve
+  - `index.ts` — wires `protocolDeps` into `ApprovalResolver`
+- Tests: 3 new (pending event parse, resolved event parse, WsEvent union coverage).
 
 ## 10. Risks, Mitigations, Rollback
 
@@ -779,5 +838,42 @@ npx vitest run spa.test.ts → 3 pass
 npx vitest run → 1358 pass, 0 fail
 
 # Final typecheck
+npx tsc --noEmit --project packages/gateway/tsconfig.json → pre-existing errors only
+```
+
+### Run 4
+
+```
+# SPA page migration
+npx tsc --noEmit --project packages/web-ui/tsconfig.json → OK (0 errors)
+pnpm --filter @tyrum/web-ui build → 62 modules, 263 kB JS + 4.6 kB CSS
+npx vitest run canvas-list.test.ts → 4 pass
+npx vitest run → 1362 pass, 0 fail
+```
+
+### Run 5
+
+```
+# Schemas build
+pnpm --filter @tyrum/schemas build → OK (67 kB bundle)
+npx tsc --build packages/schemas/tsconfig.json → OK
+
+# Snapshot import
+npx vitest run snapshot-import.test.ts → 5 pass
+
+# Cost enrichment
+npx vitest run cost-enrichment.test.ts → 4 pass
+
+# WS approval events
+npx vitest run ws-approval-events.test.ts → 3 pass
+
+# SPA panels (4 pages: Presence, Usage, Context, ContextDetail)
+npx tsc --noEmit --project packages/web-ui/tsconfig.json → OK (0 errors)
+pnpm --filter @tyrum/web-ui build → 66 modules, 269 kB JS + 4.6 kB CSS
+
+# Full suite
+npx vitest run → 1374 pass, 0 fail
+
+# Gateway typecheck
 npx tsc --noEmit --project packages/gateway/tsconfig.json → pre-existing errors only
 ```

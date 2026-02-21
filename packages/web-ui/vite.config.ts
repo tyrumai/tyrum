@@ -17,6 +17,10 @@ export default defineConfig({
       "/playbooks": "http://localhost:8788",
       "/canvas": "http://localhost:8788",
       "/healthz": "http://localhost:8788",
+      "/presence": "http://localhost:8788",
+      "/status": "http://localhost:8788",
+      "/context": "http://localhost:8788",
+      "/usage": "http://localhost:8788",
     },
   },
 });

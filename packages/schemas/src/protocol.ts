@@ -606,9 +606,44 @@ export const WsRequest = z.discriminatedUnion("type", [
 ]);
 export type WsRequest = z.infer<typeof WsRequest>;
 
+export const WsApprovalPendingPayload = z
+  .object({
+    approval_id: z.number(),
+    plan_id: z.string().min(1),
+    step_index: z.number(),
+    prompt: z.string().min(1),
+    run_id: z.string().optional(),
+  })
+  .strict();
+export type WsApprovalPendingPayload = z.infer<typeof WsApprovalPendingPayload>;
+
+export const WsApprovalPendingEvent = WsEventEnvelope.extend({
+  type: z.literal("approval.pending"),
+  payload: WsApprovalPendingPayload,
+});
+export type WsApprovalPendingEvent = z.infer<typeof WsApprovalPendingEvent>;
+
+export const WsApprovalResolvedPayload = z
+  .object({
+    approval_id: z.number(),
+    approved: z.boolean(),
+    reason: z.string().optional(),
+    run_id: z.string().optional(),
+  })
+  .strict();
+export type WsApprovalResolvedPayload = z.infer<typeof WsApprovalResolvedPayload>;
+
+export const WsApprovalResolvedEvent = WsEventEnvelope.extend({
+  type: z.literal("approval.resolved"),
+  payload: WsApprovalResolvedPayload,
+});
+export type WsApprovalResolvedEvent = z.infer<typeof WsApprovalResolvedEvent>;
+
 export const WsEvent = z.discriminatedUnion("type", [
   WsPlanUpdateEvent,
   WsErrorEvent,
+  WsApprovalPendingEvent,
+  WsApprovalResolvedEvent,
 ]);
 export type WsEvent = z.infer<typeof WsEvent>;
 

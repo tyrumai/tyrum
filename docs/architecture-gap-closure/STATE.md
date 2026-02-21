@@ -1,7 +1,7 @@
 # Architecture Gap Closure — State
 
-**Last updated**: 2026-02-21T10:45:00Z
-**Git HEAD**: 7df2167 (feat/gap-closure-p0)
+**Last updated**: 2026-02-21T11:48:00Z
+**Git HEAD**: 13e99dd (feat/gap-closure-p0)
 
 ## Docs Ingested (40 files)
 
@@ -30,8 +30,8 @@ docs/architecture/system-prompt.md, docs/architecture/tools.md
 
 | Status | Count |
 |--------|-------|
-| Implemented | 129 |
-| Partially Implemented | 25 |
+| Implemented | 134 |
+| Partially Implemented | 20 |
 | Missing | 5 |
 | **Total** | **159** |
 
@@ -49,6 +49,11 @@ docs/architecture/system-prompt.md, docs/architecture/tools.md
 - [x] PLAN-a3b4c5d6: Session compaction (LLM-based, preserve_recent, schema+DAL+runtime) **DONE run 3**
 - [x] PLAN-a5b6c7d8: Plugin runtime (Zod manifest, lifecycle hooks, code loading, security) **DONE run 3**
 - [x] PLAN-c3d4e5f6: Client SPA scaffold (React 19 + Vite, gateway serving, feature flag) **DONE run 3**
+- [x] PLAN-d4e5f6a7: SPA page-by-page migration (14 pages, canvas list API, auth handler) **DONE run 4**
+- [x] PLAN-f5a6b7c8: Snapshot import endpoint (round-trip restore) **DONE run 5**
+- [x] PLAN-a8b9c0d1: Cost tracking integration (model catalog enrichment + /usage aggregates) **DONE run 5**
+- [x] PLAN-b2c3d4e5: SPA operational panels (Presence, Context, ContextDetail, Usage) **DONE run 5**
+- [x] PLAN-d6e7f8a9: WS approval event broadcasting (approval.pending + approval.resolved) **DONE run 5**
 
 ## Open Questions / Blockers
 
@@ -57,13 +62,12 @@ docs/architecture/system-prompt.md, docs/architecture/tools.md
 3. ~~Client UI direction~~: RESOLVED — SPA scaffold created, server-rendered kept as fallback.
 4. ~~Compaction~~: RESOLVED — LLM-based compaction integrated into finalizeTurn.
 5. ~~Provider catalog~~: RESOLVED — three-tier cascade (cache/network/snapshot) from models.dev.
+6. ~~SPA migration~~: RESOLVED — all 14 pages migrated from web-ui.ts to React SPA.
 
 ## Remaining Work (future PRs)
 
-- SPA page-by-page migration (10 pages from server-rendered web-ui.ts)
-- Snapshot import endpoint (currently stubbed 501)
-- Cost tracking integration with model catalog
 - Plugin marketplace / discovery
+- Snapshot import: full conflict resolution / merge strategies (current: destructive overwrite)
 
 ## Safety Check
 
@@ -73,8 +77,9 @@ docs/architecture/system-prompt.md, docs/architecture/tools.md
   - `TYRUM_PLUGINS` (default OFF, opt-in)
   - `TYRUM_SPA_UI` (default OFF, opt-in)
 - No database migration rollback needed (all additive ALTER TABLE + CREATE TABLE)
-- Tests: 1358 pass, 0 fail (1332 prior + 26 new across 5 features in run 3)
+- Tests: 1374 pass, 0 fail (1297 baseline → 1309 run 1 → 1332 run 2 → 1358 run 3 → 1362 run 4 → 1374 run 5)
 - Typecheck: Only pre-existing errors (engine.ts, runner.ts, secret.ts, policy-v2.ts)
+- Web-UI typecheck: 0 errors; Vite build: 66 modules, 269 kB JS + 4.6 kB CSS
 
 ## Implementation Journal
 
@@ -101,3 +106,16 @@ docs/architecture/system-prompt.md, docs/architecture/tools.md
 | 843313a | Session compaction (LLM + schema + DAL) | 7 |
 | 83e9f10 | Plugin runtime (Zod manifest, lifecycle, code loading) | 8 |
 | 7df2167 | Client SPA scaffold (React 19 + Vite) | 3 |
+
+### Run 4
+| Commit | Feature | Tests Added |
+|--------|---------|-------------|
+| bde2697 | SPA page-by-page migration (14 pages, infra, canvas list API, auth handler) | 4 |
+
+### Run 5
+| Commit | Feature | Tests Added |
+|--------|---------|-------------|
+| 13e99dd | Snapshot import (round-trip restore, validation, confirm gate) | 5 |
+| 13e99dd | Cost tracking (model catalog enrichment, /usage aggregates) | 4 |
+| 13e99dd | SPA operational panels (Presence, Context, ContextDetail, Usage) | 0 |
+| 13e99dd | WS approval events (approval.pending, approval.resolved, broadcast) | 3 |

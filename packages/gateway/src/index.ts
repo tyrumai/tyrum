@@ -453,6 +453,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     db: container.db,
     eventBus: container.eventBus,
     eventPublisher,
+    protocolDeps,
   });
   approvalResolver.start();
 
@@ -532,6 +533,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
           db: container.db,
           redactionEngine: container.redactionEngine,
           logger,
+          modelCatalog: container.modelCatalog,
         });
 
         const resolveExecutor = (): ExecutionStepExecutor => {

@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { Logger } from "../observability/logger.js";
 import type { SqlDb } from "../../statestore/types.js";
+import { enrichAttemptCost, type CostLookup } from "./cost-enrichment.js";
 
 export interface StepResult {
   success: boolean;
@@ -122,6 +123,7 @@ export class ExecutionEngine {
   private readonly redactionEngine?: RedactionEngine;
   private readonly logger?: Logger;
   private readonly maxQueueDepth: number;
+  private readonly modelCatalog?: CostLookup;
 
   constructor(opts: {
     db: SqlDb;
@@ -129,12 +131,14 @@ export class ExecutionEngine {
     redactionEngine?: RedactionEngine;
     logger?: Logger;
     maxQueueDepth?: number;
+    modelCatalog?: CostLookup;
   }) {
     this.db = opts.db;
     this.clock = opts.clock ?? defaultClock;
     this.redactionEngine = opts.redactionEngine;
     this.logger = opts.logger;
     this.maxQueueDepth = opts.maxQueueDepth ?? 0; // 0 = unlimited (default-off)
+    this.modelCatalog = opts.modelCatalog;
   }
 
   private redactUnknown<T>(value: T): T {
@@ -674,7 +678,8 @@ export class ExecutionEngine {
       ...(result.cost ?? {}),
       duration_ms: result.cost?.duration_ms ?? wallDurationMs,
     });
-    const costJson = JSON.stringify(cost);
+    const enrichedCost = this.modelCatalog ? enrichAttemptCost(cost as AttemptCostT, this.modelCatalog) : cost;
+    const costJson = JSON.stringify(enrichedCost);
 
     if (result.success) {
       // Postcondition evaluation (pause on missing evidence).

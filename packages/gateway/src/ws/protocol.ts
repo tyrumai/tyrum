@@ -374,6 +374,44 @@ export function sendPlanUpdate(
   }
 }
 
+/**
+ * Broadcast an approval lifecycle event to all connected clients.
+ */
+export function sendApprovalUpdate(
+  type: "approval.pending" | "approval.resolved",
+  payload: Record<string, unknown>,
+  deps: ProtocolDeps,
+): void {
+  const message: WsEventEnvelope = {
+    event_id: crypto.randomUUID(),
+    type,
+    occurred_at: new Date().toISOString(),
+    payload,
+  };
+
+  const payloadStr = JSON.stringify(message);
+
+  for (const client of deps.connectionManager.allClients()) {
+    client.ws.send(payloadStr);
+  }
+
+  if (deps.cluster) {
+    void deps.cluster.outboxDal
+      .enqueue("ws.broadcast", {
+        source_edge_id: deps.cluster.edgeId,
+        skip_local: true,
+        message,
+      })
+      .catch((err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        deps.logger?.error("outbox.enqueue_failed", {
+          topic: "ws.broadcast",
+          error: msg,
+        });
+      });
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
