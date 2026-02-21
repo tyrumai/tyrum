@@ -380,4 +380,30 @@ export class MemoryDal {
       updated_at: normalizeTime(row.updated_at),
     };
   }
+
+  // --- Delete methods ---
+
+  async deleteFact(id: number): Promise<boolean> {
+    const result = await this.db.run(
+      "DELETE FROM facts WHERE id = ?",
+      [id],
+    );
+    return (result.changes ?? 0) > 0;
+  }
+
+  async deleteEpisodicEvent(id: number): Promise<boolean> {
+    const result = await this.db.run(
+      "DELETE FROM episodic_events WHERE id = ?",
+      [id],
+    );
+    return (result.changes ?? 0) > 0;
+  }
+
+  async deleteCapabilityMemory(id: number): Promise<boolean> {
+    const result = await this.db.run(
+      "DELETE FROM capability_memories WHERE id = ?",
+      [id],
+    );
+    return (result.changes ?? 0) > 0;
+  }
 }

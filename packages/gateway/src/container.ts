@@ -15,6 +15,10 @@ import type { ApprovalDal } from "./modules/approval/dal.js";
 import type { WatcherProcessor } from "./modules/watcher/processor.js";
 import type { CanvasDal } from "./modules/canvas/dal.js";
 import type { JobQueue } from "./modules/executor/job-queue.js";
+import type { PresenceDal } from "./modules/presence/dal.js";
+import type { NodeDal } from "./modules/node/dal.js";
+import type { PolicySnapshotDal } from "./modules/policy/snapshot-dal.js";
+import type { AuthProfileDal } from "./modules/model/auth-profile-dal.js";
 import type { SqlDb } from "./statestore/types.js";
 
 import { createEventBus } from "./event-bus.js";
@@ -34,9 +38,15 @@ import { TelegramBot as TelegramBotImpl } from "./modules/ingress/telegram-bot.j
 import { WatcherProcessor as WatcherProcessorImpl } from "./modules/watcher/processor.js";
 import { CanvasDal as CanvasDalImpl } from "./modules/canvas/dal.js";
 import { JobQueue as JobQueueImpl } from "./modules/executor/job-queue.js";
+import { PresenceDal as PresenceDalImpl } from "./modules/presence/dal.js";
+import { NodeDal as NodeDalImpl } from "./modules/node/dal.js";
+import { PolicySnapshotDal as PolicySnapshotDalImpl } from "./modules/policy/snapshot-dal.js";
+import { AuthProfileDal as AuthProfileDalImpl } from "./modules/model/auth-profile-dal.js";
 import { RedactionEngine } from "./modules/redaction/engine.js";
 import type { ArtifactStore } from "./modules/artifact/store.js";
+import type { ArtifactMetadataDal } from "./modules/artifact/metadata-dal.js";
 import { createArtifactStoreFromEnv } from "./modules/artifact/create-artifact-store.js";
+import { ArtifactMetadataDal as ArtifactMetadataDalImpl } from "./modules/artifact/metadata-dal.js";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Logger } from "./modules/observability/logger.js";
@@ -64,8 +74,13 @@ export interface GatewayContainer {
   watcherProcessor: WatcherProcessor;
   canvasDal: CanvasDal;
   jobQueue: JobQueue;
+  presenceDal: PresenceDal;
   redactionEngine: RedactionEngine;
   artifactStore: ArtifactStore;
+  artifactMetadataDal: ArtifactMetadataDal;
+  nodeDal: NodeDal;
+  policySnapshotDal: PolicySnapshotDal;
+  authProfileDal: AuthProfileDal;
   logger: Logger;
   config: GatewayConfig;
 }
@@ -121,12 +136,17 @@ function wireContainer(
   const watcherProcessor = new WatcherProcessorImpl({ db, memoryDal, eventBus });
   const canvasDal = new CanvasDalImpl(db);
   const jobQueue = new JobQueueImpl(db);
+  const presenceDal = new PresenceDalImpl(db);
 
   const tyrumHome =
     config.tyrumHome ??
     process.env["TYRUM_HOME"]?.trim() ??
     join(homedir(), ".tyrum");
   const artifactStore = createArtifactStoreFromEnv(tyrumHome, redactionEngine);
+  const artifactMetadataDal = new ArtifactMetadataDalImpl(db);
+  const nodeDal = new NodeDalImpl(db);
+  const policySnapshotDal = new PolicySnapshotDalImpl(db);
+  const authProfileDal = new AuthProfileDalImpl(db);
 
   return {
     db,
@@ -141,8 +161,13 @@ function wireContainer(
     watcherProcessor,
     canvasDal,
     jobQueue,
+    presenceDal,
     redactionEngine,
     artifactStore,
+    artifactMetadataDal,
+    nodeDal,
+    policySnapshotDal,
+    authProfileDal,
     logger,
     config,
   };

@@ -39,6 +39,11 @@ export {
   LegalContext,
   ConnectorScopeContext,
   PolicyCheckRequest,
+  PolicyDomain,
+  PolicyAction,
+  PolicyPrecedence,
+  PolicyRule,
+  PolicyBundle,
 } from "./policy.js";
 
 export {
@@ -119,10 +124,32 @@ export {
   WsApprovalResolveResponseOkEnvelope,
   WsApprovalResolveResponseErrEnvelope,
   WsApprovalResolveResponseEnvelope,
+  WsConnectInitResponseOkEnvelope,
+  WsConnectInitResponseErrEnvelope,
+  WsConnectInitResponseEnvelope,
+  WsConnectProofResponseOkEnvelope,
+  WsConnectProofResponseErrEnvelope,
+  WsConnectProofResponseEnvelope,
+  WsWorkflowRunResponseOkEnvelope,
+  WsWorkflowRunResponseErrEnvelope,
+  WsWorkflowRunResponseEnvelope,
+  WsWorkflowResumeResponseOkEnvelope,
+  WsWorkflowResumeResponseErrEnvelope,
+  WsWorkflowResumeResponseEnvelope,
+  WsWorkflowCancelResponseOkEnvelope,
+  WsWorkflowCancelResponseErrEnvelope,
+  WsWorkflowCancelResponseEnvelope,
   WsResponse,
   WsConnectPayload,
   WsConnectRequest,
   WsConnectResult,
+  ProtocolRev,
+  WsConnectInitPayload,
+  WsConnectInitRequest,
+  WsConnectInitResult,
+  WsConnectProofPayload,
+  WsConnectProofRequest,
+  WsConnectProofResult,
   WsPingRequest,
   WsTaskExecutePayload,
   WsTaskExecuteRequest,
@@ -136,6 +163,12 @@ export {
   WsApprovalResolvePayload,
   WsApprovalResolveRequest,
   WsApprovalResolveResult,
+  WsWorkflowRunRequest,
+  WsWorkflowRunResult,
+  WsWorkflowResumeRequest,
+  WsWorkflowResumeResult,
+  WsWorkflowCancelRequest,
+  WsWorkflowCancelResult,
   WsPlanUpdatePayload,
   WsPlanUpdateEvent,
   WsErrorEventPayload,
@@ -238,6 +271,7 @@ export {
   Sha256Hex,
   ArtifactUri,
   ArtifactRef,
+  ArtifactMetadata,
 } from "./artifact.js";
 
 export {
@@ -271,3 +305,28 @@ export {
   ExecutionAttempt,
   AttemptCost,
 } from "./execution.js";
+
+export {
+  PresenceRole,
+  PresenceEntry,
+  PresenceEventKind,
+  PresenceEvent,
+} from "./presence.js";
+
+export {
+  GatewayEventKind,
+  GatewayEventEnvelope,
+  RunLifecyclePayload,
+  StepLifecyclePayload,
+  ApprovalLifecyclePayload,
+  WatcherFiredPayload,
+} from "./gateway-event.js";
+
+export {
+  WorkflowRunRequest,
+  WorkflowResumeRequest,
+  WorkflowCancelRequest,
+  WorkflowRunStatus,
+} from "./workflow.js";
+
+export { SlashCommandPayload, SlashCommandResult } from "./slash-command.js";

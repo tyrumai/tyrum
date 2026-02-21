@@ -4,6 +4,13 @@
 
 import { Hono } from "hono";
 import type { MemoryDal } from "../modules/memory/dal.js";
+import { scanForSecretPatterns } from "../modules/redaction/engine.js";
+
+const secretScanEnabled = (() => {
+  const raw = process.env["TYRUM_MEMORY_SECRET_SCAN"]?.trim().toLowerCase();
+  if (!raw) return true; // default on
+  return !["0", "false", "off", "no"].includes(raw);
+})();
 
 export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
   const memory = new Hono();
@@ -44,6 +51,21 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
       );
     }
 
+    if (secretScanEnabled) {
+      const textToScan = `${fact_key} ${JSON.stringify(fact_value)}`;
+      const secretPatterns = scanForSecretPatterns(textToScan);
+      if (secretPatterns.length > 0) {
+        return c.json(
+          {
+            error: "secret_pattern_detected",
+            message: `Potential secret patterns detected: ${secretPatterns.join(", ")}. Refusing to store.`,
+            patterns: secretPatterns,
+          },
+          422,
+        );
+      }
+    }
+
     const id = await memoryDal.insertFact(
       fact_key,
       fact_value,
@@ -52,6 +74,18 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
       confidence,
     );
     return c.json({ id }, 201);
+  });
+
+  memory.delete("/memory/facts/:id", async (c) => {
+    const id = parseInt(c.req.param("id"), 10);
+    if (isNaN(id)) {
+      return c.json({ error: "invalid_id", message: "id must be a number" }, 400);
+    }
+    const deleted = await memoryDal.deleteFact(id);
+    if (!deleted) {
+      return c.json({ error: "not_found", message: "fact not found" }, 404);
+    }
+    return c.json({ deleted: true });
   });
 
   // --- Episodic Events ---
@@ -90,6 +124,21 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
       );
     }
 
+    if (secretScanEnabled) {
+      const textToScan = `${event_type} ${JSON.stringify(payload)}`;
+      const secretPatterns = scanForSecretPatterns(textToScan);
+      if (secretPatterns.length > 0) {
+        return c.json(
+          {
+            error: "secret_pattern_detected",
+            message: `Potential secret patterns detected: ${secretPatterns.join(", ")}. Refusing to store.`,
+            patterns: secretPatterns,
+          },
+          422,
+        );
+      }
+    }
+
     const id = await memoryDal.insertEpisodicEvent(
       event_id,
       occurred_at,
@@ -98,6 +147,18 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
       payload,
     );
     return c.json({ id }, 201);
+  });
+
+  memory.delete("/memory/events/:id", async (c) => {
+    const id = parseInt(c.req.param("id"), 10);
+    if (isNaN(id)) {
+      return c.json({ error: "invalid_id", message: "id must be a number" }, 400);
+    }
+    const deleted = await memoryDal.deleteEpisodicEvent(id);
+    if (!deleted) {
+      return c.json({ error: "not_found", message: "event not found" }, 404);
+    }
+    return c.json({ deleted: true });
   });
 
   // --- Capability Memories ---
@@ -153,6 +214,18 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
       data ?? {},
     );
     return c.json(result, 201);
+  });
+
+  memory.delete("/memory/capabilities/:id", async (c) => {
+    const id = parseInt(c.req.param("id"), 10);
+    if (isNaN(id)) {
+      return c.json({ error: "invalid_id", message: "id must be a number" }, 400);
+    }
+    const deleted = await memoryDal.deleteCapabilityMemory(id);
+    if (!deleted) {
+      return c.json({ error: "not_found", message: "capability not found" }, 404);
+    }
+    return c.json({ deleted: true });
   });
 
   return memory;

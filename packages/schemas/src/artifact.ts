@@ -49,3 +49,21 @@ export const ArtifactRef = z
   .strict();
 export type ArtifactRef = z.infer<typeof ArtifactRef>;
 
+export const ArtifactMetadata = z
+  .object({
+    artifact_id: ArtifactId,
+    run_id: UuidSchema.optional(),
+    step_id: UuidSchema.optional(),
+    attempt_id: UuidSchema.optional(),
+    kind: ArtifactKind,
+    mime_type: z.string().optional(),
+    size_bytes: z.number().int().nonnegative().optional(),
+    sha256: Sha256Hex.optional(),
+    labels: z.array(z.string()).default([]),
+    uri: ArtifactUri,
+    created_at: DateTimeSchema,
+    metadata: z.unknown().optional(),
+  })
+  .strict();
+export type ArtifactMetadata = z.infer<typeof ArtifactMetadata>;
+

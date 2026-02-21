@@ -74,3 +74,46 @@ export const PolicyCheckRequest = z.object({
   connector: ConnectorScopeContext.optional(),
 });
 export type PolicyCheckRequest = z.infer<typeof PolicyCheckRequest>;
+
+// ---------------------------------------------------------------------------
+// Policy bundles (structured rule sets)
+// ---------------------------------------------------------------------------
+
+export const PolicyDomain = z.enum([
+  "egress",
+  "secrets",
+  "messaging",
+  "tools",
+  "artifacts",
+  "spend",
+  "pii",
+  "legal",
+]);
+export type PolicyDomain = z.infer<typeof PolicyDomain>;
+
+export const PolicyAction = z.enum(["deny", "require_approval", "allow"]);
+export type PolicyAction = z.infer<typeof PolicyAction>;
+
+export const PolicyPrecedence = z.enum(["deployment", "agent", "playbook"]);
+export type PolicyPrecedence = z.infer<typeof PolicyPrecedence>;
+
+export const PolicyRule = z
+  .object({
+    domain: PolicyDomain,
+    action: PolicyAction,
+    conditions: z.unknown().optional(),
+    priority: z.number().int(),
+    description: z.string().optional(),
+  })
+  .strict();
+export type PolicyRule = z.infer<typeof PolicyRule>;
+
+export const PolicyBundle = z
+  .object({
+    rules: z.array(PolicyRule),
+    precedence: PolicyPrecedence,
+    version: z.string().optional(),
+    metadata: z.unknown().optional(),
+  })
+  .strict();
+export type PolicyBundle = z.infer<typeof PolicyBundle>;

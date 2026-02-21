@@ -60,6 +60,9 @@ function isUniqueViolation(err: unknown): boolean {
   return false;
 }
 
+/**
+ * @deprecated Use execution engine events instead. See modules/execution/engine.ts.
+ */
 export class EventLog {
   constructor(
     private db: SqlDb,

@@ -60,6 +60,9 @@ function rowToJob(row: JobRow): Job {
   };
 }
 
+/**
+ * @deprecated Use the execution engine instead. See modules/execution/engine.ts.
+ */
 export class JobQueue {
   constructor(private readonly db: SqlDb) {}
 

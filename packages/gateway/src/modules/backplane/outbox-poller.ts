@@ -1,6 +1,7 @@
 import type { WsEventEnvelope, WsRequestEnvelope } from "@tyrum/schemas";
 import type { ConnectionManager } from "../../ws/connection-manager.js";
 import type { OutboxDal, OutboxRow } from "./outbox-dal.js";
+import { GATEWAY_EVENT_TOPIC } from "./event-publisher.js";
 
 export interface OutboxPollerOptions {
   consumerId: string;
@@ -8,6 +9,7 @@ export interface OutboxPollerOptions {
   connectionManager: ConnectionManager;
   pollIntervalMs?: number;
   batchSize?: number;
+  onGatewayEvent?: (event: unknown) => void | Promise<void>;
 }
 
 type WsEnvelope = WsEventEnvelope | WsRequestEnvelope;
@@ -51,6 +53,7 @@ export class OutboxPoller {
   private readonly connectionManager: ConnectionManager;
   private readonly pollIntervalMs: number;
   private readonly batchSize: number;
+  private readonly onGatewayEvent?: (event: unknown) => void | Promise<void>;
   private timer: ReturnType<typeof setInterval> | undefined;
   private ticking = false;
 
@@ -60,6 +63,7 @@ export class OutboxPoller {
     this.connectionManager = opts.connectionManager;
     this.pollIntervalMs = opts.pollIntervalMs ?? 500;
     this.batchSize = opts.batchSize ?? 200;
+    this.onGatewayEvent = opts.onGatewayEvent;
   }
 
   start(): void {
@@ -117,6 +121,11 @@ export class OutboxPoller {
       const client = this.connectionManager.getClient(parsed.connection_id);
       if (!client) return;
       client.ws.send(JSON.stringify(parsed.message));
+      return;
+    }
+
+    if (row.topic === GATEWAY_EVENT_TOPIC) {
+      void this.onGatewayEvent?.(row.payload);
       return;
     }
   }

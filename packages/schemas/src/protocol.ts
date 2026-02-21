@@ -8,6 +8,12 @@ import {
   ApprovalResolveRequest,
   ApprovalResolveResponse,
 } from "./approval.js";
+import {
+  WorkflowRunRequest,
+  WorkflowResumeRequest,
+  WorkflowCancelRequest,
+  WorkflowRunStatus as WorkflowRunStatusSchema,
+} from "./workflow.js";
 
 /** Client capability kinds. */
 export const ClientCapability = z.enum(["playwright", "android", "desktop", "cli", "http"]);
@@ -199,6 +205,94 @@ export const WsApprovalResolveResult = ApprovalResolveResponse;
 export type WsApprovalResolveResult = z.infer<typeof WsApprovalResolveResult>;
 
 // ---------------------------------------------------------------------------
+// Connect v2 (connect.init / connect.proof)
+// ---------------------------------------------------------------------------
+
+export const ProtocolRev = z.enum(["v1", "v2"]);
+export type ProtocolRev = z.infer<typeof ProtocolRev>;
+
+export const WsConnectInitPayload = z
+  .object({
+    protocol_rev: ProtocolRev,
+    capabilities: z.array(ClientCapability).default([]),
+    device_id: z.string().min(1).optional(),
+    metadata: z.unknown().optional(),
+  })
+  .strict();
+export type WsConnectInitPayload = z.infer<typeof WsConnectInitPayload>;
+
+export const WsConnectInitRequest = WsRequestEnvelope.extend({
+  type: z.literal("connect.init"),
+  payload: WsConnectInitPayload,
+});
+export type WsConnectInitRequest = z.infer<typeof WsConnectInitRequest>;
+
+export const WsConnectInitResult = z
+  .object({
+    challenge_id: z.string().min(1),
+    client_id: z.string().min(1),
+  })
+  .strict();
+export type WsConnectInitResult = z.infer<typeof WsConnectInitResult>;
+
+export const WsConnectProofPayload = z
+  .object({
+    challenge_id: z.string().min(1),
+    proof: z.string().min(1),
+    device_id: z.string().min(1).optional(),
+  })
+  .strict();
+export type WsConnectProofPayload = z.infer<typeof WsConnectProofPayload>;
+
+export const WsConnectProofRequest = WsRequestEnvelope.extend({
+  type: z.literal("connect.proof"),
+  payload: WsConnectProofPayload,
+});
+export type WsConnectProofRequest = z.infer<typeof WsConnectProofRequest>;
+
+export const WsConnectProofResult = z
+  .object({
+    authenticated: z.boolean(),
+  })
+  .strict();
+export type WsConnectProofResult = z.infer<typeof WsConnectProofResult>;
+
+// ---------------------------------------------------------------------------
+// Workflow WS requests
+// ---------------------------------------------------------------------------
+
+export const WsWorkflowRunRequest = WsRequestEnvelope.extend({
+  type: z.literal("workflow.run"),
+  payload: WorkflowRunRequest,
+});
+export type WsWorkflowRunRequest = z.infer<typeof WsWorkflowRunRequest>;
+
+export const WsWorkflowRunResult = WorkflowRunStatusSchema;
+export type WsWorkflowRunResult = z.infer<typeof WsWorkflowRunResult>;
+
+export const WsWorkflowResumeRequest = WsRequestEnvelope.extend({
+  type: z.literal("workflow.resume"),
+  payload: WorkflowResumeRequest,
+});
+export type WsWorkflowResumeRequest = z.infer<typeof WsWorkflowResumeRequest>;
+
+export const WsWorkflowResumeResult = WorkflowRunStatusSchema;
+export type WsWorkflowResumeResult = z.infer<typeof WsWorkflowResumeResult>;
+
+export const WsWorkflowCancelRequest = WsRequestEnvelope.extend({
+  type: z.literal("workflow.cancel"),
+  payload: WorkflowCancelRequest,
+});
+export type WsWorkflowCancelRequest = z.infer<typeof WsWorkflowCancelRequest>;
+
+export const WsWorkflowCancelResult = z
+  .object({
+    cancelled: z.boolean(),
+  })
+  .strict();
+export type WsWorkflowCancelResult = z.infer<typeof WsWorkflowCancelResult>;
+
+// ---------------------------------------------------------------------------
 // Operation responses (typed)
 // ---------------------------------------------------------------------------
 
@@ -327,9 +421,128 @@ export type WsApprovalResolveResponseEnvelope = z.infer<
   typeof WsApprovalResolveResponseEnvelope
 >;
 
+export const WsConnectInitResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("connect.init"),
+  result: WsConnectInitResult,
+});
+export type WsConnectInitResponseOkEnvelope = z.infer<
+  typeof WsConnectInitResponseOkEnvelope
+>;
+
+export const WsConnectInitResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("connect.init"),
+});
+export type WsConnectInitResponseErrEnvelope = z.infer<
+  typeof WsConnectInitResponseErrEnvelope
+>;
+
+export const WsConnectInitResponseEnvelope = z.union([
+  WsConnectInitResponseOkEnvelope,
+  WsConnectInitResponseErrEnvelope,
+]);
+export type WsConnectInitResponseEnvelope = z.infer<
+  typeof WsConnectInitResponseEnvelope
+>;
+
+export const WsConnectProofResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("connect.proof"),
+  result: WsConnectProofResult,
+});
+export type WsConnectProofResponseOkEnvelope = z.infer<
+  typeof WsConnectProofResponseOkEnvelope
+>;
+
+export const WsConnectProofResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("connect.proof"),
+});
+export type WsConnectProofResponseErrEnvelope = z.infer<
+  typeof WsConnectProofResponseErrEnvelope
+>;
+
+export const WsConnectProofResponseEnvelope = z.union([
+  WsConnectProofResponseOkEnvelope,
+  WsConnectProofResponseErrEnvelope,
+]);
+export type WsConnectProofResponseEnvelope = z.infer<
+  typeof WsConnectProofResponseEnvelope
+>;
+
+export const WsWorkflowRunResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("workflow.run"),
+  result: WsWorkflowRunResult,
+});
+export type WsWorkflowRunResponseOkEnvelope = z.infer<
+  typeof WsWorkflowRunResponseOkEnvelope
+>;
+
+export const WsWorkflowRunResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("workflow.run"),
+});
+export type WsWorkflowRunResponseErrEnvelope = z.infer<
+  typeof WsWorkflowRunResponseErrEnvelope
+>;
+
+export const WsWorkflowRunResponseEnvelope = z.union([
+  WsWorkflowRunResponseOkEnvelope,
+  WsWorkflowRunResponseErrEnvelope,
+]);
+export type WsWorkflowRunResponseEnvelope = z.infer<
+  typeof WsWorkflowRunResponseEnvelope
+>;
+
+export const WsWorkflowResumeResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("workflow.resume"),
+  result: WsWorkflowResumeResult,
+});
+export type WsWorkflowResumeResponseOkEnvelope = z.infer<
+  typeof WsWorkflowResumeResponseOkEnvelope
+>;
+
+export const WsWorkflowResumeResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("workflow.resume"),
+});
+export type WsWorkflowResumeResponseErrEnvelope = z.infer<
+  typeof WsWorkflowResumeResponseErrEnvelope
+>;
+
+export const WsWorkflowResumeResponseEnvelope = z.union([
+  WsWorkflowResumeResponseOkEnvelope,
+  WsWorkflowResumeResponseErrEnvelope,
+]);
+export type WsWorkflowResumeResponseEnvelope = z.infer<
+  typeof WsWorkflowResumeResponseEnvelope
+>;
+
+export const WsWorkflowCancelResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("workflow.cancel"),
+  result: WsWorkflowCancelResult,
+});
+export type WsWorkflowCancelResponseOkEnvelope = z.infer<
+  typeof WsWorkflowCancelResponseOkEnvelope
+>;
+
+export const WsWorkflowCancelResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("workflow.cancel"),
+});
+export type WsWorkflowCancelResponseErrEnvelope = z.infer<
+  typeof WsWorkflowCancelResponseErrEnvelope
+>;
+
+export const WsWorkflowCancelResponseEnvelope = z.union([
+  WsWorkflowCancelResponseOkEnvelope,
+  WsWorkflowCancelResponseErrEnvelope,
+]);
+export type WsWorkflowCancelResponseEnvelope = z.infer<
+  typeof WsWorkflowCancelResponseEnvelope
+>;
+
 export const WsResponse = z.union([
   WsConnectResponseOkEnvelope,
   WsConnectResponseErrEnvelope,
+  WsConnectInitResponseOkEnvelope,
+  WsConnectInitResponseErrEnvelope,
+  WsConnectProofResponseOkEnvelope,
+  WsConnectProofResponseErrEnvelope,
   WsPingResponseOkEnvelope,
   WsPingResponseErrEnvelope,
   WsTaskExecuteResponseOkEnvelope,
@@ -340,6 +553,12 @@ export const WsResponse = z.union([
   WsApprovalListResponseErrEnvelope,
   WsApprovalResolveResponseOkEnvelope,
   WsApprovalResolveResponseErrEnvelope,
+  WsWorkflowRunResponseOkEnvelope,
+  WsWorkflowRunResponseErrEnvelope,
+  WsWorkflowResumeResponseOkEnvelope,
+  WsWorkflowResumeResponseErrEnvelope,
+  WsWorkflowCancelResponseOkEnvelope,
+  WsWorkflowCancelResponseErrEnvelope,
 ]);
 export type WsResponse = z.infer<typeof WsResponse>;
 
@@ -374,11 +593,16 @@ export type WsErrorEvent = z.infer<typeof WsErrorEvent>;
 
 export const WsRequest = z.discriminatedUnion("type", [
   WsConnectRequest,
+  WsConnectInitRequest,
+  WsConnectProofRequest,
   WsPingRequest,
   WsTaskExecuteRequest,
   WsApprovalRequest,
   WsApprovalListRequest,
   WsApprovalResolveRequest,
+  WsWorkflowRunRequest,
+  WsWorkflowResumeRequest,
+  WsWorkflowCancelRequest,
 ]);
 export type WsRequest = z.infer<typeof WsRequest>;
 

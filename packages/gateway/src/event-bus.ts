@@ -24,6 +24,8 @@ export type GatewayEvents = {
   "plan:failed": { planId: string; reason: string };
   "plan:escalated": { planId: string; stepIndex: number };
   "watcher:fired": { watcherId: number; planId: string; triggerType: string };
+  "gateway:event": { eventId: string; kind: string; payload: unknown };
+  "approval:resolved": { approvalId: number; approved: boolean; reason?: string };
 };
 
 export type EventBus = Emitter<GatewayEvents>;

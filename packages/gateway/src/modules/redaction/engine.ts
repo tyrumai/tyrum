@@ -100,3 +100,41 @@ export class RedactionEngine {
   }
 }
 
+/**
+ * Common patterns for secrets and credentials.
+ * Returns an array of pattern descriptions that matched.
+ */
+export function scanForSecretPatterns(text: string): string[] {
+  const matches: string[] = [];
+
+  const patterns: Array<{ name: string; regex: RegExp }> = [
+    // API keys (generic prefixed keys)
+    { name: "api_key_prefix", regex: /\b(?:sk|pk|api|key|token|secret|bearer)[_-][a-zA-Z0-9]{20,}\b/i },
+    // AWS access key
+    { name: "aws_access_key", regex: /\bAKIA[0-9A-Z]{16}\b/ },
+    // AWS secret key
+    { name: "aws_secret_key", regex: /\b[0-9a-zA-Z/+]{40}\b/ },
+    // GitHub token
+    { name: "github_token", regex: /\bgh[ps]_[a-zA-Z0-9]{36,}\b/ },
+    { name: "github_fine_grained_token", regex: /\bgithub_pat_[a-zA-Z0-9_]{22,}\b/ },
+    // Slack tokens
+    { name: "slack_token", regex: /\bxox[baprs]-[0-9a-zA-Z-]{10,}\b/ },
+    // Generic JWT
+    { name: "jwt_token", regex: /\beyJ[a-zA-Z0-9_-]{10,}\.eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]+\b/ },
+    // Private key markers
+    { name: "private_key", regex: /-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----/ },
+    // Password assignments
+    { name: "password_assignment", regex: /(?:password|passwd|pwd)\s*[:=]\s*["'][^"']{8,}["']/i },
+    // Connection strings with credentials
+    { name: "connection_string", regex: /(?:postgres|mysql|mongodb|redis):\/\/[^:]+:[^@]+@/i },
+  ];
+
+  for (const { name, regex } of patterns) {
+    if (regex.test(text)) {
+      matches.push(name);
+    }
+  }
+
+  return matches;
+}
+

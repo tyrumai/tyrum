@@ -301,6 +301,9 @@ export interface PlanRouteOptions {
   stepExecutor?: StepExecutor;
 }
 
+/**
+ * @deprecated Use workflow routes (/workflow/run) instead. See routes/workflow.ts.
+ */
 export function createPlanRoutes(
   container: GatewayContainer,
   opts?: PlanRouteOptions,

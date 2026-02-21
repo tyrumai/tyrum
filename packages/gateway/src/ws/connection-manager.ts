@@ -16,6 +16,8 @@ export interface ConnectedClient {
   readonly id: string;
   readonly ws: WebSocket;
   readonly capabilities: readonly ClientCapability[];
+  readonly protocolRev?: string;
+  readonly deviceId?: string;
   lastPong: number;
 }
 
@@ -43,12 +45,18 @@ export class ConnectionManager {
    *
    * @returns the generated client id (UUID v4).
    */
-  addClient(ws: WebSocket, capabilities: readonly ClientCapability[]): string {
+  addClient(
+    ws: WebSocket,
+    capabilities: readonly ClientCapability[],
+    opts?: { protocolRev?: string; deviceId?: string },
+  ): string {
     const id = crypto.randomUUID();
     const client: ConnectedClient = {
       id,
       ws,
       capabilities,
+      protocolRev: opts?.protocolRev,
+      deviceId: opts?.deviceId,
       lastPong: Date.now(),
     };
     this.clients.set(id, client);

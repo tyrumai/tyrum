@@ -18,6 +18,14 @@ import { createAuditRoutes } from "./routes/audit.js";
 import { createSecretRoutes } from "./routes/secret.js";
 import { createPlaybookRoutes } from "./routes/playbook.js";
 import { createConnectionsRoute } from "./routes/connections.js";
+import { createObservabilityRoutes } from "./routes/observability.js";
+import { createPresenceRoutes } from "./routes/presence.js";
+import { createArtifactRoutes } from "./routes/artifact.js";
+import { createWorkflowRoutes } from "./routes/workflow.js";
+import { createNodeRoutes } from "./routes/node.js";
+import { createPolicyV2Routes } from "./routes/policy-v2.js";
+import { createModelRoutes } from "./routes/model.js";
+import { PolicyBundleManager } from "./modules/policy/bundle.js";
 import { PlaybookRunner } from "./modules/playbook/runner.js";
 import { createWebApiRoutes } from "./routes/web-api.js";
 import { createWebUiRoutes } from "./routes/web-ui.js";
@@ -37,6 +45,9 @@ export interface AppOptions {
   playbooks?: Playbook[];
   isLocalOnly?: boolean;
   connectionManager?: ConnectionManager;
+  version?: string;
+  startedAt?: number;
+  role?: string;
 }
 
 export function createApp(container: GatewayContainer, opts: AppOptions = {}): Hono {
@@ -90,6 +101,10 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   app.route("/", createWatcherRoutes(container.watcherProcessor));
   app.route("/", createCanvasRoutes(container.canvasDal));
   app.route("/", createAuditRoutes({ db: container.db, eventLog: container.eventLog }));
+  app.route("/", createArtifactRoutes({
+    artifactMetadataDal: container.artifactMetadataDal,
+    artifactStore: container.artifactStore,
+  }));
 
   // Playbook routes — load from TYRUM_HOME/playbooks or use pre-loaded set
   const tyrumHome = process.env["TYRUM_HOME"];
@@ -106,6 +121,77 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
 
   if (opts.connectionManager) {
     app.route("/", createConnectionsRoute(opts.connectionManager));
+  }
+
+  const observabilityEnabled = (() => {
+    const raw = process.env["TYRUM_OBSERVABILITY_ENDPOINTS"]?.trim().toLowerCase();
+    if (!raw) return true;
+    return !["0", "false", "off", "no"].includes(raw);
+  })();
+
+  if (observabilityEnabled) {
+    app.route("/", createObservabilityRoutes({
+      db: container.db,
+      memoryDal: container.memoryDal,
+      connectionManager: opts.connectionManager,
+      version: opts.version ?? "unknown",
+      startedAt: opts.startedAt ?? Date.now(),
+      role: opts.role ?? "all",
+    }));
+  }
+
+  const presenceEnabled = (() => {
+    const raw = process.env["TYRUM_PRESENCE"]?.trim().toLowerCase();
+    if (!raw) return true; // default on
+    return !["0", "false", "off", "no"].includes(raw);
+  })();
+
+  if (presenceEnabled) {
+    app.route("/", createPresenceRoutes(container.presenceDal));
+  }
+
+  const workflowApiEnabled = (() => {
+    const raw = process.env["TYRUM_WORKFLOW_API"]?.trim().toLowerCase();
+    if (!raw) return true; // default on
+    return !["0", "false", "off", "no"].includes(raw);
+  })();
+
+  if (workflowApiEnabled) {
+    app.route("/", createWorkflowRoutes({ db: container.db }));
+  }
+
+  const nodePairingEnabled = (() => {
+    const raw = process.env["TYRUM_NODE_PAIRING"]?.trim().toLowerCase();
+    if (!raw) return false; // default off
+    return ["1", "true", "on", "yes"].includes(raw);
+  })();
+
+  if (nodePairingEnabled) {
+    app.route("/", createNodeRoutes({ nodeDal: container.nodeDal }));
+  }
+
+  const policyV2Enabled = (() => {
+    const raw = process.env["TYRUM_POLICY_ENFORCE"]?.trim().toLowerCase();
+    if (!raw) return false; // default off (observe-only)
+    return ["1", "true", "on", "yes"].includes(raw);
+  })();
+
+  if (policyV2Enabled) {
+    const bundleManager = new PolicyBundleManager();
+    app.route("/", createPolicyV2Routes({
+      bundleManager,
+      snapshotDal: container.policySnapshotDal,
+    }));
+  }
+
+  const authProfilesEnabled = (() => {
+    const raw = process.env["TYRUM_AUTH_PROFILES"]?.trim().toLowerCase();
+    if (!raw) return false; // default off
+    return ["1", "true", "on", "yes"].includes(raw);
+  })();
+
+  if (authProfilesEnabled) {
+    app.route("/", createModelRoutes({ authProfileDal: container.authProfileDal }));
   }
 
   if (opts.agentRuntime) {
