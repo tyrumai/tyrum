@@ -77,10 +77,20 @@ export class ApprovalResolver {
     } else {
       // Approval denied — fail the run
       const nowIso = new Date().toISOString();
-      await this.deps.db.run(
-        "UPDATE execution_runs SET status = 'failed', finished_at = ? WHERE run_id = ? AND status = 'paused'",
-        [nowIso, row.run_id],
-      );
+      await this.deps.db.transaction(async (tx) => {
+        await tx.run(
+          "UPDATE resume_tokens SET revoked_at = ? WHERE token = ?",
+          [nowIso, row.resume_token],
+        );
+        await tx.run(
+          "UPDATE execution_runs SET status = 'failed', finished_at = ? WHERE run_id = ? AND status = 'paused'",
+          [nowIso, row.run_id],
+        );
+        await tx.run(
+          "UPDATE execution_steps SET status = 'failed' WHERE run_id = ? AND status = 'paused'",
+          [row.run_id],
+        );
+      });
     }
   }
 

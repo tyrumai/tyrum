@@ -148,6 +148,20 @@ describe("ApprovalResolver", () => {
     );
     expect(run!.status).toBe("failed");
     expect(run!.finished_at).not.toBeNull();
+
+    // Verify: paused steps are failed
+    const step = await db.get<{ status: string }>(
+      "SELECT status FROM execution_steps WHERE run_id = ?",
+      [runId],
+    );
+    expect(step!.status).toBe("failed");
+
+    // Verify: resume token is revoked
+    const token = await db.get<{ revoked_at: string | null }>(
+      "SELECT revoked_at FROM resume_tokens WHERE token = ?",
+      [resumeToken],
+    );
+    expect(token!.revoked_at).not.toBeNull();
   });
 
   it("createExecutionApproval creates an approval and pauses the run", async () => {
