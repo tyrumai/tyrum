@@ -25,6 +25,10 @@ export function createObservabilityRoutes(deps: ObservabilityDeps): Hono {
     const uptime_ms = Date.now() - deps.startedAt;
     const connectionStats = deps.connectionManager?.getStats();
 
+    const queueDepthRow = await deps.db.get<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM execution_runs WHERE status IN ('queued', 'running')`,
+    );
+
     return c.json({
       version: deps.version,
       uptime_ms,
@@ -32,6 +36,7 @@ export function createObservabilityRoutes(deps: ObservabilityDeps): Hono {
       db_type: deps.db.kind,
       connected_clients: connectionStats?.totalClients ?? 0,
       capability_counts: connectionStats?.capabilityCounts ?? {},
+      queue_depth: queueDepthRow?.n ?? 0,
       feature_flags: getFeatureFlags(),
     });
   });

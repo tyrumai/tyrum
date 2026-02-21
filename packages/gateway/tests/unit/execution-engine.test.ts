@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ActionPrimitive } from "@tyrum/schemas";
 import {
   ExecutionEngine,
+  QueueOverflowError,
   type StepExecutor,
   type StepResult,
 } from "../../src/modules/execution/engine.js";
@@ -494,5 +495,73 @@ describe("ExecutionEngine (normalized)", () => {
       [step!.step_id],
     );
     expect(attempts.map((a) => a.status)).toEqual(["cancelled", "succeeded"]);
+  });
+
+  it("reports queue depth", async () => {
+    db = openTestSqliteDb();
+    const engine = new ExecutionEngine({ db });
+
+    expect(await engine.getQueueDepth()).toBe(0);
+
+    await engine.enqueuePlan({
+      key: "agent:a1:ch1:group:t1",
+      lane: "main",
+      planId: "plan-depth-1",
+      requestId: "req-1",
+      steps: [action("Research")],
+    });
+
+    expect(await engine.getQueueDepth()).toBe(1);
+
+    await engine.enqueuePlan({
+      key: "agent:a1:ch1:group:t2",
+      lane: "main",
+      planId: "plan-depth-2",
+      requestId: "req-2",
+      steps: [action("Research")],
+    });
+
+    expect(await engine.getQueueDepth()).toBe(2);
+  });
+
+  it("rejects enqueue when maxQueueDepth is exceeded", async () => {
+    db = openTestSqliteDb();
+    const engine = new ExecutionEngine({ db, maxQueueDepth: 1 });
+
+    await engine.enqueuePlan({
+      key: "agent:a1:ch1:group:t1",
+      lane: "main",
+      planId: "plan-overflow-1",
+      requestId: "req-1",
+      steps: [action("Research")],
+    });
+
+    await expect(
+      engine.enqueuePlan({
+        key: "agent:a1:ch1:group:t2",
+        lane: "main",
+        planId: "plan-overflow-2",
+        requestId: "req-2",
+        steps: [action("Research")],
+      }),
+    ).rejects.toThrow(QueueOverflowError);
+  });
+
+  it("allows enqueue when maxQueueDepth is 0 (unlimited)", async () => {
+    db = openTestSqliteDb();
+    const engine = new ExecutionEngine({ db, maxQueueDepth: 0 });
+
+    // Should never throw regardless of queue depth
+    for (let i = 0; i < 5; i++) {
+      await engine.enqueuePlan({
+        key: `agent:a1:ch1:group:t${i}`,
+        lane: "main",
+        planId: `plan-no-limit-${i}`,
+        requestId: `req-${i}`,
+        steps: [action("Research")],
+      });
+    }
+
+    expect(await engine.getQueueDepth()).toBe(5);
   });
 });

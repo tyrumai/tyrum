@@ -104,22 +104,37 @@ function parsePlanIdFromTriggerJson(triggerJson: string): string | undefined {
   return undefined;
 }
 
+export class QueueOverflowError extends Error {
+  readonly depth: number;
+  readonly limit: number;
+
+  constructor(depth: number, limit: number) {
+    super(`Queue overflow: ${depth} runs pending (limit: ${limit})`);
+    this.name = "QueueOverflowError";
+    this.depth = depth;
+    this.limit = limit;
+  }
+}
+
 export class ExecutionEngine {
   private readonly db: SqlDb;
   private readonly clock: ClockFn;
   private readonly redactionEngine?: RedactionEngine;
   private readonly logger?: Logger;
+  private readonly maxQueueDepth: number;
 
   constructor(opts: {
     db: SqlDb;
     clock?: ClockFn;
     redactionEngine?: RedactionEngine;
     logger?: Logger;
+    maxQueueDepth?: number;
   }) {
     this.db = opts.db;
     this.clock = opts.clock ?? defaultClock;
     this.redactionEngine = opts.redactionEngine;
     this.logger = opts.logger;
+    this.maxQueueDepth = opts.maxQueueDepth ?? 0; // 0 = unlimited (default-off)
   }
 
   private redactUnknown<T>(value: T): T {
@@ -132,7 +147,28 @@ export class ExecutionEngine {
     return this.redactionEngine ? this.redactionEngine.redactText(text).redacted : text;
   }
 
+  /** Count of runs in queued or running status. */
+  async getQueueDepth(): Promise<number> {
+    const row = await this.db.get<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM execution_runs WHERE status IN ('queued', 'running')`,
+    );
+    return row?.n ?? 0;
+  }
+
   async enqueuePlan(input: EnqueuePlanInput): Promise<EnqueuePlanResult> {
+    if (this.maxQueueDepth > 0) {
+      const depth = await this.getQueueDepth();
+      if (depth >= this.maxQueueDepth) {
+        this.logger?.warn("execution.queue_overflow", {
+          queue_depth: depth,
+          max_queue_depth: this.maxQueueDepth,
+          key: input.key,
+          lane: input.lane,
+        });
+        throw new QueueOverflowError(depth, this.maxQueueDepth);
+      }
+    }
+
     const jobId = randomUUID();
     const runId = randomUUID();
 
