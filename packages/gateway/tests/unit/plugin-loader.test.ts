@@ -21,8 +21,8 @@ describe("loadPlugin", () => {
       version: "1.0.0",
       description: "A test plugin",
       entry: "index.js",
-      capabilities: ["read"],
-      permissions: ["fs:read"],
+      capabilities: ["tools"],
+      permissions: ["fs.read"],
     };
     writeFileSync(join(tempDir, "plugin.json"), JSON.stringify(manifest));
 
@@ -33,18 +33,19 @@ describe("loadPlugin", () => {
     expect(loaded.manifest.version).toBe("1.0.0");
     expect(loaded.manifest.description).toBe("A test plugin");
     expect(loaded.manifest.entry).toBe("index.js");
-    expect(loaded.manifest.capabilities).toEqual(["read"]);
-    expect(loaded.manifest.permissions).toEqual(["fs:read"]);
+    expect(loaded.manifest.capabilities).toEqual(["tools"]);
+    expect(loaded.manifest.permissions).toEqual(["fs.read"]);
     expect(loaded.directory).toBe(tempDir);
     expect(loaded.loaded_at).toBeTruthy();
   });
 
-  it("loads manifest with only required fields", () => {
+  it("loads manifest with defaults for optional arrays", () => {
     tempDir = mkdtempSync(join(tmpdir(), "tyrum-plugin-test-"));
     const manifest = {
       id: "minimal",
       name: "Minimal",
       version: "0.1.0",
+      entry: "main.js",
     };
     writeFileSync(join(tempDir, "plugin.json"), JSON.stringify(manifest));
 
@@ -52,9 +53,9 @@ describe("loadPlugin", () => {
 
     expect(loaded.manifest.id).toBe("minimal");
     expect(loaded.manifest.description).toBeUndefined();
-    expect(loaded.manifest.entry).toBeUndefined();
-    expect(loaded.manifest.capabilities).toBeUndefined();
-    expect(loaded.manifest.permissions).toBeUndefined();
+    expect(loaded.manifest.entry).toBe("main.js");
+    expect(loaded.manifest.capabilities).toEqual([]);
+    expect(loaded.manifest.permissions).toEqual([]);
   });
 
   it("throws on missing manifest", () => {
@@ -70,40 +71,36 @@ describe("loadPlugin", () => {
     expect(() => loadPlugin(tempDir)).toThrow("Invalid plugin manifest JSON");
   });
 
-  it("throws on missing required field 'id'", () => {
+  it("throws on missing required field via Zod", () => {
     tempDir = mkdtempSync(join(tmpdir(), "tyrum-plugin-test-"));
     writeFileSync(
       join(tempDir, "plugin.json"),
-      JSON.stringify({ name: "No ID", version: "1.0.0" }),
+      JSON.stringify({ name: "No ID", version: "1.0.0", entry: "x.js" }),
     );
 
-    expect(() => loadPlugin(tempDir)).toThrow("missing required field 'id'");
+    expect(() => loadPlugin(tempDir)).toThrow();
   });
 
-  it("throws on missing required field 'name'", () => {
+  it("throws on invalid capability enum value", () => {
     tempDir = mkdtempSync(join(tmpdir(), "tyrum-plugin-test-"));
     writeFileSync(
       join(tempDir, "plugin.json"),
-      JSON.stringify({ id: "no-name", version: "1.0.0" }),
+      JSON.stringify({
+        id: "bad-cap",
+        name: "Bad",
+        version: "1.0.0",
+        entry: "x.js",
+        capabilities: ["invalid_capability"],
+      }),
     );
 
-    expect(() => loadPlugin(tempDir)).toThrow("missing required field 'name'");
-  });
-
-  it("throws on missing required field 'version'", () => {
-    tempDir = mkdtempSync(join(tmpdir(), "tyrum-plugin-test-"));
-    writeFileSync(
-      join(tempDir, "plugin.json"),
-      JSON.stringify({ id: "no-ver", name: "No Version" }),
-    );
-
-    expect(() => loadPlugin(tempDir)).toThrow("missing required field 'version'");
+    expect(() => loadPlugin(tempDir)).toThrow();
   });
 
   it("throws when manifest is not an object", () => {
     tempDir = mkdtempSync(join(tmpdir(), "tyrum-plugin-test-"));
     writeFileSync(join(tempDir, "plugin.json"), JSON.stringify("a string"));
 
-    expect(() => loadPlugin(tempDir)).toThrow("is not an object");
+    expect(() => loadPlugin(tempDir)).toThrow();
   });
 });

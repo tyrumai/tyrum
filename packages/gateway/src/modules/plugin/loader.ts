@@ -1,24 +1,37 @@
 import { readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
-
-export interface PluginManifest {
-  id: string;
-  name: string;
-  version: string;
-  description?: string;
-  entry?: string;
-  capabilities?: string[];
-  permissions?: string[];
-}
+import { join, resolve, normalize, isAbsolute } from "node:path";
+import type { PluginManifestSchema as PluginManifestT } from "@tyrum/schemas";
+import { PluginManifestSchema } from "@tyrum/schemas";
+import type { PluginInterface } from "./types.js";
 
 export interface LoadedPlugin {
-  manifest: PluginManifest;
+  manifest: PluginManifestT;
   directory: string;
   loaded_at: string;
 }
 
 /**
+ * Validate that the entry path doesn't escape the plugin directory.
+ * Prevents path traversal attacks (e.g., `../../etc/passwd`).
+ */
+function validateEntryPath(directory: string, entry: string): string {
+  if (isAbsolute(entry)) {
+    throw new Error(`Plugin entry path must be relative, got absolute path: ${entry}`);
+  }
+  if (entry.includes("..")) {
+    throw new Error(`Plugin entry path must not contain '..': ${entry}`);
+  }
+  const resolved = resolve(directory, entry);
+  const normalizedDir = normalize(directory);
+  if (!resolved.startsWith(normalizedDir)) {
+    throw new Error(`Plugin entry path escapes plugin directory: ${entry}`);
+  }
+  return resolved;
+}
+
+/**
  * Load a plugin from a directory by reading its plugin.json manifest.
+ * Validates the manifest using the Zod schema.
  */
 export function loadPlugin(directory: string): LoadedPlugin {
   const manifestPath = join(directory, "plugin.json");
@@ -34,7 +47,10 @@ export function loadPlugin(directory: string): LoadedPlugin {
     throw new Error(`Invalid plugin manifest JSON at ${manifestPath}`);
   }
 
-  const manifest = validateManifest(parsed, manifestPath);
+  const manifest = PluginManifestSchema.parse(parsed);
+
+  // Validate entry path doesn't escape the plugin directory
+  validateEntryPath(directory, manifest.entry);
 
   return {
     manifest,
@@ -43,27 +59,27 @@ export function loadPlugin(directory: string): LoadedPlugin {
   };
 }
 
-function validateManifest(parsed: unknown, path: string): PluginManifest {
-  if (!parsed || typeof parsed !== "object") {
-    throw new Error(`Plugin manifest at ${path} is not an object`);
+/**
+ * Dynamically import a plugin's code module.
+ * The module must export a default object implementing PluginInterface.
+ */
+export async function loadPluginCode(
+  directory: string,
+  manifest: PluginManifestT,
+): Promise<PluginInterface> {
+  const entryPath = validateEntryPath(directory, manifest.entry);
+  if (!existsSync(entryPath)) {
+    throw new Error(`Plugin entry file not found: ${entryPath}`);
   }
-  const obj = parsed as Record<string, unknown>;
-  if (typeof obj["id"] !== "string" || !obj["id"]) {
-    throw new Error(`Plugin manifest at ${path} missing required field 'id'`);
+
+  const module = (await import(entryPath)) as Record<string, unknown>;
+  const plugin = (module["default"] ?? module) as PluginInterface;
+
+  if (typeof plugin.onLoad !== "function") {
+    throw new Error(
+      `Plugin '${manifest.id}' does not export onLoad function from ${manifest.entry}`,
+    );
   }
-  if (typeof obj["name"] !== "string" || !obj["name"]) {
-    throw new Error(`Plugin manifest at ${path} missing required field 'name'`);
-  }
-  if (typeof obj["version"] !== "string" || !obj["version"]) {
-    throw new Error(`Plugin manifest at ${path} missing required field 'version'`);
-  }
-  return {
-    id: obj["id"] as string,
-    name: obj["name"] as string,
-    version: obj["version"] as string,
-    description: typeof obj["description"] === "string" ? obj["description"] : undefined,
-    entry: typeof obj["entry"] === "string" ? obj["entry"] : undefined,
-    capabilities: Array.isArray(obj["capabilities"]) ? (obj["capabilities"] as string[]) : undefined,
-    permissions: Array.isArray(obj["permissions"]) ? (obj["permissions"] as string[]) : undefined,
-  };
+
+  return plugin;
 }
