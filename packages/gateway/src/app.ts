@@ -29,6 +29,10 @@ import { PlaybookRunner } from "./modules/playbook/runner.js";
 import { createWebApiRoutes } from "./routes/web-api.js";
 import { createWebUiRoutes } from "./routes/web-ui.js";
 import { createSnapshotRoutes } from "./routes/snapshot.js";
+import { createSchemaRoutes } from "./routes/schema.js";
+import { createCatalogRoutes } from "./routes/catalog.js";
+import { createPluginRoutes } from "./routes/plugin.js";
+import { createSpaRoutes } from "./routes/spa.js";
 import { loadAllPlaybooks } from "./modules/playbook/loader.js";
 import type { Playbook } from "@tyrum/schemas";
 import type { AgentRuntime } from "./modules/agent/runtime.js";
@@ -160,6 +164,8 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   }
 
   app.route("/", createSnapshotRoutes({ db: container.db }));
+  app.route("/", createSchemaRoutes());
+  app.route("/", createCatalogRoutes({ modelCatalog: container.modelCatalog }));
 
   const presenceEnabled = (() => {
     const raw = process.env["TYRUM_PRESENCE"]?.trim().toLowerCase();
@@ -214,6 +220,16 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     app.route("/", createModelRoutes({ authProfileDal: container.authProfileDal }));
   }
 
+  const pluginsEnabled = (() => {
+    const raw = process.env["TYRUM_PLUGINS"]?.trim().toLowerCase();
+    if (!raw) return false; // default off
+    return ["1", "true", "on", "yes"].includes(raw);
+  })();
+
+  if (pluginsEnabled) {
+    app.route("/", createPluginRoutes({ pluginRegistry: container.pluginRegistry }));
+  }
+
   if (opts.agentRuntime) {
     app.route("/", createAgentRoutes(opts.agentRuntime));
   }
@@ -233,7 +249,20 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     }
   }
 
-  // Gateway-hosted web UI.
+  // Gateway-hosted web UI — SPA or server-rendered.
+  const spaEnabled = (() => {
+    const raw = process.env["TYRUM_SPA_UI"]?.trim().toLowerCase();
+    if (!raw) return false; // default off
+    return ["1", "true", "on", "yes"].includes(raw);
+  })();
+
+  if (spaEnabled) {
+    const distDir = process.env["TYRUM_SPA_DIST_DIR"]?.trim() || "";
+    if (distDir) {
+      app.route("/", createSpaRoutes({ distDir }));
+    }
+  }
+
   app.route(
     "/",
     createWebUiRoutes({

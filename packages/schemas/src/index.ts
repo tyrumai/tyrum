@@ -190,6 +190,7 @@ export {
 export {
   TypingMode,
   TypingConfig,
+  CompactionConfig,
   AgentModelConfig,
   AgentSkillConfig,
   AgentMcpConfig,
@@ -340,3 +341,22 @@ export {
   ContextReportData,
   ContextReport,
 } from "./context-report.js";
+
+export {
+  listSchemaNames,
+  getJsonSchema,
+  getAllJsonSchemas,
+} from "./json-schema.js";
+
+export {
+  ModelLimits,
+  ModelCost,
+  CatalogModel,
+  CatalogProvider,
+} from "./model-catalog.js";
+
+export {
+  PluginCapability,
+  PluginPermission,
+  PluginManifestSchema,
+} from "./plugin.js";
