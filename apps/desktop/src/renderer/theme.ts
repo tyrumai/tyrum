@@ -164,7 +164,7 @@ export const tabRow: CSSProperties = {
   display: "flex",
   gap: 0,
   marginBottom: 16,
-  borderBottom: `1px solid ${colors.border}`,
+  borderBottom: `2px solid ${colors.border}`,
 };
 
 export function tab(active: boolean): CSSProperties {
@@ -179,7 +179,7 @@ export function tab(active: boolean): CSSProperties {
     borderBottomStyle: "solid",
     borderBottomWidth: 2,
     borderBottomColor: active ? colors.primary : "transparent",
-    marginBottom: -1,
+    marginBottom: -2,
     fontFamily: fonts.sans,
   };
 }
