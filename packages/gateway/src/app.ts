@@ -28,6 +28,7 @@ import { createModelRoutes } from "./routes/model.js";
 import { PlaybookRunner } from "./modules/playbook/runner.js";
 import { createWebApiRoutes } from "./routes/web-api.js";
 import { createWebUiRoutes } from "./routes/web-ui.js";
+import { createSnapshotRoutes } from "./routes/snapshot.js";
 import { loadAllPlaybooks } from "./modules/playbook/loader.js";
 import type { Playbook } from "@tyrum/schemas";
 import type { AgentRuntime } from "./modules/agent/runtime.js";
@@ -157,6 +158,8 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       role: opts.role ?? "all",
     }));
   }
+
+  app.route("/", createSnapshotRoutes({ db: container.db }));
 
   const presenceEnabled = (() => {
     const raw = process.env["TYRUM_PRESENCE"]?.trim().toLowerCase();
