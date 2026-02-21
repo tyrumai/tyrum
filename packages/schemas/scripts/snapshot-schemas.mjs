@@ -3,7 +3,7 @@
  * Generate a JSON snapshot of all schema JSON schemas for compatibility checking.
  * Output goes to stdout so it can be piped or redirected.
  */
-import { getAllJsonSchemas } from "../dist/json-schema.js";
+import { getAllJsonSchemas } from "../dist/index.mjs";
 
 const schemas = await getAllJsonSchemas();
 const sorted = Object.fromEntries(
