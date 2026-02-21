@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { randomUUID } from "node:crypto";
 import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
@@ -88,5 +89,17 @@ describe("PolicyOverrideDal", () => {
     });
     expect(row.created_from_approval_id).toBe(42);
     expect(row.created_by).toBe("operator");
+  });
+
+  it("links override to policy_snapshot_id", async () => {
+    const dal = createDal();
+    const snapshotId = randomUUID();
+    const row = await dal.create({
+      agentId: "a1",
+      toolId: "t1",
+      pattern: "*",
+      policySnapshotId: snapshotId,
+    });
+    expect(row.created_from_policy_snapshot_id).toBe(snapshotId);
   });
 });

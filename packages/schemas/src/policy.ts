@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { UuidSchema } from "./common.js";
 
 export const Decision = z.enum(["approve", "escalate", "deny"]);
 export type Decision = z.infer<typeof Decision>;
@@ -136,7 +137,7 @@ export const PolicyOverride = z
     created_at: z.string(),
     created_by: z.string().optional(),
     created_from_approval_id: z.number().int().positive().optional(),
-    created_from_policy_snapshot_id: z.number().int().positive().optional(),
+    created_from_policy_snapshot_id: UuidSchema.optional(),
     expires_at: z.string().nullable().optional(),
     revoked_at: z.string().nullable().optional(),
     revoked_by: z.string().nullable().optional(),

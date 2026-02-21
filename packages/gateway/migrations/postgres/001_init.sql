@@ -576,7 +576,7 @@ CREATE TABLE IF NOT EXISTS policy_overrides (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_by TEXT,
   created_from_approval_id INTEGER,
-  created_from_policy_snapshot_id INTEGER,
+  created_from_policy_snapshot_id TEXT,
   expires_at TIMESTAMPTZ,
   revoked_at TIMESTAMPTZ,
   revoked_by TEXT,

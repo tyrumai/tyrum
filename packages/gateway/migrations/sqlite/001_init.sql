@@ -569,7 +569,7 @@ CREATE TABLE IF NOT EXISTS policy_overrides (
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   created_by TEXT,
   created_from_approval_id INTEGER,
-  created_from_policy_snapshot_id INTEGER,
+  created_from_policy_snapshot_id TEXT,
   expires_at TEXT,
   revoked_at TEXT,
   revoked_by TEXT,

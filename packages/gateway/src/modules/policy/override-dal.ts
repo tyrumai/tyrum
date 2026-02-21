@@ -11,7 +11,7 @@ export interface PolicyOverrideRow {
   created_at: string;
   created_by: string | null;
   created_from_approval_id: number | null;
-  created_from_policy_snapshot_id: number | null;
+  created_from_policy_snapshot_id: string | null;
   expires_at: string | null;
   revoked_at: string | null;
   revoked_by: string | null;
@@ -28,7 +28,7 @@ interface RawOverrideRow {
   created_at: string | Date;
   created_by: string | null;
   created_from_approval_id: number | null;
-  created_from_policy_snapshot_id: number | null;
+  created_from_policy_snapshot_id: string | null;
   expires_at: string | null;
   revoked_at: string | null;
   revoked_by: string | null;
@@ -57,7 +57,7 @@ export class PolicyOverrideDal {
     workspaceId?: string;
     createdBy?: string;
     approvalId?: number;
-    policySnapshotId?: number;
+    policySnapshotId?: string;
     expiresAt?: string;
   }): Promise<PolicyOverrideRow> {
     const id = randomUUID();
