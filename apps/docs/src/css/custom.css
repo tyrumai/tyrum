@@ -42,7 +42,8 @@
   --docusaurus-highlighted-code-line-bg: rgba(59, 130, 246, 0.1);
 }
 
-.navbar {
+.navbar,
+.navbar-sidebar {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
