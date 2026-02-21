@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toErrorMessage } from "../lib/errors.js";
-import { colors, heading, card, label as labelStyle, input, btn, info, tabRow, tab } from "../theme.js";
+import { colors, heading, card, label as labelStyle, input, btn, info, tabRow, tab as tabStyle } from "../theme.js";
 
 type Tab = "embedded" | "remote";
 
@@ -131,10 +131,10 @@ export function Connection() {
       <h1 style={heading}>Connection</h1>
 
       <div style={tabRow}>
-        <button style={tab(tab === "embedded")} onClick={() => setTab("embedded")}>
+        <button style={tabStyle(tab === "embedded")} onClick={() => setTab("embedded")}>
           Embedded
         </button>
-        <button style={tab(tab === "remote")} onClick={() => setTab("remote")}>
+        <button style={tabStyle(tab === "remote")} onClick={() => setTab("remote")}>
           Remote
         </button>
       </div>
