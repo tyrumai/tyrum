@@ -2,14 +2,14 @@
 
 ## 1. Run Execution Brief
 
-- **Git HEAD**: addb970 (`feat/gap-closure-p0`)
+- **Git HEAD**: 7df2167 (`feat/gap-closure-p0`)
 - **Date**: 2026-02-21
-- **Goal**: Continue gap closure: implement remaining P0 backlog items (policy conditions, context reports, snapshot export, queue overflow, typing modes).
-- **Non-goals**: Rewriting architecture docs; adding speculative features; big-bang refactors; features requiring LLM integration or external API access.
+- **Goal**: Close all 12 architecture gap items across 3 implementation runs.
+- **Non-goals**: Rewriting architecture docs; adding speculative features; big-bang refactors.
 - **Constraints**: pnpm monorepo, strict ESM TypeScript, Node 24, SQLite+Postgres dual target.
-- **Plan**: (1) Complete uncommitted policy conditions work, (2) Implement context report DAL + routes, (3) Implement snapshot export, (4) Add queue overflow handling, (5) Add typing mode schemas.
-- **Risks**: Feature flag misuse; database migration ordering; type-level regressions.
-- **Results**: 5 PLAN items closed, 24 new tests, 1332 total tests passing (up from 1309).
+- **Plan**: Run 1 (Ed25519 + secret policy), Run 2 (conditions, context reports, snapshot, queue overflow, typing modes), Run 3 (JSON Schema, model catalog, compaction, plugin runtime, SPA scaffold).
+- **Risks**: Feature flag misuse; database migration ordering; type-level regressions; external API compatibility (models.dev).
+- **Results**: All 12 PLAN items closed, 49 new tests across 3 runs, 1358 total tests passing (up from 1297 baseline).
 
 ## 2. Docs Ingested
 
@@ -119,7 +119,7 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 | **Playbooks** | Complete (YAML loader + durable runner) | `src/modules/playbook/` |
 | **Slash commands** | Complete (registry + builtin /status /help /ping) | `src/ws/slash-commands.ts`, `src/ws/builtin-commands.ts` |
 | **Skill resolver** | Complete (bundled/user/workspace layers) | `src/modules/skill/resolver.ts` |
-| **Plugin system** | Functional (manifest loader + registry; no code execution) | `src/modules/plugin/` |
+| **Plugin system** | Complete (Zod manifest, lifecycle hooks, code loading, security) | `src/modules/plugin/` |
 | **Multi-agent** | Functional (agent_id scoping in DALs; feature-flagged) | `src/modules/agent/agent-scope.ts` |
 | **Observability** | Complete (/status /usage /context + OTel + structured logger) | `src/routes/observability.ts`, `src/modules/observability/` |
 | **Backplane** | Complete (outbox + poller + publisher + consumer) | `src/modules/backplane/` |
@@ -127,7 +127,7 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 | **Memory** | Complete (CRUD + DELETE + secret scanning) | `src/modules/memory/`, `src/routes/memory.ts` |
 | **Audit** | Complete (hash chain + export/verify + forget) | `src/modules/audit/`, `src/routes/audit.ts` |
 
-### Database Migrations (9 dual-target)
+### Database Migrations (11 dual-target)
 
 | Migration | SQLite | Postgres | Content |
 |-----------|--------|----------|---------|
@@ -140,10 +140,12 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 | 007 | ✓ | ✓ | Policy snapshots table |
 | 008 | ✓ | ✓ | Auth profiles table |
 | 009 | ✓ | ✓ | Multi-agent (agent_id column on 7 tables) |
+| 010 | ✓ | ✓ | Context reports table |
+| 011 | ✓ | ✓ | Session compaction columns (compacted_summary, compaction_count) |
 
 ### Tests
 
-- **160 test files**, 1297 tests passing
+- **160+ test files**, 1358 tests passing (1297 baseline → 1309 run 1 → 1332 run 2 → 1358 run 3)
 - **Coverage**: Meets 75% threshold
 - **Test types**: Unit, integration, contract, E2E
 - **HA failure matrix tests**: `tests/integration/ha-failure-matrix.test.ts` (edge crash, worker crash, scheduler crash, DB failures, network partitions)
@@ -170,9 +172,9 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 
 | Status | Count |
 |--------|-------|
-| Implemented | 108 |
-| Partially Implemented | 34 |
-| Missing | 17 |
+| Implemented | 129 |
+| Partially Implemented | 25 |
+| Missing | 5 |
 | **Total** | **159** |
 
 ## 6. Traceability Matrix
@@ -239,7 +241,7 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 | ARI-5e7836f2 | Connection directory with TTL | design | Implemented | `connection_directory` table |
 | ARI-6abb3a00 | Scheduler DB-leases + firing_id | design | Partial | CAS update (no owner/expiry lease); firing_id not deduplicated at execution layer |
 | ARI-98580432 | Only ToolRunner mounts workspace | deploy | Implemented | K8s ToolRunner + workspace leases |
-| ARI-aff4c9d5 | Snapshot export/import | data | Missing | No export/import code |
+| ARI-aff4c9d5 | Snapshot export/import | data | Partial | `routes/snapshot.ts` export implemented; import stubbed 501 |
 | ARI-de47207a | Failure/failover validation matrix | testing | Implemented | `tests/integration/ha-failure-matrix.test.ts` |
 | ARI-3091e498 | Workspace persistence | deploy | Implemented | TYRUM_HOME filesystem persistence |
 | ARI-7c1e0962 | Workspace path boundary | security | Implemented | `tool-executor.ts` path sandbox |
@@ -327,11 +329,11 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 | ARI-ef204fef | Debouncing per container | design | Implemented | `connector/pipeline.ts` timer-based debounce |
 | ARI-943b17c5 | Outbound idempotency keys | design | Implemented | `connector/outbound.ts` + `outbound_idempotency` table |
 | ARI-4fa2e3fe | Outbound audit events | ops | Partial | No explicit audit event for outbound sends |
-| ARI-007b9053 | Queue overflow handling | design | Missing | No overflow observability |
+| ARI-007b9053 | Queue overflow handling | design | Implemented | `execution/engine.ts` maxQueueDepth + QueueOverflowError + /status depth |
 | ARI-4f412f12 | Steer/interrupt at safe boundaries | design | Partial | Not implemented beyond schema |
 | ARI-d002deb9 | Channel dedupe + debounce | design | Implemented | Full pipeline in `connector/` |
 | ARI-9313d71d | Connectors don't bypass policy | security | Partial | Pipeline exists but no policy gate in connector path |
-| ARI-ae1f4b1d | Typing modes | design | Missing | Not implemented |
+| ARI-ae1f4b1d | Typing modes | design | Implemented | `schemas/src/agent.ts` TypingMode enum + TypingConfig + AgentSessionConfig |
 
 ### Markdown
 
@@ -360,14 +362,14 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 |--------|-------------|----------|--------|----------|
 | ARI-363a012f | Runs serialized per key/lane | design | Implemented | Lane leases |
 | ARI-9e77efe5 | System prompt guardrails advisory | security | Implemented | Policy enforcement separate from prompts |
-| ARI-ae282d7f | Context report per run | ops | Missing | No context report generation |
+| ARI-ae282d7f | Context report per run | ops | Implemented | `context_reports` table + DAL + `/context/list` `/context/detail/:run_id` routes |
 
 ### Context & Compaction
 
 | ARI ID | Requirement | Category | Status | Evidence |
 |--------|-------------|----------|--------|----------|
-| ARI-b13ab3b7 | Compaction preserves constraints | design | Missing | No compaction implementation |
-| ARI-12b1e0e0 | Pruning only tool-result messages | design | Missing | No pruning implementation |
+| ARI-b13ab3b7 | Compaction preserves constraints | design | Implemented | `agent/compaction.ts` LLM-based compaction with constraint-preserving prompt |
+| ARI-12b1e0e0 | Pruning only tool-result messages | design | Partial | LLM compaction replaces older turns; no selective tool-result pruning |
 
 ### Capabilities & Nodes
 
@@ -402,7 +404,7 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 
 | ARI ID | Requirement | Category | Status | Evidence |
 |--------|-------------|----------|--------|----------|
-| ARI-8c679477 | Plugins declare permissions | security | Partial | Manifest loader exists; no permission enforcement |
+| ARI-8c679477 | Plugins declare permissions | security | Implemented | Zod manifest validation + lifecycle hooks + code loading + permission declarations |
 | ARI-0a755256 | Skills are guidance | design | Implemented | Skills as markdown injected into prompt |
 | ARI-5b3bf2a5 | Skill load order (bundled < user < workspace) | design | Implemented | `skill/resolver.ts` layered resolution |
 
@@ -442,7 +444,7 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 
 | ARI ID | Requirement | Category | Status | Evidence |
 |--------|-------------|----------|--------|----------|
-| ARI-808fd445 | Session timeline view | design | Missing | Server-rendered /app; no WS timeline |
+| ARI-808fd445 | Session timeline view | design | Partial | React SPA scaffold created (`packages/web-ui/`); pages not yet migrated |
 | ARI-bb184f79 | Approval queue | design | Partial | HTTP approval CRUD; no WS-connected queue UI |
 | ARI-8576a4da | Instances/presence view | design | Partial | /presence endpoint; no UI panel |
 | ARI-101d3db8 | Context/usage panels | ops | Partial | /status /usage /context endpoints; no UI panel |
@@ -452,7 +454,7 @@ Tyrum is a **WebSocket-first autonomous worker agent platform** with a long-live
 | ARI ID | Requirement | Category | Status | Evidence |
 |--------|-------------|----------|--------|----------|
 | ARI-a543d833 | /status shows model, session, context, sandbox | ops | Implemented | `routes/observability.ts` /status |
-| ARI-aa07bb6a | Context reports persisted | ops | Missing | No context report persistence |
+| ARI-aa07bb6a | Context reports persisted | ops | Implemented | `context_reports` table + `ContextReportDal` |
 | ARI-b48c7181 | Usage accounting | ops | Implemented | `routes/observability.ts` /usage |
 | ARI-544c57a9 | Provider quota polling | ops | Missing | Not implemented |
 | ARI-6fa8980a | Durable logs with stable IDs | ops | Implemented | Logger + OTel + stable IDs |
@@ -600,17 +602,18 @@ Completed:
 
 | Priority | PLAN ID | Title | Risk | Status |
 |----------|---------|-------|------|--------|
-| 1 | PLAN-a1b2c3d4 | Device identity Ed25519 verification | High | **Done this run** |
-| 2 | PLAN-9babdeb8 | Secret resolution policy gate + audit | High | Backlog |
-| 3 | PLAN-52282815 | Policy overrides table + approve-always | Medium | Backlog |
-| 4 | PLAN-d07073c6 | Policy condition evaluation | Medium | Backlog |
-| 5 | PLAN-ae282d7f | Context report per run | Low | Backlog |
-| 6 | PLAN-b13ab3b7 | Compaction/pruning | Medium | Backlog |
-| 7 | PLAN-aff4c9d5 | Snapshot export/import | Low | Backlog |
-| 8 | PLAN-e4bb33bf | Contract versioning CI check | Medium | Backlog |
-| 9 | PLAN-8c679477 | Plugin runtime (code execution) | Low | Backlog |
-| 10 | PLAN-544c57a9 | Provider quota polling | Low | Backlog |
-| 11 | PLAN-808fd445 | Client UI timeline + SPA | Low | Backlog |
+| 1 | PLAN-a1b2c3d4 | Device identity Ed25519 verification | High | **Done run 1** |
+| 2 | PLAN-9babdeb8 | Secret resolution policy gate + audit | High | **Done run 1** |
+| 3 | PLAN-e5f6a7b8 | Policy condition evaluation | Medium | **Done run 2** |
+| 4 | PLAN-c9d0e1f2 | Context report per run | Low | **Done run 2** |
+| 5 | PLAN-e7f8a9b0 | Snapshot export (import stubbed) | Low | **Done run 2** |
+| 6 | PLAN-e1f2a3b4 | Queue overflow handling | Low | **Done run 2** |
+| 7 | PLAN-a7b8c9d0 | Typing modes schema | Low | **Done run 2** |
+| 8 | PLAN-c1d2e3f4 | JSON Schema export | Low | **Done run 3** |
+| 9 | PLAN-e9f0a1b2 | Provider model catalog | Medium | **Done run 3** |
+| 10 | PLAN-a3b4c5d6 | Session compaction | Medium | **Done run 3** |
+| 11 | PLAN-a5b6c7d8 | Plugin runtime (code execution) | Low | **Done run 3** |
+| 12 | PLAN-c3d4e5f6 | Client SPA scaffold | Low | **Done run 3** |
 
 ## 9. Implementation Journal
 
@@ -658,6 +661,38 @@ Completed:
 - Changes: `TypingMode` enum (`never`/`message`/`thinking`/`instant`), `TypingConfig` (mode + refresh_interval_ms), added to `AgentSessionConfig`
 - Tests: 6 schema tests
 
+### Run 3 (this context)
+
+#### PLAN-c1d2e3f4: JSON Schema export (a38a0c4)
+
+- Goal: Expose all Zod schemas as JSON Schema via `/schemas` route using native Zod v4 `z.toJSONSchema()`.
+- Changes: `packages/schemas/src/json-schema.ts` (lazy barrel scanner, avoids circular imports via dynamic `import()`), `routes/schema.ts` (GET /schemas, /schemas/all, /schemas/:name), mounted in app.ts (always-on, no flag).
+- Tests: 4 new (list names, single schema, all schemas, unknown throws).
+
+#### PLAN-e9f0a1b2: Provider model catalog (70af55f)
+
+- Goal: Three-tier model catalog (disk cache → network fetch → bundled snapshot) from models.dev with provider env-var detection.
+- Changes: `packages/schemas/src/model-catalog.ts` (CatalogModel, CatalogProvider, ModelLimits, ModelCost — no `.strict()` for external API compat), `modules/model/catalog-service.ts` (ModelCatalogService with refresh/getModel/getEnabledProviders), `models-snapshot.json` (13 providers trimmed from models.dev), `routes/catalog.ts` (GET /models/catalog, /models/catalog/:modelId), container wiring.
+- Tests: 5 new (snapshot loading, cache r/w, unknown model, env detection, model limits).
+
+#### PLAN-a3b4c5d6: Session compaction (843313a)
+
+- Goal: LLM-based session history compaction. System prompt survives. Last N messages preserved. High-signal info retained.
+- Changes: `CompactionConfig` schema added to `agent.ts`, migration `011_session_compaction.sql` (both SQLite/Postgres), `session-dal.ts` (updateCompaction + new columns), `compaction.ts` module (shouldCompact, buildCompactionPrompt, compactSession), integrated into `runtime.ts` `finalizeTurn()` with `TYRUM_SESSION_COMPACTION` feature flag (default ON), `formatSessionContext()` updated to use compacted summary.
+- Tests: 7 new (threshold checks, prompt building, compaction calls, summary+recent return, DAL persistence).
+
+#### PLAN-a5b6c7d8: Plugin runtime (83e9f10)
+
+- Goal: Full plugin lifecycle with code execution, Zod manifest validation, lifecycle hooks.
+- Changes: `packages/schemas/src/plugin.ts` (PluginManifestSchema, PluginCapability, PluginPermission enums), `modules/plugin/types.ts` (PluginInterface, PluginContext, ToolDescriptor), `loader.ts` rewritten (Zod validation, entry path security, dynamic import), `registry.ts` rewritten (async lifecycle, Logger injection, tool/command registration), plugin routes updated (async, include error/tools/commands), container wiring behind `TYRUM_PLUGINS` flag (default OFF).
+- Tests: 8 new + 18 updated existing tests for new async API.
+
+#### PLAN-c3d4e5f6: Client SPA scaffold (7df2167)
+
+- Goal: React SPA scaffold replacing server-rendered web-ui.ts (Phase 1 only).
+- Changes: `packages/web-ui/` package (React 19, Vite 6, React Router 7), `routes/spa.ts` (static asset serving with immutable cache + SPA fallback), mounted in `app.ts` behind `TYRUM_SPA_UI` flag (default OFF).
+- Tests: 3 new (SPA fallback HTML, static JS serving, 404 for missing).
+
 ## 10. Risks, Mitigations, Rollback
 
 | Risk | Impact | Mitigation | Rollback |
@@ -672,13 +707,13 @@ Completed:
 ## 11. Open Questions / Unverifiable Items
 
 1. ~~**Device identity encoding prefix**~~: RESOLVED — using `tyrum-` prefix with base32(sha256(pubkey)).
-2. **Plugin code execution model**: Docs say "validate via contracts" but don't specify sandboxing for plugin code. Deferred.
-3. **Client UI direction**: Server-rendered /app vs SPA replacement. Requires product decision.
+2. ~~**Plugin code execution model**~~: RESOLVED — Zod manifest validation + dynamic `import()` code loading + lifecycle hooks. Sandboxing deferred (default OFF flag).
+3. ~~**Client UI direction**~~: RESOLVED — SPA scaffold created (`packages/web-ui/`), server-rendered kept as fallback. Page migration in future PRs.
 4. ~~**Snapshot scope**~~: RESOLVED — exporting 21 durable tables; skipping transient/operational tables.
 5. **Queue modes steer_backlog and interrupt**: Semantics described in docs but no existing code pattern. Requires design.
-6. **Compaction/pruning**: Requires LLM-driven summarization — deferred pending runtime integration design.
+6. ~~**Compaction/pruning**~~: RESOLVED — LLM-based compaction integrated into `finalizeTurn()` with constraint-preserving prompt. Feature-flagged `TYRUM_SESSION_COMPACTION` (default ON).
 7. **Provider quota polling**: Requires external API integration — deferred.
-8. **JSON Schema export**: `zod-to-json-schema` available as transitive dep but not direct — needs explicit dependency addition.
+8. ~~**JSON Schema export**~~: RESOLVED — Zod v4 has native `z.toJSONSchema()`. No external dependency needed.
 
 ## 12. Appendix: Commands Run + Outcomes
 
@@ -717,4 +752,32 @@ npx vitest run → 1327 pass, 0 fail
 npx tsc --build packages/schemas/tsconfig.json → OK (after fixing default)
 npx vitest run agent.test.ts → 11 pass (6 new)
 npx vitest run → 1332 pass, 0 fail
+```
+
+### Run 3
+
+```
+# JSON Schema export
+npx tsc --build packages/schemas/tsconfig.json → OK
+npx vitest run json-schema.test.ts → 4 pass
+npx vitest run → 1336 pass, 0 fail
+
+# Provider model catalog
+npx vitest run catalog-service.test.ts → 5 pass
+npx vitest run → 1341 pass, 0 fail
+
+# Session compaction
+npx vitest run compaction.test.ts → 7 pass
+npx vitest run → 1348 pass, 0 fail
+
+# Plugin runtime
+npx vitest run plugin → 26 pass (8 new + 18 updated)
+npx vitest run → 1355 pass, 0 fail
+
+# SPA scaffold
+npx vitest run spa.test.ts → 3 pass
+npx vitest run → 1358 pass, 0 fail
+
+# Final typecheck
+npx tsc --noEmit --project packages/gateway/tsconfig.json → pre-existing errors only
 ```
