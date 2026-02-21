@@ -193,17 +193,19 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
       );
     }
 
-    if (deps.engine && updated.resume_token && updated.run_id) {
-      if (isApproved) {
+    const desiredStatus = isApproved ? "approved" : "denied";
+    const decisionMatches = updated.status === desiredStatus;
+    if (deps.engine && decisionMatches) {
+      if (updated.status === "approved" && updated.resume_token) {
         await deps.engine.resumeRun(updated.resume_token);
-      } else {
-        await deps.engine.cancelRun(updated.run_id, body.reason ?? "approval denied");
+      } else if (updated.status === "denied" && updated.run_id) {
+        await deps.engine.cancelRun(updated.run_id, updated.response_reason ?? body.reason ?? "approval denied");
       }
     }
 
     const createdOverrides: unknown[] = [];
 
-    if (isApproved && body.mode === "always") {
+    if (decisionMatches && updated.status === "approved" && body.mode === "always") {
       const overrideDal = deps.policyOverrideDal;
       if (!overrideDal) {
         return c.json({ error: "unsupported", message: "policy overrides not configured" }, 400);

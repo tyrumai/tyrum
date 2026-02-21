@@ -388,12 +388,19 @@ export async function handleClientMessage(
       );
     }
 
-    if (deps.engine && updated.resume_token && updated.run_id) {
+    const desiredStatus = req.decision === "approved" ? "approved" : "denied";
+    if (updated.status !== desiredStatus) {
+      deps.logger?.warn("approval.decision_mismatch", {
+        approval_id: updated.id,
+        decision: req.decision,
+        status: updated.status,
+      });
+    } else if (deps.engine) {
       try {
-        if (req.decision === "approved") {
+        if (updated.status === "approved" && updated.resume_token) {
           await deps.engine.resumeRun(updated.resume_token);
-        } else {
-          await deps.engine.cancelRun(updated.run_id, req.reason ?? "approval denied");
+        } else if (updated.status === "denied" && updated.run_id) {
+          await deps.engine.cancelRun(updated.run_id, updated.response_reason ?? req.reason ?? "approval denied");
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

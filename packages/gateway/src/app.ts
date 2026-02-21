@@ -58,6 +58,7 @@ export interface AppOptions {
   isLocalOnly?: boolean;
   connectionManager?: ConnectionManager;
   connectionDirectory?: ConnectionDirectoryDal;
+  engine?: ExecutionEngine;
   wsCluster?: {
     edgeId: string;
     outboxDal: OutboxDal;
@@ -80,17 +81,20 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     otelEnabled: false,
   };
 
-  const engineApiEnabledRaw = process.env["TYRUM_ENGINE_API_ENABLED"]?.trim();
-  const engineApiEnabled =
-    engineApiEnabledRaw &&
-    !["0", "false", "off", "no"].includes(engineApiEnabledRaw.toLowerCase());
-  const engine = engineApiEnabled
-    ? new ExecutionEngine({
+  const engine =
+    opts.engine ??
+    (() => {
+      const engineApiEnabledRaw = process.env["TYRUM_ENGINE_API_ENABLED"]?.trim();
+      const engineApiEnabled =
+        engineApiEnabledRaw &&
+        !["0", "false", "off", "no"].includes(engineApiEnabledRaw.toLowerCase());
+      if (!engineApiEnabled) return undefined;
+      return new ExecutionEngine({
         db: container.db,
         redactionEngine: container.redactionEngine,
         logger: container.logger,
-      })
-    : undefined;
+      });
+    })();
 
   const authProfileDal = new AuthProfileDal(container.db);
   const pinDal = new SessionProviderPinDal(container.db);

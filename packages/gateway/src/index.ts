@@ -392,6 +392,14 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   const connectionManager = new ConnectionManager();
   const outboxDal = new OutboxDal(container.db, container.redactionEngine);
   const connectionDirectory = new ConnectionDirectoryDal(container.db);
+  const edgeEngine =
+    shouldRunEdge && engineApiEnabled
+      ? new ExecutionEngine({
+          db: container.db,
+          redactionEngine: container.redactionEngine,
+          logger,
+        })
+      : undefined;
   const protocolDeps: ProtocolDeps = {
     connectionManager,
     logger,
@@ -409,14 +417,8 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     presenceDal: container.presenceDal,
     policyOverrideDal: container.policyOverrideDal,
     nodePairingDal: container.nodePairingDal,
-    engine: shouldRunEdge && engineApiEnabled
-      ? new ExecutionEngine({
-          db: container.db,
-          redactionEngine: container.redactionEngine,
-          logger,
-        })
-      : undefined,
-    policyService: shouldRunEdge && engineApiEnabled ? container.policyService : undefined,
+    engine: edgeEngine,
+    policyService: edgeEngine ? container.policyService : undefined,
     cluster: shouldRunEdge
       ? {
           edgeId: instanceId,
@@ -432,22 +434,26 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
       void container.approvalDal
         .respond(approvalId, approved, reason)
         .then(async (row) => {
+          const desiredStatus = approved ? "approved" : "denied";
+          const decisionMatches = row?.status === desiredStatus;
+
           logger.info("approval.decided", {
             approval_id: approvalId,
             approved,
             status: row?.status ?? "missing",
             reason,
+            decision_matches: decisionMatches,
           });
 
-          if (!row || !protocolDeps.engine || !row.resume_token || !row.run_id) {
+          if (!row || !decisionMatches || !protocolDeps.engine) {
             return;
           }
 
           try {
-            if (approved) {
+            if (row.status === "approved" && row.resume_token) {
               await protocolDeps.engine.resumeRun(row.resume_token);
-            } else {
-              await protocolDeps.engine.cancelRun(row.run_id, reason ?? "approval denied");
+            } else if (row.status === "denied" && row.run_id) {
+              await protocolDeps.engine.cancelRun(row.run_id, row.response_reason ?? reason ?? "approval denied");
             }
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
@@ -506,6 +512,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
         isLocalOnly,
         connectionManager,
         connectionDirectory,
+        engine: edgeEngine,
         wsCluster: shouldRunEdge
           ? {
               edgeId: instanceId,
