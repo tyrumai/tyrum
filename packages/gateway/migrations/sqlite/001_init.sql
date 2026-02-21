@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS capability_memories (
   agent_id TEXT NOT NULL DEFAULT 'default',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-  UNIQUE(capability_type, capability_identifier, executor_kind)
+  UNIQUE(capability_type, capability_identifier, executor_kind, agent_id)
 );
 
 CREATE INDEX IF NOT EXISTS capability_memories_type_idx ON capability_memories (capability_type);

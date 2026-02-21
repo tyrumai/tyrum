@@ -185,6 +185,42 @@ describe("MemoryDal", () => {
       const allMemories = await dal.getCapabilityMemories();
       expect(allMemories).toHaveLength(2);
     });
+
+    it("isolates capability memories by agent_id", async () => {
+      const prev = process.env["TYRUM_MULTI_AGENT"];
+      process.env["TYRUM_MULTI_AGENT"] = "1";
+      try {
+        const first = await dal.upsertCapabilityMemory(
+          "web_login",
+          "example.com",
+          "playwright",
+          { resultSummary: "agent-a" },
+          "agent-a",
+        );
+        expect(first.inserted).toBe(true);
+
+        const second = await dal.upsertCapabilityMemory(
+          "web_login",
+          "example.com",
+          "playwright",
+          { resultSummary: "agent-b" },
+          "agent-b",
+        );
+        expect(second.inserted).toBe(true);
+
+        const agentAMemories = await dal.getCapabilityMemories("web_login", "agent-a");
+        expect(agentAMemories).toHaveLength(1);
+
+        const agentBMemories = await dal.getCapabilityMemories("web_login", "agent-b");
+        expect(agentBMemories).toHaveLength(1);
+      } finally {
+        if (prev === undefined) {
+          delete process.env["TYRUM_MULTI_AGENT"];
+        } else {
+          process.env["TYRUM_MULTI_AGENT"] = prev;
+        }
+      }
+    });
   });
 
   // --- PAM Profiles ---

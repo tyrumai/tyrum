@@ -95,7 +95,8 @@ CREATE TABLE IF NOT EXISTS capability_memories (
   CONSTRAINT capability_memories_unique UNIQUE (
     capability_type,
     capability_identifier,
-    executor_kind
+    executor_kind,
+    agent_id
   )
 );
 
