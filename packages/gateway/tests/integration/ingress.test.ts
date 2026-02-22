@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Hono } from "hono";
 import { ingress } from "../../src/routes/ingress.js";
+import { createTestApp } from "./helpers.js";
 
 describe("POST /ingress/telegram", () => {
   const app = new Hono();
@@ -101,5 +102,51 @@ describe("POST /ingress/telegram", () => {
     expect(body.thread.kind).toBe("group");
     expect(body.message.content.text).toBe("Edited text");
     expect(body.message.edited_timestamp).toBeDefined();
+  });
+
+  it("enforces messaging policy via connector pipeline when enabled", async () => {
+    const prev = process.env["TYRUM_CONNECTOR_PIPELINE"];
+    process.env["TYRUM_CONNECTOR_PIPELINE"] = "1";
+    try {
+      const { app, container } = await createTestApp();
+      container.policyBundleManager.addBundle({
+        rules: [{ domain: "messaging", action: "deny", priority: 1, description: "blocked" }],
+        precedence: "deployment",
+      });
+
+      const update = {
+        update_id: 100,
+        message: {
+          message_id: 42,
+          date: 1700000000,
+          from: {
+            id: 999,
+            is_bot: false,
+            first_name: "Alice",
+            username: "alice",
+          },
+          chat: {
+            id: 123,
+            type: "private",
+          },
+          text: "Hello bot",
+        },
+      };
+
+      const res = await app.request("/ingress/telegram", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(update),
+      });
+
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ ok: true });
+    } finally {
+      if (prev === undefined) {
+        delete process.env["TYRUM_CONNECTOR_PIPELINE"];
+      } else {
+        process.env["TYRUM_CONNECTOR_PIPELINE"] = prev;
+      }
+    }
   });
 });

@@ -109,7 +109,10 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   const connectorPipelineEnabled = readBooleanEnv("TYRUM_CONNECTOR_PIPELINE", false); // default off
 
   const connectorPipeline = connectorPipelineEnabled
-    ? new ConnectorPipeline({ dedupeDal: new DedupeDal(container.db) })
+    ? new ConnectorPipeline({
+      dedupeDal: new DedupeDal(container.db),
+      policyBundleManager: container.policyBundleManager,
+    })
     : undefined;
 
   app.route(
