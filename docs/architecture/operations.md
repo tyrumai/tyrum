@@ -1,6 +1,6 @@
 # Operations and onboarding
 
-This document describes Tyrum’s **day-0 / day-1 / day-2** operational target state. Ops ergonomics are part of the architecture: if the secure configuration is hard to reach, insecure defaults will ship in practice.
+This document describes Tyrum’s operational model and the onboarding/diagnostics surfaces that keep deployments hardened and maintainable. Ops ergonomics are part of the architecture: if the secure configuration is hard to reach, insecure defaults tend to win in practice.
 
 ## Goals
 
@@ -12,7 +12,7 @@ This document describes Tyrum’s **day-0 / day-1 / day-2** operational target s
 
 ## Hardened-by-default onboarding
 
-Onboarding should produce a configuration that is safe before customization:
+Onboarding produces a configuration that is safe without additional customization:
 
 - Bind gateway to **loopback** by default.
 - Require an auth token for all privileged HTTP/WS surfaces.
@@ -20,9 +20,9 @@ Onboarding should produce a configuration that is safe before customization:
 - Enable “secure DM mode” automatically when more than one distinct sender can reach an agent.
 - Make “dangerous” settings explicit and noisy (require a typed `--i-understand` style acknowledgement in CLIs/UIs).
 
-### Onboarding flow (target)
+### Onboarding flow
 
-Tyrum should provide a guided onboarding flow (CLI and/or gateway-served UI) that:
+Tyrum provides a guided onboarding flow (CLI and/or gateway-served UI) that:
 
 1. Generates or imports gateway credentials.
 2. Picks an operating mode:
@@ -30,11 +30,11 @@ Tyrum should provide a guided onboarding flow (CLI and/or gateway-served UI) tha
    - team/remote (multiple operators, device enrollment)
 3. Configures provider auth profiles and secret provider integration.
 4. Enables a minimal set of channels/nodes (explicitly).
-5. Runs a security and connectivity check before declaring success.
+5. Runs a security and connectivity check.
 
-## Day-2 diagnostics (“doctor”)
+## Diagnostics (“doctor”)
 
-Tyrum should ship a “doctor” surface that detects high-impact footguns and produces actionable fixes. Examples of checks:
+Tyrum provides a “doctor” surface that detects high-impact footguns and produces actionable fixes. Examples of checks:
 
 - gateway exposed beyond loopback without TLS and without device-bound auth
 - permissive tool policy on untrusted channels
@@ -61,9 +61,8 @@ Reference deployments should be used by CI smoke tests so drift is caught early.
 
 Durable state and auditability are only useful if they survive incidents.
 
-Target requirements:
+Requirements:
 
 - Snapshot export/import for StateStore tables required to reconstruct sessions and execution.
 - Artifact retention policies and export options (see [Artifacts](./artifacts.md)).
 - Clear guidance on credential rotation (gateway tokens, device tokens, provider auth profiles).
-

@@ -101,7 +101,7 @@ A durable, reviewable workflow artifact (schema-validated) that describes a mult
 
 ## Workflow run
 
-A concrete execution attempt of a playbook (or ad-hoc workflow spec) by the execution engine. A workflow run can complete successfully, fail, or pause awaiting approvals and later resume without re-running prior completed steps.
+A concrete execution attempt of a playbook (or ad-hoc workflow spec) by the execution engine. A workflow run can complete successfully, fail, or pause awaiting approvals and resume without re-running prior completed steps.
 
 ## Approval
 

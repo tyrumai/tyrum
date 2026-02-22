@@ -1,6 +1,6 @@
 # Gateway authN/authZ
 
-This document describes Tyrum’s **gateway authentication (authN)** and **authorization (authZ)** target state. The goal is to support both:
+This document describes Tyrum’s **gateway authentication (authN)** and **authorization (authZ)** model. It supports both:
 
 - **Personal assistant mode** (single operator, local-first).
 - **Remote coworker / team mode** (multiple operators, remote access, explicit access control).
@@ -50,9 +50,9 @@ Operator clients present an explicit list of scopes (examples):
 
 **Per-method authorization:** every HTTP route and WS request type declares the scopes required to call it. Deny-by-default is the baseline.
 
-### Device tokens (post-enrollment)
+### Device tokens
 
-After a device proves identity, the gateway can issue a **device token** that is:
+When a device proves identity, the gateway can issue a **device token** that is:
 
 - bound to `{ device_id, role }`
 - scoped (subset of operator scopes, or node capability scopes)
@@ -66,7 +66,7 @@ Rotation and revocation are operator actions and are audited. Revocation immedia
 
 Nodes are capability providers and are always treated as high-risk.
 
-Target posture:
+Posture:
 
 - Nodes advertise **capabilities** (high-level categories) and optionally **commands/permissions** (fine-grained claims).
 - The gateway enforces server-side allow/deny rules in two places:
@@ -79,7 +79,7 @@ Pairing is required before a node can execute privileged capabilities. Pairing b
 
 When the gateway runs behind a reverse proxy (nginx/Caddy/Traefik), Tyrum must avoid “local-trust” bypasses where proxied requests appear to come from `127.0.0.1`.
 
-Target requirements:
+Requirements:
 
 - Only trust `X-Forwarded-For` / `Forwarded` / `X-Real-IP` headers from an explicit `trusted_proxies` allowlist.
 - When `trusted_proxies` is unset, treat forwarding headers as untrusted data and derive client IP from the socket.
@@ -89,7 +89,7 @@ Target requirements:
 
 Remote operation requires TLS (direct or terminated at a proxy).
 
-Target requirements:
+Requirements:
 
 - Clients can be configured with a **TLS certificate fingerprint** (pinning) for high-assurance remote access.
 - Pinning is optional but recommended for “remote coworker / team mode” deployments where users connect over untrusted networks.
@@ -103,4 +103,3 @@ AuthN/authZ decisions must be observable and durable:
 - record the scope set used for each privileged action (method/route + scope check result)
 
 This is foundational for “many remote coworkers”: the system should answer **who did what, when, and why it was allowed**.
-

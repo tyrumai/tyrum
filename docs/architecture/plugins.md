@@ -4,7 +4,7 @@ A gateway plugin is an **in-process** code module that extends Tyrum with additi
 
 Gateway plugins are **trusted extensions** (they run inside the gateway process). They are not the primary mechanism for per-vendor/per-app integrations; those should generally live in **capability providers** (nodes and MCP servers) so scopes are explicit and blast radius is smaller.
 
-Plugins are part of Tyrum’s extensibility story, but they must not weaken the safety model. The target posture is: **easy to extend, hard to accidentally make unsafe**.
+Plugins are part of Tyrum’s extensibility story, but they must not weaken the safety model. The posture is: **easy to extend, hard to accidentally make unsafe**.
 
 ## What plugins can add
 
@@ -38,7 +38,7 @@ This is a hard requirement for operability and security: it prevents “config d
 
 Plugins can register tool descriptors, but tool availability is enforced by policy.
 
-Target requirements:
+Requirements:
 
 - Tools that cause side effects or expand access (filesystem/network/secrets/messaging) should be **opt-in** by default.
 - Optional tools must be explicitly enabled via allowlists (global or per-agent), and must still respect policy/approvals/sandboxing.
@@ -51,7 +51,7 @@ Target requirements:
 
 ## Marketplace
 
-In the target state, plugins are discoverable and installable from operator clients (CLI/UI) with a clear trust model (source, version, integrity).
+Plugins are discoverable and installable from operator clients (CLI/UI) with a clear trust model (source, version, integrity).
 
 ## Discovery and installation hardening
 

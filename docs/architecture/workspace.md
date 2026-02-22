@@ -10,7 +10,7 @@ A workspace is the agent's working directory boundary for tools that read and wr
 
 ## Durability (hard requirement)
 
-- A workspace filesystem is **persistent**: files written during one run are available in later runs.
+- A workspace filesystem is **persistent**: files written during one run are available across runs.
 - In single-host deployments, `TYRUM_HOME` is a durable local directory on disk.
 - In clustered deployments, a workspace is backed by durable storage (for example a PVC) and must remain available across pod reschedules.
 

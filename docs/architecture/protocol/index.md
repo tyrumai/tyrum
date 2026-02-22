@@ -43,7 +43,7 @@ The protocol uses run-scoped identifiers (`run_id`, `step_id`, `attempt_id`) and
 - **Requests/Responses:** peer-initiated actions that return a typed response.
 - **Events:** gateway-emitted notifications (including server-push progress and lifecycle).
 
-## Next
+## See also
 
 - [Handshake](./handshake.md)
 - [Requests and Responses](./requests-responses.md)

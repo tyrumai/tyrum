@@ -11,9 +11,9 @@ Tyrum is an autonomous worker.
 
 The same core architecture is intended to scale from “one assistant” to “many coworkers” without turning into an un-auditable pile of prompts and cronjobs: durable execution, least-privilege authorization, explicit approvals, and evidence-backed audit trails.
 
-## Engineering bar (target state)
+## Engineering bar
 
-The documents under `docs/architecture/**` describe the **target state** for Tyrum. The target state is intentionally conservative:
+Tyrum’s architecture is intentionally conservative:
 
 - **Security best practices, secure by default:** local-first binding, explicit auth, least privilege, and defense-in-depth enforcement (not prompt-only “safety”).
 - **Industry-standard primitives:** idempotency keys, durable outbox/eventing, leases/locks, auditable change control, and typed contracts at trust boundaries.
@@ -90,18 +90,18 @@ flowchart LR
 - **Typed boundaries:** inputs/outputs are validated at the edges (protocol, tools, plugins).
 - **Least privilege:** capabilities and tools are scoped; high-risk actions require explicit policy/approvals.
 - **Evidence over confidence:** state changes require postconditions and artifacts when feasible; unverifiable outcomes must not be reported as “done”.
-- **Resumable execution:** long-running work can pause for approvals/takeover and resume later without repeating completed steps.
+- **Resumable execution:** long-running work can pause for approvals/takeover and resume without repeating completed steps.
 - **Secrets by handle:** the model never sees raw credentials; executors use secret handles with policy-gated resolution.
 - **Auditability:** important actions emit events and can be persisted for troubleshooting and compliance.
 - **Extensible core:** gateway plugins, tools, skills, nodes, and MCP servers extend behavior without changing the gateway core.
 
-## Current focus (architecture-level commitments)
+## Architecture commitments
 
-- **Ops ergonomics:** ship onboarding and day-2 diagnostics that default to a hardened configuration.
+- **Ops ergonomics:** onboarding and diagnostics default to a hardened configuration.
 - **Gateway authN/authZ:** explicit operator scopes, per-method authorization, device-token lifecycle, and a documented trusted-proxy + TLS/pinning story.
 - **Plugins:** require manifests + config schemas, make risky tools opt-in, and harden discovery/install (path/ownership checks, safe dependency rules).
-- **Scale validation:** ship reference deployments and keep a failure-matrix test suite as a hard gate.
-- **Integration quality bar:** pick a small set of high-ROI channels/nodes and make them idempotent, approval-gated, and evidence-rich before broadening.
+- **Scale validation:** reference deployments and a failure-matrix test suite are hard gates.
+- **Integration quality bar:** channels and node capabilities are idempotent, approval-gated, and evidence-rich.
 
 ## Where to start
 

@@ -6,7 +6,7 @@ The execution engine is the gateway subsystem responsible for turning a plan or 
 
 LLMs are good at planning, but they are a poor place to host the control plane for long-running, side-effecting work. The execution engine moves orchestration into a typed runtime so that:
 
-- Side effects can be **paused** behind approvals and **resumed** safely later.
+- Side effects can be **paused** behind approvals and **resumed** safely without repeating completed work.
 - Runs can be **retried** deterministically without duplicating actions.
 - “Done” is backed by **postconditions + artifacts**, not narrative.
 - Operator UIs can observe progress in real time via events.

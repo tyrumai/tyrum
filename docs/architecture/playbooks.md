@@ -5,7 +5,7 @@ A playbook is a **durable, reviewable workflow artifact** that the execution eng
 - **Composable:** a single run request executes many steps
 - **Auditable:** steps and outcomes are logged with artifacts
 - **Safe:** side effects are gated by approvals; runs can pause and resume
-- **Resumable:** paused workflows can continue later without repeating completed steps
+- **Resumable:** paused workflows can continue without repeating completed steps
 
 ## Playbooks are not skills
 
