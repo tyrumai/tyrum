@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createDatabase } from "../../src/db.js";
@@ -9,11 +10,24 @@ const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
 const MIGRATIONS_BEFORE_SESSIONS_AGENT_ID = [
   "001_init.sql",
-  "001b_backfill_baseline_tables.sql",
-  "002_inbound_dedupe_composite_pk.sql",
-  "003_policy_overrides_policy_snapshot_id_text.sql",
-  "004_capability_memories_unique_agent_id.sql",
-  "005_presence_entries_timestamp_defaults.sql",
+  "002_presence.sql",
+  "003_artifact_metadata.sql",
+  "004_nodes.sql",
+  "005_approval_execution.sql",
+  "006_connector_dedupe.sql",
+  "007_policy_snapshots.sql",
+  "008_auth_profiles.sql",
+  "009_multi_agent.sql",
+  "010_context_reports.sql",
+  "011_session_compaction.sql",
+  "012_policy_overrides.sql",
+  "013_engine_enhancements.sql",
+  "014_watcher_lease.sql",
+  "015_retention_indexes.sql",
+  "016_inbound_dedupe_composite_pk.sql",
+  "017_policy_overrides_policy_snapshot_id_text.sql",
+  "018_capability_memories_unique_agent_id.sql",
+  "019_presence_entries_timestamp_defaults.sql",
 ];
 
 function markApplied(db: ReturnType<typeof createDatabase>, names: readonly string[]): void {
@@ -30,46 +44,10 @@ function markApplied(db: ReturnType<typeof createDatabase>, names: readonly stri
 }
 
 describe("SQLite migrations (upgrade compatibility)", () => {
-  it("backfills baseline-only tables when 001_init.sql was applied before they existed", () => {
+  it("applies incremental migrations on top of the 001_init.sql baseline", () => {
     const db = createDatabase(":memory:");
+    db.exec(readFileSync(join(migrationsDir, "001_init.sql"), "utf-8"));
     markApplied(db, ["001_init.sql"]);
-
-    db.exec(`
-      -- Older databases have these core tables but may be missing newer baseline-only tables.
-      CREATE TABLE watchers (
-        id INTEGER PRIMARY KEY AUTOINCREMENT
-      );
-
-      CREATE TABLE capability_memories (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        capability_type TEXT NOT NULL,
-        capability_identifier TEXT NOT NULL,
-        executor_kind TEXT NOT NULL,
-        selectors TEXT,
-        outcome_metadata TEXT,
-        cost_profile TEXT,
-        anti_bot_notes TEXT,
-        result_summary TEXT,
-        success_count INTEGER NOT NULL DEFAULT 1,
-        last_success_at TEXT,
-        metadata TEXT,
-        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-      );
-
-      CREATE TABLE sessions (
-        session_id TEXT NOT NULL PRIMARY KEY,
-        channel TEXT NOT NULL,
-        thread_id TEXT NOT NULL,
-        summary TEXT NOT NULL DEFAULT '',
-        turns_json TEXT NOT NULL DEFAULT '[]',
-        workspace_id TEXT NOT NULL DEFAULT 'default',
-        compacted_summary TEXT DEFAULT '',
-        compaction_count INTEGER DEFAULT 0,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-    `);
 
     migrate(db, migrationsDir);
 
@@ -97,7 +75,7 @@ describe("SQLite migrations (upgrade compatibility)", () => {
     db.close();
   });
 
-  it("preserves sessions compaction columns when present during 006_sessions_agent_id", () => {
+  it("preserves sessions compaction columns when present during 020_sessions_agent_id", () => {
     const db = createDatabase(":memory:");
     markApplied(db, MIGRATIONS_BEFORE_SESSIONS_AGENT_ID);
 
@@ -159,7 +137,7 @@ describe("SQLite migrations (upgrade compatibility)", () => {
     db.close();
   });
 
-  it("backfills sessions compaction columns to defaults when missing during 006_sessions_agent_id", () => {
+  it("backfills sessions compaction columns to defaults when missing during 020_sessions_agent_id", () => {
     const db = createDatabase(":memory:");
     markApplied(db, MIGRATIONS_BEFORE_SESSIONS_AGENT_ID);
 

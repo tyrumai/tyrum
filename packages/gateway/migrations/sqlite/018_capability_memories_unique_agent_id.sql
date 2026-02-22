@@ -32,6 +32,7 @@ INSERT INTO capability_memories__new (
   success_count,
   last_success_at,
   metadata,
+  agent_id,
   created_at,
   updated_at
 )
@@ -48,6 +49,7 @@ SELECT
   success_count,
   last_success_at,
   metadata,
+  agent_id,
   created_at,
   updated_at
 FROM capability_memories;

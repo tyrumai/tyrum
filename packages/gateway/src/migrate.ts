@@ -23,7 +23,7 @@ function patchSqliteMigrationSql(
 ): string {
   // SQLite migration 006 historically ran against sessions schemas both with and without
   // session compaction columns. Strip copy lines if the source table lacks them.
-  if (file !== "006_sessions_agent_id.sql") return sql;
+  if (file !== "020_sessions_agent_id.sql") return sql;
 
   const columns = getSqliteTableColumns(db, "sessions");
   const missing: string[] = [];

@@ -1,9 +1,7 @@
--- Tyrum Gateway schema (Postgres)
--- Single squashed baseline – app has never been deployed.
+-- Tyrum Gateway schema baseline (Postgres)
+-- Squashed from migrations 001..023 (new installs only).
 
---------------------------------------------------------------------------------
--- planner_events
---------------------------------------------------------------------------------
+-- 001_planner_events.sql
 CREATE TABLE IF NOT EXISTS planner_events (
   id BIGSERIAL PRIMARY KEY,
   replay_id TEXT NOT NULL,
@@ -11,8 +9,6 @@ CREATE TABLE IF NOT EXISTS planner_events (
   step_index INTEGER NOT NULL CHECK (step_index >= 0),
   occurred_at TEXT NOT NULL,
   action TEXT NOT NULL,
-  prev_hash TEXT,
-  event_hash TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT planner_events_plan_step_unique UNIQUE (plan_id, step_index)
 );
@@ -20,64 +16,52 @@ CREATE TABLE IF NOT EXISTS planner_events (
 CREATE INDEX IF NOT EXISTS planner_events_plan_id_idx ON planner_events (plan_id);
 CREATE INDEX IF NOT EXISTS planner_events_replay_id_idx ON planner_events (replay_id);
 
---------------------------------------------------------------------------------
--- facts
---------------------------------------------------------------------------------
+-- 002_memory_tables.sql
 CREATE TABLE IF NOT EXISTS facts (
   id BIGSERIAL PRIMARY KEY,
+  subject_id TEXT NOT NULL,
   fact_key TEXT NOT NULL,
   fact_value TEXT NOT NULL,
   source TEXT NOT NULL,
   observed_at TEXT NOT NULL,
   confidence DOUBLE PRECISION NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
-  agent_id TEXT NOT NULL DEFAULT 'default',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS facts_key_idx ON facts (fact_key);
-CREATE INDEX IF NOT EXISTS facts_observed_idx ON facts (observed_at DESC);
-CREATE INDEX IF NOT EXISTS idx_facts_agent ON facts (agent_id);
+CREATE INDEX IF NOT EXISTS facts_subject_key_idx ON facts (subject_id, fact_key);
+CREATE INDEX IF NOT EXISTS facts_subject_observed_idx ON facts (subject_id, observed_at DESC);
 
---------------------------------------------------------------------------------
--- episodic_events
---------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS episodic_events (
   id BIGSERIAL PRIMARY KEY,
+  subject_id TEXT NOT NULL,
   event_id TEXT NOT NULL UNIQUE,
   occurred_at TEXT NOT NULL,
   channel TEXT NOT NULL,
   event_type TEXT NOT NULL,
   payload TEXT NOT NULL,
-  prev_hash TEXT,
-  event_hash TEXT,
-  agent_id TEXT NOT NULL DEFAULT 'default',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS episodic_events_occurred_idx ON episodic_events (occurred_at DESC);
-CREATE INDEX IF NOT EXISTS idx_episodic_events_agent ON episodic_events (agent_id);
+CREATE INDEX IF NOT EXISTS episodic_events_subject_occurred_idx ON episodic_events (subject_id, occurred_at DESC);
 
---------------------------------------------------------------------------------
--- vector_metadata
---------------------------------------------------------------------------------
+-- 003_vector_embeddings.sql
 CREATE TABLE IF NOT EXISTS vector_metadata (
   id BIGSERIAL PRIMARY KEY,
+  subject_id TEXT NOT NULL,
   embedding_id TEXT NOT NULL,
   embedding_model TEXT NOT NULL,
   label TEXT,
   metadata TEXT,
-  vector_data TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CONSTRAINT vector_metadata_embedding_unique UNIQUE (embedding_id)
+  CONSTRAINT vector_metadata_subject_embedding_unique UNIQUE (subject_id, embedding_id)
 );
 
-CREATE INDEX IF NOT EXISTS vector_metadata_created_idx ON vector_metadata (created_at DESC);
+CREATE INDEX IF NOT EXISTS vector_metadata_subject_created_idx ON vector_metadata (subject_id, created_at DESC);
 
---------------------------------------------------------------------------------
--- capability_memories
---------------------------------------------------------------------------------
+-- 004_capability_memories.sql
 CREATE TABLE IF NOT EXISTS capability_memories (
   id BIGSERIAL PRIMARY KEY,
+  subject_id TEXT NOT NULL,
   capability_type TEXT NOT NULL,
   capability_identifier TEXT NOT NULL,
   executor_kind TEXT NOT NULL,
@@ -89,94 +73,149 @@ CREATE TABLE IF NOT EXISTS capability_memories (
   success_count INTEGER NOT NULL DEFAULT 1,
   last_success_at TEXT,
   metadata TEXT,
-  agent_id TEXT NOT NULL DEFAULT 'default',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CONSTRAINT capability_memories_unique UNIQUE (
+  CONSTRAINT capability_memories_subject_unique UNIQUE (
+    subject_id,
     capability_type,
     capability_identifier,
-    executor_kind,
-    agent_id
+    executor_kind
   )
 );
 
-CREATE INDEX IF NOT EXISTS capability_memories_type_idx ON capability_memories (capability_type);
-CREATE INDEX IF NOT EXISTS capability_memories_success_idx ON capability_memories (last_success_at DESC);
-CREATE INDEX IF NOT EXISTS idx_capability_memories_agent ON capability_memories (agent_id);
+CREATE INDEX IF NOT EXISTS capability_memories_subject_type_idx ON capability_memories (subject_id, capability_type);
 
---------------------------------------------------------------------------------
--- pam_profiles
---------------------------------------------------------------------------------
+-- 005_profiles.sql
 CREATE TABLE IF NOT EXISTS pam_profiles (
   id BIGSERIAL PRIMARY KEY,
+  subject_id TEXT NOT NULL,
   profile_id TEXT NOT NULL,
   version TEXT,
   profile_data TEXT NOT NULL DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CONSTRAINT pam_profiles_profile_unique UNIQUE (profile_id)
+  CONSTRAINT pam_profiles_subject_profile_unique UNIQUE (subject_id, profile_id)
 );
 
---------------------------------------------------------------------------------
--- pvp_profiles
---------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS pvp_profiles (
   id BIGSERIAL PRIMARY KEY,
+  subject_id TEXT NOT NULL,
   profile_id TEXT NOT NULL,
   version TEXT,
   profile_data TEXT NOT NULL DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CONSTRAINT pvp_profiles_profile_unique UNIQUE (profile_id)
+  CONSTRAINT pvp_profiles_subject_profile_unique UNIQUE (subject_id, profile_id)
 );
 
---------------------------------------------------------------------------------
--- watchers
---------------------------------------------------------------------------------
+-- 006_watchers.sql
 CREATE TABLE IF NOT EXISTS watchers (
   id BIGSERIAL PRIMARY KEY,
+  subject_id TEXT NOT NULL,
   plan_id TEXT NOT NULL,
   trigger_type TEXT NOT NULL,
   trigger_config TEXT NOT NULL,
   active INTEGER NOT NULL DEFAULT 1,
-  workspace_id TEXT NOT NULL DEFAULT 'default',
-  last_fired_at_ms BIGINT,
-  scheduler_owner TEXT,
-  scheduler_lease_expires_at_ms BIGINT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE INDEX IF NOT EXISTS watchers_subject_active_idx ON watchers (subject_id, active);
+CREATE INDEX IF NOT EXISTS watchers_plan_id_idx ON watchers (plan_id);
+
+-- 007_single_user_schema.sql
+-- ---------------------------------------------------------------------------
+-- facts
+-- ---------------------------------------------------------------------------
+DROP INDEX IF EXISTS facts_subject_key_idx;
+DROP INDEX IF EXISTS facts_subject_observed_idx;
+
+ALTER TABLE facts DROP COLUMN IF EXISTS subject_id;
+
+CREATE INDEX IF NOT EXISTS facts_key_idx ON facts (fact_key);
+CREATE INDEX IF NOT EXISTS facts_observed_idx ON facts (observed_at DESC);
+
+-- ---------------------------------------------------------------------------
+-- episodic_events
+-- ---------------------------------------------------------------------------
+DROP INDEX IF EXISTS episodic_events_subject_occurred_idx;
+
+ALTER TABLE episodic_events DROP COLUMN IF EXISTS subject_id;
+
+CREATE INDEX IF NOT EXISTS episodic_events_occurred_idx ON episodic_events (occurred_at DESC);
+
+-- ---------------------------------------------------------------------------
+-- vector_metadata
+-- ---------------------------------------------------------------------------
+DROP INDEX IF EXISTS vector_metadata_subject_created_idx;
+
+ALTER TABLE vector_metadata DROP CONSTRAINT IF EXISTS vector_metadata_subject_embedding_unique;
+ALTER TABLE vector_metadata DROP COLUMN IF EXISTS subject_id;
+ALTER TABLE vector_metadata ADD CONSTRAINT vector_metadata_embedding_unique UNIQUE (embedding_id);
+
+CREATE INDEX IF NOT EXISTS vector_metadata_created_idx ON vector_metadata (created_at DESC);
+
+-- ---------------------------------------------------------------------------
+-- capability_memories
+-- ---------------------------------------------------------------------------
+DROP INDEX IF EXISTS capability_memories_subject_type_idx;
+
+ALTER TABLE capability_memories DROP CONSTRAINT IF EXISTS capability_memories_subject_unique;
+ALTER TABLE capability_memories DROP COLUMN IF EXISTS subject_id;
+ALTER TABLE capability_memories ADD CONSTRAINT capability_memories_unique UNIQUE (
+  capability_type,
+  capability_identifier,
+  executor_kind
+);
+
+CREATE INDEX IF NOT EXISTS capability_memories_type_idx ON capability_memories (capability_type);
+CREATE INDEX IF NOT EXISTS capability_memories_success_idx ON capability_memories (last_success_at DESC);
+
+-- ---------------------------------------------------------------------------
+-- pam_profiles
+-- ---------------------------------------------------------------------------
+ALTER TABLE pam_profiles DROP CONSTRAINT IF EXISTS pam_profiles_subject_profile_unique;
+ALTER TABLE pam_profiles DROP COLUMN IF EXISTS subject_id;
+ALTER TABLE pam_profiles ADD CONSTRAINT pam_profiles_profile_unique UNIQUE (profile_id);
+
+-- ---------------------------------------------------------------------------
+-- pvp_profiles
+-- ---------------------------------------------------------------------------
+ALTER TABLE pvp_profiles DROP CONSTRAINT IF EXISTS pvp_profiles_subject_profile_unique;
+ALTER TABLE pvp_profiles DROP COLUMN IF EXISTS subject_id;
+ALTER TABLE pvp_profiles ADD CONSTRAINT pvp_profiles_profile_unique UNIQUE (profile_id);
+
+-- ---------------------------------------------------------------------------
+-- watchers
+-- ---------------------------------------------------------------------------
+DROP INDEX IF EXISTS watchers_subject_active_idx;
+DROP INDEX IF EXISTS watchers_plan_id_idx;
+
+ALTER TABLE watchers DROP COLUMN IF EXISTS subject_id;
+
 CREATE INDEX IF NOT EXISTS watchers_active_idx ON watchers (active);
 CREATE INDEX IF NOT EXISTS watchers_plan_id_idx ON watchers (plan_id);
-CREATE INDEX IF NOT EXISTS watchers_workspace_id_idx ON watchers (workspace_id);
-CREATE INDEX IF NOT EXISTS watchers_last_fired_at_ms_idx ON watchers (last_fired_at_ms);
 
---------------------------------------------------------------------------------
--- sessions
---------------------------------------------------------------------------------
+-- 008_sessions.sql
 CREATE TABLE IF NOT EXISTS sessions (
-  session_id TEXT NOT NULL,
-  agent_id TEXT NOT NULL DEFAULT 'default',
+  session_id TEXT PRIMARY KEY,
   channel TEXT NOT NULL,
   thread_id TEXT NOT NULL,
   summary TEXT NOT NULL DEFAULT '',
   turns_json TEXT NOT NULL DEFAULT '[]',
-  workspace_id TEXT NOT NULL DEFAULT 'default',
-  compacted_summary TEXT DEFAULT '',
-  compaction_count INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  PRIMARY KEY (session_id, agent_id)
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS sessions_updated_idx ON sessions (updated_at DESC);
-CREATE INDEX IF NOT EXISTS sessions_workspace_id_idx ON sessions (workspace_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_agent ON sessions (agent_id);
 
---------------------------------------------------------------------------------
--- approvals
---------------------------------------------------------------------------------
+-- 009_audit_hash_chain.sql
+ALTER TABLE planner_events ADD COLUMN IF NOT EXISTS prev_hash TEXT;
+ALTER TABLE planner_events ADD COLUMN IF NOT EXISTS event_hash TEXT;
+ALTER TABLE episodic_events ADD COLUMN IF NOT EXISTS prev_hash TEXT;
+ALTER TABLE episodic_events ADD COLUMN IF NOT EXISTS event_hash TEXT;
+
+-- 010_approvals.sql
 CREATE TABLE IF NOT EXISTS approvals (
   id BIGSERIAL PRIMARY KEY,
   plan_id TEXT NOT NULL,
@@ -184,15 +223,6 @@ CREATE TABLE IF NOT EXISTS approvals (
   prompt TEXT NOT NULL,
   context_json TEXT NOT NULL DEFAULT '{}',
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'denied', 'expired')),
-  workspace_id TEXT NOT NULL DEFAULT 'default',
-  run_id TEXT,
-  step_id TEXT,
-  attempt_id TEXT,
-  resume_token TEXT,
-  agent_id TEXT NOT NULL DEFAULT 'default',
-  estimated_cost_micros INTEGER,
-  items_preview_json TEXT,
-  suggested_overrides_json TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   responded_at TEXT,
   response_reason TEXT,
@@ -202,13 +232,8 @@ CREATE TABLE IF NOT EXISTS approvals (
 CREATE INDEX IF NOT EXISTS approvals_plan_id_idx ON approvals (plan_id);
 CREATE INDEX IF NOT EXISTS approvals_status_idx ON approvals (status);
 CREATE INDEX IF NOT EXISTS approvals_expires_at_idx ON approvals (expires_at);
-CREATE INDEX IF NOT EXISTS approvals_workspace_id_idx ON approvals (workspace_id);
-CREATE INDEX IF NOT EXISTS idx_approvals_run_id ON approvals (run_id);
-CREATE INDEX IF NOT EXISTS idx_approvals_agent ON approvals (agent_id);
 
---------------------------------------------------------------------------------
--- jobs
---------------------------------------------------------------------------------
+-- 011_jobs.sql
 CREATE TABLE IF NOT EXISTS jobs (
   id TEXT PRIMARY KEY,
   plan_id TEXT NOT NULL,
@@ -229,9 +254,7 @@ CREATE INDEX IF NOT EXISTS jobs_plan_id_idx ON jobs (plan_id);
 CREATE INDEX IF NOT EXISTS jobs_status_idx ON jobs (status);
 CREATE INDEX IF NOT EXISTS jobs_plan_step_idx ON jobs (plan_id, step_index);
 
---------------------------------------------------------------------------------
--- canvas_artifacts
---------------------------------------------------------------------------------
+-- 012_canvas.sql
 CREATE TABLE IF NOT EXISTS canvas_artifacts (
   id TEXT PRIMARY KEY,
   plan_id TEXT,
@@ -244,9 +267,10 @@ CREATE TABLE IF NOT EXISTS canvas_artifacts (
 
 CREATE INDEX IF NOT EXISTS canvas_artifacts_plan_id_idx ON canvas_artifacts (plan_id);
 
---------------------------------------------------------------------------------
--- outbox
---------------------------------------------------------------------------------
+-- 013_vector_data.sql
+ALTER TABLE vector_metadata ADD COLUMN IF NOT EXISTS vector_data TEXT;
+
+-- 014_outbox.sql
 CREATE TABLE IF NOT EXISTS outbox (
   id BIGSERIAL PRIMARY KEY,
   topic TEXT NOT NULL,
@@ -257,20 +281,14 @@ CREATE TABLE IF NOT EXISTS outbox (
 
 CREATE INDEX IF NOT EXISTS outbox_topic_idx ON outbox (topic);
 CREATE INDEX IF NOT EXISTS outbox_target_edge_idx ON outbox (target_edge_id);
-CREATE INDEX IF NOT EXISTS idx_outbox_created_at ON outbox (created_at);
 
---------------------------------------------------------------------------------
--- outbox_consumers
---------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS outbox_consumers (
   consumer_id TEXT PRIMARY KEY,
   last_outbox_id BIGINT NOT NULL DEFAULT 0,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
---------------------------------------------------------------------------------
--- connection_directory
---------------------------------------------------------------------------------
+-- 015_connection_directory.sql
 CREATE TABLE IF NOT EXISTS connection_directory (
   connection_id TEXT PRIMARY KEY,
   edge_id TEXT NOT NULL,
@@ -283,30 +301,21 @@ CREATE TABLE IF NOT EXISTS connection_directory (
 CREATE INDEX IF NOT EXISTS connection_directory_edge_id_idx ON connection_directory (edge_id);
 CREATE INDEX IF NOT EXISTS connection_directory_expires_at_ms_idx ON connection_directory (expires_at_ms);
 
---------------------------------------------------------------------------------
--- execution_jobs
---------------------------------------------------------------------------------
+-- 016_execution_engine.sql
 CREATE TABLE IF NOT EXISTS execution_jobs (
   job_id TEXT PRIMARY KEY,
   key TEXT NOT NULL,
   lane TEXT NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'completed', 'failed', 'cancelled')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   trigger_json TEXT NOT NULL,
   input_json TEXT,
-  latest_run_id TEXT,
-  workspace_id TEXT NOT NULL DEFAULT 'default',
-  agent_id TEXT NOT NULL DEFAULT 'default',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  latest_run_id TEXT
 );
 
 CREATE INDEX IF NOT EXISTS execution_jobs_key_lane_idx ON execution_jobs (key, lane);
 CREATE INDEX IF NOT EXISTS execution_jobs_status_idx ON execution_jobs (status);
-CREATE INDEX IF NOT EXISTS execution_jobs_workspace_id_idx ON execution_jobs (workspace_id);
-CREATE INDEX IF NOT EXISTS idx_execution_jobs_agent ON execution_jobs (agent_id);
 
---------------------------------------------------------------------------------
--- execution_runs
---------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS execution_runs (
   run_id TEXT PRIMARY KEY,
   job_id TEXT NOT NULL,
@@ -314,40 +323,29 @@ CREATE TABLE IF NOT EXISTS execution_runs (
   lane TEXT NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'paused', 'succeeded', 'failed', 'cancelled')),
   attempt INTEGER NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   started_at TIMESTAMPTZ,
   finished_at TIMESTAMPTZ,
   paused_reason TEXT,
   paused_detail TEXT,
-  agent_id TEXT NOT NULL DEFAULT 'default',
-  budget_tokens INTEGER,
-  spent_tokens INTEGER NOT NULL DEFAULT 0,
-  queue_mode TEXT NOT NULL DEFAULT 'collect',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT execution_runs_job_fk FOREIGN KEY (job_id) REFERENCES execution_jobs(job_id)
 );
 
 CREATE INDEX IF NOT EXISTS execution_runs_job_id_idx ON execution_runs (job_id);
 CREATE INDEX IF NOT EXISTS execution_runs_status_idx ON execution_runs (status);
-CREATE INDEX IF NOT EXISTS idx_execution_runs_agent ON execution_runs (agent_id);
-CREATE INDEX IF NOT EXISTS idx_execution_runs_finished_at ON execution_runs (finished_at);
 
---------------------------------------------------------------------------------
--- execution_steps
---------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS execution_steps (
   step_id TEXT PRIMARY KEY,
   run_id TEXT NOT NULL,
   step_index INTEGER NOT NULL CHECK (step_index >= 0),
   status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'paused', 'succeeded', 'failed', 'cancelled', 'skipped')),
   action_json TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   idempotency_key TEXT,
   postcondition_json TEXT,
   approval_id INTEGER,
   max_attempts INTEGER NOT NULL DEFAULT 3,
   timeout_ms INTEGER NOT NULL DEFAULT 60000,
-  rollback_hint TEXT,
-  policy_snapshot_id TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT execution_steps_run_fk FOREIGN KEY (run_id) REFERENCES execution_runs(run_id),
   CONSTRAINT execution_steps_run_step_unique UNIQUE (run_id, step_index)
 );
@@ -355,9 +353,6 @@ CREATE TABLE IF NOT EXISTS execution_steps (
 CREATE INDEX IF NOT EXISTS execution_steps_run_id_idx ON execution_steps (run_id);
 CREATE INDEX IF NOT EXISTS execution_steps_status_idx ON execution_steps (status);
 
---------------------------------------------------------------------------------
--- execution_attempts
---------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS execution_attempts (
   attempt_id TEXT PRIMARY KEY,
   step_id TEXT NOT NULL,
@@ -372,7 +367,6 @@ CREATE TABLE IF NOT EXISTS execution_attempts (
   metadata_json TEXT,
   lease_owner TEXT,
   lease_expires_at_ms BIGINT,
-  cost_json TEXT,
   CONSTRAINT execution_attempts_step_fk FOREIGN KEY (step_id) REFERENCES execution_steps(step_id),
   CONSTRAINT execution_attempts_step_attempt_unique UNIQUE (step_id, attempt)
 );
@@ -380,9 +374,7 @@ CREATE TABLE IF NOT EXISTS execution_attempts (
 CREATE INDEX IF NOT EXISTS execution_attempts_step_id_idx ON execution_attempts (step_id);
 CREATE INDEX IF NOT EXISTS execution_attempts_lease_idx ON execution_attempts (status, lease_expires_at_ms);
 
---------------------------------------------------------------------------------
--- lane_leases
---------------------------------------------------------------------------------
+-- 017_lane_leases.sql
 CREATE TABLE IF NOT EXISTS lane_leases (
   key TEXT NOT NULL,
   lane TEXT NOT NULL,
@@ -393,9 +385,7 @@ CREATE TABLE IF NOT EXISTS lane_leases (
 
 CREATE INDEX IF NOT EXISTS lane_leases_expires_at_idx ON lane_leases (lease_expires_at_ms);
 
---------------------------------------------------------------------------------
--- idempotency_records
---------------------------------------------------------------------------------
+-- 018_idempotency.sql
 CREATE TABLE IF NOT EXISTS idempotency_records (
   scope_key TEXT NOT NULL,
   kind TEXT NOT NULL,
@@ -408,9 +398,7 @@ CREATE TABLE IF NOT EXISTS idempotency_records (
   CONSTRAINT idempotency_records_pk PRIMARY KEY (scope_key, kind, idempotency_key)
 );
 
---------------------------------------------------------------------------------
--- resume_tokens
---------------------------------------------------------------------------------
+-- 019_resume_tokens.sql
 CREATE TABLE IF NOT EXISTS resume_tokens (
   token TEXT PRIMARY KEY,
   run_id TEXT NOT NULL,
@@ -423,9 +411,34 @@ CREATE TABLE IF NOT EXISTS resume_tokens (
 CREATE INDEX IF NOT EXISTS resume_tokens_run_id_idx ON resume_tokens (run_id);
 CREATE INDEX IF NOT EXISTS resume_tokens_expires_at_idx ON resume_tokens (expires_at);
 
---------------------------------------------------------------------------------
--- workspace_leases
---------------------------------------------------------------------------------
+-- 020_attempt_cost.sql
+ALTER TABLE execution_attempts
+ADD COLUMN IF NOT EXISTS cost_json TEXT;
+
+-- 021_workspaces.sql
+-- Make workspace identity explicit (single default workspace initially).
+-- `TYRUM_HOME` remains the workspace root; split/HA deployments mount the
+-- appropriate workspace volume at `TYRUM_HOME` for ToolRunner jobs/pods.
+
+ALTER TABLE sessions ADD COLUMN workspace_id TEXT NOT NULL DEFAULT 'default';
+CREATE INDEX IF NOT EXISTS sessions_workspace_id_idx ON sessions (workspace_id);
+
+ALTER TABLE approvals ADD COLUMN workspace_id TEXT NOT NULL DEFAULT 'default';
+CREATE INDEX IF NOT EXISTS approvals_workspace_id_idx ON approvals (workspace_id);
+
+ALTER TABLE watchers ADD COLUMN workspace_id TEXT NOT NULL DEFAULT 'default';
+CREATE INDEX IF NOT EXISTS watchers_workspace_id_idx ON watchers (workspace_id);
+
+ALTER TABLE execution_jobs ADD COLUMN workspace_id TEXT NOT NULL DEFAULT 'default';
+CREATE INDEX IF NOT EXISTS execution_jobs_workspace_id_idx ON execution_jobs (workspace_id);
+
+-- 022_watcher_last_fired.sql
+-- Cluster-safe watcher scheduling: persist last fire time in DB.
+ALTER TABLE watchers ADD COLUMN IF NOT EXISTS last_fired_at_ms BIGINT;
+
+CREATE INDEX IF NOT EXISTS watchers_last_fired_at_ms_idx ON watchers (last_fired_at_ms);
+
+-- 023_workspace_leases.sql
 CREATE TABLE IF NOT EXISTS workspace_leases (
   workspace_id TEXT PRIMARY KEY,
   lease_owner TEXT NOT NULL,
@@ -433,169 +446,3 @@ CREATE TABLE IF NOT EXISTS workspace_leases (
 );
 
 CREATE INDEX IF NOT EXISTS workspace_leases_expires_at_idx ON workspace_leases (lease_expires_at_ms);
-
---------------------------------------------------------------------------------
--- presence_entries
---------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS presence_entries (
-  client_id TEXT PRIMARY KEY,
-  role TEXT NOT NULL DEFAULT 'client',
-  node_id TEXT,
-  agent_id TEXT,
-  capabilities_json TEXT NOT NULL DEFAULT '[]',
-  connected_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  metadata_json TEXT
-);
-
---------------------------------------------------------------------------------
--- artifact_metadata
---------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS artifact_metadata (
-  artifact_id TEXT PRIMARY KEY,
-  run_id TEXT,
-  step_id TEXT,
-  attempt_id TEXT,
-  kind TEXT NOT NULL DEFAULT 'other',
-  mime_type TEXT,
-  size_bytes BIGINT,
-  sha256 TEXT,
-  uri TEXT NOT NULL,
-  labels_json TEXT NOT NULL DEFAULT '[]',
-  agent_id TEXT NOT NULL DEFAULT 'default',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  metadata_json TEXT
-);
-
-CREATE INDEX IF NOT EXISTS idx_artifact_metadata_run_id ON artifact_metadata (run_id);
-CREATE INDEX IF NOT EXISTS idx_artifact_metadata_step_id ON artifact_metadata (step_id);
-CREATE INDEX IF NOT EXISTS idx_artifact_metadata_agent ON artifact_metadata (agent_id);
-CREATE INDEX IF NOT EXISTS idx_artifact_metadata_created_at ON artifact_metadata (created_at);
-
---------------------------------------------------------------------------------
--- nodes
---------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS nodes (
-  node_id TEXT PRIMARY KEY,
-  label TEXT,
-  capabilities JSONB NOT NULL DEFAULT '[]',
-  pairing_status TEXT NOT NULL DEFAULT 'pending',
-  requested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  resolved_at TIMESTAMPTZ,
-  resolved_by TEXT,
-  resolution_reason TEXT,
-  last_seen_at TIMESTAMPTZ,
-  metadata JSONB
-);
-
---------------------------------------------------------------------------------
--- node_capabilities
---------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS node_capabilities (
-  node_id TEXT NOT NULL REFERENCES nodes(node_id),
-  capability TEXT NOT NULL,
-  PRIMARY KEY (node_id, capability)
-);
-
---------------------------------------------------------------------------------
--- inbound_dedupe
---------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS inbound_dedupe (
-  message_id TEXT NOT NULL,
-  channel TEXT NOT NULL,
-  received_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  expires_at TIMESTAMPTZ NOT NULL,
-  PRIMARY KEY (message_id, channel)
-);
-
-CREATE INDEX IF NOT EXISTS idx_inbound_dedupe_expires ON inbound_dedupe (expires_at);
-
---------------------------------------------------------------------------------
--- outbound_idempotency
---------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS outbound_idempotency (
-  idempotency_key TEXT NOT NULL,
-  channel TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  completed_at TIMESTAMPTZ,
-  result_json JSONB,
-  PRIMARY KEY (idempotency_key, channel)
-);
-
---------------------------------------------------------------------------------
--- policy_snapshots
---------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS policy_snapshots (
-  snapshot_id TEXT PRIMARY KEY,
-  run_id TEXT NOT NULL,
-  bundle_json JSONB NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_policy_snapshots_run_id ON policy_snapshots (run_id);
-
---------------------------------------------------------------------------------
--- model_auth_profiles
---------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS model_auth_profiles (
-  profile_id TEXT PRIMARY KEY,
-  provider TEXT NOT NULL,
-  label TEXT,
-  secret_handle TEXT,
-  priority INTEGER NOT NULL DEFAULT 0,
-  is_active BOOLEAN NOT NULL DEFAULT TRUE,
-  last_used_at TIMESTAMPTZ,
-  failure_count INTEGER NOT NULL DEFAULT 0,
-  agent_id TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  metadata JSONB
-);
-
-CREATE INDEX IF NOT EXISTS idx_model_auth_profiles_provider ON model_auth_profiles (provider);
-CREATE INDEX IF NOT EXISTS idx_auth_profiles_agent ON model_auth_profiles (agent_id);
-
---------------------------------------------------------------------------------
--- context_reports
---------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS context_reports (
-  report_id TEXT PRIMARY KEY,
-  run_id TEXT NOT NULL,
-  report_json JSONB NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_context_reports_run_id ON context_reports (run_id);
-
---------------------------------------------------------------------------------
--- policy_overrides
---------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS policy_overrides (
-  policy_override_id TEXT PRIMARY KEY,
-  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'revoked', 'expired')),
-  agent_id TEXT NOT NULL,
-  workspace_id TEXT,
-  tool_id TEXT NOT NULL,
-  pattern TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  created_by TEXT,
-  created_from_approval_id INTEGER,
-  created_from_policy_snapshot_id TEXT,
-  expires_at TIMESTAMPTZ,
-  revoked_at TIMESTAMPTZ,
-  revoked_by TEXT,
-  revoked_reason TEXT
-);
-
-CREATE INDEX IF NOT EXISTS idx_policy_overrides_agent_tool ON policy_overrides (agent_id, tool_id, status);
-
---------------------------------------------------------------------------------
--- watcher_firings
---------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS watcher_firings (
-  firing_id TEXT PRIMARY KEY,
-  watcher_id INTEGER NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'enqueued', 'failed')),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  FOREIGN KEY (watcher_id) REFERENCES watchers(id)
-);

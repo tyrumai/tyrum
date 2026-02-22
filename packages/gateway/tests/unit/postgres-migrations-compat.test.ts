@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { newDb } from "pg-mem";
@@ -8,7 +9,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/postgres");
 
 describe("Postgres migrations (upgrade compatibility)", () => {
-  it("backfills baseline-only tables when 001_init.sql was applied before they existed", async () => {
+  it("applies incremental migrations on top of the 001_init.sql baseline", async () => {
     // This test needs to simulate `_migrations` already existing, which makes
     // migratePostgres run `CREATE TABLE IF NOT EXISTS _migrations (...)` as a
     // no-op. pg-mem can throw on such no-op DDL unless AST coverage checks are
@@ -19,6 +20,7 @@ describe("Postgres migrations (upgrade compatibility)", () => {
     await pg.connect();
 
     try {
+      await pg.query(readFileSync(join(migrationsDir, "001_init.sql"), "utf-8"));
       await pg.query(`
         CREATE TABLE _migrations (
           name TEXT PRIMARY KEY,
@@ -26,29 +28,6 @@ describe("Postgres migrations (upgrade compatibility)", () => {
         );
 
         INSERT INTO _migrations (name) VALUES ('001_init.sql');
-
-        -- Older databases have these core tables but may be missing newer baseline-only tables.
-        CREATE TABLE watchers (
-          id SERIAL PRIMARY KEY
-        );
-
-        CREATE TABLE capability_memories (
-          id SERIAL PRIMARY KEY,
-          capability_type TEXT NOT NULL,
-          capability_identifier TEXT NOT NULL,
-          executor_kind TEXT NOT NULL
-        );
-
-        CREATE TABLE sessions (
-          session_id TEXT PRIMARY KEY,
-          channel TEXT NOT NULL,
-          thread_id TEXT NOT NULL,
-          summary TEXT NOT NULL DEFAULT '',
-          turns_json TEXT NOT NULL DEFAULT '[]',
-          workspace_id TEXT NOT NULL DEFAULT 'default',
-          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-        );
       `);
 
       await expect(migratePostgres(pg, migrationsDir)).resolves.toBeUndefined();
