@@ -32,9 +32,9 @@ Tyrum provides a guided onboarding flow (CLI and/or gateway-served UI) that:
 4. Enables a minimal set of channels/nodes (explicitly).
 5. Runs a security and connectivity check.
 
-## Diagnostics (“doctor”)
+## Diagnostics (“check”)
 
-Tyrum provides a “doctor” surface that detects high-impact footguns and produces actionable fixes. Examples of checks:
+Tyrum provides a `check` surface that detects high-impact footguns and produces actionable fixes. Examples of checks:
 
 - gateway exposed beyond loopback without TLS and without device-bound auth
 - permissive tool policy on untrusted channels
@@ -43,7 +43,7 @@ Tyrum provides a “doctor” surface that detects high-impact footguns and prod
 - plugin discovery enabled without an allowlist / without integrity constraints
 - secret provider misconfiguration (handles fail to resolve; redaction disabled)
 
-Doctor should support both:
+Check supports both:
 
 - **static config analysis** (safe to run offline), and
 - **live probes** against the running gateway (best-effort; never required for basic correctness).

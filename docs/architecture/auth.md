@@ -27,14 +27,16 @@ Profiles are **metadata + secret handles**:
 
 Profiles are scoped per `agent_id`. Cross-agent sharing is deny-by-default and requires explicit policy.
 
-## OAuth flows (subscription and multi-account)
+## OAuth onboarding (multi-account)
 
-When a provider supports OAuth, Tyrum supports interactive login and headless login:
+When a provider supports OAuth, Tyrum onboards accounts using an Authorization Code + PKCE flow:
 
-- **Interactive (PKCE / local callback):** a local callback endpoint completes the exchange.
-- **Headless (paste / device-code):** the operator pastes a code or redirect URL to complete login.
+- an authenticated operator initiates authorization for a specific provider
+- Tyrum generates a PKCE verifier/challenge and a `state` nonce
+- the provider redirects to a callback endpoint where Tyrum exchanges the code for tokens
+- token material is stored in the secret provider; only token **handles** are persisted in Tyrum state
 
-OAuth tokens are stored via the secret provider; only token **handles** are persisted in Tyrum state. Refresh is automatic:
+Refresh is automatic:
 
 - access tokens are refreshed under a lock
 - refresh outputs overwrite the prior handles
@@ -83,4 +85,3 @@ Auth profiles integrate with:
 - **Policy:** which providers/profiles can be used for which sessions and lanes.
 - **Approvals:** high-risk auth changes (adding a privileged key, granting a broad OAuth scope) can be approval-gated.
 - **Usage tracking:** provider usage endpoints are queried using the active profile and displayed in `/usage` and UI surfaces (see [Observability](./observability.md)).
-
