@@ -71,6 +71,8 @@ jobs:
   workflow-lint:
     name: Workflow Lint
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.workflows == 'true'
     steps:
       - uses: actions/checkout@v6
       - uses: docker://rhysd/actionlint:1.7.11
