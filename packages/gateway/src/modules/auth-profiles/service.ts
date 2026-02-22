@@ -149,16 +149,16 @@ export class AuthProfileService {
   }): Promise<{ profileId: string; token: string } | undefined> {
     const nowMs = Date.now();
 
-    const pinnedId = await this.dal.getPinnedProfileId(opts.sessionId, opts.provider);
+    const pinnedId = await this.dal.getPinnedProfileId(opts.agentId, opts.sessionId, opts.provider);
     if (pinnedId) {
       const pinned = await this.dal.getById(pinnedId);
-      if (pinned && isActiveProfile(pinned, nowMs)) {
+      if (pinned && pinned.agent_id === opts.agentId && isActiveProfile(pinned, nowMs)) {
         const token = await this.resolveTokenForProfile(pinned);
         if (token) {
           return { profileId: pinned.profile_id, token };
         }
       }
-      await this.dal.clearPinnedProfileId(opts.sessionId, opts.provider);
+      await this.dal.clearPinnedProfileId(opts.agentId, opts.sessionId, opts.provider);
     }
 
     const candidates = await this.dal.list({ agentId: opts.agentId, provider: opts.provider });
@@ -167,8 +167,9 @@ export class AuthProfileService {
       const token = await this.resolveTokenForProfile(profile);
       if (!token) continue;
 
-      await this.dal.setPinnedProfileId(opts.sessionId, opts.provider, profile.profile_id);
+      await this.dal.setPinnedProfileId(opts.agentId, opts.sessionId, opts.provider, profile.profile_id);
       this.logger?.info("auth_profile.pinned", {
+        agent_id: opts.agentId,
         session_id: opts.sessionId,
         provider: opts.provider,
         profile_id: profile.profile_id,
@@ -206,9 +207,9 @@ export class AuthProfileService {
         break;
     }
 
-    const pinnedId = await this.dal.getPinnedProfileId(opts.sessionId, opts.provider);
+    const pinnedId = await this.dal.getPinnedProfileId(opts.agentId, opts.sessionId, opts.provider);
     if (pinnedId === opts.failedProfileId) {
-      await this.dal.clearPinnedProfileId(opts.sessionId, opts.provider);
+      await this.dal.clearPinnedProfileId(opts.agentId, opts.sessionId, opts.provider);
     }
 
     const candidates = await this.dal.list({ agentId: opts.agentId, provider: opts.provider });
@@ -218,8 +219,9 @@ export class AuthProfileService {
       const token = await this.resolveTokenForProfile(profile);
       if (!token) continue;
 
-      await this.dal.setPinnedProfileId(opts.sessionId, opts.provider, profile.profile_id);
+      await this.dal.setPinnedProfileId(opts.agentId, opts.sessionId, opts.provider, profile.profile_id);
       this.logger?.info("auth_profile.rotated", {
+        agent_id: opts.agentId,
         session_id: opts.sessionId,
         provider: opts.provider,
         profile_id: profile.profile_id,

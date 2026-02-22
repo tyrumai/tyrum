@@ -83,6 +83,46 @@ describe("AuthProfileService", () => {
     expect(again?.profileId).toBe(p1.profile_id);
   });
 
+  it("does not reuse pinned profiles across agents sharing session ids", async () => {
+    db = openTestSqliteDb();
+    const secrets = stubSecretProvider();
+    const service = new AuthProfileService(db, secrets);
+
+    const a = await service.create({
+      agent_id: "agent-a",
+      provider: "openai",
+      type: "api_key",
+      scope: "OPENAI_KEY_A",
+      value: "sk-a",
+    });
+
+    const b = await service.create({
+      agent_id: "agent-b",
+      provider: "openai",
+      type: "api_key",
+      scope: "OPENAI_KEY_B",
+      value: "sk-b",
+    });
+
+    const sessionId = "sess-shared";
+
+    const tokenA = await service.resolveBearerToken({
+      agentId: "agent-a",
+      provider: "openai",
+      sessionId,
+    });
+    expect(tokenA?.token).toBe("sk-a");
+    expect(tokenA?.profileId).toBe(a.profile_id);
+
+    const tokenB = await service.resolveBearerToken({
+      agentId: "agent-b",
+      provider: "openai",
+      sessionId,
+    });
+    expect(tokenB?.token).toBe("sk-b");
+    expect(tokenB?.profileId).toBe(b.profile_id);
+  });
+
   it("integrates with model proxy to apply bearer auth", async () => {
     db = openTestSqliteDb();
     const secrets = stubSecretProvider();

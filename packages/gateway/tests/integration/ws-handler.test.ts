@@ -10,6 +10,15 @@ import { TyrumClient } from "../../../client/src/ws-client.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
+async function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return await Promise.race([
+    p,
+    new Promise<T>((_resolve, reject) => {
+      setTimeout(() => reject(new Error(`${label} timeout after ${ms}ms`)), ms);
+    }),
+  ]);
+}
+
 describe("WS handler integration", () => {
   let server: Server | undefined;
   let db: SqliteDb | undefined;
@@ -133,6 +142,56 @@ describe("WS handler integration", () => {
     client.connect();
     const { code } = await disconnectedP;
     expect(code).toBe(4001);
+
+    stopHeartbeat();
+  });
+
+  it("rejects invalid tokens without waiting for handshake timeout", async () => {
+    db = openTestSqliteDb();
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
+    const tokenStore = new TokenStore(homeDir);
+    await tokenStore.initialize();
+
+    const connectionManager = new ConnectionManager();
+    const { handleUpgrade, stopHeartbeat } = createWsHandler({
+      connectionManager,
+      protocolDeps: { connectionManager },
+      tokenStore,
+      db,
+    });
+
+    server = createServer();
+    server.on("upgrade", (req, socket, head) => {
+      handleUpgrade(req, socket, head);
+    });
+
+    const port = await new Promise<number>((resolve) => {
+      server!.listen(0, "127.0.0.1", () => {
+        const addr = server!.address();
+        resolve(typeof addr === "object" && addr ? addr.port : 0);
+      });
+    });
+
+    const token = "bad-token";
+    const tokenB64 = Buffer.from(token, "utf-8").toString("base64url");
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, [
+      "tyrum-v1",
+      `tyrum-auth.${tokenB64}`,
+    ]);
+
+    try {
+      const closed = await withTimeout(
+        new Promise<CloseEvent>((resolve) => ws.addEventListener("close", resolve)),
+        1_000,
+        "ws close",
+      );
+      expect(closed.code).toBe(4001);
+    } finally {
+      try {
+        ws.close();
+      } catch {
+      }
+    }
 
     stopHeartbeat();
   });

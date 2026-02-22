@@ -289,6 +289,34 @@ export function createWsHandler(opts: WsRouteOptions): {
       return;
     }
 
+    const tokenIsAdmin = tokenStore.validate(token);
+    const tokenIsEnrollment = enrollmentToken !== undefined && token === enrollmentToken;
+    const nodeTokenPrecheck: Promise<NodeTokenRecord | undefined> | null =
+      tokenIsAdmin || tokenIsEnrollment || enrollmentToken === undefined
+        ? null
+        : nodeTokenDal.findActiveByToken(token);
+
+    if (!tokenIsAdmin && !tokenIsEnrollment) {
+      if (enrollmentToken === undefined) {
+        ws.close(4001, "unauthorized");
+        return;
+      }
+      void nodeTokenPrecheck
+        ?.then((record) => {
+          if (record) return;
+          try {
+            ws.close(4001, "unauthorized");
+          } catch {
+          }
+        })
+        .catch(() => {
+          try {
+            ws.close(1011, "internal error");
+          } catch {
+          }
+        });
+    }
+
     type HandshakeState = "await_init" | "await_proof" | "ready";
     let state: HandshakeState = "await_init";
 
@@ -308,7 +336,10 @@ export function createWsHandler(opts: WsRouteOptions): {
 
     const handshakeTimeout = setTimeout(() => {
       if (state !== "ready") {
-        ws.close(4002, "handshake timeout");
+        try {
+          ws.close(4002, "handshake timeout");
+        } catch {
+        }
       }
     }, 10_000);
 
@@ -363,7 +394,9 @@ export function createWsHandler(opts: WsRouteOptions): {
             if (token === enrollmentToken) {
               auth = { kind: "node_enrollment" };
             } else {
-              const record = await nodeTokenDal.findActiveByToken(token);
+              const record = nodeTokenPrecheck
+                ? await nodeTokenPrecheck
+                : await nodeTokenDal.findActiveByToken(token);
               if (!record || record.node_id !== derived) {
                 ws.close(4001, "unauthorized");
                 return;

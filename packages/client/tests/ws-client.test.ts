@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { WebSocketServer } from "ws";
 import type { WebSocket as WsWebSocket } from "ws";
-import { mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TyrumClient } from "../src/ws-client.js";
@@ -123,6 +123,15 @@ async function acceptConnect(
 /** Small delay helper. */
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return await Promise.race([
+    p,
+    new Promise<T>((_resolve, reject) => {
+      setTimeout(() => reject(new Error(`${label} timeout after ${ms}ms`)), ms);
+    }),
+  ]);
 }
 
 // ---------------------------------------------------------------------------
@@ -707,6 +716,44 @@ describe("TyrumClient", () => {
     // Client should reconnect and complete a new handshake.
     const ws2 = await server.waitForClient();
     await acceptConnect(ws2);
+  });
+
+  it("retries identity creation after transient filesystem failures", async () => {
+    server = createTestServer();
+
+    await chmod(tyrumHome!, 0o500);
+
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: ["cli"],
+      reconnect: true,
+      maxReconnectDelay: 500,
+      tyrumHome,
+    });
+
+    const disconnectedP = new Promise<void>((resolve) => {
+      client!.on("disconnected", () => resolve());
+    });
+    const connectedP = new Promise<void>((resolve) => {
+      client!.on("connected", () => resolve());
+    });
+
+    client.connect();
+
+    await withTimeout(server.waitForClient(), 2_000, "first ws connection");
+    await withTimeout(disconnectedP, 2_000, "disconnected after identity failure");
+
+    try {
+      await chmod(tyrumHome!, 0o700);
+
+      const ws2 = await withTimeout(server.waitForClient(), 2_000, "reconnect ws connection");
+      await acceptConnect(ws2);
+      await withTimeout(connectedP, 2_000, "connected after retry");
+      expect(client.connected).toBe(true);
+    } finally {
+      await chmod(tyrumHome!, 0o700).catch(() => undefined);
+    }
   });
 
   it("sends token in websocket subprotocol metadata", async () => {

@@ -174,36 +174,46 @@ export class AuthProfileDal {
     return existing;
   }
 
-  async getPinnedProfileId(sessionId: string, provider: string): Promise<string | undefined> {
+  async getPinnedProfileId(
+    agentId: string,
+    sessionId: string,
+    provider: string,
+  ): Promise<string | undefined> {
     const row = await this.db.get<{ profile_id: string }>(
-      "SELECT profile_id FROM session_auth_pins WHERE session_id = ? AND provider = ?",
-      [sessionId, provider],
+      "SELECT profile_id FROM session_auth_pins WHERE agent_id = ? AND session_id = ? AND provider = ?",
+      [agentId, sessionId, provider],
     );
     return row?.profile_id;
   }
 
-  async setPinnedProfileId(sessionId: string, provider: string, profileId: string): Promise<void> {
+  async setPinnedProfileId(
+    agentId: string,
+    sessionId: string,
+    provider: string,
+    profileId: string,
+  ): Promise<void> {
     const nowIso = new Date().toISOString();
     await this.db.run(
       `INSERT INTO session_auth_pins (
+         agent_id,
          session_id,
          provider,
          profile_id,
          pinned_at,
          updated_at
-       ) VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT (session_id, provider) DO UPDATE SET
+       ) VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT (agent_id, session_id, provider) DO UPDATE SET
          profile_id = excluded.profile_id,
          updated_at = excluded.updated_at`,
-      [sessionId, provider, profileId, nowIso, nowIso],
+      [agentId, sessionId, provider, profileId, nowIso, nowIso],
     );
   }
 
-  async clearPinnedProfileId(sessionId: string, provider: string): Promise<void> {
-    await this.db.run("DELETE FROM session_auth_pins WHERE session_id = ? AND provider = ?", [
-      sessionId,
-      provider,
-    ]);
+  async clearPinnedProfileId(agentId: string, sessionId: string, provider: string): Promise<void> {
+    await this.db.run(
+      "DELETE FROM session_auth_pins WHERE agent_id = ? AND session_id = ? AND provider = ?",
+      [agentId, sessionId, provider],
+    );
   }
 
   async updateTokens(opts: {

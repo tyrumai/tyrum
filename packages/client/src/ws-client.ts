@@ -669,6 +669,11 @@ export class TyrumClient {
     })();
 
     this.identityPromise = p;
+    void p.catch(() => {
+      if (this.identityPromise === p) {
+        this.identityPromise = null;
+      }
+    });
     return p;
   }
 
@@ -733,7 +738,10 @@ export class TyrumClient {
       if (this.ws !== ws || ws.readyState !== WebSocket.OPEN) {
         return;
       }
-      this.disconnect();
+      try {
+        ws.close(4000, "handshake failed");
+      } catch {
+      }
     }
   }
 
