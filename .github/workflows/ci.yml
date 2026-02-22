@@ -14,6 +14,60 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Change Detection
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      workflows: ${{ steps.filter.outputs.workflows }}
+      scripts: ${{ steps.filter.outputs.scripts }}
+      docs_gate: ${{ steps.filter.outputs.docs_gate }}
+      deps: ${{ steps.filter.outputs.deps }}
+      ci: ${{ steps.filter.outputs.ci }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            workflows:
+              - ".github/workflows/**"
+              - ".github/actions/**"
+            scripts:
+              - "scripts/**"
+              - ".github/scripts/**"
+            docs_gate:
+              - "docs/**"
+              - "apps/docs/**"
+              - "README.md"
+              - "scripts/check-public-docs.sh"
+            deps:
+              - "package.json"
+              - "pnpm-lock.yaml"
+              - "pnpm-workspace.yaml"
+              - "patches/**"
+              - "packages/**/package.json"
+              - "apps/**/package.json"
+            ci:
+              - "packages/**"
+              - "apps/desktop/**"
+              - "config/**"
+              - "web/**"
+              - "patches/**"
+              - "Dockerfile"
+              - "docker-compose.yml"
+              - "oxlint.json"
+              - "tsconfig.json"
+              - "tsconfig.base.json"
+              - "vitest.config.ts"
+              - ".node-version"
+              - ".nvmrc"
+
   workflow-lint:
     name: Workflow Lint
     runs-on: ubuntu-latest
@@ -24,6 +78,8 @@ jobs:
   shell-lint:
     name: Shell Lint
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.scripts == 'true'
     steps:
       - uses: actions/checkout@v6
       - name: Ensure shellcheck is available
@@ -38,6 +94,8 @@ jobs:
   docs-public-content:
     name: Docs Public Content Gate
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.docs_gate == 'true'
     steps:
       - uses: actions/checkout@v6
       - name: Check docs for internal-only content
@@ -45,7 +103,8 @@ jobs:
 
   dependency-review:
     name: Dependency Review
-    if: github.event_name == 'pull_request'
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.deps == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -56,6 +115,8 @@ jobs:
 
   desktop-cross-os:
     name: Validation (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.ci == 'true'
     strategy:
       fail-fast: false
       matrix:

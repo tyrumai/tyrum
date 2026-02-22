@@ -7,9 +7,25 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "patches/**"
+      - "packages/**/package.json"
+      - "apps/**/package.json"
+      - ".github/workflows/security-baseline.yml"
   pull_request:
     branches:
       - main
+    paths:
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "patches/**"
+      - "packages/**/package.json"
+      - "apps/**/package.json"
+      - ".github/workflows/security-baseline.yml"
 
 jobs:
   baseline:
