@@ -1,5 +1,6 @@
 import { PluginManifest } from "@tyrum/schemas";
 import type { PluginManifest as PluginManifestT } from "@tyrum/schemas";
+import { readFileSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { dirname, join, resolve, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -107,10 +108,44 @@ function basenameSafe(dir: string): string {
   return parts[parts.length - 1] ?? "plugin";
 }
 
+function tryReadPackageJsonName(path: string): string | undefined {
+  try {
+    const parsed = JSON.parse(readFileSync(path, "utf-8")) as unknown;
+    if (!isRecord(parsed)) return undefined;
+    const name = parsed["name"];
+    return typeof name === "string" ? name : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function resolveBundledPluginsDir(): string {
-  // packages/gateway/src/modules/plugins/registry.ts -> packages/gateway/plugins
   const here = dirname(fileURLToPath(import.meta.url));
-  return join(here, "../../../plugins");
+  return resolveBundledPluginsDirFrom(here);
+}
+
+export function resolveBundledPluginsDirFrom(startDir: string): string {
+  // We cannot rely on the source tree depth because tsdown bundles the gateway
+  // into `dist/index.mjs`, making `import.meta.url` point at `dist/`.
+  //
+  // We also cannot simply look for a `plugins/` directory because this module
+  // itself lives under `src/modules/plugins/`.
+  //
+  // Instead, find the `@tyrum/gateway` package root and return `<root>/plugins`.
+  let current = startDir;
+  for (let i = 0; i < 10; i += 1) {
+    const name = tryReadPackageJsonName(join(current, "package.json"));
+    if (name === "@tyrum/gateway") {
+      return join(current, "plugins");
+    }
+
+    const parent = dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+
+  // Fallback to the historical source layout.
+  return join(startDir, "../../../plugins");
 }
 
 function resolvePluginsDir(home: string): string {
@@ -421,4 +456,3 @@ export class PluginRegistry {
     }
   }
 }
-
