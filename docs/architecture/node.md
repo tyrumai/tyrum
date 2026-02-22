@@ -2,6 +2,14 @@
 
 A node is a companion runtime that connects to the gateway with `role: node` and exposes capabilities (for example `camera.*`, `canvas.*`, `system.*`). Nodes let Tyrum safely use device-specific interfaces without baking that logic into the gateway.
 
+## Integration quality bar
+
+Nodes are “remote hands”, so Tyrum treats node capabilities as high-risk by default. Node capabilities meet an integration quality bar:
+
+- **Explicitly authorized:** pairing + policy decide what a node may do.
+- **Approval-gated:** state-changing or privacy-impacting actions can be paused behind approvals.
+- **Evidence-backed:** capability results should include durable evidence/artifacts when feasible.
+
 ## Node forms
 
 - Desktop app (Windows/Linux/macOS)
@@ -18,7 +26,7 @@ A node is a companion runtime that connects to the gateway with `role: node` and
 ## Pairing posture
 
 - Nodes connect using a public-key device identity and prove possession of the private key during handshake.
-- On first contact, the gateway creates a pairing request for the node device.
+- When a node connects and is not yet paired, the gateway creates a pairing request for the node device.
 - Local nodes can be auto-approved by explicit policy; remote nodes require an explicit operator approval.
 - Pairing results in a scoped authorization (for example a node-scoped token and a capability allowlist) that can be revoked.
 

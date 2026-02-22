@@ -2,6 +2,25 @@
 
 Tyrum is a WebSocket-first autonomous worker agent platform built around a long-lived gateway that coordinates durable execution, approvals, and audit evidence.
 
+## Positioning
+
+Tyrum is an autonomous worker.
+
+- In the simplest case, it’s a **personal assistant** you run for yourself.
+- In richer deployments, it’s a **remote coworker** you can share with a team.
+
+The same core architecture is intended to scale from “one assistant” to “many coworkers” without turning into an un-auditable pile of prompts and cronjobs: durable execution, least-privilege authorization, explicit approvals, and evidence-backed audit trails.
+
+## Engineering bar
+
+Tyrum’s architecture is intentionally conservative:
+
+- **Security best practices, secure by default:** local-first binding, explicit auth, least privilege, and defense-in-depth enforcement (not prompt-only “safety”).
+- **Industry-standard primitives:** idempotency keys, durable outbox/eventing, leases/locks, auditable change control, and typed contracts at trust boundaries.
+- **Avoid common agent anti-patterns:** opaque side effects, non-resumable runs, unbounded tool access, and “done” without postconditions/evidence.
+- **Maintainability:** a small core with clear ownership boundaries and verifiable invariants.
+- **Extensibility without weakening safety:** plugins, nodes, MCP, and channels extend capability, but remain policy-gated and contract-validated.
+
 ## High-level topology
 
 ```mermaid
@@ -71,15 +90,24 @@ flowchart LR
 - **Typed boundaries:** inputs/outputs are validated at the edges (protocol, tools, plugins).
 - **Least privilege:** capabilities and tools are scoped; high-risk actions require explicit policy/approvals.
 - **Evidence over confidence:** state changes require postconditions and artifacts when feasible; unverifiable outcomes must not be reported as “done”.
-- **Resumable execution:** long-running work can pause for approvals/takeover and resume later without repeating completed steps.
+- **Resumable execution:** long-running work can pause for approvals/takeover and resume without repeating completed steps.
 - **Secrets by handle:** the model never sees raw credentials; executors use secret handles with policy-gated resolution.
 - **Auditability:** important actions emit events and can be persisted for troubleshooting and compliance.
 - **Extensible core:** gateway plugins, tools, skills, nodes, and MCP servers extend behavior without changing the gateway core.
+
+## Architecture commitments
+
+- **Ops ergonomics:** onboarding and diagnostics default to a hardened configuration.
+- **Gateway authN/authZ:** explicit operator scopes, per-method authorization, device-token lifecycle, and a documented trusted-proxy + TLS/pinning story.
+- **Plugins:** require manifests + config schemas, make risky tools opt-in, and harden discovery/install (path/ownership checks, safe dependency rules).
+- **Scale validation:** reference deployments and a failure-matrix test suite are hard gates.
+- **Integration quality bar:** channels and node capabilities are idempotent, approval-gated, and evidence-rich.
 
 ## Where to start
 
 - [Scaling and high availability](./scaling-ha.md)
 - [Gateway](./gateway/index.md)
+- [Gateway authN/authZ](./gateway-authz.md)
 - [Execution engine](./execution-engine.md)
 - [Messages and Sessions](./messages-sessions.md)
 - [Playbooks](./playbooks.md)
@@ -89,6 +117,7 @@ flowchart LR
 - [Provider Auth and Onboarding](./auth.md)
 - [Artifacts](./artifacts.md)
 - [Sandbox and policy](./sandbox-policy.md)
+- [Operations and onboarding](./operations.md)
 - [Observability](./observability.md)
 - [Presence](./presence.md)
 - [Client](./client.md)
