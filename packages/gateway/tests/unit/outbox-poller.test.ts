@@ -22,14 +22,18 @@ function createMockWs(opts?: { throwsOnSend?: boolean }): MockWebSocket {
 }
 
 let seq = 0;
-function addTestClient(cm: ConnectionManager, ws: MockWebSocket): string {
+function addTestPeer(
+  cm: ConnectionManager,
+  ws: MockWebSocket,
+  opts?: { role?: "client" | "node"; instanceId?: string },
+): string {
   seq += 1;
   const connectionId = `conn-${seq}`;
-  const instanceId = `dev-test-${seq}`;
+  const instanceId = opts?.instanceId ?? `dev-test-${seq}`;
   return cm.addClient({
     connectionId,
     ws: ws as never,
-    role: "client",
+    role: opts?.role ?? "client",
     instanceId,
     device: { device_id: instanceId, pubkey: "pubkey" },
     capabilities: [],
@@ -69,7 +73,7 @@ describe("OutboxPoller", () => {
     const { outbox, poller, consumerId } = setup();
     const cm = (poller as unknown as { connectionManager: ConnectionManager }).connectionManager;
     const ws = createMockWs();
-    addTestClient(cm, ws);
+    addTestPeer(cm, ws);
 
     const row = await outbox.enqueue("ws.broadcast", {
       event_id: "evt-1",
@@ -114,7 +118,7 @@ describe("OutboxPoller", () => {
     const { outbox, poller, consumerId } = setup();
     const cm = (poller as unknown as { connectionManager: ConnectionManager }).connectionManager;
     const ws = createMockWs({ throwsOnSend: true });
-    addTestClient(cm, ws);
+    addTestPeer(cm, ws);
 
     const row = await outbox.enqueue("ws.broadcast", {
       event_id: "evt-1",
@@ -128,5 +132,46 @@ describe("OutboxPoller", () => {
     expect(ws.send).toHaveBeenCalledOnce();
     expect(await outbox.getConsumerCursor(consumerId)).toBe(row.id);
   });
-});
 
+  it("acks after processing a close row and closes matching peers", async () => {
+    const { outbox, poller, consumerId } = setup();
+    const cm = (poller as unknown as { connectionManager: ConnectionManager }).connectionManager;
+    const ws = createMockWs();
+    const instanceId = "node-1";
+    addTestPeer(cm, ws, { role: "node", instanceId });
+
+    const row = await outbox.enqueue("ws.close", {
+      target_role: "node",
+      instance_id: instanceId,
+      code: 1012,
+      reason: "pairing resolved; reconnect",
+    });
+
+    await poller.tick();
+
+    expect(ws.close).toHaveBeenCalledWith(1012, "pairing resolved; reconnect");
+    expect(await outbox.getConsumerCursor(consumerId)).toBe(row.id);
+  });
+
+  it("acks close rows but skips local delivery when skip_local is set", async () => {
+    const { outbox, poller, consumerId } = setup("edge-a");
+    const cm = (poller as unknown as { connectionManager: ConnectionManager }).connectionManager;
+    const ws = createMockWs();
+    const instanceId = "node-2";
+    addTestPeer(cm, ws, { role: "node", instanceId });
+
+    const row = await outbox.enqueue("ws.close", {
+      source_edge_id: consumerId,
+      skip_local: true,
+      target_role: "node",
+      instance_id: instanceId,
+      code: 1012,
+      reason: "pairing resolved; reconnect",
+    });
+
+    await poller.tick();
+
+    expect(ws.close).not.toHaveBeenCalled();
+    expect(await outbox.getConsumerCursor(consumerId)).toBe(row.id);
+  });
+});

@@ -61,20 +61,34 @@ export function registerNodeIpc(window: BrowserWindow): void {
       config.permissions.overrides,
     );
 
+    let wsUrl = "";
+    let token = "";
+    let fallbackToken: string | null = null;
+    let attemptedFallback = false;
+
     runtime = new NodeRuntime(config, permissions, {
-      onStatusChange: (status) =>
+      onStatusChange: (status) => {
+        if (
+          !status.connected &&
+          !attemptedFallback &&
+          fallbackToken &&
+          status.code === 4001 &&
+          status.reason === "unauthorized"
+        ) {
+          attemptedFallback = true;
+          runtime?.connect(wsUrl, fallbackToken);
+        }
         sender.send("status:change", {
           nodeStatus: toNodeStatusString(status),
           node: status,
-        }),
+        });
+      },
       onConsentRequest: (msg) => sender.send("consent:request", msg),
       onPlanUpdate: (msg) => sender.send("plan:update", msg),
       onLog: (entry) => sender.send("log:entry", { source: "node", ...entry }),
     });
 
     // Determine WS URL and token based on mode
-    let wsUrl: string;
-    let token: string;
     if (config.mode === "embedded") {
       await startEmbeddedGatewayFromConfig();
       config = loadConfig();
@@ -82,7 +96,12 @@ export function registerNodeIpc(window: BrowserWindow): void {
       token = deriveNodeEnrollmentToken(ensureEmbeddedGatewayToken(config));
     } else {
       wsUrl = config.remote.wsUrl;
-      token = config.remote.tokenRef ? decryptToken(config.remote.tokenRef) : "";
+      const rawToken = config.remote.tokenRef ? decryptToken(config.remote.tokenRef) : "";
+      // Prefer the derived node enrollment token (works when the config stores the admin token),
+      // but fall back to the raw token when the gateway expects a custom enrollment token or
+      // when the config already stores a node-scoped token.
+      token = rawToken ? deriveNodeEnrollmentToken(rawToken) : "";
+      fallbackToken = rawToken || null;
     }
 
     // Register providers based on capabilities and permissions

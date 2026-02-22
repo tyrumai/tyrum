@@ -123,6 +123,57 @@ describe("AuthProfileService", () => {
     expect(tokenB?.profileId).toBe(b.profile_id);
   });
 
+  it("rotates away from pinned token profiles once they expire", async () => {
+    db = openTestSqliteDb();
+    const secrets = stubSecretProvider();
+    const service = new AuthProfileService(db, secrets);
+
+    vi.useFakeTimers();
+    const t0 = new Date("2026-02-22T00:00:00.000Z");
+    vi.setSystemTime(t0);
+
+    try {
+      const expSoon = new Date(t0.getTime() + 1_000).toISOString();
+      const expLater = new Date(t0.getTime() + 60_000).toISOString();
+
+      await service.create({
+        agent_id: "default",
+        provider: "openai",
+        type: "token",
+        scope: "OPENAI_TOKEN_1",
+        value: "tok-1",
+        expires_at: expSoon,
+      });
+
+      await service.create({
+        agent_id: "default",
+        provider: "openai",
+        type: "token",
+        scope: "OPENAI_TOKEN_2",
+        value: "tok-2",
+        expires_at: expLater,
+      });
+
+      const first = await service.resolveBearerToken({
+        agentId: "default",
+        provider: "openai",
+        sessionId: "sess-expiry",
+      });
+      expect(first?.token).toBe("tok-1");
+
+      vi.setSystemTime(new Date(t0.getTime() + 2_000));
+
+      const afterExpiry = await service.resolveBearerToken({
+        agentId: "default",
+        provider: "openai",
+        sessionId: "sess-expiry",
+      });
+      expect(afterExpiry?.token).toBe("tok-2");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("integrates with model proxy to apply bearer auth", async () => {
     db = openTestSqliteDb();
     const secrets = stubSecretProvider();

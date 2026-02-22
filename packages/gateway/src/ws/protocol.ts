@@ -973,11 +973,16 @@ export function requestApproval(
   };
   const payload = JSON.stringify(message);
 
-  // Send to the first available client.
-  const iter = deps.connectionManager.allClients();
-  const first = iter.next();
-  if (!first.done) {
-    first.value.ws.send(payload);
+  // Send to the first available *human* client (not node peers).
+  let sentLocal = false;
+  for (const peer of deps.connectionManager.allClients()) {
+    if (peer.role !== "client") continue;
+    peer.ws.send(payload);
+    sentLocal = true;
+    break;
+  }
+
+  if (sentLocal) {
     if (deps.cluster) {
       void deps.cluster.outboxDal
         .enqueue("ws.broadcast", {
@@ -1177,13 +1182,34 @@ async function listApprovals(
 }
 
 function closeNodeConnections(nodeId: string, deps: ProtocolDeps): void {
+  const closeCode = 1012;
+  const closeReason = "pairing resolved; reconnect";
   for (const peer of deps.connectionManager.allClients()) {
     if (peer.role !== "node") continue;
     if (peer.instance_id !== nodeId) continue;
     try {
-      peer.ws.close(1012, "pairing resolved; reconnect");
+      peer.ws.close(closeCode, closeReason);
     } catch {
       // best-effort
     }
+  }
+
+  if (deps.cluster) {
+    void deps.cluster.outboxDal
+      .enqueue("ws.close", {
+        source_edge_id: deps.cluster.edgeId,
+        skip_local: true,
+        target_role: "node",
+        instance_id: nodeId,
+        code: closeCode,
+        reason: closeReason,
+      })
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        deps.logger?.error("outbox.enqueue_failed", {
+          topic: "ws.close",
+          error: message,
+        });
+      });
   }
 }

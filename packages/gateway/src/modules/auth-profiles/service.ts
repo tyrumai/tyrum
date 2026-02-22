@@ -13,6 +13,10 @@ function isActiveProfile(profile: AuthProfileT, now: number): boolean {
     const ts = Date.parse(profile.cooldown_until);
     if (!isNaN(ts) && ts > now) return false;
   }
+  if (profile.expires_at && profile.type !== "oauth") {
+    const ts = Date.parse(profile.expires_at);
+    if (!isNaN(ts) && ts <= now) return false;
+  }
   return true;
 }
 

@@ -57,6 +57,45 @@ function parseBroadcastPayload(
   return { message: payload as WsEnvelope };
 }
 
+function parseClosePayload(
+  payload: unknown,
+): {
+  source_edge_id?: string;
+  skip_local?: boolean;
+  target_role: "client" | "node";
+  connection_id?: string;
+  instance_id?: string;
+  code?: number;
+  reason?: string;
+} | undefined {
+  if (!isObject(payload)) return undefined;
+
+  const targetRoleRaw = payload["target_role"];
+  const targetRole = targetRoleRaw === "client" || targetRoleRaw === "node"
+    ? targetRoleRaw
+    : undefined;
+  if (!targetRole) return undefined;
+
+  const connectionId = payload["connection_id"];
+  const instanceId = payload["instance_id"];
+  if (typeof connectionId !== "string" && typeof instanceId !== "string") return undefined;
+
+  const sourceEdgeId = payload["source_edge_id"];
+  const skipLocal = payload["skip_local"];
+  const code = payload["code"];
+  const reason = payload["reason"];
+
+  return {
+    source_edge_id: typeof sourceEdgeId === "string" ? sourceEdgeId : undefined,
+    skip_local: typeof skipLocal === "boolean" ? skipLocal : undefined,
+    target_role: targetRole,
+    connection_id: typeof connectionId === "string" ? connectionId : undefined,
+    instance_id: typeof instanceId === "string" ? instanceId : undefined,
+    code: typeof code === "number" && Number.isInteger(code) ? code : undefined,
+    reason: typeof reason === "string" ? reason : undefined,
+  };
+}
+
 export class OutboxPoller {
   private readonly consumerId: string;
   private readonly outboxDal: OutboxDal;
@@ -199,6 +238,38 @@ export class OutboxPoller {
           connection_id: parsed.connection_id,
           error: message,
         });
+      }
+      return true;
+    }
+
+    if (row.topic === "ws.close") {
+      const parsed = parseClosePayload(row.payload);
+      if (!parsed) {
+        this.logger?.warn("outbox.invalid_payload", {
+          outbox_id: row.id,
+          topic: row.topic,
+        });
+        return true;
+      }
+      if (parsed.skip_local && parsed.source_edge_id === this.consumerId) return true;
+
+      const code = parsed.code ?? 1012;
+      const reason = parsed.reason ?? "reconnect requested";
+      for (const client of this.connectionManager.allClients()) {
+        if (client.role !== parsed.target_role) continue;
+        if (parsed.connection_id && client.id !== parsed.connection_id) continue;
+        if (parsed.instance_id && client.instance_id !== parsed.instance_id) continue;
+        try {
+          client.ws.close(code, reason);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          this.logger?.debug("outbox.ws_close_failed", {
+            outbox_id: row.id,
+            topic: row.topic,
+            connection_id: client.id,
+            error: message,
+          });
+        }
       }
       return true;
     }

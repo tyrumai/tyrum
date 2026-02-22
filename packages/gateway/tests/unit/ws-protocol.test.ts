@@ -58,6 +58,20 @@ function makeClient(
   return { id, ws };
 }
 
+function makeNode(cm: ConnectionManager, nodeId: string): { id: string; ws: MockWebSocket } {
+  const ws = createMockWs();
+  const id = `conn-${crypto.randomUUID()}`;
+  cm.addClient({
+    connectionId: id,
+    ws: ws as never,
+    role: "node",
+    instanceId: nodeId,
+    device: { device_id: nodeId, pubkey: "pubkey" },
+    capabilities: [],
+  });
+  return { id, ws };
+}
+
 // ---------------------------------------------------------------------------
 // handleClientMessage
 // ---------------------------------------------------------------------------
@@ -530,6 +544,27 @@ describe("requestApproval", () => {
     });
   });
 
+  it("skips node peers when selecting a local approval recipient", () => {
+    const cm = new ConnectionManager();
+    const { ws: nodeWs } = makeNode(cm, "node-1");
+    const { ws: clientWs } = makeClient(cm, ["playwright"]);
+    const deps = makeDeps(cm);
+
+    requestApproval(
+      {
+        approval_id: 7,
+        plan_id: "plan-1",
+        step_index: 0,
+        prompt: "Approve?",
+        expires_at: null,
+      },
+      deps,
+    );
+
+    expect(nodeWs.send).not.toHaveBeenCalled();
+    expect(clientWs.send).toHaveBeenCalledOnce();
+  });
+
   it("does nothing when no clients are connected", () => {
     const cm = new ConnectionManager();
     const deps = makeDeps(cm);
@@ -546,6 +581,66 @@ describe("requestApproval", () => {
       },
       deps,
     );
+  });
+});
+
+describe("pairing resolution", () => {
+  it("closes node connections across cluster edges when pairing is approved", async () => {
+    const cm = new ConnectionManager();
+    const nodeId = "node-1";
+    const { ws: nodeWs } = makeNode(cm, nodeId);
+
+    const { id: clientConnId } = makeClient(cm, []);
+    const client = cm.getClient(clientConnId)!;
+
+    const pairing = {
+      pairing_id: 1,
+      status: "approved",
+      requested_at: "2026-02-22T00:00:00Z",
+      node: {
+        node_id: nodeId,
+        label: "Test node",
+        capabilities: [],
+        last_seen_at: "2026-02-22T00:00:00Z",
+      },
+      resolution: {
+        decision: "approved",
+        resolved_at: "2026-02-22T00:00:01Z",
+        reason: "ok",
+        resolved_by: { instance_id: client.instance_id },
+      },
+      resolved_at: "2026-02-22T00:00:01Z",
+    };
+
+    const enqueue = vi.fn(async () => ({}) as never);
+    const deps = makeDeps(cm, {
+      nodePairingService: { resolve: vi.fn(async () => pairing) } as never,
+      cluster: {
+        edgeId: "edge-a",
+        outboxDal: { enqueue } as never,
+        connectionDirectory: {} as never,
+      },
+    });
+
+    const result = await handleClientMessage(
+      client,
+      JSON.stringify({ request_id: "r-1", type: "pairing.approve", payload: { node_id: nodeId } }),
+      deps,
+    );
+
+    expect((result as { ok: boolean }).ok).toBe(true);
+    expect(nodeWs.close).toHaveBeenCalledWith(1012, "pairing resolved; reconnect");
+
+    const wsCloseCall = enqueue.mock.calls.find((call) => call[0] === "ws.close");
+    expect(wsCloseCall).toBeDefined();
+    expect(wsCloseCall![1]).toMatchObject({
+      source_edge_id: "edge-a",
+      skip_local: true,
+      target_role: "node",
+      instance_id: nodeId,
+      code: 1012,
+      reason: "pairing resolved; reconnect",
+    });
   });
 });
 
