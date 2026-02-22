@@ -363,7 +363,6 @@ export interface AgentContextReport {
 
 function looksLikeSecretText(text: string): boolean {
   if (!text) return false;
-  if (text.includes("secret:")) return true;
   if (/-----BEGIN [A-Z ]*PRIVATE KEY-----/i.test(text)) return true;
   if (/\bsk-[A-Za-z0-9]{20,}\b/.test(text)) return true;
   return false;
@@ -437,7 +436,7 @@ export class AgentRuntime {
     if (now < this.cleanupAtMs) {
       return;
     }
-    void this.sessionDal.deleteExpired(ttlDays, this.agentId);
+    void this.sessionDal.deleteExpired(ttlDays);
     this.cleanupAtMs = now + 60 * 60 * 1000;
   }
 

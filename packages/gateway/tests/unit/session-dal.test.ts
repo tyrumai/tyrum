@@ -131,6 +131,40 @@ describe("SessionDal", () => {
     expect(row).toBeUndefined();
   });
 
+  it("deletes expired sessions across agents when agent id is omitted", async () => {
+    const dal = createDal();
+    const a = await dal.getOrCreate("mattermost", "ops", "agent-1");
+    const b = await dal.getOrCreate("mattermost", "ops", "agent-2");
+
+    await db!.run(
+      "UPDATE sessions SET updated_at = datetime('now', '-40 days') WHERE session_id IN (?, ?)",
+      [a.session_id, b.session_id],
+    );
+
+    const removed = await dal.deleteExpired(30);
+
+    expect(removed).toBe(2);
+    expect(await dal.getById(a.session_id, "agent-1")).toBeUndefined();
+    expect(await dal.getById(b.session_id, "agent-2")).toBeUndefined();
+  });
+
+  it("deletes expired sessions only for the specified agent", async () => {
+    const dal = createDal();
+    const a = await dal.getOrCreate("mattermost", "ops", "agent-1");
+    const b = await dal.getOrCreate("mattermost", "ops", "agent-2");
+
+    await db!.run(
+      "UPDATE sessions SET updated_at = datetime('now', '-40 days') WHERE session_id IN (?, ?)",
+      [a.session_id, b.session_id],
+    );
+
+    const removed = await dal.deleteExpired(30, "agent-1");
+
+    expect(removed).toBe(1);
+    expect(await dal.getById(a.session_id, "agent-1")).toBeUndefined();
+    expect(await dal.getById(b.session_id, "agent-2")).toBeDefined();
+  });
+
   it("keeps newer legacy-format timestamps on threshold date", async () => {
     vi.useFakeTimers();
     try {

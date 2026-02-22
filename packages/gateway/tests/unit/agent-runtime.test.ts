@@ -139,6 +139,30 @@ describe("AgentRuntime", () => {
     expect(mcpManager.shutdown).toHaveBeenCalledTimes(1);
   });
 
+  it("writes memory when assistant mentions secret handles", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("Use secret:my-key to reference a stored secret."),
+      fetchImpl: fetch404,
+    });
+
+    const result = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      message: "how do I use secret handles?",
+    });
+
+    expect(result.reply).toContain("secret:my-key");
+    expect(result.memory_written).toBe(true);
+  });
+
   it("preserves legacy tool confirmation in policy observe-only mode", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({

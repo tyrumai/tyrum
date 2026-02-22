@@ -248,16 +248,25 @@ export class SessionDal {
   }
 
   async deleteExpired(ttlDays: number, agentId?: string): Promise<number> {
-    const normalizedAgentId = normalizeAgentId(agentId);
     const safeTtl = Math.max(1, ttlDays);
     const threshold = new Date(Date.now() - safeTtl * 24 * 60 * 60 * 1000).toISOString();
+    const normalizedAgentId = agentId === undefined ? undefined : normalizeAgentId(agentId);
     const deleteSql =
       this.db.kind === "sqlite"
-        ? `DELETE FROM sessions
-           WHERE agent_id = ? AND datetime(updated_at) < datetime(?)`
-        : `DELETE FROM sessions
-           WHERE agent_id = ? AND updated_at < ?`;
-    const result = await this.db.run(deleteSql, [normalizedAgentId, threshold]);
+        ? normalizedAgentId
+          ? `DELETE FROM sessions
+             WHERE agent_id = ? AND datetime(updated_at) < datetime(?)`
+          : `DELETE FROM sessions
+             WHERE datetime(updated_at) < datetime(?)`
+        : normalizedAgentId
+          ? `DELETE FROM sessions
+             WHERE agent_id = ? AND updated_at < ?`
+          : `DELETE FROM sessions
+             WHERE updated_at < ?`;
+    const result = await this.db.run(
+      deleteSql,
+      normalizedAgentId ? [normalizedAgentId, threshold] : [threshold],
+    );
     return result.changes;
   }
 }
