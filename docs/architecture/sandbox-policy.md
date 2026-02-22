@@ -56,6 +56,16 @@ Every execution run carries the effective policy as a snapshot reference:
 - Exports and audits reference the snapshot so policy decisions remain explainable and replayable.
 - Policy decisions may also record applied `policy_override_id` values when an operator override turns `require_approval → allow`. This keeps “why was this allowed?” answerable without weakening the conservative `deny` precedence.
 
+### Snapshot hashing (canonical form hard rule)
+
+The snapshot hash MUST be computed over a deterministic canonical representation of the merged policy (for example RFC 8785 JSON Canonicalization Scheme or an equivalent canonical JSON encoder). This ensures:
+
+- the same policy always yields the same hash across processes/languages,
+- exports/imports can validate integrity reliably, and
+- audits can prove exactly which policy content produced a decision.
+
+Store (or be able to re-derive) the canonical bytes used to compute the hash for verification during export/import.
+
 ## Minimum policy domains
 
 A `PolicyBundle` covers at minimum:

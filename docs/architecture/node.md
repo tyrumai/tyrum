@@ -19,8 +19,8 @@ A node is a companion runtime that connects to the gateway with `role: node` and
 
 - Nodes connect using a public-key device identity and prove possession of the private key during handshake.
 - On first contact, the gateway creates a pairing request for the node device.
-- Local nodes can be auto-approved; remote nodes require an explicit operator approval.
-- Pairing results in a scoped authorization that can be revoked.
+- Local nodes can be auto-approved by explicit policy; remote nodes require an explicit operator approval.
+- Pairing results in a scoped authorization (for example a node-scoped token and a capability allowlist) that can be revoked.
 
 ```mermaid
 sequenceDiagram
@@ -43,7 +43,7 @@ Pairing binds a node device identity to an explicit authorization record:
 - capability allowlist (specific capability names/versions)
 - optional labels (operator-defined)
 
-The scoped token issued to the node reflects these constraints. Capability execution requests are authorized against the node’s pairing record and the effective policy snapshot for the run.
+Capability execution requests are authorized against the node’s pairing record and the effective policy snapshot for the run.
 
 ## Revocation
 
