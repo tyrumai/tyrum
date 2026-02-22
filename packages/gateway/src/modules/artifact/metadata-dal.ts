@@ -120,11 +120,13 @@ export class ArtifactMetadataDal {
     return toArtifactMetadataRow(row);
   }
 
-  async getById(artifactId: string): Promise<ArtifactMetadataRow | undefined> {
-    const row = await this.db.get<RawArtifactMetadataRow>(
+  async getById(artifactId: string, agentId?: string): Promise<ArtifactMetadataRow | undefined> {
+    const scoped = withAgentScope(
       "SELECT * FROM artifact_metadata WHERE artifact_id = ?",
+      agentId ?? "",
       [artifactId],
     );
+    const row = await this.db.get<RawArtifactMetadataRow>(scoped.query, scoped.params);
     return row ? toArtifactMetadataRow(row) : undefined;
   }
 

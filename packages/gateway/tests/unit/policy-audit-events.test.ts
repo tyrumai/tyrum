@@ -82,7 +82,7 @@ describe("slash command policy gate", () => {
 describe("artifact agent_id scoping", () => {
   // We test the logic inline — a minimal Hono test
   // Import the route factory and create a test app
-  it("returns 403 when agent_id mismatches", async () => {
+  it("returns 404 when agent_id mismatches", async () => {
     const { createArtifactRoutes } = await import("../../src/routes/artifact.js");
     const { Hono } = await import("hono");
 
@@ -98,7 +98,9 @@ describe("artifact agent_id scoping", () => {
       "/",
       createArtifactRoutes({
         artifactMetadataDal: {
-          getById: vi.fn().mockResolvedValue(mockMeta),
+          getById: vi.fn().mockImplementation(async (_artifactId: string, agentId?: string) => {
+            return agentId === "agent-alpha" ? mockMeta : undefined;
+          }),
           listByRun: vi.fn().mockResolvedValue([]),
           listByStep: vi.fn().mockResolvedValue([]),
         } as any,
@@ -113,9 +115,9 @@ describe("artifact agent_id scoping", () => {
       headers: { "X-Tyrum-Agent-Id": "agent-beta" },
     });
 
-    expect(resp.status).toBe(403);
+    expect(resp.status).toBe(404);
     const body = (await resp.json()) as { error: string };
-    expect(body.error).toBe("forbidden");
+    expect(body.error).toBe("not_found");
   });
 
   it("passes when agent_id matches", async () => {
@@ -134,7 +136,9 @@ describe("artifact agent_id scoping", () => {
       "/",
       createArtifactRoutes({
         artifactMetadataDal: {
-          getById: vi.fn().mockResolvedValue(mockMeta),
+          getById: vi.fn().mockImplementation(async (_artifactId: string, agentId?: string) => {
+            return agentId === "agent-alpha" ? mockMeta : undefined;
+          }),
           listByRun: vi.fn().mockResolvedValue([]),
           listByStep: vi.fn().mockResolvedValue([]),
         } as any,
@@ -167,7 +171,9 @@ describe("artifact agent_id scoping", () => {
       "/",
       createArtifactRoutes({
         artifactMetadataDal: {
-          getById: vi.fn().mockResolvedValue(mockMeta),
+          getById: vi.fn().mockImplementation(async (_artifactId: string, agentId?: string) => {
+            return agentId === "agent-alpha" ? mockMeta : undefined;
+          }),
           listByRun: vi.fn().mockResolvedValue([]),
           listByStep: vi.fn().mockResolvedValue([]),
         } as any,
@@ -179,7 +185,7 @@ describe("artifact agent_id scoping", () => {
     );
 
     const resp = await app.request("/artifacts/art-1");
-    expect(resp.status).toBe(200);
+    expect(resp.status).toBe(404);
   });
 });
 

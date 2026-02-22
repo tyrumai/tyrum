@@ -50,8 +50,14 @@ describe("ArtifactMetadataDal", () => {
     });
     expect(row.agent_id).toBe("agent-a");
 
-    const fetched = await dal.getById("a-agent");
-    expect(fetched?.agent_id).toBe("agent-a");
+    const fetchedA = await dal.getById("a-agent", "agent-a");
+    expect(fetchedA?.agent_id).toBe("agent-a");
+
+    const fetchedB = await dal.getById("a-agent", "agent-b");
+    expect(fetchedB).toBeUndefined();
+
+    const fetchedDefault = await dal.getById("a-agent");
+    expect(fetchedDefault).toBeUndefined();
   });
 
   it("getById returns undefined for missing", async () => {

@@ -19,7 +19,10 @@ describe("artifact routes", () => {
     listByStep?: unknown;
   } = {}) {
     const artifactMetadataDal = {
-      getById: vi.fn().mockResolvedValue("getById" in overrides ? overrides.getById : sampleMeta),
+      getById: vi.fn().mockImplementation(async (_artifactId: string, agentId?: string) => {
+        if ("getById" in overrides) return overrides.getById;
+        return agentId === sampleMeta.agent_id ? sampleMeta : undefined;
+      }),
       listByRun: vi.fn().mockResolvedValue("listByRun" in overrides ? overrides.listByRun : [sampleMeta]),
       listByStep: vi.fn().mockResolvedValue("listByStep" in overrides ? overrides.listByStep : [sampleMeta]),
     };
@@ -41,7 +44,9 @@ describe("artifact routes", () => {
 
   it("GET /artifacts/:id returns metadata", async () => {
     const { app } = setup();
-    const res = await app.request("/artifacts/art-1");
+    const res = await app.request("/artifacts/art-1", {
+      headers: { "X-Tyrum-Agent-Id": "agent-a" },
+    });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { artifact: typeof sampleMeta };
     expect(body.artifact).toMatchObject({ id: "art-1", run_id: "run-1" });
@@ -59,7 +64,9 @@ describe("artifact routes", () => {
 
   it("GET /artifacts/:id?content=true streams content with correct Content-Type", async () => {
     const { app } = setup();
-    const res = await app.request("/artifacts/art-1?content=true");
+    const res = await app.request("/artifacts/art-1?content=true", {
+      headers: { "X-Tyrum-Agent-Id": "agent-a" },
+    });
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("text/plain");
     const text = await res.text();
@@ -68,7 +75,9 @@ describe("artifact routes", () => {
 
   it("GET /artifacts/:id?content=true returns 404 when blob not found", async () => {
     const { app } = setup({ get: undefined });
-    const res = await app.request("/artifacts/art-1?content=true");
+    const res = await app.request("/artifacts/art-1?content=true", {
+      headers: { "X-Tyrum-Agent-Id": "agent-a" },
+    });
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error: string };
     expect(body.error).toBe("blob_not_found");
@@ -76,14 +85,14 @@ describe("artifact routes", () => {
 
   // --- Agent-id scoping ---
 
-  it("GET /artifacts/:id with X-Tyrum-Agent-Id mismatch returns 403", async () => {
+  it("GET /artifacts/:id with X-Tyrum-Agent-Id mismatch returns 404", async () => {
     const { app } = setup();
     const res = await app.request("/artifacts/art-1", {
       headers: { "X-Tyrum-Agent-Id": "agent-b" },
     });
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
     const body = (await res.json()) as { error: string };
-    expect(body.error).toBe("forbidden");
+    expect(body.error).toBe("not_found");
   });
 
   it("GET /artifacts/:id with matching X-Tyrum-Agent-Id succeeds", async () => {
@@ -126,7 +135,9 @@ describe("artifact routes", () => {
 
   it("calls eventPublisher.publish on artifact fetch", async () => {
     const { app, eventPublisher } = setup();
-    await app.request("/artifacts/art-1");
+    await app.request("/artifacts/art-1", {
+      headers: { "X-Tyrum-Agent-Id": "agent-a" },
+    });
     // publish is fire-and-forget but should have been called
     expect(eventPublisher.publish).toHaveBeenCalledWith("artifact.fetched", {
       artifact_id: "art-1",

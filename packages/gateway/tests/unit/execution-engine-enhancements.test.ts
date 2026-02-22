@@ -179,6 +179,66 @@ describe("ExecutionEngine budget enforcement", () => {
     expect(run!.status).toBe("succeeded");
     expect(run!.spent_tokens).toBe(0);
   });
+
+  it("does not apply budget enforcement after run is cancelled", async () => {
+    db = openTestSqliteDb();
+    const engine = new ExecutionEngine({ db });
+
+    const { runId } = await engine.enqueuePlan({
+      key: "agent:a1:ch1:group:t1",
+      lane: "main",
+      planId: "plan-budget-cancelled-1",
+      requestId: "req-1",
+      steps: [action("Research")],
+      budget_tokens: 1,
+    });
+
+    let capturedSignal: AbortSignal | undefined;
+    let resolveStep: (() => void) | undefined;
+    let started: (() => void) | undefined;
+    const startedPromise = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+
+    const mockExecutor: StepExecutor = {
+      execute: vi.fn(
+        async (
+          _action: ActionPrimitive,
+          _planId: string,
+          _stepIndex: number,
+          _timeoutMs: number,
+          signal?: AbortSignal,
+        ): Promise<StepResult> => {
+          capturedSignal = signal;
+          started?.();
+          await new Promise<void>((resolve) => {
+            resolveStep = resolve;
+            setTimeout(resolve, 100);
+          });
+          return {
+            success: true,
+            result: { ok: true },
+            cost: { input_tokens: 5, output_tokens: 5, total_tokens: 10 },
+          };
+        },
+      ),
+    };
+
+    const tickPromise = engine.workerTick({ workerId: "w1", executor: mockExecutor });
+    await startedPromise;
+    await engine.cancelRun(runId);
+    expect(capturedSignal?.aborted).toBe(true);
+    resolveStep?.();
+    await tickPromise;
+
+    const run = await db.get<{ status: string; spent_tokens: number; paused_reason: string | null }>(
+      "SELECT status, spent_tokens, paused_reason FROM execution_runs WHERE run_id = ?",
+      [runId],
+    );
+    expect(run!.status).toBe("cancelled");
+    expect(run!.spent_tokens).toBe(0);
+    expect(run!.paused_reason).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -387,6 +447,70 @@ describe("ExecutionEngine AbortSignal cancellation", () => {
       [runId],
     );
     expect(run!.status).toBe("cancelled");
+  });
+
+  it("cancelled run is not overwritten by abort-failure retry path", async () => {
+    db = openTestSqliteDb();
+    const engine = new ExecutionEngine({ db });
+
+    const { runId } = await engine.enqueuePlan({
+      key: "agent:a1:ch1:group:t1",
+      lane: "main",
+      planId: "plan-cancel-no-clobber-1",
+      requestId: "req-1",
+      steps: [action("Research"), action("Message")],
+    });
+
+    let capturedSignal: AbortSignal | undefined;
+    let resolveStep: (() => void) | undefined;
+    let started: (() => void) | undefined;
+    const startedPromise = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+
+    const mockExecutor: StepExecutor = {
+      execute: vi.fn(
+        async (
+          _action: ActionPrimitive,
+          _planId: string,
+          _stepIndex: number,
+          _timeoutMs: number,
+          signal?: AbortSignal,
+        ): Promise<StepResult> => {
+          capturedSignal = signal;
+          started?.();
+          await new Promise<void>((resolve) => {
+            resolveStep = resolve;
+            setTimeout(resolve, 100);
+          });
+          if (signal?.aborted) {
+            throw new Error("aborted");
+          }
+          return { success: true, result: { ok: true } };
+        },
+      ),
+    };
+
+    const tickPromise = engine.workerTick({ workerId: "w1", executor: mockExecutor });
+    await startedPromise;
+    await engine.cancelRun(runId);
+    expect(capturedSignal?.aborted).toBe(true);
+    resolveStep?.();
+    await tickPromise;
+
+    const run = await db.get<{ status: string }>(
+      "SELECT status FROM execution_runs WHERE run_id = ?",
+      [runId],
+    );
+    expect(run!.status).toBe("cancelled");
+
+    const steps = await db.all<{ status: string }>(
+      "SELECT status FROM execution_steps WHERE run_id = ?",
+      [runId],
+    );
+    expect(steps.some((s) => s.status === "queued")).toBe(false);
+    expect(steps.some((s) => s.status === "failed")).toBe(false);
+    expect(steps.every((s) => s.status === "cancelled")).toBe(true);
   });
 
   it("cancelled run skips next step", async () => {

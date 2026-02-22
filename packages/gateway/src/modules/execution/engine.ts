@@ -501,14 +501,14 @@ export class ExecutionEngine {
         await tx.run(
           `UPDATE execution_runs
            SET status = ?, finished_at = ?
-           WHERE run_id = ? AND status != 'paused'`,
+           WHERE run_id = ? AND status IN ('queued', 'running')`,
           [failed ? "failed" : "succeeded", clock.nowIso, run.run_id],
         );
 
         await tx.run(
           `UPDATE execution_jobs
            SET status = ?
-           WHERE job_id = ?`,
+           WHERE job_id = ? AND status != 'cancelled'`,
           [failed ? "failed" : "completed", run.job_id],
         );
 
@@ -691,6 +691,15 @@ export class ExecutionEngine {
       [outcome.runId],
     );
     if (preCheck && preCheck.status === "cancelled") {
+      // Mark the claimed attempt cancelled so it doesn't linger as "running".
+      await this.db.run(
+        `UPDATE execution_attempts
+         SET status = 'cancelled', finished_at = ?, error = ?
+         WHERE attempt_id = ? AND status = 'running'`,
+        [clock.nowIso, "run cancelled before execution", outcome.attempt.attemptId],
+      );
+      await this.releaseLaneLease({ key: outcome.key, lane: outcome.lane, owner: input.workerId });
+      await this.releaseWorkspaceLease({ workspaceId: run.workspace_id, owner: input.workerId });
       return true;
     }
 
@@ -792,7 +801,8 @@ export class ExecutionEngine {
     if (totalTokens > 0) {
       const budgetRow = await this.db.get<{ budget_tokens: number | null; spent_tokens: number }>(
         `UPDATE execution_runs SET spent_tokens = spent_tokens + ?
-         WHERE run_id = ? RETURNING budget_tokens, spent_tokens`,
+         WHERE run_id = ? AND status != 'cancelled'
+         RETURNING budget_tokens, spent_tokens`,
         [totalTokens, opts.runId],
       );
 
@@ -811,11 +821,19 @@ export class ExecutionEngine {
         if (result.success) {
           await this.markAttemptSucceeded(opts, result, evidenceJson, null, artifactsJson, costJson);
           await this.db.run(
-            `UPDATE execution_steps SET status = 'succeeded' WHERE step_id = ?`,
+            `UPDATE execution_steps
+             SET status = 'succeeded'
+             WHERE step_id = ? AND status = 'running'`,
             [opts.stepId],
           );
         } else {
           await this.markAttemptFailed(opts, result.error ?? "unknown", evidenceJson, null, artifactsJson, costJson);
+          await this.db.run(
+            `UPDATE execution_steps
+             SET status = 'failed'
+             WHERE step_id = ? AND status = 'running'`,
+            [opts.stepId],
+          );
         }
 
         // Fail the run with budget_exceeded.
@@ -825,11 +843,13 @@ export class ExecutionEngine {
         );
         await this.db.run(
           `UPDATE execution_runs SET status = 'failed', finished_at = ?, paused_reason = 'budget_exceeded'
-           WHERE run_id = ?`,
+           WHERE run_id = ? AND status != 'cancelled'`,
           [this.clock().nowIso, opts.runId],
         );
         await this.db.run(
-          `UPDATE execution_jobs SET status = 'failed' WHERE job_id = ?`,
+          `UPDATE execution_jobs
+           SET status = 'failed'
+           WHERE job_id = ? AND status != 'cancelled'`,
           [opts.jobId],
         );
         await this.releaseLaneLease({ key: opts.key, lane: opts.lane, owner: opts.workerId });
@@ -922,9 +942,19 @@ export class ExecutionEngine {
       await this.db.run(
         `UPDATE execution_steps
          SET status = 'succeeded'
-         WHERE step_id = ?`,
+         WHERE step_id = ? AND status = 'running'`,
         [opts.stepId],
       );
+
+      const postRun = await this.db.get<{ status: string }>(
+        "SELECT status FROM execution_runs WHERE run_id = ?",
+        [opts.runId],
+      );
+      if (postRun?.status === "cancelled") {
+        await this.releaseLaneLease({ key: opts.key, lane: opts.lane, owner: opts.workerId });
+        await this.releaseWorkspaceLease({ workspaceId: opts.workspaceId, owner: opts.workerId });
+        return true;
+      }
 
       const idempotencyKey = opts.action.idempotency_key?.trim();
       if (idempotencyKey) {
@@ -1067,11 +1097,21 @@ export class ExecutionEngine {
     workerId: string;
     rollbackHint: string | null;
   }): Promise<boolean> {
+    const run = await this.db.get<{ status: string }>(
+      "SELECT status FROM execution_runs WHERE run_id = ?",
+      [opts.runId],
+    );
+    if (run?.status === "cancelled") {
+      await this.releaseLaneLease({ key: opts.key, lane: opts.lane, owner: opts.workerId });
+      await this.releaseWorkspaceLease({ workspaceId: opts.workspaceId, owner: opts.workerId });
+      return true;
+    }
+
     if (opts.attemptNum < Math.max(1, opts.maxAttempts)) {
       await this.db.run(
         `UPDATE execution_steps
          SET status = 'queued'
-         WHERE step_id = ?`,
+         WHERE step_id = ? AND status = 'running'`,
         [opts.stepId],
       );
       return true;
@@ -1080,7 +1120,7 @@ export class ExecutionEngine {
     await this.db.run(
       `UPDATE execution_steps
        SET status = 'failed'
-       WHERE step_id = ?`,
+       WHERE step_id = ? AND status = 'running'`,
       [opts.stepId],
     );
 
@@ -1094,14 +1134,14 @@ export class ExecutionEngine {
     await this.db.run(
       `UPDATE execution_runs
        SET status = 'failed', finished_at = ?
-       WHERE run_id = ?`,
+       WHERE run_id = ? AND status != 'cancelled'`,
       [this.clock().nowIso, opts.runId],
     );
 
     await this.db.run(
       `UPDATE execution_jobs
        SET status = 'failed'
-       WHERE job_id = ?`,
+       WHERE job_id = ? AND status != 'cancelled'`,
       [opts.jobId],
     );
 
@@ -1143,14 +1183,14 @@ export class ExecutionEngine {
     await this.db.run(
       `UPDATE execution_runs
        SET status = 'paused', paused_reason = ?, paused_detail = ?
-       WHERE run_id = ?`,
+       WHERE run_id = ? AND status != 'cancelled'`,
       [reason, this.redactText(detail), opts.runId],
     );
 
     await this.db.run(
       `UPDATE execution_steps
        SET status = 'paused'
-       WHERE step_id = ?`,
+       WHERE step_id = ? AND status != 'cancelled'`,
       [opts.stepId],
     );
 

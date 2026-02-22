@@ -23,6 +23,7 @@ export class StreamingChunker {
   private pendingNodes: IrNode[] = [];
   private pendingSize = 0;
   private inCodeFence = false;
+  private codeFenceBuffer: string | null = null;
   private chunks = 0;
 
   constructor(opts: StreamingChunkerOptions) {
@@ -51,6 +52,17 @@ export class StreamingChunker {
       this.buffer = "";
     }
 
+    if (this.inCodeFence && this.codeFenceBuffer) {
+      const fenceNodes = parseMarkdown(this.codeFenceBuffer);
+      this.codeFenceBuffer = null;
+      this.inCodeFence = false;
+      for (const node of fenceNodes) {
+        const nodeSize = estimateNodeSize(node);
+        this.pendingNodes.push(node);
+        this.pendingSize += nodeSize;
+      }
+    }
+
     if (this.pendingNodes.length > 0) {
       this.emitChunk();
     }
@@ -61,17 +73,30 @@ export class StreamingChunker {
   }
 
   private processLine(line: string): void {
-    // Track code fence state
-    if (/^```/.test(line.trimStart())) {
-      this.inCodeFence = !this.inCodeFence;
-    }
-
-    // Parse this line as markdown to get IR nodes
-    const lineNodes = parseMarkdown(line);
-    for (const node of lineNodes) {
-      const nodeSize = estimateNodeSize(node);
-      this.pendingNodes.push(node);
-      this.pendingSize += nodeSize;
+    const isFenceLine = line.trimStart().startsWith("```");
+    if (this.inCodeFence) {
+      this.codeFenceBuffer = (this.codeFenceBuffer ?? "") + line + "\n";
+      if (isFenceLine) {
+        this.inCodeFence = false;
+        const fenceNodes = parseMarkdown(this.codeFenceBuffer);
+        this.codeFenceBuffer = null;
+        for (const node of fenceNodes) {
+          const nodeSize = estimateNodeSize(node);
+          this.pendingNodes.push(node);
+          this.pendingSize += nodeSize;
+        }
+      }
+    } else if (isFenceLine) {
+      this.inCodeFence = true;
+      this.codeFenceBuffer = line + "\n";
+    } else {
+      // Parse this line as markdown to get IR nodes
+      const lineNodes = parseMarkdown(line);
+      for (const node of lineNodes) {
+        const nodeSize = estimateNodeSize(node);
+        this.pendingNodes.push(node);
+        this.pendingSize += nodeSize;
+      }
     }
 
     // Only emit a chunk at a safe boundary:

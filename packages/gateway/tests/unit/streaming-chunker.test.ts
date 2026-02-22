@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { StreamingChunker } from "../../src/modules/markdown/streaming-chunker.js";
 import { parseMarkdown } from "../../src/modules/markdown/parser.js";
-import { chunkIrNodes } from "../../src/modules/markdown/chunker.js";
 import type { IrNode } from "../../src/modules/markdown/parser.js";
 
 function collectChunks(text: string, maxChars: number): IrNode[][] {
@@ -51,14 +50,17 @@ describe("StreamingChunker", () => {
 
     const chunks = collectChunks(text, 20);
 
-    // No chunk should contain an opening ``` without a closing ``` (or vice versa)
-    for (const chunk of chunks) {
-      const codeBlocks = chunk.filter((n) => n.kind === "code_block");
-      for (const block of codeBlocks) {
-        // Code blocks should have content (not be partial)
-        expect(block.content).toBeDefined();
-      }
-    }
+    const expected = parseMarkdown(text);
+    const expectedCode = expected.find((n) => n.kind === "code_block");
+    expect(expectedCode).toBeDefined();
+
+    const allNodes = chunks.flat();
+    const codeBlocks = allNodes.filter((n) => n.kind === "code_block");
+    expect(codeBlocks).toHaveLength(1);
+    expect(codeBlocks[0]!.language).toBe("js");
+    expect(codeBlocks[0]!.content).toBe(expectedCode!.content);
+    expect(codeBlocks[0]!.content).toContain("const x = 1;");
+    expect(codeBlocks[0]!.content).toContain("const v = 5;");
   });
 
   it("handles token splitting (character-by-character push)", () => {
