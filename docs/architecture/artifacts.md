@@ -15,7 +15,7 @@ Artifact metadata includes:
 - execution scope (`run_id`, `step_id`, `attempt_id`)
 - `labels[]` (for example `screenshot`, `diff`, `log`, `http_trace`)
 - `sensitivity` (for example `normal` or `sensitive`)
-- `size_bytes`, `sha256`, `content_type`, `created_at`
+- `size_bytes`, `sha256`, `mime_type`, `created_at`
 
 ## Artifact store
 
@@ -36,18 +36,29 @@ Artifacts are created by workers, ToolRunner, and nodes:
 
 ## Fetch and access control
 
-Artifact bytes are fetched through the gateway. Clients do not read directly from artifact storage.
+Artifact access is mediated by the gateway. Clients do not access artifact storage without gateway authorization.
 
 Authorization depends on:
 
-- authenticated client device identity
+- authenticated operator identity (user + client device identity)
 - agent/workspace scope
 - artifact `labels` and `sensitivity`
-- the effective `PolicyBundle` snapshot attached to the run
+- the policy snapshot reference attached to the artifact/run
+
+### Durable linkage (anti-IDOR hard rule)
+
+Authorization MUST require durable linkage between the requested `artifact_id` and an authorized scope.
+
+In other words: possession of an `artifact_id` is never sufficient. The gateway must prove the artifact is referenced by durable state the requester is authorized to access, for example:
+
+- linked to an execution scope (`run_id`, `step_id`, `attempt_id`) that the requester is authorized for, or
+- linked to another durable, policy-authorized scope (for example an export/snapshot object).
+
+If an artifact is not durably linked, the gateway must deny fetch (even if the bytes exist in blob storage). This prevents insecure direct object reference (IDOR) attacks and makes authorization explainable and auditable.
 
 For object storage deployments, the gateway issues short-lived signed URLs only after authorization checks succeed. For filesystem deployments, the gateway streams bytes directly.
 
-Artifact fetches are auditable and emit events (for example `artifact.fetched`) that include who accessed what and the policy decision reference.
+Artifact fetches are auditable and emit events (for example `artifact.fetched`) that include what was accessed and requester metadata.
 
 ```mermaid
 sequenceDiagram
@@ -76,4 +87,3 @@ Exports preserve:
 - artifact references and metadata (including hashes)
 - minimal indexes needed to inspect and replay runs
 - optional artifact bytes, depending on policy and operator selection
-

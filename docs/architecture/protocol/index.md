@@ -31,7 +31,11 @@ The protocol works across gateway restarts and multi-instance deployments:
 
 ## Protocol revisions
 
-The handshake includes a `protocol_rev` integer. A connection is accepted only when the peer and gateway agree on the same revision. The protocol uses run-scoped identifiers (`run_id`, `step_id`, `attempt_id`) and avoids ambiguous plan identifiers.
+The handshake includes a `protocol_rev` integer. A connection is accepted only when the peer and gateway agree on a supported revision.
+
+Revisions allow evolving request types and fields without a major-version bump. The gateway may support multiple revisions concurrently, but it must select a single revision per connection and reject unsupported revisions.
+
+The protocol uses run-scoped identifiers (`run_id`, `step_id`, `attempt_id`) and avoids ambiguous plan identifiers.
 
 ## Message classes
 
