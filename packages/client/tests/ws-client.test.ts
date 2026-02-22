@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { WebSocketServer } from "ws";
 import type { WebSocket as WsWebSocket } from "ws";
-import { chmod, mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TyrumClient } from "../src/ws-client.js";
@@ -721,7 +721,8 @@ describe("TyrumClient", () => {
   it("retries identity creation after transient filesystem failures", async () => {
     server = createTestServer();
 
-    await chmod(tyrumHome!, 0o500);
+    const keyPath = join(tyrumHome!, "device-ed25519.json");
+    await mkdir(keyPath);
 
     client = new TyrumClient({
       url: server.url,
@@ -741,19 +742,15 @@ describe("TyrumClient", () => {
 
     client.connect();
 
-    await withTimeout(server.waitForClient(), 2_000, "first ws connection");
-    await withTimeout(disconnectedP, 2_000, "disconnected after identity failure");
+    await withTimeout(server.waitForClient(), 5_000, "first ws connection");
+    await withTimeout(disconnectedP, 5_000, "disconnected after identity failure");
 
-    try {
-      await chmod(tyrumHome!, 0o700);
+    await rm(keyPath, { recursive: true, force: true });
 
-      const ws2 = await withTimeout(server.waitForClient(), 2_000, "reconnect ws connection");
-      await acceptConnect(ws2);
-      await withTimeout(connectedP, 2_000, "connected after retry");
-      expect(client.connected).toBe(true);
-    } finally {
-      await chmod(tyrumHome!, 0o700).catch(() => undefined);
-    }
+    const ws2 = await withTimeout(server.waitForClient(), 5_000, "reconnect ws connection");
+    await acceptConnect(ws2);
+    await withTimeout(connectedP, 5_000, "connected after retry");
+    expect(client.connected).toBe(true);
   });
 
   it("sends token in websocket subprotocol metadata", async () => {
