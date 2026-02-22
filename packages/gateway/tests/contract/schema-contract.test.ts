@@ -33,7 +33,11 @@ describe("StateStore schema contract (sqlite vs postgres)", () => {
     migrate(sqlite, sqliteMigrationsDir);
 
     // Postgres (pg-mem, node-postgres adapter)
-    const mem = newDb();
+    // pg-mem can throw on some valid DDL when a statement becomes a no-op
+    // (for example, CREATE TABLE IF NOT EXISTS after the table already exists).
+    // These contract tests only need column introspection, so disable strict
+    // AST coverage checks.
+    const mem = newDb({ noAstCoverageCheck: true });
     const { Client } = mem.adapters.createPg();
     const pg = new Client();
     await pg.connect();
@@ -76,4 +80,3 @@ describe("StateStore schema contract (sqlite vs postgres)", () => {
     }
   });
 });
-

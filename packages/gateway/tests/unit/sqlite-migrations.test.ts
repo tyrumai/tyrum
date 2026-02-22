@@ -9,6 +9,7 @@ const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
 const MIGRATIONS_BEFORE_SESSIONS_AGENT_ID = [
   "001_init.sql",
+  "001b_backfill_baseline_tables.sql",
   "002_inbound_dedupe_composite_pk.sql",
   "003_policy_overrides_policy_snapshot_id_text.sql",
   "004_capability_memories_unique_agent_id.sql",
@@ -29,6 +30,73 @@ function markApplied(db: ReturnType<typeof createDatabase>, names: readonly stri
 }
 
 describe("SQLite migrations (upgrade compatibility)", () => {
+  it("backfills baseline-only tables when 001_init.sql was applied before they existed", () => {
+    const db = createDatabase(":memory:");
+    markApplied(db, ["001_init.sql"]);
+
+    db.exec(`
+      -- Older databases have these core tables but may be missing newer baseline-only tables.
+      CREATE TABLE watchers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT
+      );
+
+      CREATE TABLE capability_memories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        capability_type TEXT NOT NULL,
+        capability_identifier TEXT NOT NULL,
+        executor_kind TEXT NOT NULL,
+        selectors TEXT,
+        outcome_metadata TEXT,
+        cost_profile TEXT,
+        anti_bot_notes TEXT,
+        result_summary TEXT,
+        success_count INTEGER NOT NULL DEFAULT 1,
+        last_success_at TEXT,
+        metadata TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE TABLE sessions (
+        session_id TEXT NOT NULL PRIMARY KEY,
+        channel TEXT NOT NULL,
+        thread_id TEXT NOT NULL,
+        summary TEXT NOT NULL DEFAULT '',
+        turns_json TEXT NOT NULL DEFAULT '[]',
+        workspace_id TEXT NOT NULL DEFAULT 'default',
+        compacted_summary TEXT DEFAULT '',
+        compaction_count INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+
+    migrate(db, migrationsDir);
+
+    const expectedTables = [
+      "artifact_metadata",
+      "context_reports",
+      "inbound_dedupe",
+      "model_auth_profiles",
+      "node_capabilities",
+      "nodes",
+      "outbound_idempotency",
+      "policy_overrides",
+      "policy_snapshots",
+      "presence_entries",
+      "watcher_firings",
+    ] as const;
+
+    for (const table of expectedTables) {
+      const res = db
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+        .all(table) as Array<{ name: string }>;
+      expect(res, `sqlite should have ${table}`).toHaveLength(1);
+    }
+
+    db.close();
+  });
+
   it("preserves sessions compaction columns when present during 006_sessions_agent_id", () => {
     const db = createDatabase(":memory:");
     markApplied(db, MIGRATIONS_BEFORE_SESSIONS_AGENT_ID);
@@ -147,4 +215,3 @@ describe("SQLite migrations (upgrade compatibility)", () => {
     db.close();
   });
 });
-
