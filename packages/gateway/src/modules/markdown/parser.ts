@@ -28,6 +28,8 @@ export interface IrNode {
   url?: string; // for links
 }
 
+export const CODE_FENCE_START_RE = /^```(\w*)$/;
+
 export function parseMarkdown(text: string): IrNode[] {
   const lines = text.split("\n");
   const nodes: IrNode[] = [];
@@ -62,7 +64,7 @@ export function parseMarkdown(text: string): IrNode[] {
     }
 
     // Fenced code block
-    const codeMatch = line.match(/^```(\w*)$/);
+    const codeMatch = line.match(CODE_FENCE_START_RE);
     if (codeMatch) {
       const language = codeMatch[1] || undefined;
       const codeLines: string[] = [];

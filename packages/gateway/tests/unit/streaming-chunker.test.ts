@@ -63,6 +63,38 @@ describe("StreamingChunker", () => {
     expect(codeBlocks[0]!.content).toContain("const v = 5;");
   });
 
+  it("does not close fences on indented ``` lines", () => {
+    const text = [
+      "Before code.",
+      "",
+      "```md",
+      "Some code line",
+      "    ```",
+      "Still inside code",
+      "```",
+      "",
+      "After code.",
+    ].join("\n");
+
+    const chunks = collectChunks(text, 20);
+    const allNodes = chunks.flat();
+
+    const codeBlocks = allNodes.filter((n) => n.kind === "code_block");
+    expect(codeBlocks).toHaveLength(1);
+    expect(codeBlocks[0]!.language).toBe("md");
+    expect(codeBlocks[0]!.content).toContain("Some code line");
+    expect(codeBlocks[0]!.content).toContain("    ```");
+    expect(codeBlocks[0]!.content).toContain("Still inside code");
+    expect(codeBlocks[0]!.content).not.toContain("After code.");
+
+    const afterParagraph = allNodes.find(
+      (n) =>
+        n.kind === "paragraph"
+        && n.children?.some((c) => c.kind === "text" && c.content === "After code."),
+    );
+    expect(afterParagraph).toBeDefined();
+  });
+
   it("handles token splitting (character-by-character push)", () => {
     const text = "Hello world.\n";
     const chunks: IrNode[][] = [];

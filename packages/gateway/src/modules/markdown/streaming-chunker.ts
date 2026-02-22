@@ -8,7 +8,7 @@
  */
 
 import type { IrNode } from "./parser.js";
-import { parseMarkdown } from "./parser.js";
+import { CODE_FENCE_START_RE, parseMarkdown } from "./parser.js";
 import { estimateNodeSize } from "./chunker.js";
 
 export interface StreamingChunkerOptions {
@@ -73,10 +73,14 @@ export class StreamingChunker {
   }
 
   private processLine(line: string): void {
-    const isFenceLine = line.trimStart().startsWith("```");
+    // Keep fence detection aligned with the parser:
+    // - Start fence: strict `^```(\\w*)$` (no leading whitespace, no trailing content)
+    // - End fence: any line starting with ``` (no leading whitespace)
+    const isFenceStartLine = CODE_FENCE_START_RE.test(line);
+    const isFenceEndLine = line.startsWith("```");
     if (this.inCodeFence) {
       this.codeFenceBuffer = (this.codeFenceBuffer ?? "") + line + "\n";
-      if (isFenceLine) {
+      if (isFenceEndLine) {
         this.inCodeFence = false;
         const fenceNodes = parseMarkdown(this.codeFenceBuffer);
         this.codeFenceBuffer = null;
@@ -86,7 +90,7 @@ export class StreamingChunker {
           this.pendingSize += nodeSize;
         }
       }
-    } else if (isFenceLine) {
+    } else if (isFenceStartLine) {
       this.inCodeFence = true;
       this.codeFenceBuffer = line + "\n";
     } else {
