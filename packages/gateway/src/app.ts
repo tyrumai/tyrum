@@ -99,6 +99,17 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   const authProfileDal = new AuthProfileDal(container.db);
   const pinDal = new SessionProviderPinDal(container.db);
 
+  const secretProviderForAgent = (() => {
+    if (!opts.secretProvider) return undefined;
+    const defaultSecretProvider = opts.secretProvider;
+    return async (agentId: string) => {
+      if (opts.agents) {
+        return await opts.agents.getSecretProvider(agentId);
+      }
+      return defaultSecretProvider;
+    };
+  })();
+
   // Apply auth middleware if a token store is provided
   if (opts.tokenStore) {
     app.use("*", createAuthMiddleware(opts.tokenStore));
@@ -251,17 +262,11 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   // Gateway-hosted web API compatibility layer for former Next handlers.
   app.route("/", createWebApiRoutes());
 
-  if (opts.secretProvider) {
-    const defaultSecretProvider = opts.secretProvider;
+  if (secretProviderForAgent) {
     app.route(
       "/",
       createSecretRoutes({
-        secretProviderForAgent: async (agentId: string) => {
-          if (opts.agents) {
-            return await opts.agents.getSecretProvider(agentId);
-          }
-          return defaultSecretProvider;
-        },
+        secretProviderForAgent,
       }),
     );
   }
@@ -284,24 +289,17 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   // Model proxy routes are optional — only register if config path is set
   if (container.config?.modelGatewayConfigPath) {
     try {
-      const modelProxyDeps = (() => {
-        if (!opts.secretProvider) return undefined;
-        const defaultSecretProvider = opts.secretProvider;
-        return {
+      const modelProxyDeps = secretProviderForAgent
+        ? {
           auth: {
             authProfileDal,
             pinDal,
-            secretProviderForAgent: async (agentId: string) => {
-              if (opts.agents) {
-                return await opts.agents.getSecretProvider(agentId);
-              }
-              return defaultSecretProvider;
-            },
+            secretProviderForAgent,
             logger: container.logger,
             wsCluster: opts.wsCluster,
           },
-        };
-      })();
+        }
+        : undefined;
 
       const modelProxy = createModelProxyRoutes(
         container.config.modelGatewayConfigPath,
