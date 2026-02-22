@@ -11,11 +11,11 @@ describe("AgentConfig", () => {
   it("parses and applies defaults", () => {
     const parsed = AgentConfig.parse({
       model: {
-        model: "frontier-gpt-4o",
+        model: "openai/gpt-4.1",
       },
     });
 
-    expect(parsed.model.model).toBe("frontier-gpt-4o");
+    expect(parsed.model.model).toBe("openai/gpt-4.1");
     expect(parsed.skills.enabled).toEqual([]);
     expect(parsed.mcp.enabled).toEqual([]);
     expect(parsed.tools.allow).toEqual([]);

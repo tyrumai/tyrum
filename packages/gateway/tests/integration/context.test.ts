@@ -3,13 +3,13 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestApp } from "./helpers.js";
+import { createStubLanguageModel } from "../unit/stub-language-model.js";
 
 async function writeWorkspace(home: string): Promise<void> {
   await writeFile(
     join(home, "agent.yml"),
     `model:
-  model: frontier-gpt-4o
-  base_url: http://llm.test/v1
+  model: openai/gpt-4.1
 skills:
   enabled: []
 mcp:
@@ -45,25 +45,6 @@ describe("/context", () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-context-"));
     await writeWorkspace(homeDir);
     process.env["TYRUM_HOME"] = homeDir;
-
-    const fetchMock = vi.fn(async () => {
-      return new Response(
-        JSON.stringify({
-          choices: [
-            {
-              message: {
-                content: "ok",
-              },
-            },
-          ],
-        }),
-        {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        },
-      );
-    });
-    vi.stubGlobal("fetch", fetchMock);
   });
 
   afterEach(async () => {
@@ -80,7 +61,9 @@ describe("/context", () => {
   });
 
   it("returns last-known context report metadata after an agent turn", async () => {
-    const { app, container, agents } = await createTestApp();
+    const { app, container, agents } = await createTestApp({
+      languageModel: createStubLanguageModel("ok"),
+    });
 
     const turnRes = await app.request("/agent/turn", {
       method: "POST",

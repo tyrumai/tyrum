@@ -23,6 +23,10 @@ import type { NodePairingDal } from "./modules/node/pairing-dal.js";
 import type { ContextReportDal } from "./modules/context/report-dal.js";
 import type { SecretResolutionAuditDal } from "./modules/secret/resolution-audit-dal.js";
 import type { SqlDb } from "./statestore/types.js";
+import type { ModelsDevService } from "./modules/models/models-dev-service.js";
+import type { OauthPendingDal } from "./modules/oauth/pending-dal.js";
+import type { OauthRefreshLeaseDal } from "./modules/oauth/refresh-lease-dal.js";
+import type { OAuthProviderRegistry } from "./modules/oauth/provider-registry.js";
 
 import { createEventBus } from "./event-bus.js";
 import { MemoryDal as MemoryDalImpl } from "./modules/memory/dal.js";
@@ -57,11 +61,16 @@ import { Logger } from "./modules/observability/logger.js";
 import { SqliteDb } from "./statestore/sqlite.js";
 import { PostgresDb } from "./statestore/postgres.js";
 import { isPostgresDbUri } from "./statestore/db-uri.js";
+import { ModelsDevCacheDal } from "./modules/models/models-dev-cache-dal.js";
+import { ModelsDevRefreshLeaseDal } from "./modules/models/models-dev-refresh-lease-dal.js";
+import { ModelsDevService as ModelsDevServiceImpl } from "./modules/models/models-dev-service.js";
+import { OauthPendingDal as OauthPendingDalImpl } from "./modules/oauth/pending-dal.js";
+import { OauthRefreshLeaseDal as OauthRefreshLeaseDalImpl } from "./modules/oauth/refresh-lease-dal.js";
+import { OAuthProviderRegistry as OAuthProviderRegistryImpl } from "./modules/oauth/provider-registry.js";
 
 export interface GatewayConfig {
   dbPath: string;
   migrationsDir: string;
-  modelGatewayConfigPath?: string;
   tyrumHome?: string;
 }
 
@@ -87,6 +96,10 @@ export interface GatewayContainer {
   jobQueue: JobQueue;
   redactionEngine: RedactionEngine;
   artifactStore: ArtifactStore;
+  modelsDev: ModelsDevService;
+  oauthPendingDal: OauthPendingDal;
+  oauthRefreshLeaseDal: OauthRefreshLeaseDal;
+  oauthProviderRegistry: OAuthProviderRegistry;
   logger: Logger;
   config: GatewayConfig;
 }
@@ -160,6 +173,18 @@ function wireContainer(
     overrideDal: policyOverrideDal,
   });
 
+  const modelsDevCacheDal = new ModelsDevCacheDal(db);
+  const modelsDevRefreshLeaseDal = new ModelsDevRefreshLeaseDal(db);
+  const modelsDev = new ModelsDevServiceImpl({
+    cacheDal: modelsDevCacheDal,
+    leaseDal: modelsDevRefreshLeaseDal,
+    logger,
+  });
+
+  const oauthPendingDal = new OauthPendingDalImpl(db);
+  const oauthRefreshLeaseDal = new OauthRefreshLeaseDalImpl(db);
+  const oauthProviderRegistry = new OAuthProviderRegistryImpl();
+
   return {
     db,
     memoryDal,
@@ -182,6 +207,10 @@ function wireContainer(
     jobQueue,
     redactionEngine,
     artifactStore,
+    modelsDev,
+    oauthPendingDal,
+    oauthRefreshLeaseDal,
+    oauthProviderRegistry,
     logger,
     config,
   };

@@ -1,66 +1,46 @@
 /**
- * Embedding pipeline -- calls the model proxy /v1/embeddings endpoint
- * and integrates with VectorDal for storage and search.
+ * Embedding pipeline — uses AI SDK embedding models and integrates with VectorDal.
  */
 
+import { embed, type EmbeddingModel } from "ai";
 import type { VectorDal, VectorSearchResult } from "./vector-dal.js";
 
 export interface EmbeddingPipelineOptions {
   vectorDal: VectorDal;
   agentId?: string;
-  baseUrl: string;
-  model: string;
-  fetchImpl?: typeof fetch;
-}
-
-interface EmbeddingsResponse {
-  data?: Array<{ embedding?: number[] }>;
+  embeddingModel: EmbeddingModel;
+  embeddingModelId: string;
 }
 
 export class EmbeddingPipeline {
   private readonly vectorDal: VectorDal;
   private readonly agentId: string | undefined;
-  private readonly embeddingsUrl: string;
-  private readonly model: string;
-  private readonly fetchImpl: typeof fetch;
+  private readonly embeddingModel: EmbeddingModel;
+  private readonly embeddingModelId: string;
 
   constructor(opts: EmbeddingPipelineOptions) {
     this.vectorDal = opts.vectorDal;
     this.agentId = opts.agentId?.trim() || undefined;
-    const normalized = opts.baseUrl.replace(/\/$/, "");
-    this.embeddingsUrl = normalized.endsWith("/v1")
-      ? `${normalized}/embeddings`
-      : `${normalized}/v1/embeddings`;
-    this.model = opts.model;
-    this.fetchImpl = opts.fetchImpl ?? fetch;
+    this.embeddingModel = opts.embeddingModel;
+    this.embeddingModelId = opts.embeddingModelId.trim();
   }
 
-  /** Call the embeddings endpoint to get a vector for text. */
+  /** Embed a single text value into a vector. */
   async embed(text: string): Promise<number[]> {
-    const response = await this.fetchImpl(this.embeddingsUrl, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        model: this.model,
-        input: text,
-      }),
+    const result = await embed({
+      model: this.embeddingModel,
+      value: text,
     });
 
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(
-        `Embeddings request failed (${response.status}): ${body}`,
-      );
+    const embedding = result.embedding as unknown;
+    if (!Array.isArray(embedding)) {
+      throw new Error("Embedding result missing embedding array");
+    }
+    if (!embedding.every((v) => typeof v === "number" && Number.isFinite(v))) {
+      throw new Error("Embedding result contains non-numeric values");
     }
 
-    const payload = (await response.json()) as EmbeddingsResponse;
-    const embedding = payload.data?.[0]?.embedding;
-
-    if (!embedding || !Array.isArray(embedding)) {
-      throw new Error("Embeddings response missing data[0].embedding");
-    }
-
-    return embedding;
+    return embedding as number[];
   }
 
   /** Embed text and store it in the vector DAL. Returns the embedding_id. */
@@ -70,7 +50,7 @@ export class EmbeddingPipeline {
     metadata?: unknown,
   ): Promise<string> {
     const vector = await this.embed(text);
-    return await this.vectorDal.insertEmbedding(label, vector, this.model, metadata, this.agentId);
+    return await this.vectorDal.insertEmbedding(label, vector, this.embeddingModelId, metadata, this.agentId);
   }
 
   /** Embed a query and search for similar vectors. Returns top K results. */

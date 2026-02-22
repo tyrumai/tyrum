@@ -82,7 +82,7 @@ export function resolveMemoryDir(home = resolveTyrumHome()): string {
 }
 
 const DEFAULT_AGENT_YAML = `model:
-  model: tyrum-stub-8b
+  model: openai/gpt-4.1
 skills:
   enabled: []
 mcp:

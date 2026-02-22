@@ -21,7 +21,6 @@ export interface StatusRouteDeps {
   otelEnabled: boolean;
   connectionManager?: ConnectionManager;
   policyService?: PolicyService;
-  modelGatewayConfigPath?: string;
   authProfileDal?: AuthProfileDal;
   pinDal?: SessionProviderPinDal;
 }
@@ -65,9 +64,6 @@ export function createStatusRoutes(deps: StatusRouteDeps): Hono {
       is_exposed: !deps.isLocalOnly,
       otel_enabled: deps.otelEnabled,
       ws: deps.connectionManager?.getStats() ?? null,
-      model_gateway: deps.modelGatewayConfigPath
-        ? { enabled: true, config_path: deps.modelGatewayConfigPath }
-        : { enabled: false, config_path: null as null },
       auth_profiles: authProfiles,
       policy,
     });

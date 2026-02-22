@@ -6,34 +6,15 @@ import { fileURLToPath } from "node:url";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import { executePlaybookLlmStep } from "../../src/modules/playbook/llm-step.js";
+import { createStubLanguageModel } from "./stub-language-model.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
-function resolveFetchUrl(urlOrInput: string | URL | Request): string {
-  if (typeof urlOrInput === "string") return urlOrInput;
-  if (urlOrInput instanceof URL) return urlOrInput.toString();
-  const maybeRequest = urlOrInput as unknown as { url?: string };
-  if (typeof maybeRequest.url === "string") return maybeRequest.url;
-  return String(urlOrInput);
-}
-
-function createSimpleFetchStub(reply: string): typeof fetch {
-  return (async (urlOrInput: string | URL | Request, _init?: RequestInit) => {
-    const url = resolveFetchUrl(urlOrInput);
-    if (!url.includes("/chat/completions")) {
-      return new Response("not found", { status: 404 });
-    }
-    return new Response(
-      JSON.stringify({ choices: [{ message: { content: reply } }] }),
-      { status: 200, headers: { "content-type": "application/json" } },
-    );
-  }) as typeof fetch;
-}
-
 describe("executePlaybookLlmStep", () => {
   let homeDir: string | undefined;
   let container: GatewayContainer | undefined;
+  const fetch404 = (async () => new Response("not found", { status: 404 })) as typeof fetch;
 
   afterEach(async () => {
     await container?.db.close();
@@ -45,7 +26,7 @@ describe("executePlaybookLlmStep", () => {
     }
   });
 
-  async function makeRuntime(fetchImpl: typeof fetch): Promise<AgentRuntime> {
+  async function makeRuntime(reply: string): Promise<AgentRuntime> {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-llm-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });
 
@@ -54,7 +35,7 @@ describe("executePlaybookLlmStep", () => {
       join(homeDir, "agent.yml"),
       [
         "model:",
-        "  model: test-model",
+        "  model: openai/gpt-4.1",
         "skills:",
         "  enabled: []",
         "mcp:",
@@ -79,7 +60,8 @@ describe("executePlaybookLlmStep", () => {
     return new AgentRuntime({
       container,
       home: homeDir,
-      fetchImpl,
+      languageModel: createStubLanguageModel(reply),
+      fetchImpl: fetch404,
       mcpManager: mcpManager as unknown as ConstructorParameters<
         typeof AgentRuntime
       >[0]["mcpManager"],
@@ -88,7 +70,7 @@ describe("executePlaybookLlmStep", () => {
   }
 
   it("fails when output=json but reply is not JSON", async () => {
-    const runtime = await makeRuntime(createSimpleFetchStub("not json"));
+    const runtime = await makeRuntime("not json");
     const res = await executePlaybookLlmStep(runtime, {
       channel: "playbook",
       thread_id: "run-1",
@@ -100,7 +82,7 @@ describe("executePlaybookLlmStep", () => {
   });
 
   it("parses reply when output=json", async () => {
-    const runtime = await makeRuntime(createSimpleFetchStub("{\"a\":1}"));
+    const runtime = await makeRuntime("{\"a\":1}");
     const res = await executePlaybookLlmStep(runtime, {
       channel: "playbook",
       thread_id: "run-2",
@@ -112,7 +94,7 @@ describe("executePlaybookLlmStep", () => {
   });
 
   it("returns text when output is unspecified", async () => {
-    const runtime = await makeRuntime(createSimpleFetchStub("hello"));
+    const runtime = await makeRuntime("hello");
     const res = await executePlaybookLlmStep(runtime, {
       channel: "playbook",
       thread_id: "run-3",
@@ -122,4 +104,3 @@ describe("executePlaybookLlmStep", () => {
     expect(res.output_text).toBe("hello");
   });
 });
-

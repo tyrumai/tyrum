@@ -8,83 +8,78 @@ import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import type { ApprovalRow } from "../../src/modules/approval/dal.js";
 import { createApprovalRoutes } from "../../src/routes/approval.js";
 import { Hono } from "hono";
+import { simulateReadableStream } from "ai";
+import { MockLanguageModelV3 } from "ai/test";
+import { createStubLanguageModel } from "../unit/stub-language-model.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
-/**
- * Creates a fetch stub that simulates an LLM server.
- * On the first LLM call, returns tool_calls. On subsequent LLM calls, returns final text.
- * Non-LLM calls (e.g. embedding endpoint) return a 404 so they are handled gracefully.
- */
-function resolveFetchUrl(urlOrInput: string | URL | Request): string {
-  if (typeof urlOrInput === "string") return urlOrInput;
-  if (urlOrInput instanceof URL) return urlOrInput.toString();
-  const maybeRequest = urlOrInput as unknown as { url?: string };
-  if (typeof maybeRequest.url === "string") return maybeRequest.url;
-  return String(urlOrInput);
+function usage() {
+  return {
+    inputTokens: {
+      total: 10,
+      noCache: 10,
+      cacheRead: undefined,
+      cacheWrite: undefined,
+    },
+    outputTokens: {
+      total: 5,
+      text: 5,
+      reasoning: undefined,
+    },
+  };
 }
 
-function createToolCallFetchStub(
-  toolCalls: Array<{
-    id: string;
-    function: { name: string; arguments: string };
-  }>,
-  finalReply: string,
-): typeof fetch {
-  let llmCallCount = 0;
-  return (async (urlOrInput: string | URL | Request, _init?: RequestInit) => {
-    const url = resolveFetchUrl(urlOrInput);
+function createToolLoopLanguageModel(input: {
+  toolCalls: Array<{ id: string; name: string; arguments: string }>;
+  finalReply: string;
+  mode?: "once" | "infinite";
+}): MockLanguageModelV3 {
+  let callCount = 0;
 
-    // Only count LLM chat/completions calls
-    if (!url.includes("/chat/completions")) {
-      return new Response("not found", { status: 404 });
-    }
-
-    llmCallCount++;
-    if (llmCallCount === 1) {
-      // First LLM call: return tool_calls
-      return new Response(
-        JSON.stringify({
-          choices: [
-            {
-              message: {
-                content: null,
-                tool_calls: toolCalls.map((tc) => ({
-                  id: tc.id,
-                  type: "function",
-                  function: tc.function,
-                })),
-              },
-            },
-          ],
-        }),
-        { status: 200, headers: { "content-type": "application/json" } },
-      );
-    }
-    // Subsequent LLM calls: return final text
-    return new Response(
-      JSON.stringify({
-        choices: [{ message: { content: finalReply } }],
+  return new MockLanguageModelV3({
+    doStream: async () => ({
+      stream: simulateReadableStream({
+        chunks: [
+          { type: "text-start" as const, id: "text-1" },
+          { type: "text-delta" as const, id: "text-1", delta: input.finalReply },
+          { type: "text-end" as const, id: "text-1" },
+          {
+            type: "finish" as const,
+            finishReason: { unified: "stop" as const, raw: undefined },
+            logprobs: undefined,
+            usage: usage(),
+          },
+        ],
       }),
-      { status: 200, headers: { "content-type": "application/json" } },
-    );
-  }) as typeof fetch;
-}
+    }),
+    doGenerate: async () => {
+      callCount += 1;
 
-function createSimpleFetchStub(reply: string): typeof fetch {
-  return (async (urlOrInput: string | URL | Request, _init?: RequestInit) => {
-    const url = resolveFetchUrl(urlOrInput);
+      const shouldReturnToolCalls = input.mode === "infinite" || callCount === 1;
+      if (shouldReturnToolCalls) {
+        return {
+          content: input.toolCalls.map((tc) => ({
+            type: "tool-call" as const,
+            toolCallId: tc.id,
+            toolName: tc.name,
+            input: tc.arguments,
+          })),
+          finishReason: { unified: "tool-calls" as const, raw: undefined },
+          usage: usage(),
+          warnings: [],
+        };
+      }
 
-    if (!url.includes("/chat/completions")) {
-      return new Response("not found", { status: 404 });
-    }
-
-    return new Response(
-      JSON.stringify({ choices: [{ message: { content: reply } }] }),
-      { status: 200, headers: { "content-type": "application/json" } },
-    );
-  }) as typeof fetch;
+      return {
+        content: [{ type: "text" as const, text: input.finalReply }],
+        finishReason: { unified: "stop" as const, raw: undefined },
+        usage: usage(),
+        warnings: [],
+      };
+    },
+  });
 }
 
 async function waitForPendingApproval(
@@ -128,7 +123,7 @@ describe("Tool execution loop", () => {
       join(homeDir, "agent.yml"),
       [
         "model:",
-        "  model: test-model",
+        "  model: openai/gpt-4.1",
         "skills:",
         "  enabled: []",
         "mcp:",
@@ -145,18 +140,16 @@ describe("Tool execution loop", () => {
       "utf-8",
     );
 
-    const fetchStub = createToolCallFetchStub(
-      [
+    const languageModel = createToolLoopLanguageModel({
+      toolCalls: [
         {
           id: "tc-1",
-          function: {
-            name: "tool.fs.read",
-            arguments: JSON.stringify({ path: "notes.txt" }),
-          },
+          name: "tool.fs.read",
+          arguments: JSON.stringify({ path: "notes.txt" }),
         },
       ],
-      "I read the file, it says: important notes",
-    );
+      finalReply: "I read the file, it says: important notes",
+    });
 
     const mcpManager = {
       listToolDescriptors: vi.fn(async () => []),
@@ -167,7 +160,7 @@ describe("Tool execution loop", () => {
     const runtime = new AgentRuntime({
       container,
       home: homeDir,
-      fetchImpl: fetchStub,
+      languageModel,
       mcpManager: mcpManager as unknown as ConstructorParameters<
         typeof AgentRuntime
       >[0]["mcpManager"],
@@ -191,7 +184,7 @@ describe("Tool execution loop", () => {
       join(homeDir, "agent.yml"),
       [
         "model:",
-        "  model: test-model",
+        "  model: openai/gpt-4.1",
         "skills:",
         "  enabled: []",
         "mcp:",
@@ -208,18 +201,16 @@ describe("Tool execution loop", () => {
       "utf-8",
     );
 
-    const fetchStub = createToolCallFetchStub(
-      [
+    const languageModel = createToolLoopLanguageModel({
+      toolCalls: [
         {
           id: "tc-approve",
-          function: {
-            name: "tool.exec",
-            arguments: JSON.stringify({ command: "echo approved" }),
-          },
+          name: "tool.exec",
+          arguments: JSON.stringify({ command: "echo approved" }),
         },
       ],
-      "approved and executed",
-    );
+      finalReply: "approved and executed",
+    });
 
     const mcpManager = {
       listToolDescriptors: vi.fn(async () => []),
@@ -232,7 +223,7 @@ describe("Tool execution loop", () => {
       home: homeDir,
       agentId: "agent-test",
       workspaceId: "ws-test",
-      fetchImpl: fetchStub,
+      languageModel,
       mcpManager: mcpManager as unknown as ConstructorParameters<
         typeof AgentRuntime
       >[0]["mcpManager"],
@@ -273,7 +264,7 @@ describe("Tool execution loop", () => {
       join(homeDir, "agent.yml"),
       [
         "model:",
-        "  model: test-model",
+        "  model: openai/gpt-4.1",
         "skills:",
         "  enabled: []",
         "mcp:",
@@ -290,18 +281,16 @@ describe("Tool execution loop", () => {
       "utf-8",
     );
 
-    const fetchStub = createToolCallFetchStub(
-      [
+    const languageModel = createToolLoopLanguageModel({
+      toolCalls: [
         {
           id: "tc-deny",
-          function: {
-            name: "tool.fs.write",
-            arguments: JSON.stringify({ path: "blocked.txt", content: "secret" }),
-          },
+          name: "tool.fs.write",
+          arguments: JSON.stringify({ path: "blocked.txt", content: "secret" }),
         },
       ],
-      "approval denied",
-    );
+      finalReply: "approval denied",
+    });
 
     const mcpManager = {
       listToolDescriptors: vi.fn(async () => []),
@@ -312,7 +301,7 @@ describe("Tool execution loop", () => {
     const runtime = new AgentRuntime({
       container,
       home: homeDir,
-      fetchImpl: fetchStub,
+      languageModel,
       mcpManager: mcpManager as unknown as ConstructorParameters<
         typeof AgentRuntime
       >[0]["mcpManager"],
@@ -348,7 +337,7 @@ describe("Tool execution loop", () => {
       join(homeDir, "agent.yml"),
       [
         "model:",
-        "  model: test-model",
+        "  model: openai/gpt-4.1",
         "skills:",
         "  enabled: []",
         "mcp:",
@@ -368,14 +357,15 @@ describe("Tool execution loop", () => {
     const toolCalls = [
       {
         id: "tc-always",
-        function: {
-          name: "tool.exec",
-          arguments: JSON.stringify({ command: "echo hello" }),
-        },
+        name: "tool.exec",
+        arguments: JSON.stringify({ command: "echo hello" }),
       },
     ];
 
-    const fetchStub1 = createToolCallFetchStub(toolCalls, "approved and executed");
+    const languageModel1 = createToolLoopLanguageModel({
+      toolCalls,
+      finalReply: "approved and executed",
+    });
     const mcpManager = {
       listToolDescriptors: vi.fn(async () => []),
       shutdown: vi.fn(async () => {}),
@@ -385,7 +375,7 @@ describe("Tool execution loop", () => {
     const runtime1 = new AgentRuntime({
       container,
       home: homeDir,
-      fetchImpl: fetchStub1,
+      languageModel: languageModel1,
       mcpManager: mcpManager as unknown as ConstructorParameters<typeof AgentRuntime>[0]["mcpManager"],
       approvalWaitMs: 10_000,
       approvalPollMs: 20,
@@ -430,11 +420,14 @@ describe("Tool execution loop", () => {
     const overrides = await container.policyOverrideDal.list({ agentId: "default", toolId: "tool.exec" });
     expect(overrides.length).toBeGreaterThan(0);
 
-    const fetchStub2 = createToolCallFetchStub(toolCalls, "executed without approval");
+    const languageModel2 = createToolLoopLanguageModel({
+      toolCalls,
+      finalReply: "executed without approval",
+    });
     const runtime2 = new AgentRuntime({
       container,
       home: homeDir,
-      fetchImpl: fetchStub2,
+      languageModel: languageModel2,
       mcpManager: mcpManager as unknown as ConstructorParameters<typeof AgentRuntime>[0]["mcpManager"],
       approvalWaitMs: 1_000,
       approvalPollMs: 20,
@@ -459,7 +452,7 @@ describe("Tool execution loop", () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });
 
-    const fetchStub = createSimpleFetchStub("just a reply");
+    const languageModel = createStubLanguageModel("just a reply");
 
     const mcpManager = {
       listToolDescriptors: vi.fn(async () => []),
@@ -470,7 +463,7 @@ describe("Tool execution loop", () => {
     const runtime = new AgentRuntime({
       container,
       home: homeDir,
-      fetchImpl: fetchStub,
+      languageModel,
       mcpManager: mcpManager as unknown as ConstructorParameters<
         typeof AgentRuntime
       >[0]["mcpManager"],
@@ -496,7 +489,7 @@ describe("Tool execution loop", () => {
       join(homeDir, "agent.yml"),
       [
         "model:",
-        "  model: test-model",
+        "  model: openai/gpt-4.1",
         "skills:",
         "  enabled: []",
         "mcp:",
@@ -514,82 +507,19 @@ describe("Tool execution loop", () => {
       "utf-8",
     );
 
-    // LLM returns two tool_calls in one response
-    createToolCallFetchStub(
-      [
-        {
-          id: "tc-1",
-          function: {
-            name: "tool.fs.read",
-            arguments: JSON.stringify({ path: "a.txt" }),
-          },
-        },
-        {
-          id: "tc-2",
-          function: {
-            name: "tool.http.fetch",
-            arguments: JSON.stringify({ url: "https://example.com" }),
-          },
-        },
+    const languageModel = createToolLoopLanguageModel({
+      toolCalls: [
+        { id: "tc-1", name: "tool.fs.read", arguments: JSON.stringify({ path: "a.txt" }) },
+        { id: "tc-2", name: "tool.http.fetch", arguments: JSON.stringify({ url: "https://example.com" }) },
       ],
-      "done with both tools",
-    );
+      finalReply: "done with both tools",
+    });
 
-    // The fetchStub will be used for both the LLM call AND the http.fetch tool call.
-    // The ToolExecutor uses the same fetchImpl, so we need a smarter mock.
-    let llmCallIndex = 0;
-    const smartFetch = (async (urlOrInput: string | URL | Request, _init?: RequestInit) => {
-      const url = resolveFetchUrl(urlOrInput);
-
-      // Non-LLM, non-tool calls (e.g. embeddings) — return 404 so they fail gracefully
-      if (!url.includes("/chat/completions") && !url.startsWith("https://")) {
+    const fetchStub = vi.fn(async (url: string | URL | Request) => {
+      const resolved = typeof url === "string" ? url : url.toString();
+      if (resolved !== "https://example.com") {
         return new Response("not found", { status: 404 });
       }
-
-      // LLM calls go to completions endpoint
-      if (url.includes("/chat/completions")) {
-        llmCallIndex++;
-        if (llmCallIndex === 1) {
-          return new Response(
-            JSON.stringify({
-              choices: [
-                {
-                  message: {
-                    content: null,
-                    tool_calls: [
-                      {
-                        id: "tc-1",
-                        type: "function",
-                        function: {
-                          name: "tool.fs.read",
-                          arguments: JSON.stringify({ path: "a.txt" }),
-                        },
-                      },
-                      {
-                        id: "tc-2",
-                        type: "function",
-                        function: {
-                          name: "tool.http.fetch",
-                          arguments: JSON.stringify({ url: "https://example.com" }),
-                        },
-                      },
-                    ],
-                  },
-                },
-              ],
-            }),
-            { status: 200, headers: { "content-type": "application/json" } },
-          );
-        }
-        return new Response(
-          JSON.stringify({
-            choices: [{ message: { content: "done with both tools" } }],
-          }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
-      }
-
-      // Tool http.fetch call
       return new Response("example.com content", { status: 200 });
     }) as typeof fetch;
 
@@ -602,7 +532,8 @@ describe("Tool execution loop", () => {
     const runtime = new AgentRuntime({
       container,
       home: homeDir,
-      fetchImpl: smartFetch,
+      languageModel,
+      fetchImpl: fetchStub,
       mcpManager: mcpManager as unknown as ConstructorParameters<
         typeof AgentRuntime
       >[0]["mcpManager"],
@@ -649,7 +580,7 @@ describe("Tool execution loop", () => {
       join(homeDir, "agent.yml"),
       [
         "model:",
-        "  model: test-model",
+        "  model: openai/gpt-4.1",
         "skills:",
         "  enabled: []",
         "mcp:",
@@ -666,37 +597,17 @@ describe("Tool execution loop", () => {
       "utf-8",
     );
 
-    // Always return tool_calls for LLM calls, never final text
-    const infiniteFetch = (async (urlOrInput: string | URL | Request, _init?: RequestInit) => {
-      const url = resolveFetchUrl(urlOrInput);
-
-      if (!url.includes("/chat/completions")) {
-        return new Response("not found", { status: 404 });
-      }
-
-      return new Response(
-        JSON.stringify({
-          choices: [
-            {
-              message: {
-                content: null,
-                tool_calls: [
-                  {
-                    id: "tc-loop",
-                    type: "function",
-                    function: {
-                      name: "tool.exec",
-                      arguments: JSON.stringify({ command: "echo hi" }),
-                    },
-                  },
-                ],
-              },
-            },
-          ],
-        }),
-        { status: 200, headers: { "content-type": "application/json" } },
-      );
-    }) as typeof fetch;
+    const languageModel = createToolLoopLanguageModel({
+      toolCalls: [
+        {
+          id: "tc-loop",
+          name: "tool.exec",
+          arguments: JSON.stringify({ command: "echo hi" }),
+        },
+      ],
+      finalReply: "ignored",
+      mode: "infinite",
+    });
 
     const mcpManager = {
       listToolDescriptors: vi.fn(async () => []),
@@ -707,7 +618,7 @@ describe("Tool execution loop", () => {
     const runtime = new AgentRuntime({
       container,
       home: homeDir,
-      fetchImpl: infiniteFetch,
+      languageModel,
       mcpManager: mcpManager as unknown as ConstructorParameters<
         typeof AgentRuntime
       >[0]["mcpManager"],

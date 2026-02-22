@@ -65,6 +65,10 @@ describe("gateway CLI argument parsing", () => {
     expect(parseCliArgs(["worker"])).toEqual({ kind: "start", role: "worker" });
     expect(parseCliArgs(["scheduler"])).toEqual({ kind: "start", role: "scheduler" });
   });
+
+  it("parses check command", () => {
+    expect(parseCliArgs(["check"])).toEqual({ kind: "check" });
+  });
 });
 
 describe("gateway CLI update target resolution", () => {

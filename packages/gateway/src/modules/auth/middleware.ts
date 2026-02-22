@@ -17,6 +17,7 @@ const AUTH_ERROR_BODY = {
 
 const AUTH_COOKIE_NAME = "tyrum_admin_token";
 const APP_TOKEN_QUERY_KEY = "token";
+const OAUTH_CALLBACK_PATH_RE = /^\/providers\/[^/]+\/oauth\/callback$/;
 
 function extractBearerToken(authorizationHeader: string | undefined): string | undefined {
   if (!authorizationHeader) {
@@ -45,6 +46,11 @@ export function createAuthMiddleware(
   return async (c: Context, next: Next) => {
     // /healthz is always public
     if (c.req.path === "/healthz") {
+      return next();
+    }
+
+    // OAuth callback is public (state/PKCE-protected) and should not require an admin token.
+    if (OAUTH_CALLBACK_PATH_RE.test(c.req.path)) {
       return next();
     }
 

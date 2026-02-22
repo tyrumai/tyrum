@@ -28,7 +28,6 @@ const SECRET_HANDLE_PREFIX = "secret:";
 const ENV_DENY_PREFIXES: readonly string[] = ["TYRUM_", "GATEWAY_"];
 const ENV_DENY_NAMES: ReadonlySet<string> = new Set([
   "TELEGRAM_BOT_TOKEN",
-  "MODEL_GATEWAY_CONFIG",
 ]);
 
 /**

@@ -9,6 +9,7 @@ import { join } from "node:path";
 import type { Logger } from "../observability/logger.js";
 import { AgentRuntime } from "./runtime.js";
 import type { PluginRegistry } from "../plugins/registry.js";
+import type { LanguageModel } from "ai";
 
 function normalizeAgentId(raw: string | undefined): string {
   const trimmed = raw?.trim();
@@ -35,6 +36,8 @@ export class AgentRegistry {
       gatewayToken: string;
       defaultSecretProvider: SecretProvider;
       defaultPolicyService: PolicyService;
+      /** Optional global LanguageModel override (primarily for tests). */
+      defaultLanguageModel?: LanguageModel;
       approvalNotifier: ApprovalNotifier;
       plugins?: PluginRegistry;
       logger: Logger;
@@ -95,9 +98,9 @@ export class AgentRegistry {
         container: this.opts.container,
         home,
         fetchImpl: fetch,
-        gatewayToken: this.opts.gatewayToken,
         agentId: id,
         workspaceId: id,
+        languageModel: this.opts.defaultLanguageModel,
         secretProvider,
         approvalNotifier: this.opts.approvalNotifier,
         plugins: this.opts.plugins,

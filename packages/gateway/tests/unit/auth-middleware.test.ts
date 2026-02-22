@@ -28,6 +28,7 @@ describe("Auth middleware", () => {
     app.get("/app", (c) => c.json({ ok: true }));
     app.get("/app/settings", (c) => c.json({ ok: true }));
     app.get("/app/auth", (c) => c.json({ ok: true }));
+    app.get("/providers/test/oauth/callback", (c) => c.json({ ok: true }));
     // These routes are intentionally *not* part of the /app subtree, but share a prefix.
     // Query-string token auth must not apply to them.
     app.get("/application", (c) => c.json({ ok: true }));
@@ -40,6 +41,12 @@ describe("Auth middleware", () => {
   it("allows /healthz without token", async () => {
     const app = buildApp();
     const res = await app.request("/healthz");
+    expect(res.status).toBe(200);
+  });
+
+  it("allows OAuth callback without token", async () => {
+    const app = buildApp();
+    const res = await app.request("/providers/test/oauth/callback?state=s&code=c");
     expect(res.status).toBe(200);
   });
 
