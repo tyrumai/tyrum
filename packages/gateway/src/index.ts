@@ -513,12 +513,10 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
         connectionManager,
         connectionDirectory,
         engine: edgeEngine,
-        wsCluster: shouldRunEdge
-          ? {
-              edgeId: instanceId,
-              outboxDal,
-            }
-          : undefined,
+        wsCluster: {
+          edgeId: instanceId,
+          outboxDal,
+        },
         runtime: {
           version: VERSION,
           instanceId,
