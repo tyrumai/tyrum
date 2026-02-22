@@ -49,6 +49,55 @@ describe("AgentRuntime", () => {
     expect(result.used_tools).toEqual([]);
   });
 
+  it("enforces tool execution policy for agent-initiated tool calls", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    await writeFile(
+      join(homeDir, "agent.yml"),
+      `model:\n  model: tyrum-stub-8b\nskills:\n  enabled: []\nmcp:\n  enabled: []\ntools:\n  allow:\n    - tool.fs.read\nsessions:\n  ttl_days: 30\n  max_turns: 20\nmemory:\n  markdown_enabled: false\n`,
+      "utf-8",
+    );
+    await writeFile(join(homeDir, "test.txt"), "secret", "utf-8");
+
+    container.policyBundleManager.addBundle({
+      precedence: "deployment",
+      rules: [
+        {
+          domain: "tools",
+          action: "deny",
+          priority: 0,
+          conditions: { tool_id: "tool.fs.read" },
+          description: "tool.fs.read is blocked",
+        },
+      ],
+    });
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("hello"),
+      fetchImpl: fetch404,
+    });
+
+    const prepared = await (runtime as unknown as { prepareTurn: (input: unknown) => Promise<{ toolSet: unknown }> })
+      .prepareTurn({
+        channel: "test",
+        thread_id: "thread-1",
+        message: "read a file",
+      });
+
+    const toolSet = prepared.toolSet as Record<string, { execute: (args: unknown) => Promise<unknown> }>;
+    const output = await toolSet["tool.fs.read"]!.execute({ path: "test.txt" });
+    const parsed = JSON.parse(String(output)) as { error?: string };
+
+    expect(parsed.error).toContain("Tool execution denied by policy");
+    expect(parsed.error).toContain("tool.fs.read is blocked");
+  });
+
   it("reconciles MCP servers when MCP tools become disallowed", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({

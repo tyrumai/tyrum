@@ -502,6 +502,8 @@ export class AgentRuntime {
       this.opts.secretProvider,
       undefined,
       this.opts.container.redactionEngine,
+      this.opts.container.policyBundleManager,
+      this.opts.container.logger,
     );
 
     const usedTools = new Set<string>();

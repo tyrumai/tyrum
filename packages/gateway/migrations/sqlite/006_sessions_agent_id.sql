@@ -23,6 +23,8 @@ INSERT INTO sessions__new (
   summary,
   turns_json,
   workspace_id,
+  compacted_summary,
+  compaction_count,
   created_at,
   updated_at
 )
@@ -34,6 +36,8 @@ SELECT
   summary,
   turns_json,
   workspace_id,
+  compacted_summary,
+  compaction_count,
   created_at,
   updated_at
 FROM sessions;
