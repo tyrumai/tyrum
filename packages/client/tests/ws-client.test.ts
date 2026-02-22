@@ -429,6 +429,36 @@ describe("TyrumClient", () => {
     expect(res.approval.status).toBe("approved");
   });
 
+  it("rejects pending requests immediately on disconnect", async () => {
+    server = createTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: [],
+      reconnect: false,
+    });
+
+    client.connect();
+    const ws = await server.waitForClient();
+    await acceptConnect(ws);
+    await delay(10);
+
+    const pending = client.commandExecute("/help");
+    const req = (await waitForMessage(ws)) as Record<string, unknown>;
+    expect(req["type"]).toBe("command.execute");
+
+    client.disconnect();
+
+    await expect(
+      Promise.race([
+        pending,
+        delay(100).then(() => {
+          throw new Error("expected pending request to reject on disconnect");
+        }),
+      ]),
+    ).rejects.toThrow(/disconnected/i);
+  });
+
   it("dedupes events by event_id", async () => {
     server = createTestServer();
     client = new TyrumClient({

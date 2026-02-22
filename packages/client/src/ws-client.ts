@@ -310,7 +310,7 @@ export class TyrumClient {
     }
     this.ready = false;
     this.clientId = null;
-    this.pending.clear();
+    this.rejectPending(new Error("WebSocket disconnected"));
   }
 
   /** Respond to a task.execute request from the gateway. */
@@ -403,7 +403,7 @@ export class TyrumClient {
       this.ws = null;
       this.ready = false;
       this.clientId = null;
-      this.pending.clear();
+      this.rejectPending(new Error("WebSocket disconnected"));
       if (!this.intentionalClose && this.opts.reconnect) {
         this.scheduleReconnect();
       }
@@ -449,9 +449,7 @@ export class TyrumClient {
         this.clientId = parsed.data.client_id;
         this.emitter.emit("connected", { clientId: parsed.data.client_id });
       },
-      reject: () => {
-        this.disconnect();
-      },
+      reject: () => {},
     });
 
     this.send(request);
@@ -504,7 +502,7 @@ export class TyrumClient {
             privateKey: privkey,
           });
         },
-        reject: () => this.disconnect(),
+        reject: () => {},
       });
 
       this.send(request);
@@ -560,7 +558,7 @@ export class TyrumClient {
           this.clientId = parsed2.data.client_id;
           this.emitter.emit("connected", { clientId: parsed2.data.client_id });
         },
-        reject: () => this.disconnect(),
+        reject: () => {},
       });
 
       this.send(request);
@@ -756,6 +754,13 @@ export class TyrumClient {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+  }
+
+  private rejectPending(err: Error): void {
+    for (const pending of this.pending.values()) {
+      pending.reject(err);
+    }
+    this.pending.clear();
   }
 
   private markEventSeen(eventId: string): boolean {
