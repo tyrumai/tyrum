@@ -70,7 +70,13 @@ export class AgentRegistry {
     const cached = this.secretProviderByAgentId.get(id);
     if (cached) return await cached;
 
-    const promise = createSecretProviderFromEnv(this.resolveAgentHome(id), this.opts.gatewayToken);
+    const promise = createSecretProviderFromEnv(
+      this.resolveAgentHome(id),
+      this.opts.gatewayToken,
+    ).catch((err) => {
+      this.secretProviderByAgentId.delete(id);
+      throw err;
+    });
     this.secretProviderByAgentId.set(id, promise);
     return await promise;
   }
@@ -105,7 +111,10 @@ export class AgentRegistry {
       });
 
       return runtime;
-    })();
+    })().catch((err) => {
+      this.runtimeByAgentId.delete(id);
+      throw err;
+    });
 
     this.runtimeByAgentId.set(id, promise);
     return await promise;
