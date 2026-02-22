@@ -17,6 +17,7 @@ A client is an operator interface that connects to the gateway and participates 
 - Provide human approvals and explanations when the gateway escalates.
 - Resume or cancel paused workflow runs (via resume tokens) when approvals are resolved.
 - Initiate and manage node pairing (approve/deny, label devices, revoke access).
+- Provide onboarding and diagnostics surfaces so hardened configuration is easy to reach (see [Operations and onboarding](./operations.md)).
 
 ## Gateway control panel (web client)
 
@@ -28,6 +29,7 @@ The gateway’s web control panel is a client form that connects over WebSocket 
 - **Instances:** a presence view of connected gateway/client/node instances with TTL-based pruning (see [Presence](./presence.md)).
 - **Context/usage:** context breakdown (`/context`) and usage/quota panels (`/usage`) for operational transparency (see [Observability](./observability.md)).
 - **Settings:** policy defaults, tool allowlists, model config, secrets setup, and automation toggles.
+- **Onboarding/doctor:** guided setup and day-2 checks that detect footguns and recommend fixes (see [Operations and onboarding](./operations.md)).
 
 ## What a client is not
 

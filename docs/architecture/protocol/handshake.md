@@ -57,6 +57,12 @@ The gateway validates the gateway access token during the WS upgrade using WebSo
 The gateway selects `tyrum-v1` as the negotiated subprotocol and reads the token from the `tyrum-auth.*` entry.
 The access token should be short-lived, revocable, and scoped to the peer role (`client` vs `node`) and least-privilege permissions. Avoid placing tokens in URLs.
 
+## Authorization notes
+
+After a connection is authenticated, the gateway authorizes what the peer can do based on its role and (for operator clients) its granted scopes. The gateway can also issue device-bound tokens to reduce bootstrap-token usage during normal operation.
+
+Details: [Gateway authN/authZ](../gateway-authz.md).
+
 ## Pairing hook (nodes)
 
 Nodes require pairing approval before they can execute capabilities. Pairing binds a node device identity to a trust level and a scoped capability allowlist, and it can be revoked at any time.

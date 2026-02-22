@@ -4,6 +4,16 @@ Channels are message transports that connect Tyrum to external chat surfaces. A 
 
 Channel connectors are a high-risk integration boundary. They are responsible for preserving identity, provenance, and auditability while presenting a consistent messaging model to the gateway.
 
+## Integration quality bar
+
+Tyrum prioritizes a small set of high-ROI channels and aims to make each one:
+
+- **Idempotent:** retries do not duplicate outbound side effects.
+- **Approval-gated:** risky sends and new-party messaging require explicit consent.
+- **Evidence-rich:** receipts/errors are captured as audit events and (when useful) as artifacts.
+
+Breadth comes after correctness and safety.
+
 ## Channel types (examples)
 
 - WhatsApp (DM, group)

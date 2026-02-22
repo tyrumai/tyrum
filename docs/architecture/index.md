@@ -2,6 +2,25 @@
 
 Tyrum is a WebSocket-first autonomous worker agent platform built around a long-lived gateway that coordinates durable execution, approvals, and audit evidence.
 
+## Positioning
+
+Tyrum is an autonomous worker.
+
+- In the simplest case, it’s a **personal assistant** you run for yourself.
+- In richer deployments, it’s a **remote coworker** you can share with a team.
+
+The same core architecture is intended to scale from “one assistant” to “many coworkers” without turning into an un-auditable pile of prompts and cronjobs: durable execution, least-privilege authorization, explicit approvals, and evidence-backed audit trails.
+
+## Engineering bar (target state)
+
+The documents under `docs/architecture/**` describe the **target state** for Tyrum. The target state is intentionally conservative:
+
+- **Security best practices, secure by default:** local-first binding, explicit auth, least privilege, and defense-in-depth enforcement (not prompt-only “safety”).
+- **Industry-standard primitives:** idempotency keys, durable outbox/eventing, leases/locks, auditable change control, and typed contracts at trust boundaries.
+- **Avoid common agent anti-patterns:** opaque side effects, non-resumable runs, unbounded tool access, and “done” without postconditions/evidence.
+- **Maintainability:** a small core with clear ownership boundaries and verifiable invariants.
+- **Extensibility without weakening safety:** plugins, nodes, MCP, and channels extend capability, but remain policy-gated and contract-validated.
+
 ## High-level topology
 
 ```mermaid
@@ -76,10 +95,19 @@ flowchart LR
 - **Auditability:** important actions emit events and can be persisted for troubleshooting and compliance.
 - **Extensible core:** gateway plugins, tools, skills, nodes, and MCP servers extend behavior without changing the gateway core.
 
+## Current focus (architecture-level commitments)
+
+- **Ops ergonomics:** ship onboarding and day-2 diagnostics that default to a hardened configuration.
+- **Gateway authN/authZ:** explicit operator scopes, per-method authorization, device-token lifecycle, and a documented trusted-proxy + TLS/pinning story.
+- **Plugins:** require manifests + config schemas, make risky tools opt-in, and harden discovery/install (path/ownership checks, safe dependency rules).
+- **Scale validation:** ship reference deployments and keep a failure-matrix test suite as a hard gate.
+- **Integration quality bar:** pick a small set of high-ROI channels/nodes and make them idempotent, approval-gated, and evidence-rich before broadening.
+
 ## Where to start
 
 - [Scaling and high availability](./scaling-ha.md)
 - [Gateway](./gateway/index.md)
+- [Gateway authN/authZ](./gateway-authz.md)
 - [Execution engine](./execution-engine.md)
 - [Messages and Sessions](./messages-sessions.md)
 - [Playbooks](./playbooks.md)
@@ -89,6 +117,7 @@ flowchart LR
 - [Provider Auth and Onboarding](./auth.md)
 - [Artifacts](./artifacts.md)
 - [Sandbox and policy](./sandbox-policy.md)
+- [Operations and onboarding](./operations.md)
 - [Observability](./observability.md)
 - [Presence](./presence.md)
 - [Client](./client.md)

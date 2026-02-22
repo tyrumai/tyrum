@@ -221,3 +221,5 @@ Coordination primitives (leases, outbox delivery, approvals, and lane serializat
 - scheduler crash/restart (no double-fires; leases transfer)
 - database transient failures and restart/failover behavior
 - network partitions between components (edge↔DB, worker↔DB)
+
+These tests are treated as **hard gates**: reference deployments and the failure-matrix suite should run in CI so scaling behavior does not regress unnoticed.

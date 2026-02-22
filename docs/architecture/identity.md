@@ -4,7 +4,7 @@ Identity is how Tyrum names and scopes authority. Several identities exist in th
 
 ## Identity types
 
-- **User identity:** the human operator(s) (single-user by default).
+- **User identity:** the human operator(s). Single-user is the default, but team/remote deployments support multiple operators with explicit scopes and audited actions.
 - **Agent identity:** which agent a session belongs to.
 - **Client identity:** which operator device is connected (`role: client`).
 - **Node identity:** which capability provider device is connected (`role: node`).
