@@ -34,3 +34,5 @@ The canonical wire shape lives in `@tyrum/schemas` (`packages/schemas/src/protoc
 - Events are delivered **at-least-once**. Consumers must tolerate duplicates and implement idempotent handling.
 - Deduplicate using `event_id` (and treat `occurred_at` as informational, not a strict ordering guarantee).
 - Clients should tolerate reconnect and resubscribe without losing safety invariants; durable state in the StateStore remains the source of truth.
+
+In clustered deployments, events are delivered to the owning gateway edge via the **backplane/outbox** abstraction (see [Backplane](../backplane.md)).

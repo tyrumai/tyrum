@@ -49,13 +49,33 @@ challenge=<base64url>
 
 ## Auth
 
-The gateway validates the gateway access token during the WS upgrade using WebSocket subprotocol metadata. Clients should offer both:
+The gateway validates the gateway access token during the WS upgrade.
+
+### Preferred transports (in order)
+
+1. **`Authorization: Bearer <token>` header** when the client can set headers on the WebSocket upgrade request.
+2. **Secure cookie** for browser-based clients where cookie auth is appropriate for the deployment.
+3. **WebSocket subprotocol fallback** for constrained clients that cannot set headers.
+
+Tokens MUST NOT be placed in URLs.
+
+### Subprotocol fallback
+
+When using the fallback, the token is conveyed in the `Sec-WebSocket-Protocol` header. Clients should offer both:
 
 - `tyrum-v1`
 - `tyrum-auth.<base64url(token)>`
 
 The gateway selects `tyrum-v1` as the negotiated subprotocol and reads the token from the `tyrum-auth.*` entry.
-The access token should be short-lived, revocable, and scoped to the peer role (`client` vs `node`) and least-privilege permissions. Avoid placing tokens in URLs.
+The access token should be short-lived, revocable, and scoped to the peer role (`client` vs `node`) and least-privilege permissions.
+
+### Operational hygiene (TLS + redaction)
+
+- Always use TLS (`wss://`) in any deployment where tokens transit a network.
+- Treat **WebSocket upgrade headers as secrets**: ensure infra and application logs do not record `Authorization` or `Sec-WebSocket-Protocol` values.
+- Ensure any telemetry/trace exporters redact these headers before egress.
+- When using cookie auth, validate `Origin` for the WebSocket upgrade so cookies cannot be replayed cross-site.
+- The gateway MUST NOT echo secret-bearing subprotocol entries (it should negotiate `tyrum-v1`, not `tyrum-auth.*`).
 
 Operational note: some intermediaries log `Sec-WebSocket-Protocol`. Treat it as sensitive (redact in gateway/proxy logs). For peers that can set headers (non-browser clients/nodes), deployments may prefer an `Authorization: Bearer …` header rather than embedding the token in subprotocol metadata.
 

@@ -37,6 +37,11 @@ const sidebars: SidebarsConfig = {
           label: "Scaling & HA",
         },
         {
+          type: "doc",
+          id: "architecture/backplane",
+          label: "Backplane",
+        },
+        {
           type: "category",
           label: "Runtime Components",
           items: [
@@ -54,6 +59,7 @@ const sidebars: SidebarsConfig = {
             "architecture/approvals",
             "architecture/secrets",
             "architecture/artifacts",
+            "architecture/data-lifecycle",
           ],
         },
         {

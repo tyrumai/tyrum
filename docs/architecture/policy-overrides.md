@@ -27,6 +27,15 @@ The baseline enforcement configuration is the merged `PolicyBundle` (deployment 
 
 Overrides use **tool-specific wildcard patterns** matched against a well-defined per-tool “match target”.
 
+### Match target normalization (hard rule)
+
+Tools MUST define and document their match targets, and MUST compute them from validated, canonicalized inputs.
+
+Operators should assume policy overrides match the tool’s *normalized* representation of an action (not raw user text).
+If normalization rules change, it should be treated as a contract change because it can broaden or narrow the effective scope of existing overrides.
+
+Concrete normalization guidance for high-risk tools lives in [Tools](./tools.md).
+
 Wildcard grammar:
 
 - `*` matches zero or more characters
@@ -40,6 +49,21 @@ Each override stores:
 - `pattern` (wildcard pattern over that tool’s match target)
 
 Tools must define their match targets unambiguously (examples live in [Tools](./tools.md)).
+
+### Unsafe pattern examples (operator guidance)
+
+Wildcards are powerful; prefer narrow prefixes and avoid leading wildcards.
+Examples of overly broad patterns that are usually unsafe:
+
+- **`fs`**: `write:*` (approves writing anywhere in the workspace), `delete:*` (approves deleting any file).
+- **`bash`**: `*` (approves any command), `curl*` (often includes network egress + exfil risk), `git*` (can include destructive actions like `git reset --hard`).
+- **`messaging`**: `send:*` (approves sending to any destination).
+
+Prefer patterns that encode intent and scope, for example:
+
+- `fs`: `write:docs/architecture/*`
+- `bash`: `git status*`
+- `messaging`: `send:slack:acct_123:chan_C024BE91L`
 
 ## Evaluation semantics
 

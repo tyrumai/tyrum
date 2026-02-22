@@ -1,0 +1,94 @@
+# Data lifecycle and retention
+
+Tyrum is durable by design: the StateStore is the source of truth for sessions, execution, approvals, and audit evidence.
+That durability must be paired with explicit **retention** and **deletion** rules so deployments remain operable (bounded cost), safe (privacy), and explainable (audit).
+
+This page summarizes lifecycle expectations across the major data surfaces. It is intentionally implementation-agnostic; concrete defaults and knobs belong in deployment configuration and runbooks.
+
+References:
+
+- [Scaling and high availability](./scaling-ha.md)
+- [Backplane (outbox contract)](./backplane.md)
+- [Observability](./observability.md)
+- [Artifacts](./artifacts.md)
+- [Sandbox and policy](./sandbox-policy.md)
+
+## Principles
+
+- **Bounded by default:** every high-volume log or cache has an explicit retention/TTL/limit.
+- **Durable truth vs derived views:** durable tables are the source of truth; derived views (presence, directories, caches) are TTL-bounded.
+- **Safety first:** sensitive classes (secrets, sensitive artifacts, connector payloads) default to shorter retention and stricter access.
+- **Auditable deletion:** destructive lifecycle actions are observable and attributable (who/when/why).
+
+## Data classes (what exists where)
+
+### Durable StateStore data (system of record)
+
+Examples:
+
+- sessions and transcripts
+- run/job/step/attempt state
+- approvals and policy overrides
+- audit/event logs and policy decision records
+- outbox items (backplane)
+
+Lifecycle expectations:
+
+- Retention is configurable and documented.
+- Stable identifiers remain stable across export/import (see [Scaling and high availability](./scaling-ha.md)).
+- Deletions do not silently break referential “why was this allowed?” questions (for example keep minimal tombstones or export snapshots for audit as required by policy).
+
+### Derived/TTL-bounded StateStore data
+
+Examples:
+
+- presence and instance inventory (TTL-pruned)
+- connection directory entries (owning-edge heartbeats with TTL)
+- inbound dedupe keys (TTL-bounded)
+
+Lifecycle expectations:
+
+- TTL pruning is safe under clustered edges (no correctness dependence on long-lived cache rows).
+- TTL windows are chosen to tolerate normal jitter and brief partitions without creating “ghost ownership”.
+
+### Artifact bytes (FS/S3)
+
+Artifact bytes live outside the StateStore; the StateStore holds metadata and durable linkage.
+
+Lifecycle expectations:
+
+- Artifact retention varies by label/sensitivity and is governed by policy (see [Artifacts](./artifacts.md)).
+- Artifact fetch is always authorized by durable linkage (anti-IDOR) and is auditable.
+- Deleting artifact bytes without deleting metadata should be treated as a first-class state (for example “missing bytes”) and surfaced to operators.
+
+## Outbox/backplane retention (special case)
+
+The outbox is both a delivery queue and a replay log. It must be durable **and** bounded.
+
+Lifecycle expectations:
+
+- Retention and compaction are explicit and enforced (see [Backplane](./backplane.md)).
+- Operational recovery (edge restarts, brief partitions) should succeed without manual outbox surgery.
+- When outbox items are deleted by retention, recovery remains possible via durable StateStore-backed reads (events are not the only truth).
+
+## Redaction and privacy boundaries
+
+Retention is only safe when redaction boundaries are correct:
+
+- Secrets are referenced via handles and resolved only in trusted execution contexts (see [Secrets](./secrets.md)).
+- Logs, tool outputs, artifacts, and outbound messages SHOULD apply redaction appropriate to the deployment’s policy.
+- Treat WebSocket upgrade headers as sensitive (see [Handshake](./protocol/handshake.md)).
+
+## Export/import and “forget” workflows
+
+Snapshot export/import is part of the lifecycle story:
+
+- Exports are consistent and preserve stable ids/hashes needed for audit and replay (see [Scaling and high availability](./scaling-ha.md)).
+- Export bundles SHOULD document whether they include artifact bytes, and under what sensitivity rules.
+
+If a deployment supports “forget” or data deletion requests, it MUST define:
+
+- which durable records are deleted vs anonymized vs retained for audit,
+- how linked artifacts are handled (metadata and bytes), and
+- how the system proves deletion occurred (auditable events).
+

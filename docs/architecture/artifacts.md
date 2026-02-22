@@ -82,6 +82,8 @@ Retention is defined by policy with conservative defaults:
 - quotas apply per agent/workspace
 - extending retention for sensitive classes can be approval-gated
 
+See [Data lifecycle and retention](./data-lifecycle.md) for how artifact retention fits into broader StateStore/outbox/transcript lifecycle decisions.
+
 Exports preserve:
 
 - artifact references and metadata (including hashes)
