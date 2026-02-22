@@ -582,10 +582,12 @@ export class AgentRuntime {
       reply,
       ctx.config.sessions.max_turns,
       nowIso,
+      session.agent_id,
     );
     await this.sessionDal.updateSummary(
       session.session_id,
       summarizeTurns(updated.turns),
+      session.agent_id,
     );
 
     // Session compaction — LLM-based summarization of older turns
@@ -611,6 +613,7 @@ export class AgentRuntime {
           session.session_id,
           result.summary,
           result.remainingTurns,
+          session.agent_id,
         );
       } catch {
         // Compaction failure is non-fatal — session continues with full history

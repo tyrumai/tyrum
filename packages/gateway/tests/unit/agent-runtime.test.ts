@@ -187,4 +187,80 @@ describe("AgentRuntime", () => {
     await runtime.shutdown();
     expect(mcpManager.shutdown).toHaveBeenCalledTimes(1);
   });
+
+  it("finalizeTurn forwards agent_id for session updates in multi-agent mode", async () => {
+    const prevMultiAgent = process.env["TYRUM_MULTI_AGENT"];
+    process.env["TYRUM_MULTI_AGENT"] = "1";
+    try {
+      homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+      container = await createContainer({
+        dbPath: ":memory:",
+        migrationsDir,
+      });
+
+      const runtime = new AgentRuntime({
+        container,
+        home: homeDir,
+        languageModel: createStubLanguageModel("hello"),
+        fetchImpl: fetch404,
+      });
+
+      const session = await container.sessionDal.getOrCreate("test", "thread-1", "agent-a");
+      expect(session.agent_id).toBe("agent-a");
+
+      const ctx = {
+        config: {
+          model: { model: "tyrum-stub-8b" },
+          skills: { enabled: [] },
+          mcp: { enabled: [] },
+          tools: { allow: [] },
+          sessions: {
+            ttl_days: 30,
+            max_turns: 20,
+            typing: { mode: "message", refresh_interval_ms: 3000 },
+            compaction: {
+              enabled: false,
+              preserve_recent: 6,
+              trigger_message_count: 20,
+              tool_result_max_chars: 2048,
+            },
+          },
+          memory: { markdown_enabled: false },
+        },
+        identity: { meta: { name: "Test" }, body: "" },
+        skills: [],
+        mcpServers: [],
+        memoryStore: {},
+      };
+
+      const result = await (runtime as unknown as {
+        finalizeTurn: (
+          ctx: unknown,
+          session: unknown,
+          input: { channel: string; thread_id: string; message: string },
+          reply: string,
+          usedTools: Set<string>,
+        ) => Promise<{ session_id: string }>;
+      }).finalizeTurn(
+        ctx,
+        session,
+        { channel: "test", thread_id: "thread-1", message: "hi" },
+        "hello",
+        new Set(),
+      );
+
+      expect(result.session_id).toBe(session.session_id);
+
+      const updated = await container.sessionDal.getById(session.session_id, "agent-a");
+      expect(updated?.turns).toHaveLength(2);
+      expect(updated?.turns[0]?.content).toBe("hi");
+      expect(updated?.turns[1]?.content).toBe("hello");
+    } finally {
+      if (prevMultiAgent === undefined) {
+        delete process.env["TYRUM_MULTI_AGENT"];
+      } else {
+        process.env["TYRUM_MULTI_AGENT"] = prevMultiAgent;
+      }
+    }
+  });
 });
