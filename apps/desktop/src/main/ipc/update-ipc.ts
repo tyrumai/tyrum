@@ -67,7 +67,7 @@ function buildReleaseFileFilters(platform: NodeJS.Platform): FileFilter[] {
 
 async function openReleaseFileFromDisk(): Promise<ManualReleaseFileResult> {
   const dialogOptions: OpenDialogOptions = {
-    title: "Select Tyrum Desktop Release File",
+    title: "Select Tyrum Release File",
     buttonLabel: "Open Installer",
     properties: ["openFile"],
     filters: buildReleaseFileFilters(process.platform),
@@ -99,7 +99,7 @@ async function openReleaseFileFromDisk(): Promise<ManualReleaseFileResult> {
   return {
     opened: true,
     path: selectedPath,
-    message: "Installer opened. Complete installation, then relaunch Tyrum Desktop.",
+    message: "Installer opened. Complete installation, then relaunch Tyrum.",
   };
 }
 

@@ -54,7 +54,7 @@ function navItemStyle(active: boolean): React.CSSProperties {
 export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
   return (
     <nav style={sidebarStyle}>
-      <div style={titleStyle}>Tyrum Desktop</div>
+      <div style={titleStyle}>Tyrum</div>
       {NAV_ITEMS.map((item) => (
         <div
           key={item.id}
