@@ -23,6 +23,29 @@ export const DesktopNodeConfig = z.object({
       dbPath: z.string().default(""),
     })
     .default({ port: 8788, tokenRef: "", dbPath: "" }),
+  device: z
+    .object({
+      enabled: z.boolean().default(false),
+      deviceId: z.string().default(""),
+      publicKey: z.string().default(""),
+      privateKeyRef: z.string().default(""),
+      privateKey: z.string().default(""),
+      label: z.string().default("tyrum-desktop"),
+      platform: z.string().default(""),
+      version: z.string().default(""),
+      mode: z.string().default("desktop"),
+    })
+    .default({
+      enabled: false,
+      deviceId: "",
+      publicKey: "",
+      privateKeyRef: "",
+      privateKey: "",
+      label: "tyrum-desktop",
+      platform: "",
+      version: "",
+      mode: "desktop",
+    }),
   permissions: z
     .object({
       profile: PermissionProfile.default("balanced"),

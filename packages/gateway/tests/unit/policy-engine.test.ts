@@ -18,7 +18,7 @@ describe("Policy engine", () => {
         amount_minor_units: 8_000,
         currency: "EUR",
       });
-      expect(decision.outcome).toBe("approve");
+      expect(decision.outcome).toBe("allow");
     });
 
     it("escalates above user limit", () => {
@@ -27,7 +27,7 @@ describe("Policy engine", () => {
         currency: "EUR",
         user_limit_minor_units: 12_000,
       });
-      expect(decision.outcome).toBe("escalate");
+      expect(decision.outcome).toBe("require_approval");
     });
 
     it("denies above hard limit", () => {
@@ -43,12 +43,12 @@ describe("Policy engine", () => {
   describe("pii rule", () => {
     it("approves basic_contact", () => {
       const decision = evaluatePii({ categories: ["basic_contact"] });
-      expect(decision.outcome).toBe("approve");
+      expect(decision.outcome).toBe("allow");
     });
 
     it("escalates financial", () => {
       const decision = evaluatePii({ categories: ["financial"] });
-      expect(decision.outcome).toBe("escalate");
+      expect(decision.outcome).toBe("require_approval");
     });
 
     it("denies biometric", () => {
@@ -60,12 +60,12 @@ describe("Policy engine", () => {
   describe("legal rule", () => {
     it("approves no flags", () => {
       const decision = evaluateLegal({ flags: [] });
-      expect(decision.outcome).toBe("approve");
+      expect(decision.outcome).toBe("allow");
     });
 
     it("escalates requires_review", () => {
       const decision = evaluateLegal({ flags: ["requires_review"] });
-      expect(decision.outcome).toBe("escalate");
+      expect(decision.outcome).toBe("require_approval");
     });
 
     it("denies prohibited_content", () => {
@@ -80,7 +80,7 @@ describe("Policy engine", () => {
         scope: "mcp://calendar",
       });
       expect(decision).toBeDefined();
-      expect(decision!.outcome).toBe("approve");
+      expect(decision!.outcome).toBe("allow");
     });
 
     it("escalates unknown scope", () => {
@@ -88,7 +88,7 @@ describe("Policy engine", () => {
         scope: "mcp://analytics",
       });
       expect(decision).toBeDefined();
-      expect(decision!.outcome).toBe("escalate");
+      expect(decision!.outcome).toBe("require_approval");
     });
 
     it("denies blocked scope", () => {
@@ -102,7 +102,7 @@ describe("Policy engine", () => {
     it("escalates when scope missing", () => {
       const decision = evaluateConnectorScope({});
       expect(decision).toBeDefined();
-      expect(decision!.outcome).toBe("escalate");
+      expect(decision!.outcome).toBe("require_approval");
     });
   });
 

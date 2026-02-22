@@ -23,6 +23,7 @@ describe("ConnectionDirectoryDal", () => {
     await dir.upsertConnection({
       connectionId: "c1",
       edgeId: "edge-a",
+      role: "client",
       capabilities: ["playwright"],
       nowMs: now,
       ttlMs: 5_000,
@@ -36,4 +37,3 @@ describe("ConnectionDirectoryDal", () => {
     expect(await dir.listConnectionsForCapability("playwright", now + 10_000)).toHaveLength(0);
   });
 });
-

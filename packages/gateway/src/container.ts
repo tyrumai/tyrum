@@ -15,6 +15,13 @@ import type { ApprovalDal } from "./modules/approval/dal.js";
 import type { WatcherProcessor } from "./modules/watcher/processor.js";
 import type { CanvasDal } from "./modules/canvas/dal.js";
 import type { JobQueue } from "./modules/executor/job-queue.js";
+import type { PresenceDal } from "./modules/presence/dal.js";
+import type { PolicySnapshotDal } from "./modules/policy/snapshot-dal.js";
+import type { PolicyOverrideDal } from "./modules/policy/override-dal.js";
+import type { PolicyService } from "./modules/policy/service.js";
+import type { NodePairingDal } from "./modules/node/pairing-dal.js";
+import type { ContextReportDal } from "./modules/context/report-dal.js";
+import type { SecretResolutionAuditDal } from "./modules/secret/resolution-audit-dal.js";
 import type { SqlDb } from "./statestore/types.js";
 
 import { createEventBus } from "./event-bus.js";
@@ -34,6 +41,13 @@ import { TelegramBot as TelegramBotImpl } from "./modules/ingress/telegram-bot.j
 import { WatcherProcessor as WatcherProcessorImpl } from "./modules/watcher/processor.js";
 import { CanvasDal as CanvasDalImpl } from "./modules/canvas/dal.js";
 import { JobQueue as JobQueueImpl } from "./modules/executor/job-queue.js";
+import { PresenceDal as PresenceDalImpl } from "./modules/presence/dal.js";
+import { PolicySnapshotDal as PolicySnapshotDalImpl } from "./modules/policy/snapshot-dal.js";
+import { PolicyOverrideDal as PolicyOverrideDalImpl } from "./modules/policy/override-dal.js";
+import { PolicyService as PolicyServiceImpl } from "./modules/policy/service.js";
+import { NodePairingDal as NodePairingDalImpl } from "./modules/node/pairing-dal.js";
+import { ContextReportDal as ContextReportDalImpl } from "./modules/context/report-dal.js";
+import { SecretResolutionAuditDal as SecretResolutionAuditDalImpl } from "./modules/secret/resolution-audit-dal.js";
 import { RedactionEngine } from "./modules/redaction/engine.js";
 import type { ArtifactStore } from "./modules/artifact/store.js";
 import { createArtifactStoreFromEnv } from "./modules/artifact/create-artifact-store.js";
@@ -54,6 +68,8 @@ export interface GatewayConfig {
 export interface GatewayContainer {
   db: SqlDb;
   memoryDal: MemoryDal;
+  contextReportDal: ContextReportDal;
+  secretResolutionAuditDal: SecretResolutionAuditDal;
   eventLog: EventLog;
   discoveryPipeline: DiscoveryPipeline;
   riskClassifier: RiskClassifier;
@@ -61,6 +77,11 @@ export interface GatewayContainer {
   eventBus: EventBus;
   telegramBot?: TelegramBot;
   approvalDal: ApprovalDal;
+  presenceDal: PresenceDal;
+  policySnapshotDal: PolicySnapshotDal;
+  policyOverrideDal: PolicyOverrideDal;
+  policyService: PolicyService;
+  nodePairingDal: NodePairingDal;
   watcherProcessor: WatcherProcessor;
   canvasDal: CanvasDal;
   jobQueue: JobQueue;
@@ -102,6 +123,8 @@ function wireContainer(
   opts?: { redactionEngine?: RedactionEngine },
 ): GatewayContainer {
   const memoryDal = new MemoryDalImpl(db);
+  const contextReportDal = new ContextReportDalImpl(db);
+  const secretResolutionAuditDal = new SecretResolutionAuditDalImpl(db);
   const redactionEngine = opts?.redactionEngine ?? new RedactionEngine();
   const logger = new Logger({ base: { service: "tyrum-gateway" } });
   const eventLog = new EventLogImpl(db, redactionEngine, logger);
@@ -118,6 +141,10 @@ function wireContainer(
     ? new TelegramBotImpl(telegramToken)
     : undefined;
   const approvalDal = new ApprovalDalImpl(db);
+  const presenceDal = new PresenceDalImpl(db);
+  const policySnapshotDal = new PolicySnapshotDalImpl(db);
+  const policyOverrideDal = new PolicyOverrideDalImpl(db);
+  const nodePairingDal = new NodePairingDalImpl(db);
   const watcherProcessor = new WatcherProcessorImpl({ db, memoryDal, eventBus });
   const canvasDal = new CanvasDalImpl(db);
   const jobQueue = new JobQueueImpl(db);
@@ -127,10 +154,17 @@ function wireContainer(
     process.env["TYRUM_HOME"]?.trim() ??
     join(homedir(), ".tyrum");
   const artifactStore = createArtifactStoreFromEnv(tyrumHome, redactionEngine);
+  const policyService = new PolicyServiceImpl({
+    home: tyrumHome,
+    snapshotDal: policySnapshotDal,
+    overrideDal: policyOverrideDal,
+  });
 
   return {
     db,
     memoryDal,
+    contextReportDal,
+    secretResolutionAuditDal,
     eventLog,
     discoveryPipeline,
     riskClassifier,
@@ -138,6 +172,11 @@ function wireContainer(
     eventBus,
     telegramBot,
     approvalDal,
+    presenceDal,
+    policySnapshotDal,
+    policyOverrideDal,
+    policyService,
+    nodePairingDal,
     watcherProcessor,
     canvasDal,
     jobQueue,

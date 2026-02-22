@@ -41,8 +41,20 @@ describe("Auth integration", () => {
       expect(res.status).toBe(401);
     });
 
+    it("rejects /status without token", async () => {
+      const res = await app.request("/status");
+      expect(res.status).toBe(401);
+    });
+
     it("allows /memory/facts with valid token", async () => {
       const res = await app.request("/memory/facts", {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      expect(res.status).toBe(200);
+    });
+
+    it("allows /status with valid token", async () => {
+      const res = await app.request("/status", {
         headers: { Authorization: `Bearer ${adminToken}` },
       });
       expect(res.status).toBe(200);
@@ -80,8 +92,20 @@ describe("Auth integration", () => {
       expect(res.status).toBe(401);
     });
 
+    it("rejects /status without token", async () => {
+      const res = await app.request("/status");
+      expect(res.status).toBe(401);
+    });
+
     it("allows /memory/facts with valid token", async () => {
       const res = await app.request("/memory/facts", {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      expect(res.status).toBe(200);
+    });
+
+    it("allows /status with valid token", async () => {
+      const res = await app.request("/status", {
         headers: { Authorization: `Bearer ${adminToken}` },
       });
       expect(res.status).toBe(200);

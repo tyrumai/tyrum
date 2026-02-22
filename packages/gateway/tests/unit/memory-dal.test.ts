@@ -90,8 +90,8 @@ describe("MemoryDal", () => {
       expect(events[0]!.payload).toEqual({ url: "https://example.com" });
     });
 
-    it("rejects duplicate event_id", async () => {
-      await dal.insertEpisodicEvent(
+    it("dedupes duplicate event_id (idempotent insert)", async () => {
+      const firstId = await dal.insertEpisodicEvent(
         "evt-dup",
         "2025-01-15T10:00:00Z",
         "web",
@@ -99,15 +99,18 @@ describe("MemoryDal", () => {
         {},
       );
 
-      await expect(
-        dal.insertEpisodicEvent(
-          "evt-dup",
-          "2025-01-15T10:01:00Z",
-          "web",
-          "click",
-          {},
-        ),
-      ).rejects.toThrow();
+      const secondId = await dal.insertEpisodicEvent(
+        "evt-dup",
+        "2025-01-15T10:01:00Z",
+        "web",
+        "click",
+        {},
+      );
+
+      expect(secondId).toBe(firstId);
+
+      const events = await dal.getEpisodicEvents();
+      expect(events).toHaveLength(1);
     });
 
     it("respects limit parameter", async () => {

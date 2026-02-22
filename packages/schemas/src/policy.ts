@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-export const Decision = z.enum(["approve", "escalate", "deny"]);
+// Canonical policy decision vocabulary (docs/architecture/sandbox-policy.md).
+export const Decision = z.enum(["allow", "require_approval", "deny"]);
 export type Decision = z.infer<typeof Decision>;
 
 export const RuleKind = z.enum([

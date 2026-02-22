@@ -8,7 +8,11 @@ import { createContainer } from "../../src/container.js";
 import { createApp } from "../../src/app.js";
 import type { GatewayContainer } from "../../src/container.js";
 import { isAgentEnabled } from "../../src/modules/agent/enabled.js";
-import { AgentRuntime } from "../../src/modules/agent/runtime.js";
+import type { AgentRegistry } from "../../src/modules/agent/registry.js";
+import { AgentRegistry as AgentRegistryImpl } from "../../src/modules/agent/registry.js";
+import { EnvSecretProvider } from "../../src/modules/secret/provider.js";
+import { resolveTyrumHome } from "../../src/modules/agent/home.js";
+import { VERSION } from "../../src/version.js";
 import type { TokenStore } from "../../src/modules/auth/token-store.js";
 import type { Hono } from "hono";
 
@@ -30,16 +34,32 @@ export interface TestAppOptions {
 export async function createTestApp(opts: TestAppOptions = {}): Promise<{
   app: Hono;
   container: GatewayContainer;
-  agentRuntime?: AgentRuntime;
+  agents?: AgentRegistry;
 }> {
   const container = await createTestContainer();
-  const agentRuntime = isAgentEnabled() ? new AgentRuntime({ container }) : undefined;
+  const agents = isAgentEnabled()
+    ? new AgentRegistryImpl({
+        container,
+        baseHome: resolveTyrumHome(),
+        gatewayToken: "test-gateway-token",
+        defaultSecretProvider: new EnvSecretProvider(),
+        defaultPolicyService: container.policyService,
+        approvalNotifier: { notify: () => {} },
+        logger: container.logger,
+      })
+    : undefined;
   const app = createApp(container, {
-    agentRuntime,
+    agents,
     tokenStore: opts.tokenStore,
     isLocalOnly: opts.isLocalOnly,
+    runtime: {
+      version: VERSION,
+      instanceId: "test-instance",
+      role: "all",
+      otelEnabled: false,
+    },
   });
-  return { app, container, agentRuntime };
+  return { app, container, agents };
 }
 
 /**

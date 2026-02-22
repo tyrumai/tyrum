@@ -22,8 +22,24 @@ describe("SessionDal", () => {
     const second = await dal.getOrCreate("telegram", "dm-1");
 
     expect(first.session_id).toBe("telegram:dm-1");
+    expect(first.agent_id).toBe("default");
     expect(second.session_id).toBe(first.session_id);
     expect(second.turns).toEqual([]);
+  });
+
+  it("isolates sessions per agent", async () => {
+    const dal = createDal();
+    const a = await dal.getOrCreate("telegram", "dm-1", "agent-1");
+    const b = await dal.getOrCreate("telegram", "dm-1", "agent-2");
+    const def = await dal.getOrCreate("telegram", "dm-1");
+
+    expect(a.agent_id).toBe("agent-1");
+    expect(b.agent_id).toBe("agent-2");
+    expect(def.agent_id).toBe("default");
+
+    expect(a.session_id).toBe("agent:agent-1:telegram:dm-1");
+    expect(b.session_id).toBe("agent:agent-2:telegram:dm-1");
+    expect(def.session_id).toBe("telegram:dm-1");
   });
 
   it("stores bounded turn history", async () => {
@@ -57,6 +73,49 @@ describe("SessionDal", () => {
     expect(updated.turns[3]?.content).toBe("a3");
   });
 
+  it("compacts overflow into session summary deterministically", async () => {
+    const dal = createDal();
+    const session = await dal.getOrCreate("discord", "thread-compact");
+
+    const first = await dal.appendTurn(
+      session.session_id,
+      "u1",
+      "a1",
+      1,
+      "2026-02-17T00:00:00.000Z",
+    );
+    expect(first.turns).toHaveLength(2);
+    expect(first.summary).toBe("");
+
+    const second = await dal.appendTurn(
+      session.session_id,
+      "u2",
+      "a2",
+      1,
+      "2026-02-17T00:01:00.000Z",
+    );
+    expect(second.turns).toHaveLength(2);
+    expect(second.turns[0]?.content).toBe("u2");
+    expect(second.turns[1]?.content).toBe("a2");
+    expect(second.summary).toContain("u1");
+    expect(second.summary).toContain("a1");
+    expect(second.summary).not.toContain("u2");
+
+    const third = await dal.appendTurn(
+      session.session_id,
+      "u3",
+      "a3",
+      1,
+      "2026-02-17T00:02:00.000Z",
+    );
+    expect(third.turns).toHaveLength(2);
+    expect(third.turns[0]?.content).toBe("u3");
+    expect(third.turns[1]?.content).toBe("a3");
+    expect(third.summary).toContain("u1");
+    expect(third.summary).toContain("u2");
+    expect(third.summary).not.toContain("u3");
+  });
+
   it("deletes expired sessions using ttl days", async () => {
     const dal = createDal();
     const session = await dal.getOrCreate("mattermost", "ops");
@@ -70,6 +129,40 @@ describe("SessionDal", () => {
 
     expect(removed).toBe(1);
     expect(row).toBeUndefined();
+  });
+
+  it("deletes expired sessions across agents when agent id is omitted", async () => {
+    const dal = createDal();
+    const a = await dal.getOrCreate("mattermost", "ops", "agent-1");
+    const b = await dal.getOrCreate("mattermost", "ops", "agent-2");
+
+    await db!.run(
+      "UPDATE sessions SET updated_at = datetime('now', '-40 days') WHERE session_id IN (?, ?)",
+      [a.session_id, b.session_id],
+    );
+
+    const removed = await dal.deleteExpired(30);
+
+    expect(removed).toBe(2);
+    expect(await dal.getById(a.session_id, "agent-1")).toBeUndefined();
+    expect(await dal.getById(b.session_id, "agent-2")).toBeUndefined();
+  });
+
+  it("deletes expired sessions only for the specified agent", async () => {
+    const dal = createDal();
+    const a = await dal.getOrCreate("mattermost", "ops", "agent-1");
+    const b = await dal.getOrCreate("mattermost", "ops", "agent-2");
+
+    await db!.run(
+      "UPDATE sessions SET updated_at = datetime('now', '-40 days') WHERE session_id IN (?, ?)",
+      [a.session_id, b.session_id],
+    );
+
+    const removed = await dal.deleteExpired(30, "agent-1");
+
+    expect(removed).toBe(1);
+    expect(await dal.getById(a.session_id, "agent-1")).toBeUndefined();
+    expect(await dal.getById(b.session_id, "agent-2")).toBeDefined();
   });
 
   it("keeps newer legacy-format timestamps on threshold date", async () => {

@@ -77,7 +77,7 @@ export function evaluateSpend(ctx?: PolicySpendContext): RuleDecision {
   if (ctx == null) {
     return {
       rule: "spend_limit",
-      outcome: "escalate",
+      outcome: "require_approval",
       detail: "Spend context missing; escalate for confirmation.",
     };
   }
@@ -96,14 +96,14 @@ export function evaluateSpend(ctx?: PolicySpendContext): RuleDecision {
   if (amount > userLimit) {
     return {
       rule: "spend_limit",
-      outcome: "escalate",
+      outcome: "require_approval",
       detail: `Amount ${formatMoney(amount, ctx.currency)} exceeds user limit ${formatMoney(userLimit, ctx.currency)}.`,
     };
   }
 
   return {
     rule: "spend_limit",
-    outcome: "approve",
+    outcome: "allow",
     detail: `Amount ${formatMoney(amount, ctx.currency)} within auto-approval limit ${formatMoney(userLimit, ctx.currency)}.`,
   };
 }
@@ -112,7 +112,7 @@ export function evaluatePii(ctx?: PiiContext): RuleDecision {
   if (ctx == null) {
     return {
       rule: "pii_guardrail",
-      outcome: "escalate",
+      outcome: "require_approval",
       detail: "PII context missing; escalate to request confirmation.",
     };
   }
@@ -120,7 +120,7 @@ export function evaluatePii(ctx?: PiiContext): RuleDecision {
   if (ctx.categories.length === 0) {
     return {
       rule: "pii_guardrail",
-      outcome: "approve",
+      outcome: "allow",
       detail: "No PII categories declared.",
     };
   }
@@ -142,14 +142,14 @@ export function evaluatePii(ctx?: PiiContext): RuleDecision {
   if (hasFinancialOrHealth) {
     return {
       rule: "pii_guardrail",
-      outcome: "escalate",
+      outcome: "require_approval",
       detail: `Detected sensitive PII categories requiring consent: ${describeCategories(ctx.categories)}.`,
     };
   }
 
   return {
     rule: "pii_guardrail",
-    outcome: "approve",
+    outcome: "allow",
     detail: `PII categories acceptable for automated handling: ${describeCategories(ctx.categories)}.`,
   };
 }
@@ -158,7 +158,7 @@ export function evaluateLegal(ctx?: LegalContext): RuleDecision {
   if (ctx == null) {
     return {
       rule: "legal_compliance",
-      outcome: "escalate",
+      outcome: "require_approval",
       detail: "Legal context missing; escalate for review.",
     };
   }
@@ -166,7 +166,7 @@ export function evaluateLegal(ctx?: LegalContext): RuleDecision {
   if (ctx.flags.length === 0) {
     return {
       rule: "legal_compliance",
-      outcome: "approve",
+      outcome: "allow",
       detail: "No legal flags raised.",
     };
   }
@@ -191,14 +191,14 @@ export function evaluateLegal(ctx?: LegalContext): RuleDecision {
   if (hasEscalating) {
     return {
       rule: "legal_compliance",
-      outcome: "escalate",
+      outcome: "require_approval",
       detail: `Legal flags require human review: ${describeLegalFlags(ctx.flags)}.`,
     };
   }
 
   return {
     rule: "legal_compliance",
-    outcome: "approve",
+    outcome: "allow",
     detail: `Legal flags acceptable: ${describeLegalFlags(ctx.flags)}.`,
   };
 }
@@ -214,7 +214,7 @@ export function evaluateConnectorScope(
   if (scope == null || scope.length === 0) {
     return {
       rule: "connector_scope",
-      outcome: "escalate",
+      outcome: "require_approval",
       detail: "Connector scope missing; escalate for consent.",
     };
   }
@@ -230,14 +230,14 @@ export function evaluateConnectorScope(
   if ((AUTO_APPROVE_SCOPES as readonly string[]).includes(scope)) {
     return {
       rule: "connector_scope",
-      outcome: "approve",
+      outcome: "allow",
       detail: `Connector scope ${scope} already granted.`,
     };
   }
 
   return {
     rule: "connector_scope",
-    outcome: "escalate",
+    outcome: "require_approval",
     detail: `Consent required before activating connector scope ${scope}.`,
   };
 }
@@ -250,10 +250,10 @@ export function overallDecision(rules: readonly RuleDecision[]): Decision {
   if (rules.some((r) => r.outcome === "deny")) {
     return "deny";
   }
-  if (rules.some((r) => r.outcome === "escalate")) {
-    return "escalate";
+  if (rules.some((r) => r.outcome === "require_approval")) {
+    return "require_approval";
   }
-  return "approve";
+  return "allow";
 }
 
 // ---------------------------------------------------------------------------

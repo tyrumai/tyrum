@@ -10,6 +10,7 @@ import type { TaggedContent } from "./provenance.js";
 import { tagContent } from "./provenance.js";
 import { sanitizeForModel } from "./sanitizer.js";
 import type { SecretProvider } from "../secret/provider.js";
+import type { SecretResolutionAuditDal } from "../secret/resolution-audit-dal.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 
 const MAX_RESPONSE_BYTES = 32_768;
@@ -313,16 +314,29 @@ export class ToolExecutor {
     private readonly secretProvider?: SecretProvider,
     private readonly dnsLookup: DnsLookupFn = defaultDnsLookup,
     private readonly redactionEngine?: RedactionEngine,
+    private readonly secretResolutionAuditDal?: SecretResolutionAuditDal,
   ) {}
 
   async execute(
     toolId: string,
     toolCallId: string,
     args: unknown,
+    audit?: {
+      agent_id?: string;
+      workspace_id?: string;
+      session_id?: string;
+      channel?: string;
+      thread_id?: string;
+      policy_snapshot_id?: string;
+    },
   ): Promise<ToolResult> {
     try {
       // Resolve secret handle references in args
-      const { resolved: resolvedArgs, secrets } = await this.resolveSecrets(args);
+      const { resolved: resolvedArgs, secrets } = await this.resolveSecrets(args, {
+        tool_id: toolId,
+        tool_call_id: toolCallId,
+        ...audit,
+      });
       this.redactionEngine?.registerSecrets(secrets);
 
       let result: ToolResult;
@@ -686,6 +700,16 @@ export class ToolExecutor {
    */
   private async resolveSecrets(
     args: unknown,
+    audit?: {
+      tool_call_id: string;
+      tool_id: string;
+      agent_id?: string;
+      workspace_id?: string;
+      session_id?: string;
+      channel?: string;
+      thread_id?: string;
+      policy_snapshot_id?: string;
+    },
   ): Promise<{ resolved: unknown; secrets: string[] }> {
     if (!this.secretProvider) {
       return { resolved: args, secrets: [] };
@@ -700,9 +724,28 @@ export class ToolExecutor {
         // scope (needed by EnvSecretProvider) is populated correctly.
         const allHandles = await this.secretProvider!.list();
         const handle = allHandles.find((h) => h.handle_id === handleId);
-        const resolved = handle
-          ? await this.secretProvider!.resolve(handle)
-          : null;
+        const resolved = handle ? await this.secretProvider!.resolve(handle) : null;
+        if (handle && audit && this.secretResolutionAuditDal) {
+          try {
+            await this.secretResolutionAuditDal.record({
+              toolCallId: audit.tool_call_id,
+              toolId: audit.tool_id,
+              handleId: handle.handle_id,
+              provider: handle.provider,
+              scope: handle.scope,
+              agentId: audit.agent_id,
+              workspaceId: audit.workspace_id,
+              sessionId: audit.session_id,
+              channel: audit.channel,
+              threadId: audit.thread_id,
+              policySnapshotId: audit.policy_snapshot_id,
+              outcome: resolved !== null ? "resolved" : "failed",
+              error: resolved !== null ? undefined : "secret provider returned null",
+            });
+          } catch {
+            // ignore audit write failures
+          }
+        }
         if (resolved !== null) {
           secrets.push(resolved);
           return resolved;

@@ -33,29 +33,29 @@ In the local-first profile, the policy check runs in-process inside `@tyrum/gate
 }
 ```
 
-All sections are optional except fields required by each section's schema (for example `spend.amount_minor_units` when a `spend` object is present). When context is missing the service escalates the corresponding rule so planners can request confirmation.
+All sections are optional except fields required by each section's schema (for example `spend.amount_minor_units` when a `spend` object is present). When context is missing the service returns `require_approval` for the corresponding rule so planners can request confirmation.
 
-- `connector.scope` – Optional; connector identifier that requires consent before activation. When omitted, the connector rule is skipped. Known trusted scopes auto-approve, while unknown scopes escalate and explicitly blocked scopes deny.
+- `connector.scope` – Optional; connector identifier that requires consent before activation. When omitted, the connector rule is skipped. Known trusted scopes auto-allow, while unknown scopes require approval and explicitly blocked scopes deny.
 
 ## Static Rule Set
 - **Spend:**
-  - Auto-approve up to `user_limit_minor_units` (defaults to 100.00 in currency minor units).
-  - Escalate when the amount exceeds the user limit but remains under the hard ceiling (500.00).
+  - Auto-allow up to `user_limit_minor_units` (defaults to 100.00 in currency minor units).
+  - Require approval when the amount exceeds the user limit but remains under the hard ceiling (500.00).
   - Deny when the amount exceeds the hard ceiling.
 - **PII:**
   - Deny when `biometric` or `government_id` data is present.
-  - Escalate when `financial` or `health` data is present.
-  - Approve otherwise (including basic contact or location metadata).
+  - Require approval when `financial` or `health` data is present.
+  - Allow otherwise (including basic contact or location metadata).
 - **Legal:**
   - Deny when `prohibited_content` is present.
-  - Escalate for `requires_review`, `export_controlled`, or `terms_unknown` flags.
-  - Approve when no flags (or only `other`) are supplied.
+  - Require approval for `requires_review`, `export_controlled`, or `terms_unknown` flags.
+  - Allow when no flags (or only `other`) are supplied.
 - **Connector Scope:**
-  - Approve when the scope matches curated MCP capabilities (`mcp://calendar`, `mcp://crm`, `mcp://email`, `mcp://files`, `mcp://support`, `mcp://tasks`).
+  - Allow when the scope matches curated MCP capabilities (`mcp://calendar`, `mcp://crm`, `mcp://email`, `mcp://files`, `mcp://support`, `mcp://tasks`).
   - Deny sensitive scopes such as `mcp://root`, `mcp://secrets`, or `mcp://admin`.
-  - Escalate for any other scope or when the scope string is missing, prompting the planner to request user consent.
+  - Require approval for any other scope or when the scope string is missing, prompting the planner to request user consent.
 
-The overall `decision` is `deny` if any rule denies, `escalate` if any rule escalates, and `approve` otherwise.
+The overall `decision` is `deny` if any rule denies, `require_approval` if any rule requires approval, and `allow` otherwise.
 
 ## Validation & PII Handling
 - Requests are validated structurally against the policy schema; no user identifier is required in the single-operator local-first profile.
@@ -74,26 +74,26 @@ The overall `decision` is `deny` if any rule denies, `escalate` if any rule esca
 
 // Response
 {
-  "decision": "approve",
+  "decision": "allow",
   "rules": [
     {
       "rule": "spend_limit",
-      "outcome": "approve",
+      "outcome": "allow",
       "detail": "Amount EUR 87.50 within auto-approval limit EUR 100.00."
     },
     {
       "rule": "pii_guardrail",
-      "outcome": "approve",
+      "outcome": "allow",
       "detail": "PII categories acceptable for automated handling: basic_contact."
     },
     {
       "rule": "legal_compliance",
-      "outcome": "approve",
+      "outcome": "allow",
       "detail": "No legal flags raised."
     },
     {
       "rule": "connector_scope",
-      "outcome": "approve",
+      "outcome": "allow",
       "detail": "Connector scope mcp://calendar already granted."
     }
   ]

@@ -53,6 +53,34 @@ describe("Memory CRUD routes", () => {
       });
       expect(res.status).toBe(400);
     });
+
+    it("forgets facts by key", async () => {
+      await app.request("/memory/facts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fact_key: "pet",
+          fact_value: "cat",
+          source: "user",
+          observed_at: "2025-01-15T10:00:00Z",
+          confidence: 0.9,
+        }),
+      });
+
+      const forgetRes = await app.request("/memory/forget", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: "FORGET", fact_key: "pet" }),
+      });
+      expect(forgetRes.status).toBe(200);
+      const forgetBody = (await forgetRes.json()) as { status: string; deleted: { facts: number } };
+      expect(forgetBody.status).toBe("ok");
+      expect(forgetBody.deleted.facts).toBe(1);
+
+      const getRes = await app.request("/memory/facts");
+      const body = (await getRes.json()) as { facts: unknown[] };
+      expect(body.facts).toEqual([]);
+    });
   });
 
   describe("Episodic events", () => {
@@ -82,6 +110,29 @@ describe("Memory CRUD routes", () => {
       expect(body.events.length).toBe(1);
       expect(body.events[0]!.event_id).toBe("evt-1");
       expect(body.events[0]!.payload).toEqual({ text: "hello" });
+    });
+
+    it("forgets episodic events by event_id", async () => {
+      await app.request("/memory/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event_id: "evt-forget-1",
+          occurred_at: "2025-01-15T10:00:00Z",
+          channel: "telegram",
+          event_type: "message",
+          payload: { text: "hello" },
+        }),
+      });
+
+      const forgetRes = await app.request("/memory/forget", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: "FORGET", event_id: "evt-forget-1" }),
+      });
+      expect(forgetRes.status).toBe(200);
+      const forgetBody = (await forgetRes.json()) as { status: string; deleted: { episodic_events: number } };
+      expect(forgetBody.deleted.episodic_events).toBe(1);
     });
   });
 

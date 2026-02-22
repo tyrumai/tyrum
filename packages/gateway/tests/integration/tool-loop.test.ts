@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import type { ApprovalRow } from "../../src/modules/approval/dal.js";
+import { createApprovalRoutes } from "../../src/routes/approval.js";
+import { Hono } from "hono";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -228,6 +230,8 @@ describe("Tool execution loop", () => {
     const runtime = new AgentRuntime({
       container,
       home: homeDir,
+      agentId: "agent-test",
+      workspaceId: "ws-test",
       fetchImpl: fetchStub,
       mcpManager: mcpManager as unknown as ConstructorParameters<
         typeof AgentRuntime
@@ -244,6 +248,9 @@ describe("Tool execution loop", () => {
 
     const pending = await waitForPendingApproval(container);
     expect(pending.prompt).toContain("tool.exec");
+    expect(pending.kind).toBe("workflow_step");
+    expect(pending.agent_id).toBe("agent-test");
+    expect(pending.workspace_id).toBe("ws-test");
     expect(pending.status).toBe("pending");
 
     const updated = await container.approvalDal.respond(
@@ -331,6 +338,121 @@ describe("Tool execution loop", () => {
     expect(result.reply).toBe("approval denied");
     expect(result.used_tools).not.toContain("tool.fs.write");
     await expect(access(join(homeDir, "blocked.txt"))).rejects.toThrow();
+  });
+
+  it("supports approve-always by creating a policy override that skips future approvals", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
+
+    await writeFile(
+      join(homeDir, "agent.yml"),
+      [
+        "model:",
+        "  model: test-model",
+        "skills:",
+        "  enabled: []",
+        "mcp:",
+        "  enabled: []",
+        "tools:",
+        "  allow:",
+        "    - tool.exec",
+        "sessions:",
+        "  ttl_days: 30",
+        "  max_turns: 20",
+        "memory:",
+        "  markdown_enabled: false",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const toolCalls = [
+      {
+        id: "tc-always",
+        function: {
+          name: "tool.exec",
+          arguments: JSON.stringify({ command: "echo hello" }),
+        },
+      },
+    ];
+
+    const fetchStub1 = createToolCallFetchStub(toolCalls, "approved and executed");
+    const mcpManager = {
+      listToolDescriptors: vi.fn(async () => []),
+      shutdown: vi.fn(async () => {}),
+      callTool: vi.fn(async () => ({ content: [] })),
+    };
+
+    const runtime1 = new AgentRuntime({
+      container,
+      home: homeDir,
+      fetchImpl: fetchStub1,
+      mcpManager: mcpManager as unknown as ConstructorParameters<typeof AgentRuntime>[0]["mcpManager"],
+      approvalWaitMs: 10_000,
+      approvalPollMs: 20,
+    });
+
+    const turn1Promise = runtime1.turn({
+      channel: "test",
+      thread_id: "thread-always-1",
+      message: "run command",
+    });
+
+    const pending = await waitForPendingApproval(container);
+    expect(pending.prompt).toContain("tool.exec");
+
+    const approvalApp = new Hono();
+    approvalApp.route(
+      "/",
+      createApprovalRoutes({
+        approvalDal: container.approvalDal,
+        policyOverrideDal: container.policyOverrideDal,
+      }),
+    );
+
+    const suggested = (pending.context as { policy?: { suggested_overrides?: unknown[] } }).policy?.suggested_overrides;
+    expect(Array.isArray(suggested)).toBe(true);
+
+    const res = await approvalApp.request(`/approvals/${pending.id}/respond`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        decision: "approved",
+        mode: "always",
+        overrides: [{ tool_id: "tool.exec", pattern: "echo hello", workspace_id: "default" }],
+      }),
+    });
+    expect(res.status).toBe(200);
+
+    const result1 = await turn1Promise;
+    expect(result1.reply).toBe("approved and executed");
+    expect(result1.used_tools).toContain("tool.exec");
+
+    const overrides = await container.policyOverrideDal.list({ agentId: "default", toolId: "tool.exec" });
+    expect(overrides.length).toBeGreaterThan(0);
+
+    const fetchStub2 = createToolCallFetchStub(toolCalls, "executed without approval");
+    const runtime2 = new AgentRuntime({
+      container,
+      home: homeDir,
+      fetchImpl: fetchStub2,
+      mcpManager: mcpManager as unknown as ConstructorParameters<typeof AgentRuntime>[0]["mcpManager"],
+      approvalWaitMs: 1_000,
+      approvalPollMs: 20,
+    });
+
+    const turn2Promise = runtime2.turn({
+      channel: "test",
+      thread_id: "thread-always-2",
+      message: "run command again",
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const stillPending = await container.approvalDal.getPending();
+    expect(stillPending).toHaveLength(0);
+
+    const result2 = await turn2Promise;
+    expect(result2.reply).toBe("executed without approval");
+    expect(result2.used_tools).toContain("tool.exec");
   });
 
   it("returns final reply when LLM returns no tool_calls (single-shot)", async () => {

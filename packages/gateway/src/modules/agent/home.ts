@@ -1,7 +1,8 @@
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { mkdir, access, writeFile } from "node:fs/promises";
-import { constants } from "node:fs";
+import { constants, statSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 function fileExists(path: string): Promise<boolean> {
   return access(path, constants.F_OK)
@@ -11,6 +12,14 @@ function fileExists(path: string): Promise<boolean> {
 
 export function resolveTyrumHome(): string {
   const fromEnv = process.env["TYRUM_HOME"]?.trim();
+  if (fromEnv && fromEnv.length > 0) {
+    return fromEnv;
+  }
+  return join(homedir(), ".tyrum");
+}
+
+export function resolveUserTyrumHome(): string {
+  const fromEnv = process.env["TYRUM_USER_HOME"]?.trim();
   if (fromEnv && fromEnv.length > 0) {
     return fromEnv;
   }
@@ -27,6 +36,41 @@ export function resolveIdentityPath(home = resolveTyrumHome()): string {
 
 export function resolveSkillsDir(home = resolveTyrumHome()): string {
   return join(home, "skills");
+}
+
+export function resolveUserSkillsDir(userHome = resolveUserTyrumHome()): string {
+  return join(userHome, "skills");
+}
+
+export function resolveBundledSkillsDir(): string {
+  const here = dirname(fileURLToPath(import.meta.url));
+  return resolveBundledSkillsDirFrom(here);
+}
+
+function isDirectory(path: string): boolean {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+export function resolveBundledSkillsDirFrom(startDir: string): string {
+  // We cannot rely on the source tree depth because tsdown bundles the gateway
+  // into `dist/index.mjs`, making `import.meta.url` point at `dist/`.
+  //
+  // Instead, walk up until we find a `skills/` directory.
+  let current = startDir;
+  for (let i = 0; i < 10; i += 1) {
+    const candidate = join(current, "skills");
+    if (isDirectory(candidate)) return candidate;
+    const parent = dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+
+  // Fallback to the historical source layout.
+  return join(startDir, "../../../skills");
 }
 
 export function resolveMcpDir(home = resolveTyrumHome()): string {

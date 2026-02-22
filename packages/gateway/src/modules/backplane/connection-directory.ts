@@ -4,6 +4,12 @@ import type { SqlDb } from "../../statestore/types.js";
 export interface ConnectionDirectoryRow {
   connection_id: string;
   edge_id: string;
+  role: "client" | "node";
+  device_id: string | null;
+  pubkey: string | null;
+  label: string | null;
+  version: string | null;
+  mode: string | null;
   capabilities: ClientCapability[];
   connected_at_ms: number;
   last_seen_at_ms: number;
@@ -13,6 +19,12 @@ export interface ConnectionDirectoryRow {
 interface RawConnectionDirectoryRow {
   connection_id: string;
   edge_id: string;
+  role: string;
+  device_id: string | null;
+  pubkey: string | null;
+  label: string | null;
+  version: string | null;
+  mode: string | null;
   capabilities_json: string;
   connected_at_ms: number;
   last_seen_at_ms: number;
@@ -29,9 +41,16 @@ function toRow(raw: RawConnectionDirectoryRow): ConnectionDirectoryRow {
   } catch {
     // leave empty
   }
+  const role = raw.role === "node" ? "node" : "client";
   return {
     connection_id: raw.connection_id,
     edge_id: raw.edge_id,
+    role,
+    device_id: raw.device_id,
+    pubkey: raw.pubkey,
+    label: raw.label,
+    version: raw.version,
+    mode: raw.mode,
     capabilities,
     connected_at_ms: raw.connected_at_ms,
     last_seen_at_ms: raw.last_seen_at_ms,
@@ -45,6 +64,12 @@ export class ConnectionDirectoryDal {
   async upsertConnection(params: {
     connectionId: string;
     edgeId: string;
+    role: "client" | "node";
+    deviceId?: string | null;
+    pubkey?: string | null;
+    label?: string | null;
+    version?: string | null;
+    mode?: string | null;
     capabilities: readonly ClientCapability[];
     nowMs: number;
     ttlMs: number;
@@ -54,19 +79,37 @@ export class ConnectionDirectoryDal {
       `INSERT INTO connection_directory (
          connection_id,
          edge_id,
+         role,
+         device_id,
+         pubkey,
+         label,
+         version,
+         mode,
          capabilities_json,
          connected_at_ms,
          last_seen_at_ms,
          expires_at_ms
-       ) VALUES (?, ?, ?, ?, ?, ?)
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(connection_id) DO UPDATE SET
          edge_id = excluded.edge_id,
+         role = excluded.role,
+         device_id = excluded.device_id,
+         pubkey = excluded.pubkey,
+         label = excluded.label,
+         version = excluded.version,
+         mode = excluded.mode,
          capabilities_json = excluded.capabilities_json,
          last_seen_at_ms = excluded.last_seen_at_ms,
          expires_at_ms = excluded.expires_at_ms`,
       [
         params.connectionId,
         params.edgeId,
+        params.role,
+        params.deviceId ?? null,
+        params.pubkey ?? null,
+        params.label ?? null,
+        params.version ?? null,
+        params.mode ?? null,
         JSON.stringify(params.capabilities ?? []),
         params.nowMs,
         params.nowMs,
@@ -117,9 +160,13 @@ export class ConnectionDirectoryDal {
   async listConnectionsForCapability(
     capability: ClientCapability,
     nowMs: number,
+    opts?: { role?: "client" | "node" },
   ): Promise<ConnectionDirectoryRow[]> {
     const rows = await this.listNonExpired(nowMs);
-    return rows.filter((r) => r.capabilities.includes(capability));
+    return rows.filter(
+      (r) =>
+        r.capabilities.includes(capability) &&
+        (opts?.role ? r.role === opts.role : true),
+    );
   }
 }
-

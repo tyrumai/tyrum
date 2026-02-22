@@ -11,7 +11,8 @@ import type {
   SkillManifest as SkillManifestT,
   IdentityPack as IdentityPackT,
 } from "@tyrum/schemas";
-import { AgentStatusResponse, AgentTurnResponse } from "@tyrum/schemas";
+import { AgentStatusResponse, AgentTurnResponse, DEFAULT_WORKSPACE_ID } from "@tyrum/schemas";
+import type { Decision } from "@tyrum/schemas";
 import type { GatewayContainer } from "../../container.js";
 import { ensureWorkspaceInitialized, resolveTyrumHome } from "./home.js";
 import { MarkdownMemoryStore } from "./markdown-memory.js";
@@ -32,6 +33,8 @@ import { VectorDal, type VectorSearchResult } from "../memory/vector-dal.js";
 import { EmbeddingPipeline } from "../memory/embedding-pipeline.js";
 import type { ApprovalNotifier } from "../approval/notifier.js";
 import type { ApprovalDal, ApprovalStatus } from "../approval/dal.js";
+import type { PluginRegistry } from "../plugins/registry.js";
+import type { PolicyService } from "../policy/service.js";
 
 const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_APPROVAL_WAIT_MS = 120_000;
@@ -59,14 +62,93 @@ interface ToolExecutionContext {
   threadId: string;
 }
 
+function resolveAgentId(): string {
+  const raw = process.env["TYRUM_AGENT_ID"]?.trim();
+  return raw && raw.length > 0 ? raw : "default";
+}
+
+function resolveWorkspaceId(): string {
+  const raw = process.env["TYRUM_WORKSPACE_ID"]?.trim();
+  return raw && raw.length > 0 ? raw : DEFAULT_WORKSPACE_ID;
+}
+
+function collapseWhitespace(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function toolMatchTarget(toolId: string, args: unknown): string {
+  const parsed = args as Record<string, unknown> | null;
+
+  if (toolId === "tool.exec") {
+    const cmd = typeof parsed?.["command"] === "string" ? parsed["command"] : "";
+    return collapseWhitespace(cmd);
+  }
+
+  if (toolId === "tool.http.fetch") {
+    const url = typeof parsed?.["url"] === "string" ? parsed["url"] : "";
+    // For matching, we intentionally do not include query params.
+    const q = url.indexOf("?");
+    const safe = q === -1 ? url : url.slice(0, q);
+    return safe.trim();
+  }
+
+  if (toolId === "tool.fs.read" || toolId === "tool.fs.write") {
+    const rawPath = typeof parsed?.["path"] === "string" ? parsed["path"] : "";
+    const op = toolId === "tool.fs.write" ? "write" : "read";
+    return `${op}:${rawPath.trim()}`;
+  }
+
+  if (toolId === "tool.node.dispatch") {
+    const cap = typeof parsed?.["capability"] === "string" ? parsed["capability"] : "";
+    const action = typeof parsed?.["action"] === "string" ? parsed["action"] : "";
+    return `capability:${cap.trim()};action:${action.trim()}`;
+  }
+
+  // MCP and unknown tools: match on tool id.
+  return toolId;
+}
+
+function collectSecretHandleIds(args: unknown): string[] {
+  const out = new Set<string>();
+
+  const walk = (value: unknown): void => {
+    if (typeof value === "string" && value.startsWith("secret:")) {
+      const id = value.slice("secret:".length).trim();
+      if (id) out.add(id);
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const entry of value) walk(entry);
+      return;
+    }
+    if (value !== null && typeof value === "object") {
+      for (const v of Object.values(value as Record<string, unknown>)) {
+        walk(v);
+      }
+    }
+  };
+
+  walk(args);
+  return [...out];
+}
+
 export interface AgentRuntimeOptions {
   container: GatewayContainer;
   home?: string;
   sessionDal?: SessionDal;
   fetchImpl?: typeof fetch;
+  /** Stable agent identifier for routing/isolation (default: env TYRUM_AGENT_ID or "default"). */
+  agentId?: string;
+  /** Workspace identifier for leases/audit (default: env TYRUM_WORKSPACE_ID or "default"). */
+  workspaceId?: string;
+  /** Gateway admin token used for internal HTTP calls (model proxy, embeddings). */
+  gatewayToken?: string;
   /** Override the language model (useful for testing). */
   languageModel?: LanguageModel;
   mcpManager?: McpManager;
+  plugins?: PluginRegistry;
+  /** Optional per-agent policy service instance. */
+  policyService?: PolicyService;
   /** Maximum tool/LLM steps per turn (AI SDK step budget). */
   maxSteps?: number;
   secretProvider?: SecretProvider;
@@ -99,15 +181,6 @@ function formatSessionContext(summary: string, turns: SessionMessage[]): string 
   }
 
   return lines.join("\n");
-}
-
-function summarizeTurns(turns: SessionMessage[]): string {
-  if (turns.length === 0) return "";
-  const lines = turns.slice(-6).map((turn) => {
-    const role = turn.role === "assistant" ? "A" : "U";
-    return `${role}: ${trimTo(turn.content.trim(), 140)}`;
-  });
-  return trimTo(lines.join(" | "), 600);
 }
 
 function formatIdentityPrompt(identity: IdentityPackT): string {
@@ -219,6 +292,10 @@ function resolveModelBaseUrl(config: AgentConfigT): string {
     return configured.replace(/\/$/, "");
   }
 
+  return resolveGatewayApiBaseUrl();
+}
+
+function resolveGatewayApiBaseUrl(): string {
   const rawHost =
     process.env["GATEWAY_HOST"]?.trim() ||
     process.env["HOST"]?.trim() ||
@@ -257,30 +334,79 @@ const NOOP_APPROVAL_NOTIFIER: ApprovalNotifier = {
   },
 };
 
+export interface AgentContextPartReport {
+  id: string;
+  chars: number;
+}
+
+export interface AgentContextReport {
+  context_report_id: string;
+  generated_at: string;
+  session_id: string;
+  channel: string;
+  thread_id: string;
+  agent_id: string;
+  workspace_id: string;
+  system_prompt: {
+    chars: number;
+  };
+  user_parts: AgentContextPartReport[];
+  selected_tools: string[];
+  tool_schema_top: AgentContextPartReport[];
+  enabled_skills: string[];
+  mcp_servers: string[];
+  memory: {
+    keyword_hits: number;
+    semantic_hits: number;
+  };
+}
+
+function looksLikeSecretText(text: string): boolean {
+  if (!text) return false;
+  if (/-----BEGIN [A-Z ]*PRIVATE KEY-----/i.test(text)) return true;
+  if (/\bsk-[A-Za-z0-9]{20,}\b/.test(text)) return true;
+  return false;
+}
+
 export class AgentRuntime {
   private readonly home: string;
   private readonly sessionDal: SessionDal;
   private readonly fetchImpl: typeof fetch;
+  private readonly agentId: string;
+  private readonly workspaceId: string;
+  private readonly gatewayToken: string | undefined;
   private readonly languageModelOverride?: LanguageModel;
   private readonly mcpManager: McpManager;
+  private plugins: PluginRegistry | undefined;
+  private readonly policyService: PolicyService;
   private readonly approvalDal: ApprovalDal;
   private readonly approvalNotifier: ApprovalNotifier;
   private readonly approvalWaitMs: number;
   private readonly approvalPollMs: number;
   private readonly maxSteps: number;
+  private lastContextReport: AgentContextReport | undefined;
   private cleanupAtMs = 0;
 
   constructor(private readonly opts: AgentRuntimeOptions) {
     this.home = opts.home ?? resolveTyrumHome();
     this.sessionDal = opts.sessionDal ?? opts.container.sessionDal;
     this.fetchImpl = opts.fetchImpl ?? fetch;
+    this.agentId = opts.agentId?.trim() || resolveAgentId();
+    this.workspaceId = opts.workspaceId?.trim() || resolveWorkspaceId();
+    this.gatewayToken = opts.gatewayToken?.trim() || undefined;
     this.languageModelOverride = opts.languageModel;
     this.mcpManager = opts.mcpManager ?? new McpManager();
+    this.plugins = opts.plugins;
+    this.policyService = opts.policyService ?? opts.container.policyService;
     this.approvalDal = opts.approvalDal ?? opts.container.approvalDal;
     this.approvalNotifier = opts.approvalNotifier ?? NOOP_APPROVAL_NOTIFIER;
     this.approvalWaitMs = Math.max(1_000, opts.approvalWaitMs ?? DEFAULT_APPROVAL_WAIT_MS);
     this.approvalPollMs = Math.max(100, opts.approvalPollMs ?? DEFAULT_APPROVAL_POLL_MS);
     this.maxSteps = opts.maxSteps ?? DEFAULT_MAX_STEPS;
+  }
+
+  setPlugins(plugins: PluginRegistry): void {
+    this.plugins = plugins;
   }
 
   async shutdown(): Promise<void> {
@@ -310,11 +436,11 @@ export class AgentRuntime {
     if (now < this.cleanupAtMs) {
       return;
     }
-    void this.sessionDal.deleteExpired(ttlDays);
+    void this.sessionDal.deleteExpired(ttlDays, this.agentId);
     this.cleanupAtMs = now + 60 * 60 * 1000;
   }
 
-  private async resolveModel(config: AgentConfigT): Promise<LanguageModel> {
+  private async resolveModel(config: AgentConfigT, fetchImpl?: typeof fetch): Promise<LanguageModel> {
     if (this.languageModelOverride) {
       return this.languageModelOverride;
     }
@@ -324,7 +450,7 @@ export class AgentRuntime {
       name: "tyrum",
       apiKey: "",
       baseURL: baseUrl,
-      fetch: this.fetchImpl,
+      fetch: fetchImpl ?? this.fetchImpl,
     });
 
     return provider.languageModel(config.model.model);
@@ -372,6 +498,10 @@ export class AgentRuntime {
     };
 
     return AgentStatusResponse.parse(status);
+  }
+
+  getLastContextReport(): AgentContextReport | undefined {
+    return this.lastContextReport;
   }
 
   async turnStream(input: AgentTurnRequestT): Promise<{
@@ -436,7 +566,28 @@ export class AgentRuntime {
     const ctx = await this.loadContext();
     this.maybeCleanupSessions(ctx.config.sessions.ttl_days);
 
-    const session = await this.sessionDal.getOrCreate(input.channel, input.thread_id);
+    const session = await this.sessionDal.getOrCreate(input.channel, input.thread_id, this.agentId);
+    const baseUrl = resolveModelBaseUrl(ctx.config);
+    const gatewayBaseUrl = resolveGatewayApiBaseUrl();
+    const shouldAuthToGateway = Boolean(this.gatewayToken && baseUrl === gatewayBaseUrl);
+    const agentId = this.agentId;
+    const workspaceId = this.workspaceId;
+
+    const modelFetch: typeof fetch = async (resource, init: RequestInit = {}) => {
+      const headers = new Headers(init.headers ?? {});
+      if (shouldAuthToGateway && !headers.has("authorization")) {
+        headers.set("authorization", `Bearer ${this.gatewayToken}`);
+      }
+      headers.set("x-tyrum-agent-id", agentId);
+      headers.set("x-tyrum-workspace-id", workspaceId);
+      headers.set("x-tyrum-session-id", session.session_id);
+
+      return await this.fetchImpl(resource as RequestInfo, {
+        ...init,
+        headers,
+      });
+    };
+
     const wantsMcpTools = ctx.config.tools.allow.some(
       (entry) => entry === "*" || entry === "mcp*" || entry.startsWith("mcp."),
     );
@@ -446,12 +597,12 @@ export class AgentRuntime {
     if (ctx.config.memory.markdown_enabled) {
       try {
         const vectorDal = new VectorDal(this.opts.container.db);
-        const embeddingBaseUrl = resolveModelBaseUrl(ctx.config);
         const embeddingPipeline = new EmbeddingPipeline({
           vectorDal,
-          baseUrl: embeddingBaseUrl,
+          agentId: this.agentId,
+          baseUrl,
           model: ctx.config.model.model,
-          fetchImpl: this.fetchImpl,
+          fetchImpl: modelFetch,
         });
         semanticSearchPromise = embeddingPipeline
           .search(input.message, 5)
@@ -473,10 +624,11 @@ export class AgentRuntime {
       semanticSearchPromise,
     ]);
 
+    const pluginTools = this.plugins?.getToolDescriptors() ?? [];
     const tools = selectToolDirectory(
       input.message,
       ctx.config.tools.allow,
-      mcpTools,
+      [...mcpTools, ...pluginTools],
       8,
     );
 
@@ -494,6 +646,7 @@ export class AgentRuntime {
       this.opts.secretProvider,
       undefined,
       this.opts.container.redactionEngine,
+      this.opts.container.secretResolutionAuditDal,
     );
 
     const usedTools = new Set<string>();
@@ -515,22 +668,89 @@ export class AgentRuntime {
       formatSemanticMemoryPrompt(semanticHits),
     );
 
+    const systemPrompt = `${formatIdentityPrompt(ctx.identity)}\n\n${DATA_TAG_SAFETY_PROMPT}`;
+    const skillsText = `Enabled skills:\n${formatSkillsPrompt(ctx.skills)}`;
+    const toolsText = `Available tools:\n${formatToolPrompt(tools)}`;
+    const sessionText = `Session context:\n${sessionCtx}`;
+    const memoryText = `Long-term memory matches:\n${memoryCtx}`;
+
+    const toolSchemaTop = tools
+      .map((t) => {
+        const schema = t.inputSchema ?? { type: "object", additionalProperties: true };
+        let chars = 0;
+        try {
+          chars = JSON.stringify(schema).length;
+        } catch {
+          chars = 0;
+        }
+        return { id: t.id, chars };
+      })
+      .sort((a, b) => b.chars - a.chars)
+      .slice(0, 5);
+
+    const contextReportId = randomUUID();
+    const report: AgentContextReport = {
+      context_report_id: contextReportId,
+      generated_at: new Date().toISOString(),
+      session_id: session.session_id,
+      channel: input.channel,
+      thread_id: input.thread_id,
+      agent_id: agentId,
+      workspace_id: workspaceId,
+      system_prompt: { chars: systemPrompt.length },
+      user_parts: [
+        { id: "skills", chars: skillsText.length },
+        { id: "tools", chars: toolsText.length },
+        { id: "session_context", chars: sessionText.length },
+        { id: "memory_matches", chars: memoryText.length },
+        { id: "message", chars: input.message.length },
+      ],
+      selected_tools: tools.map((t) => t.id),
+      tool_schema_top: toolSchemaTop,
+      enabled_skills: ctx.skills.map((s) => s.meta.id),
+      mcp_servers: ctx.mcpServers.map((s) => s.id),
+      memory: {
+        keyword_hits: memoryHits.length,
+        semantic_hits: semanticHits.length,
+      },
+    };
+    this.lastContextReport = report;
+
+    try {
+      await this.opts.container.contextReportDal.insert({
+        contextReportId,
+        sessionId: session.session_id,
+        channel: input.channel,
+        threadId: input.thread_id,
+        agentId: report.agent_id,
+        workspaceId: report.workspace_id,
+        report,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.opts.container.logger.warn("context_report.persist_failed", {
+        context_report_id: contextReportId,
+        session_id: session.session_id,
+        error: message,
+      });
+    }
+
     const userContent: Array<{ type: "text"; text: string }> = [
       {
         type: "text",
-        text: `Enabled skills:\n${formatSkillsPrompt(ctx.skills)}`,
+        text: skillsText,
       },
       {
         type: "text",
-        text: `Available tools:\n${formatToolPrompt(tools)}`,
+        text: toolsText,
       },
       {
         type: "text",
-        text: `Session context:\n${sessionCtx}`,
+        text: sessionText,
       },
       {
         type: "text",
-        text: `Long-term memory matches:\n${memoryCtx}`,
+        text: memoryText,
       },
       {
         type: "text",
@@ -538,7 +758,7 @@ export class AgentRuntime {
       },
     ];
 
-    const model = await this.resolveModel(ctx.config);
+    const model = await this.resolveModel(ctx.config, modelFetch);
 
     return {
       ctx,
@@ -559,16 +779,13 @@ export class AgentRuntime {
   ): Promise<AgentTurnResponseT> {
     const nowIso = new Date().toISOString();
 
-    const updated = await this.sessionDal.appendTurn(
+    await this.sessionDal.appendTurn(
       session.session_id,
       input.message,
       reply,
       ctx.config.sessions.max_turns,
       nowIso,
-    );
-    await this.sessionDal.updateSummary(
-      session.session_id,
-      summarizeTurns(updated.turns),
+      this.agentId,
     );
 
     let memoryWritten = false;
@@ -579,14 +796,22 @@ export class AgentRuntime {
         `User: ${input.message}`,
         `Assistant: ${reply}`,
       ].join("\n");
-      await ctx.memoryStore.appendDaily(entry);
-      memoryWritten = true;
+      if (looksLikeSecretText(entry)) {
+        this.opts.container.logger.warn("memory.write_skipped_secret_like", {
+          session_id: session.session_id,
+          channel: input.channel,
+          thread_id: input.thread_id,
+        });
+      } else {
+        await ctx.memoryStore.appendDaily(entry);
+        memoryWritten = true;
 
-      if (shouldPromoteToCoreMemory(input.message)) {
-        await ctx.memoryStore.appendToCoreSection(
-          "Learned Preferences",
-          `- ${input.message.trim()}`,
-        );
+        if (shouldPromoteToCoreMemory(input.message)) {
+          await ctx.memoryStore.appendToCoreSection(
+            "Learned Preferences",
+            `- ${input.message.trim()}`,
+          );
+        }
       }
     }
 
@@ -598,6 +823,7 @@ export class AgentRuntime {
       {
         session_id: session.session_id,
       },
+      this.agentId,
     );
 
     return AgentTurnResponse.parse({
@@ -625,13 +851,87 @@ export class AgentRuntime {
         inputSchema: jsonSchema(schema),
         execute: async (args: unknown) => {
           const toolCallId = `tc-${randomUUID()}`;
-          if (toolDesc.requires_confirmation) {
+          const policy = this.policyService;
+          const policyEnabled = policy.isEnabled();
+
+          let policyDecision: Decision | undefined;
+          let policySnapshotId: string | undefined;
+          let appliedOverrideIds: string[] | undefined;
+
+          if (policyEnabled) {
+            const agentId = this.agentId;
+            const workspaceId = this.workspaceId;
+
+            const url =
+              toolDesc.id === "tool.http.fetch" &&
+              args &&
+              typeof (args as Record<string, unknown>)["url"] === "string"
+                ? String((args as Record<string, unknown>)["url"])
+                : undefined;
+
+            const handleIds = collectSecretHandleIds(args);
+            const secretScopes: string[] = [];
+            if (handleIds.length > 0 && this.opts.secretProvider) {
+              const handles = await this.opts.secretProvider.list();
+              for (const id of handleIds) {
+                const handle = handles.find((h) => h.handle_id === id);
+                if (handle?.scope) {
+                  secretScopes.push(`${handle.provider}:${handle.scope}`);
+                } else {
+                  secretScopes.push(id);
+                }
+              }
+            }
+
+            const evaluation = await policy.evaluateToolCall({
+              agentId,
+              workspaceId,
+              toolId: toolDesc.id,
+              toolMatchTarget: toolMatchTarget(toolDesc.id, args),
+              url,
+              secretScopes: secretScopes.length > 0 ? secretScopes : undefined,
+            });
+            policyDecision = evaluation.decision;
+            policySnapshotId = evaluation.policy_snapshot?.policy_snapshot_id;
+            appliedOverrideIds = evaluation.applied_override_ids;
+
+            if (policyDecision === "deny" && !policy.isObserveOnly()) {
+              return JSON.stringify({
+                error: `policy denied tool execution for '${toolDesc.id}'`,
+                decision: "deny",
+              });
+            }
+          }
+
+          const shouldRequireApproval =
+            policyEnabled && !policy.isObserveOnly()
+              ? policyDecision === "require_approval"
+              : toolDesc.requires_confirmation;
+
+          if (shouldRequireApproval) {
+            const suggestedOverrides = policyEnabled
+              ? [
+                  {
+                    tool_id: toolDesc.id,
+                    pattern: toolMatchTarget(toolDesc.id, args),
+                    workspace_id: this.workspaceId,
+                  },
+                ]
+              : undefined;
+
             const decision = await this.awaitApprovalForToolExecution(
               toolDesc,
               args,
               toolCallId,
               toolExecutionContext,
               approvalStepIndex++,
+              {
+                policy_snapshot_id: policySnapshotId,
+                agent_id: this.agentId,
+                workspace_id: this.workspaceId,
+                suggested_overrides: suggestedOverrides,
+                applied_override_ids: appliedOverrideIds,
+              },
             );
             if (!decision.approved) {
               return JSON.stringify({
@@ -644,7 +944,51 @@ export class AgentRuntime {
           }
 
           usedTools.add(toolDesc.id);
-          const res = await toolExecutor.execute(toolDesc.id, toolCallId, args);
+          const agentId = this.agentId;
+          const workspaceId = this.workspaceId;
+
+          const pluginRes = await this.plugins?.executeTool({
+            toolId: toolDesc.id,
+            args,
+            home: this.home,
+            agentId,
+            workspaceId,
+          });
+
+          const res = pluginRes
+            ? (() => {
+                const tagged = tagContent(pluginRes.output, "tool", false);
+                return {
+                  tool_call_id: toolCallId,
+                  output: sanitizeForModel(tagged),
+                  error: pluginRes.error,
+                  provenance: tagged,
+                };
+              })()
+            : await toolExecutor.execute(toolDesc.id, toolCallId, args, {
+                agent_id: agentId,
+                workspace_id: workspaceId,
+                session_id: toolExecutionContext.sessionId,
+                channel: toolExecutionContext.channel,
+                thread_id: toolExecutionContext.threadId,
+                policy_snapshot_id: policySnapshotId,
+              });
+
+          if (pluginRes && this.opts.container.redactionEngine) {
+            const redact = (text: string): string =>
+              this.opts.container.redactionEngine?.redactText(text).redacted ?? text;
+            res.output = redact(res.output);
+            if (res.error) {
+              res.error = redact(res.error);
+            }
+            if (res.provenance) {
+              res.provenance = {
+                ...res.provenance,
+                content: redact(res.provenance.content),
+              };
+            }
+          }
+
           let content = res.error ? JSON.stringify({ error: res.error }) : res.output;
 
           if (
@@ -669,6 +1013,13 @@ export class AgentRuntime {
     toolCallId: string,
     context: ToolExecutionContext,
     stepIndex: number,
+    policyContext?: {
+      policy_snapshot_id?: string;
+      agent_id?: string;
+      workspace_id?: string;
+      suggested_overrides?: unknown;
+      applied_override_ids?: string[];
+    },
   ): Promise<{
     approved: boolean;
     status: ApprovalStatus;
@@ -679,6 +1030,9 @@ export class AgentRuntime {
     const approval = await this.approvalDal.create({
       planId: context.planId,
       stepIndex,
+      kind: "workflow_step",
+      agentId: this.agentId,
+      workspaceId: this.workspaceId,
       prompt: `Approve execution of '${tool.id}' (risk=${tool.risk})`,
       context: {
         source: "agent-tool-execution",
@@ -689,6 +1043,7 @@ export class AgentRuntime {
         session_id: context.sessionId,
         channel: context.channel,
         thread_id: context.threadId,
+        policy: policyContext ?? undefined,
       },
       expiresAt: new Date(deadline).toISOString(),
     });

@@ -1,17 +1,25 @@
 /**
  * Agent runtime routes.
  *
- * Exposes singleton-agent APIs for turn execution and status introspection.
+ * Exposes multi-agent APIs for turn execution and status introspection.
  */
 
 import { Hono } from "hono";
 import { AgentTurnRequest } from "@tyrum/schemas";
-import type { AgentRuntime } from "../modules/agent/runtime.js";
+import type { AgentRegistry } from "../modules/agent/registry.js";
 
-export function createAgentRoutes(runtime: AgentRuntime): Hono {
+export function createAgentRoutes(agents: AgentRegistry): Hono {
   const agent = new Hono();
 
   agent.get("/agent/status", async (c) => {
+    const agentId = c.req.query("agent_id")?.trim() || "default";
+    let runtime;
+    try {
+      runtime = await agents.getRuntime(agentId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: "invalid_request", message }, 400);
+    }
     const status = await runtime.status(true);
     return c.json(status);
   });
@@ -27,6 +35,14 @@ export function createAgentRoutes(runtime: AgentRuntime): Hono {
     }
 
     try {
+      const agentId = parsed.data.agent_id ?? "default";
+      let runtime;
+      try {
+        runtime = await agents.getRuntime(agentId);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return c.json({ error: "invalid_request", message }, 400);
+      }
       const result = await runtime.turn(parsed.data);
       return c.json(result, 200);
     } catch (err) {

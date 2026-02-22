@@ -6,6 +6,7 @@ import { afterEach } from "vitest";
 import { ToolExecutor } from "../../src/modules/agent/tool-executor.js";
 import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
 import type { SecretProvider } from "../../src/modules/secret/provider.js";
+import type { SecretResolutionAuditDal } from "../../src/modules/secret/resolution-audit-dal.js";
 import type { SecretHandle } from "@tyrum/schemas";
 
 function stubMcpManager(): McpManager {
@@ -80,6 +81,82 @@ describe("ToolExecutor secret resolution", () => {
         headers: expect.objectContaining({
           Authorization: "my-api-key-value",
         }),
+      }),
+    );
+  });
+
+  it("records audit rows for resolved secrets when audit context is provided", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tool-executor-secret-"));
+
+    const mockFetch = vi.fn(async () => ({
+      text: async () => "ok",
+    })) as unknown as typeof fetch;
+
+    const secrets = new Map([["handle-abc", "my-api-key-value"]]);
+    const provider = stubSecretProvider(secrets);
+
+    const auditDal: SecretResolutionAuditDal = {
+      record: vi.fn(async () => {
+        return {
+          secret_resolution_id: "sr-1",
+          tool_call_id: "call-1",
+          tool_id: "tool.http.fetch",
+          handle_id: "handle-abc",
+          provider: "env",
+          scope: "handle-abc",
+          agent_id: "default",
+          workspace_id: "default",
+          session_id: "s1",
+          channel: "telegram",
+          thread_id: "t1",
+          policy_snapshot_id: "ps-1",
+          outcome: "resolved",
+          error: null,
+          occurred_at: new Date().toISOString(),
+        };
+      }),
+    } as unknown as SecretResolutionAuditDal;
+
+    const executor = new ToolExecutor(
+      homeDir,
+      stubMcpManager(),
+      new Map(),
+      mockFetch,
+      provider,
+      allowPublicDnsLookup,
+      undefined,
+      auditDal,
+    );
+
+    await executor.execute(
+      "tool.http.fetch",
+      "call-1",
+      {
+        url: "https://api.example.com",
+        headers: { Authorization: "secret:handle-abc" },
+      },
+      {
+        agent_id: "default",
+        workspace_id: "default",
+        session_id: "s1",
+        channel: "telegram",
+        thread_id: "t1",
+        policy_snapshot_id: "ps-1",
+      },
+    );
+
+    expect(auditDal.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolCallId: "call-1",
+        toolId: "tool.http.fetch",
+        handleId: "handle-abc",
+        provider: "env",
+        scope: "handle-abc",
+        sessionId: "s1",
+        channel: "telegram",
+        threadId: "t1",
+        policySnapshotId: "ps-1",
+        outcome: "resolved",
       }),
     );
   });

@@ -99,12 +99,23 @@ function deepMerge(
   return result;
 }
 
+function sanitizeConfigForRenderer(config: DesktopNodeConfig): DesktopNodeConfig {
+  return {
+    ...config,
+    device: {
+      ...config.device,
+      privateKey: "",
+      privateKeyRef: "",
+    },
+  };
+}
+
 export function registerConfigIpc(): void {
   if (ipcRegistered) return;
   ipcRegistered = true;
 
   ipcMain.handle("config:get", () => {
-    return loadConfig();
+    return sanitizeConfigForRenderer(loadConfig());
   });
 
   ipcMain.handle("config:set", (_event, partial: unknown) => {
@@ -124,7 +135,7 @@ export function registerConfigIpc(): void {
       ),
     );
     saveConfig(merged);
-    return merged;
+    return sanitizeConfigForRenderer(merged);
   });
 
   ipcMain.handle("permissions:check-mac", () => {

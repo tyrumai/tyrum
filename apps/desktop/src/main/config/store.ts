@@ -8,6 +8,7 @@ import {
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { DesktopNodeConfig, DEFAULT_CONFIG } from "./schema.js";
+import { encryptToken } from "./token-store.js";
 
 function getConfigDir(): string {
   return process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
@@ -25,12 +26,36 @@ export function loadConfig(): DesktopNodeConfig {
   const path = getConfigPath();
   if (!existsSync(path)) return structuredClone(DEFAULT_CONFIG);
   const raw = readFileSync(path, "utf-8");
-  return DesktopNodeConfig.parse(JSON.parse(raw));
+  const parsed = DesktopNodeConfig.parse(JSON.parse(raw));
+  const normalized = normalizeDevicePrivateKey(parsed);
+  if (normalized !== parsed) {
+    saveConfig(normalized);
+  }
+  return normalized;
 }
 
 export function saveConfig(config: DesktopNodeConfig): void {
   const path = getConfigPath();
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(config, null, 2), { mode: 0o600 });
+  const normalized = normalizeDevicePrivateKey(config);
+  writeFileSync(path, JSON.stringify(normalized, null, 2), { mode: 0o600 });
   chmodSync(path, 0o600);
+}
+
+function normalizeDevicePrivateKey(config: DesktopNodeConfig): DesktopNodeConfig {
+  const privateKey = config.device.privateKey.trim();
+
+  if (privateKey.length === 0) {
+    return config;
+  }
+
+  const nextRef = encryptToken(privateKey);
+  return {
+    ...config,
+    device: {
+      ...config.device,
+      privateKeyRef: nextRef,
+      privateKey: "",
+    },
+  };
 }

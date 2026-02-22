@@ -9,11 +9,16 @@ import {
   TelegramNormalizationError,
 } from "../modules/ingress/telegram.js";
 import type { TelegramBot } from "../modules/ingress/telegram-bot.js";
-import type { AgentRuntime } from "../modules/agent/runtime.js";
+import type { AgentRegistry } from "../modules/agent/registry.js";
+import type { TelegramChannelQueue } from "../modules/channels/telegram.js";
+import { renderMarkdownForTelegram } from "../modules/markdown/telegram.js";
+import { loadRoutingConfig, resolveTelegramAgentId } from "../modules/channels/routing.js";
 
 export interface IngressDeps {
   telegramBot?: TelegramBot;
-  agentRuntime?: AgentRuntime;
+  agents?: AgentRegistry;
+  telegramQueue?: TelegramChannelQueue;
+  home?: string;
 }
 
 const TELEGRAM_SECRET_HEADER = "x-telegram-bot-api-secret-token";
@@ -77,7 +82,7 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
     }
 
     // If no agent runtime, return normalized message (legacy behavior)
-    if (!deps.agentRuntime || !deps.telegramBot) {
+    if (!deps.agents || !deps.telegramBot) {
       return c.json(normalized);
     }
 
@@ -93,14 +98,43 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
       return c.json({ ok: true });
     }
 
+    const home = deps.home?.trim() || process.env["TYRUM_HOME"]?.trim() || undefined;
+    const routing = home ? await loadRoutingConfig(home) : { v: 1 };
+    const routedAgentId = c.req.query("agent_id")?.trim() || resolveTelegramAgentId(routing, chatId);
+
+    if (deps.telegramQueue) {
+      try {
+        const enqueued = await deps.telegramQueue.enqueue(normalized, { agentId: routedAgentId });
+        return c.json({
+          ok: true,
+          queued: enqueued.inbox.status === "queued" || enqueued.inbox.status === "processing",
+          inbox_id: enqueued.inbox.inbox_id,
+          deduped: enqueued.deduped,
+          status: enqueued.inbox.status,
+        });
+      } catch {
+        return c.json(
+          {
+            error: "temporary_failure",
+            message: "failed to queue telegram update; please retry",
+          },
+          503,
+        );
+      }
+    }
+
     try {
-      const result = await deps.agentRuntime.turn({
+      const runtime = await deps.agents.getRuntime(routedAgentId);
+      const result = await runtime.turn({
         channel: "telegram",
         thread_id: chatId,
         message: messageText,
       });
 
-      await deps.telegramBot.sendMessage(chatId, result.reply);
+      const chunks = renderMarkdownForTelegram(result.reply);
+      for (const chunk of chunks) {
+        await deps.telegramBot.sendMessage(chatId, chunk);
+      }
       return c.json({ ok: true, session_id: result.session_id });
     } catch {
       try {

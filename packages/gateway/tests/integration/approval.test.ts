@@ -113,7 +113,7 @@ describe("Approval routes (with DAL access)", () => {
     expect(body.approval.response_reason).toBe("too risky");
   });
 
-  it("returns 404 when responding to already-responded approval", async () => {
+  it("is idempotent when responding to already-responded approval", async () => {
     const created = await container.approvalDal.create({
       planId: "plan-1",
       stepIndex: 0,
@@ -132,7 +132,9 @@ describe("Approval routes (with DAL access)", () => {
       body: JSON.stringify({ approved: false }),
     });
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { approval: { status: string } };
+    expect(body.approval.status).toBe("approved");
   });
 
   it("returns 400 when approved field is missing", async () => {
