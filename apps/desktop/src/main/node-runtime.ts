@@ -4,6 +4,7 @@ import { deviceIdFromSha256Digest, type ClientCapability } from "@tyrum/schemas"
 import type { DesktopNodeConfig } from "./config/schema.js";
 import type { ResolvedPermissions } from "./config/permissions.js";
 import { saveConfig } from "./config/store.js";
+import { decryptToken, encryptToken } from "./config/token-store.js";
 import { createHash, generateKeyPairSync } from "node:crypto";
 
 function computeDeviceId(pubkeyDer: Buffer): string {
@@ -51,56 +52,71 @@ export class NodeRuntime {
   private ensureDeviceIdentity(): DesktopNodeConfig["device"] | undefined {
     if (!envForcesNodeRole() && !this.config.device.enabled) return undefined;
 
-    const device = this.config.device;
-    let publicKey = device.publicKey.trim();
-    let privateKey = device.privateKey.trim();
-    let deviceId = device.deviceId.trim();
+    const current = this.config.device;
+    let publicKey = current.publicKey.trim();
+    let privateKeyRef = current.privateKeyRef.trim();
+    const legacyPrivateKey = current.privateKey.trim();
+    let deviceId = current.deviceId.trim();
 
-    if (!publicKey || !privateKey) {
+    let privateKey = "";
+    let shouldSave = false;
+
+    if (privateKeyRef) {
+      try {
+        privateKey = decryptToken(privateKeyRef).trim();
+      } catch {
+        privateKeyRef = "";
+      }
+    }
+
+    if (!privateKey && legacyPrivateKey) {
+      privateKey = legacyPrivateKey;
+      privateKeyRef = encryptToken(privateKey);
+      shouldSave = true;
+    }
+
+    if (!publicKey || !privateKey || !privateKeyRef) {
       const { publicKey: pub, privateKey: priv } = generateKeyPairSync("ed25519");
       const pubDer = pub.export({ format: "der", type: "spki" }) as Buffer;
       const privDer = priv.export({ format: "der", type: "pkcs8" }) as Buffer;
       publicKey = pubDer.toString("base64url");
       privateKey = privDer.toString("base64url");
+      privateKeyRef = encryptToken(privateKey);
       if (!deviceId) deviceId = computeDeviceId(pubDer);
-
-      this.config = {
-        ...this.config,
-        device: {
-          ...device,
-          enabled: true,
-          deviceId,
-          publicKey,
-          privateKey,
-        },
-      };
-      saveConfig(this.config);
-      return this.config.device;
+      shouldSave = true;
     }
 
     if (!deviceId) {
       try {
         const pubDer = Buffer.from(publicKey, "base64url");
         deviceId = computeDeviceId(pubDer);
-        this.config = {
-          ...this.config,
-          device: {
-            ...device,
-            enabled: true,
-            deviceId,
-          },
-        };
-        saveConfig(this.config);
+        shouldSave = true;
       } catch {
         // ignore — client will compute device id if omitted
       }
     }
 
+    if (shouldSave) {
+      this.config = {
+        ...this.config,
+        device: {
+          ...current,
+          enabled: true,
+          deviceId,
+          publicKey,
+          privateKeyRef,
+          privateKey: "",
+        },
+      };
+      saveConfig(this.config);
+    }
+
     return {
-      ...device,
+      ...current,
       enabled: true,
       deviceId,
       publicKey,
+      privateKeyRef,
       privateKey,
     };
   }

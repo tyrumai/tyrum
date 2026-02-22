@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, readFileSync, statSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
@@ -8,6 +8,7 @@ import {
   PermissionProfile,
 } from "../src/main/config/schema.js";
 import { loadConfig, saveConfig } from "../src/main/config/store.js";
+import { decryptToken } from "../src/main/config/token-store.js";
 
 // ---------------------------------------------------------------------------
 // Schema tests
@@ -146,6 +147,53 @@ describe("Config store", () => {
     // Verify round-trip
     const loaded = loadConfig();
     expect(loaded).toEqual(custom);
+  });
+
+  it("migrates device.privateKey to device.privateKeyRef on save", () => {
+    const config = DesktopNodeConfig.parse({
+      device: {
+        enabled: true,
+        deviceId: "device-1",
+        publicKey: "pub",
+        privateKey: "legacy-private-key",
+      },
+    });
+
+    saveConfig(config);
+
+    const filePath = join(tmpDir, "desktop-node.json");
+    const raw = readFileSync(filePath, "utf-8");
+    expect(raw).not.toContain("legacy-private-key");
+
+    const persisted = DesktopNodeConfig.parse(JSON.parse(raw));
+    expect(persisted.device.privateKey).toBe("");
+    expect(persisted.device.privateKeyRef).toBeTruthy();
+    expect(decryptToken(persisted.device.privateKeyRef)).toBe("legacy-private-key");
+  });
+
+  it("migrates legacy device.privateKey to device.privateKeyRef on load", () => {
+    const filePath = join(tmpDir, "desktop-node.json");
+    const legacy = DesktopNodeConfig.parse({
+      device: {
+        enabled: true,
+        deviceId: "device-1",
+        publicKey: "pub",
+        privateKey: "legacy-private-key",
+        privateKeyRef: "",
+      },
+    });
+    // Write raw legacy payload (privateKey plaintext) to simulate older versions.
+    const legacyRaw = JSON.stringify(legacy, null, 2);
+    expect(legacyRaw).toContain("legacy-private-key");
+    writeFileSync(filePath, legacyRaw, { mode: 0o600 });
+
+    const loaded = loadConfig();
+    expect(loaded.device.privateKey).toBe("");
+    expect(loaded.device.privateKeyRef).toBeTruthy();
+    expect(decryptToken(loaded.device.privateKeyRef)).toBe("legacy-private-key");
+
+    const migratedRaw = readFileSync(filePath, "utf-8");
+    expect(migratedRaw).not.toContain("legacy-private-key");
   });
 
   it("saveConfig writes config file with owner-only permissions", () => {
