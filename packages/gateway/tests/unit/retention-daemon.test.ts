@@ -33,7 +33,7 @@ describe("RetentionDaemon", () => {
       );
 
       const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-      const deleted = await pruneByAge(db, "episodic_events", "created_at", cutoff);
+      const deleted = await pruneByAge(db, "episodic_events", "id", "created_at", cutoff);
 
       expect(deleted).toBe(1);
 
@@ -56,7 +56,7 @@ describe("RetentionDaemon", () => {
         );
       }
 
-      const deleted = await pruneByCount(db, "episodic_events", 2, "created_at");
+      const deleted = await pruneByCount(db, "episodic_events", "id", 2, "created_at");
 
       expect(deleted).toBe(3);
 
@@ -78,7 +78,7 @@ describe("RetentionDaemon", () => {
       );
 
       const policies: RetentionPolicy[] = [
-        { table: "episodic_events", maxAgeDays: 30, timestampColumn: "created_at" },
+        { table: "episodic_events", idColumn: "id", maxAgeDays: 30, timestampColumn: "created_at" },
       ];
 
       const daemon = new RetentionDaemon({ db, policies, intervalMs: 100_000 });

@@ -55,11 +55,23 @@ export class RetentionDaemon {
         const cutoff = new Date(
           Date.now() - policy.maxAgeDays * 24 * 60 * 60 * 1000,
         ).toISOString();
-        total += await pruneByAge(this.db, policy.table, policy.timestampColumn, cutoff);
+        total += await pruneByAge(
+          this.db,
+          policy.table,
+          policy.idColumn,
+          policy.timestampColumn,
+          cutoff,
+        );
       }
 
       if (policy.maxCount != null && policy.maxCount > 0) {
-        total += await pruneByCount(this.db, policy.table, policy.maxCount, policy.timestampColumn);
+        total += await pruneByCount(
+          this.db,
+          policy.table,
+          policy.idColumn,
+          policy.maxCount,
+          policy.timestampColumn,
+        );
       }
     }
 
