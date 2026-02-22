@@ -16,6 +16,8 @@ export const ApprovalKind = z.enum([
   "spend",
   "pii",
   "workflow_step",
+  "policy",
+  "budget",
   "pairing",
   "takeover",
   "other",
