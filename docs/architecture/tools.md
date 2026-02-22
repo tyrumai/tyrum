@@ -80,10 +80,11 @@ Recommended normalization rules for high-risk tool classes:
   - Avoid matching on message bodies or display names (too variable; easy to broaden accidentally).
   - Example match target: `send:slack:acct_123:chan_C024BE91L`.
 
-### Match targets (examples)
+### Suggested patterns (examples)
 
-Tools define what their override patterns match. Common examples:
+Tools define what their override patterns match. Suggested patterns should be conservative and tool-specific:
 
-- **`bash`**: a normalized command string (for example `git status --porcelain`). Suggested patterns should typically be safe prefixes like `git status*`.
-- **`fs`**: an operation + workspace-relative path (for example `write:src/generated/types.ts`). Suggested patterns should be narrow prefixes like `write:src/generated/*`.
-- **MCP tools**: a stable tool identifier (server + tool) and optionally selected low-risk arguments. Suggested patterns should prefer tool-name prefixes (for example `mcp.github.*`) over broad argument matches.
+- **`bash`**: safe prefixes like `git status*`.
+- **`fs`**: narrow prefixes like `write:src/generated/*` or `read:docs/architecture/*`.
+- **`messaging`**: destination-scoped patterns like `send:slack:acct_123:chan_C024BE91L`.
+- **MCP tools**: tool-name prefixes like `mcp.github.*` (prefer stable identifiers over broad argument matches).
