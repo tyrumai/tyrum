@@ -211,7 +211,7 @@ export class ModelsDevService {
           etag: cached.etag,
           sha256: cached.sha256,
           json: cached.json,
-          source: "remote",
+          source: "cache",
           lastError: null,
           nowIso,
         });

@@ -185,13 +185,13 @@ async function postTokenForm(
     }
 
     const out: OAuthTokenResponse = {
+      ...body,
       access_token: accessToken,
       token_type: coerceString(body["token_type"]),
       refresh_token: coerceString(body["refresh_token"]),
       expires_in: coerceNumber(body["expires_in"]),
       scope: coerceString(body["scope"]),
       id_token: coerceString(body["id_token"]),
-      ...body,
     };
 
     return out;

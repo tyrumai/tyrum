@@ -758,126 +758,84 @@ export class AgentRuntime {
       return await resolver.resolveById(handleId);
     }
 
-    const providerLabel = `${chosen.providerId}/${chosen.modelId}`;
+	    const providerLabel = `${chosen.providerId}/${chosen.modelId}`;
 
-    const rotating: LanguageModelV3 = {
-      specificationVersion: "v3",
-      provider: chosen.providerId,
-      modelId: providerLabel,
-      supportedUrls: {},
+	    async function callWithRotation<T>(
+	      options: LanguageModelV3CallOptions,
+	      invoke: (model: LanguageModelV3, options: LanguageModelV3CallOptions) => PromiseLike<T>,
+	    ): Promise<T> {
+	      let lastErr: unknown;
+	      const nowMs = Date.now();
 
-      async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
-        let lastErr: unknown;
-        const nowMs = Date.now();
+	      for (const profile of orderedProfiles) {
+	        const apiKey = await resolveApiKeyFromProfile(profile);
+	        if (!apiKey) continue;
 
-        for (const profile of orderedProfiles) {
-          const apiKey = await resolveApiKeyFromProfile(profile);
-          if (!apiKey) continue;
+	        const model = await buildModelFromApiKey(apiKey);
+	        try {
+	          const res = await invoke(model, options);
+	          if (input.sessionId) {
+	            void pinDal
+	              .upsert({
+	                agentId: profile.agent_id,
+	                sessionId: input.sessionId,
+	                provider: chosen.providerId,
+	                profileId: profile.profile_id,
+	              })
+	              .catch(() => {});
+	          }
+	          return res;
+	        } catch (err) {
+	          lastErr = err;
+	          if (APICallError.isInstance(err)) {
+	            const status = err.statusCode;
+	            if (isAuthInvalidStatus(status)) {
+	              await authProfileDal.disableProfile(profile.profile_id, {
+	                reason: `upstream_auth_${String(status)}`,
+	              });
+	              continue;
+	            }
+	            if (isTransientStatus(status)) {
+	              const cooldownMs = status === 429 ? 60_000 : 15_000;
+	              await authProfileDal.setCooldown(profile.profile_id, { untilMs: nowMs + cooldownMs });
+	              continue;
+	            }
+	            throw err;
+	          }
 
-          const model = await buildModelFromApiKey(apiKey);
-          try {
-            const res = await model.doGenerate(options);
-            if (input.sessionId) {
-              void pinDal
-                .upsert({
-                  agentId: profile.agent_id,
-                  sessionId: input.sessionId,
-                  provider: chosen.providerId,
-                  profileId: profile.profile_id,
-                })
-                .catch(() => {});
-            }
-            return res;
-          } catch (err) {
-            lastErr = err;
-            if (APICallError.isInstance(err)) {
-              const status = err.statusCode;
-              if (isAuthInvalidStatus(status)) {
-                await authProfileDal.disableProfile(profile.profile_id, { reason: `upstream_auth_${String(status)}` });
-                continue;
-              }
-              if (isTransientStatus(status)) {
-                const cooldownMs = status === 429 ? 60_000 : 15_000;
-                await authProfileDal.setCooldown(profile.profile_id, { untilMs: nowMs + cooldownMs });
-                continue;
-              }
-              throw err;
-            }
+	          // Non-HTTP errors: treat as transient and rotate.
+	          const cooldownMs = 30_000;
+	          await authProfileDal.setCooldown(profile.profile_id, { untilMs: nowMs + cooldownMs });
+	          continue;
+	        }
+	      }
 
-            // Non-HTTP errors: treat as transient and rotate.
-            const cooldownMs = 30_000;
-            await authProfileDal.setCooldown(profile.profile_id, { untilMs: nowMs + cooldownMs });
-            continue;
-          }
-        }
+	      // Fall back to environment-provided credentials (single attempt; no pinning).
+	      try {
+	        const model = await buildModelFromApiKey(envApiKey);
+	        return await invoke(model, options);
+	      } catch (err) {
+	        lastErr = err;
+	      }
 
-        // Fall back to environment-provided credentials (single attempt; no pinning).
-        try {
-          const model = await buildModelFromApiKey(envApiKey);
-          return await model.doGenerate(options);
-        } catch (err) {
-          lastErr = err;
-        }
+	      const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
+	      throw new Error(`model call failed for ${providerLabel}: ${message}`);
+	    }
 
-        const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
-        throw new Error(`model call failed for ${providerLabel}: ${message}`);
-      },
+	    const rotating: LanguageModelV3 = {
+	      specificationVersion: "v3",
+	      provider: chosen.providerId,
+	      modelId: providerLabel,
+	      supportedUrls: {},
 
-      async doStream(options: LanguageModelV3CallOptions): Promise<LanguageModelV3StreamResult> {
-        let lastErr: unknown;
-        const nowMs = Date.now();
+	      async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
+	        return await callWithRotation(options, (model, opts) => model.doGenerate(opts));
+	      },
 
-        for (const profile of orderedProfiles) {
-          const apiKey = await resolveApiKeyFromProfile(profile);
-          if (!apiKey) continue;
-
-          const model = await buildModelFromApiKey(apiKey);
-          try {
-            const res = await model.doStream(options);
-            if (input.sessionId) {
-              void pinDal
-                .upsert({
-                  agentId: profile.agent_id,
-                  sessionId: input.sessionId,
-                  provider: chosen.providerId,
-                  profileId: profile.profile_id,
-                })
-                .catch(() => {});
-            }
-            return res;
-          } catch (err) {
-            lastErr = err;
-            if (APICallError.isInstance(err)) {
-              const status = err.statusCode;
-              if (isAuthInvalidStatus(status)) {
-                await authProfileDal.disableProfile(profile.profile_id, { reason: `upstream_auth_${String(status)}` });
-                continue;
-              }
-              if (isTransientStatus(status)) {
-                const cooldownMs = status === 429 ? 60_000 : 15_000;
-                await authProfileDal.setCooldown(profile.profile_id, { untilMs: nowMs + cooldownMs });
-                continue;
-              }
-              throw err;
-            }
-
-            const cooldownMs = 30_000;
-            await authProfileDal.setCooldown(profile.profile_id, { untilMs: nowMs + cooldownMs });
-            continue;
-          }
-        }
-
-        try {
-          const model = await buildModelFromApiKey(envApiKey);
-          return await model.doStream(options);
-        } catch (err) {
-          lastErr = err;
-        }
-
-        const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
-        throw new Error(`model call failed for ${providerLabel}: ${message}`);
-      },
-    };
+	      async doStream(options: LanguageModelV3CallOptions): Promise<LanguageModelV3StreamResult> {
+	        return await callWithRotation(options, (model, opts) => model.doStream(opts));
+	      },
+	    };
 
     return rotating;
   }
