@@ -44,13 +44,12 @@ export function saveConfig(config: DesktopNodeConfig): void {
 
 function normalizeDevicePrivateKey(config: DesktopNodeConfig): DesktopNodeConfig {
   const privateKey = config.device.privateKey.trim();
-  const privateKeyRef = config.device.privateKeyRef.trim();
 
   if (privateKey.length === 0) {
     return config;
   }
 
-  const nextRef = privateKeyRef.length > 0 ? privateKeyRef : encryptToken(privateKey);
+  const nextRef = encryptToken(privateKey);
   return {
     ...config,
     device: {

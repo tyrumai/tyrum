@@ -436,7 +436,7 @@ export class AgentRuntime {
     if (now < this.cleanupAtMs) {
       return;
     }
-    void this.sessionDal.deleteExpired(ttlDays);
+    void this.sessionDal.deleteExpired(ttlDays, this.agentId);
     this.cleanupAtMs = now + 60 * 60 * 1000;
   }
 

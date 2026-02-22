@@ -49,6 +49,38 @@ describe("AgentRuntime", () => {
     expect(result.used_tools).toEqual([]);
   });
 
+  it("scopes session cleanup to the current agentId", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    await writeFile(
+      join(homeDir, "agent.yml"),
+      `model:\n  model: tyrum-stub-8b\nskills:\n  enabled: []\nmcp:\n  enabled: []\ntools:\n  allow: []\nsessions:\n  ttl_days: 12\n  max_turns: 20\nmemory:\n  markdown_enabled: false\n`,
+      "utf-8",
+    );
+
+    const deleteSpy = vi.spyOn(container.sessionDal, "deleteExpired").mockResolvedValue(0);
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      agentId: "agent-1",
+      languageModel: createStubLanguageModel("hello"),
+      fetchImpl: fetch404,
+    });
+
+    await runtime.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      message: "hello",
+    });
+
+    expect(deleteSpy).toHaveBeenCalledWith(12, "agent-1");
+  });
+
   it("reconciles MCP servers when MCP tools become disallowed", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({

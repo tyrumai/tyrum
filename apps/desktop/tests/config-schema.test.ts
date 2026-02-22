@@ -8,7 +8,7 @@ import {
   PermissionProfile,
 } from "../src/main/config/schema.js";
 import { loadConfig, saveConfig } from "../src/main/config/store.js";
-import { decryptToken } from "../src/main/config/token-store.js";
+import { decryptToken, encryptToken } from "../src/main/config/token-store.js";
 
 // ---------------------------------------------------------------------------
 // Schema tests
@@ -169,6 +169,28 @@ describe("Config store", () => {
     expect(persisted.device.privateKey).toBe("");
     expect(persisted.device.privateKeyRef).toBeTruthy();
     expect(decryptToken(persisted.device.privateKeyRef)).toBe("legacy-private-key");
+  });
+
+  it("overwrites device.privateKeyRef when device.privateKey is provided", () => {
+    const config = DesktopNodeConfig.parse({
+      device: {
+        enabled: true,
+        deviceId: "device-1",
+        publicKey: "pub",
+        privateKey: "new-private-key",
+        privateKeyRef: encryptToken("old-private-key"),
+      },
+    });
+
+    saveConfig(config);
+
+    const filePath = join(tmpDir, "desktop-node.json");
+    const raw = readFileSync(filePath, "utf-8");
+    expect(raw).not.toContain("new-private-key");
+
+    const persisted = DesktopNodeConfig.parse(JSON.parse(raw));
+    expect(persisted.device.privateKey).toBe("");
+    expect(decryptToken(persisted.device.privateKeyRef)).toBe("new-private-key");
   });
 
   it("migrates legacy device.privateKey to device.privateKeyRef on load", () => {

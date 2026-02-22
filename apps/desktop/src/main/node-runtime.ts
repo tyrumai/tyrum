@@ -82,18 +82,21 @@ export class NodeRuntime {
       publicKey = pubDer.toString("base64url");
       privateKey = privDer.toString("base64url");
       privateKeyRef = encryptToken(privateKey);
-      if (!deviceId) deviceId = computeDeviceId(pubDer);
+      deviceId = computeDeviceId(pubDer);
       shouldSave = true;
     }
 
-    if (!deviceId) {
-      try {
-        const pubDer = Buffer.from(publicKey, "base64url");
-        deviceId = computeDeviceId(pubDer);
-        shouldSave = true;
-      } catch {
-        // ignore — client will compute device id if omitted
+    try {
+      const pubDer = Buffer.from(publicKey, "base64url");
+      if (pubDer.length > 0) {
+        const expectedDeviceId = computeDeviceId(pubDer);
+        if (!deviceId || deviceId !== expectedDeviceId) {
+          deviceId = expectedDeviceId;
+          shouldSave = true;
+        }
       }
+    } catch {
+      // ignore — client will compute device id if omitted
     }
 
     if (shouldSave) {
