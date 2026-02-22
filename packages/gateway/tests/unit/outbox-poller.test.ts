@@ -5,6 +5,7 @@ import { ConnectionManager } from "../../src/ws/connection-manager.js";
 interface MockWebSocket {
   send: ReturnType<typeof vi.fn>;
   close: ReturnType<typeof vi.fn>;
+  on: ReturnType<typeof vi.fn>;
   readyState: number;
 }
 
@@ -12,6 +13,7 @@ function createMockWs(): MockWebSocket {
   return {
     send: vi.fn(),
     close: vi.fn(),
+    on: vi.fn(() => undefined as never),
     readyState: 1,
   };
 }
@@ -76,4 +78,3 @@ describe("OutboxPoller", () => {
     expect(ws.send).toHaveBeenCalledTimes(1);
   });
 });
-

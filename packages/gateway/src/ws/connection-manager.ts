@@ -66,6 +66,9 @@ export class ConnectionManager {
       capabilities,
       lastPong: Date.now(),
     };
+    ws.on("pong", () => {
+      client.lastPong = Date.now();
+    });
     this.clients.set(id, client);
     return id;
   }
@@ -101,23 +104,37 @@ export class ConnectionManager {
   }
 
   /**
-   * Heartbeat tick: send a `ping` frame to all clients and evict those that
-   * have not responded with a `pong` within {@link HEARTBEAT_TIMEOUT_MS}.
+   * Heartbeat tick: send a WebSocket-level ping control frame to all clients
+   * and evict those that have not responded with a pong within
+   * {@link HEARTBEAT_TIMEOUT_MS}.
    */
   heartbeat(): void {
     const now = Date.now();
-    const pingPayload = JSON.stringify({
-      request_id: `ping-${crypto.randomUUID()}`,
-      type: "ping",
-      payload: {},
-    } satisfies WsRequestEnvelope);
 
     for (const [id, client] of this.clients) {
+      // Drop sockets that are no longer open (close event cleanup is best-effort).
+      if (client.ws.readyState !== 1) {
+        this.clients.delete(id);
+        continue;
+      }
       if (now - client.lastPong > HEARTBEAT_TIMEOUT_MS) {
-        client.ws.close();
+        try {
+          client.ws.terminate();
+        } catch {
+          // ignore
+        }
         this.clients.delete(id);
       } else {
-        client.ws.send(pingPayload);
+        try {
+          client.ws.ping();
+        } catch {
+          try {
+            client.ws.terminate();
+          } catch {
+            // ignore
+          }
+          this.clients.delete(id);
+        }
       }
     }
   }

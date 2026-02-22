@@ -12,15 +12,29 @@ import { ConnectionManager } from "../../src/ws/connection-manager.js";
 
 interface MockWebSocket {
   send: ReturnType<typeof vi.fn>;
+  ping: ReturnType<typeof vi.fn>;
   close: ReturnType<typeof vi.fn>;
+  terminate: ReturnType<typeof vi.fn>;
+  on: ReturnType<typeof vi.fn>;
   readyState: number;
 }
 
-function createMockWs(): MockWebSocket {
+function createMockWs(): MockWebSocket & { emitPong: () => void } {
+  const pongListeners: Array<() => void> = [];
+
   return {
     send: vi.fn(),
+    ping: vi.fn(),
     close: vi.fn(),
+    terminate: vi.fn(),
+    on: vi.fn((event: string, listener: () => void) => {
+      if (event === "pong") pongListeners.push(listener);
+      return undefined as never;
+    }),
     readyState: 1, // OPEN
+    emitPong: () => {
+      for (const listener of pongListeners) listener();
+    },
   };
 }
 
@@ -112,7 +126,7 @@ describe("ConnectionManager", () => {
   });
 
   describe("heartbeat", () => {
-    it("sends ping to all connected clients", () => {
+    it("sends WebSocket ping control frames to all connected clients", () => {
       const cm = new ConnectionManager();
       const ws1 = createMockWs();
       const ws2 = createMockWs();
@@ -122,16 +136,8 @@ describe("ConnectionManager", () => {
 
       cm.heartbeat();
 
-      expect(ws1.send).toHaveBeenCalledOnce();
-      expect(ws2.send).toHaveBeenCalledOnce();
-
-      const ping = JSON.parse(ws1.send.mock.calls[0]![0] as string) as Record<
-        string,
-        unknown
-      >;
-      expect(ping["type"]).toBe("ping");
-      expect(typeof ping["request_id"]).toBe("string");
-      expect(ping["payload"]).toEqual({});
+      expect(ws1.ping).toHaveBeenCalledOnce();
+      expect(ws2.ping).toHaveBeenCalledOnce();
     });
 
     it("evicts clients that have not ponged within timeout", () => {
@@ -146,7 +152,7 @@ describe("ConnectionManager", () => {
 
       cm.heartbeat();
 
-      expect(ws.close).toHaveBeenCalledOnce();
+      expect(ws.terminate).toHaveBeenCalledOnce();
       expect(cm.getClient(id)).toBeUndefined();
       expect(cm.getStats().totalClients).toBe(0);
     });
@@ -163,9 +169,25 @@ describe("ConnectionManager", () => {
 
       cm.heartbeat();
 
-      expect(ws.close).not.toHaveBeenCalled();
-      expect(ws.send).toHaveBeenCalledOnce(); // ping sent
+      expect(ws.terminate).not.toHaveBeenCalled();
+      expect(ws.ping).toHaveBeenCalledOnce();
       expect(cm.getClient(id)).toBeDefined();
+    });
+
+    it("updates lastPong on websocket pong frames", () => {
+      const cm = new ConnectionManager();
+      const ws = createMockWs();
+      const id = cm.addClient(ws as never, ["playwright"]);
+      const client = cm.getClient(id);
+      expect(client).toBeDefined();
+
+      client!.lastPong = 1000;
+      const before = Date.now();
+      ws.emitPong();
+      const after = Date.now();
+
+      expect(client!.lastPong).toBeGreaterThanOrEqual(before);
+      expect(client!.lastPong).toBeLessThanOrEqual(after);
     });
   });
 
