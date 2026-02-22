@@ -182,6 +182,21 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
       );
     }
 
+    const existing = await deps.approvalDal.getById(id);
+    if (!existing) {
+      return c.json(
+        { error: "not_found", message: `approval ${String(id)} not found` },
+        404,
+      );
+    }
+
+    if (existing.status !== "pending") {
+      // Idempotency: if the approval has already been resolved, return the
+      // existing state without applying side effects (engine actions, overrides,
+      // or duplicate broadcasts).
+      return c.json({ approval: existing });
+    }
+
     const updated = await deps.approvalDal.respond(id, isApproved, body.reason);
     if (!updated) {
       return c.json(
