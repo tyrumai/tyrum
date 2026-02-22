@@ -103,14 +103,17 @@ async function fileExists(path: string): Promise<boolean> {
   }
 }
 
-function resolveDefaultConfigPath(): string | undefined {
+function resolveDefaultConfigPaths(): string[] {
   const fromEnv = process.env["TYRUM_OAUTH_PROVIDERS_CONFIG"]?.trim();
-  if (fromEnv) return fromEnv;
+  if (fromEnv) return [fromEnv];
 
   const home = process.env["TYRUM_HOME"]?.trim();
-  if (home) return join(home, "oauth-providers.yml");
+  if (home) {
+    return [join(home, "oauth-providers.yml"), join(home, "oauth_providers.yml")];
+  }
 
-  return join(process.cwd(), "config", "oauth_providers.yml");
+  const configDir = join(process.cwd(), "config");
+  return [join(configDir, "oauth-providers.yml"), join(configDir, "oauth_providers.yml")];
 }
 
 export class OAuthProviderRegistry {
@@ -139,16 +142,20 @@ export class OAuthProviderRegistry {
     const now = Date.now();
     if (this.cached && now - this.cachedAtMs < ttlMs) return this.cached;
 
-    const path = this.opts?.configPath ?? resolveDefaultConfigPath();
+    const paths = this.opts?.configPath ? [this.opts.configPath] : resolveDefaultConfigPaths();
     const byId = new Map<string, OAuthProviderSpec>();
 
-    if (path && (await fileExists(path))) {
+    for (const path of paths) {
+      if (!path) continue;
+      if (!(await fileExists(path))) continue;
+
       const raw = await readFile(path, "utf-8");
       const parsed = parseYaml(raw) as unknown;
       const cfg = parseOAuthProviderConfigFile(parsed ?? {});
       for (const spec of cfg.providers) {
         byId.set(spec.provider_id, spec);
       }
+      break;
     }
 
     this.cached = byId;

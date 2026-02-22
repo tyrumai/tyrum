@@ -99,6 +99,71 @@ export class ModelsDevService {
     return ModelsDevCatalog.parse(raw);
   }
 
+  private async recordError(input: { error: string; nowIso: string }): Promise<ModelsDevLoadResult> {
+    const cached = await this.opts.cacheDal.get();
+
+    if (!cached) {
+      const json = JSON.stringify(bundledSnapshot);
+      const sha256 = sha256Hex(json);
+      const row = await this.opts.cacheDal.upsert({
+        fetchedAt: null,
+        etag: null,
+        sha256,
+        json,
+        source: "bundled",
+        lastError: input.error,
+        nowIso: input.nowIso,
+      });
+
+      const catalog = this.parseCatalog(JSON.parse(row.json) as unknown);
+      const result: ModelsDevLoadResult = {
+        catalog,
+        status: this.buildStatus({
+          source: row.source,
+          fetchedAt: row.fetched_at,
+          updatedAt: row.updated_at,
+          etag: row.etag,
+          sha256: row.sha256,
+          lastError: row.last_error,
+          catalog,
+        }),
+      };
+      this.current = result;
+      return result;
+    }
+
+    await this.opts.cacheDal.setError({ error: input.error, nowIso: input.nowIso });
+
+    if (this.current) {
+      const result: ModelsDevLoadResult = {
+        catalog: this.current.catalog,
+        status: {
+          ...this.current.status,
+          last_error: input.error,
+          updated_at: input.nowIso,
+        },
+      };
+      this.current = result;
+      return result;
+    }
+
+    const catalog = this.parseCatalog(JSON.parse(cached.json) as unknown);
+    const result: ModelsDevLoadResult = {
+      catalog,
+      status: this.buildStatus({
+        source: cached.source,
+        fetchedAt: cached.fetched_at,
+        updatedAt: input.nowIso,
+        etag: cached.etag,
+        sha256: cached.sha256,
+        lastError: input.error,
+        catalog,
+      }),
+    };
+    this.current = result;
+    return result;
+  }
+
   async ensureLoaded(): Promise<ModelsDevLoadResult> {
     if (this.current) return this.current;
 
@@ -223,8 +288,7 @@ export class ModelsDevService {
         const body = await res.text().catch(() => "");
         const message = `models.dev fetch failed (${String(res.status)}): ${body.slice(0, 400)}`;
         this.opts.logger?.warn("models_dev.refresh_failed", { status: res.status });
-        await this.opts.cacheDal.setError({ error: message, nowIso });
-        return await this.ensureLoaded();
+        return await this.recordError({ error: message, nowIso });
       }
 
       const text = await res.text();
@@ -266,8 +330,7 @@ export class ModelsDevService {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.opts.logger?.warn("models_dev.refresh_failed", { error: message });
-      await this.opts.cacheDal.setError({ error: message, nowIso });
-      return await this.ensureLoaded();
+      return await this.recordError({ error: message, nowIso });
     } finally {
       await this.opts.leaseDal.release({ key: REFRESH_LEASE_KEY, owner }).catch(() => {});
     }

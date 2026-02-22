@@ -57,4 +57,20 @@ describe("ModelsDevService", () => {
     const loaded = await restarted.ensureLoaded();
     expect(loaded.status.source).toBe("cache");
   });
+
+  it("persists last_error even when no cache row exists yet", async () => {
+    db = openTestSqliteDb();
+    const cacheDal = new ModelsDevCacheDal(db);
+    const leaseDal = new ModelsDevRefreshLeaseDal(db);
+
+    const fetchImpl: typeof fetch = async () => new Response("boom", { status: 502 });
+
+    const svc = new ModelsDevService({ cacheDal, leaseDal, fetchImpl });
+    const refreshed = await svc.refreshNow();
+    expect(refreshed.status.last_error).toContain("models.dev fetch failed");
+
+    const restarted = new ModelsDevService({ cacheDal, leaseDal, fetchImpl });
+    const loaded = await restarted.ensureLoaded();
+    expect(loaded.status.last_error).toContain("models.dev fetch failed");
+  });
 });

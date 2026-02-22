@@ -760,6 +760,15 @@ export class AgentRuntime {
 
 	    const providerLabel = `${chosen.providerId}/${chosen.modelId}`;
 
+	    const supportedUrls: PromiseLike<Record<string, RegExp[]>> = (async () => {
+	      try {
+	        const model = await buildModelFromApiKey(undefined);
+	        return await Promise.resolve(model.supportedUrls);
+	      } catch {
+	        return {};
+	      }
+	    })();
+
 	    async function callWithRotation<T>(
 	      options: LanguageModelV3CallOptions,
 	      invoke: (model: LanguageModelV3, options: LanguageModelV3CallOptions) => PromiseLike<T>,
@@ -826,7 +835,7 @@ export class AgentRuntime {
 	      specificationVersion: "v3",
 	      provider: chosen.providerId,
 	      modelId: providerLabel,
-	      supportedUrls: {},
+	      supportedUrls,
 
 	      async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
 	        return await callWithRotation(options, (model, opts) => model.doGenerate(opts));
