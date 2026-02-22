@@ -132,6 +132,43 @@ describe("TyrumClient", () => {
     expect(connect["payload"]).toEqual({ capabilities: ["playwright", "http"] });
   });
 
+  it("omits empty optional device strings in connect.init payload", async () => {
+    server = createTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: [],
+      reconnect: false,
+      useDeviceProof: true,
+      role: "node",
+      device: {
+        publicKey: "AQID",
+        privateKey: "BAUG",
+        deviceId: "",
+        label: "",
+        platform: "   ",
+        version: "",
+        mode: "",
+      },
+    });
+
+    client.connect();
+    const ws = await server.waitForClient();
+    const init = (await waitForMessage(ws)) as Record<string, unknown>;
+
+    expect(init["type"]).toBe("connect.init");
+    const payload = init["payload"] as Record<string, unknown>;
+    const device = payload["device"] as Record<string, unknown>;
+
+    expect(typeof device["device_id"]).toBe("string");
+    expect(String(device["device_id"]).length).toBeGreaterThan(0);
+    expect(device["pubkey"]).toBe("AQID");
+    expect(Object.prototype.hasOwnProperty.call(device, "label")).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(device, "platform")).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(device, "version")).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(device, "mode")).toBe(false);
+  });
+
   it("responds to ping with pong", async () => {
     server = createTestServer();
     client = new TyrumClient({

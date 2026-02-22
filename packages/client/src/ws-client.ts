@@ -113,6 +113,12 @@ const WS_BASE_PROTOCOL = "tyrum-v1";
 const WS_AUTH_PROTOCOL_PREFIX = "tyrum-auth.";
 const DEFAULT_PROTOCOL_REV = 2;
 
+function toOptionalTrimmedString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 function toBase64UrlBytes(value: Uint8Array): string {
   // Node runtime path.
   if (typeof Buffer !== "undefined") {
@@ -480,10 +486,10 @@ export class TyrumClient {
           device: {
             device_id: deviceId,
             pubkey,
-            label: device.label,
-            platform: device.platform,
-            version: device.version,
-            mode: device.mode,
+            label: toOptionalTrimmedString(device.label),
+            platform: toOptionalTrimmedString(device.platform),
+            version: toOptionalTrimmedString(device.version),
+            mode: toOptionalTrimmedString(device.mode),
           },
           capabilities: this.opts.capabilities.map((id) => ({ id })),
         },
