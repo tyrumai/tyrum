@@ -1084,6 +1084,11 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
               }
               return;
             }
+
+            if (type === "ping" && msg.request_id) {
+              send({ request_id: msg.request_id, type: "ping", ok: true });
+              return;
+            }
             log("<< request " + type);
           });
 
