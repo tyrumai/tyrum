@@ -1620,7 +1620,7 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
 
       <section class="card">
         <h2>What happens next</h2>
-        <p class="muted">Choose Embedded to continue persona + consent onboarding. Choose Remote to stop onboarding and configure a remote connection in Tyrum Desktop.</p>
+        <p class="muted">Choose Embedded to continue persona + consent onboarding. Choose Remote to stop onboarding and configure a remote connection in Tyrum.</p>
       </section>
 
       <script>
@@ -1672,7 +1672,7 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
       redirectWithMessageFromRequest(
         c,
         "/app",
-        "Remote mode selected. Configure remote connection in Tyrum Desktop.",
+        "Remote mode selected. Configure remote connection in Tyrum.",
       ),
     );
   });

@@ -42,13 +42,13 @@ export function checkMacPermissions(): MacPermissions {
     if (!accessibility) {
       instructions.push(
         "Accessibility: Open System Settings > Privacy & Security > Accessibility, " +
-          "then add Tyrum Desktop to the list and enable it.",
+          "then add Tyrum to the list and enable it.",
       );
     }
     if (!screenRecording) {
       instructions.push(
         "Screen Recording: Open System Settings > Privacy & Security > Screen Recording, " +
-          "then add Tyrum Desktop to the list and enable it.",
+          "then add Tyrum to the list and enable it.",
       );
     }
   } catch {
@@ -113,7 +113,7 @@ export async function requestMacPermission(
     return {
       granted: false,
       instructions:
-        "Opened Screen Recording settings. Enable Tyrum Desktop, then restart the app.",
+        "Opened Screen Recording settings. Enable Tyrum, then restart the app.",
     };
   } catch {
     return {

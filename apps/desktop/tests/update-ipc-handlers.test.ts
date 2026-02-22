@@ -158,7 +158,7 @@ describe("registerUpdateIpc handlers", () => {
       opened: true,
       path: selectedPath,
       message:
-        "Installer opened. Complete installation, then relaunch Tyrum Desktop.",
+        "Installer opened. Complete installation, then relaunch Tyrum.",
     });
   });
 

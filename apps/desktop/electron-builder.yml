@@ -1,5 +1,5 @@
 appId: net.tyrum.desktop
-productName: Tyrum Desktop
+productName: Tyrum
 directories:
   output: release
 publish:
