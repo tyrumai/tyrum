@@ -12,6 +12,7 @@ function makeTmpDist(): string {
   mkdirSync(join(dir, "assets"), { recursive: true });
   writeFileSync(join(dir, "assets", "index-abc123.js"), "console.log('app')");
   writeFileSync(join(dir, "assets", "index-abc123.css"), "body { margin: 0; }");
+  writeFileSync(join(dir, "secret.txt"), "top-secret");
   return dir;
 }
 
@@ -54,5 +55,26 @@ describe("SPA routes", () => {
 
     const res = await app.request("/app/assets/nonexistent.js");
     expect(res.status).toBe(404);
+  });
+
+  it("does not allow path traversal out of assets directory", async () => {
+    distDir = makeTmpDist();
+    const app = new Hono();
+    app.route("/", createSpaRoutes({ distDir }));
+
+    const res = await app.request("/app/assets/%2e%2e%2fsecret.txt");
+    expect(res.status).toBe(404);
+  });
+
+  it("does not allow encoded traversal segments", async () => {
+    distDir = makeTmpDist();
+    const app = new Hono();
+    app.route("/", createSpaRoutes({ distDir }));
+
+    const res1 = await app.request("/app/assets/%2e%2e%2findex.html");
+    expect(res1.status).toBe(404);
+
+    const res2 = await app.request("/app/assets/%2e%2e%5cindex.html");
+    expect(res2.status).toBe(404);
   });
 });

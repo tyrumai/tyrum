@@ -27,6 +27,12 @@ describe("shouldCompact", () => {
     expect(shouldCompact(makeTurns(20), defaultConfig)).toBe(true);
   });
 
+  it("returns false when it would preserve all turns", () => {
+    expect(
+      shouldCompact(makeTurns(20), { enabled: true, preserve_recent: 20, trigger_message_count: 20 }),
+    ).toBe(false);
+  });
+
   it("returns false when disabled", () => {
     expect(shouldCompact(makeTurns(30), { ...defaultConfig, enabled: false })).toBe(false);
   });
@@ -90,6 +96,22 @@ describe("compactSession", () => {
 
     expect(flushMemory).toHaveBeenCalledOnce();
     expect(callOrder).toEqual(["flush", "generate"]);
+  });
+
+  it("does not call generateFn when there are no older turns to summarize", async () => {
+    const generateFn = vi.fn().mockResolvedValue({ text: "Should not be called." });
+    const turns = makeTurns(6);
+
+    const result = await compactSession({
+      turns,
+      previousSummary: "Existing summary.",
+      config: { enabled: true, preserve_recent: 6, trigger_message_count: 1 },
+      generateFn,
+    });
+
+    expect(generateFn).not.toHaveBeenCalled();
+    expect(result.summary).toBe("Existing summary.");
+    expect(result.remainingTurns).toEqual(turns);
   });
 });
 

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { setCookie } from "hono/cookie";
 import { readFileSync, existsSync, statSync } from "node:fs";
-import { join, extname } from "node:path";
+import { join, extname, resolve, relative, isAbsolute } from "node:path";
 import { APP_PATH_PREFIX, matchesPathPrefixSegment } from "../app-path.js";
 
 const MIME_TYPES: Record<string, string> = {
@@ -18,6 +18,50 @@ const MIME_TYPES: Record<string, string> = {
 
 export interface SpaRouteDeps {
   distDir: string;
+}
+
+function decodeAssetPath(rawAssetPath: string): string | null {
+  const decodedSegments: string[] = [];
+  for (const rawSegment of rawAssetPath.split("/")) {
+    if (rawSegment.length === 0) return null;
+
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(rawSegment);
+    } catch {
+      return null;
+    }
+
+    if (
+      decoded === "." ||
+      decoded === ".." ||
+      decoded.includes("/") ||
+      decoded.includes("\\") ||
+      decoded.includes("\0")
+    ) {
+      return null;
+    }
+
+    decodedSegments.push(decoded);
+  }
+
+  return decodedSegments.join("/");
+}
+
+function resolveAssetPath(distDir: string, rawAssetPath: string): string | null {
+  const decoded = decodeAssetPath(rawAssetPath);
+  if (!decoded) return null;
+
+  const assetsDir = resolve(distDir, "assets");
+  const resolvedAssetsDir = resolve(assetsDir);
+  const filePath = resolve(resolvedAssetsDir, decoded);
+  const rel = relative(resolvedAssetsDir, filePath);
+
+  if (rel !== "" && (rel.startsWith("..") || isAbsolute(rel))) {
+    return null;
+  }
+
+  return filePath;
 }
 
 export function createSpaRoutes(deps: SpaRouteDeps): Hono {
@@ -55,8 +99,17 @@ export function createSpaRoutes(deps: SpaRouteDeps): Hono {
 
   // Serve static assets from /app/assets/*
   app.get("/app/assets/*", (c) => {
-    const assetPath = c.req.path.replace(/^\/app\//, "");
-    const filePath = join(distDir, assetPath);
+    const pathname = new URL(c.req.url).pathname;
+    const prefix = "/app/assets/";
+    if (!pathname.startsWith(prefix)) {
+      return c.notFound();
+    }
+
+    const rawAssetPath = pathname.slice(prefix.length);
+    const filePath = resolveAssetPath(distDir, rawAssetPath);
+    if (!filePath) {
+      return c.notFound();
+    }
 
     if (!existsSync(filePath) || !statSync(filePath).isFile()) {
       return c.notFound();

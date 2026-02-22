@@ -32,7 +32,9 @@ export function shouldCompact(
   config: CompactionConfigT,
 ): boolean {
   if (!config.enabled) return false;
-  return turns.length >= config.trigger_message_count;
+  if (turns.length < config.trigger_message_count) return false;
+  // Avoid wasteful compaction when we'd preserve all turns anyway.
+  return turns.length > config.preserve_recent;
 }
 
 const TOOL_RESULT_MARKER = /\[tool[_-]result\b/i;
@@ -87,17 +89,24 @@ export async function compactSession(
 ): Promise<CompactSessionResult> {
   const { turns, previousSummary, config, generateFn } = opts;
 
-  // Flush pending memory writes before compacting so no data is lost.
-  if (opts.flushMemory) {
-    await opts.flushMemory();
-  }
-
-  const { recentTurns, prompt } = buildCompactionPrompt(
+  const { olderTurns, recentTurns, prompt } = buildCompactionPrompt(
     turns,
     config.preserve_recent,
     previousSummary,
     config.tool_result_max_chars,
   );
+
+  if (olderTurns.length === 0) {
+    return {
+      summary: previousSummary.trim(),
+      remainingTurns: turns,
+    };
+  }
+
+  // Flush pending memory writes before compacting so no data is lost.
+  if (opts.flushMemory) {
+    await opts.flushMemory();
+  }
 
   const result = await generateFn({
     system: COMPACTION_SYSTEM_PROMPT,
