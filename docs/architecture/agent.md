@@ -7,7 +7,7 @@ An agent is a configured runtime persona that owns sessions, a workspace, enable
 - Tool allowlist/policy configuration
 - Enabled skills and MCP servers
 - Model configuration and fallback chain
-- Memory configuration (what is stored, retention, forget controls)
+- Memory configuration (agent scope, budgets, consolidation, and forget controls)
 
 ## Agent outputs
 

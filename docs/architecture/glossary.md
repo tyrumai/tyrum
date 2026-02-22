@@ -8,6 +8,26 @@ A configured runtime identity that owns sessions, a workspace, enabled tools/ski
 
 The end-to-end path from an inbound message to model inference, tool execution, streaming output, and persistence.
 
+## Memory
+
+The durable, agent-scoped knowledge system that stores facts, preferences, procedures, and episodic records for later recall. Memory is bounded by **budgets** (not time-based TTL) and supports explicit “forget” with tombstones for auditability.
+
+## Memory item
+
+An addressable long-term memory record (stable id) stored in the StateStore and scoped to an agent. Memory items may be structured (facts) or text (notes) and can have derived indexes (for example embeddings) used for retrieval.
+
+## Memory budget
+
+A per-agent limit on memory volume (for example bytes/items/vectors). When exceeded, the system consolidates and evicts until back under budget. Inactivity must not cause forgetting.
+
+## Consolidation
+
+The process that converts high-volume episodic experience into lower-volume, reusable semantic/procedural memory and prunes redundancy under budget pressure (for example deduplication, summarization, merging facts, dropping derived indexes).
+
+## Tombstone
+
+A minimal durable record indicating a memory item was deleted/forgotten (who/when/why), without retaining the deleted content. Tombstones provide auditability and deletion proof.
+
 ## Capability
 
 A named interface a node can provide (for example `camera.capture`) with typed operations and evidence.

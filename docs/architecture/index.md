@@ -110,6 +110,7 @@ flowchart LR
 - [Gateway authN/authZ](./gateway-authz.md)
 - [Execution engine](./execution-engine.md)
 - [Messages and Sessions](./messages-sessions.md)
+- [Memory](./memory.md)
 - [Playbooks](./playbooks.md)
 - [Approvals](./approvals.md)
 - [Policy overrides (approve-always)](./policy-overrides.md)

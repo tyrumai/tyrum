@@ -10,7 +10,7 @@ Tools are the gateway's invocable operations used by the agent runtime. Tools ca
 - **fs:** read/write/edit/apply-patch operations within a workspace boundary
 - **session:** session list/history/send/spawn/status operations
 - **observability:** status/context/usage inspection and diagnostics
-- **memory:** search/get/write operations over durable memory
+- **memory:** agent-scoped durable memory tools for search + CRUD (create/read/update/delete), with budget enforcement and tombstones for auditability
 - **web:** search/fetch for browsing and extraction (when enabled)
 - **ui:** browser/canvas style surfaces (when enabled)
 - **workflow:** run/resume deterministic workflows (playbooks) with approvals and resume tokens

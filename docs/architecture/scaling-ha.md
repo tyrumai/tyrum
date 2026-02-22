@@ -124,6 +124,8 @@ To keep the single-host and cluster behaviors aligned while avoiding RWX require
 - **Only ToolRunner mounts the workspace filesystem.**
 - Gateway edge, schedulers, and control-plane workers are otherwise **stateless with respect to workspace POSIX volumes**.
 
+Long-term memory does not depend on the workspace filesystem: it is stored in the **StateStore** and is scoped to the agent, making it available across channels and across gateway replicas without requiring shared POSIX mounts.
+
 ToolRunner runs as a **local subprocess** in single-host deployments and as a **sandboxed job/pod** in clustered deployments. Both forms mount the workspace at `TYRUM_HOME`, execute workspace-backed tools, persist outcomes/artifacts to the StateStore, and exit.
 
 ## Deployment topologies
