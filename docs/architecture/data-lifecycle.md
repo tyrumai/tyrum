@@ -15,7 +15,7 @@ References:
 
 ## Principles
 
-- **Bounded by default:** every high-volume log or cache has an explicit retention/TTL/limit.
+- **Bounded by default:** every high-volume surface has an explicit retention/TTL/limit/budget.
 - **Durable truth vs derived views:** durable tables are the source of truth; derived views (presence, directories, caches) are TTL-bounded.
 - **Safety first:** sensitive classes (secrets, sensitive artifacts, connector payloads) default to shorter retention and stricter access.
 - **Auditable deletion:** destructive lifecycle actions are observable and attributable (who/when/why).
@@ -27,6 +27,7 @@ References:
 Examples:
 
 - sessions and transcripts
+- durable agent memory (facts, notes/preferences, procedures, tombstones)
 - run/job/step/attempt state
 - approvals and policy overrides
 - audit/event logs and policy decision records
@@ -71,6 +72,15 @@ Lifecycle expectations:
 - Operational recovery (edge restarts, brief partitions) should succeed without manual outbox surgery.
 - When outbox items are deleted by retention, recovery remains possible via durable StateStore-backed reads (events are not the only truth).
 
+## Memory budgets (special case)
+
+Agent memory is durable by design, but must remain bounded for cost and operability. The default lifecycle model is **budget-based**, not time-based:
+
+- Inactivity must not cause forgetting.
+- When budgets are exceeded, the system performs consolidation and eviction until back under budget.
+- Eviction should prefer compressing/re-summarizing high-volume episodic data and dropping derived indexes (embeddings) before deleting canonical memory content.
+- Explicit “forget” actions must be auditable and should produce tombstones that preserve stable ids and deletion proof without retaining content.
+
 ## Redaction and privacy boundaries
 
 Retention is only safe when redaction boundaries are correct:
@@ -91,4 +101,3 @@ If a deployment supports “forget” or data deletion requests, it MUST define:
 - which durable records are deleted vs anonymized vs retained for audit,
 - how linked artifacts are handled (metadata and bytes), and
 - how the system proves deletion occurred (auditable events).
-

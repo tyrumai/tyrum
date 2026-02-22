@@ -21,7 +21,7 @@ The canonical wire shape lives in `@tyrum/schemas` (`packages/schemas/src/protoc
 - **Execution engine:** run queued/started/paused/resumed/completed/failed; step started/completed; retries and budget events.
 - **Evidence:** artifacts captured/attached; postconditions passed/failed.
 - **Agent runtime:** plan/workflow selection and high-level intent updates.
-- **Memory:** facts/events written, compaction, snapshots.
+- **Memory:** items written/accessed/tombstoned, consolidation runs, and budget GC outcomes.
 - **Messaging UX:** typing indicators, outbound delivery receipts, and formatting fallbacks.
 - **Observability:** context reports, usage snapshots, and provider quota polling status.
 

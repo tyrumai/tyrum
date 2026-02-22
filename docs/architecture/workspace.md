@@ -7,6 +7,7 @@ A workspace is the agent's working directory boundary for tools that read and wr
 - Each agent has a single workspace directory (identified by a `WorkspaceId`).
 - Tools operate relative to that workspace by default.
 - The gateway can inject selected workspace files into context to reduce tool calls.
+- The workspace filesystem is an operator-visible surface for files and artifacts; **long-term memory is stored in the StateStore** (see [Memory](./memory.md)).
 
 ## Durability (hard requirement)
 

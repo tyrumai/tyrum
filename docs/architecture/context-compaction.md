@@ -33,6 +33,15 @@ Compaction should:
 - Preserve key decisions and unfinished threads.
 - Avoid inventing facts or deleting obligations.
 
+## Compaction vs long-term memory
+
+Session compaction is a **prompt-level** optimization; it is not a long-term memory system.
+
+- The compaction summary exists to keep ongoing work safe and coherent within a bounded context window.
+- Long-term memory lives in the StateStore (agent-scoped) and is retrieved as a budgeted digest for each turn (see [Memory](./memory.md)).
+
+At compaction boundaries, the system MAY trigger consolidation workflows that promote durable lessons (facts/preferences/procedures) out of ephemeral context into long-term memory. These workflows are budget-driven and auditable, and must not silently “remember” sensitive content.
+
 ## Pruning (tool-result trimming)
 
 Pruning reduces context bloat by trimming or clearing older tool results in the prompt for a single run while leaving the durable transcript intact.
