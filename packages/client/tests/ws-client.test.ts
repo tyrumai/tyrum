@@ -1,6 +1,7 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { WebSocketServer } from "ws";
 import type { WebSocket as WsWebSocket } from "ws";
+import { generateKeyPairSync } from "node:crypto";
 import { TyrumClient } from "../src/ws-client.js";
 
 // ---------------------------------------------------------------------------
@@ -100,6 +101,15 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return await Promise.race([
+    p,
+    delay(ms).then(() => {
+      throw new Error(`${label} timeout after ${ms}ms`);
+    }),
+  ]);
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -115,6 +125,7 @@ describe("TyrumClient", () => {
       await server.close();
       server = undefined;
     }
+    vi.restoreAllMocks();
   });
 
   it("connects and sends hello with capabilities", async () => {
@@ -660,6 +671,106 @@ describe("TyrumClient", () => {
         result: { client_id: "client-2" },
       }),
     );
+  });
+
+  it("reconnects when socket closes mid device-proof handshake", async () => {
+    server = createTestServer();
+
+    const keyPair = generateKeyPairSync("ed25519");
+    const publicKeyDer = keyPair.publicKey.export({ format: "der", type: "spki" }) as Uint8Array;
+    const privateKeyDer = keyPair.privateKey.export({ format: "der", type: "pkcs8" }) as Uint8Array;
+
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: [],
+      reconnect: true,
+      maxReconnectDelay: 25,
+      useDeviceProof: true,
+      role: "node",
+      device: {
+        publicKey: Buffer.from(publicKeyDer).toString("base64url"),
+        privateKey: Buffer.from(privateKeyDer).toString("base64url"),
+      },
+    });
+
+    const connectedP = new Promise<void>((resolve) => {
+      client!.on("connected", () => resolve());
+    });
+
+    if (!globalThis.crypto?.subtle) {
+      throw new Error("WebCrypto subtle API not available");
+    }
+
+    const originalSign = globalThis.crypto.subtle.sign.bind(globalThis.crypto.subtle);
+    let didReject = false;
+    const signRejectedP = new Promise<void>((resolve) => {
+      vi.spyOn(globalThis.crypto.subtle!, "sign").mockImplementation(async (...args) => {
+        if (!didReject) {
+          didReject = true;
+          await delay(50);
+          resolve();
+          throw new Error("test sign failure");
+        }
+        return await originalSign(...(args as Parameters<typeof originalSign>));
+      });
+    });
+
+    client.connect();
+
+    // First connection: server responds to connect.init then closes immediately.
+    const ws1 = await withTimeout(server.waitForClient(), 2_000, "ws1 connection");
+    const init1 = (await withTimeout(waitForMessage(ws1), 2_000, "ws1 connect.init")) as Record<
+      string,
+      unknown
+    >;
+    expect(init1["type"]).toBe("connect.init");
+    ws1.send(
+      JSON.stringify({
+        request_id: String(init1["request_id"]),
+        type: "connect.init",
+        ok: true,
+        result: { connection_id: "conn-1", challenge: "nonce-1" },
+      }),
+    );
+    ws1.terminate();
+
+    // Second connection: wait for the reconnect, then complete the handshake.
+    const ws2 = await withTimeout(server.waitForClient(), 2_000, "ws2 reconnect");
+    const init2 = (await withTimeout(waitForMessage(ws2), 2_000, "ws2 connect.init")) as Record<
+      string,
+      unknown
+    >;
+    expect(init2["type"]).toBe("connect.init");
+    ws2.send(
+      JSON.stringify({
+        request_id: String(init2["request_id"]),
+        type: "connect.init",
+        ok: true,
+        result: { connection_id: "conn-2", challenge: "nonce-2" },
+      }),
+    );
+
+    const proof2 = (await withTimeout(waitForMessage(ws2), 2_000, "ws2 connect.proof")) as Record<
+      string,
+      unknown
+    >;
+    expect(proof2["type"]).toBe("connect.proof");
+
+    // Ensure stale handshake work has a chance to fail while the new socket is alive.
+    await withTimeout(signRejectedP, 2_000, "sign rejection");
+
+    ws2.send(
+      JSON.stringify({
+        request_id: String(proof2["request_id"]),
+        type: "connect.proof",
+        ok: true,
+        result: { client_id: "client-2", device_id: "dev-2", role: "node" },
+      }),
+    );
+
+    await withTimeout(connectedP, 2_000, "connected");
+    expect(client.connected).toBe(true);
   });
 
   it("sends token in websocket subprotocol metadata", async () => {

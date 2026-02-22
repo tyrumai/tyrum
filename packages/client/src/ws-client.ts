@@ -423,6 +423,15 @@ export class TyrumClient {
     this.sendLegacyConnect();
   }
 
+  private disconnectIfHandshakeSocketActive(handshakeWs: WebSocket): void {
+    // Avoid disabling reconnect due to stale async handshake work that outlives
+    // the socket it started on.
+    if (this.ws !== handshakeWs || handshakeWs.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    this.disconnect();
+  }
+
   private sendLegacyConnect(): void {
     const requestId = crypto.randomUUID();
 
@@ -456,6 +465,9 @@ export class TyrumClient {
   }
 
   private async sendConnectWithDeviceProof(): Promise<void> {
+    const ws = this.ws;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
     try {
       const device = this.opts.device;
       if (!device) {
@@ -465,12 +477,15 @@ export class TyrumClient {
       const pubkey = device.publicKey.trim();
       const privkey = device.privateKey.trim();
       if (!pubkey || !privkey) {
-        this.disconnect();
+        this.disconnectIfHandshakeSocketActive(ws);
         return;
       }
 
       const pubkeyDer = fromBase64Url(pubkey);
       const deviceId = device.deviceId?.trim() || (await computeDeviceId(pubkeyDer));
+      if (this.ws !== ws || ws.readyState !== WebSocket.OPEN) {
+        return;
+      }
       const role = this.opts.role;
       const protocolRev = this.opts.protocolRev;
 
@@ -495,33 +510,38 @@ export class TyrumClient {
 
       this.pending.set(requestId, {
         resolve: (msg) => {
-          void this.handleConnectInitResponse(msg, {
-            deviceId,
-            role,
-            protocolRev,
-            privateKey: privkey,
-          });
+          void this.handleConnectInitResponse(
+            msg,
+            {
+              deviceId,
+              role,
+              protocolRev,
+              privateKey: privkey,
+            },
+            ws,
+          );
         },
         reject: () => {},
       });
 
       this.send(request);
     } catch {
-      this.disconnect();
+      this.disconnectIfHandshakeSocketActive(ws);
     }
   }
 
   private async handleConnectInitResponse(
     msg: WsResponseEnvelope,
     ctx: { deviceId: string; role: WsPeerRole; protocolRev: number; privateKey: string },
+    handshakeWs: WebSocket,
   ): Promise<void> {
     if (!msg.ok) {
-      this.disconnect();
+      this.disconnectIfHandshakeSocketActive(handshakeWs);
       return;
     }
     const parsed = WsConnectInitResult.safeParse(msg.result ?? {});
     if (!parsed.success) {
-      this.disconnect();
+      this.disconnectIfHandshakeSocketActive(handshakeWs);
       return;
     }
 
@@ -534,6 +554,9 @@ export class TyrumClient {
         challenge: parsed.data.challenge,
       });
       const signature = await signEd25519Pkcs8(fromBase64Url(ctx.privateKey), transcript);
+      if (this.ws !== handshakeWs || handshakeWs.readyState !== WebSocket.OPEN) {
+        return;
+      }
       const proof = toBase64UrlBytes(signature);
 
       const requestId = crypto.randomUUID();
@@ -545,13 +568,14 @@ export class TyrumClient {
 
       this.pending.set(requestId, {
         resolve: (msg2) => {
+          if (this.ws !== handshakeWs) return;
           if (!msg2.ok) {
-            this.disconnect();
+            this.disconnectIfHandshakeSocketActive(handshakeWs);
             return;
           }
           const parsed2 = WsConnectProofResult.safeParse(msg2.result ?? {});
           if (!parsed2.success) {
-            this.disconnect();
+            this.disconnectIfHandshakeSocketActive(handshakeWs);
             return;
           }
           this.ready = true;
@@ -563,7 +587,7 @@ export class TyrumClient {
 
       this.send(request);
     } catch {
-      this.disconnect();
+      this.disconnectIfHandshakeSocketActive(handshakeWs);
     }
   }
 
