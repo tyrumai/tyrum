@@ -18,3 +18,6 @@ Skills are discoverable and installable from a curated catalog.
 
 - Skills are guidance, not enforcement.
 - Hard enforcement comes from tool policy, approvals, and sandboxing.
+- Skills can still be a social-engineering and supply-chain risk (especially marketplace and workspace-provided skills). Operator clients should surface skill origin (bundled vs user vs workspace) and encourage review before enabling.
+- Workspace skills are supplied by the current workspace contents; treat them as untrusted by default and load them only in trusted workspaces under explicit policy.
+- Skills must not contain raw secret values; use secret handles via the secret provider.

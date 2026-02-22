@@ -7,14 +7,16 @@ Presence is Tyrum’s lightweight, best-effort view of:
 
 Presence exists to give operators immediate visibility into “what is connected and healthy” without reading logs.
 
+Presence is a **diagnostic surface**, not a security boundary. The only authoritative identity is the device-derived `instance_id`. Other fields like `host` and `ip` may be self-reported and must not be used for authorization or policy decisions.
+
 ## Presence entries
 
 Presence entries are structured objects with fields like:
 
 - `instance_id`: stable device identity (derived from the device public key; see [Handshake](./protocol/handshake.md)).
 - `role`: `gateway | client | node`.
-- `host`: human-friendly host label.
-- `ip`: best-effort remote address (with tunnel-aware handling).
+- `host`: human-friendly host label (often self-reported).
+- `ip`: best-effort remote address (may include observed and/or self-reported values; see tunnel note below).
 - `version`: client/node version string (when provided).
 - `mode`: `ui | web | cli | node | backend | probe | test` (used for filtering).
 - `last_seen_at`: last update timestamp.
@@ -36,7 +38,7 @@ Short-lived, one-off CLI connections can be excluded from presence by `mode` to 
 
 Presence is keyed by stable device identity (`instance_id`). When a device reconnects, Tyrum updates the existing entry instead of creating duplicates.
 
-Tunnel caveat: when a connection arrives through a local port-forward, the gateway may observe `127.0.0.1` as the remote address. In that case, client-reported IP/host fields from periodic beacons take precedence.
+Tunnel caveat: when a connection arrives through a local port-forward, the gateway may observe `127.0.0.1` as the remote address. Operator clients may optionally report additional host/IP fields via periodic beacons for UI display, but these values are self-reported and must be clearly labeled. Prefer storing both observed and reported values rather than overwriting them.
 
 ## TTL and bounded size
 
@@ -56,4 +58,3 @@ Operator surfaces consume presence as:
 - diagnostics exports for support and debugging
 
 Presence is access-controlled: only authenticated operator clients can view presence entries.
-
