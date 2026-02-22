@@ -72,6 +72,9 @@ Plugin lifecycle is observable:
 
 ## Safety expectations
 
+- Plugins run **in-process**. Installing/enabling a plugin is equivalent to running trusted code with the gateway’s privileges.
+- Treat plugin install/enable/upgrade as a privileged operation (authenticated operator, auditable events, and approval-gated when appropriate).
+- Prefer allowlisted/curated sources; pin versions and verify package integrity/provenance where feasible.
 - Plugins must declare what they add (tools/commands/endpoints) and what permissions they require.
 - Plugin boundaries should be validated by contracts and guarded by policy.
 - Prefer least-privilege scopes over broad access.

@@ -19,6 +19,10 @@ Automation lets Tyrum act on schedules and triggers while keeping behavior obser
 - Automation must be idempotent where possible.
 - Emit events for triggers, actions taken, and outcomes.
 - Apply the same policy and approval gates as interactive runs.
+- Webhooks must be authenticated and replay-resistant (for example a signature over the request body plus timestamp/nonce), and should be rate-limited.
+- Webhook secrets must be stored behind the secret provider and referenced via handles. Avoid placing secrets in URLs.
+- Prefer running webhook-triggered work in a dedicated lane/session with minimal permissions.
+- Hooks must be explicitly configured/allowlisted and run under the same policy/sandbox constraints as any other execution.
 
 ## Scheduler safety (DB-leases)
 

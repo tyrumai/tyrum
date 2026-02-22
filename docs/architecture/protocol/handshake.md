@@ -57,6 +57,8 @@ The gateway validates the gateway access token during the WS upgrade using WebSo
 The gateway selects `tyrum-v1` as the negotiated subprotocol and reads the token from the `tyrum-auth.*` entry.
 The access token should be short-lived, revocable, and scoped to the peer role (`client` vs `node`) and least-privilege permissions. Avoid placing tokens in URLs.
 
+Operational note: some intermediaries log `Sec-WebSocket-Protocol`. Treat it as sensitive (redact in gateway/proxy logs). For peers that can set headers (non-browser clients/nodes), deployments may prefer an `Authorization: Bearer …` header rather than embedding the token in subprotocol metadata.
+
 ## Authorization notes
 
 After a connection is authenticated, the gateway authorizes what the peer can do based on its role and (for operator clients) its granted scopes. The gateway can also issue device-bound tokens to reduce bootstrap-token usage during normal operation.

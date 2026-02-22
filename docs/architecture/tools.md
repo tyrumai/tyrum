@@ -35,6 +35,7 @@ MCP servers expose tool catalogs that Tyrum can call through a standardized inte
 - State-changing tools should support **postconditions** and emit **artifacts** suitable for audit.
 - Tools should accept **secret handles**, not raw secret values.
 - Tool outputs should redact secrets and avoid leaking sensitive local data by default.
+- Treat tool outputs (especially from web pages and channels) as untrusted input and rely on provenance tagging plus policy rules to prevent prompt injection and unsafe tool chaining (see [Sandbox and policy](./sandbox-policy.md)).
 
 ## Approval pattern suggestions (approve-always)
 
