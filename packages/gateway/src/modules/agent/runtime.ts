@@ -905,9 +905,9 @@ export class AgentRuntime {
           }
 
           const shouldRequireApproval =
-            !policyEnabled
-              ? toolDesc.requires_confirmation
-              : policyDecision === "require_approval";
+            policyEnabled && !policy.isObserveOnly()
+              ? policyDecision === "require_approval"
+              : toolDesc.requires_confirmation;
 
           if (shouldRequireApproval) {
             const suggestedOverrides = policyEnabled

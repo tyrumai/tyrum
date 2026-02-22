@@ -138,4 +138,82 @@ describe("AgentRuntime", () => {
     await runtime.shutdown();
     expect(mcpManager.shutdown).toHaveBeenCalledTimes(1);
   });
+
+  it("preserves legacy tool confirmation in policy observe-only mode", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const policyService = {
+      isEnabled: () => true,
+      isObserveOnly: () => true,
+      evaluateToolCall: vi.fn(async () => ({ decision: "deny" as const })),
+    };
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("hello"),
+      fetchImpl: fetch404,
+      policyService: policyService as unknown as ConstructorParameters<typeof AgentRuntime>[0]["policyService"],
+    });
+
+    const approvalSpy = vi.fn(async () => ({
+      approved: true,
+      status: "approved" as const,
+      approvalId: 1,
+    }));
+    (runtime as unknown as { awaitApprovalForToolExecution: unknown }).awaitApprovalForToolExecution =
+      approvalSpy;
+
+    const toolDesc = {
+      id: "tool.exec",
+      description: "Execute shell commands on the local machine.",
+      risk: "high" as const,
+      requires_confirmation: true,
+      keywords: [],
+      inputSchema: {
+        type: "object",
+        properties: { command: { type: "string" } },
+        required: ["command"],
+        additionalProperties: false,
+      },
+    };
+
+    const toolExecutor = {
+      execute: vi.fn(async () => ({
+        tool_call_id: "tc-test",
+        output: "ok",
+        error: undefined,
+        provenance: undefined,
+      })),
+    };
+
+    const usedTools = new Set<string>();
+    const toolSet = (
+      runtime as unknown as {
+        buildToolSet: (
+          tools: readonly unknown[],
+          toolExecutor: unknown,
+          usedTools: Set<string>,
+          context: { planId: string; sessionId: string; channel: string; threadId: string },
+        ) => Record<string, { execute: (args: unknown) => Promise<string> }>;
+      }
+    ).buildToolSet([toolDesc], toolExecutor, usedTools, {
+      planId: "plan-1",
+      sessionId: "session-1",
+      channel: "test",
+      threadId: "thread-1",
+    });
+
+    const res = await toolSet["tool.exec"]!.execute({ command: "echo hi" });
+
+    expect(res).toBe("ok");
+    expect(policyService.evaluateToolCall).toHaveBeenCalledTimes(1);
+    expect(approvalSpy).toHaveBeenCalledTimes(1);
+    expect(toolExecutor.execute).toHaveBeenCalledTimes(1);
+    expect(usedTools.has("tool.exec")).toBe(true);
+  });
 });
