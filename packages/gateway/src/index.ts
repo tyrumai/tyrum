@@ -283,14 +283,16 @@ async function runGatewayCheck(): Promise<number> {
     });
 
     const models = await container.modelsDev.ensureLoaded();
-    const oauthProviders = await container.oauthProviderRegistry.list();
+    await container.oauthProviderRegistry.list();
 
     console.log("check: ok");
-    console.log(`models.dev: source=${models.status.source} providers=${models.status.provider_count} models=${models.status.model_count}`);
+    console.log(
+      `models.dev: source=${models.status.source} providers=${models.status.provider_count} models=${models.status.model_count}`,
+    );
     if (models.status.last_error) {
-      console.log(`models.dev: last_error=${models.status.last_error}`);
+      console.log("models.dev: last_error=present");
     }
-    console.log(`oauth: providers_configured=${oauthProviders.length}`);
+    console.log("oauth: providers_configured=loaded");
 
     await container.db.close();
     return 0;
