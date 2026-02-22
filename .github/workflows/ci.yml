@@ -116,7 +116,7 @@ jobs:
   desktop-cross-os:
     name: Validation (${{ matrix.os }})
     needs: changes
-    if: needs.changes.outputs.ci == 'true'
+    if: needs.changes.outputs.ci == 'true' || needs.changes.outputs.deps == 'true'
     strategy:
       fail-fast: false
       matrix:
