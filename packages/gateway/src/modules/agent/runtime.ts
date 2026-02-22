@@ -956,12 +956,15 @@ export class AgentRuntime {
           });
 
           const res = pluginRes
-            ? {
-                tool_call_id: toolCallId,
-                output: pluginRes.output,
-                error: pluginRes.error,
-                provenance: undefined,
-              }
+            ? (() => {
+                const tagged = tagContent(pluginRes.output, "tool", false);
+                return {
+                  tool_call_id: toolCallId,
+                  output: sanitizeForModel(tagged),
+                  error: pluginRes.error,
+                  provenance: tagged,
+                };
+              })()
             : await toolExecutor.execute(toolDesc.id, toolCallId, args, {
                 agent_id: agentId,
                 workspace_id: workspaceId,
@@ -977,6 +980,12 @@ export class AgentRuntime {
             res.output = redact(res.output);
             if (res.error) {
               res.error = redact(res.error);
+            }
+            if (res.provenance) {
+              res.provenance = {
+                ...res.provenance,
+                content: redact(res.provenance.content),
+              };
             }
           }
 

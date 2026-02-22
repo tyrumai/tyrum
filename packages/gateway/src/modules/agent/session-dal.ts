@@ -236,17 +236,6 @@ export class SessionDal {
     return updated;
   }
 
-  async updateSummary(sessionId: string, summary: string, agentId?: string): Promise<void> {
-    const normalizedAgentId = normalizeAgentId(agentId);
-    const nowIso = new Date().toISOString();
-    await this.db.run(
-      `UPDATE sessions
-       SET summary = ?, updated_at = ?
-       WHERE agent_id = ? AND session_id = ?`,
-      [summary, nowIso, normalizedAgentId, sessionId],
-    );
-  }
-
   async deleteExpired(ttlDays: number, agentId?: string): Promise<number> {
     const safeTtl = Math.max(1, ttlDays);
     const threshold = new Date(Date.now() - safeTtl * 24 * 60 * 60 * 1000).toISOString();
