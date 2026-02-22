@@ -81,6 +81,8 @@ The backplane uses a durable outbox table in the StateStore:
 - Gateway edges poll and deliver outbox items to their connected peers.
 - Consumers treat delivery as at-least-once and dedupe using ids.
 
+See [Backplane (outbox contract)](./backplane.md) for explicit ordering, retention, replay, and failure behavior expectations.
+
 Deployments may use low-latency signals (for example Postgres `LISTEN/NOTIFY` or external pub/sub) to reduce polling latency. The outbox remains the durable source of truth and replay log.
 
 ### WebSocket routing (connection directory)

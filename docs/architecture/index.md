@@ -69,7 +69,7 @@ flowchart LR
 
 - **Gateway:** the long-lived service that owns edge connectivity (WebSocket), routing, and contract validation. See [Gateway](./gateway/index.md).
 - **StateStore:** durable state and logs (SQLite local; Postgres for HA/scale). See [Scaling and high availability](./scaling-ha.md).
-- **Event backplane:** cross-component event delivery (in-process for replica count = 1; shared for clusters). See [Scaling and high availability](./scaling-ha.md) and [Events](./protocol/events.md).
+- **Event backplane:** cross-instance delivery via a durable outbox (in-process for replica count = 1; shared for clusters). See [Backplane](./backplane.md), [Scaling and high availability](./scaling-ha.md), and [Events](./protocol/events.md).
 - **Execution engine:** the durable orchestration runtime (retries, idempotency, pause/resume, evidence). See [Execution engine](./execution-engine.md).
 - **Workers:** step executors that claim work (leases), perform side effects, and publish results/events. See [Execution engine](./execution-engine.md).
 - **ToolRunner:** a workspace-mounted execution context that runs filesystem/CLI tools. In single-host deployments it can be a local subprocess; in clusters it is typically a sandboxed job/pod. See [Scaling and high availability](./scaling-ha.md).
@@ -116,9 +116,11 @@ flowchart LR
 - [Secrets](./secrets.md)
 - [Provider Auth and Onboarding](./auth.md)
 - [Artifacts](./artifacts.md)
+- [Backplane (outbox contract)](./backplane.md)
 - [Sandbox and policy](./sandbox-policy.md)
 - [Operations and onboarding](./operations.md)
 - [Observability](./observability.md)
+- [Data lifecycle and retention](./data-lifecycle.md)
 - [Presence](./presence.md)
 - [Client](./client.md)
 - [Node](./node.md)

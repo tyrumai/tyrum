@@ -53,10 +53,37 @@ Suggested override patterns use a simple wildcard language:
 - `*` matches zero or more characters
 - `?` matches exactly one character
 
+### Match target normalization (hard rule)
+
+Policy overrides and suggested patterns MUST match against a tool-defined **match target** that is:
+
+- **canonical** (equivalent inputs normalize to the same string),
+- **unambiguous** (no multiple spellings for the same underlying action), and
+- **stable** (format changes are treated like a contract change).
+
+Tools MUST compute match targets from **validated, normalized** inputs (not from raw user/model text). This prevents wildcard patterns from silently broadening over time.
+
+Recommended normalization rules for high-risk tool classes:
+
+- **`fs` (workspace filesystem):**
+  - Match target SHOULD include the operation and the *workspace-relative* canonical path: `op:path`.
+  - Path normalization SHOULD use POSIX separators (`/`), strip leading `./`, reject `..`, collapse repeated separators, and apply workspace boundary checks before computing the match target.
+  - If symlinks are allowed, the match target SHOULD be based on the resolved canonical path inside the workspace boundary (so the override cannot be bypassed by alternative spellings).
+  - Example match targets: `read:src/app.ts`, `write:docs/architecture/backplane.md`, `delete:tmp/output.log`.
+- **`bash` / CLI execution:**
+  - Match target SHOULD be derived from a structured command representation (argv), not an unparsed shell string.
+  - Normalize whitespace and remove non-semantic differences (for example multiple spaces).
+  - Do not include secret values in the match target; redact or replace with placeholders.
+  - Example match target: `git status --porcelain` (not `git   status   --porcelain`).
+- **`messaging` / outbound sends:**
+  - Match target SHOULD include the action and a stable destination identifier (connector + account + container/recipient id).
+  - Avoid matching on message bodies or display names (too variable; easy to broaden accidentally).
+  - Example match target: `send:slack:acct_123:chan_C024BE91L`.
+
 ### Match targets (examples)
 
 Tools define what their override patterns match. Common examples:
 
 - **`bash`**: a normalized command string (for example `git status --porcelain`). Suggested patterns should typically be safe prefixes like `git status*`.
-- **`fs`**: an operation + workspace-relative path (for example `write:src/generated/types.ts`). Suggested patterns should be narrow like `write:src/generated/**`.
+- **`fs`**: an operation + workspace-relative path (for example `write:src/generated/types.ts`). Suggested patterns should be narrow prefixes like `write:src/generated/*`.
 - **MCP tools**: a stable tool identifier (server + tool) and optionally selected low-risk arguments. Suggested patterns should prefer tool-name prefixes (for example `mcp.github.*`) over broad argument matches.
