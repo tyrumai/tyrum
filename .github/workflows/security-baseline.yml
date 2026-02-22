@@ -7,6 +7,14 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "patches/**"
+      - "packages/**/package.json"
+      - "apps/**/package.json"
+      - ".github/workflows/security-baseline.yml"
   pull_request:
     branches:
       - main
@@ -18,25 +26,49 @@ jobs:
     permissions:
       contents: read
       issues: write
+      pull-requests: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Detect dependency changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            deps:
+              - "package.json"
+              - "pnpm-lock.yaml"
+              - "pnpm-workspace.yaml"
+              - "patches/**"
+              - "packages/**/package.json"
+              - "apps/**/package.json"
+              - ".github/workflows/security-baseline.yml"
+
+      - name: Skip baseline (no dependency changes)
+        if: github.event_name == 'pull_request' && steps.filter.outputs.deps != 'true'
+        run: echo "No dependency manifest changes detected; skipping pnpm audit."
+
       - uses: pnpm/action-setup@v4
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' || steps.filter.outputs.deps == 'true'
         with:
           version: 10
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' || steps.filter.outputs.deps == 'true'
         with:
           node-version: 24
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' || steps.filter.outputs.deps == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: pnpm audit (workspace packages)
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' || steps.filter.outputs.deps == 'true'
         run: pnpm audit
 
       - name: Report failure for triage
