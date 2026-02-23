@@ -251,6 +251,7 @@ export class S3ArtifactStore implements ArtifactStore {
     const expiresInSeconds = this.resolveExpiresInSeconds(opts);
 
     const manifestKey = this.manifestKeyFor(artifactId);
+    let parsedManifest: ArtifactManifestV1 | null = null;
     try {
       const manifestRes = await this.client.send(
         new GetObjectCommand({
@@ -260,31 +261,37 @@ export class S3ArtifactStore implements ArtifactStore {
       );
 
       const manifestBuf = await bodyToBuffer(manifestRes.Body);
-      const parsed = JSON.parse(manifestBuf.toString("utf8")) as ArtifactManifestV1;
-      if (!parsed || parsed.v !== 1 || typeof parsed.blob_key !== "string" || !parsed.ref) {
-        throw new Error(`invalid artifact manifest for ${artifactId}`);
+      try {
+        const candidate = JSON.parse(manifestBuf.toString("utf8")) as unknown;
+        const maybe = candidate as Partial<ArtifactManifestV1> | null;
+        if (maybe && maybe.v === 1 && typeof maybe.blob_key === "string" && maybe.ref) {
+          parsedManifest = maybe as ArtifactManifestV1;
+        }
+      } catch {
+        // Treat malformed JSON as missing manifest and fall back to legacy keys.
       }
+    } catch (err) {
+      if (!isNoSuchKey(err)) throw err;
+    }
 
+    if (parsedManifest) {
       try {
         await this.client.send(
           new HeadObjectCommand({
             Bucket: this.bucket,
-            Key: parsed.blob_key,
+            Key: parsedManifest.blob_key,
           }),
         );
       } catch (err) {
         if (isNoSuchKey(err)) return null;
-        throw err;
+        // Best-effort: some S3-compatible deployments block HEAD while allowing GET.
       }
 
       return await this.presignGetObject({
         bucket: this.bucket,
-        key: parsed.blob_key,
+        key: parsedManifest.blob_key,
         expiresInSeconds,
       });
-    } catch (err) {
-      if (!isNoSuchKey(err)) throw err;
-      // Manifest missing -> try legacy fallback.
     }
 
     const legacyKey = this.legacyKeyFor(artifactId, ".bin");
@@ -303,7 +310,12 @@ export class S3ArtifactStore implements ArtifactStore {
       });
     } catch (err) {
       if (isNoSuchKey(err)) return null;
-      throw err;
+      // Best-effort: some S3-compatible deployments block HEAD while allowing GET.
+      return await this.presignGetObject({
+        bucket: this.bucket,
+        key: legacyKey,
+        expiresInSeconds,
+      });
     }
   }
 

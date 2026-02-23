@@ -327,4 +327,110 @@ describe("ArtifactStore", () => {
       }),
     );
   });
+
+  it("s3 store: getSignedUrl presigns even when HeadObject is blocked", async () => {
+    const artifactId = "550e8400-e29b-41d4-a716-446655440000";
+    const manifestKey = "artifacts/manifests/55/550e8400-e29b-41d4-a716-446655440000.json";
+    const blobKey =
+      "artifacts/blobs/55/550e8400-e29b-41d4-a716-446655440000/2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824.bin";
+
+    const send = vi.fn(async (cmd: unknown) => {
+      if (cmd instanceof GetObjectCommand) {
+        const key = cmd.input.Key ?? "";
+        if (key === manifestKey) {
+          const meta = JSON.stringify({
+            v: 1,
+            ref: {
+              artifact_id: artifactId,
+              uri: `artifact://${artifactId}`,
+              kind: "log",
+              created_at: "2026-02-19T12:00:00.000Z",
+              labels: [],
+              sha256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+              size_bytes: 5,
+              mime_type: "text/plain",
+            },
+            blob_key: blobKey,
+          });
+          return {
+            Body: {
+              transformToByteArray: async () => Buffer.from(meta, "utf8"),
+            },
+          };
+        }
+      }
+
+      if (cmd instanceof HeadObjectCommand) {
+        const key = cmd.input.Key ?? "";
+        if (key === blobKey) {
+          const err = Object.assign(new Error("forbidden"), { name: "AccessDenied" });
+          throw err;
+        }
+      }
+
+      throw new Error("unexpected command");
+    });
+
+    const presignGetObject = vi.fn(async () => "https://objects.example.test/signed?sig=test");
+
+    const store = new S3ArtifactStore(
+      { send } as unknown as import("@aws-sdk/client-s3").S3Client,
+      "bucket",
+      "artifacts",
+      undefined,
+      presignGetObject,
+    );
+
+    const url = await store.getSignedUrl(artifactId, { expiresInSeconds: 42 });
+    expect(url).toBe("https://objects.example.test/signed?sig=test");
+    expect(presignGetObject).toHaveBeenCalledWith({
+      bucket: "bucket",
+      key: blobKey,
+      expiresInSeconds: 42,
+    });
+  });
+
+  it("s3 store: getSignedUrl falls back to legacy key when manifest is malformed", async () => {
+    const artifactId = "550e8400-e29b-41d4-a716-446655440000";
+    const manifestKey = "artifacts/manifests/55/550e8400-e29b-41d4-a716-446655440000.json";
+    const legacyKey = "artifacts/55/550e8400-e29b-41d4-a716-446655440000.bin";
+
+    const send = vi.fn(async (cmd: unknown) => {
+      if (cmd instanceof GetObjectCommand) {
+        const key = cmd.input.Key ?? "";
+        if (key === manifestKey) {
+          return {
+            Body: {
+              transformToByteArray: async () => Buffer.from("{not-json", "utf8"),
+            },
+          };
+        }
+      }
+
+      if (cmd instanceof HeadObjectCommand) {
+        const key = cmd.input.Key ?? "";
+        if (key === legacyKey) return {};
+      }
+
+      throw new Error("unexpected command");
+    });
+
+    const presignGetObject = vi.fn(async () => "https://objects.example.test/legacy?sig=test");
+
+    const store = new S3ArtifactStore(
+      { send } as unknown as import("@aws-sdk/client-s3").S3Client,
+      "bucket",
+      "artifacts",
+      undefined,
+      presignGetObject,
+    );
+
+    const url = await store.getSignedUrl(artifactId, { expiresInSeconds: 42 });
+    expect(url).toBe("https://objects.example.test/legacy?sig=test");
+    expect(presignGetObject).toHaveBeenCalledWith({
+      bucket: "bucket",
+      key: legacyKey,
+      expiresInSeconds: 42,
+    });
+  });
 });
