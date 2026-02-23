@@ -95,7 +95,9 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
 
     if (deps.telegramQueue) {
       try {
-        const enqueued = await deps.telegramQueue.enqueue(normalized, { agentId: routedAgentId });
+        const enqueued = await deps.telegramQueue.enqueue(normalized, {
+          agentId: routedAgentId,
+        });
         return c.json({
           ok: true,
           queued: enqueued.inbox.status === "queued" || enqueued.inbox.status === "processing",

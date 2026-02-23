@@ -17,6 +17,13 @@ import type { AgentRegistry } from "../agent/registry.js";
 import type { ApprovalDal } from "../approval/dal.js";
 import type { ApprovalNotifier } from "../approval/notifier.js";
 import type { PolicyService } from "../policy/service.js";
+import {
+  type ChannelEgressConnector,
+  DEFAULT_CHANNEL_ACCOUNT_ID,
+  buildChannelSourceKey,
+  normalizeConnectorId,
+  parseChannelSourceKey,
+} from "./interface.js";
 
 function isFalsyEnvFlag(value: string | undefined): boolean {
   if (!value) return false;
@@ -42,6 +49,24 @@ function telegramAccountIdFromEnv(): string {
   return process.env["TYRUM_TELEGRAM_ACCOUNT_ID"]?.trim()
     || process.env["TYRUM_TELEGRAM_CHANNEL_KEY"]?.trim()
     || "telegram-1";
+}
+
+function toTelegramParseMode(value: string | undefined): "HTML" | "Markdown" | "MarkdownV2" | undefined {
+  if (value === "HTML" || value === "Markdown" || value === "MarkdownV2") {
+    return value;
+  }
+  return undefined;
+}
+
+function connectorBindingKey(connector: ChannelEgressConnector): string {
+  const connectorId = normalizeConnectorId(connector.connector);
+  if (typeof connector.accountId !== "string") {
+    return connectorId;
+  }
+  return buildChannelSourceKey({
+    connector: connectorId,
+    accountId: connector.accountId,
+  });
 }
 
 export function telegramThreadKey(
@@ -144,6 +169,20 @@ export function telegramThreadKey(
   });
 }
 
+export function createTelegramEgressConnector(telegramBot: TelegramBot): ChannelEgressConnector {
+  return {
+    connector: "telegram",
+    sendMessage: async (input) => {
+      const parseMode = toTelegramParseMode(input.parseMode);
+      return await telegramBot.sendMessage(
+        input.containerId,
+        input.text,
+        parseMode ? { parse_mode: parseMode } : undefined,
+      );
+    },
+  };
+}
+
 async function tryAcquireLaneLease(db: SqlDb, opts: {
   key: string;
   lane: string;
@@ -209,9 +248,13 @@ export class TelegramChannelQueue {
       accountId,
       dmScope,
     });
+    const source =
+      accountId === telegramAccountIdFromEnv()
+        ? "telegram"
+        : buildChannelSourceKey({ connector: "telegram", accountId });
 
     const { row, deduped } = await this.inbox.enqueue({
-      source: "telegram",
+      source,
       thread_id: normalized.thread.id,
       message_id: normalized.message.id,
       key,
@@ -229,7 +272,7 @@ export class TelegramChannelProcessor {
   private readonly inbox: ChannelInboxDal;
   private readonly outbox: ChannelOutboxDal;
   private readonly agents: AgentRegistry;
-  private readonly telegramBot: TelegramBot;
+  private readonly egressConnectors: Map<string, ChannelEgressConnector>;
   private readonly owner: string;
   private readonly logger?: Logger;
   private readonly approvalDal?: ApprovalDal;
@@ -251,6 +294,7 @@ export class TelegramChannelProcessor {
     logger?: Logger;
     approvalDal?: ApprovalDal;
     approvalNotifier?: ApprovalNotifier;
+    egressConnectors?: ChannelEgressConnector[];
     pollIntervalMs?: number;
     inboxLeaseTtlMs?: number;
     outboxLeaseTtlMs?: number;
@@ -262,7 +306,12 @@ export class TelegramChannelProcessor {
     this.inbox = new ChannelInboxDal(opts.db);
     this.outbox = new ChannelOutboxDal(opts.db);
     this.agents = opts.agents;
-    this.telegramBot = opts.telegramBot;
+    this.egressConnectors = new Map(
+      (opts.egressConnectors ?? [createTelegramEgressConnector(opts.telegramBot)]).map((connector) => [
+        connectorBindingKey(connector),
+        connector,
+      ]),
+    );
     this.owner = opts.owner;
     this.logger = opts.logger;
     this.approvalDal = opts.approvalDal;
@@ -378,14 +427,38 @@ export class TelegramChannelProcessor {
     });
     if (!next) return false;
 
+    const address = parseChannelSourceKey(next.source);
+    const sourceKey = buildChannelSourceKey(address);
+    const connector = this.egressConnectors.get(sourceKey) ?? this.egressConnectors.get(address.connector);
+    if (!connector) {
+      const message = `no egress connector registered for source '${address.connector}'`;
+      await this.outbox.markFailed(next.outbox_id, this.owner, message);
+      this.logger?.warn("channels.egress.connector_missing", {
+        outbox_id: next.outbox_id,
+        source: next.source,
+        source_key: sourceKey,
+        connector: address.connector,
+        account_id: address.accountId,
+      });
+      return true;
+    }
+
     try {
-      const resp = await this.telegramBot.sendMessage(next.thread_id, next.text);
+      const resp = await connector.sendMessage({
+        accountId: address.accountId,
+        containerId: next.thread_id,
+        text: next.text,
+        parseMode: next.parse_mode ?? undefined,
+      });
       await this.outbox.markSent(next.outbox_id, this.owner, resp);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       await this.outbox.markFailed(next.outbox_id, this.owner, message);
-      this.logger?.warn("channels.telegram.send_failed", {
+      this.logger?.warn("channels.egress.send_failed", {
         outbox_id: next.outbox_id,
+        source: next.source,
+        connector: address.connector,
+        account_id: address.accountId,
         thread_id: next.thread_id,
         error: message,
       });
@@ -432,6 +505,9 @@ export class TelegramChannelProcessor {
 
   private async processBatch(rows: ChannelInboxRow[]): Promise<void> {
     const leader = rows[0]!;
+    const address = parseChannelSourceKey(leader.source);
+    const connectorId = address.connector;
+    const accountId = address.accountId;
     const messages: string[] = [];
 
     for (const row of rows) {
@@ -463,22 +539,32 @@ export class TelegramChannelProcessor {
 
       const runtime = await this.agents.getRuntime(agentId);
       const result = await runtime.turn({
-        channel: "telegram",
+        channel: connectorId,
         thread_id: leader.thread_id,
         message: combined,
       });
       reply = result.reply ?? "";
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.logger?.warn("channels.telegram.agent_failed", {
+      this.logger?.warn("channels.ingress.agent_failed", {
         inbox_id: leader.inbox_id,
+        source: leader.source,
+        connector: connectorId,
+        account_id: accountId,
         thread_id: leader.thread_id,
         error: message,
       });
-      await this.telegramBot.sendMessage(
-        leader.thread_id,
-        "Sorry, something went wrong. Please try again later.",
-      );
+      const sourceKey = buildChannelSourceKey(address);
+      const connector = this.egressConnectors.get(sourceKey) ?? this.egressConnectors.get(connectorId);
+      if (connector) {
+        await connector
+          .sendMessage({
+            accountId,
+            containerId: leader.thread_id,
+            text: "Sorry, something went wrong. Please try again later.",
+          })
+          .catch(() => undefined);
+      }
       for (const row of rows) {
         await this.inbox.markFailed(row.inbox_id, this.owner, message);
       }
@@ -486,7 +572,7 @@ export class TelegramChannelProcessor {
     }
 
     const chunks = renderMarkdownForTelegram(reply);
-    const source = "telegram";
+    const source = connectorId;
 
     // Apply outbound send policy before enqueueing side effects.
     let decision: "allow" | "deny" | "require_approval" = "allow";
@@ -498,10 +584,14 @@ export class TelegramChannelProcessor {
         : undefined;
     if (policyService?.isEnabled()) {
       try {
+        const matchTarget =
+          accountId === DEFAULT_CHANNEL_ACCOUNT_ID
+            ? `${source}:${leader.thread_id}`
+            : `${source}:${accountId}:${leader.thread_id}`;
         const evalRes = await policyService.evaluateConnectorAction({
           agentId,
           workspaceId: agentId,
-          matchTarget: `${source}:${leader.thread_id}`,
+          matchTarget,
         });
         decision = evalRes.decision;
         policySnapshotId = evalRes.policy_snapshot?.policy_snapshot_id;
@@ -529,9 +619,11 @@ export class TelegramChannelProcessor {
         return;
       }
 
+      const planSource =
+        accountId === DEFAULT_CHANNEL_ACCOUNT_ID ? connectorId : `${connectorId}@${accountId}`;
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
       const approval = await this.approvalDal.create({
-        planId: `connector:${source}:${leader.thread_id}:${leader.message_id}`,
+        planId: `connector:${planSource}:${leader.thread_id}:${leader.message_id}`,
         stepIndex: 0,
         kind: "connector.send",
         agentId,
@@ -541,6 +633,7 @@ export class TelegramChannelProcessor {
         prompt: `Approve sending a ${source} reply`,
         context: {
           source,
+          account_id: accountId,
           thread_id: leader.thread_id,
           inbox_id: leader.inbox_id,
           policy_snapshot_id: policySnapshotId,
@@ -560,10 +653,10 @@ export class TelegramChannelProcessor {
     // Durable enqueue of outbound chunks.
     for (let i = 0; i < chunks.length; i += 1) {
       const text = chunks[i]!;
-      const dedupeKey = `telegram:${leader.thread_id}:${leader.message_id}:reply:${String(i)}`;
+      const dedupeKey = `${leader.source}:${leader.thread_id}:${leader.message_id}:reply:${String(i)}`;
       await this.outbox.enqueue({
         inbox_id: leader.inbox_id,
-        source,
+        source: leader.source,
         thread_id: leader.thread_id,
         dedupe_key: dedupeKey,
         chunk_index: i,
