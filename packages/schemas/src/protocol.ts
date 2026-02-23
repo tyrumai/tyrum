@@ -12,7 +12,7 @@ import {
 } from "./approval.js";
 import { ArtifactRef } from "./artifact.js";
 import { ExecutionAttempt, ExecutionBudgets, ExecutionRun, ExecutionStep } from "./execution.js";
-import { NodePairingRequest } from "./node.js";
+import { NodePairingRequest, NodePairingTrustLevel } from "./node.js";
 import { AgentId, Lane, TyrumKey } from "./keys.js";
 import { PresenceBeacon, PresenceEntry } from "./presence.js";
 import { PolicyOverride } from "./policy-bundle.js";
@@ -394,6 +394,8 @@ export const WsPairingApprovePayload = z
   .object({
     pairing_id: z.number().int().positive(),
     reason: z.string().trim().min(1).optional(),
+    trust_level: NodePairingTrustLevel.optional(),
+    capability_allowlist: z.array(CapabilityDescriptor).optional(),
   })
   .strict();
 export type WsPairingApprovePayload = z.infer<typeof WsPairingApprovePayload>;

@@ -6,7 +6,7 @@ import { Hono } from "hono";
 import type { NodePairingDal } from "../modules/node/pairing-dal.js";
 import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
-import type { WsEventEnvelope } from "@tyrum/schemas";
+import { CapabilityDescriptor, NodePairingTrustLevel, type WsEventEnvelope } from "@tyrum/schemas";
 
 export interface PairingRouteDeps {
   nodePairingDal: NodePairingDal;
@@ -63,12 +63,31 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
     if (!Number.isInteger(id) || id <= 0) {
       return c.json({ error: "invalid_request", message: "id must be a positive integer" }, 400);
     }
-    const body = (await c.req.json()) as { reason?: string };
+
+    const body = (await c.req.json()) as Record<string, unknown>;
+    const reason = typeof body["reason"] === "string" ? body["reason"] : undefined;
+
+    const trustLevelRaw = body["trust_level"];
+    const trustLevelParsed = trustLevelRaw === undefined ? undefined : NodePairingTrustLevel.safeParse(trustLevelRaw);
+    if (trustLevelParsed && !trustLevelParsed.success) {
+      return c.json({ error: "invalid_request", message: "trust_level must be 'local' or 'remote'" }, 400);
+    }
+
+    const allowlistRaw = body["capability_allowlist"];
+    const allowlistParsed = allowlistRaw === undefined ? undefined : CapabilityDescriptor.array().safeParse(allowlistRaw);
+    if (allowlistParsed && !allowlistParsed.success) {
+      return c.json(
+        { error: "invalid_request", message: "capability_allowlist must be an array of CapabilityDescriptor" },
+        400,
+      );
+    }
 
     const pairing = await deps.nodePairingDal.resolve({
       pairingId: id,
       decision: "approved",
-      reason: typeof body.reason === "string" ? body.reason : undefined,
+      reason,
+      trustLevel: trustLevelParsed ? trustLevelParsed.data : undefined,
+      capabilityAllowlist: allowlistParsed ? allowlistParsed.data : undefined,
       resolvedBy: {
         kind: "http",
         ip: c.req.header("x-forwarded-for") ?? undefined,
