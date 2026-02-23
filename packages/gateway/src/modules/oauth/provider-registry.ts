@@ -46,7 +46,7 @@ function parseOAuthProviderSpec(value: unknown): OAuthProviderSpec {
   const tokenEndpointBasicAuth =
     typeof tokenEndpointBasicAuthRaw === "boolean"
       ? tokenEndpointBasicAuthRaw
-      : Boolean(clientSecretEnv);
+      : false;
 
   if (tokenEndpointBasicAuth && !clientSecretEnv) {
     throw new Error(

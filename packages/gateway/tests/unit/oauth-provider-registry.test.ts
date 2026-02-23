@@ -34,7 +34,7 @@ describe("OAuthProviderRegistry config defaults", () => {
     expect(spec?.token_endpoint_basic_auth).toBe(false);
   });
 
-  it("defaults token_endpoint_basic_auth to true when client_secret_env is configured", async () => {
+  it("defaults token_endpoint_basic_auth to false even when client_secret_env is configured", async () => {
     tempDir = await mkdtemp(join(tmpdir(), "tyrum-oauth-registry-test-"));
     const configPath = join(tempDir, "oauth-providers.yml");
     await writeFile(
@@ -51,7 +51,7 @@ describe("OAuthProviderRegistry config defaults", () => {
 
     const registry = new OAuthProviderRegistry({ configPath });
     const spec = await registry.get("confidential");
-    expect(spec?.token_endpoint_basic_auth).toBe(true);
+    expect(spec?.token_endpoint_basic_auth).toBe(false);
   });
 
   it("fails fast when token_endpoint_basic_auth=true but client_secret_env is missing", async () => {
@@ -73,4 +73,3 @@ describe("OAuthProviderRegistry config defaults", () => {
     await expect(registry.list()).rejects.toThrow("client_secret_env");
   });
 });
-

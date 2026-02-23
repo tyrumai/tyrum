@@ -466,6 +466,10 @@ async function resolveProfileApiKey(profile: AuthProfileRow, deps: {
       return null;
     }
 
+    let createdAccessHandleId: string | undefined;
+    let createdRefreshHandleId: string | undefined;
+    let updateAttempted = false;
+
     try {
       const latest = await authProfileDal.getById(profile.profile_id);
       const current = latest ?? profile;
@@ -527,6 +531,7 @@ async function resolveProfileApiKey(profile: AuthProfileRow, deps: {
         `oauth:${current.provider}:${current.agent_id}:access`,
         accessToken,
       );
+      createdAccessHandleId = accessHandle.handle_id;
 
       const nextSecretHandles: Record<string, string> = { ...current.secret_handles };
       const oldAccessHandleId = nextSecretHandles["access_token_handle"];
@@ -543,6 +548,7 @@ async function resolveProfileApiKey(profile: AuthProfileRow, deps: {
         oldRefreshHandleId = nextSecretHandles["refresh_token_handle"];
         nextSecretHandles["refresh_token_handle"] = refreshHandle.handle_id;
         newRefreshHandleId = refreshHandle.handle_id;
+        createdRefreshHandleId = refreshHandle.handle_id;
       }
 
       const nextExpiresAt = (() => {
@@ -555,6 +561,7 @@ async function resolveProfileApiKey(profile: AuthProfileRow, deps: {
         return null;
       })();
 
+      updateAttempted = true;
       const updated = await authProfileDal.updateSecretHandles(current.profile_id, {
         secretHandles: nextSecretHandles,
         expiresAt: nextExpiresAt,
@@ -597,6 +604,22 @@ async function resolveProfileApiKey(profile: AuthProfileRow, deps: {
         profile_id: profile.profile_id,
         error: msg,
       });
+      const createdHandles = [createdAccessHandleId, createdRefreshHandleId].filter(
+        (v): v is string => Boolean(v),
+      );
+      if (createdHandles.length > 0) {
+        if (!updateAttempted) {
+          await Promise.all(createdHandles.map((handleId) => secretProvider.revoke(handleId).catch(() => {})));
+        } else {
+          const latest = await authProfileDal.getById(profile.profile_id).catch(() => undefined);
+          const referenced = new Set(Object.values(latest?.secret_handles ?? {}));
+          await Promise.all(
+            createdHandles
+              .filter((handleId) => !referenced.has(handleId))
+              .map((handleId) => secretProvider.revoke(handleId).catch(() => {})),
+          );
+        }
+      }
       // If refresh fails and the token is already expired, avoid hammering the token endpoint.
       if (expiresAtMs <= nowMs) {
         await authProfileDal.setCooldown(profile.profile_id, { untilMs: Date.now() + 60_000 });
@@ -988,9 +1011,9 @@ export class AgentRuntime {
           lastErr = err;
         }
 
-          const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
-          throw new Error(`model call failed for ${providerLabel}: ${message}`, { cause: lastErr });
-        }
+        const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
+        throw new Error(`model call failed for ${providerLabel}: ${message}`, { cause: lastErr });
+      }
 
       const rotating: LanguageModelV3 = {
         specificationVersion: "v3",
