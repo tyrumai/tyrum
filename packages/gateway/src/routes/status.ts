@@ -6,24 +6,30 @@
  */
 
 import { Hono } from "hono";
-import type { StateStoreKind } from "../statestore/types.js";
+import type { SqlDb, StateStoreKind } from "../statestore/types.js";
 import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { PolicyService } from "../modules/policy/service.js";
 import type { AuthProfileDal } from "../modules/models/auth-profile-dal.js";
 import type { SessionProviderPinDal } from "../modules/models/session-pin-dal.js";
+import type { ModelsDevService } from "../modules/models/models-dev-service.js";
 import { isAuthProfilesEnabled } from "../modules/models/auth-profiles-enabled.js";
+import type { AgentRegistry } from "../modules/agent/registry.js";
+import { buildStatusDetails } from "../modules/observability/status-details.js";
 
 export interface StatusRouteDeps {
   version: string;
   instanceId: string;
   role: string;
   dbKind: StateStoreKind;
+  db: SqlDb;
   isLocalOnly: boolean;
   otelEnabled: boolean;
   connectionManager?: ConnectionManager;
   policyService?: PolicyService;
   authProfileDal?: AuthProfileDal;
   pinDal?: SessionProviderPinDal;
+  modelsDev?: ModelsDevService;
+  agents?: AgentRegistry;
 }
 
 export function createStatusRoutes(deps: StatusRouteDeps): Hono {
@@ -31,6 +37,12 @@ export function createStatusRoutes(deps: StatusRouteDeps): Hono {
 
   app.get("/status", async (c) => {
     const policy = deps.policyService ? await deps.policyService.getStatus() : null;
+    const details = await buildStatusDetails({
+      db: deps.db,
+      policyService: deps.policyService,
+      agents: deps.agents,
+      modelsDev: deps.modelsDev,
+    });
     const authProfilesEnabled = isAuthProfilesEnabled();
 
     let authProfiles: unknown = null;
@@ -62,6 +74,11 @@ export function createStatusRoutes(deps: StatusRouteDeps): Hono {
       ws: deps.connectionManager?.getStats() ?? null,
       auth_profiles: authProfiles,
       policy,
+      model_auth: details.model_auth,
+      catalog_freshness: details.catalog_freshness,
+      session_lanes: details.session_lanes,
+      queue_depth: details.queue_depth,
+      sandbox: details.sandbox,
     });
   });
 

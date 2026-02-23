@@ -481,6 +481,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     nodePairingDal: container.nodePairingDal,
     engine: edgeEngine,
     policyService: edgeEngine ? container.policyService : undefined,
+    modelsDev: container.modelsDev,
     cluster: shouldRunEdge
       ? {
           edgeId: instanceId,

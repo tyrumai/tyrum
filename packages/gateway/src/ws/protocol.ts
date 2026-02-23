@@ -60,6 +60,7 @@ import type { PolicyService } from "../modules/policy/service.js";
 import type { PluginRegistry } from "../modules/plugins/registry.js";
 import type { Logger } from "../modules/observability/logger.js";
 import type { SqlDb, StateStoreKind } from "../statestore/types.js";
+import type { ModelsDevService } from "../modules/models/models-dev-service.js";
 import { executeCommand } from "../modules/commands/dispatcher.js";
 
 // ---------------------------------------------------------------------------
@@ -91,6 +92,7 @@ export interface ProtocolDeps {
   engine?: ExecutionEngine;
   policyService?: PolicyService;
   plugins?: PluginRegistry;
+  modelsDev?: ModelsDevService;
   presenceTtlMs?: number;
 
   /**
@@ -638,6 +640,8 @@ export async function handleClientMessage(
       policyOverrideDal: deps.policyOverrideDal,
       contextReportDal: deps.contextReportDal,
       plugins: deps.plugins,
+      modelsDev: deps.modelsDev,
+      agents: deps.agents,
     });
 
     const result = WsCommandExecuteResult.parse({

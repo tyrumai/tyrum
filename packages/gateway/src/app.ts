@@ -167,12 +167,15 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       instanceId: runtime.instanceId,
       role: runtime.role,
       dbKind: container.db.kind,
+      db: container.db,
       isLocalOnly,
       otelEnabled: runtime.otelEnabled,
       connectionManager: opts.connectionManager,
       policyService: container.policyService,
       authProfileDal,
       pinDal,
+      modelsDev: container.modelsDev,
+      agents: opts.agents,
     }),
   );
   app.route(
