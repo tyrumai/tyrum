@@ -799,11 +799,17 @@ export class AgentRuntime {
       return override as LanguageModelV3;
     }
 
-    const candidateIds = [input.config.model.model, ...(input.config.model.fallback ?? [])].filter((v, i, a) => {
-      const trimmed = v.trim();
-      if (!trimmed) return false;
-      return a.findIndex((x) => x.trim() === trimmed) === i;
-    });
+    const rawCandidateIds = [input.config.model.model, ...(input.config.model.fallback ?? [])]
+      .map((v) => v.trim())
+      .filter((v, i, a) => v.length > 0 && a.indexOf(v) === i);
+
+    const primaryProviderId = (() => {
+      try {
+        return parseProviderModelId(rawCandidateIds[0] ?? "").providerId;
+      } catch {
+        return undefined;
+      }
+    })();
 
     const loaded = await this.opts.container.modelsDev.ensureLoaded();
     const catalog = loaded.catalog;
@@ -819,9 +825,43 @@ export class AgentRuntime {
       api: string | undefined;
     };
 
-    const resolvedCandidates: ResolvedCandidate[] = candidateIds
+    const invalidCandidateIds: string[] = [];
+    const parsedCandidates: Array<{ providerId: string; modelId: string }> = [];
+    const seenCandidates = new Set<string>();
+    for (const rawCandidate of rawCandidateIds) {
+      const parsed = (() => {
+        try {
+          return parseProviderModelId(rawCandidate);
+        } catch {
+          // ignore
+        }
+
+        // Legacy short model ids: treat as provider-local fallbacks.
+        if (!rawCandidate.includes("/") && primaryProviderId) {
+          try {
+            return parseProviderModelId(`${primaryProviderId}/${rawCandidate}`);
+          } catch {
+            // ignore
+          }
+        }
+
+        return undefined;
+      })();
+
+      if (!parsed) {
+        invalidCandidateIds.push(rawCandidate);
+        continue;
+      }
+
+      const key = `${parsed.providerId}/${parsed.modelId}`;
+      if (seenCandidates.has(key)) continue;
+      seenCandidates.add(key);
+      parsedCandidates.push(parsed);
+    }
+
+    const resolvedCandidates: ResolvedCandidate[] = parsedCandidates
       .map((candidate): ResolvedCandidate | undefined => {
-        const { providerId, modelId } = parseProviderModelId(candidate);
+        const { providerId, modelId } = candidate;
         const provider = catalog[providerId];
         if (!provider) return undefined;
         const model = provider.models?.[modelId];
@@ -844,9 +884,12 @@ export class AgentRuntime {
       .filter((v): v is ResolvedCandidate => Boolean(v));
 
     if (resolvedCandidates.length === 0) {
-      throw new Error(
-        `model not found in models.dev catalog: ${candidateIds.join(", ")}`,
-      );
+      const attempted = parsedCandidates.map((c) => `${c.providerId}/${c.modelId}`);
+      const attemptedLabel = attempted.length > 0 ? attempted.join(", ") : rawCandidateIds.join(", ") || "(none)";
+      const invalidLabel = invalidCandidateIds.length > 0
+        ? ` (invalid model ids ignored: ${invalidCandidateIds.join(", ")})`
+        : "";
+      throw new Error(`model not found in models.dev catalog: ${attemptedLabel}${invalidLabel}`);
     }
 
     const agentId = this.agentId;

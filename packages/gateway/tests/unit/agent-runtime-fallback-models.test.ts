@@ -120,6 +120,71 @@ describe("AgentRuntime model fallbacks", () => {
     expect(seenProviders).toEqual(["openai", "anthropic"]);
   });
 
+  it("ignores malformed fallback model ids and still resolves other candidates", async () => {
+    process.env["OPENAI_API_KEY"] = "openai-key";
+    process.env["ANTHROPIC_API_KEY"] = "anthropic-key";
+    process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "0";
+
+    container = createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const cacheDal = new ModelsDevCacheDal(container.db);
+    const nowIso = new Date().toISOString();
+    await cacheDal.upsert({
+      fetchedAt: nowIso,
+      etag: null,
+      sha256: "sha",
+      json: JSON.stringify({
+        openai: {
+          id: "openai",
+          name: "OpenAI",
+          env: ["OPENAI_API_KEY"],
+          npm: "@ai-sdk/openai",
+          models: { "gpt-4.1": { id: "gpt-4.1", name: "GPT-4.1" } },
+        },
+        anthropic: {
+          id: "anthropic",
+          name: "Anthropic",
+          env: ["ANTHROPIC_API_KEY"],
+          npm: "@ai-sdk/anthropic",
+          models: { "claude-3.5-sonnet": { id: "claude-3.5-sonnet", name: "Claude 3.5 Sonnet" } },
+        },
+      }),
+      source: "remote",
+      lastError: null,
+      nowIso,
+    });
+
+    const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
+
+    const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
+    const runtime = new AgentRuntime({
+      container,
+      agentId: "agent-1",
+      fetchImpl,
+    });
+
+    const model = await (runtime as unknown as {
+      resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
+    }).resolveSessionModel({
+      config: {
+        model: {
+          model: "openai/gpt-4.1",
+          fallback: ["gpt-4.1-mini", "anthropic/claude-3.5-sonnet"],
+          options: {},
+        },
+      },
+      sessionId: "session-1",
+      fetchImpl,
+    });
+
+    const res = await model.doGenerate({} as any);
+    expect((res as any).text).toBe("ok");
+    expect(seenProviders).toEqual(["openai", "anthropic"]);
+  });
+
   it("does not try fallback models for non-transient API errors", async () => {
     process.env["OPENAI_API_KEY"] = "openai-key";
     process.env["ANTHROPIC_API_KEY"] = "anthropic-key";

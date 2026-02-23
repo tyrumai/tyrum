@@ -9,7 +9,7 @@ vi.mock("hono/route", () => {
 });
 
 describe("auth middleware oauth callback bypass fallback", () => {
-  it("allows OAuth callback without token when matchedRoutes is empty", async () => {
+  it("fails closed when matchedRoutes is empty", async () => {
     const { createAuthMiddleware } = await import("../../src/modules/auth/middleware.js");
 
     const app = new Hono();
@@ -21,10 +21,10 @@ describe("auth middleware oauth callback bypass fallback", () => {
     expect(protectedRes.status).toBe(401);
 
     const callbackRes = await app.request("/providers/test/oauth/callback");
-    expect(callbackRes.status).toBe(200);
+    expect(callbackRes.status).toBe(401);
   });
 
-  it("allows OAuth callback without token under a base path prefix when matchedRoutes is empty", async () => {
+  it("fails closed under a base path prefix when matchedRoutes is empty", async () => {
     const { createAuthMiddleware } = await import("../../src/modules/auth/middleware.js");
 
     const app = new Hono();
@@ -34,7 +34,6 @@ describe("auth middleware oauth callback bypass fallback", () => {
     app.route("/prefix", sub);
 
     const res = await app.request("/prefix/providers/test/oauth/callback");
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
   });
 });
-
