@@ -250,11 +250,12 @@ export class S3ArtifactStore implements ArtifactStore {
     await this.ensureBucketOnce();
     const expiresInSeconds = this.resolveExpiresInSeconds(opts);
 
+    const manifestKey = this.manifestKeyFor(artifactId);
     try {
       const manifestRes = await this.client.send(
         new GetObjectCommand({
           Bucket: this.bucket,
-          Key: this.manifestKeyFor(artifactId),
+          Key: manifestKey,
         }),
       );
 
@@ -264,12 +265,17 @@ export class S3ArtifactStore implements ArtifactStore {
         throw new Error(`invalid artifact manifest for ${artifactId}`);
       }
 
-      await this.client.send(
-        new HeadObjectCommand({
-          Bucket: this.bucket,
-          Key: parsed.blob_key,
-        }),
-      );
+      try {
+        await this.client.send(
+          new HeadObjectCommand({
+            Bucket: this.bucket,
+            Key: parsed.blob_key,
+          }),
+        );
+      } catch (err) {
+        if (isNoSuchKey(err)) return null;
+        throw err;
+      }
 
       return await this.presignGetObject({
         bucket: this.bucket,
@@ -278,6 +284,7 @@ export class S3ArtifactStore implements ArtifactStore {
       });
     } catch (err) {
       if (!isNoSuchKey(err)) throw err;
+      // Manifest missing -> try legacy fallback.
     }
 
     const legacyKey = this.legacyKeyFor(artifactId, ".bin");

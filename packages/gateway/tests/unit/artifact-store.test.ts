@@ -258,4 +258,73 @@ describe("ArtifactStore", () => {
       expiresInSeconds: 42,
     });
   });
+
+  it("s3 store: getSignedUrl returns null when manifest exists but blob is missing (no legacy fallback)", async () => {
+    const artifactId = "550e8400-e29b-41d4-a716-446655440000";
+    const manifestKey = "artifacts/manifests/55/550e8400-e29b-41d4-a716-446655440000.json";
+    const blobKey =
+      "artifacts/blobs/55/550e8400-e29b-41d4-a716-446655440000/2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824.bin";
+    const legacyKey = "artifacts/55/550e8400-e29b-41d4-a716-446655440000.bin";
+
+    const send = vi.fn(async (cmd: unknown) => {
+      if (cmd instanceof GetObjectCommand) {
+        const key = cmd.input.Key ?? "";
+        if (key === manifestKey) {
+          const meta = JSON.stringify({
+            v: 1,
+            ref: {
+              artifact_id: artifactId,
+              uri: `artifact://${artifactId}`,
+              kind: "log",
+              created_at: "2026-02-19T12:00:00.000Z",
+              labels: [],
+              sha256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+              size_bytes: 5,
+              mime_type: "text/plain",
+            },
+            blob_key: blobKey,
+          });
+          return {
+            Body: {
+              transformToByteArray: async () => Buffer.from(meta, "utf8"),
+            },
+          };
+        }
+      }
+
+      if (cmd instanceof HeadObjectCommand) {
+        const key = cmd.input.Key ?? "";
+        if (key === blobKey) {
+          const err = Object.assign(new Error("not found"), { name: "NotFound" });
+          throw err;
+        }
+        if (key === legacyKey) {
+          return {};
+        }
+      }
+
+      throw new Error("unexpected command");
+    });
+
+    const presignGetObject = vi.fn(async () => "https://objects.example.test/signed?sig=test");
+
+    const store = new S3ArtifactStore(
+      { send } as unknown as import("@aws-sdk/client-s3").S3Client,
+      "bucket",
+      "artifacts",
+      undefined,
+      presignGetObject,
+    );
+
+    const url = await store.getSignedUrl(artifactId);
+    expect(url).toBeNull();
+    expect(presignGetObject).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          Key: legacyKey,
+        }),
+      }),
+    );
+  });
 });
