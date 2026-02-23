@@ -1,6 +1,7 @@
 import {
   NormalizedThreadMessage as NormalizedThreadMessageSchema,
   buildAgentSessionKey,
+  normalizedContainerKindFromThreadKind,
   parseTyrumKey,
   resolveDmScope,
 } from "@tyrum/schemas";
@@ -41,17 +42,6 @@ function telegramAccountIdFromEnv(): string {
   return process.env["TYRUM_TELEGRAM_ACCOUNT_ID"]?.trim()
     || process.env["TYRUM_TELEGRAM_CHANNEL_KEY"]?.trim()
     || "telegram-1";
-}
-
-function toThreadContainer(kind: NormalizedThreadMessage["thread"]["kind"]): "dm" | "group" | "channel" {
-  switch (kind) {
-    case "private":
-      return "dm";
-    case "channel":
-      return "channel";
-    default:
-      return "group";
-  }
 }
 
 export function telegramThreadKey(
@@ -122,7 +112,7 @@ export function telegramThreadKey(
     });
   }
 
-  const container = toThreadContainer(thread.thread.kind);
+  const container = normalizedContainerKindFromThreadKind(thread.thread.kind);
   if (container === "dm") {
     let peerId = opts?.peerId?.trim()
       || thread.thread.id?.trim()
