@@ -527,6 +527,133 @@ describe("AgentRuntime", () => {
     expect(aborted).toBe(true);
   });
 
+  it("does not time out after a run succeeds on the last engine tick", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("ok"),
+      fetchImpl: fetch404,
+      turnEngineWaitMs: 100,
+    } as ConstructorParameters<typeof AgentRuntime>[0]);
+
+    const engine = (runtime as unknown as { executionEngine: ExecutionEngine }).executionEngine;
+    const originalWorkerTick = engine.workerTick.bind(engine);
+
+    engine.workerTick = async (opts) => {
+      const didWork = await originalWorkerTick(opts);
+      if (didWork) {
+        const runId = (opts as { runId?: string }).runId;
+        if (runId) {
+          const run = await container!.db.get<{ status: string }>(
+            "SELECT status FROM execution_runs WHERE run_id = ?",
+            [runId],
+          );
+          if (run?.status === "succeeded") {
+            // Simulate expensive work after the run has already completed,
+            // pushing the caller past its polling deadline.
+            const endAt = Date.now() + 200;
+            while (Date.now() < endAt) {
+              // busy wait
+            }
+          }
+        }
+      }
+      return didWork;
+    };
+
+    const res = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      message: "hello",
+    });
+
+    expect(res.reply).toBe("ok");
+  });
+
+  it("prefers the attempt error for failed runs over stale pause metadata", async () => {
+    const model: LanguageModelV3 = {
+      specificationVersion: "v3",
+      provider: "test",
+      modelId: "fail",
+      supportedUrls: {},
+
+      async doStream(_options: LanguageModelV3CallOptions): Promise<LanguageModelV3StreamResult> {
+        return {
+          stream: simulateReadableStream({
+            chunks: [
+              { type: "text-start" as const, id: "text-1" },
+              { type: "text-delta" as const, id: "text-1", delta: "" },
+              { type: "text-end" as const, id: "text-1" },
+              {
+                type: "finish" as const,
+                finishReason: { unified: "stop" as const, raw: undefined },
+                logprobs: undefined,
+                usage: {
+                  inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
+                  outputTokens: { total: 1, text: 1, reasoning: undefined },
+                },
+              },
+            ],
+          }),
+          warnings: [],
+        };
+      },
+
+      async doGenerate(_options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
+        throw new Error("real failure");
+      },
+    };
+
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: model,
+      fetchImpl: fetch404,
+    });
+
+    const engine = (runtime as unknown as { executionEngine: ExecutionEngine }).executionEngine;
+    const originalEnqueuePlan = engine.enqueuePlan.bind(engine);
+    engine.enqueuePlan = async (input) => {
+      const res = await originalEnqueuePlan(input);
+      await container!.db.run(
+        "UPDATE execution_steps SET max_attempts = 1 WHERE run_id = ?",
+        [res.runId],
+      );
+      await container!.db.run(
+        "UPDATE execution_runs SET paused_reason = 'stale', paused_detail = 'stale pause' WHERE run_id = ?",
+        [res.runId],
+      );
+      return res;
+    };
+
+    let message = "";
+    try {
+      await runtime.turn({
+        channel: "test",
+        thread_id: "thread-1",
+        message: "hello",
+      });
+      throw new Error("expected turn() to fail");
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err);
+    }
+
+    expect(message).toMatch(/real failure/i);
+    expect(message).not.toMatch(/stale pause/i);
+  });
+
   it("serializes concurrent turns for the same thread", async () => {
     const gate = createDeferred<void>();
     const firstStarted = createDeferred<void>();

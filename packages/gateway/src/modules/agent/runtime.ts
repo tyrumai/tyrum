@@ -1528,7 +1528,10 @@ export class AgentRuntime {
 
       if (run.status === "failed" || run.status === "cancelled") {
         const failure = await this.loadTurnFailureFromRun(runId);
-        const reason = run.paused_detail ?? run.paused_reason ?? failure ?? `execution run ${run.status}`;
+        const reason =
+          run.status === "failed"
+            ? failure ?? run.paused_detail ?? run.paused_reason ?? `execution run ${run.status}`
+            : run.paused_detail ?? run.paused_reason ?? failure ?? `execution run ${run.status}`;
         throw new Error(reason);
       }
 
@@ -1550,6 +1553,51 @@ export class AgentRuntime {
       } else {
         backoffMs = TURN_ENGINE_MIN_BACKOFF_MS;
       }
+    }
+
+    // Avoid timing out when the run completed during the final tick but the
+    // polling loop didn't get another iteration before the deadline elapsed.
+    const completed = await this.opts.container.db.get<{
+      status: string;
+      paused_reason: string | null;
+      paused_detail: string | null;
+    }>(
+      `SELECT status, paused_reason, paused_detail
+       FROM execution_runs
+       WHERE run_id = ?`,
+      [runId],
+    );
+    if (!completed) {
+      throw new Error(`execution run '${runId}' not found`);
+    }
+
+    if (completed.status === "succeeded") {
+      const persisted = await this.loadTurnResultFromRun(runId);
+      if (persisted) {
+        return persisted;
+      }
+      throw new Error("execution engine turn completed without a result payload");
+    }
+
+    if (completed.status === "failed" || completed.status === "cancelled") {
+      const failure = await this.loadTurnFailureFromRun(runId);
+      const reason =
+        completed.status === "failed"
+          ? failure ??
+            completed.paused_detail ??
+            completed.paused_reason ??
+            `execution run ${completed.status}`
+          : completed.paused_detail ??
+            completed.paused_reason ??
+            failure ??
+            `execution run ${completed.status}`;
+      throw new Error(reason);
+    }
+
+    if (completed.status === "paused") {
+      throw new Error(
+        completed.paused_detail ?? completed.paused_reason ?? "execution run paused",
+      );
     }
 
     const elapsed = Math.max(0, Date.now() - startMs);
