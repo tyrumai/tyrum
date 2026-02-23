@@ -760,6 +760,21 @@ describe("PluginRegistry", () => {
     ).toBeUndefined();
   });
 
+  it("loads plugins from directories whose names start with '..' (non-traversal)", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
+    const pluginDir = join(home, "plugins/..echo");
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(join(pluginDir, "plugin.yml"), pluginManifestYaml(), "utf-8");
+    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
+
+    const plugins = await PluginRegistry.load({
+      home,
+      logger: new Logger({ level: "silent" }),
+    });
+
+    expect(plugins.list().map((p) => p.id)).toEqual(["echo"]);
+  });
+
   it("skips plugins whose entry path traverses outside the plugin directory", async () => {
     home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
     const pluginDir = join(home, "plugins/echo");

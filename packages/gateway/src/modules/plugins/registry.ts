@@ -502,7 +502,10 @@ function isWorldWritable(mode: number): boolean {
 
 function isWithinDir(parent: string, child: string): boolean {
   const rel = relative(parent, child);
-  return rel === "" || (!rel.startsWith("..") && !rel.startsWith("../") && !rel.startsWith("..\\") && !isAbsolute(rel));
+  if (rel === "") return true;
+  if (isAbsolute(rel)) return false;
+  const firstSegment = rel.split(/[\\/]/g)[0];
+  return firstSegment !== "..";
 }
 
 function normalizePluginId(id: string): string {
