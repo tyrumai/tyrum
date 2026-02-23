@@ -36,7 +36,7 @@ describe("createContainer oauthProviderRegistry", () => {
         "providers:",
         "  - provider_id: test",
         "    scopes: []",
-        "    token_endpoint_basic_auth: true",
+        "    token_endpoint_basic_auth: false",
       ].join("\n"),
       "utf-8",
     );
@@ -51,4 +51,3 @@ describe("createContainer oauthProviderRegistry", () => {
     expect(spec?.provider_id).toBe("test");
   });
 });
-

@@ -40,9 +40,19 @@ function parseOAuthProviderSpec(value: unknown): OAuthProviderSpec {
     throw new Error("oauth provider spec missing provider_id");
   }
 
+  const clientSecretEnv = coerceString(record["client_secret_env"]);
+
   const tokenEndpointBasicAuthRaw = record["token_endpoint_basic_auth"];
   const tokenEndpointBasicAuth =
-    typeof tokenEndpointBasicAuthRaw === "boolean" ? tokenEndpointBasicAuthRaw : true;
+    typeof tokenEndpointBasicAuthRaw === "boolean"
+      ? tokenEndpointBasicAuthRaw
+      : Boolean(clientSecretEnv);
+
+  if (tokenEndpointBasicAuth && !clientSecretEnv) {
+    throw new Error(
+      "oauth provider spec missing client_secret_env (required when token_endpoint_basic_auth=true)",
+    );
+  }
 
   return {
     provider_id: providerId,
@@ -53,7 +63,7 @@ function parseOAuthProviderSpec(value: unknown): OAuthProviderSpec {
     device_authorization_endpoint: coerceString(record["device_authorization_endpoint"]),
     scopes: coerceStringArray(record["scopes"]),
     client_id_env: coerceString(record["client_id_env"]),
-    client_secret_env: coerceString(record["client_secret_env"]),
+    client_secret_env: clientSecretEnv,
     token_endpoint_basic_auth: tokenEndpointBasicAuth,
     extra_authorize_params: coerceNonEmptyStringRecord(record["extra_authorize_params"]),
     extra_token_params: coerceNonEmptyStringRecord(record["extra_token_params"]),
