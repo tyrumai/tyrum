@@ -10,10 +10,12 @@ import type {
 import {
   evaluatePostcondition,
   Lane,
+  DEFAULT_WORKSPACE_ID,
   PostconditionError,
   requiredCapability,
   requiresPostcondition,
   TyrumKey,
+  WorkspaceId,
 } from "@tyrum/schemas";
 import type { EvaluationContext } from "@tyrum/schemas";
 import { randomUUID } from "node:crypto";
@@ -51,6 +53,8 @@ export type ClockFn = () => ExecutionClock;
 export interface EnqueuePlanInput {
   key: string;
   lane: string;
+  /** Workspace identifier used for workspace leases and audit scoping (default: "default"). */
+  workspaceId?: string;
   planId: string;
   requestId: string;
   steps: ActionPrimitiveT[];
@@ -218,6 +222,13 @@ function parsePlanIdFromTriggerJson(triggerJson: string): string | undefined {
     // ignore
   }
   return undefined;
+}
+
+function normalizeWorkspaceId(input: string | undefined): string {
+  const trimmed = input?.trim();
+  if (!trimmed) return DEFAULT_WORKSPACE_ID;
+  const parsed = WorkspaceId.safeParse(trimmed);
+  return parsed.success ? parsed.data : DEFAULT_WORKSPACE_ID;
 }
 
 export class ExecutionEngine {
@@ -555,6 +566,7 @@ export class ExecutionEngine {
   async enqueuePlanInTx(tx: SqlDb, input: EnqueuePlanInput): Promise<EnqueuePlanResult> {
     const jobId = randomUUID();
     const runId = randomUUID();
+    const workspaceId = normalizeWorkspaceId(input.workspaceId);
 
     const trigger = {
       kind: "session",
@@ -581,10 +593,20 @@ export class ExecutionEngine {
          trigger_json,
          input_json,
          latest_run_id,
-         policy_snapshot_id
+         policy_snapshot_id,
+         workspace_id
        )
-       VALUES (?, ?, ?, 'queued', ?, ?, ?, ?)`,
-      [jobId, input.key, input.lane, triggerJson, inputJson, runId, input.policySnapshotId ?? null],
+       VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, ?)`,
+      [
+        jobId,
+        input.key,
+        input.lane,
+        triggerJson,
+        inputJson,
+        runId,
+        input.policySnapshotId ?? null,
+        workspaceId,
+      ],
     );
 
     await tx.run(

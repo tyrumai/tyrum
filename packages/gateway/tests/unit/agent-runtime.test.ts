@@ -221,6 +221,125 @@ describe("AgentRuntime", () => {
     expect(attemptResult.reply).toBe("hello");
   });
 
+  it("persists workspace_id on execution jobs for agent turns", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      agentId: "agent-a",
+      workspaceId: "agent-a",
+      languageModel: createStubLanguageModel("hello"),
+      fetchImpl: fetch404,
+    });
+
+    const result = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      message: "hello from test",
+    });
+    expect(result.reply).toBe("hello");
+
+    const run = await container.db.get<{ job_id: string }>(
+      `SELECT job_id
+       FROM execution_runs
+       ORDER BY rowid DESC
+       LIMIT 1`,
+    );
+    expect(run).toBeTruthy();
+
+    const job = await container.db.get<{ workspace_id: string }>(
+      "SELECT workspace_id FROM execution_jobs WHERE job_id = ?",
+      [run!.job_id],
+    );
+    expect(job).toBeTruthy();
+    expect(job!.workspace_id).toBe("agent-a");
+  });
+
+  it("avoids turn key collisions between raw and encoded key parts", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("ok"),
+      fetchImpl: fetch404,
+    });
+
+    await runtime.turn({
+      channel: "a:b",
+      thread_id: "thread-1",
+      message: "m1",
+    });
+    const first = await container.db.get<{ key: string }>(
+      "SELECT key FROM execution_runs ORDER BY rowid DESC LIMIT 1",
+    );
+    expect(first).toBeTruthy();
+
+    await runtime.turn({
+      channel: "YTpi",
+      thread_id: "thread-1",
+      message: "m2",
+    });
+    const second = await container.db.get<{ key: string }>(
+      "SELECT key FROM execution_runs ORDER BY rowid DESC LIMIT 1",
+    );
+    expect(second).toBeTruthy();
+
+    expect(first!.key).not.toBe(second!.key);
+  });
+
+  it("scopes the turn key by container_kind to avoid cross-thread collisions", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("ok"),
+      fetchImpl: fetch404,
+    });
+
+    await runtime.turn({
+      channel: "test",
+      thread_id: "same-id",
+      message: "m1",
+      container_kind: "dm",
+    });
+
+    const first = await container.db.get<{ key: string }>(
+      "SELECT key FROM execution_runs ORDER BY rowid DESC LIMIT 1",
+    );
+    expect(first).toBeTruthy();
+    expect(first!.key.includes(":dm:")).toBe(true);
+
+    await runtime.turn({
+      channel: "test",
+      thread_id: "same-id",
+      message: "m2",
+      container_kind: "group",
+    });
+
+    const second = await container.db.get<{ key: string }>(
+      "SELECT key FROM execution_runs ORDER BY rowid DESC LIMIT 1",
+    );
+    expect(second).toBeTruthy();
+    expect(second!.key.includes(":group:")).toBe(true);
+
+    expect(first!.key).not.toBe(second!.key);
+  });
+
   it("does not execute other agents' queued runs when ticking inline", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({
@@ -323,6 +442,89 @@ describe("AgentRuntime", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("enforces the engine deadline against slow model calls", async () => {
+    let aborted = false;
+
+    const model: LanguageModelV3 = {
+      specificationVersion: "v3",
+      provider: "test",
+      modelId: "slow",
+      supportedUrls: {},
+
+      async doStream(_options: LanguageModelV3CallOptions): Promise<LanguageModelV3StreamResult> {
+        return {
+          stream: simulateReadableStream({
+            chunks: [
+              { type: "text-start" as const, id: "text-1" },
+              { type: "text-delta" as const, id: "text-1", delta: "stream" },
+              { type: "text-end" as const, id: "text-1" },
+              {
+                type: "finish" as const,
+                finishReason: { unified: "stop" as const, raw: undefined },
+                logprobs: undefined,
+                usage: {
+                  inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
+                  outputTokens: { total: 1, text: 1, reasoning: undefined },
+                },
+              },
+            ],
+          }),
+          warnings: [],
+        };
+      },
+
+      async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
+        return await new Promise<LanguageModelV3GenerateResult>((resolve, reject) => {
+          const timer = setTimeout(() => {
+            resolve({
+              content: [{ type: "text" as const, text: "late" }],
+              finishReason: { unified: "stop" as const, raw: undefined },
+              usage: {
+                inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
+                outputTokens: { total: 1, text: 1, reasoning: undefined },
+              },
+              warnings: [],
+            });
+          }, 100);
+
+          options.abortSignal?.addEventListener(
+            "abort",
+            () => {
+              aborted = true;
+              clearTimeout(timer);
+              reject(new Error("timed out"));
+            },
+            { once: true },
+          );
+        });
+      },
+    };
+
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: model,
+      fetchImpl: fetch404,
+      turnEngineWaitMs: 50,
+    } as ConstructorParameters<typeof AgentRuntime>[0]);
+
+    await expect(
+      runtime.turn({
+        channel: "test",
+        thread_id: "thread-1",
+        message: "hello",
+      }),
+    ).rejects.toThrow(/did not complete|timed out/i);
+
+    expect(aborted).toBe(true);
   });
 
   it("serializes concurrent turns for the same thread", async () => {

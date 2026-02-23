@@ -12,6 +12,7 @@ import type {
   IdentityPack as IdentityPackT,
   NormalizedAttachment as NormalizedAttachmentT,
   NormalizedMessageEnvelope as NormalizedMessageEnvelopeT,
+  NormalizedContainerKind,
 } from "@tyrum/schemas";
 import {
   AgentId,
@@ -108,15 +109,24 @@ function resolveWorkspaceId(): string {
 }
 
 function encodeKeyPart(value: string): string {
-  if (!value.includes(":")) return value;
-  return Buffer.from(value, "utf-8").toString("base64url");
+  // Collision-safe reversible encoding for colon-delimited key segments.
+  // - Only encode when required (`:`) or when the raw segment could be
+  //   confused with an encoded segment (prefix `~`).
+  const prefix = "~";
+  if (!value.includes(":") && !value.startsWith(prefix)) return value;
+  const encoded = Buffer.from(value, "utf-8").toString("base64url");
+  return `${prefix}${encoded}`;
 }
 
-function buildAgentTurnKey(agentId: string, channel: string, threadId: string): string {
-  const safeAgentId = encodeKeyPart(agentId);
+function buildAgentTurnKey(
+  agentId: string,
+  channel: string,
+  containerKind: NormalizedContainerKind,
+  threadId: string,
+): string {
   const safeChannel = encodeKeyPart(channel);
   const safeThread = encodeKeyPart(threadId);
-  return `agent:${safeAgentId}:${safeChannel}:channel:${safeThread}`;
+  return `agent:${agentId}:${safeChannel}:${containerKind}:${safeThread}`;
 }
 
 function resolveTurnRequestId(input: AgentTurnRequestT): string {
@@ -225,6 +235,8 @@ export interface AgentRuntimeOptions {
   approvalWaitMs?: number;
   /** Poll interval while waiting for human approval. */
   approvalPollMs?: number;
+  /** Maximum duration for a single turn to complete via the execution engine. */
+  turnEngineWaitMs?: number;
 }
 
 function trimTo(value: string, max: number): string {
@@ -850,6 +862,7 @@ export class AgentRuntime {
   private readonly maxSteps: number;
   private readonly executionEngine: ExecutionEngine;
   private readonly executionWorkerId: string;
+  private readonly turnEngineWaitMs: number;
   private lastContextReport: AgentContextReport | undefined;
   private cleanupAtMs = 0;
 
@@ -886,6 +899,7 @@ export class AgentRuntime {
     this.approvalWaitMs = Math.max(1_000, opts.approvalWaitMs ?? DEFAULT_APPROVAL_WAIT_MS);
     this.approvalPollMs = Math.max(100, opts.approvalPollMs ?? DEFAULT_APPROVAL_POLL_MS);
     this.maxSteps = opts.maxSteps ?? DEFAULT_MAX_STEPS;
+    this.turnEngineWaitMs = Math.max(1, opts.turnEngineWaitMs ?? MAX_TURN_ENGINE_WAIT_MS);
     this.executionEngine = new ExecutionEngine({
       db: opts.container.db,
       redactionEngine: opts.container.redactionEngine,
@@ -1392,7 +1406,10 @@ export class AgentRuntime {
     return await this.turnViaExecutionEngine(input);
   }
 
-  private async turnDirect(input: AgentTurnRequestT): Promise<AgentTurnResponseT> {
+  private async turnDirect(
+    input: AgentTurnRequestT,
+    opts?: { abortSignal?: AbortSignal; timeoutMs?: number },
+  ): Promise<AgentTurnResponseT> {
     const prepared = await this.prepareTurn(input);
     const { ctx, session, model, toolSet, usedTools, userContent, contextReport, systemPrompt, resolved } = prepared;
 
@@ -1407,6 +1424,8 @@ export class AgentRuntime {
       ],
       tools: toolSet,
       stopWhen: [stepCountIs(this.maxSteps)],
+      abortSignal: opts?.abortSignal,
+      timeout: opts?.timeoutMs,
     });
 
     const reply = result.text || "No assistant response returned.";
@@ -1414,7 +1433,8 @@ export class AgentRuntime {
   }
 
   private async turnViaExecutionEngine(input: AgentTurnRequestT): Promise<AgentTurnResponseT> {
-    const key = buildAgentTurnKey(this.agentId, input.channel, input.thread_id);
+    const containerKind: NormalizedContainerKind = input.container_kind ?? "channel";
+    const key = buildAgentTurnKey(this.agentId, input.channel, containerKind, input.thread_id);
     const lane = "main";
     const planId = `agent-turn-${this.agentId}-${randomUUID()}`;
     const requestId = resolveTurnRequestId(input);
@@ -1422,6 +1442,7 @@ export class AgentRuntime {
     const stepArgs: Record<string, unknown> = {
       channel: input.channel,
       thread_id: input.thread_id,
+      container_kind: containerKind,
       message: input.message,
       agent_id: this.agentId,
       workspace_id: this.workspaceId,
@@ -1433,6 +1454,7 @@ export class AgentRuntime {
     const { runId } = await this.executionEngine.enqueuePlan({
       key,
       lane,
+      workspaceId: this.workspaceId,
       planId,
       requestId,
       steps: [{ type: "Decide", args: stepArgs }],
@@ -1442,7 +1464,7 @@ export class AgentRuntime {
     const workerId = `${this.executionWorkerId}-${runId}`;
 
     const executor: StepExecutor = {
-      execute: async (action) => {
+      execute: async (action, _planId, _stepIndex, timeoutMs) => {
         if (action.type !== "Decide") {
           return { success: false, error: `unsupported action type: ${action.type}` };
         }
@@ -1452,13 +1474,32 @@ export class AgentRuntime {
           return { success: false, error: `invalid agent turn request: ${parsed.error.message}` };
         }
 
-        const response = await this.turnDirect(parsed.data);
-        return { success: true, result: response };
+        const remainingMs = Math.max(1, deadlineMs - Date.now());
+        const requestedTimeoutMs = Math.max(1, Math.floor(timeoutMs));
+        const effectiveTimeoutMs = Math.min(requestedTimeoutMs, remainingMs);
+
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), effectiveTimeoutMs);
+        try {
+          const response = await this.turnDirect(parsed.data, {
+            abortSignal: controller.signal,
+            timeoutMs: effectiveTimeoutMs,
+          });
+          return { success: true, result: response };
+        } catch (err) {
+          if (controller.signal.aborted) {
+            return { success: false, error: `timed out after ${String(effectiveTimeoutMs)}ms` };
+          }
+          const message = err instanceof Error ? err.message : String(err);
+          return { success: false, error: message };
+        } finally {
+          clearTimeout(timer);
+        }
       },
     };
 
     const startMs = Date.now();
-    const deadlineMs = startMs + MAX_TURN_ENGINE_WAIT_MS;
+    const deadlineMs = startMs + this.turnEngineWaitMs;
     let backoffMs = TURN_ENGINE_MIN_BACKOFF_MS;
 
     while (Date.now() < deadlineMs) {
