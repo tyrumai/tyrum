@@ -137,13 +137,15 @@ export function persistOperatingMode(
 ): ConsentRecord {
   const previous = latestRecord ?? snapshotConsent();
   const revision = previous.revision + 1;
+  const nextRemoteHardening =
+    mode === "remote-team" ? (remoteHardening ?? previous.remoteHardening) : undefined;
 
   latestRecord = buildRecord(
     revision,
     previous.selections,
     previous.calibration,
     mode,
-    mode === "remote-team" ? remoteHardening : undefined,
+    nextRemoteHardening,
   );
 
   return structuredClone(latestRecord);

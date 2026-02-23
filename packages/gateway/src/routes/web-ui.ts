@@ -1735,6 +1735,7 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
       return c.redirect(withAuthToken("/app/onboarding/persona", search));
     }
 
+    persistOperatingMode("remote-team");
     return c.redirect(
       redirectWithMessageFromRequest(
         c,
@@ -1964,6 +1965,16 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
   app.get("/app/onboarding/consent", (c) => {
     const search = new URL(c.req.url).searchParams;
     const snapshot = snapshotConsent();
+    if (snapshot.mode === "remote-team" && !snapshot.remoteHardening) {
+      return c.redirect(
+        redirectWithMessageFromRequest(
+          c,
+          "/app/onboarding/remote-team",
+          "Complete remote-team hardening before continuing to consent.",
+          "error",
+        ),
+      );
+    }
     const selected = Object.values(snapshot.selections).filter(Boolean).length;
 
     const body = `
@@ -2001,6 +2012,17 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
   });
 
   app.post("/app/actions/onboarding/consent", async (c) => {
+    const snapshot = snapshotConsent();
+    if (snapshot.mode === "remote-team" && !snapshot.remoteHardening) {
+      return c.redirect(
+        redirectWithMessageFromRequest(
+          c,
+          "/app/onboarding/remote-team",
+          "Complete remote-team hardening before recording consent.",
+          "error",
+        ),
+      );
+    }
     const form = await c.req.formData();
     const startedAt = new Date(Date.now() - 60_000).toISOString();
     const completedAt = new Date().toISOString();
