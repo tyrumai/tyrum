@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -155,6 +155,83 @@ describe("artifact routes", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("text/plain");
     expect(await res.text()).toBe("hello");
+
+    await container.db.close();
+  });
+
+  it("GET /runs/:runId/artifacts/:id redirects to a signed URL when the store supports it", async () => {
+    const container = await createTestContainer();
+    const scope: ExecutionScopeIds = {
+      jobId: "job-artifacts-signed-url",
+      runId: "run-artifacts-signed-url",
+      stepId: "step-artifacts-signed-url",
+      attemptId: "attempt-artifacts-signed-url",
+    };
+    await seedExecutionScope(container.db, scope);
+
+    const ref = await container.artifactStore.put({
+      kind: "log",
+      mime_type: "text/plain",
+      body: Buffer.from("hello", "utf8"),
+      labels: ["log"],
+      metadata: { test: true },
+    });
+
+    await container.db.run(
+      `INSERT INTO execution_artifacts (
+         artifact_id,
+         workspace_id,
+         agent_id,
+         run_id,
+         step_id,
+         attempt_id,
+         kind,
+         uri,
+         created_at,
+         mime_type,
+         size_bytes,
+         sha256,
+         labels_json,
+         metadata_json,
+         sensitivity,
+         policy_snapshot_id
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        ref.artifact_id,
+        "default",
+        "agent-1",
+        scope.runId,
+        scope.stepId,
+        scope.attemptId,
+        ref.kind,
+        ref.uri,
+        ref.created_at,
+        ref.mime_type ?? null,
+        ref.size_bytes ?? null,
+        ref.sha256 ?? null,
+        JSON.stringify(ref.labels ?? []),
+        JSON.stringify(ref.metadata ?? {}),
+        "normal",
+        null,
+      ],
+    );
+
+    const signedUrl = `https://objects.example.test/${ref.artifact_id}?sig=test`;
+    const put = container.artifactStore.put.bind(container.artifactStore);
+    const get = vi.fn(container.artifactStore.get.bind(container.artifactStore));
+
+    container.artifactStore = {
+      put,
+      get,
+      getSignedUrl: vi.fn(async () => signedUrl),
+    };
+
+    const app = createApp(container);
+    const res = await app.request(`/runs/${scope.runId}/artifacts/${ref.artifact_id}`);
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(signedUrl);
+    expect(get).not.toHaveBeenCalled();
 
     await container.db.close();
   });

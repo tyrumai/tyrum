@@ -59,6 +59,8 @@ If an artifact is not durably linked, the gateway must deny fetch (even if the b
 
 For object storage deployments, the gateway issues short-lived signed URLs only after authorization checks succeed. For filesystem deployments, the gateway streams bytes directly.
 
+In the HTTP API, `GET /runs/:runId/artifacts/:id` streams bytes for filesystem stores and redirects to a signed URL for object stores.
+
 Artifact fetches are auditable and emit events (for example `artifact.fetched`) that include what was accessed and requester metadata.
 
 ```mermaid

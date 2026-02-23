@@ -46,6 +46,7 @@ type DurableExecutionScope = {
 };
 
 const ARTIFACT_NOT_FOUND_BODY = { error: "not_found", message: "artifact not found" } as const;
+const DEFAULT_SIGNED_URL_TTL_SECONDS = 60;
 
 function normalizeDbDateTime(value: string | Date | null): string | null {
   if (value === null) return null;
@@ -307,6 +308,49 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
           403,
         );
       }
+    }
+
+    const maybeGetSignedUrl = deps.artifactStore.getSignedUrl;
+    if (typeof maybeGetSignedUrl === "function") {
+      const signedUrl = await maybeGetSignedUrl(parsedId.data, {
+        expiresInSeconds: DEFAULT_SIGNED_URL_TTL_SECONDS,
+      });
+      if (!signedUrl) {
+        return c.json({ error: "not_found", message: "artifact bytes not found" }, 404);
+      }
+
+      // Conservative: prevent caches from persisting potentially sensitive artifacts.
+      c.header("Cache-Control", "no-store");
+
+      // Best-effort: emit an audit-style event.
+      const ref = rowToArtifactRef(row);
+      if (!ref) {
+        return c.json({ error: "invalid_state", message: "artifact metadata is invalid" }, 500);
+      }
+      try {
+        const evt: WsEventEnvelope = {
+          event_id: randomUUID(),
+          type: "artifact.fetched",
+          occurred_at: new Date().toISOString(),
+          scope: { kind: "run", run_id: durableScope.run_id },
+          payload: {
+            artifact: ref,
+            fetched_by: {
+              kind: "http",
+              request_id: c.res.headers.get("x-request-id") ?? undefined,
+            },
+          },
+        };
+        await enqueueWsEvent(deps.db, evt);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        deps.logger?.warn("artifact.fetched_emit_failed", {
+          artifact_id: parsedId.data,
+          error: message,
+        });
+      }
+
+      return c.redirect(signedUrl, 302);
     }
 
     const stored = await deps.artifactStore.get(parsedId.data);
