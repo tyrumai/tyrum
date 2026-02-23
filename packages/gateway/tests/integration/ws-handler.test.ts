@@ -435,7 +435,17 @@ describe("WS handler integration", () => {
       JSON.stringify({
         request_id: "r-approve",
         type: "pairing.approve",
-        payload: { pairing_id: pairing!.pairing_id, reason: "ok" },
+        payload: {
+          pairing_id: pairing!.pairing_id,
+          reason: "ok",
+          trust_level: "remote",
+          capability_allowlist: [
+            {
+              id: descriptorIdForClientCapability("cli"),
+              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+            },
+          ],
+        },
       }),
     );
     const approveRes = await waitForJsonMessageMatching(
@@ -447,6 +457,13 @@ describe("WS handler integration", () => {
     const pairing2 = await container.nodePairingDal.getById(pairing!.pairing_id);
     expect(pairing2).toBeDefined();
     expect(pairing2!.status).toBe("approved");
+    expect((pairing2 as any)["trust_level"]).toBe("remote");
+    expect((pairing2 as any)["capability_allowlist"]).toEqual([
+      {
+        id: descriptorIdForClientCapability("cli"),
+        version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+      },
+    ]);
 
     stopHeartbeat();
   });

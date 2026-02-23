@@ -355,6 +355,7 @@ export {
   NodeIdentity,
   NodePairingStatus,
   NodePairingDecision,
+  NodePairingTrustLevel,
   NodePairingResolution,
   NodePairingRequest,
 } from "./node.js";

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { DateTimeSchema } from "./common.js";
 import { NodeId } from "./keys.js";
-import { ClientCapability } from "./capability.js";
+import { CapabilityDescriptor, ClientCapability } from "./capability.js";
 
 export const NodeIdentity = z
   .object({
@@ -20,6 +20,9 @@ export type NodePairingStatus = z.infer<typeof NodePairingStatus>;
 export const NodePairingDecision = z.enum(["approved", "denied", "revoked"]);
 export type NodePairingDecision = z.infer<typeof NodePairingDecision>;
 
+export const NodePairingTrustLevel = z.enum(["local", "remote"]);
+export type NodePairingTrustLevel = z.infer<typeof NodePairingTrustLevel>;
+
 export const NodePairingResolution = z
   .object({
     decision: NodePairingDecision,
@@ -34,8 +37,10 @@ export const NodePairingRequest = z
   .object({
     pairing_id: z.number().int().positive(),
     status: NodePairingStatus,
+    trust_level: NodePairingTrustLevel.optional(),
     requested_at: DateTimeSchema,
     node: NodeIdentity,
+    capability_allowlist: z.array(CapabilityDescriptor).default([]),
     resolution: NodePairingResolution.nullable(),
     resolved_at: DateTimeSchema.nullable(),
   })

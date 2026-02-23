@@ -1,4 +1,10 @@
-import type { ClientCapability, NodePairingRequest as NodePairingRequestT } from "@tyrum/schemas";
+import {
+  CapabilityDescriptor as CapabilityDescriptorSchema,
+  type CapabilityDescriptor,
+  type ClientCapability,
+  type NodePairingRequest as NodePairingRequestT,
+  type NodePairingTrustLevel,
+} from "@tyrum/schemas";
 import { NodePairingRequest } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
 
@@ -7,10 +13,12 @@ type NodePairingStatus = "pending" | "approved" | "denied" | "revoked";
 interface RawNodePairingRow {
   pairing_id: number;
   status: string;
+  trust_level: string;
   node_id: string;
   pubkey: string | null;
   label: string | null;
   capabilities_json: string;
+  capability_allowlist_json: string;
   metadata_json: string;
   requested_at: string | Date;
   last_seen_at: string | Date;
@@ -44,6 +52,24 @@ function parseCapabilities(raw: string): ClientCapability[] {
   return [];
 }
 
+function parseAllowlist(raw: string): CapabilityDescriptor[] {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((entry) => CapabilityDescriptorSchema.safeParse(entry))
+      .filter((res) => res.success)
+      .map((res) => res.data);
+  } catch {
+    return [];
+  }
+}
+
+function parseTrustLevel(raw: string): NodePairingTrustLevel | undefined {
+  if (raw === "local" || raw === "remote") return raw;
+  return undefined;
+}
+
 function toPairing(row: RawNodePairingRow): NodePairingRequestT {
   const status: NodePairingStatus =
     row.status === "approved" || row.status === "denied" || row.status === "revoked"
@@ -67,6 +93,7 @@ function toPairing(row: RawNodePairingRow): NodePairingRequestT {
   return NodePairingRequest.parse({
     pairing_id: row.pairing_id,
     status,
+    trust_level: parseTrustLevel(row.trust_level),
     requested_at: requestedAt,
     node: {
       node_id: row.node_id,
@@ -75,6 +102,7 @@ function toPairing(row: RawNodePairingRow): NodePairingRequestT {
       last_seen_at: lastSeenAt,
       metadata: parseJsonOrEmpty(row.metadata_json),
     },
+    capability_allowlist: parseAllowlist(row.capability_allowlist_json),
     resolution,
     resolved_at: resolvedAt,
   });
@@ -255,16 +283,45 @@ export class NodePairingDal {
 
   async resolve(params: {
     pairingId: number;
-    decision: Exclude<NodePairingStatus, "pending">;
+    decision: "approved";
+    reason?: string;
+    resolvedBy?: unknown;
+    trustLevel: NodePairingTrustLevel;
+    capabilityAllowlist: readonly CapabilityDescriptor[];
+    nowIso?: string;
+  } | {
+    pairingId: number;
+    decision: "denied";
     reason?: string;
     resolvedBy?: unknown;
     nowIso?: string;
   }): Promise<NodePairingRequestT | undefined> {
     const nowIso = params.nowIso ?? new Date().toISOString();
 
+    const existing = await this.db.get<RawNodePairingRow>(
+      `SELECT *
+       FROM node_pairings
+       WHERE pairing_id = ?
+         AND status = 'pending'`,
+      [params.pairingId],
+    );
+    if (!existing) return undefined;
+
+    const trustLevel =
+      params.decision === "approved"
+        ? params.trustLevel
+        : parseTrustLevel(existing.trust_level) ?? "remote";
+
+    const allowlist =
+      params.decision === "approved"
+        ? params.capabilityAllowlist
+        : parseAllowlist(existing.capability_allowlist_json);
+
     const result = await this.db.run(
       `UPDATE node_pairings
        SET status = ?,
+           trust_level = ?,
+           capability_allowlist_json = ?,
            resolved_at = ?,
            resolved_by_json = ?,
            resolution_reason = ?,
@@ -273,6 +330,8 @@ export class NodePairingDal {
          AND status = 'pending'`,
       [
         params.decision,
+        trustLevel,
+        JSON.stringify(allowlist),
         nowIso,
         JSON.stringify(params.resolvedBy ?? {}),
         params.reason ?? null,

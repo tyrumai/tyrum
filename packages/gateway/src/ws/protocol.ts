@@ -457,69 +457,100 @@ export async function handleClientMessage(
       );
     }
 
-    const parsedReq =
-      msg.type === "pairing.approve"
-        ? WsPairingApproveRequest.safeParse(msg)
-        : msg.type === "pairing.deny"
-          ? WsPairingDenyRequest.safeParse(msg)
-          : WsPairingRevokeRequest.safeParse(msg);
-    if (!parsedReq.success) {
-      return errorResponse(
-        msg.request_id,
-        msg.type,
-        "invalid_request",
-        parsedReq.error.message,
-        { issues: parsedReq.error.issues },
-      );
-    }
-
-    const pairingId = parsedReq.data.payload.pairing_id;
-    const reason =
-      typeof (parsedReq.data.payload as { reason?: unknown }).reason === "string"
-        ? String((parsedReq.data.payload as { reason?: unknown }).reason)
-        : undefined;
-
     const resolvedBy = {
       kind: "ws",
       client_id: client.id,
       device_id: client.device_id,
     };
 
-    const pairing =
-      msg.type === "pairing.revoke"
-        ? await deps.nodePairingDal.revoke({
-            pairingId,
-            reason,
-            resolvedBy,
-          })
-        : await deps.nodePairingDal.resolve({
-            pairingId,
-            decision: msg.type === "pairing.approve" ? "approved" : "denied",
-            reason,
-            resolvedBy,
-          });
-
-    if (!pairing) {
-      return errorResponse(
+    const notFound = (pairingId: number) =>
+      errorResponse(
         msg.request_id,
         msg.type,
         "not_found",
         `pairing ${String(pairingId)} not found or not resolvable`,
       );
+
+    const ok = (pairing: unknown): WsResponseEnvelope => {
+      broadcastEvent(
+        {
+          event_id: crypto.randomUUID(),
+          type: "pairing.resolved",
+          occurred_at: new Date().toISOString(),
+          payload: { pairing },
+        },
+        deps,
+      );
+
+      const result = WsPairingResolveResult.parse({ pairing });
+      return { request_id: msg.request_id, type: msg.type, ok: true, result };
+    };
+
+    let pairingId: number;
+    let pairing: unknown;
+
+    if (msg.type === "pairing.approve") {
+      const parsedReq = WsPairingApproveRequest.safeParse(msg);
+      if (!parsedReq.success) {
+        return errorResponse(
+          msg.request_id,
+          msg.type,
+          "invalid_request",
+          parsedReq.error.message,
+          { issues: parsedReq.error.issues },
+        );
+      }
+
+      pairingId = parsedReq.data.payload.pairing_id;
+      pairing = await deps.nodePairingDal.resolve({
+        pairingId,
+        decision: "approved",
+        reason: parsedReq.data.payload.reason,
+        resolvedBy,
+        trustLevel: parsedReq.data.payload.trust_level,
+        capabilityAllowlist: parsedReq.data.payload.capability_allowlist,
+      });
+    } else if (msg.type === "pairing.deny") {
+      const parsedReq = WsPairingDenyRequest.safeParse(msg);
+      if (!parsedReq.success) {
+        return errorResponse(
+          msg.request_id,
+          msg.type,
+          "invalid_request",
+          parsedReq.error.message,
+          { issues: parsedReq.error.issues },
+        );
+      }
+
+      pairingId = parsedReq.data.payload.pairing_id;
+      pairing = await deps.nodePairingDal.resolve({
+        pairingId,
+        decision: "denied",
+        reason: parsedReq.data.payload.reason,
+        resolvedBy,
+      });
+    } else {
+      const parsedReq = WsPairingRevokeRequest.safeParse(msg);
+      if (!parsedReq.success) {
+        return errorResponse(
+          msg.request_id,
+          msg.type,
+          "invalid_request",
+          parsedReq.error.message,
+          { issues: parsedReq.error.issues },
+        );
+      }
+
+      pairingId = parsedReq.data.payload.pairing_id;
+      pairing = await deps.nodePairingDal.revoke({
+        pairingId,
+        reason: parsedReq.data.payload.reason,
+        resolvedBy,
+      });
     }
 
-    broadcastEvent(
-      {
-        event_id: crypto.randomUUID(),
-        type: "pairing.resolved",
-        occurred_at: new Date().toISOString(),
-        payload: { pairing },
-      },
-      deps,
-    );
-
-    const result = WsPairingResolveResult.parse({ pairing });
-    return { request_id: msg.request_id, type: msg.type, ok: true, result };
+    if (!pairing) return notFound(pairingId);
+    return ok(pairing);
   }
 
   if (msg.type === "session.send") {
