@@ -213,4 +213,46 @@ describe("tyrum check", () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it("parses host:port values in GATEWAY_HOST for live probes", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    process.env["GATEWAY_DB_PATH"] = ":memory:";
+    process.env["GATEWAY_HOST"] = "127.0.0.1:9999";
+    process.env["GATEWAY_PORT"] = "8788";
+    process.env["GATEWAY_TOKEN"] = "test-token";
+    process.env["TYRUM_HOME"] = "/tmp/tyrum-test-home";
+    process.env["TYRUM_SECRET_PROVIDER"] = "env";
+
+    ensureLoaded.mockResolvedValueOnce({
+      status: {
+        source: "default",
+        provider_count: 1,
+        model_count: 2,
+        last_error: null,
+      },
+    } as any);
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(JSON.stringify({ status: "ok" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { runCli } = await import("../../src/index.js");
+    const code = await runCli(["check"]);
+
+    expect(code).toBe(0);
+
+    const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(urls).toContain("http://127.0.0.1:9999/healthz");
+    expect(urls).toContain("http://127.0.0.1:9999/status");
+
+    logSpy.mockRestore();
+    errorSpy.mockRestore();
+    vi.unstubAllGlobals();
+  });
 });

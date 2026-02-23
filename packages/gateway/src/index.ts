@@ -283,15 +283,59 @@ async function runGatewayUpdate(
 
 type AdminTokenSource = "env" | "file" | "generated";
 
+type PortInfo = { port: number; raw: string; valid: boolean };
+
 function resolveGatewayHost(): string {
   return process.env["GATEWAY_HOST"]?.trim() || "127.0.0.1";
 }
 
-function resolveGatewayPort(): { port: number; raw: string; valid: boolean } {
-  const raw = process.env["GATEWAY_PORT"] ?? "8788";
-  const parsed = parseInt(raw, 10);
+function parsePort(raw: string): PortInfo {
+  const trimmed = raw.trim();
+  if (!/^[0-9]+$/.test(trimmed)) {
+    return { port: Number.NaN, raw, valid: false };
+  }
+  const parsed = Number(trimmed);
   const valid = Number.isInteger(parsed) && parsed > 0 && parsed <= 65535;
   return { port: parsed, raw, valid };
+}
+
+function resolveGatewayPort(): PortInfo {
+  const raw = process.env["GATEWAY_PORT"] ?? "8788";
+  return parsePort(raw);
+}
+
+function splitHostAndPort(rawHost: string): { host: string; port: string | null } {
+  const trimmed = rawHost.trim();
+  if (trimmed.length === 0) {
+    return { host: "", port: null };
+  }
+
+  if (trimmed.startsWith("[")) {
+    const closeBracket = trimmed.indexOf("]");
+    if (closeBracket !== -1) {
+      const host = trimmed.slice(1, closeBracket);
+      const rest = trimmed.slice(closeBracket + 1);
+      if (rest.startsWith(":")) {
+        const port = rest.slice(1);
+        if (/^[0-9]+$/.test(port)) {
+          return { host, port };
+        }
+      }
+      return { host, port: null };
+    }
+  }
+
+  const firstColon = trimmed.indexOf(":");
+  const lastColon = trimmed.lastIndexOf(":");
+  if (firstColon !== -1 && firstColon === lastColon) {
+    const host = trimmed.slice(0, lastColon);
+    const port = trimmed.slice(lastColon + 1);
+    if (host.length > 0 && /^[0-9]+$/.test(port)) {
+      return { host, port };
+    }
+  }
+
+  return { host: trimmed, port: null };
 }
 
 function normalizeProbeHost(host: string): string {
@@ -490,8 +534,10 @@ async function runGatewayCheck(): Promise<number> {
     console.log("oauth: providers_configured=loaded");
 
     // --- Static diagnostics ---
-    const host = resolveGatewayHost();
-    const portInfo = resolveGatewayPort();
+    const hostRaw = resolveGatewayHost();
+    const hostSplit = splitHostAndPort(hostRaw);
+    const host = hostSplit.host.length > 0 ? hostSplit.host : hostRaw;
+    const portInfo = hostSplit.port ? parsePort(hostSplit.port) : resolveGatewayPort();
     const isLocalOnly = isLoopbackHost(host);
     console.log(
       `static.exposure: host=${host} port=${portInfo.valid ? portInfo.port : `invalid(raw=${portInfo.raw})`} is_exposed=${!isLocalOnly}`,
