@@ -555,7 +555,6 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
       ? new AgentRegistry({
           container,
           baseHome: tyrumHome,
-          gatewayToken: token,
           defaultSecretProvider: secretProvider,
           defaultPolicyService: container.policyService,
           approvalNotifier,

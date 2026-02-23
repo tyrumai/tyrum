@@ -43,7 +43,6 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<{
     ? new AgentRegistryImpl({
         container,
         baseHome: resolveTyrumHome(),
-        gatewayToken: "test-gateway-token",
         defaultSecretProvider: new EnvSecretProvider(),
         defaultPolicyService: container.policyService,
         defaultLanguageModel: opts.languageModel,
