@@ -44,6 +44,7 @@ import { refreshAccessToken, resolveOAuthEndpoints } from "../oauth/oauth-client
 import { coerceRecord, coerceStringRecord } from "../util/coerce.js";
 import { isAuthProfilesEnabled } from "../models/auth-profiles-enabled.js";
 import { resolveSandboxHardeningProfile } from "../sandbox/hardening.js";
+import { deriveElevatedExecutionAvailableFromPolicyBundle } from "../sandbox/elevated-execution.js";
 
 const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_APPROVAL_WAIT_MS = 120_000;
@@ -61,13 +62,7 @@ async function deriveElevatedExecutionAvailable(
 ): Promise<boolean | null> {
   try {
     const effective = await policyService.loadEffectiveBundle();
-    const tools = effective.bundle.tools;
-    const toolsDefault = tools?.default ?? "deny";
-    const allowCount = Array.isArray(tools?.allow) ? tools.allow.length : 0;
-    const requireApprovalCount = Array.isArray(tools?.require_approval)
-      ? tools.require_approval.length
-      : 0;
-    return toolsDefault !== "deny" || allowCount > 0 || requireApprovalCount > 0;
+    return deriveElevatedExecutionAvailableFromPolicyBundle(effective.bundle);
   } catch {
     return null;
   }

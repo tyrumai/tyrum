@@ -4,6 +4,7 @@ import type { PolicyService } from "../policy/service.js";
 import type { AgentRegistry } from "../agent/registry.js";
 import type { SqlDb } from "../../statestore/types.js";
 import { resolveSandboxHardeningProfile, type SandboxHardeningProfile } from "../sandbox/hardening.js";
+import { deriveElevatedExecutionAvailableFromPolicyBundle } from "../sandbox/elevated-execution.js";
 
 type StatusCountMap = Record<string, number>;
 
@@ -612,14 +613,7 @@ async function loadSandboxStatus(
   let elevatedExecutionAvailable: boolean | null = null;
   try {
     const effective = await policyService.loadEffectiveBundle();
-    const tools = effective.bundle.tools;
-    const toolsDefault = tools?.default ?? "deny";
-    const allowCount = Array.isArray(tools?.allow) ? tools.allow.length : 0;
-    const requireApprovalCount = Array.isArray(tools?.require_approval)
-      ? tools.require_approval.length
-      : 0;
-    elevatedExecutionAvailable =
-      toolsDefault !== "deny" || allowCount > 0 || requireApprovalCount > 0;
+    elevatedExecutionAvailable = deriveElevatedExecutionAvailableFromPolicyBundle(effective.bundle);
   } catch {
     elevatedExecutionAvailable = null;
   }
