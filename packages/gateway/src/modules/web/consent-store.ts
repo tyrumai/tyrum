@@ -137,12 +137,12 @@ export function persistOperatingMode(
   remoteHardening?: RemoteTeamHardeningSnapshot,
 ): ConsentRecord {
   const previous = latestRecord ?? snapshotConsent();
-  const revision = previous.revision + 1;
   const nextRemoteHardening =
     mode === "remote-team" ? (remoteHardening ?? previous.remoteHardening) : undefined;
 
+  // Keep consent revision/audit metadata stable; mode/hardening changes are not consent changes.
   latestRecord = buildRecord(
-    revision,
+    previous.revision,
     previous.selections,
     previous.calibration,
     mode,

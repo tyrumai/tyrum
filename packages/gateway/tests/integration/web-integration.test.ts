@@ -211,6 +211,15 @@ describe("gateway-hosted web API + UI", () => {
   });
 
   it("persists remote-team mode selection before hardening is recorded", async () => {
+    const draft = await app.request("/api/onboarding/consent");
+    expect(draft.status).toBe(200);
+    const draftBody = (await draft.json()) as {
+      revision: number;
+      auditReference: string;
+      recordedAt: string;
+    };
+    expect(draftBody.revision).toBe(0);
+
     const body = new URLSearchParams({ mode: "remote" });
     const modeResponse = await app.request("/app/actions/onboarding/mode", {
       method: "POST",
@@ -225,12 +234,45 @@ describe("gateway-hosted web API + UI", () => {
     const snapshot = await app.request("/api/onboarding/consent");
     expect(snapshot.status).toBe(200);
     const payload = (await snapshot.json()) as {
+      revision?: number;
+      auditReference?: string;
+      recordedAt?: string;
       mode?: string;
       remoteHardening?: unknown;
     };
 
+    expect(payload.revision).toBe(0);
+    expect(payload.auditReference).toBe(draftBody.auditReference);
+    expect(payload.recordedAt).toBe(draftBody.recordedAt);
     expect(payload.mode).toBe("remote-team");
     expect(payload.remoteHardening).toBeUndefined();
+  });
+
+  it("records the first consent revision as 1 even after mode selection", async () => {
+    const modeResponse = await app.request("/app/actions/onboarding/mode", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ mode: "remote" }).toString(),
+    });
+    expect(modeResponse.status).toBe(302);
+
+    const post = await app.request("/api/onboarding/consent", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        selections: {
+          shareCalendarSignals: true,
+          allowPlannerAutonomy: false,
+          retainAuditTrail: true,
+        },
+      }),
+    });
+
+    expect(post.status).toBe(201);
+    const payload = (await post.json()) as { revision?: number };
+    expect(payload.revision).toBe(1);
   });
 
   it("blocks consent checklist until remote-team hardening is recorded", async () => {
@@ -370,6 +412,15 @@ describe("gateway-hosted web API + UI", () => {
   });
 
   it("records remote-team hardening details in onboarding snapshot", async () => {
+    const draft = await app.request("/api/onboarding/consent");
+    expect(draft.status).toBe(200);
+    const draftBody = (await draft.json()) as {
+      revision: number;
+      auditReference: string;
+      recordedAt: string;
+    };
+    expect(draftBody.revision).toBe(0);
+
     const completed = new URLSearchParams({
       ownerBootstrapConfirmed: "true",
       nonLocalDeviceApproval: "true",
@@ -396,6 +447,9 @@ describe("gateway-hosted web API + UI", () => {
     const snapshot = await app.request("/api/onboarding/consent");
     expect(snapshot.status).toBe(200);
     const payload = (await snapshot.json()) as {
+      revision?: number;
+      auditReference?: string;
+      recordedAt?: string;
       mode?: string;
       remoteHardening?: {
         ownerBootstrapConfirmed: boolean;
@@ -410,6 +464,9 @@ describe("gateway-hosted web API + UI", () => {
       };
     };
 
+    expect(payload.revision).toBe(0);
+    expect(payload.auditReference).toBe(draftBody.auditReference);
+    expect(payload.recordedAt).toBe(draftBody.recordedAt);
     expect(payload.mode).toBe("remote-team");
     expect(payload.remoteHardening).toEqual({
       ownerBootstrapConfirmed: true,
