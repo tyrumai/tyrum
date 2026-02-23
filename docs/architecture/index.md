@@ -9,7 +9,7 @@ Tyrum is an autonomous worker.
 - In the simplest case, it’s a **personal assistant** you run for yourself.
 - In richer deployments, it’s a **remote coworker** you can share with a team.
 
-The same core architecture is intended to scale from “one assistant” to “many coworkers” without turning into an un-auditable pile of prompts and cronjobs: durable execution, least-privilege authorization, explicit approvals, and evidence-backed audit trails.
+The same core architecture scales from “one assistant” to “many coworkers” without turning into an un-auditable pile of prompts and cronjobs: durable execution, least-privilege authorization, explicit approvals, and evidence-backed audit trails.
 
 ## Engineering bar
 
@@ -26,7 +26,7 @@ Tyrum’s architecture is intentionally conservative:
 ```mermaid
 flowchart LR
   subgraph Operator["Operator surfaces"]
-    C["Client<br/>(Desktop • Mobile • CLI/TUI • Web UI)"]
+    C["Client<br/>(Desktop • Mobile • CLI/TUI • Web App)"]
   end
 
   subgraph Runtime["Tyrum runtime"]
@@ -68,6 +68,7 @@ flowchart LR
 ## Building blocks
 
 - **Gateway:** the long-lived service that owns edge connectivity (WebSocket), routing, and contract validation. See [Gateway](./gateway/index.md).
+- **Tenancy:** the isolation boundary for identity, policy, and durable state. See [Tenancy](./tenancy.md).
 - **StateStore:** durable state and logs (SQLite local; Postgres for HA/scale). See [Scaling and high availability](./scaling-ha.md).
 - **Event backplane:** cross-instance delivery via a durable outbox (in-process for replica count = 1; shared for clusters). See [Backplane](./backplane.md), [Scaling and high availability](./scaling-ha.md), and [Events](./protocol/events.md).
 - **Execution engine:** the durable orchestration runtime (retries, idempotency, pause/resume, evidence). See [Execution engine](./execution-engine.md).
@@ -107,7 +108,9 @@ flowchart LR
 
 - [Scaling and high availability](./scaling-ha.md)
 - [Gateway](./gateway/index.md)
+- [Tenancy](./tenancy.md)
 - [Gateway authN/authZ](./gateway-authz.md)
+- [Identity](./identity.md)
 - [Execution engine](./execution-engine.md)
 - [Messages and Sessions](./messages-sessions.md)
 - [Memory](./memory.md)

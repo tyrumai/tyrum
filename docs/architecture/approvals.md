@@ -38,7 +38,7 @@ Approvals are exposed over:
 
 ## Scoping
 
-Approvals are scoped to durable identifiers, including `approval_id` and execution scope (`run_id`, `step_id`, `attempt_id`) plus agent/session identifiers where applicable.
+Approvals are scoped to durable identifiers, including `tenant_id`, `approval_id`, and execution scope (`run_id`, `step_id`, `attempt_id`) plus agent/session identifiers where applicable.
 
 ## Approval request shape
 
@@ -60,7 +60,7 @@ Resolutions are durable records:
 
 - `outcome` (`approved`, `denied`, or `expired`)
 - `resolved_at`
-- `resolved_by` (client identity / user identity)
+- `resolved_by` (tenant membership / user identity / client device identity)
 - optional `reason` (operator-provided)
 - optional `mode` (`once` or `always`, only meaningful when `outcome=approved`)
 - optional `policy_override_id` (when `mode=always` creates a durable policy override)

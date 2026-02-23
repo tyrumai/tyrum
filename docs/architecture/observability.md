@@ -32,7 +32,7 @@ Context reports are generated deterministically by the gateway and persisted alo
 - **Local accounting:** tokens/time attributed to runs/steps/attempts (source of truth for budgets and approvals).
 - **Provider usage:** provider-reported quota/usage windows when a provider exposes a usage endpoint and credentials allow access.
 
-Usage is scoped to the current session by default, with agent-wide and deployment-wide rollups available in the control panel.
+Usage is scoped to the current session by default, with agent-wide and tenant-wide rollups available in operator clients. Platform-wide rollups are restricted to platform administration.
 
 ## Events, logs, and evidence
 

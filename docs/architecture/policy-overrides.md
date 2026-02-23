@@ -13,7 +13,7 @@ They are most commonly created when an operator resolves an approval with **appr
 
 Policy overrides are scoped and conservative by default:
 
-- scoped at least to `agent_id` (and typically also `workspace_id` for workspace-backed tools)
+- scoped at least to `tenant_id` and `agent_id` (and typically also `workspace_id` for workspace-backed tools)
 - **cannot** override an explicit `deny` by default
 - intended to relax only `require_approval → allow`
 
@@ -83,6 +83,7 @@ Policy overrides are durable records separate from approvals. A minimal record s
 - `policy_override_id`
 - `status` (`active`, `revoked`, `expired`)
 - `created_at`, `created_by` (user identity + client identity)
+- `tenant_id`
 - `agent_id`
 - optional `workspace_id` (recommended for workspace-backed tools)
 - `tool_id`

@@ -1,9 +1,8 @@
 # Gateway authN/authZ
 
-This document describes Tyrum’s **gateway authentication (authN)** and **authorization (authZ)** model. It supports both:
+This document describes Tyrum’s **gateway authentication (authN)** and **authorization (authZ)** model.
 
-- **Personal assistant mode** (single operator, local-first).
-- **Remote coworker / team mode** (multiple operators, remote access, explicit access control).
+Tyrum is multi-tenant: every authenticated request and connection is bound to exactly one `tenant_id` (see [Tenancy](./tenancy.md)).
 
 The gateway is the authority for identity, scopes, and audit trails. “Safety by prompt” is not a security boundary.
 
@@ -11,19 +10,39 @@ The gateway is the authority for identity, scopes, and audit trails. “Safety b
 
 - **Secure-by-default access:** expose nothing without explicit configuration, and require auth for all privileged interfaces.
 - **Least privilege:** clients and nodes get only the scopes/commands they need.
+- **Tenant-scoped access:** credentials are issued within a tenant and cannot cross tenant boundaries.
 - **Device-bound access:** credentials are issued to device identities, not “whoever has the URL”.
 - **Auditable change control:** auth and authZ decisions produce durable, inspectable evidence.
 
 ## Authentication (authN)
 
-### Bootstrap token
+### Human authentication (users)
 
-The gateway requires an operator bootstrap token (for example `GATEWAY_TOKEN`) for initial access over both:
+Human users authenticate through a tenant-configured auth provider. Tyrum supports both:
 
-- HTTP APIs (Authorization header), and
-- WebSocket upgrade (subprotocol token transport).
+- **Built-in auth** (self-contained user accounts for self-hosted and offline-friendly deployments), and
+- **OIDC auth** (SSO/enterprise deployments).
 
-Bootstrap tokens are treated as **admin-level** credentials and should be used only to enroll devices or recover access.
+The gateway maps provider identities into a canonical `user_id` and creates/updates tenant membership records that drive authorization.
+
+### Bootstrap and recovery
+
+The gateway exposes an explicit bootstrap/recovery mechanism that can be used to:
+
+- create the first tenant and owner membership in a fresh deployment
+- recover access if all admin memberships or devices are lost
+
+Bootstrap credentials are **admin-level** by definition and must be treated as break-glass secrets: used rarely, rotated, and audited.
+
+### Local bootstrap channel (first-device and remote enrollment)
+
+Tyrum provides a local operator channel (for example a CLI/TUI on the gateway host) that can perform tenant administration tasks, including:
+
+- approving/enrolling the first operator device
+- approving/enrolling additional non-local operator devices
+- approving/revoking nodes
+
+When the gateway is configured for loopback-only access, local operator devices can be auto-approved so a single-user desktop installation is frictionless.
 
 ### Device identity + proof
 
@@ -31,16 +50,33 @@ Every WebSocket peer has a **device identity** derived from a long-lived signing
 
 See [Handshake](./protocol/handshake.md) and [Identity](./identity.md).
 
+### Session and access tokens
+
+After a user authenticates, the gateway issues short-lived access tokens scoped to:
+
+- `tenant_id`
+- `user_id` (or service principal id for nodes)
+- peer `role` (`client` or `node`)
+- effective scopes / permissions
+- optional `device_id` binding
+
+Tokens are presented to the gateway on HTTP requests and WebSocket upgrades (see [Handshake](./protocol/handshake.md)).
+
 ## Authorization (authZ)
 
-### Roles and scopes
+### Roles, scopes, and surfaces
 
 Peers connect as one of:
 
 - `client` (operator surface)
 - `node` (capability provider)
 
-Operator clients present an explicit list of scopes (examples):
+Authorization is based on tenant membership plus explicit scopes. Scopes separate two surfaces:
+
+- **Core product surface:** day-to-day operation (sessions, runs, approvals, artifacts, nodes).
+- **Tenant administration surface:** tenant configuration and security operations (users, devices, pairing policy, secrets, exports, enforcement defaults).
+
+Example operator scopes:
 
 - `operator.read` (read-only status/session views)
 - `operator.write` (send messages, start runs)
@@ -50,7 +86,13 @@ Operator clients present an explicit list of scopes (examples):
 
 **Per-method authorization:** every HTTP route and WS request type declares the scopes required to call it. Deny-by-default is the baseline.
 
-### Device tokens
+### Admin mode (step-up)
+
+Operator clients support an **Admin Mode** that grants elevated scopes for a short duration. Entering Admin Mode requires step-up authentication and/or an explicit approval, and it is audited.
+
+Admin Mode limits blast radius: routine usage runs with minimal scopes; tenant administration is explicit and time-bounded.
+
+### Device tokens and enrollment
 
 When a device proves identity, the gateway can issue a **device token** that is:
 
@@ -101,5 +143,6 @@ AuthN/authZ decisions must be observable and durable:
 - log and event failed auth attempts (rate-limited)
 - audit device enroll/approve/revoke/rotate actions
 - record the scope set used for each privileged action (method/route + scope check result)
+- include `tenant_id`, `user_id`, and `device_id` (when available) in audit records and events
 
 This is foundational for “many remote coworkers”: the system should answer **who did what, when, and why it was allowed**.

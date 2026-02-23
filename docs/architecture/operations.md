@@ -5,9 +5,9 @@ This document describes Tyrum’s operational model and the onboarding/diagnosti
 ## Goals
 
 - Make the **hardened path** the easiest path.
-- Provide a clear separation between:
-  - **personal assistant mode** (single operator, local-first), and
-  - **remote coworker / team mode** (multiple operators, remote access).
+- Support both:
+  - frictionless single-user local installations, and
+  - multi-user and multi-tenant deployments with explicit access control.
 - Ensure operators can quickly answer: “is this safe, is it working, and what changed?”
 
 ## Hardened-by-default onboarding
@@ -22,15 +22,19 @@ Onboarding produces a configuration that is safe without additional customizatio
 
 ### Onboarding flow
 
-Tyrum provides a guided onboarding flow (CLI and/or gateway-served UI) that:
+Tyrum provides a guided onboarding flow (CLI/TUI and/or operator clients) that:
 
-1. Generates or imports gateway credentials.
-2. Picks an operating mode:
-   - local/personal (single operator)
-   - team/remote (multiple operators, device enrollment)
-3. Configures provider auth profiles and secret provider integration.
-4. Enables a minimal set of channels/nodes (explicitly).
-5. Runs a security and connectivity check.
+1. Establishes tenant context (create the first tenant or select an existing tenant) and creates the initial owner membership.
+2. Configures tenant authentication (built-in auth and/or OIDC) and sets enforcement defaults.
+3. Enrolls the first operator device:
+   - loopback-local devices may be auto-approved when the gateway is configured for loopback-only access
+   - non-local devices are enrolled via explicit approval from a trusted operator channel
+4. Enrolls additional devices and nodes with explicit pairing and revocation controls.
+5. Configures provider auth profiles and secret provider integration.
+6. Enables a minimal set of channels/nodes (explicitly).
+7. Runs a security and connectivity check.
+
+Operator clients implement an explicit **Admin Mode** (step-up) so tenant administration actions are time-bounded and auditable.
 
 ## Diagnostics (“doctor”)
 

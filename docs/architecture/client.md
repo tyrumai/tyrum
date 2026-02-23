@@ -7,21 +7,23 @@ A client is an operator interface that connects to the gateway and participates 
 - Desktop app (Windows/Linux/macOS)
 - Mobile app (iOS/Android)
 - CLI/TUI
-- Web interface served by the gateway
+- Web app (SPA)
 
 ## Responsibilities
 
 - Establish a single WebSocket connection per client device identity (`role: client`).
+- Authenticate a user and bind activity to a tenant membership (see [Tenancy](./tenancy.md) and [Gateway authN/authZ](./gateway-authz.md)).
 - Send requests (commands, session interactions, configuration changes).
 - Subscribe to events (status updates, audit evidence, approvals, pairing requests).
 - Provide human approvals and explanations when the gateway escalates.
 - Resume or cancel paused workflow runs (via resume tokens) when approvals are resolved.
 - Initiate and manage node pairing (approve/deny, label devices, revoke access).
 - Provide onboarding and diagnostics surfaces so hardened configuration is easy to reach (see [Operations and onboarding](./operations.md)).
+- Support **Admin Mode** (time-bounded step-up) for tenant administration actions.
 
-## Gateway control panel (web client)
+## Operator UI expectations
 
-The gateway’s web control panel is a client form that connects over WebSocket and provides operator oversight. At minimum it should expose:
+Operator clients provide oversight and administration. At minimum they should expose:
 
 - **Session:** a session-centric view rendered as a unified timeline that merges chat, runs/steps/attempts, approvals, and artifacts (reconstructible from durable state; live events stream updates). The UI supports lane filters and surfaces queue-mode semantics as pending input items.
 - **Approvals:** an approval queue (approve/deny) with previews and linked evidence.

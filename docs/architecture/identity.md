@@ -1,14 +1,21 @@
 # Identity
 
-Identity is how Tyrum names and scopes authority. Several identities exist in the system, each with a different purpose.
+Identity is how Tyrum attributes authority and scopes access to durable state. Tyrum uses identity at three layers:
+
+- **Tenant** (isolation boundary)
+- **User** (human principal)
+- **Device** (cryptographic endpoint identity for clients and nodes)
 
 ## Identity types
 
-- **User identity:** the human operator(s). Single-user is the default, but team/remote deployments support multiple operators with explicit scopes and audited actions.
-- **Agent identity:** which agent a session belongs to.
-- **Client identity:** which operator device is connected (`role: client`).
-- **Node identity:** which capability provider device is connected (`role: node`).
-- **Channel identity:** which connector/account a message came from.
+- **Tenant identity (`tenant_id`):** the primary security boundary. All durable records and events are scoped to exactly one tenant.
+- **User identity (`user_id`):** a human principal authenticated via a tenant-configured auth provider.
+- **Membership:** a durable binding of a user into a tenant, including a role and effective scopes.
+- **Agent identity (`agent_id`):** the configured runtime persona that owns sessions, tools/skills, and memory within a tenant.
+- **Client device identity (`device_id`, `role: client`):** a specific operator device connected to the gateway.
+- **Node device identity (`device_id`, `role: node`):** a capability provider device connected to the gateway.
+- **Channel identity (`channel_key`):** which connector/account instance an inbound message or event belongs to.
+- **Connection identity (`connection_id`):** an ephemeral identifier for a single live WebSocket connection, bound to a device identity after handshake.
 
 ## Device identities
 
@@ -24,4 +31,4 @@ Where `base32_lower_nopad` uses the RFC 4648 alphabet (`a-z2-7`), rendered lower
 
 - Pairing and revocation (nodes and clients)
 - Audit trails (who/what performed an action)
-- Scoping (which sessions and workspaces an action can touch)
+- Scoping (which tenant, agents, and workspaces an action can touch)

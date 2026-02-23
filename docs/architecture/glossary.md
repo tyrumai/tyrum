@@ -71,9 +71,29 @@ The system of record for durable state and logs (sessions, approvals, run/job st
 
 A cross-instance event delivery mechanism used in clustered deployments so workers/schedulers can publish events that the gateway edge instances deliver to their connected clients/nodes.
 
+## Tenant
+
+An isolation boundary for identity, policy, and durable state. A deployment hosts one or more tenants; every request, event, and durable record is scoped to exactly one `tenant_id`.
+
 ## Worker
 
 A step execution process that claims work (leases) and performs tool/capability calls. Workers scale horizontally.
+
+## User
+
+A human principal authenticated via a tenant-configured auth provider (built-in or OIDC). Users act through client devices.
+
+## Membership
+
+A durable binding of a user into a tenant, including a role and effective scopes. Membership is the unit of authorization and auditing for human actions.
+
+## Device
+
+A cryptographic endpoint identity derived from a long-lived signing keypair. Devices connect to the gateway as WebSocket peers (`role: client` or `role: node`) and are registered, pairable, and revocable.
+
+## Admin mode
+
+A time-bounded elevated access posture within a client UI that grants tenant administration capabilities after step-up authentication and/or explicit approval.
 
 ## Scheduler
 
@@ -102,6 +122,10 @@ A typed operation and typed reply correlated by `request_id`. Either peer may in
 ## Session
 
 A durable conversation container with transcript history and queue state. Session keys and DM scope rules determine which messages share context.
+
+## Workspace (filesystem)
+
+The agent’s working directory boundary for workspace-backed tools. Workspaces make file operations explicit, containable, and durable across runs. Workspaces are not tenants.
 
 ## Skill
 
