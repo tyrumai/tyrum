@@ -1,6 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { createServer } from "node:http";
-import type { Server } from "node:http";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
