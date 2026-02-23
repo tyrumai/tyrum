@@ -75,6 +75,32 @@ describe("ModelsDevService", () => {
     expect(loaded.status.last_error).toContain("models.dev fetch failed");
   });
 
+  it("recovers from corrupted cached JSON by falling back to the bundled snapshot", async () => {
+    db = openTestSqliteDb();
+    const cacheDal = new ModelsDevCacheDal(db);
+    const leaseDal = new ModelsDevRefreshLeaseDal(db);
+
+    const nowIso = new Date().toISOString();
+    await cacheDal.upsert({
+      fetchedAt: nowIso,
+      etag: null,
+      sha256: "sha-bad",
+      json: "{not-json",
+      source: "remote",
+      lastError: null,
+      nowIso,
+    });
+
+    const svc = new ModelsDevService({ cacheDal, leaseDal });
+    const loaded = await svc.ensureLoaded();
+    expect(loaded.status.source).toBe("bundled");
+    expect(loaded.status.last_error).toContain("models.dev cache parse failed");
+
+    const row = await cacheDal.get();
+    expect(row?.source).toBe("bundled");
+    expect(row?.last_error).toContain("models.dev cache parse failed");
+  });
+
   it("surfaces latest last_error even when already loaded in-memory", async () => {
     db = openTestSqliteDb();
     const cacheDal = new ModelsDevCacheDal(db);

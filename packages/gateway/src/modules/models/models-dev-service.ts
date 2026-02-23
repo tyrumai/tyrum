@@ -151,21 +151,54 @@ export class ModelsDevService {
       return result;
     }
 
-    const catalog = this.parseCatalog(JSON.parse(cached.json) as unknown);
-    const result: ModelsDevLoadResult = {
-      catalog,
-      status: this.buildStatus({
-        source: cached.source,
-        fetchedAt: cached.fetched_at,
-        updatedAt: input.nowIso,
-        etag: cached.etag,
-        sha256: cached.sha256,
-        lastError: input.error,
+    try {
+      const catalog = this.parseCatalog(JSON.parse(cached.json) as unknown);
+      const result: ModelsDevLoadResult = {
         catalog,
-      }),
-    };
-    this.current = result;
-    return result;
+        status: this.buildStatus({
+          source: cached.source,
+          fetchedAt: cached.fetched_at,
+          updatedAt: input.nowIso,
+          etag: cached.etag,
+          sha256: cached.sha256,
+          lastError: input.error,
+          catalog,
+        }),
+      };
+      this.current = result;
+      return result;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.opts.logger?.warn("models_dev.cache_parse_failed", { error: message });
+
+      const json = JSON.stringify(bundledSnapshot);
+      const sha256 = sha256Hex(json);
+      const row = await this.opts.cacheDal.upsert({
+        fetchedAt: null,
+        etag: null,
+        sha256,
+        json,
+        source: "bundled",
+        lastError: input.error,
+        nowIso: input.nowIso,
+      });
+
+      const catalog = this.parseCatalog(bundledSnapshot);
+      const result: ModelsDevLoadResult = {
+        catalog,
+        status: this.buildStatus({
+          source: row.source,
+          fetchedAt: row.fetched_at,
+          updatedAt: row.updated_at,
+          etag: row.etag,
+          sha256: row.sha256,
+          lastError: row.last_error,
+          catalog,
+        }),
+      };
+      this.current = result;
+      return result;
+    }
   }
 
   async ensureLoaded(): Promise<ModelsDevLoadResult> {
@@ -198,21 +231,28 @@ export class ModelsDevService {
         return result;
       }
 
-      const catalog = this.parseCatalog(JSON.parse(cached.json) as unknown);
-      const result: ModelsDevLoadResult = {
-        catalog,
-        status: this.buildStatus({
-          source: cached.source,
-          fetchedAt: cached.fetched_at,
-          updatedAt: cached.updated_at,
-          etag: cached.etag,
-          sha256: cached.sha256,
-          lastError: cached.last_error,
+      try {
+        const catalog = this.parseCatalog(JSON.parse(cached.json) as unknown);
+        const result: ModelsDevLoadResult = {
           catalog,
-        }),
-      };
-      this.current = result;
-      return result;
+          status: this.buildStatus({
+            source: cached.source,
+            fetchedAt: cached.fetched_at,
+            updatedAt: cached.updated_at,
+            etag: cached.etag,
+            sha256: cached.sha256,
+            lastError: cached.last_error,
+            catalog,
+          }),
+        };
+        this.current = result;
+        return result;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.opts.logger?.warn("models_dev.cache_parse_failed", { error: message });
+        const nowIso = new Date().toISOString();
+        return await this.recordError({ error: `models.dev cache parse failed: ${message}`, nowIso });
+      }
     }
 
     if (this.current) return this.current;
