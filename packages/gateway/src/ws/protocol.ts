@@ -941,7 +941,13 @@ export function dispatchTask(
         ? (
             await Promise.all(
               candidates
-                .filter((c) => c.role === "node" && typeof c.device_id === "string" && c.device_id.trim().length > 0)
+                .filter(
+                  (c) =>
+                    c.protocol_rev >= 2 &&
+                    c.role === "node" &&
+                    typeof c.device_id === "string" &&
+                    c.device_id.trim().length > 0,
+                )
                 .map(async (c) => {
                   const pairing = await deps.nodePairingDal!.getByNodeId(c.device_id!);
                   return pairing?.status === "approved" ? c : null;
@@ -950,7 +956,7 @@ export function dispatchTask(
           ).filter((c): c is NonNullable<(typeof candidates)[number]> => c !== null)
         : [];
 
-      const eligibleClients = candidates.filter((c) => c.role === "client");
+      const eligibleClients = candidates.filter((c) => c.protocol_rev >= 2 && c.role === "client");
       const eligible = [...eligibleNodes, ...eligibleClients];
 
       const target = eligible.find((c) => c.edge_id !== cluster.edgeId) ?? eligible[0];
@@ -1014,7 +1020,13 @@ export function dispatchTask(
         ? (
             await Promise.all(
               candidates
-                .filter((c) => c.role === "node" && typeof c.device_id === "string" && c.device_id.trim().length > 0)
+                .filter(
+                  (c) =>
+                    c.protocol_rev >= 2 &&
+                    c.role === "node" &&
+                    typeof c.device_id === "string" &&
+                    c.device_id.trim().length > 0,
+                )
                 .map(async (c) => {
                   const pairing = await deps.nodePairingDal!.getByNodeId(c.device_id!);
                   return pairing?.status === "approved" ? c : null;
@@ -1022,7 +1034,7 @@ export function dispatchTask(
             )
           ).filter((c): c is NonNullable<(typeof candidates)[number]> => c !== null)
         : [];
-      const eligibleClients2 = candidates.filter((c) => c.role === "client");
+      const eligibleClients2 = candidates.filter((c) => c.protocol_rev >= 2 && c.role === "client");
       const eligible2 = [...eligibleNodes2, ...eligibleClients2];
 
       const target = eligible2.find((c) => c.edge_id !== cluster.edgeId) ?? eligible2[0];

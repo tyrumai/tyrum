@@ -5,6 +5,7 @@ export interface ConnectionDirectoryRow {
   connection_id: string;
   edge_id: string;
   role: "client" | "node";
+  protocol_rev: number;
   device_id: string | null;
   pubkey: string | null;
   label: string | null;
@@ -20,6 +21,7 @@ interface RawConnectionDirectoryRow {
   connection_id: string;
   edge_id: string;
   role: string;
+  protocol_rev: number;
   device_id: string | null;
   pubkey: string | null;
   label: string | null;
@@ -46,6 +48,10 @@ function toRow(raw: RawConnectionDirectoryRow): ConnectionDirectoryRow {
     connection_id: raw.connection_id,
     edge_id: raw.edge_id,
     role,
+    protocol_rev:
+      typeof raw.protocol_rev === "number" && Number.isFinite(raw.protocol_rev)
+        ? raw.protocol_rev
+        : 1,
     device_id: raw.device_id,
     pubkey: raw.pubkey,
     label: raw.label,
@@ -65,6 +71,7 @@ export class ConnectionDirectoryDal {
     connectionId: string;
     edgeId: string;
     role: "client" | "node";
+    protocolRev?: number;
     deviceId?: string | null;
     pubkey?: string | null;
     label?: string | null;
@@ -80,6 +87,7 @@ export class ConnectionDirectoryDal {
          connection_id,
          edge_id,
          role,
+         protocol_rev,
          device_id,
          pubkey,
          label,
@@ -89,10 +97,11 @@ export class ConnectionDirectoryDal {
          connected_at_ms,
          last_seen_at_ms,
          expires_at_ms
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(connection_id) DO UPDATE SET
          edge_id = excluded.edge_id,
          role = excluded.role,
+         protocol_rev = excluded.protocol_rev,
          device_id = excluded.device_id,
          pubkey = excluded.pubkey,
          label = excluded.label,
@@ -105,6 +114,7 @@ export class ConnectionDirectoryDal {
         params.connectionId,
         params.edgeId,
         params.role,
+        params.protocolRev ?? 1,
         params.deviceId ?? null,
         params.pubkey ?? null,
         params.label ?? null,
