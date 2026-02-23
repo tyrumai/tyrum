@@ -44,14 +44,13 @@ const BASE_STYLE = `
   --primary: #6366f1;
   --primary-dim: rgba(99, 102, 241, 0.12);
   --success: #22c55e;
-  --warning: #eab308;
   --danger: #ef4444;
 }
 * { box-sizing: border-box; }
 html, body { width: 100%; height: 100%; margin: 0; }
 body {
   color: var(--text);
-  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
 }
@@ -124,7 +123,7 @@ a:hover { text-decoration: underline; }
 h1 { margin: 0 0 20px; font-size: 22px; line-height: 1.15; font-weight: 700; }
 h2 { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
 h3 { margin: 0 0 12px; font-size: 14px; font-weight: 600; }
-label {
+label[for] {
   display: block;
   margin: 10px 0 4px;
   font-weight: 600;
@@ -133,6 +132,16 @@ label {
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+label:not([for]) {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 10px 0 4px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+}
+label:not([for]) input { margin-top: 2px; }
 input, textarea, select, button { font: inherit; }
 input, textarea, select {
   width: 100%;
@@ -143,13 +152,19 @@ input, textarea, select {
   color: var(--text);
   font-size: 14px;
 }
+input[type="checkbox"], input[type="radio"] {
+  width: auto;
+  padding: 0;
+  accent-color: var(--primary);
+}
 input:focus, textarea:focus, select:focus {
   outline: 2px solid rgba(99, 102, 241, 0.4);
   outline-offset: 1px;
 }
 textarea {
   min-height: 80px;
-  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
   font-size: 13px;
   resize: vertical;
 }
@@ -184,7 +199,8 @@ th { color: var(--muted); font-size: 12px; font-weight: 600; text-transform: upp
 code, pre {
   background: var(--bg-subtle);
   border-radius: 6px;
-  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
 }
 code { padding: 1px 4px; }
 pre { padding: 10px; overflow: auto; border: 1px solid var(--border); }
