@@ -37,6 +37,8 @@ Revisions allow evolving request types and fields without a major-version bump. 
 
 The protocol uses run-scoped identifiers (`run_id`, `step_id`, `attempt_id`) and avoids ambiguous plan identifiers.
 
+Operational note: the gateway currently expects `protocol_rev = 2` for `connect.init` handshakes and will reject mismatches (close code `4005`, reason `protocol_rev mismatch`).
+
 ## Message classes
 
 - **Handshake:** identifies the connecting device and declares capabilities.

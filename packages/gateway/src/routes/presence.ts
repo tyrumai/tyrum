@@ -4,8 +4,8 @@
  * Presence is keyed by stable device identity (`instance_id`) when peers
  * connect via `connect.init/connect.proof` or send `presence.beacon` updates.
  *
- * Legacy `connect` peers may not appear in presence until they migrate to
- * device-proof handshakes.
+ * Legacy `connect` peers (deprecated) may not appear in presence until they
+ * migrate to device-proof handshakes.
  */
 
 import { Hono } from "hono";

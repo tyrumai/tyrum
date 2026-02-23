@@ -70,8 +70,10 @@ export interface TyrumClientOptions {
   /** Capabilities to advertise in the hello handshake. */
   capabilities: ClientCapability[];
   /**
-   * Whether to use the vNext `connect.init/connect.proof` handshake.
-   * Defaults to `false` (legacy `connect`).
+   * Whether to use the `connect.init/connect.proof` handshake (recommended).
+   *
+   * When `false`, the client uses the legacy `connect` handshake (deprecated).
+   * Defaults to `false` for backwards compatibility.
    */
   useDeviceProof?: boolean;
   /** Peer role for vNext handshake. Defaults to `client`. */

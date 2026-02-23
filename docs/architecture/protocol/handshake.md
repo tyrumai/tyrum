@@ -16,6 +16,15 @@ sequenceDiagram
   Gateway-->>Peer: connect.proof (response) { client_id, device_id, role }
 ```
 
+## Legacy handshake (deprecated)
+
+Older peers may use a legacy request/response handshake:
+
+- `connect` (request) `{ capabilities }`
+- `connect` (response) `{ client_id }`
+
+This legacy path does **not** include device identity proof or `protocol_rev` negotiation and is deprecated. Gateways may continue to accept it for backwards compatibility, but they SHOULD emit a warning (for example an `error` event with code `deprecated_handshake`) and it may be removed in a future protocol revision.
+
 ## Connect payload
 
 `connect.init.payload` includes:

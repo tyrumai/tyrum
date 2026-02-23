@@ -193,6 +193,70 @@ describe("WS handler integration", () => {
     stopHeartbeat();
   });
 
+  it("emits a deprecation warning event after legacy connect", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
+    const tokenStore = new TokenStore(homeDir);
+    const adminToken = await tokenStore.initialize();
+
+    const connectionManager = new ConnectionManager();
+    const { handleUpgrade, stopHeartbeat } = createWsHandler({
+      connectionManager,
+      protocolDeps: { connectionManager },
+      tokenStore,
+    });
+
+    server = createServer();
+    server.on("upgrade", (req, socket, head) => {
+      handleUpgrade(req, socket, head);
+    });
+
+    const port = await new Promise<number>((resolve) => {
+      server!.listen(0, "127.0.0.1", () => {
+        const addr = server!.address();
+        resolve(typeof addr === "object" && addr ? addr.port : 0);
+      });
+    });
+
+    const ws = new WebSocket(
+      `ws://127.0.0.1:${port}/ws`,
+      authProtocols(adminToken),
+    );
+    clients.push(ws);
+    await waitForOpen(ws);
+
+    const connectResP = waitForJsonMessageMatching(
+      ws,
+      (msg) => msg["type"] === "connect" && Object.prototype.hasOwnProperty.call(msg, "ok"),
+    );
+    const warningP = waitForJsonMessageMatching(
+      ws,
+      (msg) =>
+        msg["type"] === "error" &&
+        Object.prototype.hasOwnProperty.call(msg, "event_id") &&
+        typeof msg["payload"] === "object" &&
+        msg["payload"] !== null &&
+        (msg["payload"] as Record<string, unknown>)["code"] === "deprecated_handshake",
+    );
+
+    ws.send(
+      JSON.stringify({
+        request_id: "r-1",
+        type: "connect",
+        payload: { capabilities: [] },
+      }),
+    );
+
+    await connectResP;
+    const warning = await warningP;
+    expect(
+      ((warning as Record<string, unknown>)["payload"] as Record<string, unknown>)["code"],
+    ).toBe(
+      "deprecated_handshake",
+    );
+
+    stopHeartbeat();
+  });
+
   it("rejects connection with invalid token", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
     const tokenStore = new TokenStore(homeDir);
@@ -322,6 +386,65 @@ describe("WS handler integration", () => {
     expect(registered!.device_id).toBe(deviceId);
     expect(registered!.role).toBe("client");
     expect(registered!.capabilities).toEqual(["http"]);
+
+    stopHeartbeat();
+  });
+
+  it("rejects connect.init when protocol_rev is unsupported", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
+    const tokenStore = new TokenStore(homeDir);
+    const adminToken = await tokenStore.initialize();
+
+    const connectionManager = new ConnectionManager();
+    const { handleUpgrade, stopHeartbeat } = createWsHandler({
+      connectionManager,
+      protocolDeps: { connectionManager },
+      tokenStore,
+    });
+
+    server = createServer();
+    server.on("upgrade", (req, socket, head) => {
+      handleUpgrade(req, socket, head);
+    });
+
+    const port = await new Promise<number>((resolve) => {
+      server!.listen(0, "127.0.0.1", () => {
+        const addr = server!.address();
+        resolve(typeof addr === "object" && addr ? addr.port : 0);
+      });
+    });
+
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(adminToken));
+    clients.push(ws);
+    await waitForOpen(ws);
+
+    const { publicKey } = generateKeyPairSync("ed25519");
+    const pubkeyDer = publicKey.export({ format: "der", type: "spki" }) as Buffer;
+    const pubkeyB64Url = pubkeyDer.toString("base64url");
+    const deviceId = computeDeviceId(pubkeyDer);
+
+    ws.send(
+      JSON.stringify({
+        request_id: "r-init",
+        type: "connect.init",
+        payload: {
+          protocol_rev: 999,
+          role: "client",
+          device: { device_id: deviceId, pubkey: pubkeyB64Url, label: "test" },
+          capabilities: [
+            {
+              id: descriptorIdForClientCapability("http"),
+              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+            },
+          ],
+        },
+      }),
+    );
+
+    const close = await waitForClose(ws);
+    expect(close.code).toBe(4005);
+    expect(close.reason).toBe("protocol_rev mismatch");
+    expect(connectionManager.getStats().totalClients).toBe(0);
 
     stopHeartbeat();
   });

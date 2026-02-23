@@ -177,6 +177,9 @@ export const WsConnectProofResult = z
   .strict();
 export type WsConnectProofResult = z.infer<typeof WsConnectProofResult>;
 
+/**
+ * @deprecated Legacy handshake payload. Prefer `connect.init/connect.proof`.
+ */
 export const WsConnectPayload = z
   .object({
     capabilities: z.array(ClientCapability).default([]),
@@ -185,12 +188,18 @@ export const WsConnectPayload = z
   .strict();
 export type WsConnectPayload = z.infer<typeof WsConnectPayload>;
 
+/**
+ * @deprecated Legacy handshake request. Prefer `connect.init/connect.proof`.
+ */
 export const WsConnectRequest = WsRequestEnvelope.extend({
   type: z.literal("connect"),
   payload: WsConnectPayload,
 });
 export type WsConnectRequest = z.infer<typeof WsConnectRequest>;
 
+/**
+ * @deprecated Legacy handshake result. Prefer `connect.init/connect.proof`.
+ */
 export const WsConnectResult = z
   .object({
     client_id: z.string().min(1),

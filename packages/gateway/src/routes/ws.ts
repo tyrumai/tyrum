@@ -77,11 +77,6 @@ function parseRemoteIp(req: IncomingMessage): string | undefined {
   return ip;
 }
 
-function isProtocolRevStrict(): boolean {
-  const raw = process.env["TYRUM_PROTOCOL_REV_STRICT"]?.trim().toLowerCase();
-  return Boolean(raw && !["0", "false", "off", "no"].includes(raw));
-}
-
 function parseProtocolHeader(
   value: string | string[] | undefined,
 ): string[] {
@@ -302,8 +297,7 @@ export function createWsHandler(opts: WsRouteOptions): {
         // vNext handshake: connect.init
         const init = WsConnectInitRequest.safeParse(json);
         if (init.success) {
-          const strict = isProtocolRevStrict();
-          if (strict && init.data.payload.protocol_rev !== GATEWAY_PROTOCOL_REV) {
+          if (init.data.payload.protocol_rev !== GATEWAY_PROTOCOL_REV) {
             ws.close(4005, "protocol_rev mismatch");
             return;
           }
@@ -591,6 +585,21 @@ export function createWsHandler(opts: WsRouteOptions): {
           result: { client_id: clientId },
         };
         ws.send(JSON.stringify(connected));
+        try {
+          ws.send(
+            JSON.stringify({
+              event_id: crypto.randomUUID(),
+              type: "error",
+              occurred_at: new Date().toISOString(),
+              payload: {
+                code: "deprecated_handshake",
+                message: "legacy connect is deprecated; use connect.init/connect.proof",
+              },
+            }),
+          );
+        } catch {
+          // ignore
+        }
 
         ws.on("close", () => {
           connectionManager.removeClient(clientId!);
