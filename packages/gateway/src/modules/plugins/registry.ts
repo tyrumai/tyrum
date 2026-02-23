@@ -65,8 +65,14 @@ type LoadedPlugin = {
   loaded_at: string;
 };
 
+const REQUIRED_MANIFEST_FIELDS = ["id", "name", "version", "entry", "contributes", "permissions"] as const;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function missingRequiredManifestFields(value: Record<string, unknown>): string[] {
+  return REQUIRED_MANIFEST_FIELDS.filter((field) => !Object.prototype.hasOwnProperty.call(value, field));
 }
 
 function parseJsonOrYaml(contents: string, hintPath?: string): unknown {
@@ -95,17 +101,15 @@ async function loadManifestFromDir(dir: string): Promise<{ path: string; manifes
     if (!raw) continue;
     const parsed = parseJsonOrYaml(raw, path);
     if (!isRecord(parsed)) {
-      return { path, manifest: PluginManifest.parse({ id: basenameSafe(dir), name: basenameSafe(dir), version: "0.0.0" }) };
+      throw new Error("manifest must be an object");
+    }
+    const missingFields = missingRequiredManifestFields(parsed);
+    if (missingFields.length > 0) {
+      throw new Error(`missing required manifest field(s): ${missingFields.join(", ")}`);
     }
     return { path, manifest: PluginManifest.parse(parsed) };
   }
   return undefined;
-}
-
-function basenameSafe(dir: string): string {
-  const normalized = dir.replace(/\\/g, "/");
-  const parts = normalized.split("/").filter((p) => p.length > 0);
-  return parts[parts.length - 1] ?? "plugin";
 }
 
 function tryReadPackageJsonName(path: string): string | undefined {
@@ -342,7 +346,17 @@ export class PluginRegistry {
         if (!entry.isDirectory()) continue;
 
         const pluginDir = join(dir.path, entry.name);
-        const manifestFile = await loadManifestFromDir(pluginDir);
+        let manifestFile: { path: string; manifest: PluginManifestT } | undefined;
+        try {
+          manifestFile = await loadManifestFromDir(pluginDir);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          this.opts.logger.warn("plugins.invalid_manifest", {
+            source_dir: pluginDir,
+            error: message,
+          });
+          continue;
+        }
         if (!manifestFile) continue;
 
         const id = normalizePluginId(manifestFile.manifest.id);
@@ -405,33 +419,41 @@ export class PluginRegistry {
         }
 
         const tools = new Map<string, PluginToolRegistration>();
+        const undeclaredTools: string[] = [];
         for (const tool of registration.tools ?? []) {
           if (!tool?.descriptor || typeof tool.execute !== "function") continue;
           const toolId = tool.descriptor.id?.trim?.() ?? "";
           if (!toolId) continue;
           if (!toolIdAllowed(manifest, toolId)) {
-            this.opts.logger.warn("plugins.tool_not_declared", {
-              plugin_id: id,
-              tool_id: toolId,
-            });
+            undeclaredTools.push(toolId);
             continue;
           }
           tools.set(toolId, tool);
         }
 
         const commands = new Map<string, PluginCommandRegistration>();
+        const undeclaredCommands: string[] = [];
         for (const cmd of registration.commands ?? []) {
           if (!cmd || typeof cmd.name !== "string" || typeof cmd.execute !== "function") continue;
           const name = cmd.name.trim();
           if (!name) continue;
           if (!commandAllowed(manifest, name)) {
-            this.opts.logger.warn("plugins.command_not_declared", {
-              plugin_id: id,
-              command: name,
-            });
+            undeclaredCommands.push(name);
             continue;
           }
           commands.set(name, cmd);
+        }
+
+        const undeclaredRouter = Boolean(registration.router) && (manifest.contributes?.routes.length ?? 0) === 0;
+        if (undeclaredTools.length > 0 || undeclaredCommands.length > 0 || undeclaredRouter) {
+          this.opts.logger.warn("plugins.undeclared_contributions", {
+            plugin_id: id,
+            source_dir: pluginDir,
+            tools: undeclaredTools,
+            commands: undeclaredCommands,
+            router: undeclaredRouter,
+          });
+          continue;
         }
 
         this.plugins.set(id, {
