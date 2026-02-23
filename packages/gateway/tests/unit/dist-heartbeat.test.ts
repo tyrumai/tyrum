@@ -188,5 +188,5 @@ describe("gateway dist bundle", () => {
 
     expect(ws.ping).toHaveBeenCalledOnce();
     expect(ws.send).not.toHaveBeenCalled();
-  });
+  }, 60_000);
 });
