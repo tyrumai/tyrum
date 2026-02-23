@@ -1,4 +1,4 @@
-import { posix as pathPosix } from "node:path";
+import { posix as pathPosix, win32 as pathWin32 } from "node:path";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
@@ -17,18 +17,44 @@ function collapseWhitespace(value: string): string {
   return value.trim().replace(/\s+/g, " ");
 }
 
-function normalizeFsPath(rawPath: string): string {
+function normalizeFsPath(rawPath: string, workspaceRoot?: string): string {
   const trimmed = rawPath.trim();
   if (trimmed.length === 0) return "";
 
   const slashNormalized = trimmed.replace(/\\/g, "/");
-  const isAbsolute = /^(?:[a-zA-Z]:\/|\/)/.test(slashNormalized);
+  const isWindowsAbsolute = /^[a-zA-Z]:\//.test(slashNormalized);
+  const isPosixAbsolute = slashNormalized.startsWith("/");
+  const isAbsolute = isWindowsAbsolute || isPosixAbsolute;
 
-  const base = isAbsolute ? slashNormalized : slashNormalized.replace(/^\.\/+/, "");
-  const normalized = pathPosix.normalize(base);
-  if (normalized === ".") return "";
-  if (!isAbsolute && normalized.split("/").includes("..")) return "";
-  return isAbsolute ? normalized : normalized.replace(/^\.\/+/, "");
+  let candidate = slashNormalized;
+  if (isAbsolute) {
+    const root = workspaceRoot?.trim()?.replace(/\\/g, "/");
+    if (!root) return "";
+
+    const rootIsWindowsAbsolute = /^[a-zA-Z]:\//.test(root);
+    const rootIsPosixAbsolute = root.startsWith("/");
+
+    if (isPosixAbsolute && rootIsPosixAbsolute) {
+      const rel = pathPosix.relative(pathPosix.normalize(root), pathPosix.normalize(slashNormalized));
+      candidate = rel.length === 0 ? "." : rel;
+    } else if (isWindowsAbsolute && rootIsWindowsAbsolute) {
+      const rel = pathWin32.relative(pathWin32.normalize(root), pathWin32.normalize(slashNormalized));
+      const relSlash = rel.replace(/\\/g, "/");
+      candidate = relSlash.length === 0 ? "." : relSlash;
+    } else {
+      return "";
+    }
+
+    // Reject absolute targets or cross-drive paths that can't be made workspace-relative.
+    if (/^(?:[a-zA-Z]:\/|\/)/.test(candidate)) return "";
+  }
+
+  candidate = candidate.replace(/^\.\/+/, "");
+  const normalized = pathPosix.normalize(candidate);
+  if (normalized === ".") return ".";
+  if (normalized.startsWith("/")) return "";
+  if (normalized.split("/").includes("..")) return "";
+  return normalized.replace(/^\.\/+/, "");
 }
 
 function normalizeMcpToolId(rawToolId: string): string {
@@ -89,7 +115,11 @@ function canonicalizeMessagingTarget(toolId: string, parsed: Record<string, unkn
   return `${action}:${toolId}`;
 }
 
-export function canonicalizeToolMatchTarget(toolId: string, args: unknown): string {
+export function canonicalizeToolMatchTarget(
+  toolId: string,
+  args: unknown,
+  workspaceRoot?: string,
+): string {
   const normalizedToolId = toolId.trim();
   const parsed = asRecord(args);
 
@@ -109,7 +139,7 @@ export function canonicalizeToolMatchTarget(toolId: string, args: unknown): stri
   if (normalizedToolId.startsWith("tool.fs.")) {
     const operation = normalizeToken(normalizedToolId.slice("tool.fs.".length));
     const rawPath = normalizeToken(parsed?.["path"]) ?? "";
-    const canonicalPath = normalizeFsPath(rawPath);
+    const canonicalPath = normalizeFsPath(rawPath, workspaceRoot);
     if (!operation) return canonicalPath;
     return `${operation}:${canonicalPath}`;
   }

@@ -1732,7 +1732,7 @@ export class AgentRuntime {
           const toolCallId = `tc-${randomUUID()}`;
           const policy = this.policyService;
           const policyEnabled = policy.isEnabled();
-          const matchTarget = canonicalizeToolMatchTarget(toolDesc.id, args);
+          const matchTarget = canonicalizeToolMatchTarget(toolDesc.id, args, this.home);
 
           let policyDecision: Decision | undefined;
           let policySnapshotId: string | undefined;

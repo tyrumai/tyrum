@@ -2,6 +2,13 @@ import { describe, expect, it } from "vitest";
 import { canonicalizeToolMatchTarget } from "../../src/modules/policy/match-target.js";
 
 describe("canonicalizeToolMatchTarget", () => {
+  const canonicalizeWithHome = (
+    toolId: string,
+    args: unknown,
+    home: string,
+  ): string =>
+    canonicalizeToolMatchTarget(toolId, args, home);
+
   it("canonicalizes fs paths with stable workspace-relative formatting", () => {
     const target = canonicalizeToolMatchTarget(
       "tool.fs.read",
@@ -19,6 +26,45 @@ describe("canonicalizeToolMatchTarget", () => {
 
     // Match targets for fs must be workspace-relative and must not contain "..".
     expect(target).toBe("read:");
+  });
+
+  it("rejects absolute fs paths that escape the workspace boundary", () => {
+    const target = canonicalizeWithHome(
+      "tool.fs.read",
+      { path: "/etc/passwd" },
+      "/workspace",
+    );
+
+    expect(target).toBe("read:");
+  });
+
+  it("canonicalizes absolute fs paths within the workspace to workspace-relative targets", () => {
+    const target = canonicalizeWithHome(
+      "tool.fs.read",
+      { path: "/workspace/docs//architecture/../policy-overrides.md" },
+      "/workspace",
+    );
+
+    expect(target).toBe("read:docs/policy-overrides.md");
+  });
+
+  it("canonicalizes Windows drive paths within the workspace to workspace-relative targets", () => {
+    const target = canonicalizeWithHome(
+      "tool.fs.read",
+      { path: "C:\\workspace\\docs\\policy-overrides.md" },
+      "C:\\workspace",
+    );
+
+    expect(target).toBe("read:docs/policy-overrides.md");
+  });
+
+  it("canonicalizes '.' to an explicit workspace-root target", () => {
+    const target = canonicalizeToolMatchTarget(
+      "tool.fs.read",
+      { path: "." },
+    );
+
+    expect(target).toBe("read:.");
   });
 
   it("canonicalizes exec commands by collapsing non-semantic whitespace", () => {
