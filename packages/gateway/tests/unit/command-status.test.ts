@@ -321,5 +321,6 @@ describe("/status command", () => {
     const sandbox = payload["sandbox"] as Record<string, unknown>;
     expect(sandbox["mode"]).toBe("enforce");
     expect(sandbox["elevated_execution_available"]).toBe(true);
+    expect(sandbox["hardening_profile"]).toBe("baseline");
   });
 });

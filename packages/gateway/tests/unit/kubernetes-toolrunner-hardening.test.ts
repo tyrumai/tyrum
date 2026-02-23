@@ -1,0 +1,149 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+let createdJobBody: any;
+
+const batchClient = {
+  createNamespacedJob: vi.fn(async (input: { body: unknown }) => {
+    createdJobBody = input.body;
+    return { body: {} };
+  }),
+  readNamespacedJobStatus: vi.fn(async () => ({ body: { status: { succeeded: 1 } } })),
+  deleteNamespacedJob: vi.fn(async () => ({ body: {} })),
+};
+
+const coreClient = {
+  listNamespacedPod: vi.fn(async () => ({ body: { items: [{ metadata: { name: "pod-1" } }] } })),
+  readNamespacedPodLog: vi.fn(async () => `{"success":true}\n`),
+};
+
+vi.mock("@kubernetes/client-node", () => {
+  class BatchV1Api {}
+  class CoreV1Api {}
+
+  class KubeConfig {
+    loadFromCluster(): void {
+      // no-op
+    }
+    loadFromDefault(): void {
+      // no-op
+    }
+    makeApiClient(api: unknown): unknown {
+      if (api === BatchV1Api) return batchClient;
+      if (api === CoreV1Api) return coreClient;
+      throw new Error("unexpected api client");
+    }
+  }
+
+  return { BatchV1Api, CoreV1Api, KubeConfig };
+});
+
+describe("KubernetesToolRunnerStepExecutor hardening", () => {
+  const originalHardeningProfile = process.env["TYRUM_TOOLRUNNER_HARDENING_PROFILE"];
+  const originalKubernetesServiceHost = process.env["KUBERNETES_SERVICE_HOST"];
+
+  beforeEach(() => {
+    createdJobBody = undefined;
+    vi.clearAllMocks();
+    delete process.env["TYRUM_TOOLRUNNER_HARDENING_PROFILE"];
+    delete process.env["KUBERNETES_SERVICE_HOST"];
+  });
+
+  afterEach(() => {
+    if (originalHardeningProfile === undefined) {
+      delete process.env["TYRUM_TOOLRUNNER_HARDENING_PROFILE"];
+    } else {
+      process.env["TYRUM_TOOLRUNNER_HARDENING_PROFILE"] = originalHardeningProfile;
+    }
+
+    if (originalKubernetesServiceHost === undefined) {
+      delete process.env["KUBERNETES_SERVICE_HOST"];
+    } else {
+      process.env["KUBERNETES_SERVICE_HOST"] = originalKubernetesServiceHost;
+    }
+  });
+
+  it("applies baseline pod/container security context by default", async () => {
+    const { createKubernetesToolRunnerStepExecutor } = await import(
+      "../../src/modules/execution/kubernetes-toolrunner-step-executor.js"
+    );
+
+    const executor = createKubernetesToolRunnerStepExecutor({
+      namespace: "default",
+      image: "tyrum/gateway:dev",
+      workspacePvcClaim: "workspace",
+      tyrumHome: "/var/lib/tyrum",
+      deleteJobAfter: false,
+    });
+
+    const result = await executor.execute(
+      { type: "CLI", args: { cmd: "echo", args: ["hi"] } },
+      "plan-1",
+      0,
+      1_000,
+    );
+
+    expect(result.success).toBe(true);
+    expect(createdJobBody).toBeTruthy();
+
+    const podSpec = createdJobBody.spec.template.spec;
+    expect(podSpec.securityContext).toMatchObject({
+      runAsNonRoot: true,
+      runAsUser: 10001,
+      runAsGroup: 10001,
+      fsGroup: 10001,
+      seccompProfile: { type: "RuntimeDefault" },
+    });
+
+    const container = podSpec.containers[0];
+    expect(container.securityContext).toMatchObject({
+      allowPrivilegeEscalation: false,
+      capabilities: { drop: ["ALL"] },
+      runAsNonRoot: true,
+    });
+  });
+
+  it("enables hardened profile with read-only rootfs and /tmp mount", async () => {
+    process.env["TYRUM_TOOLRUNNER_HARDENING_PROFILE"] = "hardened";
+
+    const { createKubernetesToolRunnerStepExecutor } = await import(
+      "../../src/modules/execution/kubernetes-toolrunner-step-executor.js"
+    );
+
+    const executor = createKubernetesToolRunnerStepExecutor({
+      namespace: "default",
+      image: "tyrum/gateway:dev",
+      workspacePvcClaim: "workspace",
+      tyrumHome: "/var/lib/tyrum",
+      deleteJobAfter: false,
+    });
+
+    const result = await executor.execute(
+      { type: "CLI", args: { cmd: "echo", args: ["hi"] } },
+      "plan-1",
+      0,
+      1_000,
+    );
+
+    expect(result.success).toBe(true);
+    expect(createdJobBody).toBeTruthy();
+
+    const podSpec = createdJobBody.spec.template.spec;
+    const container = podSpec.containers[0];
+
+    expect(container.securityContext).toMatchObject({
+      readOnlyRootFilesystem: true,
+    });
+
+    expect(podSpec.volumes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "tmp" }),
+      ]),
+    );
+
+    expect(container.volumeMounts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "tmp", mountPath: "/tmp" }),
+      ]),
+    );
+  });
+});

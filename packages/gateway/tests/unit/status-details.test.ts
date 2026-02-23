@@ -27,5 +27,6 @@ describe("status details sandbox summary", () => {
     expect(details.sandbox).not.toBeNull();
     expect(details.sandbox?.mode).toBe("enforce");
     expect(details.sandbox?.elevated_execution_available).toBe(true);
+    expect(details.sandbox?.hardening_profile).toBe("baseline");
   });
 });

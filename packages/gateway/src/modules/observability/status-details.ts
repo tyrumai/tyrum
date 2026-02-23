@@ -3,6 +3,7 @@ import type { ModelsDevService } from "../models/models-dev-service.js";
 import type { PolicyService } from "../policy/service.js";
 import type { AgentRegistry } from "../agent/registry.js";
 import type { SqlDb } from "../../statestore/types.js";
+import { resolveSandboxHardeningProfile, type SandboxHardeningProfile } from "../sandbox/hardening.js";
 
 type StatusCountMap = Record<string, number>;
 
@@ -71,6 +72,7 @@ type SandboxStatus = {
   policy_enabled: boolean;
   policy_observe_only: boolean;
   effective_policy_sha256: string;
+  hardening_profile: SandboxHardeningProfile;
   elevated_execution_available: boolean | null;
 };
 
@@ -599,6 +601,7 @@ async function loadSandboxStatus(
 ): Promise<SandboxStatus | null> {
   if (!policyService) return null;
 
+  const hardeningProfile = resolveSandboxHardeningProfile();
   const status = policyStatus ?? (await policyService.getStatus());
   const mode: SandboxStatus["mode"] = !status.enabled
     ? "disabled"
@@ -626,6 +629,7 @@ async function loadSandboxStatus(
     policy_enabled: status.enabled,
     policy_observe_only: status.observe_only,
     effective_policy_sha256: status.effective_sha256,
+    hardening_profile: hardeningProfile,
     elevated_execution_available: elevatedExecutionAvailable,
   };
 }
