@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
+import { Hono } from "hono";
 import type { SecretHandle } from "@tyrum/schemas";
 import type { SecretProvider } from "../../src/modules/secret/provider.js";
 import { createProviderOAuthRoutes } from "../../src/routes/provider-oauth.js";
@@ -214,5 +215,51 @@ describe("provider OAuth callback cleanup", () => {
       { headers: { accept: "text/html" } },
     );
     expect(reuse.status).toBe(400);
+  });
+
+  it("preserves mount prefix when deriving redirect_uri", async () => {
+    const secretProvider = new MemorySecretProvider();
+    const registry = new MemoryProviderRegistry({
+      provider_id: "test",
+      display_name: "Test",
+      authorization_endpoint: "https://auth.test/authorize",
+      token_endpoint: "https://auth.test/token",
+      scopes: ["scope1"],
+      client_id_env: "TEST_CLIENT_ID",
+      client_secret_env: "TEST_CLIENT_SECRET",
+      token_endpoint_basic_auth: false,
+    });
+
+    const oauthPendingDal = {
+      async deleteExpired() {
+        return 0;
+      },
+      async create() {},
+    } as any;
+
+    const mounted = new Hono().route(
+      "/prefix",
+      createProviderOAuthRoutes({
+        oauthPendingDal,
+        oauthProviderRegistry: registry as any,
+        authProfileDal: {} as any,
+        secretProviderForAgent: async () => secretProvider,
+      }),
+    );
+
+    const res = await mounted.request(
+      new Request("https://example.test/prefix/providers/test/oauth/authorize", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    const authorizeUrl = new URL(json.authorize_url);
+    expect(authorizeUrl.searchParams.get("redirect_uri")).toBe(
+      "https://example.test/prefix/providers/test/oauth/callback",
+    );
   });
 });

@@ -347,6 +347,54 @@ function resolveEnvApiKey(providerEnv: readonly string[] | undefined): string | 
   return undefined;
 }
 
+function resolveProviderBaseURL(input: {
+  providerEnv: readonly string[] | undefined;
+  providerApi: string | undefined;
+  options?: Record<string, unknown> | undefined;
+}): string | undefined {
+  const raw =
+    input.options?.["baseURL"] ??
+    input.options?.["baseUrl"] ??
+    input.options?.["base_url"] ??
+    undefined;
+  if (typeof raw === "string" && raw.trim().length > 0) {
+    return raw.trim();
+  }
+
+  const endpointKey = (input.providerEnv ?? []).find((key) => /(ENDPOINT|BASE_URL|BASEURL|URL)$/i.test(key));
+  const endpoint = endpointKey ? process.env[endpointKey]?.trim() : undefined;
+  if (endpoint && endpoint.length > 0) {
+    return endpoint;
+  }
+
+  const api = input.providerApi?.trim();
+  if (api && api.length > 0) {
+    return api;
+  }
+
+  return undefined;
+}
+
+function createProviderSdk(input: {
+  npm: string;
+  providerId: string;
+  apiKey: string | undefined;
+  baseURL: string | undefined;
+  headers?: Record<string, string> | undefined;
+  fetchImpl: typeof fetch;
+  options?: Record<string, unknown> | undefined;
+}): ReturnType<typeof createProviderFromNpm> {
+  return createProviderFromNpm({
+    npm: input.npm,
+    providerId: input.providerId,
+    apiKey: input.apiKey,
+    baseURL: input.baseURL,
+    headers: input.headers,
+    fetchImpl: input.fetchImpl,
+    options: input.options,
+  });
+}
+
 async function listOrderedEligibleProfilesForProvider(input: {
   agentId: string;
   sessionId: string;
@@ -418,7 +466,7 @@ async function resolveProfileApiKey(profile: AuthProfileRow, deps: {
   oauthLeaseOwner: string;
   logger: GatewayContainer["logger"];
   fetchImpl: typeof fetch;
-}): Promise<string | null> {
+}, opts?: { forceOAuthRefresh?: boolean }): Promise<string | null> {
   const {
     secretProvider,
     resolver,
@@ -430,18 +478,25 @@ async function resolveProfileApiKey(profile: AuthProfileRow, deps: {
     fetchImpl,
   } = deps;
 
-  async function maybeRefreshOAuthAccessToken(): Promise<string | null> {
+  async function maybeRefreshOAuthAccessToken(input?: { force?: boolean }): Promise<string | null> {
     if (profile.type !== "oauth") return null;
     if (!secretProvider || !resolver) return null;
 
-    const expiresAt = profile.expires_at;
-    if (!expiresAt) return null;
-    const expiresAtMs = Date.parse(expiresAt);
-    if (!Number.isFinite(expiresAtMs)) return null;
-
     const nowMs = Date.now();
     const refreshThresholdMs = 60_000;
-    if (expiresAtMs - nowMs > refreshThresholdMs) return null;
+    const force = input?.force ?? false;
+
+    const expiresAtMs = (() => {
+      const expiresAt = profile.expires_at;
+      if (!expiresAt) return Number.NaN;
+      const parsed = Date.parse(expiresAt);
+      return Number.isFinite(parsed) ? parsed : Number.NaN;
+    })();
+
+    if (!force) {
+      if (!Number.isFinite(expiresAtMs)) return null;
+      if (expiresAtMs - nowMs > refreshThresholdMs) return null;
+    }
 
     const refreshHandleId = profile.secret_handles?.["refresh_token_handle"];
     if (!refreshHandleId) return null;
@@ -626,7 +681,7 @@ async function resolveProfileApiKey(profile: AuthProfileRow, deps: {
         }
       }
       // If refresh fails and the token is already expired, avoid hammering the token endpoint.
-      if (expiresAtMs <= nowMs) {
+      if (force || !Number.isFinite(expiresAtMs) || expiresAtMs <= nowMs) {
         await authProfileDal.setCooldown(profile.profile_id, { untilMs: Date.now() + 60_000 });
       }
       return null;
@@ -635,7 +690,7 @@ async function resolveProfileApiKey(profile: AuthProfileRow, deps: {
     }
   }
 
-  const refreshed = await maybeRefreshOAuthAccessToken();
+  const refreshed = await maybeRefreshOAuthAccessToken({ force: opts?.forceOAuthRefresh ?? false });
   if (refreshed) return refreshed;
 
   if (profile.type === "oauth") {
@@ -929,30 +984,16 @@ export class AgentRuntime {
         ? { ...modelHeaders, ...optionHeaders }
         : undefined;
 
-      const baseURL = (() => {
-        const raw =
-          mergedOptions["baseURL"] ??
-          mergedOptions["baseUrl"] ??
-          mergedOptions["base_url"] ??
-          undefined;
-        if (typeof raw === "string" && raw.trim().length > 0) {
-          return raw.trim();
-        }
-        const endpointKey = (chosen.provider.env ?? []).find((key) => /(ENDPOINT|BASE_URL|BASEURL|URL)$/i.test(key));
-        const endpoint = endpointKey ? process.env[endpointKey]?.trim() : undefined;
-        if (endpoint && endpoint.length > 0) {
-          return endpoint;
-        }
-        if (typeof chosen.api === "string" && chosen.api.trim().length > 0) {
-          return chosen.api.trim();
-        }
-        return undefined;
-      })();
+      const baseURL = resolveProviderBaseURL({
+        providerEnv: chosen.provider.env,
+        providerApi: chosen.api,
+        options: mergedOptions,
+      });
 
       const envApiKey = resolveEnvApiKey(chosen.provider.env);
 
       async function buildModelFromApiKey(apiKey: string | undefined): Promise<LanguageModelV3> {
-        const sdk = createProviderFromNpm({
+        const sdk = createProviderSdk({
           npm: chosen.npm,
           providerId: chosen.providerId,
           apiKey,
@@ -972,17 +1013,24 @@ export class AgentRuntime {
         return model as LanguageModelV3;
       }
 
-      async function resolveApiKeyFromProfile(profile: AuthProfileRow): Promise<string | null> {
-        return await resolveProfileApiKey(profile, {
-          secretProvider,
-          resolver,
-          authProfileDal,
-          oauthProviderRegistry,
-          oauthRefreshLeaseDal,
-          oauthLeaseOwner,
-          logger,
-          fetchImpl: fetch,
-        });
+      async function resolveApiKeyFromProfile(
+        profile: AuthProfileRow,
+        opts?: { forceOAuthRefresh?: boolean },
+      ): Promise<string | null> {
+        return await resolveProfileApiKey(
+          profile,
+          {
+            secretProvider,
+            resolver,
+            authProfileDal,
+            oauthProviderRegistry,
+            oauthRefreshLeaseDal,
+            oauthLeaseOwner,
+            logger,
+            fetchImpl: fetch,
+          },
+          opts,
+        );
       }
 
       const providerLabel = `${chosen.providerId}/${chosen.modelId}`;
@@ -1034,6 +1082,55 @@ export class AgentRuntime {
             if (APICallError.isInstance(err)) {
               const status = err.statusCode;
               if (isAuthInvalidStatus(status)) {
+                if (profile.type === "oauth") {
+                  const refreshHandleId = profile.secret_handles?.["refresh_token_handle"];
+                  if (refreshHandleId) {
+                    const refreshedApiKey = await resolveApiKeyFromProfile(profile, { forceOAuthRefresh: true });
+                    if (!refreshedApiKey) {
+                      await authProfileDal.setCooldown(profile.profile_id, { untilMs: Date.now() + 60_000 });
+                      continue;
+                    }
+
+                    const refreshedModel = await buildModelFromApiKey(refreshedApiKey);
+                    try {
+                      const res = await invoke(refreshedModel, options);
+                      if (input.sessionId) {
+                        void pinDal
+                          .upsert({
+                            agentId: profile.agent_id,
+                            sessionId: input.sessionId,
+                            provider: chosen.providerId,
+                            profileId: profile.profile_id,
+                          })
+                          .catch(() => {});
+                      }
+                      return res;
+                    } catch (retryErr) {
+                      lastErr = retryErr;
+                      if (APICallError.isInstance(retryErr)) {
+                        const retryStatus = retryErr.statusCode;
+                        if (isAuthInvalidStatus(retryStatus)) {
+                          // fall through to disable below
+                        } else if (isTransientStatus(retryStatus)) {
+                          const cooldownMs = retryStatus === 429 ? 60_000 : 15_000;
+                          await authProfileDal.setCooldown(profile.profile_id, { untilMs: Date.now() + cooldownMs });
+                          continue;
+                        } else if (isCredentialPaymentOrEntitlementStatus(retryStatus)) {
+                          const cooldownMs = 10 * 60_000;
+                          await authProfileDal.setCooldown(profile.profile_id, { untilMs: Date.now() + cooldownMs });
+                          continue;
+                        } else {
+                          throw retryErr;
+                        }
+                      } else {
+                        const cooldownMs = 30_000;
+                        await authProfileDal.setCooldown(profile.profile_id, { untilMs: Date.now() + cooldownMs });
+                        continue;
+                      }
+                    }
+                  }
+                }
+
                 await authProfileDal.disableProfile(profile.profile_id, {
                   reason: `upstream_auth_${String(status)}`,
                 });
@@ -1401,12 +1498,12 @@ export class AgentRuntime {
           if (hasApiKeyHint) continue;
         }
 
-        const endpointKey = (candidate.provider.env ?? []).find((key) => /(ENDPOINT|BASE_URL|BASEURL|URL)$/i.test(key));
-        const endpoint = endpointKey ? process.env[endpointKey]?.trim() : undefined;
-        const api = candidate.api?.trim();
-        const baseURL = endpoint && endpoint.length > 0 ? endpoint : api && api.length > 0 ? api : undefined;
+        const baseURL = resolveProviderBaseURL({
+          providerEnv: candidate.provider.env,
+          providerApi: candidate.api,
+        });
 
-        const sdk = createProviderFromNpm({
+        const sdk = createProviderSdk({
           npm: candidate.npm,
           providerId: candidate.providerId,
           apiKey,

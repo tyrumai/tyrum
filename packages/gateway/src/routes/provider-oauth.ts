@@ -49,7 +49,14 @@ function computeRequestBaseUrl(c: Context, publicBaseUrl?: string): string {
   }
 
   const requestUrl = new URL(c.req.url);
-  return requestUrl.origin;
+  const path = requestUrl.pathname.replace(/\/$/, "");
+
+  // Preserve any mount prefix when the gateway is served under a subpath (e.g. /prefix).
+  // Route handlers are mounted at `/providers/...`, so keep everything before the *last*
+  // `/providers/` segment and drop the rest.
+  const providersIdx = path.lastIndexOf("/providers/");
+  const mountPrefix = providersIdx >= 0 ? path.slice(0, providersIdx) : "";
+  return `${requestUrl.origin}${mountPrefix}`.replace(/\/$/, "");
 }
 
 function renderHtml(title: string, message: string): string {
