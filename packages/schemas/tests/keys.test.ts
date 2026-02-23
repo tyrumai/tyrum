@@ -48,6 +48,16 @@ describe("TyrumKey", () => {
     });
   });
 
+  it("parses ambiguous legacy main key before dm per-peer key", () => {
+    const key = TyrumKey.parse("agent:a1:dm:main");
+    expect(parseTyrumKey(key)).toEqual({
+      kind: "agent",
+      agent_id: "a1",
+      channel: "dm",
+      thread_kind: "main",
+    });
+  });
+
   it("parses canonical direct shared key", () => {
     const key = TyrumKey.parse("agent:agent-1:main");
     expect(parseTyrumKey(key)).toEqual({

@@ -339,6 +339,16 @@ export function parseTyrumKey(key: TyrumKey): ParsedTyrumKey {
         };
       }
 
+      // legacy: agent:<agentId>:<channel>:main
+      if (parts.length === 4 && parts[3] === "main") {
+        return {
+          kind: "agent",
+          agent_id: AgentId.parse(agentId),
+          channel: ChannelKey.parse(parts[2]),
+          thread_kind: "main",
+        };
+      }
+
       // agent:<agentId>:dm:<peerId>
       if (parts.length === 4 && parts[2] === "dm") {
         return {
@@ -347,16 +357,6 @@ export function parseTyrumKey(key: TyrumKey): ParsedTyrumKey {
           thread_kind: "dm",
           dm_scope: "per_peer",
           peer_id: PeerId.parse(parts[3]),
-        };
-      }
-
-      // legacy: agent:<agentId>:<channel>:main
-      if (parts.length === 4 && parts[3] === "main") {
-        return {
-          kind: "agent",
-          agent_id: AgentId.parse(agentId),
-          channel: ChannelKey.parse(parts[2]),
-          thread_kind: "main",
         };
       }
 
