@@ -167,37 +167,6 @@ function normalizePositiveInt(value: unknown): number | undefined {
   return n;
 }
 
-function buildExecCommandFromCliArgs(args: unknown): string | undefined {
-  if (!args || typeof args !== "object" || Array.isArray(args)) return undefined;
-  const obj = args as Record<string, unknown>;
-  const cmd = typeof obj["cmd"] === "string" ? obj["cmd"].trim() : "";
-  if (!cmd) return undefined;
-  const cmdArgs = Array.isArray(obj["args"]) ? obj["args"].filter((v): v is string => typeof v === "string") : [];
-  return [cmd, ...cmdArgs].join(" ").trim();
-}
-
-function mapActionToPolicyTool(action: ActionPrimitiveT): {
-  toolId: string;
-  toolArgs: unknown;
-  url?: string;
-} {
-  if (action.type === "Http") {
-    const args = action.args ?? {};
-    const url =
-      args && typeof args === "object" && !Array.isArray(args) && typeof (args as Record<string, unknown>)["url"] === "string"
-        ? String((args as Record<string, unknown>)["url"])
-        : undefined;
-    return { toolId: "tool.http.fetch", toolArgs: args, url };
-  }
-
-  if (action.type === "CLI") {
-    const command = buildExecCommandFromCliArgs(action.args) ?? "";
-    return { toolId: "tool.exec", toolArgs: { command } };
-  }
-
-  return { toolId: `action.${action.type}`, toolArgs: action.args ?? {} };
-}
-
 const KNOWN_CAPABILITIES = new Set<string>([
   "playwright",
   "android",
@@ -1297,112 +1266,148 @@ export class ExecutionEngine {
           parsedAction = undefined;
         }
 
-        if (parsedAction) {
-          const mapped = mapActionToPolicyTool(parsedAction);
-          const toolMatchTarget = canonicalizeToolMatchTarget(mapped.toolId, mapped.toolArgs);
+	        if (parsedAction) {
+	          const tool = this.toolCallFromAction(parsedAction);
+	          const toolId = tool.toolId;
+	          const toolMatchTarget = tool.matchTarget;
+	          const url = tool.url;
 
-          const decision: DecisionT = await (async () => {
-            if (snapshotState === "invalid") {
-              // Fail closed: if we can't parse the stored snapshot, do not allow overrides to auto-allow.
-              // Observe-only deployments keep their non-blocking behavior.
+	          const decision: DecisionT = await (async () => {
+	            if (snapshotState === "invalid") {
+	              // Fail closed: if we can't parse the stored snapshot, do not allow overrides to auto-allow.
+	              // Observe-only deployments keep their non-blocking behavior.
               if (this.policyService?.isEnabled() && this.policyService.isObserveOnly()) {
                 return "allow";
               }
               return "require_approval";
             }
 
-            if (this.policyService?.isEnabled()) {
-              const agentId = this.deriveAgentIdFromKey(run.key) ?? "default";
-              const evaluation = await this.policyService.evaluateToolCallFromSnapshot({
-                policySnapshotId,
-                agentId,
-                workspaceId: run.workspace_id,
-                toolId: mapped.toolId,
-                toolMatchTarget,
-                url: mapped.url,
-                inputProvenance: { source: "workflow", trusted: true },
-              });
-              // Observe-only mode records decisions but doesn't block execution.
-              return this.policyService.isObserveOnly() ? "allow" : evaluation.decision;
-            }
+	            if (this.policyService?.isEnabled()) {
+	              const agentId = this.deriveAgentIdFromKey(run.key) ?? "default";
+	              const evaluation = await this.policyService.evaluateToolCallFromSnapshot({
+	                policySnapshotId,
+	                agentId,
+	                workspaceId: run.workspace_id,
+	                toolId,
+	                toolMatchTarget,
+	                url,
+	                inputProvenance: { source: "workflow", trusted: true },
+	              });
+	              // Observe-only mode records decisions but doesn't block execution.
+	              return this.policyService.isObserveOnly() ? "allow" : evaluation.decision;
+	            }
 
             if (snapshotState === "missing" || !policyBundle) {
               return "require_approval";
             }
 
-            const toolsDomain = normalizeDomain(policyBundle.tools, "require_approval");
-            const egressDomain = normalizeDomain(policyBundle.network_egress, "require_approval");
+	            const toolsDomain = normalizeDomain(policyBundle.tools, "require_approval");
+	            const egressDomain = normalizeDomain(policyBundle.network_egress, "require_approval");
 
-            const toolDecision = evaluateDomain(toolsDomain, mapped.toolId);
-            const egressDecision: DecisionT = mapped.url
-              ? (() => {
-                  const normalizedUrl = normalizeUrlForPolicy(mapped.url);
-                  if (normalizedUrl.length === 0) return "allow";
-                  return evaluateDomain(egressDomain, normalizedUrl);
-                })()
-              : "allow";
+	            const toolDecision = evaluateDomain(toolsDomain, toolId);
+	            const egressDecision: DecisionT = url
+	              ? (() => {
+	                  const normalizedUrl = normalizeUrlForPolicy(url);
+	                  if (normalizedUrl.length === 0) return "allow";
+	                  return evaluateDomain(egressDomain, normalizedUrl);
+	                })()
+	              : "allow";
 
-            return mostRestrictiveDecision(toolDecision, egressDecision);
-          })();
+	            return mostRestrictiveDecision(toolDecision, egressDecision);
+	          })();
 
-          if (decision === "deny") {
-            const updated = await tx.run(
-              `UPDATE execution_steps
-               SET status = 'failed'
-               WHERE step_id = ? AND status = 'queued'`,
-              [next.step_id],
-            );
+	          if (decision === "deny") {
+	            const updated = await tx.run(
+	              `UPDATE execution_steps
+	               SET status = 'failed'
+	               WHERE step_id = ? AND status = 'queued'`,
+	              [next.step_id],
+	            );
 
-            if (updated.changes === 1) {
-              const attemptAgg = await tx.get<{ n: number }>(
-                "SELECT COALESCE(MAX(attempt), 0) AS n FROM execution_attempts WHERE step_id = ?",
-                [next.step_id],
-              );
-              const attemptNum = (attemptAgg?.n ?? 0) + 1;
-              const attemptId = randomUUID();
+	            if (updated.changes === 1) {
+	              const attemptAgg = await tx.get<{ n: number }>(
+	                "SELECT COALESCE(MAX(attempt), 0) AS n FROM execution_attempts WHERE step_id = ?",
+	                [next.step_id],
+	              );
+	              const attemptNum = (attemptAgg?.n ?? 0) + 1;
+	              const attemptId = randomUUID();
 
-              await tx.run(
-                `INSERT INTO execution_attempts (
-                   attempt_id,
-                   step_id,
-                   attempt,
-                   status,
-                   started_at,
-                   finished_at,
-                   result_json,
-                   error,
-                   artifacts_json,
-                   metadata_json
-                 ) VALUES (?, ?, ?, 'failed', ?, ?, NULL, ?, '[]', ?)`,
-                [
-                  attemptId,
-                  next.step_id,
-                  attemptNum,
-                  clock.nowIso,
-                  clock.nowIso,
-                  this.redactText(`policy denied ${mapped.toolId}`).trim() || "policy denied",
-                  JSON.stringify(
-                    this.redactUnknown({
-                      policy_snapshot_id: policySnapshotId,
-                      tool_id: mapped.toolId,
-                      tool_match_target: toolMatchTarget,
-                      url: mapped.url,
-                      decision,
-                    }),
-                  ),
-                ],
-              );
+	              await tx.run(
+	                `INSERT INTO execution_attempts (
+	                   attempt_id,
+	                   step_id,
+	                   attempt,
+	                   status,
+	                   started_at,
+	                   finished_at,
+	                   result_json,
+	                   error,
+	                   artifacts_json,
+	                   metadata_json
+	                 ) VALUES (?, ?, ?, 'failed', ?, ?, NULL, ?, '[]', ?)`,
+	                [
+	                  attemptId,
+	                  next.step_id,
+	                  attemptNum,
+	                  clock.nowIso,
+	                  clock.nowIso,
+	                  this.redactText(`policy denied ${toolId}`).trim() || "policy denied",
+	                  JSON.stringify(
+	                    this.redactUnknown({
+	                      policy_snapshot_id: policySnapshotId,
+	                      tool_id: toolId,
+	                      tool_match_target: toolMatchTarget,
+	                      url,
+	                      decision,
+	                    }),
+	                  ),
+	                ],
+	              );
 
-              await this.emitStepUpdatedTx(tx, next.step_id);
-              await this.emitAttemptUpdatedTx(tx, attemptId);
-              return { kind: "recovered" as const };
-            }
-          }
+	              // Policy denies are terminal for the run: fail the run, cancel remaining queued
+	              // steps, and release lane/workspace leases so future ticks do not continue.
+	              await tx.run(
+	                `UPDATE execution_steps
+	                 SET status = 'cancelled'
+	                 WHERE run_id = ? AND status = 'queued'`,
+	                [run.run_id],
+	              );
+	              const runUpdated = await tx.run(
+	                `UPDATE execution_runs
+	                 SET status = 'failed', finished_at = ?
+	                 WHERE run_id = ? AND status != 'cancelled'`,
+	                [clock.nowIso, run.run_id],
+	              );
+	              await tx.run(
+	                `UPDATE execution_jobs
+	                 SET status = 'failed'
+	                 WHERE job_id = ? AND status != 'cancelled'`,
+	                [run.job_id],
+	              );
+	              if (runUpdated.changes === 1) {
+	                await this.emitRunUpdatedTx(tx, run.run_id);
+	              }
+	              await tx.run(
+	                `DELETE FROM lane_leases
+	                 WHERE key = ? AND lane = ? AND lease_owner = ?`,
+	                [run.key, run.lane, input.workerId],
+	              );
+	              await tx.run(
+	                `DELETE FROM workspace_leases
+	                 WHERE workspace_id = ? AND lease_owner = ?`,
+	                [run.workspace_id, input.workerId],
+	              );
 
-          if (decision === "require_approval") {
-            const approvalStatus = next.approval_id
-              ? await tx.get<{ status: string }>(
-                  "SELECT status FROM approvals WHERE id = ? LIMIT 1",
+	              await this.emitStepUpdatedTx(tx, next.step_id);
+	              await this.emitAttemptUpdatedTx(tx, attemptId);
+	              return { kind: "recovered" as const };
+	            }
+	          }
+
+	          if (decision === "require_approval") {
+	            const approvalStatus = next.approval_id
+	              ? await tx.get<{ status: string }>(
+	                  "SELECT status FROM approvals WHERE id = ? LIMIT 1",
                   [next.approval_id],
                 )
               : undefined;
@@ -1424,20 +1429,20 @@ export class ExecutionEngine {
                   workerId: input.workerId,
                 },
                 {
-                  kind: "policy",
-                  prompt: "Policy approval required to continue execution",
-                  detail: `policy requires approval for '${mapped.toolId}' (${toolMatchTarget || "unknown"})`,
-                  context: {
-                    source: "execution-engine",
-                    policy_snapshot_id: policySnapshotId,
-                    tool_id: mapped.toolId,
-                    tool_match_target: toolMatchTarget,
-                    url: mapped.url,
-                    decision,
-                  },
-                },
-              );
-              return {
+	                  kind: "policy",
+	                  prompt: "Policy approval required to continue execution",
+	                  detail: `policy requires approval for '${toolId}' (${toolMatchTarget || "unknown"})`,
+	                  context: {
+	                    source: "execution-engine",
+	                    policy_snapshot_id: policySnapshotId,
+	                    tool_id: toolId,
+	                    tool_match_target: toolMatchTarget,
+	                    url,
+	                    decision,
+	                  },
+	                },
+	              );
+	              return {
                 kind: "paused" as const,
                 reason: "policy" as const,
                 approvalId: paused.approvalId,
@@ -2172,15 +2177,14 @@ export class ExecutionEngine {
     if (!policySnapshotId) return;
 
     const tool = this.toolCallFromAction(opts.action);
-    await this.db.run(
-      `UPDATE execution_attempts
-       SET policy_snapshot_id = ?
-       WHERE attempt_id = ?`,
-      [policySnapshotId, opts.attemptId],
-    );
+	    await this.db.run(
+	      `UPDATE execution_attempts
+	       SET policy_snapshot_id = ?
+	       WHERE attempt_id = ?`,
+	      [policySnapshotId, opts.attemptId],
+	    );
 
-    if (!this.policyService?.isEnabled()) return;
-    if (!tool) return;
+	    if (!this.policyService?.isEnabled()) return;
 
     const agentId = this.deriveAgentIdFromKey(opts.key) ?? "default";
     const secretScopes = await this.resolveSecretScopesFromArgs(opts.action.args ?? {});
@@ -2213,10 +2217,10 @@ export class ExecutionEngine {
     );
   }
 
-  private toolCallFromAction(action: ActionPrimitiveT): { toolId: string; matchTarget: string; url?: string } | null {
+  private toolCallFromAction(action: ActionPrimitiveT): { toolId: string; matchTarget: string; url?: string } {
     const args = action.args as unknown;
-    if (!args || typeof args !== "object" || Array.isArray(args)) return null;
-    const rec = args as Record<string, unknown>;
+    const rec: Record<string, unknown> =
+      args && typeof args === "object" && !Array.isArray(args) ? (args as Record<string, unknown>) : {};
 
     if (action.type === "CLI") {
       const cmd = typeof rec["cmd"] === "string" ? rec["cmd"].trim() : "";
@@ -2231,10 +2235,12 @@ export class ExecutionEngine {
     if (action.type === "Http") {
       const url = typeof rec["url"] === "string" ? rec["url"].trim() : "";
       const matchTarget = canonicalizeToolMatchTarget("tool.http.fetch", { url });
-      return { toolId: "tool.http.fetch", matchTarget, url };
+      return { toolId: "tool.http.fetch", matchTarget, url: url.length > 0 ? url : undefined };
     }
 
-    return null;
+    const toolId = `action.${action.type}`;
+    const matchTarget = canonicalizeToolMatchTarget(toolId, rec);
+    return { toolId, matchTarget };
   }
 
   private async markAttemptSucceeded(

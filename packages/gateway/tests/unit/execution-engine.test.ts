@@ -233,6 +233,58 @@ describe("ExecutionEngine (normalized)", () => {
     expect(runDone?.status).toBe("succeeded");
   });
 
+  it("fails the run when policy denies a step (cancels remaining steps + releases leases)", async () => {
+    db = openTestSqliteDb();
+
+    const snapshotDal = new PolicySnapshotDal(db);
+    const snapshot = await snapshotDal.getOrCreate(
+      PolicyBundle.parse({
+        v: 1,
+        tools: { default: "allow", allow: [], require_approval: [], deny: ["tool.http.fetch"] },
+        network_egress: { default: "allow", allow: [], require_approval: [], deny: [] },
+      }),
+    );
+
+    const engine = new ExecutionEngine({
+      db,
+      clock: () => ({ nowMs: Date.now(), nowIso: new Date().toISOString() }),
+    });
+    await engine.enqueuePlan({
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-policy-deny-1",
+      requestId: "req-policy-deny-1",
+      policySnapshotId: snapshot.policy_snapshot_id,
+      steps: [action("Http", { url: "https://example.com/" }), action("CLI", { cmd: "echo", args: ["hi"] })],
+    });
+
+    const executor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => ({ success: true, result: { ok: true } })),
+    };
+
+    expect(await engine.workerTick({ workerId: "w1", executor })).toBe(true);
+    expect((executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(0);
+
+    const run = await db.get<{ status: string }>("SELECT status FROM execution_runs LIMIT 1");
+    expect(run?.status).toBe("failed");
+
+    const job = await db.get<{ status: string }>("SELECT status FROM execution_jobs LIMIT 1");
+    expect(job?.status).toBe("failed");
+
+    const stepRows = await db.all<{ step_index: number; status: string }>(
+      "SELECT step_index, status FROM execution_steps ORDER BY step_index ASC",
+    );
+    expect(stepRows.map((row) => row.status)).toEqual(["failed", "cancelled"]);
+
+    const laneLeases = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM lane_leases");
+    expect(laneLeases?.n).toBe(0);
+    const workspaceLeases = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM workspace_leases");
+    expect(workspaceLeases?.n).toBe(0);
+
+    expect(await engine.workerTick({ workerId: "w1", executor })).toBe(false);
+    expect((executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(0);
+  });
+
   it("fails closed when a stored policy snapshot is malformed (override cannot auto-allow)", async () => {
     db = openTestSqliteDb();
 
@@ -643,6 +695,60 @@ describe("ExecutionEngine (normalized)", () => {
     expect(run?.status).toBe("succeeded");
 
     await rm(home, { recursive: true, force: true });
+  });
+
+  it("persists policy decisions on attempts for non-tool actions", async () => {
+    db = openTestSqliteDb();
+
+    const home = await mkdtemp(join(tmpdir(), "tyrum-policy-home-action-"));
+    try {
+      const snapshotDal = new PolicySnapshotDal(db);
+      const overrideDal = new PolicyOverrideDal(db);
+      const policyService = new PolicyService({ home, snapshotDal, overrideDal });
+
+      const snapshot = await snapshotDal.getOrCreate(
+        PolicyBundle.parse({
+          v: 1,
+          tools: { default: "allow", allow: [], require_approval: [], deny: [] },
+          network_egress: { default: "allow", allow: [], require_approval: [], deny: [] },
+        }),
+      );
+
+      const engine = new ExecutionEngine({ db, policyService });
+      await engine.enqueuePlan({
+        key: "agent:agent-1:telegram-1:group:thread-1",
+        lane: "main",
+        planId: "plan-policy-action-1",
+        requestId: "req-policy-action-1",
+        policySnapshotId: snapshot.policy_snapshot_id,
+        steps: [action("Research")],
+      });
+
+      const executor: StepExecutor = {
+        execute: vi.fn(async (): Promise<StepResult> => ({ success: true, result: { ok: true } })),
+      };
+
+      await drain(engine, "w1", executor);
+      expect((executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(1);
+
+      const row = await db.get<{
+        policy_snapshot_id?: string | null;
+        policy_decision_json?: string | null;
+        policy_applied_override_ids_json?: string | null;
+      }>("SELECT * FROM execution_attempts LIMIT 1");
+
+      expect(row?.policy_snapshot_id).toBe(snapshot.policy_snapshot_id);
+      expect(row?.policy_decision_json).toBeTruthy();
+      const policyDecision = JSON.parse(row!.policy_decision_json!) as { decision?: unknown; rules?: unknown };
+      expect(policyDecision.decision).toBe("allow");
+      expect(Array.isArray(policyDecision.rules)).toBe(true);
+
+      expect(row?.policy_applied_override_ids_json).toBeTruthy();
+      const applied = JSON.parse(row!.policy_applied_override_ids_json!) as unknown;
+      expect(applied).toEqual([]);
+    } finally {
+      await rm(home, { recursive: true, force: true });
+    }
   });
 
   it("retries a failed step until it succeeds (within max_attempts)", async () => {
