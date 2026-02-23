@@ -267,11 +267,9 @@ export class NodePairingDal {
     await this.db.run(
       `UPDATE node_pairings
        SET status = 'pending',
-           trust_level = 'remote',
            pubkey = COALESCE(?, pubkey),
            label = COALESCE(?, label),
            capabilities_json = ?,
-           capability_allowlist_json = '[]',
            metadata_json = ?,
            requested_at = ?,
            last_seen_at = ?,
