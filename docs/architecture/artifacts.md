@@ -11,6 +11,7 @@ Artifacts are referenced using `ArtifactRef` (for example `artifact://…` URIs)
 Artifact metadata includes:
 
 - `artifact_id` / `ArtifactRef`
+- `tenant_id`
 - `agent_id`, `workspace_id`
 - execution scope (`run_id`, `step_id`, `attempt_id`)
 - `labels[]` (for example `screenshot`, `diff`, `log`, `http_trace`)
@@ -41,7 +42,7 @@ Artifact access is mediated by the gateway. Clients do not access artifact stora
 Authorization depends on:
 
 - authenticated operator identity (user + client device identity)
-- agent/workspace scope
+- tenant/agent/workspace scope
 - artifact `labels` and `sensitivity`
 - the policy snapshot reference attached to the artifact/run
 

@@ -39,6 +39,13 @@ The backplane does **not** provide a global total order:
 
 If an operator view depends on ordering, it MUST be reconstructible from durable StateStore state (events are an incremental *signal*, not the only source of truth).
 
+### Tenant isolation
+
+In multi-tenant deployments, backplane routing is tenant-scoped:
+
+- outbox items are associated with exactly one `tenant_id`
+- consumers deliver items only to connections authenticated within that same tenant
+
 ### Durable append
 
 Publishing is durable:
@@ -110,4 +117,3 @@ If a peer is offline beyond the outbox retention window, it may miss incremental
 - Outbox payloads SHOULD avoid embedding raw secret values (prefer secret handles and redaction).
 - Treat the outbox and any backplane transport as sensitive data: apply access controls and avoid logging payloads by default.
 - Ensure tooling and infra do not leak auth tokens in WebSocket upgrade headers (see [Handshake](./protocol/handshake.md)).
-

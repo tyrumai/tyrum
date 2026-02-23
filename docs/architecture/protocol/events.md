@@ -28,6 +28,7 @@ The canonical wire shape lives in `@tyrum/schemas` (`packages/schemas/src/protoc
 ## Notes
 
 - Some gateway→peer interactions are modeled as **requests** (with responses) rather than events, for example `task.execute` and `approval.request`.
+- Events are **tenant-scoped**. The gateway delivers an event only to peers authenticated within the same `tenant_id`.
 
 ## Delivery expectations
 
