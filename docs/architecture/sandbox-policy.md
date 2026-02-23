@@ -27,6 +27,8 @@ The initial provenance policy surface is a single conservative rule:
 
 - `PolicyBundle.provenance.untrusted_shell_requires_approval` (default: `true`) escalates `tool.exec` from `allow → require_approval` when the tool call is driven by untrusted-input provenance.
 
+Operators can relax this behavior by setting `provenance.untrusted_shell_requires_approval: false` in policy bundles (deployment/agent/playbook). For narrow exceptions, prefer `approve always` policy overrides on stable tool match targets rather than broad allowlists.
+
 ## Policy bundle
 
 Policy is represented as a declarative, versioned configuration bundle (`PolicyBundle`) stored as data (YAML/JSON) and validated like other contracts.
