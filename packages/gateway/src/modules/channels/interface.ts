@@ -5,13 +5,6 @@ export interface ChannelAddress {
   accountId: string;
 }
 
-export interface ChannelIngressEnvelope<TPayload = unknown> {
-  address: ChannelAddress;
-  containerId: string;
-  messageId: string;
-  payload: TPayload;
-}
-
 export interface ChannelEgressRequest {
   accountId: string;
   containerId: string;
