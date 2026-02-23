@@ -88,6 +88,7 @@ export interface StatusDetails {
 export interface StatusDetailsDeps {
   db?: SqlDb;
   policyService?: PolicyService;
+  policyStatus?: { enabled: boolean; observe_only: boolean; effective_sha256: string };
   agents?: AgentRegistry;
   modelsDev?: ModelsDevService;
 }
@@ -485,10 +486,13 @@ async function loadQueueDepth(db: SqlDb | undefined): Promise<QueueDepthStatus |
   };
 }
 
-async function loadSandboxStatus(policyService: PolicyService | undefined): Promise<SandboxStatus | null> {
+async function loadSandboxStatus(
+  policyService: PolicyService | undefined,
+  policyStatus?: { enabled: boolean; observe_only: boolean; effective_sha256: string },
+): Promise<SandboxStatus | null> {
   if (!policyService) return null;
 
-  const status = await policyService.getStatus();
+  const status = policyStatus ?? (await policyService.getStatus());
   const mode: SandboxStatus["mode"] = !status.enabled
     ? "disabled"
     : status.observe_only
@@ -527,7 +531,7 @@ export async function buildStatusDetails(deps: StatusDetailsDeps): Promise<Statu
       loadCatalogFreshness(deps.db, deps.modelsDev),
       loadSessionLanes(deps.db),
       loadQueueDepth(deps.db),
-      loadSandboxStatus(deps.policyService),
+      loadSandboxStatus(deps.policyService, deps.policyStatus),
     ]);
 
   return {

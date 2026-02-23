@@ -12,7 +12,6 @@ import type { PolicyService } from "../modules/policy/service.js";
 import type { AuthProfileDal } from "../modules/models/auth-profile-dal.js";
 import type { SessionProviderPinDal } from "../modules/models/session-pin-dal.js";
 import type { ModelsDevService } from "../modules/models/models-dev-service.js";
-import { isAuthProfilesEnabled } from "../modules/models/auth-profiles-enabled.js";
 import type { AgentRegistry } from "../modules/agent/registry.js";
 import { buildStatusDetails } from "../modules/observability/status-details.js";
 
@@ -40,28 +39,16 @@ export function createStatusRoutes(deps: StatusRouteDeps): Hono {
     const details = await buildStatusDetails({
       db: deps.db,
       policyService: deps.policyService,
+      policyStatus: policy
+        ? {
+            enabled: policy.enabled,
+            observe_only: policy.observe_only,
+            effective_sha256: policy.effective_sha256,
+          }
+        : undefined,
       agents: deps.agents,
       modelsDev: deps.modelsDev,
     });
-    const authProfilesEnabled = isAuthProfilesEnabled();
-
-    let authProfiles: unknown = null;
-    if (deps.authProfileDal && deps.pinDal) {
-      const profiles = await deps.authProfileDal.list({ limit: 500 });
-      const pins = await deps.pinDal.list({ limit: 500 });
-      authProfiles = {
-        enabled: authProfilesEnabled,
-        profiles: {
-          total: profiles.length,
-          active: profiles.filter((p) => p.status === "active").length,
-          disabled: profiles.filter((p) => p.status === "disabled").length,
-          providers: [...new Set(profiles.map((p) => p.provider))].sort(),
-        },
-        pins: {
-          total: pins.length,
-        },
-      };
-    }
 
     return c.json({
       status: "ok",
@@ -72,7 +59,7 @@ export function createStatusRoutes(deps: StatusRouteDeps): Hono {
       is_exposed: !deps.isLocalOnly,
       otel_enabled: deps.otelEnabled,
       ws: deps.connectionManager?.getStats() ?? null,
-      auth_profiles: authProfiles,
+      auth_profiles: details.model_auth.auth_profiles,
       policy,
       model_auth: details.model_auth,
       catalog_freshness: details.catalog_freshness,

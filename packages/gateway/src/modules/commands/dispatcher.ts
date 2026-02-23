@@ -170,6 +170,13 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
     const details = await buildStatusDetails({
       db: deps.db,
       policyService: deps.policyService,
+      policyStatus: policy
+        ? {
+            enabled: policy.enabled,
+            observe_only: policy.observe_only,
+            effective_sha256: policy.effective_sha256,
+          }
+        : undefined,
       agents: deps.agents,
       modelsDev: deps.modelsDev,
     });
