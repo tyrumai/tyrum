@@ -3,11 +3,25 @@ import { readFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+const TRANSIENT_READ_MAX_ATTEMPTS = 25;
+const TRANSIENT_READ_DELAY_MS = 100;
+
 function resolveSchemasJsonSchemaDir(): string {
   const entrypointUrl = import.meta.resolve("@tyrum/schemas");
   const entrypointPath = fileURLToPath(entrypointUrl);
   const pkgRoot = dirname(dirname(entrypointPath));
   return join(pkgRoot, "dist", "jsonschema");
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
+}
+
+function errorCode(err: unknown): string | undefined {
+  if (!err || typeof err !== "object") return undefined;
+  if (!("code" in err)) return undefined;
+  const code = (err as { code?: unknown }).code;
+  return typeof code === "string" ? code : undefined;
 }
 
 function isSafeContractFilename(filename: string): boolean {
@@ -16,6 +30,31 @@ function isSafeContractFilename(filename: string): boolean {
   if (filename.includes("..")) return false;
   if (!filename.endsWith(".json")) return false;
   return true;
+}
+
+async function readJsonFile(path: string): Promise<unknown> {
+  let lastError: unknown = new Error(`Failed to read JSON file: ${path}`);
+
+  for (let attempt = 0; attempt < TRANSIENT_READ_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const raw = await readFile(path, "utf-8");
+      return JSON.parse(raw);
+    } catch (err) {
+      lastError = err;
+
+      const code = errorCode(err);
+      const isParseError = err instanceof SyntaxError;
+      const isTransient = code === "ENOENT" || isParseError;
+
+      if (!isTransient || attempt === TRANSIENT_READ_MAX_ATTEMPTS - 1) {
+        throw err;
+      }
+
+      await delay(TRANSIENT_READ_DELAY_MS);
+    }
+  }
+
+  throw lastError;
 }
 
 export function createContractRoutes(): Hono {
@@ -42,8 +81,7 @@ export function createContractRoutes(): Hono {
     }
 
     try {
-      const raw = await readFile(join(jsonSchemaDir, "catalog.json"), "utf-8");
-      const parsed: unknown = JSON.parse(raw);
+      const parsed: unknown = await readJsonFile(join(jsonSchemaDir, "catalog.json"));
 
       if (
         parsed &&
@@ -111,14 +149,10 @@ export function createContractRoutes(): Hono {
     }
 
     try {
-      const raw = await readFile(fullPath, "utf-8");
-      return c.json(JSON.parse(raw));
+      const parsed = await readJsonFile(fullPath);
+      return c.json(parsed);
     } catch (err) {
-      const code =
-        err && typeof err === "object" && "code" in err &&
-        typeof (err as { code?: unknown }).code === "string"
-          ? String((err as { code: string }).code)
-          : undefined;
+      const code = errorCode(err);
 
       if (code === "ENOENT") {
         return c.json(
