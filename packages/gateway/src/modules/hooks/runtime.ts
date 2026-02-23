@@ -1,4 +1,8 @@
-import type { ActionPrimitive as ActionPrimitiveT, ExecutionTrigger as ExecutionTriggerT } from "@tyrum/schemas";
+import type {
+  ActionPrimitive as ActionPrimitiveT,
+  ExecutionTrigger as ExecutionTriggerT,
+  Lane as LaneT,
+} from "@tyrum/schemas";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
 import type { ExecutionEngine } from "../execution/engine.js";
@@ -12,7 +16,7 @@ export type LifecycleHookEvent = {
 export type LifecycleHookDefinition = {
   hook_key: string;
   event: string;
-  lane?: string;
+  lane?: LaneT;
   steps: readonly ActionPrimitiveT[];
 };
 
@@ -34,7 +38,7 @@ export class LifecycleHooksRuntime {
     const snapshot = await this.opts.policyService.getOrCreateSnapshot(effective.bundle);
 
     for (const hook of matches) {
-      const lane = hook.lane?.trim() || "cron";
+      const lane: LaneT = hook.lane ?? "cron";
       const planId = `hook-${hook.hook_key}-${randomUUID()}`;
       const requestId = `hook-${hook.hook_key}-${randomUUID()}`;
 
