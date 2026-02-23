@@ -91,6 +91,27 @@ describe("oauth-client", () => {
     expect(endpoints.tokenEndpoint).toBe("https://issuer.example/oauth/token");
   });
 
+  it("skips OIDC discovery when only the token endpoint is required and it is explicitly configured", async () => {
+    const endpoints = await resolveOAuthEndpoints(
+      {
+        provider_id: "test",
+        issuer: "https://issuer.example",
+        token_endpoint: "https://issuer.example/oauth/token",
+        scopes: [],
+        token_endpoint_basic_auth: true,
+      },
+      {
+        requireAuthorizationEndpoint: false,
+        fetchImpl: async () => {
+          throw new Error("discovery should not be called");
+        },
+      },
+    );
+
+    expect(endpoints.authorizationEndpoint).toBeUndefined();
+    expect(endpoints.tokenEndpoint).toBe("https://issuer.example/oauth/token");
+  });
+
   it("discovers missing endpoints via OIDC discovery when needed", async () => {
     const endpoints = await resolveOAuthEndpoints(
       {

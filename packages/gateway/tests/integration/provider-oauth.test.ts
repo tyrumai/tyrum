@@ -158,6 +158,93 @@ describe("provider OAuth routes", () => {
     await container.db.close();
   });
 
+  it("does not require OIDC discovery on callback when token endpoint is explicit", async () => {
+    await writeFile(
+      oauthConfigPath,
+      [
+        "providers:",
+        "  - provider_id: test",
+        "    display_name: Test Provider",
+        "    issuer: https://issuer.test",
+        "    token_endpoint: https://auth.test/token",
+        "    scopes: [scope1]",
+        "    client_id_env: TEST_CLIENT_ID",
+        "    client_secret_env: TEST_CLIENT_SECRET",
+        "    token_endpoint_basic_auth: false",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    let discoveryCalls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+        const resolved = typeof url === "string" ? url : url.toString();
+        if (resolved === "https://issuer.test/.well-known/openid-configuration") {
+          discoveryCalls += 1;
+          if (discoveryCalls > 1) {
+            throw new Error("discovery down");
+          }
+          return new Response(
+            JSON.stringify({
+              authorization_endpoint: "https://auth.test/authorize",
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (resolved === "https://auth.test/token") {
+          const body = typeof init?.body === "string" ? init.body : "";
+          expect(body).toContain("grant_type=authorization_code");
+          expect(body).toContain("code=code-1");
+          return new Response(
+            JSON.stringify({
+              access_token: "access-1",
+              refresh_token: "refresh-1",
+              expires_in: 3600,
+              token_type: "Bearer",
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        return new Response("not found", { status: 404 });
+      }),
+    );
+
+    const container = await createTestContainer();
+    const app = createApp(container, {
+      tokenStore,
+      secretProvider,
+      isLocalOnly: true,
+      runtime: {
+        version: "test",
+        instanceId: "test-instance",
+        role: "all",
+        otelEnabled: false,
+      },
+    });
+
+    const authorizeRes = await app.request("/providers/test/oauth/authorize", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        Authorization: `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify({ agent_id: "default" }),
+    });
+    expect(authorizeRes.status).toBe(200);
+    const authorize = (await authorizeRes.json()) as { state: string; authorize_url: string };
+    expect(authorize.state).toBeTypeOf("string");
+    expect(authorize.authorize_url).toContain("https://auth.test/authorize");
+
+    const callbackRes = await app.request(
+      `/providers/test/oauth/callback?state=${encodeURIComponent(authorize.state)}&code=code-1`,
+    );
+    expect(callbackRes.status).toBe(200);
+    expect(discoveryCalls).toBe(1);
+
+    await container.db.close();
+  });
+
   it("rejects non-default agent_id when agent registry is disabled", async () => {
     const container = await createTestContainer();
     const app = createApp(container, {

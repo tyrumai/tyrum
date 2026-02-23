@@ -569,7 +569,10 @@ async function resolveProfileApiKey(profile: AuthProfileRow, deps: {
       const clientSecretEnv = spec.client_secret_env?.trim();
       const clientSecret = clientSecretEnv ? process.env[clientSecretEnv]?.trim() : undefined;
 
-      const { tokenEndpoint } = await resolveOAuthEndpoints(spec, { fetchImpl });
+      const { tokenEndpoint } = await resolveOAuthEndpoints(spec, {
+        fetchImpl,
+        requireAuthorizationEndpoint: false,
+      });
       if (!tokenEndpoint) return null;
 
       const scope = (spec.scopes ?? []).join(" ").trim();

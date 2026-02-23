@@ -282,7 +282,7 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
     let profileCreated = false;
 
     try {
-      const { tokenEndpoint } = await resolveOAuthEndpoints(spec);
+      const { tokenEndpoint } = await resolveOAuthEndpoints(spec, { requireAuthorizationEndpoint: false });
       if (!tokenEndpoint) {
         return c.html(renderHtml("Authorization failed", "oauth provider missing token endpoint"), 500);
       }

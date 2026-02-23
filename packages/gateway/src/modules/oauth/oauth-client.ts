@@ -57,10 +57,18 @@ async function fetchJson(
 
 export async function resolveOAuthEndpoints(
   spec: OAuthProviderSpec,
-  opts?: { fetchImpl?: typeof fetch; timeoutMs?: number; requireDeviceAuthorizationEndpoint?: boolean },
+  opts?: {
+    fetchImpl?: typeof fetch;
+    timeoutMs?: number;
+    requireAuthorizationEndpoint?: boolean;
+    requireTokenEndpoint?: boolean;
+    requireDeviceAuthorizationEndpoint?: boolean;
+  },
 ): Promise<ResolvedOAuthEndpoints> {
   const fetchImpl = opts?.fetchImpl ?? fetch;
   const timeoutMs = resolveTimeoutMs(opts?.timeoutMs);
+  const requireAuthorizationEndpoint = opts?.requireAuthorizationEndpoint ?? true;
+  const requireTokenEndpoint = opts?.requireTokenEndpoint ?? true;
   const requireDeviceAuthorizationEndpoint = opts?.requireDeviceAuthorizationEndpoint ?? false;
 
   const explicit: ResolvedOAuthEndpoints = {
@@ -71,8 +79,8 @@ export async function resolveOAuthEndpoints(
 
   const needsDiscovery = Boolean(
     spec.issuer &&
-      (!explicit.authorizationEndpoint ||
-        !explicit.tokenEndpoint ||
+      ((requireAuthorizationEndpoint && !explicit.authorizationEndpoint) ||
+        (requireTokenEndpoint && !explicit.tokenEndpoint) ||
         (requireDeviceAuthorizationEndpoint && !explicit.deviceAuthorizationEndpoint)),
   );
   if (!needsDiscovery) return explicit;
