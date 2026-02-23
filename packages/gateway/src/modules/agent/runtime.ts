@@ -1984,7 +1984,6 @@ export class AgentRuntime {
                   output: sanitizeForModel(tagged),
                   error: pluginRes.error,
                   provenance: tagged,
-                  meta: undefined,
                 };
               })()
             : await toolExecutor.execute(toolDesc.id, toolCallId, args, {
