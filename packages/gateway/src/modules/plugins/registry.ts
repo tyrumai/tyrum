@@ -236,7 +236,7 @@ async function loadConfigFromDir(dir: string): Promise<{ path?: string; config: 
   for (const filename of candidates) {
     const path = join(dir, filename);
     const raw = await tryReadFile(path);
-    if (!raw) continue;
+    if (raw === undefined) continue;
     try {
       const parsed = parseJsonOrYaml(raw, path);
       return { path, config: parsed };

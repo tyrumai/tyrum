@@ -5,6 +5,24 @@ import { tmpdir } from "node:os";
 import { Logger } from "../../src/modules/observability/logger.js";
 import { PluginRegistry } from "../../src/modules/plugins/registry.js";
 
+type CapturedLog = { msg: string; fields: Record<string, unknown> };
+
+function createCapturingLogger(): { logger: Logger; warnings: CapturedLog[] } {
+  const warnings: CapturedLog[] = [];
+
+  const makeLogger = (): unknown => ({
+    child: (_fields: Record<string, unknown>) => makeLogger(),
+    debug: (_msg: string, _fields?: Record<string, unknown>) => {},
+    info: (_msg: string, _fields?: Record<string, unknown>) => {},
+    warn: (msg: string, fields: Record<string, unknown> = {}) => {
+      warnings.push({ msg, fields });
+    },
+    error: (_msg: string, _fields?: Record<string, unknown>) => {},
+  });
+
+  return { logger: makeLogger() as Logger, warnings };
+}
+
 function yamlStringList(indent: string, values: string[]): string[] {
   if (values.length === 0) {
     return [`${indent}[]`];
@@ -338,6 +356,38 @@ describe("PluginRegistry", () => {
     });
 
     expect(plugins.list()).toEqual([]);
+  });
+
+  it("records config_path when config file is present but empty", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
+    const pluginDir = join(home, "plugins/echo");
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(
+      join(pluginDir, "plugin.yml"),
+      pluginManifestYaml({
+        configSchema: [
+          "type: object",
+          "properties:",
+          "  greeting:",
+          "    type: string",
+          "required:",
+          "  - greeting",
+        ],
+      }),
+      "utf-8",
+    );
+    await writeFile(join(pluginDir, "config.yml"), "", "utf-8");
+    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
+
+    const { logger, warnings } = createCapturingLogger();
+    const plugins = await PluginRegistry.load({
+      home,
+      logger,
+    });
+
+    expect(plugins.list()).toEqual([]);
+    const invalidConfig = warnings.find((entry) => entry.msg === "plugins.invalid_config");
+    expect(invalidConfig?.fields["config_path"]).toBe(join(pluginDir, "config.yml"));
   });
 
   it("loads plugins when config schema explicitly allows additionalProperties", async () => {
