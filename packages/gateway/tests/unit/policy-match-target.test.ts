@@ -11,6 +11,16 @@ describe("canonicalizeToolMatchTarget", () => {
     expect(target).toBe("read:docs/policy-overrides.md");
   });
 
+  it("rejects parent traversal that would escape the workspace boundary", () => {
+    const target = canonicalizeToolMatchTarget(
+      "tool.fs.read",
+      { path: "a/../../b" },
+    );
+
+    // Match targets for fs must be workspace-relative and must not contain "..".
+    expect(target).toBe("read:");
+  });
+
   it("canonicalizes exec commands by collapsing non-semantic whitespace", () => {
     const target = canonicalizeToolMatchTarget(
       "tool.exec",

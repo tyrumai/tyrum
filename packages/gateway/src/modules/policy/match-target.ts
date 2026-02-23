@@ -27,6 +27,7 @@ function normalizeFsPath(rawPath: string): string {
   const base = isAbsolute ? slashNormalized : slashNormalized.replace(/^\.\/+/, "");
   const normalized = pathPosix.normalize(base);
   if (normalized === ".") return "";
+  if (!isAbsolute && normalized.split("/").includes("..")) return "";
   return isAbsolute ? normalized : normalized.replace(/^\.\/+/, "");
 }
 
