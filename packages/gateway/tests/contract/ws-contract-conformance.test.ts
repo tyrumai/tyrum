@@ -28,12 +28,18 @@ function delay(ms: number): Promise<void> {
 }
 
 async function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
-  return await Promise.race([
-    p,
-    delay(ms).then(() => {
-      throw new Error(`${label} timeout after ${ms}ms`);
-    }),
-  ]);
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutP = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`${label} timeout after ${ms}ms`));
+    }, ms);
+  });
+
+  try {
+    return await Promise.race([p, timeoutP]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -330,4 +336,3 @@ describe("WS contract conformance (gateway <-> client <-> schemas)", () => {
     WsErrorEvent.parse(warningEvt);
   });
 });
-
