@@ -832,10 +832,10 @@ export class AgentRuntime {
         if (typeof chosen.api === "string" && chosen.api.trim().length > 0) {
           return chosen.api.trim();
         }
-      const endpointKey = (chosen.provider.env ?? []).find((key) => /(ENDPOINT|BASE_URL|BASEURL|URL)$/i.test(key));
-      const endpoint = endpointKey ? process.env[endpointKey]?.trim() : undefined;
-      return endpoint && endpoint.length > 0 ? endpoint : undefined;
-    })();
+        const endpointKey = (chosen.provider.env ?? []).find((key) => /(ENDPOINT|BASE_URL|BASEURL|URL)$/i.test(key));
+        const endpoint = endpointKey ? process.env[endpointKey]?.trim() : undefined;
+        return endpoint && endpoint.length > 0 ? endpoint : undefined;
+      })();
 
       const orderedProfiles = await listOrderedEligibleProfilesForProvider({
         agentId,
