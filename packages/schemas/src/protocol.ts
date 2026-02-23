@@ -394,8 +394,8 @@ export const WsPairingApprovePayload = z
   .object({
     pairing_id: z.number().int().positive(),
     reason: z.string().trim().min(1).optional(),
-    trust_level: NodePairingTrustLevel.optional(),
-    capability_allowlist: z.array(CapabilityDescriptor).optional(),
+    trust_level: NodePairingTrustLevel,
+    capability_allowlist: z.array(CapabilityDescriptor),
   })
   .strict();
 export type WsPairingApprovePayload = z.infer<typeof WsPairingApprovePayload>;

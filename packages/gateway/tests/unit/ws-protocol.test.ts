@@ -397,6 +397,52 @@ describe("handleClientMessage", () => {
     expect(res.result.approval.status).toBe("approved");
     expect(res.result.approval.resolution.decision).toBe("approved");
   });
+
+  it("rejects pairing.approve when trust_level is missing", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["cli"]);
+    const client = cm.getClient(id)!;
+    const nodePairingDal = { resolve: vi.fn(async () => undefined) };
+    const deps = makeDeps(cm, { nodePairingDal: nodePairingDal as never });
+
+    const result = await handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "r-approve-1",
+        type: "pairing.approve",
+        payload: { pairing_id: 1, capability_allowlist: [] },
+      }),
+      deps,
+    );
+
+    expect(result).toBeDefined();
+    expect((result as unknown as { ok: boolean }).ok).toBe(false);
+    expect((result as unknown as { error: { code: string } }).error.code).toBe("invalid_request");
+    expect(nodePairingDal.resolve).not.toHaveBeenCalled();
+  });
+
+  it("rejects pairing.approve when capability_allowlist is missing", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["cli"]);
+    const client = cm.getClient(id)!;
+    const nodePairingDal = { resolve: vi.fn(async () => undefined) };
+    const deps = makeDeps(cm, { nodePairingDal: nodePairingDal as never });
+
+    const result = await handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "r-approve-2",
+        type: "pairing.approve",
+        payload: { pairing_id: 1, trust_level: "remote" },
+      }),
+      deps,
+    );
+
+    expect(result).toBeDefined();
+    expect((result as unknown as { ok: boolean }).ok).toBe(false);
+    expect((result as unknown as { error: { code: string } }).error.code).toBe("invalid_request");
+    expect(nodePairingDal.resolve).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------

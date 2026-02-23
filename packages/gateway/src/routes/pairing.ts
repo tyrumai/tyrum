@@ -68,14 +68,20 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
     const reason = typeof body["reason"] === "string" ? body["reason"] : undefined;
 
     const trustLevelRaw = body["trust_level"];
-    const trustLevelParsed = trustLevelRaw === undefined ? undefined : NodePairingTrustLevel.safeParse(trustLevelRaw);
-    if (trustLevelParsed && !trustLevelParsed.success) {
+    if (trustLevelRaw === undefined) {
+      return c.json({ error: "invalid_request", message: "trust_level is required" }, 400);
+    }
+    const trustLevelParsed = NodePairingTrustLevel.safeParse(trustLevelRaw);
+    if (!trustLevelParsed.success) {
       return c.json({ error: "invalid_request", message: "trust_level must be 'local' or 'remote'" }, 400);
     }
 
     const allowlistRaw = body["capability_allowlist"];
-    const allowlistParsed = allowlistRaw === undefined ? undefined : CapabilityDescriptor.array().safeParse(allowlistRaw);
-    if (allowlistParsed && !allowlistParsed.success) {
+    if (allowlistRaw === undefined) {
+      return c.json({ error: "invalid_request", message: "capability_allowlist is required" }, 400);
+    }
+    const allowlistParsed = CapabilityDescriptor.array().safeParse(allowlistRaw);
+    if (!allowlistParsed.success) {
       return c.json(
         { error: "invalid_request", message: "capability_allowlist must be an array of CapabilityDescriptor" },
         400,
@@ -86,8 +92,8 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
       pairingId: id,
       decision: "approved",
       reason,
-      trustLevel: trustLevelParsed ? trustLevelParsed.data : undefined,
-      capabilityAllowlist: allowlistParsed ? allowlistParsed.data : undefined,
+      trustLevel: trustLevelParsed.data,
+      capabilityAllowlist: allowlistParsed.data,
       resolvedBy: {
         kind: "http",
         ip: c.req.header("x-forwarded-for") ?? undefined,

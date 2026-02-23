@@ -1,7 +1,5 @@
 import {
-  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   CapabilityDescriptor as CapabilityDescriptorSchema,
-  descriptorIdForClientCapability,
   type CapabilityDescriptor,
   type ClientCapability,
   type NodePairingRequest as NodePairingRequestT,
@@ -70,18 +68,6 @@ function parseAllowlist(raw: string): CapabilityDescriptor[] {
 function parseTrustLevel(raw: string): NodePairingTrustLevel | undefined {
   if (raw === "local" || raw === "remote") return raw;
   return undefined;
-}
-
-function allowlistFromCapabilities(capabilitiesJson: string): CapabilityDescriptor[] {
-  const caps = parseCapabilities(capabilitiesJson);
-  return [
-    ...new Map(
-      caps.map((capability) => [
-        capability,
-        { id: descriptorIdForClientCapability(capability), version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION },
-      ]),
-    ).values(),
-  ];
 }
 
 function toPairing(row: RawNodePairingRow): NodePairingRequestT {
@@ -297,11 +283,17 @@ export class NodePairingDal {
 
   async resolve(params: {
     pairingId: number;
-    decision: Exclude<NodePairingStatus, "pending">;
+    decision: "approved";
     reason?: string;
     resolvedBy?: unknown;
-    trustLevel?: NodePairingTrustLevel;
-    capabilityAllowlist?: readonly CapabilityDescriptor[];
+    trustLevel: NodePairingTrustLevel;
+    capabilityAllowlist: readonly CapabilityDescriptor[];
+    nowIso?: string;
+  } | {
+    pairingId: number;
+    decision: "denied";
+    reason?: string;
+    resolvedBy?: unknown;
     nowIso?: string;
   }): Promise<NodePairingRequestT | undefined> {
     const nowIso = params.nowIso ?? new Date().toISOString();
@@ -317,21 +309,13 @@ export class NodePairingDal {
 
     const trustLevel =
       params.decision === "approved"
-        ? params.trustLevel ?? parseTrustLevel(existing.trust_level) ?? "remote"
+        ? params.trustLevel
         : parseTrustLevel(existing.trust_level) ?? "remote";
 
-    let allowlist: readonly CapabilityDescriptor[];
-    if (params.decision === "approved" && params.capabilityAllowlist) {
-      allowlist = params.capabilityAllowlist;
-    } else {
-      const existingAllowlist = parseAllowlist(existing.capability_allowlist_json);
-      allowlist =
-        params.decision === "approved"
-          ? existingAllowlist.length > 0
-            ? existingAllowlist
-            : allowlistFromCapabilities(existing.capabilities_json)
-          : existingAllowlist;
-    }
+    const allowlist =
+      params.decision === "approved"
+        ? params.capabilityAllowlist
+        : parseAllowlist(existing.capability_allowlist_json);
 
     const result = await this.db.run(
       `UPDATE node_pairings
