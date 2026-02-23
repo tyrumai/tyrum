@@ -130,6 +130,7 @@ function tryGatewayBuild(cmd: string, args: string[]): ReturnType<typeof spawnSy
 async function ensureGatewayBuild(): Promise<void> {
   if (!existsSync(WORKSPACE_MARKER)) return;
   if (!existsSync(SRC_ROOT)) return;
+  if (!gatewayBuildIsStale()) return;
 
   const release = await acquireGatewayBuildLock();
   try {

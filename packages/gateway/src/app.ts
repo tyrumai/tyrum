@@ -172,8 +172,6 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       otelEnabled: runtime.otelEnabled,
       connectionManager: opts.connectionManager,
       policyService: container.policyService,
-      authProfileDal,
-      pinDal,
       modelsDev: container.modelsDev,
       agents: opts.agents,
     }),

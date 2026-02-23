@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { createStatusRoutes } from "../../src/routes/status.js";
 
-describe("GET /status legacy auth_profiles", () => {
+describe("GET /status model_auth.auth_profiles", () => {
   let db: ReturnType<typeof openTestSqliteDb> | undefined;
 
   afterEach(async () => {
@@ -10,7 +10,7 @@ describe("GET /status legacy auth_profiles", () => {
     db = undefined;
   });
 
-  it("does not call auth profile DAL list methods", async () => {
+  it("does not include legacy top-level auth_profiles", async () => {
     db = openTestSqliteDb();
 
     const app = createStatusRoutes({
@@ -21,21 +21,13 @@ describe("GET /status legacy auth_profiles", () => {
       db,
       isLocalOnly: true,
       otelEnabled: false,
-      authProfileDal: {
-        list: async () => {
-          throw new Error("unexpected authProfileDal.list call");
-        },
-      } as unknown as import("../../src/modules/models/auth-profile-dal.js").AuthProfileDal,
-      pinDal: {
-        list: async () => {
-          throw new Error("unexpected pinDal.list call");
-        },
-      } as unknown as import("../../src/modules/models/session-pin-dal.js").SessionProviderPinDal,
     });
 
     const res = await app.request("/status");
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
-    expect(body["auth_profiles"]).toBeTypeOf("object");
+    expect("auth_profiles" in body).toBe(false);
+    const modelAuth = body["model_auth"] as Record<string, unknown>;
+    expect(modelAuth["auth_profiles"]).toBeTypeOf("object");
   });
 });

@@ -9,8 +9,6 @@ import { Hono } from "hono";
 import type { SqlDb, StateStoreKind } from "../statestore/types.js";
 import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { PolicyService } from "../modules/policy/service.js";
-import type { AuthProfileDal } from "../modules/models/auth-profile-dal.js";
-import type { SessionProviderPinDal } from "../modules/models/session-pin-dal.js";
 import type { ModelsDevService } from "../modules/models/models-dev-service.js";
 import type { AgentRegistry } from "../modules/agent/registry.js";
 import { buildStatusDetails } from "../modules/observability/status-details.js";
@@ -25,8 +23,6 @@ export interface StatusRouteDeps {
   otelEnabled: boolean;
   connectionManager?: ConnectionManager;
   policyService?: PolicyService;
-  authProfileDal?: AuthProfileDal;
-  pinDal?: SessionProviderPinDal;
   modelsDev?: ModelsDevService;
   agents?: AgentRegistry;
 }
@@ -59,7 +55,6 @@ export function createStatusRoutes(deps: StatusRouteDeps): Hono {
       is_exposed: !deps.isLocalOnly,
       otel_enabled: deps.otelEnabled,
       ws: deps.connectionManager?.getStats() ?? null,
-      auth_profiles: details.model_auth.auth_profiles,
       policy,
       model_auth: details.model_auth,
       catalog_freshness: details.catalog_freshness,
