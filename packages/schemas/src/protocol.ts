@@ -11,7 +11,15 @@ import {
   ApprovalResolveResponse,
 } from "./approval.js";
 import { ArtifactRef } from "./artifact.js";
-import { ExecutionAttempt, ExecutionBudgets, ExecutionRun, ExecutionStep } from "./execution.js";
+import {
+  ExecutionAttempt,
+  ExecutionAttemptId,
+  ExecutionBudgets,
+  ExecutionRun,
+  ExecutionRunId,
+  ExecutionStep,
+  ExecutionStepId,
+} from "./execution.js";
 import { NodePairingRequest, NodePairingTrustLevel } from "./node.js";
 import { AgentId, Lane, TyrumKey } from "./keys.js";
 import { PresenceBeacon, PresenceEntry } from "./presence.js";
@@ -201,8 +209,9 @@ export type WsPingRequest = z.infer<typeof WsPingRequest>;
 
 export const WsTaskExecutePayload = z
   .object({
-    plan_id: z.string().min(1),
-    step_index: z.number().int().nonnegative(),
+    run_id: ExecutionRunId,
+    step_id: ExecutionStepId,
+    attempt_id: ExecutionAttemptId,
     action: ActionPrimitive,
   })
   .strict();

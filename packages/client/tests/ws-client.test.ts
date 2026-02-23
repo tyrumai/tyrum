@@ -256,8 +256,9 @@ describe("TyrumClient", () => {
       request_id: "task-1",
       type: "task.execute",
       payload: {
-        plan_id: "plan-1",
-        step_index: 0,
+        run_id: "550e8400-e29b-41d4-a716-446655440000",
+        step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+        attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
         action: { type: "Http", args: { url: "https://example.com" } },
       },
     };
@@ -285,8 +286,9 @@ describe("TyrumClient", () => {
         request_id: "task-bad-1",
         type: "task.execute",
         payload: {
-          plan_id: "plan-1",
-          step_index: "0",
+          run_id: "not-a-uuid",
+          step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+          attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
           action: { type: "Http", args: { url: "https://example.com" } },
         },
       }),

@@ -45,9 +45,15 @@ function makeDeps(
 function makeClient(
   cm: ConnectionManager,
   capabilities: string[],
+  opts?: {
+    id?: string;
+    role?: "client" | "node";
+    deviceId?: string;
+    protocolRev?: number;
+  },
 ): { id: string; ws: MockWebSocket } {
   const ws = createMockWs();
-  const id = cm.addClient(ws as never, capabilities as never);
+  const id = cm.addClient(ws as never, capabilities as never, opts);
   return { id, ws };
 }
 
@@ -452,7 +458,7 @@ describe("handleClientMessage", () => {
 describe("dispatchTask", () => {
   it("sends task.execute request to a capable client", async () => {
     const cm = new ConnectionManager();
-    const { ws } = makeClient(cm, ["playwright"]);
+    const { ws } = makeClient(cm, ["playwright"], { protocolRev: 2 });
     const deps = makeDeps(cm);
 
     const action: ActionPrimitive = {
@@ -460,7 +466,15 @@ describe("dispatchTask", () => {
       args: { url: "https://example.com" },
     };
 
-    const taskId = await dispatchTask(action, "plan-1", 0, deps);
+    const taskId = await dispatchTask(
+      action,
+      {
+        runId: "550e8400-e29b-41d4-a716-446655440000",
+        stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+        attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+      },
+      deps,
+    );
     expect(taskId).toMatch(/^task-[0-9a-f-]{36}$/);
 
     expect(ws.send).toHaveBeenCalledOnce();
@@ -472,8 +486,9 @@ describe("dispatchTask", () => {
       request_id: taskId,
       type: "task.execute",
       payload: {
-        plan_id: "plan-1",
-        step_index: 0,
+        run_id: "550e8400-e29b-41d4-a716-446655440000",
+        step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+        attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
         action: { type: "Web", args: { url: "https://example.com" } },
       },
     });
@@ -500,9 +515,17 @@ describe("dispatchTask", () => {
       args: { command: "echo hi" },
     };
 
-    await expect(dispatchTask(action, "plan-1", 0, deps)).rejects.toBeInstanceOf(
-      NoCapableClientError,
-    );
+    await expect(
+      dispatchTask(
+        action,
+        {
+          runId: "550e8400-e29b-41d4-a716-446655440000",
+          stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+          attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+        },
+        deps,
+      ),
+    ).rejects.toBeInstanceOf(NoCapableClientError);
     expect(nodeWs.send).not.toHaveBeenCalled();
   });
 
@@ -528,13 +551,21 @@ describe("dispatchTask", () => {
       args: { command: "echo hi" },
     };
 
-    const taskId = await dispatchTask(action, "plan-1", 0, deps);
+    const taskId = await dispatchTask(
+      action,
+      {
+        runId: "550e8400-e29b-41d4-a716-446655440000",
+        stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+        attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+      },
+      deps,
+    );
     expect(taskId).toMatch(/^task-[0-9a-f-]{36}$/);
     expect(nodeWs.send).toHaveBeenCalledOnce();
     expect(legacyWs.send).not.toHaveBeenCalled();
   });
 
-  it("falls back to legacy clients when nodes are unpaired", async () => {
+  it("does not dispatch tasks to legacy clients", async () => {
     const cm = new ConnectionManager();
     const nodeWs = createMockWs();
     cm.addClient(nodeWs as never, ["cli"] as never, {
@@ -556,10 +587,19 @@ describe("dispatchTask", () => {
       args: { command: "echo hi" },
     };
 
-    const taskId = await dispatchTask(action, "plan-1", 0, deps);
-    expect(taskId).toMatch(/^task-[0-9a-f-]{36}$/);
+    await expect(
+      dispatchTask(
+        action,
+        {
+          runId: "550e8400-e29b-41d4-a716-446655440000",
+          stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+          attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+        },
+        deps,
+      ),
+    ).rejects.toBeInstanceOf(NoCapableClientError);
     expect(nodeWs.send).not.toHaveBeenCalled();
-    expect(legacyWs.send).toHaveBeenCalledOnce();
+    expect(legacyWs.send).not.toHaveBeenCalled();
   });
 
   it("throws NoCapableClientError when no client has the capability", () => {
@@ -572,9 +612,17 @@ describe("dispatchTask", () => {
       args: {},
     };
 
-    expect(() => dispatchTask(action, "plan-1", 0, deps)).toThrow(
-      NoCapableClientError,
-    );
+    expect(() =>
+      dispatchTask(
+        action,
+        {
+          runId: "550e8400-e29b-41d4-a716-446655440000",
+          stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+          attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+        },
+        deps,
+      ),
+    ).toThrow(NoCapableClientError);
   });
 
   it("throws NoCapableClientError when no clients are connected", () => {
@@ -586,9 +634,17 @@ describe("dispatchTask", () => {
       args: {},
     };
 
-    expect(() => dispatchTask(action, "plan-1", 0, deps)).toThrow(
-      NoCapableClientError,
-    );
+    expect(() =>
+      dispatchTask(
+        action,
+        {
+          runId: "550e8400-e29b-41d4-a716-446655440000",
+          stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+          attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+        },
+        deps,
+      ),
+    ).toThrow(NoCapableClientError);
   });
 
   it("throws NoCapableClientError for unmapped action type", () => {
@@ -602,9 +658,17 @@ describe("dispatchTask", () => {
       args: {},
     };
 
-    expect(() => dispatchTask(action, "plan-1", 0, deps)).toThrow(
-      NoCapableClientError,
-    );
+    expect(() =>
+      dispatchTask(
+        action,
+        {
+          runId: "550e8400-e29b-41d4-a716-446655440000",
+          stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+          attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+        },
+        deps,
+      ),
+    ).toThrow(NoCapableClientError);
   });
 });
 
