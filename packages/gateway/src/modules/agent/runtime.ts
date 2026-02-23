@@ -14,11 +14,13 @@ import type {
   NormalizedMessageEnvelope as NormalizedMessageEnvelopeT,
 } from "@tyrum/schemas";
 import {
+  AgentId,
   AgentStatusResponse,
   AgentTurnRequest,
   AgentTurnResponse,
   ContextReport as ContextReportSchema,
   DEFAULT_WORKSPACE_ID,
+  WorkspaceId,
 } from "@tyrum/schemas";
 import type { Decision } from "@tyrum/schemas";
 import type { GatewayContainer } from "../../container.js";
@@ -113,9 +115,10 @@ function encodeKeyPart(value: string): string {
 }
 
 function buildAgentTurnKey(agentId: string, channel: string, threadId: string): string {
+  const safeAgentId = encodeKeyPart(agentId);
   const safeChannel = encodeKeyPart(channel);
   const safeThread = encodeKeyPart(threadId);
-  return `agent:${agentId}:${safeChannel}:channel:${safeThread}`;
+  return `agent:${safeAgentId}:${safeChannel}:channel:${safeThread}`;
 }
 
 function resolveTurnRequestId(input: AgentTurnRequestT): string {
@@ -887,8 +890,24 @@ export class AgentRuntime {
     this.home = opts.home ?? resolveTyrumHome();
     this.sessionDal = opts.sessionDal ?? opts.container.sessionDal;
     this.fetchImpl = opts.fetchImpl ?? fetch;
-    this.agentId = opts.agentId?.trim() || resolveAgentId();
-    this.workspaceId = opts.workspaceId?.trim() || resolveWorkspaceId();
+
+    const agentIdCandidate = opts.agentId?.trim() || resolveAgentId();
+    const parsedAgentId = AgentId.safeParse(agentIdCandidate);
+    if (!parsedAgentId.success) {
+      throw new Error(
+        `invalid agent_id '${agentIdCandidate}' (${parsedAgentId.error.message})`,
+      );
+    }
+    this.agentId = parsedAgentId.data;
+
+    const workspaceIdCandidate = opts.workspaceId?.trim() || resolveWorkspaceId();
+    const parsedWorkspaceId = WorkspaceId.safeParse(workspaceIdCandidate);
+    if (!parsedWorkspaceId.success) {
+      throw new Error(
+        `invalid workspace_id '${workspaceIdCandidate}' (${parsedWorkspaceId.error.message})`,
+      );
+    }
+    this.workspaceId = parsedWorkspaceId.data;
     this.instanceOwner =
       process.env["TYRUM_INSTANCE_ID"]?.trim() || `instance-${randomUUID()}`;
     this.languageModelOverride = opts.languageModel;

@@ -112,6 +112,25 @@ describe("AgentRuntime", () => {
     );
   });
 
+  it("rejects agentId containing ':'", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    expect(
+      () =>
+        new AgentRuntime({
+          container,
+          home: homeDir,
+          agentId: "bad:agent",
+          languageModel: createStubLanguageModel("hello"),
+          fetchImpl: fetch404,
+        }),
+    ).toThrow(/invalid agent_id/i);
+  });
+
   it("routes turns through execution engine run records", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({
