@@ -355,10 +355,28 @@ describe("artifact routes", () => {
     );
 
     const metaRes = await app.request(`/runs/run-wrong-scope/artifacts/${ref.artifact_id}/metadata`);
-    expect(metaRes.status).toBe(403);
+    expect(metaRes.status).toBe(404);
+    const metaBody = (await metaRes.json()) as { error: string; message: string };
+    expect(metaBody).toEqual({ error: "not_found", message: "artifact not found" });
 
     const res = await app.request(`/runs/run-wrong-scope/artifacts/${ref.artifact_id}`);
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { error: string; message: string };
+    expect(body).toEqual({ error: "not_found", message: "artifact not found" });
+
+    const missingMetaRes = await app.request(
+      `/runs/${scope.runId}/artifacts/550e8400-e29b-41d4-a716-446655440000/metadata`,
+    );
+    expect(missingMetaRes.status).toBe(404);
+    const missingMetaBody = (await missingMetaRes.json()) as { error: string; message: string };
+    expect(missingMetaBody).toEqual(metaBody);
+
+    const missingRes = await app.request(
+      `/runs/${scope.runId}/artifacts/550e8400-e29b-41d4-a716-446655440000`,
+    );
+    expect(missingRes.status).toBe(404);
+    const missingBody = (await missingRes.json()) as { error: string; message: string };
+    expect(missingBody).toEqual(body);
 
     await container.db.close();
   });

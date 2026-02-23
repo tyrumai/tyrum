@@ -45,6 +45,8 @@ type DurableExecutionScope = {
   attempt_id: string | null;
 };
 
+const ARTIFACT_NOT_FOUND_BODY = { error: "not_found", message: "artifact not found" } as const;
+
 function normalizeDbDateTime(value: string | Date | null): string | null {
   if (value === null) return null;
   const raw = value instanceof Date ? value.toISOString() : value;
@@ -200,7 +202,7 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
       [parsedId.data],
     );
     if (!row) {
-      return c.json({ error: "not_found", message: "artifact not found" }, 404);
+      return c.json(ARTIFACT_NOT_FOUND_BODY, 404);
     }
 
     const durableScope = await resolveDurableExecutionScope(deps, row);
@@ -214,13 +216,7 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
       );
     }
     if (durableScope.run_id !== runId) {
-      return c.json(
-        {
-          error: "forbidden",
-          message: "artifact access denied: requested run scope does not match artifact linkage",
-        },
-        403,
-      );
+      return c.json(ARTIFACT_NOT_FOUND_BODY, 404);
     }
 
     if (deps.policyService?.isEnabled() && !deps.policyService.isObserveOnly()) {
@@ -279,7 +275,7 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
       [parsedId.data],
     );
     if (!row) {
-      return c.json({ error: "not_found", message: "artifact not found" }, 404);
+      return c.json(ARTIFACT_NOT_FOUND_BODY, 404);
     }
 
     const durableScope = await resolveDurableExecutionScope(deps, row);
@@ -293,13 +289,7 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
       );
     }
     if (durableScope.run_id !== runId) {
-      return c.json(
-        {
-          error: "forbidden",
-          message: "artifact access denied: requested run scope does not match artifact linkage",
-        },
-        403,
-      );
+      return c.json(ARTIFACT_NOT_FOUND_BODY, 404);
     }
 
     if (deps.policyService?.isEnabled() && !deps.policyService.isObserveOnly()) {
