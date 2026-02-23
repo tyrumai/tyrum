@@ -22,7 +22,6 @@ import {
   DEFAULT_CHANNEL_ACCOUNT_ID,
   buildChannelSourceKey,
   normalizeConnectorId,
-  normalizeAccountId,
   parseChannelSourceKey,
 } from "./interface.js";
 

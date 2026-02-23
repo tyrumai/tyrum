@@ -495,8 +495,6 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
   it("formats connector approval plan ids without extra colons for account-scoped sources", async () => {
     db = openTestSqliteDb();
 
-    process.env["TYRUM_TELEGRAM_ACCOUNT_ID"] = "work";
-
     const tmp = await mkdtemp(join(tmpdir(), "tyrum-policy-"));
     try {
       const bundlePath = join(tmp, "policy.yml");
@@ -551,7 +549,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       });
 
       const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
-      await queue.enqueue(normalized);
+      await queue.enqueue(normalized, { accountId: "work" });
 
       await processor.tick();
 
