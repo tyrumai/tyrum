@@ -183,7 +183,14 @@ function wireContainer(
 
   const oauthPendingDal = new OauthPendingDalImpl(db);
   const oauthRefreshLeaseDal = new OauthRefreshLeaseDalImpl(db);
-  const oauthProviderRegistry = new OAuthProviderRegistryImpl();
+  const oauthProviderRegistry = new OAuthProviderRegistryImpl({
+    configPaths: [
+      join(tyrumHome, "oauth-providers.yml"),
+      join(tyrumHome, "oauth_providers.yml"),
+      join(process.cwd(), "config", "oauth-providers.yml"),
+      join(process.cwd(), "config", "oauth_providers.yml"),
+    ],
+  });
 
   return {
     db,

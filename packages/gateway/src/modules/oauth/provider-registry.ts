@@ -98,7 +98,7 @@ export class OAuthProviderRegistry {
   private cached: Map<string, OAuthProviderSpec> | undefined;
   private cachedAtMs = 0;
 
-  constructor(private readonly opts?: { ttlMs?: number; configPath?: string }) {}
+  constructor(private readonly opts?: { ttlMs?: number; configPath?: string; configPaths?: string[] }) {}
 
   async get(providerId: string): Promise<OAuthProviderSpec | undefined> {
     const specs = await this.load();
@@ -120,7 +120,14 @@ export class OAuthProviderRegistry {
     const now = Date.now();
     if (this.cached && now - this.cachedAtMs < ttlMs) return this.cached;
 
-    const paths = this.opts?.configPath ? [this.opts.configPath] : resolveDefaultConfigPaths();
+    const fromEnv = process.env["TYRUM_OAUTH_PROVIDERS_CONFIG"]?.trim();
+    const paths = fromEnv
+      ? [fromEnv]
+      : this.opts?.configPaths && this.opts.configPaths.length > 0
+        ? this.opts.configPaths
+        : this.opts?.configPath
+          ? [this.opts.configPath]
+          : resolveDefaultConfigPaths();
     const byId = new Map<string, OAuthProviderSpec>();
 
     for (const path of paths) {
