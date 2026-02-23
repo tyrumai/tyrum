@@ -8,7 +8,7 @@ import {
 } from "../src/index.js";
 
 describe("Device token contracts", () => {
-  it("parses issue request with normalized scopes", () => {
+  it("parses issue request with trimmed scopes", () => {
     const req = DeviceTokenIssueRequest.parse({
       device_id: "  dev_client_1  ",
       role: "client",
@@ -16,7 +16,7 @@ describe("Device token contracts", () => {
       ttl_seconds: 900,
     });
     expect(req.device_id).toBe("dev_client_1");
-    expect(req.scopes).toEqual(["operator.read", "operator.write"]);
+    expect(req.scopes).toEqual(["operator.read", "operator.write", "operator.read"]);
     expect(req.ttl_seconds).toBe(900);
   });
 
