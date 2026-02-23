@@ -13,7 +13,9 @@ import {
   WsConnectInitRequest,
   WsConnectProofRequest,
   WsConnectRequest,
+  clientCapabilityFromDescriptorId,
   deviceIdFromSha256Digest,
+  type CapabilityDescriptor,
   type ClientCapability,
   type WsPeerRole,
   type WsResponseEnvelope,
@@ -57,9 +59,15 @@ function buildConnectProofTranscript(input: {
 }
 
 function parseCapabilitiesFromInit(
-  payload: { capabilities: Array<{ id: ClientCapability }> },
+  payload: { capabilities: CapabilityDescriptor[] },
 ): ClientCapability[] {
-  return [...new Set(payload.capabilities.map((c) => c.id))];
+  return [
+    ...new Set(
+      payload.capabilities
+        .map((capability) => clientCapabilityFromDescriptorId(capability.id))
+        .filter((capability): capability is ClientCapability => capability !== undefined),
+    ),
+  ];
 }
 
 function parseRemoteIp(req: IncomingMessage): string | undefined {

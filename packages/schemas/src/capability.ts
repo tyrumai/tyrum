@@ -4,17 +4,59 @@ import { z } from "zod";
 export const ClientCapability = z.enum(["playwright", "android", "desktop", "cli", "http"]);
 export type ClientCapability = z.infer<typeof ClientCapability>;
 
+const CAPABILITY_ID_SEGMENT = "[a-z][a-z0-9-]*";
+const CAPABILITY_ID_PATTERN = new RegExp(`^${CAPABILITY_ID_SEGMENT}(?:\\.${CAPABILITY_ID_SEGMENT})+$`);
+const CAPABILITY_VERSION_PATTERN =
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+
+export const CAPABILITY_DESCRIPTOR_DEFAULT_VERSION = "1.0.0" as const;
+
+export const CapabilityDescriptorId = z
+  .string()
+  .trim()
+  .min(3)
+  .regex(CAPABILITY_ID_PATTERN, "capability IDs must be namespaced (example: system.shell.exec)");
+
+export const CapabilityDescriptorVersion = z
+  .string()
+  .trim()
+  .regex(CAPABILITY_VERSION_PATTERN, "capability versions must use semantic version format (x.y.z)");
+
+const LEGACY_TO_DESCRIPTOR_ID = {
+  playwright: "tyrum.playwright",
+  android: "tyrum.android",
+  desktop: "tyrum.desktop",
+  cli: "tyrum.cli",
+  http: "tyrum.http",
+} as const;
+
+type LegacyCapabilityDescriptorId = (typeof LEGACY_TO_DESCRIPTOR_ID)[ClientCapability];
+
+const DESCRIPTOR_TO_LEGACY = Object.fromEntries(
+  (Object.entries(LEGACY_TO_DESCRIPTOR_ID) as Array<[ClientCapability, LegacyCapabilityDescriptorId]>)
+    .map(([capability, id]) => [id, capability]),
+) as Record<LegacyCapabilityDescriptorId, ClientCapability>;
+
 /**
  * Capability descriptor used in the vNext handshake.
  *
- * Today this is intentionally minimal and uses the existing capability enum.
- * The target architecture allows richer, namespaced capabilities over time.
+ * Descriptors are namespaced and explicitly versioned so nodes can advertise
+ * stable contracts independently from legacy enum routing keys.
  */
 export const CapabilityDescriptor = z
   .object({
-    id: ClientCapability,
-    version: z.string().trim().min(1).optional(),
+    id: CapabilityDescriptorId,
+    version: CapabilityDescriptorVersion.default(CAPABILITY_DESCRIPTOR_DEFAULT_VERSION),
   })
   .strict();
 export type CapabilityDescriptor = z.infer<typeof CapabilityDescriptor>;
 
+export function descriptorIdForClientCapability(
+  capability: ClientCapability,
+): LegacyCapabilityDescriptorId {
+  return LEGACY_TO_DESCRIPTOR_ID[capability];
+}
+
+export function clientCapabilityFromDescriptorId(id: string): ClientCapability | undefined {
+  return DESCRIPTOR_TO_LEGACY[id as LegacyCapabilityDescriptorId];
+}

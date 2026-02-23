@@ -9,7 +9,11 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
-import { deviceIdFromSha256Digest } from "@tyrum/schemas";
+import {
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  descriptorIdForClientCapability,
+  deviceIdFromSha256Digest,
+} from "@tyrum/schemas";
 
 function authProtocols(token: string): string[] {
   return [
@@ -267,7 +271,12 @@ describe("WS handler integration", () => {
           protocol_rev: 2,
           role: "client",
           device: { device_id: deviceId, pubkey: pubkeyB64Url, label: "test" },
-          capabilities: [{ id: "http" }],
+          capabilities: [
+            {
+              id: descriptorIdForClientCapability("http"),
+              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+            },
+          ],
         },
       }),
     );
@@ -375,7 +384,12 @@ describe("WS handler integration", () => {
           protocol_rev: 2,
           role: "node",
           device: { device_id: deviceId, pubkey: pubkeyB64Url, label: "node-1" },
-          capabilities: [{ id: "cli" }],
+          capabilities: [
+            {
+              id: descriptorIdForClientCapability("cli"),
+              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+            },
+          ],
         },
       }),
     );

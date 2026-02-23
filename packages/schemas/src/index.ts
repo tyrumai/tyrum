@@ -116,8 +116,11 @@ export type {
 } from "./postcondition.js";
 
 export {
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   CapabilityDescriptor,
   ClientCapability,
+  clientCapabilityFromDescriptorId,
+  descriptorIdForClientCapability,
   WsPeerRole,
   WsDeviceDescriptor,
   WsError,

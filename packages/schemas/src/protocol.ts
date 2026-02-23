@@ -17,7 +17,13 @@ import { AgentId, Lane, TyrumKey } from "./keys.js";
 import { PresenceBeacon, PresenceEntry } from "./presence.js";
 import { PolicyOverride } from "./policy-bundle.js";
 
-export { CapabilityDescriptor, ClientCapability };
+export {
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  CapabilityDescriptor,
+  ClientCapability,
+  clientCapabilityFromDescriptorId,
+  descriptorIdForClientCapability,
+} from "./capability.js";
 
 // ---------------------------------------------------------------------------
 // WebSocket protocol (v1) — request/response envelopes + events

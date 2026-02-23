@@ -24,6 +24,8 @@ import type { WsApprovalResolveResult as WsApprovalResolveResultT } from "@tyrum
 import type { WsCommandExecuteResult as WsCommandExecuteResultT } from "@tyrum/schemas";
 import type { WsPeerRole } from "@tyrum/schemas";
 import {
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  descriptorIdForClientCapability,
   deviceIdFromSha256Digest,
   WsApprovalDecision,
   WsApprovalRequest,
@@ -504,7 +506,10 @@ export class TyrumClient {
             version: toOptionalTrimmedString(device.version),
             mode: toOptionalTrimmedString(device.mode),
           },
-          capabilities: this.opts.capabilities.map((id) => ({ id })),
+          capabilities: this.opts.capabilities.map((capability) => ({
+            id: descriptorIdForClientCapability(capability),
+            version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+          })),
         },
       };
 
