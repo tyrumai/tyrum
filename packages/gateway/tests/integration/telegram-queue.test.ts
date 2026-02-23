@@ -305,6 +305,42 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
     expect(fetchFn).not.toHaveBeenCalled();
   });
 
+  it("sends agent failure messages via account-specific egress connectors", async () => {
+    db = openTestSqliteDb();
+    const fetchFn = mockFetch();
+    const bot = new TelegramBot("test-token", fetchFn);
+    const queue = new TelegramChannelQueue(db);
+
+    const mockRuntime = {
+      turn: vi.fn().mockRejectedValue(new Error("boom")),
+    };
+
+    const workSend = vi.fn().mockResolvedValue({ ok: true, account: "work" });
+
+    const processor = new TelegramChannelProcessor({
+      db,
+      agents: makeAgents(mockRuntime),
+      telegramBot: bot,
+      owner: "test-owner",
+      debounceMs: 0,
+      maxBatch: 1,
+      egressConnectors: [{ connector: "telegram", accountId: "work", sendMessage: workSend }],
+    });
+
+    const normalizedWork = normalizeUpdate(JSON.stringify(makeTelegramUpdate("work", 123, 3001)));
+    await queue.enqueue(normalizedWork, { accountId: "work" });
+
+    await processor.tick();
+
+    expect(workSend).toHaveBeenCalledTimes(1);
+    expect(workSend).toHaveBeenCalledWith({
+      accountId: "work",
+      containerId: "123",
+      text: "Sorry, something went wrong. Please try again later.",
+    });
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
   it("policy-gates outbound sends via approvals when required", async () => {
     db = openTestSqliteDb();
 

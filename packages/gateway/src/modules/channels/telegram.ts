@@ -549,7 +549,8 @@ export class TelegramChannelProcessor {
         thread_id: leader.thread_id,
         error: message,
       });
-      const connector = this.egressConnectors.get(connectorId);
+      const sourceKey = buildChannelSourceKey(address);
+      const connector = this.egressConnectors.get(sourceKey) ?? this.egressConnectors.get(connectorId);
       if (connector) {
         await connector
           .sendMessage({
