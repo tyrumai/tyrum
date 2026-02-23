@@ -4,6 +4,8 @@ import { DateTimeSchema } from "./common.js";
 const Scope = z.string().trim().min(1);
 const Role = z.enum(["client", "node"]);
 
+export const MAX_DEVICE_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30;
+
 function dedupeScopes(scopes: string[]): string[] {
   return [...new Set(scopes.map((scope) => scope.trim()))];
 }
@@ -13,7 +15,7 @@ export const DeviceTokenIssueRequest = z
     device_id: z.string().trim().min(1),
     role: Role,
     scopes: z.array(Scope).default([]).transform(dedupeScopes),
-    ttl_seconds: z.number().int().positive().max(60 * 60 * 24 * 30).optional(),
+    ttl_seconds: z.number().int().positive().max(MAX_DEVICE_TOKEN_TTL_SECONDS).optional(),
   })
   .strict();
 export type DeviceTokenIssueRequest = z.infer<typeof DeviceTokenIssueRequest>;

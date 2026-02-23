@@ -10,12 +10,12 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { MAX_DEVICE_TOKEN_TTL_SECONDS } from "@tyrum/schemas";
 
 const TOKEN_FILENAME = ".admin-token";
 const DEVICE_TOKEN_REVOCATIONS_FILENAME = ".device-token-revocations.json";
 const DEVICE_TOKEN_PREFIX = "tyrum-device.v1";
 const DEFAULT_DEVICE_TOKEN_TTL_SECONDS = 15 * 60;
-const MAX_DEVICE_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 export type DeviceTokenRole = "client" | "node";
 
@@ -271,8 +271,10 @@ export class TokenStore {
     if (!payload) return false;
     if (this.revokedDeviceTokenIds.has(payload.jti)) return false;
 
-    this.revokedDeviceTokenIds.add(payload.jti);
-    await this.persistRevokedDeviceTokenIds();
+    const nextRevokedDeviceTokenIds = new Set(this.revokedDeviceTokenIds);
+    nextRevokedDeviceTokenIds.add(payload.jti);
+    await this.persistRevokedDeviceTokenIds(nextRevokedDeviceTokenIds);
+    this.revokedDeviceTokenIds = nextRevokedDeviceTokenIds;
     return true;
   }
 
@@ -372,10 +374,10 @@ export class TokenStore {
     }
   }
 
-  private async persistRevokedDeviceTokenIds(): Promise<void> {
+  private async persistRevokedDeviceTokenIds(ids: Iterable<string> = this.revokedDeviceTokenIds): Promise<void> {
     const revocationPath = this.getRevocationPath();
     await mkdir(this.tyrumHome, { recursive: true });
-    const sortedIds = [...this.revokedDeviceTokenIds].sort();
+    const sortedIds = [...ids].sort();
     await writeFile(revocationPath, JSON.stringify(sortedIds, null, 2) + "\n", {
       mode: 0o600,
     });

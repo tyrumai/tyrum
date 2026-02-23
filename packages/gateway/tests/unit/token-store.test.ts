@@ -178,6 +178,39 @@ describe("TokenStore", () => {
     expect(reloaded.authenticate(issued.token)).toBeNull();
   });
 
+  it("does not revoke a device token if persisting the revocation fails", async () => {
+    const store = new TokenStore(tempDir);
+    await store.initialize();
+
+    const issued = await store.issueDeviceToken({
+      deviceId: "dev_client_5",
+      role: "client",
+      scopes: ["operator.read"],
+      ttlSeconds: 300,
+    });
+    expect(store.authenticate(issued.token, { expectedRole: "client" })).not.toBeNull();
+
+    const storeWithPrivates = store as unknown as {
+      persistRevokedDeviceTokenIds: (ids?: Iterable<string>) => Promise<void>;
+    };
+    const originalPersist = storeWithPrivates.persistRevokedDeviceTokenIds.bind(store);
+    const persistSpy = vi
+      .spyOn(storeWithPrivates, "persistRevokedDeviceTokenIds")
+      .mockImplementationOnce(async () => {
+        throw new Error("disk full");
+      })
+      .mockImplementation(originalPersist);
+
+    try {
+      await expect(store.revokeDeviceToken(issued.token)).rejects.toThrow("disk full");
+      await expect(store.revokeDeviceToken(issued.token)).resolves.toBe(true);
+    } finally {
+      persistSpy.mockRestore();
+    }
+
+    expect(store.authenticate(issued.token)).toBeNull();
+  });
+
   it("rejects expired device tokens", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-02-23T00:00:00.000Z"));

@@ -8,24 +8,10 @@ import {
   DeviceTokenRevokeResponse,
 } from "@tyrum/schemas";
 import type { TokenStore } from "../modules/auth/token-store.js";
+import { AUTH_COOKIE_NAME, extractBearerToken } from "../modules/auth/http.js";
 
 export interface DeviceTokenRouteDeps {
   tokenStore: TokenStore;
-}
-
-const AUTH_COOKIE_NAME = "tyrum_admin_token";
-
-function extractBearerToken(authorizationHeader: string | undefined): string | undefined {
-  if (!authorizationHeader) {
-    return undefined;
-  }
-
-  const parts = authorizationHeader.split(" ");
-  if (parts.length !== 2 || parts[0] !== "Bearer" || !parts[1]) {
-    return undefined;
-  }
-
-  return parts[1];
 }
 
 function extractAuthToken(c: Context): string | undefined {

@@ -7,6 +7,7 @@ import type { CanvasDal } from "../modules/canvas/dal.js";
 import type { Playbook } from "@tyrum/schemas";
 import type { PlaybookRunner } from "../modules/playbook/runner.js";
 import { APP_PATH_PREFIX, matchesPathPrefixSegment } from "../app-path.js";
+import { AUTH_COOKIE_NAME } from "../modules/auth/http.js";
 import {
   buildAuditTaskResponse,
   getPlanTimeline,
@@ -276,7 +277,6 @@ const PVP_EMOJI_OPTIONS = ["never", "sometimes", "often"] as const;
 
 const PRONUNCIATION_MAX_ENTRIES = 32;
 const PRONUNCIATION_MAX_LENGTH = 128;
-const AUTH_COOKIE_NAME = "tyrum_admin_token";
 const AUTH_QUERY_PARAM = "token";
 
 // Inline scripts are intentionally minimal; onboarding/settings are server-rendered.

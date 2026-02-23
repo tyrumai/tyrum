@@ -322,6 +322,7 @@ export {
   DeviceTokenRevokeRequest,
   DeviceTokenRevokeResponse,
   DeviceTokenClaims,
+  MAX_DEVICE_TOKEN_TTL_SECONDS,
 } from "./device-token.js";
 
 export {

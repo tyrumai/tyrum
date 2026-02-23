@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { createAuthMiddleware } from "../../src/modules/auth/middleware.js";
+import { AUTH_COOKIE_NAME } from "../../src/modules/auth/http.js";
 
 describe("Auth middleware", () => {
   let tempDir: string;
@@ -90,7 +91,7 @@ describe("Auth middleware", () => {
   it("allows requests with valid auth cookie", async () => {
     const app = buildApp();
     const res = await app.request("/api/data", {
-      headers: { Cookie: `tyrum_admin_token=${encodeURIComponent(adminToken)}` },
+      headers: { Cookie: `${AUTH_COOKIE_NAME}=${encodeURIComponent(adminToken)}` },
     });
     expect(res.status).toBe(200);
   });
@@ -142,7 +143,7 @@ describe("Auth middleware", () => {
   it("prefers /app/auth query token over cookie token", async () => {
     const app = buildApp();
     const res = await app.request("/app/auth?token=invalid-token", {
-      headers: { Cookie: `tyrum_admin_token=${encodeURIComponent(adminToken)}` },
+      headers: { Cookie: `${AUTH_COOKIE_NAME}=${encodeURIComponent(adminToken)}` },
     });
     expect(res.status).toBe(401);
   });
