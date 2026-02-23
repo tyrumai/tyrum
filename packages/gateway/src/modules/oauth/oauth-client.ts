@@ -56,10 +56,11 @@ async function fetchJson(
 
 export async function resolveOAuthEndpoints(
   spec: OAuthProviderSpec,
-  opts?: { fetchImpl?: typeof fetch; timeoutMs?: number },
+  opts?: { fetchImpl?: typeof fetch; timeoutMs?: number; requireDeviceAuthorizationEndpoint?: boolean },
 ): Promise<ResolvedOAuthEndpoints> {
   const fetchImpl = opts?.fetchImpl ?? fetch;
   const timeoutMs = resolveTimeoutMs(opts?.timeoutMs);
+  const requireDeviceAuthorizationEndpoint = opts?.requireDeviceAuthorizationEndpoint ?? false;
 
   const explicit: ResolvedOAuthEndpoints = {
     authorizationEndpoint: spec.authorization_endpoint,
@@ -69,7 +70,9 @@ export async function resolveOAuthEndpoints(
 
   const needsDiscovery = Boolean(
     spec.issuer &&
-      (!explicit.authorizationEndpoint || !explicit.tokenEndpoint || !explicit.deviceAuthorizationEndpoint),
+      (!explicit.authorizationEndpoint ||
+        !explicit.tokenEndpoint ||
+        (requireDeviceAuthorizationEndpoint && !explicit.deviceAuthorizationEndpoint)),
   );
   if (!needsDiscovery) return explicit;
 
@@ -221,8 +224,10 @@ export async function exchangeAuthorizationCode(input: {
     code: input.code,
     redirect_uri: input.redirectUri,
     code_verifier: input.pkceVerifier,
-    client_id: input.clientId,
   };
+  if (!input.tokenEndpointBasicAuth) {
+    params["client_id"] = input.clientId;
+  }
   if (!input.tokenEndpointBasicAuth && input.clientSecret) {
     params["client_secret"] = input.clientSecret;
   }
@@ -259,8 +264,10 @@ export async function refreshAccessToken(input: {
   const params: Record<string, string> = {
     grant_type: "refresh_token",
     refresh_token: input.refreshToken,
-    client_id: input.clientId,
   };
+  if (!input.tokenEndpointBasicAuth) {
+    params["client_id"] = input.clientId;
+  }
   if (!input.tokenEndpointBasicAuth && input.clientSecret) {
     params["client_secret"] = input.clientSecret;
   }

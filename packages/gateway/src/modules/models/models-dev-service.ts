@@ -165,10 +165,31 @@ export class ModelsDevService {
   }
 
   async ensureLoaded(): Promise<ModelsDevLoadResult> {
-    if (this.current) return this.current;
-
     const cached = await this.opts.cacheDal.get();
     if (cached) {
+      if (this.current && cached.updated_at === this.current.status.updated_at) {
+        return this.current;
+      }
+
+      // Avoid re-parsing JSON unless content changed; still sync status fields (e.g., last_error).
+      if (this.current && cached.sha256 === this.current.status.sha256) {
+        const catalog = this.current.catalog;
+        const result: ModelsDevLoadResult = {
+          catalog,
+          status: this.buildStatus({
+            source: cached.source,
+            fetchedAt: cached.fetched_at,
+            updatedAt: cached.updated_at,
+            etag: cached.etag,
+            sha256: cached.sha256,
+            lastError: cached.last_error,
+            catalog,
+          }),
+        };
+        this.current = result;
+        return result;
+      }
+
       const catalog = this.parseCatalog(JSON.parse(cached.json) as unknown);
       const result: ModelsDevLoadResult = {
         catalog,
@@ -185,6 +206,8 @@ export class ModelsDevService {
       this.current = result;
       return result;
     }
+
+    if (this.current) return this.current;
 
     // No cached row: materialize bundled snapshot into cache.
     const nowIso = new Date().toISOString();

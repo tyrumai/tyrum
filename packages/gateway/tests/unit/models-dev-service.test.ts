@@ -73,4 +73,47 @@ describe("ModelsDevService", () => {
     const loaded = await restarted.ensureLoaded();
     expect(loaded.status.last_error).toContain("models.dev fetch failed");
   });
+
+  it("surfaces latest last_error even when already loaded in-memory", async () => {
+    db = openTestSqliteDb();
+    const cacheDal = new ModelsDevCacheDal(db);
+    const leaseDal = new ModelsDevRefreshLeaseDal(db);
+
+    const catalog = {
+      openai: {
+        id: "openai",
+        name: "OpenAI",
+        env: [],
+        npm: "@ai-sdk/openai",
+        models: {
+          "gpt-4.1": {
+            id: "gpt-4.1",
+            name: "GPT-4.1",
+          },
+        },
+      },
+    };
+
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
+    await cacheDal.upsert({
+      fetchedAt: nowIso,
+      etag: "etag",
+      sha256: "sha",
+      json: JSON.stringify(catalog),
+      source: "remote",
+      lastError: null,
+      nowIso,
+    });
+
+    const svc = new ModelsDevService({ cacheDal, leaseDal });
+    const loaded = await svc.ensureLoaded();
+    expect(loaded.status.last_error).toBeNull();
+
+    const laterIso = new Date(nowMs + 1000).toISOString();
+    await cacheDal.setError({ error: "models.dev down", nowIso: laterIso });
+
+    const reloaded = await svc.ensureLoaded();
+    expect(reloaded.status.last_error).toBe("models.dev down");
+  });
 });

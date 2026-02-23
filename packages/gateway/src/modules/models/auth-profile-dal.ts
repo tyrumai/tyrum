@@ -146,7 +146,14 @@ export class AuthProfileDal {
     const nowIso = new Date(params.nowMs).toISOString();
     return rows
       .map(toRow)
-      .filter((r) => r.expires_at == null || r.expires_at > nowIso);
+      .filter((r) => {
+        if (r.expires_at == null || r.expires_at > nowIso) return true;
+        if (r.type !== "oauth") return false;
+
+        // Allow expired OAuth profiles through if they can be refreshed.
+        const refreshHandleId = r.secret_handles?.["refresh_token_handle"];
+        return typeof refreshHandleId === "string" && refreshHandleId.trim().length > 0;
+      });
   }
 
   async create(input: {
