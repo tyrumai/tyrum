@@ -22,5 +22,12 @@ describe("gateway dev-start stale dist guard", () => {
     expect(bin).not.toContain('from "../dist/index.mjs"');
     expect(bin).toContain("await import");
   });
-});
 
+  it("treats missing @tyrum/schemas dist as stale (gateway dist depends on it at runtime)", async () => {
+    const binPath = resolve(PACKAGE_ROOT, "bin/tyrum.mjs");
+    const bin = await readFile(binPath, "utf-8");
+
+    expect(bin).toContain("schemasDistEntrypoint");
+    expect(bin).toContain("!existsSync(schemasDistEntrypoint)");
+  });
+});

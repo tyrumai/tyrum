@@ -44,10 +44,9 @@ function gatewayBuildIsStale() {
     if (distMtime < srcMtime) return true;
   }
 
-  if (existsSync(schemasDistEntrypoint)) {
-    const schemasMtime = statSync(schemasDistEntrypoint).mtimeMs;
-    if (distMtime < schemasMtime) return true;
-  }
+  if (!existsSync(schemasDistEntrypoint)) return true;
+  const schemasMtime = statSync(schemasDistEntrypoint).mtimeMs;
+  if (distMtime < schemasMtime) return true;
 
   return false;
 }
