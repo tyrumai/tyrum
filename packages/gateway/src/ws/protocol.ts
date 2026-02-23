@@ -933,6 +933,15 @@ export function dispatchTask(
       })
     : undefined;
 
+  const isNodeAuthorizedForDispatch = async (nodeId: string): Promise<boolean> => {
+    if (!deps.nodePairingDal) return false;
+
+    const pairing = await deps.nodePairingDal.getByNodeId(nodeId);
+    if (pairing?.status !== "approved") return false;
+    const allowlist = pairing.capability_allowlist ?? [];
+    return allowlist.some((entry) => entry.id === descriptorId);
+  };
+
   const localCandidates: ConnectedClient[] = [];
   for (const c of deps.connectionManager.allClients()) {
     if (c.protocol_rev >= 2 && c.capabilities.includes(capability)) {
@@ -972,27 +981,24 @@ export function dispatchTask(
         nowMs,
       );
 
-      const eligibleNodes = deps.nodePairingDal
-        ? (
-            await Promise.all(
-              candidates
-                .filter(
-                  (c) =>
-                    c.protocol_rev >= 2 &&
-                    c.role === "node" &&
-                    typeof c.device_id === "string" &&
-                    c.device_id.trim().length > 0,
-                )
-                .map(async (c) => {
-                  const pairing = await deps.nodePairingDal!.getByNodeId(c.device_id!);
-                  if (!nodeDispatchAllowed) return null;
-                  if (pairing?.status !== "approved") return null;
-                  const allowlist = pairing.capability_allowlist ?? [];
-                  return allowlist.some((entry) => entry.id === descriptorId) ? c : null;
-                }),
-            )
-          ).filter((c): c is NonNullable<(typeof candidates)[number]> => c !== null)
-        : [];
+      const eligibleNodes =
+        deps.nodePairingDal && nodeDispatchAllowed
+          ? (
+              await Promise.all(
+                candidates
+                  .filter(
+                    (c) =>
+                      c.protocol_rev >= 2 &&
+                      c.role === "node" &&
+                      typeof c.device_id === "string" &&
+                      c.device_id.trim().length > 0,
+                  )
+                  .map(async (c) => {
+                    return (await isNodeAuthorizedForDispatch(c.device_id!)) ? c : null;
+                  }),
+              )
+            ).filter((c): c is NonNullable<(typeof candidates)[number]> => c !== null)
+          : [];
 
       const eligibleClients = candidates.filter((c) => c.protocol_rev >= 2 && c.role === "client");
       const eligible = [...eligibleNodes, ...eligibleClients];
@@ -1053,16 +1059,11 @@ export function dispatchTask(
         continue;
       }
 
-      const nodeId = c.device_id;
-      if (!nodeId || !deps.nodePairingDal) continue;
-      const pairing = await deps.nodePairingDal.getByNodeId(nodeId);
       if (!nodeDispatchAllowed) continue;
-      if (pairing?.status !== "approved") continue;
-      const allowlist = pairing.capability_allowlist ?? [];
-      if (!allowlist.some((entry) => entry.id === descriptorId)) continue;
-      {
-        eligibleNodes.push(c);
-      }
+      const nodeId = c.device_id;
+      if (!nodeId) continue;
+      if (!(await isNodeAuthorizedForDispatch(nodeId))) continue;
+      eligibleNodes.push(c);
     }
 
     const selected = eligibleNodes[0] ?? eligibleClients[0];
@@ -1078,27 +1079,26 @@ export function dispatchTask(
         nowMs,
       );
 
-      const eligibleNodes2 = deps.nodePairingDal
-        ? (
-            await Promise.all(
-              candidates
-                .filter(
-                  (c) =>
-                    c.protocol_rev >= 2 &&
-                    c.role === "node" &&
-                    typeof c.device_id === "string" &&
-                    c.device_id.trim().length > 0,
-                )
-                .map(async (c) => {
-                  const pairing = await deps.nodePairingDal!.getByNodeId(c.device_id!);
-                  if (!nodeDispatchAllowed) return null;
-                  if (pairing?.status !== "approved") return null;
-                  const allowlist = pairing.capability_allowlist ?? [];
-                  return allowlist.some((entry) => entry.id === descriptorId) ? c : null;
-                }),
+      const eligibleNodes2 =
+        deps.nodePairingDal && nodeDispatchAllowed
+          ? (
+              await Promise.all(
+                candidates
+                  .filter(
+                    (c) =>
+                      c.protocol_rev >= 2 &&
+                      c.role === "node" &&
+                      typeof c.device_id === "string" &&
+                      c.device_id.trim().length > 0,
+                  )
+                  .map(async (c) => {
+                    return (await isNodeAuthorizedForDispatch(c.device_id!)) ? c : null;
+                  }),
+              )
             )
           ).filter((c): c is NonNullable<(typeof candidates)[number]> => c !== null)
         : [];
+
       const eligibleClients2 = candidates.filter((c) => c.protocol_rev >= 2 && c.role === "client");
       const eligible2 = [...eligibleNodes2, ...eligibleClients2];
 
