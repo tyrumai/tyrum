@@ -301,7 +301,7 @@ describe("gateway startup process", () => {
 
         writeFileSync(
           join(tyrumHome, "hooks.yml"),
-          `v: 1\nhooks:\n  - hook_key: ${hookKey}\n    event: gateway.shutdown\n    lane: cron\n    steps:\n      - type: CLI\n        args:\n          cmd: echo\n          args: [\"shutdown hook\"]\n`,
+          `v: 1\nhooks:\n  - hook_key: ${hookKey}\n    event: gateway.shutdown\n    lane: cron\n    steps:\n      - type: CLI\n        args:\n          cmd: echo\n          args: ["shutdown hook"]\n`,
           "utf8",
         );
 
