@@ -309,6 +309,28 @@ describe("Watcher routes + scheduler integration", () => {
     expect(replay.status).toBe(409);
   });
 
+  it("POST /watchers/:id/trigger/webhook rejects nonces containing '.' to avoid signature ambiguity", async () => {
+    const secret = "super-secret";
+    const watcherId = await createWebhookWatcher(secret, 120_000);
+    const payload = "c";
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const nonce = "a.b";
+    const signature = computeWebhookSignature(secret, timestamp, nonce, payload);
+
+    const res = await app.request(`/watchers/${String(watcherId)}/trigger/webhook`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain",
+        [WEBHOOK_SIGNATURE_HEADER]: signature,
+        [WEBHOOK_TIMESTAMP_HEADER]: timestamp,
+        [WEBHOOK_NONCE_HEADER]: nonce,
+      },
+      body: payload,
+    });
+
+    expect(res.status).toBe(401);
+  });
+
   it("POST /watchers/:id/trigger/webhook uses watcher-configured agent_id for secret resolution", async () => {
     const agentA = "agent-a";
     const agentB = "agent-b";

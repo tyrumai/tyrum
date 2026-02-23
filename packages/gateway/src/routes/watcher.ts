@@ -2,11 +2,12 @@
  * Watcher CRUD routes.
  */
 
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { SecretHandle, WorkspaceId } from "@tyrum/schemas";
 import type { SecretHandle as SecretHandleT } from "@tyrum/schemas";
 import { Hono } from "hono";
 import type { SecretProvider } from "../modules/secret/provider.js";
+import { secureStringEqual } from "../utils/secure-string-equal.js";
 import type { WatcherProcessor } from "../modules/watcher/processor.js";
 
 const WEBHOOK_SIGNATURE_HEADER = "x-tyrum-webhook-signature";
@@ -56,6 +57,11 @@ function parseWebhookEnvelope(headers: {
     return null;
   }
   if (!nonce || nonce.length > 256) {
+    return null;
+  }
+  // Disallow '.' and other separators to keep the signed input unambiguous.
+  // Base64url (and UUIDs) fit this constraint.
+  if (!/^[A-Za-z0-9_-]+$/.test(nonce)) {
     return null;
   }
 
@@ -122,15 +128,6 @@ function computeWebhookSignature(
     .update(body)
     .digest("hex");
   return `sha256=${digest}`;
-}
-
-function secureStringEqual(a: string, b: string): boolean {
-  const left = Buffer.from(a);
-  const right = Buffer.from(b);
-  if (left.length !== right.length) {
-    return false;
-  }
-  return timingSafeEqual(left, right);
 }
 
 export function createWatcherRoutes(

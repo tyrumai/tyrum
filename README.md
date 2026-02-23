@@ -127,7 +127,7 @@ Webhook-triggered watchers now accept signed calls at `POST /watchers/:id/trigge
 
 - Headers required on every request:
   - `x-tyrum-webhook-timestamp`: UNIX timestamp in seconds or milliseconds
-  - `x-tyrum-webhook-nonce`: unique nonce per request
+  - `x-tyrum-webhook-nonce`: unique nonce per request (only `A-Z a-z 0-9 _ -`)
   - `x-tyrum-webhook-signature`: `sha256=<hex>`
 - Signature input format:
   - `HMAC_SHA256(secret, "<timestamp>.<nonce>.<raw-body>")`
