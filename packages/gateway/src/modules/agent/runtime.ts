@@ -1463,6 +1463,9 @@ export class AgentRuntime {
     // Ensure concurrent turns don't share a lease owner (lane leases are re-entrant for the same owner).
     const workerId = `${this.executionWorkerId}-${runId}`;
 
+    const startMs = Date.now();
+    const deadlineMs = startMs + this.turnEngineWaitMs;
+
     const executor: StepExecutor = {
       execute: async (action, _planId, _stepIndex, timeoutMs) => {
         if (action.type !== "Decide") {
@@ -1498,8 +1501,6 @@ export class AgentRuntime {
       },
     };
 
-    const startMs = Date.now();
-    const deadlineMs = startMs + this.turnEngineWaitMs;
     let backoffMs = TURN_ENGINE_MIN_BACKOFF_MS;
 
     while (Date.now() < deadlineMs) {
