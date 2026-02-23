@@ -149,9 +149,7 @@ describe("tyrum check", () => {
       .filter(Boolean);
 
     for (const headers of allHeaders) {
-      const asRecord = headers as Record<string, string>;
-      expect(asRecord["authorization"]).toBeUndefined();
-      expect(asRecord["Authorization"]).toBeUndefined();
+      expect(new Headers(headers as any).get("authorization")).toBeNull();
     }
 
     logSpy.mockRestore();

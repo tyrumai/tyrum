@@ -55,7 +55,22 @@ export type { ConnectedClient, ConnectionStats } from "./ws/connection-manager.j
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
+const LOOPBACK_HOSTNAMES = new Set(["localhost"]);
+
+function normalizeHostForLoopbackCheck(host: string): string {
+  const trimmed = host.trim();
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function isLoopbackHost(host: string): boolean {
+  const normalized = normalizeHostForLoopbackCheck(host).toLowerCase();
+  if (LOOPBACK_HOSTNAMES.has(normalized)) return true;
+  if (normalized === "::1" || normalized === "0:0:0:0:0:0:0:1") return true;
+  return normalized.startsWith("127.");
+}
 const UPDATE_CHANNEL_TAG: Record<UpdateChannel, string> = {
   stable: "latest",
   beta: "next",
@@ -464,7 +479,7 @@ async function runGatewayCheck(): Promise<number> {
     // --- Static diagnostics ---
     const host = resolveGatewayHost();
     const portInfo = resolveGatewayPort();
-    const isLocalOnly = LOCAL_HOSTS.has(host);
+    const isLocalOnly = isLoopbackHost(host);
     console.log(
       `static.exposure: host=${host} port=${portInfo.valid ? portInfo.port : `invalid(raw=${portInfo.raw})`} is_exposed=${!isLocalOnly}`,
     );
@@ -539,7 +554,7 @@ async function runGatewayCheck(): Promise<number> {
       const health = await tryFetchJson(`${baseUrl}/healthz`, { timeoutMs: 500 });
       const statusPublic = await tryFetchJson(`${baseUrl}/status`, { timeoutMs: 500 });
 
-      const isLoopbackProbeTarget = LOCAL_HOSTS.has(probeHost);
+      const isLoopbackProbeTarget = isLoopbackHost(probeHost);
       const statusAuth = isLoopbackProbeTarget
         ? await tryFetchJson(`${baseUrl}/status`, {
             timeoutMs: 500,
@@ -649,7 +664,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
 
   const tyrumHome =
     process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
-  const isLocalOnly = LOCAL_HOSTS.has(host);
+  const isLocalOnly = isLoopbackHost(host);
 
   const instanceId = (() => {
     const raw = process.env["TYRUM_INSTANCE_ID"];
