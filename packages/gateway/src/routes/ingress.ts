@@ -92,10 +92,14 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
     const home = deps.home?.trim() || process.env["TYRUM_HOME"]?.trim() || undefined;
     const routing = home ? await loadRoutingConfig(home) : { v: 1 };
     const routedAgentId = c.req.query("agent_id")?.trim() || resolveTelegramAgentId(routing, chatId);
+    const accountId = c.req.query("account_id")?.trim() || undefined;
 
     if (deps.telegramQueue) {
       try {
-        const enqueued = await deps.telegramQueue.enqueue(normalized, { agentId: routedAgentId });
+        const enqueued = await deps.telegramQueue.enqueue(normalized, {
+          agentId: routedAgentId,
+          accountId,
+        });
         return c.json({
           ok: true,
           queued: enqueued.inbox.status === "queued" || enqueued.inbox.status === "processing",

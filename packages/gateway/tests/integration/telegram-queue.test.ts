@@ -213,6 +213,19 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
     expect(enqueued.inbox.key).toBe("agent:agent-c1:telegram:work:channel:456");
   });
 
+  it("isolates dedupe keys per connector account", async () => {
+    db = openTestSqliteDb();
+    const queue = new TelegramChannelQueue(db);
+    const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
+
+    const workAccount = await queue.enqueue(normalized, { accountId: "work" });
+    const personalAccount = await queue.enqueue(normalized, { accountId: "personal" });
+
+    expect(workAccount.deduped).toBe(false);
+    expect(personalAccount.deduped).toBe(false);
+    expect(personalAccount.inbox.inbox_id).not.toBe(workAccount.inbox.inbox_id);
+  });
+
   it("policy-gates outbound sends via approvals when required", async () => {
     db = openTestSqliteDb();
 
