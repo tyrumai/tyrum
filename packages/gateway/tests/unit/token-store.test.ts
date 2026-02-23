@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { TokenStore } from "../../src/modules/auth/token-store.js";
@@ -319,6 +319,30 @@ describe("TokenStore", () => {
     await reloaded.initialize();
     expect(reloaded.authenticate(token1.token)).toBeNull();
     expect(reloaded.authenticate(token2.token)).toBeNull();
+  });
+
+  it("loads revoked device token ids from backup when the revocations file is missing", async () => {
+    const store = new TokenStore(tempDir);
+    const adminToken = await store.initialize();
+
+    const issued = await store.issueDeviceToken({
+      deviceId: "dev_client_backup_1",
+      role: "client",
+      scopes: ["operator.read"],
+      ttlSeconds: 300,
+    });
+    await expect(store.revokeDeviceToken(issued.token)).resolves.toBe(true);
+
+    const revocationPath = join(tempDir, ".device-token-revocations.json");
+    await rename(revocationPath, `${revocationPath}.bak`);
+    await expect(readFile(revocationPath, "utf-8")).rejects.toMatchObject({ code: "ENOENT" });
+
+    const reloaded = new TokenStore(tempDir);
+    await expect(reloaded.initialize()).resolves.toBe(adminToken);
+    await expect(readFile(revocationPath, "utf-8")).resolves.toBeTruthy();
+    await expect(readFile(`${revocationPath}.bak`, "utf-8")).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(join(tempDir, ".admin-token"), "utf-8")).resolves.toContain(adminToken);
+    expect(reloaded.authenticate(issued.token)).toBeNull();
   });
 
   it("rejects expired device tokens", async () => {

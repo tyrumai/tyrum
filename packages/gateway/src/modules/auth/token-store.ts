@@ -142,16 +142,17 @@ export class TokenStore {
 
     // 2. Try reading from file
     const tokenPath = join(this.tyrumHome, TOKEN_FILENAME);
+    let fileContent: string | undefined;
     try {
-      const fileContent = await readFile(tokenPath, "utf-8");
-      const trimmed = fileContent.trim();
-      if (trimmed) {
-        this.token = trimmed;
-        await this.loadRevokedDeviceTokenIds();
-        return this.token;
-      }
+      fileContent = await readFile(tokenPath, "utf-8");
     } catch {
       // File doesn't exist or is unreadable — fall through to generation.
+    }
+    const trimmed = fileContent?.trim();
+    if (trimmed) {
+      this.token = trimmed;
+      await this.loadRevokedDeviceTokenIds();
+      return this.token;
     }
 
     // 3. Generate a new token and persist it
@@ -387,8 +388,9 @@ export class TokenStore {
           }
           throw backupErr;
         }
+      } else {
+        throw err;
       }
-      throw err;
     }
 
     let parsed: unknown;
