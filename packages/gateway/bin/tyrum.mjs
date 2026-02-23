@@ -81,6 +81,7 @@ function ensureWorkspaceBuild() {
     if (isMissingPnpm) {
       const fallback = tryBuild("corepack", ["pnpm", ...args]);
       if (fallback.status === 0) continue;
+      process.exit(fallback.status ?? 1);
     }
 
     process.exit(result.status ?? 1);
