@@ -65,7 +65,7 @@ export function createContractRoutes(): Hono {
       }
 
       return c.json(parsed);
-    } catch (err) {
+    } catch {
       return c.json(
         {
           error: "contracts_unavailable",
