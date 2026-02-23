@@ -613,9 +613,11 @@ export class TelegramChannelProcessor {
         return;
       }
 
+      const planSource =
+        accountId === DEFAULT_CHANNEL_ACCOUNT_ID ? connectorId : `${connectorId}@${accountId}`;
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
       const approval = await this.approvalDal.create({
-        planId: `connector:${leader.source}:${leader.thread_id}:${leader.message_id}`,
+        planId: `connector:${planSource}:${leader.thread_id}:${leader.message_id}`,
         stepIndex: 0,
         kind: "connector.send",
         agentId,

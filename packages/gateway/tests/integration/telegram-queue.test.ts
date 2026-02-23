@@ -405,6 +405,77 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
     expect(fetchFn).not.toHaveBeenCalled();
   });
 
+  it("formats connector approval plan ids without extra colons for account-scoped sources", async () => {
+    db = openTestSqliteDb();
+
+    process.env["TYRUM_TELEGRAM_ACCOUNT_ID"] = "work";
+
+    const tmp = await mkdtemp(join(tmpdir(), "tyrum-policy-"));
+    try {
+      const bundlePath = join(tmp, "policy.yml");
+      await writeFile(
+        bundlePath,
+        [
+          "v: 1",
+          "connectors:",
+          "  default: require_approval",
+          "  allow: []",
+          "  require_approval:",
+          "    - \"telegram:*\"",
+          "  deny: []",
+          "",
+        ].join("\n"),
+        "utf-8",
+      );
+      process.env["TYRUM_POLICY_BUNDLE_PATH"] = bundlePath;
+
+      const fetchFn = mockFetch();
+      const bot = new TelegramBot("test-token", fetchFn);
+
+      const mockRuntime = {
+        turn: vi.fn().mockResolvedValue({
+          reply: "This requires approval",
+          session_id: "session-abc",
+          used_tools: [],
+          memory_written: false,
+        }),
+      };
+
+      const approvalDal = new ApprovalDal(db);
+      const policyService = new PolicyService({
+        home: tmp,
+        snapshotDal: new PolicySnapshotDal(db),
+        overrideDal: new PolicyOverrideDal(db),
+      });
+
+      const queue = new TelegramChannelQueue(db);
+      const processor = new TelegramChannelProcessor({
+        db,
+        agents: {
+          getRuntime: async () => mockRuntime,
+          getPolicyService: () => policyService,
+        } as unknown as AgentRegistry,
+        telegramBot: bot,
+        owner: "test-owner",
+        debounceMs: 0,
+        maxBatch: 1,
+        approvalDal,
+        approvalNotifier: { notify: () => {} },
+      });
+
+      const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
+      await queue.enqueue(normalized);
+
+      await processor.tick();
+
+      const pending = await approvalDal.getPending();
+      expect(pending).toHaveLength(1);
+      expect(pending[0]!.plan_id).toBe("connector:telegram@work:123:42");
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
   it("policy-gates outbound sends via approvals when required", async () => {
     db = openTestSqliteDb();
 
