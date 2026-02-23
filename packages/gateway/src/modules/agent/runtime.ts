@@ -890,12 +890,15 @@ export class AgentRuntime {
         if (typeof raw === "string" && raw.trim().length > 0) {
           return raw.trim();
         }
+        const endpointKey = (chosen.provider.env ?? []).find((key) => /(ENDPOINT|BASE_URL|BASEURL|URL)$/i.test(key));
+        const endpoint = endpointKey ? process.env[endpointKey]?.trim() : undefined;
+        if (endpoint && endpoint.length > 0) {
+          return endpoint;
+        }
         if (typeof chosen.api === "string" && chosen.api.trim().length > 0) {
           return chosen.api.trim();
         }
-        const endpointKey = (chosen.provider.env ?? []).find((key) => /(ENDPOINT|BASE_URL|BASEURL|URL)$/i.test(key));
-        const endpoint = endpointKey ? process.env[endpointKey]?.trim() : undefined;
-        return endpoint && endpoint.length > 0 ? endpoint : undefined;
+        return undefined;
       })();
 
       const envApiKey = resolveEnvApiKey(chosen.provider.env);
@@ -1347,7 +1350,8 @@ export class AgentRuntime {
 
           const endpointKey = (candidate.provider.env ?? []).find((key) => /(ENDPOINT|BASE_URL|BASEURL|URL)$/i.test(key));
           const endpoint = endpointKey ? process.env[endpointKey]?.trim() : undefined;
-          const baseURL = endpoint && endpoint.length > 0 ? endpoint : candidate.api;
+          const api = candidate.api?.trim();
+          const baseURL = endpoint && endpoint.length > 0 ? endpoint : api && api.length > 0 ? api : undefined;
 
           const sdk = createProviderFromNpm({
             npm: candidate.npm,
