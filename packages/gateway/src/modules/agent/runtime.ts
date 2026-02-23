@@ -1478,7 +1478,8 @@ export class AgentRuntime {
         }
 
         const remainingMs = Math.max(1, deadlineMs - Date.now());
-        const requestedTimeoutMs = Math.max(1, Math.floor(timeoutMs));
+        const normalizedTimeoutMs = Number.isFinite(timeoutMs) ? timeoutMs : remainingMs;
+        const requestedTimeoutMs = Math.max(1, Math.floor(normalizedTimeoutMs));
         const effectiveTimeoutMs = Math.min(requestedTimeoutMs, remainingMs);
 
         const controller = new AbortController();

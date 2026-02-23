@@ -527,6 +527,125 @@ describe("AgentRuntime", () => {
     expect(aborted).toBe(true);
   });
 
+  it("does not abort turns immediately when execution step timeouts are non-finite", async () => {
+    let aborted = false;
+
+    const model: LanguageModelV3 = {
+      specificationVersion: "v3",
+      provider: "test",
+      modelId: "nan-timeout",
+      supportedUrls: {},
+
+      async doStream(_options: LanguageModelV3CallOptions): Promise<LanguageModelV3StreamResult> {
+        return {
+          stream: simulateReadableStream({
+            chunks: [
+              { type: "text-start" as const, id: "text-1" },
+              { type: "text-delta" as const, id: "text-1", delta: "ok" },
+              { type: "text-end" as const, id: "text-1" },
+              {
+                type: "finish" as const,
+                finishReason: { unified: "stop" as const, raw: undefined },
+                logprobs: undefined,
+                usage: {
+                  inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
+                  outputTokens: { total: 1, text: 1, reasoning: undefined },
+                },
+              },
+            ],
+          }),
+          warnings: [],
+        };
+      },
+
+      async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
+        if (options.abortSignal?.aborted) {
+          aborted = true;
+          throw new Error("timed out");
+        }
+
+        return await new Promise<LanguageModelV3GenerateResult>((resolve, reject) => {
+          const timer = setTimeout(() => {
+            resolve({
+              content: [{ type: "text" as const, text: "ok" }],
+              finishReason: { unified: "stop" as const, raw: undefined },
+              usage: {
+                inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
+                outputTokens: { total: 1, text: 1, reasoning: undefined },
+              },
+              warnings: [],
+            });
+          }, 50);
+
+          options.abortSignal?.addEventListener(
+            "abort",
+            () => {
+              aborted = true;
+              clearTimeout(timer);
+              reject(new Error("timed out"));
+            },
+            { once: true },
+          );
+        });
+      },
+    };
+
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: model,
+      fetchImpl: fetch404,
+      turnEngineWaitMs: 500,
+    } as ConstructorParameters<typeof AgentRuntime>[0]);
+
+    const engine = (runtime as unknown as { executionEngine: ExecutionEngine }).executionEngine;
+    const engineAny = engine as unknown as Record<string, unknown>;
+
+    const originalEnqueuePlan = engine.enqueuePlan.bind(engine);
+    engine.enqueuePlan = async (input) => {
+      const res = await originalEnqueuePlan(input);
+      await container!.db.run(
+        "UPDATE execution_steps SET max_attempts = 1 WHERE run_id = ?",
+        [res.runId],
+      );
+      return res;
+    };
+
+    const originalExecuteWithTimeout =
+      engineAny["executeWithTimeout"] as
+        | ((...args: unknown[]) => Promise<unknown>)
+        | undefined;
+    if (typeof originalExecuteWithTimeout !== "function") {
+      throw new Error("expected ExecutionEngine.executeWithTimeout to exist");
+    }
+
+    engineAny["executeWithTimeout"] = async (...args: unknown[]) => {
+      // Force the inline executor to see a non-finite timeout value.
+      return await originalExecuteWithTimeout.apply(engine, [
+        args[0],
+        args[1],
+        args[2],
+        args[3],
+        Number.NaN,
+      ]);
+    };
+
+    const res = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      message: "hello",
+    });
+
+    expect(res.reply).toBe("ok");
+    expect(aborted).toBe(false);
+  });
+
   it("does not time out after a run succeeds on the last engine tick", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({
