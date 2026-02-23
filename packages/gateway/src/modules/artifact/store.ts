@@ -1,8 +1,9 @@
 import type { ArtifactKind, ArtifactRef as ArtifactRefT } from "@tyrum/schemas";
 import { randomUUID, createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
@@ -30,6 +31,7 @@ export interface ArtifactGetResult {
 export interface ArtifactStore {
   put(input: ArtifactPutInput): Promise<ArtifactRefT>;
   get(artifactId: string): Promise<ArtifactGetResult | null>;
+  delete(artifactId: string): Promise<void>;
   getSignedUrl?: (
     artifactId: string,
     opts?: { expiresInSeconds?: number },
@@ -147,6 +149,20 @@ export class FsArtifactStore implements ArtifactStore {
       const code = err && typeof err === "object" ? (err as { code?: string }).code : undefined;
       if (code === "ENOENT") return null;
       throw err;
+    }
+  }
+
+  async delete(artifactId: string): Promise<void> {
+    const { dataPath, metaPath } = this.paths(artifactId);
+    const results = await Promise.allSettled([unlink(dataPath), unlink(metaPath)]);
+    for (const res of results) {
+      if (res.status === "fulfilled") continue;
+      const code =
+        res.reason && typeof res.reason === "object"
+          ? (res.reason as { code?: string }).code
+          : undefined;
+      if (code === "ENOENT") continue;
+      throw res.reason;
     }
   }
 }
@@ -421,6 +437,49 @@ export class S3ArtifactStore implements ArtifactStore {
     } catch (err) {
       if (isNoSuchKey(err)) return null;
       throw err;
+    }
+  }
+
+  async delete(artifactId: string): Promise<void> {
+    await this.ensureBucketOnce();
+
+    const manifestKey = this.manifestKeyFor(artifactId);
+    const keys = new Set<string>([
+      manifestKey,
+      this.legacyKeyFor(artifactId, ".bin"),
+      this.legacyKeyFor(artifactId, ".json"),
+    ]);
+
+    // Best-effort: include the blob key if we can read the manifest.
+    try {
+      const manifestRes = await this.client.send(
+        new GetObjectCommand({
+          Bucket: this.bucket,
+          Key: manifestKey,
+        }),
+      );
+
+      const manifestBuf = await bodyToBuffer(manifestRes.Body);
+      const candidate = JSON.parse(manifestBuf.toString("utf8")) as unknown;
+      const maybe = candidate as Partial<ArtifactManifestV1> | null;
+      if (maybe && maybe.v === 1 && typeof maybe.blob_key === "string") {
+        keys.add(maybe.blob_key);
+      }
+    } catch (err) {
+      if (!isNoSuchKey(err)) throw err;
+    }
+
+    for (const key of keys) {
+      try {
+        await this.client.send(
+          new DeleteObjectCommand({
+            Bucket: this.bucket,
+            Key: key,
+          }),
+        );
+      } catch (err) {
+        if (!isNoSuchKey(err)) throw err;
+      }
     }
   }
 }

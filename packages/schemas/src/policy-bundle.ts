@@ -8,6 +8,62 @@ import { Sha256Hex } from "./artifact.js";
 // PolicyBundle (versioned, declarative)
 // ---------------------------------------------------------------------------
 
+export const ArtifactSensitivity = z.enum(["normal", "sensitive"]);
+export type ArtifactSensitivity = z.infer<typeof ArtifactSensitivity>;
+
+const ArtifactSensitivityNumberMap = z
+  .object({
+    normal: z.number().int().positive().optional(),
+    sensitive: z.number().int().positive().optional(),
+  })
+  .strict();
+
+const ArtifactRetentionPolicy = z
+  .object({
+    /**
+     * Default retention applied when no more-specific rule matches.
+     */
+    default_days: z.number().int().positive().optional(),
+    /**
+     * Retention by label (examples: `log`, `screenshot`, `http_trace`).
+     */
+    by_label: z.record(z.string(), z.number().int().positive()).optional(),
+    /**
+     * Retention by sensitivity class.
+     */
+    by_sensitivity: ArtifactSensitivityNumberMap.optional(),
+    /**
+     * Retention by label + sensitivity class.
+     */
+    by_label_sensitivity: z.record(z.string(), ArtifactSensitivityNumberMap).optional(),
+  })
+  .strict();
+
+const ArtifactQuotaPolicy = z
+  .object({
+    /**
+     * Default quota applied when no more-specific rule matches.
+     * Units are bytes.
+     */
+    default_max_bytes: z.number().int().positive().optional(),
+    /**
+     * Quota by label (examples: `log`, `screenshot`, `http_trace`).
+     * Units are bytes.
+     */
+    by_label: z.record(z.string(), z.number().int().positive()).optional(),
+    /**
+     * Quota by sensitivity class.
+     * Units are bytes.
+     */
+    by_sensitivity: ArtifactSensitivityNumberMap.optional(),
+    /**
+     * Quota by label + sensitivity class.
+     * Units are bytes.
+     */
+    by_label_sensitivity: z.record(z.string(), ArtifactSensitivityNumberMap).optional(),
+  })
+  .strict();
+
 export const PolicyBundleV1 = z
   .object({
     v: z.literal(1),
@@ -57,6 +113,8 @@ export const PolicyBundleV1 = z
         default: Decision.default("allow"),
         retention_days: z.number().int().positive().optional(),
         max_bytes: z.number().int().positive().optional(),
+        retention: ArtifactRetentionPolicy.optional(),
+        quota: ArtifactQuotaPolicy.optional(),
       })
       .strict()
       .optional(),
