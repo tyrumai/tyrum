@@ -2,12 +2,12 @@
  * Ingress routes — Telegram webhook normalization + agent flow.
  */
 
-import { timingSafeEqual } from "node:crypto";
 import { Hono } from "hono";
 import {
   normalizeUpdate,
   TelegramNormalizationError,
 } from "../modules/ingress/telegram.js";
+import { secureStringEqual } from "../utils/secure-string-equal.js";
 import type { TelegramBot } from "../modules/ingress/telegram-bot.js";
 import type { AgentRegistry } from "../modules/agent/registry.js";
 import type { TelegramChannelQueue } from "../modules/channels/telegram.js";
@@ -22,15 +22,6 @@ export interface IngressDeps {
 }
 
 const TELEGRAM_SECRET_HEADER = "x-telegram-bot-api-secret-token";
-
-function secureStringEqual(a: string, b: string): boolean {
-  const left = Buffer.from(a);
-  const right = Buffer.from(b);
-  if (left.length !== right.length) {
-    return false;
-  }
-  return timingSafeEqual(left, right);
-}
 
 export function createIngressRoutes(deps: IngressDeps = {}): Hono {
   const ingressRouter = new Hono();

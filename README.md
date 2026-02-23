@@ -121,6 +121,23 @@ Follow these steps to provision the Telegram channel safely across local and sta
 ### 3. Wire credentials
 - Set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_URL`, and `TELEGRAM_WEBHOOK_SECRET` environment variables before starting the gateway.
 
+## Signed Webhook Watcher Trigger
+
+Webhook-triggered watchers now accept signed calls at `POST /watchers/:id/trigger/webhook`.
+
+- Headers required on every request:
+  - `x-tyrum-webhook-timestamp`: UNIX timestamp in seconds or milliseconds
+  - `x-tyrum-webhook-nonce`: unique nonce per request (only `A-Z a-z 0-9 _ -`)
+  - `x-tyrum-webhook-signature`: `sha256=<hex>`
+- Signature input format:
+  - `HMAC_SHA256(secret, "<timestamp>.<nonce>.<raw-body>")`
+- Replay safety:
+  - Timestamp must fall within the configured replay window (`trigger_config.max_skew_ms`, default 5 minutes).
+  - Reusing the same nonce is rejected with `409 replay_detected` (even if timestamp units differ).
+- Secret source:
+  - Use secret handles from `/secrets` and store the handle in watcher `trigger_config.secret_handle`.
+  - Optionally set watcher `trigger_config.agent_id` to choose which agent/workspace secret store resolves the handle (default: `default`).
+
 ## Key Documents
 - [Architecture Overview](docs/architecture/index.md)
 - [Install Guide](docs/install.md)

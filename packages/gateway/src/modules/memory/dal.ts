@@ -180,6 +180,33 @@ export class MemoryDal {
 
   // --- Episodic Events ---
 
+  async insertEpisodicEventIfAbsent(
+    eventId: string,
+    occurredAt: string,
+    channel: string,
+    eventType: string,
+    payload: unknown,
+    agentId?: string,
+  ): Promise<boolean> {
+    const nowIso = new Date().toISOString();
+    const inserted = await this.db.get<{ id: number }>(
+      `INSERT INTO episodic_events (agent_id, event_id, occurred_at, channel, event_type, payload, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(event_id) DO NOTHING
+       RETURNING id`,
+      [
+        this.normalizeAgentId(agentId),
+        eventId,
+        occurredAt,
+        channel,
+        eventType,
+        JSON.stringify(payload),
+        nowIso,
+      ],
+    );
+    return Boolean(inserted);
+  }
+
   async insertEpisodicEvent(
     eventId: string,
     occurredAt: string,

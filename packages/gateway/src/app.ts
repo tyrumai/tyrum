@@ -259,7 +259,12 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
         : undefined,
     }),
   );
-  app.route("/", createWatcherRoutes(container.watcherProcessor));
+  app.route(
+    "/",
+    createWatcherRoutes(container.watcherProcessor, {
+      secretProviderForAgent,
+    }),
+  );
   app.route("/", createCanvasRoutes(container.canvasDal));
   app.route("/", createAuditRoutes({ db: container.db, eventLog: container.eventLog }));
   app.route("/", createSnapshotRoutes({ db: container.db, version: runtime.version }));

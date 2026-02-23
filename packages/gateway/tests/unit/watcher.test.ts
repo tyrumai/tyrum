@@ -72,4 +72,80 @@ describe("WatcherProcessor", () => {
 
     processor.stop();
   });
+
+  it("records webhook triggers and rejects replayed nonce+timestamp envelopes", async () => {
+    const id = await processor.createWatcher("plan-1", "webhook", {
+      secret_handle: {
+        handle_id: "secret-handle",
+        provider: "file",
+        scope: "watcher:webhook:test",
+        created_at: new Date().toISOString(),
+      },
+    });
+    const watcher = await processor.getActiveWatcherById(id);
+    expect(watcher).not.toBeNull();
+    const timestampMs = Date.now();
+
+    const first = await processor.recordWebhookTrigger(watcher!, {
+      timestampMs,
+      nonce: "nonce-1",
+      bodySha256: "abc123",
+      bodyBytes: 11,
+    });
+    expect(first).toBe(true);
+
+    const replay = await processor.recordWebhookTrigger(watcher!, {
+      timestampMs,
+      nonce: "nonce-1",
+      bodySha256: "abc123",
+      bodyBytes: 11,
+    });
+    expect(replay).toBe(false);
+
+    const events = await memoryDal.getEpisodicEvents();
+    expect(events.filter((event) => event.event_type === "webhook_fired")).toHaveLength(1);
+  });
+
+  it("rejects webhook nonce replays even when timestamp differs", async () => {
+    const id = await processor.createWatcher("plan-1", "webhook", {
+      secret_handle: {
+        handle_id: "secret-handle",
+        provider: "file",
+        scope: "watcher:webhook:test",
+        created_at: new Date().toISOString(),
+      },
+    });
+    const watcher = await processor.getActiveWatcherById(id);
+    expect(watcher).not.toBeNull();
+
+    const first = await processor.recordWebhookTrigger(watcher!, {
+      timestampMs: Date.now(),
+      nonce: "nonce-3",
+      bodySha256: "abc123",
+      bodyBytes: 11,
+    });
+    expect(first).toBe(true);
+
+    const replay = await processor.recordWebhookTrigger(watcher!, {
+      timestampMs: Date.now() + 5,
+      nonce: "nonce-3",
+      bodySha256: "abc123",
+      bodyBytes: 11,
+    });
+    expect(replay).toBe(false);
+  });
+
+  it("does not record webhook trigger events for non-webhook watchers", async () => {
+    const id = await processor.createWatcher("plan-1", "plan_complete", { planId: "plan-1" });
+    const watcher = await processor.getActiveWatcherById(id);
+    expect(watcher).not.toBeNull();
+
+    const recorded = await processor.recordWebhookTrigger(watcher!, {
+      timestampMs: Date.now(),
+      nonce: "nonce-2",
+      bodySha256: "def456",
+      bodyBytes: 22,
+    });
+    expect(recorded).toBe(false);
+  });
 });
