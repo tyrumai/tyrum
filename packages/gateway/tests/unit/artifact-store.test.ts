@@ -433,4 +433,42 @@ describe("ArtifactStore", () => {
       expiresInSeconds: 42,
     });
   });
+
+  it("s3 store: getSignedUrl propagates presign errors in legacy mode without retrying", async () => {
+    const artifactId = "550e8400-e29b-41d4-a716-446655440000";
+    const manifestKey = "artifacts/manifests/55/550e8400-e29b-41d4-a716-446655440000.json";
+    const legacyKey = "artifacts/55/550e8400-e29b-41d4-a716-446655440000.bin";
+
+    const send = vi.fn(async (cmd: unknown) => {
+      if (cmd instanceof GetObjectCommand) {
+        const key = cmd.input.Key ?? "";
+        if (key === manifestKey) {
+          const err = Object.assign(new Error("not found"), { name: "NoSuchKey" });
+          throw err;
+        }
+      }
+
+      if (cmd instanceof HeadObjectCommand) {
+        const key = cmd.input.Key ?? "";
+        if (key === legacyKey) return {};
+      }
+
+      throw new Error("unexpected command");
+    });
+
+    const presignGetObject = vi.fn(async () => {
+      throw new Error("presign-failed");
+    });
+
+    const store = new S3ArtifactStore(
+      { send } as unknown as import("@aws-sdk/client-s3").S3Client,
+      "bucket",
+      "artifacts",
+      undefined,
+      presignGetObject,
+    );
+
+    await expect(store.getSignedUrl(artifactId)).rejects.toThrow("presign-failed");
+    expect(presignGetObject).toHaveBeenCalledTimes(1);
+  });
 });

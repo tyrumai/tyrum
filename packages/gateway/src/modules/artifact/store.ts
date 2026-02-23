@@ -302,21 +302,16 @@ export class S3ArtifactStore implements ArtifactStore {
           Key: legacyKey,
         }),
       );
-
-      return await this.presignGetObject({
-        bucket: this.bucket,
-        key: legacyKey,
-        expiresInSeconds,
-      });
     } catch (err) {
       if (isNoSuchKey(err)) return null;
       // Best-effort: some S3-compatible deployments block HEAD while allowing GET.
-      return await this.presignGetObject({
-        bucket: this.bucket,
-        key: legacyKey,
-        expiresInSeconds,
-      });
     }
+
+    return await this.presignGetObject({
+      bucket: this.bucket,
+      key: legacyKey,
+      expiresInSeconds,
+    });
   }
 
   async put(input: ArtifactPutInput): Promise<ArtifactRefT> {
