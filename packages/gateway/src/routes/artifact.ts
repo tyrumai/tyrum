@@ -162,6 +162,33 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
   const app = new Hono();
 
   app.get("/artifacts/:id/metadata", async (c) => {
+    return c.json(
+      {
+        error: "invalid_request",
+        message:
+          "artifact fetch APIs must be scope-bound; use GET /runs/:runId/artifacts/:id/metadata",
+      },
+      400,
+    );
+  });
+
+  app.get("/artifacts/:id", async (c) => {
+    return c.json(
+      {
+        error: "invalid_request",
+        message:
+          "artifact fetch APIs must be scope-bound; use GET /runs/:runId/artifacts/:id",
+      },
+      400,
+    );
+  });
+
+  app.get("/runs/:runId/artifacts/:id/metadata", async (c) => {
+    const runId = c.req.param("runId")?.trim();
+    if (!runId) {
+      return c.json({ error: "invalid_request", message: "invalid run id" }, 400);
+    }
+
     const artifactId = c.req.param("id");
     const parsedId = ArtifactId.safeParse(artifactId);
     if (!parsedId.success) {
@@ -182,6 +209,15 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
         {
           error: "forbidden",
           message: "artifact access denied: durable execution scope linkage is required",
+        },
+        403,
+      );
+    }
+    if (durableScope.run_id !== runId) {
+      return c.json(
+        {
+          error: "forbidden",
+          message: "artifact access denied: requested run scope does not match artifact linkage",
         },
         403,
       );
@@ -226,7 +262,12 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
     );
   });
 
-  app.get("/artifacts/:id", async (c) => {
+  app.get("/runs/:runId/artifacts/:id", async (c) => {
+    const runId = c.req.param("runId")?.trim();
+    if (!runId) {
+      return c.json({ error: "invalid_request", message: "invalid run id" }, 400);
+    }
+
     const artifactId = c.req.param("id");
     const parsedId = ArtifactId.safeParse(artifactId);
     if (!parsedId.success) {
@@ -247,6 +288,15 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
         {
           error: "forbidden",
           message: "artifact access denied: durable execution scope linkage is required",
+        },
+        403,
+      );
+    }
+    if (durableScope.run_id !== runId) {
+      return c.json(
+        {
+          error: "forbidden",
+          message: "artifact access denied: requested run scope does not match artifact linkage",
         },
         403,
       );
