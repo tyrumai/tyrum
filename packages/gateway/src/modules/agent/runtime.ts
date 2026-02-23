@@ -1528,6 +1528,7 @@ export class AgentRuntime {
       await this.executionEngine.workerTick({
         workerId: this.executionWorkerId,
         executor,
+        runId,
       });
     }
 

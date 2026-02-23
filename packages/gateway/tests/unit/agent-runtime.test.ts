@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
+import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { createStubLanguageModel } from "./stub-language-model.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -197,6 +198,59 @@ describe("AgentRuntime", () => {
     expect(attempt).toBeTruthy();
     const attemptResult = JSON.parse(attempt!.result_json ?? "{}") as { reply?: string };
     expect(attemptResult.reply).toBe("hello");
+  });
+
+  it("does not execute other agents' queued runs when ticking inline", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const engine = new ExecutionEngine({ db: container.db });
+    const queued = await engine.enqueuePlan({
+      key: "agent:agent-b:test:channel:thread-b",
+      lane: "main",
+      planId: "test-plan-b",
+      requestId: "req-b",
+      steps: [
+        {
+          type: "Decide",
+          args: { channel: "test", thread_id: "thread-b", message: "hello b" },
+        },
+      ],
+    });
+
+    // Ensure this run sorts ahead of the new run enqueued by runtime.turn().
+    await container.db.run(
+      "UPDATE execution_runs SET created_at = '2000-01-01 00:00:00' WHERE run_id = ?",
+      [queued.runId],
+    );
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      agentId: "agent-a",
+      workspaceId: "agent-a",
+      languageModel: createStubLanguageModel("from a"),
+      fetchImpl: fetch404,
+    });
+
+    const result = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-a",
+      message: "hello a",
+    });
+
+    expect(result.reply).toBe("from a");
+
+    const other = await container.db.get<{ status: string }>(
+      "SELECT status FROM execution_runs WHERE run_id = ?",
+      [queued.runId],
+    );
+
+    expect(other).toBeTruthy();
+    expect(other!.status).toBe("queued");
   });
 
   it("scopes session cleanup to the current agentId", async () => {

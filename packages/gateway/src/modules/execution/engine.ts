@@ -66,6 +66,8 @@ export interface EnqueuePlanResult {
 export interface WorkerTickInput {
   workerId: string;
   executor: StepExecutor;
+  /** When set, only this run_id will be considered for execution. */
+  runId?: string;
 }
 
 export interface ExecutionConcurrencyLimits {
@@ -825,6 +827,11 @@ export class ExecutionEngine {
   async workerTick(input: WorkerTickInput): Promise<boolean> {
     const { nowMs, nowIso } = this.clock();
 
+    const runIdFilter = input.runId?.trim();
+    const whereRunId = runIdFilter ? " AND r.run_id = ?" : "";
+    const params = runIdFilter ? [runIdFilter] : [];
+    const limit = runIdFilter ? 1 : 10;
+
     const candidates = await this.db.all<RunnableRunRow>(
       `SELECT
          r.run_id,
@@ -842,10 +849,12 @@ export class ExecutionEngine {
            SELECT 1 FROM execution_runs p
            WHERE p.key = r.key AND p.lane = r.lane AND p.status = 'paused'
          )
+         ${whereRunId}
        ORDER BY
          CASE r.status WHEN 'running' THEN 0 ELSE 1 END,
          r.created_at ASC
-       LIMIT 10`,
+       LIMIT ${String(limit)}`,
+      params,
     );
 
     for (const run of candidates) {
