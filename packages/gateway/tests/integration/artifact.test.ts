@@ -5,6 +5,43 @@ import { tmpdir } from "node:os";
 import { createApp } from "../../src/app.js";
 import { createTestContainer } from "./helpers.js";
 
+type SqlRunner = {
+  run(sql: string, params?: unknown[]): Promise<unknown>;
+};
+
+type ExecutionScopeIds = {
+  jobId: string;
+  runId: string;
+  stepId: string;
+  attemptId: string;
+};
+
+async function seedExecutionScope(db: SqlRunner, ids: ExecutionScopeIds): Promise<void> {
+  await db.run(
+    `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json, input_json, latest_run_id)
+     VALUES (?, ?, ?, 'running', ?, ?, ?)`,
+    [ids.jobId, "agent:agent-1:thread:thread-1", "main", "{}", "{}", ids.runId],
+  );
+
+  await db.run(
+    `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
+     VALUES (?, ?, ?, ?, 'running', 1)`,
+    [ids.runId, ids.jobId, "agent:agent-1:thread:thread-1", "main"],
+  );
+
+  await db.run(
+    `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
+     VALUES (?, ?, 0, 'running', ?)`,
+    [ids.stepId, ids.runId, "{}"],
+  );
+
+  await db.run(
+    `INSERT INTO execution_attempts (attempt_id, step_id, attempt, status, artifacts_json)
+     VALUES (?, ?, 1, 'running', '[]')`,
+    [ids.attemptId, ids.stepId],
+  );
+}
+
 describe("artifact routes", () => {
   let originalTyrumHome: string | undefined;
   let homeDir: string | undefined;
@@ -29,6 +66,79 @@ describe("artifact routes", () => {
   });
 
   it("GET /artifacts/:id streams bytes for stored artifacts with metadata", async () => {
+    const container = await createTestContainer();
+    const app = createApp(container);
+    const scope: ExecutionScopeIds = {
+      jobId: "job-artifacts-1",
+      runId: "run-artifacts-1",
+      stepId: "step-artifacts-1",
+      attemptId: "attempt-artifacts-1",
+    };
+    await seedExecutionScope(container.db, scope);
+
+    const ref = await container.artifactStore.put({
+      kind: "log",
+      mime_type: "text/plain",
+      body: Buffer.from("hello", "utf8"),
+      labels: ["log"],
+      metadata: { test: true },
+    });
+
+    await container.db.run(
+      `INSERT INTO execution_artifacts (
+         artifact_id,
+         workspace_id,
+         agent_id,
+         run_id,
+         step_id,
+         attempt_id,
+         kind,
+         uri,
+         created_at,
+         mime_type,
+         size_bytes,
+         sha256,
+         labels_json,
+         metadata_json,
+         sensitivity,
+         policy_snapshot_id
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        ref.artifact_id,
+        "default",
+        "agent-1",
+        scope.runId,
+        scope.stepId,
+        scope.attemptId,
+        ref.kind,
+        ref.uri,
+        ref.created_at,
+        ref.mime_type ?? null,
+        ref.size_bytes ?? null,
+        ref.sha256 ?? null,
+        JSON.stringify(ref.labels ?? []),
+        JSON.stringify(ref.metadata ?? {}),
+        "normal",
+        null,
+      ],
+    );
+
+    const metaRes = await app.request(`/artifacts/${ref.artifact_id}/metadata`);
+    expect(metaRes.status).toBe(200);
+    const metaBody = (await metaRes.json()) as { artifact: { uri: string; kind: string } };
+    expect(metaBody.artifact.uri).toBe(ref.uri);
+    expect(metaBody.artifact.kind).toBe(ref.kind);
+
+    const res = await app.request(`/artifacts/${ref.artifact_id}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("text/plain");
+    expect(await res.text()).toBe("hello");
+
+    await container.db.close();
+  });
+
+  it("GET /artifacts/:id denies unlinked artifacts that lack durable execution scope", async () => {
     const container = await createTestContainer();
     const app = createApp(container);
 
@@ -81,17 +191,86 @@ describe("artifact routes", () => {
     );
 
     const metaRes = await app.request(`/artifacts/${ref.artifact_id}/metadata`);
-    expect(metaRes.status).toBe(200);
-    const metaBody = (await metaRes.json()) as { artifact: { uri: string; kind: string } };
-    expect(metaBody.artifact.uri).toBe(ref.uri);
-    expect(metaBody.artifact.kind).toBe(ref.kind);
+    expect(metaRes.status).toBe(403);
 
     const res = await app.request(`/artifacts/${ref.artifact_id}`);
-    expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toBe("text/plain");
-    expect(await res.text()).toBe("hello");
+    expect(res.status).toBe(403);
+
+    await container.db.close();
+  });
+
+  it("GET /artifacts/:id denies artifacts with inconsistent execution linkage", async () => {
+    const container = await createTestContainer();
+    const app = createApp(container);
+    const scopeA: ExecutionScopeIds = {
+      jobId: "job-artifacts-a",
+      runId: "run-artifacts-a",
+      stepId: "step-artifacts-a",
+      attemptId: "attempt-artifacts-a",
+    };
+    const scopeB: ExecutionScopeIds = {
+      jobId: "job-artifacts-b",
+      runId: "run-artifacts-b",
+      stepId: "step-artifacts-b",
+      attemptId: "attempt-artifacts-b",
+    };
+    await seedExecutionScope(container.db, scopeA);
+    await seedExecutionScope(container.db, scopeB);
+
+    const ref = await container.artifactStore.put({
+      kind: "log",
+      mime_type: "text/plain",
+      body: Buffer.from("hello", "utf8"),
+      labels: ["log"],
+      metadata: { test: true },
+    });
+
+    await container.db.run(
+      `INSERT INTO execution_artifacts (
+         artifact_id,
+         workspace_id,
+         agent_id,
+         run_id,
+         step_id,
+         attempt_id,
+         kind,
+         uri,
+         created_at,
+         mime_type,
+         size_bytes,
+         sha256,
+         labels_json,
+         metadata_json,
+         sensitivity,
+         policy_snapshot_id
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        ref.artifact_id,
+        "default",
+        "agent-1",
+        scopeA.runId,
+        scopeB.stepId,
+        scopeB.attemptId,
+        ref.kind,
+        ref.uri,
+        ref.created_at,
+        ref.mime_type ?? null,
+        ref.size_bytes ?? null,
+        ref.sha256 ?? null,
+        JSON.stringify(ref.labels ?? []),
+        JSON.stringify(ref.metadata ?? {}),
+        "normal",
+        null,
+      ],
+    );
+
+    const metaRes = await app.request(`/artifacts/${ref.artifact_id}/metadata`);
+    expect(metaRes.status).toBe(403);
+
+    const res = await app.request(`/artifacts/${ref.artifact_id}`);
+    expect(res.status).toBe(403);
 
     await container.db.close();
   });
 });
-
