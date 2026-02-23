@@ -94,7 +94,6 @@ a:hover { text-decoration: underline; }
   border-left: 3px solid transparent;
   margin: 0;
   color: var(--muted);
-  border: 0;
   font-size: 14px;
   font-weight: 400;
   transition: background 0.15s, color 0.15s;
@@ -349,9 +348,6 @@ function shell(title: string, activePath: string, search: URLSearchParams, body:
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${esc(title)} | Tyrum</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
   <style>${BASE_STYLE}</style>
 </head>
 <body>
@@ -869,9 +865,6 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Tyrum</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
   <style>${BASE_STYLE}</style>
 </head>
 <body>
