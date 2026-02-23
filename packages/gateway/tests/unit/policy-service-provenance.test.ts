@@ -17,6 +17,56 @@ async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
 }
 
 describe("PolicyService provenance rules", () => {
+  it("defaults to requiring approval for untrusted tool.exec when provenance config is omitted", async () => {
+    await withTempDir(async (home) => {
+      const db = openTestSqliteDb();
+      try {
+        const bundlePath = join(home, "policy.yml");
+        await writeFile(
+          bundlePath,
+          [
+            "v: 1",
+            "tools:",
+            "  default: deny",
+            "  allow:",
+            "    - tool.exec",
+            "  require_approval: []",
+            "  deny: []",
+            "",
+          ].join("\n"),
+          "utf-8",
+        );
+
+        const prevBundlePath = process.env["TYRUM_POLICY_BUNDLE_PATH"];
+        process.env["TYRUM_POLICY_BUNDLE_PATH"] = bundlePath;
+        try {
+          const policy = new PolicyService({
+            home,
+            snapshotDal: new PolicySnapshotDal(db),
+            overrideDal: new PolicyOverrideDal(db),
+          });
+
+          const untrusted = await policy.evaluateToolCall({
+            agentId: "agent-1",
+            workspaceId: "ws-1",
+            toolId: "tool.exec",
+            toolMatchTarget: "echo ok",
+            inputProvenance: { source: "web", trusted: false },
+          });
+          expect(untrusted.decision).toBe("require_approval");
+        } finally {
+          if (prevBundlePath === undefined) {
+            delete process.env["TYRUM_POLICY_BUNDLE_PATH"];
+          } else {
+            process.env["TYRUM_POLICY_BUNDLE_PATH"] = prevBundlePath;
+          }
+        }
+      } finally {
+        await db.close();
+      }
+    });
+  });
+
   it("escalates tool.exec to require_approval when input provenance is untrusted", async () => {
     await withTempDir(async (home) => {
       const db = openTestSqliteDb();
@@ -139,4 +189,3 @@ describe("PolicyService provenance rules", () => {
     });
   });
 });
-

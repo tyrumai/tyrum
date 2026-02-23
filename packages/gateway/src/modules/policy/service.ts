@@ -388,9 +388,14 @@ function mergePolicyBundles(bundles: Array<PolicyBundleT | undefined>): PolicyBu
     .map((b) => b?.artifacts?.max_bytes)
     .filter((v): v is number => typeof v === "number" && Number.isFinite(v) && v > 0);
 
-  const provenanceShellApproval = bundles.some(
-    (b) => b?.provenance?.untrusted_shell_requires_approval === true,
-  );
+  const provenanceValues = bundles
+    .map((b) => b?.provenance?.untrusted_shell_requires_approval)
+    .filter((v): v is boolean => typeof v === "boolean");
+  const provenanceShellApproval = provenanceValues.includes(true)
+    ? true
+    : provenanceValues.includes(false)
+      ? false
+      : true;
 
   return PolicyBundle.parse({
     v: 1,

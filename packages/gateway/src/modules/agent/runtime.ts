@@ -1734,6 +1734,7 @@ export class AgentRuntime {
         inputSchema: jsonSchema(schema),
         execute: async (args: unknown) => {
           const toolCallId = `tc-${randomUUID()}`;
+          const inputProvenance = { ...drivingProvenance };
           const policy = this.policyService;
           const policyEnabled = policy.isEnabled();
           const matchTarget = canonicalizeToolMatchTarget(toolDesc.id, args, this.home);
@@ -1774,7 +1775,7 @@ export class AgentRuntime {
               toolMatchTarget: matchTarget,
               url,
               secretScopes: secretScopes.length > 0 ? secretScopes : undefined,
-              inputProvenance: drivingProvenance,
+              inputProvenance,
             });
             policyDecision = evaluation.decision;
             policySnapshotId = evaluation.policy_snapshot?.policy_snapshot_id;
