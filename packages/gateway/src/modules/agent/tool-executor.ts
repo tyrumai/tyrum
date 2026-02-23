@@ -14,6 +14,7 @@ import type { SecretResolutionAuditDal } from "../secret/resolution-audit-dal.js
 import type { RedactionEngine } from "../redaction/engine.js";
 
 const MAX_RESPONSE_BYTES = 32_768;
+const TRUNCATION_MARKER = "...(truncated)";
 const HTTP_TIMEOUT_MS = 30_000;
 const DEFAULT_EXEC_TIMEOUT_MS = 30_000;
 const MAX_EXEC_TIMEOUT_MS = 300_000;
@@ -302,7 +303,19 @@ export interface ToolResult {
   output: string;
   error?: string;
   provenance?: TaggedContent;
+  meta?: ToolResultMeta;
 }
+
+export type ToolResultMeta = {
+  kind: "fs.read";
+  path: string;
+  offset?: number;
+  limit?: number;
+  raw_chars: number;
+  selected_chars: number;
+  truncated: boolean;
+  truncation_marker?: string;
+};
 
 export class ToolExecutor {
   constructor(
@@ -445,6 +458,10 @@ export class ToolExecutor {
 
     const safePath = this.assertSandboxed(rawPath);
     const content = await readFile(safePath, "utf-8");
+    const resolvedHome = resolve(this.home);
+    const relativePath = relative(resolvedHome, safePath);
+    const normalizedPath =
+      relativePath.trim().length > 0 ? relativePath : rawPath;
 
     const selected = offset !== undefined || limit !== undefined
       ? (() => {
@@ -455,8 +472,9 @@ export class ToolExecutor {
         })()
       : content;
 
-    const truncated = selected.length > MAX_RESPONSE_BYTES
-      ? `${selected.slice(0, MAX_RESPONSE_BYTES)}...(truncated)`
+    const isTruncated = selected.length > MAX_RESPONSE_BYTES;
+    const truncated = isTruncated
+      ? `${selected.slice(0, MAX_RESPONSE_BYTES)}${TRUNCATION_MARKER}`
       : selected;
 
     const tagged = tagContent(truncated, "tool");
@@ -464,6 +482,16 @@ export class ToolExecutor {
       tool_call_id: toolCallId,
       output: sanitizeForModel(tagged),
       provenance: tagged,
+      meta: {
+        kind: "fs.read",
+        path: normalizedPath,
+        offset,
+        limit,
+        raw_chars: content.length,
+        selected_chars: selected.length,
+        truncated: isTruncated,
+        truncation_marker: isTruncated ? TRUNCATION_MARKER : undefined,
+      },
     };
   }
 

@@ -3,7 +3,8 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestApp } from "./helpers.js";
-import { createStubLanguageModel } from "../unit/stub-language-model.js";
+import { simulateReadableStream } from "ai";
+import { MockLanguageModelV3 } from "ai/test";
 
 async function writeWorkspace(home: string): Promise<void> {
   await writeFile(
@@ -15,7 +16,8 @@ skills:
 mcp:
   enabled: []
 tools:
-  allow: []
+  allow:
+    - tool.fs.read
 sessions:
   ttl_days: 30
   max_turns: 20
@@ -37,6 +39,71 @@ You are a concise test assistant.
   );
 }
 
+function usage() {
+  return {
+    inputTokens: {
+      total: 10,
+      noCache: 10,
+      cacheRead: undefined,
+      cacheWrite: undefined,
+    },
+    outputTokens: {
+      total: 5,
+      text: 5,
+      reasoning: undefined,
+    },
+  };
+}
+
+function createToolCallLanguageModel(input: {
+  toolCalls: Array<{ id: string; name: string; arguments: string }>;
+  finalReply: string;
+}): MockLanguageModelV3 {
+  let callCount = 0;
+
+  return new MockLanguageModelV3({
+    doStream: async () => ({
+      stream: simulateReadableStream({
+        chunks: [
+          { type: "text-start" as const, id: "text-1" },
+          { type: "text-delta" as const, id: "text-1", delta: input.finalReply },
+          { type: "text-end" as const, id: "text-1" },
+          {
+            type: "finish" as const,
+            finishReason: { unified: "stop" as const, raw: undefined },
+            logprobs: undefined,
+            usage: usage(),
+          },
+        ],
+      }),
+    }),
+    doGenerate: async () => {
+      callCount += 1;
+
+      if (callCount === 1) {
+        return {
+          content: input.toolCalls.map((tc) => ({
+            type: "tool-call" as const,
+            toolCallId: tc.id,
+            toolName: tc.name,
+            input: tc.arguments,
+          })),
+          finishReason: { unified: "tool-calls" as const, raw: undefined },
+          usage: usage(),
+          warnings: [],
+        };
+      }
+
+      return {
+        content: [{ type: "text" as const, text: input.finalReply }],
+        finishReason: { unified: "stop" as const, raw: undefined },
+        usage: usage(),
+        warnings: [],
+      };
+    },
+  });
+}
+
 describe("/context", () => {
   let homeDir: string | undefined;
   const originalTyrumHome = process.env["TYRUM_HOME"];
@@ -44,6 +111,7 @@ describe("/context", () => {
   beforeEach(async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-context-"));
     await writeWorkspace(homeDir);
+    await writeFile(join(homeDir, "big.txt"), "a".repeat(40_000), "utf-8");
     process.env["TYRUM_HOME"] = homeDir;
   });
 
@@ -62,7 +130,16 @@ describe("/context", () => {
 
   it("returns last-known context report metadata after an agent turn", async () => {
     const { app, container, agents } = await createTestApp({
-      languageModel: createStubLanguageModel("ok"),
+      languageModel: createToolCallLanguageModel({
+        toolCalls: [
+          {
+            id: "tc-1",
+            name: "tool.fs.read",
+            arguments: JSON.stringify({ path: "big.txt" }),
+          },
+        ],
+        finalReply: "ok",
+      }),
     });
 
     const turnRes = await app.request("/agent/turn", {
@@ -85,8 +162,19 @@ describe("/context", () => {
         session_id: string;
         channel: string;
         thread_id: string;
-        system_prompt: { chars: number };
+        system_prompt: { chars: number; sections?: Array<{ id: string; chars: number }> };
         user_parts: Array<{ id: string; chars: number }>;
+        tool_schema_total_chars?: number;
+        tool_schema_top?: Array<{ id: string; chars: number }>;
+        tool_calls?: Array<{ tool_call_id: string; tool_id: string; injected_chars: number }>;
+        injected_files?: Array<{
+          tool_call_id: string;
+          path: string;
+          raw_chars: number;
+          injected_chars: number;
+          truncated: boolean;
+          truncation_marker?: string;
+        }>;
       };
     };
 
@@ -99,6 +187,19 @@ describe("/context", () => {
 
     const messagePart = ctxPayload.report!.user_parts.find((p) => p.id === "message");
     expect(messagePart).toEqual({ id: "message", chars: "hello".length });
+
+    expect(ctxPayload.report!.system_prompt.sections?.length).toBeGreaterThan(0);
+    expect(ctxPayload.report!.tool_schema_total_chars).toBeGreaterThan(0);
+    expect(ctxPayload.report!.tool_schema_top?.some((p) => p.id === "tool.fs.read")).toBe(true);
+
+    const fileReport = ctxPayload.report!.injected_files?.find((f) => f.path === "big.txt");
+    expect(fileReport).toBeTruthy();
+    expect(fileReport!.raw_chars).toBe(40_000);
+    expect(fileReport!.injected_chars).toBeLessThan(fileReport!.raw_chars);
+    expect(fileReport!.truncated).toBe(true);
+    expect(fileReport!.truncation_marker).toBe("...(truncated)");
+
+    expect(ctxPayload.report!.tool_calls?.some((c) => c.tool_id === "tool.fs.read")).toBe(true);
 
     const listRes = await app.request("/context/list");
     expect(listRes.status).toBe(200);
