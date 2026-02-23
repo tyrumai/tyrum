@@ -191,6 +191,7 @@ export class PolicyService {
     url?: string;
     secretScopes?: string[];
     playbookBundle?: PolicyBundleT;
+    inputProvenance?: { source: string; trusted: boolean };
   }): Promise<PolicyEvaluation> {
     const effective = await this.loadEffectiveBundle({ playbookBundle: params.playbookBundle });
     const snapshot = await this.getOrCreateSnapshot(effective.bundle);
@@ -200,6 +201,14 @@ export class PolicyService {
     const secretsDomain = normalizeDomain(effective.bundle.secrets, "require_approval");
 
     let toolDecision = evaluateDomain(toolsDomain, params.toolId);
+
+    if (
+      effective.bundle.provenance?.untrusted_shell_requires_approval === true &&
+      params.inputProvenance?.trusted === false &&
+      params.toolId.trim() === "tool.exec"
+    ) {
+      toolDecision = mostRestrictive(toolDecision, "require_approval");
+    }
 
     let egressDecision: Decision = "allow";
     if (params.url) {

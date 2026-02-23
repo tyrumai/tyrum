@@ -1721,6 +1721,10 @@ export class AgentRuntime {
   ): ToolSet {
     const result: Record<string, Tool> = {};
     let approvalStepIndex = 0;
+    let drivingProvenance: { source: string; trusted: boolean } = {
+      source: "user",
+      trusted: true,
+    };
 
     for (const toolDesc of tools) {
       const schema = toolDesc.inputSchema ?? { type: "object", additionalProperties: true };
@@ -1770,6 +1774,7 @@ export class AgentRuntime {
               toolMatchTarget: matchTarget,
               url,
               secretScopes: secretScopes.length > 0 ? secretScopes : undefined,
+              inputProvenance: drivingProvenance,
             });
             policyDecision = evaluation.decision;
             policySnapshotId = evaluation.policy_snapshot?.policy_snapshot_id;
@@ -1867,6 +1872,13 @@ export class AgentRuntime {
                 content: redact(res.provenance.content),
               };
             }
+          }
+
+          if (res.provenance) {
+            drivingProvenance = {
+              source: res.provenance.source,
+              trusted: res.provenance.trusted,
+            };
           }
 
           let content = res.error ? JSON.stringify({ error: res.error }) : res.output;

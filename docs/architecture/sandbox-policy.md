@@ -21,6 +21,12 @@ Tyrum treats untrusted content as data. Inputs from tools, web pages, channels, 
 
 Policy rules can depend on provenance (for example: “deny shell when the input originated from web content”, or “require approval before sending an outbound message derived from an untrusted source”).
 
+### Current provenance rule (v1)
+
+The initial provenance policy surface is a single conservative rule:
+
+- `PolicyBundle.provenance.untrusted_shell_requires_approval` (default: `true`) escalates `tool.exec` from `allow → require_approval` when the tool call is driven by untrusted-input provenance.
+
 ## Policy bundle
 
 Policy is represented as a declarative, versioned configuration bundle (`PolicyBundle`) stored as data (YAML/JSON) and validated like other contracts.
