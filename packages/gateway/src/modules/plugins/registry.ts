@@ -158,6 +158,7 @@ function collectAllOfInternalRefTargets(root: unknown): WeakSet<object> {
 
     const record = node as Record<string, unknown>;
     const allOf = record["allOf"];
+    const ref = record["$ref"];
     if (Array.isArray(allOf)) {
       for (const entry of allOf) {
         if (!isRecord(entry)) continue;
@@ -167,6 +168,25 @@ function collectAllOfInternalRefTargets(root: unknown): WeakSet<object> {
         if (resolved !== null && typeof resolved === "object") {
           targets.add(resolved as object);
         }
+      }
+    }
+    const additionalPropertiesExplicit = Object.prototype.hasOwnProperty.call(record, "additionalProperties");
+    const unevaluatedPropertiesExplicit = Object.prototype.hasOwnProperty.call(record, "unevaluatedProperties");
+    const hasProperties =
+      Object.prototype.hasOwnProperty.call(record, "properties") ||
+      Object.prototype.hasOwnProperty.call(record, "patternProperties");
+    const hasAllOf = Array.isArray(allOf) && allOf.length > 0;
+    if (
+      typeof ref === "string" &&
+      !hasAllOf &&
+      hasProperties &&
+      !additionalPropertiesExplicit &&
+      !unevaluatedPropertiesExplicit &&
+      looksLikeJsonSchemaObjectShapeOrRef(record, root)
+    ) {
+      const resolved = resolveInternalJsonSchemaRef(root, ref);
+      if (resolved !== null && typeof resolved === "object") {
+        targets.add(resolved as object);
       }
     }
 
