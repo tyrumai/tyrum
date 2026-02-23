@@ -31,6 +31,23 @@ When more than one distinct sender can DM an agent (for example a DM allowlist w
 
 Identity linking can map multiple provider sender ids to a canonical identity so the same person shares a DM session across channels when `dm_scope` is `per_peer`.
 
+### Canonical identity linking
+
+Identity links are stored in the StateStore table `peer_identity_links`, which maps:
+
+- `(channel, account, provider_peer_id)` → `canonical_peer_id`
+
+When `dm_scope` is `per_peer`, the gateway uses `canonical_peer_id` (when present) as `<peerId>` in the session key, enabling per-peer DM continuity across channels.
+
+To link multiple provider identities to the same peer, insert one row per provider identity that shares the same `canonical_peer_id` (an opaque stable id; it must not contain `:`):
+
+```sql
+INSERT INTO peer_identity_links (channel, account, provider_peer_id, canonical_peer_id)
+VALUES
+  ('telegram', 'work', '123', 'peer_550e8400-e29b-41d4-a716-446655440000'),
+  ('discord', 'default', '456', 'peer_550e8400-e29b-41d4-a716-446655440000');
+```
+
 ### Key scheme
 
 - **Agent sessions**

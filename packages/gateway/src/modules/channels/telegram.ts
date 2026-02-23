@@ -1,5 +1,6 @@
 import {
   NormalizedThreadMessage as NormalizedThreadMessageSchema,
+  PeerId,
   buildAgentSessionKey,
   normalizedContainerKindFromThreadKind,
   parseTyrumKey,
@@ -24,6 +25,7 @@ import {
   normalizeConnectorId,
   parseChannelSourceKey,
 } from "./interface.js";
+import { PeerIdentityLinkDal } from "./peer-identity-link-dal.js";
 
 function isFalsyEnvFlag(value: string | undefined): boolean {
   if (!value) return false;
@@ -221,6 +223,7 @@ async function releaseLaneLease(db: SqlDb, opts: { key: string; lane: string; ow
 
 export class TelegramChannelQueue {
   private readonly inbox: ChannelInboxDal;
+  private readonly peerIdentityLinks: PeerIdentityLinkDal;
   private readonly agentId: string;
   private readonly accountId: string;
   private readonly lane: string;
@@ -228,6 +231,7 @@ export class TelegramChannelQueue {
 
   constructor(db: SqlDb, opts?: { agentId?: string; accountId?: string; channelKey?: string; lane?: string; dmScope?: DmScope }) {
     this.inbox = new ChannelInboxDal(db);
+    this.peerIdentityLinks = new PeerIdentityLinkDal(db);
     this.agentId = opts?.agentId?.trim() || agentIdFromEnv();
     this.accountId = opts?.accountId?.trim() || opts?.channelKey?.trim() || telegramAccountIdFromEnv();
     this.lane = opts?.lane?.trim() || "main";
@@ -243,7 +247,7 @@ export class TelegramChannelQueue {
     const accountId = opts?.accountId?.trim() || opts?.channelKey?.trim() || this.accountId;
     const lane = opts?.lane?.trim() || this.lane;
     const dmScope = opts?.dmScope ?? this.dmScope;
-    const key = telegramThreadKey(normalized, {
+    let key = telegramThreadKey(normalized, {
       agentId,
       accountId,
       dmScope,
@@ -252,6 +256,31 @@ export class TelegramChannelQueue {
       accountId === telegramAccountIdFromEnv()
         ? "telegram"
         : buildChannelSourceKey({ connector: "telegram", accountId });
+    const parsed = parseTyrumKey(key as never);
+    if (
+      parsed.kind === "agent" &&
+      parsed.thread_kind === "dm" &&
+      parsed.dm_scope === "per_peer"
+    ) {
+      const canonicalPeerId = await this.peerIdentityLinks.resolveCanonicalPeerId({
+        channel: "telegram",
+        account: accountId,
+        providerPeerId: parsed.peer_id,
+      });
+      if (canonicalPeerId) {
+        const parsedCanonicalPeerId = PeerId.safeParse(canonicalPeerId.trim());
+        if (parsedCanonicalPeerId.success) {
+          key = buildAgentSessionKey({
+            agentId,
+            container: "dm",
+            channel: "telegram",
+            account: accountId,
+            peerId: parsedCanonicalPeerId.data,
+            dmScope: "per_peer",
+          });
+        }
+      }
+    }
 
     const { row, deduped } = await this.inbox.enqueue({
       source,
