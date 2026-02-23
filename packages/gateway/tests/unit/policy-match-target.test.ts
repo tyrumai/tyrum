@@ -34,6 +34,29 @@ describe("canonicalizeToolMatchTarget", () => {
     expect(target).toBe("send:slack:acct_123:chan_C024BE91L");
   });
 
+  it("does not misclassify non-messaging tool ids that share a prefix with tool.channel.send", () => {
+    const target = canonicalizeToolMatchTarget(
+      "tool.channel.sendbird",
+      {},
+    );
+
+    expect(target).toBe("tool.channel.sendbird");
+  });
+
+  it("treats tool.channel.send as a messaging tool id (exact match)", () => {
+    const target = canonicalizeToolMatchTarget(
+      "tool.channel.send",
+      {
+        connector: "slack",
+        account_id: "acct_123",
+        thread_id: "chan_C024BE91L",
+        text: "hello",
+      },
+    );
+
+    expect(target).toBe("send:slack:acct_123:chan_C024BE91L");
+  });
+
   it("canonicalizes mcp tools to a stable id-only target", () => {
     const target = canonicalizeToolMatchTarget(
       "  mcp.calendar.events_list  ",

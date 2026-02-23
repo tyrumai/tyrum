@@ -48,10 +48,12 @@ function normalizeMcpToolId(rawToolId: string): string {
 }
 
 function isMessagingToolClass(toolId: string): boolean {
+  const channelSendPrefix = "tool.channel.send";
   return (
     toolId.startsWith("tool.messaging.") ||
     toolId.startsWith("tool.message.") ||
-    toolId.startsWith("tool.channel.send")
+    toolId === channelSendPrefix ||
+    toolId.startsWith(`${channelSendPrefix}.`)
   );
 }
 
