@@ -72,6 +72,38 @@ describe("AgentRuntime", () => {
     expect(result.used_tools).toEqual([]);
   });
 
+  it("reports system prompt section char counts as string lengths", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("hello"),
+      fetchImpl: fetch404,
+    });
+
+    await runtime.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      message: "hello",
+    });
+
+    const report = runtime.getLastContextReport();
+    expect(report).toBeDefined();
+
+    const identitySection = report!.system_prompt.sections.find((section) => section.id === "identity");
+    const safetySection = report!.system_prompt.sections.find((section) => section.id === "safety");
+    expect(identitySection).toBeDefined();
+    expect(safetySection).toBeDefined();
+
+    const delimiter = "\n\n";
+    expect(report!.system_prompt.chars).toBe(identitySection!.chars + delimiter.length + safetySection!.chars);
+  });
+
   it("scopes session cleanup to the current agentId", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({
