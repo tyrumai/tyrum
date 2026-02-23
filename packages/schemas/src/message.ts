@@ -32,6 +32,17 @@ export type MediaKind = z.infer<typeof MediaKind>;
 export const NormalizedContainerKind = z.enum(["dm", "group", "channel"]);
 export type NormalizedContainerKind = z.infer<typeof NormalizedContainerKind>;
 
+export function normalizedContainerKindFromThreadKind(kind: ThreadKind): NormalizedContainerKind {
+  switch (kind) {
+    case "private":
+      return "dm";
+    case "channel":
+      return "channel";
+    default:
+      return "group";
+  }
+}
+
 /** Provenance tags preserved by connector normalization. */
 export const MessageProvenance = z.enum(["user", "connector", "tool", "system"]);
 export type MessageProvenance = z.infer<typeof MessageProvenance>;

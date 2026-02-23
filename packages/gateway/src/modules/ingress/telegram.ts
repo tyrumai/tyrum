@@ -4,6 +4,7 @@
  * Converts raw Telegram update payloads into the NormalizedThreadMessage schema.
  */
 
+import { normalizedContainerKindFromThreadKind } from "@tyrum/schemas";
 import type {
   MediaKind,
   MessageContent,
@@ -11,7 +12,6 @@ import type {
   NormalizedMessageEnvelope,
   NormalizedThread,
   NormalizedThreadMessage,
-  NormalizedContainerKind,
   PiiField,
   SenderMetadata,
   ThreadKind,
@@ -163,17 +163,6 @@ function piiFromContent(content: MessageContent): PiiField[] {
   return fields;
 }
 
-function toContainerKind(kind: ThreadKind): NormalizedContainerKind {
-  switch (kind) {
-    case "private":
-      return "dm";
-    case "channel":
-      return "channel";
-    default:
-      return "group";
-  }
-}
-
 function trimNonEmpty(value: string | undefined): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
@@ -275,13 +264,13 @@ export function normalizeUpdate(
         delivery: {
           channel: "telegram",
           account: "default",
-        },
-        container: {
-          kind: toContainerKind(thread.kind),
-          id: thread.id,
-        },
-        sender: {
-          id: sender?.id ?? `chat:${thread.id}`,
+	        },
+	        container: {
+	          kind: normalizedContainerKindFromThreadKind(thread.kind),
+	          id: thread.id,
+	        },
+	        sender: {
+	          id: sender?.id ?? `chat:${thread.id}`,
           ...(sender?.username != null ? { display: sender.username } : {}),
         },
         content: envelopeContent,

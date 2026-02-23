@@ -130,3 +130,21 @@ describe("NormalizedMessageEnvelope", () => {
     ).toThrow();
   });
 });
+
+describe("normalizedContainerKindFromThreadKind", () => {
+  it("maps ThreadKind to NormalizedContainerKind", async () => {
+    const schemas = await import("../src/index.js");
+    const normalizedContainerKindFromThreadKind = (schemas as {
+      normalizedContainerKindFromThreadKind?: (kind: string) => string;
+    }).normalizedContainerKindFromThreadKind;
+
+    expect(typeof normalizedContainerKindFromThreadKind).toBe("function");
+    if (typeof normalizedContainerKindFromThreadKind !== "function") return;
+
+    expect(normalizedContainerKindFromThreadKind("private")).toBe("dm");
+    expect(normalizedContainerKindFromThreadKind("channel")).toBe("channel");
+    expect(normalizedContainerKindFromThreadKind("group")).toBe("group");
+    expect(normalizedContainerKindFromThreadKind("supergroup")).toBe("group");
+    expect(normalizedContainerKindFromThreadKind("other")).toBe("group");
+  });
+});

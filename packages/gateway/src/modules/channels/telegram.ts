@@ -1,4 +1,7 @@
-import { NormalizedThreadMessage as NormalizedThreadMessageSchema } from "@tyrum/schemas";
+import {
+  NormalizedThreadMessage as NormalizedThreadMessageSchema,
+  normalizedContainerKindFromThreadKind,
+} from "@tyrum/schemas";
 import type { NormalizedThreadMessage } from "@tyrum/schemas";
 import { parseTyrumKey } from "@tyrum/schemas";
 import type { TelegramBot } from "../ingress/telegram-bot.js";
@@ -36,12 +39,6 @@ function telegramChannelKeyFromEnv(): string {
   return process.env["TYRUM_TELEGRAM_CHANNEL_KEY"]?.trim() || "telegram-1";
 }
 
-function threadScopeFromKind(kind: NormalizedThreadMessage["thread"]["kind"]): "dm" | "group" | "channel" {
-  if (kind === "private") return "dm";
-  if (kind === "channel") return "channel";
-  return "group";
-}
-
 export function telegramThreadKey(
   thread: string | Pick<NormalizedThreadMessage["thread"], "id" | "kind">,
   opts?: {
@@ -61,7 +58,7 @@ export function telegramThreadKey(
 
   const agentId = opts?.agentId?.trim() || agentIdFromEnv();
   const channelKey = opts?.channelKey?.trim() || telegramChannelKeyFromEnv();
-  const scope = threadScopeFromKind(threadKind);
+  const scope = normalizedContainerKindFromThreadKind(threadKind);
   return `agent:${agentId}:${channelKey}:${scope}:${threadId}`;
 }
 
