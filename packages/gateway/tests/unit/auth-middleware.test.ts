@@ -28,7 +28,7 @@ describe("Auth middleware", () => {
     app.get("/app", (c) => c.json({ ok: true }));
     app.get("/app/settings", (c) => c.json({ ok: true }));
     app.get("/app/auth", (c) => c.json({ ok: true }));
-    app.get("/providers/test/oauth/callback", (c) => c.json({ ok: true }));
+    app.get("/providers/:provider/oauth/callback", (c) => c.json({ ok: true }));
     // These routes are intentionally *not* part of the /app subtree, but share a prefix.
     // Query-string token auth must not apply to them.
     app.get("/application", (c) => c.json({ ok: true }));
@@ -54,7 +54,7 @@ describe("Auth middleware", () => {
     const app = new Hono();
     const sub = new Hono();
     sub.use("*", createAuthMiddleware(tokenStore));
-    sub.get("/providers/test/oauth/callback", (c) => c.json({ ok: true }));
+    sub.get("/providers/:provider/oauth/callback", (c) => c.json({ ok: true }));
     app.route("/prefix", sub);
 
     const res = await app.request("/prefix/providers/test/oauth/callback?state=s&code=c");

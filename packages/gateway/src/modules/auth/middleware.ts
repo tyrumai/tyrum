@@ -7,6 +7,7 @@
 
 import type { Context, Next } from "hono";
 import { getCookie } from "hono/cookie";
+import { routePath } from "hono/route";
 import { APP_PATH_PREFIX, matchesPathPrefixSegment } from "../../app-path.js";
 import type { TokenStore } from "./token-store.js";
 
@@ -17,7 +18,7 @@ const AUTH_ERROR_BODY = {
 
 const AUTH_COOKIE_NAME = "tyrum_admin_token";
 const APP_TOKEN_QUERY_KEY = "token";
-const OAUTH_CALLBACK_PATH_RE = /(?:^|\/)providers\/[^/]+\/oauth\/callback$/;
+const OAUTH_CALLBACK_ROUTE_PATH_RE = /\/providers\/:[^/]+\/oauth\/callback$/;
 
 function extractBearerToken(authorizationHeader: string | undefined): string | undefined {
   if (!authorizationHeader) {
@@ -50,7 +51,8 @@ export function createAuthMiddleware(
     }
 
     // OAuth callback is public (state/PKCE-protected) and should not require an admin token.
-    if (OAUTH_CALLBACK_PATH_RE.test(c.req.path)) {
+    // Use the router's matched route to avoid accidentally exempting other paths with similar suffixes.
+    if (c.req.method === "GET" && OAUTH_CALLBACK_ROUTE_PATH_RE.test(routePath(c, -1))) {
       return next();
     }
 
