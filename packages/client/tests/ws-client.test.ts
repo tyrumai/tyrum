@@ -2,6 +2,10 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { WebSocketServer } from "ws";
 import type { WebSocket as WsWebSocket } from "ws";
 import { generateKeyPairSync } from "node:crypto";
+import {
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  descriptorIdForClientCapability,
+} from "@tyrum/schemas";
 import { TyrumClient } from "../src/ws-client.js";
 
 // ---------------------------------------------------------------------------
@@ -178,6 +182,39 @@ describe("TyrumClient", () => {
     expect(Object.prototype.hasOwnProperty.call(device, "platform")).toBe(false);
     expect(Object.prototype.hasOwnProperty.call(device, "version")).toBe(false);
     expect(Object.prototype.hasOwnProperty.call(device, "mode")).toBe(false);
+  });
+
+  it("sends namespaced, versioned capability descriptors in connect.init", async () => {
+    server = createTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: ["cli", "http"],
+      reconnect: false,
+      useDeviceProof: true,
+      role: "node",
+      device: {
+        publicKey: "AQID",
+        privateKey: "BAUG",
+      },
+    });
+
+    client.connect();
+    const ws = await server.waitForClient();
+    const init = (await waitForMessage(ws)) as Record<string, unknown>;
+    expect(init["type"]).toBe("connect.init");
+
+    const payload = init["payload"] as Record<string, unknown>;
+    expect(payload["capabilities"]).toEqual([
+      {
+        id: descriptorIdForClientCapability("cli"),
+        version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+      },
+      {
+        id: descriptorIdForClientCapability("http"),
+        version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+      },
+    ]);
   });
 
   it("responds to ping with pong", async () => {

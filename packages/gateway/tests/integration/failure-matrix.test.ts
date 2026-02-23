@@ -5,7 +5,11 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
-import { deviceIdFromSha256Digest } from "@tyrum/schemas";
+import {
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  descriptorIdForClientCapability,
+  deviceIdFromSha256Digest,
+} from "@tyrum/schemas";
 
 import type { StepExecutor, StepResult } from "../../src/modules/execution/engine.js";
 import { ExecutionEngine } from "../../src/modules/execution/engine.js";
@@ -138,7 +142,10 @@ async function connectClientWithProof(input: {
         protocol_rev: 2,
         role: input.role,
         device: { device_id: deviceId, pubkey, label: "test" },
-        capabilities: input.capabilities.map((id) => ({ id })),
+        capabilities: input.capabilities.map((capability) => ({
+          id: descriptorIdForClientCapability(capability),
+          version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+        })),
       },
     }),
   );
