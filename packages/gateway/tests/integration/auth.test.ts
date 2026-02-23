@@ -19,10 +19,11 @@ describe("Auth integration", () => {
 
   describe("non-local bind (auth enforced)", () => {
     let app: Hono;
+    let tokenStore: TokenStore;
     let adminToken: string;
 
     beforeEach(async () => {
-      const tokenStore = new TokenStore(tempDir);
+      tokenStore = new TokenStore(tempDir);
       adminToken = await tokenStore.initialize();
       const result = await createTestApp({ tokenStore, isLocalOnly: false });
       app = result.app;
@@ -65,6 +66,63 @@ describe("Auth integration", () => {
         headers: { Authorization: "Bearer invalid" },
       });
       expect(res.status).toBe(401);
+    });
+
+    it("authorizes /status with a client device token scoped to operator.read", async () => {
+      const issued = await tokenStore.issueDeviceToken({
+        deviceId: "dev_client_1",
+        role: "client",
+        scopes: ["operator.read"],
+        ttlSeconds: 300,
+      });
+
+      const res = await app.request("/status", {
+        headers: { Authorization: `Bearer ${issued.token}` },
+      });
+      expect(res.status).toBe(200);
+    });
+
+    it("forbids /status with a client device token missing operator.read", async () => {
+      const issued = await tokenStore.issueDeviceToken({
+        deviceId: "dev_client_1",
+        role: "client",
+        scopes: [],
+        ttlSeconds: 300,
+      });
+
+      const res = await app.request("/status", {
+        headers: { Authorization: `Bearer ${issued.token}` },
+      });
+      expect(res.status).toBe(403);
+      const body = (await res.json()) as { error?: string };
+      expect(body.error).toBe("forbidden");
+    });
+
+    it("forbids POST /memory/facts with a read-only device token", async () => {
+      const issued = await tokenStore.issueDeviceToken({
+        deviceId: "dev_client_1",
+        role: "client",
+        scopes: ["operator.read"],
+        ttlSeconds: 300,
+      });
+
+      const res = await app.request("/memory/facts", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${issued.token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fact_key: "k",
+          fact_value: "v",
+          source: "test",
+          observed_at: new Date().toISOString(),
+          confidence: 0.5,
+        }),
+      });
+      expect(res.status).toBe(403);
+      const body = (await res.json()) as { error?: string };
+      expect(body.error).toBe("forbidden");
     });
   });
 

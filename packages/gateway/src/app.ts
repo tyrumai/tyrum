@@ -49,6 +49,7 @@ import { createAuthMiddleware } from "./modules/auth/middleware.js";
 import type { ConnectionManager } from "./ws/connection-manager.js";
 import type { ConnectionDirectoryDal } from "./modules/backplane/connection-directory.js";
 import type { OutboxDal } from "./modules/backplane/outbox-dal.js";
+import { createHttpScopeAuthorizationMiddleware } from "./modules/authz/http-scope-middleware.js";
 import { randomUUID } from "node:crypto";
 import { VERSION } from "./version.js";
 import { isAuthProfilesEnabled } from "./modules/models/auth-profiles-enabled.js";
@@ -133,6 +134,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   // Apply auth middleware if a token store is provided
   if (opts.tokenStore) {
     app.use("*", createAuthMiddleware(opts.tokenStore));
+    app.use("*", createHttpScopeAuthorizationMiddleware());
   }
 
   // Baseline structured request logging with stable request_id.
