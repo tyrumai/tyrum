@@ -5,20 +5,20 @@ import { AgentId, WorkspaceId } from "./keys.js";
 export const ContextPartReport = z.object({
   id: z.string().trim().min(1),
   chars: z.number().int().nonnegative(),
-});
+}).passthrough();
 export type ContextPartReport = z.infer<typeof ContextPartReport>;
 
 export const ContextSystemPromptReport = z.object({
   chars: z.number().int().nonnegative(),
   sections: z.array(ContextPartReport).default([]),
-});
+}).passthrough();
 export type ContextSystemPromptReport = z.infer<typeof ContextSystemPromptReport>;
 
 export const ContextToolCallReport = z.object({
   tool_call_id: z.string().trim().min(1),
   tool_id: z.string().trim().min(1),
   injected_chars: z.number().int().nonnegative(),
-});
+}).passthrough();
 export type ContextToolCallReport = z.infer<typeof ContextToolCallReport>;
 
 export const ContextInjectedFileReport = z.object({
@@ -31,7 +31,7 @@ export const ContextInjectedFileReport = z.object({
   injected_chars: z.number().int().nonnegative(),
   truncated: z.boolean(),
   truncation_marker: z.string().trim().min(1).optional(),
-});
+}).passthrough();
 export type ContextInjectedFileReport = z.infer<typeof ContextInjectedFileReport>;
 
 export const ContextReport = z.object({
@@ -54,9 +54,9 @@ export const ContextReport = z.object({
       keyword_hits: z.number().int().nonnegative().default(0),
       semantic_hits: z.number().int().nonnegative().default(0),
     })
+    .passthrough()
     .default({ keyword_hits: 0, semantic_hits: 0 }),
   tool_calls: z.array(ContextToolCallReport).default([]),
   injected_files: z.array(ContextInjectedFileReport).default([]),
-});
+}).passthrough();
 export type ContextReport = z.infer<typeof ContextReport>;
-

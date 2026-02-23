@@ -27,7 +27,7 @@ import {
 } from "./workspace.js";
 import { selectToolDirectory, type ToolDescriptor } from "./tools.js";
 import { McpManager } from "./mcp-manager.js";
-import { ToolExecutor } from "./tool-executor.js";
+import { ToolExecutor, type ToolResult } from "./tool-executor.js";
 import { tagContent } from "./provenance.js";
 import { sanitizeForModel, containsInjectionPatterns } from "./sanitizer.js";
 import type { SecretProvider } from "../secret/provider.js";
@@ -1976,7 +1976,7 @@ export class AgentRuntime {
             workspaceId,
           });
 
-          const res = pluginRes
+          const res: ToolResult = pluginRes
             ? (() => {
                 const tagged = tagContent(pluginRes.output, "tool", false);
                 return {
@@ -1984,6 +1984,7 @@ export class AgentRuntime {
                   output: sanitizeForModel(tagged),
                   error: pluginRes.error,
                   provenance: tagged,
+                  meta: undefined,
                 };
               })()
             : await toolExecutor.execute(toolDesc.id, toolCallId, args, {

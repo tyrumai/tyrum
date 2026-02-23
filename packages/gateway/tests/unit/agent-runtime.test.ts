@@ -10,6 +10,29 @@ import { createStubLanguageModel } from "./stub-language-model.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
+function makeContextReport(overrides?: Partial<Record<string, unknown>>): Record<string, unknown> {
+  return {
+    context_report_id: "123e4567-e89b-12d3-a456-426614174000",
+    generated_at: new Date().toISOString(),
+    session_id: "session-1",
+    channel: "test",
+    thread_id: "thread-1",
+    agent_id: "default",
+    workspace_id: "default",
+    system_prompt: { chars: 0, sections: [] },
+    user_parts: [],
+    selected_tools: [],
+    tool_schema_top: [],
+    tool_schema_total_chars: 0,
+    enabled_skills: [],
+    mcp_servers: [],
+    memory: { keyword_hits: 0, semantic_hits: 0 },
+    tool_calls: [],
+    injected_files: [],
+    ...overrides,
+  };
+}
+
 describe("AgentRuntime", () => {
   let homeDir: string | undefined;
   let container: GatewayContainer | undefined;
@@ -255,6 +278,7 @@ describe("AgentRuntime", () => {
           toolExecutor: unknown,
           usedTools: Set<string>,
           context: { planId: string; sessionId: string; channel: string; threadId: string },
+          contextReport: unknown,
         ) => Record<string, { execute: (args: unknown) => Promise<string> }>;
       }
     ).buildToolSet([toolDesc], toolExecutor, usedTools, {
@@ -262,7 +286,7 @@ describe("AgentRuntime", () => {
       sessionId: "session-1",
       channel: "test",
       threadId: "thread-1",
-    });
+    }, makeContextReport());
 
     const res = await toolSet["tool.exec"]!.execute({ command: "echo hi" });
 
@@ -383,6 +407,7 @@ describe("AgentRuntime", () => {
           toolExecutor: unknown,
           usedTools: Set<string>,
           context: { planId: string; sessionId: string; channel: string; threadId: string },
+          contextReport: unknown,
         ) => Record<string, { execute: (args: unknown) => Promise<string> }>;
       }
     ).buildToolSet(toolDescs, toolExecutor, usedTools, {
@@ -390,7 +415,7 @@ describe("AgentRuntime", () => {
       sessionId: "session-1",
       channel: "test",
       threadId: "thread-1",
-    });
+    }, makeContextReport());
 
     const execPromise = toolSet["tool.exec"]!.execute({ command: "secret:h1" });
     const fetchPromise = toolSet["tool.http.fetch"]!.execute({ url: "https://example.com" });
@@ -472,6 +497,7 @@ describe("AgentRuntime", () => {
           toolExecutor: unknown,
           usedTools: Set<string>,
           context: { planId: string; sessionId: string; channel: string; threadId: string },
+          contextReport: unknown,
         ) => Record<string, { execute: (args: unknown) => Promise<string> }>;
       }
     ).buildToolSet([toolDesc], toolExecutor, usedTools, {
@@ -479,7 +505,7 @@ describe("AgentRuntime", () => {
       sessionId: "session-1",
       channel: "test",
       threadId: "thread-1",
-    });
+    }, makeContextReport());
 
     const result = await toolSet["tool.fs.read"]!.execute({
       path: " ./docs//architecture/../policy-overrides.md ",
@@ -566,6 +592,7 @@ describe("AgentRuntime", () => {
           toolExecutor: unknown,
           usedTools: Set<string>,
           context: { planId: string; sessionId: string; channel: string; threadId: string },
+          contextReport: unknown,
         ) => Record<string, { execute: (args: unknown) => Promise<string> }>;
       }
     ).buildToolSet([toolDesc], toolExecutor, usedTools, {
@@ -573,7 +600,7 @@ describe("AgentRuntime", () => {
       sessionId: "session-1",
       channel: "test",
       threadId: "thread-1",
-    });
+    }, makeContextReport());
 
     const res = await toolSet["plugin.echo.echo"]!.execute({});
 
