@@ -1,4 +1,8 @@
-import type { PolicyOverride as PolicyOverrideT, PolicyOverrideStatus as PolicyOverrideStatusT } from "@tyrum/schemas";
+import type {
+  PolicyOverride as PolicyOverrideT,
+  PolicyOverrideStatus as PolicyOverrideStatusT,
+  WsEventEnvelope,
+} from "@tyrum/schemas";
 import { PolicyOverride } from "@tyrum/schemas";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
@@ -185,17 +189,38 @@ export class PolicyOverrideDal {
     return await this.getById(params.policyOverrideId);
   }
 
-  async expireStale(nowIso = isoNow()): Promise<number> {
-    const result = await this.db.run(
-      `UPDATE policy_overrides
-       SET status = 'expired',
-           updated_at = ?
-       WHERE status = 'active'
-         AND expires_at IS NOT NULL
-         AND expires_at <= ?`,
-      [nowIso, nowIso],
-    );
-    return result.changes;
+  async expireStale(nowIso = isoNow()): Promise<PolicyOverrideRow[]> {
+    return await this.db.transaction(async (tx) => {
+      const rows = await tx.all<RawPolicyOverrideRow>(
+        `UPDATE policy_overrides
+         SET status = 'expired',
+             updated_at = ?
+         WHERE status = 'active'
+           AND expires_at IS NOT NULL
+           AND expires_at <= ?
+         RETURNING *`,
+        [nowIso, nowIso],
+      );
+      if (rows.length === 0) return [];
+
+      const overrides = rows.map(toOverrideRow);
+
+      for (const override of overrides) {
+        const evt: WsEventEnvelope = {
+          event_id: randomUUID(),
+          type: "policy_override.expired",
+          occurred_at: nowIso,
+          payload: { override },
+        };
+        await tx.run(
+          `INSERT INTO outbox (topic, target_edge_id, payload_json)
+           VALUES (?, ?, ?)`,
+          ["ws.broadcast", null, JSON.stringify({ message: evt })],
+        );
+      }
+
+      return overrides;
+    });
   }
 
   async listActiveForTool(params: {
@@ -220,4 +245,3 @@ export class PolicyOverrideDal {
     return rows.map(toOverrideRow);
   }
 }
-

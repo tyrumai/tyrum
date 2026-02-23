@@ -1041,6 +1041,19 @@ export const WsPolicyOverrideRevokedEvent = WsEventEnvelope.extend({
 });
 export type WsPolicyOverrideRevokedEvent = z.infer<typeof WsPolicyOverrideRevokedEvent>;
 
+export const WsPolicyOverrideExpiredEventPayload = z
+  .object({
+    override: PolicyOverride,
+  })
+  .strict();
+export type WsPolicyOverrideExpiredEventPayload = z.infer<typeof WsPolicyOverrideExpiredEventPayload>;
+
+export const WsPolicyOverrideExpiredEvent = WsEventEnvelope.extend({
+  type: z.literal("policy_override.expired"),
+  payload: WsPolicyOverrideExpiredEventPayload,
+});
+export type WsPolicyOverrideExpiredEvent = z.infer<typeof WsPolicyOverrideExpiredEvent>;
+
 export const WsErrorEventPayload = z
   .object({
     code: z.string().min(1),
@@ -1090,6 +1103,7 @@ export const WsEvent = z.discriminatedUnion("type", [
   WsPresencePrunedEvent,
   WsPolicyOverrideCreatedEvent,
   WsPolicyOverrideRevokedEvent,
+  WsPolicyOverrideExpiredEvent,
   WsErrorEvent,
 ]);
 export type WsEvent = z.infer<typeof WsEvent>;
