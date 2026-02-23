@@ -375,26 +375,6 @@ function resolveProviderBaseURL(input: {
   return undefined;
 }
 
-function createProviderSdk(input: {
-  npm: string;
-  providerId: string;
-  apiKey: string | undefined;
-  baseURL: string | undefined;
-  headers?: Record<string, string> | undefined;
-  fetchImpl: typeof fetch;
-  options?: Record<string, unknown> | undefined;
-}): ReturnType<typeof createProviderFromNpm> {
-  return createProviderFromNpm({
-    npm: input.npm,
-    providerId: input.providerId,
-    apiKey: input.apiKey,
-    baseURL: input.baseURL,
-    headers: input.headers,
-    fetchImpl: input.fetchImpl,
-    options: input.options,
-  });
-}
-
 async function listOrderedEligibleProfilesForProvider(input: {
   agentId: string;
   sessionId: string;
@@ -930,10 +910,7 @@ export class AgentRuntime {
     if (resolvedCandidates.length === 0) {
       const attempted = parsedCandidates.map((c) => `${c.providerId}/${c.modelId}`);
       const attemptedLabel = attempted.length > 0 ? attempted.join(", ") : rawCandidateIds.join(", ") || "(none)";
-      const invalidLabel = invalidCandidateIds.length > 0
-        ? ` (invalid model ids ignored: ${invalidCandidateIds.join(", ")})`
-        : "";
-      throw new Error(`model not found in models.dev catalog: ${attemptedLabel}${invalidLabel}`);
+      throw new Error(`model not found in models.dev catalog: ${attemptedLabel}`);
     }
 
     const agentId = this.agentId;
@@ -982,7 +959,7 @@ export class AgentRuntime {
       const envApiKey = resolveEnvApiKey(chosen.provider.env);
 
       async function buildModelFromApiKey(apiKey: string | undefined): Promise<LanguageModelV3> {
-        const sdk = createProviderSdk({
+        const sdk = createProviderFromNpm({
           npm: chosen.npm,
           providerId: chosen.providerId,
           apiKey,
@@ -1492,7 +1469,7 @@ export class AgentRuntime {
           providerApi: candidate.api,
         });
 
-        const sdk = createProviderSdk({
+        const sdk = createProviderFromNpm({
           npm: candidate.npm,
           providerId: candidate.providerId,
           apiKey,

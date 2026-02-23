@@ -18,8 +18,8 @@ export class OauthRefreshLeaseDal {
        SET lease_owner = ?,
            lease_expires_at_ms = ?
        WHERE profile_id = ?
-         AND (lease_expires_at_ms <= ? OR lease_owner = ?)`,
-      [input.owner, leaseExpiresAt, input.profileId, input.nowMs, input.owner],
+         AND lease_expires_at_ms <= ?`,
+      [input.owner, leaseExpiresAt, input.profileId, input.nowMs],
     );
 
     return updated.changes > 0;
@@ -33,4 +33,3 @@ export class OauthRefreshLeaseDal {
     );
   }
 }
-
