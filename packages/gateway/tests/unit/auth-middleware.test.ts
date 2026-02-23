@@ -50,6 +50,17 @@ describe("Auth middleware", () => {
     expect(res.status).toBe(200);
   });
 
+  it("allows OAuth callback without token under a base path prefix", async () => {
+    const app = new Hono();
+    const sub = new Hono();
+    sub.use("*", createAuthMiddleware(tokenStore));
+    sub.get("/providers/test/oauth/callback", (c) => c.json({ ok: true }));
+    app.route("/prefix", sub);
+
+    const res = await app.request("/prefix/providers/test/oauth/callback?state=s&code=c");
+    expect(res.status).toBe(200);
+  });
+
   it("rejects requests without token", async () => {
     const app = buildApp();
     const res = await app.request("/api/data");

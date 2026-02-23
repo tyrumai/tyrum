@@ -17,7 +17,7 @@ const AUTH_ERROR_BODY = {
 
 const AUTH_COOKIE_NAME = "tyrum_admin_token";
 const APP_TOKEN_QUERY_KEY = "token";
-const OAUTH_CALLBACK_PATH_RE = /^\/providers\/[^/]+\/oauth\/callback$/;
+const OAUTH_CALLBACK_PATH_RE = /(?:^|\/)providers\/[^/]+\/oauth\/callback$/;
 
 function extractBearerToken(authorizationHeader: string | undefined): string | undefined {
   if (!authorizationHeader) {
