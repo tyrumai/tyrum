@@ -42,6 +42,11 @@ export function normalizeAccountId(value: string | undefined): string {
 
 export function buildChannelSourceKey(input: ChannelAddress): string {
   const connector = normalizeIdentityPart("connector", input.connector);
+  // Treat empty/whitespace account ids as invalid to avoid silently collapsing
+  // distinct connector/account identities into the default account.
+  if (input.accountId.trim().length === 0) {
+    throw new Error("account must be non-empty");
+  }
   const accountId = normalizeAccountId(input.accountId);
   return `${connector}:${accountId}`;
 }

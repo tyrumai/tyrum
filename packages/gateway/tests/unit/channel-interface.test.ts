@@ -19,6 +19,11 @@ describe("channel interface source identity", () => {
     });
   });
 
+  it("rejects empty account ids when building source keys", () => {
+    expect(() => buildChannelSourceKey({ connector: "telegram", accountId: "" })).toThrow(/account must be non-empty/);
+    expect(() => buildChannelSourceKey({ connector: "telegram", accountId: "   " })).toThrow(/account must be non-empty/);
+  });
+
   it("rejects invalid source key parts", () => {
     expect(() => buildChannelSourceKey({ connector: "telegram:test", accountId: "work" })).toThrow(
       /must not contain ':'/,
