@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { chmod, mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { chmod, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { Logger } from "../../src/modules/observability/logger.js";
@@ -164,6 +165,29 @@ export function registerPlugin({ manifest }) {
   };
 }
 `;
+}
+
+function pluginIntegritySha256Hex(manifestRaw: string, entryRaw: string): string {
+  return createHash("sha256")
+    .update("manifest\0")
+    .update(manifestRaw)
+    .update("\0entry\0")
+    .update(entryRaw)
+    .digest("hex");
+}
+
+function pluginLockJson(opts: { pinnedVersion: string; integritySha256: string }): string {
+  return JSON.stringify(
+    {
+      format: "tyrum.plugin.lock.v1",
+      recorded_at: new Date().toISOString(),
+      source: { kind: "local", spec: "test" },
+      pinned_version: opts.pinnedVersion,
+      integrity_sha256: opts.integritySha256,
+    },
+    null,
+    2,
+  );
 }
 
 describe("PluginRegistry", () => {
@@ -813,6 +837,88 @@ describe("PluginRegistry", () => {
     });
 
     expect(plugins.list()).toEqual([]);
+  });
+
+  it("loads plugins when plugin.lock.json matches pinned version and integrity", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
+    const pluginDir = join(home, "plugins/echo");
+    await mkdir(pluginDir, { recursive: true });
+
+    await writeFile(join(pluginDir, "plugin.yml"), pluginManifestYaml(), "utf-8");
+    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
+
+    const manifestRaw = await readFile(join(pluginDir, "plugin.yml"), "utf-8");
+    const entryRaw = await readFile(join(pluginDir, "index.mjs"), "utf-8");
+    const integritySha256 = pluginIntegritySha256Hex(manifestRaw, entryRaw);
+
+    await writeFile(
+      join(pluginDir, "plugin.lock.json"),
+      pluginLockJson({ pinnedVersion: "0.0.1", integritySha256 }),
+      "utf-8",
+    );
+
+    const { logger } = createCapturingLogger();
+    const plugins = await PluginRegistry.load({
+      home,
+      logger,
+    });
+
+    const listed = plugins.list() as unknown as Array<Record<string, unknown>>;
+    expect(listed.map((p) => p["id"])).toEqual(["echo"]);
+    expect((listed[0]?.["install"] as Record<string, unknown> | undefined)?.["pinned_version"]).toBe("0.0.1");
+    expect((listed[0]?.["install"] as Record<string, unknown> | undefined)?.["integrity_sha256"]).toBe(integritySha256);
+  });
+
+  it("skips plugins when plugin.lock.json pinned_version does not match manifest version", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
+    const pluginDir = join(home, "plugins/echo");
+    await mkdir(pluginDir, { recursive: true });
+
+    await writeFile(join(pluginDir, "plugin.yml"), pluginManifestYaml(), "utf-8");
+    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
+
+    const manifestRaw = await readFile(join(pluginDir, "plugin.yml"), "utf-8");
+    const entryRaw = await readFile(join(pluginDir, "index.mjs"), "utf-8");
+    const integritySha256 = pluginIntegritySha256Hex(manifestRaw, entryRaw);
+
+    await writeFile(
+      join(pluginDir, "plugin.lock.json"),
+      pluginLockJson({ pinnedVersion: "0.0.2", integritySha256 }),
+      "utf-8",
+    );
+
+    const { logger, warnings } = createCapturingLogger();
+    const plugins = await PluginRegistry.load({
+      home,
+      logger,
+    });
+
+    expect(plugins.list()).toEqual([]);
+    expect(warnings.some((entry) => entry.msg === "plugins.lock_version_mismatch")).toBe(true);
+  });
+
+  it("skips plugins when plugin.lock.json integrity does not match installed plugin contents", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
+    const pluginDir = join(home, "plugins/echo");
+    await mkdir(pluginDir, { recursive: true });
+
+    await writeFile(join(pluginDir, "plugin.yml"), pluginManifestYaml(), "utf-8");
+    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
+
+    await writeFile(
+      join(pluginDir, "plugin.lock.json"),
+      pluginLockJson({ pinnedVersion: "0.0.1", integritySha256: "b".repeat(64) }),
+      "utf-8",
+    );
+
+    const { logger, warnings } = createCapturingLogger();
+    const plugins = await PluginRegistry.load({
+      home,
+      logger,
+    });
+
+    expect(plugins.list()).toEqual([]);
+    expect(warnings.some((entry) => entry.msg === "plugins.lock_integrity_mismatch")).toBe(true);
   });
 
   itPosix("skips plugins when plugin root is world-writable", async () => {

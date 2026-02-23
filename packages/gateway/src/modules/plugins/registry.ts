@@ -9,6 +9,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import type { Hono } from "hono";
 import type { GatewayContainer } from "../../container.js";
 import { isRecord, parseJsonOrYaml } from "../../utils/parse-json-or-yaml.js";
+import { parsePluginLockFile, pluginIntegritySha256Hex, PLUGIN_LOCK_FILENAME, type PluginInstallInfo } from "./lockfile.js";
 import type { Logger } from "../observability/logger.js";
 import type { ToolDescriptor } from "../agent/tools.js";
 
@@ -61,6 +62,7 @@ export type PluginRegisterFn = (ctx: {
 type LoadedPlugin = {
   manifest: PluginManifestT;
   source_dir: string;
+  install?: PluginInstallInfo;
   entry_path: string;
   tools: Map<string, PluginToolRegistration>;
   commands: Map<string, PluginCommandRegistration>;
@@ -336,7 +338,9 @@ async function tryReadFile(path: string): Promise<string | undefined> {
   }
 }
 
-async function loadManifestFromDir(dir: string): Promise<{ path: string; manifest: PluginManifestT } | undefined> {
+async function loadManifestFromDir(
+  dir: string,
+): Promise<{ path: string; raw: string; manifest: PluginManifestT } | undefined> {
   const candidates = ["plugin.yml", "plugin.yaml", "plugin.json"];
   for (const filename of candidates) {
     const path = join(dir, filename);
@@ -350,7 +354,7 @@ async function loadManifestFromDir(dir: string): Promise<{ path: string; manifes
     if (missingFields.length > 0) {
       throw new Error(`missing required manifest field(s): ${missingFields.join(", ")}`);
     }
-    return { path, manifest: PluginManifest.parse(parsed) };
+    return { path, raw, manifest: PluginManifest.parse(parsed) };
   }
   return undefined;
 }
@@ -557,6 +561,7 @@ export class PluginRegistry {
     version: string;
     contributions: PluginManifestT["contributes"] | undefined;
     permissions: PluginManifestT["permissions"] | undefined;
+    install?: PluginInstallInfo;
     loaded_at: string;
     source_dir: string;
   }> {
@@ -567,6 +572,7 @@ export class PluginRegistry {
         version: p.manifest.version,
         contributions: p.manifest.contributes,
         permissions: p.manifest.permissions,
+        install: p.install ? structuredClone(p.install) : undefined,
         loaded_at: p.loaded_at,
         source_dir: p.source_dir,
       }))
@@ -777,7 +783,7 @@ export class PluginRegistry {
           }
         }
 
-        let manifestFile: { path: string; manifest: PluginManifestT } | undefined;
+        let manifestFile: { path: string; raw: string; manifest: PluginManifestT } | undefined;
         try {
           manifestFile = await loadManifestFromDir(pluginDir);
         } catch (err) {
@@ -803,6 +809,29 @@ export class PluginRegistry {
             source_dir: pluginDir,
           });
           continue;
+        }
+
+        let pluginInstall: PluginInstallInfo | undefined;
+        const lockRaw = await tryReadFile(join(pluginDir, PLUGIN_LOCK_FILENAME));
+        if (lockRaw !== undefined) {
+          const parsedLock = parsePluginLockFile(lockRaw);
+          if (!parsedLock) {
+            this.opts.logger.warn("plugins.lock_invalid", {
+              plugin_id: id,
+              source_dir: pluginDir,
+            });
+            continue;
+          }
+          pluginInstall = parsedLock;
+          if (parsedLock.pinned_version !== manifest.version) {
+            this.opts.logger.warn("plugins.lock_version_mismatch", {
+              plugin_id: id,
+              source_dir: pluginDir,
+              pinned_version: parsedLock.pinned_version,
+              manifest_version: manifest.version,
+            });
+            continue;
+          }
         }
 
         let configPath: string | undefined;
@@ -872,6 +901,29 @@ export class PluginRegistry {
             error: message,
           });
           continue;
+        }
+
+        if (pluginInstall) {
+          const entryRaw = await tryReadFile(entryPath);
+          if (entryRaw === undefined) {
+            this.opts.logger.warn("plugins.lock_integrity_mismatch", {
+              plugin_id: id,
+              source_dir: pluginDir,
+              reason: "entry_unreadable",
+            });
+            continue;
+          }
+          const integritySha256 = pluginIntegritySha256Hex(manifestFile.raw, entryRaw);
+          if (integritySha256 !== pluginInstall.integrity_sha256) {
+            this.opts.logger.warn("plugins.lock_integrity_mismatch", {
+              plugin_id: id,
+              source_dir: pluginDir,
+              pinned_version: pluginInstall.pinned_version,
+              expected_sha256: pluginInstall.integrity_sha256,
+              actual_sha256: integritySha256,
+            });
+            continue;
+          }
         }
 
         let registerFn: PluginRegisterFn | undefined;
@@ -962,6 +1014,7 @@ export class PluginRegistry {
         this.plugins.set(id, {
           manifest,
           source_dir: pluginDir,
+          install: pluginInstall ? structuredClone(pluginInstall) : undefined,
           entry_path: entryPath,
           tools,
           commands,

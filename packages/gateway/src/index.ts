@@ -38,6 +38,7 @@ import { isPostgresDbUri } from "./statestore/db-uri.js";
 import { VERSION } from "./version.js";
 import { resolveUserTyrumHome } from "./modules/agent/home.js";
 import { PluginRegistry, resolveBundledPluginsDirFrom } from "./modules/plugins/registry.js";
+import { installPluginFromDir } from "./modules/plugins/installer.js";
 import { AgentRegistry } from "./modules/agent/registry.js";
 import { isRecord, parseJsonOrYaml } from "./utils/parse-json-or-yaml.js";
 
@@ -95,7 +96,8 @@ type CliCommand =
   | { kind: "toolrunner" }
   | { kind: "help" }
   | { kind: "version" }
-  | { kind: "update"; channel: UpdateChannel; version?: string };
+  | { kind: "update"; channel: UpdateChannel; version?: string }
+  | { kind: "plugin_install"; source_dir: string; home?: string };
 
 function parseGatewayRole(raw: string | undefined): GatewayRole | undefined {
   const value = raw?.trim().toLowerCase();
@@ -142,6 +144,7 @@ Usage:
   tyrum [start|edge|worker|scheduler]
   tyrum check
   tyrum toolrunner
+  tyrum plugin install <dir> [--home <path>]
   tyrum update [--channel stable|beta|dev] [--version <version>]
   tyrum --version
   tyrum --help
@@ -197,6 +200,53 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
   }
   if (first === "check") return { kind: "check" };
   if (first === "toolrunner") return { kind: "toolrunner" };
+
+  if (first === "plugin") {
+    const [subcommand, ...args] = rest;
+    if (subcommand === "-h" || subcommand === "--help") return { kind: "help" };
+    if (subcommand !== "install") {
+      throw new Error(`unknown plugin command '${subcommand ?? ""}'`);
+    }
+
+    let sourceDir: string | undefined;
+    let home: string | undefined;
+
+    for (let index = 0; index < args.length; index += 1) {
+      const arg = args[index];
+      if (!arg) continue;
+
+      if (arg === "--home") {
+        const value = args[index + 1];
+        if (!value) {
+          throw new Error("--home requires a value");
+        }
+        home = value;
+        index += 1;
+        continue;
+      }
+
+      if (arg === "-h" || arg === "--help") {
+        return { kind: "help" };
+      }
+
+      if (arg.startsWith("-")) {
+        throw new Error(`unsupported plugin install argument '${arg}'`);
+      }
+
+      if (!sourceDir) {
+        sourceDir = arg;
+        continue;
+      }
+
+      throw new Error(`unexpected plugin install argument '${arg}'`);
+    }
+
+    if (!sourceDir) {
+      throw new Error("plugin install requires a source directory");
+    }
+
+    return { kind: "plugin_install", source_dir: sourceDir, home };
+  }
 
   if (first !== "update") {
     throw new Error(`unknown command '${first}'`);
@@ -700,6 +750,23 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
 
   if (command.kind === "toolrunner") {
     return runToolRunnerFromStdio();
+  }
+
+  if (command.kind === "plugin_install") {
+    const tyrumHome =
+      command.home ?? process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
+    try {
+      const result = await installPluginFromDir({
+        home: tyrumHome,
+        sourceDir: command.source_dir,
+      });
+      console.log(`plugin.install: ok id=${result.plugin_id} dir=${result.plugin_dir}`);
+      return 0;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`plugin.install: failed: ${message}`);
+      return 1;
+    }
   }
 
   if (command.kind === "update") {

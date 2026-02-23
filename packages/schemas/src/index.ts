@@ -446,6 +446,8 @@ export {
   PluginContributions,
   PluginPermissions,
   PluginManifest,
+  PluginLockFormat,
+  PluginLockFile,
 } from "./plugin.js";
 
 export { base32LowerNoPad, deviceIdFromSha256Digest } from "./device-id.js";

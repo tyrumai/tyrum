@@ -60,6 +60,18 @@ Requirements:
 
 Plugins are discoverable and installable from operator clients (CLI/UI) with a clear trust model (source, version, integrity).
 
+### Install record (`plugin.lock.json`)
+
+Plugins installed via an operator client should write a lock file in the plugin root: `plugin.lock.json`.
+
+This file records:
+
+- the install source (for example a registry reference or local path)
+- the pinned plugin version
+- an integrity hash recorded at install time
+
+When `plugin.lock.json` is present, the gateway treats it as an integrity/pinning contract: it refuses to load the plugin if the pinned version or integrity hash does not match what is on disk.
+
 ## Discovery and installation hardening
 
 Plugin discovery/install must be hardened because plugins run in-process:
