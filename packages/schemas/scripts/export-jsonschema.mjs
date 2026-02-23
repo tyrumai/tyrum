@@ -24,7 +24,9 @@ for (const [name, value] of Object.entries(dist)) {
   if (typeof toJSONSchema !== "function") continue;
 
   try {
-    const schema = toJSONSchema.call(value, {});
+    // Publish contract schemas as the accepted input shape. This avoids JSON Schema
+    // export failures for schemas that normalize output (for example via transforms).
+    const schema = toJSONSchema.call(value, { io: "input" });
     if (!schema || typeof schema !== "object") continue;
 
     const id = `https://schemas.tyrum.dev/${pkg.version}/${encodeURIComponent(name)}.json`;
