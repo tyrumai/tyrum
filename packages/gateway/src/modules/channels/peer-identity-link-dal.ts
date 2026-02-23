@@ -1,6 +1,16 @@
 import type { SqlDb } from "../../statestore/types.js";
 
+function getErrorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== "object") return undefined;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" ? code : undefined;
+}
+
 function isMissingTableError(error: unknown, table: string): boolean {
+  const code = getErrorCode(error);
+  // Postgres: undefined table / relation does not exist.
+  if (code === "42P01") return true;
+
   const message = error instanceof Error ? error.message : String(error);
   const needle = table.toLowerCase();
   const haystack = message.toLowerCase();
@@ -8,7 +18,6 @@ function isMissingTableError(error: unknown, table: string): boolean {
     haystack.includes(needle) &&
     (haystack.includes("no such table") ||
       haystack.includes("does not exist") ||
-      haystack.includes("relation") ||
       haystack.includes("undefined table"))
   );
 }
@@ -36,4 +45,3 @@ export class PeerIdentityLinkDal {
     }
   }
 }
-
