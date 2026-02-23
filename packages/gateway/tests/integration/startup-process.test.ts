@@ -165,7 +165,9 @@ async function stopChildProcess(
 ): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return;
 
-  child.kill("SIGTERM");
+  // On Windows, SIGTERM is not reliably handled as a graceful signal.
+  const gracefulSignal: NodeJS.Signals = process.platform === "win32" ? "SIGINT" : "SIGTERM";
+  child.kill(gracefulSignal);
   const maybeExit = await Promise.race([
     once(child, "exit"),
     delay(5_000).then(() => null),
