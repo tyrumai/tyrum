@@ -130,6 +130,7 @@ function tryGatewayBuild(cmd: string, args: string[]): ReturnType<typeof spawnSy
 async function ensureGatewayBuild(): Promise<void> {
   if (!existsSync(WORKSPACE_MARKER)) return;
   if (!existsSync(SRC_ROOT)) return;
+  if (!gatewayBuildIsStale()) return;
 
   const release = await acquireGatewayBuildLock();
   try {
@@ -169,24 +170,28 @@ async function ensureGatewayBuild(): Promise<void> {
 }
 
 describe("gateway dist bundle", () => {
-  it("uses WS ping/pong control frames for heartbeats (regression for /app/live disconnects)", async () => {
-    await ensureGatewayBuild();
+  it(
+    "uses WS ping/pong control frames for heartbeats (regression for /app/live disconnects)",
+    { timeout: 60_000 },
+    async () => {
+      await ensureGatewayBuild();
 
-    const mod = await import(pathToFileURL(DIST_ENTRYPOINT).href);
-    const ConnectionManager = mod.ConnectionManager as {
-      new (): {
-        addClient: (ws: unknown, capabilities: unknown[]) => string;
-        heartbeat: () => void;
+      const mod = await import(pathToFileURL(DIST_ENTRYPOINT).href);
+      const ConnectionManager = mod.ConnectionManager as {
+        new (): {
+          addClient: (ws: unknown, capabilities: unknown[]) => string;
+          heartbeat: () => void;
+        };
       };
-    };
 
-    const cm = new ConnectionManager();
-    const ws = createMockWs();
-    cm.addClient(ws as never, []);
+      const cm = new ConnectionManager();
+      const ws = createMockWs();
+      cm.addClient(ws as never, []);
 
-    cm.heartbeat();
+      cm.heartbeat();
 
-    expect(ws.ping).toHaveBeenCalledOnce();
-    expect(ws.send).not.toHaveBeenCalled();
-  }, 60_000);
+      expect(ws.ping).toHaveBeenCalledOnce();
+      expect(ws.send).not.toHaveBeenCalled();
+    },
+  );
 });

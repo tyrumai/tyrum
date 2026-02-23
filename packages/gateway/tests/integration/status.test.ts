@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createTestApp } from "./helpers.js";
 
 describe("GET /status", () => {
-  it("returns runtime status information", async () => {
+  it("returns expanded observability status information", async () => {
     const { app } = await createTestApp();
 
     const res = await app.request("/status");
@@ -17,6 +17,14 @@ describe("GET /status", () => {
     expect(body["is_exposed"]).toBe(false);
     expect(body["otel_enabled"]).toBe(false);
     expect(body["ws"]).toBeNull();
+    expect("auth_profiles" in body).toBe(false);
+    expect(body["model_auth"]).toBeTypeOf("object");
+    expect(
+      (body["model_auth"] as Record<string, unknown>)["auth_profiles"],
+    ).toBeTypeOf("object");
+    expect(body["catalog_freshness"]).toBeTypeOf("object");
+    expect(body["session_lanes"]).toBeInstanceOf(Array);
+    expect(body["queue_depth"]).toBeTypeOf("object");
+    expect(body["sandbox"]).toBeTypeOf("object");
   });
 });
-

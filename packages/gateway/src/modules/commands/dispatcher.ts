@@ -8,6 +8,9 @@ import type { PolicyService } from "../policy/service.js";
 import type { PolicyOverrideDal } from "../policy/override-dal.js";
 import type { ContextReportDal } from "../context/report-dal.js";
 import type { PluginRegistry } from "../plugins/registry.js";
+import type { ModelsDevService } from "../models/models-dev-service.js";
+import type { AgentRegistry } from "../agent/registry.js";
+import { buildStatusDetails } from "../observability/status-details.js";
 
 export type CommandExecuteResult = {
   output: string;
@@ -32,6 +35,8 @@ export interface CommandDeps {
   policyOverrideDal?: PolicyOverrideDal;
   contextReportDal?: ContextReportDal;
   plugins?: PluginRegistry;
+  modelsDev?: ModelsDevService;
+  agents?: AgentRegistry;
 }
 
 function tokensFromCommand(raw: string): string[] {
@@ -162,11 +167,29 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
 
   if (cmd === "status") {
     const policy = deps.policyService ? await deps.policyService.getStatus() : null;
+    const details = await buildStatusDetails({
+      db: deps.db,
+      policyService: deps.policyService,
+      policyStatus: policy
+        ? {
+            enabled: policy.enabled,
+            observe_only: policy.observe_only,
+            effective_sha256: policy.effective_sha256,
+          }
+        : undefined,
+      agents: deps.agents,
+      modelsDev: deps.modelsDev,
+    });
     const payload = {
       status: "ok",
       runtime: deps.runtime ?? null,
       ws: deps.connectionManager?.getStats() ?? null,
       policy,
+      model_auth: details.model_auth,
+      catalog_freshness: details.catalog_freshness,
+      session_lanes: details.session_lanes,
+      queue_depth: details.queue_depth,
+      sandbox: details.sandbox,
     };
     return { output: jsonBlock(payload), data: payload };
   }
