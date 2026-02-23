@@ -5,6 +5,10 @@ const { spawnMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
 }));
 
+const { mkdirSyncMock } = vi.hoisted(() => ({
+  mkdirSyncMock: vi.fn(),
+}));
+
 vi.mock("node:child_process", async () => {
   const actual = await vi.importActual<typeof import("node:child_process")>(
     "node:child_process",
@@ -12,6 +16,14 @@ vi.mock("node:child_process", async () => {
   return {
     ...actual,
     spawn: spawnMock,
+  };
+});
+
+vi.mock("node:fs", async () => {
+  const actual = await vi.importActual<typeof import("node:fs")>("node:fs");
+  return {
+    ...actual,
+    mkdirSync: mkdirSyncMock,
   };
 });
 
@@ -114,6 +126,33 @@ describe("gateway CLI runCli", () => {
 
     logSpy.mockRestore();
     errSpy.mockRestore();
+  });
+
+  it("prints a check failure when database directory creation fails", async () => {
+    const prevDbPath = process.env["GATEWAY_DB_PATH"];
+    process.env["GATEWAY_DB_PATH"] = "forbidden/gateway.db";
+
+    mkdirSyncMock.mockImplementationOnce(() => {
+      throw new Error("permission denied");
+    });
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      const code = await runCli(["check"]);
+      expect(code).toBe(1);
+      expect(errSpy).toHaveBeenCalledWith(expect.stringContaining("check: failed:"));
+      expect(errSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Unable to create database directory"),
+      );
+    } finally {
+      if (prevDbPath === undefined) delete process.env["GATEWAY_DB_PATH"];
+      else process.env["GATEWAY_DB_PATH"] = prevDbPath;
+
+      logSpy.mockRestore();
+      errSpy.mockRestore();
+    }
   });
 });
 

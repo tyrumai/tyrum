@@ -273,10 +273,10 @@ async function runGatewayCheck(): Promise<number> {
   const tyrumHome =
     process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
 
-  ensureDatabaseDirectory(dbPath);
-
   let container: Awaited<ReturnType<typeof createContainerAsync>> | undefined;
   try {
+    ensureDatabaseDirectory(dbPath);
+
     container = await createContainerAsync({
       dbPath,
       migrationsDir,
