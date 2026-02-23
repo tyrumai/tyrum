@@ -35,7 +35,7 @@ export const PluginManifest = z
     entry: z.string().trim().min(1).optional(),
     contributes: PluginContributions.optional(),
     permissions: PluginPermissions.optional(),
+    config_schema: z.record(z.string(), z.unknown()),
   })
   .strict();
 export type PluginManifest = z.infer<typeof PluginManifest>;
-

@@ -15,11 +15,14 @@ function yamlStringList(indent: string, values: string[]): string[] {
 function pluginManifestYaml(opts?: {
   includeContributes?: boolean;
   includePermissions?: boolean;
+  includeConfigSchema?: boolean;
+  configSchema?: string[];
   tools?: string[];
   commands?: string[];
 }): string {
   const includeContributes = opts?.includeContributes ?? true;
   const includePermissions = opts?.includePermissions ?? true;
+  const includeConfigSchema = opts?.includeConfigSchema ?? true;
   const tools = opts?.tools ?? ["plugin.echo.echo"];
   const commands = opts?.commands ?? ["echo"];
 
@@ -46,6 +49,20 @@ function pluginManifestYaml(opts?: {
     lines.push("  network_egress: []");
     lines.push("  secrets: []");
     lines.push("  db: false");
+  }
+
+  if (includeConfigSchema) {
+    const schemaLines = opts?.configSchema ?? [
+      "type: object",
+      "properties: {}",
+      "required: []",
+      "additionalProperties: false",
+    ];
+
+    lines.push("config_schema:");
+    for (const line of schemaLines) {
+      lines.push(`  ${line}`);
+    }
   }
 
   lines.push("");
@@ -207,6 +224,79 @@ describe("PluginRegistry", () => {
 
     expect(plugins.list()).toEqual([]);
     expect(await plugins.tryExecuteCommand("/echo hello")).toBeUndefined();
+  });
+
+  it("rejects plugins whose manifest omits required 'config_schema' field", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
+    const pluginDir = join(home, "plugins/echo");
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(join(pluginDir, "plugin.yml"), pluginManifestYaml({ includeConfigSchema: false }), "utf-8");
+    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
+
+    const plugins = await PluginRegistry.load({
+      home,
+      logger: new Logger({ level: "silent" }),
+    });
+
+    expect(plugins.list()).toEqual([]);
+    expect(await plugins.tryExecuteCommand("/echo hello")).toBeUndefined();
+  });
+
+  it("rejects plugins when config contains unknown keys (additionalProperties defaults to false)", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
+    const pluginDir = join(home, "plugins/echo");
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(
+      join(pluginDir, "plugin.yml"),
+      pluginManifestYaml({
+        configSchema: [
+          "type: object",
+          "properties:",
+          "  greeting:",
+          "    type: string",
+          "required: []",
+        ],
+      }),
+      "utf-8",
+    );
+    await writeFile(join(pluginDir, "config.json"), JSON.stringify({ greeting: "hi", extra: "nope" }), "utf-8");
+    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
+
+    const plugins = await PluginRegistry.load({
+      home,
+      logger: new Logger({ level: "silent" }),
+    });
+
+    expect(plugins.list()).toEqual([]);
+  });
+
+  it("loads plugins when config schema explicitly allows additionalProperties", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
+    const pluginDir = join(home, "plugins/echo");
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(
+      join(pluginDir, "plugin.yml"),
+      pluginManifestYaml({
+        configSchema: [
+          "type: object",
+          "properties:",
+          "  greeting:",
+          "    type: string",
+          "required: []",
+          "additionalProperties: true",
+        ],
+      }),
+      "utf-8",
+    );
+    await writeFile(join(pluginDir, "config.json"), JSON.stringify({ greeting: "hi", extra: "ok" }), "utf-8");
+    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
+
+    const plugins = await PluginRegistry.load({
+      home,
+      logger: new Logger({ level: "silent" }),
+    });
+
+    expect(plugins.list().map((p) => p.id)).toEqual(["echo"]);
   });
 
   it("rejects plugins when runtime registration includes undeclared contributions", async () => {

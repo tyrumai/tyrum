@@ -1,5 +1,6 @@
 import { PluginManifest } from "@tyrum/schemas";
 import type { PluginManifest as PluginManifestT } from "@tyrum/schemas";
+import { Ajv, type ErrorObject } from "ajv";
 import { readFileSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { dirname, join, resolve, relative } from "node:path";
@@ -52,6 +53,7 @@ export type PluginRegistration = {
 
 export type PluginRegisterFn = (ctx: {
   manifest: PluginManifestT;
+  config: unknown;
   logger: Logger;
 }) => PluginRegistration | Promise<PluginRegistration>;
 
@@ -65,7 +67,7 @@ type LoadedPlugin = {
   loaded_at: string;
 };
 
-const REQUIRED_MANIFEST_FIELDS = ["id", "name", "version", "entry", "contributes", "permissions"] as const;
+const REQUIRED_MANIFEST_FIELDS = ["id", "name", "version", "entry", "contributes", "permissions", "config_schema"] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -83,6 +85,98 @@ function parseJsonOrYaml(contents: string, hintPath?: string): unknown {
     return JSON.parse(trimmed) as unknown;
   }
   return parseYaml(trimmed) as unknown;
+}
+
+function isJsonSchemaObject(value: unknown): value is Record<string, unknown> {
+  return isRecord(value);
+}
+
+function normalizeJsonSchemaAdditionalPropertiesDefaults(
+  schema: unknown,
+  seen = new WeakMap<object, unknown>(),
+): unknown {
+  if (schema === null || typeof schema !== "object") return schema;
+  const existing = seen.get(schema);
+  if (existing) return existing;
+
+  if (Array.isArray(schema)) {
+    const out: unknown[] = [];
+    seen.set(schema, out);
+    for (const item of schema) {
+      out.push(normalizeJsonSchemaAdditionalPropertiesDefaults(item, seen));
+    }
+    return out;
+  }
+
+  const record = schema as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  seen.set(schema, out);
+
+  const type = record["type"];
+  const isObjectType = type === "object" || (Array.isArray(type) && type.includes("object"));
+  const hasProperties =
+    Object.prototype.hasOwnProperty.call(record, "properties") ||
+    Object.prototype.hasOwnProperty.call(record, "patternProperties");
+  const isObjectSchema = isObjectType || hasProperties;
+
+  for (const [key, value] of Object.entries(record)) {
+    switch (key) {
+      case "additionalProperties":
+      case "unevaluatedProperties": {
+        out[key] =
+          typeof value === "boolean"
+            ? value
+            : normalizeJsonSchemaAdditionalPropertiesDefaults(value, seen);
+        break;
+      }
+      case "items":
+      case "contains":
+      case "not":
+      case "if":
+      case "then":
+      case "else":
+      case "propertyNames":
+      case "unevaluatedItems":
+      case "additionalItems": {
+        out[key] = normalizeJsonSchemaAdditionalPropertiesDefaults(value, seen);
+        break;
+      }
+      case "prefixItems":
+      case "allOf":
+      case "anyOf":
+      case "oneOf": {
+        out[key] = Array.isArray(value)
+          ? value.map((entry) => normalizeJsonSchemaAdditionalPropertiesDefaults(entry, seen))
+          : value;
+        break;
+      }
+      case "properties":
+      case "patternProperties":
+      case "$defs":
+      case "definitions":
+      case "dependentSchemas": {
+        if (!isRecord(value)) {
+          out[key] = value;
+          break;
+        }
+        const normalized: Record<string, unknown> = {};
+        for (const [prop, schemaValue] of Object.entries(value)) {
+          normalized[prop] = normalizeJsonSchemaAdditionalPropertiesDefaults(schemaValue, seen);
+        }
+        out[key] = normalized;
+        break;
+      }
+      default:
+        out[key] = value;
+        break;
+    }
+  }
+
+  if (isObjectSchema && !Object.prototype.hasOwnProperty.call(record, "additionalProperties")) {
+    out["additionalProperties"] = false;
+  }
+
+  return out;
 }
 
 async function tryReadFile(path: string): Promise<string | undefined> {
@@ -110,6 +204,56 @@ async function loadManifestFromDir(dir: string): Promise<{ path: string; manifes
     return { path, manifest: PluginManifest.parse(parsed) };
   }
   return undefined;
+}
+
+async function loadConfigFromDir(dir: string): Promise<{ path?: string; config: unknown }> {
+  const candidates = ["config.yml", "config.yaml", "config.json"];
+  for (const filename of candidates) {
+    const path = join(dir, filename);
+    const raw = await tryReadFile(path);
+    if (!raw) continue;
+    try {
+      const parsed = parseJsonOrYaml(raw, path);
+      return { path, config: parsed };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(`failed to parse config (${filename}): ${message}`);
+    }
+  }
+  return { config: {} };
+}
+
+function validatePluginConfig(params: {
+  schema: unknown;
+  config: unknown;
+}): { ok: true; normalizedSchema: Record<string, unknown>; config: unknown } | { ok: false; error: string } {
+  const normalizedSchema = normalizeJsonSchemaAdditionalPropertiesDefaults(params.schema);
+  if (!isJsonSchemaObject(normalizedSchema)) {
+    return { ok: false, error: "config_schema must be a JSON Schema object" };
+  }
+
+	  try {
+	    const ajv = new Ajv({ allErrors: true, strict: false });
+	    const validate = ajv.compile(normalizedSchema);
+	    const ok = validate(params.config);
+	    if (ok) {
+	      return { ok: true, normalizedSchema, config: params.config };
+	    }
+	    const errors = ((validate.errors ?? []) as ErrorObject[])
+	      .map((err) => {
+	        const at = err.instancePath && err.instancePath.length > 0 ? err.instancePath : "/";
+	        const msg = err.message ? String(err.message) : "invalid";
+	        return `${at}: ${msg}`;
+	      })
+	      .filter((entry) => entry.length > 0);
+    return {
+      ok: false,
+      error: errors.length > 0 ? errors.join("; ") : "config does not match schema",
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: message };
+  }
 }
 
 function tryReadPackageJsonName(path: string): string | undefined {
@@ -378,6 +522,36 @@ export class PluginRegistry {
           continue;
         }
 
+        let configPath: string | undefined;
+        let config: unknown;
+        try {
+          const loadedConfig = await loadConfigFromDir(pluginDir);
+          configPath = loadedConfig.path;
+          config = loadedConfig.config;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          this.opts.logger.warn("plugins.invalid_config", {
+            plugin_id: id,
+            source_dir: pluginDir,
+            error: message,
+          });
+          continue;
+        }
+        const configValidation = validatePluginConfig({
+          schema: manifest.config_schema,
+          config,
+        });
+        if (!configValidation.ok) {
+          this.opts.logger.warn("plugins.invalid_config", {
+            plugin_id: id,
+            source_dir: pluginDir,
+            config_path: configPath,
+            error: configValidation.error,
+          });
+          continue;
+        }
+        manifest.config_schema = configValidation.normalizedSchema;
+
         const entryPath = resolveSafeChildPath(pluginDir, manifest.entry);
 
         let registerFn: PluginRegisterFn | undefined;
@@ -411,7 +585,11 @@ export class PluginRegistry {
         try {
           const manifestForRegistration = cloneManifest(manifest);
           registration = await Promise.resolve(
-            registerFn({ manifest: manifestForRegistration, logger: this.opts.logger.child({ plugin_id: id }) }),
+            registerFn({
+              manifest: manifestForRegistration,
+              config: configValidation.config,
+              logger: this.opts.logger.child({ plugin_id: id }),
+            }),
           );
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
