@@ -99,6 +99,21 @@ function parseIsoToMs(value: string | null | undefined): number | null {
   return Number.isFinite(ms) ? ms : null;
 }
 
+function isMissingTableError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+
+  const code = (err as { code?: unknown }).code;
+  if (code === "42P01") return true;
+
+  const message = (err as { message?: unknown }).message;
+  if (typeof message !== "string") return false;
+  const lowered = message.toLowerCase();
+  return (
+    lowered.includes("no such table") ||
+    (lowered.includes("relation") && lowered.includes("does not exist"))
+  );
+}
+
 function asFiniteNumber(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string") {
@@ -175,7 +190,7 @@ async function loadActiveModel(agents: AgentRegistry | undefined): Promise<Activ
 async function loadAuthProfileHealth(db: SqlDb | undefined): Promise<AuthProfilesStatus | null> {
   if (!db) return null;
 
-  const profiles = await db.all<{
+  let profiles: Array<{
     profile_id: string;
     agent_id: string;
     provider: string;
@@ -184,38 +199,60 @@ async function loadAuthProfileHealth(db: SqlDb | undefined): Promise<AuthProfile
     disabled_reason: string | null;
     cooldown_until_ms: number | null;
     expires_at: string | null;
-  }>(
-    `SELECT
-       profile_id,
-       agent_id,
-       provider,
-       type,
-       status,
-       disabled_reason,
-       cooldown_until_ms,
-       expires_at
-     FROM auth_profiles
-     ORDER BY updated_at DESC
-     LIMIT 500`,
-  );
-
-  const pins = await db.all<{
+  }>;
+  let pins: Array<{
     agent_id: string;
     session_id: string;
     provider: string;
     profile_id: string;
     updated_at: string;
-  }>(
-    `SELECT
-       agent_id,
-       session_id,
-       provider,
-       profile_id,
-       updated_at
-     FROM session_provider_pins
-     ORDER BY updated_at DESC
-     LIMIT 500`,
-  );
+  }>;
+  try {
+    profiles = await db.all<{
+      profile_id: string;
+      agent_id: string;
+      provider: string;
+      type: string;
+      status: string;
+      disabled_reason: string | null;
+      cooldown_until_ms: number | null;
+      expires_at: string | null;
+    }>(
+      `SELECT
+         profile_id,
+         agent_id,
+         provider,
+         type,
+         status,
+         disabled_reason,
+         cooldown_until_ms,
+         expires_at
+       FROM auth_profiles
+       ORDER BY updated_at DESC
+       LIMIT 500`,
+    );
+
+    pins = await db.all<{
+      agent_id: string;
+      session_id: string;
+      provider: string;
+      profile_id: string;
+      updated_at: string;
+    }>(
+      `SELECT
+         agent_id,
+         session_id,
+         provider,
+         profile_id,
+         updated_at
+       FROM session_provider_pins
+       ORDER BY updated_at DESC
+       LIMIT 500`,
+    );
+  } catch (err) {
+    if (isMissingTableError(err)) return null;
+    throw err;
+  }
 
   const nowMs = Date.now();
   const soonMs = nowMs + 24 * 60 * 60 * 1000;
@@ -316,18 +353,31 @@ async function loadCatalogFreshness(
 
   if (!db) return fallback;
 
-  const row = await db.get<{
+  let row: {
     source: string;
     fetched_at: string | null;
     updated_at: string;
     sha256: string;
     last_error: string | null;
     json: string;
-  }>(
-    `SELECT source, fetched_at, updated_at, sha256, last_error, json
-     FROM models_dev_cache
-     WHERE id = 1`,
-  );
+  } | undefined;
+  try {
+    row = await db.get<{
+      source: string;
+      fetched_at: string | null;
+      updated_at: string;
+      sha256: string;
+      last_error: string | null;
+      json: string;
+    }>(
+      `SELECT source, fetched_at, updated_at, sha256, last_error, json
+       FROM models_dev_cache
+       WHERE id = 1`,
+    );
+  } catch (err) {
+    if (isMissingTableError(err)) return fallback;
+    throw err;
+  }
   if (!row) return fallback;
 
   const counts = parseCatalogCounts(row.json);
@@ -351,34 +401,54 @@ async function loadSessionLanes(db: SqlDb | undefined): Promise<SessionLaneStatu
   if (!db) return [];
 
   const nowMs = Date.now();
-  const runs = await db.all<{
+  let runs: Array<{
     key: string;
     lane: string;
     run_id: string;
     status: string;
     created_at: string;
-  }>(
-    `SELECT key, lane, run_id, status, created_at
-     FROM execution_runs
-     WHERE status IN ('queued', 'running', 'paused')
-     ORDER BY created_at DESC, run_id DESC
-     LIMIT 500`,
-  );
-  const queuedRows = await db.all<{ key: string; lane: string; queued_runs: number | string }>(
-    `SELECT key, lane, COUNT(*) AS queued_runs
-     FROM execution_runs
-     WHERE status = 'queued'
-     GROUP BY key, lane`,
-  );
-  const leases = await db.all<{
+  }>;
+  let queuedRows: Array<{ key: string; lane: string; queued_runs: number | string }>;
+  let leases: Array<{
     key: string;
     lane: string;
     lease_owner: string;
     lease_expires_at_ms: number;
-  }>(
-    `SELECT key, lane, lease_owner, lease_expires_at_ms
-     FROM lane_leases`,
-  );
+  }>;
+
+  try {
+    runs = await db.all<{
+      key: string;
+      lane: string;
+      run_id: string;
+      status: string;
+      created_at: string;
+    }>(
+      `SELECT key, lane, run_id, status, created_at
+       FROM execution_runs
+       WHERE status IN ('queued', 'running', 'paused')
+       ORDER BY created_at DESC, run_id DESC
+       LIMIT 500`,
+    );
+    queuedRows = await db.all<{ key: string; lane: string; queued_runs: number | string }>(
+      `SELECT key, lane, COUNT(*) AS queued_runs
+       FROM execution_runs
+       WHERE status = 'queued'
+       GROUP BY key, lane`,
+    );
+    leases = await db.all<{
+      key: string;
+      lane: string;
+      lease_owner: string;
+      lease_expires_at_ms: number;
+    }>(
+      `SELECT key, lane, lease_owner, lease_expires_at_ms
+       FROM lane_leases`,
+    );
+  } catch (err) {
+    if (isMissingTableError(err)) return [];
+    throw err;
+  }
 
   const keyFor = (key: string, lane: string): string => `${key}\u0000${lane}`;
 
@@ -440,13 +510,23 @@ async function loadSessionLanes(db: SqlDb | undefined): Promise<SessionLaneStatu
 async function loadQueueDepth(db: SqlDb | undefined): Promise<QueueDepthStatus | null> {
   if (!db) return null;
 
-  const [runs, jobs, inbox, outbox, firings] = await Promise.all([
-    countByStatus(db, "execution_runs", ["queued", "running", "paused"]),
-    countByStatus(db, "execution_jobs", ["queued", "running"]),
-    countByStatus(db, "channel_inbox", ["queued", "processing"]),
-    countByStatus(db, "channel_outbox", ["queued", "sending"]),
-    countByStatus(db, "watcher_firings", ["queued", "processing"]),
-  ]);
+  let runs: StatusCountMap;
+  let jobs: StatusCountMap;
+  let inbox: StatusCountMap;
+  let outbox: StatusCountMap;
+  let firings: StatusCountMap;
+  try {
+    [runs, jobs, inbox, outbox, firings] = await Promise.all([
+      countByStatus(db, "execution_runs", ["queued", "running", "paused"]),
+      countByStatus(db, "execution_jobs", ["queued", "running"]),
+      countByStatus(db, "channel_inbox", ["queued", "processing"]),
+      countByStatus(db, "channel_outbox", ["queued", "sending"]),
+      countByStatus(db, "watcher_firings", ["queued", "processing"]),
+    ]);
+  } catch (err) {
+    if (isMissingTableError(err)) return null;
+    throw err;
+  }
 
   return {
     execution_runs: {
