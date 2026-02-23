@@ -312,12 +312,16 @@ function isTransientStatus(status: number | undefined): boolean {
   return status === 429 || status >= 500;
 }
 
-function getNonTransientApiCallError(err: unknown): APICallError | undefined {
+function getStopFallbackApiCallError(err: unknown): APICallError | undefined {
   let current: unknown = err;
   for (let i = 0; i < 5; i++) {
     if (APICallError.isInstance(current)) {
       const status = current.statusCode;
-      return isTransientStatus(status) ? undefined : current;
+      if (status == null) return undefined;
+      if (isTransientStatus(status)) return undefined;
+      if (isAuthInvalidStatus(status)) return undefined;
+      if (status === 404) return undefined;
+      return current;
     }
     if (current instanceof Error && typeof current.cause !== "undefined") {
       current = current.cause;
@@ -937,7 +941,7 @@ export class AgentRuntime {
 	          try {
 	            return await model.doGenerate(options);
 	          } catch (err) {
-	            if (getNonTransientApiCallError(err)) throw err;
+	            if (getStopFallbackApiCallError(err)) throw err;
 	            lastErr = err;
 	          }
 	        }
@@ -951,7 +955,7 @@ export class AgentRuntime {
 	          try {
 	            return await model.doStream(options);
 	          } catch (err) {
-	            if (getNonTransientApiCallError(err)) throw err;
+	            if (getStopFallbackApiCallError(err)) throw err;
 	            lastErr = err;
 	          }
 	        }
