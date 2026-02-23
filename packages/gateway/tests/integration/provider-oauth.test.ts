@@ -157,4 +157,34 @@ describe("provider OAuth routes", () => {
 
     await container.db.close();
   });
+
+  it("rejects non-default agent_id when agent registry is disabled", async () => {
+    const container = await createTestContainer();
+    const app = createApp(container, {
+      tokenStore,
+      secretProvider,
+      isLocalOnly: true,
+      runtime: {
+        version: "test",
+        instanceId: "test-instance",
+        role: "all",
+        otelEnabled: false,
+      },
+    });
+
+    const authorizeRes = await app.request("/providers/test/oauth/authorize", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        Authorization: `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify({ agent_id: "agent-2" }),
+    });
+    expect(authorizeRes.status).toBe(400);
+    const body = (await authorizeRes.json()) as { error: string; message: string };
+    expect(body.error).toBe("invalid_request");
+    expect(body.message).toContain("non-default agent_id");
+
+    await container.db.close();
+  });
 });

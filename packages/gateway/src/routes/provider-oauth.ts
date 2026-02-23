@@ -103,6 +103,13 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
       return c.json({ error: "not_found", message: `oauth provider '${providerId}' not configured` }, 404);
     }
 
+    try {
+      await deps.secretProviderForAgent(agentId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: "invalid_request", message }, 400);
+    }
+
     const clientIdEnv = coerceString(spec.client_id_env);
     if (!clientIdEnv) {
       return c.json({ error: "invalid_config", message: "oauth provider missing client_id_env" }, 500);

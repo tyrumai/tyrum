@@ -111,6 +111,21 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     };
   })();
 
+  const oauthSecretProviderForAgent = (() => {
+    if (!opts.secretProvider) return undefined;
+    const defaultSecretProvider = opts.secretProvider;
+    return async (agentId: string) => {
+      if (opts.agents) {
+        return await opts.agents.getSecretProvider(agentId);
+      }
+      const trimmed = agentId.trim();
+      if (trimmed !== "default") {
+        throw new Error("non-default agent_id requires TYRUM_AGENT_ENABLED=1");
+      }
+      return defaultSecretProvider;
+    };
+  })();
+
   // Apply auth middleware if a token store is provided
   if (opts.tokenStore) {
     app.use("*", createAuthMiddleware(opts.tokenStore));
@@ -197,14 +212,14 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   );
   app.route("/", createAuthProfileRoutes({ authProfileDal, pinDal }));
   app.route("/", createModelsDevRoutes({ modelsDev: container.modelsDev }));
-  if (secretProviderForAgent) {
+  if (oauthSecretProviderForAgent) {
     app.route(
       "/",
       createProviderOAuthRoutes({
         oauthPendingDal: container.oauthPendingDal,
         oauthProviderRegistry: container.oauthProviderRegistry,
         authProfileDal,
-        secretProviderForAgent,
+        secretProviderForAgent: oauthSecretProviderForAgent,
         logger: container.logger,
       }),
     );
