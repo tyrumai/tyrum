@@ -372,6 +372,38 @@ async function listOrderedEligibleProfilesForProvider(input: {
     : eligibleProfiles;
 }
 
+function buildProviderResolutionSetup(input: {
+  container: GatewayContainer;
+  secretProvider: SecretProvider | undefined;
+  oauthLeaseOwner: string;
+  fetchImpl: typeof fetch;
+}): {
+  secretProvider: SecretProvider | undefined;
+  resolver: SecretHandleResolver | undefined;
+  authProfileDal: AuthProfileDal;
+  pinDal: SessionProviderPinDal;
+  oauthProviderRegistry: GatewayContainer["oauthProviderRegistry"];
+  oauthRefreshLeaseDal: GatewayContainer["oauthRefreshLeaseDal"];
+  logger: GatewayContainer["logger"];
+  oauthLeaseOwner: string;
+  fetchImpl: typeof fetch;
+} {
+  const secretProvider = input.secretProvider;
+  const resolver = secretProvider ? createSecretHandleResolver(secretProvider) : undefined;
+
+  return {
+    secretProvider,
+    resolver,
+    authProfileDal: new AuthProfileDal(input.container.db),
+    pinDal: new SessionProviderPinDal(input.container.db),
+    oauthProviderRegistry: input.container.oauthProviderRegistry,
+    oauthRefreshLeaseDal: input.container.oauthRefreshLeaseDal,
+    logger: input.container.logger,
+    oauthLeaseOwner: input.oauthLeaseOwner,
+    fetchImpl: input.fetchImpl,
+  };
+}
+
 async function resolveProfileApiKey(profile: AuthProfileRow, deps: {
   secretProvider: SecretProvider | undefined;
   resolver: SecretHandleResolver | undefined;
@@ -789,18 +821,24 @@ export class AgentRuntime {
       );
     }
 
-    const secretProvider = this.opts.secretProvider;
-    const resolver = secretProvider ? createSecretHandleResolver(secretProvider) : undefined;
-
-    const authProfileDal = new AuthProfileDal(this.opts.container.db);
-    const pinDal = new SessionProviderPinDal(this.opts.container.db);
-    const oauthProviderRegistry = this.opts.container.oauthProviderRegistry;
-    const oauthRefreshLeaseDal = this.opts.container.oauthRefreshLeaseDal;
-    const logger = this.opts.container.logger;
-    const oauthLeaseOwner = this.instanceOwner;
     const agentId = this.agentId;
 
     const fetch = input.fetchImpl ?? this.fetchImpl;
+    const {
+      secretProvider,
+      resolver,
+      authProfileDal,
+      pinDal,
+      oauthProviderRegistry,
+      oauthRefreshLeaseDal,
+      logger,
+      oauthLeaseOwner,
+    } = buildProviderResolutionSetup({
+      container: this.opts.container,
+      secretProvider: this.opts.secretProvider,
+      oauthLeaseOwner: this.instanceOwner,
+      fetchImpl: fetch,
+    });
 
     async function buildRotatingModel(chosen: (typeof resolvedCandidates)[number]): Promise<LanguageModelV3> {
       const mergedOptions = (() => {
@@ -1227,15 +1265,22 @@ export class AgentRuntime {
           addProvider(id);
         }
 
-        const secretProvider = this.opts.secretProvider;
-        const resolver = secretProvider ? createSecretHandleResolver(secretProvider) : undefined;
-
-        const authProfileDal = new AuthProfileDal(this.opts.container.db);
-        const pinDal = new SessionProviderPinDal(this.opts.container.db);
-        const oauthProviderRegistry = this.opts.container.oauthProviderRegistry;
-        const oauthRefreshLeaseDal = this.opts.container.oauthRefreshLeaseDal;
-        const logger = this.opts.container.logger;
-        const oauthLeaseOwner = this.instanceOwner;
+        const {
+          secretProvider,
+          resolver,
+          authProfileDal,
+          pinDal,
+          oauthProviderRegistry,
+          oauthRefreshLeaseDal,
+          logger,
+          oauthLeaseOwner,
+          fetchImpl,
+        } = buildProviderResolutionSetup({
+          container: this.opts.container,
+          secretProvider: this.opts.secretProvider,
+          oauthLeaseOwner: this.instanceOwner,
+          fetchImpl: this.fetchImpl,
+        });
 
         const resolveProviderApiKey = async (
           providerId: string,
@@ -1259,7 +1304,7 @@ export class AgentRuntime {
               oauthRefreshLeaseDal,
               oauthLeaseOwner,
               logger,
-              fetchImpl: this.fetchImpl,
+              fetchImpl,
             });
             if (apiKey) return apiKey;
           }
