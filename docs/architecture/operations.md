@@ -61,6 +61,17 @@ Check supports both:
 - **static config analysis** (safe to run offline), and
 - **live probes** against the running gateway (best-effort; never required for basic correctness).
 
+### `tyrum check` output (operator-facing)
+
+`tyrum check` prints a short, line-oriented report intended for humans and log capture.
+
+- `static.exposure`: host/port and whether the configured bind address is loopback-only.
+- `static.auth`: where the admin token is sourced from (`GATEWAY_TOKEN`, existing `.admin-token`, or generated) without printing the token value.
+- `static.policy`: policy enablement and the effective policy bundle hash + sources.
+- `static.plugins`: manifest discovery counts per plugin source (workspace/user/bundled), without executing plugin entry code.
+- `static.secrets`: secret provider kind + basic initialization status.
+- `live.http`: best-effort HTTP probes (`/healthz` and `/status`) against the configured host/port (authenticated probe is only attempted on loopback targets to avoid leaking the admin token).
+
 ## Reference deployments
 
 Reference deployments are part of the operability contract:
