@@ -204,7 +204,7 @@ function normalizeJsonSchemaAdditionalPropertiesDefaults(
   }
 
   const record = schema as Record<string, unknown>;
-  const out: Record<string, unknown> = {};
+  const out: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
   seen.set(schema, out);
 
   const skipAdditionalPropertiesDefault =
@@ -279,7 +279,7 @@ function normalizeJsonSchemaAdditionalPropertiesDefaults(
           out[key] = value;
           break;
         }
-        const normalized: Record<string, unknown> = {};
+        const normalized: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
         for (const [prop, schemaValue] of Object.entries(value)) {
           normalized[prop] = normalizeJsonSchemaAdditionalPropertiesDefaults(schemaValue, seen, childOpts);
         }
