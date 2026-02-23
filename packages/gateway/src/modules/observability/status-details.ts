@@ -500,8 +500,10 @@ async function loadSandboxStatus(policyService: PolicyService | undefined): Prom
     const effective = await policyService.loadEffectiveBundle();
     const tools = effective.bundle.tools;
     const toolsDefault = tools?.default ?? "deny";
-    const allowCount = tools?.allow.length ?? 0;
-    const requireApprovalCount = tools?.require_approval.length ?? 0;
+    const allowCount = Array.isArray(tools?.allow) ? tools.allow.length : 0;
+    const requireApprovalCount = Array.isArray(tools?.require_approval)
+      ? tools.require_approval.length
+      : 0;
     elevatedExecutionAvailable =
       toolsDefault !== "deny" || allowCount > 0 || requireApprovalCount > 0;
   } catch {
