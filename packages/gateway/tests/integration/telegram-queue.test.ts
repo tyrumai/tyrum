@@ -146,11 +146,17 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
     await processor.tick();
 
-    expect(mockRuntime.turn).toHaveBeenCalledWith({
-      channel: "telegram",
-      thread_id: "123",
-      message: "Help me",
-    });
+    expect(mockRuntime.turn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        envelope: expect.objectContaining({
+          delivery: { channel: "telegram", account: "default" },
+          container: { kind: "dm", id: "123" },
+          sender: expect.objectContaining({ id: "999" }),
+          content: { text: "Help me", attachments: [] },
+          provenance: ["user"],
+        }),
+      }),
+    );
     expect(fetchFn).toHaveBeenCalledOnce();
 
     const res2 = await app.request("/ingress/telegram", {
@@ -169,6 +175,74 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
     await processor.tick();
     expect(fetchFn).toHaveBeenCalledOnce();
+  });
+
+  it("processes attachment-only messages by passing the normalized envelope through", async () => {
+    db = openTestSqliteDb();
+
+    const fetchFn = mockFetch();
+    const bot = new TelegramBot("test-token", fetchFn);
+
+    const mockRuntime = {
+      turn: vi.fn().mockResolvedValue({
+        reply: "Got it.",
+        session_id: "session-abc",
+        used_tools: [],
+        memory_written: false,
+      }),
+    };
+
+    const queue = new TelegramChannelQueue(db);
+    const processor = new TelegramChannelProcessor({
+      db,
+      agents: makeAgents(mockRuntime),
+      telegramBot: bot,
+      owner: "test-owner",
+      debounceMs: 0,
+      maxBatch: 1,
+    });
+
+    const app = new Hono();
+    app.route(
+      "/",
+      createIngressRoutes({ telegramBot: bot, agents: makeAgents(mockRuntime), telegramQueue: queue }),
+    );
+
+    const res = await app.request("/ingress/telegram", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-telegram-bot-api-secret-token": "test-telegram-secret",
+      },
+      body: JSON.stringify({
+        update_id: 100,
+        message: {
+          message_id: 43,
+          date: 1700000000,
+          from: { id: 999, is_bot: false, first_name: "Alice" },
+          chat: { id: 123, type: "private" },
+          caption: "  ",
+          photo: [{ file_id: "abc" }],
+        },
+      }),
+    });
+
+    expect(res.status).toBe(200);
+
+    await processor.tick();
+
+    expect(mockRuntime.turn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        envelope: expect.objectContaining({
+          container: { kind: "dm", id: "123" },
+          content: expect.objectContaining({
+            text: undefined,
+            attachments: [{ kind: "photo" }],
+          }),
+          provenance: ["user"],
+        }),
+      }),
+    );
   });
 
   it("does not allow webhook callers to override the Telegram account id", async () => {

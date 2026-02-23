@@ -194,4 +194,44 @@ describe("agent routes", () => {
     await agents?.shutdown();
     await container.db.close();
   });
+
+  it("accepts envelope-only turns with attachments", async () => {
+    const { app, container, agents } = await createTestApp({
+      languageModel: createStubLanguageModel("ok"),
+    });
+
+    const res = await app.request("/agent/turn", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        envelope: {
+          message_id: "msg-1",
+          received_at: "2025-10-05T16:31:09Z",
+          delivery: {
+            channel: "telegram",
+            account: "default",
+          },
+          container: {
+            kind: "dm",
+            id: "dm-attach-1",
+          },
+          sender: {
+            id: "user-42",
+          },
+          content: {
+            attachments: [{ kind: "photo" }],
+          },
+          provenance: ["user"],
+        },
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const payload = (await res.json()) as { reply: string; session_id: string };
+    expect(typeof payload.reply).toBe("string");
+    expect(payload.session_id).toBeTruthy();
+
+    await agents?.shutdown();
+    await container.db.close();
+  });
 });

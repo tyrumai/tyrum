@@ -78,12 +78,17 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     expect(body.ok).toBe(true);
     expect(body.session_id).toBe("session-abc");
 
-    // Verify agent was called with correct params
-    expect(mockRuntime.turn).toHaveBeenCalledWith({
-      channel: "telegram",
-      thread_id: "123",
-      message: "Help me",
-    });
+    expect(mockRuntime.turn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        envelope: expect.objectContaining({
+          delivery: { channel: "telegram", account: "default" },
+          container: { kind: "dm", id: "123" },
+          sender: expect.objectContaining({ id: "999" }),
+          content: { text: "Help me", attachments: [] },
+          provenance: ["user"],
+        }),
+      }),
+    );
 
     // Verify bot sent the reply
     expect(fetchFn).toHaveBeenCalledOnce();
@@ -156,12 +161,17 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     expect(body.message.content.text).toBe("Hello bot");
   });
 
-  it("returns ok for non-text messages without caption", async () => {
+  it("processes non-text messages without captions by passing the normalized envelope through", async () => {
     const fetchFn = mockFetch();
     const bot = new TelegramBot("test-token", fetchFn);
 
     const mockRuntime = {
-      turn: vi.fn(),
+      turn: vi.fn().mockResolvedValue({
+        reply: "Got it.",
+        session_id: "session-abc",
+        used_tools: [],
+        memory_written: false,
+      }),
     };
 
     const app = new Hono();
@@ -190,10 +200,23 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     });
 
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { ok: boolean };
+    const body = (await res.json()) as { ok: boolean; session_id?: string };
     expect(body.ok).toBe(true);
-    // Agent should not be called for empty text
-    expect(mockRuntime.turn).not.toHaveBeenCalled();
+    expect(body.session_id).toBe("session-abc");
+    expect(mockRuntime.turn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        envelope: expect.objectContaining({
+          delivery: { channel: "telegram", account: "default" },
+          container: { kind: "dm", id: "123" },
+          sender: { id: "chat:123" },
+          content: expect.objectContaining({
+            attachments: [{ kind: "photo" }],
+          }),
+          provenance: ["user"],
+        }),
+      }),
+    );
+    expect(fetchFn).toHaveBeenCalledOnce();
   });
 
   it("rejects webhook when secret header is missing", async () => {
