@@ -112,6 +112,74 @@ describe("AgentRuntime", () => {
     );
   });
 
+  it("routes turns through execution engine run records", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("hello"),
+      fetchImpl: fetch404,
+    });
+
+    const result = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      message: "hello from test",
+    });
+
+    expect(result.reply).toBe("hello");
+
+    const run = await container.db.get<{
+      run_id: string;
+      status: string;
+      key: string;
+      lane: string;
+    }>(
+      `SELECT run_id, status, key, lane
+       FROM execution_runs
+       ORDER BY created_at DESC
+       LIMIT 1`,
+    );
+    expect(run).toBeTruthy();
+    expect(run!.status).toBe("succeeded");
+    expect(run!.key.startsWith("agent:default:test:channel:")).toBe(true);
+    expect(run!.lane).toBe("main");
+
+    const step = await container.db.get<{ action_json: string }>(
+      `SELECT action_json
+       FROM execution_steps
+       WHERE run_id = ?
+       ORDER BY step_index ASC
+       LIMIT 1`,
+      [run!.run_id],
+    );
+    expect(step).toBeTruthy();
+    const action = JSON.parse(step!.action_json) as {
+      type: string;
+      args: { message?: string };
+    };
+    expect(action.type).toBe("Decide");
+    expect(action.args.message).toBe("hello from test");
+
+    const attempt = await container.db.get<{ result_json: string | null }>(
+      `SELECT a.result_json
+       FROM execution_attempts a
+       JOIN execution_steps s ON s.step_id = a.step_id
+       WHERE s.run_id = ?
+       ORDER BY a.attempt DESC
+       LIMIT 1`,
+      [run!.run_id],
+    );
+    expect(attempt).toBeTruthy();
+    const attemptResult = JSON.parse(attempt!.result_json ?? "{}") as { reply?: string };
+    expect(attemptResult.reply).toBe("hello");
+  });
+
   it("scopes session cleanup to the current agentId", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({
