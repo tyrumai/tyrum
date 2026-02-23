@@ -53,8 +53,8 @@ export function resolveHttpRouteRequiredScopes(input: {
 
   // Tenant administration surfaces.
   if (
-    routePath.startsWith("/auth/device-tokens") ||
-    routePath.startsWith("/auth/profiles") ||
+    routePath.startsWith("/api/") ||
+    routePath.startsWith("/auth/") ||
     routePath.startsWith("/audit") ||
     routePath.startsWith("/policy") ||
     routePath.startsWith("/plugins") ||
@@ -63,6 +63,7 @@ export function resolveHttpRouteRequiredScopes(input: {
     routePath.startsWith("/snapshot") ||
     routePath === "/models/refresh" ||
     routePath.startsWith("/app/settings") ||
+    routePath.startsWith("/app/actions/account") ||
     routePath.startsWith("/app/actions/settings") ||
     routePath.startsWith("/app/actions/onboarding")
   ) {
