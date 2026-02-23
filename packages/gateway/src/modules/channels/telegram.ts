@@ -21,6 +21,7 @@ import {
   type ChannelEgressConnector,
   DEFAULT_CHANNEL_ACCOUNT_ID,
   buildChannelSourceKey,
+  normalizeConnectorId,
   normalizeAccountId,
   parseChannelSourceKey,
 } from "./interface.js";
@@ -59,11 +60,12 @@ function toTelegramParseMode(value: string | undefined): "HTML" | "Markdown" | "
 }
 
 function connectorBindingKey(connector: ChannelEgressConnector): string {
+  const connectorId = normalizeConnectorId(connector.connector);
   if (!connector.accountId || connector.accountId.trim().length === 0) {
-    return connector.connector;
+    return connectorId;
   }
   return buildChannelSourceKey({
-    connector: connector.connector,
+    connector: connectorId,
     accountId: normalizeAccountId(connector.accountId),
   });
 }

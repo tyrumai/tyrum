@@ -260,6 +260,70 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
     expect(viaOverride.inbox.key).toBe(viaWorkQueue.inbox.key);
   });
 
+  it("normalizes connector ids when binding no-account egress connectors", async () => {
+    db = openTestSqliteDb();
+
+    const fetchFn = mockFetch();
+    const bot = new TelegramBot("test-token", fetchFn);
+    const queue = new TelegramChannelQueue(db);
+
+    const mockRuntime = {
+      turn: vi.fn().mockResolvedValue({
+        reply: "hello",
+        session_id: "session-abc",
+        used_tools: [],
+        memory_written: false,
+      }),
+    };
+
+    const send = vi.fn().mockResolvedValue({ ok: true });
+    const processor = new TelegramChannelProcessor({
+      db,
+      agents: makeAgents(mockRuntime),
+      telegramBot: bot,
+      owner: "test-owner",
+      debounceMs: 0,
+      maxBatch: 1,
+      egressConnectors: [{ connector: " telegram ", sendMessage: send }],
+    });
+
+    const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
+    await queue.enqueue(normalized);
+
+    await processor.tick();
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it("rejects connector ids that contain ':' when binding no-account egress connectors", () => {
+    db = openTestSqliteDb();
+
+    const fetchFn = mockFetch();
+    const bot = new TelegramBot("test-token", fetchFn);
+    const mockRuntime = {
+      turn: vi.fn().mockResolvedValue({
+        reply: "hello",
+        session_id: "session-abc",
+        used_tools: [],
+        memory_written: false,
+      }),
+    };
+
+    expect(
+      () =>
+        new TelegramChannelProcessor({
+          db: db!,
+          agents: makeAgents(mockRuntime),
+          telegramBot: bot,
+          owner: "test-owner",
+          debounceMs: 0,
+          maxBatch: 1,
+          egressConnectors: [{ connector: "telegram:work", sendMessage: vi.fn() }],
+        }),
+    ).toThrow("connector must not contain ':'");
+  });
+
   it("uses account-specific egress connectors when provided", async () => {
     db = openTestSqliteDb();
     const fetchFn = mockFetch();

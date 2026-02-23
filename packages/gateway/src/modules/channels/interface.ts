@@ -29,6 +29,10 @@ function normalizeIdentityPart(kind: "connector" | "account", value: string): st
   return trimmed;
 }
 
+export function normalizeConnectorId(value: string): string {
+  return normalizeIdentityPart("connector", value);
+}
+
 export function normalizeAccountId(value: string | undefined): string {
   if (!value || value.trim().length === 0) {
     return DEFAULT_CHANNEL_ACCOUNT_ID;
