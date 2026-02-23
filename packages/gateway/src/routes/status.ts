@@ -11,6 +11,7 @@ import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { PolicyService } from "../modules/policy/service.js";
 import type { AuthProfileDal } from "../modules/models/auth-profile-dal.js";
 import type { SessionProviderPinDal } from "../modules/models/session-pin-dal.js";
+import { isAuthProfilesEnabled } from "../modules/models/auth-profiles-enabled.js";
 
 export interface StatusRouteDeps {
   version: string;
@@ -21,18 +22,12 @@ export interface StatusRouteDeps {
   otelEnabled: boolean;
   connectionManager?: ConnectionManager;
   policyService?: PolicyService;
-  modelGatewayConfigPath?: string;
   authProfileDal?: AuthProfileDal;
   pinDal?: SessionProviderPinDal;
 }
 
 export function createStatusRoutes(deps: StatusRouteDeps): Hono {
   const app = new Hono();
-
-  function isAuthProfilesEnabled(): boolean {
-    const raw = process.env["TYRUM_AUTH_PROFILES_ENABLED"]?.trim().toLowerCase();
-    return Boolean(raw && !["0", "false", "off", "no"].includes(raw));
-  }
 
   app.get("/status", async (c) => {
     const policy = deps.policyService ? await deps.policyService.getStatus() : null;
@@ -65,9 +60,6 @@ export function createStatusRoutes(deps: StatusRouteDeps): Hono {
       is_exposed: !deps.isLocalOnly,
       otel_enabled: deps.otelEnabled,
       ws: deps.connectionManager?.getStats() ?? null,
-      model_gateway: deps.modelGatewayConfigPath
-        ? { enabled: true, config_path: deps.modelGatewayConfigPath }
-        : { enabled: false, config_path: null as null },
       auth_profiles: authProfiles,
       policy,
     });

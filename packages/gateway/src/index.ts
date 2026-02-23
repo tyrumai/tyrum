@@ -65,6 +65,7 @@ type GatewayRole = "all" | "edge" | "worker" | "scheduler";
 
 type CliCommand =
   | { kind: "start"; role: GatewayRole }
+  | { kind: "check" }
   | { kind: "toolrunner" }
   | { kind: "help" }
   | { kind: "version" }
@@ -113,6 +114,7 @@ function printCliHelp(): void {
 
 Usage:
   tyrum [start|edge|worker|scheduler]
+  tyrum check
   tyrum toolrunner
   tyrum update [--channel stable|beta|dev] [--version <version>]
   tyrum --version
@@ -167,6 +169,7 @@ export function parseCliArgs(argv: readonly string[]): CliCommand {
   if (first === "all" || first === "edge" || first === "worker" || first === "scheduler") {
     return { kind: "start", role: first };
   }
+  if (first === "check") return { kind: "check" };
   if (first === "toolrunner") return { kind: "toolrunner" };
 
   if (first !== "update") {
@@ -260,6 +263,53 @@ async function runGatewayUpdate(
   return exitCode;
 }
 
+async function runGatewayCheck(): Promise<number> {
+  const dbPath = process.env["GATEWAY_DB_PATH"] ?? "gateway.db";
+  const defaultMigrationsDir = isPostgresDbUri(dbPath)
+    ? join(__dirname, "../migrations/postgres")
+    : join(__dirname, "../migrations/sqlite");
+  const migrationsDir =
+    process.env["GATEWAY_MIGRATIONS_DIR"] ?? defaultMigrationsDir;
+  const tyrumHome =
+    process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
+
+  let container: Awaited<ReturnType<typeof createContainerAsync>> | undefined;
+  try {
+    ensureDatabaseDirectory(dbPath);
+
+    container = await createContainerAsync({
+      dbPath,
+      migrationsDir,
+      tyrumHome,
+    });
+
+    const models = await container.modelsDev.ensureLoaded();
+    await container.oauthProviderRegistry.list();
+
+    console.log("check: ok");
+    console.log(
+      `models.dev: source=${models.status.source} providers=${models.status.provider_count} models=${models.status.model_count}`,
+    );
+    if (models.status.last_error) {
+      console.log("models.dev: last_error=present");
+    }
+    console.log("oauth: providers_configured=loaded");
+
+    return 0;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`check: failed: ${message}`);
+    return 1;
+  } finally {
+    if (container) {
+      await container.db.close().catch((closeErr) => {
+        const message = closeErr instanceof Error ? closeErr.message : String(closeErr);
+        console.error(`check: warning: failed to close db: ${message}`);
+      });
+    }
+  }
+}
+
 export async function runCli(argv: readonly string[] = process.argv.slice(2)): Promise<number> {
   let command: CliCommand;
   try {
@@ -279,6 +329,10 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
   if (command.kind === "version") {
     console.log(VERSION);
     return 0;
+  }
+
+  if (command.kind === "check") {
+    return await runGatewayCheck();
   }
 
   if (command.kind === "toolrunner") {
@@ -311,21 +365,31 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     : join(__dirname, "../migrations/sqlite");
   const migrationsDir =
     process.env["GATEWAY_MIGRATIONS_DIR"] ?? defaultMigrationsDir;
-  const modelGatewayConfigPath =
-    process.env["MODEL_GATEWAY_CONFIG"] ?? undefined;
 
   const tyrumHome =
     process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
   const isLocalOnly = LOCAL_HOSTS.has(host);
+
+  const instanceId = (() => {
+    const raw = process.env["TYRUM_INSTANCE_ID"];
+    const trimmed = raw?.trim();
+    if (trimmed) {
+      process.env["TYRUM_INSTANCE_ID"] = trimmed;
+      return trimmed;
+    }
+    const generated = `gw-${crypto.randomUUID()}`;
+    process.env["TYRUM_INSTANCE_ID"] = generated;
+    return generated;
+  })();
 
   ensureDatabaseDirectory(dbPath);
 
   const container = await createContainerAsync({
     dbPath,
     migrationsDir,
-    modelGatewayConfigPath,
     tyrumHome,
   });
+  container.modelsDev.startBackgroundRefresh();
 
   // Initialize auth token store
   const tokenStore = new TokenStore(tyrumHome);
@@ -365,8 +429,6 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     watcherScheduler.start();
   }
 
-  const instanceId =
-    process.env["TYRUM_INSTANCE_ID"]?.trim() || `gw-${crypto.randomUUID()}`;
   const logger = container.logger.child({
     role,
     instance_id: instanceId,
@@ -493,7 +555,6 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
       ? new AgentRegistry({
           container,
           baseHome: tyrumHome,
-          gatewayToken: token,
           defaultSecretProvider: secretProvider,
           defaultPolicyService: container.policyService,
           approvalNotifier,
@@ -692,6 +753,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     outboxPoller?.stop();
     telegramProcessor?.stop();
     workerLoop?.stop();
+    container.modelsDev.stopBackgroundRefresh();
 
     void runShutdownCleanup(
       [

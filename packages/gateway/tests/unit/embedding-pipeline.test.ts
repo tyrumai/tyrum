@@ -1,33 +1,27 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { VectorDal } from "../../src/modules/memory/vector-dal.js";
-import { EmbeddingPipeline } from "../../src/modules/memory/embedding-pipeline.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
+import type { EmbeddingModel } from "ai";
 
-function createMockFetch(embeddingVector: number[]) {
-  return async (_url: string | URL | Request, _init?: RequestInit) => {
-    return new Response(
-      JSON.stringify({
-        data: [{ embedding: embeddingVector }],
-      }),
-      { status: 200, headers: { "content-type": "application/json" } },
-    );
-  };
-}
+const embedMock = vi.fn();
 
-function createFailingFetch() {
-  return async (_url: string | URL | Request, _init?: RequestInit) => {
-    return new Response("Internal Server Error", { status: 500 });
-  };
-}
+vi.mock("ai", () => ({
+  embed: embedMock,
+}));
+
+const { EmbeddingPipeline } = await import("../../src/modules/memory/embedding-pipeline.js");
 
 describe("EmbeddingPipeline", () => {
   let db: SqliteDb;
   let vectorDal: VectorDal;
+  const embeddingModel = {} as unknown as EmbeddingModel;
+  const embeddingModelId = "openai/text-embedding-3-small";
 
   beforeEach(() => {
     db = openTestSqliteDb();
     vectorDal = new VectorDal(db);
+    embedMock.mockReset();
   });
 
   afterEach(async () => {
@@ -35,75 +29,42 @@ describe("EmbeddingPipeline", () => {
   });
 
   describe("embed", () => {
-    it("calls /v1/embeddings and returns vector", async () => {
+    it("calls ai.embed and returns vector", async () => {
       const mockVector = [0.1, 0.2, 0.3];
-      let capturedUrl = "";
-      let capturedBody: unknown;
+      embedMock.mockResolvedValueOnce({ embedding: mockVector });
 
-      const mockFetch = async (url: string | URL | Request, init?: RequestInit) => {
-        capturedUrl = typeof url === "string" ? url : url.toString();
-        capturedBody = JSON.parse(init?.body as string);
-        return new Response(
-          JSON.stringify({ data: [{ embedding: mockVector }] }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
-      };
-
-      const pipeline = new EmbeddingPipeline({
-        vectorDal,
-        baseUrl: "http://localhost:8080/v1",
-        model: "text-embedding-3",
-        fetchImpl: mockFetch as typeof fetch,
-      });
+      const pipeline = new EmbeddingPipeline({ vectorDal, embeddingModel, embeddingModelId });
 
       const result = await pipeline.embed("hello world");
       expect(result).toEqual(mockVector);
-      expect(capturedUrl).toBe("http://localhost:8080/v1/embeddings");
-      expect((capturedBody as Record<string, unknown>).model).toBe("text-embedding-3");
-      expect((capturedBody as Record<string, unknown>).input).toBe("hello world");
+      expect(embedMock).toHaveBeenCalledWith({ model: embeddingModel, value: "hello world" });
     });
 
-    it("throws on non-OK response", async () => {
-      const pipeline = new EmbeddingPipeline({
-        vectorDal,
-        baseUrl: "http://localhost:8080/v1",
-        model: "model",
-        fetchImpl: createFailingFetch() as typeof fetch,
-      });
+    it("throws when embedding is missing", async () => {
+      embedMock.mockResolvedValueOnce({ embedding: "nope" });
 
-      await expect(pipeline.embed("test")).rejects.toThrow("Embeddings request failed (500)");
+      const pipeline = new EmbeddingPipeline({ vectorDal, embeddingModel, embeddingModelId });
+
+      await expect(pipeline.embed("test")).rejects.toThrow("Embedding result missing embedding array");
     });
 
-    it("handles base URL without /v1 suffix", async () => {
-      let capturedUrl = "";
-      const mockFetch = async (url: string | URL | Request, _init?: RequestInit) => {
-        capturedUrl = typeof url === "string" ? url : url.toString();
-        return new Response(
-          JSON.stringify({ data: [{ embedding: [1] }] }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
-      };
+    it("throws when embedding contains non-numeric values", async () => {
+      embedMock.mockResolvedValueOnce({ embedding: [1, "x"] });
 
-      const pipeline = new EmbeddingPipeline({
-        vectorDal,
-        baseUrl: "http://localhost:8080",
-        model: "model",
-        fetchImpl: mockFetch as typeof fetch,
-      });
+      const pipeline = new EmbeddingPipeline({ vectorDal, embeddingModel, embeddingModelId });
 
-      await pipeline.embed("test");
-      expect(capturedUrl).toBe("http://localhost:8080/v1/embeddings");
+      await expect(pipeline.embed("test")).rejects.toThrow("Embedding result contains non-numeric values");
     });
   });
 
   describe("embedAndStore", () => {
     it("embeds text and stores it", async () => {
       const mockVector = [1.0, 0.0, 0.0];
+      embedMock.mockResolvedValueOnce({ embedding: mockVector });
       const pipeline = new EmbeddingPipeline({
         vectorDal,
-        baseUrl: "http://localhost:8080/v1",
-        model: "test-model",
-        fetchImpl: createMockFetch(mockVector) as typeof fetch,
+        embeddingModel,
+        embeddingModelId,
       });
 
       const id = await pipeline.embedAndStore("hello world", "greeting", { source: "test" });
@@ -113,7 +74,7 @@ describe("EmbeddingPipeline", () => {
       expect(row).toBeDefined();
       expect(row!.label).toBe("greeting");
       expect(row!.vector).toEqual(mockVector);
-      expect(row!.embedding_model).toBe("test-model");
+      expect(row!.embedding_model).toBe(embeddingModelId);
     });
   });
 
@@ -125,11 +86,11 @@ describe("EmbeddingPipeline", () => {
       await vectorDal.insertEmbedding("doc-c", [0.9, 0.1, 0], "test-model");
 
       // Mock embed returns [1, 0, 0] for the query
+      embedMock.mockResolvedValueOnce({ embedding: [1, 0, 0] });
       const pipeline = new EmbeddingPipeline({
         vectorDal,
-        baseUrl: "http://localhost:8080/v1",
-        model: "test-model",
-        fetchImpl: createMockFetch([1, 0, 0]) as typeof fetch,
+        embeddingModel,
+        embeddingModelId,
       });
 
       const results = await pipeline.search("similar to doc-a", 2);
@@ -140,11 +101,11 @@ describe("EmbeddingPipeline", () => {
     });
 
     it("returns empty when no vectors stored", async () => {
+      embedMock.mockResolvedValueOnce({ embedding: [1, 0, 0] });
       const pipeline = new EmbeddingPipeline({
         vectorDal,
-        baseUrl: "http://localhost:8080/v1",
-        model: "test-model",
-        fetchImpl: createMockFetch([1, 0, 0]) as typeof fetch,
+        embeddingModel,
+        embeddingModelId,
       });
 
       const results = await pipeline.search("anything", 5);
@@ -154,27 +115,21 @@ describe("EmbeddingPipeline", () => {
 
   describe("embed -> store -> search cycle", () => {
     it("completes full embedding cycle", async () => {
-      let callCount = 0;
       const vectors = [
         [0.8, 0.6, 0.0],  // store call 1
         [0.1, 0.9, 0.1],  // store call 2
         [0.7, 0.5, 0.1],  // search query
       ];
 
-      const mockFetch = async (_url: string | URL | Request, _init?: RequestInit) => {
-        const vector = vectors[callCount] ?? [0, 0, 0];
-        callCount++;
-        return new Response(
-          JSON.stringify({ data: [{ embedding: vector }] }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
-      };
+      embedMock
+        .mockResolvedValueOnce({ embedding: vectors[0] })
+        .mockResolvedValueOnce({ embedding: vectors[1] })
+        .mockResolvedValueOnce({ embedding: vectors[2] });
 
       const pipeline = new EmbeddingPipeline({
         vectorDal,
-        baseUrl: "http://localhost:8080/v1",
-        model: "test-model",
-        fetchImpl: mockFetch as typeof fetch,
+        embeddingModel,
+        embeddingModelId,
       });
 
       await pipeline.embedAndStore("TypeScript guide", "typescript-doc");

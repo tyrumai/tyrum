@@ -36,9 +36,9 @@ Tyrum provides a guided onboarding flow (CLI/TUI and/or operator clients) that:
 
 Operator clients implement an explicit **Admin Mode** (step-up) so tenant administration actions are time-bounded and auditable.
 
-## Diagnostics (“doctor”)
+## Diagnostics (“check”)
 
-Tyrum provides a “doctor” surface that detects high-impact footguns and produces actionable fixes. Examples of checks:
+Tyrum provides a `check` surface that detects high-impact footguns and produces actionable fixes. Examples of checks:
 
 - gateway exposed beyond loopback without TLS and without device-bound auth
 - permissive tool policy on untrusted channels
@@ -47,7 +47,7 @@ Tyrum provides a “doctor” surface that detects high-impact footguns and prod
 - plugin discovery enabled without an allowlist / without integrity constraints
 - secret provider misconfiguration (handles fail to resolve; redaction disabled)
 
-Doctor should support both:
+Check supports both:
 
 - **static config analysis** (safe to run offline), and
 - **live probes** against the running gateway (best-effort; never required for basic correctness).

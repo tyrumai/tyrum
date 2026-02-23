@@ -2,8 +2,22 @@ import { z } from "zod";
 import { AgentId, WorkspaceId } from "./keys.js";
 
 export const AgentModelConfig = z.object({
-  model: z.string().trim().min(1),
-  base_url: z.string().trim().url().optional(),
+  model: z
+    .string()
+    .trim()
+    .min(1)
+    .regex(/^[^/\s]+\/.+$/, "model must be in provider/model format"),
+  variant: z.string().trim().min(1).optional(),
+  options: z.record(z.string(), z.unknown()).optional(),
+  fallback: z
+    .array(
+      z
+        .string()
+        .trim()
+        .min(1)
+        .regex(/^[^/\s]+\/.+$/, "fallback model must be in provider/model format"),
+    )
+    .optional(),
 });
 export type AgentModelConfig = z.infer<typeof AgentModelConfig>;
 

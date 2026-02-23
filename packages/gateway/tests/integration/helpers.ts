@@ -15,6 +15,7 @@ import { resolveTyrumHome } from "../../src/modules/agent/home.js";
 import { VERSION } from "../../src/version.js";
 import type { TokenStore } from "../../src/modules/auth/token-store.js";
 import type { Hono } from "hono";
+import type { LanguageModel } from "ai";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -29,6 +30,7 @@ export async function createTestContainer(): Promise<GatewayContainer> {
 export interface TestAppOptions {
   tokenStore?: TokenStore;
   isLocalOnly?: boolean;
+  languageModel?: LanguageModel;
 }
 
 export async function createTestApp(opts: TestAppOptions = {}): Promise<{
@@ -41,9 +43,9 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<{
     ? new AgentRegistryImpl({
         container,
         baseHome: resolveTyrumHome(),
-        gatewayToken: "test-gateway-token",
         defaultSecretProvider: new EnvSecretProvider(),
         defaultPolicyService: container.policyService,
+        defaultLanguageModel: opts.languageModel,
         approvalNotifier: { notify: () => {} },
         logger: container.logger,
       })

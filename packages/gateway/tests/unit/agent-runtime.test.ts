@@ -58,7 +58,7 @@ describe("AgentRuntime", () => {
 
     await writeFile(
       join(homeDir, "agent.yml"),
-      `model:\n  model: tyrum-stub-8b\nskills:\n  enabled: []\nmcp:\n  enabled: []\ntools:\n  allow: []\nsessions:\n  ttl_days: 12\n  max_turns: 20\nmemory:\n  markdown_enabled: false\n`,
+      `model:\n  model: openai/gpt-4.1\nskills:\n  enabled: []\nmcp:\n  enabled: []\ntools:\n  allow: []\nsessions:\n  ttl_days: 12\n  max_turns: 20\nmemory:\n  markdown_enabled: false\n`,
       "utf-8",
     );
 
@@ -91,7 +91,7 @@ describe("AgentRuntime", () => {
     await mkdir(join(homeDir, "mcp/calendar"), { recursive: true });
     await writeFile(
       join(homeDir, "agent.yml"),
-      `model:\n  model: tyrum-stub-8b\nskills:\n  enabled: []\nmcp:\n  enabled:\n    - calendar\ntools:\n  allow:\n    - tool.fs.read\n    - mcp.*\nsessions:\n  ttl_days: 30\n  max_turns: 20\nmemory:\n  markdown_enabled: false\n`,
+      `model:\n  model: openai/gpt-4.1\nskills:\n  enabled: []\nmcp:\n  enabled:\n    - calendar\ntools:\n  allow:\n    - tool.fs.read\n    - mcp.*\nsessions:\n  ttl_days: 30\n  max_turns: 20\nmemory:\n  markdown_enabled: false\n`,
       "utf-8",
     );
     await writeFile(
@@ -130,7 +130,7 @@ describe("AgentRuntime", () => {
 
     await writeFile(
       join(homeDir, "agent.yml"),
-      `model:\n  model: tyrum-stub-8b\nskills:\n  enabled: []\nmcp:\n  enabled:\n    - calendar\ntools:\n  allow:\n    - tool.fs.read\nsessions:\n  ttl_days: 30\n  max_turns: 20\nmemory:\n  markdown_enabled: false\n`,
+      `model:\n  model: openai/gpt-4.1\nskills:\n  enabled: []\nmcp:\n  enabled:\n    - calendar\ntools:\n  allow:\n    - tool.fs.read\nsessions:\n  ttl_days: 30\n  max_turns: 20\nmemory:\n  markdown_enabled: false\n`,
       "utf-8",
     );
 

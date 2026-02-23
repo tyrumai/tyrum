@@ -7,6 +7,7 @@
 
 import type { Context, Next } from "hono";
 import { getCookie } from "hono/cookie";
+import { matchedRoutes } from "hono/route";
 import { APP_PATH_PREFIX, matchesPathPrefixSegment } from "../../app-path.js";
 import type { TokenStore } from "./token-store.js";
 
@@ -17,6 +18,8 @@ const AUTH_ERROR_BODY = {
 
 const AUTH_COOKIE_NAME = "tyrum_admin_token";
 const APP_TOKEN_QUERY_KEY = "token";
+const OAUTH_CALLBACK_ROUTE_PATH_SUFFIX = "/providers/:provider/oauth/callback";
+const OAUTH_CALLBACK_REQUEST_PATH_PATTERN = /(?:^|\/)providers\/[^/]+\/oauth\/callback$/;
 
 function extractBearerToken(authorizationHeader: string | undefined): string | undefined {
   if (!authorizationHeader) {
@@ -39,12 +42,31 @@ function extractAppQueryToken(c: Context): string | undefined {
   return c.req.query(APP_TOKEN_QUERY_KEY)?.trim() || undefined;
 }
 
+function isPublicOAuthCallbackRoute(c: Context): boolean {
+  if (c.req.method !== "GET") return false;
+  try {
+    // Use the router's matched route to avoid accidentally exempting other concrete request paths with a similar suffix.
+    if (matchedRoutes(c).some((route) => route.path.endsWith(OAUTH_CALLBACK_ROUTE_PATH_SUFFIX))) {
+      return true;
+    }
+  } catch {
+    // Continue to path-shape fallback when route metadata isn't available.
+  }
+  return OAUTH_CALLBACK_REQUEST_PATH_PATTERN.test(c.req.path);
+}
+
 export function createAuthMiddleware(
   tokenStore: TokenStore,
 ) {
   return async (c: Context, next: Next) => {
     // /healthz is always public
     if (c.req.path === "/healthz") {
+      return next();
+    }
+
+    // OAuth callback is public (state/PKCE-protected) and should not require an admin token.
+    // Use the router's matched route to avoid accidentally exempting other paths with similar suffixes.
+    if (isPublicOAuthCallbackRoute(c)) {
       return next();
     }
 

@@ -146,7 +146,14 @@ export class AuthProfileDal {
     const nowIso = new Date(params.nowMs).toISOString();
     return rows
       .map(toRow)
-      .filter((r) => r.expires_at == null || r.expires_at > nowIso);
+      .filter((r) => {
+        if (r.expires_at == null || r.expires_at > nowIso) return true;
+        if (r.type !== "oauth") return false;
+
+        // Allow expired OAuth profiles through if they can be refreshed.
+        const refreshHandleId = r.secret_handles?.["refresh_token_handle"];
+        return typeof refreshHandleId === "string" && refreshHandleId.trim().length > 0;
+      });
   }
 
   async create(input: {
@@ -220,6 +227,27 @@ export class AuthProfileDal {
     return await this.getById(profileId);
   }
 
+  async updateSecretHandles(profileId: string, input: { secretHandles: Record<string, string>; expiresAt?: string | null; updatedBy?: unknown }): Promise<AuthProfileRow | undefined> {
+    const nowIso = new Date().toISOString();
+    const row = await this.getById(profileId);
+    if (!row) return undefined;
+
+    const nextExpiresAt = typeof input.expiresAt === "undefined" ? row.expires_at : input.expiresAt;
+    const updatedByJson = input.updatedBy ? JSON.stringify(input.updatedBy) : null;
+
+    await this.db.run(
+      `UPDATE auth_profiles
+       SET secret_handles_json = ?,
+           expires_at = ?,
+           updated_by_json = COALESCE(?, updated_by_json),
+           updated_at = ?
+       WHERE profile_id = ?`,
+      [JSON.stringify(input.secretHandles ?? {}), nextExpiresAt ?? null, updatedByJson, nowIso, profileId],
+    );
+
+    return await this.getById(profileId);
+  }
+
   async disableProfile(profileId: string, input?: { reason?: string; updatedBy?: unknown }): Promise<AuthProfileRow | undefined> {
     const nowIso = new Date().toISOString();
     const updatedByJson = input?.updatedBy ? JSON.stringify(input.updatedBy) : null;
@@ -269,4 +297,3 @@ export class AuthProfileDal {
     );
   }
 }
-

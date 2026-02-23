@@ -323,6 +323,12 @@ export {
   SessionProviderPinSetRequest,
 } from "./auth-profile.js";
 
+export {
+  ModelsDevModel,
+  ModelsDevProvider,
+  ModelsDevCatalog,
+} from "./models-dev.js";
+
 export { EventScope } from "./scope.js";
 
 export {

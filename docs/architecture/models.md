@@ -2,6 +2,22 @@
 
 Tyrum identifies models as `provider/model`.
 
+## Model catalog
+
+Tyrum uses a shared **model catalog** to describe:
+
+- available providers and their models
+- capability metadata (for example context window and modality)
+- how to instantiate a provider implementation
+
+The catalog is loaded using a three-tier strategy:
+
+1. Fetch the current catalog from `models.dev`.
+2. Use a cached copy stored in the StateStore.
+3. Fall back to a catalog snapshot distributed with Tyrum.
+
+Catalog refresh is lease-controlled to avoid stampedes in multi-replica deployments.
+
 ## Model identifiers
 
 - The provider and model id are parsed by splitting on the first `/`.
@@ -11,6 +27,10 @@ Examples:
 
 - `openai/gpt-4.1`
 - `openrouter/moonshotai/kimi-k2`
+
+## Provider adapters
+
+Tyrum instantiates model providers using standard provider adapters referenced by the model catalog (for example, provider packages in the Vercel AI SDK ecosystem). Tyrum does not maintain a separate built-in mapping table of provider names to implementations.
 
 ## Selection and fallback
 

@@ -61,7 +61,6 @@ describe("AgentRegistry cache eviction", () => {
     return new AgentRegistry({
       container,
       baseHome: baseHome ?? "unused",
-      gatewayToken: "token",
       defaultSecretProvider: noopProvider,
       defaultPolicyService: {} as unknown as PolicyService,
       approvalNotifier: {} as unknown as ApprovalNotifier,
@@ -103,4 +102,3 @@ describe("AgentRegistry cache eviction", () => {
     expect(createSecretProviderFromEnvMock).toHaveBeenCalledTimes(2);
   });
 });
-

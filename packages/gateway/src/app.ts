@@ -12,7 +12,6 @@ import { createPolicyBundleRoutes } from "./routes/policy-bundle.js";
 import { createMemoryRoutes } from "./routes/memory.js";
 import { createIngressRoutes } from "./routes/ingress.js";
 import { createPlanRoutes } from "./routes/plan.js";
-import { createModelProxyRoutes } from "./routes/model-proxy.js";
 import { createAgentRoutes } from "./routes/agent.js";
 import { createContextRoutes } from "./routes/context.js";
 import { createWorkflowRoutes } from "./routes/workflow.js";
@@ -28,6 +27,8 @@ import { createConnectionsRoute } from "./routes/connections.js";
 import { createPairingRoutes } from "./routes/pairing.js";
 import { createAuthProfileRoutes } from "./routes/auth-profiles.js";
 import { createPluginRoutes } from "./routes/plugins.js";
+import { createModelsDevRoutes } from "./routes/models-dev.js";
+import { createProviderOAuthRoutes } from "./routes/provider-oauth.js";
 import { PlaybookRunner } from "./modules/playbook/runner.js";
 import { createWebApiRoutes } from "./routes/web-api.js";
 import { createWebUiRoutes } from "./routes/web-ui.js";
@@ -48,6 +49,7 @@ import type { ConnectionDirectoryDal } from "./modules/backplane/connection-dire
 import type { OutboxDal } from "./modules/backplane/outbox-dal.js";
 import { randomUUID } from "node:crypto";
 import { VERSION } from "./version.js";
+import { isAuthProfilesEnabled } from "./modules/models/auth-profiles-enabled.js";
 
 export interface AppOptions {
   agents?: AgentRegistry;
@@ -110,6 +112,21 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     };
   })();
 
+  const oauthSecretProviderForAgent = (() => {
+    if (!opts.secretProvider) return undefined;
+    const defaultSecretProvider = opts.secretProvider;
+    return async (agentId: string) => {
+      if (opts.agents) {
+        return await opts.agents.getSecretProvider(agentId);
+      }
+      const trimmed = agentId.trim();
+      if (trimmed !== "default") {
+        throw new Error("non-default agent_id requires TYRUM_AGENT_ENABLED=1");
+      }
+      return defaultSecretProvider;
+    };
+  })();
+
   // Apply auth middleware if a token store is provided
   if (opts.tokenStore) {
     app.use("*", createAuthMiddleware(opts.tokenStore));
@@ -154,7 +171,6 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       otelEnabled: runtime.otelEnabled,
       connectionManager: opts.connectionManager,
       policyService: container.policyService,
-      modelGatewayConfigPath: container.config?.modelGatewayConfigPath,
       authProfileDal,
       pinDal,
     }),
@@ -196,6 +212,19 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     }),
   );
   app.route("/", createAuthProfileRoutes({ authProfileDal, pinDal }));
+  app.route("/", createModelsDevRoutes({ modelsDev: container.modelsDev }));
+  if (oauthSecretProviderForAgent && isAuthProfilesEnabled()) {
+    app.route(
+      "/",
+      createProviderOAuthRoutes({
+        oauthPendingDal: container.oauthPendingDal,
+        oauthProviderRegistry: container.oauthProviderRegistry,
+        authProfileDal,
+        secretProviderForAgent: oauthSecretProviderForAgent,
+        logger: container.logger,
+      }),
+    );
+  }
   if (opts.plugins) {
     app.route("/", createPluginRoutes({ plugins: opts.plugins }));
   }
@@ -284,34 +313,6 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
         contextReportDal: container.contextReportDal,
       }),
     );
-  }
-
-  // Model proxy routes are optional — only register if config path is set
-  if (container.config?.modelGatewayConfigPath) {
-    try {
-      const modelProxyDeps = secretProviderForAgent
-        ? {
-          auth: {
-            authProfileDal,
-            pinDal,
-            secretProviderForAgent,
-            logger: container.logger,
-            wsCluster: opts.wsCluster,
-          },
-        }
-        : undefined;
-
-      const modelProxy = createModelProxyRoutes(
-        container.config.modelGatewayConfigPath,
-        modelProxyDeps,
-      );
-      app.route("/", modelProxy);
-    } catch {
-      // Model gateway config not available; skip registration
-      console.warn(
-        "Model gateway config not available; model proxy routes not registered",
-      );
-    }
   }
 
   // Gateway-hosted web UI.

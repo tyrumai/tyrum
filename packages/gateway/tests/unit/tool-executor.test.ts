@@ -464,13 +464,6 @@ describe("sanitizeEnv", () => {
     expect(result).toHaveProperty("TELEGRAM_OTHER", "safe");
   });
 
-  it("strips MODEL_GATEWAY_CONFIG exact match", () => {
-    const env = { MODEL_GATEWAY_CONFIG: "{}", USER: "test" };
-    const result = sanitizeEnv(env);
-    expect(result).not.toHaveProperty("MODEL_GATEWAY_CONFIG");
-    expect(result).toHaveProperty("USER", "test");
-  });
-
   it("preserves PATH, HOME, LANG, USER", () => {
     const env = { PATH: "/usr/bin", HOME: "/home/u", LANG: "en_US.UTF-8", USER: "u" };
     const result = sanitizeEnv(env);

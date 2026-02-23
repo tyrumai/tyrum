@@ -9,6 +9,8 @@ import { join } from "node:path";
 import type { Logger } from "../observability/logger.js";
 import { AgentRuntime } from "./runtime.js";
 import type { PluginRegistry } from "../plugins/registry.js";
+import type { LanguageModel } from "ai";
+import { TokenStore } from "../auth/token-store.js";
 
 function normalizeAgentId(raw: string | undefined): string {
   const trimmed = raw?.trim();
@@ -27,19 +29,31 @@ export class AgentRegistry {
   private readonly runtimeByAgentId = new Map<string, Promise<AgentRuntime>>();
   private readonly secretProviderByAgentId = new Map<string, Promise<SecretProvider>>();
   private readonly policyServiceByAgentId = new Map<string, PolicyService>();
+  private readonly tokenStore: TokenStore;
+  private adminTokenPromise: Promise<string> | undefined;
 
   constructor(
     private readonly opts: {
       container: GatewayContainer;
       baseHome: string;
-      gatewayToken: string;
       defaultSecretProvider: SecretProvider;
       defaultPolicyService: PolicyService;
+      /** Optional global LanguageModel override (primarily for tests). */
+      defaultLanguageModel?: LanguageModel;
       approvalNotifier: ApprovalNotifier;
       plugins?: PluginRegistry;
       logger: Logger;
     },
-  ) {}
+  ) {
+    this.tokenStore = new TokenStore(opts.baseHome);
+  }
+
+  private getAdminToken(): Promise<string> {
+    if (!this.adminTokenPromise) {
+      this.adminTokenPromise = this.tokenStore.initialize();
+    }
+    return this.adminTokenPromise;
+  }
 
   resolveAgentHome(agentId: string): string {
     const id = normalizeAgentId(agentId);
@@ -70,10 +84,9 @@ export class AgentRegistry {
     const cached = this.secretProviderByAgentId.get(id);
     if (cached) return await cached;
 
-    const promise = createSecretProviderFromEnv(
-      this.resolveAgentHome(id),
-      this.opts.gatewayToken,
-    ).catch((err) => {
+    const promise = this.getAdminToken()
+      .then((token) => createSecretProviderFromEnv(this.resolveAgentHome(id), token))
+      .catch((err) => {
       this.secretProviderByAgentId.delete(id);
       throw err;
     });
@@ -95,9 +108,9 @@ export class AgentRegistry {
         container: this.opts.container,
         home,
         fetchImpl: fetch,
-        gatewayToken: this.opts.gatewayToken,
         agentId: id,
         workspaceId: id,
+        languageModel: this.opts.defaultLanguageModel,
         secretProvider,
         approvalNotifier: this.opts.approvalNotifier,
         plugins: this.opts.plugins,
