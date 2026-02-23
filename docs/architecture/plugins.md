@@ -68,7 +68,7 @@ This file records:
 
 - the install source (for example a registry reference or local path)
 - the pinned plugin version
-- an integrity hash recorded at install time
+- an integrity hash recorded at install time (v1 covers the manifest file contents and the entry module contents)
 
 When `plugin.lock.json` is present, the gateway treats it as an integrity/pinning contract: it refuses to load the plugin if the pinned version or integrity hash does not match what is on disk.
 
