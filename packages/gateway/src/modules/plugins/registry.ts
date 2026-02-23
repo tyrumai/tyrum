@@ -6,9 +6,9 @@ import { readFileSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { dirname, join, resolve, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { parse as parseYaml } from "yaml";
 import type { Hono } from "hono";
 import type { GatewayContainer } from "../../container.js";
+import { isRecord, parseJsonOrYaml } from "../../utils/parse-json-or-yaml.js";
 import type { Logger } from "../observability/logger.js";
 import type { ToolDescriptor } from "../agent/tools.js";
 
@@ -70,22 +70,8 @@ type LoadedPlugin = {
 
 const REQUIRED_MANIFEST_FIELDS = ["id", "name", "version", "entry", "contributes", "permissions", "config_schema"] as const;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
 function missingRequiredManifestFields(value: Record<string, unknown>): string[] {
   return REQUIRED_MANIFEST_FIELDS.filter((field) => !Object.prototype.hasOwnProperty.call(value, field));
-}
-
-function parseJsonOrYaml(contents: string, hintPath?: string): unknown {
-  const trimmed = contents.trim();
-  if (trimmed.length === 0) return {};
-  const isJson = hintPath?.toLowerCase().endsWith(".json") ?? trimmed.startsWith("{");
-  if (isJson) {
-    return JSON.parse(trimmed) as unknown;
-  }
-  return parseYaml(trimmed) as unknown;
 }
 
 function isJsonSchemaObject(value: unknown): value is Record<string, unknown> {
@@ -342,7 +328,6 @@ function normalizeJsonSchemaAdditionalPropertiesDefaults(
 
   return out;
 }
-
 async function tryReadFile(path: string): Promise<string | undefined> {
   try {
     return await readFile(path, "utf-8");

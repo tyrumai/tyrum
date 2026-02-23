@@ -14,7 +14,6 @@ import { basename, dirname, join } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { PluginManifest } from "@tyrum/schemas";
-import { parse as parseYaml } from "yaml";
 import { createContainerAsync } from "./container.js";
 import { createApp } from "./app.js";
 import { isAgentEnabled } from "./modules/agent/enabled.js";
@@ -40,6 +39,7 @@ import { VERSION } from "./version.js";
 import { resolveUserTyrumHome } from "./modules/agent/home.js";
 import { PluginRegistry, resolveBundledPluginsDirFrom } from "./modules/plugins/registry.js";
 import { AgentRegistry } from "./modules/agent/registry.js";
+import { isRecord, parseJsonOrYaml } from "./utils/parse-json-or-yaml.js";
 
 // Re-export for library consumers
 export { VERSION } from "./version.js";
@@ -358,20 +358,6 @@ function hostForUrl(host: string): string {
     return `[${host}]`;
   }
   return host;
-}
-
-function parseJsonOrYaml(contents: string, hintPath?: string): unknown {
-  const trimmed = contents.trim();
-  if (trimmed.length === 0) return {};
-  const isJson = hintPath?.toLowerCase().endsWith(".json") ?? trimmed.startsWith("{");
-  if (isJson) {
-    return JSON.parse(trimmed) as unknown;
-  }
-  return parseYaml(trimmed) as unknown;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 async function loadPluginManifestFromDir(dir: string): Promise<
