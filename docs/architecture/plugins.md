@@ -34,6 +34,13 @@ Plugins must declare a **config schema** (JSON Schema) as part of the manifest s
 
 This is a hard requirement for operability and security: it prevents “config drift” and reduces the need for trial-and-error restarts.
 
+### Manifest and config files
+
+- Manifest field: `config_schema` (a JSON Schema object describing the plugin config)
+- Config file: `config.yml` / `config.yaml` / `config.json` in the plugin directory (defaults to `{}` when absent)
+- Default safety: for object schemas, `additionalProperties` defaults to `false` unless explicitly set (so unknown keys fail validation)
+- Invalid config: the plugin is skipped at load time (and should be surfaced via logs/status surfaces)
+
 ## Tool exposure and opt-in
 
 Plugins can register tool descriptors, but tool availability is enforced by policy.
