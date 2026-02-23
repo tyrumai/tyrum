@@ -8,8 +8,10 @@ import type {
   MediaKind,
   MessageContent,
   NormalizedMessage,
+  NormalizedMessageEnvelope,
   NormalizedThread,
   NormalizedThreadMessage,
+  NormalizedContainerKind,
   PiiField,
   SenderMetadata,
   ThreadKind,
@@ -161,6 +163,28 @@ function piiFromContent(content: MessageContent): PiiField[] {
   return fields;
 }
 
+function toContainerKind(kind: ThreadKind): NormalizedContainerKind {
+  switch (kind) {
+    case "private":
+      return "dm";
+    case "channel":
+      return "channel";
+    default:
+      return "group";
+  }
+}
+
+function toEnvelopeContent(content: MessageContent): NormalizedMessageEnvelope["content"] {
+  if (content.kind === "text") {
+    return { text: content.text, attachments: [] };
+  }
+
+  return {
+    ...(content.caption != null ? { text: content.caption } : {}),
+    attachments: [{ kind: content.media_kind }],
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -232,6 +256,24 @@ export function normalizeUpdate(
     timestamp,
     edited_timestamp: editedTimestamp,
     pii_fields: messagePii,
+    envelope: {
+      message_id: String(message.message_id),
+      received_at: timestamp,
+      delivery: {
+        channel: "telegram",
+        account: "default",
+      },
+      container: {
+        kind: toContainerKind(thread.kind),
+        id: thread.id,
+      },
+      sender: {
+        id: sender?.id ?? `chat:${thread.id}`,
+        ...(sender?.username != null ? { display: sender.username } : {}),
+      },
+      content: toEnvelopeContent(content),
+      provenance: ["user"],
+    },
   };
 
   return {

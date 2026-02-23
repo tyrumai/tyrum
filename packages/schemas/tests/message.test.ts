@@ -3,6 +3,7 @@ import {
   NormalizedThreadMessage,
   NormalizedThread,
   NormalizedMessage,
+  NormalizedMessageEnvelope,
 } from "../src/index.js";
 
 describe("NormalizedThread", () => {
@@ -76,5 +77,56 @@ describe("NormalizedThreadMessage", () => {
     const json = JSON.parse(JSON.stringify(parsed));
     const restored = NormalizedThreadMessage.parse(json);
     expect(restored).toEqual(parsed);
+  });
+});
+
+describe("NormalizedMessageEnvelope", () => {
+  it("parses a v2 baseline normalized envelope", () => {
+    const envelope = NormalizedMessageEnvelope.parse({
+      message_id: "msg-1",
+      received_at: "2025-10-05T16:31:09Z",
+      delivery: {
+        channel: "telegram",
+        account: "default",
+      },
+      container: {
+        kind: "dm",
+        id: "chat-123",
+      },
+      sender: {
+        id: "user-42",
+        display: "Ron",
+      },
+      content: {
+        text: "Hello, world!",
+      },
+      provenance: ["user"],
+    });
+
+    expect(envelope.delivery.channel).toBe("telegram");
+    expect(envelope.container.kind).toBe("dm");
+    expect(envelope.provenance).toEqual(["user"]);
+  });
+
+  it("rejects empty content", () => {
+    expect(() =>
+      NormalizedMessageEnvelope.parse({
+        message_id: "msg-1",
+        received_at: "2025-10-05T16:31:09Z",
+        delivery: {
+          channel: "telegram",
+          account: "default",
+        },
+        container: {
+          kind: "group",
+          id: "chat-123",
+        },
+        sender: {
+          id: "user-42",
+        },
+        content: {},
+        provenance: ["user"],
+      }),
+    ).toThrow();
   });
 });

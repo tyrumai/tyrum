@@ -28,6 +28,14 @@ export const MediaKind = z.enum([
 ]);
 export type MediaKind = z.infer<typeof MediaKind>;
 
+/** Baseline container classes used by session routing. */
+export const NormalizedContainerKind = z.enum(["dm", "group", "channel"]);
+export type NormalizedContainerKind = z.infer<typeof NormalizedContainerKind>;
+
+/** Provenance tags preserved by connector normalization. */
+export const MessageProvenance = z.enum(["user", "connector", "tool", "system"]);
+export type MessageProvenance = z.infer<typeof MessageProvenance>;
+
 /** Fields that may contain personal data. */
 export const PiiField = z.enum([
   "message_caption",
@@ -76,6 +84,70 @@ export const MessageContent = z.discriminatedUnion("kind", [
 ]);
 export type MessageContent = z.infer<typeof MessageContent>;
 
+/** Delivery identity for v2 normalized envelopes. */
+export const NormalizedDeliveryIdentity = z
+  .object({
+    channel: z.string().trim().min(1),
+    account: z.string().trim().min(1),
+  })
+  .strict();
+export type NormalizedDeliveryIdentity = z.infer<typeof NormalizedDeliveryIdentity>;
+
+/** Container reference for v2 normalized envelopes. */
+export const NormalizedContainer = z
+  .object({
+    kind: NormalizedContainerKind,
+    id: z.string().trim().min(1),
+  })
+  .strict();
+export type NormalizedContainer = z.infer<typeof NormalizedContainer>;
+
+/** Sender identity for v2 normalized envelopes. */
+export const NormalizedEnvelopeSender = z
+  .object({
+    id: z.string().trim().min(1),
+    display: z.string().trim().min(1).optional(),
+  })
+  .strict();
+export type NormalizedEnvelopeSender = z.infer<typeof NormalizedEnvelopeSender>;
+
+/** Attachment metadata preserved by normalization. */
+export const NormalizedAttachment = z
+  .object({
+    kind: z.string().trim().min(1),
+    mime_type: z.string().trim().min(1).optional(),
+    size_bytes: z.number().int().nonnegative().optional(),
+    sha256: z.string().trim().min(1).optional(),
+  })
+  .strict();
+export type NormalizedAttachment = z.infer<typeof NormalizedAttachment>;
+
+/** Content payload for v2 normalized envelopes. */
+export const NormalizedEnvelopeContent = z
+  .object({
+    text: z.string().trim().min(1).optional(),
+    attachments: z.array(NormalizedAttachment).default([]),
+  })
+  .strict()
+  .refine((value) => typeof value.text === "string" || value.attachments.length > 0, {
+    message: "content must include text or at least one attachment",
+  });
+export type NormalizedEnvelopeContent = z.infer<typeof NormalizedEnvelopeContent>;
+
+/** Baseline v2 normalized message envelope contract. */
+export const NormalizedMessageEnvelope = z
+  .object({
+    message_id: z.string().trim().min(1),
+    received_at: z.string().datetime(),
+    delivery: NormalizedDeliveryIdentity,
+    container: NormalizedContainer,
+    sender: NormalizedEnvelopeSender,
+    content: NormalizedEnvelopeContent,
+    provenance: z.array(MessageProvenance).min(1),
+  })
+  .strict();
+export type NormalizedMessageEnvelope = z.infer<typeof NormalizedMessageEnvelope>;
+
 /** Canonical chat message payload. */
 export const NormalizedMessage = z.object({
   id: z.string(),
@@ -86,6 +158,7 @@ export const NormalizedMessage = z.object({
   timestamp: z.string().datetime(),
   edited_timestamp: z.string().datetime().optional(),
   pii_fields: z.array(PiiField).default([]),
+  envelope: NormalizedMessageEnvelope.optional(),
 });
 export type NormalizedMessage = z.infer<typeof NormalizedMessage>;
 

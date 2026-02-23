@@ -47,6 +47,27 @@ describe("Telegram normalization", () => {
     });
     expect(update.message.timestamp).toBe("2024-03-09T16:00:00.000Z");
     expect(update.message.edited_timestamp).toBeUndefined();
+    expect(update.message.envelope).toEqual({
+      message_id: "111",
+      received_at: "2024-03-09T16:00:00.000Z",
+      delivery: {
+        channel: "telegram",
+        account: "default",
+      },
+      container: {
+        kind: "dm",
+        id: "987654321",
+      },
+      sender: {
+        id: "555555",
+        display: "rons",
+      },
+      content: {
+        text: "Hello planner",
+        attachments: [],
+      },
+      provenance: ["user"],
+    });
     expect(update.message.pii_fields).toEqual([
       "message_text",
       "sender_first_name",
@@ -78,6 +99,12 @@ describe("Telegram normalization", () => {
       expect(update.message.content.media_kind).toBe("photo");
       expect(update.message.content.caption).toBe("Check this out");
     }
+
+    expect(update.message.envelope?.container.kind).toBe("group");
+    expect(update.message.envelope?.content).toEqual({
+      text: "Check this out",
+      attachments: [{ kind: "photo" }],
+    });
 
     expect(update.message.pii_fields).toContain("message_caption");
   });
