@@ -59,6 +59,7 @@ export interface ModelsDevLoadResult {
 export class ModelsDevService {
   private current: ModelsDevLoadResult | undefined;
   private refreshTimer: NodeJS.Timeout | undefined;
+  private readonly instanceOwner: string;
 
   constructor(
     private readonly opts: {
@@ -67,7 +68,10 @@ export class ModelsDevService {
       logger?: Logger;
       fetchImpl?: typeof fetch;
     },
-  ) {}
+  ) {
+    this.instanceOwner =
+      process.env["TYRUM_INSTANCE_ID"]?.trim() || `instance-${randomUUID()}`;
+  }
 
   private buildStatus(input: {
     source: ModelsDevCacheSource;
@@ -167,7 +171,11 @@ export class ModelsDevService {
   async ensureLoaded(): Promise<ModelsDevLoadResult> {
     const cached = await this.opts.cacheDal.get();
     if (cached) {
-      if (this.current && cached.updated_at === this.current.status.updated_at) {
+      if (
+        this.current &&
+        cached.updated_at === this.current.status.updated_at &&
+        cached.sha256 === this.current.status.sha256
+      ) {
         return this.current;
       }
 
@@ -243,7 +251,7 @@ export class ModelsDevService {
   async refreshNow(): Promise<ModelsDevLoadResult> {
     const nowIso = new Date().toISOString();
     const nowMs = Date.now();
-    const owner = process.env["TYRUM_INSTANCE_ID"]?.trim() || `instance-${randomUUID()}`;
+    const owner = this.instanceOwner;
 
     if (isFetchDisabled()) {
       return await this.ensureLoaded();

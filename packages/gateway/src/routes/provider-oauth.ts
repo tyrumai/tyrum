@@ -63,8 +63,10 @@ function computeRequestBaseUrl(c: Context, publicBaseUrl?: string): string {
 }
 
 function renderHtml(title: string, message: string): string {
-  const safeTitle = title.replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-  const safeMessage = message.replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+  const escapeHtml = (value: string): string =>
+    value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+  const safeTitle = escapeHtml(title);
+  const safeMessage = escapeHtml(message);
   return `<!doctype html>
 <html lang="en">
   <head>

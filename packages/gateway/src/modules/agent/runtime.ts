@@ -386,6 +386,7 @@ export class AgentRuntime {
   private readonly fetchImpl: typeof fetch;
   private readonly agentId: string;
   private readonly workspaceId: string;
+  private readonly instanceOwner: string;
   private readonly languageModelOverride?: LanguageModel;
   private readonly mcpManager: McpManager;
   private plugins: PluginRegistry | undefined;
@@ -404,6 +405,8 @@ export class AgentRuntime {
     this.fetchImpl = opts.fetchImpl ?? fetch;
     this.agentId = opts.agentId?.trim() || resolveAgentId();
     this.workspaceId = opts.workspaceId?.trim() || resolveWorkspaceId();
+    this.instanceOwner =
+      process.env["TYRUM_INSTANCE_ID"]?.trim() || `instance-${randomUUID()}`;
     this.languageModelOverride = opts.languageModel;
     this.mcpManager = opts.mcpManager ?? new McpManager();
     this.plugins = opts.plugins;
@@ -475,18 +478,29 @@ export class AgentRuntime {
     const loaded = await this.opts.container.modelsDev.ensureLoaded();
     const catalog = loaded.catalog;
 
-    const resolved = (() => {
-      for (const candidate of candidateIds) {
+    type ProviderEntry = (typeof catalog)[string];
+    type ModelEntry = NonNullable<ProviderEntry["models"]>[string];
+    type ResolvedCandidate = {
+      providerId: string;
+      modelId: string;
+      provider: ProviderEntry;
+      model: ModelEntry;
+      npm: string;
+      api: string | undefined;
+    };
+
+    const resolvedCandidates: ResolvedCandidate[] = candidateIds
+      .map((candidate): ResolvedCandidate | undefined => {
         const { providerId, modelId } = parseProviderModelId(candidate);
         const provider = catalog[providerId];
-        if (!provider) continue;
+        if (!provider) return undefined;
         const model = provider.models?.[modelId];
-        if (!model) continue;
+        if (!model) return undefined;
 
         const providerOverride = (model as { provider?: { npm?: string; api?: string } }).provider;
         const npm = providerOverride?.npm ?? provider.npm;
         const api = providerOverride?.api ?? provider.api;
-        if (!npm) continue;
+        if (!npm) return undefined;
 
         return {
           providerId,
@@ -496,51 +510,14 @@ export class AgentRuntime {
           npm,
           api,
         };
-      }
-      return undefined;
-    })();
+      })
+      .filter((v): v is ResolvedCandidate => Boolean(v));
 
-    if (!resolved) {
+    if (resolvedCandidates.length === 0) {
       throw new Error(
         `model not found in models.dev catalog: ${candidateIds.join(", ")}`,
       );
     }
-
-    const chosen = resolved;
-
-    const mergedOptions = (() => {
-      const modelOptions = coerceRecord((chosen.model as { options?: unknown }).options) ?? {};
-      const variantOptions = (() => {
-        const variant = input.config.model.variant?.trim();
-        const variants = coerceRecord((chosen.model as { variants?: unknown }).variants);
-        if (!variant || !variants) return {};
-        return coerceRecord(variants[variant]) ?? {};
-      })();
-      return Object.assign({}, modelOptions, variantOptions, input.config.model.options);
-    })();
-
-    const modelHeaders = coerceStringRecord((chosen.model as { headers?: unknown }).headers) ?? {};
-    const optionHeaders = coerceStringRecord(mergedOptions["headers"]) ?? {};
-    const headers = Object.keys(modelHeaders).length > 0 || Object.keys(optionHeaders).length > 0
-      ? { ...modelHeaders, ...optionHeaders }
-      : undefined;
-
-    const baseURL = (() => {
-      const raw =
-        mergedOptions["baseURL"] ??
-        mergedOptions["baseUrl"] ??
-        mergedOptions["base_url"] ??
-        undefined;
-      if (typeof raw === "string" && raw.trim().length > 0) {
-        return raw.trim();
-      }
-      if (typeof chosen.api === "string" && chosen.api.trim().length > 0) {
-        return chosen.api.trim();
-      }
-      const endpointKey = (chosen.provider.env ?? []).find((key) => /(ENDPOINT|BASE_URL|BASEURL|URL)$/i.test(key));
-      const endpoint = endpointKey ? process.env[endpointKey]?.trim() : undefined;
-      return endpoint && endpoint.length > 0 ? endpoint : undefined;
-    })();
 
     const secretProvider = this.opts.secretProvider;
     const resolver = secretProvider ? createSecretHandleResolver(secretProvider) : undefined;
@@ -550,316 +527,438 @@ export class AgentRuntime {
     const oauthProviderRegistry = this.opts.container.oauthProviderRegistry;
     const oauthRefreshLeaseDal = this.opts.container.oauthRefreshLeaseDal;
     const logger = this.opts.container.logger;
-    const oauthLeaseOwner =
-      process.env["TYRUM_INSTANCE_ID"]?.trim() || `instance-${randomUUID()}`;
-
-    const eligibleProfiles = isAuthProfilesEnabled() && resolver
-      ? await authProfileDal.listEligibleForProvider({
-        agentId: this.agentId,
-        provider: chosen.providerId,
-        nowMs: Date.now(),
-      })
-      : [];
-
-    let pinnedId: string | undefined;
-    if (eligibleProfiles.length > 0) {
-      const pin = await pinDal.get({
-        agentId: this.agentId,
-        sessionId: input.sessionId,
-        provider: chosen.providerId,
-      });
-      pinnedId = pin?.profile_id;
-    }
-
-    const orderedProfiles = pinnedId
-      ? [...eligibleProfiles].sort((a, b) => (a.profile_id === pinnedId ? -1 : b.profile_id === pinnedId ? 1 : 0))
-      : eligibleProfiles;
-
-    const envApiKey = (() => {
-      const apiKeyVar = (chosen.provider.env ?? []).find((key) => /(_API_KEY|_TOKEN)$/i.test(key));
-      const value = apiKeyVar ? process.env[apiKeyVar] : undefined;
-      const trimmed = typeof value === "string" ? value.trim() : "";
-      return trimmed.length > 0 ? trimmed : undefined;
-    })();
+    const oauthLeaseOwner = this.instanceOwner;
+    const agentId = this.agentId;
 
     const fetch = input.fetchImpl ?? this.fetchImpl;
 
-    async function buildModelFromApiKey(apiKey: string | undefined): Promise<LanguageModelV3> {
-      const sdk = createProviderFromNpm({
-        npm: chosen.npm,
-        providerId: chosen.providerId,
-        apiKey,
-        baseURL,
-        headers,
-        fetchImpl: fetch,
-        options: mergedOptions,
-      });
+    async function buildRotatingModel(chosen: (typeof resolvedCandidates)[number]): Promise<LanguageModelV3> {
+      const mergedOptions = (() => {
+        const modelOptions = coerceRecord((chosen.model as { options?: unknown }).options) ?? {};
+        const variantOptions = (() => {
+          const variant = input.config.model.variant?.trim();
+          const variants = coerceRecord((chosen.model as { variants?: unknown }).variants);
+          if (!variant || !variants) return {};
+          return coerceRecord(variants[variant]) ?? {};
+        })();
+        return Object.assign({}, modelOptions, variantOptions, input.config.model.options);
+      })();
 
-      const model = sdk.languageModel(chosen.modelId);
-      if (typeof model === "string") {
-        throw new Error(`provider returned string model id for '${chosen.providerId}/${chosen.modelId}'`);
-      }
-      if ((model as Partial<LanguageModelV3>).specificationVersion !== "v3") {
-        throw new Error(`provider model '${chosen.providerId}/${chosen.modelId}' is not specificationVersion v3`);
-      }
-      return model as LanguageModelV3;
-    }
+      const modelHeaders = coerceStringRecord((chosen.model as { headers?: unknown }).headers) ?? {};
+      const optionHeaders = coerceStringRecord(mergedOptions["headers"]) ?? {};
+      const headers = Object.keys(modelHeaders).length > 0 || Object.keys(optionHeaders).length > 0
+        ? { ...modelHeaders, ...optionHeaders }
+        : undefined;
 
-    async function resolveApiKeyFromProfile(profile: AuthProfileRow): Promise<string | null> {
-      async function maybeRefreshOAuthAccessToken(): Promise<string | null> {
-        if (profile.type !== "oauth") return null;
-        if (!secretProvider || !resolver) return null;
+      const baseURL = (() => {
+        const raw =
+          mergedOptions["baseURL"] ??
+          mergedOptions["baseUrl"] ??
+          mergedOptions["base_url"] ??
+          undefined;
+        if (typeof raw === "string" && raw.trim().length > 0) {
+          return raw.trim();
+        }
+        if (typeof chosen.api === "string" && chosen.api.trim().length > 0) {
+          return chosen.api.trim();
+        }
+        const endpointKey = (chosen.provider.env ?? []).find((key) => /(ENDPOINT|BASE_URL|BASEURL|URL)$/i.test(key));
+        const endpoint = endpointKey ? process.env[endpointKey]?.trim() : undefined;
+        return endpoint && endpoint.length > 0 ? endpoint : undefined;
+      })();
 
-        const expiresAt = profile.expires_at;
-        if (!expiresAt) return null;
-        const expiresAtMs = Date.parse(expiresAt);
-        if (!Number.isFinite(expiresAtMs)) return null;
+      const eligibleProfiles = isAuthProfilesEnabled() && resolver
+        ? await authProfileDal.listEligibleForProvider({
+          agentId,
+          provider: chosen.providerId,
+          nowMs: Date.now(),
+        })
+        : [];
 
-        const nowMs = Date.now();
-        const refreshThresholdMs = 60_000;
-        if (expiresAtMs - nowMs > refreshThresholdMs) return null;
-
-        const refreshHandleId = profile.secret_handles?.["refresh_token_handle"];
-        if (!refreshHandleId) return null;
-
-        const acquired = await oauthRefreshLeaseDal.tryAcquire({
-          profileId: profile.profile_id,
-          owner: oauthLeaseOwner,
-          nowMs,
-          leaseTtlMs: 60_000,
+      let pinnedId: string | undefined;
+      if (eligibleProfiles.length > 0) {
+        const pin = await pinDal.get({
+          agentId,
+          sessionId: input.sessionId,
+          provider: chosen.providerId,
         });
-        if (!acquired) return null;
+        pinnedId = pin?.profile_id;
+      }
 
-        try {
-          const latest = await authProfileDal.getById(profile.profile_id);
-          const current = latest ?? profile;
+      const orderedProfiles = pinnedId
+        ? [...eligibleProfiles].sort((a, b) => (a.profile_id === pinnedId ? -1 : b.profile_id === pinnedId ? 1 : 0))
+        : eligibleProfiles;
 
-          const currentExpiresAt = current.expires_at;
-          if (currentExpiresAt) {
-            const currentExpiresAtMs = Date.parse(currentExpiresAt);
-            if (Number.isFinite(currentExpiresAtMs) && currentExpiresAtMs - nowMs > refreshThresholdMs) {
-              return null;
+      const envApiKey = (() => {
+        const apiKeyVar = (chosen.provider.env ?? []).find((key) => /(_API_KEY|_TOKEN)$/i.test(key));
+        const value = apiKeyVar ? process.env[apiKeyVar] : undefined;
+        const trimmed = typeof value === "string" ? value.trim() : "";
+        return trimmed.length > 0 ? trimmed : undefined;
+      })();
+
+      async function buildModelFromApiKey(apiKey: string | undefined): Promise<LanguageModelV3> {
+        const sdk = createProviderFromNpm({
+          npm: chosen.npm,
+          providerId: chosen.providerId,
+          apiKey,
+          baseURL,
+          headers,
+          fetchImpl: fetch,
+          options: mergedOptions,
+        });
+
+        const model = sdk.languageModel(chosen.modelId);
+        if (typeof model === "string") {
+          throw new Error(`provider returned string model id for '${chosen.providerId}/${chosen.modelId}'`);
+        }
+        if ((model as Partial<LanguageModelV3>).specificationVersion !== "v3") {
+          throw new Error(`provider model '${chosen.providerId}/${chosen.modelId}' is not specificationVersion v3`);
+        }
+        return model as LanguageModelV3;
+      }
+
+      async function resolveApiKeyFromProfile(profile: AuthProfileRow): Promise<string | null> {
+        async function maybeRefreshOAuthAccessToken(): Promise<string | null> {
+          if (profile.type !== "oauth") return null;
+          if (!secretProvider || !resolver) return null;
+
+          const expiresAt = profile.expires_at;
+          if (!expiresAt) return null;
+          const expiresAtMs = Date.parse(expiresAt);
+          if (!Number.isFinite(expiresAtMs)) return null;
+
+          const nowMs = Date.now();
+          const refreshThresholdMs = 60_000;
+          if (expiresAtMs - nowMs > refreshThresholdMs) return null;
+
+          const refreshHandleId = profile.secret_handles?.["refresh_token_handle"];
+          if (!refreshHandleId) return null;
+
+          const acquired = await oauthRefreshLeaseDal.tryAcquire({
+            profileId: profile.profile_id,
+            owner: oauthLeaseOwner,
+            nowMs,
+            leaseTtlMs: 60_000,
+          });
+          if (!acquired) {
+            // Another instance is refreshing (or the lease is stuck); sync in-memory handles
+            // from the latest row so we don't attempt a revoked access handle.
+            const latest = await authProfileDal.getById(profile.profile_id);
+            if (latest && latest.updated_at !== profile.updated_at) {
+              profile.secret_handles = latest.secret_handles;
+              profile.expires_at = latest.expires_at;
+              profile.updated_at = latest.updated_at;
+              await resolver.refresh().catch((err) => {
+                const msg = err instanceof Error ? err.message : String(err);
+                logger.warn("secret.handle_resolver_refresh_failed", {
+                  profile_id: profile.profile_id,
+                  error: msg,
+                });
+              });
             }
+            return null;
           }
 
-          const currentRefreshHandleId = current.secret_handles?.["refresh_token_handle"] ?? refreshHandleId;
-          const refreshToken = await resolver.resolveById(currentRefreshHandleId);
-          if (!refreshToken) return null;
+          try {
+            const latest = await authProfileDal.getById(profile.profile_id);
+            const current = latest ?? profile;
 
-          const spec = await oauthProviderRegistry.get(current.provider);
-          if (!spec) return null;
+            const currentExpiresAt = current.expires_at;
+            if (currentExpiresAt) {
+              const currentExpiresAtMs = Date.parse(currentExpiresAt);
+              if (Number.isFinite(currentExpiresAtMs) && currentExpiresAtMs - nowMs > refreshThresholdMs) {
+                if (latest && latest.updated_at !== profile.updated_at) {
+                  profile.secret_handles = latest.secret_handles;
+                  profile.expires_at = latest.expires_at;
+                  profile.updated_at = latest.updated_at;
+                  await resolver.refresh().catch((err) => {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    logger.warn("secret.handle_resolver_refresh_failed", {
+                      profile_id: profile.profile_id,
+                      error: msg,
+                    });
+                  });
+                }
+                return null;
+              }
+            }
 
-          const clientIdEnv = spec.client_id_env?.trim();
-          if (!clientIdEnv) return null;
-          const clientId = process.env[clientIdEnv]?.trim();
-          if (!clientId) return null;
+            const currentRefreshHandleId = current.secret_handles?.["refresh_token_handle"] ?? refreshHandleId;
+            const refreshToken = await resolver.resolveById(currentRefreshHandleId);
+            if (!refreshToken) return null;
 
-          const clientSecretEnv = spec.client_secret_env?.trim();
-          const clientSecret = clientSecretEnv ? process.env[clientSecretEnv]?.trim() : undefined;
+            const spec = await oauthProviderRegistry.get(current.provider);
+            if (!spec) return null;
 
-          const { tokenEndpoint } = await resolveOAuthEndpoints(spec, { fetchImpl: fetch });
-          if (!tokenEndpoint) return null;
+            const clientIdEnv = spec.client_id_env?.trim();
+            if (!clientIdEnv) return null;
+            const clientId = process.env[clientIdEnv]?.trim();
+            if (!clientId) return null;
 
-          const scope = (spec.scopes ?? []).join(" ").trim();
-          const token = await refreshAccessToken({
-            tokenEndpoint,
-            clientId,
-            clientSecret,
-            tokenEndpointBasicAuth: spec.token_endpoint_basic_auth,
-            refreshToken,
-            scope: scope || undefined,
-            extraParams: spec.extra_token_params,
-            fetchImpl: fetch,
-          });
+            const clientSecretEnv = spec.client_secret_env?.trim();
+            const clientSecret = clientSecretEnv ? process.env[clientSecretEnv]?.trim() : undefined;
 
-          const accessToken = token.access_token?.trim();
-          if (!accessToken) return null;
+            const { tokenEndpoint } = await resolveOAuthEndpoints(spec, { fetchImpl: fetch });
+            if (!tokenEndpoint) return null;
 
-          const accessHandle = await secretProvider.store(
-            `oauth:${current.provider}:${current.agent_id}:access`,
-            accessToken,
-          );
+            const scope = (spec.scopes ?? []).join(" ").trim();
+            const token = await refreshAccessToken({
+              tokenEndpoint,
+              clientId,
+              clientSecret,
+              tokenEndpointBasicAuth: spec.token_endpoint_basic_auth,
+              refreshToken,
+              scope: scope || undefined,
+              extraParams: spec.extra_token_params,
+              fetchImpl: fetch,
+            });
 
-          const nextSecretHandles: Record<string, string> = { ...current.secret_handles };
-          const oldAccessHandleId = nextSecretHandles["access_token_handle"];
-          nextSecretHandles["access_token_handle"] = accessHandle.handle_id;
+            const accessToken = token.access_token?.trim();
+            if (!accessToken) return null;
 
-          const refreshTokenNew = token.refresh_token?.trim();
-          let oldRefreshHandleId: string | undefined;
-          let newRefreshHandleId: string | undefined;
-          if (refreshTokenNew) {
-            const refreshHandle = await secretProvider.store(
-              `oauth:${current.provider}:${current.agent_id}:refresh`,
-              refreshTokenNew,
+            const accessHandle = await secretProvider.store(
+              `oauth:${current.provider}:${current.agent_id}:access`,
+              accessToken,
             );
-            oldRefreshHandleId = nextSecretHandles["refresh_token_handle"];
-            nextSecretHandles["refresh_token_handle"] = refreshHandle.handle_id;
-            newRefreshHandleId = refreshHandle.handle_id;
-          }
 
-          const nextExpiresAt = (() => {
-            const expiresIn = token.expires_in;
-            if (typeof expiresIn === "number" && Number.isFinite(expiresIn) && expiresIn > 0) {
-              return new Date(nowMs + Math.floor(expiresIn) * 1000).toISOString();
+            const nextSecretHandles: Record<string, string> = { ...current.secret_handles };
+            const oldAccessHandleId = nextSecretHandles["access_token_handle"];
+            nextSecretHandles["access_token_handle"] = accessHandle.handle_id;
+
+            const refreshTokenNew = token.refresh_token?.trim();
+            let oldRefreshHandleId: string | undefined;
+            let newRefreshHandleId: string | undefined;
+            if (refreshTokenNew) {
+              const refreshHandle = await secretProvider.store(
+                `oauth:${current.provider}:${current.agent_id}:refresh`,
+                refreshTokenNew,
+              );
+              oldRefreshHandleId = nextSecretHandles["refresh_token_handle"];
+              nextSecretHandles["refresh_token_handle"] = refreshHandle.handle_id;
+              newRefreshHandleId = refreshHandle.handle_id;
             }
-            return undefined;
-          })();
 
-          const updated = await authProfileDal.updateSecretHandles(current.profile_id, {
-            secretHandles: nextSecretHandles,
-            expiresAt: nextExpiresAt,
-            updatedBy: { kind: "oauth_refresh" },
-          });
+            const nextExpiresAt = (() => {
+              const expiresIn = token.expires_in;
+              if (typeof expiresIn === "number" && Number.isFinite(expiresIn) && expiresIn > 0) {
+                return new Date(nowMs + Math.floor(expiresIn) * 1000).toISOString();
+              }
+              return undefined;
+            })();
 
-          if (!updated) {
-            await secretProvider.revoke(accessHandle.handle_id).catch(() => {});
-            if (newRefreshHandleId) {
-              await secretProvider.revoke(newRefreshHandleId).catch(() => {});
+            const updated = await authProfileDal.updateSecretHandles(current.profile_id, {
+              secretHandles: nextSecretHandles,
+              expiresAt: nextExpiresAt,
+              updatedBy: { kind: "oauth_refresh" },
+            });
+
+            if (!updated) {
+              await secretProvider.revoke(accessHandle.handle_id).catch(() => {});
+              if (newRefreshHandleId) {
+                await secretProvider.revoke(newRefreshHandleId).catch(() => {});
+              }
+              return accessToken;
             }
+
+            if (oldAccessHandleId && oldAccessHandleId !== accessHandle.handle_id) {
+              await secretProvider.revoke(oldAccessHandleId).catch(() => {});
+            }
+            if (oldRefreshHandleId && newRefreshHandleId && oldRefreshHandleId !== newRefreshHandleId) {
+              await secretProvider.revoke(oldRefreshHandleId).catch(() => {});
+            }
+
+            // Keep the in-memory snapshot in sync so subsequent calls in the same turn
+            // don't try to resolve a revoked handle.
+            profile.secret_handles = updated.secret_handles;
+            profile.expires_at = updated.expires_at;
+            profile.updated_at = updated.updated_at;
+            await resolver.refresh().catch((err) => {
+              const msg = err instanceof Error ? err.message : String(err);
+              logger.warn("secret.handle_resolver_refresh_failed", {
+                profile_id: profile.profile_id,
+                error: msg,
+              });
+            });
+
             return accessToken;
-          }
-
-          if (oldAccessHandleId && oldAccessHandleId !== accessHandle.handle_id) {
-            await secretProvider.revoke(oldAccessHandleId).catch(() => {});
-          }
-          if (oldRefreshHandleId && newRefreshHandleId && oldRefreshHandleId !== newRefreshHandleId) {
-            await secretProvider.revoke(oldRefreshHandleId).catch(() => {});
-          }
-
-          // Keep the in-memory snapshot in sync so subsequent calls in the same turn
-          // don't try to resolve a revoked handle.
-          profile.secret_handles = updated.secret_handles;
-          profile.expires_at = updated.expires_at;
-          profile.updated_at = updated.updated_at;
-          await resolver.refresh().catch((err) => {
+          } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            logger.warn("secret.handle_resolver_refresh_failed", {
+            logger.warn("oauth.refresh_failed", {
+              provider: profile.provider,
               profile_id: profile.profile_id,
               error: msg,
             });
-          });
-
-          return accessToken;
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          logger.warn("oauth.refresh_failed", {
-            provider: profile.provider,
-            profile_id: profile.profile_id,
-            error: msg,
-          });
-          // If refresh fails and the token is already expired, avoid hammering the token endpoint.
-          if (expiresAtMs <= nowMs) {
-            await authProfileDal.setCooldown(profile.profile_id, { untilMs: nowMs + 60_000 });
+            // If refresh fails and the token is already expired, avoid hammering the token endpoint.
+            if (expiresAtMs <= nowMs) {
+              await authProfileDal.setCooldown(profile.profile_id, { untilMs: Date.now() + 60_000 });
+            }
+            return null;
+          } finally {
+            await oauthRefreshLeaseDal.release({ profileId: profile.profile_id, owner: oauthLeaseOwner }).catch(() => {});
           }
-          return null;
-        } finally {
-          await oauthRefreshLeaseDal.release({ profileId: profile.profile_id, owner: oauthLeaseOwner }).catch(() => {});
         }
+
+        const refreshed = await maybeRefreshOAuthAccessToken();
+        if (refreshed) return refreshed;
+
+        if (profile.type === "oauth") {
+          const refreshTokenHandleId = profile.secret_handles?.["refresh_token_handle"];
+          if (refreshTokenHandleId) {
+            const expiresAt = profile.expires_at;
+            const expiresAtMs = expiresAt ? Date.parse(expiresAt) : Number.NaN;
+            if (Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now()) {
+              return null;
+            }
+          }
+        }
+
+        const handles = profile.secret_handles ?? {};
+        const handleId =
+          profile.type === "api_key"
+            ? handles["api_key_handle"]
+            : profile.type === "token"
+              ? handles["token_handle"]
+              : handles["access_token_handle"];
+        if (!handleId || !resolver) return null;
+        return await resolver.resolveById(handleId);
       }
 
-      const refreshed = await maybeRefreshOAuthAccessToken();
-      if (refreshed) return refreshed;
+      const providerLabel = `${chosen.providerId}/${chosen.modelId}`;
 
-      const handles = profile.secret_handles ?? {};
-      const handleId =
-        profile.type === "api_key"
-          ? handles["api_key_handle"]
-          : profile.type === "token"
-            ? handles["token_handle"]
-            : handles["access_token_handle"];
-      if (!handleId || !resolver) return null;
-      return await resolver.resolveById(handleId);
+      const supportedUrls: PromiseLike<Record<string, RegExp[]>> = (async () => {
+        try {
+          const model = await buildModelFromApiKey(undefined);
+          return await Promise.resolve(model.supportedUrls);
+        } catch {
+          return {};
+        }
+      })();
+
+      async function callWithRotation<T>(
+        options: LanguageModelV3CallOptions,
+        invoke: (model: LanguageModelV3, options: LanguageModelV3CallOptions) => PromiseLike<T>,
+      ): Promise<T> {
+        let lastErr: unknown;
+
+        for (const profile of orderedProfiles) {
+          const apiKey = await resolveApiKeyFromProfile(profile);
+          if (!apiKey) continue;
+
+          const model = await buildModelFromApiKey(apiKey);
+          try {
+            const res = await invoke(model, options);
+            if (input.sessionId) {
+              void pinDal
+                .upsert({
+                  agentId: profile.agent_id,
+                  sessionId: input.sessionId,
+                  provider: chosen.providerId,
+                  profileId: profile.profile_id,
+                })
+                .catch(() => {});
+            }
+            return res;
+          } catch (err) {
+            lastErr = err;
+            if (APICallError.isInstance(err)) {
+              const status = err.statusCode;
+              if (isAuthInvalidStatus(status)) {
+                await authProfileDal.disableProfile(profile.profile_id, {
+                  reason: `upstream_auth_${String(status)}`,
+                });
+                continue;
+              }
+              if (isTransientStatus(status)) {
+                const cooldownMs = status === 429 ? 60_000 : 15_000;
+                await authProfileDal.setCooldown(profile.profile_id, { untilMs: Date.now() + cooldownMs });
+                continue;
+              }
+              throw err;
+            }
+
+            // Non-HTTP errors: treat as transient and rotate.
+            const cooldownMs = 30_000;
+            await authProfileDal.setCooldown(profile.profile_id, { untilMs: Date.now() + cooldownMs });
+            continue;
+          }
+        }
+
+        // Fall back to environment-provided credentials (single attempt; no pinning).
+        try {
+          const model = await buildModelFromApiKey(envApiKey);
+          return await invoke(model, options);
+        } catch (err) {
+          lastErr = err;
+        }
+
+        const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
+        throw new Error(`model call failed for ${providerLabel}: ${message}`);
+      }
+
+      const rotating: LanguageModelV3 = {
+        specificationVersion: "v3",
+        provider: chosen.providerId,
+        modelId: providerLabel,
+        supportedUrls,
+
+        async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
+          return await callWithRotation(options, (model, opts) => model.doGenerate(opts));
+        },
+
+        async doStream(options: LanguageModelV3CallOptions): Promise<LanguageModelV3StreamResult> {
+          return await callWithRotation(options, (model, opts) => model.doStream(opts));
+        },
+      };
+
+      return rotating;
     }
 
-	    const providerLabel = `${chosen.providerId}/${chosen.modelId}`;
+    const rotatingModels: LanguageModelV3[] = [];
+    for (const entry of resolvedCandidates) {
+      rotatingModels.push(await buildRotatingModel(entry));
+    }
 
-	    const supportedUrls: PromiseLike<Record<string, RegExp[]>> = (async () => {
-	      try {
-	        const model = await buildModelFromApiKey(undefined);
-	        return await Promise.resolve(model.supportedUrls);
-	      } catch {
-	        return {};
-	      }
-	    })();
+    if (rotatingModels.length === 1) {
+      return rotatingModels[0]!;
+    }
 
-	    async function callWithRotation<T>(
-	      options: LanguageModelV3CallOptions,
-	      invoke: (model: LanguageModelV3, options: LanguageModelV3CallOptions) => PromiseLike<T>,
-	    ): Promise<T> {
-	      let lastErr: unknown;
-	      const nowMs = Date.now();
+    const attempted = rotatingModels.map((m) => m.modelId).join(", ");
+    const primary = rotatingModels[0]!;
 
-	      for (const profile of orderedProfiles) {
-	        const apiKey = await resolveApiKeyFromProfile(profile);
-	        if (!apiKey) continue;
+    const multi: LanguageModelV3 = {
+      specificationVersion: "v3",
+      provider: primary.provider,
+      modelId: primary.modelId,
+      supportedUrls: primary.supportedUrls,
 
-	        const model = await buildModelFromApiKey(apiKey);
-	        try {
-	          const res = await invoke(model, options);
-	          if (input.sessionId) {
-	            void pinDal
-	              .upsert({
-	                agentId: profile.agent_id,
-	                sessionId: input.sessionId,
-	                provider: chosen.providerId,
-	                profileId: profile.profile_id,
-	              })
-	              .catch(() => {});
-	          }
-	          return res;
-	        } catch (err) {
-	          lastErr = err;
-	          if (APICallError.isInstance(err)) {
-	            const status = err.statusCode;
-	            if (isAuthInvalidStatus(status)) {
-	              await authProfileDal.disableProfile(profile.profile_id, {
-	                reason: `upstream_auth_${String(status)}`,
-	              });
-	              continue;
-	            }
-	            if (isTransientStatus(status)) {
-	              const cooldownMs = status === 429 ? 60_000 : 15_000;
-	              await authProfileDal.setCooldown(profile.profile_id, { untilMs: nowMs + cooldownMs });
-	              continue;
-	            }
-	            throw err;
-	          }
+      async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
+        let lastErr: unknown;
+        for (const model of rotatingModels) {
+          try {
+            return await model.doGenerate(options);
+          } catch (err) {
+            lastErr = err;
+          }
+        }
+        const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
+        throw new Error(`model call failed for candidates ${attempted}: ${message}`);
+      },
 
-	          // Non-HTTP errors: treat as transient and rotate.
-	          const cooldownMs = 30_000;
-	          await authProfileDal.setCooldown(profile.profile_id, { untilMs: nowMs + cooldownMs });
-	          continue;
-	        }
-	      }
+      async doStream(options: LanguageModelV3CallOptions): Promise<LanguageModelV3StreamResult> {
+        let lastErr: unknown;
+        for (const model of rotatingModels) {
+          try {
+            return await model.doStream(options);
+          } catch (err) {
+            lastErr = err;
+          }
+        }
+        const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
+        throw new Error(`model call failed for candidates ${attempted}: ${message}`);
+      },
+    };
 
-	      // Fall back to environment-provided credentials (single attempt; no pinning).
-	      try {
-	        const model = await buildModelFromApiKey(envApiKey);
-	        return await invoke(model, options);
-	      } catch (err) {
-	        lastErr = err;
-	      }
-
-	      const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
-	      throw new Error(`model call failed for ${providerLabel}: ${message}`);
-	    }
-
-	    const rotating: LanguageModelV3 = {
-	      specificationVersion: "v3",
-	      provider: chosen.providerId,
-	      modelId: providerLabel,
-	      supportedUrls,
-
-	      async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
-	        return await callWithRotation(options, (model, opts) => model.doGenerate(opts));
-	      },
-
-	      async doStream(options: LanguageModelV3CallOptions): Promise<LanguageModelV3StreamResult> {
-	        return await callWithRotation(options, (model, opts) => model.doStream(opts));
-	      },
-	    };
-
-    return rotating;
+    return multi;
   }
 
   async status(enabled: boolean): Promise<AgentStatusResponseT> {

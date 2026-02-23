@@ -363,6 +363,18 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
   const isLocalOnly = LOCAL_HOSTS.has(host);
 
+  const instanceId = (() => {
+    const raw = process.env["TYRUM_INSTANCE_ID"];
+    const trimmed = raw?.trim();
+    if (trimmed) {
+      process.env["TYRUM_INSTANCE_ID"] = trimmed;
+      return trimmed;
+    }
+    const generated = `gw-${crypto.randomUUID()}`;
+    process.env["TYRUM_INSTANCE_ID"] = generated;
+    return generated;
+  })();
+
   ensureDatabaseDirectory(dbPath);
 
   const container = await createContainerAsync({
@@ -410,8 +422,6 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     watcherScheduler.start();
   }
 
-  const instanceId =
-    process.env["TYRUM_INSTANCE_ID"]?.trim() || `gw-${crypto.randomUUID()}`;
   const logger = container.logger.child({
     role,
     instance_id: instanceId,
