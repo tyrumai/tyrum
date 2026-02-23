@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -109,5 +109,105 @@ describe("TokenStore", () => {
     expect(token).toBeTruthy();
     const fileContent = await readFile(join(nested, ".admin-token"), "utf-8");
     expect(fileContent.trim()).toBe(token);
+  });
+
+  it("issues a device token with role and scope claims", async () => {
+    const store = new TokenStore(tempDir);
+    await store.initialize();
+
+    const issued = await store.issueDeviceToken({
+      deviceId: "dev_client_1",
+      role: "client",
+      scopes: ["operator.read", "operator.write", "operator.read"],
+      ttlSeconds: 300,
+    });
+
+    expect(issued.token).toContain("tyrum-device.v1.");
+    expect(issued.role).toBe("client");
+    expect(issued.device_id).toBe("dev_client_1");
+    expect(issued.scopes).toEqual(["operator.read", "operator.write"]);
+
+    const claims = store.authenticate(issued.token, {
+      expectedRole: "client",
+      expectedDeviceId: "dev_client_1",
+    });
+    expect(claims).toMatchObject({
+      token_kind: "device",
+      token_id: issued.token_id,
+      role: "client",
+      device_id: "dev_client_1",
+      scopes: ["operator.read", "operator.write"],
+    });
+    expect(store.authenticate(issued.token, { expectedRole: "node" })).toBeNull();
+    expect(store.authenticate(issued.token, { expectedDeviceId: "dev_other" })).toBeNull();
+    expect(store.validate(issued.token)).toBe(true);
+  });
+
+  it("revokes a device token and invalidates it immediately", async () => {
+    const store = new TokenStore(tempDir);
+    await store.initialize();
+
+    const issued = await store.issueDeviceToken({
+      deviceId: "dev_client_2",
+      role: "client",
+      scopes: ["operator.read"],
+      ttlSeconds: 300,
+    });
+
+    expect(store.validate(issued.token)).toBe(true);
+    await expect(store.revokeDeviceToken(issued.token)).resolves.toBe(true);
+    await expect(store.revokeDeviceToken(issued.token)).resolves.toBe(false);
+    expect(store.validate(issued.token)).toBe(false);
+    expect(store.authenticate(issued.token)).toBeNull();
+  });
+
+  it("persists revoked device token ids across restarts", async () => {
+    const store = new TokenStore(tempDir);
+    await store.initialize();
+    const issued = await store.issueDeviceToken({
+      deviceId: "dev_client_4",
+      role: "client",
+      scopes: ["operator.read"],
+      ttlSeconds: 300,
+    });
+    await expect(store.revokeDeviceToken(issued.token)).resolves.toBe(true);
+
+    const reloaded = new TokenStore(tempDir);
+    await reloaded.initialize();
+    expect(reloaded.validate(issued.token)).toBe(false);
+    expect(reloaded.authenticate(issued.token)).toBeNull();
+  });
+
+  it("rejects expired device tokens", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-02-23T00:00:00.000Z"));
+    try {
+      const store = new TokenStore(tempDir);
+      await store.initialize();
+      const issued = await store.issueDeviceToken({
+        deviceId: "dev_client_3",
+        role: "client",
+        scopes: ["operator.read"],
+        ttlSeconds: 60,
+      });
+
+      vi.setSystemTime(new Date("2026-02-23T00:02:00.000Z"));
+      expect(store.validate(issued.token)).toBe(false);
+      expect(store.authenticate(issued.token)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("authenticates admin bootstrap token with admin claims", async () => {
+    const store = new TokenStore(tempDir);
+    const token = await store.initialize();
+
+    const claims = store.authenticate(token);
+    expect(claims).toMatchObject({
+      token_kind: "admin",
+      role: "admin",
+      scopes: ["*"],
+    });
   });
 });

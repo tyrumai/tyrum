@@ -317,6 +317,14 @@ export {
 } from "./secret.js";
 
 export {
+  DeviceTokenIssueRequest,
+  DeviceTokenIssueResponse,
+  DeviceTokenRevokeRequest,
+  DeviceTokenRevokeResponse,
+  DeviceTokenClaims,
+} from "./device-token.js";
+
+export {
   AuthProfileId,
   AuthProviderId,
   AuthProfileType,
