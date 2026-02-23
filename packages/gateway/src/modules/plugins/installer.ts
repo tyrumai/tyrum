@@ -1,6 +1,6 @@
 import { PluginManifest } from "@tyrum/schemas";
 import type { PluginManifest as PluginManifestT } from "@tyrum/schemas";
-import { cp, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { isRecord, parseJsonOrYaml } from "../../utils/parse-json-or-yaml.js";
 import {
@@ -11,9 +11,17 @@ import {
 } from "./lockfile.js";
 
 const REQUIRED_MANIFEST_FIELDS = ["id", "name", "version", "entry", "contributes", "permissions", "config_schema"] as const;
+const SAFE_PLUGIN_ID_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 function missingRequiredManifestFields(value: Record<string, unknown>): string[] {
   return REQUIRED_MANIFEST_FIELDS.filter((field) => !Object.prototype.hasOwnProperty.call(value, field));
+}
+
+function assertSafePluginIdSegment(value: string): string {
+  if (!SAFE_PLUGIN_ID_SEGMENT.test(value)) {
+    throw new Error(`invalid plugin id '${value}' (expected ${String(SAFE_PLUGIN_ID_SEGMENT)})`);
+  }
+  return value;
 }
 
 function resolveSafeChildPath(parent: string, child: string): string {
@@ -72,7 +80,7 @@ export async function installPluginFromDir(opts: {
   install: PluginInstallInfo;
 }> {
   const manifestFile = await loadPluginManifestFromDir(opts.sourceDir);
-  const pluginId = manifestFile.manifest.id;
+  const pluginId = assertSafePluginIdSegment(manifestFile.manifest.id);
 
   const pluginsRoot = join(opts.home, "plugins");
   await mkdir(pluginsRoot, { recursive: true });
@@ -82,37 +90,41 @@ export async function installPluginFromDir(opts: {
     throw new Error(`plugin '${pluginId}' already exists at ${pluginDir}`);
   }
 
-  await cp(opts.sourceDir, pluginDir, {
-    recursive: true,
-    force: false,
-    errorOnExist: true,
-  });
+  try {
+    await cp(opts.sourceDir, pluginDir, {
+      recursive: true,
+      force: false,
+      errorOnExist: true,
+    });
 
-  const installedManifestPath = join(pluginDir, manifestFile.filename);
-  const installedManifestRaw = await readFile(installedManifestPath, "utf-8");
-  const installedEntryPath = resolveSafeChildPath(pluginDir, manifestFile.manifest.entry ?? "");
-  const installedEntryRaw = await readFile(installedEntryPath, "utf-8");
+    const installedManifestPath = join(pluginDir, manifestFile.filename);
+    const installedManifestRaw = await readFile(installedManifestPath, "utf-8");
+    const installedEntryPath = resolveSafeChildPath(pluginDir, manifestFile.manifest.entry ?? "");
+    const installedEntryRaw = await readFile(installedEntryPath, "utf-8");
 
-  const integritySha256 = pluginIntegritySha256Hex(installedManifestRaw, installedEntryRaw);
-  const recordedAt = new Date().toISOString();
-  const install: PluginInstallInfo = {
-    pinned_version: manifestFile.manifest.version,
-    integrity_sha256: integritySha256,
-    recorded_at: recordedAt,
-    source: { kind: "local_path", path: opts.sourceDir },
-  };
-
-  await writeFile(
-    join(pluginDir, PLUGIN_LOCK_FILENAME),
-    renderPluginLockFile({
-      pinned_version: install.pinned_version,
-      integrity_sha256: install.integrity_sha256,
+    const integritySha256 = pluginIntegritySha256Hex(installedManifestRaw, installedEntryRaw);
+    const recordedAt = new Date().toISOString();
+    const install: PluginInstallInfo = {
+      pinned_version: manifestFile.manifest.version,
+      integrity_sha256: integritySha256,
       recorded_at: recordedAt,
-      source: install.source,
-    }),
-    "utf-8",
-  );
+      source: { kind: "local_path", path: opts.sourceDir },
+    };
 
-  return { plugin_id: pluginId, plugin_dir: pluginDir, install };
+    await writeFile(
+      join(pluginDir, PLUGIN_LOCK_FILENAME),
+      renderPluginLockFile({
+        pinned_version: install.pinned_version,
+        integrity_sha256: install.integrity_sha256,
+        recorded_at: recordedAt,
+        source: install.source,
+      }),
+      "utf-8",
+    );
+
+    return { plugin_id: pluginId, plugin_dir: pluginDir, install };
+  } catch (err) {
+    await rm(pluginDir, { recursive: true, force: true }).catch(() => {});
+    throw err;
+  }
 }
-

@@ -812,7 +812,23 @@ export class PluginRegistry {
         }
 
         let pluginInstall: PluginInstallInfo | undefined;
-        const lockRaw = await tryReadFile(join(pluginDir, PLUGIN_LOCK_FILENAME));
+        let lockRaw: string | undefined;
+        try {
+          lockRaw = await readFile(join(pluginDir, PLUGIN_LOCK_FILENAME), "utf-8");
+        } catch (err) {
+          const code = err && typeof err === "object" && "code" in err ? (err as { code?: string }).code : undefined;
+          if (code !== "ENOENT") {
+            const message = err instanceof Error ? err.message : String(err);
+            this.opts.logger.warn("plugins.lock_unreadable", {
+              plugin_id: id,
+              source_dir: pluginDir,
+              error: message,
+            });
+            continue;
+          }
+          lockRaw = undefined;
+        }
+
         if (lockRaw !== undefined) {
           const parsedLock = parsePluginLockFile(lockRaw);
           if (!parsedLock) {

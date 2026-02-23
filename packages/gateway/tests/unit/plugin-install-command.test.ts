@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -16,9 +16,10 @@ function pluginIntegritySha256Hex(manifestRaw: string, entryRaw: string): string
     .digest("hex");
 }
 
-function pluginManifestYaml(): string {
+function pluginManifestYaml(opts?: { id?: string }): string {
+  const id = opts?.id ?? "echo";
   return [
-    "id: echo",
+    `id: ${id}`,
     "name: Echo",
     "version: 0.0.1",
     "entry: ./index.mjs",
@@ -93,5 +94,18 @@ describe("tyrum plugin install", () => {
     expect((listed[0]?.["install"] as Record<string, unknown> | undefined)?.["pinned_version"]).toBe("0.0.1");
     expect((listed[0]?.["install"] as Record<string, unknown> | undefined)?.["integrity_sha256"]).toBe(expectedIntegrity);
   });
-});
 
+  it("rejects plugin installs when the manifest id is not a safe directory segment", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-home-"));
+    source = await mkdtemp(join(tmpdir(), "tyrum-plugin-src-"));
+
+    await writeFile(join(source, "plugin.yml"), pluginManifestYaml({ id: "../evil" }), "utf-8");
+    await writeFile(join(source, "index.mjs"), pluginEntryModule(), "utf-8");
+
+    const exitCode = await runCli(["plugin", "install", source, "--home", home]);
+    expect(exitCode).toBe(1);
+
+    await expect(stat(join(home, "evil"))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(stat(join(home, "plugins", "echo"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+});

@@ -921,6 +921,32 @@ describe("PluginRegistry", () => {
     expect(warnings.some((entry) => entry.msg === "plugins.lock_integrity_mismatch")).toBe(true);
   });
 
+  itPosix("skips plugins when plugin.lock.json exists but is unreadable", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
+    const pluginDir = join(home, "plugins/echo");
+    await mkdir(pluginDir, { recursive: true });
+
+    await writeFile(join(pluginDir, "plugin.yml"), pluginManifestYaml(), "utf-8");
+    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
+
+    const manifestRaw = await readFile(join(pluginDir, "plugin.yml"), "utf-8");
+    const entryRaw = await readFile(join(pluginDir, "index.mjs"), "utf-8");
+    const integritySha256 = pluginIntegritySha256Hex(manifestRaw, entryRaw);
+
+    const lockPath = join(pluginDir, "plugin.lock.json");
+    await writeFile(lockPath, pluginLockJson({ pinnedVersion: "0.0.1", integritySha256 }), "utf-8");
+    await chmod(lockPath, 0o000);
+
+    const { logger, warnings } = createCapturingLogger();
+    const plugins = await PluginRegistry.load({
+      home,
+      logger,
+    });
+
+    expect(plugins.list()).toEqual([]);
+    expect(warnings.some((entry) => entry.msg === "plugins.lock_unreadable")).toBe(true);
+  });
+
   itPosix("skips plugins when plugin root is world-writable", async () => {
     home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
     const pluginDir = join(home, "plugins/echo");
