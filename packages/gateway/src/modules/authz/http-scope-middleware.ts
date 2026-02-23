@@ -107,10 +107,10 @@ export function createHttpScopeAuthorizationMiddleware(opts?: {
       return next();
     }
 
-    const routePath = getLeafRoutePath(c);
-    if (!routePath) {
-      return next();
-    }
+    // Prefer the router's matched route template (ex: "/approvals/:id") when available,
+    // but fall back to the concrete request path to avoid failing open when route
+    // metadata isn't exposed (ex: mocked matchedRoutes or unsupported router composition).
+    const routePath = getLeafRoutePath(c) ?? c.req.path;
 
     const requiredScopes = resolveScopes({ method: c.req.method, routePath });
     if (!requiredScopes) {

@@ -124,6 +124,22 @@ describe("Auth integration", () => {
       const body = (await res.json()) as { error?: string };
       expect(body.error).toBe("forbidden");
     });
+
+    it("forbids /auth/pins with a non-admin device token", async () => {
+      const issued = await tokenStore.issueDeviceToken({
+        deviceId: "dev_client_1",
+        role: "client",
+        scopes: ["operator.read"],
+        ttlSeconds: 300,
+      });
+
+      const res = await app.request("/auth/pins", {
+        headers: { Authorization: `Bearer ${issued.token}` },
+      });
+      expect(res.status).toBe(403);
+      const body = (await res.json()) as { error?: string };
+      expect(body.error).toBe("forbidden");
+    });
   });
 
   describe("localhost bind (auth still enforced)", () => {
