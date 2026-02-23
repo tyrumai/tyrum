@@ -1665,7 +1665,7 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
 
       <ol class="onboarding-stepper">
         <li class="active">1. Mode</li>
-        <li>2. Hardening</li>
+        <li>2. Setup</li>
         <li>3. Consent</li>
       </ol>
 
@@ -1760,7 +1760,7 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
 
       <ol class="onboarding-stepper">
         <li>1. Mode</li>
-        <li class="active">2. Hardening</li>
+        <li class="active">2. Setup</li>
         <li>3. Consent</li>
       </ol>
 
@@ -1891,7 +1891,7 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
 
       <ol class="onboarding-stepper">
         <li>1. Mode</li>
-        <li class="active">2. Persona</li>
+        <li class="active">2. Setup</li>
         <li>3. Consent</li>
       </ol>
 

@@ -52,13 +52,14 @@ export type ConsentRecord = {
 
 const CONSENT_RECORD_ID = "onboarding-consent-stub";
 const BASE_AUDIT_REFERENCE = "CONSENT-STUB-0001";
+const DRAFT_AUDIT_REFERENCE = "CONSENT-STUB-DRAFT";
 const BASE_TIMESTAMP = Date.parse("2025-01-20T09:00:00.000Z");
 
 let latestRecord: ConsentRecord | undefined;
 
 function computeRecordedAt(revision: number) {
   if (revision <= 0) {
-    return new Date(BASE_TIMESTAMP).toISOString();
+    return new Date(BASE_TIMESTAMP - 60_000).toISOString();
   }
   const offsetMilliseconds = (revision - 1) * 60_000;
   return new Date(BASE_TIMESTAMP + offsetMilliseconds).toISOString();
@@ -82,7 +83,7 @@ function buildRecord(
   return {
     id: CONSENT_RECORD_ID,
     revision,
-    auditReference: revision === 0 ? BASE_AUDIT_REFERENCE : buildAuditReference(revision),
+    auditReference: revision === 0 ? DRAFT_AUDIT_REFERENCE : buildAuditReference(revision),
     recordedAt: computeRecordedAt(revision),
     mode,
     remoteHardening,

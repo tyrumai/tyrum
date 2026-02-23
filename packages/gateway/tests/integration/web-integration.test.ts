@@ -78,6 +78,41 @@ describe("gateway-hosted web API + UI", () => {
     expect(body.error).toBe("plan_not_found");
   });
 
+  it("distinguishes draft consent audit metadata from recorded revision", async () => {
+    const draft = await app.request("/api/onboarding/consent");
+    expect(draft.status).toBe(200);
+    const draftBody = (await draft.json()) as {
+      revision: number;
+      auditReference: string;
+      recordedAt: string;
+    };
+
+    expect(draftBody.revision).toBe(0);
+
+    const post = await app.request("/api/onboarding/consent", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        selections: {
+          shareCalendarSignals: true,
+          allowPlannerAutonomy: false,
+          retainAuditTrail: true,
+        },
+      }),
+    });
+
+    expect(post.status).toBe(201);
+    const postBody = (await post.json()) as {
+      revision: number;
+      auditReference: string;
+      recordedAt: string;
+    };
+
+    expect(postBody.revision).toBe(1);
+    expect(postBody.auditReference).not.toBe(draftBody.auditReference);
+    expect(postBody.recordedAt).not.toBe(draftBody.recordedAt);
+  });
+
   it("persists onboarding consent via API", async () => {
     const post = await app.request("/api/onboarding/consent", {
       method: "POST",
@@ -132,6 +167,25 @@ describe("gateway-hosted web API + UI", () => {
     const snapshot = await app.request("/api/onboarding/consent");
     const payload = (await snapshot.json()) as { revision: number };
     expect(payload.revision).toBe(1);
+  });
+
+  it("uses a consistent onboarding stepper label for step 2", async () => {
+    const start = await app.request("/app/onboarding/start");
+    expect(start.status).toBe(200);
+    const startHtml = await start.text();
+    expect(startHtml).toContain("<li>2. Setup</li>");
+    expect(startHtml).not.toContain("2. Persona");
+    expect(startHtml).not.toContain("2. Hardening");
+
+    const persona = await app.request("/app/onboarding/persona");
+    expect(persona.status).toBe(200);
+    const personaHtml = await persona.text();
+    expect(personaHtml).toContain('<li class="active">2. Setup</li>');
+
+    const remoteTeam = await app.request("/app/onboarding/remote-team");
+    expect(remoteTeam.status).toBe(200);
+    const remoteHtml = await remoteTeam.text();
+    expect(remoteHtml).toContain('<li class="active">2. Setup</li>');
   });
 
   it("routes remote mode through hardened remote-team onboarding", async () => {
