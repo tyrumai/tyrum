@@ -19,7 +19,7 @@ import { createApp } from "./app.js";
 import { isAgentEnabled } from "./modules/agent/enabled.js";
 import { TokenStore } from "./modules/auth/token-store.js";
 import { WatcherScheduler } from "./modules/watcher/scheduler.js";
-import { createSecretProviderFromEnv } from "./modules/secret/create-secret-provider.js";
+import { createSecretProviderFromEnv, resolveSecretProviderKind } from "./modules/secret/create-secret-provider.js";
 import { WsNotifier } from "./modules/approval/notifier.js";
 import { OutboxDal } from "./modules/backplane/outbox-dal.js";
 import { ConnectionDirectoryDal } from "./modules/backplane/connection-directory.js";
@@ -438,17 +438,6 @@ async function discoverPluginsInDir(dir: string): Promise<{
   return { plugins, invalid_manifests: invalidManifests };
 }
 
-type SecretProviderKind = "env" | "file" | "keychain";
-
-function resolveSecretProviderKindForCheck(): SecretProviderKind {
-  const desiredProvider = process.env["TYRUM_SECRET_PROVIDER"]?.trim().toLowerCase();
-  const isKubernetes = Boolean(process.env["KUBERNETES_SERVICE_HOST"]);
-  if (desiredProvider === "env" || desiredProvider === "file" || desiredProvider === "keychain") {
-    return desiredProvider;
-  }
-  return isKubernetes ? "env" : "file";
-}
-
 function shortHash(value: string): string {
   const trimmed = value.trim();
   if (trimmed.length <= 12) return trimmed;
@@ -587,7 +576,7 @@ async function runGatewayCheck(): Promise<number> {
       console.log(`static.plugins: error=${message}`);
     }
 
-    const secretProviderKind = resolveSecretProviderKindForCheck();
+    const secretProviderKind = resolveSecretProviderKind();
     try {
       const secretProvider = await createSecretProviderFromEnv(tyrumHome, token);
       const handles = await secretProvider.list();

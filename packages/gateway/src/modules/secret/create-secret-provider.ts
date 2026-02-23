@@ -2,9 +2,9 @@ import { join } from "node:path";
 import { EnvSecretProvider, FileSecretProvider, KeychainSecretProvider } from "./provider.js";
 import type { SecretProvider } from "./provider.js";
 
-type SecretProviderKind = "env" | "file" | "keychain";
+export type SecretProviderKind = "env" | "file" | "keychain";
 
-function resolveSecretProviderKind(): SecretProviderKind {
+export function resolveSecretProviderKind(): SecretProviderKind {
   const desiredProvider = process.env["TYRUM_SECRET_PROVIDER"]?.trim().toLowerCase();
   const isKubernetes = Boolean(process.env["KUBERNETES_SERVICE_HOST"]);
   if (desiredProvider === "env" || desiredProvider === "file" || desiredProvider === "keychain") {
