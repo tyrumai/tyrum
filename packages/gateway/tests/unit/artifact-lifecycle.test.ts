@@ -240,5 +240,165 @@ describe("Artifact lifecycle (retention + quotas)", () => {
     expect(oldRow?.bytes_deleted_reason).toBe("quota");
     expect(newRow?.bytes_deleted_at).toBeNull();
   });
-});
 
+  it("uses the most-specific retention rule over broader defaults", async () => {
+    const nowMs = Date.now();
+    const oldIso = new Date(nowMs - 2 * 24 * 60 * 60 * 1000).toISOString();
+
+    const snapshot = await snapshotDal.getOrCreate(
+      PolicyBundle.parse({
+        v: 1,
+        artifacts: {
+          default: "allow",
+          retention: {
+            default_days: 1,
+            by_label_sensitivity: {
+              log: { normal: 30 },
+            },
+          },
+        },
+      }),
+    );
+
+    const ref = await artifactStore.put({
+      kind: "log",
+      mime_type: "text/plain",
+      body: Buffer.from("old", "utf8"),
+      created_at: oldIso,
+      labels: ["log"],
+    });
+
+    await db.run(
+      `INSERT INTO execution_artifacts (
+         artifact_id,
+         workspace_id,
+         agent_id,
+         kind,
+         uri,
+         created_at,
+         mime_type,
+         size_bytes,
+         sha256,
+         labels_json,
+         metadata_json,
+         sensitivity,
+         policy_snapshot_id
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        ref.artifact_id,
+        "default",
+        "agent-1",
+        ref.kind,
+        ref.uri,
+        ref.created_at,
+        ref.mime_type ?? null,
+        ref.size_bytes ?? null,
+        ref.sha256 ?? null,
+        JSON.stringify(ref.labels ?? []),
+        JSON.stringify(ref.metadata ?? {}),
+        "normal",
+        snapshot.policy_snapshot_id,
+      ],
+    );
+
+    const { ArtifactLifecycleScheduler } = await import("../../src/modules/artifact/lifecycle.js");
+    const scheduler = new ArtifactLifecycleScheduler({
+      db,
+      artifactStore,
+      policySnapshotDal: snapshotDal,
+      clock: () => ({ nowMs, nowIso: new Date(nowMs).toISOString() }),
+      tickMs: 10_000,
+    });
+
+    await scheduler.tick();
+
+    // With most-specific precedence, this should use 30 days and keep bytes.
+    expect(await artifactStore.get(ref.artifact_id)).not.toBeNull();
+  });
+
+  it("uses the most-specific quota rule over broader defaults", async () => {
+    const nowMs = Date.now();
+    const olderIso = new Date(nowMs - 2 * 60 * 60 * 1000).toISOString();
+    const newerIso = new Date(nowMs - 1 * 60 * 60 * 1000).toISOString();
+
+    const snapshot = await snapshotDal.getOrCreate(
+      PolicyBundle.parse({
+        v: 1,
+        artifacts: {
+          default: "allow",
+          quota: {
+            default_max_bytes: 10,
+            by_label_sensitivity: {
+              log: { normal: 100 },
+            },
+          },
+        },
+      }),
+    );
+
+    const oldRef = await artifactStore.put({
+      kind: "log",
+      mime_type: "text/plain",
+      body: Buffer.from("123456", "utf8"), // 6 bytes
+      created_at: olderIso,
+      labels: ["log"],
+    });
+    const newRef = await artifactStore.put({
+      kind: "log",
+      mime_type: "text/plain",
+      body: Buffer.from("abcdef", "utf8"), // 6 bytes
+      created_at: newerIso,
+      labels: ["log"],
+    });
+
+    for (const ref of [oldRef, newRef]) {
+      await db.run(
+        `INSERT INTO execution_artifacts (
+           artifact_id,
+           workspace_id,
+           agent_id,
+           kind,
+           uri,
+           created_at,
+           mime_type,
+           size_bytes,
+           sha256,
+           labels_json,
+           metadata_json,
+           sensitivity,
+           policy_snapshot_id
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          ref.artifact_id,
+          "default",
+          "agent-1",
+          ref.kind,
+          ref.uri,
+          ref.created_at,
+          ref.mime_type ?? null,
+          ref.size_bytes ?? null,
+          ref.sha256 ?? null,
+          JSON.stringify(ref.labels ?? []),
+          JSON.stringify(ref.metadata ?? {}),
+          "normal",
+          snapshot.policy_snapshot_id,
+        ],
+      );
+    }
+
+    const { ArtifactLifecycleScheduler } = await import("../../src/modules/artifact/lifecycle.js");
+    const scheduler = new ArtifactLifecycleScheduler({
+      db,
+      artifactStore,
+      policySnapshotDal: snapshotDal,
+      clock: () => ({ nowMs, nowIso: new Date(nowMs).toISOString() }),
+      tickMs: 10_000,
+    });
+
+    await scheduler.tick();
+
+    // With most-specific precedence, max_bytes should be 100 and nothing is pruned.
+    expect(await artifactStore.get(oldRef.artifact_id)).not.toBeNull();
+    expect(await artifactStore.get(newRef.artifact_id)).not.toBeNull();
+  });
+});

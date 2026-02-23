@@ -88,17 +88,27 @@ function resolveRetentionDays(
   const artifacts = bundle.artifacts;
   if (!artifacts) return undefined;
 
-  const byLabel = artifacts.retention?.by_label?.[label];
-  const bySensitivity = artifacts.retention?.by_sensitivity?.[sensitivity];
+  // Precedence: most-specific rule wins.
+  // - by_label_sensitivity(label,sensitivity)
+  // - by_sensitivity(sensitivity)
+  // - by_label(label)
+  // - defaults (retention.default_days, retention_days legacy)
   const byLabelSensitivity = artifacts.retention?.by_label_sensitivity?.[label]?.[sensitivity];
+  if (typeof byLabelSensitivity === "number" && Number.isFinite(byLabelSensitivity) && byLabelSensitivity > 0) {
+    return byLabelSensitivity;
+  }
 
-  return minPositive([
-    artifacts.retention_days,
-    artifacts.retention?.default_days,
-    byLabel,
-    bySensitivity,
-    byLabelSensitivity,
-  ]);
+  const bySensitivity = artifacts.retention?.by_sensitivity?.[sensitivity];
+  if (typeof bySensitivity === "number" && Number.isFinite(bySensitivity) && bySensitivity > 0) {
+    return bySensitivity;
+  }
+
+  const byLabel = artifacts.retention?.by_label?.[label];
+  if (typeof byLabel === "number" && Number.isFinite(byLabel) && byLabel > 0) {
+    return byLabel;
+  }
+
+  return minPositive([artifacts.retention?.default_days, artifacts.retention_days]);
 }
 
 function resolveQuotaMaxBytes(
@@ -109,17 +119,27 @@ function resolveQuotaMaxBytes(
   const artifacts = bundle.artifacts;
   if (!artifacts) return undefined;
 
-  const byLabel = artifacts.quota?.by_label?.[label];
-  const bySensitivity = artifacts.quota?.by_sensitivity?.[sensitivity];
+  // Precedence: most-specific rule wins.
+  // - by_label_sensitivity(label,sensitivity)
+  // - by_sensitivity(sensitivity)
+  // - by_label(label)
+  // - defaults (quota.default_max_bytes, max_bytes legacy)
   const byLabelSensitivity = artifacts.quota?.by_label_sensitivity?.[label]?.[sensitivity];
+  if (typeof byLabelSensitivity === "number" && Number.isFinite(byLabelSensitivity) && byLabelSensitivity > 0) {
+    return byLabelSensitivity;
+  }
 
-  return minPositive([
-    artifacts.max_bytes,
-    artifacts.quota?.default_max_bytes,
-    byLabel,
-    bySensitivity,
-    byLabelSensitivity,
-  ]);
+  const bySensitivity = artifacts.quota?.by_sensitivity?.[sensitivity];
+  if (typeof bySensitivity === "number" && Number.isFinite(bySensitivity) && bySensitivity > 0) {
+    return bySensitivity;
+  }
+
+  const byLabel = artifacts.quota?.by_label?.[label];
+  if (typeof byLabel === "number" && Number.isFinite(byLabel) && byLabel > 0) {
+    return byLabel;
+  }
+
+  return minPositive([artifacts.quota?.default_max_bytes, artifacts.max_bytes]);
 }
 
 function whereNullableEquals(column: string, value: string | null): { clause: string; params: unknown[] } {
@@ -366,4 +386,3 @@ export class ArtifactLifecycleScheduler {
     );
   }
 }
-

@@ -109,4 +109,11 @@ Retention and quotas are configured in `PolicyBundle.artifacts`:
 
 For lifecycle purposes, the label is the artifact `kind` (for example: `log`, `screenshot`, `diff`, `http_trace`), and sensitivity is `normal` or `sensitive`.
 
+Precedence is “most-specific rule wins”:
+
+1. `by_label_sensitivity.<label>.<sensitivity>`
+2. `by_sensitivity.<sensitivity>`
+3. `by_label.<label>`
+4. `default_days` / `default_max_bytes` (or legacy `retention_days` / `max_bytes`)
+
 The gateway enforces retention/quota by pruning artifact bytes from the ArtifactStore while keeping durable metadata in the StateStore. When bytes are pruned, `execution_artifacts.bytes_deleted_at` and `execution_artifacts.bytes_deleted_reason` are populated; subsequent fetches may return “bytes not found” while metadata remains available for audit.
