@@ -275,8 +275,9 @@ async function runGatewayCheck(): Promise<number> {
 
   ensureDatabaseDirectory(dbPath);
 
+  let container: Awaited<ReturnType<typeof createContainerAsync>> | undefined;
   try {
-    const container = await createContainerAsync({
+    container = await createContainerAsync({
       dbPath,
       migrationsDir,
       tyrumHome,
@@ -294,12 +295,18 @@ async function runGatewayCheck(): Promise<number> {
     }
     console.log("oauth: providers_configured=loaded");
 
-    await container.db.close();
     return 0;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`check: failed: ${message}`);
     return 1;
+  } finally {
+    if (container) {
+      await container.db.close().catch((closeErr) => {
+        const message = closeErr instanceof Error ? closeErr.message : String(closeErr);
+        console.error(`check: warning: failed to close db: ${message}`);
+      });
+    }
   }
 }
 
@@ -747,6 +754,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     outboxPoller?.stop();
     telegramProcessor?.stop();
     workerLoop?.stop();
+    container.modelsDev.stopBackgroundRefresh();
 
     void runShutdownCleanup(
       [
