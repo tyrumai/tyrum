@@ -30,13 +30,14 @@ export class LifecycleHooksRuntime {
     },
   ) {}
 
-  async fire(input: LifecycleHookEvent): Promise<void> {
+  async fire(input: LifecycleHookEvent): Promise<readonly string[]> {
     const matches = this.opts.hooks.filter((h) => h.event === input.event);
-    if (matches.length === 0) return;
+    if (matches.length === 0) return [];
 
     const effective = await this.opts.policyService.loadEffectiveBundle();
     const snapshot = await this.opts.policyService.getOrCreateSnapshot(effective.bundle);
 
+    const runIds: string[] = [];
     for (const hook of matches) {
       const lane: LaneT = hook.lane ?? "cron";
       const planId = `hook-${hook.hook_key}-${randomUUID()}`;
@@ -62,7 +63,7 @@ export class LifecycleHooksRuntime {
         },
       };
 
-      await this.opts.engine.enqueuePlan({
+      const { runId } = await this.opts.engine.enqueuePlan({
         key: hook.hook_key,
         lane,
         planId,
@@ -71,6 +72,9 @@ export class LifecycleHooksRuntime {
         policySnapshotId: snapshot.policy_snapshot_id,
         trigger,
       });
+      runIds.push(runId);
     }
+
+    return runIds;
   }
 }

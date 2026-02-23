@@ -1257,6 +1257,29 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     shuttingDown = true;
     console.log(`Gateway shutting down (${signal})`);
 
+    const sleep = (ms: number): Promise<void> => {
+      return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
+    };
+
+    const waitForRunsToStart = async (runIds: readonly string[], timeoutMs: number): Promise<void> => {
+      if (runIds.length === 0) return;
+      const placeholders = runIds.map(() => "?").join(", ");
+      const startedAt = Date.now();
+      while (Date.now() - startedAt < timeoutMs) {
+        const rows = await container.db.all<{ run_id: string; status: string }>(
+          `SELECT run_id, status FROM execution_runs WHERE run_id IN (${placeholders})`,
+          runIds,
+        );
+        const statusByRunId = new Map(rows.map((row) => [row.run_id, row.status]));
+        const allStarted = runIds.every((runId) => {
+          const status = statusByRunId.get(runId);
+          return status !== undefined && status !== "queued";
+        });
+        if (allStarted) return;
+        await sleep(50);
+      }
+    };
+
     const hardExitTimer = setTimeout(() => {
       console.warn("Gateway forced shutdown after 5 seconds.");
       process.exit(1);
@@ -1274,6 +1297,33 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
 
     wsHandler?.stopHeartbeat();
 
+    const shutdownHookRuns = hooksRuntime
+      ? hooksRuntime
+          .fire({
+            event: "gateway.shutdown",
+            metadata: { signal, instance_id: instanceId, role },
+          })
+          .catch((err) => {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.warn("hooks.fire_failed", { event: "gateway.shutdown", error: message });
+            return [];
+          })
+      : Promise.resolve([]);
+
+    const stopWorker = (async () => {
+      if (!workerLoop) return;
+      try {
+        const runIds = await shutdownHookRuns;
+        if (runIds.length > 0) {
+          // Give the worker loop a brief chance to pick up the runs before stopping.
+          await waitForRunsToStart(runIds, 2_000);
+        }
+      } finally {
+        workerLoop.stop();
+        await workerLoop.done;
+      }
+    })();
+
     const closeWss = new Promise<void>((resolve) => {
       try {
         if (!wsHandler) return resolve();
@@ -1288,22 +1338,16 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     artifactLifecycleScheduler?.stop();
     outboxPoller?.stop();
     telegramProcessor?.stop();
-    workerLoop?.stop();
     container.modelsDev.stopBackgroundRefresh();
 
     void runShutdownCleanup(
       [
         closeServer,
         closeWss,
-        hooksRuntime
-          ? hooksRuntime.fire({
-              event: "gateway.shutdown",
-              metadata: { signal, instance_id: instanceId, role },
-            })
-          : Promise.resolve(),
+        shutdownHookRuns,
         agents?.shutdown() ?? Promise.resolve(),
         otel.shutdown(),
-        workerLoop?.done ?? Promise.resolve(),
+        stopWorker,
       ],
       () => container.db.close(),
     )

@@ -1,12 +1,13 @@
 import { spawn, spawnSync } from "node:child_process";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { once } from "node:events";
-import { closeSync, existsSync, mkdtempSync, openSync, rmSync, statSync, unlinkSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import Database from "better-sqlite3";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = resolve(__dirname, "../..");
@@ -274,6 +275,98 @@ describe("gateway startup process", () => {
           expect(agentStatusBody.enabled).toBe(true);
         } finally {
           await stopChildProcess(child);
+          rmSync(tempRoot, { recursive: true, force: true });
+        }
+      } finally {
+        releaseBuildLock();
+      }
+    },
+  );
+
+  it(
+    "processes gateway.shutdown hooks before stopping the worker loop",
+    { timeout: 60_000 },
+    async () => {
+      const releaseBuildLock = acquireGatewayBuildLock();
+      try {
+        ensureGatewayBuild();
+
+        const port = await findAvailablePort();
+        const gatewayToken = "tyrum-test-token";
+        const tempRoot = mkdtempSync(join(tmpdir(), "tyrum-gateway-shutdown-hooks-"));
+        const tyrumHome = join(tempRoot, ".tyrum");
+        mkdirSync(tyrumHome, { recursive: true });
+        const dbPath = join(tempRoot, "gateway.db");
+        const hookKey = "hook:550e8400-e29b-41d4-a716-446655440000";
+
+        writeFileSync(
+          join(tyrumHome, "hooks.yml"),
+          `v: 1\nhooks:\n  - hook_key: ${hookKey}\n    event: gateway.shutdown\n    lane: cron\n    steps:\n      - type: CLI\n        args:\n          cmd: echo\n          args: [\"shutdown hook\"]\n`,
+          "utf8",
+        );
+
+        let stdout = "";
+        let stderr = "";
+
+        const child = spawn(process.execPath, [GATEWAY_ENTRYPOINT, "start"], {
+          cwd: REPO_ROOT,
+          env: {
+            ...process.env,
+            GATEWAY_HOST: "127.0.0.1",
+            GATEWAY_PORT: String(port),
+            GATEWAY_DB_PATH: dbPath,
+            GATEWAY_MIGRATIONS_DIR,
+            GATEWAY_TOKEN: gatewayToken,
+            TYRUM_HOME: tyrumHome,
+          },
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+
+        child.stdout.setEncoding("utf8");
+        child.stderr.setEncoding("utf8");
+        child.stdout.on("data", (chunk: string) => {
+          stdout += chunk;
+        });
+        child.stderr.on("data", (chunk: string) => {
+          stderr += chunk;
+        });
+
+        const output = () => `--- stdout ---\n${stdout}\n--- stderr ---\n${stderr}`;
+
+        try {
+          const healthUrl = `http://127.0.0.1:${port}/healthz`;
+          await waitForGatewayHealth(healthUrl, child, output);
+        } finally {
+          await stopChildProcess(child);
+        }
+
+        const db = new Database(dbPath);
+        try {
+          const row = db
+            .prepare(
+              `SELECT r.status AS status, r.paused_reason AS paused_reason, j.trigger_json AS trigger_json
+               FROM execution_runs r
+               JOIN execution_jobs j ON j.job_id = r.job_id
+               WHERE r.key = ?
+               ORDER BY r.created_at DESC
+               LIMIT 1`,
+            )
+            .get(hookKey) as
+            | { status: string; paused_reason: string | null; trigger_json: string }
+            | undefined;
+
+          expect(row, `gateway.shutdown hook run missing.\n${output()}`).toBeTruthy();
+          if (!row) return;
+
+          expect(row.status, output()).toBe("paused");
+          expect(row.paused_reason, output()).toBe("policy");
+
+          const trigger = JSON.parse(row.trigger_json) as { kind?: string; metadata?: Record<string, unknown> };
+          expect(trigger.kind, output()).toBe("hook");
+          expect(trigger.metadata?.["hook_event"], output()).toBe("gateway.shutdown");
+          expect(trigger.metadata?.["hook_key"], output()).toBe(hookKey);
+        } finally {
+          db.close();
           rmSync(tempRoot, { recursive: true, force: true });
         }
       } finally {
