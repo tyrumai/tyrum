@@ -20,6 +20,8 @@ describe("QueueMode", () => {
     expect(QueueMode.parse("collect")).toBe("collect");
     expect(QueueMode.parse("followup")).toBe("followup");
     expect(QueueMode.parse("steer")).toBe("steer");
+    expect(QueueMode.parse("steer_backlog")).toBe("steer_backlog");
+    expect(QueueMode.parse("interrupt")).toBe("interrupt");
   });
 });
 
@@ -34,12 +36,55 @@ describe("TyrumKey", () => {
     });
   });
 
+  it("parses shared direct agent main key", () => {
+    const key = TyrumKey.parse("agent:agent-1:main");
+    expect(parseTyrumKey(key)).toEqual({
+      kind: "agent",
+      agent_id: "agent-1",
+      thread_kind: "main",
+    });
+  });
+
+  it("parses per-peer dm key", () => {
+    const key = TyrumKey.parse("agent:a1:dm:peer-9");
+    expect(parseTyrumKey(key)).toEqual({
+      kind: "agent",
+      agent_id: "a1",
+      thread_kind: "dm",
+      peer_id: "peer-9",
+    });
+  });
+
+  it("parses per-account channel dm key", () => {
+    const key = TyrumKey.parse("agent:a1:telegram:work:dm:peer-9");
+    expect(parseTyrumKey(key)).toEqual({
+      kind: "agent",
+      agent_id: "a1",
+      channel: "telegram",
+      account: "work",
+      thread_kind: "dm",
+      peer_id: "peer-9",
+    });
+  });
+
   it("parses agent group key", () => {
     const key = TyrumKey.parse("agent:a1:discord-1:group:999");
     expect(parseTyrumKey(key)).toEqual({
       kind: "agent",
       agent_id: "a1",
       channel: "discord-1",
+      thread_kind: "group",
+      id: "999",
+    });
+  });
+
+  it("parses account-scoped group key", () => {
+    const key = TyrumKey.parse("agent:a1:discord:work:group:999");
+    expect(parseTyrumKey(key)).toEqual({
+      kind: "agent",
+      agent_id: "a1",
+      channel: "discord",
+      account: "work",
       thread_kind: "group",
       id: "999",
     });
@@ -69,4 +114,3 @@ describe("HookKey", () => {
     expect(() => HookKey.parse("hook:not-a-uuid")).toThrow();
   });
 });
-

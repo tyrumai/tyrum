@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 import { createIngressRoutes } from "../../src/routes/ingress.js";
 import { TelegramBot } from "../../src/modules/ingress/telegram-bot.js";
-import { TelegramChannelProcessor, TelegramChannelQueue } from "../../src/modules/channels/telegram.js";
+import {
+  TelegramChannelProcessor,
+  TelegramChannelQueue,
+  telegramThreadKey,
+} from "../../src/modules/channels/telegram.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
@@ -23,6 +27,29 @@ function makeTelegramUpdate(text: string, chatId = 123) {
       from: { id: 999, is_bot: false, first_name: "Alice" },
       chat: { id: chatId, type: "private" },
       text,
+    },
+  };
+}
+
+function makeNormalizedUpdate(opts: {
+  threadId: string;
+  threadKind: "private" | "group" | "supergroup" | "channel" | "other";
+  messageId: string;
+  text: string;
+}) {
+  return {
+    thread: {
+      id: opts.threadId,
+      kind: opts.threadKind,
+      pii_fields: [],
+    },
+    message: {
+      id: opts.messageId,
+      thread_id: opts.threadId,
+      source: "telegram" as const,
+      content: { kind: "text" as const, text: opts.text },
+      timestamp: new Date().toISOString(),
+      pii_fields: [],
     },
   };
 }
@@ -143,6 +170,60 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
     await processor.tick();
     expect(fetchFn).toHaveBeenCalledOnce();
+  });
+
+  it("uses DM key shape for private Telegram chats", async () => {
+    db = openTestSqliteDb();
+
+    const queue = new TelegramChannelQueue(db, {
+      agentId: "agent-1",
+      channelKey: "telegram",
+    });
+
+    const enqueued = await queue.enqueue(
+      makeNormalizedUpdate({
+        threadId: "123",
+        threadKind: "private",
+        messageId: "m-private-1",
+        text: "Help me",
+      }),
+    );
+
+    expect(enqueued.inbox.key).toBe("agent:agent-1:telegram:dm:123");
+  });
+
+  it("uses channel key shape for Telegram channel posts", async () => {
+    db = openTestSqliteDb();
+
+    const queue = new TelegramChannelQueue(db, {
+      agentId: "agent-1",
+      channelKey: "telegram",
+    });
+
+    const enqueued = await queue.enqueue(
+      makeNormalizedUpdate({
+        threadId: "456",
+        threadKind: "channel",
+        messageId: "m-channel-1",
+        text: "announce",
+      }),
+    );
+
+    expect(enqueued.inbox.key).toBe("agent:agent-1:telegram:channel:456");
+  });
+
+  it("requires explicit thread kind for string thread ids", () => {
+    expect(() =>
+      telegramThreadKey("789", { agentId: "agent-1", channelKey: "telegram" }),
+    ).toThrow("thread kind is required");
+
+    expect(
+      telegramThreadKey("789", {
+        agentId: "agent-1",
+        channelKey: "telegram",
+        threadKind: "private",
+      }),
+    ).toBe("agent:agent-1:telegram:dm:789");
   });
 
   it("policy-gates outbound sends via approvals when required", async () => {

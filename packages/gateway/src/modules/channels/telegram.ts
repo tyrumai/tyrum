@@ -1,4 +1,7 @@
-import { NormalizedThreadMessage as NormalizedThreadMessageSchema } from "@tyrum/schemas";
+import {
+  NormalizedThreadMessage as NormalizedThreadMessageSchema,
+  normalizedContainerKindFromThreadKind,
+} from "@tyrum/schemas";
 import type { NormalizedThreadMessage } from "@tyrum/schemas";
 import { parseTyrumKey } from "@tyrum/schemas";
 import type { TelegramBot } from "../ingress/telegram-bot.js";
@@ -36,10 +39,27 @@ function telegramChannelKeyFromEnv(): string {
   return process.env["TYRUM_TELEGRAM_CHANNEL_KEY"]?.trim() || "telegram-1";
 }
 
-export function telegramThreadKey(threadId: string, opts?: { agentId?: string; channelKey?: string }): string {
+export function telegramThreadKey(
+  thread: string | Pick<NormalizedThreadMessage["thread"], "id" | "kind">,
+  opts?: {
+    agentId?: string;
+    channelKey?: string;
+    threadKind?: NormalizedThreadMessage["thread"]["kind"];
+  },
+): string {
+  const threadId = typeof thread === "string" ? thread : thread.id;
+  const threadKind =
+    typeof thread === "string"
+      ? opts?.threadKind
+      : thread.kind;
+  if (!threadKind) {
+    throw new Error("thread kind is required when thread id is passed as a string");
+  }
+
   const agentId = opts?.agentId?.trim() || agentIdFromEnv();
   const channelKey = opts?.channelKey?.trim() || telegramChannelKeyFromEnv();
-  return `agent:${agentId}:${channelKey}:group:${threadId}`;
+  const scope = normalizedContainerKindFromThreadKind(threadKind);
+  return `agent:${agentId}:${channelKey}:${scope}:${threadId}`;
 }
 
 async function tryAcquireLaneLease(db: SqlDb, opts: {
@@ -99,7 +119,7 @@ export class TelegramChannelQueue {
     const agentId = opts?.agentId?.trim() || this.agentId;
     const channelKey = opts?.channelKey?.trim() || this.channelKey;
     const lane = opts?.lane?.trim() || this.lane;
-    const key = telegramThreadKey(normalized.thread.id, { agentId, channelKey });
+    const key = telegramThreadKey(normalized.thread, { agentId, channelKey });
 
     const { row, deduped } = await this.inbox.enqueue({
       source: "telegram",
