@@ -476,6 +476,110 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
     }
   });
 
+  it("uses legacy connector policy match targets for default accounts", async () => {
+    db = openTestSqliteDb();
+
+    const fetchFn = mockFetch();
+    const bot = new TelegramBot("test-token", fetchFn);
+    const queue = new TelegramChannelQueue(db);
+
+    const mockRuntime = {
+      turn: vi.fn().mockResolvedValue({
+        reply: "This requires approval",
+        session_id: "session-abc",
+        used_tools: [],
+        memory_written: false,
+      }),
+    };
+
+    const evaluateConnectorAction = vi.fn().mockResolvedValue({ decision: "require_approval" });
+    const policyService = {
+      isEnabled: () => true,
+      isObserveOnly: () => false,
+      evaluateConnectorAction,
+    } as unknown as PolicyService;
+
+    const approvalDal = new ApprovalDal(db);
+
+    const processor = new TelegramChannelProcessor({
+      db,
+      agents: {
+        getRuntime: async () => mockRuntime,
+        getPolicyService: () => policyService,
+      } as unknown as AgentRegistry,
+      telegramBot: bot,
+      owner: "test-owner",
+      debounceMs: 0,
+      maxBatch: 1,
+      approvalDal,
+      approvalNotifier: { notify: () => {} },
+    });
+
+    const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
+    await queue.enqueue(normalized, { accountId: "default" });
+
+    await processor.tick();
+
+    expect(evaluateConnectorAction).toHaveBeenCalledTimes(1);
+    expect(evaluateConnectorAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        matchTarget: "telegram:123",
+      }),
+    );
+  });
+
+  it("includes account ids in connector policy match targets for non-default accounts", async () => {
+    db = openTestSqliteDb();
+
+    const fetchFn = mockFetch();
+    const bot = new TelegramBot("test-token", fetchFn);
+    const queue = new TelegramChannelQueue(db);
+
+    const mockRuntime = {
+      turn: vi.fn().mockResolvedValue({
+        reply: "This requires approval",
+        session_id: "session-abc",
+        used_tools: [],
+        memory_written: false,
+      }),
+    };
+
+    const evaluateConnectorAction = vi.fn().mockResolvedValue({ decision: "require_approval" });
+    const policyService = {
+      isEnabled: () => true,
+      isObserveOnly: () => false,
+      evaluateConnectorAction,
+    } as unknown as PolicyService;
+
+    const approvalDal = new ApprovalDal(db);
+
+    const processor = new TelegramChannelProcessor({
+      db,
+      agents: {
+        getRuntime: async () => mockRuntime,
+        getPolicyService: () => policyService,
+      } as unknown as AgentRegistry,
+      telegramBot: bot,
+      owner: "test-owner",
+      debounceMs: 0,
+      maxBatch: 1,
+      approvalDal,
+      approvalNotifier: { notify: () => {} },
+    });
+
+    const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
+    await queue.enqueue(normalized, { accountId: "work" });
+
+    await processor.tick();
+
+    expect(evaluateConnectorAction).toHaveBeenCalledTimes(1);
+    expect(evaluateConnectorAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        matchTarget: "telegram:work:123",
+      }),
+    );
+  });
+
   it("policy-gates outbound sends via approvals when required", async () => {
     db = openTestSqliteDb();
 

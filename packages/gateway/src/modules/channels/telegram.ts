@@ -582,10 +582,14 @@ export class TelegramChannelProcessor {
         : undefined;
     if (policyService?.isEnabled()) {
       try {
+        const matchTarget =
+          accountId === DEFAULT_CHANNEL_ACCOUNT_ID
+            ? `${source}:${leader.thread_id}`
+            : `${source}:${accountId}:${leader.thread_id}`;
         const evalRes = await policyService.evaluateConnectorAction({
           agentId,
           workspaceId: agentId,
-          matchTarget: `${source}:${accountId}:${leader.thread_id}`,
+          matchTarget,
         });
         decision = evalRes.decision;
         policySnapshotId = evalRes.policy_snapshot?.policy_snapshot_id;
