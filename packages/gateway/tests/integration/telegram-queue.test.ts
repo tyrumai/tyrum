@@ -2,11 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 import { createIngressRoutes } from "../../src/routes/ingress.js";
 import { TelegramBot } from "../../src/modules/ingress/telegram-bot.js";
-import {
-  TelegramChannelProcessor,
-  TelegramChannelQueue,
-  telegramThreadKey,
-} from "../../src/modules/channels/telegram.js";
+import { TelegramChannelProcessor, TelegramChannelQueue } from "../../src/modules/channels/telegram.js";
+import { normalizeUpdate } from "../../src/modules/ingress/telegram.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
@@ -18,38 +15,19 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-function makeTelegramUpdate(text: string, chatId = 123) {
+function makeTelegramUpdate(
+  text: string,
+  chatId = 123,
+  opts?: { chatType?: "private" | "group" | "supergroup" | "channel"; senderId?: number },
+) {
   return {
     update_id: 100,
     message: {
       message_id: 42,
       date: 1700000000,
-      from: { id: 999, is_bot: false, first_name: "Alice" },
-      chat: { id: chatId, type: "private" },
+      from: { id: opts?.senderId ?? 999, is_bot: false, first_name: "Alice" },
+      chat: { id: chatId, type: opts?.chatType ?? "private" },
       text,
-    },
-  };
-}
-
-function makeNormalizedUpdate(opts: {
-  threadId: string;
-  threadKind: "private" | "group" | "supergroup" | "channel" | "other";
-  messageId: string;
-  text: string;
-}) {
-  return {
-    thread: {
-      id: opts.threadId,
-      kind: opts.threadKind,
-      pii_fields: [],
-    },
-    message: {
-      id: opts.messageId,
-      thread_id: opts.threadId,
-      source: "telegram" as const,
-      content: { kind: "text" as const, text: opts.text },
-      timestamp: new Date().toISOString(),
-      pii_fields: [],
     },
   };
 }
@@ -172,58 +150,67 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
     expect(fetchFn).toHaveBeenCalledOnce();
   });
 
-  it("uses DM key shape for private Telegram chats", async () => {
+  it("uses canonical dm session key taxonomy by default", async () => {
     db = openTestSqliteDb();
+    const queue = new TelegramChannelQueue(db, { agentId: "agent-c1", channelKey: "work" });
 
-    const queue = new TelegramChannelQueue(db, {
-      agentId: "agent-1",
-      channelKey: "telegram",
-    });
+    const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me", 123, { senderId: 777 })));
+    const enqueued = await queue.enqueue(normalized);
 
-    const enqueued = await queue.enqueue(
-      makeNormalizedUpdate({
-        threadId: "123",
-        threadKind: "private",
-        messageId: "m-private-1",
-        text: "Help me",
-      }),
-    );
-
-    expect(enqueued.inbox.key).toBe("agent:agent-1:telegram:dm:123");
+    expect(enqueued.inbox.key).toBe("agent:agent-c1:telegram:work:dm:123");
   });
 
-  it("uses channel key shape for Telegram channel posts", async () => {
+  it("defaults telegram account id to legacy channel key", async () => {
     db = openTestSqliteDb();
 
-    const queue = new TelegramChannelQueue(db, {
-      agentId: "agent-1",
-      channelKey: "telegram",
-    });
+    const originalAccountId = process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
+    const originalChannelKey = process.env["TYRUM_TELEGRAM_CHANNEL_KEY"];
+    try {
+      delete process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
+      delete process.env["TYRUM_TELEGRAM_CHANNEL_KEY"];
 
-    const enqueued = await queue.enqueue(
-      makeNormalizedUpdate({
-        threadId: "456",
-        threadKind: "channel",
-        messageId: "m-channel-1",
-        text: "announce",
-      }),
-    );
+      const queue = new TelegramChannelQueue(db, { agentId: "agent-c1" });
+      const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me", 123, { senderId: 777 })));
+      const enqueued = await queue.enqueue(normalized);
 
-    expect(enqueued.inbox.key).toBe("agent:agent-1:telegram:channel:456");
+      expect(enqueued.inbox.key).toBe("agent:agent-c1:telegram:telegram-1:dm:123");
+    } finally {
+      if (originalAccountId === undefined) {
+        delete process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
+      } else {
+        process.env["TYRUM_TELEGRAM_ACCOUNT_ID"] = originalAccountId;
+      }
+
+      if (originalChannelKey === undefined) {
+        delete process.env["TYRUM_TELEGRAM_CHANNEL_KEY"];
+      } else {
+        process.env["TYRUM_TELEGRAM_CHANNEL_KEY"] = originalChannelKey;
+      }
+    }
   });
 
-  it("requires explicit thread kind for string thread ids", () => {
-    expect(() =>
-      telegramThreadKey("789", { agentId: "agent-1", channelKey: "telegram" }),
-    ).toThrow("thread kind is required");
+  it("uses canonical group session key taxonomy", async () => {
+    db = openTestSqliteDb();
+    const queue = new TelegramChannelQueue(db, { agentId: "agent-c1", channelKey: "work" });
 
-    expect(
-      telegramThreadKey("789", {
-        agentId: "agent-1",
-        channelKey: "telegram",
-        threadKind: "private",
-      }),
-    ).toBe("agent:agent-1:telegram:dm:789");
+    const normalized = normalizeUpdate(
+      JSON.stringify(makeTelegramUpdate("Group hello", 555, { chatType: "group", senderId: 777 })),
+    );
+    const enqueued = await queue.enqueue(normalized);
+
+    expect(enqueued.inbox.key).toBe("agent:agent-c1:telegram:work:group:555");
+  });
+
+  it("uses canonical channel session key taxonomy", async () => {
+    db = openTestSqliteDb();
+    const queue = new TelegramChannelQueue(db, { agentId: "agent-c1", channelKey: "work" });
+
+    const normalized = normalizeUpdate(
+      JSON.stringify(makeTelegramUpdate("announce", 456, { chatType: "channel", senderId: 777 })),
+    );
+    const enqueued = await queue.enqueue(normalized);
+
+    expect(enqueued.inbox.key).toBe("agent:agent-c1:telegram:work:channel:456");
   });
 
   it("policy-gates outbound sends via approvals when required", async () => {

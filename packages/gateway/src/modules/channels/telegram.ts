@@ -1,9 +1,12 @@
 import {
   NormalizedThreadMessage as NormalizedThreadMessageSchema,
+  buildAgentSessionKey,
   normalizedContainerKindFromThreadKind,
+  parseTyrumKey,
+  resolveDmScope,
 } from "@tyrum/schemas";
 import type { NormalizedThreadMessage } from "@tyrum/schemas";
-import { parseTyrumKey } from "@tyrum/schemas";
+import type { DmScope } from "@tyrum/schemas";
 import type { TelegramBot } from "../ingress/telegram-bot.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { Logger } from "../observability/logger.js";
@@ -35,31 +38,110 @@ function agentIdFromEnv(): string {
   return process.env["TYRUM_AGENT_ID"]?.trim() || "default";
 }
 
-function telegramChannelKeyFromEnv(): string {
-  return process.env["TYRUM_TELEGRAM_CHANNEL_KEY"]?.trim() || "telegram-1";
+function telegramAccountIdFromEnv(): string {
+  return process.env["TYRUM_TELEGRAM_ACCOUNT_ID"]?.trim()
+    || process.env["TYRUM_TELEGRAM_CHANNEL_KEY"]?.trim()
+    || "telegram-1";
 }
 
 export function telegramThreadKey(
-  thread: string | Pick<NormalizedThreadMessage["thread"], "id" | "kind">,
+  thread: NormalizedThreadMessage,
   opts?: {
     agentId?: string;
+    accountId?: string;
     channelKey?: string;
-    threadKind?: NormalizedThreadMessage["thread"]["kind"];
+    dmScope?: DmScope;
+    peerId?: string;
+  },
+): string;
+
+export function telegramThreadKey(
+  threadId: string,
+  opts: {
+    container: "dm" | "group" | "channel";
+    agentId?: string;
+    accountId?: string;
+    channelKey?: string;
+    dmScope?: DmScope;
+    peerId?: string;
+  },
+): string;
+
+export function telegramThreadKey(
+  thread: string | NormalizedThreadMessage,
+  opts?: {
+    agentId?: string;
+    accountId?: string;
+    channelKey?: string;
+    container?: "dm" | "group" | "channel";
+    dmScope?: DmScope;
+    peerId?: string;
   },
 ): string {
-  const threadId = typeof thread === "string" ? thread : thread.id;
-  const threadKind =
-    typeof thread === "string"
-      ? opts?.threadKind
-      : thread.kind;
-  if (!threadKind) {
-    throw new Error("thread kind is required when thread id is passed as a string");
+  const agentId = opts?.agentId?.trim() || agentIdFromEnv();
+  const accountId = opts?.accountId?.trim() || opts?.channelKey?.trim() || telegramAccountIdFromEnv();
+
+  if (typeof thread === "string") {
+    const container = opts?.container;
+    if (!container) {
+      throw new Error("container is required when passing a thread id string");
+    }
+
+    if (container === "dm") {
+      // Telegram private chats use chat id as the peer identity. Callers may override.
+      const peerId = opts?.peerId?.trim() || thread.trim();
+      const dmScope = resolveDmScope({
+        configured: opts?.dmScope ?? "per_account_channel_peer",
+      });
+      return buildAgentSessionKey({
+        agentId,
+        container: "dm",
+        channel: "telegram",
+        account: accountId,
+        peerId,
+        dmScope,
+      });
+    }
+
+    return buildAgentSessionKey({
+      agentId,
+      container,
+      channel: "telegram",
+      account: accountId,
+      id: thread,
+    });
   }
 
-  const agentId = opts?.agentId?.trim() || agentIdFromEnv();
-  const channelKey = opts?.channelKey?.trim() || telegramChannelKeyFromEnv();
-  const scope = normalizedContainerKindFromThreadKind(threadKind);
-  return `agent:${agentId}:${channelKey}:${scope}:${threadId}`;
+  const container = normalizedContainerKindFromThreadKind(thread.thread.kind);
+  if (container === "dm") {
+    let peerId = opts?.peerId?.trim()
+      || thread.thread.id?.trim()
+      || thread.message.thread_id?.trim()
+      || thread.message.sender?.id?.trim();
+    if (!peerId) {
+      const msgId = thread.message.id?.trim();
+      peerId = msgId ? `msg-${msgId}` : "unknown";
+    }
+    const dmScope = resolveDmScope({
+      configured: opts?.dmScope ?? "per_account_channel_peer",
+    });
+    return buildAgentSessionKey({
+      agentId,
+      container: "dm",
+      channel: "telegram",
+      account: accountId,
+      peerId,
+      dmScope,
+    });
+  }
+
+  return buildAgentSessionKey({
+    agentId,
+    container,
+    channel: "telegram",
+    account: accountId,
+    id: thread.thread.id,
+  });
 }
 
 async function tryAcquireLaneLease(db: SqlDb, opts: {
@@ -101,25 +183,32 @@ async function releaseLaneLease(db: SqlDb, opts: { key: string; lane: string; ow
 export class TelegramChannelQueue {
   private readonly inbox: ChannelInboxDal;
   private readonly agentId: string;
-  private readonly channelKey: string;
+  private readonly accountId: string;
   private readonly lane: string;
+  private readonly dmScope: DmScope;
 
-  constructor(db: SqlDb, opts?: { agentId?: string; channelKey?: string; lane?: string }) {
+  constructor(db: SqlDb, opts?: { agentId?: string; accountId?: string; channelKey?: string; lane?: string; dmScope?: DmScope }) {
     this.inbox = new ChannelInboxDal(db);
     this.agentId = opts?.agentId?.trim() || agentIdFromEnv();
-    this.channelKey = opts?.channelKey?.trim() || telegramChannelKeyFromEnv();
+    this.accountId = opts?.accountId?.trim() || opts?.channelKey?.trim() || telegramAccountIdFromEnv();
     this.lane = opts?.lane?.trim() || "main";
+    this.dmScope = resolveDmScope({ configured: opts?.dmScope ?? "per_account_channel_peer" });
   }
 
   async enqueue(
     normalized: NormalizedThreadMessage,
-    opts?: { agentId?: string; channelKey?: string; lane?: string },
+    opts?: { agentId?: string; accountId?: string; channelKey?: string; lane?: string; dmScope?: DmScope },
   ): Promise<{ inbox: ChannelInboxRow; deduped: boolean; message_text: string }> {
     const text = extractMessageText(normalized).trim();
     const agentId = opts?.agentId?.trim() || this.agentId;
-    const channelKey = opts?.channelKey?.trim() || this.channelKey;
+    const accountId = opts?.accountId?.trim() || opts?.channelKey?.trim() || this.accountId;
     const lane = opts?.lane?.trim() || this.lane;
-    const key = telegramThreadKey(normalized.thread, { agentId, channelKey });
+    const dmScope = opts?.dmScope ?? this.dmScope;
+    const key = telegramThreadKey(normalized, {
+      agentId,
+      accountId,
+      dmScope,
+    });
 
     const { row, deduped } = await this.inbox.enqueue({
       source: "telegram",
