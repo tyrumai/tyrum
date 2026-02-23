@@ -216,6 +216,26 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
     expect(enqueued.inbox.key).toBe("agent:agent-c1:telegram:work:dm:123");
   });
 
+  it("links per-peer dm session keys via canonical identity mapping", async () => {
+    db = openTestSqliteDb();
+    await db.run(
+      `INSERT INTO peer_identity_links (channel, account, provider_peer_id, canonical_peer_id)
+       VALUES (?, ?, ?, ?)`,
+      ["telegram", "work", "123", "canon-1"],
+    );
+
+    const queue = new TelegramChannelQueue(db, {
+      agentId: "agent-c1",
+      channelKey: "work",
+      dmScope: "per_peer",
+    });
+
+    const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me", 123, { senderId: 777 })));
+    const enqueued = await queue.enqueue(normalized);
+
+    expect(enqueued.inbox.key).toBe("agent:agent-c1:dm:canon-1");
+  });
+
   it("defaults telegram account id to legacy channel key", async () => {
     db = openTestSqliteDb();
 

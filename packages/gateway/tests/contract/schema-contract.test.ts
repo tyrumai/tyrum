@@ -51,6 +51,7 @@ describe("StateStore schema contract (sqlite vs postgres)", () => {
         "watchers",
         "watcher_firings",
         "sessions",
+        "peer_identity_links",
         "approvals",
         "jobs",
         "canvas_artifacts",
@@ -79,8 +80,12 @@ describe("StateStore schema contract (sqlite vs postgres)", () => {
       ] as const;
 
       for (const table of tables) {
-        const sqliteCols = getSqliteColumns(sqlite, table).sort();
-        const pgCols = (await getPostgresColumns(pg, table)).sort();
+        const sqliteCols = getSqliteColumns(sqlite, table);
+        const pgCols = await getPostgresColumns(pg, table);
+        expect(sqliteCols.length, `sqlite columns for ${table}`).toBeGreaterThan(0);
+        expect(pgCols.length, `postgres columns for ${table}`).toBeGreaterThan(0);
+        sqliteCols.sort();
+        pgCols.sort();
         expect(pgCols, `postgres columns for ${table}`).toEqual(sqliteCols);
       }
     } finally {

@@ -51,6 +51,8 @@ Session key selection follows a **DM scope** policy:
 
 Identity linking can optionally map multiple provider sender ids to a canonical identity so the same person shares a DM session across channels when using the per-peer modes.
 
+Identity links are stored in the StateStore table `peer_identity_links`.
+
 The exact key formats are defined in [Sessions and Lanes](./sessions-lanes.md).
 
 ## Inbound dedupe (don’t run twice)
