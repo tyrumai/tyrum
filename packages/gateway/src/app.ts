@@ -29,6 +29,7 @@ import { createAuthProfileRoutes } from "./routes/auth-profiles.js";
 import { createPluginRoutes } from "./routes/plugins.js";
 import { createModelsDevRoutes } from "./routes/models-dev.js";
 import { createProviderOAuthRoutes } from "./routes/provider-oauth.js";
+import { createContractRoutes } from "./routes/contracts.js";
 import { PlaybookRunner } from "./modules/playbook/runner.js";
 import { createWebApiRoutes } from "./routes/web-api.js";
 import { createWebUiRoutes } from "./routes/web-ui.js";
@@ -177,6 +178,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       agents: opts.agents,
     }),
   );
+  app.route("/", createContractRoutes());
   app.route(
     "/",
     createPresenceRoutes({

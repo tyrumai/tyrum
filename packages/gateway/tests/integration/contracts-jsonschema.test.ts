@@ -1,0 +1,64 @@
+import { describe, expect, it } from "vitest";
+import { createTestApp } from "./helpers.js";
+
+describe("Gateway JSON Schema publishing", () => {
+  it("serves a JSON Schema catalog for contracts", async () => {
+    const { app } = await createTestApp();
+
+    const res = await app.request("/contracts/jsonschema/catalog.json");
+    expect(res.status).toBe(200);
+
+    const json = (await res.json()) as {
+      format: string;
+      schemas: Array<{ name: string; file: string; $id: string }>;
+      errors?: unknown;
+    };
+
+    expect(json.format).toBe("tyrum.contracts.jsonschema.catalog.v1");
+    expect(Array.isArray(json.schemas)).toBe(true);
+    expect(json.schemas.length).toBeGreaterThan(0);
+    expect(json.errors).toBeUndefined();
+
+    const names = new Set(json.schemas.map((s) => s.name));
+    expect(names.has("WsConnectInitRequest")).toBe(true);
+    expect(names.has("PluginManifest")).toBe(true);
+    expect(names.has("PolicyBundle")).toBe(true);
+
+    const connectInit = json.schemas.find((schema) => schema.name === "WsConnectInitRequest");
+    expect(connectInit).toBeDefined();
+    expect(connectInit?.file.includes("/")).toBe(false);
+
+    const schemaRes = await app.request(`/contracts/jsonschema/${connectInit?.file}`);
+    expect(schemaRes.status).toBe(200);
+  });
+
+  it("serves individual contract JSON Schemas by file name", async () => {
+    const { app } = await createTestApp();
+
+    const res = await app.request(
+      "/contracts/jsonschema/WsConnectInitRequest.json",
+    );
+    expect(res.status).toBe(200);
+
+    const json = (await res.json()) as {
+      $schema?: string;
+      $id?: string;
+      title?: string;
+    };
+
+    expect(json.$schema).toBeTypeOf("string");
+    expect(json.$id).toMatch(/WsConnectInitRequest\.json$/);
+    expect(json.title).toBe("WsConnectInitRequest");
+  });
+
+  it("returns 404 quickly for missing schema files (no ENOENT retry)", async () => {
+    const { app } = await createTestApp();
+
+    const startedAt = Date.now();
+    const res = await app.request("/contracts/jsonschema/__missing__.json");
+    const durationMs = Date.now() - startedAt;
+
+    expect(res.status).toBe(404);
+    expect(durationMs).toBeLessThan(1000);
+  });
+});

@@ -17,6 +17,22 @@ Tyrum contracts are:
 
 JSON Schema is the default interchange format for contracts. Internally, contracts may also be represented in code (for example as typed schemas) and exported to JSON Schema for distribution.
 
+## JSON Schema artifacts
+
+The canonical JSON Schema artifacts are generated from `@tyrum/schemas` during build and include:
+
+- Individual `*.json` schemas (one per exported contract)
+- A `catalog.json` index (format: `tyrum.contracts.jsonschema.catalog.v1`)
+
+In a workspace checkout, run `pnpm --filter @tyrum/schemas build` to (re)generate artifacts under `packages/schemas/dist/jsonschema/`.
+
+The gateway publishes these artifacts for clients/operators to fetch:
+
+- `GET /contracts/jsonschema/catalog.json`
+- `GET /contracts/jsonschema/<SchemaName>.json`
+
+Operational note: when the gateway auth middleware is enabled, these endpoints require an admin token (`Authorization: Bearer <token>`), consistent with other HTTP routes.
+
 ## Versioning rules
 
 - Backward-compatible changes (add optional fields, widen enums safely) stay within a major version.
