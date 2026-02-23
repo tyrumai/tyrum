@@ -743,7 +743,9 @@ export class AgentRuntime {
               if (typeof expiresIn === "number" && Number.isFinite(expiresIn) && expiresIn > 0) {
                 return new Date(nowMs + Math.floor(expiresIn) * 1000).toISOString();
               }
-              return undefined;
+              // If the refresh response omits expires_in, clear the stored expiry so we don't keep
+              // treating a newly-refreshed token as already expired.
+              return null;
             })();
 
             const updated = await authProfileDal.updateSecretHandles(current.profile_id, {
