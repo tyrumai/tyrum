@@ -67,6 +67,9 @@ export function parseChannelSourceKey(source: string): ChannelAddress {
 
   const connector = trimmed.slice(0, separator);
   const accountId = trimmed.slice(separator + 1);
+  if (accountId.trim().length === 0) {
+    throw new Error("account must be non-empty");
+  }
   return {
     connector: normalizeIdentityPart("connector", connector),
     accountId: normalizeAccountId(accountId),
