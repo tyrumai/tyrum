@@ -32,7 +32,12 @@ function isSafeContractFilename(filename: string): boolean {
   return true;
 }
 
-async function readJsonFile(path: string): Promise<unknown> {
+async function readJsonFile(
+  path: string,
+  opts?: {
+    transientNotFound?: boolean;
+  },
+): Promise<unknown> {
   let lastError: unknown = new Error(`Failed to read JSON file: ${path}`);
 
   for (let attempt = 0; attempt < TRANSIENT_READ_MAX_ATTEMPTS; attempt += 1) {
@@ -44,7 +49,9 @@ async function readJsonFile(path: string): Promise<unknown> {
 
       const code = errorCode(err);
       const isParseError = err instanceof SyntaxError;
-      const isTransient = code === "ENOENT" || isParseError;
+      const isTransient =
+        isParseError ||
+        (opts?.transientNotFound === true && code === "ENOENT");
 
       if (!isTransient || attempt === TRANSIENT_READ_MAX_ATTEMPTS - 1) {
         throw err;
@@ -81,7 +88,9 @@ export function createContractRoutes(): Hono {
     }
 
     try {
-      const parsed: unknown = await readJsonFile(join(jsonSchemaDir, "catalog.json"));
+      const parsed: unknown = await readJsonFile(join(jsonSchemaDir, "catalog.json"), {
+        transientNotFound: true,
+      });
 
       if (
         parsed &&

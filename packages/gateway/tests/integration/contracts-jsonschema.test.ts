@@ -50,4 +50,15 @@ describe("Gateway JSON Schema publishing", () => {
     expect(json.$id).toMatch(/WsConnectInitRequest\.json$/);
     expect(json.title).toBe("WsConnectInitRequest");
   });
+
+  it("returns 404 quickly for missing schema files (no ENOENT retry)", async () => {
+    const { app } = await createTestApp();
+
+    const startedAt = Date.now();
+    const res = await app.request("/contracts/jsonschema/__missing__.json");
+    const durationMs = Date.now() - startedAt;
+
+    expect(res.status).toBe(404);
+    expect(durationMs).toBeLessThan(1000);
+  });
 });
