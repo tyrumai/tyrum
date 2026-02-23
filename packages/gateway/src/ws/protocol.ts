@@ -6,6 +6,7 @@
  */
 
 import {
+  descriptorIdForClientCapability,
   requiredCapability,
   ApprovalListRequest,
   ApprovalListResponse,
@@ -921,6 +922,17 @@ export function dispatchTask(
     throw new NoCapableClientError(action.type as ClientCapability);
   }
 
+  const descriptorId = descriptorIdForClientCapability(capability);
+  const toolMatchTarget = `capability:${descriptorId};action:${action.type}`;
+  const policyEnabled = deps.policyService?.isEnabled() ?? false;
+  const policyEvalPromise = policyEnabled
+    ? deps.policyService!.evaluateToolCall({
+        agentId: "default",
+        toolId: "tool.node.dispatch",
+        toolMatchTarget,
+      })
+    : undefined;
+
   const localCandidates: ConnectedClient[] = [];
   for (const c of deps.connectionManager.allClients()) {
     if (c.protocol_rev >= 2 && c.capabilities.includes(capability)) {
@@ -936,6 +948,25 @@ export function dispatchTask(
 
     const nowMs = Date.now();
     return (async (): Promise<string> => {
+      const policyEvaluation = policyEvalPromise
+        ? await policyEvalPromise.catch((err) => {
+            const message = err instanceof Error ? err.message : String(err);
+            deps.logger?.error("policy.evaluate_failed", {
+              tool_id: "tool.node.dispatch",
+              tool_match_target: toolMatchTarget,
+              error: message,
+            });
+            return { decision: "deny" as const, policy_snapshot: undefined };
+          })
+        : undefined;
+      const policyDecision = policyEvaluation?.decision;
+      const policySnapshotId = policyEvaluation?.policy_snapshot?.policy_snapshot_id;
+      const shouldEnforcePolicy = policyEnabled && !(deps.policyService?.isObserveOnly() ?? false);
+      const nodeDispatchAllowed = !shouldEnforcePolicy || policyDecision === "allow";
+      const trace = policySnapshotId || policyDecision
+        ? { policy_snapshot_id: policySnapshotId, policy_decision: policyDecision }
+        : undefined;
+
       const candidates = await cluster.connectionDirectory.listConnectionsForCapability(
         capability,
         nowMs,
@@ -954,7 +985,10 @@ export function dispatchTask(
                 )
                 .map(async (c) => {
                   const pairing = await deps.nodePairingDal!.getByNodeId(c.device_id!);
-                  return pairing?.status === "approved" ? c : null;
+                  if (!nodeDispatchAllowed) return null;
+                  if (pairing?.status !== "approved") return null;
+                  const allowlist = pairing.capability_allowlist ?? [];
+                  return allowlist.some((entry) => entry.id === descriptorId) ? c : null;
                 }),
             )
           ).filter((c): c is NonNullable<(typeof candidates)[number]> => c !== null)
@@ -978,6 +1012,7 @@ export function dispatchTask(
           attempt_id: scope.attemptId,
           action,
         },
+        trace: target.role === "node" ? trace : undefined,
       };
 
       await cluster.outboxDal.enqueue(
@@ -990,6 +1025,25 @@ export function dispatchTask(
   }
 
   return (async (): Promise<string> => {
+    const policyEvaluation = policyEvalPromise
+      ? await policyEvalPromise.catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          deps.logger?.error("policy.evaluate_failed", {
+            tool_id: "tool.node.dispatch",
+            tool_match_target: toolMatchTarget,
+            error: message,
+          });
+          return { decision: "deny" as const, policy_snapshot: undefined };
+        })
+      : undefined;
+    const policyDecision = policyEvaluation?.decision;
+    const policySnapshotId = policyEvaluation?.policy_snapshot?.policy_snapshot_id;
+    const shouldEnforcePolicy = policyEnabled && !(deps.policyService?.isObserveOnly() ?? false);
+    const nodeDispatchAllowed = !shouldEnforcePolicy || policyDecision === "allow";
+    const trace = policySnapshotId || policyDecision
+      ? { policy_snapshot_id: policySnapshotId, policy_decision: policyDecision }
+      : undefined;
+
     const eligibleNodes: ConnectedClient[] = [];
     const eligibleClients: ConnectedClient[] = [];
 
@@ -1002,7 +1056,11 @@ export function dispatchTask(
       const nodeId = c.device_id;
       if (!nodeId || !deps.nodePairingDal) continue;
       const pairing = await deps.nodePairingDal.getByNodeId(nodeId);
-      if (pairing?.status === "approved") {
+      if (!nodeDispatchAllowed) continue;
+      if (pairing?.status !== "approved") continue;
+      const allowlist = pairing.capability_allowlist ?? [];
+      if (!allowlist.some((entry) => entry.id === descriptorId)) continue;
+      {
         eligibleNodes.push(c);
       }
     }
@@ -1033,7 +1091,10 @@ export function dispatchTask(
                 )
                 .map(async (c) => {
                   const pairing = await deps.nodePairingDal!.getByNodeId(c.device_id!);
-                  return pairing?.status === "approved" ? c : null;
+                  if (!nodeDispatchAllowed) return null;
+                  if (pairing?.status !== "approved") return null;
+                  const allowlist = pairing.capability_allowlist ?? [];
+                  return allowlist.some((entry) => entry.id === descriptorId) ? c : null;
                 }),
             )
           ).filter((c): c is NonNullable<(typeof candidates)[number]> => c !== null)
@@ -1056,6 +1117,7 @@ export function dispatchTask(
           attempt_id: scope.attemptId,
           action,
         },
+        trace: target.role === "node" ? trace : undefined,
       };
 
       await cluster.outboxDal.enqueue(
@@ -1076,6 +1138,7 @@ export function dispatchTask(
         attempt_id: scope.attemptId,
         action,
       },
+      trace: selected.role === "node" ? trace : undefined,
     };
     selected.ws.send(JSON.stringify(message));
     return requestId;

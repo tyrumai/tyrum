@@ -51,7 +51,10 @@ Pairing binds a node device identity to an explicit authorization record:
 - capability allowlist (specific capability names/versions)
 - optional labels (operator-defined)
 
-Capability execution requests are authorized against the node’s pairing record and the effective policy snapshot for the run.
+Capability execution requests are authorized against the node’s pairing record and the effective policy snapshot for the run. Authorization is deny-by-default:
+
+- the gateway only dispatches a capability request to a node when the node’s pairing `capability_allowlist` includes the required capability descriptor, and
+- when tool policy is enabled, node dispatch is additionally gated by the effective policy snapshot (`tool_id: tool.node.dispatch`).
 
 ## Revocation
 
