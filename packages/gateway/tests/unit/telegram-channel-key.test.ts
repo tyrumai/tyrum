@@ -3,7 +3,7 @@ import { telegramThreadKey } from "../../src/modules/channels/telegram.js";
 
 describe("telegramThreadKey", () => {
   it("does not duplicate account id for derived non-default account keys", () => {
-    const key = telegramThreadKey("thread-1", {
+    const key = telegramThreadKey({ id: "thread-1", kind: "group" }, {
       agentId: "agent-1",
       accountId: "work",
     });
@@ -11,7 +11,7 @@ describe("telegramThreadKey", () => {
   });
 
   it("does not append account twice when channel key already includes account suffix", () => {
-    const key = telegramThreadKey("thread-2", {
+    const key = telegramThreadKey({ id: "thread-2", kind: "group" }, {
       agentId: "agent-1",
       accountId: "work",
       channelKey: "telegram-main@work",
@@ -20,7 +20,7 @@ describe("telegramThreadKey", () => {
   });
 
   it("appends account suffix once for generic custom channel keys", () => {
-    const key = telegramThreadKey("thread-3", {
+    const key = telegramThreadKey({ id: "thread-3", kind: "group" }, {
       agentId: "agent-1",
       accountId: "work",
       channelKey: "telegram-main",

@@ -19,6 +19,7 @@ import type { ApprovalNotifier } from "../approval/notifier.js";
 import type { PolicyService } from "../policy/service.js";
 import {
   type ChannelEgressConnector,
+  DEFAULT_CHANNEL_ACCOUNT_ID,
   buildChannelSourceKey,
   normalizeAccountId,
   parseChannelSourceKey,
