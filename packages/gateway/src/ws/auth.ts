@@ -19,5 +19,5 @@ export function validateWsToken(
 ): boolean {
   if (!tokenStore) return false;
   if (!token) return false;
-  return tokenStore.validate(token);
+  return tokenStore.authenticate(token) !== null;
 }

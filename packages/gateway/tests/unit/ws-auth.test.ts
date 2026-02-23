@@ -13,8 +13,8 @@ import { tmpdir } from "node:os";
 
 describe("validateWsToken", () => {
   const mockedTokenStore = {
-    validate(candidate: string) {
-      return candidate === "admin-123";
+    authenticate(candidate: string) {
+      return candidate === "admin-123" ? ({ token_kind: "admin" } as const) : null;
     },
   } as unknown as TokenStore;
 
@@ -28,7 +28,7 @@ describe("validateWsToken", () => {
     expect(validateWsToken(undefined, mockedTokenStore)).toBe(false);
   });
 
-  it("rejects device tokens for websocket upgrade auth", async () => {
+  it("accepts device tokens for websocket upgrade auth", async () => {
     const tempDir = await mkdtemp(join(tmpdir(), "tyrum-ws-auth-test-"));
     try {
       const tokenStore = new TokenStore(tempDir);
@@ -41,7 +41,7 @@ describe("validateWsToken", () => {
       });
 
       expect(tokenStore.authenticate(issued.token)).not.toBeNull();
-      expect(validateWsToken(issued.token, tokenStore)).toBe(false);
+      expect(validateWsToken(issued.token, tokenStore)).toBe(true);
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }

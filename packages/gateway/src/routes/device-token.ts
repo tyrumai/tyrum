@@ -1,4 +1,6 @@
+import type { Context } from "hono";
 import { Hono } from "hono";
+import { getCookie } from "hono/cookie";
 import {
   DeviceTokenIssueRequest,
   DeviceTokenIssueResponse,
@@ -11,10 +13,39 @@ export interface DeviceTokenRouteDeps {
   tokenStore: TokenStore;
 }
 
+const AUTH_COOKIE_NAME = "tyrum_admin_token";
+
+function extractBearerToken(authorizationHeader: string | undefined): string | undefined {
+  if (!authorizationHeader) {
+    return undefined;
+  }
+
+  const parts = authorizationHeader.split(" ");
+  if (parts.length !== 2 || parts[0] !== "Bearer" || !parts[1]) {
+    return undefined;
+  }
+
+  return parts[1];
+}
+
+function extractAuthToken(c: Context): string | undefined {
+  return extractBearerToken(c.req.header("authorization")) ?? getCookie(c, AUTH_COOKIE_NAME);
+}
+
+function isAdminRequest(c: Context, tokenStore: TokenStore): boolean {
+  const token = extractAuthToken(c);
+  if (!token) return false;
+  return tokenStore.validate(token);
+}
+
 export function createDeviceTokenRoutes(deps: DeviceTokenRouteDeps): Hono {
   const app = new Hono();
 
   app.post("/auth/device-tokens/issue", async (c) => {
+    if (!isAdminRequest(c, deps.tokenStore)) {
+      return c.json({ error: "forbidden", message: "admin token required" }, 403);
+    }
+
     const body = (await c.req.json()) as unknown;
     const parsed = DeviceTokenIssueRequest.safeParse(body);
     if (!parsed.success) {
@@ -36,6 +67,10 @@ export function createDeviceTokenRoutes(deps: DeviceTokenRouteDeps): Hono {
   });
 
   app.post("/auth/device-tokens/revoke", async (c) => {
+    if (!isAdminRequest(c, deps.tokenStore)) {
+      return c.json({ error: "forbidden", message: "admin token required" }, 403);
+    }
+
     const body = (await c.req.json()) as unknown;
     const parsed = DeviceTokenRevokeRequest.safeParse(body);
     if (!parsed.success) {
