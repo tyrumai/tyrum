@@ -164,9 +164,13 @@ export class TokenStore {
   /**
    * Validate a candidate token against the stored admin token.
    * Uses timing-safe comparison to prevent timing attacks.
+   * Device tokens are intentionally excluded from this gate.
    */
   validate(candidate: string): boolean {
-    return this.authenticate(candidate) !== null;
+    if (!this.token) return false;
+    const token = candidate.trim();
+    if (!token) return false;
+    return this.isAdminToken(token);
   }
 
   authenticate(

@@ -6,10 +6,13 @@
 
 import { describe, expect, it } from "vitest";
 import { validateWsToken } from "../../src/ws/auth.js";
-import type { TokenStore } from "../../src/modules/auth/token-store.js";
+import { TokenStore } from "../../src/modules/auth/token-store.js";
+import { mkdtemp, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 describe("validateWsToken", () => {
-  const tokenStore = {
+  const mockedTokenStore = {
     validate(candidate: string) {
       return candidate === "admin-123";
     },
@@ -20,8 +23,27 @@ describe("validateWsToken", () => {
   });
 
   it("validates against tokenStore", () => {
-    expect(validateWsToken("admin-123", tokenStore)).toBe(true);
-    expect(validateWsToken("wrong", tokenStore)).toBe(false);
-    expect(validateWsToken(undefined, tokenStore)).toBe(false);
+    expect(validateWsToken("admin-123", mockedTokenStore)).toBe(true);
+    expect(validateWsToken("wrong", mockedTokenStore)).toBe(false);
+    expect(validateWsToken(undefined, mockedTokenStore)).toBe(false);
+  });
+
+  it("rejects device tokens for websocket upgrade auth", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "tyrum-ws-auth-test-"));
+    try {
+      const tokenStore = new TokenStore(tempDir);
+      await tokenStore.initialize();
+      const issued = await tokenStore.issueDeviceToken({
+        deviceId: "dev_client_1",
+        role: "client",
+        scopes: ["operator.read"],
+        ttlSeconds: 300,
+      });
+
+      expect(tokenStore.authenticate(issued.token)).not.toBeNull();
+      expect(validateWsToken(issued.token, tokenStore)).toBe(false);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
   });
 });

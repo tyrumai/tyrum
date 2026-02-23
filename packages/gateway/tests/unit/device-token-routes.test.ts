@@ -59,11 +59,17 @@ describe("Device token routes", () => {
     expect(issued.device_id).toBe("dev_client_1");
     expect(issued.role).toBe("client");
     expect(issued.scopes).toEqual(["operator.read"]);
+    expect(
+      tokenStore.authenticate(issued.token, {
+        expectedRole: "client",
+        expectedDeviceId: "dev_client_1",
+      }),
+    ).not.toBeNull();
 
     const preRevoke = await app.request("/status", {
       headers: { Authorization: `Bearer ${issued.token}` },
     });
-    expect(preRevoke.status).toBe(200);
+    expect(preRevoke.status).toBe(401);
 
     const revokeRes = await app.request("/auth/device-tokens/revoke", {
       method: "POST",
@@ -82,5 +88,6 @@ describe("Device token routes", () => {
       headers: { Authorization: `Bearer ${issued.token}` },
     });
     expect(postRevoke.status).toBe(401);
+    expect(tokenStore.authenticate(issued.token)).toBeNull();
   });
 });

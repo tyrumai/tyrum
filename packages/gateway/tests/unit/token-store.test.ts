@@ -140,7 +140,7 @@ describe("TokenStore", () => {
     });
     expect(store.authenticate(issued.token, { expectedRole: "node" })).toBeNull();
     expect(store.authenticate(issued.token, { expectedDeviceId: "dev_other" })).toBeNull();
-    expect(store.validate(issued.token)).toBe(true);
+    expect(store.validate(issued.token)).toBe(false);
   });
 
   it("revokes a device token and invalidates it immediately", async () => {
@@ -154,7 +154,7 @@ describe("TokenStore", () => {
       ttlSeconds: 300,
     });
 
-    expect(store.validate(issued.token)).toBe(true);
+    expect(store.validate(issued.token)).toBe(false);
     await expect(store.revokeDeviceToken(issued.token)).resolves.toBe(true);
     await expect(store.revokeDeviceToken(issued.token)).resolves.toBe(false);
     expect(store.validate(issued.token)).toBe(false);
