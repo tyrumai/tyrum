@@ -169,6 +169,77 @@ describe("gateway-hosted web API + UI", () => {
     expect(payload.revision).toBe(1);
   });
 
+  it("preserves persona calibration when updating consent-only selections", async () => {
+    const first = new URLSearchParams({
+      tone: "formal",
+      verbosity: "balanced",
+      initiative: "act_within_limits",
+      quietHours: "21-07",
+      spending: "50",
+      voice: "warm",
+      shareCalendarSignals: "true",
+      allowPlannerAutonomy: "true",
+      retainAuditTrail: "true",
+    });
+
+    const firstResponse = await app.request("/app/actions/onboarding/consent", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: first.toString(),
+    });
+
+    expect(firstResponse.status).toBe(302);
+
+    const afterFirst = await app.request("/api/onboarding/consent");
+    const firstPayload = (await afterFirst.json()) as {
+      revision: number;
+      calibration?: { persona?: Record<string, unknown> };
+    };
+    expect(firstPayload.revision).toBe(1);
+    expect(firstPayload.calibration?.persona).toEqual({
+      tone: "formal",
+      verbosity: "balanced",
+      initiative: "act_within_limits",
+      quietHours: "21-07",
+      spending: "50",
+      voice: "warm",
+    });
+
+    const update = new URLSearchParams({
+      shareCalendarSignals: "false",
+      allowPlannerAutonomy: "true",
+      retainAuditTrail: "true",
+    });
+
+    const updateResponse = await app.request("/app/actions/onboarding/consent", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: update.toString(),
+    });
+
+    expect(updateResponse.status).toBe(302);
+
+    const afterUpdate = await app.request("/api/onboarding/consent");
+    const updatePayload = (await afterUpdate.json()) as {
+      revision: number;
+      calibration?: { persona?: Record<string, unknown> };
+    };
+
+    expect(updatePayload.revision).toBe(2);
+    expect(updatePayload.calibration?.persona).toEqual({
+      tone: "formal",
+      verbosity: "balanced",
+      initiative: "act_within_limits",
+      quietHours: "21-07",
+      spending: "50",
+      voice: "warm",
+    });
+  });
+
   it("uses a consistent onboarding stepper label for step 2", async () => {
     const start = await app.request("/app/onboarding/start");
     expect(start.status).toBe(200);

@@ -120,11 +120,12 @@ export function persistConsent(
 ): ConsentRecord {
   const previous = latestRecord ?? snapshotConsent();
   const revision = previous.revision + 1;
+  const nextCalibration = calibration ?? previous.calibration;
 
   latestRecord = buildRecord(
     revision,
     selections,
-    calibration,
+    nextCalibration,
     previous.mode,
     previous.remoteHardening,
   );
