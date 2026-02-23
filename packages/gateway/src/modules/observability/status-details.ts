@@ -199,14 +199,14 @@ async function loadAuthProfileHealth(db: SqlDb | undefined): Promise<AuthProfile
     disabled_reason: string | null;
     cooldown_until_ms: number | null;
     expires_at: string | null;
-  }>;
+  }> = [];
   let pins: Array<{
     agent_id: string;
     session_id: string;
     provider: string;
     profile_id: string;
     updated_at: string;
-  }>;
+  }> = [];
   try {
     profiles = await db.all<{
       profile_id: string;
@@ -231,7 +231,12 @@ async function loadAuthProfileHealth(db: SqlDb | undefined): Promise<AuthProfile
        ORDER BY updated_at DESC
        LIMIT 500`,
     );
+  } catch (err) {
+    if (isMissingTableError(err)) return null;
+    throw err;
+  }
 
+  try {
     pins = await db.all<{
       agent_id: string;
       session_id: string;
@@ -250,8 +255,7 @@ async function loadAuthProfileHealth(db: SqlDb | undefined): Promise<AuthProfile
        LIMIT 500`,
     );
   } catch (err) {
-    if (isMissingTableError(err)) return null;
-    throw err;
+    if (!isMissingTableError(err)) throw err;
   }
 
   const nowMs = Date.now();
@@ -407,14 +411,14 @@ async function loadSessionLanes(db: SqlDb | undefined): Promise<SessionLaneStatu
     run_id: string;
     status: string;
     created_at: string;
-  }>;
-  let queuedRows: Array<{ key: string; lane: string; queued_runs: number | string }>;
+  }> = [];
+  let queuedRows: Array<{ key: string; lane: string; queued_runs: number | string }> = [];
   let leases: Array<{
     key: string;
     lane: string;
     lease_owner: string;
     lease_expires_at_ms: number;
-  }>;
+  }> = [];
 
   try {
     runs = await db.all<{
@@ -436,6 +440,11 @@ async function loadSessionLanes(db: SqlDb | undefined): Promise<SessionLaneStatu
        WHERE status = 'queued'
        GROUP BY key, lane`,
     );
+  } catch (err) {
+    if (!isMissingTableError(err)) throw err;
+  }
+
+  try {
     leases = await db.all<{
       key: string;
       lane: string;
@@ -446,8 +455,7 @@ async function loadSessionLanes(db: SqlDb | undefined): Promise<SessionLaneStatu
        FROM lane_leases`,
     );
   } catch (err) {
-    if (isMissingTableError(err)) return [];
-    throw err;
+    if (!isMissingTableError(err)) throw err;
   }
 
   const keyFor = (key: string, lane: string): string => `${key}\u0000${lane}`;

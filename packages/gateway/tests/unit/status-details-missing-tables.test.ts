@@ -100,4 +100,83 @@ describe("status details missing tables", () => {
     expect(details.queue_depth?.pending_total).toBe(2);
     expect(details.queue_depth?.inflight_total).toBe(2);
   });
+
+  it("keeps session lanes when lane_leases is missing", async () => {
+    db = openBareSqliteDb();
+
+    await db.exec(
+      `CREATE TABLE execution_runs (
+         key TEXT NOT NULL,
+         lane TEXT NOT NULL,
+         run_id TEXT NOT NULL,
+         status TEXT NOT NULL,
+         created_at TEXT NOT NULL
+       );`,
+    );
+    await db.exec(
+      `INSERT INTO execution_runs (key, lane, run_id, status, created_at) VALUES
+         ('agent:default:ui:main', 'main', 'run-1', 'queued', '2026-02-23T00:00:00.000Z'),
+         ('agent:default:ui:main', 'main', 'run-2', 'queued', '2026-02-23T00:00:01.000Z'),
+         ('agent:default:ui:main', 'main', 'run-3', 'running', '2026-02-23T00:00:02.000Z'),
+         ('agent:default:ui:main', 'main', 'run-4', 'paused', '2026-02-23T00:00:03.000Z');`,
+    );
+
+    const details = await buildStatusDetails({ db });
+
+    expect(details.session_lanes).toHaveLength(1);
+    expect(details.session_lanes[0]).toEqual({
+      key: "agent:default:ui:main",
+      lane: "main",
+      latest_run_id: "run-4",
+      latest_run_status: "paused",
+      queued_runs: 2,
+      lease_owner: null,
+      lease_expires_at_ms: null,
+      lease_active: false,
+    });
+  });
+
+  it("keeps auth profile health when session_provider_pins is missing", async () => {
+    db = openBareSqliteDb();
+
+    await db.exec(
+      `CREATE TABLE auth_profiles (
+         profile_id TEXT NOT NULL,
+         agent_id TEXT NOT NULL,
+         provider TEXT NOT NULL,
+         type TEXT NOT NULL,
+         status TEXT NOT NULL,
+         disabled_reason TEXT,
+         cooldown_until_ms INTEGER,
+         expires_at TEXT,
+         updated_at TEXT NOT NULL
+       );`,
+    );
+    await db.exec(
+      `INSERT INTO auth_profiles (
+         profile_id,
+         agent_id,
+         provider,
+         type,
+         status,
+         disabled_reason,
+         cooldown_until_ms,
+         expires_at,
+         updated_at
+       ) VALUES
+         ('profile-1', 'default', 'openai', 'api_key', 'active', NULL, NULL, NULL, '2026-02-23T00:00:01.000Z'),
+         ('profile-2', 'default', 'openai', 'api_key', 'disabled', 'manual', NULL, NULL, '2026-02-23T00:00:00.000Z');`,
+    );
+
+    const details = await buildStatusDetails({ db });
+    const auth = details.model_auth.auth_profiles as NonNullable<
+      typeof details.model_auth.auth_profiles
+    >;
+
+    expect(auth.total).toBe(2);
+    expect(auth.active).toBe(1);
+    expect(auth.disabled).toBe(1);
+    expect(auth.providers).toEqual(["openai"]);
+    expect(auth.selected).toBeNull();
+  });
 });
