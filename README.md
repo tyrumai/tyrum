@@ -133,9 +133,10 @@ Webhook-triggered watchers now accept signed calls at `POST /watchers/:id/trigge
   - `HMAC_SHA256(secret, "<timestamp>.<nonce>.<raw-body>")`
 - Replay safety:
   - Timestamp must fall within the configured replay window (`trigger_config.max_skew_ms`, default 5 minutes).
-  - Reusing the same signed envelope (`timestamp` + `nonce`) is rejected with `409 replay_detected`.
+  - Reusing the same nonce is rejected with `409 replay_detected` (even if timestamp units differ).
 - Secret source:
   - Use secret handles from `/secrets` and store the handle in watcher `trigger_config.secret_handle`.
+  - Optionally set watcher `trigger_config.agent_id` to choose which agent/workspace secret store resolves the handle (default: `default`).
 
 ## Key Documents
 - [Architecture Overview](docs/architecture/index.md)

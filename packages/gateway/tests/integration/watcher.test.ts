@@ -70,11 +70,24 @@ describe("Watcher routes + scheduler integration", () => {
   let memoryDal: MemoryDal;
   let eventBus: ReturnType<typeof mitt<GatewayEvents>>;
   let processor: WatcherProcessor;
-  let secretProvider: InMemorySecretProvider;
+  let secretProviders: Map<string, InMemorySecretProvider>;
   let app: Hono;
 
-  async function createWebhookWatcher(secretValue: string, maxSkewMs = 60_000): Promise<number> {
-    const handle = await secretProvider.store("watcher:webhook:test", secretValue);
+  function secretProviderFor(agentId: string): InMemorySecretProvider {
+    const trimmed = agentId.trim();
+    const existing = secretProviders.get(trimmed);
+    if (existing) return existing;
+    const created = new InMemorySecretProvider();
+    secretProviders.set(trimmed, created);
+    return created;
+  }
+
+  async function createWebhookWatcher(
+    secretValue: string,
+    maxSkewMs = 60_000,
+    agentId = "default",
+  ): Promise<number> {
+    const handle = await secretProviderFor(agentId).store("watcher:webhook:test", secretValue);
     const res = await app.request("/watchers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -84,6 +97,7 @@ describe("Watcher routes + scheduler integration", () => {
         trigger_config: {
           secret_handle: handle,
           max_skew_ms: maxSkewMs,
+          agent_id: agentId,
         },
       }),
     });
@@ -97,12 +111,12 @@ describe("Watcher routes + scheduler integration", () => {
     memoryDal = new MemoryDal(db);
     eventBus = mitt<GatewayEvents>();
     processor = new WatcherProcessor({ db, memoryDal, eventBus });
-    secretProvider = new InMemorySecretProvider();
+    secretProviders = new Map([["default", new InMemorySecretProvider()]]);
     app = new Hono();
     app.route(
       "/",
       createWatcherRoutes(processor, {
-        secretProviderForAgent: async () => secretProvider,
+        secretProviderForAgent: async (agentId) => secretProviderFor(agentId),
       }),
     );
   });
@@ -254,6 +268,74 @@ describe("Watcher routes + scheduler integration", () => {
     expect(replay.status).toBe(409);
     const events = await memoryDal.getEpisodicEvents();
     expect(events.filter((event) => event.event_type === "webhook_fired")).toHaveLength(1);
+  });
+
+  it("POST /watchers/:id/trigger/webhook rejects nonce replays even if timestamp unit differs", async () => {
+    const secret = "super-secret";
+    const watcherId = await createWebhookWatcher(secret, 120_000);
+    const payload = JSON.stringify({ hello: "world" });
+    let timestampMs = Date.now();
+    if (timestampMs % 1000 === 0) timestampMs += 1;
+
+    const nonce = "nonce-units";
+
+    const timestampHeaderMs = String(timestampMs);
+    const signatureMs = computeWebhookSignature(secret, timestampHeaderMs, nonce, payload);
+
+    const first = await app.request(`/watchers/${String(watcherId)}/trigger/webhook`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        [WEBHOOK_SIGNATURE_HEADER]: signatureMs,
+        [WEBHOOK_TIMESTAMP_HEADER]: timestampHeaderMs,
+        [WEBHOOK_NONCE_HEADER]: nonce,
+      },
+      body: payload,
+    });
+    expect(first.status).toBe(202);
+
+    const timestampHeaderSeconds = String(Math.floor(timestampMs / 1000));
+    const signatureSeconds = computeWebhookSignature(secret, timestampHeaderSeconds, nonce, payload);
+    const replay = await app.request(`/watchers/${String(watcherId)}/trigger/webhook`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        [WEBHOOK_SIGNATURE_HEADER]: signatureSeconds,
+        [WEBHOOK_TIMESTAMP_HEADER]: timestampHeaderSeconds,
+        [WEBHOOK_NONCE_HEADER]: nonce,
+      },
+      body: payload,
+    });
+    expect(replay.status).toBe(409);
+  });
+
+  it("POST /watchers/:id/trigger/webhook uses watcher-configured agent_id for secret resolution", async () => {
+    const agentA = "agent-a";
+    const agentB = "agent-b";
+    void secretProviderFor(agentB);
+
+    const secretA = "secret-a";
+    const watcherId = await createWebhookWatcher(secretA, 120_000, agentA);
+    const payload = JSON.stringify({ hello: "world" });
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const nonce = "nonce-agent";
+    const signature = computeWebhookSignature(secretA, timestamp, nonce, payload);
+
+    const res = await app.request(
+      `/watchers/${String(watcherId)}/trigger/webhook?agent_id=${encodeURIComponent(agentB)}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          [WEBHOOK_SIGNATURE_HEADER]: signature,
+          [WEBHOOK_TIMESTAMP_HEADER]: timestamp,
+          [WEBHOOK_NONCE_HEADER]: nonce,
+        },
+        body: payload,
+      },
+    );
+
+    expect(res.status).toBe(202);
   });
 
   it("POST /watchers/:id/trigger/webhook rejects stale timestamps", async () => {

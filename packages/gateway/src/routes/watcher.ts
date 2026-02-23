@@ -3,7 +3,7 @@
  */
 
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import { SecretHandle } from "@tyrum/schemas";
+import { SecretHandle, WorkspaceId } from "@tyrum/schemas";
 import type { SecretHandle as SecretHandleT } from "@tyrum/schemas";
 import { Hono } from "hono";
 import type { SecretProvider } from "../modules/secret/provider.js";
@@ -22,16 +22,13 @@ interface WebhookEnvelope {
 }
 
 interface WebhookTriggerConfig {
+  agent_id: string;
   secret_handle: SecretHandleT;
   max_skew_ms?: number;
 }
 
 export interface WatcherRouteDeps {
   secretProviderForAgent?: (agentId: string) => Promise<SecretProvider>;
-}
-
-function agentIdFromReq(c: { req: { query: (key: string) => string | undefined; header: (key: string) => string | undefined } }): string {
-  return c.req.query("agent_id")?.trim() || c.req.header("x-tyrum-agent-id")?.trim() || "default";
 }
 
 function parseTimestampMs(value: string): number | null {
@@ -70,6 +67,21 @@ function parseWebhookTriggerConfig(raw: unknown): WebhookTriggerConfig | null {
     return null;
   }
 
+  const agentIdRaw = (raw as Record<string, unknown>)["agent_id"];
+  const agentId = (() => {
+    if (agentIdRaw === undefined || agentIdRaw === null) return "default";
+    if (typeof agentIdRaw !== "string") return null;
+    const trimmed = agentIdRaw.trim();
+    if (!trimmed) return "default";
+    if (trimmed === "default") return "default";
+    const parsed = WorkspaceId.safeParse(trimmed);
+    if (!parsed.success) return null;
+    return parsed.data;
+  })();
+  if (!agentId) {
+    return null;
+  }
+
   const secretHandleRaw = (raw as Record<string, unknown>)["secret_handle"];
   const parsedSecret = SecretHandle.safeParse(secretHandleRaw);
   if (!parsedSecret.success) {
@@ -78,7 +90,7 @@ function parseWebhookTriggerConfig(raw: unknown): WebhookTriggerConfig | null {
 
   const maxSkewRaw = (raw as Record<string, unknown>)["max_skew_ms"];
   if (maxSkewRaw === undefined) {
-    return { secret_handle: parsedSecret.data };
+    return { agent_id: agentId, secret_handle: parsedSecret.data };
   }
   if (
     typeof maxSkewRaw !== "number" ||
@@ -90,6 +102,7 @@ function parseWebhookTriggerConfig(raw: unknown): WebhookTriggerConfig | null {
   }
 
   return {
+    agent_id: agentId,
     secret_handle: parsedSecret.data,
     max_skew_ms: maxSkewRaw,
   };
@@ -264,7 +277,7 @@ export function createWatcherRoutes(
 
     let secretProvider: SecretProvider;
     try {
-      secretProvider = await deps.secretProviderForAgent(agentIdFromReq(c));
+      secretProvider = await deps.secretProviderForAgent(webhookConfig.agent_id);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: "invalid_request", message }, 400);

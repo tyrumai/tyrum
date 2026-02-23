@@ -216,8 +216,6 @@ export class WatcherProcessor {
     }
 
     const replayDigest = createHash("sha256")
-      .update(String(event.timestampMs))
-      .update(":")
       .update(event.nonce)
       .digest("hex");
 
