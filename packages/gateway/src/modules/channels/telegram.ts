@@ -40,7 +40,7 @@ function agentIdFromEnv(): string {
 function telegramAccountIdFromEnv(): string {
   return process.env["TYRUM_TELEGRAM_ACCOUNT_ID"]?.trim()
     || process.env["TYRUM_TELEGRAM_CHANNEL_KEY"]?.trim()
-    || "default";
+    || "telegram-1";
 }
 
 function toThreadContainer(kind: NormalizedThreadMessage["thread"]["kind"]): "dm" | "group" | "channel" {

@@ -160,6 +160,35 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
     expect(enqueued.inbox.key).toBe("agent:agent-c1:telegram:work:dm:123");
   });
 
+  it("defaults telegram account id to legacy channel key", async () => {
+    db = openTestSqliteDb();
+
+    const originalAccountId = process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
+    const originalChannelKey = process.env["TYRUM_TELEGRAM_CHANNEL_KEY"];
+    try {
+      delete process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
+      delete process.env["TYRUM_TELEGRAM_CHANNEL_KEY"];
+
+      const queue = new TelegramChannelQueue(db, { agentId: "agent-c1" });
+      const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me", 123, { senderId: 777 })));
+      const enqueued = await queue.enqueue(normalized);
+
+      expect(enqueued.inbox.key).toBe("agent:agent-c1:telegram:telegram-1:dm:123");
+    } finally {
+      if (originalAccountId === undefined) {
+        delete process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
+      } else {
+        process.env["TYRUM_TELEGRAM_ACCOUNT_ID"] = originalAccountId;
+      }
+
+      if (originalChannelKey === undefined) {
+        delete process.env["TYRUM_TELEGRAM_CHANNEL_KEY"];
+      } else {
+        process.env["TYRUM_TELEGRAM_CHANNEL_KEY"] = originalChannelKey;
+      }
+    }
+  });
+
   it("uses canonical group session key taxonomy", async () => {
     db = openTestSqliteDb();
     const queue = new TelegramChannelQueue(db, { agentId: "agent-c1", channelKey: "work" });
