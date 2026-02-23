@@ -23,6 +23,13 @@ describe("Gateway JSON Schema publishing", () => {
     expect(names.has("WsConnectInitRequest")).toBe(true);
     expect(names.has("PluginManifest")).toBe(true);
     expect(names.has("PolicyBundle")).toBe(true);
+
+    const connectInit = json.schemas.find((schema) => schema.name === "WsConnectInitRequest");
+    expect(connectInit).toBeDefined();
+    expect(connectInit?.file.includes("/")).toBe(false);
+
+    const schemaRes = await app.request(`/contracts/jsonschema/${connectInit?.file}`);
+    expect(schemaRes.status).toBe(200);
   });
 
   it("serves individual contract JSON Schemas by file name", async () => {

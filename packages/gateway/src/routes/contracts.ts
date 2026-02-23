@@ -26,7 +26,28 @@ export function createContractRoutes(): Hono {
   contracts.get("/contracts/jsonschema/catalog.json", async (c) => {
     try {
       const raw = await readFile(join(jsonSchemaDir, "catalog.json"), "utf-8");
-      return c.json(JSON.parse(raw));
+      const parsed: unknown = JSON.parse(raw);
+
+      if (
+        parsed &&
+        typeof parsed === "object" &&
+        "schemas" in parsed &&
+        Array.isArray((parsed as { schemas?: unknown }).schemas)
+      ) {
+        const schemas = (parsed as { schemas: unknown[] }).schemas.map((entry) => {
+          if (!entry || typeof entry !== "object") return entry;
+          const file =
+            "file" in entry && typeof (entry as { file?: unknown }).file === "string"
+              ? basename(String((entry as { file: string }).file))
+              : undefined;
+          if (!file) return entry;
+          return { ...entry, file };
+        });
+
+        return c.json({ ...(parsed as Record<string, unknown>), schemas });
+      }
+
+      return c.json(parsed);
     } catch (err) {
       return c.json(
         {
