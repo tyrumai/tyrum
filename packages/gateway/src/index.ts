@@ -7,10 +7,13 @@
 import { createServer } from "node:http";
 import { mkdirSync } from "node:fs";
 import { spawn } from "node:child_process";
+import { readdir, readFile } from "node:fs/promises";
 import { getRequestListener } from "@hono/node-server";
 import { basename, dirname, join } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { PluginManifest } from "@tyrum/schemas";
+import { parse as parseYaml } from "yaml";
 import { createContainerAsync } from "./container.js";
 import { createApp } from "./app.js";
 import { isAgentEnabled } from "./modules/agent/enabled.js";
@@ -34,7 +37,7 @@ import { runToolRunnerFromStdio } from "./toolrunner.js";
 import { isPostgresDbUri } from "./statestore/db-uri.js";
 import { VERSION } from "./version.js";
 import { resolveUserTyrumHome } from "./modules/agent/home.js";
-import { PluginRegistry } from "./modules/plugins/registry.js";
+import { PluginRegistry, resolveBundledPluginsDirFrom } from "./modules/plugins/registry.js";
 import { AgentRegistry } from "./modules/agent/registry.js";
 
 // Re-export for library consumers
@@ -263,6 +266,168 @@ async function runGatewayUpdate(
   return exitCode;
 }
 
+type AdminTokenSource = "env" | "file" | "generated";
+
+function resolveGatewayHost(): string {
+  return process.env["GATEWAY_HOST"]?.trim() || "127.0.0.1";
+}
+
+function resolveGatewayPort(): number {
+  const raw = process.env["GATEWAY_PORT"] ?? "8788";
+  const parsed = parseInt(raw, 10);
+  return Number.isFinite(parsed) ? parsed : 8788;
+}
+
+function normalizeProbeHost(host: string): string {
+  const trimmed = host.trim();
+  if (trimmed === "0.0.0.0") return "127.0.0.1";
+  if (trimmed === "::") return "::1";
+  return trimmed;
+}
+
+function hostForUrl(host: string): string {
+  if (host.includes(":") && !host.startsWith("[")) {
+    return `[${host}]`;
+  }
+  return host;
+}
+
+function parseJsonOrYaml(contents: string, hintPath?: string): unknown {
+  const trimmed = contents.trim();
+  if (trimmed.length === 0) return {};
+  const isJson = hintPath?.toLowerCase().endsWith(".json") ?? trimmed.startsWith("{");
+  if (isJson) {
+    return JSON.parse(trimmed) as unknown;
+  }
+  return parseYaml(trimmed) as unknown;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+async function loadPluginManifestFromDir(dir: string): Promise<
+  | { kind: "missing" }
+  | { kind: "invalid"; error: string }
+  | { kind: "ok"; manifest: { id: string; name: string; version: string } }
+> {
+  const candidates = ["plugin.yml", "plugin.yaml", "plugin.json"];
+  for (const filename of candidates) {
+    const path = join(dir, filename);
+    let raw: string;
+    try {
+      raw = await readFile(path, "utf-8");
+    } catch {
+      continue;
+    }
+
+    try {
+      const parsed = parseJsonOrYaml(raw, path);
+      if (!isRecord(parsed)) {
+        return { kind: "invalid", error: "manifest must be an object" };
+      }
+      const manifest = PluginManifest.parse(parsed);
+      return { kind: "ok", manifest: { id: manifest.id, name: manifest.name, version: manifest.version } };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { kind: "invalid", error: message };
+    }
+  }
+  return { kind: "missing" };
+}
+
+async function discoverPluginsInDir(dir: string): Promise<{
+  plugins: Array<{ id: string; name: string; version: string }>;
+  invalid_manifests: number;
+}> {
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return { plugins: [], invalid_manifests: 0 };
+  }
+
+  const plugins: Array<{ id: string; name: string; version: string }> = [];
+  let invalidManifests = 0;
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const pluginDir = join(dir, entry.name);
+    const result = await loadPluginManifestFromDir(pluginDir);
+    if (result.kind === "ok") {
+      plugins.push(result.manifest);
+    } else if (result.kind === "invalid") {
+      invalidManifests += 1;
+    }
+  }
+
+  plugins.sort((a, b) => a.id.localeCompare(b.id));
+  return { plugins, invalid_manifests: invalidManifests };
+}
+
+type SecretProviderKind = "env" | "file" | "keychain";
+
+function resolveSecretProviderKindForCheck(): SecretProviderKind {
+  const desiredProvider = process.env["TYRUM_SECRET_PROVIDER"]?.trim().toLowerCase();
+  const isKubernetes = Boolean(process.env["KUBERNETES_SERVICE_HOST"]);
+  if (desiredProvider === "env" || desiredProvider === "file" || desiredProvider === "keychain") {
+    return desiredProvider;
+  }
+  return isKubernetes ? "env" : "file";
+}
+
+function shortHash(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length <= 12) return trimmed;
+  return trimmed.slice(0, 12);
+}
+
+async function resolveAdminTokenSource(tyrumHome: string): Promise<AdminTokenSource> {
+  const envToken = process.env["GATEWAY_TOKEN"]?.trim();
+  if (envToken) return "env";
+
+  const tokenPath = join(tyrumHome, ".admin-token");
+  try {
+    const raw = await readFile(tokenPath, "utf-8");
+    if (raw.trim().length > 0) {
+      return "file";
+    }
+  } catch {
+    // ignore
+  }
+
+  return "generated";
+}
+
+async function tryFetchJson(url: string, init: RequestInit & { timeoutMs: number }): Promise<{
+  ok: boolean;
+  status: number;
+  json: unknown;
+  error?: string;
+}> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), init.timeoutMs);
+  try {
+    const res = await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+    const text = await res.text();
+    let json: unknown = null;
+    try {
+      json = JSON.parse(text) as unknown;
+    } catch {
+      json = text;
+    }
+    return { ok: res.ok, status: res.status, json };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, status: 0, json: null, error: message };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function runGatewayCheck(): Promise<number> {
   const dbPath = process.env["GATEWAY_DB_PATH"] ?? "gateway.db";
   const defaultMigrationsDir = isPostgresDbUri(dbPath)
@@ -294,6 +459,103 @@ async function runGatewayCheck(): Promise<number> {
       console.log("models.dev: last_error=present");
     }
     console.log("oauth: providers_configured=loaded");
+
+    // --- Static diagnostics ---
+    const host = resolveGatewayHost();
+    const port = resolveGatewayPort();
+    const isLocalOnly = LOCAL_HOSTS.has(host);
+    console.log(
+      `static.exposure: host=${host} port=${port} is_exposed=${!isLocalOnly}`,
+    );
+
+    const tokenPath = join(tyrumHome, ".admin-token");
+    const tokenSource = await resolveAdminTokenSource(tyrumHome);
+    console.log(
+      `static.auth: admin_token_source=${tokenSource} token_path=${tokenPath}`,
+    );
+
+    const tokenStore = new TokenStore(tyrumHome);
+    const token = await tokenStore.initialize();
+
+    try {
+      const policy = await container.policyService?.getStatus?.();
+      if (policy) {
+        console.log(
+          `static.policy: enabled=${policy.enabled} observe_only=${policy.observe_only} sha256=${shortHash(policy.effective_sha256)} deployment=${policy.sources.deployment} agent=${policy.sources.agent ?? "none"}`,
+        );
+      } else {
+        console.log("static.policy: unavailable");
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.log(`static.policy: error=${message}`);
+    }
+
+    try {
+      const userHome = resolveUserTyrumHome();
+      const bundledDir = resolveBundledPluginsDirFrom(__dirname);
+
+      const workspaceDir = join(tyrumHome, "plugins");
+      const userDir = join(userHome, "plugins");
+
+      const [workspacePlugins, userPlugins, bundledPlugins] = await Promise.all([
+        discoverPluginsInDir(workspaceDir),
+        discoverPluginsInDir(userDir),
+        discoverPluginsInDir(bundledDir),
+      ]);
+
+      console.log(
+        `static.plugins: manifests=workspace:${workspacePlugins.plugins.length} user:${userPlugins.plugins.length} bundled:${bundledPlugins.plugins.length} invalid=${workspacePlugins.invalid_manifests + userPlugins.invalid_manifests + bundledPlugins.invalid_manifests}`,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.log(`static.plugins: error=${message}`);
+    }
+
+    const secretProviderKind = resolveSecretProviderKindForCheck();
+    try {
+      const secretProvider = await createSecretProviderFromEnv(tyrumHome, token);
+      const handles = await secretProvider.list();
+      console.log(
+        `static.secrets: provider=${secretProviderKind} handles=${handles.length}`,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.log(
+        `static.secrets: provider=${secretProviderKind} error=${message}`,
+      );
+    }
+
+    // --- Live HTTP probes (best-effort) ---
+    try {
+      const probeHost = normalizeProbeHost(host);
+      const baseUrl = `http://${hostForUrl(probeHost)}:${port}`;
+      const health = await tryFetchJson(`${baseUrl}/healthz`, { timeoutMs: 500 });
+      const status = await tryFetchJson(`${baseUrl}/status`, {
+        timeoutMs: 500,
+        headers: {
+          authorization: `Bearer ${token}`,
+        },
+      });
+
+      const healthOk =
+        health.ok && isRecord(health.json) && (health.json["status"] as unknown) === "ok";
+      const statusOk =
+        status.ok && isRecord(status.json) && (status.json["status"] as unknown) === "ok";
+
+      const formatProbe = (probe: { ok: boolean; status: number }, ok: boolean): string => {
+        if (probe.status === 0) return "unavailable";
+        if (ok) return "ok";
+        return `fail(${probe.status})`;
+      };
+
+      console.log(
+        `live.http: base=${baseUrl} healthz=${formatProbe(health, healthOk)} status=${formatProbe(status, statusOk)}`,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.log(`live.http: error=${message}`);
+    }
 
     return 0;
   } catch (err) {
