@@ -11,6 +11,8 @@ import type { GatewayManager } from "./gateway-manager.js";
 import { MAIN_WINDOW_OPTIONS } from "./window-options.js";
 import { configExists, loadConfig } from "./config/store.js";
 
+app.setName?.("Tyrum");
+
 let mainWindow: BrowserWindow | null = null;
 let gatewayManager: GatewayManager | null = null;
 let isQuitting = false;
