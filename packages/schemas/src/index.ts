@@ -251,6 +251,8 @@ export {
   WsArtifactCreatedEvent,
   WsPairingRequestedEventPayload,
   WsPairingRequestedEvent,
+  WsPairingApprovedEventPayload,
+  WsPairingApprovedEvent,
   WsPairingResolvedEventPayload,
   WsPairingResolvedEvent,
   WsPresenceUpsertedEventPayload,

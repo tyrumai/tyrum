@@ -88,7 +88,7 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
       );
     }
 
-    const pairing = await deps.nodePairingDal.resolve({
+    const resolved = await deps.nodePairingDal.resolve({
       pairingId: id,
       decision: "approved",
       reason,
@@ -100,9 +100,10 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
         user_agent: c.req.header("user-agent") ?? undefined,
       },
     });
-    if (!pairing) {
+    if (!resolved) {
       return c.json({ error: "not_found", message: "pairing not found or not pending" }, 404);
     }
+    const { pairing, scopedToken } = resolved;
 
     emitEvent(
       deps,
@@ -114,7 +115,7 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
       },
     );
 
-    return c.json({ status: "ok", pairing });
+    return c.json({ status: "ok", pairing, scoped_token: scopedToken });
   });
 
   app.post("/pairings/:id/deny", async (c) => {
@@ -124,7 +125,7 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
     }
     const body = (await c.req.json()) as { reason?: string };
 
-    const pairing = await deps.nodePairingDal.resolve({
+    const resolved = await deps.nodePairingDal.resolve({
       pairingId: id,
       decision: "denied",
       reason: typeof body.reason === "string" ? body.reason : undefined,
@@ -134,9 +135,10 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
         user_agent: c.req.header("user-agent") ?? undefined,
       },
     });
-    if (!pairing) {
+    if (!resolved) {
       return c.json({ error: "not_found", message: "pairing not found or not pending" }, 404);
     }
+    const { pairing } = resolved;
 
     emitEvent(
       deps,

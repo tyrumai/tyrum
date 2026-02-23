@@ -41,6 +41,7 @@ import type {
   ActionPrimitive,
   ClientCapability,
   Approval as ApprovalT,
+  NodePairingRequest as NodePairingRequestT,
   WsEventEnvelope,
   WsRequestEnvelope,
   WsResponseEnvelope,
@@ -491,7 +492,8 @@ export async function handleClientMessage(
     };
 
     let pairingId: number;
-    let pairing: unknown;
+    let pairing: NodePairingRequestT | undefined;
+    let scopedToken: string | undefined;
 
     if (msg.type === "pairing.approve") {
       const parsedReq = WsPairingApproveRequest.safeParse(msg);
@@ -506,7 +508,7 @@ export async function handleClientMessage(
       }
 
       pairingId = parsedReq.data.payload.pairing_id;
-      pairing = await deps.nodePairingDal.resolve({
+      const resolved = await deps.nodePairingDal.resolve({
         pairingId,
         decision: "approved",
         reason: parsedReq.data.payload.reason,
@@ -514,6 +516,8 @@ export async function handleClientMessage(
         trustLevel: parsedReq.data.payload.trust_level,
         capabilityAllowlist: parsedReq.data.payload.capability_allowlist,
       });
+      pairing = resolved?.pairing;
+      scopedToken = resolved?.scopedToken;
     } else if (msg.type === "pairing.deny") {
       const parsedReq = WsPairingDenyRequest.safeParse(msg);
       if (!parsedReq.success) {
@@ -527,12 +531,13 @@ export async function handleClientMessage(
       }
 
       pairingId = parsedReq.data.payload.pairing_id;
-      pairing = await deps.nodePairingDal.resolve({
+      const resolved = await deps.nodePairingDal.resolve({
         pairingId,
         decision: "denied",
         reason: parsedReq.data.payload.reason,
         resolvedBy,
       });
+      pairing = resolved?.pairing;
     } else {
       const parsedReq = WsPairingRevokeRequest.safeParse(msg);
       if (!parsedReq.success) {
@@ -554,6 +559,46 @@ export async function handleClientMessage(
     }
 
     if (!pairing) return notFound(pairingId);
+
+    if (msg.type === "pairing.approve" && scopedToken) {
+      const evt = {
+        event_id: crypto.randomUUID(),
+        type: "pairing.approved",
+        occurred_at: new Date().toISOString(),
+        payload: { pairing, scoped_token: scopedToken },
+      } satisfies WsEventEnvelope;
+
+      const nodeId = pairing.node.node_id;
+      for (const peer of deps.connectionManager.allClients()) {
+        if (peer.role !== "node") continue;
+        if (peer.device_id !== nodeId) continue;
+        try {
+          peer.ws.send(JSON.stringify(evt));
+        } catch {
+          // ignore
+        }
+      }
+
+      if (deps.cluster) {
+        const cluster = deps.cluster;
+        void (async () => {
+          const nowMs = Date.now();
+          const peers = await cluster.connectionDirectory.listNonExpired(nowMs);
+          for (const peer of peers) {
+            if (peer.role !== "node") continue;
+            if (peer.device_id !== nodeId) continue;
+            if (peer.edge_id === cluster.edgeId) continue;
+            await cluster.outboxDal.enqueue(
+              "ws.direct",
+              { connection_id: peer.connection_id, message: evt },
+              { targetEdgeId: peer.edge_id },
+            );
+          }
+        })().catch(() => {
+          // ignore
+        });
+      }
+    }
     return ok(pairing);
   }
 

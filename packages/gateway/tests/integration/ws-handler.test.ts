@@ -107,11 +107,12 @@ function waitForJsonMessageMatching(
   ws: WebSocket,
   predicate: (msg: Record<string, unknown>) => boolean,
   timeoutMs = 5_000,
+  label = "unknown",
 ): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       ws.off("message", onMessage);
-      reject(new Error("message timeout"));
+      reject(new Error(`message timeout (${label})`));
     }, timeoutMs);
 
     const onMessage = (data: unknown) => {
@@ -725,6 +726,154 @@ describe("WS handler integration", () => {
     await waitForJsonMessageMatching(
       operator,
       (msg) => msg["type"] === "connect" && Object.prototype.hasOwnProperty.call(msg, "ok"),
+      5_000,
+      "operator.connect",
+    );
+
+    const node = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(adminToken));
+    clients.push(node);
+    await waitForOpen(node);
+
+    const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+    const pubkeyDer = publicKey.export({ format: "der", type: "spki" }) as Buffer;
+    const pubkeyB64Url = pubkeyDer.toString("base64url");
+    const deviceId = computeDeviceId(pubkeyDer);
+
+    node.send(
+      JSON.stringify({
+        request_id: "r-node-init",
+        type: "connect.init",
+        payload: {
+          protocol_rev: 2,
+          role: "node",
+          device: { device_id: deviceId, pubkey: pubkeyB64Url, label: "node-1" },
+          capabilities: [
+            {
+              id: descriptorIdForClientCapability("cli"),
+              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+            },
+          ],
+        },
+      }),
+    );
+
+    const initRes = await waitForJsonMessage(node);
+    const initResult = initRes["result"] as Record<string, unknown>;
+    const connectionId = String(initResult["connection_id"]);
+    const challenge = String(initResult["challenge"]);
+
+    const transcript = buildTranscript({
+      protocolRev: 2,
+      role: "node",
+      deviceId,
+      connectionId,
+      challenge,
+    });
+    const signature = sign(null, transcript, privateKey);
+    const proof = signature.toString("base64url");
+
+    node.send(
+      JSON.stringify({
+        request_id: "r-node-proof",
+        type: "connect.proof",
+        payload: { connection_id: connectionId, proof },
+      }),
+    );
+    await waitForJsonMessageMatching(
+      node,
+      (msg) => msg["type"] === "connect.proof" && Object.prototype.hasOwnProperty.call(msg, "ok"),
+      5_000,
+      "node.connect.proof",
+    );
+
+    const pairingEvt = await waitForJsonMessageMatching(
+      operator,
+      (msg) => msg["type"] === "pairing.requested" && Object.prototype.hasOwnProperty.call(msg, "event_id"),
+      5_000,
+      "pairing.requested",
+    );
+    expect(pairingEvt["type"]).toBe("pairing.requested");
+
+    const pairing = await container.nodePairingDal.getByNodeId(deviceId);
+    expect(pairing).toBeDefined();
+    expect(pairing!.status).toBe("pending");
+
+    operator.send(
+      JSON.stringify({
+        request_id: "r-approve",
+        type: "pairing.approve",
+        payload: {
+          pairing_id: pairing!.pairing_id,
+          reason: "ok",
+          trust_level: "remote",
+          capability_allowlist: [
+            {
+              id: descriptorIdForClientCapability("cli"),
+              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+            },
+          ],
+        },
+      }),
+    );
+    const approveRes = await waitForJsonMessageMatching(
+      operator,
+      (msg) => msg["type"] === "pairing.approve" && Object.prototype.hasOwnProperty.call(msg, "ok"),
+    );
+    expect(approveRes["ok"]).toBe(true);
+
+    const pairing2 = await container.nodePairingDal.getById(pairing!.pairing_id);
+    expect(pairing2).toBeDefined();
+    expect(pairing2!.status).toBe("approved");
+    expect((pairing2 as any)["trust_level"]).toBe("remote");
+    expect((pairing2 as any)["capability_allowlist"]).toEqual([
+      {
+        id: descriptorIdForClientCapability("cli"),
+        version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+      },
+    ]);
+
+    stopHeartbeat();
+  });
+
+  it("issues a node-scoped token on approval and invalidates it on revocation", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
+    const tokenStore = new TokenStore(homeDir);
+    const adminToken = await tokenStore.initialize();
+    const container = await createTestContainer();
+
+    const connectionManager = new ConnectionManager();
+    const { handleUpgrade, stopHeartbeat } = createWsHandler({
+      connectionManager,
+      protocolDeps: { connectionManager, nodePairingDal: container.nodePairingDal },
+      tokenStore,
+      nodePairingDal: container.nodePairingDal,
+    });
+
+    server = createServer();
+    server.on("upgrade", (req, socket, head) => {
+      handleUpgrade(req, socket, head);
+    });
+
+    const port = await new Promise<number>((resolve) => {
+      server!.listen(0, "127.0.0.1", () => {
+        const addr = server!.address();
+        resolve(typeof addr === "object" && addr ? addr.port : 0);
+      });
+    });
+
+    const operator = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(adminToken));
+    clients.push(operator);
+    await waitForOpen(operator);
+    operator.send(
+      JSON.stringify({
+        request_id: "r-op-connect",
+        type: "connect",
+        payload: { capabilities: [] },
+      }),
+    );
+    await waitForJsonMessageMatching(
+      operator,
+      (msg) => msg["type"] === "connect" && Object.prototype.hasOwnProperty.call(msg, "ok"),
     );
 
     const node = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(adminToken));
@@ -785,18 +934,24 @@ describe("WS handler integration", () => {
       operator,
       (msg) => msg["type"] === "pairing.requested" && Object.prototype.hasOwnProperty.call(msg, "event_id"),
     );
-    expect(pairingEvt["type"]).toBe("pairing.requested");
+    const pairingPayload = pairingEvt["payload"] as Record<string, unknown>;
+    const pairing = pairingPayload["pairing"] as Record<string, unknown>;
+    const pairingId = Number(pairing["pairing_id"]);
+    expect(pairingId).toBeGreaterThan(0);
 
-    const pairing = await container.nodePairingDal.getByNodeId(deviceId);
-    expect(pairing).toBeDefined();
-    expect(pairing!.status).toBe("pending");
+    const approvedEvtP = waitForJsonMessageMatching(
+      node,
+      (msg) => msg["type"] === "pairing.approved" && Object.prototype.hasOwnProperty.call(msg, "event_id"),
+      5_000,
+      "pairing.approved",
+    );
 
     operator.send(
       JSON.stringify({
         request_id: "r-approve",
         type: "pairing.approve",
         payload: {
-          pairing_id: pairing!.pairing_id,
+          pairing_id: pairingId,
           reason: "ok",
           trust_level: "remote",
           capability_allowlist: [
@@ -811,20 +966,93 @@ describe("WS handler integration", () => {
     const approveRes = await waitForJsonMessageMatching(
       operator,
       (msg) => msg["type"] === "pairing.approve" && Object.prototype.hasOwnProperty.call(msg, "ok"),
+      5_000,
+      "pairing.approve.response",
     );
     expect(approveRes["ok"]).toBe(true);
 
-    const pairing2 = await container.nodePairingDal.getById(pairing!.pairing_id);
-    expect(pairing2).toBeDefined();
-    expect(pairing2!.status).toBe("approved");
-    expect((pairing2 as any)["trust_level"]).toBe("remote");
-    expect((pairing2 as any)["capability_allowlist"]).toEqual([
-      {
-        id: descriptorIdForClientCapability("cli"),
-        version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-      },
-    ]);
+    const approvedEvt = await approvedEvtP;
+    const approvedPayload = approvedEvt["payload"] as Record<string, unknown>;
+    const scopedToken = String(approvedPayload["scoped_token"] ?? "");
+    expect(scopedToken.length).toBeGreaterThan(0);
+
+    node.close();
+    await waitForClose(node);
+
+    const node2 = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(scopedToken));
+    clients.push(node2);
+    await waitForOpen(node2);
+
+    node2.send(
+      JSON.stringify({
+        request_id: "r-node2-init",
+        type: "connect.init",
+        payload: {
+          protocol_rev: 2,
+          role: "node",
+          device: { device_id: deviceId, pubkey: pubkeyB64Url, label: "node-1" },
+          capabilities: [
+            {
+              id: descriptorIdForClientCapability("cli"),
+              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+            },
+          ],
+        },
+      }),
+    );
+
+    const init2Res = await waitForJsonMessage(node2);
+    const init2Result = init2Res["result"] as Record<string, unknown>;
+    const connectionId2 = String(init2Result["connection_id"]);
+    const challenge2 = String(init2Result["challenge"]);
+    const transcript2 = buildTranscript({
+      protocolRev: 2,
+      role: "node",
+      deviceId,
+      connectionId: connectionId2,
+      challenge: challenge2,
+    });
+    const signature2 = sign(null, transcript2, privateKey);
+    const proof2 = signature2.toString("base64url");
+
+    node2.send(
+      JSON.stringify({
+        request_id: "r-node2-proof",
+        type: "connect.proof",
+        payload: { connection_id: connectionId2, proof: proof2 },
+      }),
+    );
+    await waitForJsonMessageMatching(
+      node2,
+      (msg) => msg["type"] === "connect.proof" && Object.prototype.hasOwnProperty.call(msg, "ok"),
+      5_000,
+      "node2.connect.proof",
+    );
+
+    operator.send(
+      JSON.stringify({
+        request_id: "r-revoke",
+        type: "pairing.revoke",
+        payload: { pairing_id: pairingId, reason: "revoked" },
+      }),
+    );
+    const revokeRes = await waitForJsonMessageMatching(
+      operator,
+      (msg) => msg["type"] === "pairing.revoke" && Object.prototype.hasOwnProperty.call(msg, "ok"),
+      5_000,
+      "pairing.revoke.response",
+    );
+    expect(revokeRes["ok"]).toBe(true);
+
+    node2.close();
+    await waitForClose(node2);
+
+    const node3 = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(scopedToken));
+    clients.push(node3);
+    await waitForOpen(node3);
+    const close3 = await waitForClose(node3);
+    expect(close3.code).toBe(4001);
 
     stopHeartbeat();
-  });
+  }, 15_000);
 });
