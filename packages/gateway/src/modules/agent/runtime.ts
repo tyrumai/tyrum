@@ -124,8 +124,8 @@ function buildAgentTurnKey(
   containerKind: NormalizedContainerKind,
   threadId: string,
 ): string {
-  const safeChannel = encodeKeyPart(channel);
-  const safeThread = encodeKeyPart(threadId);
+  const safeChannel = encodeKeyPart(channel.trim());
+  const safeThread = encodeKeyPart(threadId.trim());
   return `agent:${agentId}:${safeChannel}:${containerKind}:${safeThread}`;
 }
 

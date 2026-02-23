@@ -340,6 +340,33 @@ describe("AgentRuntime", () => {
     expect(first!.key).not.toBe(second!.key);
   });
 
+  it("trims channel and thread_id when building execution turn keys", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("ok"),
+      fetchImpl: fetch404,
+    });
+
+    await runtime.turn({
+      channel: " test ",
+      thread_id: " thread-1 ",
+      message: "m1",
+    });
+
+    const run = await container.db.get<{ key: string }>(
+      "SELECT key FROM execution_runs ORDER BY rowid DESC LIMIT 1",
+    );
+    expect(run).toBeTruthy();
+    expect(run!.key).toBe("agent:default:test:channel:thread-1");
+  });
+
   it("does not execute other agents' queued runs when ticking inline", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({
