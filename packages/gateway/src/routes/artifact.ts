@@ -4,7 +4,7 @@
 
 import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
-import { ArtifactId, ArtifactRef } from "@tyrum/schemas";
+import { ArtifactId, ArtifactKind, ArtifactRef } from "@tyrum/schemas";
 import type { ArtifactRef as ArtifactRefT, WsEventEnvelope } from "@tyrum/schemas";
 import type { ArtifactStore } from "../modules/artifact/store.js";
 import type { Logger } from "../modules/observability/logger.js";
@@ -87,12 +87,59 @@ function rowToArtifactRef(row: ExecutionArtifactRow): ArtifactRefT | undefined {
   return parsed.success ? parsed.data : undefined;
 }
 
+function synthArtifactRefFromRow(row: ExecutionArtifactRow): ArtifactRefT {
+  const labels = safeJsonParse(row.labels_json, [] as unknown[]);
+  const metadata = safeJsonParse(row.metadata_json, undefined as unknown);
+
+  const kindCandidate = ArtifactKind.safeParse(row.kind);
+  const kind: ArtifactRefT["kind"] = kindCandidate.success ? kindCandidate.data : "other";
+
+  const mimeType = row.mime_type?.trim() || undefined;
+  const sizeBytes =
+    typeof row.size_bytes === "number" && Number.isInteger(row.size_bytes) && row.size_bytes >= 0
+      ? row.size_bytes
+      : undefined;
+  const sha256 =
+    typeof row.sha256 === "string" && /^[0-9a-f]{64}$/i.test(row.sha256) ? row.sha256 : undefined;
+  const canonicalUri = `artifact://${row.artifact_id}`;
+
+  const candidate = {
+    artifact_id: row.artifact_id,
+    uri: canonicalUri,
+    kind,
+    created_at: normalizeDbDateTime(row.created_at) ?? new Date().toISOString(),
+    mime_type: mimeType,
+    size_bytes: sizeBytes,
+    sha256,
+    labels: Array.isArray(labels) ? labels.filter((l): l is string => typeof l === "string" && l.trim() !== "") : [],
+    metadata,
+  };
+
+  const parsed = ArtifactRef.safeParse(candidate);
+  if (parsed.success) return parsed.data;
+  return {
+    artifact_id: row.artifact_id,
+    uri: canonicalUri,
+    kind,
+    created_at: new Date().toISOString(),
+    labels: [],
+  };
+}
+
 async function enqueueWsEvent(db: SqlDb, evt: WsEventEnvelope): Promise<void> {
   await db.run(
     `INSERT INTO outbox (topic, target_edge_id, payload_json)
      VALUES (?, ?, ?)`,
     ["ws.broadcast", null, JSON.stringify({ message: evt })],
   );
+}
+
+function requestIdForAudit(c: { req: { header(name: string): string | undefined }; res: { headers: Headers } }): string | undefined {
+  const fromRequest = c.req.header("x-request-id")?.trim();
+  if (fromRequest) return fromRequest;
+  const fromResponse = c.res.headers.get("x-request-id")?.trim();
+  if (fromResponse) return fromResponse;
+  return undefined;
 }
 
 async function evaluateAccessDecision(
@@ -323,10 +370,7 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
       c.header("Cache-Control", "no-store");
 
       // Best-effort: emit an audit-style event.
-      const ref = rowToArtifactRef(row);
-      if (!ref) {
-        return c.json({ error: "invalid_state", message: "artifact metadata is invalid" }, 500);
-      }
+      const ref = rowToArtifactRef(row) ?? synthArtifactRefFromRow(row);
       try {
         const evt: WsEventEnvelope = {
           event_id: randomUUID(),
@@ -337,7 +381,7 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
             artifact: ref,
             fetched_by: {
               kind: "http",
-              request_id: c.res.headers.get("x-request-id") ?? undefined,
+              request_id: requestIdForAudit(c),
             },
           },
         };
@@ -376,7 +420,7 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
           artifact: ref,
           fetched_by: {
             kind: "http",
-            request_id: c.res.headers.get("x-request-id") ?? undefined,
+            request_id: requestIdForAudit(c),
           },
         },
       };

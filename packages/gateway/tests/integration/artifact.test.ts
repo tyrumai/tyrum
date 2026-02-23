@@ -159,6 +159,93 @@ describe("artifact routes", () => {
     await container.db.close();
   });
 
+  it("GET /runs/:runId/artifacts/:id emits artifact.fetched with request_id for traceability", async () => {
+    const container = await createTestContainer();
+    const app = createApp(container);
+    const scope: ExecutionScopeIds = {
+      jobId: "job-artifacts-request-id",
+      runId: "run-artifacts-request-id",
+      stepId: "step-artifacts-request-id",
+      attemptId: "attempt-artifacts-request-id",
+    };
+    await seedExecutionScope(container.db, scope);
+
+    const ref = await container.artifactStore.put({
+      kind: "log",
+      mime_type: "text/plain",
+      body: Buffer.from("hello", "utf8"),
+      labels: ["log"],
+      metadata: { test: true },
+    });
+
+    await container.db.run(
+      `INSERT INTO execution_artifacts (
+         artifact_id,
+         workspace_id,
+         agent_id,
+         run_id,
+         step_id,
+         attempt_id,
+         kind,
+         uri,
+         created_at,
+         mime_type,
+         size_bytes,
+         sha256,
+         labels_json,
+         metadata_json,
+         sensitivity,
+         policy_snapshot_id
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        ref.artifact_id,
+        "default",
+        "agent-1",
+        scope.runId,
+        scope.stepId,
+        scope.attemptId,
+        ref.kind,
+        ref.uri,
+        ref.created_at,
+        ref.mime_type ?? null,
+        ref.size_bytes ?? null,
+        ref.sha256 ?? null,
+        JSON.stringify(ref.labels ?? []),
+        JSON.stringify(ref.metadata ?? {}),
+        "normal",
+        null,
+      ],
+    );
+
+    const requestId = "req-artifacts-123";
+    const res = await app.request(`/runs/${scope.runId}/artifacts/${ref.artifact_id}`, {
+      headers: {
+        "x-request-id": requestId,
+      },
+    });
+    expect(res.status).toBe(200);
+
+    const outbox = await container.db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ?",
+      ["ws.broadcast"],
+    );
+    const fetched = outbox
+      .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string; payload?: unknown } })
+      .map((row) => row.message)
+      .find((message) => message?.type === "artifact.fetched");
+
+    expect(fetched).toBeTruthy();
+    expect(fetched?.payload).toMatchObject({
+      fetched_by: {
+        kind: "http",
+        request_id: requestId,
+      },
+    });
+
+    await container.db.close();
+  });
+
   it("GET /runs/:runId/artifacts/:id redirects to a signed URL when the store supports it", async () => {
     const container = await createTestContainer();
     const scope: ExecutionScopeIds = {
@@ -206,6 +293,83 @@ describe("artifact routes", () => {
         scope.attemptId,
         ref.kind,
         ref.uri,
+        ref.created_at,
+        ref.mime_type ?? null,
+        ref.size_bytes ?? null,
+        ref.sha256 ?? null,
+        JSON.stringify(ref.labels ?? []),
+        JSON.stringify(ref.metadata ?? {}),
+        "normal",
+        null,
+      ],
+    );
+
+    const signedUrl = `https://objects.example.test/${ref.artifact_id}?sig=test`;
+    const put = container.artifactStore.put.bind(container.artifactStore);
+    const get = vi.fn(container.artifactStore.get.bind(container.artifactStore));
+
+    container.artifactStore = {
+      put,
+      get,
+      getSignedUrl: vi.fn(async () => signedUrl),
+    };
+
+    const app = createApp(container);
+    const res = await app.request(`/runs/${scope.runId}/artifacts/${ref.artifact_id}`);
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(signedUrl);
+    expect(get).not.toHaveBeenCalled();
+
+    await container.db.close();
+  });
+
+  it("GET /runs/:runId/artifacts/:id still redirects when DB artifact metadata is invalid (signed URL path)", async () => {
+    const container = await createTestContainer();
+    const scope: ExecutionScopeIds = {
+      jobId: "job-artifacts-signed-url-invalid-meta",
+      runId: "run-artifacts-signed-url-invalid-meta",
+      stepId: "step-artifacts-signed-url-invalid-meta",
+      attemptId: "attempt-artifacts-signed-url-invalid-meta",
+    };
+    await seedExecutionScope(container.db, scope);
+
+    const ref = await container.artifactStore.put({
+      kind: "log",
+      mime_type: "text/plain",
+      body: Buffer.from("hello", "utf8"),
+      labels: ["log"],
+      metadata: { test: true },
+    });
+
+    await container.db.run(
+      `INSERT INTO execution_artifacts (
+         artifact_id,
+         workspace_id,
+         agent_id,
+         run_id,
+         step_id,
+         attempt_id,
+         kind,
+         uri,
+         created_at,
+         mime_type,
+         size_bytes,
+         sha256,
+         labels_json,
+         metadata_json,
+         sensitivity,
+         policy_snapshot_id
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        ref.artifact_id,
+        "default",
+        "agent-1",
+        scope.runId,
+        scope.stepId,
+        scope.attemptId,
+        ref.kind,
+        "not-a-valid-artifact-uri",
         ref.created_at,
         ref.mime_type ?? null,
         ref.size_bytes ?? null,
