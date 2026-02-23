@@ -229,6 +229,56 @@ describe("TokenStore", () => {
     await expect(reloaded.initialize()).rejects.toThrow();
   });
 
+  it("does not lose revocations when revokeDeviceToken is called concurrently", async () => {
+    const store = new TokenStore(tempDir);
+    await store.initialize();
+
+    const token1 = await store.issueDeviceToken({
+      deviceId: "dev_client_concurrent_1",
+      role: "client",
+      scopes: ["operator.read"],
+      ttlSeconds: 300,
+    });
+    const token2 = await store.issueDeviceToken({
+      deviceId: "dev_client_concurrent_2",
+      role: "client",
+      scopes: ["operator.read"],
+      ttlSeconds: 300,
+    });
+
+    const storeWithPrivates = store as unknown as {
+      persistRevokedDeviceTokenIds: (ids?: Iterable<string>) => Promise<void>;
+    };
+    const originalPersist = storeWithPrivates.persistRevokedDeviceTokenIds.bind(store);
+
+    let calls = 0;
+    const persistSpy = vi
+      .spyOn(storeWithPrivates, "persistRevokedDeviceTokenIds")
+      .mockImplementation(async (ids) => {
+        calls += 1;
+        if (calls === 1) {
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        await originalPersist(ids);
+      });
+
+    try {
+      const [revoked1, revoked2] = await Promise.all([
+        store.revokeDeviceToken(token1.token),
+        store.revokeDeviceToken(token2.token),
+      ]);
+      expect(revoked1).toBe(true);
+      expect(revoked2).toBe(true);
+    } finally {
+      persistSpy.mockRestore();
+    }
+
+    const reloaded = new TokenStore(tempDir);
+    await reloaded.initialize();
+    expect(reloaded.authenticate(token1.token)).toBeNull();
+    expect(reloaded.authenticate(token2.token)).toBeNull();
+  });
+
   it("rejects expired device tokens", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-02-23T00:00:00.000Z"));

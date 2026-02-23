@@ -123,6 +123,7 @@ function toDeviceTokenPayload(value: unknown): DeviceTokenPayload | undefined {
 export class TokenStore {
   private token: string | undefined;
   private revokedDeviceTokenIds = new Set<string>();
+  private revocationWriteChain: Promise<void> = Promise.resolve();
 
   constructor(private readonly tyrumHome: string) {}
 
@@ -269,13 +270,16 @@ export class TokenStore {
       allowRevoked: true,
     });
     if (!payload) return false;
-    if (this.revokedDeviceTokenIds.has(payload.jti)) return false;
 
-    const nextRevokedDeviceTokenIds = new Set(this.revokedDeviceTokenIds);
-    nextRevokedDeviceTokenIds.add(payload.jti);
-    await this.persistRevokedDeviceTokenIds(nextRevokedDeviceTokenIds);
-    this.revokedDeviceTokenIds = nextRevokedDeviceTokenIds;
-    return true;
+    return this.withRevocationWriteLock(async () => {
+      if (this.revokedDeviceTokenIds.has(payload.jti)) return false;
+
+      const nextRevokedDeviceTokenIds = new Set(this.revokedDeviceTokenIds);
+      nextRevokedDeviceTokenIds.add(payload.jti);
+      await this.persistRevokedDeviceTokenIds(nextRevokedDeviceTokenIds);
+      this.revokedDeviceTokenIds = nextRevokedDeviceTokenIds;
+      return true;
+    });
   }
 
   /** Get the current token (undefined until initialize() is called). */
@@ -396,10 +400,19 @@ export class TokenStore {
     await mkdir(this.tyrumHome, { recursive: true });
     const sortedIds = [...ids].sort();
     const payload = JSON.stringify(sortedIds, null, 2) + "\n";
-    const tempPath = `${revocationPath}.tmp`;
+    const tempPath = `${revocationPath}.${randomUUID()}.tmp`;
     await writeFile(tempPath, payload, {
       mode: 0o600,
     });
     await rename(tempPath, revocationPath);
+  }
+
+  private withRevocationWriteLock<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.revocationWriteChain.then(fn, fn);
+    this.revocationWriteChain = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
   }
 }
