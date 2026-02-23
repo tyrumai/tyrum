@@ -20,10 +20,27 @@ function isSafeContractFilename(filename: string): boolean {
 
 export function createContractRoutes(): Hono {
   const contracts = new Hono();
-  const jsonSchemaDir = resolveSchemasJsonSchemaDir();
-  const jsonSchemaDirResolved = resolve(jsonSchemaDir);
+  let jsonSchemaDir: string | undefined;
+  let jsonSchemaDirResolved: string | undefined;
+  try {
+    jsonSchemaDir = resolveSchemasJsonSchemaDir();
+    jsonSchemaDirResolved = resolve(jsonSchemaDir);
+  } catch {
+    jsonSchemaDir = undefined;
+    jsonSchemaDirResolved = undefined;
+  }
 
   contracts.get("/contracts/jsonschema/catalog.json", async (c) => {
+    if (!jsonSchemaDir) {
+      return c.json(
+        {
+          error: "contracts_unavailable",
+          message: "JSON Schema catalog unavailable.",
+        },
+        500,
+      );
+    }
+
     try {
       const raw = await readFile(join(jsonSchemaDir, "catalog.json"), "utf-8");
       const parsed: unknown = JSON.parse(raw);
@@ -60,6 +77,16 @@ export function createContractRoutes(): Hono {
   });
 
   contracts.get("/contracts/jsonschema/:file", async (c) => {
+    if (!jsonSchemaDirResolved) {
+      return c.json(
+        {
+          error: "contracts_unavailable",
+          message: "Contract schema unavailable.",
+        },
+        500,
+      );
+    }
+
     const file = c.req.param("file")?.trim() || "";
     if (!isSafeContractFilename(file) || file === "catalog.json") {
       return c.json(
