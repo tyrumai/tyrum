@@ -63,6 +63,7 @@ import type { AgentRegistry } from "../modules/agent/registry.js";
 import type { ExecutionEngine } from "../modules/execution/engine.js";
 import type { PolicyService } from "../modules/policy/service.js";
 import type { PluginRegistry } from "../modules/plugins/registry.js";
+import type { LifecycleHooksRuntime } from "../modules/hooks/runtime.js";
 import type { Logger } from "../modules/observability/logger.js";
 import type { SqlDb, StateStoreKind } from "../statestore/types.js";
 import type { ModelsDevService } from "../modules/models/models-dev-service.js";
@@ -100,6 +101,7 @@ export interface ProtocolDeps {
   policyService?: PolicyService;
   plugins?: PluginRegistry;
   modelsDev?: ModelsDevService;
+  hooks?: LifecycleHooksRuntime;
   presenceTtlMs?: number;
 
   /**
@@ -762,6 +764,21 @@ export async function handleClientMessage(
       modelsDev: deps.modelsDev,
       agents: deps.agents,
     });
+
+    if (deps.hooks) {
+      void deps.hooks
+        .fire({
+          event: "command.execute",
+          metadata: { command: parsedReq.data.payload.command },
+        })
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          deps.logger?.warn("hooks.fire_failed", {
+            event: "command.execute",
+            error: message,
+          });
+        });
+    }
 
     const result = WsCommandExecuteResult.parse({
       output: res.output,

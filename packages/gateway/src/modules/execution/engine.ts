@@ -4,6 +4,7 @@ import type {
   AttemptCost as AttemptCostT,
   ClientCapability as ClientCapabilityT,
   ExecutionBudgets as ExecutionBudgetsT,
+  ExecutionTrigger as ExecutionTriggerT,
   WsEventEnvelope as WsEventEnvelopeT,
   WsRequestEnvelope as WsRequestEnvelopeT,
 } from "@tyrum/schemas";
@@ -11,6 +12,7 @@ import {
   evaluatePostcondition,
   Lane,
   DEFAULT_WORKSPACE_ID,
+  PolicyBundle,
   PostconditionError,
   requiredCapability,
   requiresPostcondition,
@@ -24,6 +26,7 @@ import type { Logger } from "../observability/logger.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { PolicyService } from "../policy/service.js";
 import { canonicalizeToolMatchTarget } from "../policy/match-target.js";
+import { wildcardMatch } from "../policy/wildcard.js";
 import type { SecretProvider } from "../secret/provider.js";
 import { collectSecretHandleIds } from "../secret/collect-secret-handle-ids.js";
 
@@ -62,6 +65,7 @@ export interface EnqueuePlanInput {
   steps: ActionPrimitiveT[];
   policySnapshotId?: string;
   budgets?: ExecutionBudgetsT;
+  trigger?: ExecutionTriggerT;
 }
 
 export interface EnqueuePlanResult {
@@ -154,6 +158,106 @@ function normalizePositiveInt(value: unknown): number | undefined {
   if (n === undefined) return undefined;
   if (n <= 0) return undefined;
   return n;
+}
+
+type PolicyDecision = "allow" | "deny" | "require_approval";
+
+type PolicyDomainConfig = {
+  default: PolicyDecision;
+  allow: readonly string[];
+  require_approval: readonly string[];
+  deny: readonly string[];
+};
+
+function isPolicyDecision(value: unknown): value is PolicyDecision {
+  return value === "allow" || value === "deny" || value === "require_approval";
+}
+
+function normalizePolicyDomain(value: unknown, fallbackDefault: PolicyDecision): PolicyDomainConfig {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { default: fallbackDefault, allow: [], require_approval: [], deny: [] };
+  }
+
+  const obj = value as Record<string, unknown>;
+  const defaultDecision = isPolicyDecision(obj["default"]) ? obj["default"] : fallbackDefault;
+  const allow = Array.isArray(obj["allow"]) ? obj["allow"].filter((v): v is string => typeof v === "string") : [];
+  const requireApproval = Array.isArray(obj["require_approval"])
+    ? obj["require_approval"].filter((v): v is string => typeof v === "string")
+    : [];
+  const deny = Array.isArray(obj["deny"]) ? obj["deny"].filter((v): v is string => typeof v === "string") : [];
+
+  return {
+    default: defaultDecision,
+    allow,
+    require_approval: requireApproval,
+    deny,
+  };
+}
+
+function evaluatePolicyDomain(domain: PolicyDomainConfig, matchTarget: string): PolicyDecision {
+  const target = matchTarget.trim();
+
+  for (const pat of domain.deny) {
+    if (wildcardMatch(pat, target)) return "deny";
+  }
+  for (const pat of domain.require_approval) {
+    if (wildcardMatch(pat, target)) return "require_approval";
+  }
+  for (const pat of domain.allow) {
+    if (wildcardMatch(pat, target)) return "allow";
+  }
+
+  return domain.default;
+}
+
+function mostRestrictivePolicy(a: PolicyDecision, b: PolicyDecision): PolicyDecision {
+  if (a === "deny" || b === "deny") return "deny";
+  if (a === "require_approval" || b === "require_approval") return "require_approval";
+  return "allow";
+}
+
+function normalizeUrlForPolicy(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return "";
+  try {
+    const url = new URL(trimmed);
+    const pathname = url.pathname || "/";
+    return `${url.protocol}//${url.host}${pathname}`;
+  } catch {
+    const q = trimmed.indexOf("?");
+    return q === -1 ? trimmed : trimmed.slice(0, q);
+  }
+}
+
+function buildExecCommandFromCliArgs(args: unknown): string | undefined {
+  if (!args || typeof args !== "object" || Array.isArray(args)) return undefined;
+  const obj = args as Record<string, unknown>;
+  const cmd = typeof obj["cmd"] === "string" ? obj["cmd"].trim() : "";
+  if (!cmd) return undefined;
+  const cmdArgs = Array.isArray(obj["args"]) ? obj["args"].filter((v): v is string => typeof v === "string") : [];
+  return [cmd, ...cmdArgs].join(" ").trim();
+}
+
+function mapActionToPolicyTool(action: ActionPrimitiveT): {
+  toolId: string;
+  toolArgs: unknown;
+  url?: string;
+} {
+  if (action.type === "Http") {
+    const args = action.args ?? {};
+    const url =
+      args && typeof args === "object" && !Array.isArray(args) && typeof (args as Record<string, unknown>)["url"] === "string"
+        ? String((args as Record<string, unknown>)["url"])
+        : undefined;
+    return { toolId: "tool.http.fetch", toolArgs: args, url };
+  }
+
+  if (action.type === "CLI") {
+    const command = buildExecCommandFromCliArgs(action.args) ?? "";
+    return { toolId: "tool.exec", toolArgs: { command } };
+  }
+
+  return { toolId: `action.${action.type}`, toolArgs: action.args ?? {} };
 }
 
 const KNOWN_CAPABILITIES = new Set<string>([
@@ -611,15 +715,34 @@ export class ExecutionEngine {
     const runId = randomUUID();
     const workspaceId = normalizeWorkspaceId(input.workspaceId);
 
-    const trigger = {
-      kind: "session",
-      key: input.key,
-      lane: input.lane,
-      metadata: {
-        plan_id: input.planId,
-        request_id: input.requestId,
-      },
+    const baseMetadata = {
+      plan_id: input.planId,
+      request_id: input.requestId,
     };
+
+    const trigger = (() => {
+      if (!input.trigger) {
+        return {
+          kind: "session",
+          key: input.key,
+          lane: input.lane,
+          metadata: baseMetadata,
+        };
+      }
+
+      const provided = input.trigger as Record<string, unknown>;
+      const metadata =
+        provided["metadata"] && typeof provided["metadata"] === "object" && !Array.isArray(provided["metadata"])
+          ? { ...(provided["metadata"] as Record<string, unknown>), ...baseMetadata }
+          : baseMetadata;
+
+      return {
+        ...provided,
+        key: typeof provided["key"] === "string" ? provided["key"] : input.key,
+        lane: typeof provided["lane"] === "string" ? provided["lane"] : input.lane,
+        metadata,
+      };
+    })();
 
     const triggerJson = JSON.stringify(trigger);
     const inputJson = JSON.stringify({
@@ -1118,8 +1241,9 @@ export class ExecutionEngine {
         budgets_json: string | null;
         budget_overridden_at: string | Date | null;
         started_at: string | Date | null;
+        policy_snapshot_id: string | null;
       }>(
-        `SELECT budgets_json, budget_overridden_at, started_at
+        `SELECT budgets_json, budget_overridden_at, started_at, policy_snapshot_id
          FROM execution_runs
          WHERE run_id = ?`,
         [run.run_id],
@@ -1205,6 +1329,149 @@ export class ExecutionEngine {
             reason: "budget" as const,
             approvalId: paused.approvalId,
           };
+        }
+      }
+
+      // Enforce per-step policy decisions when a run carries a snapshot.
+      const policySnapshotId = budgetRow?.policy_snapshot_id ?? null;
+      if (policySnapshotId) {
+        const policyRow = await tx.get<{ bundle_json: string }>(
+          "SELECT bundle_json FROM policy_snapshots WHERE policy_snapshot_id = ?",
+          [policySnapshotId],
+        );
+        const policyBundleRaw = safeJsonParse(policyRow?.bundle_json ?? null, undefined as unknown);
+        const policyBundle = (() => {
+          try {
+            return PolicyBundle.parse(policyBundleRaw);
+          } catch {
+            return PolicyBundle.parse({ v: 1 });
+          }
+        })();
+
+        let parsedAction: ActionPrimitiveT | undefined;
+        try {
+          parsedAction = JSON.parse(next.action_json) as ActionPrimitiveT;
+        } catch {
+          parsedAction = undefined;
+        }
+
+        if (parsedAction) {
+          const mapped = mapActionToPolicyTool(parsedAction);
+          const toolMatchTarget = canonicalizeToolMatchTarget(mapped.toolId, mapped.toolArgs);
+
+          const toolsDomain = normalizePolicyDomain(policyBundle.tools, "require_approval");
+          const egressDomain = normalizePolicyDomain(policyBundle.network_egress, "require_approval");
+
+          const toolDecision = evaluatePolicyDomain(toolsDomain, mapped.toolId);
+          const egressDecision: PolicyDecision = mapped.url
+            ? (() => {
+                const normalizedUrl = normalizeUrlForPolicy(mapped.url);
+                if (normalizedUrl.length === 0) return "allow";
+                return evaluatePolicyDomain(egressDomain, normalizedUrl);
+              })()
+            : "allow";
+
+          const decision = mostRestrictivePolicy(toolDecision, egressDecision);
+
+          if (decision === "deny") {
+            const updated = await tx.run(
+              `UPDATE execution_steps
+               SET status = 'failed'
+               WHERE step_id = ? AND status = 'queued'`,
+              [next.step_id],
+            );
+
+            if (updated.changes === 1) {
+              const attemptAgg = await tx.get<{ n: number }>(
+                "SELECT COALESCE(MAX(attempt), 0) AS n FROM execution_attempts WHERE step_id = ?",
+                [next.step_id],
+              );
+              const attemptNum = (attemptAgg?.n ?? 0) + 1;
+              const attemptId = randomUUID();
+
+              await tx.run(
+                `INSERT INTO execution_attempts (
+                   attempt_id,
+                   step_id,
+                   attempt,
+                   status,
+                   started_at,
+                   finished_at,
+                   result_json,
+                   error,
+                   artifacts_json,
+                   metadata_json
+                 ) VALUES (?, ?, ?, 'failed', ?, ?, NULL, ?, '[]', ?)`,
+                [
+                  attemptId,
+                  next.step_id,
+                  attemptNum,
+                  clock.nowIso,
+                  clock.nowIso,
+                  this.redactText(`policy denied ${mapped.toolId}`).trim() || "policy denied",
+                  JSON.stringify(
+                    this.redactUnknown({
+                      policy_snapshot_id: policySnapshotId,
+                      tool_id: mapped.toolId,
+                      tool_match_target: toolMatchTarget,
+                      url: mapped.url,
+                      decision,
+                    }),
+                  ),
+                ],
+              );
+
+              await this.emitStepUpdatedTx(tx, next.step_id);
+              await this.emitAttemptUpdatedTx(tx, attemptId);
+              return { kind: "recovered" as const };
+            }
+          }
+
+          if (decision === "require_approval") {
+            const approvalStatus = next.approval_id
+              ? await tx.get<{ status: string }>(
+                  "SELECT status FROM approvals WHERE id = ? LIMIT 1",
+                  [next.approval_id],
+                )
+              : undefined;
+            const alreadyApproved = approvalStatus?.status === "approved";
+
+            if (!alreadyApproved) {
+              const planId = parsePlanIdFromTriggerJson(run.trigger_json) ?? run.run_id;
+              const paused = await this.pauseRunForApproval(
+                tx,
+                {
+                  planId,
+                  stepIndex: next.step_index,
+                  runId: run.run_id,
+                  jobId: run.job_id,
+                  stepId: next.step_id,
+                  workspaceId: run.workspace_id,
+                  key: run.key,
+                  lane: run.lane,
+                  workerId: input.workerId,
+                },
+                {
+                  kind: "policy",
+                  prompt: "Policy approval required to continue execution",
+                  detail: `policy requires approval for '${mapped.toolId}' (${toolMatchTarget || "unknown"})`,
+                  context: {
+                    source: "execution-engine",
+                    policy_snapshot_id: policySnapshotId,
+                    tool_id: mapped.toolId,
+                    tool_match_target: toolMatchTarget,
+                    url: mapped.url,
+                    decision,
+                  },
+                },
+              );
+              return {
+                kind: "paused" as const,
+                reason: "policy" as const,
+                approvalId: paused.approvalId,
+              };
+            }
+          }
         }
       }
 

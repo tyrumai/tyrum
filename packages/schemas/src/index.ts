@@ -461,6 +461,12 @@ export {
 } from "./execution.js";
 
 export {
+  LifecycleHookEvent,
+  LifecycleHookDefinition,
+  LifecycleHooksConfig,
+} from "./lifecycle-hooks.js";
+
+export {
   PluginId,
   PluginContributions,
   PluginPermissions,

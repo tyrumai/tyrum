@@ -42,6 +42,8 @@ import { PluginRegistry, resolveBundledPluginsDirFrom } from "./modules/plugins/
 import { installPluginFromDir } from "./modules/plugins/installer.js";
 import { AgentRegistry } from "./modules/agent/registry.js";
 import { isRecord, parseJsonOrYaml } from "./utils/parse-json-or-yaml.js";
+import { loadLifecycleHooksFromHome } from "./modules/hooks/config.js";
+import { LifecycleHooksRuntime } from "./modules/hooks/runtime.js";
 
 // Re-export for library consumers
 export { VERSION } from "./version.js";
@@ -894,6 +896,8 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   // Initialize secret provider (defaults per ADR-0007; override via TYRUM_SECRET_PROVIDER)
   const secretProvider = await createSecretProviderFromEnv(tyrumHome, token);
 
+  const lifecycleHooks = await loadLifecycleHooksFromHome(tyrumHome);
+
   if (container.telegramBot) {
     console.log("Telegram bot initialized");
   }
@@ -961,6 +965,22 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
           logger,
         })
       : undefined;
+
+  const hooksRuntime =
+    lifecycleHooks.length > 0
+      ? new LifecycleHooksRuntime({
+          db: container.db,
+          engine:
+            edgeEngine ??
+            new ExecutionEngine({
+              db: container.db,
+              redactionEngine: container.redactionEngine,
+              logger,
+            }),
+          policyService: container.policyService,
+          hooks: lifecycleHooks,
+        })
+      : undefined;
   const protocolDeps: ProtocolDeps = {
     connectionManager,
     logger,
@@ -988,6 +1008,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
           connectionDirectory,
         }
       : undefined,
+    hooks: hooksRuntime,
     onApprovalDecision: (
       approvalId: number,
       approved: boolean,
@@ -1159,6 +1180,18 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     console.log(`Tyrum gateway v${VERSION} started in role '${role}'.`);
   }
 
+  if (hooksRuntime) {
+    void hooksRuntime
+      .fire({
+        event: "gateway.start",
+        metadata: { instance_id: instanceId, role },
+      })
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        logger.warn("hooks.fire_failed", { event: "gateway.start", error: message });
+      });
+  }
+
   const shouldRunWorker = role === "all" || role === "worker";
   const workerLoop = shouldRunWorker
     ? (() => {
@@ -1262,6 +1295,12 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
       [
         closeServer,
         closeWss,
+        hooksRuntime
+          ? hooksRuntime.fire({
+              event: "gateway.shutdown",
+              metadata: { signal, instance_id: instanceId, role },
+            })
+          : Promise.resolve(),
         agents?.shutdown() ?? Promise.resolve(),
         otel.shutdown(),
         workerLoop?.done ?? Promise.resolve(),

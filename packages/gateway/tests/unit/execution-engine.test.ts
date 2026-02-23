@@ -173,6 +173,66 @@ describe("ExecutionEngine (normalized)", () => {
     expect(runDone?.status).toBe("succeeded");
   });
 
+  it("pauses when policy requires approval for a step and resumes after approval", async () => {
+    db = openTestSqliteDb();
+
+    const snapshotDal = new PolicySnapshotDal(db);
+    const snapshot = await snapshotDal.getOrCreate(
+      PolicyBundle.parse({
+        v: 1,
+        tools: { default: "allow", allow: [], require_approval: [], deny: [] },
+        network_egress: { default: "require_approval", allow: [], require_approval: [], deny: [] },
+      }),
+    );
+
+    const engine = new ExecutionEngine({
+      db,
+      clock: () => ({ nowMs: Date.now(), nowIso: new Date().toISOString() }),
+    });
+    await engine.enqueuePlan({
+      key: "hook:550e8400-e29b-41d4-a716-446655440000",
+      lane: "cron",
+      planId: "plan-policy-1",
+      requestId: "req-policy-1",
+      policySnapshotId: snapshot.policy_snapshot_id,
+      steps: [action("Http", { url: "https://example.com/" })],
+    });
+
+    const mockExecutor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => {
+        return { success: true, result: { ok: true } };
+      }),
+    };
+
+    // First tick pauses before starting step 0 due to policy.
+    expect(await engine.workerTick({ workerId: "w1", executor: mockExecutor })).toBe(true);
+    expect((mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(0);
+
+    const runPaused = await db.get<{ status: string; paused_reason: string | null }>(
+      "SELECT status, paused_reason FROM execution_runs LIMIT 1",
+    );
+    expect(runPaused?.status).toBe("paused");
+    expect(runPaused?.paused_reason).toBe("policy");
+
+    const approval = await db.get<{ id: number; kind: string; resume_token: string | null }>(
+      "SELECT id, kind, resume_token FROM approvals WHERE status = 'pending' ORDER BY id ASC LIMIT 1",
+    );
+    expect(approval?.kind).toBe("policy");
+    expect(approval?.resume_token).toBeTruthy();
+
+    await db.run("UPDATE approvals SET status = 'approved' WHERE id = ?", [approval!.id]);
+    await engine.resumeRun(approval!.resume_token!);
+
+    await drain(engine, "w1", mockExecutor);
+
+    expect((mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(1);
+
+    const runDone = await db.get<{ status: string }>(
+      "SELECT status FROM execution_runs LIMIT 1",
+    );
+    expect(runDone?.status).toBe("succeeded");
+  });
+
   it("records attempt finished_at after started_at", async () => {
     db = openTestSqliteDb();
 
