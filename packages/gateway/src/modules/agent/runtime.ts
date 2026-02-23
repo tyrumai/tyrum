@@ -726,6 +726,19 @@ export class AgentRuntime {
             await secretProvider.revoke(oldRefreshHandleId).catch(() => {});
           }
 
+          // Keep the in-memory snapshot in sync so subsequent calls in the same turn
+          // don't try to resolve a revoked handle.
+          profile.secret_handles = updated.secret_handles;
+          profile.expires_at = updated.expires_at;
+          profile.updated_at = updated.updated_at;
+          await resolver.refresh().catch((err) => {
+            const msg = err instanceof Error ? err.message : String(err);
+            logger.warn("secret.handle_resolver_refresh_failed", {
+              profile_id: profile.profile_id,
+              error: msg,
+            });
+          });
+
           return accessToken;
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
