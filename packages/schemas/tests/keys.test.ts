@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  DmScope,
   HookKey,
   Lane,
   QueueMode,
   TyrumKey,
+  buildAgentSessionKey,
   parseTyrumKey,
+  resolveDmScope,
 } from "../src/index.js";
 
 describe("Lane", () => {
@@ -12,6 +15,15 @@ describe("Lane", () => {
     expect(Lane.parse("main")).toBe("main");
     expect(Lane.parse("cron")).toBe("cron");
     expect(Lane.parse("subagent")).toBe("subagent");
+  });
+});
+
+describe("DmScope", () => {
+  it("accepts known dm scopes", () => {
+    expect(DmScope.parse("shared")).toBe("shared");
+    expect(DmScope.parse("per_peer")).toBe("per_peer");
+    expect(DmScope.parse("per_channel_peer")).toBe("per_channel_peer");
+    expect(DmScope.parse("per_account_channel_peer")).toBe("per_account_channel_peer");
   });
 });
 
@@ -26,7 +38,7 @@ describe("QueueMode", () => {
 });
 
 describe("TyrumKey", () => {
-  it("parses agent main key", () => {
+  it("parses legacy direct shared key", () => {
     const key = TyrumKey.parse("agent:agent-1:telegram-acc-1:main");
     expect(parseTyrumKey(key)).toEqual({
       kind: "agent",
@@ -36,7 +48,7 @@ describe("TyrumKey", () => {
     });
   });
 
-  it("parses shared direct agent main key", () => {
+  it("parses canonical direct shared key", () => {
     const key = TyrumKey.parse("agent:agent-1:main");
     expect(parseTyrumKey(key)).toEqual({
       kind: "agent",
@@ -45,46 +57,60 @@ describe("TyrumKey", () => {
     });
   });
 
-  it("parses per-peer dm key", () => {
-    const key = TyrumKey.parse("agent:a1:dm:peer-9");
+  it("parses canonical direct per-peer key", () => {
+    const key = TyrumKey.parse("agent:agent-1:dm:user-1");
     expect(parseTyrumKey(key)).toEqual({
       kind: "agent",
-      agent_id: "a1",
+      agent_id: "agent-1",
       thread_kind: "dm",
-      peer_id: "peer-9",
+      dm_scope: "per_peer",
+      peer_id: "user-1",
     });
   });
 
-  it("parses per-account channel dm key", () => {
-    const key = TyrumKey.parse("agent:a1:telegram:work:dm:peer-9");
+  it("parses canonical direct per-channel-peer key", () => {
+    const key = TyrumKey.parse("agent:agent-1:telegram:dm:user-1");
     expect(parseTyrumKey(key)).toEqual({
       kind: "agent",
-      agent_id: "a1",
+      agent_id: "agent-1",
+      thread_kind: "dm",
+      dm_scope: "per_channel_peer",
+      channel: "telegram",
+      peer_id: "user-1",
+    });
+  });
+
+  it("parses canonical direct per-account-channel-peer key", () => {
+    const key = TyrumKey.parse("agent:agent-1:telegram:work:dm:user-1");
+    expect(parseTyrumKey(key)).toEqual({
+      kind: "agent",
+      agent_id: "agent-1",
+      thread_kind: "dm",
+      dm_scope: "per_account_channel_peer",
       channel: "telegram",
       account: "work",
-      thread_kind: "dm",
-      peer_id: "peer-9",
+      peer_id: "user-1",
     });
   });
 
-  it("parses agent group key", () => {
-    const key = TyrumKey.parse("agent:a1:discord-1:group:999");
-    expect(parseTyrumKey(key)).toEqual({
-      kind: "agent",
-      agent_id: "a1",
-      channel: "discord-1",
-      thread_kind: "group",
-      id: "999",
-    });
-  });
-
-  it("parses account-scoped group key", () => {
+  it("parses canonical group key", () => {
     const key = TyrumKey.parse("agent:a1:discord:work:group:999");
     expect(parseTyrumKey(key)).toEqual({
       kind: "agent",
       agent_id: "a1",
       channel: "discord",
       account: "work",
+      thread_kind: "group",
+      id: "999",
+    });
+  });
+
+  it("parses legacy group key", () => {
+    const key = TyrumKey.parse("agent:a1:discord:group:999");
+    expect(parseTyrumKey(key)).toEqual({
+      kind: "agent",
+      agent_id: "a1",
+      channel: "discord",
       thread_kind: "group",
       id: "999",
     });
@@ -112,5 +138,102 @@ describe("TyrumKey", () => {
 describe("HookKey", () => {
   it("rejects non-uuid hook keys", () => {
     expect(() => HookKey.parse("hook:not-a-uuid")).toThrow();
+  });
+});
+
+describe("resolveDmScope", () => {
+  it("uses secure default when distinct dm senders exceed one", () => {
+    expect(resolveDmScope({ distinctDmSenders: 2 })).toBe("per_account_channel_peer");
+  });
+
+  it("uses shared default for single-sender dm surfaces", () => {
+    expect(resolveDmScope({ distinctDmSenders: 1 })).toBe("shared");
+  });
+
+  it("honors explicit configured scope", () => {
+    expect(
+      resolveDmScope({
+        configured: "per_channel_peer",
+        distinctDmSenders: 10,
+      }),
+    ).toBe("per_channel_peer");
+  });
+});
+
+describe("buildAgentSessionKey", () => {
+  it("builds canonical shared dm key", () => {
+    expect(
+      buildAgentSessionKey({
+        agentId: "agent-1",
+        container: "dm",
+        channel: "telegram",
+        account: "work",
+        peerId: "user-1",
+        dmScope: "shared",
+      }),
+    ).toBe("agent:agent-1:main");
+  });
+
+  it("builds canonical per-peer dm key", () => {
+    expect(
+      buildAgentSessionKey({
+        agentId: "agent-1",
+        container: "dm",
+        channel: "telegram",
+        account: "work",
+        peerId: "user-1",
+        dmScope: "per_peer",
+      }),
+    ).toBe("agent:agent-1:dm:user-1");
+  });
+
+  it("builds canonical per-channel-peer dm key", () => {
+    expect(
+      buildAgentSessionKey({
+        agentId: "agent-1",
+        container: "dm",
+        channel: "telegram",
+        account: "work",
+        peerId: "user-1",
+        dmScope: "per_channel_peer",
+      }),
+    ).toBe("agent:agent-1:telegram:dm:user-1");
+  });
+
+  it("builds canonical per-account-channel-peer dm key", () => {
+    expect(
+      buildAgentSessionKey({
+        agentId: "agent-1",
+        container: "dm",
+        channel: "telegram",
+        account: "work",
+        peerId: "user-1",
+        dmScope: "per_account_channel_peer",
+      }),
+    ).toBe("agent:agent-1:telegram:work:dm:user-1");
+  });
+
+  it("builds canonical group key", () => {
+    expect(
+      buildAgentSessionKey({
+        agentId: "agent-1",
+        container: "group",
+        channel: "telegram",
+        account: "work",
+        id: "group-42",
+      }),
+    ).toBe("agent:agent-1:telegram:work:group:group-42");
+  });
+
+  it("builds canonical channel key", () => {
+    expect(
+      buildAgentSessionKey({
+        agentId: "agent-1",
+        container: "channel",
+        channel: "telegram",
+        account: "work",
+        id: "chan-7",
+      }),
+    ).toBe("agent:agent-1:telegram:work:channel:chan-7");
   });
 });
