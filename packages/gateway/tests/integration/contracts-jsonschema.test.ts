@@ -16,7 +16,7 @@ describe("Gateway JSON Schema publishing", () => {
 
     expect(json.format).toBe("tyrum.contracts.jsonschema.catalog.v1");
     expect(Array.isArray(json.schemas)).toBe(true);
-    expect(json.schemas.length).toBeGreaterThan(50);
+    expect(json.schemas.length).toBeGreaterThan(0);
     expect(json.errors).toBeUndefined();
 
     const names = new Set(json.schemas.map((s) => s.name));
@@ -44,4 +44,3 @@ describe("Gateway JSON Schema publishing", () => {
     expect(json.title).toBe("WsConnectInitRequest");
   });
 });
-

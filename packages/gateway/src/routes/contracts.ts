@@ -28,11 +28,10 @@ export function createContractRoutes(): Hono {
       const raw = await readFile(join(jsonSchemaDir, "catalog.json"), "utf-8");
       return c.json(JSON.parse(raw));
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
       return c.json(
         {
           error: "contracts_unavailable",
-          message: `Failed to read JSON Schema catalog: ${message}`,
+          message: "JSON Schema catalog unavailable.",
         },
         500,
       );
@@ -67,8 +66,13 @@ export function createContractRoutes(): Hono {
       const raw = await readFile(fullPath, "utf-8");
       return c.json(JSON.parse(raw));
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (message.includes("ENOENT")) {
+      const code =
+        err && typeof err === "object" && "code" in err &&
+        typeof (err as { code?: unknown }).code === "string"
+          ? String((err as { code: string }).code)
+          : undefined;
+
+      if (code === "ENOENT") {
         return c.json(
           {
             error: "not_found",
@@ -81,7 +85,7 @@ export function createContractRoutes(): Hono {
       return c.json(
         {
           error: "contracts_unavailable",
-          message: `Failed to read contract schema: ${message}`,
+          message: "Contract schema unavailable.",
         },
         500,
       );
