@@ -488,6 +488,60 @@ describe("WS handler integration", () => {
     expect(close.code).toBe(4005);
     expect(close.reason).toBe("protocol_rev mismatch");
     expect(connectionManager.getStats().totalClients).toBe(0);
+    stopHeartbeat();
+  });
+
+  it("rejects legacy connect handshake when using a device token", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
+    const tokenStore = new TokenStore(homeDir);
+    await tokenStore.initialize();
+
+    const issued = await tokenStore.issueDeviceToken({
+      deviceId: "dev_client_legacy",
+      role: "client",
+      scopes: ["operator.read"],
+      ttlSeconds: 300,
+    });
+
+    const connectionManager = new ConnectionManager();
+    const { handleUpgrade, stopHeartbeat } = createWsHandler({
+      connectionManager,
+      protocolDeps: { connectionManager },
+      tokenStore,
+    });
+
+    server = createServer();
+    server.on("upgrade", (req, socket, head) => {
+      handleUpgrade(req, socket, head);
+    });
+
+    const port = await new Promise<number>((resolve) => {
+      server!.listen(0, "127.0.0.1", () => {
+        const addr = server!.address();
+        resolve(typeof addr === "object" && addr ? addr.port : 0);
+      });
+    });
+
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(issued.token));
+    clients.push(ws);
+    await waitForOpen(ws);
+
+    const firstPromise = waitForMessageOrClose(ws);
+    ws.send(
+      JSON.stringify({
+        request_id: "r-connect",
+        type: "connect",
+        payload: { capabilities: [] },
+      }),
+    );
+
+    const first = await firstPromise;
+    expect(first.kind).toBe("close");
+    if (first.kind === "close") {
+      expect(first.code).toBe(4001);
+    }
+
+    expect(connectionManager.getStats().totalClients).toBe(0);
 
     stopHeartbeat();
   });

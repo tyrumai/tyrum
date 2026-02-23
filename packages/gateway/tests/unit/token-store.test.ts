@@ -211,6 +211,24 @@ describe("TokenStore", () => {
     expect(store.authenticate(issued.token)).toBeNull();
   });
 
+  it("fails initialization if revoked device token ids file is corrupted (fail closed)", async () => {
+    const store = new TokenStore(tempDir);
+    await store.initialize();
+
+    const issued = await store.issueDeviceToken({
+      deviceId: "dev_client_corrupt",
+      role: "client",
+      scopes: ["operator.read"],
+      ttlSeconds: 300,
+    });
+    await expect(store.revokeDeviceToken(issued.token)).resolves.toBe(true);
+
+    await writeFile(join(tempDir, ".device-token-revocations.json"), "{not-json");
+
+    const reloaded = new TokenStore(tempDir);
+    await expect(reloaded.initialize()).rejects.toThrow();
+  });
+
   it("rejects expired device tokens", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-02-23T00:00:00.000Z"));

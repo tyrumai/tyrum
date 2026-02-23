@@ -7,7 +7,7 @@
  * 3. Generate a new random token and persist to .admin-token
  */
 
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import { join } from "node:path";
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { MAX_DEVICE_TOKEN_TTL_SECONDS } from "@tyrum/schemas";
@@ -357,29 +357,49 @@ export class TokenStore {
 
   private async loadRevokedDeviceTokenIds(): Promise<void> {
     const revocationPath = this.getRevocationPath();
+    let raw: string;
     try {
-      const raw = await readFile(revocationPath, "utf-8");
-      const parsed = JSON.parse(raw) as unknown;
-      if (!Array.isArray(parsed)) {
+      raw = await readFile(revocationPath, "utf-8");
+    } catch (err) {
+      if (
+        typeof err === "object" &&
+        err !== null &&
+        "code" in err &&
+        (err as { code?: unknown }).code === "ENOENT"
+      ) {
         this.revokedDeviceTokenIds = new Set<string>();
         return;
       }
-      const ids = parsed
-        .filter((entry): entry is string => typeof entry === "string")
-        .map((entry) => entry.trim())
-        .filter((entry) => entry.length > 0);
-      this.revokedDeviceTokenIds = new Set(ids);
-    } catch {
-      this.revokedDeviceTokenIds = new Set<string>();
+      throw err;
     }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw) as unknown;
+    } catch (err) {
+      throw new Error(`Failed to parse device token revocations file: ${revocationPath}`, { cause: err });
+    }
+
+    if (!Array.isArray(parsed)) {
+      throw new Error(`Device token revocations file must be a JSON array: ${revocationPath}`);
+    }
+
+    const ids = parsed
+      .filter((entry): entry is string => typeof entry === "string")
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+    this.revokedDeviceTokenIds = new Set(ids);
   }
 
   private async persistRevokedDeviceTokenIds(ids: Iterable<string> = this.revokedDeviceTokenIds): Promise<void> {
     const revocationPath = this.getRevocationPath();
     await mkdir(this.tyrumHome, { recursive: true });
     const sortedIds = [...ids].sort();
-    await writeFile(revocationPath, JSON.stringify(sortedIds, null, 2) + "\n", {
+    const payload = JSON.stringify(sortedIds, null, 2) + "\n";
+    const tempPath = `${revocationPath}.tmp`;
+    await writeFile(tempPath, payload, {
       mode: 0o600,
     });
+    await rename(tempPath, revocationPath);
   }
 }

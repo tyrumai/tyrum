@@ -257,6 +257,12 @@ export function createWsHandler(opts: WsRouteOptions): {
       return;
     }
 
+    const upgradeClaims = tokenStore.authenticate(token);
+    if (!upgradeClaims) {
+      ws.close(4001, "unauthorized");
+      return;
+    }
+
     // Mutable slot: filled once the hello handshake completes.
     let clientId: string | undefined;
     let deviceId: string | undefined;
@@ -565,6 +571,11 @@ export function createWsHandler(opts: WsRouteOptions): {
         const legacy = WsConnectRequest.safeParse(json);
         if (!legacy.success) {
           ws.close(4003, "expected connect request");
+          return;
+        }
+
+        if (upgradeClaims.token_kind === "device") {
+          ws.close(4001, "unauthorized");
           return;
         }
 
