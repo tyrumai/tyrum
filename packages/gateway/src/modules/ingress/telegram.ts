@@ -174,13 +174,22 @@ function toContainerKind(kind: ThreadKind): NormalizedContainerKind {
   }
 }
 
-function toEnvelopeContent(content: MessageContent): NormalizedMessageEnvelope["content"] {
+function trimNonEmpty(value: string | undefined): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function toEnvelopeContent(content: MessageContent): NormalizedMessageEnvelope["content"] | undefined {
   if (content.kind === "text") {
-    return { text: content.text, attachments: [] };
+    const text = trimNonEmpty(content.text);
+    if (!text) return undefined;
+    return { text, attachments: [] };
   }
 
+  const caption = trimNonEmpty(content.caption);
   return {
-    ...(content.caption != null ? { text: content.caption } : {}),
+    ...(caption ? { text: caption } : {}),
     attachments: [{ kind: content.media_kind }],
   };
 }
@@ -256,24 +265,29 @@ export function normalizeUpdate(
     timestamp,
     edited_timestamp: editedTimestamp,
     pii_fields: messagePii,
-    envelope: {
-      message_id: String(message.message_id),
-      received_at: timestamp,
-      delivery: {
-        channel: "telegram",
-        account: "default",
-      },
-      container: {
-        kind: toContainerKind(thread.kind),
-        id: thread.id,
-      },
-      sender: {
-        id: sender?.id ?? `chat:${thread.id}`,
-        ...(sender?.username != null ? { display: sender.username } : {}),
-      },
-      content: toEnvelopeContent(content),
-      provenance: ["user"],
-    },
+    envelope: (() => {
+      const envelopeContent = toEnvelopeContent(content);
+      if (!envelopeContent) return undefined;
+
+      return {
+        message_id: String(message.message_id),
+        received_at: timestamp,
+        delivery: {
+          channel: "telegram",
+          account: "default",
+        },
+        container: {
+          kind: toContainerKind(thread.kind),
+          id: thread.id,
+        },
+        sender: {
+          id: sender?.id ?? `chat:${thread.id}`,
+          ...(sender?.username != null ? { display: sender.username } : {}),
+        },
+        content: envelopeContent,
+        provenance: ["user"],
+      };
+    })(),
   };
 
   return {

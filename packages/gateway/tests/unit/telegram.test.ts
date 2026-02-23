@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { NormalizedThreadMessage as NormalizedThreadMessageSchema } from "@tyrum/schemas";
 import {
   normalizeUpdate,
   TelegramNormalizationError,
@@ -127,5 +128,39 @@ describe("Telegram normalization", () => {
     expect(() => {
       normalizeUpdate('{"update_id": 1}');
     }).toThrow(TelegramNormalizationError);
+  });
+
+  it("omits envelope for whitespace-only text messages (envelope contract requires non-empty text)", () => {
+    const raw = JSON.stringify({
+      update_id: 100,
+      message: {
+        message_id: 42,
+        date: 1700000000,
+        chat: { id: 123, type: "private" },
+        text: "   ",
+      },
+    });
+
+    const update = normalizeUpdate(raw);
+    expect(update.message.envelope).toBeUndefined();
+    expect(() => NormalizedThreadMessageSchema.parse(update)).not.toThrow();
+  });
+
+  it("drops whitespace-only captions from the envelope while preserving attachments", () => {
+    const raw = JSON.stringify({
+      update_id: 100,
+      message: {
+        message_id: 42,
+        date: 1700000000,
+        chat: { id: 123, type: "private" },
+        caption: "  ",
+        photo: [{ file_id: "abc" }],
+      },
+    });
+
+    const update = normalizeUpdate(raw);
+    expect(update.message.envelope?.content.text).toBeUndefined();
+    expect(update.message.envelope?.content.attachments).toEqual([{ kind: "photo" }]);
+    expect(() => NormalizedThreadMessageSchema.parse(update)).not.toThrow();
   });
 });
