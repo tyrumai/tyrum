@@ -14,6 +14,44 @@ describe("approval respond policy overrides", () => {
     db = undefined;
   });
 
+  it("rejects approve-always override creation when the selected pattern violates guardrails", async () => {
+    db = openTestSqliteDb();
+    const approvalDal = new ApprovalDal(db);
+    const policyOverrideDal = new PolicyOverrideDal(db);
+
+    const created = await approvalDal.create({
+      planId: "plan-1",
+      stepIndex: 0,
+      prompt: "Allow tool.exec?",
+      agentId: "agent-1",
+      workspaceId: "default",
+      context: {
+        policy: {
+          agent_id: "agent-1",
+          policy_snapshot_id: "00000000-0000-0000-0000-000000000000",
+          suggested_overrides: [
+            { tool_id: "tool.exec", pattern: "echo *", workspace_id: "default" },
+          ],
+        },
+      },
+    });
+
+    const app = new Hono();
+    app.route("/", createApprovalRoutes({ approvalDal, policyOverrideDal }));
+
+    const res = await app.request(`/approvals/${String(created.id)}/respond`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        decision: "approved",
+        mode: "always",
+        overrides: [{ tool_id: "tool.exec", pattern: "echo *", workspace_id: "default" }],
+      }),
+    });
+    expect(res.status).toBe(400);
+    expect(await policyOverrideDal.list({ agentId: "agent-1", toolId: "tool.exec" })).toHaveLength(0);
+  });
+
   it("does not create duplicate overrides when already resolved", async () => {
     db = openTestSqliteDb();
     const approvalDal = new ApprovalDal(db);

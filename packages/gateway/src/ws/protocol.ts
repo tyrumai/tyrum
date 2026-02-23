@@ -55,6 +55,7 @@ import { toApprovalContract } from "../modules/approval/to-contract.js";
 import type { PresenceDal } from "../modules/presence/dal.js";
 import type { ContextReportDal } from "../modules/context/report-dal.js";
 import type { PolicyOverrideDal } from "../modules/policy/override-dal.js";
+import { isSafeSuggestedOverridePattern } from "../modules/policy/override-guardrails.js";
 import type { NodePairingDal } from "../modules/node/pairing-dal.js";
 import type { AgentRegistry } from "../modules/agent/registry.js";
 import type { ExecutionEngine } from "../modules/execution/engine.js";
@@ -303,7 +304,11 @@ export async function handleClientMessage(
 
     const req = ApprovalResolveRequest.parse(parsedReq.data.payload);
 
-    let createdOverrides: unknown[] | undefined;
+    let selectedOverrides: Array<{ tool_id: string; pattern: string; workspace_id?: string }> | undefined;
+    let createOverrideContext:
+      | { agentId: string; policySnapshotId?: string; approvalId: number }
+      | undefined;
+
     if (req.decision === "approved" && req.mode === "always") {
       if (!deps.policyOverrideDal) {
         return errorResponse(
@@ -315,13 +320,26 @@ export async function handleClientMessage(
       }
 
       const existing = await deps.approvalDal.getById(req.approval_id);
-      if (!existing || existing.status !== "pending") {
+      if (!existing) {
         return errorResponse(
           msg.request_id,
           msg.type,
           "not_found",
-          `approval ${String(req.approval_id)} not found or already responded`,
+          `approval ${String(req.approval_id)} not found`,
         );
+      }
+      if (existing.status !== "pending") {
+        const approval = toApprovalContract(existing);
+        if (!approval) {
+          return errorResponse(
+            msg.request_id,
+            msg.type,
+            "invalid_state",
+            `approval ${String(existing.id)} could not be converted to contract`,
+          );
+        }
+        const result = ApprovalResolveResponse.parse({ approval });
+        return { request_id: msg.request_id, type: msg.type, ok: true, result };
       }
 
       const suggested = extractSuggestedOverrides(existing.context);
@@ -348,34 +366,22 @@ export async function handleClientMessage(
             "requested overrides must be selected from suggested_overrides",
           );
         }
+        if (!isSafeSuggestedOverridePattern(sel.pattern)) {
+          return errorResponse(
+            msg.request_id,
+            msg.type,
+            "invalid_request",
+            "requested overrides violate deny guardrails",
+          );
+        }
       }
 
-      const agentId = extractAgentId(existing.context) ?? "default";
-      const snapshotId = extractPolicySnapshotId(existing.context);
-      const createdBy = { kind: "ws" };
-
-      createdOverrides = [];
-      for (const sel of selected) {
-        const row = await deps.policyOverrideDal.create({
-          agentId,
-          workspaceId: sel.workspace_id,
-          toolId: sel.tool_id,
-          pattern: sel.pattern,
-          createdBy,
-          createdFromApprovalId: existing.id,
-          createdFromPolicySnapshotId: snapshotId,
-        });
-        createdOverrides.push(row);
-        broadcastEvent(
-          {
-            event_id: crypto.randomUUID(),
-            type: "policy_override.created",
-            occurred_at: new Date().toISOString(),
-            payload: { override: row },
-          },
-          deps,
-        );
-      }
+      selectedOverrides = selected;
+      createOverrideContext = {
+        agentId: extractAgentId(existing.context) ?? "default",
+        policySnapshotId: extractPolicySnapshotId(existing.context),
+        approvalId: existing.id,
+      };
     }
 
     const updated = await deps.approvalDal.respond(
@@ -393,6 +399,7 @@ export async function handleClientMessage(
     }
 
     const desiredStatus = req.decision === "approved" ? "approved" : "denied";
+    const decisionMatches = updated.status === desiredStatus;
     if (updated.status !== desiredStatus) {
       deps.logger?.warn("approval.decision_mismatch", {
         approval_id: updated.id,
@@ -414,6 +421,40 @@ export async function handleClientMessage(
           run_id: updated.run_id,
           error: message,
         });
+      }
+    }
+
+    let createdOverrides: unknown[] | undefined;
+    if (
+      decisionMatches &&
+      updated.status === "approved" &&
+      req.mode === "always" &&
+      selectedOverrides &&
+      createOverrideContext
+    ) {
+      const createdBy = { kind: "ws" };
+      createdOverrides = [];
+
+      for (const sel of selectedOverrides) {
+        const row = await deps.policyOverrideDal!.create({
+          agentId: createOverrideContext.agentId,
+          workspaceId: sel.workspace_id,
+          toolId: sel.tool_id,
+          pattern: sel.pattern,
+          createdBy,
+          createdFromApprovalId: createOverrideContext.approvalId,
+          createdFromPolicySnapshotId: createOverrideContext.policySnapshotId,
+        });
+        createdOverrides.push(row);
+        broadcastEvent(
+          {
+            event_id: crypto.randomUUID(),
+            type: "policy_override.created",
+            occurred_at: new Date().toISOString(),
+            payload: { override: row },
+          },
+          deps,
+        );
       }
     }
 

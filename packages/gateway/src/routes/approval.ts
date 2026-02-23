@@ -13,6 +13,7 @@ import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { WsEventEnvelope } from "@tyrum/schemas";
 import type { ExecutionEngine } from "../modules/execution/engine.js";
 import { toApprovalContract } from "../modules/approval/to-contract.js";
+import { isSafeSuggestedOverridePattern } from "../modules/policy/override-guardrails.js";
 
 const VALID_STATUSES = new Set<ApprovalStatus>([
   "pending",
@@ -197,46 +198,27 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
       return c.json({ approval: existing });
     }
 
-    const updated = await deps.approvalDal.respond(id, isApproved, body.reason);
-    if (!updated) {
-      return c.json(
-        {
-          error: "not_found",
-          message: `approval ${String(id)} not found or already responded`,
-        },
-        404,
-      );
-    }
+    const shouldCreateOverrides = isApproved && body.mode === "always";
+    const selectedNormalized: Array<{ tool_id: string; pattern: string; workspace_id?: string }> = [];
 
-    const desiredStatus = isApproved ? "approved" : "denied";
-    const decisionMatches = updated.status === desiredStatus;
-    if (deps.engine && decisionMatches) {
-      if (updated.status === "approved" && updated.resume_token) {
-        await deps.engine.resumeRun(updated.resume_token);
-      } else if (updated.status === "denied" && updated.run_id) {
-        await deps.engine.cancelRun(updated.run_id, updated.response_reason ?? body.reason ?? "approval denied");
-      }
-    }
-
-    const createdOverrides: unknown[] = [];
-
-    if (decisionMatches && updated.status === "approved" && body.mode === "always") {
+    if (shouldCreateOverrides) {
       const overrideDal = deps.policyOverrideDal;
       if (!overrideDal) {
         return c.json({ error: "unsupported", message: "policy overrides not configured" }, 400);
       }
 
-      const suggested = extractSuggestedOverrides(updated.context);
+      const suggested = extractSuggestedOverrides(existing.context);
       const selected = Array.isArray(body.overrides) ? body.overrides : [];
-      const selectedNormalized = selected
-        .map((o) => {
-          const toolId = typeof o.tool_id === "string" ? o.tool_id.trim() : "";
-          const pattern = typeof o.pattern === "string" ? o.pattern.trim() : "";
-          const workspaceId = typeof o.workspace_id === "string" ? o.workspace_id.trim() : undefined;
-          if (!toolId || !pattern) return null;
-          return workspaceId ? { tool_id: toolId, pattern, workspace_id: workspaceId } : { tool_id: toolId, pattern };
-        })
-        .filter((o): o is { tool_id: string; pattern: string; workspace_id?: string } => o !== null);
+
+      for (const entry of selected) {
+        const toolId = typeof entry.tool_id === "string" ? entry.tool_id.trim() : "";
+        const pattern = typeof entry.pattern === "string" ? entry.pattern.trim() : "";
+        const workspaceId = typeof entry.workspace_id === "string" ? entry.workspace_id.trim() : undefined;
+        if (!toolId || !pattern) continue;
+        selectedNormalized.push(
+          workspaceId ? { tool_id: toolId, pattern, workspace_id: workspaceId } : { tool_id: toolId, pattern },
+        );
+      }
 
       if (selectedNormalized.length === 0) {
         return c.json(
@@ -260,6 +242,45 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
             400,
           );
         }
+        if (!isSafeSuggestedOverridePattern(sel.pattern)) {
+          return c.json(
+            {
+              error: "invalid_request",
+              message: "requested overrides violate deny guardrails",
+            },
+            400,
+          );
+        }
+      }
+    }
+
+    const updated = await deps.approvalDal.respond(id, isApproved, body.reason);
+    if (!updated) {
+      return c.json(
+        {
+          error: "not_found",
+          message: `approval ${String(id)} not found or already responded`,
+        },
+        404,
+      );
+    }
+
+    const desiredStatus = isApproved ? "approved" : "denied";
+    const decisionMatches = updated.status === desiredStatus;
+    if (deps.engine && decisionMatches) {
+      if (updated.status === "approved" && updated.resume_token) {
+        await deps.engine.resumeRun(updated.resume_token);
+      } else if (updated.status === "denied" && updated.run_id) {
+        await deps.engine.cancelRun(updated.run_id, updated.response_reason ?? body.reason ?? "approval denied");
+      }
+    }
+
+    const createdOverrides: unknown[] = [];
+
+    if (decisionMatches && updated.status === "approved" && shouldCreateOverrides) {
+      const overrideDal = deps.policyOverrideDal;
+      if (!overrideDal) {
+        return c.json({ error: "unsupported", message: "policy overrides not configured" }, 400);
       }
 
       const createdBy = {
