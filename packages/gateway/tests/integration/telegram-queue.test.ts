@@ -396,6 +396,19 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
     expect(personalAccount.inbox.inbox_id).not.toBe(workAccount.inbox.inbox_id);
   });
 
+  it("stamps the normalized envelope delivery identity with the queue account id", async () => {
+    db = openTestSqliteDb();
+    const queue = new TelegramChannelQueue(db);
+    const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
+
+    const enqueued = await queue.enqueue(normalized, { accountId: "work" });
+
+    const inbox = new ChannelInboxDal(db);
+    const row = await inbox.getById(enqueued.inbox.inbox_id);
+    expect((row?.payload as { message?: { envelope?: { delivery?: { account?: string } } } })?.message?.envelope?.delivery?.account)
+      .toBe("work");
+  });
+
   it("dedupes default-account messages against legacy source keys", async () => {
     db = openTestSqliteDb();
 

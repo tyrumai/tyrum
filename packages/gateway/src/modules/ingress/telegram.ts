@@ -183,6 +183,12 @@ function toEnvelopeContent(content: MessageContent): NormalizedMessageEnvelope["
   };
 }
 
+function resolveTelegramAccountId(): string {
+  return process.env["TYRUM_TELEGRAM_ACCOUNT_ID"]?.trim()
+    || process.env["TYRUM_TELEGRAM_CHANNEL_KEY"]?.trim()
+    || "default";
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -263,14 +269,14 @@ export function normalizeUpdate(
         received_at: timestamp,
         delivery: {
           channel: "telegram",
-          account: "default",
-	        },
-	        container: {
-	          kind: normalizedContainerKindFromThreadKind(thread.kind),
-	          id: thread.id,
-	        },
-	        sender: {
-	          id: sender?.id ?? `chat:${thread.id}`,
+          account: resolveTelegramAccountId(),
+        },
+        container: {
+          kind: normalizedContainerKindFromThreadKind(thread.kind),
+          id: thread.id,
+        },
+        sender: {
+          id: sender?.id ?? `chat:${thread.id}`,
           ...(sender?.username != null ? { display: sender.username } : {}),
         },
         content: envelopeContent,

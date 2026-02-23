@@ -322,6 +322,23 @@ export class TelegramChannelQueue {
       }
     }
 
+    const payload: NormalizedThreadMessage =
+      normalized.message.envelope
+        ? {
+            ...normalized,
+            message: {
+              ...normalized.message,
+              envelope: {
+                ...normalized.message.envelope,
+                delivery: {
+                  ...normalized.message.envelope.delivery,
+                  account: accountId,
+                },
+              },
+            },
+          }
+        : normalized;
+
     const { row, deduped } = await this.inbox.enqueue({
       source,
       thread_id: payload.thread.id,
