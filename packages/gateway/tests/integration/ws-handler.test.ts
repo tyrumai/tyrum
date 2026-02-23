@@ -981,6 +981,14 @@ describe("WS handler integration", () => {
     node.close();
     await waitForClose(node);
 
+    // Regression: the node-scoped token lookup can be async (e.g. Postgres),
+    // so make sure we don't drop connect.init frames that arrive while auth is resolving.
+    const originalTokenLookup = container.nodePairingDal.getNodeIdForScopedToken.bind(container.nodePairingDal);
+    container.nodePairingDal.getNodeIdForScopedToken = async (token: string) => {
+      await new Promise<void>((resolve) => setTimeout(resolve, 250));
+      return await originalTokenLookup(token);
+    };
+
     const node2 = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(scopedToken));
     clients.push(node2);
     await waitForOpen(node2);
