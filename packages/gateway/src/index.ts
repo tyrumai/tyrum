@@ -343,7 +343,20 @@ async function loadPluginManifestFromDir(dir: string): Promise<
         return { kind: "invalid", error: "manifest must be an object" };
       }
       const manifest = PluginManifest.parse(parsed);
-      return { kind: "ok", manifest: { id: manifest.id, name: manifest.name, version: manifest.version } };
+      const missingFields: string[] = [];
+      if (!manifest.entry) missingFields.push("entry");
+      if (!manifest.contributes) missingFields.push("contributes");
+      if (!manifest.permissions) missingFields.push("permissions");
+      if (missingFields.length > 0) {
+        return {
+          kind: "invalid",
+          error: `missing required manifest field(s): ${missingFields.join(", ")}`,
+        };
+      }
+      return {
+        kind: "ok",
+        manifest: { id: manifest.id, name: manifest.name, version: manifest.version },
+      };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return { kind: "invalid", error: message };

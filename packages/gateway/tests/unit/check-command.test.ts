@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const closeDb = vi.fn(async () => {});
 const ensureLoaded = vi.fn(async () => {
@@ -155,5 +158,59 @@ describe("tyrum check", () => {
     logSpy.mockRestore();
     errorSpy.mockRestore();
     vi.unstubAllGlobals();
+  });
+
+  it("counts plugin manifests missing required fields as invalid", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const tyrumHome = await mkdtemp(join(tmpdir(), "tyrum-test-home-"));
+
+    try {
+      await mkdir(join(tyrumHome, "plugins", "bad-plugin"), { recursive: true });
+      await writeFile(
+        join(tyrumHome, "plugins", "bad-plugin", "plugin.json"),
+        JSON.stringify({ id: "bad-plugin", name: "Bad plugin", version: "0.0.1" }),
+        "utf-8",
+      );
+
+      process.env["GATEWAY_DB_PATH"] = ":memory:";
+      process.env["GATEWAY_HOST"] = "127.0.0.1";
+      process.env["GATEWAY_PORT"] = "8788";
+      process.env["GATEWAY_TOKEN"] = "test-token";
+      process.env["TYRUM_HOME"] = tyrumHome;
+      process.env["TYRUM_SECRET_PROVIDER"] = "env";
+
+      ensureLoaded.mockResolvedValueOnce({
+        status: {
+          source: "default",
+          provider_count: 1,
+          model_count: 2,
+          last_error: null,
+        },
+      } as any);
+
+      vi.stubGlobal("fetch", vi.fn(async () => {
+        return new Response(JSON.stringify({ status: "ok" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }));
+
+      const { runCli } = await import("../../src/index.js");
+      const code = await runCli(["check"]);
+
+      expect(code).toBe(0);
+
+      const output = logSpy.mock.calls.map((c) => c.join(" ")).join("\n");
+      expect(output).toContain("static.plugins:");
+      expect(output).toContain("invalid=1");
+      expect(output).toContain("manifests=workspace:0");
+    } finally {
+      await rm(tyrumHome, { recursive: true, force: true });
+      logSpy.mockRestore();
+      errorSpy.mockRestore();
+      vi.unstubAllGlobals();
+    }
   });
 });
