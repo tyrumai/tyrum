@@ -1,4 +1,9 @@
-import type { PolicyBundle as PolicyBundleT, Decision } from "@tyrum/schemas";
+import type {
+  PolicyBundle as PolicyBundleT,
+  Decision,
+  PolicyDecision as PolicyDecisionT,
+  RuleDecision as RuleDecisionT,
+} from "@tyrum/schemas";
 import { PolicyBundle } from "@tyrum/schemas";
 import { access } from "node:fs/promises";
 import { wildcardMatch } from "./wildcard.js";
@@ -122,6 +127,7 @@ export interface PolicyEvaluation {
   decision: Decision;
   policy_snapshot?: PolicySnapshotRow;
   applied_override_ids?: string[];
+  decision_record?: PolicyDecisionT;
 }
 
 export class PolicyService {
@@ -195,19 +201,97 @@ export class PolicyService {
   }): Promise<PolicyEvaluation> {
     const effective = await this.loadEffectiveBundle({ playbookBundle: params.playbookBundle });
     const snapshot = await this.getOrCreateSnapshot(effective.bundle);
+    return await this.evaluateToolCallAgainstBundle({
+      bundle: effective.bundle,
+      snapshot,
+      agentId: params.agentId,
+      workspaceId: params.workspaceId,
+      toolId: params.toolId,
+      toolMatchTarget: params.toolMatchTarget,
+      url: params.url,
+      secretScopes: params.secretScopes,
+      inputProvenance: params.inputProvenance,
+    });
+  }
 
-    const toolsDomain = normalizeDomain(effective.bundle.tools, "require_approval");
-    const egressDomain = normalizeDomain(effective.bundle.network_egress, "require_approval");
-    const secretsDomain = normalizeDomain(effective.bundle.secrets, "require_approval");
+  async evaluateToolCallFromSnapshot(params: {
+    policySnapshotId: string;
+    agentId: string;
+    workspaceId?: string;
+    toolId: string;
+    toolMatchTarget: string;
+    url?: string;
+    secretScopes?: string[];
+    inputProvenance?: { source: string; trusted: boolean };
+  }): Promise<PolicyEvaluation> {
+    const snapshot = await this.opts.snapshotDal.getById(params.policySnapshotId);
+    if (!snapshot) {
+      const record: PolicyDecisionT = {
+        decision: "require_approval",
+        rules: [
+          {
+            rule: "tool_policy",
+            outcome: "require_approval",
+            detail: `missing policy snapshot: ${params.policySnapshotId}`,
+          },
+        ],
+      };
+      return {
+        decision: "require_approval",
+        policy_snapshot: undefined,
+        applied_override_ids: undefined,
+        decision_record: record,
+      };
+    }
+
+    return await this.evaluateToolCallAgainstBundle({
+      bundle: snapshot.bundle,
+      snapshot,
+      agentId: params.agentId,
+      workspaceId: params.workspaceId,
+      toolId: params.toolId,
+      toolMatchTarget: params.toolMatchTarget,
+      url: params.url,
+      secretScopes: params.secretScopes,
+      inputProvenance: params.inputProvenance,
+    });
+  }
+
+  private async evaluateToolCallAgainstBundle(params: {
+    bundle: PolicyBundleT;
+    snapshot: PolicySnapshotRow;
+    agentId: string;
+    workspaceId?: string;
+    toolId: string;
+    toolMatchTarget: string;
+    url?: string;
+    secretScopes?: string[];
+    inputProvenance?: { source: string; trusted: boolean };
+  }): Promise<PolicyEvaluation> {
+    const toolsDomain = normalizeDomain(params.bundle.tools, "require_approval");
+    const egressDomain = normalizeDomain(params.bundle.network_egress, "require_approval");
+    const secretsDomain = normalizeDomain(params.bundle.secrets, "require_approval");
 
     let toolDecision = evaluateDomain(toolsDomain, params.toolId);
+    const rules: RuleDecisionT[] = [
+      {
+        rule: "tool_policy",
+        outcome: toolDecision,
+        detail: `tool_id=${params.toolId}`,
+      },
+    ];
 
     if (
-      effective.bundle.provenance?.untrusted_shell_requires_approval === true &&
+      params.bundle.provenance?.untrusted_shell_requires_approval === true &&
       params.inputProvenance?.trusted === false &&
       params.toolId.trim() === "tool.exec"
     ) {
       toolDecision = mostRestrictive(toolDecision, "require_approval");
+      rules.push({
+        rule: "provenance",
+        outcome: "require_approval",
+        detail: `untrusted_shell_requires_approval=true (source=${params.inputProvenance?.source ?? "unknown"})`,
+      });
     }
 
     let egressDecision: Decision = "allow";
@@ -215,6 +299,11 @@ export class PolicyService {
       const normalizedUrl = normalizeUrlForPolicy(params.url);
       if (normalizedUrl.length > 0) {
         egressDecision = evaluateDomain(egressDomain, normalizedUrl);
+        rules.push({
+          rule: "network_egress",
+          outcome: egressDecision,
+          detail: normalizedUrl,
+        });
       }
     }
 
@@ -225,6 +314,11 @@ export class PolicyService {
         decision = mostRestrictive(decision, evaluateDomain(secretsDomain, scope));
       }
       secretsDecision = decision;
+      rules.push({
+        rule: "secrets",
+        outcome: secretsDecision,
+        detail: `scopes=${params.secretScopes.length}`,
+      });
     }
 
     let decision = mostRestrictive(toolDecision, mostRestrictive(egressDecision, secretsDecision));
@@ -244,13 +338,21 @@ export class PolicyService {
       if (appliedOverrides.length > 0) {
         toolDecision = "allow";
         decision = mostRestrictive(toolDecision, mostRestrictive(egressDecision, secretsDecision));
+        rules.push({
+          rule: "policy_override",
+          outcome: "allow",
+          detail: `applied_overrides=${appliedOverrides.join(",")}`,
+        });
       }
     }
 
+    const decisionRecord: PolicyDecisionT = { decision, rules };
+
     return {
       decision,
-      policy_snapshot: snapshot,
+      policy_snapshot: params.snapshot,
       applied_override_ids: appliedOverrides.length > 0 ? appliedOverrides : undefined,
+      decision_record: decisionRecord,
     };
   }
 

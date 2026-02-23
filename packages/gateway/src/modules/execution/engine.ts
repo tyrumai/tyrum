@@ -20,6 +20,8 @@ import { randomUUID } from "node:crypto";
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { Logger } from "../observability/logger.js";
 import type { SqlDb } from "../../statestore/types.js";
+import type { PolicyService } from "../policy/service.js";
+import { canonicalizeToolMatchTarget } from "../policy/match-target.js";
 
 export interface StepResult {
   success: boolean;
@@ -90,6 +92,7 @@ interface RunnableRunRow {
   status: "queued" | "running";
   trigger_json: string;
   workspace_id: string;
+  policy_snapshot_id: string | null;
 }
 
 interface StepRow {
@@ -220,6 +223,7 @@ export class ExecutionEngine {
   private readonly clock: ClockFn;
   private readonly redactionEngine?: RedactionEngine;
   private readonly logger?: Logger;
+  private readonly policyService?: PolicyService;
   private readonly eventsEnabled: boolean;
   private readonly concurrencyLimits?: ExecutionConcurrencyLimits;
 
@@ -228,6 +232,7 @@ export class ExecutionEngine {
     clock?: ClockFn;
     redactionEngine?: RedactionEngine;
     logger?: Logger;
+    policyService?: PolicyService;
     eventsEnabled?: boolean;
     concurrencyLimits?: ExecutionConcurrencyLimits;
   }) {
@@ -235,6 +240,7 @@ export class ExecutionEngine {
     this.clock = opts.clock ?? defaultClock;
     this.redactionEngine = opts.redactionEngine;
     this.logger = opts.logger;
+    this.policyService = opts.policyService;
     this.eventsEnabled = opts.eventsEnabled ?? true;
     this.concurrencyLimits =
       opts.concurrencyLimits ??
@@ -395,6 +401,9 @@ export class ExecutionEngine {
       artifacts_json: string;
       cost_json: string | null;
       metadata_json: string | null;
+      policy_snapshot_id: string | null;
+      policy_decision_json: string | null;
+      policy_applied_override_ids_json: string | null;
     }>(
       `SELECT
          attempt_id,
@@ -408,7 +417,10 @@ export class ExecutionEngine {
          postcondition_report_json,
          artifacts_json,
          cost_json,
-         metadata_json
+         metadata_json,
+         policy_snapshot_id,
+         policy_decision_json,
+         policy_applied_override_ids_json
        FROM execution_attempts
        WHERE attempt_id = ?`,
       [attemptId],
@@ -439,6 +451,9 @@ export class ExecutionEngine {
           artifacts: safeJsonParse(row.artifacts_json, [] as unknown[]),
           cost: safeJsonParse(row.cost_json, undefined as unknown),
           metadata: safeJsonParse(row.metadata_json, undefined as unknown),
+          policy_snapshot_id: row.policy_snapshot_id ?? undefined,
+          policy_decision: safeJsonParse(row.policy_decision_json, undefined as unknown),
+          policy_applied_override_ids: safeJsonParse(row.policy_applied_override_ids_json, undefined as unknown),
         },
       },
     };
@@ -818,7 +833,8 @@ export class ExecutionEngine {
          r.lane,
          r.status,
          j.trigger_json,
-         j.workspace_id
+         j.workspace_id,
+         r.policy_snapshot_id
        FROM execution_runs r
        JOIN execution_jobs j ON j.job_id = r.job_id
        WHERE r.status IN ('running', 'queued')
@@ -1151,16 +1167,18 @@ export class ExecutionEngine {
                  status,
                  started_at,
                  finished_at,
+                 policy_snapshot_id,
                  artifacts_json,
                  result_json,
                  error
-               ) VALUES (?, ?, ?, 'succeeded', ?, ?, '[]', ?, NULL)`,
+               ) VALUES (?, ?, ?, 'succeeded', ?, ?, ?, '[]', ?, NULL)`,
               [
                 attemptId,
                 next.step_id,
                 attemptNum,
                 clock.nowIso,
                 clock.nowIso,
+                run.policy_snapshot_id ?? null,
                 record.result_json ?? null,
               ],
             );
@@ -1223,15 +1241,17 @@ export class ExecutionEngine {
            attempt,
            status,
            started_at,
+           policy_snapshot_id,
            artifacts_json,
            lease_owner,
            lease_expires_at_ms
-         ) VALUES (?, ?, ?, 'running', ?, '[]', ?, ?)`,
+         ) VALUES (?, ?, ?, 'running', ?, ?, '[]', ?, ?)`,
         [
           attemptId,
           next.step_id,
           attemptNum,
           clock.nowIso,
+          run.policy_snapshot_id ?? null,
           input.workerId,
           clock.nowMs + leaseTtlMs,
         ],
@@ -1333,6 +1353,16 @@ export class ExecutionEngine {
       worker_id: opts.workerId,
       step_index: opts.stepIndex,
       action_type: opts.action.type,
+    });
+
+    await this.persistAttemptPolicyContext(opts).catch((err) => {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger?.warn("execution.attempt.policy_persist_failed", {
+        run_id: opts.runId,
+        step_id: opts.stepId,
+        attempt_id: opts.attemptId,
+        error: message,
+      });
     });
 
     const result = await this.executeWithTimeout(
@@ -1666,6 +1696,85 @@ export class ExecutionEngine {
     });
 
     return true;
+  }
+
+  private async persistAttemptPolicyContext(opts: {
+    runId: string;
+    stepId: string;
+    attemptId: string;
+    key: string;
+    workspaceId: string;
+    action: ActionPrimitiveT;
+  }): Promise<void> {
+    const run = await this.db.get<{ policy_snapshot_id: string | null }>(
+      "SELECT policy_snapshot_id FROM execution_runs WHERE run_id = ?",
+      [opts.runId],
+    );
+    const policySnapshotId = run?.policy_snapshot_id?.trim() ?? "";
+    if (!policySnapshotId) return;
+
+    const tool = this.toolCallFromAction(opts.action);
+    await this.db.run(
+      `UPDATE execution_attempts
+       SET policy_snapshot_id = ?
+       WHERE attempt_id = ?`,
+      [policySnapshotId, opts.attemptId],
+    );
+
+    if (!this.policyService?.isEnabled()) return;
+    if (!tool) return;
+
+    const agentId = this.deriveAgentIdFromKey(opts.key) ?? "default";
+    const evaluation = await this.policyService.evaluateToolCallFromSnapshot({
+      policySnapshotId,
+      agentId,
+      workspaceId: opts.workspaceId,
+      toolId: tool.toolId,
+      toolMatchTarget: tool.matchTarget,
+      url: tool.url,
+      inputProvenance: { source: "workflow", trusted: true },
+    });
+
+    const decisionJson = JSON.stringify(
+      evaluation.decision_record ?? { decision: evaluation.decision, rules: [] },
+    );
+    const appliedOverrideIdsJson = JSON.stringify(evaluation.applied_override_ids ?? []);
+
+    await this.db.run(
+      `UPDATE execution_attempts
+       SET policy_decision_json = ?,
+           policy_applied_override_ids_json = ?
+       WHERE attempt_id = ?`,
+      [
+        decisionJson,
+        appliedOverrideIdsJson,
+        opts.attemptId,
+      ],
+    );
+  }
+
+  private toolCallFromAction(action: ActionPrimitiveT): { toolId: string; matchTarget: string; url?: string } | null {
+    const args = action.args as unknown;
+    if (!args || typeof args !== "object" || Array.isArray(args)) return null;
+    const rec = args as Record<string, unknown>;
+
+    if (action.type === "CLI") {
+      const cmd = typeof rec["cmd"] === "string" ? rec["cmd"].trim() : "";
+      const argv = Array.isArray(rec["args"])
+        ? (rec["args"] as unknown[]).filter((v): v is string => typeof v === "string")
+        : [];
+      const command = [cmd, ...argv].filter((t) => t.trim().length > 0).join(" ").trim();
+      const matchTarget = canonicalizeToolMatchTarget("tool.exec", { command });
+      return { toolId: "tool.exec", matchTarget };
+    }
+
+    if (action.type === "Http") {
+      const url = typeof rec["url"] === "string" ? rec["url"].trim() : "";
+      const matchTarget = canonicalizeToolMatchTarget("tool.http.fetch", { url });
+      return { toolId: "tool.http.fetch", matchTarget, url };
+    }
+
+    return null;
   }
 
   private async markAttemptSucceeded(

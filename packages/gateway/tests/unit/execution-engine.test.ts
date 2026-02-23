@@ -9,6 +9,10 @@ import {
   type StepResult,
 } from "../../src/modules/execution/engine.js";
 import { RedactionEngine } from "../../src/modules/redaction/engine.js";
+import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
+import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
+import { defaultPolicyBundle } from "../../src/modules/policy/bundle-loader.js";
+import { PolicyService } from "../../src/modules/policy/service.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
@@ -329,6 +333,60 @@ describe("ExecutionEngine (normalized)", () => {
     const cost = JSON.parse(row!.cost_json!) as { total_tokens?: number; duration_ms?: number };
     expect(cost.total_tokens).toBe(30);
     expect(typeof cost.duration_ms).toBe("number");
+  });
+
+  it("persists policy decisions (reasons + snapshot + applied override ids) on attempts", async () => {
+    db = openTestSqliteDb();
+
+    const home = await mkdtemp(join(tmpdir(), "tyrum-policy-home-"));
+    const snapshotDal = new PolicySnapshotDal(db);
+    const overrideDal = new PolicyOverrideDal(db);
+    const policyService = new PolicyService({ home, snapshotDal, overrideDal });
+
+    const snapshot = await snapshotDal.getOrCreate(defaultPolicyBundle());
+    const override = await overrideDal.create({
+      agentId: "agent-1",
+      workspaceId: "default",
+      toolId: "tool.exec",
+      pattern: "echo hi",
+      createdFromPolicySnapshotId: snapshot.policy_snapshot_id,
+    });
+
+    const engine = new ExecutionEngine({ db, policyService });
+    await engine.enqueuePlan({
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-policy-attempt-1",
+      requestId: "req-policy-attempt-1",
+      policySnapshotId: snapshot.policy_snapshot_id,
+      steps: [action("CLI", { cmd: "echo", args: ["hi"] })],
+    });
+
+    const executor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => ({ success: true, result: { ok: true } })),
+    };
+
+    await drain(engine, "w1", executor);
+
+    const row = await db.get<{
+      policy_snapshot_id?: string | null;
+      policy_decision_json?: string | null;
+      policy_applied_override_ids_json?: string | null;
+    }>("SELECT * FROM execution_attempts LIMIT 1");
+
+    expect(row?.policy_snapshot_id).toBe(snapshot.policy_snapshot_id);
+
+    expect(row?.policy_decision_json).toBeTruthy();
+    const policyDecision = JSON.parse(row!.policy_decision_json!) as { decision?: unknown; rules?: unknown };
+    expect(policyDecision.decision).toBe("allow");
+    expect(Array.isArray(policyDecision.rules)).toBe(true);
+
+    expect(row?.policy_applied_override_ids_json).toBeTruthy();
+    const applied = JSON.parse(row!.policy_applied_override_ids_json!) as unknown;
+    expect(Array.isArray(applied)).toBe(true);
+    expect(applied).toContain(override.policy_override_id);
+
+    await rm(home, { recursive: true, force: true });
   });
 
   it("retries a failed step until it succeeds (within max_attempts)", async () => {
