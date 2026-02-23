@@ -837,15 +837,6 @@ export class AgentRuntime {
         return endpoint && endpoint.length > 0 ? endpoint : undefined;
       })();
 
-      const orderedProfiles = await listOrderedEligibleProfilesForProvider({
-        agentId,
-        sessionId: input.sessionId,
-        providerId: chosen.providerId,
-        resolver,
-        authProfileDal,
-        pinDal,
-      });
-
       const envApiKey = resolveEnvApiKey(chosen.provider.env);
 
       async function buildModelFromApiKey(apiKey: string | undefined): Promise<LanguageModelV3> {
@@ -869,18 +860,18 @@ export class AgentRuntime {
         return model as LanguageModelV3;
       }
 
-        async function resolveApiKeyFromProfile(profile: AuthProfileRow): Promise<string | null> {
-          return await resolveProfileApiKey(profile, {
-            secretProvider,
-            resolver,
-            authProfileDal,
-            oauthProviderRegistry,
-            oauthRefreshLeaseDal,
-            oauthLeaseOwner,
-            logger,
-            fetchImpl: fetch,
-          });
-        }
+      async function resolveApiKeyFromProfile(profile: AuthProfileRow): Promise<string | null> {
+        return await resolveProfileApiKey(profile, {
+          secretProvider,
+          resolver,
+          authProfileDal,
+          oauthProviderRegistry,
+          oauthRefreshLeaseDal,
+          oauthLeaseOwner,
+          logger,
+          fetchImpl: fetch,
+        });
+      }
 
       const providerLabel = `${chosen.providerId}/${chosen.modelId}`;
 
@@ -898,6 +889,15 @@ export class AgentRuntime {
         invoke: (model: LanguageModelV3, options: LanguageModelV3CallOptions) => PromiseLike<T>,
       ): Promise<T> {
         let lastErr: unknown;
+
+        const orderedProfiles = await listOrderedEligibleProfilesForProvider({
+          agentId,
+          sessionId: input.sessionId,
+          providerId: chosen.providerId,
+          resolver,
+          authProfileDal,
+          pinDal,
+        });
 
         for (const profile of orderedProfiles) {
           const apiKey = await resolveApiKeyFromProfile(profile);
@@ -1267,16 +1267,19 @@ export class AgentRuntime {
           return resolveEnvApiKey(provider.env);
         };
 
-        for (const providerId of orderedProviderIds) {
-          const candidate = resolveEmbeddingCandidate(providerId);
-          if (!candidate) continue;
+	        for (const providerId of orderedProviderIds) {
+	          const candidate = resolveEmbeddingCandidate(providerId);
+	          if (!candidate) continue;
 
-          const apiKey = await resolveProviderApiKey(candidate.providerId, candidate.provider);
-          if (!apiKey) continue;
+	          const apiKey = await resolveProviderApiKey(candidate.providerId, candidate.provider);
+	          if (!apiKey) {
+	            const hasApiKeyHint = (candidate.provider.env ?? []).some((key) => /(_API_KEY|_TOKEN)$/i.test(key));
+	            if (hasApiKeyHint) continue;
+	          }
 
-          const endpointKey = (candidate.provider.env ?? []).find((key) => /(ENDPOINT|BASE_URL|BASEURL|URL)$/i.test(key));
-          const endpoint = endpointKey ? process.env[endpointKey]?.trim() : undefined;
-          const baseURL = endpoint && endpoint.length > 0 ? endpoint : candidate.api;
+	          const endpointKey = (candidate.provider.env ?? []).find((key) => /(ENDPOINT|BASE_URL|BASEURL|URL)$/i.test(key));
+	          const endpoint = endpointKey ? process.env[endpointKey]?.trim() : undefined;
+	          const baseURL = endpoint && endpoint.length > 0 ? endpoint : candidate.api;
 
           const sdk = createProviderFromNpm({
             npm: candidate.npm,

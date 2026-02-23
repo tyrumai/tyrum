@@ -82,6 +82,57 @@ describe("AgentRuntime embedding pipeline selection", () => {
     delete process.env["TYRUM_AUTH_PROFILES_ENABLED"];
   });
 
+  it("allows embeddings for providers without API keys", async () => {
+    container = createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const cacheDal = new ModelsDevCacheDal(container.db);
+    const nowIso = new Date().toISOString();
+    await cacheDal.upsert({
+      fetchedAt: nowIso,
+      etag: null,
+      sha256: "sha",
+      json: JSON.stringify({
+        local: {
+          id: "local",
+          name: "Local",
+          env: [],
+          npm: "@ai-sdk/local",
+          models: {
+            chat: { id: "chat", name: "Chat" },
+            "embedding-1": { id: "embedding-1", name: "Embedding 1", family: "embedding" },
+          },
+        },
+      }),
+      source: "remote",
+      lastError: null,
+      nowIso,
+    });
+
+    const fetchImpl: typeof fetch = async () => new Response("not found", { status: 404 });
+
+    const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
+    const runtime = new AgentRuntime({
+      container,
+      agentId: "agent-1",
+      fetchImpl,
+    });
+
+    const pipeline = await (runtime as any).resolveEmbeddingPipeline("local/chat", "session-1");
+    expect(pipeline).toBeDefined();
+
+    expect(seenProviderInputs[0]).toMatchObject({
+      providerId: "local",
+    });
+    expect(Object.hasOwn(seenProviderInputs[0], "apiKey")).toBe(true);
+    expect(seenProviderInputs[0].apiKey).toBeUndefined();
+    expect(createdPipelines[0]).toMatchObject({
+      embeddingModelId: "local/embedding-1",
+    });
+  });
+
   it("uses auth profiles and can fall back to OpenAI embeddings for non-OpenAI primary models", async () => {
     process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "1";
 
@@ -160,4 +211,3 @@ describe("AgentRuntime embedding pipeline selection", () => {
     });
   });
 });
-
