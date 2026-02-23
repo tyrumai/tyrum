@@ -3,6 +3,8 @@ import type { ModelsDevService } from "../models/models-dev-service.js";
 import type { PolicyService } from "../policy/service.js";
 import type { AgentRegistry } from "../agent/registry.js";
 import type { SqlDb } from "../../statestore/types.js";
+import { resolveSandboxHardeningProfile, type SandboxHardeningProfile } from "../sandbox/hardening.js";
+import { deriveElevatedExecutionAvailableFromPolicyBundle } from "../sandbox/elevated-execution.js";
 
 type StatusCountMap = Record<string, number>;
 
@@ -71,6 +73,7 @@ type SandboxStatus = {
   policy_enabled: boolean;
   policy_observe_only: boolean;
   effective_policy_sha256: string;
+  hardening_profile: SandboxHardeningProfile;
   elevated_execution_available: boolean | null;
 };
 
@@ -599,6 +602,7 @@ async function loadSandboxStatus(
 ): Promise<SandboxStatus | null> {
   if (!policyService) return null;
 
+  const hardeningProfile = resolveSandboxHardeningProfile();
   const status = policyStatus ?? (await policyService.getStatus());
   const mode: SandboxStatus["mode"] = !status.enabled
     ? "disabled"
@@ -609,14 +613,7 @@ async function loadSandboxStatus(
   let elevatedExecutionAvailable: boolean | null = null;
   try {
     const effective = await policyService.loadEffectiveBundle();
-    const tools = effective.bundle.tools;
-    const toolsDefault = tools?.default ?? "deny";
-    const allowCount = Array.isArray(tools?.allow) ? tools.allow.length : 0;
-    const requireApprovalCount = Array.isArray(tools?.require_approval)
-      ? tools.require_approval.length
-      : 0;
-    elevatedExecutionAvailable =
-      toolsDefault !== "deny" || allowCount > 0 || requireApprovalCount > 0;
+    elevatedExecutionAvailable = deriveElevatedExecutionAvailableFromPolicyBundle(effective.bundle);
   } catch {
     elevatedExecutionAvailable = null;
   }
@@ -626,6 +623,7 @@ async function loadSandboxStatus(
     policy_enabled: status.enabled,
     policy_observe_only: status.observe_only,
     effective_policy_sha256: status.effective_sha256,
+    hardening_profile: hardeningProfile,
     elevated_execution_available: elevatedExecutionAvailable,
   };
 }

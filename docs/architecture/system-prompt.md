@@ -13,7 +13,7 @@ For each agent run, Tyrum assembles a custom system prompt. The purpose is to pr
 - Documentation: where local docs live and when to read them
 - Injected workspace files: bootstrap context included without explicit reads
 - Memory digest: budgeted long-term memory recall (from the StateStore), scoped to the agent
-- Sandbox: runtime constraints and whether elevated execution is available
+- Sandbox: runtime constraints (including hardening profile) and whether elevated execution is available
 - Date and time: user-local time and formatting
 - Reply tags: optional provider-specific reply tags
 - Heartbeats: periodic prompt and acknowledgement behavior

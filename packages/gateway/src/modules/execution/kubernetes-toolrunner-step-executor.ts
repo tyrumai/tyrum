@@ -2,6 +2,7 @@ import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/schemas";
 import { BatchV1Api, CoreV1Api, KubeConfig } from "@kubernetes/client-node";
 import { randomUUID } from "node:crypto";
 import type { Logger } from "../observability/logger.js";
+import { resolveSandboxHardeningProfile, type SandboxHardeningProfile } from "../sandbox/hardening.js";
 import type { StepExecutor, StepResult } from "./engine.js";
 
 function sleep(ms: number): Promise<void> {
@@ -122,6 +123,7 @@ class KubernetesToolRunnerStepExecutor implements StepExecutor {
     stepIndex: number,
     timeoutMs: number,
   ): Promise<StepResult> {
+    const hardeningProfile: SandboxHardeningProfile = resolveSandboxHardeningProfile();
     const suffix = sanitizeDnsLabelSuffix(randomUUID().replace(/-/g, "").slice(0, 10));
     const jobName = `tyrum-toolrunner-${suffix}`.slice(0, 63);
 
@@ -137,6 +139,52 @@ class KubernetesToolRunnerStepExecutor implements StepExecutor {
       TYRUM_LOG_LEVEL: "silent",
       TYRUM_TOOLRUNNER_PAYLOAD: payload,
     });
+
+    const podSecurityContext = {
+      runAsNonRoot: true,
+      runAsUser: 10001,
+      runAsGroup: 10001,
+      fsGroup: 10001,
+      seccompProfile: { type: "RuntimeDefault" },
+    };
+
+    const containerSecurityContext = {
+      allowPrivilegeEscalation: false,
+      capabilities: { drop: ["ALL"] },
+      runAsNonRoot: true,
+      ...(hardeningProfile === "hardened" ? { readOnlyRootFilesystem: true } : {}),
+    };
+
+    const workspaceMount = {
+      name: "workspace",
+      mountPath: this.tyrumHome,
+    };
+
+    const volumeMounts = hardeningProfile === "hardened"
+      ? [
+          workspaceMount,
+          { name: "tmp", mountPath: "/tmp" },
+        ]
+      : [workspaceMount];
+
+    const volumes = hardeningProfile === "hardened"
+      ? [
+          {
+            name: "workspace",
+            persistentVolumeClaim: {
+              claimName: this.workspacePvcClaim,
+            },
+          },
+          { name: "tmp", emptyDir: {} },
+        ]
+      : [
+          {
+            name: "workspace",
+            persistentVolumeClaim: {
+              claimName: this.workspacePvcClaim,
+            },
+          },
+        ];
 
     const job = {
       apiVersion: "batch/v1",
@@ -161,29 +209,21 @@ class KubernetesToolRunnerStepExecutor implements StepExecutor {
           },
           spec: {
             serviceAccountName: this.serviceAccountName,
+            automountServiceAccountToken: hardeningProfile === "hardened" ? false : undefined,
+            enableServiceLinks: hardeningProfile === "hardened" ? false : undefined,
             restartPolicy: "Never",
+            securityContext: podSecurityContext,
             containers: [
               {
                 name: "toolrunner",
                 image: this.image,
                 args: ["toolrunner"],
                 env,
-                volumeMounts: [
-                  {
-                    name: "workspace",
-                    mountPath: this.tyrumHome,
-                  },
-                ],
+                securityContext: containerSecurityContext,
+                volumeMounts,
               },
             ],
-            volumes: [
-              {
-                name: "workspace",
-                persistentVolumeClaim: {
-                  claimName: this.workspacePvcClaim,
-                },
-              },
-            ],
+            volumes,
           },
         },
       },
@@ -271,4 +311,3 @@ class KubernetesToolRunnerStepExecutor implements StepExecutor {
     return typeof logs === "string" ? logs : String(logs);
   }
 }
-

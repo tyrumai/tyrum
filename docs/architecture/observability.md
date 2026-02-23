@@ -12,7 +12,7 @@ Tyrum is designed so operators can answer: “what happened, why, and what did i
 - model catalog freshness (source version, cache age, last refresh status)
 - session key + lane, run state, and queue depth
 - context window utilization (estimated + last-run measured)
-- sandbox/policy mode and whether elevated execution is available
+- sandbox/policy mode, sandbox hardening profile, and whether elevated execution is available
 - OAuth profile health (expiry, refresh state, cooldown/disable reasons when present)
 
 ### Context inspection

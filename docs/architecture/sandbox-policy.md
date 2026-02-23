@@ -93,6 +93,29 @@ Sandboxing is the runtime enforcement layer that limits what executors can do ev
 - least-privilege process/container defaults (no ambient host access)
 - optional hardened mode (seccomp/AppArmor/container restrictions) for high-risk deployments
 
+## Sandbox hardening profiles
+
+Tyrum exposes a simple **sandbox hardening profile** concept so operators and the model can reason about the runtime containment posture.
+
+Profiles:
+
+- **`baseline`** (default): conservative process/container defaults (non-root, reduced ambient privilege) plus workspace boundary checks and environment sanitization.
+- **`hardened`** (opt-in): baseline plus additional container hardening such as read-only root filesystem and tighter pod/process settings in ToolRunner sandboxes.
+
+### Configuration
+
+Set `TYRUM_TOOLRUNNER_HARDENING_PROFILE`:
+
+- `baseline` (default)
+- `hardened`
+
+In Kubernetes deployments, the gateway uses this profile to harden ToolRunner job/pod specs. In local-subprocess deployments, the value is treated as **operator-provided signaling** (the runtime cannot reliably detect host/container hardening automatically).
+
+### Observability and signaling
+
+- `/status` includes `sandbox.hardening_profile`.
+- The agent system prompt includes a **Sandbox** section (hardening profile + elevated-execution availability) so the model does not need to guess.
+
 ## Auditability
 
 Policy decisions and sandbox denials are observable:
