@@ -1502,14 +1502,41 @@ export class AgentRuntime {
       },
     };
 
+    type RunStatusRow = {
+      status: string;
+      paused_reason: string | null;
+      paused_detail: string | null;
+    };
+
+    const resolveIfTerminal = async (row: RunStatusRow): Promise<AgentTurnResponseT | undefined> => {
+      if (row.status === "succeeded") {
+        const persisted = await this.loadTurnResultFromRun(runId);
+        if (persisted) {
+          return persisted;
+        }
+        throw new Error("execution engine turn completed without a result payload");
+      }
+
+      if (row.status === "failed" || row.status === "cancelled") {
+        const failure = await this.loadTurnFailureFromRun(runId);
+        const reason =
+          row.status === "failed"
+            ? failure ?? row.paused_detail ?? row.paused_reason ?? `execution run ${row.status}`
+            : row.paused_detail ?? row.paused_reason ?? failure ?? `execution run ${row.status}`;
+        throw new Error(reason);
+      }
+
+      if (row.status === "paused") {
+        throw new Error(row.paused_detail ?? row.paused_reason ?? "execution run paused");
+      }
+
+      return undefined;
+    };
+
     let backoffMs = TURN_ENGINE_MIN_BACKOFF_MS;
 
     while (Date.now() < deadlineMs) {
-      const run = await this.opts.container.db.get<{
-        status: string;
-        paused_reason: string | null;
-        paused_detail: string | null;
-      }>(
+      const run = await this.opts.container.db.get<RunStatusRow>(
         `SELECT status, paused_reason, paused_detail
          FROM execution_runs
          WHERE run_id = ?`,
@@ -1519,25 +1546,9 @@ export class AgentRuntime {
         throw new Error(`execution run '${runId}' not found`);
       }
 
-      if (run.status === "succeeded") {
-        const persisted = await this.loadTurnResultFromRun(runId);
-        if (persisted) {
-          return persisted;
-        }
-        throw new Error("execution engine turn completed without a result payload");
-      }
-
-      if (run.status === "failed" || run.status === "cancelled") {
-        const failure = await this.loadTurnFailureFromRun(runId);
-        const reason =
-          run.status === "failed"
-            ? failure ?? run.paused_detail ?? run.paused_reason ?? `execution run ${run.status}`
-            : run.paused_detail ?? run.paused_reason ?? failure ?? `execution run ${run.status}`;
-        throw new Error(reason);
-      }
-
-      if (run.status === "paused") {
-        throw new Error(run.paused_detail ?? run.paused_reason ?? "execution run paused");
+      const resolved = await resolveIfTerminal(run);
+      if (resolved) {
+        return resolved;
       }
 
       const didWork = await this.executionEngine.workerTick({
@@ -1558,11 +1569,7 @@ export class AgentRuntime {
 
     // Avoid timing out when the run completed during the final tick but the
     // polling loop didn't get another iteration before the deadline elapsed.
-    const completed = await this.opts.container.db.get<{
-      status: string;
-      paused_reason: string | null;
-      paused_detail: string | null;
-    }>(
+    const completed = await this.opts.container.db.get<RunStatusRow>(
       `SELECT status, paused_reason, paused_detail
        FROM execution_runs
        WHERE run_id = ?`,
@@ -1572,33 +1579,9 @@ export class AgentRuntime {
       throw new Error(`execution run '${runId}' not found`);
     }
 
-    if (completed.status === "succeeded") {
-      const persisted = await this.loadTurnResultFromRun(runId);
-      if (persisted) {
-        return persisted;
-      }
-      throw new Error("execution engine turn completed without a result payload");
-    }
-
-    if (completed.status === "failed" || completed.status === "cancelled") {
-      const failure = await this.loadTurnFailureFromRun(runId);
-      const reason =
-        completed.status === "failed"
-          ? failure ??
-            completed.paused_detail ??
-            completed.paused_reason ??
-            `execution run ${completed.status}`
-          : completed.paused_detail ??
-            completed.paused_reason ??
-            failure ??
-            `execution run ${completed.status}`;
-      throw new Error(reason);
-    }
-
-    if (completed.status === "paused") {
-      throw new Error(
-        completed.paused_detail ?? completed.paused_reason ?? "execution run paused",
-      );
+    const resolved = await resolveIfTerminal(completed);
+    if (resolved) {
+      return resolved;
     }
 
     const elapsed = Math.max(0, Date.now() - startMs);
