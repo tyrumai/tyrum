@@ -47,6 +47,7 @@ describe("provider OAuth routes", () => {
   const prevOauthConfigEnv = process.env["TYRUM_OAUTH_PROVIDERS_CONFIG"];
   const prevClientId = process.env["TEST_CLIENT_ID"];
   const prevClientSecret = process.env["TEST_CLIENT_SECRET"];
+  const prevAuthProfilesEnabled = process.env["TYRUM_AUTH_PROFILES_ENABLED"];
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "tyrum-oauth-test-"));
@@ -73,6 +74,7 @@ describe("provider OAuth routes", () => {
     process.env["TYRUM_OAUTH_PROVIDERS_CONFIG"] = oauthConfigPath;
     process.env["TEST_CLIENT_ID"] = "client-1";
     process.env["TEST_CLIENT_SECRET"] = "secret-1";
+    process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "1";
 
     secretProvider = new MemorySecretProvider();
 
@@ -108,6 +110,9 @@ describe("provider OAuth routes", () => {
 
     if (prevClientSecret === undefined) delete process.env["TEST_CLIENT_SECRET"];
     else process.env["TEST_CLIENT_SECRET"] = prevClientSecret;
+
+    if (prevAuthProfilesEnabled === undefined) delete process.env["TYRUM_AUTH_PROFILES_ENABLED"];
+    else process.env["TYRUM_AUTH_PROFILES_ENABLED"] = prevAuthProfilesEnabled;
 
     await rm(tempDir, { recursive: true, force: true });
   });
@@ -241,6 +246,35 @@ describe("provider OAuth routes", () => {
     );
     expect(callbackRes.status).toBe(200);
     expect(discoveryCalls).toBe(1);
+
+    await container.db.close();
+  });
+
+  it("does not mount provider OAuth routes when auth profiles are disabled", async () => {
+    delete process.env["TYRUM_AUTH_PROFILES_ENABLED"];
+
+    const container = await createTestContainer();
+    const app = createApp(container, {
+      tokenStore,
+      secretProvider,
+      isLocalOnly: true,
+      runtime: {
+        version: "test",
+        instanceId: "test-instance",
+        role: "all",
+        otelEnabled: false,
+      },
+    });
+
+    const authorizeRes = await app.request("/providers/test/oauth/authorize", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        Authorization: `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify({ agent_id: "default" }),
+    });
+    expect(authorizeRes.status).toBe(404);
 
     await container.db.close();
   });

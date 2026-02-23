@@ -49,6 +49,7 @@ import type { ConnectionDirectoryDal } from "./modules/backplane/connection-dire
 import type { OutboxDal } from "./modules/backplane/outbox-dal.js";
 import { randomUUID } from "node:crypto";
 import { VERSION } from "./version.js";
+import { isAuthProfilesEnabled } from "./modules/models/auth-profiles-enabled.js";
 
 export interface AppOptions {
   agents?: AgentRegistry;
@@ -212,7 +213,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   );
   app.route("/", createAuthProfileRoutes({ authProfileDal, pinDal }));
   app.route("/", createModelsDevRoutes({ modelsDev: container.modelsDev }));
-  if (oauthSecretProviderForAgent) {
+  if (oauthSecretProviderForAgent && isAuthProfilesEnabled()) {
     app.route(
       "/",
       createProviderOAuthRoutes({
