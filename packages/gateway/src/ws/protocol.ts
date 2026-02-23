@@ -909,8 +909,7 @@ export async function handleClientMessage(
  */
 export function dispatchTask(
   action: ActionPrimitive,
-  planId: string,
-  stepIndex: number,
+  scope: { runId: string; stepId: string; attemptId: string },
   deps: ProtocolDeps,
 ): Promise<string> {
   const capability = requiredCapability(action.type);
@@ -920,7 +919,7 @@ export function dispatchTask(
 
   const localCandidates: ConnectedClient[] = [];
   for (const c of deps.connectionManager.allClients()) {
-    if (c.capabilities.includes(capability)) {
+    if (c.protocol_rev >= 2 && c.capabilities.includes(capability)) {
       localCandidates.push(c);
     }
   }
@@ -942,7 +941,13 @@ export function dispatchTask(
         ? (
             await Promise.all(
               candidates
-                .filter((c) => c.role === "node" && typeof c.device_id === "string" && c.device_id.trim().length > 0)
+                .filter(
+                  (c) =>
+                    c.protocol_rev >= 2 &&
+                    c.role === "node" &&
+                    typeof c.device_id === "string" &&
+                    c.device_id.trim().length > 0,
+                )
                 .map(async (c) => {
                   const pairing = await deps.nodePairingDal!.getByNodeId(c.device_id!);
                   return pairing?.status === "approved" ? c : null;
@@ -951,7 +956,7 @@ export function dispatchTask(
           ).filter((c): c is NonNullable<(typeof candidates)[number]> => c !== null)
         : [];
 
-      const eligibleClients = candidates.filter((c) => c.role === "client");
+      const eligibleClients = candidates.filter((c) => c.protocol_rev >= 2 && c.role === "client");
       const eligible = [...eligibleNodes, ...eligibleClients];
 
       const target = eligible.find((c) => c.edge_id !== cluster.edgeId) ?? eligible[0];
@@ -963,7 +968,12 @@ export function dispatchTask(
       const message: WsRequestEnvelope = {
         request_id: requestId,
         type: "task.execute",
-        payload: { plan_id: planId, step_index: stepIndex, action },
+        payload: {
+          run_id: scope.runId,
+          step_id: scope.stepId,
+          attempt_id: scope.attemptId,
+          action,
+        },
       };
 
       await cluster.outboxDal.enqueue(
@@ -1010,7 +1020,13 @@ export function dispatchTask(
         ? (
             await Promise.all(
               candidates
-                .filter((c) => c.role === "node" && typeof c.device_id === "string" && c.device_id.trim().length > 0)
+                .filter(
+                  (c) =>
+                    c.protocol_rev >= 2 &&
+                    c.role === "node" &&
+                    typeof c.device_id === "string" &&
+                    c.device_id.trim().length > 0,
+                )
                 .map(async (c) => {
                   const pairing = await deps.nodePairingDal!.getByNodeId(c.device_id!);
                   return pairing?.status === "approved" ? c : null;
@@ -1018,7 +1034,7 @@ export function dispatchTask(
             )
           ).filter((c): c is NonNullable<(typeof candidates)[number]> => c !== null)
         : [];
-      const eligibleClients2 = candidates.filter((c) => c.role === "client");
+      const eligibleClients2 = candidates.filter((c) => c.protocol_rev >= 2 && c.role === "client");
       const eligible2 = [...eligibleNodes2, ...eligibleClients2];
 
       const target = eligible2.find((c) => c.edge_id !== cluster.edgeId) ?? eligible2[0];
@@ -1030,7 +1046,12 @@ export function dispatchTask(
       const message: WsRequestEnvelope = {
         request_id: requestId,
         type: "task.execute",
-        payload: { plan_id: planId, step_index: stepIndex, action },
+        payload: {
+          run_id: scope.runId,
+          step_id: scope.stepId,
+          attempt_id: scope.attemptId,
+          action,
+        },
       };
 
       await cluster.outboxDal.enqueue(
@@ -1045,7 +1066,12 @@ export function dispatchTask(
     const message: WsRequestEnvelope = {
       request_id: requestId,
       type: "task.execute",
-      payload: { plan_id: planId, step_index: stepIndex, action },
+      payload: {
+        run_id: scope.runId,
+        step_id: scope.stepId,
+        attempt_id: scope.attemptId,
+        action,
+      },
     };
     selected.ws.send(JSON.stringify(message));
     return requestId;

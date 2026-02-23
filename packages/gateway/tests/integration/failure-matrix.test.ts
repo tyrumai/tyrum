@@ -290,7 +290,12 @@ describe("Failure matrix (scaling-ha)", () => {
     expect(listA1[0]!.edge_id).toBe("edge-a");
 
     // Directed routing: edge-b dispatches to the capable peer owned by edge-a via outbox.
-    await dispatchTask({ type: "CLI", args: {} }, "plan-x", 0, {
+    const taskScopeX = {
+      runId: "550e8400-e29b-41d4-a716-446655440000",
+      stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+      attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+    };
+    await dispatchTask({ type: "CLI", args: {} }, taskScopeX, {
       connectionManager: cmB,
       cluster: { edgeId: "edge-b", outboxDal: outboxB, connectionDirectory: cdB },
     } as never);
@@ -302,7 +307,7 @@ describe("Failure matrix (scaling-ha)", () => {
       5_000,
       "task.execute",
     );
-    expect((taskMsg["payload"] as Record<string, unknown>)["plan_id"]).toBe("plan-x");
+    expect((taskMsg["payload"] as Record<string, unknown>)["run_id"]).toBe(taskScopeX.runId);
 
     // Simulate edge-a crash by stopping its directory heartbeat; entry should expire and be cleaned up by other edges.
     wsHandlerA.stopHeartbeat();
@@ -312,7 +317,7 @@ describe("Failure matrix (scaling-ha)", () => {
 
     // With no directory entries, dispatch should fail (at-least-once semantics require re-resolve on reconnect).
     await expect(
-      dispatchTask({ type: "CLI", args: {} }, "plan-y", 0, {
+      dispatchTask({ type: "CLI", args: {} }, taskScopeX, {
         connectionManager: cmB,
         cluster: { edgeId: "edge-b", outboxDal: outboxB, connectionDirectory: cdB },
       } as never),
@@ -332,7 +337,12 @@ describe("Failure matrix (scaling-ha)", () => {
     expect(listB.length).toBe(1);
     expect(listB[0]!.edge_id).toBe("edge-b");
 
-    await dispatchTask({ type: "CLI", args: {} }, "plan-z", 0, {
+    const taskScopeZ = {
+      runId: "550e8400-e29b-41d4-a716-446655440002",
+      stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+      attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+    };
+    await dispatchTask({ type: "CLI", args: {} }, taskScopeZ, {
       connectionManager: cmA,
       cluster: { edgeId: "edge-a", outboxDal: outboxA, connectionDirectory: cdA },
     } as never);
@@ -344,7 +354,7 @@ describe("Failure matrix (scaling-ha)", () => {
       5_000,
       "task.execute edge-b",
     );
-    expect((taskMsg2["payload"] as Record<string, unknown>)["plan_id"]).toBe("plan-z");
+    expect((taskMsg2["payload"] as Record<string, unknown>)["run_id"]).toBe(taskScopeZ.runId);
   });
 
   it("recovers from worker crash mid-attempt via lease expiry/takeover", async () => {

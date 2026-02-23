@@ -19,9 +19,10 @@ import type { Hono } from "hono";
 import { createTestApp, minimalPlanRequest } from "./helpers.js";
 import { createWsHandler } from "../../src/routes/ws.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
-import type { ProtocolDeps } from "../../src/ws/protocol.js";
+import { dispatchTask, type ProtocolDeps } from "../../src/ws/protocol.js";
 import { TyrumClient } from "../../../client/src/ws-client.js";
 import { TokenStore } from "../../src/modules/auth/token-store.js";
+import { generateKeyPairSync } from "node:crypto";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -125,11 +126,22 @@ describe("E2E smoke test", () => {
     const baseUrl = `http://127.0.0.1:${srv.port}`;
 
     // --- 1. Connect a TyrumClient ---
+    const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+    const publicKeyDer = publicKey.export({ format: "der", type: "spki" }) as Buffer;
+    const privateKeyDer = privateKey.export({ format: "der", type: "pkcs8" }) as Buffer;
+
     client = new TyrumClient({
       url: `ws://127.0.0.1:${srv.port}/ws`,
       token: srv.adminToken,
       capabilities: ["playwright", "http"],
       reconnect: false,
+      useDeviceProof: true,
+      role: "client",
+      protocolRev: 2,
+      device: {
+        publicKey: publicKeyDer.toString("base64url"),
+        privateKey: privateKeyDer.toString("base64url"),
+      },
     });
 
     const connectedP = new Promise<void>((resolve) => {
@@ -157,35 +169,29 @@ describe("E2E smoke test", () => {
     // We dispatch directly via the connection manager (the /plan route
     // orchestrator does not dispatch over WS in the current TS impl;
     // it returns a PlanResponse).  This exercises the protocol layer.
-    const taskDispatchP = new Promise<{ task_id: string; plan_id: string }>(
+    const taskDispatchP = new Promise<{ task_id: string; run_id: string }>(
       (resolve) => {
         client!.on("task_execute", (msg) => {
-          resolve({ task_id: msg.request_id, plan_id: msg.payload.plan_id });
+          resolve({ task_id: msg.request_id, run_id: msg.payload.run_id });
         });
       },
     );
 
-    const httpClient = srv.connectionManager.getClientForCapability("http");
-    expect(httpClient).toBeDefined();
-
-    const taskId = crypto.randomUUID();
-    const planId = "plan-e2e-1";
-    httpClient!.ws.send(
-      JSON.stringify({
-        request_id: taskId,
-        type: "task.execute",
-        payload: {
-          plan_id: planId,
-          step_index: 0,
-          action: { type: "Http", args: { url: "https://example.com" } },
-        },
-      }),
+    const runId = "550e8400-e29b-41d4-a716-446655440000";
+    const taskId = await dispatchTask(
+      { type: "Http", args: { url: "https://example.com" } },
+      {
+        runId,
+        stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+        attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+      },
+      { connectionManager: srv.connectionManager },
     );
 
     // --- 5. Client receives task_dispatch ---
     const dispatch = await taskDispatchP;
     expect(dispatch.task_id).toBe(taskId);
-    expect(dispatch.plan_id).toBe(planId);
+    expect(dispatch.run_id).toBe(runId);
 
     // --- 6. Client sends task_result ---
     client.respondTaskExecute(taskId, true, undefined, { statusCode: 200 });

@@ -16,6 +16,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { generateKeyPairSync, randomUUID } from "node:crypto";
 import { getRequestListener } from "@hono/node-server";
 import { createContainer } from "../../../../packages/gateway/src/container.js";
 import { createApp } from "../../../../packages/gateway/src/app.js";
@@ -151,11 +152,21 @@ async function connectClient(
   capabilities: Array<"desktop" | "cli" | "playwright" | "http" | "android">,
   connectionManager: ConnectionManager,
 ): Promise<TyrumClient> {
+  const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+  const publicKeyDer = publicKey.export({ format: "der", type: "spki" }) as Buffer;
+  const privateKeyDer = privateKey.export({ format: "der", type: "pkcs8" }) as Buffer;
+
   const client = new TyrumClient({
     url: `ws://127.0.0.1:${port}/ws`,
     token,
     capabilities,
     reconnect: false,
+    useDeviceProof: true,
+    protocolRev: 2,
+    device: {
+      publicKey: publicKeyDer.toString("base64url"),
+      privateKey: privateKeyDer.toString("base64url"),
+    },
   });
 
   const connectedP = new Promise<void>((resolve) => {
@@ -230,8 +241,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
         type: "Desktop",
         args: { op: "screenshot", display: "primary", format: "png" },
       },
-      "plan-1",
-      0,
+      { runId: randomUUID(), stepId: randomUUID(), attemptId: randomUUID() },
       { connectionManager: srv.connectionManager },
     );
 
@@ -266,8 +276,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
         type: "Desktop",
         args: { op: "mouse", action: "click", x: 100, y: 200 },
       },
-      "plan-2",
-      0,
+      { runId: randomUUID(), stepId: randomUUID(), attemptId: randomUUID() },
       { connectionManager: srv.connectionManager },
     );
 
@@ -300,8 +309,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
         type: "CLI",
         args: { cmd: "rm", args: ["-rf", "/"] },
       },
-      "plan-3",
-      0,
+      { runId: randomUUID(), stepId: randomUUID(), attemptId: randomUUID() },
       { connectionManager: srv.connectionManager },
     );
 
@@ -334,8 +342,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
         type: "CLI",
         args: { cmd: "echo", args: ["hello", "world"] },
       },
-      "plan-4",
-      0,
+      { runId: randomUUID(), stepId: randomUUID(), attemptId: randomUUID() },
       { connectionManager: srv.connectionManager },
     );
 
