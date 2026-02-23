@@ -272,10 +272,11 @@ function resolveGatewayHost(): string {
   return process.env["GATEWAY_HOST"]?.trim() || "127.0.0.1";
 }
 
-function resolveGatewayPort(): number {
+function resolveGatewayPort(): { port: number; raw: string; valid: boolean } {
   const raw = process.env["GATEWAY_PORT"] ?? "8788";
   const parsed = parseInt(raw, 10);
-  return Number.isFinite(parsed) ? parsed : 8788;
+  const valid = Number.isInteger(parsed) && parsed > 0 && parsed <= 65535;
+  return { port: parsed, raw, valid };
 }
 
 function normalizeProbeHost(host: string): string {
@@ -462,10 +463,10 @@ async function runGatewayCheck(): Promise<number> {
 
     // --- Static diagnostics ---
     const host = resolveGatewayHost();
-    const port = resolveGatewayPort();
+    const portInfo = resolveGatewayPort();
     const isLocalOnly = LOCAL_HOSTS.has(host);
     console.log(
-      `static.exposure: host=${host} port=${port} is_exposed=${!isLocalOnly}`,
+      `static.exposure: host=${host} port=${portInfo.valid ? portInfo.port : `invalid(raw=${portInfo.raw})`} is_exposed=${!isLocalOnly}`,
     );
 
     const tokenPath = join(tyrumHome, ".admin-token");
@@ -528,29 +529,47 @@ async function runGatewayCheck(): Promise<number> {
 
     // --- Live HTTP probes (best-effort) ---
     try {
+      if (!portInfo.valid) {
+        console.log(`live.http: skipped=invalid_port raw=${portInfo.raw}`);
+        return 0;
+      }
+
       const probeHost = normalizeProbeHost(host);
-      const baseUrl = `http://${hostForUrl(probeHost)}:${port}`;
+      const baseUrl = `http://${hostForUrl(probeHost)}:${portInfo.port}`;
       const health = await tryFetchJson(`${baseUrl}/healthz`, { timeoutMs: 500 });
-      const status = await tryFetchJson(`${baseUrl}/status`, {
-        timeoutMs: 500,
-        headers: {
-          authorization: `Bearer ${token}`,
-        },
-      });
+      const statusPublic = await tryFetchJson(`${baseUrl}/status`, { timeoutMs: 500 });
+
+      const isLoopbackProbeTarget = LOCAL_HOSTS.has(probeHost);
+      const statusAuth = isLoopbackProbeTarget
+        ? await tryFetchJson(`${baseUrl}/status`, {
+            timeoutMs: 500,
+            headers: {
+              authorization: `Bearer ${token}`,
+            },
+          })
+        : null;
 
       const healthOk =
         health.ok && isRecord(health.json) && (health.json["status"] as unknown) === "ok";
-      const statusOk =
-        status.ok && isRecord(status.json) && (status.json["status"] as unknown) === "ok";
+      const statusPublicOk =
+        statusPublic.ok &&
+        isRecord(statusPublic.json) &&
+        (statusPublic.json["status"] as unknown) === "ok";
+      const statusAuthOk =
+        statusAuth?.ok &&
+        isRecord(statusAuth.json) &&
+        (statusAuth.json["status"] as unknown) === "ok";
 
-      const formatProbe = (probe: { ok: boolean; status: number }, ok: boolean): string => {
+      const formatProbe = (probe: { ok: boolean; status: number } | null, ok: boolean): string => {
+        if (!probe) return "skipped";
         if (probe.status === 0) return "unavailable";
         if (ok) return "ok";
+        if (probe.status === 401) return "unauthorized";
         return `fail(${probe.status})`;
       };
 
       console.log(
-        `live.http: base=${baseUrl} healthz=${formatProbe(health, healthOk)} status=${formatProbe(status, statusOk)}`,
+        `live.http: base=${baseUrl} healthz=${formatProbe(health, healthOk)} status_public=${formatProbe(statusPublic, statusPublicOk)} status_auth=${formatProbe(statusAuth, Boolean(statusAuthOk))}`,
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

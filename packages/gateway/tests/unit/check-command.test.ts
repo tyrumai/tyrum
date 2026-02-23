@@ -108,4 +108,54 @@ describe("tyrum check", () => {
     errorSpy.mockRestore();
     vi.unstubAllGlobals();
   });
+
+  it("does not send the admin token when probing non-loopback hosts", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    process.env["GATEWAY_DB_PATH"] = ":memory:";
+    process.env["GATEWAY_HOST"] = "10.0.0.1";
+    process.env["GATEWAY_PORT"] = "8788";
+    process.env["GATEWAY_TOKEN"] = "test-token";
+    process.env["TYRUM_HOME"] = "/tmp/tyrum-test-home";
+    process.env["TYRUM_SECRET_PROVIDER"] = "env";
+
+    ensureLoaded.mockResolvedValueOnce({
+      status: {
+        source: "default",
+        provider_count: 1,
+        model_count: 2,
+        last_error: null,
+      },
+    } as any);
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(JSON.stringify({ status: "ok" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { runCli } = await import("../../src/index.js");
+    const code = await runCli(["check"]);
+
+    expect(code).toBe(0);
+
+    const allHeaders = fetchMock.mock.calls
+      .map((call) => call[1])
+      .filter(Boolean)
+      .map((init) => (init as RequestInit).headers)
+      .filter(Boolean);
+
+    for (const headers of allHeaders) {
+      const asRecord = headers as Record<string, string>;
+      expect(asRecord["authorization"]).toBeUndefined();
+      expect(asRecord["Authorization"]).toBeUndefined();
+    }
+
+    logSpy.mockRestore();
+    errorSpy.mockRestore();
+    vi.unstubAllGlobals();
+  });
 });

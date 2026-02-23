@@ -70,7 +70,7 @@ Check supports both:
 - `static.policy`: policy enablement and the effective policy bundle hash + sources.
 - `static.plugins`: manifest discovery counts per plugin source (workspace/user/bundled), without executing plugin entry code.
 - `static.secrets`: secret provider kind + basic initialization status.
-- `live.http`: best-effort HTTP probes (`/healthz` and `/status`) against the configured host/port.
+- `live.http`: best-effort HTTP probes (`/healthz` and `/status`) against the configured host/port (authenticated probe is only attempted on loopback targets to avoid leaking the admin token).
 
 ## Reference deployments
 
