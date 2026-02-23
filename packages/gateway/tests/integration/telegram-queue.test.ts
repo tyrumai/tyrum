@@ -324,6 +324,34 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
     ).toThrow("connector must not contain ':'");
   });
 
+  it("rejects whitespace-only account ids when binding egress connectors", () => {
+    db = openTestSqliteDb();
+
+    const fetchFn = mockFetch();
+    const bot = new TelegramBot("test-token", fetchFn);
+    const mockRuntime = {
+      turn: vi.fn().mockResolvedValue({
+        reply: "hello",
+        session_id: "session-abc",
+        used_tools: [],
+        memory_written: false,
+      }),
+    };
+
+    expect(
+      () =>
+        new TelegramChannelProcessor({
+          db: db!,
+          agents: makeAgents(mockRuntime),
+          telegramBot: bot,
+          owner: "test-owner",
+          debounceMs: 0,
+          maxBatch: 1,
+          egressConnectors: [{ connector: "telegram", accountId: "   ", sendMessage: vi.fn() }],
+        }),
+    ).toThrow(/account must be non-empty/);
+  });
+
   it("uses account-specific egress connectors when provided", async () => {
     db = openTestSqliteDb();
     const fetchFn = mockFetch();

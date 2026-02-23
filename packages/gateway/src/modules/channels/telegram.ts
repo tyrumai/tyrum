@@ -61,12 +61,12 @@ function toTelegramParseMode(value: string | undefined): "HTML" | "Markdown" | "
 
 function connectorBindingKey(connector: ChannelEgressConnector): string {
   const connectorId = normalizeConnectorId(connector.connector);
-  if (!connector.accountId || connector.accountId.trim().length === 0) {
+  if (typeof connector.accountId !== "string") {
     return connectorId;
   }
   return buildChannelSourceKey({
     connector: connectorId,
-    accountId: normalizeAccountId(connector.accountId),
+    accountId: connector.accountId,
   });
 }
 
