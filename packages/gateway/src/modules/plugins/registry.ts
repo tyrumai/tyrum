@@ -3,8 +3,8 @@ import type { PluginManifest as PluginManifestT } from "@tyrum/schemas";
 import { Ajv2019 } from "ajv/dist/2019.js";
 import type { ErrorObject } from "ajv";
 import { readFileSync } from "node:fs";
-import { readdir, readFile } from "node:fs/promises";
-import { dirname, join, resolve, relative } from "node:path";
+import { readdir, readFile, realpath, stat } from "node:fs/promises";
+import { dirname, isAbsolute, join, resolve, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parse as parseYaml } from "yaml";
 import type { Hono } from "hono";
@@ -482,6 +482,29 @@ function resolveSafeChildPath(parent: string, child: string): string {
   throw new Error(`path escapes plugin directory: ${child}`);
 }
 
+function getCurrentUid(): number | undefined {
+  if (typeof process.getuid !== "function") return undefined;
+  try {
+    return process.getuid();
+  } catch {
+    return undefined;
+  }
+}
+
+function isTrustedOwner(uid: number, currentUid: number): boolean {
+  return uid === currentUid || uid === 0;
+}
+
+function isWorldWritable(mode: number): boolean {
+  // POSIX "other write" bit.
+  return (mode & 0o002) !== 0;
+}
+
+function isWithinDir(parent: string, child: string): boolean {
+  const rel = relative(parent, child);
+  return rel === "" || (!rel.startsWith("..") && !rel.startsWith("../") && !rel.startsWith("..\\") && !isAbsolute(rel));
+}
+
 function normalizePluginId(id: string): string {
   const trimmed = id.trim();
   return trimmed.length > 0 ? trimmed : "plugin";
@@ -662,10 +685,110 @@ export class PluginRegistry {
         continue;
       }
 
+      const currentUid = getCurrentUid();
+      let rootRealDir: string;
+      try {
+        rootRealDir = await realpath(dir.path);
+      } catch {
+        // If we cannot resolve or stat the plugin root, fail closed for this directory.
+        this.opts.logger.warn("plugins.insecure_root_dir", {
+          root_dir: dir.path,
+          kind: dir.kind,
+          reason: "unresolvable",
+        });
+        continue;
+      }
+
+      if (currentUid !== undefined) {
+        try {
+          const rootStat = await stat(rootRealDir);
+          if (isWorldWritable(rootStat.mode)) {
+            this.opts.logger.warn("plugins.insecure_root_dir", {
+              root_dir: dir.path,
+              kind: dir.kind,
+              reason: "world_writable",
+              mode: rootStat.mode,
+            });
+            continue;
+          }
+          if (!isTrustedOwner(rootStat.uid, currentUid)) {
+            this.opts.logger.warn("plugins.insecure_root_dir", {
+              root_dir: dir.path,
+              kind: dir.kind,
+              reason: "unsafe_ownership",
+              uid: rootStat.uid,
+              current_uid: currentUid,
+            });
+            continue;
+          }
+        } catch {
+          this.opts.logger.warn("plugins.insecure_root_dir", {
+            root_dir: dir.path,
+            kind: dir.kind,
+            reason: "unstatable",
+          });
+          continue;
+        }
+      }
+
       for (const entry of entries) {
         if (!entry.isDirectory()) continue;
 
         const pluginDir = join(dir.path, entry.name);
+        let pluginRealDir: string;
+        try {
+          pluginRealDir = await realpath(pluginDir);
+        } catch {
+          this.opts.logger.warn("plugins.insecure_plugin_dir", {
+            source_dir: pluginDir,
+            kind: dir.kind,
+            reason: "unresolvable",
+          });
+          continue;
+        }
+        if (rootRealDir && !isWithinDir(rootRealDir, pluginRealDir)) {
+          this.opts.logger.warn("plugins.insecure_plugin_dir", {
+            source_dir: pluginDir,
+            kind: dir.kind,
+            reason: "escapes_root",
+            root_dir: dir.path,
+            root_real_dir: rootRealDir,
+            plugin_real_dir: pluginRealDir,
+          });
+          continue;
+        }
+        if (currentUid !== undefined) {
+          try {
+            const pluginStat = await stat(pluginRealDir);
+            if (isWorldWritable(pluginStat.mode)) {
+              this.opts.logger.warn("plugins.insecure_plugin_dir", {
+                source_dir: pluginDir,
+                kind: dir.kind,
+                reason: "world_writable",
+                mode: pluginStat.mode,
+              });
+              continue;
+            }
+            if (!isTrustedOwner(pluginStat.uid, currentUid)) {
+              this.opts.logger.warn("plugins.insecure_plugin_dir", {
+                source_dir: pluginDir,
+                kind: dir.kind,
+                reason: "unsafe_ownership",
+                uid: pluginStat.uid,
+                current_uid: currentUid,
+              });
+              continue;
+            }
+          } catch {
+            this.opts.logger.warn("plugins.insecure_plugin_dir", {
+              source_dir: pluginDir,
+              kind: dir.kind,
+              reason: "unstatable",
+            });
+            continue;
+          }
+        }
+
         let manifestFile: { path: string; manifest: PluginManifestT } | undefined;
         try {
           manifestFile = await loadManifestFromDir(pluginDir);
@@ -724,7 +847,44 @@ export class PluginRegistry {
         }
         manifest.config_schema = configValidation.normalizedSchema;
 
-        const entryPath = resolveSafeChildPath(pluginDir, manifest.entry);
+        let entryPath: string;
+        try {
+          entryPath = resolveSafeChildPath(pluginDir, manifest.entry);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          this.opts.logger.warn("plugins.invalid_entry_path", {
+            plugin_id: id,
+            source_dir: pluginDir,
+            entry: manifest.entry,
+            error: message,
+          });
+          continue;
+        }
+        try {
+          const entryRealPath = await realpath(entryPath);
+          if (!isWithinDir(pluginRealDir, entryRealPath)) {
+            this.opts.logger.warn("plugins.invalid_entry_path", {
+              plugin_id: id,
+              source_dir: pluginDir,
+              entry: manifest.entry,
+              reason: "symlink_escape",
+              entry_path: entryPath,
+              entry_real_path: entryRealPath,
+              plugin_real_dir: pluginRealDir,
+            });
+            continue;
+          }
+          entryPath = entryRealPath;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          this.opts.logger.warn("plugins.import_failed", {
+            plugin_id: id,
+            source_dir: pluginDir,
+            entry_path: entryPath,
+            error: message,
+          });
+          continue;
+        }
 
         let registerFn: PluginRegisterFn | undefined;
         try {

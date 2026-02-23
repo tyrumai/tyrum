@@ -69,6 +69,11 @@ Plugin discovery/install must be hardened because plugins run in-process:
 - Prefer registry installs that can record integrity metadata (hashes) and pin versions.
 - Avoid executing arbitrary lifecycle scripts during install; prefer “pure JS/TS” dependency trees.
 
+Implementation notes:
+
+- Entry points are validated twice: lexically (no `..` traversal outside the plugin directory) and by resolved real path (no symlink escape outside the plugin directory).
+- On POSIX systems, the gateway treats plugin search roots and plugin directories as unsafe when they are world-writable or owned by a different user than the gateway process (root ownership is permitted).
+
 ## Auditability
 
 Plugin lifecycle is observable:
