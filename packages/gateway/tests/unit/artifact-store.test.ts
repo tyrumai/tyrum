@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { FsArtifactStore, S3ArtifactStore } from "../../src/modules/artifact/store.js";
 import { RedactionEngine } from "../../src/modules/redaction/engine.js";
-import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { GetObjectCommand, HeadObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 
 describe("ArtifactStore", () => {
   let baseDir: string;
@@ -201,5 +201,274 @@ describe("ArtifactStore", () => {
       }),
     );
   });
-});
 
+  it("s3 store: getSignedUrl presigns manifest-backed blob keys", async () => {
+    const send = vi.fn(async (cmd: unknown) => {
+      if (cmd instanceof GetObjectCommand) {
+        const key = cmd.input.Key ?? "";
+        if (key === "artifacts/manifests/55/550e8400-e29b-41d4-a716-446655440000.json") {
+          const meta = JSON.stringify({
+            v: 1,
+            ref: {
+              artifact_id: "550e8400-e29b-41d4-a716-446655440000",
+              uri: "artifact://550e8400-e29b-41d4-a716-446655440000",
+              kind: "log",
+              created_at: "2026-02-19T12:00:00.000Z",
+              labels: [],
+              sha256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+              size_bytes: 5,
+              mime_type: "text/plain",
+            },
+            blob_key:
+              "artifacts/blobs/55/550e8400-e29b-41d4-a716-446655440000/2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824.bin",
+          });
+          return {
+            Body: {
+              transformToByteArray: async () => Buffer.from(meta, "utf8"),
+            },
+          };
+        }
+      }
+
+      if (cmd instanceof HeadObjectCommand) {
+        return {};
+      }
+
+      throw new Error("unexpected command");
+    });
+
+    const presignGetObject = vi.fn(async () => "https://objects.example.test/signed?sig=test");
+
+    const store = new S3ArtifactStore(
+      { send } as unknown as import("@aws-sdk/client-s3").S3Client,
+      "bucket",
+      "artifacts",
+      undefined,
+      presignGetObject,
+    );
+
+    const url = await store.getSignedUrl("550e8400-e29b-41d4-a716-446655440000", {
+      expiresInSeconds: 42,
+    });
+
+    expect(url).toBe("https://objects.example.test/signed?sig=test");
+    expect(presignGetObject).toHaveBeenCalledWith({
+      bucket: "bucket",
+      key: "artifacts/blobs/55/550e8400-e29b-41d4-a716-446655440000/2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824.bin",
+      expiresInSeconds: 42,
+    });
+  });
+
+  it("s3 store: getSignedUrl returns null when manifest exists but blob is missing (no legacy fallback)", async () => {
+    const artifactId = "550e8400-e29b-41d4-a716-446655440000";
+    const manifestKey = "artifacts/manifests/55/550e8400-e29b-41d4-a716-446655440000.json";
+    const blobKey =
+      "artifacts/blobs/55/550e8400-e29b-41d4-a716-446655440000/2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824.bin";
+    const legacyKey = "artifacts/55/550e8400-e29b-41d4-a716-446655440000.bin";
+
+    const send = vi.fn(async (cmd: unknown) => {
+      if (cmd instanceof GetObjectCommand) {
+        const key = cmd.input.Key ?? "";
+        if (key === manifestKey) {
+          const meta = JSON.stringify({
+            v: 1,
+            ref: {
+              artifact_id: artifactId,
+              uri: `artifact://${artifactId}`,
+              kind: "log",
+              created_at: "2026-02-19T12:00:00.000Z",
+              labels: [],
+              sha256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+              size_bytes: 5,
+              mime_type: "text/plain",
+            },
+            blob_key: blobKey,
+          });
+          return {
+            Body: {
+              transformToByteArray: async () => Buffer.from(meta, "utf8"),
+            },
+          };
+        }
+      }
+
+      if (cmd instanceof HeadObjectCommand) {
+        const key = cmd.input.Key ?? "";
+        if (key === blobKey) {
+          const err = Object.assign(new Error("not found"), { name: "NotFound" });
+          throw err;
+        }
+        if (key === legacyKey) {
+          return {};
+        }
+      }
+
+      throw new Error("unexpected command");
+    });
+
+    const presignGetObject = vi.fn(async () => "https://objects.example.test/signed?sig=test");
+
+    const store = new S3ArtifactStore(
+      { send } as unknown as import("@aws-sdk/client-s3").S3Client,
+      "bucket",
+      "artifacts",
+      undefined,
+      presignGetObject,
+    );
+
+    const url = await store.getSignedUrl(artifactId);
+    expect(url).toBeNull();
+    expect(presignGetObject).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          Key: legacyKey,
+        }),
+      }),
+    );
+  });
+
+  it("s3 store: getSignedUrl presigns even when HeadObject is blocked", async () => {
+    const artifactId = "550e8400-e29b-41d4-a716-446655440000";
+    const manifestKey = "artifacts/manifests/55/550e8400-e29b-41d4-a716-446655440000.json";
+    const blobKey =
+      "artifacts/blobs/55/550e8400-e29b-41d4-a716-446655440000/2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824.bin";
+
+    const send = vi.fn(async (cmd: unknown) => {
+      if (cmd instanceof GetObjectCommand) {
+        const key = cmd.input.Key ?? "";
+        if (key === manifestKey) {
+          const meta = JSON.stringify({
+            v: 1,
+            ref: {
+              artifact_id: artifactId,
+              uri: `artifact://${artifactId}`,
+              kind: "log",
+              created_at: "2026-02-19T12:00:00.000Z",
+              labels: [],
+              sha256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+              size_bytes: 5,
+              mime_type: "text/plain",
+            },
+            blob_key: blobKey,
+          });
+          return {
+            Body: {
+              transformToByteArray: async () => Buffer.from(meta, "utf8"),
+            },
+          };
+        }
+      }
+
+      if (cmd instanceof HeadObjectCommand) {
+        const key = cmd.input.Key ?? "";
+        if (key === blobKey) {
+          const err = Object.assign(new Error("forbidden"), { name: "AccessDenied" });
+          throw err;
+        }
+      }
+
+      throw new Error("unexpected command");
+    });
+
+    const presignGetObject = vi.fn(async () => "https://objects.example.test/signed?sig=test");
+
+    const store = new S3ArtifactStore(
+      { send } as unknown as import("@aws-sdk/client-s3").S3Client,
+      "bucket",
+      "artifacts",
+      undefined,
+      presignGetObject,
+    );
+
+    const url = await store.getSignedUrl(artifactId, { expiresInSeconds: 42 });
+    expect(url).toBe("https://objects.example.test/signed?sig=test");
+    expect(presignGetObject).toHaveBeenCalledWith({
+      bucket: "bucket",
+      key: blobKey,
+      expiresInSeconds: 42,
+    });
+  });
+
+  it("s3 store: getSignedUrl falls back to legacy key when manifest is malformed", async () => {
+    const artifactId = "550e8400-e29b-41d4-a716-446655440000";
+    const manifestKey = "artifacts/manifests/55/550e8400-e29b-41d4-a716-446655440000.json";
+    const legacyKey = "artifacts/55/550e8400-e29b-41d4-a716-446655440000.bin";
+
+    const send = vi.fn(async (cmd: unknown) => {
+      if (cmd instanceof GetObjectCommand) {
+        const key = cmd.input.Key ?? "";
+        if (key === manifestKey) {
+          return {
+            Body: {
+              transformToByteArray: async () => Buffer.from("{not-json", "utf8"),
+            },
+          };
+        }
+      }
+
+      if (cmd instanceof HeadObjectCommand) {
+        const key = cmd.input.Key ?? "";
+        if (key === legacyKey) return {};
+      }
+
+      throw new Error("unexpected command");
+    });
+
+    const presignGetObject = vi.fn(async () => "https://objects.example.test/legacy?sig=test");
+
+    const store = new S3ArtifactStore(
+      { send } as unknown as import("@aws-sdk/client-s3").S3Client,
+      "bucket",
+      "artifacts",
+      undefined,
+      presignGetObject,
+    );
+
+    const url = await store.getSignedUrl(artifactId, { expiresInSeconds: 42 });
+    expect(url).toBe("https://objects.example.test/legacy?sig=test");
+    expect(presignGetObject).toHaveBeenCalledWith({
+      bucket: "bucket",
+      key: legacyKey,
+      expiresInSeconds: 42,
+    });
+  });
+
+  it("s3 store: getSignedUrl propagates presign errors in legacy mode without retrying", async () => {
+    const artifactId = "550e8400-e29b-41d4-a716-446655440000";
+    const manifestKey = "artifacts/manifests/55/550e8400-e29b-41d4-a716-446655440000.json";
+    const legacyKey = "artifacts/55/550e8400-e29b-41d4-a716-446655440000.bin";
+
+    const send = vi.fn(async (cmd: unknown) => {
+      if (cmd instanceof GetObjectCommand) {
+        const key = cmd.input.Key ?? "";
+        if (key === manifestKey) {
+          const err = Object.assign(new Error("not found"), { name: "NoSuchKey" });
+          throw err;
+        }
+      }
+
+      if (cmd instanceof HeadObjectCommand) {
+        const key = cmd.input.Key ?? "";
+        if (key === legacyKey) return {};
+      }
+
+      throw new Error("unexpected command");
+    });
+
+    const presignGetObject = vi.fn(async () => {
+      throw new Error("presign-failed");
+    });
+
+    const store = new S3ArtifactStore(
+      { send } as unknown as import("@aws-sdk/client-s3").S3Client,
+      "bucket",
+      "artifacts",
+      undefined,
+      presignGetObject,
+    );
+
+    await expect(store.getSignedUrl(artifactId)).rejects.toThrow("presign-failed");
+    expect(presignGetObject).toHaveBeenCalledTimes(1);
+  });
+});

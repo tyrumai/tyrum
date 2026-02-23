@@ -2,7 +2,14 @@ import type { ArtifactKind, ArtifactRef as ArtifactRefT } from "@tyrum/schemas";
 import { randomUUID, createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { GetObjectCommand, PutObjectCommand, S3Client, S3ServiceException } from "@aws-sdk/client-s3";
+import {
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+  S3ServiceException,
+} from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { RedactionEngine } from "../redaction/engine.js";
 
 export interface ArtifactPutInput {
@@ -23,6 +30,10 @@ export interface ArtifactGetResult {
 export interface ArtifactStore {
   put(input: ArtifactPutInput): Promise<ArtifactRefT>;
   get(artifactId: string): Promise<ArtifactGetResult | null>;
+  getSignedUrl?: (
+    artifactId: string,
+    opts?: { expiresInSeconds?: number },
+  ) => Promise<string | null>;
 }
 
 type ArtifactManifestV1 = {
@@ -161,25 +172,48 @@ async function bodyToBuffer(body: unknown): Promise<Buffer> {
 
 function isNoSuchKey(err: unknown): boolean {
   if (err instanceof S3ServiceException) {
-    return err.name === "NoSuchKey";
+    if (err.name === "NoSuchKey" || err.name === "NotFound") return true;
+    if (err.$metadata.httpStatusCode === 404) return true;
   }
   const name = err && typeof err === "object" ? (err as { name?: string }).name : undefined;
   const code =
     err && typeof err === "object"
       ? ((err as { Code?: string; code?: string }).Code ?? (err as { code?: string }).code)
       : undefined;
-  return name === "NoSuchKey" || code === "NoSuchKey";
+  return (
+    name === "NoSuchKey" ||
+    name === "NotFound" ||
+    code === "NoSuchKey" ||
+    code === "NotFound"
+  );
+}
+
+type PresignGetObjectFn = (input: {
+  bucket: string;
+  key: string;
+  expiresInSeconds: number;
+}) => Promise<string>;
+
+function defaultPresignGetObject(client: S3Client): PresignGetObjectFn {
+  return async ({ bucket, key, expiresInSeconds }) =>
+    await getSignedUrl(client, new GetObjectCommand({ Bucket: bucket, Key: key }), {
+      expiresIn: expiresInSeconds,
+    });
 }
 
 export class S3ArtifactStore implements ArtifactStore {
   private bucketEnsured: Promise<void> | undefined;
+  private readonly presignGetObject: PresignGetObjectFn;
 
   constructor(
     private readonly client: S3Client,
     private readonly bucket: string,
     private readonly keyPrefix = "artifacts",
     private readonly redactionEngine?: RedactionEngine,
-  ) {}
+    presignGetObject?: PresignGetObjectFn,
+  ) {
+    this.presignGetObject = presignGetObject ?? defaultPresignGetObject(client);
+  }
 
   private legacyKeyFor(artifactId: string, suffix: ".bin" | ".json"): string {
     const shard = artifactShard(artifactId);
@@ -201,6 +235,83 @@ export class S3ArtifactStore implements ArtifactStore {
     // Lazy — avoid any startup dependency on object storage.
     this.bucketEnsured = Promise.resolve();
     return this.bucketEnsured;
+  }
+
+  private resolveExpiresInSeconds(opts?: { expiresInSeconds?: number }): number {
+    const candidate = opts?.expiresInSeconds;
+    if (typeof candidate === "number" && Number.isFinite(candidate) && candidate > 0) return candidate;
+    return 60;
+  }
+
+  async getSignedUrl(
+    artifactId: string,
+    opts?: { expiresInSeconds?: number },
+  ): Promise<string | null> {
+    await this.ensureBucketOnce();
+    const expiresInSeconds = this.resolveExpiresInSeconds(opts);
+
+    const manifestKey = this.manifestKeyFor(artifactId);
+    let parsedManifest: ArtifactManifestV1 | null = null;
+    try {
+      const manifestRes = await this.client.send(
+        new GetObjectCommand({
+          Bucket: this.bucket,
+          Key: manifestKey,
+        }),
+      );
+
+      const manifestBuf = await bodyToBuffer(manifestRes.Body);
+      try {
+        const candidate = JSON.parse(manifestBuf.toString("utf8")) as unknown;
+        const maybe = candidate as Partial<ArtifactManifestV1> | null;
+        if (maybe && maybe.v === 1 && typeof maybe.blob_key === "string" && maybe.ref) {
+          parsedManifest = maybe as ArtifactManifestV1;
+        }
+      } catch {
+        // Treat malformed JSON as missing manifest and fall back to legacy keys.
+      }
+    } catch (err) {
+      if (!isNoSuchKey(err)) throw err;
+    }
+
+    if (parsedManifest) {
+      try {
+        await this.client.send(
+          new HeadObjectCommand({
+            Bucket: this.bucket,
+            Key: parsedManifest.blob_key,
+          }),
+        );
+      } catch (err) {
+        if (isNoSuchKey(err)) return null;
+        // Best-effort: some S3-compatible deployments block HEAD while allowing GET.
+      }
+
+      return await this.presignGetObject({
+        bucket: this.bucket,
+        key: parsedManifest.blob_key,
+        expiresInSeconds,
+      });
+    }
+
+    const legacyKey = this.legacyKeyFor(artifactId, ".bin");
+    try {
+      await this.client.send(
+        new HeadObjectCommand({
+          Bucket: this.bucket,
+          Key: legacyKey,
+        }),
+      );
+    } catch (err) {
+      if (isNoSuchKey(err)) return null;
+      // Best-effort: some S3-compatible deployments block HEAD while allowing GET.
+    }
+
+    return await this.presignGetObject({
+      bucket: this.bucket,
+      key: legacyKey,
+      expiresInSeconds,
+    });
   }
 
   async put(input: ArtifactPutInput): Promise<ArtifactRefT> {
@@ -313,4 +424,3 @@ export class S3ArtifactStore implements ArtifactStore {
     }
   }
 }
-
