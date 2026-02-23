@@ -2,6 +2,7 @@ import type {
   ActionPrimitive as ActionPrimitiveT,
   ArtifactRef as ArtifactRefT,
   AttemptCost as AttemptCostT,
+  Decision as DecisionT,
   ClientCapability as ClientCapabilityT,
   ExecutionBudgets as ExecutionBudgetsT,
   ExecutionTrigger as ExecutionTriggerT,
@@ -26,7 +27,12 @@ import type { Logger } from "../observability/logger.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { PolicyService } from "../policy/service.js";
 import { canonicalizeToolMatchTarget } from "../policy/match-target.js";
-import { wildcardMatch } from "../policy/wildcard.js";
+import {
+  evaluateDomain,
+  mostRestrictiveDecision,
+  normalizeDomain,
+  normalizeUrlForPolicy,
+} from "../policy/domain.js";
 import type { SecretProvider } from "../secret/provider.js";
 import { collectSecretHandleIds } from "../secret/collect-secret-handle-ids.js";
 
@@ -158,75 +164,6 @@ function normalizePositiveInt(value: unknown): number | undefined {
   if (n === undefined) return undefined;
   if (n <= 0) return undefined;
   return n;
-}
-
-type PolicyDecision = "allow" | "deny" | "require_approval";
-
-type PolicyDomainConfig = {
-  default: PolicyDecision;
-  allow: readonly string[];
-  require_approval: readonly string[];
-  deny: readonly string[];
-};
-
-function isPolicyDecision(value: unknown): value is PolicyDecision {
-  return value === "allow" || value === "deny" || value === "require_approval";
-}
-
-function normalizePolicyDomain(value: unknown, fallbackDefault: PolicyDecision): PolicyDomainConfig {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return { default: fallbackDefault, allow: [], require_approval: [], deny: [] };
-  }
-
-  const obj = value as Record<string, unknown>;
-  const defaultDecision = isPolicyDecision(obj["default"]) ? obj["default"] : fallbackDefault;
-  const allow = Array.isArray(obj["allow"]) ? obj["allow"].filter((v): v is string => typeof v === "string") : [];
-  const requireApproval = Array.isArray(obj["require_approval"])
-    ? obj["require_approval"].filter((v): v is string => typeof v === "string")
-    : [];
-  const deny = Array.isArray(obj["deny"]) ? obj["deny"].filter((v): v is string => typeof v === "string") : [];
-
-  return {
-    default: defaultDecision,
-    allow,
-    require_approval: requireApproval,
-    deny,
-  };
-}
-
-function evaluatePolicyDomain(domain: PolicyDomainConfig, matchTarget: string): PolicyDecision {
-  const target = matchTarget.trim();
-
-  for (const pat of domain.deny) {
-    if (wildcardMatch(pat, target)) return "deny";
-  }
-  for (const pat of domain.require_approval) {
-    if (wildcardMatch(pat, target)) return "require_approval";
-  }
-  for (const pat of domain.allow) {
-    if (wildcardMatch(pat, target)) return "allow";
-  }
-
-  return domain.default;
-}
-
-function mostRestrictivePolicy(a: PolicyDecision, b: PolicyDecision): PolicyDecision {
-  if (a === "deny" || b === "deny") return "deny";
-  if (a === "require_approval" || b === "require_approval") return "require_approval";
-  return "allow";
-}
-
-function normalizeUrlForPolicy(raw: string): string {
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) return "";
-  try {
-    const url = new URL(trimmed);
-    const pathname = url.pathname || "/";
-    return `${url.protocol}//${url.host}${pathname}`;
-  } catch {
-    const q = trimmed.indexOf("?");
-    return q === -1 ? trimmed : trimmed.slice(0, q);
-  }
 }
 
 function buildExecCommandFromCliArgs(args: unknown): string | undefined {
@@ -1359,19 +1296,19 @@ export class ExecutionEngine {
           const mapped = mapActionToPolicyTool(parsedAction);
           const toolMatchTarget = canonicalizeToolMatchTarget(mapped.toolId, mapped.toolArgs);
 
-          const toolsDomain = normalizePolicyDomain(policyBundle.tools, "require_approval");
-          const egressDomain = normalizePolicyDomain(policyBundle.network_egress, "require_approval");
+          const toolsDomain = normalizeDomain(policyBundle.tools, "require_approval");
+          const egressDomain = normalizeDomain(policyBundle.network_egress, "require_approval");
 
-          const toolDecision = evaluatePolicyDomain(toolsDomain, mapped.toolId);
-          const egressDecision: PolicyDecision = mapped.url
+          const toolDecision = evaluateDomain(toolsDomain, mapped.toolId);
+          const egressDecision: DecisionT = mapped.url
             ? (() => {
                 const normalizedUrl = normalizeUrlForPolicy(mapped.url);
                 if (normalizedUrl.length === 0) return "allow";
-                return evaluatePolicyDomain(egressDomain, normalizedUrl);
+                return evaluateDomain(egressDomain, normalizedUrl);
               })()
             : "allow";
 
-          const decision = mostRestrictivePolicy(toolDecision, egressDecision);
+          const decision = mostRestrictiveDecision(toolDecision, egressDecision);
 
           if (decision === "deny") {
             const updated = await tx.run(
