@@ -6,6 +6,7 @@
  */
 
 import {
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
   requiredCapability,
   ApprovalListRequest,
@@ -939,7 +940,9 @@ export function dispatchTask(
     const pairing = await deps.nodePairingDal.getByNodeId(nodeId);
     if (pairing?.status !== "approved") return false;
     const allowlist = pairing.capability_allowlist ?? [];
-    return allowlist.some((entry) => entry.id === descriptorId);
+    return allowlist.some(
+      (entry) => entry.id === descriptorId && entry.version === CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+    );
   };
 
   const localCandidates: ConnectedClient[] = [];
@@ -1095,9 +1098,8 @@ export function dispatchTask(
                     return (await isNodeAuthorizedForDispatch(c.device_id!)) ? c : null;
                   }),
               )
-            )
-          ).filter((c): c is NonNullable<(typeof candidates)[number]> => c !== null)
-        : [];
+            ).filter((c): c is NonNullable<(typeof candidates)[number]> => c !== null)
+          : [];
 
       const eligibleClients2 = candidates.filter((c) => c.protocol_rev >= 2 && c.role === "client");
       const eligible2 = [...eligibleNodes2, ...eligibleClients2];

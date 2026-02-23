@@ -684,6 +684,50 @@ describe("dispatchTask", () => {
     expect(clientWs.send).toHaveBeenCalledOnce();
   });
 
+  it("does not dispatch to a node when its pairing allowlist version excludes the capability", async () => {
+    const cm = new ConnectionManager();
+    const nodeWs = createMockWs();
+    cm.addClient(nodeWs as never, ["cli"] as never, {
+      id: "node-1",
+      role: "node",
+      deviceId: "dev_test",
+      protocolRev: 2,
+    });
+    const { ws: clientWs } = makeClient(cm, ["cli"], { protocolRev: 2 });
+
+    const deps = makeDeps(cm, {
+      nodePairingDal: {
+        getByNodeId: async () => ({
+          status: "approved",
+          capability_allowlist: [
+            {
+              id: descriptorIdForClientCapability("cli"),
+              version: "2.0.0",
+            },
+          ],
+        }) as never,
+      } as never,
+    });
+
+    const action: ActionPrimitive = {
+      type: "CLI",
+      args: { command: "echo hi" },
+    };
+
+    const taskId = await dispatchTask(
+      action,
+      {
+        runId: "550e8400-e29b-41d4-a716-446655440000",
+        stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+        attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+      },
+      deps,
+    );
+    expect(taskId).toMatch(/^task-[0-9a-f-]{36}$/);
+    expect(nodeWs.send).not.toHaveBeenCalled();
+    expect(clientWs.send).toHaveBeenCalledOnce();
+  });
+
   it("does not dispatch to a node when policy denies node dispatch", async () => {
     const cm = new ConnectionManager();
     const nodeWs = createMockWs();
