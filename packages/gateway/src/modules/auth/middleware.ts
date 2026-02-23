@@ -71,9 +71,8 @@ export function createAuthMiddleware(
       );
     }
 
-    // HTTP routes are an operator surface; accept admin bootstrap tokens and
-    // role-scoped device tokens for `client` peers.
-    if (!tokenStore.authenticate(token, { expectedRole: "client" })) {
+    // HTTP routes are an operator surface; require an admin bootstrap token.
+    if (!tokenStore.validate(token)) {
       return c.json(
         AUTH_ERROR_BODY,
         401,
