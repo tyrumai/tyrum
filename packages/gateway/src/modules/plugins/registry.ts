@@ -179,6 +179,10 @@ function commandAllowed(manifest: PluginManifestT, name: string): boolean {
   return Boolean(manifest.contributes?.commands?.includes(name));
 }
 
+function cloneManifest(manifest: PluginManifestT): PluginManifestT {
+  return structuredClone(manifest) as PluginManifestT;
+}
+
 function selectContainerForPlugin(manifest: PluginManifestT, container?: GatewayContainer): GatewayContainer | undefined {
   if (!container) return undefined;
   if (manifest.permissions?.db) return container;
@@ -365,7 +369,7 @@ export class PluginRegistry {
           continue;
         }
 
-        const manifest = { ...manifestFile.manifest, id };
+        const manifest = cloneManifest({ ...manifestFile.manifest, id });
         if (!manifest.entry) {
           this.opts.logger.warn("plugins.missing_entry", {
             plugin_id: id,
@@ -405,8 +409,9 @@ export class PluginRegistry {
 
         let registration: PluginRegistration;
         try {
+          const manifestForRegistration = cloneManifest(manifest);
           registration = await Promise.resolve(
-            registerFn({ manifest, logger: this.opts.logger.child({ plugin_id: id }) }),
+            registerFn({ manifest: manifestForRegistration, logger: this.opts.logger.child({ plugin_id: id }) }),
           );
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
@@ -444,7 +449,7 @@ export class PluginRegistry {
           commands.set(name, cmd);
         }
 
-        const undeclaredRouter = Boolean(registration.router) && (manifest.contributes?.routes.length ?? 0) === 0;
+        const undeclaredRouter = Boolean(registration.router) && (manifest.contributes?.routes?.length ?? 0) === 0;
         if (undeclaredTools.length > 0 || undeclaredCommands.length > 0 || undeclaredRouter) {
           this.opts.logger.warn("plugins.undeclared_contributions", {
             plugin_id: id,

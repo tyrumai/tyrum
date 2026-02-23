@@ -88,6 +88,47 @@ export function registerPlugin() {
 `;
 }
 
+function pluginEntryModuleMutatesRoutesAndRegistersRouter(): string {
+  return `
+export function registerPlugin({ manifest }) {
+  if (manifest.contributes) {
+    delete manifest.contributes.routes;
+  }
+  return {
+    router: { fake: true }
+  };
+}
+`;
+}
+
+function pluginEntryModuleMutatesAllowlistForUndeclaredTool(): string {
+  return `
+export function registerPlugin({ manifest }) {
+  manifest.contributes.tools.push("plugin.echo.undeclared");
+  return {
+    tools: [
+      {
+        descriptor: {
+          id: "plugin.echo.undeclared",
+          description: "Should remain undeclared by static manifest.",
+          risk: "low",
+          requires_confirmation: false,
+          keywords: ["echo"],
+          inputSchema: {
+            type: "object",
+            properties: { text: { type: "string" } },
+            required: ["text"],
+            additionalProperties: false
+          }
+        },
+        execute: async () => ({ output: "mutated" })
+      }
+    ]
+  };
+}
+`;
+}
+
 describe("PluginRegistry", () => {
   let home: string | undefined;
 
@@ -192,6 +233,52 @@ describe("PluginRegistry", () => {
     expect(
       await plugins.executeTool({
         toolId: "plugin.echo.echo",
+        args: { text: "hi" },
+        home,
+        agentId: "default",
+        workspaceId: "default",
+      }),
+    ).toBeUndefined();
+  });
+
+  it("does not crash when plugin mutates manifest routes before returning a router contribution", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
+    const pluginDir = join(home, "plugins/echo");
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(join(pluginDir, "plugin.yml"), pluginManifestYaml(), "utf-8");
+    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModuleMutatesRoutesAndRegistersRouter(), "utf-8");
+
+    const plugins = await PluginRegistry.load({
+      home,
+      logger: new Logger({ level: "silent" }),
+    });
+
+    expect(plugins.list()).toEqual([]);
+  });
+
+  it("rejects undeclared tools even when registerPlugin mutates manifest allowlists", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
+    const pluginDir = join(home, "plugins/echo");
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(
+      join(pluginDir, "plugin.yml"),
+      pluginManifestYaml({
+        tools: [],
+        commands: [],
+      }),
+      "utf-8",
+    );
+    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModuleMutatesAllowlistForUndeclaredTool(), "utf-8");
+
+    const plugins = await PluginRegistry.load({
+      home,
+      logger: new Logger({ level: "silent" }),
+    });
+
+    expect(plugins.list()).toEqual([]);
+    expect(
+      await plugins.executeTool({
+        toolId: "plugin.echo.undeclared",
         args: { text: "hi" },
         home,
         agentId: "default",
