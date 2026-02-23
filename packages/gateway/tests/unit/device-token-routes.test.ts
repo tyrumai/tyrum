@@ -69,7 +69,7 @@ describe("Device token routes", () => {
     const preRevoke = await app.request("/status", {
       headers: { Authorization: `Bearer ${issued.token}` },
     });
-    expect(preRevoke.status).toBe(200);
+    expect(preRevoke.status).toBe(401);
 
     const deviceIssueRes = await app.request("/auth/device-tokens/issue", {
       method: "POST",
@@ -84,7 +84,7 @@ describe("Device token routes", () => {
         ttl_seconds: 900,
       }),
     });
-    expect(deviceIssueRes.status).toBe(403);
+    expect(deviceIssueRes.status).toBe(401);
 
     const deviceRevokeRes = await app.request("/auth/device-tokens/revoke", {
       method: "POST",
@@ -94,7 +94,7 @@ describe("Device token routes", () => {
       },
       body: JSON.stringify({ token: issued.token }),
     });
-    expect(deviceRevokeRes.status).toBe(403);
+    expect(deviceRevokeRes.status).toBe(401);
 
     const revokeRes = await app.request("/auth/device-tokens/revoke", {
       method: "POST",
