@@ -251,7 +251,7 @@ export function createWsHandler(opts: WsRouteOptions): {
   wss.on("connection", (ws, req) => {
     const token = extractWsTokenFromProtocols(req);
 
-    if (!validateWsToken(token, tokenStore)) {
+    if (!token || !validateWsToken(token, tokenStore)) {
       ws.close(4001, "unauthorized");
       return;
     }
@@ -308,6 +308,18 @@ export function createWsHandler(opts: WsRouteOptions): {
           );
           if (expectedDeviceId !== init.data.payload.device.device_id) {
             ws.close(4006, "device_id mismatch");
+            return;
+          }
+
+          // Bind device tokens to the peer identity proof. This prevents replaying
+          // a valid device token across different device proofs.
+          if (
+            tokenStore.authenticate(token, {
+              expectedRole: init.data.payload.role,
+              expectedDeviceId,
+            }) === null
+          ) {
+            ws.close(4001, "unauthorized");
             return;
           }
 
