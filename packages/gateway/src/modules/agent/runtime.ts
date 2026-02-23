@@ -40,6 +40,8 @@ import { SessionProviderPinDal } from "../models/session-pin-dal.js";
 import { createProviderFromNpm } from "../models/provider-factory.js";
 import { createSecretHandleResolver } from "../secret/handle-resolver.js";
 import { refreshAccessToken, resolveOAuthEndpoints } from "../oauth/oauth-client.js";
+import { coerceRecord, coerceStringRecord } from "../util/coerce.js";
+import { isAuthProfilesEnabled } from "../models/auth-profiles-enabled.js";
 
 const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_APPROVAL_WAIT_MS = 120_000;
@@ -301,11 +303,6 @@ function parseProviderModelId(model: string): { providerId: string; modelId: str
   };
 }
 
-function isAuthProfilesEnabled(): boolean {
-  const raw = process.env["TYRUM_AUTH_PROFILES_ENABLED"]?.trim().toLowerCase();
-  return Boolean(raw && !["0", "false", "off", "no"].includes(raw));
-}
-
 function isAuthInvalidStatus(status: number | undefined): boolean {
   return status === 401 || status === 403;
 }
@@ -315,19 +312,20 @@ function isTransientStatus(status: number | undefined): boolean {
   return status === 429 || status >= 500;
 }
 
-function coerceRecord(value: unknown): Record<string, unknown> | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
-  return value as Record<string, unknown>;
-}
-
-function coerceStringRecord(value: unknown): Record<string, string> | undefined {
-  const record = coerceRecord(value);
-  if (!record) return undefined;
-  const out: Record<string, string> = {};
-  for (const [key, v] of Object.entries(record)) {
-    if (typeof v === "string") out[key] = v;
+function getNonTransientApiCallError(err: unknown): APICallError | undefined {
+  let current: unknown = err;
+  for (let i = 0; i < 5; i++) {
+    if (APICallError.isInstance(current)) {
+      const status = current.statusCode;
+      return isTransientStatus(status) ? undefined : current;
+    }
+    if (current instanceof Error && typeof current.cause !== "undefined") {
+      current = current.cause;
+      continue;
+    }
+    return undefined;
   }
-  return out;
+  return undefined;
 }
 
 function shouldPromoteToCoreMemory(message: string): boolean {
@@ -893,9 +891,9 @@ export class AgentRuntime {
           lastErr = err;
         }
 
-        const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
-        throw new Error(`model call failed for ${providerLabel}: ${message}`);
-      }
+	        const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
+	        throw new Error(`model call failed for ${providerLabel}: ${message}`, { cause: lastErr });
+	      }
 
       const rotating: LanguageModelV3 = {
         specificationVersion: "v3",
@@ -933,31 +931,33 @@ export class AgentRuntime {
       modelId: primary.modelId,
       supportedUrls: primary.supportedUrls,
 
-      async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
-        let lastErr: unknown;
-        for (const model of rotatingModels) {
-          try {
-            return await model.doGenerate(options);
-          } catch (err) {
-            lastErr = err;
-          }
-        }
-        const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
-        throw new Error(`model call failed for candidates ${attempted}: ${message}`);
-      },
+	      async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
+	        let lastErr: unknown;
+	        for (const model of rotatingModels) {
+	          try {
+	            return await model.doGenerate(options);
+	          } catch (err) {
+	            if (getNonTransientApiCallError(err)) throw err;
+	            lastErr = err;
+	          }
+	        }
+	        const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
+	        throw new Error(`model call failed for candidates ${attempted}: ${message}`);
+	      },
 
-      async doStream(options: LanguageModelV3CallOptions): Promise<LanguageModelV3StreamResult> {
-        let lastErr: unknown;
-        for (const model of rotatingModels) {
-          try {
-            return await model.doStream(options);
-          } catch (err) {
-            lastErr = err;
-          }
-        }
-        const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
-        throw new Error(`model call failed for candidates ${attempted}: ${message}`);
-      },
+	      async doStream(options: LanguageModelV3CallOptions): Promise<LanguageModelV3StreamResult> {
+	        let lastErr: unknown;
+	        for (const model of rotatingModels) {
+	          try {
+	            return await model.doStream(options);
+	          } catch (err) {
+	            if (getNonTransientApiCallError(err)) throw err;
+	            lastErr = err;
+	          }
+	        }
+	        const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
+	        throw new Error(`model call failed for candidates ${attempted}: ${message}`);
+	      },
     };
 
     return multi;

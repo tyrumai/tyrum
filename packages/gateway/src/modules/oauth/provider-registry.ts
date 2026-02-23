@@ -3,6 +3,7 @@ import { access } from "node:fs/promises";
 import { constants } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
+import { coerceNonEmptyStringRecord, coerceRecord, coerceString } from "../util/coerce.js";
 
 export interface OAuthProviderSpec {
   provider_id: string;
@@ -23,32 +24,9 @@ export interface OAuthProviderConfigFile {
   providers: OAuthProviderSpec[];
 }
 
-function coerceRecord(value: unknown): Record<string, unknown> | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
-  return value as Record<string, unknown>;
-}
-
-function coerceString(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-}
-
 function coerceStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.map(coerceString).filter((v): v is string => Boolean(v));
-}
-
-function coerceStringRecord(value: unknown): Record<string, string> | undefined {
-  const record = coerceRecord(value);
-  if (!record) return undefined;
-  const out: Record<string, string> = {};
-  for (const [key, v] of Object.entries(record)) {
-    const k = coerceString(key);
-    const vv = coerceString(v);
-    if (k && vv) out[k] = vv;
-  }
-  return out;
 }
 
 function parseOAuthProviderSpec(value: unknown): OAuthProviderSpec {
@@ -77,8 +55,8 @@ function parseOAuthProviderSpec(value: unknown): OAuthProviderSpec {
     client_id_env: coerceString(record["client_id_env"]),
     client_secret_env: coerceString(record["client_secret_env"]),
     token_endpoint_basic_auth: tokenEndpointBasicAuth,
-    extra_authorize_params: coerceStringRecord(record["extra_authorize_params"]),
-    extra_token_params: coerceStringRecord(record["extra_token_params"]),
+    extra_authorize_params: coerceNonEmptyStringRecord(record["extra_authorize_params"]),
+    extra_token_params: coerceNonEmptyStringRecord(record["extra_token_params"]),
   };
 }
 

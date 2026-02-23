@@ -1,4 +1,5 @@
 import type { OAuthProviderSpec } from "./provider-registry.js";
+import { coerceString } from "../util/coerce.js";
 
 export interface ResolvedOAuthEndpoints {
   authorizationEndpoint?: string;
@@ -118,12 +119,6 @@ function parseTokenResponseBody(input: { text: string; contentType: string | nul
     out[k] = v;
   }
   return out;
-}
-
-function coerceString(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function coerceNumber(value: unknown): number | undefined {

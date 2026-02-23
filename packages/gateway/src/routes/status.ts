@@ -11,6 +11,7 @@ import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { PolicyService } from "../modules/policy/service.js";
 import type { AuthProfileDal } from "../modules/models/auth-profile-dal.js";
 import type { SessionProviderPinDal } from "../modules/models/session-pin-dal.js";
+import { isAuthProfilesEnabled } from "../modules/models/auth-profiles-enabled.js";
 
 export interface StatusRouteDeps {
   version: string;
@@ -27,11 +28,6 @@ export interface StatusRouteDeps {
 
 export function createStatusRoutes(deps: StatusRouteDeps): Hono {
   const app = new Hono();
-
-  function isAuthProfilesEnabled(): boolean {
-    const raw = process.env["TYRUM_AUTH_PROFILES_ENABLED"]?.trim().toLowerCase();
-    return Boolean(raw && !["0", "false", "off", "no"].includes(raw));
-  }
 
   app.get("/status", async (c) => {
     const policy = deps.policyService ? await deps.policyService.getStatus() : null;

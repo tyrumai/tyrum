@@ -14,6 +14,7 @@ import { exchangeAuthorizationCode, resolveOAuthEndpoints } from "../modules/oau
 import type { SecretProvider } from "../modules/secret/provider.js";
 import type { AuthProfileDal } from "../modules/models/auth-profile-dal.js";
 import type { Logger } from "../modules/observability/logger.js";
+import { coerceRecord, coerceString } from "../modules/util/coerce.js";
 
 const PENDING_TTL_MS = 10 * 60 * 1000;
 
@@ -28,17 +29,6 @@ function base64Url(input: Buffer): string {
 function sha256Base64Url(input: string): string {
   const hash = createHash("sha256").update(input, "utf-8").digest();
   return base64Url(hash);
-}
-
-function coerceRecord(value: unknown): Record<string, unknown> | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
-  return value as Record<string, unknown>;
-}
-
-function coerceString(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function computeExpiresAt(nowMs: number, expiresIn: number | undefined): string | null {
@@ -259,18 +249,18 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
       return c.html(renderHtml("Authorization failed", `missing env var ${clientIdEnv}`), 400);
     }
 
-	    const clientSecretEnv = coerceString(spec.client_secret_env);
-	    const clientSecret = clientSecretEnv ? process.env[clientSecretEnv]?.trim() : undefined;
+    const clientSecretEnv = coerceString(spec.client_secret_env);
+    const clientSecret = clientSecretEnv ? process.env[clientSecretEnv]?.trim() : undefined;
 
-	    let secretProvider: SecretProvider | undefined;
-	    const createdHandleIds: string[] = [];
-	    let profileCreated = false;
+    let secretProvider: SecretProvider | undefined;
+    const createdHandleIds: string[] = [];
+    let profileCreated = false;
 
-	    try {
-	      const { tokenEndpoint } = await resolveOAuthEndpoints(spec);
-	      if (!tokenEndpoint) {
-	        return c.html(renderHtml("Authorization failed", "oauth provider missing token endpoint"), 500);
-	      }
+    try {
+      const { tokenEndpoint } = await resolveOAuthEndpoints(spec);
+      if (!tokenEndpoint) {
+        return c.html(renderHtml("Authorization failed", "oauth provider missing token endpoint"), 500);
+      }
 
       const token = await exchangeAuthorizationCode({
         tokenEndpoint,
@@ -281,33 +271,33 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
         redirectUri: pending.redirect_uri,
         pkceVerifier: pending.pkce_verifier,
         scope: pending.scopes || undefined,
-	        extraParams: spec.extra_token_params,
-	      });
+        extraParams: spec.extra_token_params,
+      });
 
-	      secretProvider = await deps.secretProviderForAgent(pending.agent_id);
-	      const accessHandle = await secretProvider.store(
-	        `oauth:${providerId}:${pending.agent_id}:access`,
-	        token.access_token,
-	      );
-	      createdHandleIds.push(accessHandle.handle_id);
+      secretProvider = await deps.secretProviderForAgent(pending.agent_id);
+      const accessHandle = await secretProvider.store(
+        `oauth:${providerId}:${pending.agent_id}:access`,
+        token.access_token,
+      );
+      createdHandleIds.push(accessHandle.handle_id);
 
-	      const secretHandles: Record<string, string> = {
-	        access_token_handle: accessHandle.handle_id,
-	      };
+      const secretHandles: Record<string, string> = {
+        access_token_handle: accessHandle.handle_id,
+      };
 
-	      if (token.refresh_token) {
-	        const refreshHandle = await secretProvider.store(
-	          `oauth:${providerId}:${pending.agent_id}:refresh`,
-	          token.refresh_token,
-	        );
-	        createdHandleIds.push(refreshHandle.handle_id);
-	        secretHandles["refresh_token_handle"] = refreshHandle.handle_id;
-	      }
+      if (token.refresh_token) {
+        const refreshHandle = await secretProvider.store(
+          `oauth:${providerId}:${pending.agent_id}:refresh`,
+          token.refresh_token,
+        );
+        createdHandleIds.push(refreshHandle.handle_id);
+        secretHandles["refresh_token_handle"] = refreshHandle.handle_id;
+      }
 
-	      const profileId = randomUUID();
-	      const expiresAt = computeExpiresAt(nowMs, token.expires_in);
+      const profileId = randomUUID();
+      const expiresAt = computeExpiresAt(nowMs, token.expires_in);
 
-	      const profile = await deps.authProfileDal.create({
+      const profile = await deps.authProfileDal.create({
         profileId,
         agentId: pending.agent_id,
         provider: providerId,
@@ -318,14 +308,14 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
           token_type: token.token_type ?? null,
           oauth: true,
         },
-	        expiresAt,
-	        createdBy: { kind: "oauth_callback" },
-	      });
-	      profileCreated = true;
+        expiresAt,
+        createdBy: { kind: "oauth_callback" },
+      });
+      profileCreated = true;
 
-	      deps.logger?.info("oauth.authorized", {
-	        provider: providerId,
-	        agent_id: pending.agent_id,
+      deps.logger?.info("oauth.authorized", {
+        provider: providerId,
+        agent_id: pending.agent_id,
         profile_id: profile.profile_id,
       });
 
@@ -340,18 +330,18 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
           `Saved credentials for ${providerId} as profile ${profile.profile_id}.`,
         ),
         200,
-	      );
-	    } catch (err) {
-	      if (secretProvider && !profileCreated && createdHandleIds.length > 0) {
-	        await Promise.all(
-	          createdHandleIds.map((handleId) => secretProvider!.revoke(handleId).catch(() => false)),
-	        );
-	      }
-	      const message = err instanceof Error ? err.message : String(err);
-	      deps.logger?.warn("oauth.callback_failed", { provider: providerId, error: message });
-	      return c.html(renderHtml("Authorization failed", message), 502);
-	    }
-	  });
+      );
+    } catch (err) {
+      if (secretProvider && !profileCreated && createdHandleIds.length > 0) {
+        await Promise.all(
+          createdHandleIds.map((handleId) => secretProvider!.revoke(handleId).catch(() => false)),
+        );
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      deps.logger?.warn("oauth.callback_failed", { provider: providerId, error: message });
+      return c.html(renderHtml("Authorization failed", message), 502);
+    }
+  });
 
   return app;
 }
