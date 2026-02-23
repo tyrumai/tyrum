@@ -7,7 +7,7 @@
  * 3. Generate a new random token and persist to .admin-token
  */
 
-import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { MAX_DEVICE_TOKEN_TTL_SECONDS } from "@tyrum/schemas";
@@ -361,6 +361,7 @@ export class TokenStore {
 
   private async loadRevokedDeviceTokenIds(): Promise<void> {
     const revocationPath = this.getRevocationPath();
+    const backupPath = this.getRevocationBackupPath();
     let raw: string;
     try {
       raw = await readFile(revocationPath, "utf-8");
@@ -371,8 +372,21 @@ export class TokenStore {
         "code" in err &&
         (err as { code?: unknown }).code === "ENOENT"
       ) {
-        this.revokedDeviceTokenIds = new Set<string>();
-        return;
+        try {
+          await this.renameFile(backupPath, revocationPath);
+          raw = await readFile(revocationPath, "utf-8");
+        } catch (backupErr) {
+          if (
+            typeof backupErr === "object" &&
+            backupErr !== null &&
+            "code" in backupErr &&
+            (backupErr as { code?: unknown }).code === "ENOENT"
+          ) {
+            this.revokedDeviceTokenIds = new Set<string>();
+            return;
+          }
+          throw backupErr;
+        }
       }
       throw err;
     }
@@ -404,7 +418,7 @@ export class TokenStore {
     await writeFile(tempPath, payload, {
       mode: 0o600,
     });
-    await rename(tempPath, revocationPath);
+    await this.replaceFile(tempPath, revocationPath);
   }
 
   private withRevocationWriteLock<T>(fn: () => Promise<T>): Promise<T> {
@@ -414,5 +428,72 @@ export class TokenStore {
       () => undefined,
     );
     return run;
+  }
+
+  private getRevocationBackupPath(): string {
+    return `${this.getRevocationPath()}.bak`;
+  }
+
+  private async replaceFile(tempPath: string, finalPath: string): Promise<void> {
+    try {
+      await this.renameFile(tempPath, finalPath);
+      return;
+    } catch (err) {
+      if (
+        typeof err !== "object" ||
+        err === null ||
+        !("code" in err) ||
+        !(
+          (err as { code?: unknown }).code === "EPERM" ||
+          (err as { code?: unknown }).code === "EEXIST" ||
+          (err as { code?: unknown }).code === "EACCES"
+        )
+      ) {
+        throw err;
+      }
+    }
+
+    // Windows doesn't reliably allow rename() to overwrite an existing file.
+    // Fall back to a two-step replace that keeps a backup for crash safety.
+    const backupPath = `${finalPath}.bak`;
+    await rm(backupPath, { force: true });
+
+    let backedUp = false;
+    try {
+      await this.renameFile(finalPath, backupPath);
+      backedUp = true;
+    } catch (err) {
+      if (
+        typeof err === "object" &&
+        err !== null &&
+        "code" in err &&
+        (err as { code?: unknown }).code === "ENOENT"
+      ) {
+        backedUp = false;
+      } else {
+        throw err;
+      }
+    }
+
+    try {
+      await this.renameFile(tempPath, finalPath);
+    } catch (err) {
+      if (backedUp) {
+        try {
+          await this.renameFile(backupPath, finalPath);
+        } catch {
+          // ignore best-effort rollback
+        }
+      }
+      throw err;
+    }
+
+    if (backedUp) {
+      await rm(backupPath, { force: true });
+    }
+  }
+
+  private async renameFile(from: string, to: string): Promise<void> {
+    await rename(from, to);
   }
 }

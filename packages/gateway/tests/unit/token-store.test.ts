@@ -178,6 +178,48 @@ describe("TokenStore", () => {
     expect(reloaded.authenticate(issued.token)).toBeNull();
   });
 
+  it("persists revoked device token ids when overwriting the revocations file fails on Windows", async () => {
+    const store = new TokenStore(tempDir);
+    await store.initialize();
+    const issued1 = await store.issueDeviceToken({
+      deviceId: "dev_client_win_1",
+      role: "client",
+      scopes: ["operator.read"],
+      ttlSeconds: 300,
+    });
+    await expect(store.revokeDeviceToken(issued1.token)).resolves.toBe(true);
+
+    const issued2 = await store.issueDeviceToken({
+      deviceId: "dev_client_win_2",
+      role: "client",
+      scopes: ["operator.read"],
+      ttlSeconds: 300,
+    });
+
+    const storeWithPrivates = store as unknown as {
+      renameFile: (from: string, to: string) => Promise<void>;
+    };
+    const originalRename = storeWithPrivates.renameFile.bind(store);
+    const renameSpy = vi
+      .spyOn(storeWithPrivates, "renameFile")
+      .mockImplementationOnce(async () => {
+        const err = new Error("EPERM: operation not permitted") as NodeJS.ErrnoException;
+        err.code = "EPERM";
+        throw err;
+      })
+      .mockImplementation(originalRename);
+
+    try {
+      await expect(store.revokeDeviceToken(issued2.token)).resolves.toBe(true);
+    } finally {
+      renameSpy.mockRestore();
+    }
+
+    const reloaded = new TokenStore(tempDir);
+    await reloaded.initialize();
+    expect(reloaded.authenticate(issued2.token)).toBeNull();
+  });
+
   it("does not revoke a device token if persisting the revocation fails", async () => {
     const store = new TokenStore(tempDir);
     await store.initialize();
