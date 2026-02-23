@@ -11,6 +11,7 @@ import {
   normalizeUpdate,
   TelegramNormalizationError,
 } from "../../src/modules/ingress/telegram.js";
+import { telegramThreadKey } from "../../src/modules/channels/telegram.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixturesDir = resolve(__dirname, "../fixtures/telegram");
@@ -162,5 +163,44 @@ describe("Telegram normalization", () => {
     expect(update.message.envelope?.content.text).toBeUndefined();
     expect(update.message.envelope?.content.attachments).toEqual([{ kind: "photo" }]);
     expect(() => NormalizedThreadMessageSchema.parse(update)).not.toThrow();
+  });
+});
+
+describe("telegramThreadKey", () => {
+  it("requires container when thread is passed as a string", () => {
+    expect(() => telegramThreadKey("123" as unknown as never)).toThrow(
+      /container/i,
+    );
+  });
+
+  it("builds group keys when container is group", () => {
+    expect(
+      telegramThreadKey("555", {
+        container: "group",
+        agentId: "agent-1",
+        accountId: "work",
+      }),
+    ).toBe("agent:agent-1:telegram:work:group:555");
+  });
+
+  it("builds channel keys when container is channel", () => {
+    expect(
+      telegramThreadKey("777", {
+        container: "channel",
+        agentId: "agent-1",
+        accountId: "work",
+      }),
+    ).toBe("agent:agent-1:telegram:work:channel:777");
+  });
+
+  it("builds dm keys when container is dm", () => {
+    expect(
+      telegramThreadKey("999", {
+        container: "dm",
+        agentId: "agent-1",
+        accountId: "work",
+        dmScope: "per_account_channel_peer",
+      }),
+    ).toBe("agent:agent-1:telegram:work:dm:999");
   });
 });

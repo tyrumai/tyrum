@@ -55,11 +55,35 @@ function toThreadContainer(kind: NormalizedThreadMessage["thread"]["kind"]): "dm
 }
 
 export function telegramThreadKey(
+  thread: NormalizedThreadMessage,
+  opts?: {
+    agentId?: string;
+    accountId?: string;
+    channelKey?: string;
+    dmScope?: DmScope;
+    peerId?: string;
+  },
+): string;
+
+export function telegramThreadKey(
+  threadId: string,
+  opts: {
+    container: "dm" | "group" | "channel";
+    agentId?: string;
+    accountId?: string;
+    channelKey?: string;
+    dmScope?: DmScope;
+    peerId?: string;
+  },
+): string;
+
+export function telegramThreadKey(
   thread: string | NormalizedThreadMessage,
   opts?: {
     agentId?: string;
     accountId?: string;
     channelKey?: string;
+    container?: "dm" | "group" | "channel";
     dmScope?: DmScope;
     peerId?: string;
   },
@@ -68,9 +92,30 @@ export function telegramThreadKey(
   const accountId = opts?.accountId?.trim() || opts?.channelKey?.trim() || telegramAccountIdFromEnv();
 
   if (typeof thread === "string") {
+    const container = opts?.container;
+    if (!container) {
+      throw new Error("container is required when passing a thread id string");
+    }
+
+    if (container === "dm") {
+      // Telegram private chats use chat id as the peer identity. Callers may override.
+      const peerId = opts?.peerId?.trim() || thread;
+      const dmScope = resolveDmScope({
+        configured: opts?.dmScope ?? "per_account_channel_peer",
+      });
+      return buildAgentSessionKey({
+        agentId,
+        container: "dm",
+        channel: "telegram",
+        account: accountId,
+        peerId,
+        dmScope,
+      });
+    }
+
     return buildAgentSessionKey({
       agentId,
-      container: "group",
+      container,
       channel: "telegram",
       account: accountId,
       id: thread,
