@@ -171,7 +171,42 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
     expect(fetchFn).toHaveBeenCalledOnce();
   });
 
-  it("uses canonical dm session key taxonomy by default", async () => {
+  it("does not allow webhook callers to override the Telegram account id", async () => {
+    db = openTestSqliteDb();
+
+    const fetchFn = mockFetch();
+    const bot = new TelegramBot("test-token", fetchFn);
+    const queue = new TelegramChannelQueue(db);
+
+    const app = new Hono();
+    app.route(
+      "/",
+      createIngressRoutes({
+        telegramBot: bot,
+        agents: makeAgents({}),
+        telegramQueue: queue,
+      }),
+    );
+
+    const res = await app.request("/ingress/telegram?account_id=work", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-telegram-bot-api-secret-token": "test-telegram-secret",
+      },
+      body: JSON.stringify(makeTelegramUpdate("Help me")),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; inbox_id: number };
+    expect(body.ok).toBe(true);
+
+    const inbox = new ChannelInboxDal(db);
+    const row = await inbox.getById(body.inbox_id);
+    expect(row?.source).toBe("telegram");
+  });
+
+  it("uses DM key shape for private Telegram chats", async () => {
     db = openTestSqliteDb();
     const queue = new TelegramChannelQueue(db, { agentId: "agent-c1", channelKey: "work" });
 
