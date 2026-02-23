@@ -107,10 +107,6 @@ function resolveWorkspaceId(): string {
   return raw && raw.length > 0 ? raw : DEFAULT_WORKSPACE_ID;
 }
 
-function collapseWhitespace(value: string): string {
-  return value.trim().replace(/\s+/g, " ");
-}
-
 function encodeKeyPart(value: string): string {
   if (!value.includes(":")) return value;
   return Buffer.from(value, "utf-8").toString("base64url");
@@ -131,37 +127,6 @@ function resolveTurnRequestId(input: AgentTurnRequestT): string {
   return `agent-turn-${randomUUID()}`;
 }
 
-function toolMatchTarget(toolId: string, args: unknown): string {
-  const parsed = args as Record<string, unknown> | null;
-
-  if (toolId === "tool.exec") {
-    const cmd = typeof parsed?.["command"] === "string" ? parsed["command"] : "";
-    return collapseWhitespace(cmd);
-  }
-
-  if (toolId === "tool.http.fetch") {
-    const url = typeof parsed?.["url"] === "string" ? parsed["url"] : "";
-    // For matching, we intentionally do not include query params.
-    const q = url.indexOf("?");
-    const safe = q === -1 ? url : url.slice(0, q);
-    return safe.trim();
-  }
-
-  if (toolId === "tool.fs.read" || toolId === "tool.fs.write") {
-    const rawPath = typeof parsed?.["path"] === "string" ? parsed["path"] : "";
-    const op = toolId === "tool.fs.write" ? "write" : "read";
-    return `${op}:${rawPath.trim()}`;
-  }
-
-  if (toolId === "tool.node.dispatch") {
-    const cap = typeof parsed?.["capability"] === "string" ? parsed["capability"] : "";
-    const action = typeof parsed?.["action"] === "string" ? parsed["action"] : "";
-    return `capability:${cap.trim()};action:${action.trim()}`;
-  }
-
-  // MCP and unknown tools: match on tool id.
-  return toolId;
-}
 function collectSecretHandleIds(args: unknown): string[] {
   const out = new Set<string>();
 
