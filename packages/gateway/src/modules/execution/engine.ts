@@ -1296,19 +1296,36 @@ export class ExecutionEngine {
           const mapped = mapActionToPolicyTool(parsedAction);
           const toolMatchTarget = canonicalizeToolMatchTarget(mapped.toolId, mapped.toolArgs);
 
-          const toolsDomain = normalizeDomain(policyBundle.tools, "require_approval");
-          const egressDomain = normalizeDomain(policyBundle.network_egress, "require_approval");
+          const decision: DecisionT = await (async () => {
+            if (this.policyService?.isEnabled()) {
+              const agentId = this.deriveAgentIdFromKey(run.key) ?? "default";
+              const evaluation = await this.policyService.evaluateToolCallFromSnapshot({
+                policySnapshotId,
+                agentId,
+                workspaceId: run.workspace_id,
+                toolId: mapped.toolId,
+                toolMatchTarget,
+                url: mapped.url,
+                inputProvenance: { source: "workflow", trusted: true },
+              });
+              // Observe-only mode records decisions but doesn't block execution.
+              return this.policyService.isObserveOnly() ? "allow" : evaluation.decision;
+            }
 
-          const toolDecision = evaluateDomain(toolsDomain, mapped.toolId);
-          const egressDecision: DecisionT = mapped.url
-            ? (() => {
-                const normalizedUrl = normalizeUrlForPolicy(mapped.url);
-                if (normalizedUrl.length === 0) return "allow";
-                return evaluateDomain(egressDomain, normalizedUrl);
-              })()
-            : "allow";
+            const toolsDomain = normalizeDomain(policyBundle.tools, "require_approval");
+            const egressDomain = normalizeDomain(policyBundle.network_egress, "require_approval");
 
-          const decision = mostRestrictiveDecision(toolDecision, egressDecision);
+            const toolDecision = evaluateDomain(toolsDomain, mapped.toolId);
+            const egressDecision: DecisionT = mapped.url
+              ? (() => {
+                  const normalizedUrl = normalizeUrlForPolicy(mapped.url);
+                  if (normalizedUrl.length === 0) return "allow";
+                  return evaluateDomain(egressDomain, normalizedUrl);
+                })()
+              : "allow";
+
+            return mostRestrictiveDecision(toolDecision, egressDecision);
+          })();
 
           if (decision === "deny") {
             const updated = await tx.run(
