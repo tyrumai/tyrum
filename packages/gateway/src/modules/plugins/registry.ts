@@ -103,7 +103,7 @@ function looksLikeJsonSchemaObjectShape(value: unknown): boolean {
 }
 
 function unescapeJsonPointerSegment(value: string): string {
-  return value.replace(/~1/g, "/").replace(/~0/g, "~");
+  return value.replace(/~[01]/g, (match) => (match === "~1" ? "/" : "~"));
 }
 
 function resolveInternalJsonSchemaRef(root: unknown, ref: string): unknown | undefined {

@@ -367,7 +367,7 @@ describe("PluginRegistry", () => {
       pluginManifestYaml({
         configSchema: [
           "$defs:",
-          "  ConfigGreeting:",
+          "  Config~1Greeting:",
           "    type: object",
           "    properties:",
           "      greeting:",
@@ -378,7 +378,7 @@ describe("PluginRegistry", () => {
           "      target:",
           "        type: string",
           "allOf:",
-          "  - $ref: \"#/$defs/ConfigGreeting\"",
+          "  - $ref: \"#/$defs/Config~01Greeting\"",
           "  - $ref: \"#/$defs/ConfigTarget\"",
           "required: []",
         ],
@@ -405,7 +405,7 @@ describe("PluginRegistry", () => {
       pluginManifestYaml({
         configSchema: [
           "$defs:",
-          "  ConfigGreeting:",
+          "  Config~1Greeting:",
           "    type: object",
           "    properties:",
           "      greeting:",
@@ -416,7 +416,7 @@ describe("PluginRegistry", () => {
           "      target:",
           "        type: string",
           "allOf:",
-          "  - $ref: \"#/$defs/ConfigGreeting\"",
+          "  - $ref: \"#/$defs/Config~01Greeting\"",
           "  - $ref: \"#/$defs/ConfigTarget\"",
           "required: []",
         ],
@@ -447,7 +447,7 @@ describe("PluginRegistry", () => {
       pluginManifestYaml({
         configSchema: [
           "$defs:",
-          "  ConfigGreeting:",
+          "  Config~1Greeting:",
           "    type: object",
           "    properties:",
           "      greeting:",
@@ -460,9 +460,9 @@ describe("PluginRegistry", () => {
           "type: object",
           "properties:",
           "  nested:",
-          "    $ref: \"#/$defs/ConfigGreeting\"",
+          "    $ref: \"#/$defs/Config~01Greeting\"",
           "allOf:",
-          "  - $ref: \"#/$defs/ConfigGreeting\"",
+          "  - $ref: \"#/$defs/Config~01Greeting\"",
           "  - $ref: \"#/$defs/ConfigTarget\"",
           "required: []",
         ],
