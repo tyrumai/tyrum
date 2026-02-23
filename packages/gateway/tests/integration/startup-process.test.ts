@@ -165,9 +165,7 @@ async function stopChildProcess(
 ): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return;
 
-  // On Windows, SIGTERM is not reliably handled as a graceful signal.
-  const gracefulSignal: NodeJS.Signals = process.platform === "win32" ? "SIGINT" : "SIGTERM";
-  child.kill(gracefulSignal);
+  child.kill("SIGTERM");
   const maybeExit = await Promise.race([
     once(child, "exit"),
     delay(5_000).then(() => null),
@@ -285,7 +283,11 @@ describe("gateway startup process", () => {
     },
   );
 
-  it(
+  // Windows runners do not reliably deliver a catchable SIGTERM/SIGINT to a Node child
+  // process when its stdio is piped, so we can't assert graceful shutdown behavior there.
+  const itShutdown = process.platform === "win32" ? it.skip : it;
+
+  itShutdown(
     "processes gateway.shutdown hooks before stopping the worker loop",
     { timeout: 60_000 },
     async () => {
