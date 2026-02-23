@@ -249,7 +249,10 @@ export class TelegramChannelQueue {
       accountId,
       dmScope,
     });
-    const source = buildChannelSourceKey({ connector: "telegram", accountId });
+    const source =
+      accountId === telegramAccountIdFromEnv()
+        ? "telegram"
+        : buildChannelSourceKey({ connector: "telegram", accountId });
 
     const { row, deduped } = await this.inbox.enqueue({
       source,

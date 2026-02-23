@@ -4,6 +4,7 @@ import { createIngressRoutes } from "../../src/routes/ingress.js";
 import { TelegramBot } from "../../src/modules/ingress/telegram-bot.js";
 import { TelegramChannelProcessor, TelegramChannelQueue } from "../../src/modules/channels/telegram.js";
 import { normalizeUpdate } from "../../src/modules/ingress/telegram.js";
+import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
@@ -244,6 +245,29 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
     expect(workAccount.deduped).toBe(false);
     expect(personalAccount.deduped).toBe(false);
     expect(personalAccount.inbox.inbox_id).not.toBe(workAccount.inbox.inbox_id);
+  });
+
+  it("dedupes default-account messages against legacy source keys", async () => {
+    db = openTestSqliteDb();
+
+    const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
+
+    const inbox = new ChannelInboxDal(db);
+    const legacy = await inbox.enqueue({
+      source: "telegram",
+      thread_id: normalized.thread.id,
+      message_id: normalized.message.id,
+      key: "legacy-key",
+      lane: "main",
+      received_at_ms: Date.now(),
+      payload: normalized,
+    });
+
+    const queue = new TelegramChannelQueue(db);
+    const enqueued = await queue.enqueue(normalized);
+
+    expect(enqueued.deduped).toBe(true);
+    expect(enqueued.inbox.inbox_id).toBe(legacy.row.inbox_id);
   });
 
   it("derives account-appropriate thread keys when enqueue overrides account id", async () => {
