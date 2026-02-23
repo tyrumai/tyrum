@@ -39,6 +39,12 @@ type ExecutionArtifactRow = {
   policy_snapshot_id: string | null;
 };
 
+type DurableExecutionScope = {
+  run_id: string;
+  step_id: string | null;
+  attempt_id: string | null;
+};
+
 function normalizeDbDateTime(value: string | Date | null): string | null {
   if (value === null) return null;
   const raw = value instanceof Date ? value.toISOString() : value;
@@ -100,6 +106,58 @@ async function evaluateAccessDecision(
   return decision;
 }
 
+async function resolveDurableExecutionScope(
+  deps: ArtifactRouteDeps,
+  row: ExecutionArtifactRow,
+): Promise<DurableExecutionScope | null> {
+  if (row.attempt_id) {
+    const attemptScope = await deps.db.get<{ run_id: string; step_id: string }>(
+      `SELECT s.run_id AS run_id, a.step_id AS step_id
+       FROM execution_attempts a
+       JOIN execution_steps s ON s.step_id = a.step_id
+       WHERE a.attempt_id = ?`,
+      [row.attempt_id],
+    );
+    if (!attemptScope) return null;
+    if (row.step_id && row.step_id !== attemptScope.step_id) return null;
+    if (row.run_id && row.run_id !== attemptScope.run_id) return null;
+    return {
+      run_id: attemptScope.run_id,
+      step_id: attemptScope.step_id,
+      attempt_id: row.attempt_id,
+    };
+  }
+
+  if (row.step_id) {
+    const stepScope = await deps.db.get<{ run_id: string }>(
+      "SELECT run_id FROM execution_steps WHERE step_id = ?",
+      [row.step_id],
+    );
+    if (!stepScope) return null;
+    if (row.run_id && row.run_id !== stepScope.run_id) return null;
+    return {
+      run_id: stepScope.run_id,
+      step_id: row.step_id,
+      attempt_id: null,
+    };
+  }
+
+  if (row.run_id) {
+    const runScope = await deps.db.get<{ run_id: string }>(
+      "SELECT run_id FROM execution_runs WHERE run_id = ?",
+      [row.run_id],
+    );
+    if (!runScope) return null;
+    return {
+      run_id: runScope.run_id,
+      step_id: null,
+      attempt_id: null,
+    };
+  }
+
+  return null;
+}
+
 export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
   const app = new Hono();
 
@@ -116,6 +174,17 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
     );
     if (!row) {
       return c.json({ error: "not_found", message: "artifact not found" }, 404);
+    }
+
+    const durableScope = await resolveDurableExecutionScope(deps, row);
+    if (!durableScope) {
+      return c.json(
+        {
+          error: "forbidden",
+          message: "artifact access denied: durable execution scope linkage is required",
+        },
+        403,
+      );
     }
 
     if (deps.policyService?.isEnabled() && !deps.policyService.isObserveOnly()) {
@@ -146,9 +215,9 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
         scope: {
           workspace_id: row.workspace_id,
           agent_id: row.agent_id,
-          run_id: row.run_id,
-          step_id: row.step_id,
-          attempt_id: row.attempt_id,
+          run_id: durableScope.run_id,
+          step_id: durableScope.step_id,
+          attempt_id: durableScope.attempt_id,
           sensitivity: row.sensitivity,
           policy_snapshot_id: row.policy_snapshot_id,
         },
@@ -170,6 +239,17 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
     );
     if (!row) {
       return c.json({ error: "not_found", message: "artifact not found" }, 404);
+    }
+
+    const durableScope = await resolveDurableExecutionScope(deps, row);
+    if (!durableScope) {
+      return c.json(
+        {
+          error: "forbidden",
+          message: "artifact access denied: durable execution scope linkage is required",
+        },
+        403,
+      );
     }
 
     if (deps.policyService?.isEnabled() && !deps.policyService.isObserveOnly()) {
@@ -207,7 +287,7 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
         event_id: randomUUID(),
         type: "artifact.fetched",
         occurred_at: new Date().toISOString(),
-        scope: row.run_id ? { kind: "run", run_id: row.run_id } : undefined,
+        scope: { kind: "run", run_id: durableScope.run_id },
         payload: {
           artifact: ref,
           fetched_by: {
