@@ -4,6 +4,8 @@ import { Lane, TyrumKey } from "./keys.js";
 import { ActionPrimitive } from "./planner.js";
 import { ArtifactRef } from "./artifact.js";
 import { PostconditionReport } from "./postcondition.js";
+import { PolicyDecision } from "./policy.js";
+import { PolicyOverrideId, PolicySnapshotId } from "./policy-bundle.js";
 
 export const ExecutionJobId = UuidSchema;
 export type ExecutionJobId = z.infer<typeof ExecutionJobId>;
@@ -226,6 +228,9 @@ export const ExecutionAttempt = z
     artifacts: z.array(ArtifactRef).default([]),
     cost: AttemptCost.optional(),
     metadata: z.unknown().optional(),
+    policy_snapshot_id: PolicySnapshotId.optional(),
+    policy_decision: PolicyDecision.optional(),
+    policy_applied_override_ids: z.array(PolicyOverrideId).optional(),
   })
   .strict();
 export type ExecutionAttempt = z.infer<typeof ExecutionAttempt>;

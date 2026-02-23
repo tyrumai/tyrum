@@ -9,6 +9,12 @@ export const RuleKind = z.enum([
   "pii_guardrail",
   "legal_compliance",
   "connector_scope",
+  // Tool-policy domains (docs/architecture/sandbox-policy.md, tools.md).
+  "tool_policy",
+  "network_egress",
+  "secrets",
+  "provenance",
+  "policy_override",
 ]);
 export type RuleKind = z.infer<typeof RuleKind>;
 
