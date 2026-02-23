@@ -23,6 +23,7 @@ import {
 import { createHash, createPublicKey, randomBytes, verify } from "node:crypto";
 import type { ConnectionManager } from "../ws/connection-manager.js";
 import { validateWsToken } from "../ws/auth.js";
+import { rawDataToUtf8 } from "../ws/raw-data.js";
 import { handleClientMessage } from "../ws/protocol.js";
 import type { ProtocolDeps } from "../ws/protocol.js";
 import type { TokenStore } from "../modules/auth/token-store.js";
@@ -283,7 +284,7 @@ export function createWsHandler(opts: WsRouteOptions): {
         };
 
     ws.on("message", (data) => {
-      const raw = typeof data === "string" ? data : data.toString("utf-8");
+      const raw = rawDataToUtf8(data);
 
       if (clientId === undefined) {
         let json: unknown;
