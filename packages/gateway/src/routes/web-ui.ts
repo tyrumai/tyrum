@@ -1723,7 +1723,7 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
         redirectWithMessageFromRequest(
           c,
           "/app/onboarding/start",
-          "Select Embedded or Remote mode to continue.",
+          "Select Local-Personal or Remote-Team mode to continue.",
           "error",
         ),
       );

@@ -78,6 +78,23 @@ describe("gateway-hosted web API + UI", () => {
     expect(body.error).toBe("plan_not_found");
   });
 
+  it("shows updated mode validation copy on invalid onboarding mode submissions", async () => {
+    const body = new URLSearchParams({ mode: "bogus" });
+    const response = await app.request("/app/actions/onboarding/mode", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: body.toString(),
+    });
+
+    expect(response.status).toBe(302);
+    const location = response.headers.get("location") ?? "";
+    expect(location).toContain("/app/onboarding/start");
+    expect(location).toContain("tone=error");
+    expect(location).toContain("Select+Local-Personal+or+Remote-Team+mode+to+continue");
+  });
+
   it("distinguishes draft consent audit metadata from recorded revision", async () => {
     const draft = await app.request("/api/onboarding/consent");
     expect(draft.status).toBe(200);
