@@ -45,6 +45,8 @@ type DurableExecutionScope = {
   attempt_id: string | null;
 };
 
+const ARTIFACT_NOT_FOUND_BODY = { error: "not_found", message: "artifact not found" } as const;
+
 function normalizeDbDateTime(value: string | Date | null): string | null {
   if (value === null) return null;
   const raw = value instanceof Date ? value.toISOString() : value;
@@ -162,6 +164,33 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
   const app = new Hono();
 
   app.get("/artifacts/:id/metadata", async (c) => {
+    return c.json(
+      {
+        error: "invalid_request",
+        message:
+          "artifact fetch APIs must be scope-bound; use GET /runs/:runId/artifacts/:id/metadata",
+      },
+      400,
+    );
+  });
+
+  app.get("/artifacts/:id", async (c) => {
+    return c.json(
+      {
+        error: "invalid_request",
+        message:
+          "artifact fetch APIs must be scope-bound; use GET /runs/:runId/artifacts/:id",
+      },
+      400,
+    );
+  });
+
+  app.get("/runs/:runId/artifacts/:id/metadata", async (c) => {
+    const runId = c.req.param("runId")?.trim();
+    if (!runId) {
+      return c.json({ error: "invalid_request", message: "invalid run id" }, 400);
+    }
+
     const artifactId = c.req.param("id");
     const parsedId = ArtifactId.safeParse(artifactId);
     if (!parsedId.success) {
@@ -173,7 +202,7 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
       [parsedId.data],
     );
     if (!row) {
-      return c.json({ error: "not_found", message: "artifact not found" }, 404);
+      return c.json(ARTIFACT_NOT_FOUND_BODY, 404);
     }
 
     const durableScope = await resolveDurableExecutionScope(deps, row);
@@ -185,6 +214,9 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
         },
         403,
       );
+    }
+    if (durableScope.run_id !== runId) {
+      return c.json(ARTIFACT_NOT_FOUND_BODY, 404);
     }
 
     if (deps.policyService?.isEnabled() && !deps.policyService.isObserveOnly()) {
@@ -226,7 +258,12 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
     );
   });
 
-  app.get("/artifacts/:id", async (c) => {
+  app.get("/runs/:runId/artifacts/:id", async (c) => {
+    const runId = c.req.param("runId")?.trim();
+    if (!runId) {
+      return c.json({ error: "invalid_request", message: "invalid run id" }, 400);
+    }
+
     const artifactId = c.req.param("id");
     const parsedId = ArtifactId.safeParse(artifactId);
     if (!parsedId.success) {
@@ -238,7 +275,7 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
       [parsedId.data],
     );
     if (!row) {
-      return c.json({ error: "not_found", message: "artifact not found" }, 404);
+      return c.json(ARTIFACT_NOT_FOUND_BODY, 404);
     }
 
     const durableScope = await resolveDurableExecutionScope(deps, row);
@@ -250,6 +287,9 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
         },
         403,
       );
+    }
+    if (durableScope.run_id !== runId) {
+      return c.json(ARTIFACT_NOT_FOUND_BODY, 404);
     }
 
     if (deps.policyService?.isEnabled() && !deps.policyService.isObserveOnly()) {
