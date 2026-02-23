@@ -255,22 +255,22 @@ function validatePluginConfig(params: {
   const normalizedSchema = normalizeJsonSchemaAdditionalPropertiesDefaults(params.schema);
   if (!isJsonSchemaObject(normalizedSchema)) {
     return { ok: false, error: "config_schema must be a JSON Schema object" };
-	  }
+  }
 
-	  try {
-	    const ajv = new Ajv2019({ allErrors: true, strict: false });
-	    const validate = ajv.compile(normalizedSchema);
-	    const ok = validate(params.config);
-	    if (ok) {
-	      return { ok: true, normalizedSchema, config: params.config };
-	    }
-	    const errors = ((validate.errors ?? []) as ErrorObject[])
-	      .map((err) => {
-	        const at = err.instancePath && err.instancePath.length > 0 ? err.instancePath : "/";
-	        const msg = err.message ? String(err.message) : "invalid";
-	        return `${at}: ${msg}`;
-	      })
-	      .filter((entry) => entry.length > 0);
+  try {
+    const ajv = new Ajv2019({ allErrors: true, strict: false });
+    const validate = ajv.compile(normalizedSchema);
+    const ok = validate(params.config);
+    if (ok) {
+      return { ok: true, normalizedSchema, config: params.config };
+    }
+    const errors = ((validate.errors ?? []) as ErrorObject[])
+      .map((err) => {
+        const at = err.instancePath && err.instancePath.length > 0 ? err.instancePath : "/";
+        const msg = err.message ? String(err.message) : "invalid";
+        return `${at}: ${msg}`;
+      })
+      .filter((entry) => entry.length > 0);
     return {
       ok: false,
       error: errors.length > 0 ? errors.join("; ") : "config does not match schema",
