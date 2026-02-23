@@ -38,7 +38,7 @@ import type { PolicyService } from "../policy/service.js";
 import { AuthProfileDal, type AuthProfileRow } from "../models/auth-profile-dal.js";
 import { SessionProviderPinDal } from "../models/session-pin-dal.js";
 import { createProviderFromNpm } from "../models/provider-factory.js";
-import { createSecretHandleResolver } from "../secret/handle-resolver.js";
+import { createSecretHandleResolver, type SecretHandleResolver } from "../secret/handle-resolver.js";
 import { refreshAccessToken, resolveOAuthEndpoints } from "../oauth/oauth-client.js";
 import { coerceRecord, coerceStringRecord } from "../util/coerce.js";
 import { isAuthProfilesEnabled } from "../models/auth-profiles-enabled.js";
@@ -332,6 +332,234 @@ function getStopFallbackApiCallError(err: unknown): APICallError | undefined {
   return undefined;
 }
 
+async function resolveProfileApiKey(profile: AuthProfileRow, deps: {
+  secretProvider: SecretProvider | undefined;
+  resolver: SecretHandleResolver | undefined;
+  authProfileDal: AuthProfileDal;
+  oauthProviderRegistry: GatewayContainer["oauthProviderRegistry"];
+  oauthRefreshLeaseDal: GatewayContainer["oauthRefreshLeaseDal"];
+  oauthLeaseOwner: string;
+  logger: GatewayContainer["logger"];
+  fetchImpl: typeof fetch;
+}): Promise<string | null> {
+  const {
+    secretProvider,
+    resolver,
+    authProfileDal,
+    oauthProviderRegistry,
+    oauthRefreshLeaseDal,
+    oauthLeaseOwner,
+    logger,
+    fetchImpl,
+  } = deps;
+
+  async function maybeRefreshOAuthAccessToken(): Promise<string | null> {
+    if (profile.type !== "oauth") return null;
+    if (!secretProvider || !resolver) return null;
+
+    const expiresAt = profile.expires_at;
+    if (!expiresAt) return null;
+    const expiresAtMs = Date.parse(expiresAt);
+    if (!Number.isFinite(expiresAtMs)) return null;
+
+    const nowMs = Date.now();
+    const refreshThresholdMs = 60_000;
+    if (expiresAtMs - nowMs > refreshThresholdMs) return null;
+
+    const refreshHandleId = profile.secret_handles?.["refresh_token_handle"];
+    if (!refreshHandleId) return null;
+
+    const acquired = await oauthRefreshLeaseDal.tryAcquire({
+      profileId: profile.profile_id,
+      owner: oauthLeaseOwner,
+      nowMs,
+      leaseTtlMs: 60_000,
+    });
+    if (!acquired) {
+      // Another instance is refreshing (or the lease is stuck); sync in-memory handles
+      // from the latest row so we don't attempt a revoked access handle.
+      const latest = await authProfileDal.getById(profile.profile_id);
+      if (latest && latest.updated_at !== profile.updated_at) {
+        profile.secret_handles = latest.secret_handles;
+        profile.expires_at = latest.expires_at;
+        profile.updated_at = latest.updated_at;
+        await resolver.refresh().catch((err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          logger.warn("secret.handle_resolver_refresh_failed", {
+            profile_id: profile.profile_id,
+            error: msg,
+          });
+        });
+      }
+      return null;
+    }
+
+    try {
+      const latest = await authProfileDal.getById(profile.profile_id);
+      const current = latest ?? profile;
+
+      const currentExpiresAt = current.expires_at;
+      if (currentExpiresAt) {
+        const currentExpiresAtMs = Date.parse(currentExpiresAt);
+        if (Number.isFinite(currentExpiresAtMs) && currentExpiresAtMs - nowMs > refreshThresholdMs) {
+          if (latest && latest.updated_at !== profile.updated_at) {
+            profile.secret_handles = latest.secret_handles;
+            profile.expires_at = latest.expires_at;
+            profile.updated_at = latest.updated_at;
+            await resolver.refresh().catch((err) => {
+              const msg = err instanceof Error ? err.message : String(err);
+              logger.warn("secret.handle_resolver_refresh_failed", {
+                profile_id: profile.profile_id,
+                error: msg,
+              });
+            });
+          }
+          return null;
+        }
+      }
+
+      const currentRefreshHandleId = current.secret_handles?.["refresh_token_handle"] ?? refreshHandleId;
+      const refreshToken = await resolver.resolveById(currentRefreshHandleId);
+      if (!refreshToken) return null;
+
+      const spec = await oauthProviderRegistry.get(current.provider);
+      if (!spec) return null;
+
+      const clientIdEnv = spec.client_id_env?.trim();
+      if (!clientIdEnv) return null;
+      const clientId = process.env[clientIdEnv]?.trim();
+      if (!clientId) return null;
+
+      const clientSecretEnv = spec.client_secret_env?.trim();
+      const clientSecret = clientSecretEnv ? process.env[clientSecretEnv]?.trim() : undefined;
+
+      const { tokenEndpoint } = await resolveOAuthEndpoints(spec, { fetchImpl });
+      if (!tokenEndpoint) return null;
+
+      const scope = (spec.scopes ?? []).join(" ").trim();
+      const token = await refreshAccessToken({
+        tokenEndpoint,
+        clientId,
+        clientSecret,
+        tokenEndpointBasicAuth: spec.token_endpoint_basic_auth,
+        refreshToken,
+        scope: scope || undefined,
+        extraParams: spec.extra_token_params,
+        fetchImpl,
+      });
+
+      const accessToken = token.access_token?.trim();
+      if (!accessToken) return null;
+
+      const accessHandle = await secretProvider.store(
+        `oauth:${current.provider}:${current.agent_id}:access`,
+        accessToken,
+      );
+
+      const nextSecretHandles: Record<string, string> = { ...current.secret_handles };
+      const oldAccessHandleId = nextSecretHandles["access_token_handle"];
+      nextSecretHandles["access_token_handle"] = accessHandle.handle_id;
+
+      const refreshTokenNew = token.refresh_token?.trim();
+      let oldRefreshHandleId: string | undefined;
+      let newRefreshHandleId: string | undefined;
+      if (refreshTokenNew) {
+        const refreshHandle = await secretProvider.store(
+          `oauth:${current.provider}:${current.agent_id}:refresh`,
+          refreshTokenNew,
+        );
+        oldRefreshHandleId = nextSecretHandles["refresh_token_handle"];
+        nextSecretHandles["refresh_token_handle"] = refreshHandle.handle_id;
+        newRefreshHandleId = refreshHandle.handle_id;
+      }
+
+      const nextExpiresAt = (() => {
+        const expiresIn = token.expires_in;
+        if (typeof expiresIn === "number" && Number.isFinite(expiresIn) && expiresIn > 0) {
+          return new Date(nowMs + Math.floor(expiresIn) * 1000).toISOString();
+        }
+        // If the refresh response omits expires_in, clear the stored expiry so we don't keep
+        // treating a newly-refreshed token as already expired.
+        return null;
+      })();
+
+      const updated = await authProfileDal.updateSecretHandles(current.profile_id, {
+        secretHandles: nextSecretHandles,
+        expiresAt: nextExpiresAt,
+        updatedBy: { kind: "oauth_refresh" },
+      });
+
+      if (!updated) {
+        await secretProvider.revoke(accessHandle.handle_id).catch(() => {});
+        if (newRefreshHandleId) {
+          await secretProvider.revoke(newRefreshHandleId).catch(() => {});
+        }
+        return accessToken;
+      }
+
+      if (oldAccessHandleId && oldAccessHandleId !== accessHandle.handle_id) {
+        await secretProvider.revoke(oldAccessHandleId).catch(() => {});
+      }
+      if (oldRefreshHandleId && newRefreshHandleId && oldRefreshHandleId !== newRefreshHandleId) {
+        await secretProvider.revoke(oldRefreshHandleId).catch(() => {});
+      }
+
+      // Keep the in-memory snapshot in sync so subsequent calls in the same turn
+      // don't try to resolve a revoked handle.
+      profile.secret_handles = updated.secret_handles;
+      profile.expires_at = updated.expires_at;
+      profile.updated_at = updated.updated_at;
+      await resolver.refresh().catch((err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.warn("secret.handle_resolver_refresh_failed", {
+          profile_id: profile.profile_id,
+          error: msg,
+        });
+      });
+
+      return accessToken;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.warn("oauth.refresh_failed", {
+        provider: profile.provider,
+        profile_id: profile.profile_id,
+        error: msg,
+      });
+      // If refresh fails and the token is already expired, avoid hammering the token endpoint.
+      if (expiresAtMs <= nowMs) {
+        await authProfileDal.setCooldown(profile.profile_id, { untilMs: Date.now() + 60_000 });
+      }
+      return null;
+    } finally {
+      await oauthRefreshLeaseDal.release({ profileId: profile.profile_id, owner: oauthLeaseOwner }).catch(() => {});
+    }
+  }
+
+  const refreshed = await maybeRefreshOAuthAccessToken();
+  if (refreshed) return refreshed;
+
+  if (profile.type === "oauth") {
+    const refreshTokenHandleId = profile.secret_handles?.["refresh_token_handle"];
+    if (refreshTokenHandleId) {
+      const expiresAt = profile.expires_at;
+      const expiresAtMs = expiresAt ? Date.parse(expiresAt) : Number.NaN;
+      if (Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now()) {
+        return null;
+      }
+    }
+  }
+
+  const handles = profile.secret_handles ?? {};
+  const handleId =
+    profile.type === "api_key"
+      ? handles["api_key_handle"]
+      : profile.type === "token"
+        ? handles["token_handle"]
+        : handles["access_token_handle"];
+  if (!handleId || !resolver) return null;
+  return await resolver.resolveById(handleId);
+}
+
 function shouldPromoteToCoreMemory(message: string): boolean {
   const normalized = message.toLowerCase();
   return (
@@ -619,213 +847,18 @@ export class AgentRuntime {
         return model as LanguageModelV3;
       }
 
-      async function resolveApiKeyFromProfile(profile: AuthProfileRow): Promise<string | null> {
-        async function maybeRefreshOAuthAccessToken(): Promise<string | null> {
-          if (profile.type !== "oauth") return null;
-          if (!secretProvider || !resolver) return null;
-
-          const expiresAt = profile.expires_at;
-          if (!expiresAt) return null;
-          const expiresAtMs = Date.parse(expiresAt);
-          if (!Number.isFinite(expiresAtMs)) return null;
-
-          const nowMs = Date.now();
-          const refreshThresholdMs = 60_000;
-          if (expiresAtMs - nowMs > refreshThresholdMs) return null;
-
-          const refreshHandleId = profile.secret_handles?.["refresh_token_handle"];
-          if (!refreshHandleId) return null;
-
-          const acquired = await oauthRefreshLeaseDal.tryAcquire({
-            profileId: profile.profile_id,
-            owner: oauthLeaseOwner,
-            nowMs,
-            leaseTtlMs: 60_000,
+        async function resolveApiKeyFromProfile(profile: AuthProfileRow): Promise<string | null> {
+          return await resolveProfileApiKey(profile, {
+            secretProvider,
+            resolver,
+            authProfileDal,
+            oauthProviderRegistry,
+            oauthRefreshLeaseDal,
+            oauthLeaseOwner,
+            logger,
+            fetchImpl: fetch,
           });
-          if (!acquired) {
-            // Another instance is refreshing (or the lease is stuck); sync in-memory handles
-            // from the latest row so we don't attempt a revoked access handle.
-            const latest = await authProfileDal.getById(profile.profile_id);
-            if (latest && latest.updated_at !== profile.updated_at) {
-              profile.secret_handles = latest.secret_handles;
-              profile.expires_at = latest.expires_at;
-              profile.updated_at = latest.updated_at;
-              await resolver.refresh().catch((err) => {
-                const msg = err instanceof Error ? err.message : String(err);
-                logger.warn("secret.handle_resolver_refresh_failed", {
-                  profile_id: profile.profile_id,
-                  error: msg,
-                });
-              });
-            }
-            return null;
-          }
-
-          try {
-            const latest = await authProfileDal.getById(profile.profile_id);
-            const current = latest ?? profile;
-
-            const currentExpiresAt = current.expires_at;
-            if (currentExpiresAt) {
-              const currentExpiresAtMs = Date.parse(currentExpiresAt);
-              if (Number.isFinite(currentExpiresAtMs) && currentExpiresAtMs - nowMs > refreshThresholdMs) {
-                if (latest && latest.updated_at !== profile.updated_at) {
-                  profile.secret_handles = latest.secret_handles;
-                  profile.expires_at = latest.expires_at;
-                  profile.updated_at = latest.updated_at;
-                  await resolver.refresh().catch((err) => {
-                    const msg = err instanceof Error ? err.message : String(err);
-                    logger.warn("secret.handle_resolver_refresh_failed", {
-                      profile_id: profile.profile_id,
-                      error: msg,
-                    });
-                  });
-                }
-                return null;
-              }
-            }
-
-            const currentRefreshHandleId = current.secret_handles?.["refresh_token_handle"] ?? refreshHandleId;
-            const refreshToken = await resolver.resolveById(currentRefreshHandleId);
-            if (!refreshToken) return null;
-
-            const spec = await oauthProviderRegistry.get(current.provider);
-            if (!spec) return null;
-
-            const clientIdEnv = spec.client_id_env?.trim();
-            if (!clientIdEnv) return null;
-            const clientId = process.env[clientIdEnv]?.trim();
-            if (!clientId) return null;
-
-            const clientSecretEnv = spec.client_secret_env?.trim();
-            const clientSecret = clientSecretEnv ? process.env[clientSecretEnv]?.trim() : undefined;
-
-            const { tokenEndpoint } = await resolveOAuthEndpoints(spec, { fetchImpl: fetch });
-            if (!tokenEndpoint) return null;
-
-            const scope = (spec.scopes ?? []).join(" ").trim();
-            const token = await refreshAccessToken({
-              tokenEndpoint,
-              clientId,
-              clientSecret,
-              tokenEndpointBasicAuth: spec.token_endpoint_basic_auth,
-              refreshToken,
-              scope: scope || undefined,
-              extraParams: spec.extra_token_params,
-              fetchImpl: fetch,
-            });
-
-            const accessToken = token.access_token?.trim();
-            if (!accessToken) return null;
-
-            const accessHandle = await secretProvider.store(
-              `oauth:${current.provider}:${current.agent_id}:access`,
-              accessToken,
-            );
-
-            const nextSecretHandles: Record<string, string> = { ...current.secret_handles };
-            const oldAccessHandleId = nextSecretHandles["access_token_handle"];
-            nextSecretHandles["access_token_handle"] = accessHandle.handle_id;
-
-            const refreshTokenNew = token.refresh_token?.trim();
-            let oldRefreshHandleId: string | undefined;
-            let newRefreshHandleId: string | undefined;
-            if (refreshTokenNew) {
-              const refreshHandle = await secretProvider.store(
-                `oauth:${current.provider}:${current.agent_id}:refresh`,
-                refreshTokenNew,
-              );
-              oldRefreshHandleId = nextSecretHandles["refresh_token_handle"];
-              nextSecretHandles["refresh_token_handle"] = refreshHandle.handle_id;
-              newRefreshHandleId = refreshHandle.handle_id;
-            }
-
-            const nextExpiresAt = (() => {
-              const expiresIn = token.expires_in;
-              if (typeof expiresIn === "number" && Number.isFinite(expiresIn) && expiresIn > 0) {
-                return new Date(nowMs + Math.floor(expiresIn) * 1000).toISOString();
-              }
-              // If the refresh response omits expires_in, clear the stored expiry so we don't keep
-              // treating a newly-refreshed token as already expired.
-              return null;
-            })();
-
-            const updated = await authProfileDal.updateSecretHandles(current.profile_id, {
-              secretHandles: nextSecretHandles,
-              expiresAt: nextExpiresAt,
-              updatedBy: { kind: "oauth_refresh" },
-            });
-
-            if (!updated) {
-              await secretProvider.revoke(accessHandle.handle_id).catch(() => {});
-              if (newRefreshHandleId) {
-                await secretProvider.revoke(newRefreshHandleId).catch(() => {});
-              }
-              return accessToken;
-            }
-
-            if (oldAccessHandleId && oldAccessHandleId !== accessHandle.handle_id) {
-              await secretProvider.revoke(oldAccessHandleId).catch(() => {});
-            }
-            if (oldRefreshHandleId && newRefreshHandleId && oldRefreshHandleId !== newRefreshHandleId) {
-              await secretProvider.revoke(oldRefreshHandleId).catch(() => {});
-            }
-
-            // Keep the in-memory snapshot in sync so subsequent calls in the same turn
-            // don't try to resolve a revoked handle.
-            profile.secret_handles = updated.secret_handles;
-            profile.expires_at = updated.expires_at;
-            profile.updated_at = updated.updated_at;
-            await resolver.refresh().catch((err) => {
-              const msg = err instanceof Error ? err.message : String(err);
-              logger.warn("secret.handle_resolver_refresh_failed", {
-                profile_id: profile.profile_id,
-                error: msg,
-              });
-            });
-
-            return accessToken;
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            logger.warn("oauth.refresh_failed", {
-              provider: profile.provider,
-              profile_id: profile.profile_id,
-              error: msg,
-            });
-            // If refresh fails and the token is already expired, avoid hammering the token endpoint.
-            if (expiresAtMs <= nowMs) {
-              await authProfileDal.setCooldown(profile.profile_id, { untilMs: Date.now() + 60_000 });
-            }
-            return null;
-          } finally {
-            await oauthRefreshLeaseDal.release({ profileId: profile.profile_id, owner: oauthLeaseOwner }).catch(() => {});
-          }
         }
-
-        const refreshed = await maybeRefreshOAuthAccessToken();
-        if (refreshed) return refreshed;
-
-        if (profile.type === "oauth") {
-          const refreshTokenHandleId = profile.secret_handles?.["refresh_token_handle"];
-          if (refreshTokenHandleId) {
-            const expiresAt = profile.expires_at;
-            const expiresAtMs = expiresAt ? Date.parse(expiresAt) : Number.NaN;
-            if (Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now()) {
-              return null;
-            }
-          }
-        }
-
-        const handles = profile.secret_handles ?? {};
-        const handleId =
-          profile.type === "api_key"
-            ? handles["api_key_handle"]
-            : profile.type === "token"
-              ? handles["token_handle"]
-              : handles["access_token_handle"];
-        if (!handleId || !resolver) return null;
-        return await resolver.resolveById(handleId);
-      }
 
       const providerLabel = `${chosen.providerId}/${chosen.modelId}`;
 
@@ -895,9 +928,9 @@ export class AgentRuntime {
           lastErr = err;
         }
 
-	        const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
-	        throw new Error(`model call failed for ${providerLabel}: ${message}`, { cause: lastErr });
-	      }
+          const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
+          throw new Error(`model call failed for ${providerLabel}: ${message}`, { cause: lastErr });
+        }
 
       const rotating: LanguageModelV3 = {
         specificationVersion: "v3",
@@ -935,33 +968,33 @@ export class AgentRuntime {
       modelId: primary.modelId,
       supportedUrls: primary.supportedUrls,
 
-	      async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
-	        let lastErr: unknown;
-	        for (const model of rotatingModels) {
-	          try {
-	            return await model.doGenerate(options);
-	          } catch (err) {
-	            if (getStopFallbackApiCallError(err)) throw err;
-	            lastErr = err;
-	          }
-	        }
-	        const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
-	        throw new Error(`model call failed for candidates ${attempted}: ${message}`);
-	      },
+        async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
+          let lastErr: unknown;
+          for (const model of rotatingModels) {
+            try {
+              return await model.doGenerate(options);
+            } catch (err) {
+              if (getStopFallbackApiCallError(err)) throw err;
+              lastErr = err;
+            }
+          }
+          const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
+          throw new Error(`model call failed for candidates ${attempted}: ${message}`);
+        },
 
-	      async doStream(options: LanguageModelV3CallOptions): Promise<LanguageModelV3StreamResult> {
-	        let lastErr: unknown;
-	        for (const model of rotatingModels) {
-	          try {
-	            return await model.doStream(options);
-	          } catch (err) {
-	            if (getStopFallbackApiCallError(err)) throw err;
-	            lastErr = err;
-	          }
-	        }
-	        const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
-	        throw new Error(`model call failed for candidates ${attempted}: ${message}`);
-	      },
+        async doStream(options: LanguageModelV3CallOptions): Promise<LanguageModelV3StreamResult> {
+          let lastErr: unknown;
+          for (const model of rotatingModels) {
+            try {
+              return await model.doStream(options);
+            } catch (err) {
+              if (getStopFallbackApiCallError(err)) throw err;
+              lastErr = err;
+            }
+          }
+          const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
+          throw new Error(`model call failed for candidates ${attempted}: ${message}`);
+        },
     };
 
     return multi;
@@ -1045,9 +1078,9 @@ export class AgentRuntime {
     return { streamResult, sessionId: session.session_id, finalize };
   }
 
-  async turn(input: AgentTurnRequestT): Promise<AgentTurnResponseT> {
-    const prepared = await this.prepareTurn(input);
-    const { ctx, session, model, toolSet, usedTools, userContent } = prepared;
+    async turn(input: AgentTurnRequestT): Promise<AgentTurnResponseT> {
+      const prepared = await this.prepareTurn(input);
+      const { ctx, session, model, toolSet, usedTools, userContent } = prepared;
 
     const result = await generateText({
       model,
@@ -1062,14 +1095,222 @@ export class AgentRuntime {
       stopWhen: [stepCountIs(this.maxSteps)],
     });
 
-    const reply = result.text || "No assistant response returned.";
-    return this.finalizeTurn(ctx, session, input, reply, usedTools);
-  }
+      const reply = result.text || "No assistant response returned.";
+      return this.finalizeTurn(ctx, session, input, reply, usedTools);
+    }
 
-  private async prepareTurn(input: AgentTurnRequestT): Promise<{
-    ctx: AgentLoadedContext;
-    session: SessionRow;
-    model: LanguageModel;
+    private async semanticSearch(
+      message: string,
+      primaryModelId: string,
+      sessionId: string,
+    ): Promise<VectorSearchResult[]> {
+      try {
+        const pipeline = await this.resolveEmbeddingPipeline(primaryModelId, sessionId);
+        if (!pipeline) return [];
+        return await pipeline.search(message, 5);
+      } catch {
+        return [];
+      }
+    }
+
+    private async resolveEmbeddingPipeline(
+      primaryModelId: string,
+      sessionId: string,
+    ): Promise<EmbeddingPipeline | undefined> {
+      try {
+        const loaded = await this.opts.container.modelsDev.ensureLoaded();
+        const catalog = loaded.catalog;
+
+        type ProviderEntry = (typeof catalog)[string];
+        type ModelEntry = NonNullable<ProviderEntry["models"]>[string];
+        type ResolvedEmbeddingCandidate = {
+          providerId: string;
+          modelId: string;
+          provider: ProviderEntry;
+          model: ModelEntry;
+          npm: string;
+          api: string | undefined;
+        };
+
+        const isEmbeddingModel = (id: string, model: ModelEntry): boolean => {
+          if (/embedding/i.test(id)) return true;
+          const family = (model as { family?: unknown }).family;
+          if (typeof family === "string" && /embedding/i.test(family)) return true;
+          const name = (model as { name?: unknown }).name;
+          return typeof name === "string" && /embedding/i.test(name);
+        };
+
+        const resolveEmbeddingCandidate = (providerId: string): ResolvedEmbeddingCandidate | undefined => {
+          const provider = catalog[providerId];
+          if (!provider) return undefined;
+
+          const models = provider.models ?? {};
+          const preferredIds = ["text-embedding-3-small", "text-embedding-3-large"];
+          let embeddingModelId: string | undefined;
+          for (const id of preferredIds) {
+            if (Object.hasOwn(models, id)) {
+              embeddingModelId = id;
+              break;
+            }
+          }
+          if (!embeddingModelId) {
+            const candidateIds = Object.entries(models)
+              .filter(([id, model]) => isEmbeddingModel(id, model))
+              .map(([id]) => id)
+              .sort((a, b) => a.localeCompare(b));
+            embeddingModelId = candidateIds[0];
+          }
+
+          if (!embeddingModelId) return undefined;
+          const model = models[embeddingModelId];
+          if (!model) return undefined;
+
+          const providerOverride = (model as { provider?: { npm?: string; api?: string } }).provider;
+          const npm = providerOverride?.npm ?? provider.npm;
+          const api = providerOverride?.api ?? provider.api;
+          if (!npm) return undefined;
+
+          return {
+            providerId,
+            modelId: embeddingModelId,
+            provider,
+            model,
+            npm,
+            api,
+          };
+        };
+
+        const primaryProviderId = (() => {
+          try {
+            return parseProviderModelId(primaryModelId).providerId;
+          } catch {
+            return undefined;
+          }
+        })();
+
+        const orderedProviderIds: string[] = [];
+        const seen = new Set<string>();
+        const addProvider = (id: string | undefined): void => {
+          const trimmed = id?.trim();
+          if (!trimmed) return;
+          if (!catalog[trimmed]) return;
+          if (seen.has(trimmed)) return;
+          seen.add(trimmed);
+          orderedProviderIds.push(trimmed);
+        };
+
+        addProvider(primaryProviderId);
+        addProvider("openai");
+        for (const id of Object.keys(catalog).sort((a, b) => a.localeCompare(b))) {
+          addProvider(id);
+        }
+
+        const secretProvider = this.opts.secretProvider;
+        const resolver = secretProvider ? createSecretHandleResolver(secretProvider) : undefined;
+
+        const authProfileDal = new AuthProfileDal(this.opts.container.db);
+        const pinDal = new SessionProviderPinDal(this.opts.container.db);
+        const oauthProviderRegistry = this.opts.container.oauthProviderRegistry;
+        const oauthRefreshLeaseDal = this.opts.container.oauthRefreshLeaseDal;
+        const logger = this.opts.container.logger;
+        const oauthLeaseOwner = this.instanceOwner;
+
+        const resolveProviderApiKey = async (
+          providerId: string,
+          provider: ProviderEntry,
+        ): Promise<string | undefined> => {
+          const eligibleProfiles = isAuthProfilesEnabled() && resolver
+            ? await authProfileDal.listEligibleForProvider({
+              agentId: this.agentId,
+              provider: providerId,
+              nowMs: Date.now(),
+            })
+            : [];
+
+          let pinnedId: string | undefined;
+          if (eligibleProfiles.length > 0) {
+            const pin = await pinDal.get({
+              agentId: this.agentId,
+              sessionId,
+              provider: providerId,
+            });
+            pinnedId = pin?.profile_id;
+          }
+
+          const orderedProfiles = pinnedId
+            ? [...eligibleProfiles].sort((a, b) => (a.profile_id === pinnedId ? -1 : b.profile_id === pinnedId ? 1 : 0))
+            : eligibleProfiles;
+
+          for (const profile of orderedProfiles) {
+            const apiKey = await resolveProfileApiKey(profile, {
+              secretProvider,
+              resolver,
+              authProfileDal,
+              oauthProviderRegistry,
+              oauthRefreshLeaseDal,
+              oauthLeaseOwner,
+              logger,
+              fetchImpl: this.fetchImpl,
+            });
+            if (apiKey) return apiKey;
+          }
+
+          for (const key of provider.env ?? []) {
+            if (!/(_API_KEY|_TOKEN)$/i.test(key)) continue;
+            const raw = process.env[key];
+            const trimmed = typeof raw === "string" ? raw.trim() : "";
+            if (trimmed.length > 0) return trimmed;
+          }
+
+          return undefined;
+        };
+
+        for (const providerId of orderedProviderIds) {
+          const candidate = resolveEmbeddingCandidate(providerId);
+          if (!candidate) continue;
+
+          const apiKey = await resolveProviderApiKey(candidate.providerId, candidate.provider);
+          if (!apiKey) continue;
+
+          const endpointKey = (candidate.provider.env ?? []).find((key) => /(ENDPOINT|BASE_URL|BASEURL|URL)$/i.test(key));
+          const endpoint = endpointKey ? process.env[endpointKey]?.trim() : undefined;
+          const baseURL = endpoint && endpoint.length > 0 ? endpoint : candidate.api;
+
+          const sdk = createProviderFromNpm({
+            npm: candidate.npm,
+            providerId: candidate.providerId,
+            apiKey,
+            baseURL,
+            fetchImpl: this.fetchImpl,
+          });
+
+          const sdkAny = sdk as any;
+          const embeddingModel = typeof sdkAny.textEmbeddingModel === "function"
+            ? sdkAny.textEmbeddingModel(candidate.modelId)
+            : typeof sdkAny.embeddingModel === "function"
+              ? sdkAny.embeddingModel(candidate.modelId)
+              : undefined;
+          if (!embeddingModel) continue;
+
+          const vectorDal = new VectorDal(this.opts.container.db);
+          return new EmbeddingPipeline({
+            vectorDal,
+            agentId: this.agentId,
+            embeddingModel,
+            embeddingModelId: `${candidate.providerId}/${candidate.modelId}`,
+          });
+        }
+
+        return undefined;
+      } catch {
+        return undefined;
+      }
+    }
+
+    private async prepareTurn(input: AgentTurnRequestT): Promise<{
+      ctx: AgentLoadedContext;
+      session: SessionRow;
+      model: LanguageModel;
     toolSet: ToolSet;
     usedTools: Set<string>;
     userContent: Array<{ type: "text"; text: string }>;
@@ -1081,85 +1322,19 @@ export class AgentRuntime {
     const agentId = this.agentId;
     const workspaceId = this.workspaceId;
 
-    const wantsMcpTools = ctx.config.tools.allow.some(
-      (entry) => entry === "*" || entry === "mcp*" || entry.startsWith("mcp."),
-    );
+      const wantsMcpTools = ctx.config.tools.allow.some(
+        (entry) => entry === "*" || entry === "mcp*" || entry.startsWith("mcp."),
+      );
 
-    // Semantic search via embedding pipeline (graceful -- skipped if memory disabled)
-    let semanticSearchPromise: Promise<VectorSearchResult[]>;
-    if (ctx.config.memory.markdown_enabled) {
-      try {
-        const loaded = await this.opts.container.modelsDev.ensureLoaded();
-        const { providerId } = parseProviderModelId(ctx.config.model.model);
-        const provider = loaded.catalog[providerId];
-        if (!provider) {
-          semanticSearchPromise = Promise.resolve([]);
-        } else {
-          const apiKeyVar = (provider.env ?? []).find((key) => /(_API_KEY|_TOKEN)$/i.test(key));
-          const apiKey = apiKeyVar ? process.env[apiKeyVar]?.trim() : undefined;
-          if (!apiKey) {
-            semanticSearchPromise = Promise.resolve([]);
-          } else {
-            const embeddingModelId = (() => {
-              const preferred = ["text-embedding-3-small", "text-embedding-3-large"];
-              for (const id of preferred) {
-                if (provider.models && Object.hasOwn(provider.models, id)) return id;
-              }
-              const entries = Object.entries(provider.models ?? {});
-              const match = entries.find(([id, model]) => {
-                if (/embedding/i.test(id)) return true;
-                const family = (model as { family?: string }).family;
-                return typeof family === "string" && /embedding/i.test(family);
-              });
-              return match?.[0];
-            })();
+      // Semantic search via embedding pipeline (graceful -- skipped if memory disabled)
+      const semanticSearchPromise = ctx.config.memory.markdown_enabled
+        ? this.semanticSearch(input.message, ctx.config.model.model, session.session_id)
+        : Promise.resolve([]);
 
-            if (!embeddingModelId) {
-              semanticSearchPromise = Promise.resolve([]);
-            } else {
-              const endpointKey = (provider.env ?? []).find((key) => /(ENDPOINT|BASE_URL|BASEURL|URL)$/i.test(key));
-              const endpoint = endpointKey ? process.env[endpointKey]?.trim() : undefined;
-
-              if (!provider.npm) {
-                semanticSearchPromise = Promise.resolve([]);
-              } else {
-                const sdk = createProviderFromNpm({
-                  npm: provider.npm,
-                  providerId,
-                  apiKey,
-                  baseURL: endpoint && endpoint.length > 0 ? endpoint : provider.api,
-                  fetchImpl: this.fetchImpl,
-                });
-
-                const embeddingModel = (sdk as any).textEmbeddingModel
-                  ? (sdk as any).textEmbeddingModel(embeddingModelId)
-                  : sdk.embeddingModel(embeddingModelId);
-
-                const vectorDal = new VectorDal(this.opts.container.db);
-                const embeddingPipeline = new EmbeddingPipeline({
-                  vectorDal,
-                  agentId: this.agentId,
-                  embeddingModel,
-                  embeddingModelId: `${providerId}/${embeddingModelId}`,
-                });
-                semanticSearchPromise = embeddingPipeline
-                  .search(input.message, 5)
-                  .catch(() => [] as VectorSearchResult[]);
-              }
-            }
-          }
-        }
-      } catch {
-        semanticSearchPromise = Promise.resolve([]);
-      }
-    } else {
-      semanticSearchPromise = Promise.resolve([]);
-    }
-
-    const [memoryHits, mcpTools, semanticHits] = await Promise.all([
-      ctx.config.memory.markdown_enabled
-        ? ctx.memoryStore.search(input.message, 5)
-        : Promise.resolve([]),
+      const [memoryHits, mcpTools, semanticHits] = await Promise.all([
+        ctx.config.memory.markdown_enabled
+          ? ctx.memoryStore.search(input.message, 5)
+          : Promise.resolve([]),
       wantsMcpTools
         ? this.mcpManager.listToolDescriptors(ctx.mcpServers)
         : this.mcpManager.listToolDescriptors([]),

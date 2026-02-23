@@ -76,6 +76,24 @@ export class OauthPendingDal {
     return row ? toRow(row) : undefined;
   }
 
+  /**
+   * Atomically "consume" a pending OAuth request so duplicate callbacks can't
+   * process the same state concurrently.
+   */
+  async consume(state: string): Promise<OauthPendingRow | undefined> {
+    return await this.db.transaction(async (tx) => {
+      const row = await tx.get<RawOauthPendingRow>(
+        "SELECT * FROM oauth_pending WHERE state = ?",
+        [state],
+      );
+      if (!row) return undefined;
+
+      const res = await tx.run("DELETE FROM oauth_pending WHERE state = ?", [state]);
+      if (res.changes !== 1) return undefined;
+      return toRow(row);
+    });
+  }
+
   async create(input: OauthPendingRow): Promise<void> {
     await this.db.run(
       `INSERT INTO oauth_pending (
@@ -114,4 +132,3 @@ export class OauthPendingDal {
     return res.changes;
   }
 }
-

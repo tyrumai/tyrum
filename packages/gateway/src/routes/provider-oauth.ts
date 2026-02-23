@@ -228,9 +228,16 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
       await deps.oauthPendingDal.delete(state).catch(() => {});
       return c.html(renderHtml("Authorization failed", "OAuth request expired. Please retry."), 400);
     }
-
-    // One-time use.
-    await deps.oauthPendingDal.delete(state).catch(() => {});
+    const consumed = await deps.oauthPendingDal.consume(state);
+    if (!consumed) {
+      return c.html(
+        renderHtml(
+          "Authorization failed",
+          "Unknown or expired authorization request (state not found). Please retry.",
+        ),
+        400,
+      );
+    }
 
     const spec = await deps.oauthProviderRegistry.get(providerId);
     if (!spec) {
@@ -268,15 +275,15 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
         clientSecret,
         tokenEndpointBasicAuth: spec.token_endpoint_basic_auth,
         code,
-        redirectUri: pending.redirect_uri,
-        pkceVerifier: pending.pkce_verifier,
-        scope: pending.scopes || undefined,
+        redirectUri: consumed.redirect_uri,
+        pkceVerifier: consumed.pkce_verifier,
+        scope: consumed.scopes || undefined,
         extraParams: spec.extra_token_params,
       });
 
-      secretProvider = await deps.secretProviderForAgent(pending.agent_id);
+      secretProvider = await deps.secretProviderForAgent(consumed.agent_id);
       const accessHandle = await secretProvider.store(
-        `oauth:${providerId}:${pending.agent_id}:access`,
+        `oauth:${providerId}:${consumed.agent_id}:access`,
         token.access_token,
       );
       createdHandleIds.push(accessHandle.handle_id);
@@ -287,7 +294,7 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
 
       if (token.refresh_token) {
         const refreshHandle = await secretProvider.store(
-          `oauth:${providerId}:${pending.agent_id}:refresh`,
+          `oauth:${providerId}:${consumed.agent_id}:refresh`,
           token.refresh_token,
         );
         createdHandleIds.push(refreshHandle.handle_id);
@@ -299,12 +306,12 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
 
       const profile = await deps.authProfileDal.create({
         profileId,
-        agentId: pending.agent_id,
+        agentId: consumed.agent_id,
         provider: providerId,
         type: "oauth",
         secretHandles,
         labels: {
-          scopes: pending.scopes,
+          scopes: consumed.scopes,
           token_type: token.token_type ?? null,
           oauth: true,
         },
@@ -315,7 +322,7 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
 
       deps.logger?.info("oauth.authorized", {
         provider: providerId,
-        agent_id: pending.agent_id,
+        agent_id: consumed.agent_id,
         profile_id: profile.profile_id,
       });
 
