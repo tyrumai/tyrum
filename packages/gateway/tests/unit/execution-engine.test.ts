@@ -233,6 +233,66 @@ describe("ExecutionEngine (normalized)", () => {
     expect(runDone?.status).toBe("succeeded");
   });
 
+  it("fails closed when a stored policy snapshot is malformed (override cannot auto-allow)", async () => {
+    db = openTestSqliteDb();
+
+    const originalPolicyEnabled = process.env["TYRUM_POLICY_ENABLED"];
+    process.env["TYRUM_POLICY_ENABLED"] = "1";
+
+    const home = await mkdtemp(join(tmpdir(), "tyrum-policy-home-invalid-snapshot-"));
+    try {
+      const snapshotDal = new PolicySnapshotDal(db);
+      const overrideDal = new PolicyOverrideDal(db);
+      const policyService = new PolicyService({ home, snapshotDal, overrideDal });
+
+      const invalidSnapshotId = "11111111-1111-1111-8111-111111111111";
+      await db.run(
+        `INSERT INTO policy_snapshots (policy_snapshot_id, sha256, bundle_json)
+         VALUES (?, ?, ?)`,
+        [invalidSnapshotId, "invalid", "{not-json"],
+      );
+
+      await overrideDal.create({
+        agentId: "default",
+        workspaceId: "default",
+        toolId: "tool.exec",
+        pattern: "echo hi",
+        createdFromPolicySnapshotId: invalidSnapshotId,
+      });
+
+      const engine = new ExecutionEngine({ db, policyService });
+      await engine.enqueuePlan({
+        key: "agent:default:telegram-1:group:thread-1",
+        lane: "main",
+        planId: "plan-policy-invalid-snapshot-1",
+        requestId: "req-policy-invalid-snapshot-1",
+        policySnapshotId: invalidSnapshotId,
+        steps: [action("CLI", { cmd: "echo", args: ["hi"] })],
+      });
+
+      const executor: StepExecutor = {
+        execute: vi.fn(async (): Promise<StepResult> => ({ success: true, result: { ok: true } })),
+      };
+
+      expect(await engine.workerTick({ workerId: "w1", executor })).toBe(true);
+      expect((executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(0);
+
+      const runPaused = await db.get<{ status: string; paused_reason: string | null }>(
+        "SELECT status, paused_reason FROM execution_runs LIMIT 1",
+      );
+      expect(runPaused?.status).toBe("paused");
+      expect(runPaused?.paused_reason).toBe("policy");
+    } finally {
+      if (originalPolicyEnabled === undefined) {
+        delete process.env["TYRUM_POLICY_ENABLED"];
+      } else {
+        process.env["TYRUM_POLICY_ENABLED"] = originalPolicyEnabled;
+      }
+
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+
   it("records attempt finished_at after started_at", async () => {
     db = openTestSqliteDb();
 

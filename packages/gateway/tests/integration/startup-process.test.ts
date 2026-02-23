@@ -378,4 +378,129 @@ describe("gateway startup process", () => {
       }
     },
   );
+
+  itShutdown(
+    "does not miss gateway.shutdown hooks when the worker is busy",
+    { timeout: 60_000 },
+    async () => {
+      const releaseBuildLock = acquireGatewayBuildLock();
+      try {
+        ensureGatewayBuild();
+
+        const port = await findAvailablePort();
+        const gatewayToken = "tyrum-test-token";
+        const tempRoot = mkdtempSync(join(tmpdir(), "tyrum-gateway-shutdown-hooks-busy-"));
+        const tyrumHome = join(tempRoot, ".tyrum");
+        mkdirSync(tyrumHome, { recursive: true });
+        const dbPath = join(tempRoot, "gateway.db");
+        const startHookKey = "hook:550e8400-e29b-41d4-a716-446655440001";
+        const shutdownHookKey = "hook:550e8400-e29b-41d4-a716-446655440002";
+
+        // Allow CLI hooks to run so the gateway.start hook can keep the worker busy for >2s.
+        writeFileSync(
+          join(tyrumHome, "policy.yml"),
+          `v: 1\ntools:\n  default: require_approval\n  allow: ["tool.exec"]\n  require_approval: []\n  deny: []\n`,
+          "utf8",
+        );
+
+        writeFileSync(
+          join(tyrumHome, "hooks.yml"),
+          `v: 1\nhooks:\n  - hook_key: ${startHookKey}\n    event: gateway.start\n    lane: cron\n    steps:\n      - type: CLI\n        args:\n          cmd: ${process.execPath}\n          args: ["-e", "setTimeout(() => {}, 3000)"]\n  - hook_key: ${shutdownHookKey}\n    event: gateway.shutdown\n    lane: cron\n    steps:\n      - type: CLI\n        args:\n          cmd: ${process.execPath}\n          args: ["-e", "process.exit(0)"]\n`,
+          "utf8",
+        );
+
+        let stdout = "";
+        let stderr = "";
+
+        const child = spawn(process.execPath, [GATEWAY_ENTRYPOINT, "start"], {
+          cwd: REPO_ROOT,
+          env: {
+            ...process.env,
+            GATEWAY_HOST: "127.0.0.1",
+            GATEWAY_PORT: String(port),
+            GATEWAY_DB_PATH: dbPath,
+            GATEWAY_MIGRATIONS_DIR,
+            GATEWAY_TOKEN: gatewayToken,
+            TYRUM_HOME: tyrumHome,
+          },
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+
+        child.stdout.setEncoding("utf8");
+        child.stderr.setEncoding("utf8");
+        child.stdout.on("data", (chunk: string) => {
+          stdout += chunk;
+        });
+        child.stderr.on("data", (chunk: string) => {
+          stderr += chunk;
+        });
+
+        const output = () => `--- stdout ---\n${stdout}\n--- stderr ---\n${stderr}`;
+
+        try {
+          const healthUrl = `http://127.0.0.1:${port}/healthz`;
+          await waitForGatewayHealth(healthUrl, child, output);
+
+          // Ensure the start hook is running (worker is busy) before triggering shutdown.
+          const db = new Database(dbPath);
+          try {
+            const startedAt = Date.now();
+            for (;;) {
+              if (Date.now() - startedAt > 10_000) {
+                throw new Error(`gateway.start hook did not begin running.\n${output()}`);
+              }
+              try {
+                const row = db
+                  .prepare(
+                    `SELECT status
+                     FROM execution_runs
+                     WHERE key = ?
+                     ORDER BY created_at DESC
+                     LIMIT 1`,
+                  )
+                  .get(startHookKey) as { status: string } | undefined;
+                if (row?.status === "running") break;
+              } catch {
+                // DB may be briefly busy while the gateway is migrating / writing.
+              }
+              await delay(50);
+            }
+          } finally {
+            db.close();
+          }
+        } finally {
+          await stopChildProcess(child);
+        }
+
+        const db = new Database(dbPath);
+        try {
+          const row = db
+            .prepare(
+              `SELECT r.status AS status, j.trigger_json AS trigger_json
+               FROM execution_runs r
+               JOIN execution_jobs j ON j.job_id = r.job_id
+               WHERE r.key = ?
+               ORDER BY r.created_at DESC
+               LIMIT 1`,
+            )
+            .get(shutdownHookKey) as { status: string; trigger_json: string } | undefined;
+
+          expect(row, `gateway.shutdown hook run missing.\n${output()}`).toBeTruthy();
+          if (!row) return;
+
+          expect(row.status, output()).not.toBe("queued");
+
+          const trigger = JSON.parse(row.trigger_json) as { kind?: string; metadata?: Record<string, unknown> };
+          expect(trigger.kind, output()).toBe("hook");
+          expect(trigger.metadata?.["hook_event"], output()).toBe("gateway.shutdown");
+          expect(trigger.metadata?.["hook_key"], output()).toBe(shutdownHookKey);
+        } finally {
+          db.close();
+          rmSync(tempRoot, { recursive: true, force: true });
+        }
+      } finally {
+        releaseBuildLock();
+      }
+    },
+  );
 });

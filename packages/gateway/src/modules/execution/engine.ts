@@ -6,6 +6,7 @@ import type {
   ClientCapability as ClientCapabilityT,
   ExecutionBudgets as ExecutionBudgetsT,
   ExecutionTrigger as ExecutionTriggerT,
+  PolicyBundle as PolicyBundleT,
   WsEventEnvelope as WsEventEnvelopeT,
   WsRequestEnvelope as WsRequestEnvelopeT,
 } from "@tyrum/schemas";
@@ -1276,14 +1277,18 @@ export class ExecutionEngine {
           "SELECT bundle_json FROM policy_snapshots WHERE policy_snapshot_id = ?",
           [policySnapshotId],
         );
-        const policyBundleRaw = safeJsonParse(policyRow?.bundle_json ?? null, undefined as unknown);
-        const policyBundle = (() => {
+        let snapshotState: "valid" | "missing" | "invalid" = "missing";
+        let policyBundle: PolicyBundleT | undefined;
+
+        if (policyRow?.bundle_json) {
           try {
-            return PolicyBundle.parse(policyBundleRaw);
+            policyBundle = PolicyBundle.parse(JSON.parse(policyRow.bundle_json) as unknown);
+            snapshotState = "valid";
           } catch {
-            return PolicyBundle.parse({ v: 1 });
+            snapshotState = "invalid";
+            policyBundle = undefined;
           }
-        })();
+        }
 
         let parsedAction: ActionPrimitiveT | undefined;
         try {
@@ -1297,6 +1302,15 @@ export class ExecutionEngine {
           const toolMatchTarget = canonicalizeToolMatchTarget(mapped.toolId, mapped.toolArgs);
 
           const decision: DecisionT = await (async () => {
+            if (snapshotState === "invalid") {
+              // Fail closed: if we can't parse the stored snapshot, do not allow overrides to auto-allow.
+              // Observe-only deployments keep their non-blocking behavior.
+              if (this.policyService?.isEnabled() && this.policyService.isObserveOnly()) {
+                return "allow";
+              }
+              return "require_approval";
+            }
+
             if (this.policyService?.isEnabled()) {
               const agentId = this.deriveAgentIdFromKey(run.key) ?? "default";
               const evaluation = await this.policyService.evaluateToolCallFromSnapshot({
@@ -1310,6 +1324,10 @@ export class ExecutionEngine {
               });
               // Observe-only mode records decisions but doesn't block execution.
               return this.policyService.isObserveOnly() ? "allow" : evaluation.decision;
+            }
+
+            if (snapshotState === "missing" || !policyBundle) {
+              return "require_approval";
             }
 
             const toolsDomain = normalizeDomain(policyBundle.tools, "require_approval");

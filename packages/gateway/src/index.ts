@@ -1256,6 +1256,9 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     if (shuttingDown) return;
     shuttingDown = true;
     console.log(`Gateway shutting down (${signal})`);
+    const shutdownStartedAtMs = Date.now();
+    const hardExitTimeoutMs = 5_000;
+    const hardExitDeadlineMs = shutdownStartedAtMs + hardExitTimeoutMs;
 
     const sleep = (ms: number): Promise<void> => {
       return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
@@ -1263,6 +1266,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
 
     const waitForRunsToStart = async (runIds: readonly string[], timeoutMs: number): Promise<void> => {
       if (runIds.length === 0) return;
+      if (timeoutMs <= 0) return;
       const placeholders = runIds.map(() => "?").join(", ");
       const startedAt = Date.now();
       while (Date.now() - startedAt < timeoutMs) {
@@ -1283,7 +1287,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     const hardExitTimer = setTimeout(() => {
       console.warn("Gateway forced shutdown after 5 seconds.");
       process.exit(1);
-    }, 5_000);
+    }, hardExitTimeoutMs);
     hardExitTimer.unref();
 
     const closeServer = new Promise<void>((resolve) => {
@@ -1315,8 +1319,10 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
       try {
         const runIds = await shutdownHookRuns;
         if (runIds.length > 0) {
-          // Give the worker loop a brief chance to pick up the runs before stopping.
-          await waitForRunsToStart(runIds, 2_000);
+          // Give the worker loop as much time as possible to pick up shutdown hooks before stopping.
+          // If we stop too early (under load), shutdown hooks can remain queued and never run.
+          const remainingMs = Math.max(0, hardExitDeadlineMs - Date.now() - 250);
+          await waitForRunsToStart(runIds, remainingMs);
         }
       } finally {
         workerLoop.stop();
