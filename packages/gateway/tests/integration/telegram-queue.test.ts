@@ -157,7 +157,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
     const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me", 123, { senderId: 777 })));
     const enqueued = await queue.enqueue(normalized);
 
-    expect(enqueued.inbox.key).toBe("agent:agent-c1:telegram:work:dm:777");
+    expect(enqueued.inbox.key).toBe("agent:agent-c1:telegram:work:dm:123");
   });
 
   it("uses canonical group session key taxonomy", async () => {

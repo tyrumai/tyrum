@@ -125,8 +125,9 @@ export function telegramThreadKey(
   const container = toThreadContainer(thread.thread.kind);
   if (container === "dm") {
     let peerId = opts?.peerId?.trim()
-      || thread.message.sender?.id?.trim()
-      || thread.thread.id?.trim();
+      || thread.thread.id?.trim()
+      || thread.message.thread_id?.trim()
+      || thread.message.sender?.id?.trim();
     if (!peerId) {
       const msgId = thread.message.id?.trim();
       peerId = msgId ? `msg-${msgId}` : "unknown";
