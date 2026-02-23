@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { chmod, mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { Logger } from "../../src/modules/observability/logger.js";
@@ -37,18 +37,20 @@ function pluginManifestYaml(opts?: {
   configSchema?: string[];
   tools?: string[];
   commands?: string[];
+  entry?: string;
 }): string {
   const includeContributes = opts?.includeContributes ?? true;
   const includePermissions = opts?.includePermissions ?? true;
   const includeConfigSchema = opts?.includeConfigSchema ?? true;
   const tools = opts?.tools ?? ["plugin.echo.echo"];
   const commands = opts?.commands ?? ["echo"];
+  const entry = opts?.entry ?? "./index.mjs";
 
   const lines = [
     "id: echo",
     "name: Echo",
     "version: 0.0.1",
-    "entry: ./index.mjs",
+    `entry: ${entry}`,
   ];
 
   if (includeContributes) {
@@ -166,8 +168,11 @@ export function registerPlugin({ manifest }) {
 
 describe("PluginRegistry", () => {
   let home: string | undefined;
+  const isPosix = process.platform !== "win32" && typeof process.getuid === "function";
+  const itPosix = isPosix ? it : it.skip;
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     if (home) {
       await rm(home, { recursive: true, force: true });
       home = undefined;
@@ -753,5 +758,116 @@ describe("PluginRegistry", () => {
         workspaceId: "default",
       }),
     ).toBeUndefined();
+  });
+
+  it("loads plugins from directories whose names start with '..' (non-traversal)", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
+    const pluginDir = join(home, "plugins/..echo");
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(join(pluginDir, "plugin.yml"), pluginManifestYaml(), "utf-8");
+    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
+
+    const plugins = await PluginRegistry.load({
+      home,
+      logger: new Logger({ level: "silent" }),
+    });
+
+    expect(plugins.list().map((p) => p.id)).toEqual(["echo"]);
+  });
+
+  it("skips plugins whose entry path traverses outside the plugin directory", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
+    const pluginDir = join(home, "plugins/echo");
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(
+      join(pluginDir, "plugin.yml"),
+      pluginManifestYaml({ entry: "../outside.mjs" }),
+      "utf-8",
+    );
+    await writeFile(join(home, "plugins/outside.mjs"), pluginEntryModule(), "utf-8");
+
+    const { logger, warnings } = createCapturingLogger();
+    const plugins = await PluginRegistry.load({
+      home,
+      logger,
+    });
+
+    expect(plugins.list()).toEqual([]);
+    expect(warnings.some((entry) => entry.msg.startsWith("plugins."))).toBe(true);
+  });
+
+  itPosix("skips plugins whose entry path escapes via symlink", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
+    const pluginDir = join(home, "plugins/echo");
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(join(pluginDir, "plugin.yml"), pluginManifestYaml(), "utf-8");
+
+    const outside = join(home, "plugins/outside.mjs");
+    await writeFile(outside, pluginEntryModule(), "utf-8");
+    await symlink(outside, join(pluginDir, "index.mjs"));
+
+    const { logger } = createCapturingLogger();
+    const plugins = await PluginRegistry.load({
+      home,
+      logger,
+    });
+
+    expect(plugins.list()).toEqual([]);
+  });
+
+  itPosix("skips plugins when plugin root is world-writable", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
+    const pluginDir = join(home, "plugins/echo");
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(join(pluginDir, "plugin.yml"), pluginManifestYaml(), "utf-8");
+    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
+
+    await chmod(pluginDir, 0o777);
+
+    const { logger } = createCapturingLogger();
+    const plugins = await PluginRegistry.load({
+      home,
+      logger,
+    });
+
+    expect(plugins.list()).toEqual([]);
+  });
+
+  itPosix("skips plugins when plugins root directory is world-writable", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
+    const pluginDir = join(home, "plugins/echo");
+    const pluginsRoot = join(home, "plugins");
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(join(pluginDir, "plugin.yml"), pluginManifestYaml(), "utf-8");
+    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
+
+    await chmod(pluginsRoot, 0o777);
+
+    const { logger } = createCapturingLogger();
+    const plugins = await PluginRegistry.load({
+      home,
+      logger,
+    });
+
+    expect(plugins.list()).toEqual([]);
+  });
+
+  itPosix("skips plugins when plugin root ownership does not match current uid", async () => {
+    const currentUid = process.getuid();
+    vi.spyOn(process, "getuid").mockReturnValue(currentUid + 1);
+
+    home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
+    const pluginDir = join(home, "plugins/echo");
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(join(pluginDir, "plugin.yml"), pluginManifestYaml(), "utf-8");
+    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
+
+    const { logger } = createCapturingLogger();
+    const plugins = await PluginRegistry.load({
+      home,
+      logger,
+    });
+
+    expect(plugins.list()).toEqual([]);
   });
 });
