@@ -8,6 +8,7 @@ import { createServer } from "node:http";
 import { mkdirSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
+import { isIP } from "node:net";
 import { getRequestListener } from "@hono/node-server";
 import { basename, dirname, join } from "node:path";
 import { homedir } from "node:os";
@@ -68,8 +69,15 @@ function normalizeHostForLoopbackCheck(host: string): string {
 function isLoopbackHost(host: string): boolean {
   const normalized = normalizeHostForLoopbackCheck(host).toLowerCase();
   if (LOOPBACK_HOSTNAMES.has(normalized)) return true;
-  if (normalized === "::1" || normalized === "0:0:0:0:0:0:0:1") return true;
-  return normalized.startsWith("127.");
+
+  const ipVersion = isIP(normalized);
+  if (ipVersion === 4) {
+    return normalized.startsWith("127.");
+  }
+  if (ipVersion === 6) {
+    return normalized === "::1" || normalized === "0:0:0:0:0:0:0:1";
+  }
+  return false;
 }
 const UPDATE_CHANNEL_TAG: Record<UpdateChannel, string> = {
   stable: "latest",

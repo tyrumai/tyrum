@@ -160,6 +160,57 @@ describe("tyrum check", () => {
     vi.unstubAllGlobals();
   });
 
+  it("does not treat hostnames starting with 127. as loopback targets", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    process.env["GATEWAY_DB_PATH"] = ":memory:";
+    process.env["GATEWAY_HOST"] = "127.evil.com";
+    process.env["GATEWAY_PORT"] = "8788";
+    process.env["GATEWAY_TOKEN"] = "test-token";
+    process.env["TYRUM_HOME"] = "/tmp/tyrum-test-home";
+    process.env["TYRUM_SECRET_PROVIDER"] = "env";
+
+    ensureLoaded.mockResolvedValueOnce({
+      status: {
+        source: "default",
+        provider_count: 1,
+        model_count: 2,
+        last_error: null,
+      },
+    } as any);
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(JSON.stringify({ status: "ok" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { runCli } = await import("../../src/index.js");
+    const code = await runCli(["check"]);
+
+    expect(code).toBe(0);
+
+    const output = logSpy.mock.calls.map((c) => c.join(" ")).join("\n");
+    expect(output).toContain("static.exposure: host=127.evil.com port=8788 is_exposed=true");
+
+    const allHeaders = fetchMock.mock.calls
+      .map((call) => call[1])
+      .filter(Boolean)
+      .map((init) => (init as RequestInit).headers)
+      .filter(Boolean);
+
+    for (const headers of allHeaders) {
+      expect(new Headers(headers as any).get("authorization")).toBeNull();
+    }
+
+    logSpy.mockRestore();
+    errorSpy.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
   it("counts plugin manifests missing required fields as invalid", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
