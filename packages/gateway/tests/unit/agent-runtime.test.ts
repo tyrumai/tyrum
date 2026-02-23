@@ -273,6 +273,105 @@ describe("AgentRuntime", () => {
     expect(usedTools.has("tool.exec")).toBe(true);
   });
 
+  it("uses canonicalized fs match targets for policy evaluation and suggested overrides", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const policyService = {
+      isEnabled: () => true,
+      isObserveOnly: () => false,
+      evaluateToolCall: vi.fn(async () => ({ decision: "require_approval" as const })),
+    };
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("hello"),
+      fetchImpl: fetch404,
+      policyService: policyService as unknown as ConstructorParameters<typeof AgentRuntime>[0]["policyService"],
+    });
+
+    const approvalSpy = vi.fn(async () => ({
+      approved: true,
+      status: "approved" as const,
+      approvalId: 1,
+    }));
+    (runtime as unknown as { awaitApprovalForToolExecution: unknown }).awaitApprovalForToolExecution =
+      approvalSpy;
+
+    const toolDesc = {
+      id: "tool.fs.read",
+      description: "Read files from workspace.",
+      risk: "high" as const,
+      requires_confirmation: false,
+      keywords: [],
+      inputSchema: {
+        type: "object",
+        properties: { path: { type: "string" } },
+        required: ["path"],
+        additionalProperties: false,
+      },
+    };
+
+    const toolExecutor = {
+      execute: vi.fn(async () => ({
+        tool_call_id: "tc-test",
+        output: "ok",
+        error: undefined,
+        provenance: undefined,
+      })),
+    };
+
+    const usedTools = new Set<string>();
+    const toolSet = (
+      runtime as unknown as {
+        buildToolSet: (
+          tools: readonly unknown[],
+          toolExecutor: unknown,
+          usedTools: Set<string>,
+          context: { planId: string; sessionId: string; channel: string; threadId: string },
+        ) => Record<string, { execute: (args: unknown) => Promise<string> }>;
+      }
+    ).buildToolSet([toolDesc], toolExecutor, usedTools, {
+      planId: "plan-1",
+      sessionId: "session-1",
+      channel: "test",
+      threadId: "thread-1",
+    });
+
+    const result = await toolSet["tool.fs.read"]!.execute({
+      path: " ./docs//architecture/../policy-overrides.md ",
+    });
+
+    expect(result).toBe("ok");
+    expect(policyService.evaluateToolCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolMatchTarget: "read:docs/policy-overrides.md",
+      }),
+    );
+    expect(approvalSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "tool.fs.read" }),
+      expect.any(Object),
+      expect.any(String),
+      expect.any(Object),
+      expect.any(Number),
+      expect.objectContaining({
+        suggested_overrides: [
+          {
+            tool_id: "tool.fs.read",
+            pattern: "read:docs/policy-overrides.md",
+            workspace_id: "default",
+          },
+        ],
+      }),
+    );
+    expect(toolExecutor.execute).toHaveBeenCalledTimes(1);
+    expect(usedTools.has("tool.fs.read")).toBe(true);
+  });
+
   it("sanitizes plugin tool output and warns on injection patterns", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({

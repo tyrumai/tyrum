@@ -35,6 +35,7 @@ import type { ApprovalNotifier } from "../approval/notifier.js";
 import type { ApprovalDal, ApprovalStatus } from "../approval/dal.js";
 import type { PluginRegistry } from "../plugins/registry.js";
 import type { PolicyService } from "../policy/service.js";
+import { canonicalizeToolMatchTarget } from "../policy/match-target.js";
 import { AuthProfileDal, type AuthProfileRow } from "../models/auth-profile-dal.js";
 import { SessionProviderPinDal } from "../models/session-pin-dal.js";
 import { createProviderFromNpm } from "../models/provider-factory.js";
@@ -77,42 +78,6 @@ function resolveAgentId(): string {
 function resolveWorkspaceId(): string {
   const raw = process.env["TYRUM_WORKSPACE_ID"]?.trim();
   return raw && raw.length > 0 ? raw : DEFAULT_WORKSPACE_ID;
-}
-
-function collapseWhitespace(value: string): string {
-  return value.trim().replace(/\s+/g, " ");
-}
-
-function toolMatchTarget(toolId: string, args: unknown): string {
-  const parsed = args as Record<string, unknown> | null;
-
-  if (toolId === "tool.exec") {
-    const cmd = typeof parsed?.["command"] === "string" ? parsed["command"] : "";
-    return collapseWhitespace(cmd);
-  }
-
-  if (toolId === "tool.http.fetch") {
-    const url = typeof parsed?.["url"] === "string" ? parsed["url"] : "";
-    // For matching, we intentionally do not include query params.
-    const q = url.indexOf("?");
-    const safe = q === -1 ? url : url.slice(0, q);
-    return safe.trim();
-  }
-
-  if (toolId === "tool.fs.read" || toolId === "tool.fs.write") {
-    const rawPath = typeof parsed?.["path"] === "string" ? parsed["path"] : "";
-    const op = toolId === "tool.fs.write" ? "write" : "read";
-    return `${op}:${rawPath.trim()}`;
-  }
-
-  if (toolId === "tool.node.dispatch") {
-    const cap = typeof parsed?.["capability"] === "string" ? parsed["capability"] : "";
-    const action = typeof parsed?.["action"] === "string" ? parsed["action"] : "";
-    return `capability:${cap.trim()};action:${action.trim()}`;
-  }
-
-  // MCP and unknown tools: match on tool id.
-  return toolId;
 }
 
 function collectSecretHandleIds(args: unknown): string[] {
@@ -1767,6 +1732,7 @@ export class AgentRuntime {
           const toolCallId = `tc-${randomUUID()}`;
           const policy = this.policyService;
           const policyEnabled = policy.isEnabled();
+          const matchTarget = canonicalizeToolMatchTarget(toolDesc.id, args);
 
           let policyDecision: Decision | undefined;
           let policySnapshotId: string | undefined;
@@ -1801,7 +1767,7 @@ export class AgentRuntime {
               agentId,
               workspaceId,
               toolId: toolDesc.id,
-              toolMatchTarget: toolMatchTarget(toolDesc.id, args),
+              toolMatchTarget: matchTarget,
               url,
               secretScopes: secretScopes.length > 0 ? secretScopes : undefined,
             });
@@ -1824,13 +1790,13 @@ export class AgentRuntime {
 
           if (shouldRequireApproval) {
             const suggestedOverrides = policyEnabled
-              ? [
-                  {
-                    tool_id: toolDesc.id,
-                    pattern: toolMatchTarget(toolDesc.id, args),
-                    workspace_id: this.workspaceId,
-                  },
-                ]
+                ? [
+                    {
+                      tool_id: toolDesc.id,
+                      pattern: matchTarget,
+                      workspace_id: this.workspaceId,
+                    },
+                  ]
               : undefined;
 
             const decision = await this.awaitApprovalForToolExecution(
