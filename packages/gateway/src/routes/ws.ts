@@ -22,7 +22,7 @@ import {
 } from "@tyrum/schemas";
 import { createHash, createPublicKey, randomBytes, verify } from "node:crypto";
 import type { ConnectionManager } from "../ws/connection-manager.js";
-import { validateWsToken } from "../ws/auth.js";
+import { authenticateWsToken } from "../ws/auth.js";
 import { rawDataToUtf8 } from "../ws/raw-data.js";
 import { handleClientMessage } from "../ws/protocol.js";
 import type { ProtocolDeps } from "../ws/protocol.js";
@@ -252,12 +252,7 @@ export function createWsHandler(opts: WsRouteOptions): {
   wss.on("connection", (ws, req) => {
     const token = extractWsTokenFromProtocols(req);
 
-    if (!token || !validateWsToken(token, tokenStore)) {
-      ws.close(4001, "unauthorized");
-      return;
-    }
-
-    const upgradeClaims = tokenStore.authenticate(token);
+    const upgradeClaims = authenticateWsToken(token, tokenStore);
     if (!upgradeClaims) {
       ws.close(4001, "unauthorized");
       return;
@@ -320,14 +315,15 @@ export function createWsHandler(opts: WsRouteOptions): {
 
           // Bind device tokens to the peer identity proof. This prevents replaying
           // a valid device token across different device proofs.
-          if (
-            tokenStore.authenticate(token, {
-              expectedRole: init.data.payload.role,
-              expectedDeviceId,
-            }) === null
-          ) {
-            ws.close(4001, "unauthorized");
-            return;
+          if (upgradeClaims.token_kind === "device") {
+            if (upgradeClaims.role !== init.data.payload.role) {
+              ws.close(4001, "unauthorized");
+              return;
+            }
+            if (upgradeClaims.device_id !== expectedDeviceId) {
+              ws.close(4001, "unauthorized");
+              return;
+            }
           }
 
           const connectionId = crypto.randomUUID();

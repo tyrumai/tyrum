@@ -1,31 +1,31 @@
 /**
  * Unit tests for WebSocket token authentication.
  *
- * Validates that `validateWsToken` requires the gateway token store.
+ * Validates that `authenticateWsToken` requires the gateway token store.
  */
 
 import { describe, expect, it } from "vitest";
-import { validateWsToken } from "../../src/ws/auth.js";
+import { authenticateWsToken } from "../../src/ws/auth.js";
 import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-describe("validateWsToken", () => {
+describe("authenticateWsToken", () => {
   const mockedTokenStore = {
     authenticate(candidate: string) {
       return candidate === "admin-123" ? ({ token_kind: "admin" } as const) : null;
     },
   } as unknown as TokenStore;
 
-  it("returns false when tokenStore is missing", () => {
-    expect(validateWsToken("admin-123")).toBe(false);
+  it("returns null when tokenStore is missing", () => {
+    expect(authenticateWsToken("admin-123")).toBeNull();
   });
 
   it("validates against tokenStore", () => {
-    expect(validateWsToken("admin-123", mockedTokenStore)).toBe(true);
-    expect(validateWsToken("wrong", mockedTokenStore)).toBe(false);
-    expect(validateWsToken(undefined, mockedTokenStore)).toBe(false);
+    expect(authenticateWsToken("admin-123", mockedTokenStore)).toEqual({ token_kind: "admin" });
+    expect(authenticateWsToken("wrong", mockedTokenStore)).toBeNull();
+    expect(authenticateWsToken(undefined, mockedTokenStore)).toBeNull();
   });
 
   it("accepts device tokens for websocket upgrade auth", async () => {
@@ -41,7 +41,7 @@ describe("validateWsToken", () => {
       });
 
       expect(tokenStore.authenticate(issued.token)).not.toBeNull();
-      expect(validateWsToken(issued.token, tokenStore)).toBe(true);
+      expect(authenticateWsToken(issued.token, tokenStore)).not.toBeNull();
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
