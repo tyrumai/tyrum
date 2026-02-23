@@ -19,6 +19,7 @@ const AUTH_ERROR_BODY = {
 const AUTH_COOKIE_NAME = "tyrum_admin_token";
 const APP_TOKEN_QUERY_KEY = "token";
 const OAUTH_CALLBACK_ROUTE_PATH_RE = /\/providers\/:[^/]+\/oauth\/callback$/;
+const OAUTH_CALLBACK_REQUEST_PATH_RE = /\/providers\/[^/]+\/oauth\/callback$/;
 
 function extractBearerToken(authorizationHeader: string | undefined): string | undefined {
   if (!authorizationHeader) {
@@ -43,8 +44,14 @@ function extractAppQueryToken(c: Context): string | undefined {
 
 function isPublicOAuthCallbackRoute(c: Context): boolean {
   if (c.req.method !== "GET") return false;
-  // Use matched router paths so we don't accidentally exempt concrete request paths with similar suffixes.
-  return matchedRoutes(c).some((route) => OAUTH_CALLBACK_ROUTE_PATH_RE.test(route.path));
+  // Prefer matched router paths so we don't accidentally exempt other concrete request paths with a similar suffix.
+  // Fall back to request path when route matching metadata isn't available.
+  try {
+    if (matchedRoutes(c).some((route) => OAUTH_CALLBACK_ROUTE_PATH_RE.test(route.path))) return true;
+  } catch {
+    // ignore
+  }
+  return OAUTH_CALLBACK_REQUEST_PATH_RE.test(c.req.path);
 }
 
 export function createAuthMiddleware(
