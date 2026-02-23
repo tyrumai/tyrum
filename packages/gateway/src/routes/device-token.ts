@@ -32,7 +32,12 @@ export function createDeviceTokenRoutes(deps: DeviceTokenRouteDeps): Hono {
       return c.json({ error: "forbidden", message: "admin token required" }, 403);
     }
 
-    const body = (await c.req.json()) as unknown;
+    let body: unknown;
+    try {
+      body = (await c.req.json()) as unknown;
+    } catch {
+      return c.json({ error: "invalid_request", message: "invalid json" }, 400);
+    }
     const parsed = DeviceTokenIssueRequest.safeParse(body);
     if (!parsed.success) {
       return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
@@ -57,7 +62,12 @@ export function createDeviceTokenRoutes(deps: DeviceTokenRouteDeps): Hono {
       return c.json({ error: "forbidden", message: "admin token required" }, 403);
     }
 
-    const body = (await c.req.json()) as unknown;
+    let body: unknown;
+    try {
+      body = (await c.req.json()) as unknown;
+    } catch {
+      return c.json({ error: "invalid_request", message: "invalid json" }, 400);
+    }
     const parsed = DeviceTokenRevokeRequest.safeParse(body);
     if (!parsed.success) {
       return c.json({ error: "invalid_request", message: parsed.error.message }, 400);

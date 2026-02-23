@@ -115,4 +115,36 @@ describe("Device token routes", () => {
     expect(postRevoke.status).toBe(401);
     expect(tokenStore.authenticate(issued.token)).toBeNull();
   });
+
+  it("returns 400 for invalid JSON when issuing a device token", async () => {
+    const app = buildApp();
+
+    const res = await app.request("/auth/device-tokens/issue", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        "Content-Type": "application/json",
+      },
+      body: "{",
+    });
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({ error: "invalid_request" });
+  });
+
+  it("returns 400 for invalid JSON when revoking a device token", async () => {
+    const app = buildApp();
+
+    const res = await app.request("/auth/device-tokens/revoke", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        "Content-Type": "application/json",
+      },
+      body: "{",
+    });
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({ error: "invalid_request" });
+  });
 });
