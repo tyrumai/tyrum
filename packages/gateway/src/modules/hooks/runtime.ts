@@ -38,16 +38,23 @@ export class LifecycleHooksRuntime {
       const planId = `hook-${hook.hook_key}-${randomUUID()}`;
       const requestId = `hook-${hook.hook_key}-${randomUUID()}`;
 
+      const eventMetadata =
+        input.metadata && typeof input.metadata === "object" && !Array.isArray(input.metadata)
+          ? (input.metadata as Record<string, unknown>)
+          : input.metadata !== undefined
+            ? { event_metadata: input.metadata }
+            : {};
+
       const trigger: ExecutionTriggerT = {
         kind: "hook",
         key: hook.hook_key,
         lane,
         metadata: {
-          plan_id: planId,
-          request_id: requestId,
+          ...eventMetadata,
           hook_event: input.event,
           hook_key: hook.hook_key,
-          ...(input.metadata && typeof input.metadata === "object" ? { event: input.metadata } : {}),
+          plan_id: planId,
+          request_id: requestId,
         },
       };
 
@@ -63,4 +70,3 @@ export class LifecycleHooksRuntime {
     }
   }
 }
-

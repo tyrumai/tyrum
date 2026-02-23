@@ -80,6 +80,7 @@ describe("LifecycleHooksRuntime", () => {
     const trigger = JSON.parse(job!.trigger_json) as { kind: string; metadata?: Record<string, unknown> };
     expect(trigger.kind).toBe("hook");
     expect(trigger.metadata?.["hook_event"]).toBe("command.execute");
+    expect(trigger.metadata?.["command"]).toBe("/status");
 
     const step = await db.get<{ action_json: string }>(
       "SELECT action_json FROM execution_steps ORDER BY step_index ASC LIMIT 1",
@@ -88,4 +89,3 @@ describe("LifecycleHooksRuntime", () => {
     expect(parsedAction.type).toBe("CLI");
   });
 });
-
