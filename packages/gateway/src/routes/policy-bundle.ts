@@ -87,7 +87,16 @@ export function createPolicyBundleRoutes(deps: PolicyBundleRouteDeps): Hono {
       return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
     }
 
-    await deps.policyOverrideDal.expireStale();
+    const expired = await deps.policyOverrideDal.expireStale();
+    for (const row of expired) {
+      const evt: WsEventEnvelope = {
+        event_id: crypto.randomUUID(),
+        type: "policy_override.expired",
+        occurred_at: new Date().toISOString(),
+        payload: { override: row },
+      };
+      emitEvent(deps, evt);
+    }
     const rows = await deps.policyOverrideDal.list({
       agentId: parsed.data.agent_id,
       toolId: parsed.data.tool_id,
@@ -170,4 +179,3 @@ export function createPolicyBundleRoutes(deps: PolicyBundleRouteDeps): Hono {
 
   return app;
 }
-

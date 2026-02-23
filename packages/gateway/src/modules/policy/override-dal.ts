@@ -185,17 +185,18 @@ export class PolicyOverrideDal {
     return await this.getById(params.policyOverrideId);
   }
 
-  async expireStale(nowIso = isoNow()): Promise<number> {
-    const result = await this.db.run(
+  async expireStale(nowIso = isoNow()): Promise<PolicyOverrideRow[]> {
+    const rows = await this.db.all<RawPolicyOverrideRow>(
       `UPDATE policy_overrides
        SET status = 'expired',
            updated_at = ?
        WHERE status = 'active'
          AND expires_at IS NOT NULL
-         AND expires_at <= ?`,
+         AND expires_at <= ?
+       RETURNING *`,
       [nowIso, nowIso],
     );
-    return result.changes;
+    return rows.map(toOverrideRow);
   }
 
   async listActiveForTool(params: {
@@ -220,4 +221,3 @@ export class PolicyOverrideDal {
     return rows.map(toOverrideRow);
   }
 }
-
