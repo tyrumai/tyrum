@@ -233,7 +233,9 @@ describe("WS handler integration", () => {
       (msg) =>
         msg["type"] === "error" &&
         Object.prototype.hasOwnProperty.call(msg, "event_id") &&
-        Object.prototype.hasOwnProperty.call(msg, "payload"),
+        typeof msg["payload"] === "object" &&
+        msg["payload"] !== null &&
+        (msg["payload"] as Record<string, unknown>)["code"] === "deprecated_handshake",
     );
 
     ws.send(
