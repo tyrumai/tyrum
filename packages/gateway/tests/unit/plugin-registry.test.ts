@@ -270,6 +270,76 @@ describe("PluginRegistry", () => {
     expect(plugins.list()).toEqual([]);
   });
 
+  it("loads plugins when config schema composes object shapes via allOf", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
+    const pluginDir = join(home, "plugins/echo");
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(
+      join(pluginDir, "plugin.yml"),
+      pluginManifestYaml({
+        configSchema: [
+          "allOf:",
+          "  - type: object",
+          "    properties:",
+          "      greeting:",
+          "        type: string",
+          "  - type: object",
+          "    properties:",
+          "      target:",
+          "        type: string",
+          "required: []",
+        ],
+      }),
+      "utf-8",
+    );
+    await writeFile(join(pluginDir, "config.json"), JSON.stringify({ greeting: "hi", target: "world" }), "utf-8");
+    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
+
+    const plugins = await PluginRegistry.load({
+      home,
+      logger: new Logger({ level: "silent" }),
+    });
+
+    expect(plugins.list().map((p) => p.id)).toEqual(["echo"]);
+  });
+
+  it("rejects unknown keys when config schema composes object shapes via allOf", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
+    const pluginDir = join(home, "plugins/echo");
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(
+      join(pluginDir, "plugin.yml"),
+      pluginManifestYaml({
+        configSchema: [
+          "allOf:",
+          "  - type: object",
+          "    properties:",
+          "      greeting:",
+          "        type: string",
+          "  - type: object",
+          "    properties:",
+          "      target:",
+          "        type: string",
+          "required: []",
+        ],
+      }),
+      "utf-8",
+    );
+    await writeFile(
+      join(pluginDir, "config.json"),
+      JSON.stringify({ greeting: "hi", target: "world", extra: "nope" }),
+      "utf-8",
+    );
+    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
+
+    const plugins = await PluginRegistry.load({
+      home,
+      logger: new Logger({ level: "silent" }),
+    });
+
+    expect(plugins.list()).toEqual([]);
+  });
+
   it("loads plugins when config schema explicitly allows additionalProperties", async () => {
     home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
     const pluginDir = join(home, "plugins/echo");

@@ -1,6 +1,7 @@
 import { PluginManifest } from "@tyrum/schemas";
 import type { PluginManifest as PluginManifestT } from "@tyrum/schemas";
-import { Ajv, type ErrorObject } from "ajv";
+import { Ajv2019 } from "ajv/dist/2019.js";
+import type { ErrorObject } from "ajv";
 import { readFileSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { dirname, join, resolve, relative } from "node:path";
@@ -94,6 +95,7 @@ function isJsonSchemaObject(value: unknown): value is Record<string, unknown> {
 function normalizeJsonSchemaAdditionalPropertiesDefaults(
   schema: unknown,
   seen = new WeakMap<object, unknown>(),
+  opts?: { skipAdditionalPropertiesDefault?: boolean },
 ): unknown {
   if (schema === null || typeof schema !== "object") return schema;
   const existing = seen.get(schema);
@@ -103,7 +105,7 @@ function normalizeJsonSchemaAdditionalPropertiesDefaults(
     const out: unknown[] = [];
     seen.set(schema, out);
     for (const item of schema) {
-      out.push(normalizeJsonSchemaAdditionalPropertiesDefaults(item, seen));
+      out.push(normalizeJsonSchemaAdditionalPropertiesDefaults(item, seen, opts));
     }
     return out;
   }
@@ -111,6 +113,12 @@ function normalizeJsonSchemaAdditionalPropertiesDefaults(
   const record = schema as Record<string, unknown>;
   const out: Record<string, unknown> = {};
   seen.set(schema, out);
+
+  const skipAdditionalPropertiesDefault = opts?.skipAdditionalPropertiesDefault ?? false;
+  const additionalPropertiesExplicit = Object.prototype.hasOwnProperty.call(record, "additionalProperties");
+  const unevaluatedPropertiesExplicit = Object.prototype.hasOwnProperty.call(record, "unevaluatedProperties");
+  const allOf = record["allOf"];
+  const hasAllOf = Array.isArray(allOf) && allOf.length > 0;
 
   const type = record["type"];
   const isObjectType = type === "object" || (Array.isArray(type) && type.includes("object"));
@@ -142,11 +150,20 @@ function normalizeJsonSchemaAdditionalPropertiesDefaults(
         break;
       }
       case "prefixItems":
-      case "allOf":
       case "anyOf":
       case "oneOf": {
         out[key] = Array.isArray(value)
           ? value.map((entry) => normalizeJsonSchemaAdditionalPropertiesDefaults(entry, seen))
+          : value;
+        break;
+      }
+      case "allOf": {
+        out[key] = Array.isArray(value)
+          ? value.map((entry) =>
+              normalizeJsonSchemaAdditionalPropertiesDefaults(entry, seen, {
+                skipAdditionalPropertiesDefault: true,
+              }),
+            )
           : value;
         break;
       }
@@ -172,8 +189,16 @@ function normalizeJsonSchemaAdditionalPropertiesDefaults(
     }
   }
 
-  if (isObjectSchema && !Object.prototype.hasOwnProperty.call(record, "additionalProperties")) {
-    out["additionalProperties"] = false;
+  if (
+    !skipAdditionalPropertiesDefault &&
+    !additionalPropertiesExplicit &&
+    !unevaluatedPropertiesExplicit
+  ) {
+    if (hasAllOf) {
+      out["unevaluatedProperties"] = false;
+    } else if (isObjectSchema) {
+      out["additionalProperties"] = false;
+    }
   }
 
   return out;
@@ -230,10 +255,10 @@ function validatePluginConfig(params: {
   const normalizedSchema = normalizeJsonSchemaAdditionalPropertiesDefaults(params.schema);
   if (!isJsonSchemaObject(normalizedSchema)) {
     return { ok: false, error: "config_schema must be a JSON Schema object" };
-  }
+	  }
 
 	  try {
-	    const ajv = new Ajv({ allErrors: true, strict: false });
+	    const ajv = new Ajv2019({ allErrors: true, strict: false });
 	    const validate = ajv.compile(normalizedSchema);
 	    const ok = validate(params.config);
 	    if (ok) {
