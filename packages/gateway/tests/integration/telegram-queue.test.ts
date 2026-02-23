@@ -236,6 +236,26 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
     expect(enqueued.inbox.key).toBe("agent:agent-c1:dm:canon-1");
   });
 
+  it("falls back to provider peer id when canonical peer id is invalid", async () => {
+    db = openTestSqliteDb();
+    await db.run(
+      `INSERT INTO peer_identity_links (channel, account, provider_peer_id, canonical_peer_id)
+       VALUES (?, ?, ?, ?)`,
+      ["telegram", "work", "123", "bad:peer"],
+    );
+
+    const queue = new TelegramChannelQueue(db, {
+      agentId: "agent-c1",
+      channelKey: "work",
+      dmScope: "per_peer",
+    });
+
+    const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me", 123, { senderId: 777 })));
+    const enqueued = await queue.enqueue(normalized);
+
+    expect(enqueued.inbox.key).toBe("agent:agent-c1:dm:123");
+  });
+
   it("defaults telegram account id to legacy channel key", async () => {
     db = openTestSqliteDb();
 

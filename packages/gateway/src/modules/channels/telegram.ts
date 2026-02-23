@@ -1,5 +1,6 @@
 import {
   NormalizedThreadMessage as NormalizedThreadMessageSchema,
+  PeerId,
   buildAgentSessionKey,
   normalizedContainerKindFromThreadKind,
   parseTyrumKey,
@@ -267,14 +268,17 @@ export class TelegramChannelQueue {
         providerPeerId: parsed.peer_id,
       });
       if (canonicalPeerId) {
-        key = buildAgentSessionKey({
-          agentId,
-          container: "dm",
-          channel: "telegram",
-          account: accountId,
-          peerId: canonicalPeerId,
-          dmScope: "per_peer",
-        });
+        const parsedCanonicalPeerId = PeerId.safeParse(canonicalPeerId.trim());
+        if (parsedCanonicalPeerId.success) {
+          key = buildAgentSessionKey({
+            agentId,
+            container: "dm",
+            channel: "telegram",
+            account: accountId,
+            peerId: parsedCanonicalPeerId.data,
+            dmScope: "per_peer",
+          });
+        }
       }
     }
 
