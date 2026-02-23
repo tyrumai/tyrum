@@ -1137,7 +1137,7 @@ export class AgentRuntime {
       const rotating: LanguageModelV3 = {
         specificationVersion: "v3",
         provider: chosen.providerId,
-        modelId: providerLabel,
+        modelId: chosen.modelId,
         supportedUrls,
 
         async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
@@ -1161,7 +1161,7 @@ export class AgentRuntime {
       return rotatingModels[0]!;
     }
 
-    const attempted = rotatingModels.map((m) => m.modelId).join(", ");
+    const attempted = resolvedCandidates.map((entry) => `${entry.providerId}/${entry.modelId}`).join(", ");
     const primary = rotatingModels[0]!;
 
     const multi: LanguageModelV3 = {

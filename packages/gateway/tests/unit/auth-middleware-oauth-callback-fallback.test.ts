@@ -9,7 +9,7 @@ vi.mock("hono/route", () => {
 });
 
 describe("auth middleware oauth callback bypass fallback", () => {
-  it("fails closed when matchedRoutes is empty", async () => {
+  it("allows oauth callback when matchedRoutes is empty", async () => {
     const { createAuthMiddleware } = await import("../../src/modules/auth/middleware.js");
 
     const app = new Hono();
@@ -21,10 +21,10 @@ describe("auth middleware oauth callback bypass fallback", () => {
     expect(protectedRes.status).toBe(401);
 
     const callbackRes = await app.request("/providers/test/oauth/callback");
-    expect(callbackRes.status).toBe(401);
+    expect(callbackRes.status).toBe(200);
   });
 
-  it("fails closed under a base path prefix when matchedRoutes is empty", async () => {
+  it("allows oauth callback under a base path prefix when matchedRoutes is empty", async () => {
     const { createAuthMiddleware } = await import("../../src/modules/auth/middleware.js");
 
     const app = new Hono();
@@ -34,6 +34,17 @@ describe("auth middleware oauth callback bypass fallback", () => {
     app.route("/prefix", sub);
 
     const res = await app.request("/prefix/providers/test/oauth/callback");
+    expect(res.status).toBe(200);
+  });
+
+  it("still requires auth for non-callback routes when matchedRoutes is empty", async () => {
+    const { createAuthMiddleware } = await import("../../src/modules/auth/middleware.js");
+
+    const app = new Hono();
+    app.use("*", createAuthMiddleware({ validate: () => false } as unknown as TokenStore));
+    app.get("/providers/:provider/oauth/callback2", (c) => c.text("ok"));
+
+    const res = await app.request("/providers/test/oauth/callback2");
     expect(res.status).toBe(401);
   });
 });
