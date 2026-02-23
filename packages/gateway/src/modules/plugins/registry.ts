@@ -314,6 +314,7 @@ function normalizeJsonSchemaAdditionalPropertiesDefaults(
     root &&
     looksLikeJsonSchemaObjectShapeOrRef(record, root)
   ) {
+    delete out["additionalProperties"];
     delete out["$ref"];
     out["allOf"] = [{ $ref: ref }];
     out["unevaluatedProperties"] = false;
