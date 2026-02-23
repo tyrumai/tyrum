@@ -358,6 +358,161 @@ describe("PluginRegistry", () => {
     expect(plugins.list()).toEqual([]);
   });
 
+  it("loads plugins when config schema composes $ref object shapes via allOf", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
+    const pluginDir = join(home, "plugins/echo");
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(
+      join(pluginDir, "plugin.yml"),
+      pluginManifestYaml({
+        configSchema: [
+          "$defs:",
+          "  ConfigGreeting:",
+          "    type: object",
+          "    properties:",
+          "      greeting:",
+          "        type: string",
+          "  ConfigTarget:",
+          "    type: object",
+          "    properties:",
+          "      target:",
+          "        type: string",
+          "allOf:",
+          "  - $ref: \"#/$defs/ConfigGreeting\"",
+          "  - $ref: \"#/$defs/ConfigTarget\"",
+          "required: []",
+        ],
+      }),
+      "utf-8",
+    );
+    await writeFile(join(pluginDir, "config.json"), JSON.stringify({ greeting: "hi", target: "world" }), "utf-8");
+    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
+
+    const plugins = await PluginRegistry.load({
+      home,
+      logger: new Logger({ level: "silent" }),
+    });
+
+    expect(plugins.list().map((p) => p.id)).toEqual(["echo"]);
+  });
+
+  it("rejects unknown keys when config schema composes $ref object shapes via allOf", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
+    const pluginDir = join(home, "plugins/echo");
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(
+      join(pluginDir, "plugin.yml"),
+      pluginManifestYaml({
+        configSchema: [
+          "$defs:",
+          "  ConfigGreeting:",
+          "    type: object",
+          "    properties:",
+          "      greeting:",
+          "        type: string",
+          "  ConfigTarget:",
+          "    type: object",
+          "    properties:",
+          "      target:",
+          "        type: string",
+          "allOf:",
+          "  - $ref: \"#/$defs/ConfigGreeting\"",
+          "  - $ref: \"#/$defs/ConfigTarget\"",
+          "required: []",
+        ],
+      }),
+      "utf-8",
+    );
+    await writeFile(
+      join(pluginDir, "config.json"),
+      JSON.stringify({ greeting: "hi", target: "world", extra: "nope" }),
+      "utf-8",
+    );
+    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
+
+    const plugins = await PluginRegistry.load({
+      home,
+      logger: new Logger({ level: "silent" }),
+    });
+
+    expect(plugins.list()).toEqual([]);
+  });
+
+  it("rejects unknown keys for $ref object schemas even when referenced in allOf elsewhere", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
+    const pluginDir = join(home, "plugins/echo");
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(
+      join(pluginDir, "plugin.yml"),
+      pluginManifestYaml({
+        configSchema: [
+          "$defs:",
+          "  ConfigGreeting:",
+          "    type: object",
+          "    properties:",
+          "      greeting:",
+          "        type: string",
+          "  ConfigTarget:",
+          "    type: object",
+          "    properties:",
+          "      target:",
+          "        type: string",
+          "type: object",
+          "properties:",
+          "  nested:",
+          "    $ref: \"#/$defs/ConfigGreeting\"",
+          "allOf:",
+          "  - $ref: \"#/$defs/ConfigGreeting\"",
+          "  - $ref: \"#/$defs/ConfigTarget\"",
+          "required: []",
+        ],
+      }),
+      "utf-8",
+    );
+    await writeFile(
+      join(pluginDir, "config.json"),
+      JSON.stringify({
+        greeting: "hi",
+        target: "world",
+        nested: { greeting: "hi", extra: "nope" },
+      }),
+      "utf-8",
+    );
+    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
+
+    const plugins = await PluginRegistry.load({
+      home,
+      logger: new Logger({ level: "silent" }),
+    });
+
+    expect(plugins.list()).toEqual([]);
+  });
+
+  it("does not force unevaluatedProperties defaults when allOf does not describe an object shape", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
+    const pluginDir = join(home, "plugins/echo");
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(
+      join(pluginDir, "plugin.yml"),
+      pluginManifestYaml({
+        configSchema: [
+          "allOf:",
+          "  - {}",
+        ],
+      }),
+      "utf-8",
+    );
+    await writeFile(join(pluginDir, "config.json"), JSON.stringify({ greeting: "hi" }), "utf-8");
+    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
+
+    const plugins = await PluginRegistry.load({
+      home,
+      logger: new Logger({ level: "silent" }),
+    });
+
+    expect(plugins.list().map((p) => p.id)).toEqual(["echo"]);
+  });
+
   it("records config_path when config file is present but empty", async () => {
     home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
     const pluginDir = join(home, "plugins/echo");

@@ -92,20 +92,113 @@ function isJsonSchemaObject(value: unknown): value is Record<string, unknown> {
   return isRecord(value);
 }
 
+function looksLikeJsonSchemaObjectShape(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  const type = value["type"];
+  const isObjectType = type === "object" || (Array.isArray(type) && type.includes("object"));
+  const hasProperties =
+    Object.prototype.hasOwnProperty.call(value, "properties") ||
+    Object.prototype.hasOwnProperty.call(value, "patternProperties");
+  return isObjectType || hasProperties;
+}
+
+function unescapeJsonPointerSegment(value: string): string {
+  return value.replace(/~1/g, "/").replace(/~0/g, "~");
+}
+
+function resolveInternalJsonSchemaRef(root: unknown, ref: string): unknown | undefined {
+  if (ref === "#") return root;
+  if (!ref.startsWith("#/")) return undefined;
+
+  const parts = ref
+    .slice(2)
+    .split("/")
+    .map((entry) => unescapeJsonPointerSegment(entry));
+
+  let current: unknown = root;
+  for (const part of parts) {
+    if (Array.isArray(current)) {
+      const index = Number(part);
+      if (!Number.isInteger(index) || index < 0 || index >= current.length) return undefined;
+      current = current[index];
+      continue;
+    }
+    if (!isRecord(current)) return undefined;
+    current = current[part];
+  }
+
+  return current;
+}
+
+function looksLikeJsonSchemaObjectShapeOrRef(value: unknown, root: unknown, seenRefs = new Set<string>()): boolean {
+  if (looksLikeJsonSchemaObjectShape(value)) return true;
+  if (!isRecord(value)) return false;
+  const ref = value["$ref"];
+  if (typeof ref !== "string") return false;
+  if (seenRefs.has(ref)) return false;
+  seenRefs.add(ref);
+  const resolved = resolveInternalJsonSchemaRef(root, ref);
+  return resolved ? looksLikeJsonSchemaObjectShapeOrRef(resolved, root, seenRefs) : false;
+}
+
+function collectAllOfInternalRefTargets(root: unknown): WeakSet<object> {
+  const targets = new WeakSet<object>();
+  if (root === null || typeof root !== "object") return targets;
+
+  const visited = new WeakSet<object>();
+  const visit = (node: unknown): void => {
+    if (node === null || typeof node !== "object") return;
+    if (visited.has(node)) return;
+    visited.add(node);
+
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item);
+      return;
+    }
+
+    const record = node as Record<string, unknown>;
+    const allOf = record["allOf"];
+    if (Array.isArray(allOf)) {
+      for (const entry of allOf) {
+        if (!isRecord(entry)) continue;
+        const ref = entry["$ref"];
+        if (typeof ref !== "string") continue;
+        const resolved = resolveInternalJsonSchemaRef(root, ref);
+        if (resolved !== null && typeof resolved === "object") {
+          targets.add(resolved as object);
+        }
+      }
+    }
+
+    for (const value of Object.values(record)) {
+      visit(value);
+    }
+  };
+
+  visit(root);
+  return targets;
+}
+
 function normalizeJsonSchemaAdditionalPropertiesDefaults(
   schema: unknown,
   seen = new WeakMap<object, unknown>(),
-  opts?: { skipAdditionalPropertiesDefault?: boolean },
+  opts?: {
+    root?: unknown;
+    skipAdditionalPropertiesDefault?: boolean;
+    skipAdditionalPropertiesDefaultFor?: WeakSet<object>;
+  },
 ): unknown {
   if (schema === null || typeof schema !== "object") return schema;
   const existing = seen.get(schema);
   if (existing) return existing;
 
+  const childOpts = opts ? { ...opts, skipAdditionalPropertiesDefault: false } : undefined;
+
   if (Array.isArray(schema)) {
     const out: unknown[] = [];
     seen.set(schema, out);
     for (const item of schema) {
-      out.push(normalizeJsonSchemaAdditionalPropertiesDefaults(item, seen, opts));
+      out.push(normalizeJsonSchemaAdditionalPropertiesDefaults(item, seen, childOpts));
     }
     return out;
   }
@@ -114,7 +207,9 @@ function normalizeJsonSchemaAdditionalPropertiesDefaults(
   const out: Record<string, unknown> = {};
   seen.set(schema, out);
 
-  const skipAdditionalPropertiesDefault = opts?.skipAdditionalPropertiesDefault ?? false;
+  const skipAdditionalPropertiesDefault =
+    (opts?.skipAdditionalPropertiesDefault ?? false) ||
+    (opts?.skipAdditionalPropertiesDefaultFor?.has(schema) ?? false);
   const additionalPropertiesExplicit = Object.prototype.hasOwnProperty.call(record, "additionalProperties");
   const unevaluatedPropertiesExplicit = Object.prototype.hasOwnProperty.call(record, "unevaluatedProperties");
   const allOf = record["allOf"];
@@ -126,6 +221,13 @@ function normalizeJsonSchemaAdditionalPropertiesDefaults(
     Object.prototype.hasOwnProperty.call(record, "properties") ||
     Object.prototype.hasOwnProperty.call(record, "patternProperties");
   const isObjectSchema = isObjectType || hasProperties;
+  const root = opts?.root;
+  const looksLikeAllOfObjectSchema =
+    hasAllOf &&
+    (isObjectSchema ||
+      (root
+        ? (allOf as unknown[]).some((entry) => looksLikeJsonSchemaObjectShapeOrRef(entry, root))
+        : (allOf as unknown[]).some((entry) => looksLikeJsonSchemaObjectShape(entry))));
 
   for (const [key, value] of Object.entries(record)) {
     switch (key) {
@@ -134,7 +236,7 @@ function normalizeJsonSchemaAdditionalPropertiesDefaults(
         out[key] =
           typeof value === "boolean"
             ? value
-            : normalizeJsonSchemaAdditionalPropertiesDefaults(value, seen);
+            : normalizeJsonSchemaAdditionalPropertiesDefaults(value, seen, childOpts);
         break;
       }
       case "items":
@@ -146,14 +248,14 @@ function normalizeJsonSchemaAdditionalPropertiesDefaults(
       case "propertyNames":
       case "unevaluatedItems":
       case "additionalItems": {
-        out[key] = normalizeJsonSchemaAdditionalPropertiesDefaults(value, seen);
+        out[key] = normalizeJsonSchemaAdditionalPropertiesDefaults(value, seen, childOpts);
         break;
       }
       case "prefixItems":
       case "anyOf":
       case "oneOf": {
         out[key] = Array.isArray(value)
-          ? value.map((entry) => normalizeJsonSchemaAdditionalPropertiesDefaults(entry, seen))
+          ? value.map((entry) => normalizeJsonSchemaAdditionalPropertiesDefaults(entry, seen, childOpts))
           : value;
         break;
       }
@@ -161,6 +263,7 @@ function normalizeJsonSchemaAdditionalPropertiesDefaults(
         out[key] = Array.isArray(value)
           ? value.map((entry) =>
               normalizeJsonSchemaAdditionalPropertiesDefaults(entry, seen, {
+                ...opts,
                 skipAdditionalPropertiesDefault: true,
               }),
             )
@@ -178,7 +281,7 @@ function normalizeJsonSchemaAdditionalPropertiesDefaults(
         }
         const normalized: Record<string, unknown> = {};
         for (const [prop, schemaValue] of Object.entries(value)) {
-          normalized[prop] = normalizeJsonSchemaAdditionalPropertiesDefaults(schemaValue, seen);
+          normalized[prop] = normalizeJsonSchemaAdditionalPropertiesDefaults(schemaValue, seen, childOpts);
         }
         out[key] = normalized;
         break;
@@ -194,11 +297,26 @@ function normalizeJsonSchemaAdditionalPropertiesDefaults(
     !additionalPropertiesExplicit &&
     !unevaluatedPropertiesExplicit
   ) {
-    if (hasAllOf) {
+    if (looksLikeAllOfObjectSchema) {
       out["unevaluatedProperties"] = false;
     } else if (isObjectSchema) {
       out["additionalProperties"] = false;
     }
+  }
+
+  const ref = record["$ref"];
+  if (
+    typeof ref === "string" &&
+    !skipAdditionalPropertiesDefault &&
+    !additionalPropertiesExplicit &&
+    !unevaluatedPropertiesExplicit &&
+    !hasAllOf &&
+    root &&
+    looksLikeJsonSchemaObjectShapeOrRef(record, root)
+  ) {
+    delete out["$ref"];
+    out["allOf"] = [{ $ref: ref }];
+    out["unevaluatedProperties"] = false;
   }
 
   return out;
@@ -252,13 +370,21 @@ function validatePluginConfig(params: {
   schema: unknown;
   config: unknown;
 }): { ok: true; normalizedSchema: Record<string, unknown>; config: unknown } | { ok: false; error: string } {
-  const normalizedSchema = normalizeJsonSchemaAdditionalPropertiesDefaults(params.schema);
+  const skipAdditionalPropertiesDefaultFor = collectAllOfInternalRefTargets(params.schema);
+  const normalizedSchema = normalizeJsonSchemaAdditionalPropertiesDefaults(
+    params.schema,
+    new WeakMap<object, unknown>(),
+    {
+      root: params.schema,
+      skipAdditionalPropertiesDefaultFor,
+    },
+  );
   if (!isJsonSchemaObject(normalizedSchema)) {
     return { ok: false, error: "config_schema must be a JSON Schema object" };
   }
 
   try {
-    const ajv = new Ajv2019({ allErrors: true, strict: false });
+    const ajv = new Ajv2019({ allErrors: true, strict: false, unevaluated: true });
     const validate = ajv.compile(normalizedSchema);
     const ok = validate(params.config);
     if (ok) {
