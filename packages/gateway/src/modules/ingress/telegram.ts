@@ -16,6 +16,7 @@ import type {
   SenderMetadata,
   ThreadKind,
 } from "@tyrum/schemas";
+import { telegramAccountIdFromEnv } from "../channels/telegram-account.js";
 
 // ---------------------------------------------------------------------------
 // Error
@@ -183,12 +184,6 @@ function toEnvelopeContent(content: MessageContent): NormalizedMessageEnvelope["
   };
 }
 
-function resolveTelegramAccountId(): string {
-  return process.env["TYRUM_TELEGRAM_ACCOUNT_ID"]?.trim()
-    || process.env["TYRUM_TELEGRAM_CHANNEL_KEY"]?.trim()
-    || "default";
-}
-
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -269,7 +264,7 @@ export function normalizeUpdate(
         received_at: timestamp,
         delivery: {
           channel: "telegram",
-          account: resolveTelegramAccountId(),
+          account: telegramAccountIdFromEnv(),
         },
         container: {
           kind: normalizedContainerKindFromThreadKind(thread.kind),

@@ -330,7 +330,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
     expect(enqueued.inbox.key).toBe("agent:agent-c1:dm:123");
   });
 
-  it("defaults telegram account id to legacy channel key", async () => {
+  it("defaults telegram account id to default", async () => {
     db = openTestSqliteDb();
 
     const originalAccountId = process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
@@ -343,7 +343,12 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me", 123, { senderId: 777 })));
       const enqueued = await queue.enqueue(normalized);
 
-      expect(enqueued.inbox.key).toBe("agent:agent-c1:telegram:telegram-1:dm:123");
+      expect(enqueued.inbox.key).toBe("agent:agent-c1:telegram:default:dm:123");
+
+      const inbox = new ChannelInboxDal(db);
+      const row = await inbox.getById(enqueued.inbox.inbox_id);
+      expect((row?.payload as { message?: { envelope?: { delivery?: { account?: string } } } })?.message?.envelope?.delivery?.account)
+        .toBe("default");
     } finally {
       if (originalAccountId === undefined) {
         delete process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
