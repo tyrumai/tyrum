@@ -41,6 +41,13 @@ class MemoryPendingDal {
     return state === this.row.state ? this.row : undefined;
   }
 
+  async consume(state: string): Promise<OauthPendingRow | undefined> {
+    const row = await this.get(state);
+    if (!row) return undefined;
+    await this.delete(state);
+    return row;
+  }
+
   async create(input: OauthPendingRow): Promise<void> {
     this.row = input;
   }
@@ -158,4 +165,3 @@ describe("provider OAuth callback cleanup", () => {
     expect(await secretProvider.list()).toHaveLength(0);
   });
 });
-
