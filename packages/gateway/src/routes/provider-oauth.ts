@@ -183,6 +183,10 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
     const errorDescription = c.req.query("error_description")?.trim();
 
     if (error) {
+      // Consume the pending row (if present) so OAuth `state` remains single-use even on error callbacks.
+      if (state) {
+        await deps.oauthPendingDal.consume(state).catch(() => {});
+      }
       return c.html(
         renderHtml(
           "Authorization failed",

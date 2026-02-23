@@ -164,4 +164,55 @@ describe("provider OAuth callback cleanup", () => {
     expect(res.status).toBe(502);
     expect(await secretProvider.list()).toHaveLength(0);
   });
+
+  it("consumes pending state when callback returns an OAuth error", async () => {
+    const secretProvider = new MemorySecretProvider();
+    const nowMs = Date.now();
+
+    const pending: OauthPendingRow = {
+      state: "state-1",
+      provider_id: "test",
+      agent_id: "default",
+      created_at: new Date(nowMs).toISOString(),
+      expires_at: new Date(nowMs + 60_000).toISOString(),
+      pkce_verifier: "verifier",
+      redirect_uri: "http://localhost:8788/providers/test/oauth/callback",
+      scopes: "scope1",
+      mode: "auth_code" satisfies OauthPendingMode,
+      metadata: {},
+    };
+
+    const pendingDal = new MemoryPendingDal(pending);
+    const registry = new MemoryProviderRegistry({
+      provider_id: "test",
+      display_name: "Test",
+      authorization_endpoint: "https://auth.test/authorize",
+      token_endpoint: "https://auth.test/token",
+      scopes: ["scope1"],
+      client_id_env: "TEST_CLIENT_ID",
+      client_secret_env: "TEST_CLIENT_SECRET",
+      token_endpoint_basic_auth: false,
+    });
+
+    const app = createProviderOAuthRoutes({
+      oauthPendingDal: pendingDal as any,
+      oauthProviderRegistry: registry as any,
+      authProfileDal: {} as any,
+      secretProviderForAgent: async () => secretProvider,
+    });
+
+    const res = await app.request(
+      `/providers/test/oauth/callback?state=${encodeURIComponent(pending.state)}&error=access_denied`,
+      { headers: { accept: "text/html" } },
+    );
+
+    expect(res.status).toBe(400);
+    expect(await pendingDal.get(pending.state)).toBeUndefined();
+
+    const reuse = await app.request(
+      `/providers/test/oauth/callback?state=${encodeURIComponent(pending.state)}&code=code-1`,
+      { headers: { accept: "text/html" } },
+    );
+    expect(reuse.status).toBe(400);
+  });
 });
