@@ -150,6 +150,10 @@ describe("resolveDmScope", () => {
     expect(resolveDmScope({ distinctDmSenders: 1 })).toBe("shared");
   });
 
+  it("defaults to secure mode when dm sender count is unknown", () => {
+    expect(resolveDmScope()).toBe("per_account_channel_peer");
+  });
+
   it("honors explicit configured scope", () => {
     expect(
       resolveDmScope({
@@ -209,6 +213,18 @@ describe("buildAgentSessionKey", () => {
         account: "work",
         peerId: "user-1",
         dmScope: "per_account_channel_peer",
+      }),
+    ).toBe("agent:agent-1:telegram:work:dm:user-1");
+  });
+
+  it("defaults to secure dm scope when none is provided", () => {
+    expect(
+      buildAgentSessionKey({
+        agentId: "agent-1",
+        container: "dm",
+        channel: "telegram",
+        account: "work",
+        peerId: "user-1",
       }),
     ).toBe("agent:agent-1:telegram:work:dm:user-1");
   });

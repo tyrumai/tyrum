@@ -99,7 +99,7 @@ export function telegramThreadKey(
 
     if (container === "dm") {
       // Telegram private chats use chat id as the peer identity. Callers may override.
-      const peerId = opts?.peerId?.trim() || thread;
+      const peerId = opts?.peerId?.trim() || thread.trim();
       const dmScope = resolveDmScope({
         configured: opts?.dmScope ?? "per_account_channel_peer",
       });
@@ -124,7 +124,13 @@ export function telegramThreadKey(
 
   const container = toThreadContainer(thread.thread.kind);
   if (container === "dm") {
-    const peerId = opts?.peerId?.trim() || thread.message.sender?.id?.trim() || thread.thread.id;
+    let peerId = opts?.peerId?.trim()
+      || thread.message.sender?.id?.trim()
+      || thread.thread.id?.trim();
+    if (!peerId) {
+      const msgId = thread.message.id?.trim();
+      peerId = msgId ? `msg-${msgId}` : "unknown";
+    }
     const dmScope = resolveDmScope({
       configured: opts?.dmScope ?? "per_account_channel_peer",
     });

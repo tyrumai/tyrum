@@ -69,10 +69,11 @@ export function resolveDmScope(opts?: {
 }): DmScope {
   if (opts?.configured) return opts.configured;
   const distinct = opts?.distinctDmSenders;
-  if (typeof distinct === "number" && Number.isFinite(distinct) && distinct > 1) {
-    return "per_account_channel_peer";
+  if (typeof distinct === "number" && Number.isFinite(distinct)) {
+    return distinct > 1 ? "per_account_channel_peer" : "shared";
   }
-  return "shared";
+  // Secure-by-default: when sender cardinality is unknown, avoid collapsing DMs.
+  return "per_account_channel_peer";
 }
 
 type BuildDmSessionKeyInput = {

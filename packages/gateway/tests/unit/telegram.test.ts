@@ -203,4 +203,34 @@ describe("telegramThreadKey", () => {
       }),
     ).toBe("agent:agent-1:telegram:work:dm:999");
   });
+
+  it("falls back to message id when dm peer id is missing", () => {
+    const normalized = {
+      thread: {
+        id: "",
+        kind: "private",
+        title: undefined,
+        username: undefined,
+        pii_fields: [],
+      },
+      message: {
+        id: "111",
+        thread_id: "",
+        source: "telegram",
+        content: { kind: "text", text: "Hello" },
+        sender: undefined,
+        timestamp: "2024-03-09T16:00:00.000Z",
+        edited_timestamp: undefined,
+        pii_fields: [],
+      },
+    } as const;
+
+    expect(
+      telegramThreadKey(normalized as unknown as never, {
+        agentId: "agent-1",
+        accountId: "work",
+        dmScope: "per_account_channel_peer",
+      }),
+    ).toBe("agent:agent-1:telegram:work:dm:msg-111");
+  });
 });
