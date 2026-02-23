@@ -18,12 +18,16 @@ import { join } from "node:path";
 function makeTelegramUpdate(
   text: string,
   chatId = 123,
-  opts?: { chatType?: "private" | "group" | "supergroup" | "channel"; senderId?: number },
+  opts?: {
+    messageId?: number;
+    chatType?: "private" | "group" | "supergroup" | "channel";
+    senderId?: number;
+  },
 ) {
   return {
     update_id: 100,
     message: {
-      message_id: 42,
+      message_id: opts?.messageId ?? 42,
       date: 1700000000,
       from: { id: opts?.senderId ?? 999, is_bot: false, first_name: "Alice" },
       chat: { id: chatId, type: opts?.chatType ?? "private" },
@@ -52,9 +56,13 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
   let db: SqliteDb | undefined;
   const originalWebhookSecret = process.env["TELEGRAM_WEBHOOK_SECRET"];
   const originalPolicyBundlePath = process.env["TYRUM_POLICY_BUNDLE_PATH"];
+  const originalTelegramChannelKey = process.env["TYRUM_TELEGRAM_CHANNEL_KEY"];
+  const originalTelegramAccountId = process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
 
   beforeEach(() => {
     process.env["TELEGRAM_WEBHOOK_SECRET"] = "test-telegram-secret";
+    delete process.env["TYRUM_TELEGRAM_CHANNEL_KEY"];
+    delete process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
   });
 
   afterEach(async () => {
@@ -71,6 +79,18 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       delete process.env["TYRUM_POLICY_BUNDLE_PATH"];
     } else {
       process.env["TYRUM_POLICY_BUNDLE_PATH"] = originalPolicyBundlePath;
+    }
+
+    if (originalTelegramChannelKey === undefined) {
+      delete process.env["TYRUM_TELEGRAM_CHANNEL_KEY"];
+    } else {
+      process.env["TYRUM_TELEGRAM_CHANNEL_KEY"] = originalTelegramChannelKey;
+    }
+
+    if (originalTelegramAccountId === undefined) {
+      delete process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
+    } else {
+      process.env["TYRUM_TELEGRAM_ACCOUNT_ID"] = originalTelegramAccountId;
     }
   });
 
@@ -224,6 +244,65 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
     expect(workAccount.deduped).toBe(false);
     expect(personalAccount.deduped).toBe(false);
     expect(personalAccount.inbox.inbox_id).not.toBe(workAccount.inbox.inbox_id);
+  });
+
+  it("derives account-appropriate thread keys when enqueue overrides account id", async () => {
+    db = openTestSqliteDb();
+    const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me", 123, { chatType: "group" })));
+
+    const defaultQueue = new TelegramChannelQueue(db, { accountId: "default" });
+    const workQueue = new TelegramChannelQueue(db, { accountId: "work" });
+
+    const viaOverride = await defaultQueue.enqueue(normalized, { accountId: "work" });
+    const viaWorkQueue = await workQueue.enqueue(normalized);
+
+    expect(viaOverride.inbox.key).toBe("agent:default:telegram:work:group:123");
+    expect(viaOverride.inbox.key).toBe(viaWorkQueue.inbox.key);
+  });
+
+  it("uses account-specific egress connectors when provided", async () => {
+    db = openTestSqliteDb();
+    const fetchFn = mockFetch();
+    const bot = new TelegramBot("test-token", fetchFn);
+    const queue = new TelegramChannelQueue(db);
+
+    const mockRuntime = {
+      turn: vi.fn().mockResolvedValue({
+        reply: "I can help with that!",
+        session_id: "session-abc",
+        used_tools: [],
+        memory_written: false,
+      }),
+    };
+
+    const defaultSend = vi.fn().mockResolvedValue({ ok: true, account: "default" });
+    const workSend = vi.fn().mockResolvedValue({ ok: true, account: "work" });
+
+    const processor = new TelegramChannelProcessor({
+      db,
+      agents: makeAgents(mockRuntime),
+      telegramBot: bot,
+      owner: "test-owner",
+      debounceMs: 0,
+      maxBatch: 1,
+      egressConnectors: [
+        { connector: "telegram", accountId: "default", sendMessage: defaultSend },
+        { connector: "telegram", accountId: "work", sendMessage: workSend },
+      ],
+    });
+
+    const normalizedDefault = normalizeUpdate(JSON.stringify(makeTelegramUpdate("default", 123, { messageId: 1001 })));
+    const normalizedWork = normalizeUpdate(JSON.stringify(makeTelegramUpdate("work", 123, { messageId: 1002 })));
+
+    await queue.enqueue(normalizedDefault, { accountId: "default" });
+    await queue.enqueue(normalizedWork, { accountId: "work" });
+
+    await processor.tick();
+    await processor.tick();
+
+    expect(defaultSend).toHaveBeenCalledTimes(1);
+    expect(workSend).toHaveBeenCalledTimes(1);
+    expect(fetchFn).not.toHaveBeenCalled();
   });
 
   it("policy-gates outbound sends via approvals when required", async () => {

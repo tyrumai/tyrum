@@ -14,6 +14,7 @@ export interface ChannelEgressRequest {
 
 export interface ChannelEgressConnector {
   connector: string;
+  accountId?: string;
   sendMessage(input: ChannelEgressRequest): Promise<unknown>;
 }
 

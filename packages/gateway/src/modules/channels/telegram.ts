@@ -20,6 +20,7 @@ import type { PolicyService } from "../policy/service.js";
 import {
   type ChannelEgressConnector,
   buildChannelSourceKey,
+  normalizeAccountId,
   parseChannelSourceKey,
 } from "./interface.js";
 
@@ -54,6 +55,16 @@ function toTelegramParseMode(value: string | undefined): "HTML" | "Markdown" | "
     return value;
   }
   return undefined;
+}
+
+function connectorBindingKey(connector: ChannelEgressConnector): string {
+  if (!connector.accountId || connector.accountId.trim().length === 0) {
+    return connector.connector;
+  }
+  return buildChannelSourceKey({
+    connector: connector.connector,
+    accountId: normalizeAccountId(connector.accountId),
+  });
 }
 
 export function telegramThreadKey(
@@ -292,7 +303,7 @@ export class TelegramChannelProcessor {
     this.agents = opts.agents;
     this.egressConnectors = new Map(
       (opts.egressConnectors ?? [createTelegramEgressConnector(opts.telegramBot)]).map((connector) => [
-        connector.connector,
+        connectorBindingKey(connector),
         connector,
       ]),
     );
@@ -412,13 +423,15 @@ export class TelegramChannelProcessor {
     if (!next) return false;
 
     const address = parseChannelSourceKey(next.source);
-    const connector = this.egressConnectors.get(address.connector);
+    const sourceKey = buildChannelSourceKey(address);
+    const connector = this.egressConnectors.get(sourceKey) ?? this.egressConnectors.get(address.connector);
     if (!connector) {
       const message = `no egress connector registered for source '${address.connector}'`;
       await this.outbox.markFailed(next.outbox_id, this.owner, message);
       this.logger?.warn("channels.egress.connector_missing", {
         outbox_id: next.outbox_id,
         source: next.source,
+        source_key: sourceKey,
         connector: address.connector,
         account_id: address.accountId,
       });
