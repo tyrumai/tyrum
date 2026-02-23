@@ -1267,19 +1267,19 @@ export class AgentRuntime {
           return resolveEnvApiKey(provider.env);
         };
 
-	        for (const providerId of orderedProviderIds) {
-	          const candidate = resolveEmbeddingCandidate(providerId);
-	          if (!candidate) continue;
+        for (const providerId of orderedProviderIds) {
+          const candidate = resolveEmbeddingCandidate(providerId);
+          if (!candidate) continue;
 
-	          const apiKey = await resolveProviderApiKey(candidate.providerId, candidate.provider);
-	          if (!apiKey) {
-	            const hasApiKeyHint = (candidate.provider.env ?? []).some((key) => /(_API_KEY|_TOKEN)$/i.test(key));
-	            if (hasApiKeyHint) continue;
-	          }
+          const apiKey = await resolveProviderApiKey(candidate.providerId, candidate.provider);
+          if (!apiKey) {
+            const hasApiKeyHint = (candidate.provider.env ?? []).some((key) => /(_API_KEY|_TOKEN)$/i.test(key));
+            if (hasApiKeyHint) continue;
+          }
 
-	          const endpointKey = (candidate.provider.env ?? []).find((key) => /(ENDPOINT|BASE_URL|BASEURL|URL)$/i.test(key));
-	          const endpoint = endpointKey ? process.env[endpointKey]?.trim() : undefined;
-	          const baseURL = endpoint && endpoint.length > 0 ? endpoint : candidate.api;
+          const endpointKey = (candidate.provider.env ?? []).find((key) => /(ENDPOINT|BASE_URL|BASEURL|URL)$/i.test(key));
+          const endpoint = endpointKey ? process.env[endpointKey]?.trim() : undefined;
+          const baseURL = endpoint && endpoint.length > 0 ? endpoint : candidate.api;
 
           const sdk = createProviderFromNpm({
             npm: candidate.npm,
