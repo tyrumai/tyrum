@@ -343,6 +343,19 @@ function splitHostAndPort(rawHost: string): { host: string; port: string | null 
     }
   }
 
+  // Heuristic: treat unbracketed IPv6 values ending in :<digits> as host:port
+  // when the portion before the last colon is itself a valid IPv6 address.
+  //
+  // This prevents forming incorrect probe URLs like `http://[::1:8788]:8788`
+  // when a user configures GATEWAY_HOST="::1:8788".
+  if (firstColon !== -1 && firstColon !== lastColon) {
+    const host = trimmed.slice(0, lastColon);
+    const port = trimmed.slice(lastColon + 1);
+    if (host.length > 0 && /^[0-9]+$/.test(port) && isIP(host) === 6) {
+      return { host, port };
+    }
+  }
+
   return { host: trimmed, port: null };
 }
 
@@ -438,21 +451,27 @@ function shortHash(value: string): string {
   return trimmed.slice(0, 12);
 }
 
-async function resolveAdminTokenSource(tyrumHome: string): Promise<AdminTokenSource> {
+async function resolveAdminTokenForCheck(tyrumHome: string): Promise<{
+  source: AdminTokenSource;
+  token: string | undefined;
+}> {
   const envToken = process.env["GATEWAY_TOKEN"]?.trim();
-  if (envToken) return "env";
+  if (envToken && envToken.length > 0) {
+    return { source: "env", token: envToken };
+  }
 
   const tokenPath = join(tyrumHome, ".admin-token");
   try {
     const raw = await readFile(tokenPath, "utf-8");
-    if (raw.trim().length > 0) {
-      return "file";
+    const trimmed = raw.trim();
+    if (trimmed.length > 0) {
+      return { source: "file", token: trimmed };
     }
   } catch {
     // ignore
   }
 
-  return "generated";
+  return { source: "generated", token: undefined };
 }
 
 async function tryFetchJson(url: string, init: RequestInit & { timeoutMs: number }): Promise<{
@@ -461,11 +480,12 @@ async function tryFetchJson(url: string, init: RequestInit & { timeoutMs: number
   json: unknown;
   error?: string;
 }> {
+  const { timeoutMs, ...requestInit } = init;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), init.timeoutMs);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, {
-      ...init,
+      ...requestInit,
       signal: controller.signal,
     });
     const text = await res.text();
@@ -527,13 +547,11 @@ async function runGatewayCheck(): Promise<number> {
     );
 
     const tokenPath = join(tyrumHome, ".admin-token");
-    const tokenSource = await resolveAdminTokenSource(tyrumHome);
+    const adminToken = await resolveAdminTokenForCheck(tyrumHome);
     console.log(
-      `static.auth: admin_token_source=${tokenSource} token_path=${tokenPath}`,
+      `static.auth: admin_token_source=${adminToken.source} token_path=${tokenPath}`,
     );
-
-    const tokenStore = new TokenStore(tyrumHome);
-    const token = await tokenStore.initialize();
+    const token = adminToken.token;
 
     try {
       const policy = await container.policyService?.getStatus?.();
@@ -604,7 +622,7 @@ async function runGatewayCheck(): Promise<number> {
       const statusPublic = await tryFetchJson(`${baseUrl}/status`, { timeoutMs: 500 });
 
       const isLoopbackProbeTarget = isLoopbackHost(probeHost);
-      const statusAuth = isLoopbackProbeTarget
+      const statusAuth = isLoopbackProbeTarget && token
         ? await tryFetchJson(`${baseUrl}/status`, {
             timeoutMs: 500,
             headers: {
