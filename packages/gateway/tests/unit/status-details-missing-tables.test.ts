@@ -66,5 +66,38 @@ describe("status details missing tables", () => {
     expect(body["status"]).toBe("ok");
     expect(body["queue_depth"]).toBeNull();
   });
-});
 
+  it("keeps queue depth when some queue tables are missing", async () => {
+    db = openBareSqliteDb();
+
+    await db.exec(
+      `CREATE TABLE execution_runs (
+         key TEXT NOT NULL,
+         lane TEXT NOT NULL,
+         run_id TEXT NOT NULL,
+         status TEXT NOT NULL,
+         created_at TEXT NOT NULL
+       );`,
+    );
+    await db.exec(
+      `INSERT INTO execution_runs (key, lane, run_id, status, created_at) VALUES
+         ('agent:default:ui:main', 'main', 'run-1', 'queued', '2026-02-23T00:00:00.000Z'),
+         ('agent:default:ui:main', 'main', 'run-2', 'queued', '2026-02-23T00:00:01.000Z'),
+         ('agent:default:ui:main', 'main', 'run-3', 'running', '2026-02-23T00:00:02.000Z'),
+         ('agent:default:ui:main', 'main', 'run-4', 'paused', '2026-02-23T00:00:03.000Z');`,
+    );
+
+    const details = await buildStatusDetails({ db });
+
+    expect(details.queue_depth).not.toBeNull();
+    expect(details.queue_depth?.execution_runs.queued).toBe(2);
+    expect(details.queue_depth?.execution_runs.running).toBe(1);
+    expect(details.queue_depth?.execution_runs.paused).toBe(1);
+    expect(details.queue_depth?.execution_jobs.queued).toBe(0);
+    expect(details.queue_depth?.channel_inbox.queued).toBe(0);
+    expect(details.queue_depth?.channel_outbox.queued).toBe(0);
+    expect(details.queue_depth?.watcher_firings.queued).toBe(0);
+    expect(details.queue_depth?.pending_total).toBe(2);
+    expect(details.queue_depth?.inflight_total).toBe(2);
+  });
+});

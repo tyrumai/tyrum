@@ -510,23 +510,42 @@ async function loadSessionLanes(db: SqlDb | undefined): Promise<SessionLaneStatu
 async function loadQueueDepth(db: SqlDb | undefined): Promise<QueueDepthStatus | null> {
   if (!db) return null;
 
-  let runs: StatusCountMap;
-  let jobs: StatusCountMap;
-  let inbox: StatusCountMap;
-  let outbox: StatusCountMap;
-  let firings: StatusCountMap;
-  try {
-    [runs, jobs, inbox, outbox, firings] = await Promise.all([
-      countByStatus(db, "execution_runs", ["queued", "running", "paused"]),
-      countByStatus(db, "execution_jobs", ["queued", "running"]),
-      countByStatus(db, "channel_inbox", ["queued", "processing"]),
-      countByStatus(db, "channel_outbox", ["queued", "sending"]),
-      countByStatus(db, "watcher_firings", ["queued", "processing"]),
-    ]);
-  } catch (err) {
-    if (isMissingTableError(err)) return null;
-    throw err;
-  }
+  const emptyCounts = (statuses: readonly string[]): StatusCountMap =>
+    Object.fromEntries(statuses.map((status) => [status, 0])) as StatusCountMap;
+
+  const loadCounts = async (
+    table: Parameters<typeof countByStatus>[1],
+    statuses: readonly string[],
+  ): Promise<{ counts: StatusCountMap; available: boolean }> => {
+    try {
+      return { counts: await countByStatus(db, table, statuses), available: true };
+    } catch (err) {
+      if (isMissingTableError(err)) return { counts: emptyCounts(statuses), available: false };
+      throw err;
+    }
+  };
+
+  const [runsRes, jobsRes, inboxRes, outboxRes, firingsRes] = await Promise.all([
+    loadCounts("execution_runs", ["queued", "running", "paused"]),
+    loadCounts("execution_jobs", ["queued", "running"]),
+    loadCounts("channel_inbox", ["queued", "processing"]),
+    loadCounts("channel_outbox", ["queued", "sending"]),
+    loadCounts("watcher_firings", ["queued", "processing"]),
+  ]);
+
+  const anyAvailable =
+    runsRes.available ||
+    jobsRes.available ||
+    inboxRes.available ||
+    outboxRes.available ||
+    firingsRes.available;
+  if (!anyAvailable) return null;
+
+  const runs = runsRes.counts;
+  const jobs = jobsRes.counts;
+  const inbox = inboxRes.counts;
+  const outbox = outboxRes.counts;
+  const firings = firingsRes.counts;
 
   return {
     execution_runs: {
