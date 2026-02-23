@@ -85,6 +85,10 @@ See `docs/install.md` for full details, version pinning, and update commands.
 - `GATEWAY_HOST` defaults to `127.0.0.1`.
 - `GATEWAY_PORT` defaults to `8788`.
 - Gateway auth token is required on localhost and non-local interfaces (`GATEWAY_TOKEN` env or `${TYRUM_HOME}/.admin-token`, auto-generated if missing).
+- Non-loopback deployments require a hardened admin token (minimum 32 characters).
+- Binding to a non-loopback host requires an explicit transport posture:
+  - Recommended: configure TLS termination and set `TYRUM_TLS_READY=1`.
+  - Dev/trusted networks only: set `TYRUM_ALLOW_INSECURE_HTTP=1` to acknowledge plaintext HTTP.
 - Device-bound tokens can be issued/revoked with authenticated HTTP routes:
   - `POST /auth/device-tokens/issue` with `{ device_id, role, scopes[], ttl_seconds? }`
   - `POST /auth/device-tokens/revoke` with `{ token }`

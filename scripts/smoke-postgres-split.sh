@@ -5,6 +5,12 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 cd "$ROOT_DIR"
 
+if [[ -z "${GATEWAY_TOKEN:-}" ]]; then
+  export GATEWAY_TOKEN
+  GATEWAY_TOKEN="$(node -e 'console.log(require("node:crypto").randomBytes(32).toString("hex"))')"
+  echo "[smoke] generated ephemeral GATEWAY_TOKEN for this run"
+fi
+
 cleanup() {
   if [[ "${TYRUM_SMOKE_KEEP_RUNNING:-}" == "1" ]]; then
     echo "[smoke] leaving containers running (TYRUM_SMOKE_KEEP_RUNNING=1)"
