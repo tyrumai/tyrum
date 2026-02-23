@@ -312,6 +312,10 @@ function isTransientStatus(status: number | undefined): boolean {
   return status === 429 || status >= 500;
 }
 
+function isCredentialPaymentOrEntitlementStatus(status: number | undefined): boolean {
+  return status === 402;
+}
+
 function getStopFallbackApiCallError(err: unknown): APICallError | undefined {
   let current: unknown = err;
   for (let i = 0; i < 5; i++) {
@@ -320,6 +324,7 @@ function getStopFallbackApiCallError(err: unknown): APICallError | undefined {
       if (status == null) return undefined;
       if (isTransientStatus(status)) return undefined;
       if (isAuthInvalidStatus(status)) return undefined;
+      if (isCredentialPaymentOrEntitlementStatus(status)) return undefined;
       if (status === 404) return undefined;
       return current;
     }
@@ -996,6 +1001,11 @@ export class AgentRuntime {
                 await authProfileDal.setCooldown(profile.profile_id, { untilMs: Date.now() + cooldownMs });
                 continue;
               }
+              if (isCredentialPaymentOrEntitlementStatus(status)) {
+                const cooldownMs = 10 * 60_000;
+                await authProfileDal.setCooldown(profile.profile_id, { untilMs: Date.now() + cooldownMs });
+                continue;
+              }
               throw err;
             }
 
@@ -1054,33 +1064,33 @@ export class AgentRuntime {
       modelId: primary.modelId,
       supportedUrls: primary.supportedUrls,
 
-        async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
-          let lastErr: unknown;
-          for (const model of rotatingModels) {
-            try {
-              return await model.doGenerate(options);
-            } catch (err) {
-              if (getStopFallbackApiCallError(err)) throw err;
-              lastErr = err;
-            }
+      async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
+        let lastErr: unknown;
+        for (const model of rotatingModels) {
+          try {
+            return await model.doGenerate(options);
+          } catch (err) {
+            if (getStopFallbackApiCallError(err)) throw err;
+            lastErr = err;
           }
-          const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
-          throw new Error(`model call failed for candidates ${attempted}: ${message}`);
-        },
+        }
+        const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
+        throw new Error(`model call failed for candidates ${attempted}: ${message}`);
+      },
 
-        async doStream(options: LanguageModelV3CallOptions): Promise<LanguageModelV3StreamResult> {
-          let lastErr: unknown;
-          for (const model of rotatingModels) {
-            try {
-              return await model.doStream(options);
-            } catch (err) {
-              if (getStopFallbackApiCallError(err)) throw err;
-              lastErr = err;
-            }
+      async doStream(options: LanguageModelV3CallOptions): Promise<LanguageModelV3StreamResult> {
+        let lastErr: unknown;
+        for (const model of rotatingModels) {
+          try {
+            return await model.doStream(options);
+          } catch (err) {
+            if (getStopFallbackApiCallError(err)) throw err;
+            lastErr = err;
           }
-          const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
-          throw new Error(`model call failed for candidates ${attempted}: ${message}`);
-        },
+        }
+        const message = lastErr instanceof Error ? lastErr.message : String(lastErr);
+        throw new Error(`model call failed for candidates ${attempted}: ${message}`);
+      },
     };
 
     return multi;
@@ -1164,9 +1174,9 @@ export class AgentRuntime {
     return { streamResult, sessionId: session.session_id, finalize };
   }
 
-    async turn(input: AgentTurnRequestT): Promise<AgentTurnResponseT> {
-      const prepared = await this.prepareTurn(input);
-      const { ctx, session, model, toolSet, usedTools, userContent } = prepared;
+  async turn(input: AgentTurnRequestT): Promise<AgentTurnResponseT> {
+    const prepared = await this.prepareTurn(input);
+    const { ctx, session, model, toolSet, usedTools, userContent } = prepared;
 
     const result = await generateText({
       model,
@@ -1181,213 +1191,213 @@ export class AgentRuntime {
       stopWhen: [stepCountIs(this.maxSteps)],
     });
 
-      const reply = result.text || "No assistant response returned.";
-      return this.finalizeTurn(ctx, session, input, reply, usedTools);
+    const reply = result.text || "No assistant response returned.";
+    return this.finalizeTurn(ctx, session, input, reply, usedTools);
+  }
+
+  private async semanticSearch(
+    message: string,
+    primaryModelId: string,
+    sessionId: string,
+  ): Promise<VectorSearchResult[]> {
+    try {
+      const pipeline = await this.resolveEmbeddingPipeline(primaryModelId, sessionId);
+      if (!pipeline) return [];
+      return await pipeline.search(message, 5);
+    } catch {
+      return [];
     }
+  }
 
-    private async semanticSearch(
-      message: string,
-      primaryModelId: string,
-      sessionId: string,
-    ): Promise<VectorSearchResult[]> {
-      try {
-        const pipeline = await this.resolveEmbeddingPipeline(primaryModelId, sessionId);
-        if (!pipeline) return [];
-        return await pipeline.search(message, 5);
-      } catch {
-        return [];
-      }
-    }
+  private async resolveEmbeddingPipeline(
+    primaryModelId: string,
+    sessionId: string,
+  ): Promise<EmbeddingPipeline | undefined> {
+    try {
+      const loaded = await this.opts.container.modelsDev.ensureLoaded();
+      const catalog = loaded.catalog;
 
-    private async resolveEmbeddingPipeline(
-      primaryModelId: string,
-      sessionId: string,
-    ): Promise<EmbeddingPipeline | undefined> {
-      try {
-        const loaded = await this.opts.container.modelsDev.ensureLoaded();
-        const catalog = loaded.catalog;
+      type ProviderEntry = (typeof catalog)[string];
+      type ModelEntry = NonNullable<ProviderEntry["models"]>[string];
+      type ResolvedEmbeddingCandidate = {
+        providerId: string;
+        modelId: string;
+        provider: ProviderEntry;
+        model: ModelEntry;
+        npm: string;
+        api: string | undefined;
+      };
 
-        type ProviderEntry = (typeof catalog)[string];
-        type ModelEntry = NonNullable<ProviderEntry["models"]>[string];
-        type ResolvedEmbeddingCandidate = {
-          providerId: string;
-          modelId: string;
-          provider: ProviderEntry;
-          model: ModelEntry;
-          npm: string;
-          api: string | undefined;
-        };
+      const isEmbeddingModel = (id: string, model: ModelEntry): boolean => {
+        if (/embedding/i.test(id)) return true;
+        const family = (model as { family?: unknown }).family;
+        if (typeof family === "string" && /embedding/i.test(family)) return true;
+        const name = (model as { name?: unknown }).name;
+        return typeof name === "string" && /embedding/i.test(name);
+      };
 
-        const isEmbeddingModel = (id: string, model: ModelEntry): boolean => {
-          if (/embedding/i.test(id)) return true;
-          const family = (model as { family?: unknown }).family;
-          if (typeof family === "string" && /embedding/i.test(family)) return true;
-          const name = (model as { name?: unknown }).name;
-          return typeof name === "string" && /embedding/i.test(name);
-        };
+      const resolveEmbeddingCandidate = (providerId: string): ResolvedEmbeddingCandidate | undefined => {
+        const provider = catalog[providerId];
+        if (!provider) return undefined;
 
-        const resolveEmbeddingCandidate = (providerId: string): ResolvedEmbeddingCandidate | undefined => {
-          const provider = catalog[providerId];
-          if (!provider) return undefined;
-
-          const models = provider.models ?? {};
-          const preferredIds = ["text-embedding-3-small", "text-embedding-3-large"];
-          let embeddingModelId: string | undefined;
-          for (const id of preferredIds) {
-            if (Object.hasOwn(models, id)) {
-              embeddingModelId = id;
-              break;
-            }
+        const models = provider.models ?? {};
+        const preferredIds = ["text-embedding-3-small", "text-embedding-3-large"];
+        let embeddingModelId: string | undefined;
+        for (const id of preferredIds) {
+          if (Object.hasOwn(models, id)) {
+            embeddingModelId = id;
+            break;
           }
-          if (!embeddingModelId) {
-            const candidateIds = Object.entries(models)
-              .filter(([id, model]) => isEmbeddingModel(id, model))
-              .map(([id]) => id)
-              .sort((a, b) => a.localeCompare(b));
-            embeddingModelId = candidateIds[0];
-          }
-
-          if (!embeddingModelId) return undefined;
-          const model = models[embeddingModelId];
-          if (!model) return undefined;
-
-          const providerOverride = (model as { provider?: { npm?: string; api?: string } }).provider;
-          const npm = providerOverride?.npm ?? provider.npm;
-          const api = providerOverride?.api ?? provider.api;
-          if (!npm) return undefined;
-
-          return {
-            providerId,
-            modelId: embeddingModelId,
-            provider,
-            model,
-            npm,
-            api,
-          };
-        };
-
-        const primaryProviderId = (() => {
-          try {
-            return parseProviderModelId(primaryModelId).providerId;
-          } catch {
-            return undefined;
-          }
-        })();
-
-        const orderedProviderIds: string[] = [];
-        const seen = new Set<string>();
-        const addProvider = (id: string | undefined): void => {
-          const trimmed = id?.trim();
-          if (!trimmed) return;
-          if (!catalog[trimmed]) return;
-          if (seen.has(trimmed)) return;
-          seen.add(trimmed);
-          orderedProviderIds.push(trimmed);
-        };
-
-        addProvider(primaryProviderId);
-        addProvider("openai");
-        for (const id of Object.keys(catalog).sort((a, b) => a.localeCompare(b))) {
-          addProvider(id);
+        }
+        if (!embeddingModelId) {
+          const candidateIds = Object.entries(models)
+            .filter(([id, model]) => isEmbeddingModel(id, model))
+            .map(([id]) => id)
+            .sort((a, b) => a.localeCompare(b));
+          embeddingModelId = candidateIds[0];
         }
 
-        const {
-          secretProvider,
+        if (!embeddingModelId) return undefined;
+        const model = models[embeddingModelId];
+        if (!model) return undefined;
+
+        const providerOverride = (model as { provider?: { npm?: string; api?: string } }).provider;
+        const npm = providerOverride?.npm ?? provider.npm;
+        const api = providerOverride?.api ?? provider.api;
+        if (!npm) return undefined;
+
+        return {
+          providerId,
+          modelId: embeddingModelId,
+          provider,
+          model,
+          npm,
+          api,
+        };
+      };
+
+      const primaryProviderId = (() => {
+        try {
+          return parseProviderModelId(primaryModelId).providerId;
+        } catch {
+          return undefined;
+        }
+      })();
+
+      const orderedProviderIds: string[] = [];
+      const seen = new Set<string>();
+      const addProvider = (id: string | undefined): void => {
+        const trimmed = id?.trim();
+        if (!trimmed) return;
+        if (!catalog[trimmed]) return;
+        if (seen.has(trimmed)) return;
+        seen.add(trimmed);
+        orderedProviderIds.push(trimmed);
+      };
+
+      addProvider(primaryProviderId);
+      addProvider("openai");
+      for (const id of Object.keys(catalog).sort((a, b) => a.localeCompare(b))) {
+        addProvider(id);
+      }
+
+      const {
+        secretProvider,
+        resolver,
+        authProfileDal,
+        pinDal,
+        oauthProviderRegistry,
+        oauthRefreshLeaseDal,
+        logger,
+        oauthLeaseOwner,
+        fetchImpl,
+      } = buildProviderResolutionSetup({
+        container: this.opts.container,
+        secretProvider: this.opts.secretProvider,
+        oauthLeaseOwner: this.instanceOwner,
+        fetchImpl: this.fetchImpl,
+      });
+
+      const resolveProviderApiKey = async (
+        providerId: string,
+        provider: ProviderEntry,
+      ): Promise<string | undefined> => {
+        const orderedProfiles = await listOrderedEligibleProfilesForProvider({
+          agentId: this.agentId,
+          sessionId,
+          providerId,
           resolver,
           authProfileDal,
           pinDal,
-          oauthProviderRegistry,
-          oauthRefreshLeaseDal,
-          logger,
-          oauthLeaseOwner,
-          fetchImpl,
-        } = buildProviderResolutionSetup({
-          container: this.opts.container,
-          secretProvider: this.opts.secretProvider,
-          oauthLeaseOwner: this.instanceOwner,
+        });
+
+        for (const profile of orderedProfiles) {
+          const apiKey = await resolveProfileApiKey(profile, {
+            secretProvider,
+            resolver,
+            authProfileDal,
+            oauthProviderRegistry,
+            oauthRefreshLeaseDal,
+            oauthLeaseOwner,
+            logger,
+            fetchImpl,
+          });
+          if (apiKey) return apiKey;
+        }
+
+        return resolveEnvApiKey(provider.env);
+      };
+
+      for (const providerId of orderedProviderIds) {
+        const candidate = resolveEmbeddingCandidate(providerId);
+        if (!candidate) continue;
+
+        const apiKey = await resolveProviderApiKey(candidate.providerId, candidate.provider);
+        if (!apiKey) {
+          const hasApiKeyHint = (candidate.provider.env ?? []).some((key) => /(_API_KEY|_TOKEN)$/i.test(key));
+          if (hasApiKeyHint) continue;
+        }
+
+        const endpointKey = (candidate.provider.env ?? []).find((key) => /(ENDPOINT|BASE_URL|BASEURL|URL)$/i.test(key));
+        const endpoint = endpointKey ? process.env[endpointKey]?.trim() : undefined;
+        const api = candidate.api?.trim();
+        const baseURL = endpoint && endpoint.length > 0 ? endpoint : api && api.length > 0 ? api : undefined;
+
+        const sdk = createProviderFromNpm({
+          npm: candidate.npm,
+          providerId: candidate.providerId,
+          apiKey,
+          baseURL,
           fetchImpl: this.fetchImpl,
         });
 
-        const resolveProviderApiKey = async (
-          providerId: string,
-          provider: ProviderEntry,
-        ): Promise<string | undefined> => {
-          const orderedProfiles = await listOrderedEligibleProfilesForProvider({
-            agentId: this.agentId,
-            sessionId,
-            providerId,
-            resolver,
-            authProfileDal,
-            pinDal,
-          });
+        const sdkAny = sdk as any;
+        const embeddingModel = typeof sdkAny.textEmbeddingModel === "function"
+          ? sdkAny.textEmbeddingModel(candidate.modelId)
+          : typeof sdkAny.embeddingModel === "function"
+            ? sdkAny.embeddingModel(candidate.modelId)
+            : undefined;
+        if (!embeddingModel) continue;
 
-          for (const profile of orderedProfiles) {
-            const apiKey = await resolveProfileApiKey(profile, {
-              secretProvider,
-              resolver,
-              authProfileDal,
-              oauthProviderRegistry,
-              oauthRefreshLeaseDal,
-              oauthLeaseOwner,
-              logger,
-              fetchImpl,
-            });
-            if (apiKey) return apiKey;
-          }
-
-          return resolveEnvApiKey(provider.env);
-        };
-
-        for (const providerId of orderedProviderIds) {
-          const candidate = resolveEmbeddingCandidate(providerId);
-          if (!candidate) continue;
-
-          const apiKey = await resolveProviderApiKey(candidate.providerId, candidate.provider);
-          if (!apiKey) {
-            const hasApiKeyHint = (candidate.provider.env ?? []).some((key) => /(_API_KEY|_TOKEN)$/i.test(key));
-            if (hasApiKeyHint) continue;
-          }
-
-          const endpointKey = (candidate.provider.env ?? []).find((key) => /(ENDPOINT|BASE_URL|BASEURL|URL)$/i.test(key));
-          const endpoint = endpointKey ? process.env[endpointKey]?.trim() : undefined;
-          const api = candidate.api?.trim();
-          const baseURL = endpoint && endpoint.length > 0 ? endpoint : api && api.length > 0 ? api : undefined;
-
-          const sdk = createProviderFromNpm({
-            npm: candidate.npm,
-            providerId: candidate.providerId,
-            apiKey,
-            baseURL,
-            fetchImpl: this.fetchImpl,
-          });
-
-          const sdkAny = sdk as any;
-          const embeddingModel = typeof sdkAny.textEmbeddingModel === "function"
-            ? sdkAny.textEmbeddingModel(candidate.modelId)
-            : typeof sdkAny.embeddingModel === "function"
-              ? sdkAny.embeddingModel(candidate.modelId)
-              : undefined;
-          if (!embeddingModel) continue;
-
-          const vectorDal = new VectorDal(this.opts.container.db);
-          return new EmbeddingPipeline({
-            vectorDal,
-            agentId: this.agentId,
-            embeddingModel,
-            embeddingModelId: `${candidate.providerId}/${candidate.modelId}`,
-          });
-        }
-
-        return undefined;
-      } catch {
-        return undefined;
+        const vectorDal = new VectorDal(this.opts.container.db);
+        return new EmbeddingPipeline({
+          vectorDal,
+          agentId: this.agentId,
+          embeddingModel,
+          embeddingModelId: `${candidate.providerId}/${candidate.modelId}`,
+        });
       }
-    }
 
-    private async prepareTurn(input: AgentTurnRequestT): Promise<{
-      ctx: AgentLoadedContext;
-      session: SessionRow;
-      model: LanguageModel;
+      return undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async prepareTurn(input: AgentTurnRequestT): Promise<{
+    ctx: AgentLoadedContext;
+    session: SessionRow;
+    model: LanguageModel;
     toolSet: ToolSet;
     usedTools: Set<string>;
     userContent: Array<{ type: "text"; text: string }>;
@@ -1399,19 +1409,19 @@ export class AgentRuntime {
     const agentId = this.agentId;
     const workspaceId = this.workspaceId;
 
-      const wantsMcpTools = ctx.config.tools.allow.some(
-        (entry) => entry === "*" || entry === "mcp*" || entry.startsWith("mcp."),
-      );
+    const wantsMcpTools = ctx.config.tools.allow.some(
+      (entry) => entry === "*" || entry === "mcp*" || entry.startsWith("mcp."),
+    );
 
-      // Semantic search via embedding pipeline (graceful -- skipped if memory disabled)
-      const semanticSearchPromise = ctx.config.memory.markdown_enabled
-        ? this.semanticSearch(input.message, ctx.config.model.model, session.session_id)
-        : Promise.resolve([]);
+    // Semantic search via embedding pipeline (graceful -- skipped if memory disabled)
+    const semanticSearchPromise = ctx.config.memory.markdown_enabled
+      ? this.semanticSearch(input.message, ctx.config.model.model, session.session_id)
+      : Promise.resolve([]);
 
-      const [memoryHits, mcpTools, semanticHits] = await Promise.all([
-        ctx.config.memory.markdown_enabled
-          ? ctx.memoryStore.search(input.message, 5)
-          : Promise.resolve([]),
+    const [memoryHits, mcpTools, semanticHits] = await Promise.all([
+      ctx.config.memory.markdown_enabled
+        ? ctx.memoryStore.search(input.message, 5)
+        : Promise.resolve([]),
       wantsMcpTools
         ? this.mcpManager.listToolDescriptors(ctx.mcpServers)
         : this.mcpManager.listToolDescriptors([]),
