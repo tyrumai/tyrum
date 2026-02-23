@@ -357,9 +357,9 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
       }
     }
 
-    const maybeGetSignedUrl = deps.artifactStore.getSignedUrl;
-    if (typeof maybeGetSignedUrl === "function") {
-      const signedUrl = await maybeGetSignedUrl(parsedId.data, {
+    const getSignedUrl = deps.artifactStore.getSignedUrl;
+    if (typeof getSignedUrl === "function") {
+      const signedUrl = await getSignedUrl.call(deps.artifactStore, parsedId.data, {
         expiresInSeconds: DEFAULT_SIGNED_URL_TTL_SECONDS,
       });
       if (!signedUrl) {

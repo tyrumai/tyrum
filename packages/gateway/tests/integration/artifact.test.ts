@@ -3,6 +3,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createApp } from "../../src/app.js";
+import { S3ArtifactStore } from "../../src/modules/artifact/store.js";
+import { GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { createTestContainer } from "./helpers.js";
 
 type SqlRunner = {
@@ -319,6 +321,113 @@ describe("artifact routes", () => {
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(signedUrl);
     expect(get).not.toHaveBeenCalled();
+
+    await container.db.close();
+  });
+
+  it("GET /runs/:runId/artifacts/:id redirects using S3ArtifactStore instance (preserves this binding)", async () => {
+    const container = await createTestContainer();
+    const scope: ExecutionScopeIds = {
+      jobId: "job-artifacts-signed-url-s3-store",
+      runId: "run-artifacts-signed-url-s3-store",
+      stepId: "step-artifacts-signed-url-s3-store",
+      attemptId: "attempt-artifacts-signed-url-s3-store",
+    };
+    await seedExecutionScope(container.db, scope);
+
+    const artifactId = "550e8400-e29b-41d4-a716-446655440000";
+    const signedUrl = `https://objects.example.test/${artifactId}?sig=test`;
+    const manifestKey = `artifacts/manifests/55/${artifactId}.json`;
+    const blobKey = `artifacts/blobs/55/${artifactId}/2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824.bin`;
+
+    const send = vi.fn(async (cmd: unknown) => {
+      if (cmd instanceof GetObjectCommand) {
+        const key = cmd.input.Key ?? "";
+        if (key === manifestKey) {
+          const meta = JSON.stringify({
+            v: 1,
+            ref: {
+              artifact_id: artifactId,
+              uri: `artifact://${artifactId}`,
+              kind: "log",
+              created_at: "2026-02-19T12:00:00.000Z",
+              labels: [],
+              sha256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+              size_bytes: 5,
+              mime_type: "text/plain",
+            },
+            blob_key: blobKey,
+          });
+          return {
+            Body: {
+              transformToByteArray: async () => Buffer.from(meta, "utf8"),
+            },
+          };
+        }
+      }
+
+      if (cmd instanceof HeadObjectCommand) {
+        const key = cmd.input.Key ?? "";
+        if (key === blobKey) return {};
+      }
+
+      throw new Error("unexpected command");
+    });
+
+    const store = new S3ArtifactStore(
+      { send } as unknown as import("@aws-sdk/client-s3").S3Client,
+      "bucket",
+      "artifacts",
+      undefined,
+      async () => signedUrl,
+    );
+
+    await container.db.run(
+      `INSERT INTO execution_artifacts (
+         artifact_id,
+         workspace_id,
+         agent_id,
+         run_id,
+         step_id,
+         attempt_id,
+         kind,
+         uri,
+         created_at,
+         mime_type,
+         size_bytes,
+         sha256,
+         labels_json,
+         metadata_json,
+         sensitivity,
+         policy_snapshot_id
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        artifactId,
+        "default",
+        "agent-1",
+        scope.runId,
+        scope.stepId,
+        scope.attemptId,
+        "log",
+        `artifact://${artifactId}`,
+        "2026-02-19T12:00:00.000Z",
+        "text/plain",
+        5,
+        "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+        "[]",
+        "{}",
+        "normal",
+        null,
+      ],
+    );
+
+    container.artifactStore = store;
+
+    const app = createApp(container);
+    const res = await app.request(`/runs/${scope.runId}/artifacts/${artifactId}`);
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(signedUrl);
 
     await container.db.close();
   });
