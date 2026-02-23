@@ -107,6 +107,12 @@ describe("Telegram normalization", () => {
     expect(update.message.envelope?.delivery.account).toBe("work");
   });
 
+  it("falls back to legacy Telegram channel key when account id is unset", () => {
+    process.env["TYRUM_TELEGRAM_CHANNEL_KEY"] = "legacy-telegram-1";
+    const update = normalizeUpdate(loadFixture("text_message.json"));
+    expect(update.message.envelope?.delivery.account).toBe("legacy-telegram-1");
+  });
+
   it("normalizes edited message", () => {
     const update = normalizeUpdate(loadFixture("edited_message.json"));
 
