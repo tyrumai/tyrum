@@ -320,13 +320,18 @@ export class NodePairingDal {
         ? params.trustLevel ?? parseTrustLevel(existing.trust_level) ?? "remote"
         : parseTrustLevel(existing.trust_level) ?? "remote";
 
-    const allowlist =
-      params.decision === "approved"
-        ? params.capabilityAllowlist ??
-          (parseAllowlist(existing.capability_allowlist_json).length > 0
-            ? parseAllowlist(existing.capability_allowlist_json)
-            : allowlistFromCapabilities(existing.capabilities_json))
-        : parseAllowlist(existing.capability_allowlist_json);
+    let allowlist: readonly CapabilityDescriptor[];
+    if (params.decision === "approved" && params.capabilityAllowlist) {
+      allowlist = params.capabilityAllowlist;
+    } else {
+      const existingAllowlist = parseAllowlist(existing.capability_allowlist_json);
+      allowlist =
+        params.decision === "approved"
+          ? existingAllowlist.length > 0
+            ? existingAllowlist
+            : allowlistFromCapabilities(existing.capabilities_json)
+          : existingAllowlist;
+    }
 
     const result = await this.db.run(
       `UPDATE node_pairings

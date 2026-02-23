@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { NodePairingDal } from "../../src/modules/node/pairing-dal.js";
@@ -112,5 +112,76 @@ describe("NodePairingDal.upsertOnConnect", () => {
     expect(reopened.status).toBe("pending");
     expect(reopened.trust_level).toBe("local");
     expect(reopened.capability_allowlist).toEqual([cliDescriptor]);
+  });
+
+  it("parses stored allowlist at most once when resolving approval without an explicit allowlist", async () => {
+    db = openTestSqliteDb();
+    const dal = new NodePairingDal(db);
+
+    const nodeId = "node-3";
+    const cliDescriptor = {
+      id: descriptorIdForClientCapability("cli"),
+      version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+    };
+    const allowlistJson = JSON.stringify([cliDescriptor]);
+
+    const pending = await dal.upsertOnConnect({
+      nodeId,
+      pubkey: "pubkey-3",
+      label: "node-3",
+      capabilities: ["cli"],
+      nowIso: "2026-02-23T00:00:00.000Z",
+    });
+    const approved = await dal.resolve({
+      pairingId: pending.pairing_id,
+      decision: "approved",
+      trustLevel: "local",
+      capabilityAllowlist: [cliDescriptor],
+      resolvedBy: { kind: "test" },
+      nowIso: "2026-02-23T00:00:01.000Z",
+    });
+    expect(approved).toBeDefined();
+
+    const revoked = await dal.revoke({
+      pairingId: approved!.pairing_id,
+      reason: "revoked for test",
+      resolvedBy: { kind: "test" },
+      nowIso: "2026-02-23T00:00:02.000Z",
+    });
+    expect(revoked).toBeDefined();
+
+    const reopened = await dal.upsertOnConnect({
+      nodeId,
+      pubkey: "pubkey-3",
+      label: "node-3",
+      capabilities: ["cli"],
+      nowIso: "2026-02-23T00:00:03.000Z",
+    });
+    expect(reopened.status).toBe("pending");
+
+    const raw = await db.get<{ capability_allowlist_json: string }>(
+      `SELECT capability_allowlist_json FROM node_pairings WHERE node_id = ?`,
+      [nodeId],
+    );
+    expect(raw).toBeDefined();
+    expect(raw!.capability_allowlist_json).toBe(allowlistJson);
+
+    const parseSpy = vi.spyOn(JSON, "parse");
+    let allowlistParseCount = 0;
+    try {
+      const approvedAgain = await dal.resolve({
+        pairingId: reopened.pairing_id,
+        decision: "approved",
+        reason: "re-approved",
+        resolvedBy: { kind: "test" },
+        nowIso: "2026-02-23T00:00:04.000Z",
+      });
+      expect(approvedAgain).toBeDefined();
+      allowlistParseCount = parseSpy.mock.calls.filter((call) => call[0] === allowlistJson).length;
+    } finally {
+      parseSpy.mockRestore();
+    }
+
+    expect(allowlistParseCount).toBe(2);
   });
 });
