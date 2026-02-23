@@ -482,6 +482,30 @@ describe("gateway-hosted web API + UI", () => {
     expect(location).toContain("tone=error");
   });
 
+  it("returns a validation redirect when remote-team deployment fields are missing", async () => {
+    const missing = new URLSearchParams({
+      ownerBootstrapConfirmed: "true",
+      nonLocalDeviceApproval: "true",
+      deviceBoundTokens: "true",
+      trustedProxyAllowlist: "true",
+      tlsReady: "true",
+      adminModeStepUp: "true",
+    });
+
+    const response = await app.request("/app/actions/onboarding/remote-team", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: missing.toString(),
+    });
+
+    expect(response.status).toBe(302);
+    const location = response.headers.get("location") ?? "";
+    expect(location).toContain("/app/onboarding/remote-team");
+    expect(location).toContain("tone=error");
+  });
+
   it("records remote-team hardening details in onboarding snapshot", async () => {
     const draft = await app.request("/api/onboarding/consent");
     expect(draft.status).toBe(200);
