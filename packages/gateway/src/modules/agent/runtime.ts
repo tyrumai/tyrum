@@ -332,6 +332,46 @@ function getStopFallbackApiCallError(err: unknown): APICallError | undefined {
   return undefined;
 }
 
+function resolveEnvApiKey(providerEnv: readonly string[] | undefined): string | undefined {
+  for (const key of providerEnv ?? []) {
+    if (!/(_API_KEY|_TOKEN)$/i.test(key)) continue;
+    const raw = process.env[key];
+    const trimmed = typeof raw === "string" ? raw.trim() : "";
+    if (trimmed.length > 0) return trimmed;
+  }
+  return undefined;
+}
+
+async function listOrderedEligibleProfilesForProvider(input: {
+  agentId: string;
+  sessionId: string;
+  providerId: string;
+  resolver: SecretHandleResolver | undefined;
+  authProfileDal: AuthProfileDal;
+  pinDal: SessionProviderPinDal;
+}): Promise<AuthProfileRow[]> {
+  const eligibleProfiles = isAuthProfilesEnabled() && input.resolver
+    ? await input.authProfileDal.listEligibleForProvider({
+      agentId: input.agentId,
+      provider: input.providerId,
+      nowMs: Date.now(),
+    })
+    : [];
+
+  if (eligibleProfiles.length === 0) return [];
+
+  const pin = await input.pinDal.get({
+    agentId: input.agentId,
+    sessionId: input.sessionId,
+    provider: input.providerId,
+  });
+  const pinnedId = pin?.profile_id;
+
+  return pinnedId
+    ? [...eligibleProfiles].sort((a, b) => (a.profile_id === pinnedId ? -1 : b.profile_id === pinnedId ? 1 : 0))
+    : eligibleProfiles;
+}
+
 async function resolveProfileApiKey(profile: AuthProfileRow, deps: {
   secretProvider: SecretProvider | undefined;
   resolver: SecretHandleResolver | undefined;
@@ -792,39 +832,21 @@ export class AgentRuntime {
         if (typeof chosen.api === "string" && chosen.api.trim().length > 0) {
           return chosen.api.trim();
         }
-        const endpointKey = (chosen.provider.env ?? []).find((key) => /(ENDPOINT|BASE_URL|BASEURL|URL)$/i.test(key));
-        const endpoint = endpointKey ? process.env[endpointKey]?.trim() : undefined;
-        return endpoint && endpoint.length > 0 ? endpoint : undefined;
-      })();
+      const endpointKey = (chosen.provider.env ?? []).find((key) => /(ENDPOINT|BASE_URL|BASEURL|URL)$/i.test(key));
+      const endpoint = endpointKey ? process.env[endpointKey]?.trim() : undefined;
+      return endpoint && endpoint.length > 0 ? endpoint : undefined;
+    })();
 
-      const eligibleProfiles = isAuthProfilesEnabled() && resolver
-        ? await authProfileDal.listEligibleForProvider({
-          agentId,
-          provider: chosen.providerId,
-          nowMs: Date.now(),
-        })
-        : [];
+      const orderedProfiles = await listOrderedEligibleProfilesForProvider({
+        agentId,
+        sessionId: input.sessionId,
+        providerId: chosen.providerId,
+        resolver,
+        authProfileDal,
+        pinDal,
+      });
 
-      let pinnedId: string | undefined;
-      if (eligibleProfiles.length > 0) {
-        const pin = await pinDal.get({
-          agentId,
-          sessionId: input.sessionId,
-          provider: chosen.providerId,
-        });
-        pinnedId = pin?.profile_id;
-      }
-
-      const orderedProfiles = pinnedId
-        ? [...eligibleProfiles].sort((a, b) => (a.profile_id === pinnedId ? -1 : b.profile_id === pinnedId ? 1 : 0))
-        : eligibleProfiles;
-
-      const envApiKey = (() => {
-        const apiKeyVar = (chosen.provider.env ?? []).find((key) => /(_API_KEY|_TOKEN)$/i.test(key));
-        const value = apiKeyVar ? process.env[apiKeyVar] : undefined;
-        const trimmed = typeof value === "string" ? value.trim() : "";
-        return trimmed.length > 0 ? trimmed : undefined;
-      })();
+      const envApiKey = resolveEnvApiKey(chosen.provider.env);
 
       async function buildModelFromApiKey(apiKey: string | undefined): Promise<LanguageModelV3> {
         const sdk = createProviderFromNpm({
@@ -1219,27 +1241,14 @@ export class AgentRuntime {
           providerId: string,
           provider: ProviderEntry,
         ): Promise<string | undefined> => {
-          const eligibleProfiles = isAuthProfilesEnabled() && resolver
-            ? await authProfileDal.listEligibleForProvider({
-              agentId: this.agentId,
-              provider: providerId,
-              nowMs: Date.now(),
-            })
-            : [];
-
-          let pinnedId: string | undefined;
-          if (eligibleProfiles.length > 0) {
-            const pin = await pinDal.get({
-              agentId: this.agentId,
-              sessionId,
-              provider: providerId,
-            });
-            pinnedId = pin?.profile_id;
-          }
-
-          const orderedProfiles = pinnedId
-            ? [...eligibleProfiles].sort((a, b) => (a.profile_id === pinnedId ? -1 : b.profile_id === pinnedId ? 1 : 0))
-            : eligibleProfiles;
+          const orderedProfiles = await listOrderedEligibleProfilesForProvider({
+            agentId: this.agentId,
+            sessionId,
+            providerId,
+            resolver,
+            authProfileDal,
+            pinDal,
+          });
 
           for (const profile of orderedProfiles) {
             const apiKey = await resolveProfileApiKey(profile, {
@@ -1255,14 +1264,7 @@ export class AgentRuntime {
             if (apiKey) return apiKey;
           }
 
-          for (const key of provider.env ?? []) {
-            if (!/(_API_KEY|_TOKEN)$/i.test(key)) continue;
-            const raw = process.env[key];
-            const trimmed = typeof raw === "string" ? raw.trim() : "";
-            if (trimmed.length > 0) return trimmed;
-          }
-
-          return undefined;
+          return resolveEnvApiKey(provider.env);
         };
 
         for (const providerId of orderedProviderIds) {
