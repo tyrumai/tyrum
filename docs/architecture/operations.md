@@ -36,6 +36,15 @@ Tyrum provides a guided onboarding flow (CLI/TUI and/or operator clients) that:
 
 Operator clients implement an explicit **Admin Mode** (step-up) so tenant administration actions are time-bounded and auditable.
 
+### Operating modes
+
+Onboarding exposes two operator-visible operating modes:
+
+- **Local-personal:** optimized for a single-user loopback deployment, where the first local operator device may be auto-approved.
+- **Remote-team:** requires explicit hardening confirmations before consent is finalized, including trusted proxy allowlists, TLS readiness, device-bound token posture, and Admin Mode step-up for tenant administration.
+
+Remote-team mode also captures deployment intent (`single-host` vs `split-role`) and StateStore expectation (SQLite vs Postgres) so diagnostics can reason about deployment risk from day one.
+
 ## Diagnostics (“check”)
 
 Tyrum provides a `check` surface that detects high-impact footguns and produces actionable fixes. Examples of checks:

@@ -19,6 +19,7 @@ import {
 } from "../modules/web/local-store.js";
 import {
   persistConsent,
+  persistOperatingMode,
   snapshotConsent,
 } from "../modules/web/consent-store.js";
 
@@ -1659,33 +1660,33 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
     const body = `
       <div class="page-header">
         <h1>Onboarding Start</h1>
-        <p>Select how this desktop app should connect before continuing setup.</p>
+        <p>Select the operating mode before continuing setup.</p>
       </div>
 
       <ol class="onboarding-stepper">
         <li class="active">1. Mode</li>
-        <li>2. Persona</li>
+        <li>2. Hardening</li>
         <li>3. Consent</li>
       </ol>
 
       <section class="card">
-        <h2>Connection Mode</h2>
-        <p class="muted">Embedded runs a local gateway automatically. Remote connects this desktop app to an external gateway.</p>
+        <h2>Operating Mode</h2>
+        <p class="muted">Local-personal runs a loopback-local gateway. Remote-team connects this desktop app to an external gateway with explicit hardening controls.</p>
         <div class="actions">
           <form method="post" action="/app/actions/onboarding/mode" class="inline" data-mode="embedded">
             <input type="hidden" name="mode" value="embedded" />
-            <button type="submit">Use Embedded Mode</button>
+            <button type="submit">Use Local-Personal Mode</button>
           </form>
           <form method="post" action="/app/actions/onboarding/mode" class="inline" data-mode="remote">
             <input type="hidden" name="mode" value="remote" />
-            <button type="submit" class="secondary">Use Remote Mode</button>
+            <button type="submit" class="secondary">Use Remote-Team Mode</button>
           </form>
         </div>
       </section>
 
       <section class="card">
         <h2>What happens next</h2>
-        <p class="muted">Choose Embedded to continue persona + consent onboarding. Choose Remote to stop onboarding and configure a remote connection in Tyrum.</p>
+        <p class="muted">Local-personal continues directly to persona + consent. Remote-team requires hardening checks before consent.</p>
       </section>
 
       <script>
@@ -1729,6 +1730,7 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
     }
 
     if (mode === "embedded") {
+      persistOperatingMode("local-personal");
       const search = new URL(c.req.url).searchParams;
       return c.redirect(withAuthToken("/app/onboarding/persona", search));
     }
@@ -1736,8 +1738,144 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
     return c.redirect(
       redirectWithMessageFromRequest(
         c,
-        "/app",
-        "Remote mode selected. Configure remote connection in Tyrum.",
+        "/app/onboarding/remote-team",
+        "Remote-team mode selected. Confirm hardening controls before continuing.",
+      ),
+    );
+  });
+
+  app.get("/app/onboarding/remote-team", (c) => {
+    const search = new URL(c.req.url).searchParams;
+    const snapshot = snapshotConsent();
+    const previous = snapshot.mode === "remote-team" ? snapshot.remoteHardening : undefined;
+    const deploymentProfile = previous?.deploymentProfile ?? "split-role";
+    const stateStore = previous?.stateStore ?? "postgres";
+
+    const body = `
+      <div class="page-header">
+        <h1>Remote Team Hardening</h1>
+        <p>Record explicit security controls before remote operators connect to this tenant.</p>
+      </div>
+
+      <ol class="onboarding-stepper">
+        <li>1. Mode</li>
+        <li class="active">2. Hardening</li>
+        <li>3. Consent</li>
+      </ol>
+
+      <form method="post" action="/app/actions/onboarding/remote-team">
+        <section class="card">
+          <h2>Required controls</h2>
+          <label><input type="checkbox" name="ownerBootstrapConfirmed" value="true" ${previous?.ownerBootstrapConfirmed ? "checked" : ""} /> First tenant owner bootstrap confirmed</label>
+          <p class="helper">Break-glass bootstrap credentials are restricted, rotated, and auditable.</p>
+
+          <label><input type="checkbox" name="nonLocalDeviceApproval" value="true" ${previous?.nonLocalDeviceApproval ? "checked" : ""} /> Non-local operator device approvals require a trusted local channel</label>
+          <p class="helper">Remote enrollments are explicitly approved; loopback-only auto-approval is not used.</p>
+
+          <label><input type="checkbox" name="deviceBoundTokens" value="true" ${previous?.deviceBoundTokens ? "checked" : ""} /> Device-bound tokens are required for remote sessions</label>
+          <p class="helper">Operator access tokens are bound to device identity and rotation policy.</p>
+
+          <label><input type="checkbox" name="trustedProxyAllowlist" value="true" ${previous?.trustedProxyAllowlist ? "checked" : ""} /> Trusted proxies allowlist configured</label>
+          <p class="helper">Forwarding headers are accepted only from explicit proxy addresses.</p>
+
+          <label><input type="checkbox" name="tlsReady" value="true" ${previous?.tlsReady ? "checked" : ""} /> TLS termination is configured for remote access</label>
+          <p class="helper">Remote clients connect over TLS before the gateway is exposed beyond loopback.</p>
+
+          <label><input type="checkbox" name="adminModeStepUp" value="true" ${previous?.adminModeStepUp ? "checked" : ""} /> Admin Mode step-up is required for tenant administration</label>
+          <p class="helper">Privileged security operations are time-bounded and auditable.</p>
+        </section>
+
+        <section class="card">
+          <h2>Deployment profile</h2>
+          <label for="remote-deployment-profile">Runtime profile</label>
+          <select id="remote-deployment-profile" name="deploymentProfile">
+            <option value="single-host" ${deploymentProfile === "single-host" ? "selected" : ""}>Single host</option>
+            <option value="split-role" ${deploymentProfile === "split-role" ? "selected" : ""}>Split role (gateway-edge / worker / scheduler)</option>
+          </select>
+
+          <label for="remote-state-store">Durable StateStore</label>
+          <select id="remote-state-store" name="stateStore">
+            <option value="sqlite" ${stateStore === "sqlite" ? "selected" : ""}>SQLite (single host)</option>
+            <option value="postgres" ${stateStore === "postgres" ? "selected" : ""}>Postgres (recommended for remote-team)</option>
+          </select>
+
+          <label><input type="checkbox" name="tlsPinning" value="true" ${previous?.tlsPinning ? "checked" : ""} /> TLS certificate fingerprint is configured for client pinning</label>
+          <p class="helper">Certificate pinning is optional but recommended for remote-team traffic.</p>
+
+          <div class="actions"><button type="submit">Record hardening and continue to consent</button></div>
+        </section>
+      </form>
+    `;
+
+    return c.html(shell("Remote Team Hardening", "/app/onboarding/remote-team", search, body));
+  });
+
+  app.post("/app/actions/onboarding/remote-team", async (c) => {
+    const form = await c.req.formData();
+
+    const ownerBootstrapConfirmed = boolFromForm(form.get("ownerBootstrapConfirmed"));
+    const nonLocalDeviceApproval = boolFromForm(form.get("nonLocalDeviceApproval"));
+    const deviceBoundTokens = boolFromForm(form.get("deviceBoundTokens"));
+    const trustedProxyAllowlist = boolFromForm(form.get("trustedProxyAllowlist"));
+    const tlsReady = boolFromForm(form.get("tlsReady"));
+    const adminModeStepUp = boolFromForm(form.get("adminModeStepUp"));
+    const tlsPinning = boolFromForm(form.get("tlsPinning"));
+
+    const deploymentProfileValue = form.get("deploymentProfile")?.toString().trim();
+    const stateStoreValue = form.get("stateStore")?.toString().trim();
+
+    const deploymentProfile =
+      deploymentProfileValue === "single-host" || deploymentProfileValue === "split-role"
+        ? deploymentProfileValue
+        : undefined;
+    const stateStore = stateStoreValue === "sqlite" || stateStoreValue === "postgres" ? stateStoreValue : undefined;
+
+    if (
+      !ownerBootstrapConfirmed ||
+      !nonLocalDeviceApproval ||
+      !deviceBoundTokens ||
+      !trustedProxyAllowlist ||
+      !tlsReady ||
+      !adminModeStepUp
+    ) {
+      return c.redirect(
+        redirectWithMessageFromRequest(
+          c,
+          "/app/onboarding/remote-team",
+          "Confirm every required hardening control before continuing.",
+          "error",
+        ),
+      );
+    }
+
+    if (!deploymentProfile || !stateStore) {
+      return c.redirect(
+        redirectWithMessageFromRequest(
+          c,
+          "/app/onboarding/remote-team",
+          "Choose deployment profile and StateStore before continuing.",
+          "error",
+        ),
+      );
+    }
+
+    persistOperatingMode("remote-team", {
+      ownerBootstrapConfirmed,
+      nonLocalDeviceApproval,
+      deviceBoundTokens,
+      trustedProxyAllowlist,
+      tlsReady,
+      adminModeStepUp,
+      tlsPinning,
+      deploymentProfile,
+      stateStore,
+    });
+
+    return c.redirect(
+      redirectWithMessageFromRequest(
+        c,
+        "/app/onboarding/consent",
+        "Remote-team hardening recorded. Continue with consent calibration.",
       ),
     );
   });
@@ -1835,6 +1973,8 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
       </div>
       <article class="card">
         <div class="kv">
+          <strong>Operating mode</strong><span>${snapshot.mode === "remote-team" ? "Remote-team" : "Local-personal"}</span>
+          <strong>Remote hardening</strong><span>${snapshot.mode === "remote-team" && snapshot.remoteHardening ? "Recorded" : "N/A"}</span>
           <strong>Selected</strong><span>${String(selected)} / 3</span>
           <strong>Status</strong><span>${snapshot.revision > 0 ? "Recorded" : "Draft"}</span>
           <strong>Audit reference</strong><span>${esc(snapshot.auditReference)}</span>

@@ -5,6 +5,20 @@ export type ConsentToggleKey =
 
 export type ConsentSelections = Record<ConsentToggleKey, boolean>;
 
+export type OperatingMode = "local-personal" | "remote-team";
+
+export type RemoteTeamHardeningSnapshot = {
+  ownerBootstrapConfirmed: boolean;
+  nonLocalDeviceApproval: boolean;
+  deviceBoundTokens: boolean;
+  trustedProxyAllowlist: boolean;
+  tlsReady: boolean;
+  adminModeStepUp: boolean;
+  tlsPinning: boolean;
+  deploymentProfile: "single-host" | "split-role";
+  stateStore: "sqlite" | "postgres";
+};
+
 export type CalibrationPersona = {
   tone?: string;
   verbosity?: string;
@@ -26,6 +40,8 @@ export type ConsentRecord = {
   revision: number;
   auditReference: string;
   recordedAt: string;
+  mode: OperatingMode;
+  remoteHardening?: RemoteTeamHardeningSnapshot;
   selections: ConsentSelections;
   calibration?: CalibrationSnapshot;
   stub: {
@@ -41,6 +57,9 @@ const BASE_TIMESTAMP = Date.parse("2025-01-20T09:00:00.000Z");
 let latestRecord: ConsentRecord | undefined;
 
 function computeRecordedAt(revision: number) {
+  if (revision <= 0) {
+    return new Date(BASE_TIMESTAMP).toISOString();
+  }
   const offsetMilliseconds = (revision - 1) * 60_000;
   return new Date(BASE_TIMESTAMP + offsetMilliseconds).toISOString();
 }
@@ -53,48 +72,79 @@ function buildAuditReference(revision: number) {
   return `${BASE_AUDIT_REFERENCE}-R${revision.toString().padStart(2, "0")}`;
 }
 
+function buildRecord(
+  revision: number,
+  selections: ConsentSelections,
+  calibration: CalibrationSnapshot | undefined,
+  mode: OperatingMode,
+  remoteHardening: RemoteTeamHardeningSnapshot | undefined,
+): ConsentRecord {
+  return {
+    id: CONSENT_RECORD_ID,
+    revision,
+    auditReference: revision === 0 ? BASE_AUDIT_REFERENCE : buildAuditReference(revision),
+    recordedAt: computeRecordedAt(revision),
+    mode,
+    remoteHardening,
+    selections,
+    calibration,
+    stub: {
+      persistence: "memory",
+      note: "Replace with onboarding consent service; stub keeps the most recent selections and onboarding mode in memory only.",
+    },
+  };
+}
+
 export function snapshotConsent() {
   if (latestRecord) {
     return structuredClone(latestRecord);
   }
 
-  return {
-    id: CONSENT_RECORD_ID,
-    revision: 0,
-    auditReference: BASE_AUDIT_REFERENCE,
-    recordedAt: new Date(BASE_TIMESTAMP).toISOString(),
-    selections: {
+  return buildRecord(
+    0,
+    {
       shareCalendarSignals: false,
       allowPlannerAutonomy: false,
       retainAuditTrail: false,
     },
-    calibration: undefined,
-    stub: {
-      persistence: "memory" as const,
-      note: "Replace with onboarding consent service; stub keeps the most recent selections in memory only.",
-    },
-  } satisfies ConsentRecord;
+    undefined,
+    "local-personal",
+    undefined,
+  );
 }
 
 export function persistConsent(
   selections: ConsentSelections,
   calibration?: CalibrationSnapshot,
 ): ConsentRecord {
-  const previousRevision = latestRecord?.revision ?? 0;
-  const revision = previousRevision + 1;
+  const previous = latestRecord ?? snapshotConsent();
+  const revision = previous.revision + 1;
 
-  latestRecord = {
-    id: CONSENT_RECORD_ID,
+  latestRecord = buildRecord(
     revision,
-    auditReference: buildAuditReference(revision),
-    recordedAt: computeRecordedAt(revision),
     selections,
     calibration,
-    stub: {
-      persistence: "memory",
-      note: "Replace with onboarding consent service; stub keeps the most recent selections in memory only.",
-    },
-  };
+    previous.mode,
+    previous.remoteHardening,
+  );
+
+  return structuredClone(latestRecord);
+}
+
+export function persistOperatingMode(
+  mode: OperatingMode,
+  remoteHardening?: RemoteTeamHardeningSnapshot,
+): ConsentRecord {
+  const previous = latestRecord ?? snapshotConsent();
+  const revision = previous.revision + 1;
+
+  latestRecord = buildRecord(
+    revision,
+    previous.selections,
+    previous.calibration,
+    mode,
+    mode === "remote-team" ? remoteHardening : undefined,
+  );
 
   return structuredClone(latestRecord);
 }

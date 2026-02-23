@@ -134,6 +134,108 @@ describe("gateway-hosted web API + UI", () => {
     expect(payload.revision).toBe(1);
   });
 
+  it("routes remote mode through hardened remote-team onboarding", async () => {
+    const body = new URLSearchParams({ mode: "remote" });
+    const modeResponse = await app.request("/app/actions/onboarding/mode", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: body.toString(),
+    });
+
+    expect(modeResponse.status).toBe(302);
+    expect(modeResponse.headers.get("location")).toContain("/app/onboarding/remote-team");
+
+    const checklist = await app.request("/app/onboarding/remote-team");
+    expect(checklist.status).toBe(200);
+    const html = await checklist.text();
+    expect(html).toContain("Remote Team Hardening");
+    expect(html).toContain("Trusted proxies allowlist");
+    expect(html).toContain("TLS certificate fingerprint");
+    expect(html).toContain("Admin Mode step-up");
+  });
+
+  it("requires all remote-team hardening acknowledgements before continuing", async () => {
+    const incomplete = new URLSearchParams({
+      ownerBootstrapConfirmed: "true",
+      nonLocalDeviceApproval: "true",
+      deviceBoundTokens: "true",
+      trustedProxyAllowlist: "true",
+      tlsReady: "true",
+      deploymentProfile: "split-role",
+      stateStore: "postgres",
+    });
+
+    const response = await app.request("/app/actions/onboarding/remote-team", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: incomplete.toString(),
+    });
+
+    expect(response.status).toBe(302);
+    const location = response.headers.get("location") ?? "";
+    expect(location).toContain("/app/onboarding/remote-team");
+    expect(location).toContain("tone=error");
+  });
+
+  it("records remote-team hardening details in onboarding snapshot", async () => {
+    const completed = new URLSearchParams({
+      ownerBootstrapConfirmed: "true",
+      nonLocalDeviceApproval: "true",
+      deviceBoundTokens: "true",
+      trustedProxyAllowlist: "true",
+      tlsReady: "true",
+      adminModeStepUp: "true",
+      tlsPinning: "true",
+      deploymentProfile: "split-role",
+      stateStore: "postgres",
+    });
+
+    const response = await app.request("/app/actions/onboarding/remote-team", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: completed.toString(),
+    });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toContain("/app/onboarding/consent");
+
+    const snapshot = await app.request("/api/onboarding/consent");
+    expect(snapshot.status).toBe(200);
+    const payload = (await snapshot.json()) as {
+      mode?: string;
+      remoteHardening?: {
+        ownerBootstrapConfirmed: boolean;
+        nonLocalDeviceApproval: boolean;
+        deviceBoundTokens: boolean;
+        trustedProxyAllowlist: boolean;
+        tlsReady: boolean;
+        adminModeStepUp: boolean;
+        tlsPinning: boolean;
+        deploymentProfile: string;
+        stateStore: string;
+      };
+    };
+
+    expect(payload.mode).toBe("remote-team");
+    expect(payload.remoteHardening).toEqual({
+      ownerBootstrapConfirmed: true,
+      nonLocalDeviceApproval: true,
+      deviceBoundTokens: true,
+      trustedProxyAllowlist: true,
+      tlsReady: true,
+      adminModeStepUp: true,
+      tlsPinning: true,
+      deploymentProfile: "split-role",
+      stateStore: "postgres",
+    });
+  });
+
   it("stores PAM profile from settings action form", async () => {
     const body = new URLSearchParams({
       escalation_mode: "act_within_limits",
