@@ -858,14 +858,6 @@ export class AgentRuntime {
       .map((v) => v.trim())
       .filter((v, i, a) => v.length > 0 && a.indexOf(v) === i);
 
-    const primaryProviderId = (() => {
-      try {
-        return parseProviderModelId(rawCandidateIds[0] ?? "").providerId;
-      } catch {
-        return undefined;
-      }
-    })();
-
     const loaded = await this.opts.container.modelsDev.ensureLoaded();
     const catalog = loaded.catalog;
 
@@ -884,24 +876,12 @@ export class AgentRuntime {
     const parsedCandidates: Array<{ providerId: string; modelId: string }> = [];
     const seenCandidates = new Set<string>();
     for (const rawCandidate of rawCandidateIds) {
-      const parsed = (() => {
-        try {
-          return parseProviderModelId(rawCandidate);
-        } catch {
-          // ignore
-        }
-
-        // Legacy short model ids: treat as provider-local fallbacks.
-        if (!rawCandidate.includes("/") && primaryProviderId) {
-          try {
-            return parseProviderModelId(`${primaryProviderId}/${rawCandidate}`);
-          } catch {
-            // ignore
-          }
-        }
-
-        return undefined;
-      })();
+      let parsed: { providerId: string; modelId: string } | undefined;
+      try {
+        parsed = parseProviderModelId(rawCandidate);
+      } catch {
+        parsed = undefined;
+      }
 
       if (!parsed) {
         invalidCandidateIds.push(rawCandidate);
@@ -912,6 +892,12 @@ export class AgentRuntime {
       if (seenCandidates.has(key)) continue;
       seenCandidates.add(key);
       parsedCandidates.push(parsed);
+    }
+
+    if (invalidCandidateIds.length > 0) {
+      throw new Error(
+        `invalid agent model id(s) (expected provider/model): ${invalidCandidateIds.join(", ")}`,
+      );
     }
 
     const resolvedCandidates: ResolvedCandidate[] = parsedCandidates

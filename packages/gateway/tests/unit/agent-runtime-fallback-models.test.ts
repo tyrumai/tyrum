@@ -120,7 +120,7 @@ describe("AgentRuntime model fallbacks", () => {
     expect(seenProviders).toEqual(["openai", "anthropic"]);
   });
 
-  it("ignores malformed fallback model ids and still resolves other candidates", async () => {
+  it("rejects legacy short fallback model ids", async () => {
     process.env["OPENAI_API_KEY"] = "openai-key";
     process.env["ANTHROPIC_API_KEY"] = "anthropic-key";
     process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "0";
@@ -166,23 +166,22 @@ describe("AgentRuntime model fallbacks", () => {
       fetchImpl,
     });
 
-    const model = await (runtime as unknown as {
-      resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
-    }).resolveSessionModel({
-      config: {
-        model: {
-          model: "openai/gpt-4.1",
-          fallback: ["gpt-4.1-mini", "anthropic/claude-3.5-sonnet"],
-          options: {},
+    await expect(
+      (runtime as unknown as {
+        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
+      }).resolveSessionModel({
+        config: {
+          model: {
+            model: "openai/gpt-4.1",
+            fallback: ["gpt-4.1-mini", "anthropic/claude-3.5-sonnet"],
+            options: {},
+          },
         },
-      },
-      sessionId: "session-1",
-      fetchImpl,
-    });
-
-    const res = await model.doGenerate({} as any);
-    expect((res as any).text).toBe("ok");
-    expect(seenProviders).toEqual(["openai", "anthropic"]);
+        sessionId: "session-1",
+        fetchImpl,
+      }),
+    ).rejects.toThrow("expected provider/model");
+    expect(seenProviders).toEqual([]);
   });
 
   it("does not try fallback models for non-transient API errors", async () => {
