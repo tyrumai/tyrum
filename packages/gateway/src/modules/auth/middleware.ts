@@ -7,7 +7,7 @@
 
 import type { Context, Next } from "hono";
 import { getCookie } from "hono/cookie";
-import { routePath } from "hono/route";
+import { matchedRoutes } from "hono/route";
 import { APP_PATH_PREFIX, matchesPathPrefixSegment } from "../../app-path.js";
 import type { TokenStore } from "./token-store.js";
 
@@ -41,6 +41,12 @@ function extractAppQueryToken(c: Context): string | undefined {
   return c.req.query(APP_TOKEN_QUERY_KEY)?.trim() || undefined;
 }
 
+function isPublicOAuthCallbackRoute(c: Context): boolean {
+  if (c.req.method !== "GET") return false;
+  // Use matched router paths so we don't accidentally exempt concrete request paths with similar suffixes.
+  return matchedRoutes(c).some((route) => OAUTH_CALLBACK_ROUTE_PATH_RE.test(route.path));
+}
+
 export function createAuthMiddleware(
   tokenStore: TokenStore,
 ) {
@@ -52,7 +58,7 @@ export function createAuthMiddleware(
 
     // OAuth callback is public (state/PKCE-protected) and should not require an admin token.
     // Use the router's matched route to avoid accidentally exempting other paths with similar suffixes.
-    if (c.req.method === "GET" && OAUTH_CALLBACK_ROUTE_PATH_RE.test(routePath(c, -1))) {
+    if (isPublicOAuthCallbackRoute(c)) {
       return next();
     }
 
