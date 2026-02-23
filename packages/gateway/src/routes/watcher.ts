@@ -2,10 +2,128 @@
  * Watcher CRUD routes.
  */
 
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { SecretHandle } from "@tyrum/schemas";
+import type { SecretHandle as SecretHandleT } from "@tyrum/schemas";
 import { Hono } from "hono";
+import type { SecretProvider } from "../modules/secret/provider.js";
 import type { WatcherProcessor } from "../modules/watcher/processor.js";
 
-export function createWatcherRoutes(processor: WatcherProcessor): Hono {
+const WEBHOOK_SIGNATURE_HEADER = "x-tyrum-webhook-signature";
+const WEBHOOK_TIMESTAMP_HEADER = "x-tyrum-webhook-timestamp";
+const WEBHOOK_NONCE_HEADER = "x-tyrum-webhook-nonce";
+const DEFAULT_WEBHOOK_MAX_SKEW_MS = 5 * 60_000;
+const MAX_WEBHOOK_MAX_SKEW_MS = 30 * 60_000;
+
+interface WebhookEnvelope {
+  signature: string;
+  timestamp: string;
+  nonce: string;
+}
+
+interface WebhookTriggerConfig {
+  secret_handle: SecretHandleT;
+  max_skew_ms?: number;
+}
+
+export interface WatcherRouteDeps {
+  secretProviderForAgent?: (agentId: string) => Promise<SecretProvider>;
+}
+
+function agentIdFromReq(c: { req: { query: (key: string) => string | undefined; header: (key: string) => string | undefined } }): string {
+  return c.req.query("agent_id")?.trim() || c.req.header("x-tyrum-agent-id")?.trim() || "default";
+}
+
+function parseTimestampMs(value: string): number | null {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  // Accept UNIX seconds (10 digits) or milliseconds (13 digits).
+  return value.length <= 10 ? parsed * 1000 : parsed;
+}
+
+function parseWebhookEnvelope(headers: {
+  signature: string | undefined;
+  timestamp: string | undefined;
+  nonce: string | undefined;
+}): WebhookEnvelope | null {
+  const signature = headers.signature?.trim();
+  const timestamp = headers.timestamp?.trim();
+  const nonce = headers.nonce?.trim();
+
+  if (!signature || !/^sha256=[A-Fa-f0-9]{64}$/.test(signature)) {
+    return null;
+  }
+  if (!timestamp || !/^\d{10,13}$/.test(timestamp)) {
+    return null;
+  }
+  if (!nonce || nonce.length > 256) {
+    return null;
+  }
+
+  return { signature, timestamp, nonce };
+}
+
+function parseWebhookTriggerConfig(raw: unknown): WebhookTriggerConfig | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+
+  const secretHandleRaw = (raw as Record<string, unknown>)["secret_handle"];
+  const parsedSecret = SecretHandle.safeParse(secretHandleRaw);
+  if (!parsedSecret.success) {
+    return null;
+  }
+
+  const maxSkewRaw = (raw as Record<string, unknown>)["max_skew_ms"];
+  if (maxSkewRaw === undefined) {
+    return { secret_handle: parsedSecret.data };
+  }
+  if (
+    typeof maxSkewRaw !== "number" ||
+    !Number.isInteger(maxSkewRaw) ||
+    maxSkewRaw <= 0 ||
+    maxSkewRaw > MAX_WEBHOOK_MAX_SKEW_MS
+  ) {
+    return null;
+  }
+
+  return {
+    secret_handle: parsedSecret.data,
+    max_skew_ms: maxSkewRaw,
+  };
+}
+
+function computeWebhookSignature(
+  secret: string,
+  timestamp: string,
+  nonce: string,
+  body: string,
+): string {
+  const digest = createHmac("sha256", secret)
+    .update(timestamp)
+    .update(".")
+    .update(nonce)
+    .update(".")
+    .update(body)
+    .digest("hex");
+  return `sha256=${digest}`;
+}
+
+function secureStringEqual(a: string, b: string): boolean {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  if (left.length !== right.length) {
+    return false;
+  }
+  return timingSafeEqual(left, right);
+}
+
+export function createWatcherRoutes(
+  processor: WatcherProcessor,
+  deps: WatcherRouteDeps = {},
+): Hono {
   const watcher = new Hono();
 
   watcher.post("/watchers", async (c) => {
@@ -67,6 +185,136 @@ export function createWatcherRoutes(processor: WatcherProcessor): Hono {
 
     await processor.deactivateWatcher(watcherId);
     return c.json({ id: watcherId, deleted: true });
+  });
+
+  watcher.post("/watchers/:id/trigger/webhook", async (c) => {
+    const watcherId = parseInt(c.req.param("id"), 10);
+    if (isNaN(watcherId)) {
+      return c.json(
+        { error: "invalid_request", message: "invalid watcher id" },
+        400,
+      );
+    }
+
+    const watcherRow = await processor.getActiveWatcherById(watcherId);
+    if (!watcherRow || watcherRow.trigger_type !== "webhook") {
+      return c.json(
+        { error: "not_found", message: "webhook watcher not found" },
+        404,
+      );
+    }
+
+    const envelope = parseWebhookEnvelope({
+      signature: c.req.header(WEBHOOK_SIGNATURE_HEADER),
+      timestamp: c.req.header(WEBHOOK_TIMESTAMP_HEADER),
+      nonce: c.req.header(WEBHOOK_NONCE_HEADER),
+    });
+    if (!envelope) {
+      return c.json(
+        {
+          error: "unauthorized",
+          message: "missing or invalid webhook signature envelope",
+        },
+        401,
+      );
+    }
+
+    const webhookConfig = parseWebhookTriggerConfig(watcherRow.trigger_config);
+    if (!webhookConfig) {
+      return c.json(
+        {
+          error: "misconfigured",
+          message: "webhook trigger configuration is invalid",
+        },
+        503,
+      );
+    }
+
+    if (!deps.secretProviderForAgent) {
+      return c.json(
+        {
+          error: "misconfigured",
+          message: "secret provider is not configured",
+        },
+        503,
+      );
+    }
+
+    const timestampMs = parseTimestampMs(envelope.timestamp);
+    if (timestampMs === null) {
+      return c.json(
+        {
+          error: "unauthorized",
+          message: "invalid webhook timestamp",
+        },
+        401,
+      );
+    }
+
+    const maxSkewMs = webhookConfig.max_skew_ms ?? DEFAULT_WEBHOOK_MAX_SKEW_MS;
+    if (Math.abs(Date.now() - timestampMs) > maxSkewMs) {
+      return c.json(
+        {
+          error: "unauthorized",
+          message: "webhook timestamp outside allowed replay window",
+        },
+        401,
+      );
+    }
+
+    let secretProvider: SecretProvider;
+    try {
+      secretProvider = await deps.secretProviderForAgent(agentIdFromReq(c));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: "invalid_request", message }, 400);
+    }
+
+    const secret = await secretProvider.resolve(webhookConfig.secret_handle);
+    if (!secret || secret.trim().length === 0) {
+      return c.json(
+        {
+          error: "unauthorized",
+          message: "webhook secret not available",
+        },
+        401,
+      );
+    }
+
+    const rawBody = await c.req.text();
+    const expectedSignature = computeWebhookSignature(
+      secret,
+      envelope.timestamp,
+      envelope.nonce,
+      rawBody,
+    );
+    if (!secureStringEqual(envelope.signature.toLowerCase(), expectedSignature)) {
+      return c.json(
+        {
+          error: "unauthorized",
+          message: "invalid webhook signature",
+        },
+        401,
+      );
+    }
+
+    const recorded = await processor.recordWebhookTrigger(watcherRow, {
+      timestampMs,
+      nonce: envelope.nonce,
+      bodySha256: createHash("sha256").update(rawBody).digest("hex"),
+      bodyBytes: Buffer.byteLength(rawBody),
+    });
+    if (!recorded) {
+      return c.json(
+        {
+          error: "replay_detected",
+          message: "webhook nonce has already been processed",
+        },
+        409,
+      );
+    }
+
+    return c.json({ ok: true }, 202);
   });
 
   return watcher;

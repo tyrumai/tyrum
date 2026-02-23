@@ -7,6 +7,7 @@
  */
 
 import type { Emitter, Handler } from "mitt";
+import { createHash } from "node:crypto";
 import type { GatewayEvents } from "../../event-bus.js";
 import type { MemoryDal } from "../memory/dal.js";
 import type { SqlDb } from "../../statestore/types.js";
@@ -41,6 +42,13 @@ interface RawWatcherRow {
 
 export interface PlanCompleteTriggerConfig {
   planId: string;
+}
+
+export interface WebhookTriggerEvent {
+  timestampMs: number;
+  nonce: string;
+  bodySha256: string;
+  bodyBytes: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -183,12 +191,62 @@ export class WatcherProcessor {
     return rows.map(parseRow);
   }
 
+  async getActiveWatcherById(watcherId: number): Promise<WatcherRow | null> {
+    const row = await this.db.get<RawWatcherRow>(
+      "SELECT * FROM watchers WHERE id = ? AND active = 1",
+      [watcherId],
+    );
+    return row ? parseRow(row) : null;
+  }
+
   async deactivateWatcher(watcherId: number): Promise<void> {
     const nowIso = new Date().toISOString();
     await this.db.run(
       "UPDATE watchers SET active = 0, updated_at = ? WHERE id = ?",
       [nowIso, watcherId],
     );
+  }
+
+  async recordWebhookTrigger(
+    watcher: WatcherRow,
+    event: WebhookTriggerEvent,
+  ): Promise<boolean> {
+    if (watcher.trigger_type !== "webhook") {
+      return false;
+    }
+
+    const replayDigest = createHash("sha256")
+      .update(String(event.timestampMs))
+      .update(":")
+      .update(event.nonce)
+      .digest("hex");
+
+    const inserted = await this.memoryDal.insertEpisodicEventIfAbsent(
+      `watcher-${String(watcher.id)}-webhook-${replayDigest}`,
+      new Date(event.timestampMs).toISOString(),
+      "watcher",
+      "webhook_fired",
+      {
+        watcherId: watcher.id,
+        planId: watcher.plan_id,
+        triggerType: watcher.trigger_type,
+        timestampMs: event.timestampMs,
+        nonce: event.nonce,
+        bodySha256: event.bodySha256,
+        bodyBytes: event.bodyBytes,
+      },
+    );
+
+    if (!inserted) {
+      return false;
+    }
+
+    this.eventBus.emit("watcher:fired", {
+      watcherId: watcher.id,
+      planId: watcher.plan_id,
+      triggerType: watcher.trigger_type,
+    });
+    return true;
   }
 
   // -----------------------------------------------------------------------
