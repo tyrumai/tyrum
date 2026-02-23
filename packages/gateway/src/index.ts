@@ -536,11 +536,11 @@ async function runGatewayCheck(): Promise<number> {
     // --- Static diagnostics ---
     const hostRaw = resolveGatewayHost();
     const hostSplit = splitHostAndPort(hostRaw);
-    const host = hostSplit.host.length > 0 ? hostSplit.host : hostRaw;
-    const portInfo = hostSplit.port ? parsePort(hostSplit.port) : resolveGatewayPort();
-    const isLocalOnly = isLoopbackHost(host);
+    const hostForProbe = hostSplit.host.length > 0 ? hostSplit.host : hostRaw;
+    const portInfo = resolveGatewayPort();
+    const isLocalOnly = isLoopbackHost(hostForProbe);
     console.log(
-      `static.exposure: host=${host} port=${portInfo.valid ? portInfo.port : `invalid(raw=${portInfo.raw})`} is_exposed=${!isLocalOnly}`,
+      `static.exposure: host=${hostRaw} port=${portInfo.valid ? portInfo.port : `invalid(raw=${portInfo.raw})`} is_exposed=${!isLocalOnly}`,
     );
 
     const tokenPath = join(tyrumHome, ".admin-token");
@@ -608,7 +608,14 @@ async function runGatewayCheck(): Promise<number> {
         return 0;
       }
 
-      const probeHost = normalizeProbeHost(host);
+      if (hostSplit.port) {
+        console.log(
+          `live.http: skipped=host_includes_port raw_host=${hostRaw} ignored_port=${hostSplit.port}`,
+        );
+        return 0;
+      }
+
+      const probeHost = normalizeProbeHost(hostForProbe);
       const baseUrl = `http://${hostForUrl(probeHost)}:${portInfo.port}`;
       const health = await tryFetchJson(`${baseUrl}/healthz`, { timeoutMs: 500 });
       const statusPublic = await tryFetchJson(`${baseUrl}/status`, { timeoutMs: 500 });

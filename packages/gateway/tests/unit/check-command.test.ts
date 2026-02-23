@@ -214,7 +214,7 @@ describe("tyrum check", () => {
     }
   });
 
-  it("parses host:port values in GATEWAY_HOST for live probes", async () => {
+  it("does not treat host:port values in GATEWAY_HOST as the probe port", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
@@ -247,9 +247,10 @@ describe("tyrum check", () => {
 
     expect(code).toBe(0);
 
-    const urls = fetchMock.mock.calls.map((call) => String(call[0]));
-    expect(urls).toContain("http://127.0.0.1:9999/healthz");
-    expect(urls).toContain("http://127.0.0.1:9999/status");
+    const output = logSpy.mock.calls.map((c) => c.join(" ")).join("\n");
+    expect(output).toContain("static.exposure: host=127.0.0.1:9999 port=8788");
+    expect(output).toContain("live.http: skipped=host_includes_port");
+    expect(fetchMock).not.toHaveBeenCalled();
 
     logSpy.mockRestore();
     errorSpy.mockRestore();
