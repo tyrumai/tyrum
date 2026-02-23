@@ -17,7 +17,7 @@
   ],
   "scripts": {
     "build": "tsdown src/index.ts --format esm --dts",
-    "start": "node dist/index.mjs"
+    "start": "node bin/tyrum.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^2.0.30",
