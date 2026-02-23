@@ -191,6 +191,7 @@ export class PolicyService {
     url?: string;
     secretScopes?: string[];
     playbookBundle?: PolicyBundleT;
+    inputProvenance?: { source: string; trusted: boolean };
   }): Promise<PolicyEvaluation> {
     const effective = await this.loadEffectiveBundle({ playbookBundle: params.playbookBundle });
     const snapshot = await this.getOrCreateSnapshot(effective.bundle);
@@ -200,6 +201,14 @@ export class PolicyService {
     const secretsDomain = normalizeDomain(effective.bundle.secrets, "require_approval");
 
     let toolDecision = evaluateDomain(toolsDomain, params.toolId);
+
+    if (
+      effective.bundle.provenance?.untrusted_shell_requires_approval === true &&
+      params.inputProvenance?.trusted === false &&
+      params.toolId.trim() === "tool.exec"
+    ) {
+      toolDecision = mostRestrictive(toolDecision, "require_approval");
+    }
 
     let egressDecision: Decision = "allow";
     if (params.url) {
@@ -379,9 +388,14 @@ function mergePolicyBundles(bundles: Array<PolicyBundleT | undefined>): PolicyBu
     .map((b) => b?.artifacts?.max_bytes)
     .filter((v): v is number => typeof v === "number" && Number.isFinite(v) && v > 0);
 
-  const provenanceShellApproval = bundles.some(
-    (b) => b?.provenance?.untrusted_shell_requires_approval === true,
-  );
+  const provenanceValues = bundles
+    .map((b) => b?.provenance?.untrusted_shell_requires_approval)
+    .filter((v): v is boolean => typeof v === "boolean");
+  const provenanceShellApproval = provenanceValues.includes(true)
+    ? true
+    : provenanceValues.includes(false)
+      ? false
+      : true;
 
   return PolicyBundle.parse({
     v: 1,

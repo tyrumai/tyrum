@@ -273,6 +273,145 @@ describe("AgentRuntime", () => {
     expect(usedTools.has("tool.exec")).toBe(true);
   });
 
+  it("does not let concurrent tool calls change input provenance mid-flight for policy evaluation", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    let resolveList:
+      | ((
+        value: Array<{
+          handle_id: string;
+          provider: string;
+          scope: string;
+          created_at: string;
+        }>,
+      ) => void)
+      | undefined;
+    const listPromise = new Promise<
+      Array<{ handle_id: string; provider: string; scope: string; created_at: string }>
+    >((resolve) => {
+      resolveList = resolve;
+    });
+
+    const secretProvider = {
+      resolve: vi.fn(async () => "secret-value"),
+      store: vi.fn(async () => ({
+        handle_id: "h1",
+        provider: "env",
+        scope: "SCOPE",
+        created_at: new Date().toISOString(),
+      })),
+      revoke: vi.fn(async () => true),
+      list: vi.fn(async () => await listPromise),
+    };
+
+    const policyService = {
+      isEnabled: () => true,
+      isObserveOnly: () => false,
+      evaluateToolCall: vi.fn(async () => ({ decision: "allow" as const })),
+    };
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("hello"),
+      fetchImpl: fetch404,
+      secretProvider: secretProvider as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["secretProvider"],
+      policyService: policyService as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["policyService"],
+    });
+
+    const toolDescs = [
+      {
+        id: "tool.exec",
+        description: "Execute shell commands on the local machine.",
+        risk: "high" as const,
+        requires_confirmation: true,
+        keywords: [],
+        inputSchema: {
+          type: "object",
+          properties: { command: { type: "string" } },
+          required: ["command"],
+          additionalProperties: false,
+        },
+      },
+      {
+        id: "tool.http.fetch",
+        description: "Make outbound HTTP requests.",
+        risk: "medium" as const,
+        requires_confirmation: true,
+        keywords: [],
+        inputSchema: {
+          type: "object",
+          properties: { url: { type: "string" } },
+          required: ["url"],
+          additionalProperties: false,
+        },
+      },
+    ];
+
+    const toolExecutor = {
+      execute: vi.fn(async (toolId: string) => {
+        if (toolId === "tool.http.fetch") {
+          return {
+            tool_call_id: "tc-test-fetch",
+            output: "ok",
+            error: undefined,
+            provenance: { content: "ok", source: "web", trusted: false },
+          };
+        }
+        return {
+          tool_call_id: "tc-test-exec",
+          output: "ok",
+          error: undefined,
+          provenance: undefined,
+        };
+      }),
+    };
+
+    const usedTools = new Set<string>();
+    const toolSet = (
+      runtime as unknown as {
+        buildToolSet: (
+          tools: readonly unknown[],
+          toolExecutor: unknown,
+          usedTools: Set<string>,
+          context: { planId: string; sessionId: string; channel: string; threadId: string },
+        ) => Record<string, { execute: (args: unknown) => Promise<string> }>;
+      }
+    ).buildToolSet(toolDescs, toolExecutor, usedTools, {
+      planId: "plan-1",
+      sessionId: "session-1",
+      channel: "test",
+      threadId: "thread-1",
+    });
+
+    const execPromise = toolSet["tool.exec"]!.execute({ command: "secret:h1" });
+    const fetchPromise = toolSet["tool.http.fetch"]!.execute({ url: "https://example.com" });
+
+    await fetchPromise;
+    resolveList?.([
+      {
+        handle_id: "h1",
+        provider: "env",
+        scope: "SCOPE",
+        created_at: new Date().toISOString(),
+      },
+    ]);
+    await execPromise;
+
+    const execCall = policyService.evaluateToolCall.mock.calls
+      .map((call) => call[0] as { toolId?: string; inputProvenance?: { source: string; trusted: boolean } })
+      .find((call) => call.toolId === "tool.exec");
+    expect(execCall?.inputProvenance).toEqual({ source: "user", trusted: true });
+  });
+
   it("uses canonicalized fs match targets for policy evaluation and suggested overrides", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({

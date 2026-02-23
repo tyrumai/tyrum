@@ -82,6 +82,52 @@ function createToolLoopLanguageModel(input: {
   });
 }
 
+type ToolLoopStep =
+  | { kind: "tool-calls"; toolCalls: Array<{ id: string; name: string; arguments: string }> }
+  | { kind: "text"; text: string };
+
+function createSequencedToolLoopLanguageModel(
+  steps: readonly ToolLoopStep[],
+): MockLanguageModelV3 {
+  let callCount = 0;
+
+  const getStep = (): ToolLoopStep => {
+    const step = steps[callCount] ?? steps.at(-1);
+    if (!step) {
+      return { kind: "text", text: "" };
+    }
+    return step;
+  };
+
+  return new MockLanguageModelV3({
+    doGenerate: async () => {
+      const step = getStep();
+      callCount += 1;
+
+      if (step.kind === "tool-calls") {
+        return {
+          content: step.toolCalls.map((tc) => ({
+            type: "tool-call" as const,
+            toolCallId: tc.id,
+            toolName: tc.name,
+            input: tc.arguments,
+          })),
+          finishReason: { unified: "tool-calls" as const, raw: undefined },
+          usage: usage(),
+          warnings: [],
+        };
+      }
+
+      return {
+        content: [{ type: "text" as const, text: step.text }],
+        finishReason: { unified: "stop" as const, raw: undefined },
+        usage: usage(),
+        warnings: [],
+      };
+    },
+  });
+}
+
 async function waitForPendingApproval(
   container: GatewayContainer,
   timeoutMs = 5_000,
@@ -255,6 +301,135 @@ describe("Tool execution loop", () => {
     expect(result.reply).toBe("approved and executed");
     expect(result.used_tools).toContain("tool.exec");
   });
+
+  it("requires approval for tool.exec when driven by untrusted tool output", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
+
+    await writeFile(
+      join(homeDir, "agent.yml"),
+      [
+        "model:",
+        "  model: openai/gpt-4.1",
+        "skills:",
+        "  enabled: []",
+        "mcp:",
+        "  enabled: []",
+        "tools:",
+        "  allow:",
+        "    - tool.http.fetch",
+        "    - tool.exec",
+        "sessions:",
+        "  ttl_days: 30",
+        "  max_turns: 20",
+        "memory:",
+        "  markdown_enabled: false",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const bundlePath = join(homeDir, "policy.yml");
+    await writeFile(
+      bundlePath,
+      [
+        "v: 1",
+        "tools:",
+        "  default: deny",
+        "  allow:",
+        "    - tool.http.fetch",
+        "    - tool.exec",
+        "  require_approval: []",
+        "  deny: []",
+        "network_egress:",
+        "  default: deny",
+        "  allow:",
+        "    - \"https://example.com/*\"",
+        "  require_approval: []",
+        "  deny: []",
+        "provenance:",
+        "  untrusted_shell_requires_approval: true",
+        "",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const prevBundlePath = process.env["TYRUM_POLICY_BUNDLE_PATH"];
+    process.env["TYRUM_POLICY_BUNDLE_PATH"] = bundlePath;
+
+    try {
+      const languageModel = createSequencedToolLoopLanguageModel([
+        {
+          kind: "tool-calls",
+          toolCalls: [
+            {
+              id: "tc-fetch",
+              name: "tool.http.fetch",
+              arguments: JSON.stringify({ url: "https://example.com" }),
+            },
+          ],
+        },
+        {
+          kind: "tool-calls",
+          toolCalls: [
+            {
+              id: "tc-exec",
+              name: "tool.exec",
+              arguments: JSON.stringify({ command: "echo ok" }),
+            },
+          ],
+        },
+        { kind: "text", text: "done" },
+      ]);
+
+      const fetchStub = vi.fn(async (url: string | URL | Request) => {
+        const resolved = typeof url === "string" ? url : url.toString();
+        if (resolved !== "https://example.com") {
+          return new Response("not found", { status: 404 });
+        }
+        return new Response("example.com content", { status: 200 });
+      }) as typeof fetch;
+
+      const mcpManager = {
+        listToolDescriptors: vi.fn(async () => []),
+        shutdown: vi.fn(async () => {}),
+        callTool: vi.fn(async () => ({ content: [] })),
+      };
+
+      const runtime = new AgentRuntime({
+        container,
+        home: homeDir,
+        languageModel,
+        fetchImpl: fetchStub,
+        mcpManager: mcpManager as unknown as ConstructorParameters<
+          typeof AgentRuntime
+        >[0]["mcpManager"],
+        approvalWaitMs: 10_000,
+        approvalPollMs: 20,
+      });
+
+      const turnPromise = runtime.turn({
+        channel: "test",
+        thread_id: "thread-provenance-1",
+        message: "fetch example.com then run a command",
+      });
+
+      const pending = await waitForPendingApproval(container, 2_000);
+      expect(pending.prompt).toContain("tool.exec");
+
+      await container.approvalDal.respond(pending.id, true, "approved in test");
+
+      const result = await turnPromise;
+      expect(result.reply).toBe("done");
+      expect(result.used_tools).toContain("tool.http.fetch");
+      expect(result.used_tools).toContain("tool.exec");
+    } finally {
+      if (prevBundlePath === undefined) {
+        delete process.env["TYRUM_POLICY_BUNDLE_PATH"];
+      } else {
+        process.env["TYRUM_POLICY_BUNDLE_PATH"] = prevBundlePath;
+      }
+    }
+  }, 10_000);
 
   it("does not execute high-risk tool when approval is denied", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
