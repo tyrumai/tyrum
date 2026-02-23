@@ -22,7 +22,8 @@ import {
 } from "@tyrum/schemas";
 import { createHash, createPublicKey, randomBytes, verify } from "node:crypto";
 import type { ConnectionManager } from "../ws/connection-manager.js";
-import { validateWsToken } from "../ws/auth.js";
+import { authenticateWsToken } from "../ws/auth.js";
+import { rawDataToUtf8 } from "../ws/raw-data.js";
 import { handleClientMessage } from "../ws/protocol.js";
 import type { ProtocolDeps } from "../ws/protocol.js";
 import type { TokenStore } from "../modules/auth/token-store.js";
@@ -251,7 +252,8 @@ export function createWsHandler(opts: WsRouteOptions): {
   wss.on("connection", (ws, req) => {
     const token = extractWsTokenFromProtocols(req);
 
-    if (!validateWsToken(token, tokenStore)) {
+    const upgradeClaims = authenticateWsToken(token, tokenStore);
+    if (!upgradeClaims) {
       ws.close(4001, "unauthorized");
       return;
     }
@@ -283,7 +285,7 @@ export function createWsHandler(opts: WsRouteOptions): {
         };
 
     ws.on("message", (data) => {
-      const raw = typeof data === "string" ? data : data.toString("utf-8");
+      const raw = rawDataToUtf8(data);
 
       if (clientId === undefined) {
         let json: unknown;
@@ -309,6 +311,19 @@ export function createWsHandler(opts: WsRouteOptions): {
           if (expectedDeviceId !== init.data.payload.device.device_id) {
             ws.close(4006, "device_id mismatch");
             return;
+          }
+
+          // Bind device tokens to the peer identity proof. This prevents replaying
+          // a valid device token across different device proofs.
+          if (upgradeClaims.token_kind === "device") {
+            if (upgradeClaims.role !== init.data.payload.role) {
+              ws.close(4001, "unauthorized");
+              return;
+            }
+            if (upgradeClaims.device_id !== expectedDeviceId) {
+              ws.close(4001, "unauthorized");
+              return;
+            }
           }
 
           const connectionId = crypto.randomUUID();
@@ -552,6 +567,11 @@ export function createWsHandler(opts: WsRouteOptions): {
         const legacy = WsConnectRequest.safeParse(json);
         if (!legacy.success) {
           ws.close(4003, "expected connect request");
+          return;
+        }
+
+        if (upgradeClaims.token_kind === "device") {
+          ws.close(4001, "unauthorized");
           return;
         }
 
