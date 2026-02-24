@@ -26,6 +26,7 @@ import { createPlaybookRoutes } from "./routes/playbook.js";
 import { createConnectionsRoute } from "./routes/connections.js";
 import { createPairingRoutes } from "./routes/pairing.js";
 import { createAuthProfileRoutes } from "./routes/auth-profiles.js";
+import { createDeviceTokenRoutes } from "./routes/device-token.js";
 import { createPluginRoutes } from "./routes/plugins.js";
 import { createModelsDevRoutes } from "./routes/models-dev.js";
 import { createProviderOAuthRoutes } from "./routes/provider-oauth.js";
@@ -216,6 +217,9 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     }),
   );
   app.route("/", createAuthProfileRoutes({ authProfileDal, pinDal }));
+  if (opts.tokenStore) {
+    app.route("/", createDeviceTokenRoutes({ tokenStore: opts.tokenStore }));
+  }
   app.route("/", createModelsDevRoutes({ modelsDev: container.modelsDev }));
   if (oauthSecretProviderForAgent && isAuthProfilesEnabled()) {
     app.route(

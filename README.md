@@ -85,6 +85,9 @@ See `docs/install.md` for full details, version pinning, and update commands.
 - `GATEWAY_HOST` defaults to `127.0.0.1`.
 - `GATEWAY_PORT` defaults to `8788`.
 - Gateway auth token is required on localhost and non-local interfaces (`GATEWAY_TOKEN` env or `${TYRUM_HOME}/.admin-token`, auto-generated if missing).
+- Device-bound tokens can be issued/revoked with authenticated HTTP routes:
+  - `POST /auth/device-tokens/issue` with `{ device_id, role, scopes[], ttl_seconds? }`
+  - `POST /auth/device-tokens/revoke` with `{ token }`
 - The gateway serves the web UI directly at `/app` and supports WebSocket upgrades on `/ws`.
 
 ## Development Commands
