@@ -4,6 +4,7 @@ import type { RedactionEngine } from "../redaction/engine.js";
 import type { Logger } from "../observability/logger.js";
 import type { SqlDb } from "../../statestore/types.js";
 import { isUniqueViolation } from "../../utils/sql-errors.js";
+import { insertPlannerEventNext, retryOnUniqueViolation } from "./planner-events.js";
 
 export interface NewPlannerEvent {
   replayId: string;
@@ -156,68 +157,28 @@ export class EventLog {
       : event.action;
     const actionJson = JSON.stringify(action);
 
-    const maxAttempts = 10;
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      try {
-        return await this.db.transaction(async (tx) => {
-          const lastRow = await tx.get<{ step_index: number; event_hash: string | null }>(
-            "SELECT step_index, event_hash FROM planner_events WHERE plan_id = ? ORDER BY step_index DESC LIMIT 1",
-            [event.planId],
-          );
-          const prevHash = lastRow?.event_hash ?? null;
-          const stepIndex = (lastRow?.step_index ?? -1) + 1;
-          if (stepIndex < 0) {
-            throw new Error("planner_events step_index overflow");
-          }
-
-          const eventHash = computeEventHash(
-            {
-              plan_id: event.planId,
-              step_index: stepIndex,
-              occurred_at: event.occurredAt,
-              action: actionJson,
-            },
-            prevHash,
-          );
-
-          const inserted = await tx.get<RawPlannerEventRow>(
-            `INSERT INTO planner_events (replay_id, plan_id, step_index, occurred_at, action, prev_hash, event_hash)
-             VALUES (?, ?, ?, ?, ?, ?, ?)
-             RETURNING *`,
-            [
-              event.replayId,
-              event.planId,
-              stepIndex,
-              event.occurredAt,
-              actionJson,
-              prevHash,
-              eventHash,
-            ],
-          );
-
-          if (!inserted) {
-            throw new Error("planner_events insert returned no row");
-          }
-
-          const persisted = rowToEvent(inserted);
-          this.logger?.debug("event.appended", {
-            event_id: event.replayId,
-            plan_id: event.planId,
-            step_index: stepIndex,
-            row_id: persisted.id,
-          });
-          await afterInsert?.(tx, persisted);
-          return persisted;
+    return await retryOnUniqueViolation(
+      async () => await this.db.transaction(async (tx) => {
+        const { inserted } = await insertPlannerEventNext<RawPlannerEventRow>(tx, {
+          replayId: event.replayId,
+          planId: event.planId,
+          occurredAt: event.occurredAt,
+          actionJson,
+          returning: "*",
         });
-      } catch (err) {
-        if (isUniqueViolation(err)) {
-          continue;
-        }
-        throw err;
-      }
-    }
 
-    throw new Error("failed to append planner event after retries");
+        const persisted = rowToEvent(inserted);
+        this.logger?.debug("event.appended", {
+          event_id: event.replayId,
+          plan_id: event.planId,
+          step_index: persisted.stepIndex,
+          row_id: persisted.id,
+        });
+        await afterInsert?.(tx, persisted);
+        return persisted;
+      }),
+      { failureMessage: "failed to append planner event after retries" },
+    );
   }
 
   async eventsForPlan(planId: string): Promise<PersistedPlannerEvent[]> {

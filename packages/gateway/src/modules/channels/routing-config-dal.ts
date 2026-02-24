@@ -2,8 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { RoutingConfig as RoutingConfigSchema } from "@tyrum/schemas";
 import type { RoutingConfig as RoutingConfigT } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
-import { computeEventHash } from "../audit/hash-chain.js";
-import { isUniqueViolation } from "../../utils/sql-errors.js";
+import { insertPlannerEventNext, retryOnUniqueViolation } from "../planner/planner-events.js";
 
 export type RoutingConfig = RoutingConfigT;
 
@@ -88,70 +87,33 @@ async function appendAuditEventNext(
 ): Promise<void> {
   const actionJson = JSON.stringify(event.action);
 
-  const maxAttempts = 10;
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const savepoint = `tyrum_routing_config_audit_${attempt + 1}`;
-    await tx.exec(`SAVEPOINT ${savepoint}`);
+  await retryOnUniqueViolation(
+    async (attempt) => {
+      const savepoint = `tyrum_routing_config_audit_${attempt + 1}`;
+      await tx.exec(`SAVEPOINT ${savepoint}`);
 
-    try {
-      const lastRow = await tx.get<{ step_index: number; event_hash: string | null }>(
-        "SELECT step_index, event_hash FROM planner_events WHERE plan_id = ? ORDER BY step_index DESC LIMIT 1",
-        [event.planId],
-      );
-      const prevHash = lastRow?.event_hash ?? null;
-      const stepIndex = (lastRow?.step_index ?? -1) + 1;
-      if (stepIndex < 0) {
-        throw new Error("planner_events step_index overflow");
-      }
-
-      const eventHash = computeEventHash(
-        {
-          plan_id: event.planId,
-          step_index: stepIndex,
-          occurred_at: event.occurredAt,
-          action: actionJson,
-        },
-        prevHash,
-      );
-
-      const inserted = await tx.get<{ id: number }>(
-        `INSERT INTO planner_events (replay_id, plan_id, step_index, occurred_at, action, prev_hash, event_hash)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
-         RETURNING id`,
-        [
-          event.replayId,
-          event.planId,
-          stepIndex,
-          event.occurredAt,
-          actionJson,
-          prevHash,
-          eventHash,
-        ],
-      );
-
-      if (!inserted) {
-        throw new Error("planner_events insert returned no row");
-      }
-
-      await tx.exec(`RELEASE SAVEPOINT ${savepoint}`);
-      return;
-    } catch (err) {
       try {
-        await tx.exec(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+        await insertPlannerEventNext<{ id: number }>(tx, {
+          replayId: event.replayId,
+          planId: event.planId,
+          occurredAt: event.occurredAt,
+          actionJson,
+          returning: "id",
+        });
+
         await tx.exec(`RELEASE SAVEPOINT ${savepoint}`);
-      } catch {
-        // ignore
+      } catch (err) {
+        try {
+          await tx.exec(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+          await tx.exec(`RELEASE SAVEPOINT ${savepoint}`);
+        } catch {
+          // ignore
+        }
+        throw err;
       }
-
-      if (isUniqueViolation(err)) {
-        continue;
-      }
-
-      throw err;
-    }
-  }
-
-  throw new Error("failed to append routing config audit event after retries");
+    },
+    { failureMessage: "failed to append routing config audit event after retries" },
+  );
 }
 
 export class RoutingConfigDal {
