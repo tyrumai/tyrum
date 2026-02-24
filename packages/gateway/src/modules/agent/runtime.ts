@@ -13,6 +13,7 @@ import type {
   NormalizedAttachment as NormalizedAttachmentT,
   NormalizedMessageEnvelope as NormalizedMessageEnvelopeT,
   NormalizedContainerKind,
+  SecretHandle as SecretHandleT,
 } from "@tyrum/schemas";
 import {
   AgentId,
@@ -40,7 +41,7 @@ import { McpManager } from "./mcp-manager.js";
 import { ToolExecutor, type ToolResult } from "./tool-executor.js";
 import { tagContent } from "./provenance.js";
 import { sanitizeForModel, containsInjectionPatterns } from "./sanitizer.js";
-import type { SecretProvider } from "../secret/provider.js";
+import { EnvSecretProvider, type SecretProvider } from "../secret/provider.js";
 import { collectSecretHandleIds } from "../secret/collect-secret-handle-ids.js";
 import { VectorDal, type VectorSearchResult } from "../memory/vector-dal.js";
 import { EmbeddingPipeline } from "../memory/embedding-pipeline.js";
@@ -96,6 +97,23 @@ type ToolApprovalResumeState = {
   used_tools?: string[];
   steps_used?: number;
 };
+
+function coerceSecretHandle(value: unknown): SecretHandleT | undefined {
+  const record = coerceRecord(value);
+  if (!record) return undefined;
+  const handleId = typeof record["handle_id"] === "string" ? record["handle_id"].trim() : "";
+  const provider = typeof record["provider"] === "string" ? record["provider"].trim() : "";
+  const scope = typeof record["scope"] === "string" ? record["scope"] : "";
+  const createdAt = typeof record["created_at"] === "string" ? record["created_at"] : "";
+  if (!handleId || !provider || !scope || !createdAt) return undefined;
+  if (provider !== "env" && provider !== "file" && provider !== "keychain") return undefined;
+  return {
+    handle_id: handleId,
+    provider,
+    scope,
+    created_at: createdAt,
+  };
+}
 
 function coerceModelMessages(value: unknown): ModelMessage[] | undefined {
   if (!Array.isArray(value)) return undefined;
@@ -1708,6 +1726,36 @@ export class AgentRuntime {
     return await this.turnViaExecutionEngine(input);
   }
 
+  private async maybeStoreToolApprovalArgsHandle(input: {
+    toolId: string;
+    toolCallId: string;
+    args: unknown;
+  }): Promise<SecretHandleT | undefined> {
+    const secretProvider = this.opts.secretProvider;
+    if (!secretProvider || secretProvider instanceof EnvSecretProvider) {
+      return undefined;
+    }
+
+    let serialized: string | undefined;
+    try {
+      serialized = JSON.stringify(input.args);
+    } catch {
+      serialized = undefined;
+    }
+    if (typeof serialized !== "string") {
+      return undefined;
+    }
+
+    try {
+      return await secretProvider.store(
+        `tool_approval:${this.agentId}:${input.toolId}:${input.toolCallId}:args`,
+        serialized,
+      );
+    } catch {
+      return undefined;
+    }
+  }
+
   private async turnDirect(
     input: AgentTurnRequestT,
     opts?: { abortSignal?: AbortSignal; timeoutMs?: number; execution?: TurnExecutionContext },
@@ -1815,6 +1863,12 @@ export class AgentRuntime {
 
       const expiresAt = new Date(Date.now() + this.approvalWaitMs).toISOString();
 
+      const toolArgsHandle = await this.maybeStoreToolApprovalArgsHandle({
+        toolId: state.toolDesc.id,
+        toolCallId,
+        args: state.args ?? toolArgs,
+      });
+
       const policyContext = {
         policy_snapshot_id: state.policySnapshotId,
         agent_id: this.agentId,
@@ -1845,6 +1899,7 @@ export class AgentRuntime {
             messages: resumeMessages,
             used_tools: Array.from(usedTools),
             steps_used: stepsUsedAfterCall,
+            tool_args_handle: toolArgsHandle,
           },
         },
       });
@@ -2872,6 +2927,40 @@ export class AgentRuntime {
       return state;
     };
 
+    const resolveResumedToolArgs = async (input: {
+      toolId: string;
+      toolCallId: string;
+      args: unknown;
+    }): Promise<unknown> => {
+      const execution = toolExecutionContext.execution;
+      if (!execution?.stepApprovalId) return input.args;
+
+      const secretProvider = this.opts.secretProvider;
+      if (!secretProvider || secretProvider instanceof EnvSecretProvider) {
+        return input.args;
+      }
+
+      const approval = await this.approvalDal.getById(execution.stepApprovalId);
+      const ctx = coerceRecord(approval?.context);
+      if (!ctx || ctx["source"] !== "agent-tool-execution") return input.args;
+      if (ctx["tool_id"] !== input.toolId || ctx["tool_call_id"] !== input.toolCallId) {
+        return input.args;
+      }
+
+      const aiSdk = coerceRecord(ctx["ai_sdk"]);
+      const handle = coerceSecretHandle(aiSdk?.["tool_args_handle"]);
+      if (!handle) return input.args;
+
+      const raw = await secretProvider.resolve(handle);
+      if (!raw) return input.args;
+
+      try {
+        return JSON.parse(raw) as unknown;
+      } catch {
+        return input.args;
+      }
+    };
+
     for (const toolDesc of tools) {
       const schema = toolDesc.inputSchema ?? { type: "object", additionalProperties: true };
 
@@ -2901,10 +2990,16 @@ export class AgentRuntime {
                 }
               }
 
+              const effectiveArgs = await resolveResumedToolArgs({
+                toolId: toolDesc.id,
+                toolCallId: options.toolCallId,
+                args,
+              });
+
               const state = await resolveToolCallPolicyState({
                 toolDesc,
                 toolCallId: options.toolCallId,
-                args,
+                args: effectiveArgs,
                 inputProvenance: { ...drivingProvenance },
               });
 
@@ -2948,10 +3043,16 @@ export class AgentRuntime {
               ? options.toolCallId.trim()
               : `tc-${randomUUID()}`;
 
+          const effectiveArgs = await resolveResumedToolArgs({
+            toolId: toolDesc.id,
+            toolCallId,
+            args,
+          });
+
           const state = await resolveToolCallPolicyState({
             toolDesc,
             toolCallId,
-            args,
+            args: effectiveArgs,
             inputProvenance: { ...drivingProvenance },
           });
 
@@ -3013,7 +3114,7 @@ export class AgentRuntime {
             } else {
               const decision = await this.awaitApprovalForToolExecution(
                 toolDesc,
-                args,
+                effectiveArgs,
                 toolCallId,
                 toolExecutionContext,
                 approvalStepIndexValue,
@@ -3037,7 +3138,7 @@ export class AgentRuntime {
           const pluginRes = await this.plugins?.executeTool({
             toolId: toolDesc.id,
             toolCallId,
-            args,
+            args: effectiveArgs,
             home: this.home,
             agentId,
             workspaceId,
@@ -3058,7 +3159,7 @@ export class AgentRuntime {
                   provenance: tagged,
                 };
               })()
-            : await toolExecutor.execute(toolDesc.id, toolCallId, args, {
+            : await toolExecutor.execute(toolDesc.id, toolCallId, effectiveArgs, {
                 agent_id: agentId,
                 workspace_id: workspaceId,
                 session_id: toolExecutionContext.sessionId,

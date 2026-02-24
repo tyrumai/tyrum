@@ -8,6 +8,7 @@ import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import type { ApprovalRow } from "../../src/modules/approval/dal.js";
 import { createApprovalRoutes } from "../../src/routes/approval.js";
 import { ExecutionEngine } from "../../src/modules/execution/engine.js";
+import { FileSecretProvider } from "../../src/modules/secret/provider.js";
 import { Hono } from "hono";
 import { simulateReadableStream } from "ai";
 import { MockLanguageModelV3 } from "ai/test";
@@ -935,6 +936,11 @@ describe("Tool execution loop", () => {
       callTool: vi.fn(async () => ({ content: [] })),
     };
 
+    const secretProvider = await FileSecretProvider.create(
+      join(homeDir, "secrets.json"),
+      "test-admin-token",
+    );
+
     const runtime = new AgentRuntime({
       container,
       home: homeDir,
@@ -942,6 +948,7 @@ describe("Tool execution loop", () => {
       mcpManager: mcpManager as unknown as ConstructorParameters<
         typeof AgentRuntime
       >[0]["mcpManager"],
+      secretProvider,
       approvalWaitMs: 10_000,
       approvalPollMs: 20,
     });
@@ -954,6 +961,7 @@ describe("Tool execution loop", () => {
 
     const pending = await waitForPendingApproval(container);
     expect(pending.prompt).toContain("tool.fs.write");
+    expect(JSON.stringify(pending.context)).not.toContain(secret);
 
     const approvalEngine = new ExecutionEngine({ db: container.db });
     const approvalApp = new Hono();

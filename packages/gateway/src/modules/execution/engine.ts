@@ -2671,26 +2671,7 @@ export class ExecutionEngine {
       paused_reason: pausedReason,
       paused_detail: input.detail,
     };
-
-    const aiSdkMessages =
-      baseContext["source"] === "agent-tool-execution" &&
-      isRecord(baseContext["ai_sdk"]) &&
-      Array.isArray(baseContext["ai_sdk"]["messages"])
-        ? baseContext["ai_sdk"]["messages"]
-        : undefined;
-
-    const contextToPersist = (() => {
-      const redacted = this.redactUnknown(baseContext);
-      if (aiSdkMessages === undefined) {
-        return redacted;
-      }
-
-      const persisted = { ...redacted };
-      const persistedAi = isRecord(persisted["ai_sdk"]) ? { ...persisted["ai_sdk"] } : {};
-      persistedAi["messages"] = aiSdkMessages;
-      persisted["ai_sdk"] = persistedAi;
-      return persisted;
-    })();
+    const contextToPersist = this.redactUnknown(baseContext);
 
     const agentId =
       opts.key.startsWith("agent:") && opts.key.split(":").length > 1
