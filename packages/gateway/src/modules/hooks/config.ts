@@ -2,7 +2,7 @@ import type { LifecycleHookDefinition as LifecycleHookDefinitionT } from "@tyrum
 import { LifecycleHooksConfig } from "@tyrum/schemas";
 import { access, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { parse as parseYaml } from "yaml";
+import { parseJsonOrYaml } from "../../utils/parse-json-or-yaml.js";
 
 async function fileExists(path: string): Promise<boolean> {
   try {
@@ -11,15 +11,6 @@ async function fileExists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-function parseJsonOrYaml(contents: string, hintPath: string): unknown {
-  const trimmed = contents.trim();
-  if (trimmed.length === 0) return {};
-  if (hintPath.toLowerCase().endsWith(".json") || trimmed.startsWith("{")) {
-    return JSON.parse(trimmed) as unknown;
-  }
-  return parseYaml(trimmed) as unknown;
 }
 
 export async function loadLifecycleHooksFromHome(home: string): Promise<LifecycleHookDefinitionT[]> {
@@ -51,4 +42,3 @@ export async function loadLifecycleHooksFromHome(home: string): Promise<Lifecycl
   if (!cfg.success) return [];
   return cfg.data.hooks;
 }
-
