@@ -51,6 +51,10 @@ Requirements:
 - Optional tools must be explicitly enabled via allowlists (global or per-agent), and must still respect policy/approvals/sandboxing.
 - Tool inputs/outputs are contract-validated, redacted, and sized-capped like built-in tools.
 
+Implementation note:
+
+- Side-effecting plugin tools (`requires_confirmation: true`) are **not exposed** to the agent tool directory unless the effective `PolicyBundle.tools` explicitly opts them in via `allow` or `require_approval` (deployment or agent policy). This makes risky plugin tools opt-in per agent/workspace.
+
 ## Relationship to capability providers
 
 - **Capability providers (preferred for integrations):** out-of-process nodes and MCP servers that expose typed operations and can be paired/scoped/revoked independently.

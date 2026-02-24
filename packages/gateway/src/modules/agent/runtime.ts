@@ -48,6 +48,7 @@ import type { PluginRegistry } from "../plugins/registry.js";
 import type { PolicyService } from "../policy/service.js";
 import { canonicalizeToolMatchTarget } from "../policy/match-target.js";
 import { isSafeSuggestedOverridePattern } from "../policy/override-guardrails.js";
+import { wildcardMatch } from "../policy/wildcard.js";
 import { AuthProfileDal, type AuthProfileRow } from "../models/auth-profile-dal.js";
 import { SessionProviderPinDal } from "../models/session-pin-dal.js";
 import { createProviderFromNpm } from "../models/provider-factory.js";
@@ -849,6 +850,11 @@ function looksLikeSecretText(text: string): boolean {
   if (/-----BEGIN [A-Z ]*PRIVATE KEY-----/i.test(text)) return true;
   if (/\bsk-[A-Za-z0-9]{20,}\b/.test(text)) return true;
   return false;
+}
+
+function isSideEffectingPluginTool(tool: ToolDescriptor): boolean {
+  const id = tool.id.trim();
+  return id.startsWith("plugin.") && tool.requires_confirmation;
 }
 
 export class AgentRuntime {
@@ -1907,10 +1913,15 @@ export class AgentRuntime {
       semanticSearchPromise,
     ]);
 
-    const pluginTools = this.plugins?.getToolDescriptors() ?? [];
+    const pluginToolsRaw = this.plugins?.getToolDescriptors() ?? [];
+    const { allowlist: toolAllowlist, pluginTools } =
+      await this.resolvePolicyGatedPluginToolExposure({
+        allowlist: ctx.config.tools.allow,
+        pluginTools: pluginToolsRaw,
+      });
     const tools = selectToolDirectory(
       resolved.message,
-      ctx.config.tools.allow,
+      toolAllowlist,
       [...mcpTools, ...pluginTools],
       8,
     );
@@ -2469,5 +2480,68 @@ export class AgentRuntime {
       approvalId: approval.id,
       reason: expired?.response_reason ?? "approval timed out",
     };
+  }
+
+  private async resolvePolicyGatedPluginToolExposure(params: {
+    allowlist: readonly string[];
+    pluginTools: readonly ToolDescriptor[];
+  }): Promise<{ allowlist: string[]; pluginTools: ToolDescriptor[] }> {
+    const policy = this.policyService;
+
+    const pluginTools = params.pluginTools
+      .map((tool) => {
+        const id = tool.id.trim();
+        if (!id) return undefined;
+        if (id === tool.id) return tool;
+        return { ...tool, id };
+      })
+      .filter((tool): tool is ToolDescriptor => Boolean(tool));
+
+    const sideEffecting = pluginTools.filter(isSideEffectingPluginTool);
+    if (sideEffecting.length === 0) {
+      return { allowlist: [...params.allowlist], pluginTools };
+    }
+
+    if (!policy.isEnabled() || policy.isObserveOnly()) {
+      return { allowlist: [...params.allowlist], pluginTools };
+    }
+
+    try {
+      const effective = await policy.loadEffectiveBundle();
+      const toolsDomain = effective.bundle.tools;
+      const deny = toolsDomain?.deny ?? [];
+      const allow = toolsDomain?.allow ?? [];
+      const requireApproval = toolsDomain?.require_approval ?? [];
+
+      const isOptedIn = (toolId: string): boolean => {
+        for (const pat of deny) {
+          if (wildcardMatch(pat, toolId)) return false;
+        }
+        for (const pat of requireApproval) {
+          if (wildcardMatch(pat, toolId)) return true;
+        }
+        for (const pat of allow) {
+          if (wildcardMatch(pat, toolId)) return true;
+        }
+        return false;
+      };
+
+      const gatedPluginTools = pluginTools.filter(
+        (tool) => !isSideEffectingPluginTool(tool) || isOptedIn(tool.id),
+      );
+
+      const allowlist = new Set<string>(params.allowlist);
+      for (const tool of gatedPluginTools) {
+        if (isSideEffectingPluginTool(tool)) {
+          allowlist.add(tool.id);
+        }
+      }
+
+      return { allowlist: [...allowlist], pluginTools: gatedPluginTools };
+    } catch {
+      // Fail closed: side-effecting plugin tools are opt-in and require a readable policy bundle.
+      const gatedPluginTools = pluginTools.filter((tool) => !isSideEffectingPluginTool(tool));
+      return { allowlist: [...params.allowlist], pluginTools: gatedPluginTools };
+    }
   }
 }
