@@ -1024,6 +1024,13 @@ export async function handleClientMessage(
 
     const res = await executeCommand(parsedReq.data.payload.command, {
       runtime: deps.runtime,
+      commandContext: {
+        agentId: parsedReq.data.payload.agent_id,
+        channel: parsedReq.data.payload.channel,
+        threadId: parsedReq.data.payload.thread_id,
+        key: parsedReq.data.payload.key,
+        lane: parsedReq.data.payload.lane,
+      },
       connectionManager: deps.connectionManager,
       db: deps.db,
       approvalDal: deps.approvalDal,

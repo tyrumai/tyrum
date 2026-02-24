@@ -176,6 +176,41 @@ describe("handleClientMessage", () => {
     });
   });
 
+  it("passes command context to command.execute handlers", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["cli"]);
+    const client = cm.getClient(id)!;
+
+    const db = openTestSqliteDb();
+    try {
+      const deps = makeDeps(cm, { db });
+
+      const res = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-1",
+          type: "command.execute",
+          payload: {
+            command: "/model openai/gpt-4.1",
+            agent_id: "default",
+            channel: "ui",
+            thread_id: "thread-1",
+          },
+        }),
+        deps,
+      );
+
+      expect(res).toBeDefined();
+      expect((res as unknown as { ok: boolean }).ok).toBe(true);
+      expect((res as unknown as { result: { data: unknown } }).result.data).toMatchObject({
+        session_id: "ui:thread-1",
+        model_id: "openai/gpt-4.1",
+      });
+    } finally {
+      await db.close();
+    }
+  });
+
   it("dispatches task.execute error response", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["cli"]);

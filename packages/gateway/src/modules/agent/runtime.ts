@@ -53,6 +53,7 @@ import { isSafeSuggestedOverridePattern } from "../policy/override-guardrails.js
 import { wildcardMatch } from "../policy/wildcard.js";
 import { AuthProfileDal, type AuthProfileRow } from "../models/auth-profile-dal.js";
 import { SessionProviderPinDal } from "../models/session-pin-dal.js";
+import { SessionModelOverrideDal } from "../models/session-model-override-dal.js";
 import { createProviderFromNpm } from "../models/provider-factory.js";
 import { createSecretHandleResolver, type SecretHandleResolver } from "../secret/handle-resolver.js";
 import { refreshAccessToken, resolveOAuthEndpoints } from "../oauth/oauth-client.js";
@@ -1042,7 +1043,14 @@ export class AgentRuntime {
       return override as LanguageModelV3;
     }
 
-    const rawCandidateIds = [input.config.model.model, ...(input.config.model.fallback ?? [])]
+    const override = await new SessionModelOverrideDal(this.opts.container.db).get({
+      agentId: this.agentId,
+      sessionId: input.sessionId,
+    });
+    const overrideModelId = override?.model_id?.trim();
+
+    const rawCandidateIds = [overrideModelId, input.config.model.model, ...(input.config.model.fallback ?? [])]
+      .filter((v): v is string => typeof v === "string")
       .map((v) => v.trim())
       .filter((v, i, a) => v.length > 0 && a.indexOf(v) === i);
 

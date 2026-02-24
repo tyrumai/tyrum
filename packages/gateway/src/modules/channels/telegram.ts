@@ -17,6 +17,7 @@ import type { Logger } from "../observability/logger.js";
 import { ChannelInboxDal, type ChannelInboxRow } from "./inbox-dal.js";
 import { ChannelOutboxDal } from "./outbox-dal.js";
 import { LaneQueueInterruptError, LaneQueueSignalDal } from "../lanes/queue-signal-dal.js";
+import { LaneQueueModeOverrideDal } from "../lanes/queue-mode-override-dal.js";
 import { releaseLaneLease } from "../lanes/lane-lease.js";
 import { renderMarkdownForTelegram, type TelegramFormattingFallbackEvent } from "../markdown/telegram.js";
 import type { AgentRegistry } from "../agent/registry.js";
@@ -36,6 +37,7 @@ import { PeerIdentityLinkDal } from "./peer-identity-link-dal.js";
 import { telegramAccountIdFromEnv } from "./telegram-account.js";
 import { randomUUID } from "node:crypto";
 import { enqueueWsBroadcastMessage } from "../../ws/outbox.js";
+import { SessionSendPolicyOverrideDal } from "./send-policy-override-dal.js";
 
 function isFalsyEnvFlag(value: string | undefined): boolean {
   if (!value) return false;
@@ -349,7 +351,6 @@ export class TelegramChannelQueue {
     const accountId = opts?.accountId?.trim() || opts?.channelKey?.trim() || this.accountId;
     const lane = typeof opts?.lane === "string" ? normalizeLane(opts.lane) : this.lane;
     const dmScope = opts?.dmScope ?? this.dmScope;
-    const queueMode = opts?.queueMode?.trim() || "collect";
     let key = telegramThreadKey(normalized, {
       agentId,
       accountId,
@@ -401,6 +402,11 @@ export class TelegramChannelQueue {
         }
       }
     }
+
+    const queueMode = (() => {
+      const explicit = opts?.queueMode?.trim();
+      return explicit && explicit.length > 0 ? explicit : undefined;
+    })() ?? (await new LaneQueueModeOverrideDal(this.db).get({ key, lane }))?.queue_mode ?? "collect";
 
     const nowMs = Date.now();
     const activeLease = await this.db.get<{ lease_expires_at_ms: number }>(
@@ -625,14 +631,25 @@ export class TelegramChannelProcessor {
     // Expire approvals before checking gating.
     await this.approvalDal.expireStale();
 
-    const pending = await this.db.get<{ approval_id: number }>(
-      `SELECT approval_id
-       FROM channel_outbox
-       WHERE approval_id IS NOT NULL AND status = 'queued'
-       ORDER BY created_at ASC, outbox_id ASC
+    const pending = await this.db.get<{ approval_id: number; key: string }>(
+      `SELECT o.approval_id AS approval_id, i.key AS key
+       FROM channel_outbox o
+       JOIN channel_inbox i ON i.inbox_id = o.inbox_id
+       WHERE o.approval_id IS NOT NULL AND o.status = 'queued'
+       ORDER BY o.created_at ASC, o.outbox_id ASC
        LIMIT 1`,
     );
     if (pending?.approval_id) {
+      const sendOverride = await new SessionSendPolicyOverrideDal(this.db).get({ key: pending.key });
+      if (sendOverride?.send_policy === "on") {
+        await this.outbox.clearApprovalById(pending.approval_id);
+        return true;
+      }
+      if (sendOverride?.send_policy === "off") {
+        await this.outbox.markFailedByApproval(pending.approval_id, "send disabled by operator");
+        return true;
+      }
+
       const approval = await this.approvalDal.getById(pending.approval_id);
       if (approval) {
         if (approval.status === "approved") {
@@ -657,6 +674,18 @@ export class TelegramChannelProcessor {
       lease_ttl_ms: this.outboxLeaseTtlMs,
     });
     if (!next) return false;
+
+    const scope = await this.db.get<{ key: string }>(
+      "SELECT key FROM channel_inbox WHERE inbox_id = ?",
+      [next.inbox_id],
+    );
+    if (scope?.key) {
+      const sendOverride = await new SessionSendPolicyOverrideDal(this.db).get({ key: scope.key });
+      if (sendOverride?.send_policy === "off") {
+        await this.outbox.markFailed(next.outbox_id, this.owner, "send disabled by operator");
+        return true;
+      }
+    }
 
     const address = parseChannelSourceKey(next.source);
     const sourceKey = buildChannelSourceKey(address);
@@ -990,6 +1019,14 @@ export class TelegramChannelProcessor {
       stopTyping();
     }
 
+    const sendOverride = await new SessionSendPolicyOverrideDal(this.db).get({ key: leader.key });
+    if (sendOverride?.send_policy === "off") {
+      for (const row of rows) {
+        await this.inbox.markCompleted(row.inbox_id, this.owner, reply);
+      }
+      return;
+    }
+
     const formattingFallbacks: TelegramFormattingFallbackEvent[] = [];
     const chunks = renderMarkdownForTelegram(reply, {
       onFormattingFallback: (event) => {
@@ -1062,12 +1099,18 @@ export class TelegramChannelProcessor {
 
       if (policyService.isObserveOnly()) {
         decision = "allow";
-      } else if (decision === "deny") {
-        for (const row of rows) {
-          await this.inbox.markFailed(row.inbox_id, this.owner, "policy denied outbound send");
-        }
-        return;
       }
+    }
+
+    if (sendOverride?.send_policy === "on") {
+      decision = "allow";
+    }
+
+    if (policyService?.isEnabled() && !policyService.isObserveOnly() && decision === "deny") {
+      for (const row of rows) {
+        await this.inbox.markFailed(row.inbox_id, this.owner, "policy denied outbound send");
+      }
+      return;
     }
 
     let approvalId: number | undefined;

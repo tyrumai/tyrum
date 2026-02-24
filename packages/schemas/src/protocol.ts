@@ -358,6 +358,11 @@ export type WsSessionSendResult = z.infer<typeof WsSessionSendResult>;
 export const WsCommandExecutePayload = z
   .object({
     command: z.string().trim().min(1),
+    agent_id: AgentId.optional(),
+    channel: z.string().trim().min(1).optional(),
+    thread_id: z.string().trim().min(1).optional(),
+    key: TyrumKey.optional(),
+    lane: Lane.optional(),
   })
   .strict();
 export type WsCommandExecutePayload = z.infer<typeof WsCommandExecutePayload>;

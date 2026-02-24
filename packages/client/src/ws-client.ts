@@ -21,6 +21,7 @@ const mitt = (
 import type { ClientCapability, WsRequestEnvelope, WsResponseEnvelope } from "@tyrum/schemas";
 import type { WsApprovalListResult as WsApprovalListResultT } from "@tyrum/schemas";
 import type { WsApprovalResolveResult as WsApprovalResolveResultT } from "@tyrum/schemas";
+import type { WsCommandExecutePayload as WsCommandExecutePayloadT } from "@tyrum/schemas";
 import type { WsCommandExecuteResult as WsCommandExecuteResultT } from "@tyrum/schemas";
 import type { WsPeerRole } from "@tyrum/schemas";
 import {
@@ -371,8 +372,12 @@ export class TyrumClient {
   }
 
   /** Execute a slash-command via WS control-plane request (gateway-handled). */
-  commandExecute(command: string): Promise<WsCommandExecuteResultT> {
-    return this.request("command.execute", { command }, WsCommandExecuteResult);
+  commandExecute(
+    command: string,
+    context?: Omit<WsCommandExecutePayloadT, "command">,
+  ): Promise<WsCommandExecuteResultT> {
+    const payload = context ? { command, ...context } : { command };
+    return this.request("command.execute", payload, WsCommandExecuteResult);
   }
 
   // -----------------------------------------------------------------------
