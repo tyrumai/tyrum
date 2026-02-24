@@ -500,6 +500,64 @@ describe("missing slash commands", () => {
     expect(result.data).toMatchObject({ key, send_policy: "off" });
   });
 
+  it("resolves /send using agent_id + channel/thread context", async () => {
+    db = openTestSqliteDb();
+
+    const defaultKey = "agent:default:telegram:default:dm:chat-1";
+    const otherKey = "agent:agent-2:telegram:default:dm:chat-1";
+
+    await db.run(
+      `INSERT INTO channel_inbox (
+         source,
+         thread_id,
+         message_id,
+         key,
+         lane,
+         received_at_ms,
+         payload_json,
+         status
+       ) VALUES (?, ?, ?, ?, 'main', ?, '{}', 'completed')`,
+      ["telegram", "chat-1", "msg-default", defaultKey, 1_000],
+    );
+
+    await db.run(
+      `INSERT INTO channel_inbox (
+         source,
+         thread_id,
+         message_id,
+         key,
+         lane,
+         received_at_ms,
+         payload_json,
+         status
+       ) VALUES (?, ?, ?, ?, 'main', ?, '{}', 'completed')`,
+      ["telegram", "chat-1", "msg-other", otherKey, 2_000],
+    );
+
+    const result = await executeCommand("/send off", {
+      db,
+      commandContext: { agentId: "default", channel: "telegram", threadId: "chat-1" },
+    });
+
+    expect(result.data).toMatchObject({ key: defaultKey, send_policy: "off" });
+
+    const storedDefault = await db.get<{ send_policy: string }>(
+      `SELECT send_policy
+       FROM session_send_policy_overrides
+       WHERE key = ?`,
+      [defaultKey],
+    );
+    expect(storedDefault?.send_policy).toBe("off");
+
+    const storedOther = await db.get<{ send_policy: string }>(
+      `SELECT send_policy
+       FROM session_send_policy_overrides
+       WHERE key = ?`,
+      [otherKey],
+    );
+    expect(storedOther).toBeUndefined();
+  });
+
   it("fails /send inherit when clearing the override fails", async () => {
     db = openTestSqliteDb();
 

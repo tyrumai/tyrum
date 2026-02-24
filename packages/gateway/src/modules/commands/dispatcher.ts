@@ -89,14 +89,20 @@ async function resolveKeyLane(db: SqlDb, ctx: CommandDeps["commandContext"] | un
   const threadId = ctx?.threadId?.trim();
   if (!channel || !threadId) return undefined;
 
+  const agentId = ctx?.agentId?.trim();
+  const agentKeyPrefix = agentId ? `agent:${agentId}:` : undefined;
+
   const row = await db.get<{ key: string; lane: string }>(
     `SELECT key, lane
      FROM channel_inbox
      WHERE thread_id = ?
        AND (source = ? OR source LIKE ?)
+       ${agentKeyPrefix ? "AND substr(key, 1, ?) = ?" : ""}
      ORDER BY received_at_ms DESC, inbox_id DESC
      LIMIT 1`,
-    [threadId, channel, `${channel}:%`],
+    agentKeyPrefix
+      ? [threadId, channel, `${channel}:%`, agentKeyPrefix.length, agentKeyPrefix]
+      : [threadId, channel, `${channel}:%`],
   );
   if (!row?.key) return undefined;
   return { key: row.key, lane: row.lane };
