@@ -39,14 +39,17 @@ describe("release workflow parity gate", () => {
     const gateJob = jobs?.["architecture-parity-gate"] as Record<string, unknown> | undefined;
     const steps = gateJob?.["steps"] as Array<Record<string, unknown>> | undefined;
 
-    const runScript = (steps ?? [])
-      .map((step) => (typeof step["run"] === "string" ? step["run"] : ""))
-      .filter(Boolean)
-      .join("\n");
+    const gateStep = (steps ?? []).find(
+      (step) => step["name"] === "Wait for CI parity checks to succeed",
+    );
+    expect(typeof gateStep?.["run"]).toBe("string");
+    const runScript = String(gateStep?.["run"] ?? "");
 
     expect(runScript).toContain("actions/workflows/ci.yml/runs");
     expect(runScript).toContain("head_sha=");
     expect(runScript).toContain("GITHUB_SHA");
     expect(runScript).toContain("conclusion");
+    expect(runScript).toContain("while true; do");
+    expect(runScript).toMatch(/\n\s*done\s*(\n|$)/);
   });
 });

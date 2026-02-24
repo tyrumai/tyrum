@@ -66,6 +66,7 @@ jobs:
 
             echo "CI parity checks did not succeed (conclusion=${conclusion})."
             exit 1
+          done
 
   package-bundles:
     name: Package Bundles
