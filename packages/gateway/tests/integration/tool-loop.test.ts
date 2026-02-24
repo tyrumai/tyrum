@@ -306,6 +306,9 @@ describe("Tool execution loop", () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });
 
+    // Avoid relying on real DNS in CI by using an IP literal (still tagged as untrusted web content).
+    const fetchUrl = "https://93.184.216.34";
+
     await writeFile(
       join(homeDir, "agent.yml"),
       [
@@ -343,7 +346,7 @@ describe("Tool execution loop", () => {
         "network_egress:",
         "  default: deny",
         "  allow:",
-        "    - \"https://example.com/*\"",
+        `    - "${fetchUrl}/*"`,
         "  require_approval: []",
         "  deny: []",
         "provenance:",
@@ -364,7 +367,7 @@ describe("Tool execution loop", () => {
             {
               id: "tc-fetch",
               name: "tool.http.fetch",
-              arguments: JSON.stringify({ url: "https://example.com" }),
+              arguments: JSON.stringify({ url: fetchUrl }),
             },
           ],
         },
@@ -383,7 +386,7 @@ describe("Tool execution loop", () => {
 
       const fetchStub = vi.fn(async (url: string | URL | Request) => {
         const resolved = typeof url === "string" ? url : url.toString();
-        if (resolved !== "https://example.com") {
+        if (resolved !== fetchUrl) {
           return new Response("not found", { status: 404 });
         }
         return new Response("example.com content", { status: 200 });
@@ -413,7 +416,7 @@ describe("Tool execution loop", () => {
         message: "fetch example.com then run a command",
       });
 
-      const pending = await waitForPendingApproval(container, 2_000);
+      const pending = await waitForPendingApproval(container);
       expect(pending.prompt).toContain("tool.exec");
 
       await container.approvalDal.respond(pending.id, true, "approved in test");
