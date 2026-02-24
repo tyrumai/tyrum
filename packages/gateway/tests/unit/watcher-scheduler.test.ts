@@ -306,7 +306,7 @@ describe("WatcherScheduler", () => {
     }
   });
 
-  it("preserves custom lanes from periodic watcher trigger_config", async () => {
+  it("fails periodic automation when lane is invalid (does not silently reroute)", async () => {
     const prev = process.env["TYRUM_AUTOMATION_ENABLED"];
     process.env["TYRUM_AUTOMATION_ENABLED"] = "1";
 
@@ -348,12 +348,14 @@ describe("WatcherScheduler", () => {
 
       await schedulerWithEngine.tick();
 
-      expect(enqueuedInputs).toHaveLength(1);
-      expect(enqueuedInputs[0]?.["lane"]).toBe("custom-lane");
+      expect(enqueuedInputs).toHaveLength(0);
 
-      const trigger = enqueuedInputs[0]?.["trigger"] as Record<string, unknown> | undefined;
-      expect(trigger).toBeDefined();
-      expect(trigger?.["kind"]).toBe("cron");
+      const firing = await db.get<{ status: string; error: string | null }>(
+        "SELECT status, error FROM watcher_firings",
+      );
+      expect(firing).toBeDefined();
+      expect(firing!.status).toBe("failed");
+      expect(firing!.error).toMatch(/invalid periodic watcher lane/i);
     } finally {
       if (prev === undefined) {
         delete process.env["TYRUM_AUTOMATION_ENABLED"];

@@ -8,7 +8,7 @@
 
 import type { Emitter } from "mitt";
 import type { GatewayEvents } from "../../event-bus.js";
-import type { ActionPrimitive, Playbook, PolicyBundle as PolicyBundleT } from "@tyrum/schemas";
+import type { ActionPrimitive, Lane as LaneT, Playbook, PolicyBundle as PolicyBundleT } from "@tyrum/schemas";
 import { ActionPrimitive as ActionPrimitiveSchema, Lane, PolicyBundle } from "@tyrum/schemas";
 import type { MemoryDal } from "../memory/dal.js";
 import type { SqlDb } from "../../statestore/types.js";
@@ -45,7 +45,8 @@ export interface PeriodicTriggerConfig {
   intervalMs: number;
   playbook_id?: string;
   key?: string;
-  lane?: string;
+  lane?: LaneT;
+  laneRaw?: string;
   steps?: unknown;
 }
 
@@ -219,7 +220,12 @@ export class WatcherScheduler {
         if (!trimmed) return undefined;
         const normalized = trimmed.toLowerCase();
         const parsed = Lane.safeParse(normalized);
-        return parsed.success ? parsed.data : trimmed;
+        return parsed.success ? parsed.data : undefined;
+      })(),
+      laneRaw: (() => {
+        if (typeof lane !== "string") return undefined;
+        const trimmed = lane.trim();
+        return trimmed ? trimmed : undefined;
       })(),
       steps,
     };
@@ -324,13 +330,17 @@ export class WatcherScheduler {
     const cfg = watcherRow ? this.parsePeriodicConfig(watcherRow.trigger_config) : undefined;
 
     const key = cfg?.key ?? `cron:watcher-${String(firing.watcher_id)}`;
+    if (cfg?.laneRaw && !cfg.lane) {
+      await this.firingDal.markFailed({
+        firingId: firing.firing_id,
+        owner: this.owner,
+        error: `invalid periodic watcher lane '${cfg.laneRaw}'`,
+      });
+      return;
+    }
+
     const lane = cfg?.lane ?? "cron";
     const playbookId = cfg?.playbook_id ?? firing.plan_id;
-
-    const triggerLane = (() => {
-      const parsed = Lane.safeParse(lane);
-      return parsed.success ? parsed.data : undefined;
-    })();
 
     let steps: ActionPrimitive[] | undefined = cfg?.steps ? this.parseInlineSteps(cfg.steps) : undefined;
     let playbook: Playbook | undefined;
@@ -384,7 +394,7 @@ export class WatcherScheduler {
           trigger: {
             kind: lane === "heartbeat" ? "heartbeat" : "cron",
             key,
-            lane: triggerLane,
+            lane,
             metadata: {
               firing_id: firing.firing_id,
               watcher_id: firing.watcher_id,
