@@ -315,6 +315,152 @@ describe("Tool execution loop", () => {
     expect(promptText).not.toContain("FIRST_TOOL_OUTPUT_123");
   });
 
+  it("does not orphan tool call/result pairs when truncating history", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
+
+    const prevMaxMessages = process.env["TYRUM_CONTEXT_MAX_MESSAGES"];
+    const prevKeepLast = process.env["TYRUM_CONTEXT_TOOL_PRUNE_KEEP_LAST_MESSAGES"];
+    process.env["TYRUM_CONTEXT_MAX_MESSAGES"] = "8";
+    process.env["TYRUM_CONTEXT_TOOL_PRUNE_KEEP_LAST_MESSAGES"] = "7";
+
+    try {
+      await writeFile(join(homeDir, "one.txt"), "FIRST_TOOL_OUTPUT_123", "utf-8");
+      await writeFile(join(homeDir, "two.txt"), "SECOND_TOOL_OUTPUT_456", "utf-8");
+      await writeFile(join(homeDir, "three.txt"), "THIRD_TOOL_OUTPUT_789", "utf-8");
+      await writeFile(join(homeDir, "four.txt"), "FOURTH_TOOL_OUTPUT_000", "utf-8");
+
+      await writeFile(
+        join(homeDir, "agent.yml"),
+        [
+          "model:",
+          "  model: openai/gpt-4.1",
+          "skills:",
+          "  enabled: []",
+          "mcp:",
+          "  enabled: []",
+          "tools:",
+          "  allow:",
+          "    - tool.fs.read",
+          "sessions:",
+          "  ttl_days: 30",
+          "  max_turns: 20",
+          "memory:",
+          "  markdown_enabled: false",
+        ].join("\n"),
+        "utf-8",
+      );
+
+      const languageModel = createSequencedToolLoopLanguageModel([
+        {
+          kind: "tool-calls",
+          toolCalls: [
+            {
+              id: "tc-1",
+              name: "tool.fs.read",
+              arguments: JSON.stringify({ path: "one.txt" }),
+            },
+          ],
+        },
+        {
+          kind: "tool-calls",
+          toolCalls: [
+            {
+              id: "tc-2",
+              name: "tool.fs.read",
+              arguments: JSON.stringify({ path: "two.txt" }),
+            },
+          ],
+        },
+        {
+          kind: "tool-calls",
+          toolCalls: [
+            {
+              id: "tc-3",
+              name: "tool.fs.read",
+              arguments: JSON.stringify({ path: "three.txt" }),
+            },
+          ],
+        },
+        {
+          kind: "tool-calls",
+          toolCalls: [
+            {
+              id: "tc-4",
+              name: "tool.fs.read",
+              arguments: JSON.stringify({ path: "four.txt" }),
+            },
+          ],
+        },
+        { kind: "text", text: "done" },
+      ]);
+
+      const mcpManager = {
+        listToolDescriptors: vi.fn(async () => []),
+        shutdown: vi.fn(async () => {}),
+        callTool: vi.fn(async () => ({ content: [] })),
+      };
+
+      const runtime = new AgentRuntime({
+        container,
+        home: homeDir,
+        languageModel,
+        mcpManager: mcpManager as unknown as ConstructorParameters<
+          typeof AgentRuntime
+        >[0]["mcpManager"],
+      });
+
+      const result = await runtime.turn({
+        channel: "test",
+        thread_id: "thread-pruning-2",
+        message: "read four files",
+      });
+      expect(result.reply).toBe("done");
+
+      const lastCall = languageModel.doGenerateCalls.at(-1);
+      expect(lastCall).toBeTruthy();
+
+      const toolCallIds = new Set<string>();
+      const toolResultIds = new Set<string>();
+
+      for (const message of lastCall!.prompt) {
+        if (!message || typeof message !== "object") continue;
+        const content = (message as { content?: unknown }).content;
+        if (!Array.isArray(content)) continue;
+
+        for (const part of content) {
+          if (!part || typeof part !== "object") continue;
+
+          const type = (part as { type?: unknown }).type;
+          const toolCallId = (part as { toolCallId?: unknown }).toolCallId;
+          if (type === "tool-call" && typeof toolCallId === "string") {
+            toolCallIds.add(toolCallId);
+          }
+          if (type === "tool-result" && typeof toolCallId === "string") {
+            toolResultIds.add(toolCallId);
+          }
+        }
+      }
+
+      expect(toolResultIds.size).toBeGreaterThan(0);
+      for (const toolCallId of toolResultIds) {
+        expect(toolCallIds.has(toolCallId)).toBe(true);
+      }
+    } finally {
+      if (prevMaxMessages === undefined) {
+        delete process.env["TYRUM_CONTEXT_MAX_MESSAGES"];
+      } else {
+        process.env["TYRUM_CONTEXT_MAX_MESSAGES"] = prevMaxMessages;
+      }
+
+      if (prevKeepLast === undefined) {
+        delete process.env["TYRUM_CONTEXT_TOOL_PRUNE_KEEP_LAST_MESSAGES"];
+      } else {
+        process.env["TYRUM_CONTEXT_TOOL_PRUNE_KEEP_LAST_MESSAGES"] = prevKeepLast;
+      }
+    }
+  });
+
   it("queues high-risk tool calls and resumes after approval", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });

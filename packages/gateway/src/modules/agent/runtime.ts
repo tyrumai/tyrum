@@ -98,8 +98,8 @@ function resolveToolPruneKeepLastMessages(): number {
 function applyDeterministicContextCompactionAndToolPruning(
   messages: ModelMessage[],
 ): ModelMessage[] {
-  const keepLastToolMessages = resolveToolPruneKeepLastMessages();
   const maxMessages = resolveContextMaxMessages();
+  const keepLastToolMessages = Math.min(resolveToolPruneKeepLastMessages(), Math.max(2, maxMessages - 1));
 
   const toolCalls = `before-last-${keepLastToolMessages}-messages` as `before-last-${number}-messages`;
 
@@ -113,8 +113,14 @@ function applyDeterministicContextCompactionAndToolPruning(
   if (next.length <= maxMessages) return next;
 
   const head = next[0]!;
-  const tail = next.slice(-(maxMessages - 1));
-  next = [head, ...tail];
+  const budget = Math.max(0, maxMessages - 1);
+
+  let start = Math.max(1, next.length - budget);
+  while (start < next.length && next[start]?.role === "tool") {
+    start += 1;
+  }
+
+  next = [head, ...next.slice(start)];
   return next;
 }
 
