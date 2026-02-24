@@ -12,6 +12,9 @@ import type { Context, Next } from "hono";
 import { matchedRoutes } from "hono/route";
 import type { AuthTokenClaims } from "../auth/token-store.js";
 import { matchesPathPrefixSegment } from "../../app-path.js";
+import type { AuthAudit } from "../auth/audit.js";
+import { getClientIp } from "../auth/client-ip.js";
+import { requestIdForAudit } from "../observability/request-id.js";
 
 const FORBIDDEN_BODY = {
   error: "forbidden",
@@ -133,8 +136,10 @@ export function resolveHttpRouteRequiredScopes(input: {
 
 export function createHttpScopeAuthorizationMiddleware(opts?: {
   resolveScopes?: (input: { method: string; routePath: string }) => string[] | null;
+  audit?: AuthAudit;
 }): (c: Context, next: Next) => Promise<Response | void> {
   const resolveScopes = opts?.resolveScopes ?? resolveHttpRouteRequiredScopes;
+  const audit = opts?.audit;
 
   return async (c: Context, next: Next) => {
     const claims = getAuthClaims(c);
@@ -154,6 +159,22 @@ export function createHttpScopeAuthorizationMiddleware(opts?: {
 
     const requiredScopes = resolveScopes({ method: c.req.method, routePath });
     if (!requiredScopes) {
+      await audit?.recordAuthzDenied({
+        surface: "http",
+        reason: "not_scope_authorized",
+        token: {
+          token_kind: claims.token_kind,
+          token_id: claims.token_id,
+          device_id: claims.device_id,
+          role: claims.role,
+          scopes: claims.scopes,
+        },
+        required_scopes: null,
+        method: c.req.method,
+        path: routePath,
+        request_id: requestIdForAudit(c),
+        client_ip: getClientIp(c),
+      });
       return c.json(
         {
           ...FORBIDDEN_BODY,
@@ -164,6 +185,22 @@ export function createHttpScopeAuthorizationMiddleware(opts?: {
     }
 
     if (!hasAnyRequiredScope(claims, requiredScopes)) {
+      await audit?.recordAuthzDenied({
+        surface: "http",
+        reason: "insufficient_scope",
+        token: {
+          token_kind: claims.token_kind,
+          token_id: claims.token_id,
+          device_id: claims.device_id,
+          role: claims.role,
+          scopes: claims.scopes,
+        },
+        required_scopes: requiredScopes,
+        method: c.req.method,
+        path: routePath,
+        request_id: requestIdForAudit(c),
+        client_ip: getClientIp(c),
+      });
       return c.json(FORBIDDEN_BODY, 403);
     }
 

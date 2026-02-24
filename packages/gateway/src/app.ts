@@ -54,6 +54,7 @@ import { randomUUID } from "node:crypto";
 import { VERSION } from "./version.js";
 import { isAuthProfilesEnabled } from "./modules/models/auth-profiles-enabled.js";
 import { createClientIpMiddleware, createTrustedProxyAllowlistFromEnv } from "./modules/auth/client-ip.js";
+import { AuthAudit } from "./modules/auth/audit.js";
 
 export interface AppOptions {
   agents?: AgentRegistry;
@@ -136,12 +137,6 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   const trustedProxies = createTrustedProxyAllowlistFromEnv(process.env["GATEWAY_TRUSTED_PROXIES"]);
   app.use("*", createClientIpMiddleware({ trustedProxies }));
 
-  // Apply auth middleware if a token store is provided
-  if (opts.tokenStore) {
-    app.use("*", createAuthMiddleware(opts.tokenStore));
-    app.use("*", createHttpScopeAuthorizationMiddleware());
-  }
-
   // Baseline structured request logging with stable request_id.
   app.use("*", async (c, next) => {
     const startedAt = Date.now();
@@ -167,6 +162,16 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       });
     }
   });
+
+  // Apply auth middleware if a token store is provided
+  if (opts.tokenStore) {
+    const authAudit = new AuthAudit({
+      eventLog: container.eventLog,
+      logger: container.logger,
+    });
+    app.use("*", createAuthMiddleware(opts.tokenStore, { audit: authAudit }));
+    app.use("*", createHttpScopeAuthorizationMiddleware({ audit: authAudit }));
+  }
 
   // Register all routes
   app.route("/", createHealthRoute({ isLocalOnly }));

@@ -19,6 +19,296 @@ function createMockWs(): MockWebSocket {
 }
 
 describe("OutboxPoller", () => {
+  it("broadcasts auth audit events only to operator-scoped clients", async () => {
+    const connectionManager = new ConnectionManager();
+    const operatorWs = createMockWs();
+    const otherWs = createMockWs();
+    connectionManager.addClient(operatorWs as never, ["cli"] as never, {
+      authClaims: {
+        token_kind: "device",
+        role: "client",
+        device_id: "dev_operator_1",
+        scopes: ["operator.read"],
+      },
+    });
+    connectionManager.addClient(otherWs as never, ["cli"] as never, {
+      authClaims: {
+        token_kind: "device",
+        role: "client",
+        device_id: "dev_client_2",
+        scopes: [],
+      },
+    });
+
+    const nowIso = new Date().toISOString();
+    const poll = vi
+      .fn()
+      .mockResolvedValueOnce([
+        {
+          id: 1,
+          topic: "ws.broadcast",
+          target_edge_id: null,
+          payload: {
+            message: {
+              event_id: "evt-1",
+              type: "auth.failed",
+              occurred_at: nowIso,
+              scope: { kind: "global" },
+              payload: { surface: "ws.upgrade" },
+            },
+          },
+          created_at: nowIso,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    const ackConsumerCursor = vi.fn(async () => undefined);
+    const outboxDal = {
+      poll,
+      ackConsumerCursor,
+    } as unknown as import("../../src/modules/backplane/outbox-dal.js").OutboxDal;
+
+    const poller = new OutboxPoller({
+      consumerId: "edge-a",
+      outboxDal,
+      connectionManager,
+    });
+
+    await poller.tick();
+    expect(ackConsumerCursor).toHaveBeenCalledWith("edge-a", 1);
+    expect(operatorWs.send).toHaveBeenCalledTimes(1);
+    expect(otherWs.send).not.toHaveBeenCalled();
+  });
+
+  it("gates auth audit broadcasts even when event_id is missing", async () => {
+    const connectionManager = new ConnectionManager();
+    const operatorWs = createMockWs();
+    const otherWs = createMockWs();
+    connectionManager.addClient(operatorWs as never, ["cli"] as never, {
+      authClaims: {
+        token_kind: "device",
+        role: "client",
+        device_id: "dev_operator_1",
+        scopes: ["operator.read"],
+      },
+    });
+    connectionManager.addClient(otherWs as never, ["cli"] as never, {
+      authClaims: {
+        token_kind: "device",
+        role: "client",
+        device_id: "dev_client_2",
+        scopes: [],
+      },
+    });
+
+    const nowIso = new Date().toISOString();
+    const poll = vi
+      .fn()
+      .mockResolvedValueOnce([
+        {
+          id: 1,
+          topic: "ws.broadcast",
+          target_edge_id: null,
+          payload: {
+            message: {
+              type: "auth.failed",
+              occurred_at: nowIso,
+              payload: { surface: "ws.upgrade" },
+            },
+          },
+          created_at: nowIso,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    const ackConsumerCursor = vi.fn(async () => undefined);
+    const outboxDal = {
+      poll,
+      ackConsumerCursor,
+    } as unknown as import("../../src/modules/backplane/outbox-dal.js").OutboxDal;
+
+    const poller = new OutboxPoller({
+      consumerId: "edge-a",
+      outboxDal,
+      connectionManager,
+    });
+
+    await poller.tick();
+    expect(ackConsumerCursor).toHaveBeenCalledWith("edge-a", 1);
+    expect(operatorWs.send).toHaveBeenCalledTimes(1);
+    expect(otherWs.send).not.toHaveBeenCalled();
+  });
+
+  it("does not crash when auth claims include non-string scopes", async () => {
+    const connectionManager = new ConnectionManager();
+    const operatorWs = createMockWs();
+    const badWs = createMockWs();
+    connectionManager.addClient(operatorWs as never, ["cli"] as never, {
+      authClaims: {
+        token_kind: "device",
+        role: "client",
+        device_id: "dev_operator_1",
+        scopes: ["operator.read"],
+      },
+    });
+    connectionManager.addClient(badWs as never, ["cli"] as never, {
+      authClaims: {
+        token_kind: "device",
+        role: "client",
+        device_id: "dev_bad_1",
+        scopes: [123],
+      } as never,
+    });
+
+    const nowIso = new Date().toISOString();
+    const poll = vi
+      .fn()
+      .mockResolvedValueOnce([
+        {
+          id: 1,
+          topic: "ws.broadcast",
+          target_edge_id: null,
+          payload: {
+            message: {
+              event_id: "evt-1",
+              type: "auth.failed",
+              occurred_at: nowIso,
+              payload: { surface: "ws.upgrade" },
+            },
+          },
+          created_at: nowIso,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    const ackConsumerCursor = vi.fn(async () => undefined);
+    const outboxDal = {
+      poll,
+      ackConsumerCursor,
+    } as unknown as import("../../src/modules/backplane/outbox-dal.js").OutboxDal;
+
+    const poller = new OutboxPoller({
+      consumerId: "edge-a",
+      outboxDal,
+      connectionManager,
+    });
+
+    await poller.tick();
+    expect(ackConsumerCursor).toHaveBeenCalledWith("edge-a", 1);
+    expect(operatorWs.send).toHaveBeenCalledTimes(1);
+    expect(badWs.send).not.toHaveBeenCalled();
+  });
+
+  it("delivers auth audit events to admin-token clients", async () => {
+    const connectionManager = new ConnectionManager();
+    const adminWs = createMockWs();
+    const otherWs = createMockWs();
+    connectionManager.addClient(adminWs as never, ["cli"] as never, {
+      role: "client",
+      authClaims: {
+        token_kind: "admin",
+        role: "admin",
+        scopes: ["*"],
+      },
+    });
+    connectionManager.addClient(otherWs as never, ["cli"] as never, {
+      authClaims: {
+        token_kind: "device",
+        role: "client",
+        device_id: "dev_client_2",
+        scopes: [],
+      },
+    });
+
+    const nowIso = new Date().toISOString();
+    const poll = vi
+      .fn()
+      .mockResolvedValueOnce([
+        {
+          id: 1,
+          topic: "ws.broadcast",
+          target_edge_id: null,
+          payload: {
+            message: {
+              event_id: "evt-1",
+              type: "authz.denied",
+              occurred_at: nowIso,
+              payload: { surface: "http" },
+            },
+          },
+          created_at: nowIso,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    const ackConsumerCursor = vi.fn(async () => undefined);
+    const outboxDal = {
+      poll,
+      ackConsumerCursor,
+    } as unknown as import("../../src/modules/backplane/outbox-dal.js").OutboxDal;
+
+    const poller = new OutboxPoller({
+      consumerId: "edge-a",
+      outboxDal,
+      connectionManager,
+    });
+
+    await poller.tick();
+    expect(ackConsumerCursor).toHaveBeenCalledWith("edge-a", 1);
+    expect(adminWs.send).toHaveBeenCalledTimes(1);
+    expect(otherWs.send).not.toHaveBeenCalled();
+  });
+
+  it("does not deliver auth audit events to admin-token nodes", async () => {
+    const connectionManager = new ConnectionManager();
+    const adminWs = createMockWs();
+    connectionManager.addClient(adminWs as never, ["cli"] as never, {
+      role: "node",
+      authClaims: {
+        token_kind: "admin",
+        role: "admin",
+        scopes: ["*"],
+      },
+    });
+
+    const nowIso = new Date().toISOString();
+    const poll = vi
+      .fn()
+      .mockResolvedValueOnce([
+        {
+          id: 1,
+          topic: "ws.broadcast",
+          target_edge_id: null,
+          payload: {
+            message: {
+              event_id: "evt-1",
+              type: "auth.failed",
+              occurred_at: nowIso,
+              payload: { surface: "ws.upgrade" },
+            },
+          },
+          created_at: nowIso,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    const ackConsumerCursor = vi.fn(async () => undefined);
+    const outboxDal = {
+      poll,
+      ackConsumerCursor,
+    } as unknown as import("../../src/modules/backplane/outbox-dal.js").OutboxDal;
+
+    const poller = new OutboxPoller({
+      consumerId: "edge-a",
+      outboxDal,
+      connectionManager,
+    });
+
+    await poller.tick();
+    expect(ackConsumerCursor).toHaveBeenCalledWith("edge-a", 1);
+    expect(adminWs.send).not.toHaveBeenCalled();
+  });
+
   it("acks only after processing succeeds (retries on processing error)", async () => {
     const connectionManager = new ConnectionManager();
     const ws = createMockWs();

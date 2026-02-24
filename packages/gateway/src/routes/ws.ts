@@ -195,14 +195,30 @@ function isSameOriginUpgrade(req: IncomingMessage): boolean {
   return host.hostname.toLowerCase() === originUrl.hostname.toLowerCase() && hostPort === originPort;
 }
 
-function extractWsToken(req: IncomingMessage): string | undefined {
+function extractWsTokenWithTransport(req: IncomingMessage): {
+  token: string | undefined;
+  transport: "authorization" | "cookie" | "subprotocol" | "missing";
+} {
   const bearer = extractBearerToken(req.headers["authorization"]);
-  if (bearer) return bearer;
+  if (bearer) {
+    return { token: bearer, transport: "authorization" };
+  }
 
   const cookieToken = extractCookieValue(req.headers["cookie"], AUTH_COOKIE_NAME);
-  if (cookieToken && isSameOriginUpgrade(req)) return cookieToken;
+  if (cookieToken && isSameOriginUpgrade(req)) {
+    return { token: cookieToken, transport: "cookie" };
+  }
 
-  return extractWsTokenFromProtocols(req);
+  const subprotocolToken = extractWsTokenFromProtocols(req);
+  if (subprotocolToken) {
+    return { token: subprotocolToken, transport: "subprotocol" };
+  }
+
+  if (cookieToken) {
+    return { token: undefined, transport: "cookie" };
+  }
+
+  return { token: undefined, transport: "missing" };
 }
 
 function selectWsSubprotocol(protocols: Set<string>): string | false {
@@ -336,7 +352,8 @@ export function createWsHandler(opts: WsRouteOptions): {
 
   // --- connection handler ---
   wss.on("connection", (ws, req) => {
-    const token = extractWsToken(req);
+    const tokenInfo = extractWsTokenWithTransport(req);
+    const token = tokenInfo.token;
     const upgradeClaims = authenticateWsToken(token, tokenStore);
 
     type UpgradeClaims = NonNullable<typeof upgradeClaims>;
@@ -814,18 +831,57 @@ export function createWsHandler(opts: WsRouteOptions): {
       return;
     }
 
+    const requestPath = (() => {
+      try {
+        return new URL(req.url ?? "/", "http://localhost").pathname;
+      } catch {
+        return undefined;
+      }
+    })();
+
+    const userAgent = toSingleHeaderValue(req.headers["user-agent"])?.trim() || undefined;
+    const requestId = toSingleHeaderValue(req.headers["x-request-id"])?.trim() || undefined;
+
+    const recordUpgradeAuthFailed = async (): Promise<void> => {
+      const authAudit = protocolDeps.authAudit;
+      if (!authAudit) return;
+
+      try {
+        await authAudit.recordAuthFailed({
+          surface: "ws.upgrade",
+          reason: token ? "invalid_token" : "missing_token",
+          token_transport: tokenInfo.transport,
+          client_ip: parseRemoteIp(req),
+          method: req.method,
+          path: requestPath,
+          user_agent: userAgent,
+          request_id: requestId,
+        });
+      } catch {
+        // ignore audit failures; the socket still must close
+      }
+    };
+
     void resolveAuth()
-      .then((resolved) => {
+      .then(async (resolved) => {
         if (!resolved) {
-          ws.close(4001, "unauthorized");
+          try {
+            await recordUpgradeAuthFailed();
+          } finally {
+            ws.close(4001, "unauthorized");
+          }
           return;
         }
         authState = resolved;
         startHandshakeTimeout();
         flushEarlyMessages();
       })
-      .catch(() => {
-        ws.close(4001, "unauthorized");
+      .catch(async () => {
+        try {
+          await recordUpgradeAuthFailed();
+        } finally {
+          ws.close(4001, "unauthorized");
+        }
       });
   });
 

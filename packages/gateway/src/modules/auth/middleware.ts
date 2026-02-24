@@ -9,9 +9,12 @@ import type { Context, Next } from "hono";
 import { getCookie } from "hono/cookie";
 import { matchedRoutes } from "hono/route";
 import { APP_PATH_PREFIX, matchesPathPrefixSegment } from "../../app-path.js";
+import { getClientIp } from "./client-ip.js";
+import { requestIdForAudit } from "../observability/request-id.js";
 import type { TokenStore } from "./token-store.js";
 import type { AuthTokenClaims } from "./token-store.js";
 import { AUTH_COOKIE_NAME, extractBearerToken } from "./http.js";
+import type { AuthAudit } from "./audit.js";
 
 const AUTH_ERROR_BODY = {
   error: "unauthorized",
@@ -45,6 +48,9 @@ function isPublicOAuthCallbackRoute(c: Context): boolean {
 
 export function createAuthMiddleware(
   tokenStore: TokenStore,
+  opts?: {
+    audit?: AuthAudit;
+  },
 ) {
   return async (c: Context, next: Next) => {
     // /healthz is always public
@@ -61,11 +67,28 @@ export function createAuthMiddleware(
     // Accept query-token auth for the web UI path subtree. This keeps
     // embedded desktop navigation working when third-party cookies are blocked.
     const appQueryToken = extractAppQueryToken(c);
-    const token =
-      appQueryToken ??
-      extractBearerToken(c.req.header("authorization")) ??
-      getCookie(c, AUTH_COOKIE_NAME);
+    const bearerToken = extractBearerToken(c.req.header("authorization"));
+    const cookieToken = getCookie(c, AUTH_COOKIE_NAME);
+    const token = appQueryToken ?? bearerToken ?? cookieToken;
+    const tokenTransport =
+      appQueryToken
+        ? "query"
+        : bearerToken
+          ? "authorization"
+          : cookieToken
+            ? "cookie"
+            : "missing";
     if (!token) {
+      await opts?.audit?.recordAuthFailed({
+        surface: "http",
+        reason: "missing_token",
+        token_transport: tokenTransport,
+        client_ip: getClientIp(c),
+        method: c.req.method,
+        path: c.req.path,
+        user_agent: c.req.header("user-agent")?.trim() || undefined,
+        request_id: requestIdForAudit(c),
+      });
       return c.json(
         AUTH_ERROR_BODY,
         401,
@@ -74,6 +97,16 @@ export function createAuthMiddleware(
 
     const claims: AuthTokenClaims | null = tokenStore.authenticate(token);
     if (!claims) {
+      await opts?.audit?.recordAuthFailed({
+        surface: "http",
+        reason: "invalid_token",
+        token_transport: tokenTransport,
+        client_ip: getClientIp(c),
+        method: c.req.method,
+        path: c.req.path,
+        user_agent: c.req.header("user-agent")?.trim() || undefined,
+        request_id: requestIdForAudit(c),
+      });
       return c.json(
         AUTH_ERROR_BODY,
         401,

@@ -1,5 +1,5 @@
 import type { WsEventEnvelope, WsRequestEnvelope } from "@tyrum/schemas";
-import type { ConnectionManager } from "../../ws/connection-manager.js";
+import type { ConnectedClient, ConnectionManager } from "../../ws/connection-manager.js";
 import type { OutboxDal, OutboxRow } from "./outbox-dal.js";
 import type { Logger } from "../observability/logger.js";
 
@@ -16,6 +16,20 @@ type WsEnvelope = WsEventEnvelope | WsRequestEnvelope;
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object";
+}
+
+function isAuthAuditEvent(message: unknown): boolean {
+  if (!isObject(message)) return false;
+  return message["type"] === "auth.failed" || message["type"] === "authz.denied";
+}
+
+function canReceiveAuthAudit(client: ConnectedClient): boolean {
+  if (client.role !== "client") return false;
+  const claims = client.auth_claims;
+  if (!claims) return false;
+  const scopes = Array.isArray(claims.scopes) ? claims.scopes : [];
+  if (scopes.includes("*")) return true;
+  return scopes.some((scope) => typeof scope === "string" && scope.startsWith("operator."));
 }
 
 function parseDirectPayload(payload: unknown): { connection_id: string; message: WsEnvelope } | undefined {
@@ -156,8 +170,10 @@ export class OutboxPoller {
       if (!parsed) return;
       if (parsed.skip_local && parsed.source_edge_id === this.consumerId) return;
 
+      const authAudit = isAuthAuditEvent(parsed.message);
       const payload = JSON.stringify(parsed.message);
       for (const client of this.connectionManager.allClients()) {
+        if (authAudit && !canReceiveAuthAudit(client)) continue;
         try {
           client.ws.send(payload);
         } catch (err) {

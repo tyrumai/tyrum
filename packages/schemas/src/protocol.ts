@@ -35,6 +35,7 @@ import {
 import { PresenceBeacon, PresenceEntry } from "./presence.js";
 import { PolicyOverride, PolicySnapshotId } from "./policy-bundle.js";
 import { PluginId } from "./plugin.js";
+import { DeviceTokenClaims } from "./device-token.js";
 
 export {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
@@ -1279,6 +1280,71 @@ export const WsAuditLink = z
   .strict();
 export type WsAuditLink = z.infer<typeof WsAuditLink>;
 
+export const WsAuthFailedSurface = z.enum(["http", "ws.upgrade"]);
+export type WsAuthFailedSurface = z.infer<typeof WsAuthFailedSurface>;
+
+export const WsAuthFailedReason = z.enum(["missing_token", "invalid_token", "unauthorized"]);
+export type WsAuthFailedReason = z.infer<typeof WsAuthFailedReason>;
+
+export const WsAuthTokenTransport = z.enum([
+  "authorization",
+  "cookie",
+  "query",
+  "subprotocol",
+  "missing",
+]);
+export type WsAuthTokenTransport = z.infer<typeof WsAuthTokenTransport>;
+
+export const WsAuthFailedEventPayload = z
+  .object({
+    surface: WsAuthFailedSurface,
+    reason: WsAuthFailedReason,
+    token_transport: WsAuthTokenTransport,
+    client_ip: z.string().trim().min(1).optional(),
+    method: z.string().trim().min(1).optional(),
+    path: z.string().trim().min(1).optional(),
+    user_agent: z.string().trim().min(1).optional(),
+    request_id: z.string().trim().min(1).optional(),
+    audit: WsAuditLink,
+  })
+  .strict();
+export type WsAuthFailedEventPayload = z.infer<typeof WsAuthFailedEventPayload>;
+
+export const WsAuthFailedEvent = WsEventEnvelope.extend({
+  type: z.literal("auth.failed"),
+  payload: WsAuthFailedEventPayload,
+});
+export type WsAuthFailedEvent = z.infer<typeof WsAuthFailedEvent>;
+
+export const WsAuthzDeniedSurface = z.enum(["http", "ws"]);
+export type WsAuthzDeniedSurface = z.infer<typeof WsAuthzDeniedSurface>;
+
+export const WsAuthzDeniedReason = z.enum(["insufficient_scope", "not_scope_authorized"]);
+export type WsAuthzDeniedReason = z.infer<typeof WsAuthzDeniedReason>;
+
+export const WsAuthzDeniedEventPayload = z
+  .object({
+    surface: WsAuthzDeniedSurface,
+    reason: WsAuthzDeniedReason,
+    token: DeviceTokenClaims,
+    required_scopes: z.array(z.string().trim().min(1)).nullable(),
+    method: z.string().trim().min(1).optional(),
+    path: z.string().trim().min(1).optional(),
+    request_type: z.string().trim().min(1).optional(),
+    request_id: z.string().trim().min(1).optional(),
+    client_ip: z.string().trim().min(1).optional(),
+    client_id: z.string().trim().min(1).optional(),
+    audit: WsAuditLink,
+  })
+  .strict();
+export type WsAuthzDeniedEventPayload = z.infer<typeof WsAuthzDeniedEventPayload>;
+
+export const WsAuthzDeniedEvent = WsEventEnvelope.extend({
+  type: z.literal("authz.denied"),
+  payload: WsAuthzDeniedEventPayload,
+});
+export type WsAuthzDeniedEvent = z.infer<typeof WsAuthzDeniedEvent>;
+
 export const WsPluginLifecycleKind = z.enum(["loaded", "unloaded", "failed"]);
 export type WsPluginLifecycleKind = z.infer<typeof WsPluginLifecycleKind>;
 
@@ -1613,6 +1679,8 @@ export type WsRequest = z.infer<typeof WsRequest>;
 
 export const WsEvent = z.discriminatedUnion("type", [
   WsPlanUpdateEvent,
+  WsAuthFailedEvent,
+  WsAuthzDeniedEvent,
   WsApprovalRequestedEvent,
   WsApprovalResolvedEvent,
   WsRunUpdatedEvent,

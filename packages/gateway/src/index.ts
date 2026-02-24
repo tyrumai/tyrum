@@ -30,6 +30,7 @@ import { ConnectionManager } from "./ws/connection-manager.js";
 import type { ProtocolDeps } from "./ws/protocol.js";
 import { createWsHandler } from "./routes/ws.js";
 import { maybeStartOtel } from "./modules/observability/otel.js";
+import { AuthAudit } from "./modules/auth/audit.js";
 import { ExecutionEngine, type StepExecutor as ExecutionStepExecutor } from "./modules/execution/engine.js";
 import { startExecutionWorkerLoop } from "./modules/execution/worker-loop.js";
 import { isChannelPipelineEnabled, TelegramChannelProcessor } from "./modules/channels/telegram.js";
@@ -1004,6 +1005,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     connectionManager,
     logger,
     db: container.db,
+    authAudit: new AuthAudit({ eventLog: container.eventLog, logger }),
     contextReportDal: container.contextReportDal,
     runtime: {
       version: VERSION,
