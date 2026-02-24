@@ -105,4 +105,63 @@ describe("approval respond policy overrides", () => {
     expect(secondJson.created_overrides).toBeUndefined();
     expect(await policyOverrideDal.list({ agentId: "agent-1", toolId: "tool.exec" })).toHaveLength(1);
   });
+
+  it("does not return an error if policyOverrideDal disappears after approval is persisted", async () => {
+    db = openTestSqliteDb();
+
+    let routeDeps: { approvalDal: ApprovalDal; policyOverrideDal?: PolicyOverrideDal };
+
+    class MutatingApprovalDal extends ApprovalDal {
+      override async respond(
+        id: number,
+        approved: boolean,
+        reason?: string,
+      ): Promise<Awaited<ReturnType<ApprovalDal["respond"]>>> {
+        const updated = await super.respond(id, approved, reason);
+        routeDeps.policyOverrideDal = undefined;
+        return updated;
+      }
+    }
+
+    const approvalDal = new MutatingApprovalDal(db);
+    const policyOverrideDal = new PolicyOverrideDal(db);
+
+    routeDeps = { approvalDal, policyOverrideDal };
+
+    const created = await approvalDal.create({
+      planId: "plan-1",
+      stepIndex: 0,
+      prompt: "Allow tool.exec?",
+      agentId: "agent-1",
+      workspaceId: "default",
+      context: {
+        policy: {
+          agent_id: "agent-1",
+          policy_snapshot_id: "00000000-0000-0000-0000-000000000000",
+          suggested_overrides: [
+            { tool_id: "tool.exec", pattern: "echo hi", workspace_id: "default" },
+          ],
+        },
+      },
+    });
+
+    const app = new Hono();
+    app.route("/", createApprovalRoutes(routeDeps));
+
+    const res = await app.request(`/approvals/${String(created.id)}/respond`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        decision: "approved",
+        mode: "always",
+        overrides: [{ tool_id: "tool.exec", pattern: "echo hi", workspace_id: "default" }],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { approval: { status: string }; created_overrides?: unknown[] };
+    expect(json.approval.status).toBe("approved");
+    expect(json.created_overrides).toHaveLength(1);
+    expect(await policyOverrideDal.list({ agentId: "agent-1", toolId: "tool.exec" })).toHaveLength(1);
+  });
 });

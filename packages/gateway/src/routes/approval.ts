@@ -200,10 +200,10 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
 
     const shouldCreateOverrides = isApproved && body.mode === "always";
     const selectedNormalized: Array<{ tool_id: string; pattern: string; workspace_id?: string }> = [];
+    const overrideDalForRequest = shouldCreateOverrides ? deps.policyOverrideDal : undefined;
 
     if (shouldCreateOverrides) {
-      const overrideDal = deps.policyOverrideDal;
-      if (!overrideDal) {
+      if (!overrideDalForRequest) {
         return c.json({ error: "unsupported", message: "policy overrides not configured" }, 400);
       }
 
@@ -277,12 +277,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
 
     const createdOverrides: unknown[] = [];
 
-    if (decisionMatches && updated.status === "approved" && shouldCreateOverrides) {
-      const overrideDal = deps.policyOverrideDal;
-      if (!overrideDal) {
-        return c.json({ error: "unsupported", message: "policy overrides not configured" }, 400);
-      }
-
+    if (decisionMatches && updated.status === "approved" && shouldCreateOverrides && overrideDalForRequest) {
       const createdBy = {
         kind: "http",
         ip: c.req.header("x-forwarded-for") ?? undefined,
@@ -292,7 +287,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
       const snapshotId = extractPolicySnapshotId(updated.context);
 
       for (const sel of selectedNormalized) {
-        const row = await overrideDal.create({
+        const row = await overrideDalForRequest.create({
           agentId,
           workspaceId: sel.workspace_id,
           toolId: sel.tool_id,
