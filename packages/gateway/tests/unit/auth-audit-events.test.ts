@@ -1,0 +1,301 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Hono } from "hono";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import { EventLog } from "../../src/modules/planner/event-log.js";
+import { createAuthMiddleware } from "../../src/modules/auth/middleware.js";
+import { createHttpScopeAuthorizationMiddleware } from "../../src/modules/authz/http-scope-middleware.js";
+import { TokenStore } from "../../src/modules/auth/token-store.js";
+import { AuthAudit, GATEWAY_AUTH_AUDIT_PLAN_ID } from "../../src/modules/auth/audit.js";
+import { ConnectionManager } from "../../src/ws/connection-manager.js";
+import { handleClientMessage } from "../../src/ws/protocol.js";
+import type { SqliteDb } from "../../src/statestore/sqlite.js";
+
+describe("auth audit events", () => {
+  let db: SqliteDb;
+
+  beforeEach(() => {
+    db = openTestSqliteDb();
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  it("records auth.failed without leaking query tokens", async () => {
+    const eventLog = new EventLog(db);
+    const secret = "super-secret-query-token";
+    const audit = new AuthAudit({
+      eventLog,
+      nowMs: () => 0,
+      failedAuthWindowMs: 10_000,
+    });
+
+    const tokenStore = { authenticate: () => null } as unknown as TokenStore;
+
+    const app = new Hono();
+    app.use("*", async (c, next) => {
+      c.set("clientIp", "203.0.113.10");
+      await next();
+    });
+    app.use("*", createAuthMiddleware(tokenStore, { audit }));
+    app.get("/app", (c) => c.json({ ok: true }));
+
+    const res = await app.request(`/app?token=${encodeURIComponent(secret)}`);
+    expect(res.status).toBe(401);
+
+    const rows = await db.all<{ action: string }>(
+      "SELECT action FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
+      [GATEWAY_AUTH_AUDIT_PLAN_ID],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.action).not.toContain(secret);
+
+    const outbox = await db.get<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ? ORDER BY id ASC LIMIT 1",
+      ["ws.broadcast"],
+    );
+    expect(outbox).toBeDefined();
+    expect(outbox!.payload_json).not.toContain(secret);
+
+    const payload = JSON.parse(outbox!.payload_json) as { message?: { type?: string } };
+    expect(payload.message?.type).toBe("auth.failed");
+  });
+
+  it("rate-limits repeated auth failures by client IP", async () => {
+    const eventLog = new EventLog(db);
+    let nowMs = 0;
+    const audit = new AuthAudit({
+      eventLog,
+      nowMs: () => nowMs,
+      failedAuthWindowMs: 10_000,
+    });
+
+    const tokenStore = { authenticate: () => null } as unknown as TokenStore;
+
+    const app = new Hono();
+    app.use("*", async (c, next) => {
+      c.set("clientIp", "203.0.113.10");
+      await next();
+    });
+    app.use("*", createAuthMiddleware(tokenStore, { audit }));
+    app.get("/api/data", (c) => c.json({ ok: true }));
+
+    expect((await app.request("/api/data")).status).toBe(401);
+    expect((await app.request("/api/data")).status).toBe(401);
+
+    const rowsAfterBurst = await db.all<{ id: number }>(
+      "SELECT id FROM planner_events WHERE plan_id = ?",
+      [GATEWAY_AUTH_AUDIT_PLAN_ID],
+    );
+    expect(rowsAfterBurst).toHaveLength(1);
+
+    nowMs = 20_000;
+    expect((await app.request("/api/data")).status).toBe(401);
+
+    const rowsAfterWindow = await db.all<{ id: number }>(
+      "SELECT id FROM planner_events WHERE plan_id = ?",
+      [GATEWAY_AUTH_AUDIT_PLAN_ID],
+    );
+    expect(rowsAfterWindow).toHaveLength(2);
+  });
+
+  it("records authz.denied when a scoped token lacks required scope", async () => {
+    const eventLog = new EventLog(db);
+    const audit = new AuthAudit({
+      eventLog,
+      nowMs: () => 0,
+    });
+
+    const tokenHome = await mkdtemp(join(tmpdir(), "tyrum-auth-audit-token-"));
+    const tokenStore = new TokenStore(tokenHome);
+    await tokenStore.initialize();
+
+    const deviceToken = await tokenStore.issueDeviceToken({
+      deviceId: "dev_client_1",
+      role: "client",
+      scopes: ["operator.read"],
+      ttlSeconds: 300,
+    });
+
+    const app = new Hono();
+    app.use("*", createAuthMiddleware(tokenStore, { audit }));
+    app.use("*", createHttpScopeAuthorizationMiddleware({ audit }));
+    app.post("/memory/facts", (c) => c.json({ ok: true }));
+
+    const res = await app.request("/memory/facts", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${deviceToken.token}` },
+    });
+    expect(res.status).toBe(403);
+
+    const rows = await db.all<{ action: string }>(
+      "SELECT action FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
+      [GATEWAY_AUTH_AUDIT_PLAN_ID],
+    );
+    expect(rows).toHaveLength(1);
+
+    const action = JSON.parse(rows[0]!.action) as Record<string, unknown>;
+    expect(action["type"]).toBe("authz.denied");
+    expect(action["required_scopes"]).toEqual(["operator.write"]);
+
+    await rm(tokenHome, { recursive: true, force: true });
+  });
+
+  it("records authz.denied for WS approval.request when scoped token lacks operator.approvals", async () => {
+    const eventLog = new EventLog(db);
+    const audit = new AuthAudit({
+      eventLog,
+      nowMs: () => 0,
+    });
+
+    const cm = new ConnectionManager();
+    const ws = {
+      send: vi.fn(),
+      close: vi.fn(),
+      on: vi.fn(() => undefined as never),
+      readyState: 1,
+    };
+    const clientId = cm.addClient(ws as never, ["playwright"] as never, {
+      role: "client",
+      deviceId: "dev_client_1",
+      protocolRev: 2,
+      authClaims: {
+        token_kind: "device",
+        role: "client",
+        device_id: "dev_client_1",
+        scopes: ["operator.read"],
+      },
+    } as never);
+    const client = cm.getClient(clientId)!;
+
+    const result = await handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "approval-123",
+        type: "approval.request",
+        ok: true,
+        result: { approved: true },
+      }),
+      { connectionManager: cm, authAudit: audit },
+    );
+    expect(result).toBeDefined();
+
+    const rows = await db.all<{ action: string }>(
+      "SELECT action FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
+      [GATEWAY_AUTH_AUDIT_PLAN_ID],
+    );
+    expect(rows).toHaveLength(1);
+
+    const action = JSON.parse(rows[0]!.action) as Record<string, unknown>;
+    expect(action["type"]).toBe("authz.denied");
+    expect(action["surface"]).toBe("ws");
+    expect(action["reason"]).toBe("insufficient_scope");
+    expect(action["required_scopes"]).toEqual(["operator.approvals"]);
+
+    const outbox = await db.get<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ? ORDER BY id ASC LIMIT 1",
+      ["ws.broadcast"],
+    );
+    expect(outbox).toBeDefined();
+    const payload = JSON.parse(outbox!.payload_json) as { message?: { type?: string } };
+    expect(payload.message?.type).toBe("authz.denied");
+  });
+
+  it("records authz.denied for WS requests when scoped token lacks required scope", async () => {
+    const eventLog = new EventLog(db);
+    const audit = new AuthAudit({
+      eventLog,
+      nowMs: () => 0,
+    });
+
+    const cm = new ConnectionManager();
+    const ws = {
+      send: vi.fn(),
+      close: vi.fn(),
+      on: vi.fn(() => undefined as never),
+      readyState: 1,
+    };
+    const clientId = cm.addClient(ws as never, ["playwright"] as never, {
+      role: "client",
+      deviceId: "dev_client_1",
+      protocolRev: 2,
+      authClaims: {
+        token_kind: "device",
+        role: "client",
+        device_id: "dev_client_1",
+        scopes: ["operator.read"],
+      },
+    } as never);
+    const client = cm.getClient(clientId)!;
+
+    const result = await handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "r-1",
+        type: "command.execute",
+        payload: { command: "/help" },
+      }),
+      { connectionManager: cm, authAudit: audit },
+    );
+    expect(result).toBeDefined();
+    expect((result as unknown as { ok?: boolean }).ok).toBe(false);
+
+    const rows = await db.all<{ action: string }>(
+      "SELECT action FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
+      [GATEWAY_AUTH_AUDIT_PLAN_ID],
+    );
+    expect(rows).toHaveLength(1);
+
+    const action = JSON.parse(rows[0]!.action) as Record<string, unknown>;
+    expect(action["type"]).toBe("authz.denied");
+    expect(action["surface"]).toBe("ws");
+    expect(action["reason"]).toBe("insufficient_scope");
+    expect(action["required_scopes"]).toEqual(["operator.admin"]);
+  });
+
+  it("awaits WS authz audit persistence before returning a forbidden response", async () => {
+    const cm = new ConnectionManager();
+    const ws = {
+      send: vi.fn(),
+      close: vi.fn(),
+      on: vi.fn(() => undefined as never),
+      readyState: 1,
+    };
+    const clientId = cm.addClient(ws as never, ["playwright"] as never, {
+      role: "client",
+      deviceId: "dev_client_1",
+      protocolRev: 2,
+      authClaims: {
+        token_kind: "device",
+        role: "client",
+        device_id: "dev_client_1",
+        scopes: ["operator.read"],
+      },
+    } as never);
+    const client = cm.getClient(clientId)!;
+
+    let auditCompleted = false;
+    const audit = {
+      recordAuthzDenied: async () => {
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        auditCompleted = true;
+      },
+    } as unknown as AuthAudit;
+
+    const result = await handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "r-1",
+        type: "command.execute",
+        payload: { command: "/help" },
+      }),
+      { connectionManager: cm, authAudit: audit },
+    );
+
+    expect((result as unknown as { ok?: boolean }).ok).toBe(false);
+    expect(auditCompleted).toBe(true);
+  });
+});

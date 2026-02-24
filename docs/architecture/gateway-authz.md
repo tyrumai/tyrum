@@ -162,6 +162,7 @@ Requirements:
 AuthN/authZ decisions must be observable and durable:
 
 - log and event failed auth attempts (rate-limited)
+- emit explicit auth audit events (`auth.failed`, `authz.denied`) with redacted request metadata and durable `audit` links
 - audit device enroll/approve/revoke/rotate actions
 - record the scope set used for each privileged action (method/route + scope check result)
 - include `tenant_id`, `user_id`, and `device_id` (when available) in audit records and events

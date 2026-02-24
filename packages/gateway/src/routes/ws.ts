@@ -195,14 +195,26 @@ function isSameOriginUpgrade(req: IncomingMessage): boolean {
   return host.hostname.toLowerCase() === originUrl.hostname.toLowerCase() && hostPort === originPort;
 }
 
-function extractWsToken(req: IncomingMessage): string | undefined {
+function extractWsTokenWithTransport(req: IncomingMessage): {
+  token: string | undefined;
+  transport: "authorization" | "cookie" | "subprotocol" | "missing";
+} {
   const bearer = extractBearerToken(req.headers["authorization"]);
-  if (bearer) return bearer;
+  if (bearer) {
+    return { token: bearer, transport: "authorization" };
+  }
 
   const cookieToken = extractCookieValue(req.headers["cookie"], AUTH_COOKIE_NAME);
-  if (cookieToken && isSameOriginUpgrade(req)) return cookieToken;
+  if (cookieToken && isSameOriginUpgrade(req)) {
+    return { token: cookieToken, transport: "cookie" };
+  }
 
-  return extractWsTokenFromProtocols(req);
+  const subprotocolToken = extractWsTokenFromProtocols(req);
+  if (subprotocolToken) {
+    return { token: subprotocolToken, transport: "subprotocol" };
+  }
+
+  return { token: undefined, transport: "missing" };
 }
 
 function selectWsSubprotocol(protocols: Set<string>): string | false {
@@ -336,7 +348,8 @@ export function createWsHandler(opts: WsRouteOptions): {
 
   // --- connection handler ---
   wss.on("connection", (ws, req) => {
-    const token = extractWsToken(req);
+    const tokenInfo = extractWsTokenWithTransport(req);
+    const token = tokenInfo.token;
     const upgradeClaims = authenticateWsToken(token, tokenStore);
 
     type UpgradeClaims = NonNullable<typeof upgradeClaims>;
@@ -817,6 +830,22 @@ export function createWsHandler(opts: WsRouteOptions): {
     void resolveAuth()
       .then((resolved) => {
         if (!resolved) {
+          void protocolDeps.authAudit?.recordAuthFailed({
+            surface: "ws.upgrade",
+            reason: token ? "invalid_token" : "missing_token",
+            token_transport: tokenInfo.transport,
+            client_ip: parseRemoteIp(req),
+            method: req.method,
+            path: (() => {
+              try {
+                return new URL(req.url ?? "/", "http://localhost").pathname;
+              } catch {
+                return undefined;
+              }
+            })(),
+            user_agent: toSingleHeaderValue(req.headers["user-agent"])?.trim() || undefined,
+            request_id: toSingleHeaderValue(req.headers["x-request-id"])?.trim() || undefined,
+          });
           ws.close(4001, "unauthorized");
           return;
         }
@@ -825,6 +854,22 @@ export function createWsHandler(opts: WsRouteOptions): {
         flushEarlyMessages();
       })
       .catch(() => {
+        void protocolDeps.authAudit?.recordAuthFailed({
+          surface: "ws.upgrade",
+          reason: token ? "invalid_token" : "missing_token",
+          token_transport: tokenInfo.transport,
+          client_ip: parseRemoteIp(req),
+          method: req.method,
+          path: (() => {
+            try {
+              return new URL(req.url ?? "/", "http://localhost").pathname;
+            } catch {
+              return undefined;
+            }
+          })(),
+          user_agent: toSingleHeaderValue(req.headers["user-agent"])?.trim() || undefined,
+          request_id: toSingleHeaderValue(req.headers["x-request-id"])?.trim() || undefined,
+        });
         ws.close(4001, "unauthorized");
       });
   });

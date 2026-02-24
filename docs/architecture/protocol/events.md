@@ -68,6 +68,8 @@ This is the canonical list of `type` values and payload contracts for the v1 Web
 
 ### Observability
 
+- `auth.failed` — `WsAuthFailedEventPayload` (failed auth attempts; rate-limited; includes transport + redacted request metadata + `audit` link)
+- `authz.denied` — `WsAuthzDeniedEventPayload` (authorization denials; includes token claims + required scopes + `audit` link)
 - `context_report.created` — `{ run_id, report: ContextReport }`
 - `usage.snapshot` — `{ scope, local.totals, provider }`
 - `provider_usage.polled` — `{ result }`

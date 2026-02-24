@@ -240,4 +240,63 @@ describe("WS event catalog", () => {
     });
     expect(parsed.success).toBe(true);
   });
+
+  it("parses auth.failed", () => {
+    const parsed = WsEvent.safeParse({
+      event_id: "e-15",
+      type: "auth.failed",
+      occurred_at: "2026-02-24T00:00:00Z",
+      scope: { kind: "global" },
+      payload: {
+        surface: "http",
+        reason: "invalid_token",
+        token_transport: "authorization",
+        client_ip: "203.0.113.10",
+        method: "GET",
+        path: "/api/data",
+        user_agent: "vitest",
+        request_id: "req-1",
+        audit: {
+          plan_id: "gateway.auth.audit",
+          step_index: 0,
+          event_id: 1,
+        },
+      },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("parses authz.denied", () => {
+    const parsed = WsEvent.safeParse({
+      event_id: "e-16",
+      type: "authz.denied",
+      occurred_at: "2026-02-24T00:00:00Z",
+      scope: { kind: "global" },
+      payload: {
+        surface: "http",
+        reason: "insufficient_scope",
+        token: {
+          token_kind: "device",
+          token_id: "token-1",
+          device_id: "dev_client_1",
+          role: "client",
+          scopes: ["operator.read"],
+          issued_at: "2026-02-24T00:00:00Z",
+          expires_at: "2026-02-24T00:10:00Z",
+        },
+        required_scopes: ["operator.write"],
+        method: "POST",
+        path: "/memory/facts",
+        request_id: "req-2",
+        client_ip: "203.0.113.10",
+        client_id: "client-1",
+        audit: {
+          plan_id: "gateway.auth.audit",
+          step_index: 1,
+          event_id: 2,
+        },
+      },
+    });
+    expect(parsed.success).toBe(true);
+  });
 });

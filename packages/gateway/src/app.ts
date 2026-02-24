@@ -54,6 +54,7 @@ import { randomUUID } from "node:crypto";
 import { VERSION } from "./version.js";
 import { isAuthProfilesEnabled } from "./modules/models/auth-profiles-enabled.js";
 import { createClientIpMiddleware, createTrustedProxyAllowlistFromEnv } from "./modules/auth/client-ip.js";
+import { AuthAudit } from "./modules/auth/audit.js";
 
 export interface AppOptions {
   agents?: AgentRegistry;
@@ -138,8 +139,12 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
 
   // Apply auth middleware if a token store is provided
   if (opts.tokenStore) {
-    app.use("*", createAuthMiddleware(opts.tokenStore));
-    app.use("*", createHttpScopeAuthorizationMiddleware());
+    const authAudit = new AuthAudit({
+      eventLog: container.eventLog,
+      logger: container.logger,
+    });
+    app.use("*", createAuthMiddleware(opts.tokenStore, { audit: authAudit }));
+    app.use("*", createHttpScopeAuthorizationMiddleware({ audit: authAudit }));
   }
 
   // Baseline structured request logging with stable request_id.

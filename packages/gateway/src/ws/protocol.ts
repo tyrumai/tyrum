@@ -73,6 +73,7 @@ import type { ModelsDevService } from "../modules/models/models-dev-service.js";
 import { executeCommand } from "../modules/commands/dispatcher.js";
 import type { AuthTokenClaims } from "../modules/auth/token-store.js";
 import { resolveWsRequestRequiredScopes } from "../modules/authz/ws-scope-matrix.js";
+import type { AuthAudit } from "../modules/auth/audit.js";
 
 // ---------------------------------------------------------------------------
 // Dependency injection
@@ -85,6 +86,7 @@ import { resolveWsRequestRequiredScopes } from "../modules/authz/ws-scope-matrix
 export interface ProtocolDeps {
   connectionManager: ConnectionManager;
   logger?: Logger;
+  authAudit?: AuthAudit;
   db?: SqlDb;
   contextReportDal?: ContextReportDal;
   runtime?: {
@@ -221,6 +223,21 @@ export async function handleClientMessage(
         return errorEvent("unauthorized", "only operator clients may resolve approvals");
       }
       if (authClaims.token_kind === "device" && !hasAnyRequiredScope(authClaims, ["operator.approvals"])) {
+        await deps.authAudit?.recordAuthzDenied({
+          surface: "ws",
+          reason: "insufficient_scope",
+          token: {
+            token_kind: authClaims.token_kind,
+            token_id: authClaims.token_id,
+            device_id: authClaims.device_id,
+            role: authClaims.role,
+            scopes: authClaims.scopes,
+          },
+          required_scopes: ["operator.approvals"],
+          request_type: msg.type,
+          request_id: msg.request_id,
+          client_id: client.id,
+        });
         return errorEvent("forbidden", "insufficient scope");
       }
 
@@ -273,6 +290,21 @@ export async function handleClientMessage(
   if (authClaims.token_kind === "device") {
     const requiredScopes = resolveWsRequestRequiredScopes(msg.type);
     if (!requiredScopes) {
+      await deps.authAudit?.recordAuthzDenied({
+        surface: "ws",
+        reason: "not_scope_authorized",
+        token: {
+          token_kind: authClaims.token_kind,
+          token_id: authClaims.token_id,
+          device_id: authClaims.device_id,
+          role: authClaims.role,
+          scopes: authClaims.scopes,
+        },
+        required_scopes: null,
+        request_type: msg.type,
+        request_id: msg.request_id,
+        client_id: client.id,
+      });
       return errorResponse(
         msg.request_id,
         msg.type,
@@ -282,6 +314,21 @@ export async function handleClientMessage(
     }
 
     if (!hasAnyRequiredScope(authClaims, requiredScopes)) {
+      await deps.authAudit?.recordAuthzDenied({
+        surface: "ws",
+        reason: "insufficient_scope",
+        token: {
+          token_kind: authClaims.token_kind,
+          token_id: authClaims.token_id,
+          device_id: authClaims.device_id,
+          role: authClaims.role,
+          scopes: authClaims.scopes,
+        },
+        required_scopes: requiredScopes,
+        request_type: msg.type,
+        request_id: msg.request_id,
+        client_id: client.id,
+      });
       return errorResponse(
         msg.request_id,
         msg.type,
