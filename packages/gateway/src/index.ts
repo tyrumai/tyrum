@@ -105,7 +105,9 @@ export function assertNonLoopbackDeploymentGuardrails(input: {
   const shouldRunEdge = input.role === "all" || input.role === "edge";
   if (!shouldRunEdge) return "local";
 
-  const isLocalOnly = isLoopbackHost(input.host);
+  const hostSplit = splitHostAndPort(input.host);
+  const hostForLoopback = hostSplit.host.length > 0 ? hostSplit.host : input.host;
+  const isLocalOnly = isLoopbackHost(hostForLoopback);
   if (isLocalOnly) return "local";
 
   const token = input.token?.trim() ?? "";

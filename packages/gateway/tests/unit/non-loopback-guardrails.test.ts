@@ -18,6 +18,16 @@ describe("non-loopback deployment guardrails", () => {
     ).not.toThrow();
   });
 
+  it("treats loopback host:port values as loopback targets", () => {
+    expect(
+      assertNonLoopbackDeploymentGuardrails({
+        role: "edge",
+        host: "127.0.0.1:8788",
+        token: undefined,
+      }),
+    ).toBe("local");
+  });
+
   it("does not enforce guardrails for non-edge roles", () => {
     expect(() =>
       assertNonLoopbackDeploymentGuardrails({
@@ -71,4 +81,3 @@ describe("non-loopback deployment guardrails", () => {
     ).toBe("tls");
   });
 });
-
