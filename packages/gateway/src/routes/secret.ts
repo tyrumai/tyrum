@@ -273,9 +273,9 @@ export function createSecretRoutes(deps: SecretRouteDeps): Hono {
           toHandleId: handle.handle_id,
         });
       } catch (err) {
-        const updatedCount =
-          err instanceof SecretRotationPropagationError ? err.updatedCount : 0;
-        if (updatedCount === 0) {
+        const shouldRevokeNewHandle =
+          err instanceof SecretRotationPropagationError && err.updatedCount === 0;
+        if (shouldRevokeNewHandle) {
           await secretProvider.revoke(handle.handle_id).catch(() => {});
         }
         const message = err instanceof Error ? err.message : String(err);
