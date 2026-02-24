@@ -89,3 +89,14 @@ Details: [Provider Auth and Onboarding](./auth.md).
 
 - Workflows may reference secret handles as parameters.
 - Any step that requires resolving a secret handle should be eligible for approval gating depending on risk and configured policy.
+
+### Policy matching
+
+Secret resolution is policy-gated via `PolicyBundle.secrets`. Policy matching uses **secret scopes** formatted as:
+
+- `<provider>:<scope>` (examples: `env:MY_API_KEY`, `file:oauth:openai:agent-1:access`)
+
+When a tool call or workflow step includes one or more secret handles, the gateway evaluates the resolved scopes against policy and enforces:
+
+- `deny` → do not resolve secrets; execution is blocked.
+- `require_approval` → pause and request operator approval before resolving secrets.

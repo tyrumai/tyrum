@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ActionPrimitive } from "@tyrum/schemas";
+import { PolicyBundle, type ActionPrimitive } from "@tyrum/schemas";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -13,6 +13,8 @@ import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
 import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
 import { defaultPolicyBundle } from "../../src/modules/policy/bundle-loader.js";
 import { PolicyService } from "../../src/modules/policy/service.js";
+import { ApprovalDal } from "../../src/modules/approval/dal.js";
+import type { SecretProvider } from "../../src/modules/secret/provider.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
@@ -385,6 +387,122 @@ describe("ExecutionEngine (normalized)", () => {
     const applied = JSON.parse(row!.policy_applied_override_ids_json!) as unknown;
     expect(Array.isArray(applied)).toBe(true);
     expect(applied).toContain(override.policy_override_id);
+
+    await rm(home, { recursive: true, force: true });
+  });
+
+  it("pauses workflow steps that resolve secret handles until policy approval", async () => {
+    db = openTestSqliteDb();
+
+    const home = await mkdtemp(join(tmpdir(), "tyrum-policy-home-"));
+    const snapshotDal = new PolicySnapshotDal(db);
+    const overrideDal = new PolicyOverrideDal(db);
+    const policyService = new PolicyService({ home, snapshotDal, overrideDal });
+
+    const snapshot = await snapshotDal.getOrCreate(defaultPolicyBundle());
+
+    const engine = new ExecutionEngine({ db, policyService });
+    await engine.enqueuePlan({
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-secret-policy-1",
+      requestId: "req-secret-policy-1",
+      policySnapshotId: snapshot.policy_snapshot_id,
+      steps: [action("CLI", { cmd: "echo", args: ["secret:h1"] })],
+    });
+
+    const executor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => ({ success: true, result: { ok: true } })),
+    };
+
+    expect(await engine.workerTick({ workerId: "w1", executor })).toBe(true);
+    expect((executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(0);
+
+    const paused = await db.get<{ status: string; paused_reason: string | null }>(
+      "SELECT status, paused_reason FROM execution_runs LIMIT 1",
+    );
+    expect(paused?.status).toBe("paused");
+    expect(paused?.paused_reason).toBe("policy");
+
+    const approval = await db.get<{ id: number; kind: string; resume_token: string | null }>(
+      "SELECT id, kind, resume_token FROM approvals WHERE status = 'pending' ORDER BY id ASC LIMIT 1",
+    );
+    expect(approval?.kind).toBe("policy");
+    expect(approval?.resume_token).toBeTruthy();
+
+    const approvalDal = new ApprovalDal(db);
+    await approvalDal.respond(approval!.id, true);
+    await engine.resumeRun(approval!.resume_token!);
+
+    await drain(engine, "w1", executor);
+
+    expect((executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(1);
+
+    await rm(home, { recursive: true, force: true });
+  });
+
+  it("evaluates secret policy using provider:scope when possible", async () => {
+    db = openTestSqliteDb();
+
+    const home = await mkdtemp(join(tmpdir(), "tyrum-policy-home-"));
+    const snapshotDal = new PolicySnapshotDal(db);
+    const overrideDal = new PolicyOverrideDal(db);
+    const policyService = new PolicyService({ home, snapshotDal, overrideDal });
+
+    const bundle = PolicyBundle.parse({
+      v: 1,
+      secrets: {
+        default: "deny",
+        allow: ["env:MY_API_KEY"],
+        require_approval: [],
+        deny: [],
+      },
+    });
+    const snapshot = await snapshotDal.getOrCreate(bundle);
+
+    const secretProvider: SecretProvider = {
+      resolve: vi.fn(async () => null),
+      store: vi.fn(async () => {
+        throw new Error("not implemented");
+      }),
+      revoke: vi.fn(async () => false),
+      list: vi.fn(async () => [
+        {
+          handle_id: "h1",
+          provider: "env",
+          scope: "MY_API_KEY",
+          created_at: new Date().toISOString(),
+        },
+      ]),
+    };
+
+    const engine = new ExecutionEngine({ db, policyService, secretProvider });
+    await engine.enqueuePlan({
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-secret-policy-2",
+      requestId: "req-secret-policy-2",
+      policySnapshotId: snapshot.policy_snapshot_id,
+      steps: [action("CLI", { cmd: "echo", args: ["secret:h1"] })],
+    });
+
+    const executor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => ({ success: true, result: { ok: true } })),
+    };
+
+    await drain(engine, "w1", executor);
+
+    expect((executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(1);
+
+    const approvalCount = await db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM approvals",
+    );
+    expect(approvalCount?.n).toBe(0);
+
+    const run = await db.get<{ status: string }>(
+      "SELECT status FROM execution_runs LIMIT 1",
+    );
+    expect(run?.status).toBe("succeeded");
 
     await rm(home, { recursive: true, force: true });
   });

@@ -97,6 +97,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       return new ExecutionEngine({
         db: container.db,
         redactionEngine: container.redactionEngine,
+        secretProvider: opts.secretProvider,
         policyService: container.policyService,
         logger: container.logger,
       });

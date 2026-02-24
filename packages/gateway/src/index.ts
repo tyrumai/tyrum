@@ -956,6 +956,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
       ? new ExecutionEngine({
           db: container.db,
           redactionEngine: container.redactionEngine,
+          secretProvider,
           policyService: container.policyService,
           logger,
         })
@@ -1164,6 +1165,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
         const engine = new ExecutionEngine({
           db: container.db,
           redactionEngine: container.redactionEngine,
+          secretProvider,
           policyService: container.policyService,
           logger,
         });
