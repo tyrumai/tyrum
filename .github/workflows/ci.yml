@@ -173,3 +173,19 @@ jobs:
         if: runner.os != 'Linux'
         shell: bash
         run: pnpm exec vitest run apps/desktop/tests --passWithNoTests
+
+  reference-deployment-smoke:
+    name: Reference Deployment Smoke (Docker)
+    needs: changes
+    if: needs.changes.outputs.ci == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.workflows == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Smoke (single-host, SQLite)
+        shell: bash
+        run: bash scripts/smoke-sqlite-single-host.sh
+
+      - name: Smoke (split-role, Postgres)
+        shell: bash
+        run: bash scripts/smoke-postgres-split.sh

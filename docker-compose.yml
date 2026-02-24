@@ -14,6 +14,8 @@ services:
       TYRUM_ALLOW_INSECURE_HTTP: "1"
       GATEWAY_DB_PATH: /var/lib/tyrum/gateway.db
       TYRUM_ENGINE_API_ENABLED: "1"
+      # Snapshot import is disabled by default. Enable explicitly for restore workflows.
+      TYRUM_SNAPSHOT_IMPORT_ENABLED: ${TYRUM_SNAPSHOT_IMPORT_ENABLED:-0}
       # Artifact storage: default to filesystem; set TYRUM_ARTIFACT_STORE=s3 and
       # enable the "minio" profile to use object storage.
       TYRUM_ARTIFACT_STORE: ${TYRUM_ARTIFACT_STORE:-fs}
@@ -51,6 +53,8 @@ services:
       GATEWAY_TOKEN: ${GATEWAY_TOKEN:?Set GATEWAY_TOKEN (>=32 chars) for split mode}
       # Split mode should not rely on shared filesystem secrets.
       TYRUM_SECRET_PROVIDER: env
+      # Snapshot import is disabled by default. Enable explicitly for restore workflows.
+      TYRUM_SNAPSHOT_IMPORT_ENABLED: ${TYRUM_SNAPSHOT_IMPORT_ENABLED:-0}
       # Artifact storage: default to filesystem; set TYRUM_ARTIFACT_STORE=s3 and
       # enable the "minio" profile to use object storage.
       TYRUM_ARTIFACT_STORE: ${TYRUM_ARTIFACT_STORE:-fs}
