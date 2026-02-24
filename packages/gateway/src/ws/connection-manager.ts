@@ -19,6 +19,7 @@ export interface ConnectedClient {
   readonly device_id?: string;
   readonly protocol_rev: number;
   readonly capabilities: readonly ClientCapability[];
+  readonly readyCapabilities: Set<ClientCapability>;
   lastPong: number;
 }
 
@@ -57,13 +58,19 @@ export class ConnectionManager {
     },
   ): string {
     const id = opts?.id ?? crypto.randomUUID();
+    const role = opts?.role ?? "client";
+    const readyCapabilities = new Set<ClientCapability>();
+    if (role !== "node") {
+      for (const cap of capabilities) readyCapabilities.add(cap);
+    }
     const client: ConnectedClient = {
       id,
       ws,
-      role: opts?.role ?? "client",
+      role,
       device_id: opts?.deviceId,
       protocol_rev: opts?.protocolRev ?? 1,
       capabilities,
+      readyCapabilities,
       lastPong: Date.now(),
     };
     ws.on("pong", () => {
@@ -71,6 +78,22 @@ export class ConnectionManager {
     });
     this.clients.set(id, client);
     return id;
+  }
+
+  /** Mark a capability as ready for a connected peer. */
+  markCapabilityReady(id: string, capability: ClientCapability): void {
+    const client = this.clients.get(id);
+    if (!client) return;
+    client.readyCapabilities.add(capability);
+  }
+
+  /** Mark multiple capabilities as ready for a connected peer. */
+  markCapabilitiesReady(id: string, capabilities: readonly ClientCapability[]): void {
+    const client = this.clients.get(id);
+    if (!client) return;
+    for (const cap of capabilities) {
+      client.readyCapabilities.add(cap);
+    }
   }
 
   /** Remove a client (e.g. on disconnect or eviction). */

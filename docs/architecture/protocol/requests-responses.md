@@ -25,7 +25,9 @@ The gateway, clients, and nodes support these request types:
 - `approval.list` — list pending approvals.
 - `approval.resolve` — approve/deny an approval request (may resume/cancel a run).
 - `pairing.approve` / `pairing.deny` — resolve a node pairing request.
+- `capability.ready` — node reports capability readiness after pairing (payload includes `CapabilityDescriptor[]`).
 - `task.execute` — request a capability/tool execution for a specific attempt. Payload includes `run_id`, `step_id`, `attempt_id`, and the `ActionPrimitive`.
+- `attempt.evidence` — node reports execution evidence for a specific attempt. Payload includes `run_id`, `step_id`, `attempt_id`, and evidence data for operator UIs and postconditions.
 
 ## Response envelope
 

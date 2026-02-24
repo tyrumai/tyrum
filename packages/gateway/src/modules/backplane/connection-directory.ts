@@ -12,6 +12,7 @@ export interface ConnectionDirectoryRow {
   version: string | null;
   mode: string | null;
   capabilities: ClientCapability[];
+  ready_capabilities: ClientCapability[];
   connected_at_ms: number;
   last_seen_at_ms: number;
   expires_at_ms: number;
@@ -28,6 +29,7 @@ interface RawConnectionDirectoryRow {
   version: string | null;
   mode: string | null;
   capabilities_json: string;
+  ready_capabilities_json: string;
   connected_at_ms: number;
   last_seen_at_ms: number;
   expires_at_ms: number;
@@ -39,6 +41,15 @@ function toRow(raw: RawConnectionDirectoryRow): ConnectionDirectoryRow {
     const parsed = JSON.parse(raw.capabilities_json) as unknown;
     if (Array.isArray(parsed)) {
       capabilities = parsed.filter((v): v is ClientCapability => typeof v === "string") as ClientCapability[];
+    }
+  } catch {
+    // leave empty
+  }
+  let readyCapabilities: ClientCapability[] = [];
+  try {
+    const parsed = JSON.parse(raw.ready_capabilities_json) as unknown;
+    if (Array.isArray(parsed)) {
+      readyCapabilities = parsed.filter((v): v is ClientCapability => typeof v === "string") as ClientCapability[];
     }
   } catch {
     // leave empty
@@ -58,6 +69,7 @@ function toRow(raw: RawConnectionDirectoryRow): ConnectionDirectoryRow {
     version: raw.version,
     mode: raw.mode,
     capabilities,
+    ready_capabilities: readyCapabilities,
     connected_at_ms: raw.connected_at_ms,
     last_seen_at_ms: raw.last_seen_at_ms,
     expires_at_ms: raw.expires_at_ms,
@@ -78,10 +90,13 @@ export class ConnectionDirectoryDal {
     version?: string | null;
     mode?: string | null;
     capabilities: readonly ClientCapability[];
+    readyCapabilities?: readonly ClientCapability[];
     nowMs: number;
     ttlMs: number;
   }): Promise<void> {
     const expiresAtMs = params.nowMs + params.ttlMs;
+    const readyCapabilities =
+      params.readyCapabilities ?? (params.role === "node" ? [] : params.capabilities ?? []);
     await this.db.run(
       `INSERT INTO connection_directory (
          connection_id,
@@ -94,10 +109,11 @@ export class ConnectionDirectoryDal {
          version,
          mode,
          capabilities_json,
+         ready_capabilities_json,
          connected_at_ms,
          last_seen_at_ms,
          expires_at_ms
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(connection_id) DO UPDATE SET
          edge_id = excluded.edge_id,
          role = excluded.role,
@@ -108,6 +124,7 @@ export class ConnectionDirectoryDal {
          version = excluded.version,
          mode = excluded.mode,
          capabilities_json = excluded.capabilities_json,
+         ready_capabilities_json = excluded.ready_capabilities_json,
          last_seen_at_ms = excluded.last_seen_at_ms,
          expires_at_ms = excluded.expires_at_ms`,
       [
@@ -121,10 +138,23 @@ export class ConnectionDirectoryDal {
         params.version ?? null,
         params.mode ?? null,
         JSON.stringify(params.capabilities ?? []),
+        JSON.stringify(readyCapabilities),
         params.nowMs,
         params.nowMs,
         expiresAtMs,
       ],
+    );
+  }
+
+  async setReadyCapabilities(params: {
+    connectionId: string;
+    readyCapabilities: readonly ClientCapability[];
+  }): Promise<void> {
+    await this.db.run(
+      `UPDATE connection_directory
+       SET ready_capabilities_json = ?
+       WHERE connection_id = ?`,
+      [JSON.stringify(params.readyCapabilities ?? []), params.connectionId],
     );
   }
 

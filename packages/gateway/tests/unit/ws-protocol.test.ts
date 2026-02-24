@@ -195,6 +195,98 @@ describe("handleClientMessage", () => {
     );
   });
 
+  it("accepts capability.ready from nodes and broadcasts a capability.ready event", async () => {
+    const cm = new ConnectionManager();
+    const { id: nodeConnId } = makeClient(cm, ["cli"], {
+      role: "node",
+      deviceId: "dev_test",
+      protocolRev: 2,
+    });
+    const { ws: operatorWs } = makeClient(cm, ["cli"], { protocolRev: 2 });
+    const node = cm.getClient(nodeConnId)!;
+
+    const deps = makeDeps(cm, {
+      nodePairingDal: {
+        getByNodeId: async () => ({ status: "approved" }) as never,
+      } as never,
+    });
+
+    const result = await handleClientMessage(
+      node,
+      JSON.stringify({
+        request_id: "r-cap-ready-1",
+        type: "capability.ready",
+        payload: {
+          capabilities: [
+            {
+              id: descriptorIdForClientCapability("cli"),
+              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+            },
+          ],
+        },
+      }),
+      deps,
+    );
+
+    expect(result).toBeDefined();
+    expect((result as unknown as { ok: boolean }).ok).toBe(true);
+    expect((result as unknown as { type: string }).type).toBe("capability.ready");
+
+    const frames = operatorWs.send.mock.calls.map((call) => JSON.parse(call[0] as string)) as Array<
+      Record<string, unknown>
+    >;
+    expect(
+      frames.some(
+        (msg) =>
+          msg["type"] === "capability.ready" &&
+          (msg["payload"] as { node_id?: string } | undefined)?.node_id === "dev_test",
+      ),
+    ).toBe(true);
+  });
+
+  it("accepts attempt.evidence from nodes and broadcasts an attempt.evidence event", async () => {
+    const cm = new ConnectionManager();
+    const { id: nodeConnId } = makeClient(cm, ["cli"], {
+      role: "node",
+      deviceId: "dev_test",
+      protocolRev: 2,
+    });
+    const { ws: operatorWs } = makeClient(cm, ["cli"], { protocolRev: 2 });
+    const node = cm.getClient(nodeConnId)!;
+
+    const deps = makeDeps(cm);
+
+    const result = await handleClientMessage(
+      node,
+      JSON.stringify({
+        request_id: "r-attempt-evidence-1",
+        type: "attempt.evidence",
+        payload: {
+          run_id: "550e8400-e29b-41d4-a716-446655440000",
+          step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+          attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+          evidence: { http: { status: 200 } },
+        },
+      }),
+      deps,
+    );
+
+    expect(result).toBeDefined();
+    expect((result as unknown as { ok: boolean }).ok).toBe(true);
+    expect((result as unknown as { type: string }).type).toBe("attempt.evidence");
+
+    const frames = operatorWs.send.mock.calls.map((call) => JSON.parse(call[0] as string)) as Array<
+      Record<string, unknown>
+    >;
+    expect(
+      frames.some(
+        (msg) =>
+          msg["type"] === "attempt.evidence" &&
+          (msg["payload"] as { node_id?: string } | undefined)?.node_id === "dev_test",
+      ),
+    ).toBe(true);
+  });
+
   it("dispatches approval.request decision to callback", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
@@ -675,6 +767,49 @@ describe("dispatchTask", () => {
     });
   });
 
+  it("does not dispatch to a paired node before it signals readiness", async () => {
+    const cm = new ConnectionManager();
+    const nodeWs = createMockWs();
+    cm.addClient(nodeWs as never, ["cli"] as never, {
+      id: "node-1",
+      role: "node",
+      deviceId: "dev_test",
+      protocolRev: 2,
+    });
+
+    const deps = makeDeps(cm, {
+      nodePairingDal: {
+        getByNodeId: async () => ({
+          status: "approved",
+          capability_allowlist: [
+            {
+              id: descriptorIdForClientCapability("cli"),
+              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+            },
+          ],
+        }) as never,
+      } as never,
+    });
+
+    const action: ActionPrimitive = {
+      type: "CLI",
+      args: { command: "echo hi" },
+    };
+
+    await expect(
+      dispatchTask(
+        action,
+        {
+          runId: "550e8400-e29b-41d4-a716-446655440000",
+          stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+          attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+        },
+        deps,
+      ),
+    ).rejects.toBeInstanceOf(NoCapableClientError);
+    expect(nodeWs.send).not.toHaveBeenCalled();
+  });
+
   it("filters cluster directory entries by protocol_rev >= 2", async () => {
     const cm = new ConnectionManager();
     const outboxDal = { enqueue: vi.fn(async () => undefined) };
@@ -801,6 +936,25 @@ describe("dispatchTask", () => {
         }) as never,
       } as never,
     });
+
+    await handleClientMessage(
+      cm.getClient("node-1")!,
+      JSON.stringify({
+        request_id: "r-cap-ready-1",
+        type: "capability.ready",
+        payload: {
+          capabilities: [
+            {
+              id: descriptorIdForClientCapability("cli"),
+              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+            },
+          ],
+        },
+      }),
+      deps,
+    );
+    nodeWs.send.mockClear();
+    legacyWs.send.mockClear();
 
     const action: ActionPrimitive = {
       type: "CLI",
@@ -943,6 +1097,24 @@ describe("dispatchTask", () => {
       } as never,
     });
 
+    await handleClientMessage(
+      cm.getClient("node-1")!,
+      JSON.stringify({
+        request_id: "r-cap-ready-1",
+        type: "capability.ready",
+        payload: {
+          capabilities: [
+            {
+              id: descriptorIdForClientCapability("cli"),
+              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+            },
+          ],
+        },
+      }),
+      deps,
+    );
+    nodeWs.send.mockClear();
+
     const action: ActionPrimitive = {
       type: "CLI",
       args: { command: "echo hi" },
@@ -995,6 +1167,24 @@ describe("dispatchTask", () => {
         }),
       } as never,
     });
+
+    await handleClientMessage(
+      cm.getClient("node-1")!,
+      JSON.stringify({
+        request_id: "r-cap-ready-1",
+        type: "capability.ready",
+        payload: {
+          capabilities: [
+            {
+              id: descriptorIdForClientCapability("cli"),
+              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+            },
+          ],
+        },
+      }),
+      deps,
+    );
+    nodeWs.send.mockClear();
 
     const action: ActionPrimitive = {
       type: "CLI",

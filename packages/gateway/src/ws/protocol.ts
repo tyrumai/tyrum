@@ -7,6 +7,7 @@
 
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  clientCapabilityFromDescriptorId,
   descriptorIdForClientCapability,
   requiredCapability,
   ApprovalListRequest,
@@ -34,6 +35,8 @@ import {
   WsPairingResolveResult,
   WsPresenceBeaconRequest,
   WsPresenceBeaconResult,
+  WsCapabilityReadyRequest,
+  WsAttemptEvidenceRequest,
   WsMessageEnvelope,
   WsTaskExecuteResult,
 } from "@tyrum/schemas";
@@ -608,6 +611,107 @@ export async function handleClientMessage(
     return ok(pairing);
   }
 
+  if (msg.type === "capability.ready") {
+    if (client.role !== "node") {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unauthorized",
+        "only nodes may report capability readiness",
+      );
+    }
+
+    const parsedReq = WsCapabilityReadyRequest.safeParse(msg);
+    if (!parsedReq.success) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "invalid_request",
+        parsedReq.error.message,
+        { issues: parsedReq.error.issues },
+      );
+    }
+
+    const readyLegacyCaps = parsedReq.data.payload.capabilities
+      .map((capability) => clientCapabilityFromDescriptorId(capability.id))
+      .filter((capability): capability is ClientCapability => capability !== undefined)
+      .filter((capability) => client.capabilities.includes(capability));
+
+    deps.connectionManager.markCapabilitiesReady(client.id, readyLegacyCaps);
+
+    if (deps.cluster) {
+      void deps.cluster.connectionDirectory
+        .setReadyCapabilities({
+          connectionId: client.id,
+          readyCapabilities: [...client.readyCapabilities].sort(),
+        })
+        .catch(() => {
+          // ignore readiness persistence failures (best-effort)
+        });
+    }
+
+    const nodeId = client.device_id ?? client.id;
+    broadcastEvent(
+      {
+        event_id: crypto.randomUUID(),
+        type: "capability.ready",
+        occurred_at: new Date().toISOString(),
+        scope: { kind: "node", node_id: nodeId },
+        payload: {
+          node_id: nodeId,
+          capabilities: parsedReq.data.payload.capabilities,
+        },
+      },
+      deps,
+    );
+
+    return { request_id: msg.request_id, type: msg.type, ok: true };
+  }
+
+  if (msg.type === "attempt.evidence") {
+    if (client.role !== "node") {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unauthorized",
+        "only nodes may report attempt evidence",
+      );
+    }
+
+    const parsedReq = WsAttemptEvidenceRequest.safeParse(msg);
+    if (!parsedReq.success) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "invalid_request",
+        parsedReq.error.message,
+        { issues: parsedReq.error.issues },
+      );
+    }
+
+    const nodeId = client.device_id ?? client.id;
+    const payload = parsedReq.data.payload;
+
+    broadcastEvent(
+      {
+        event_id: crypto.randomUUID(),
+        type: "attempt.evidence",
+        occurred_at: new Date().toISOString(),
+        scope: { kind: "run", run_id: payload.run_id },
+        payload: {
+          node_id: nodeId,
+          run_id: payload.run_id,
+          step_id: payload.step_id,
+          attempt_id: payload.attempt_id,
+          evidence: payload.evidence,
+        },
+      },
+      deps,
+    );
+
+    return { request_id: msg.request_id, type: msg.type, ok: true };
+  }
+
   if (msg.type === "session.send") {
     if (client.role !== "client") {
       return errorResponse(
@@ -1045,7 +1149,8 @@ export function dispatchTask(
                       c.protocol_rev >= 2 &&
                       c.role === "node" &&
                       typeof c.device_id === "string" &&
-                      c.device_id.trim().length > 0,
+                      c.device_id.trim().length > 0 &&
+                      c.ready_capabilities.includes(capability),
                   )
                   .map(async (c) => {
                     return (await isNodeAuthorizedForDispatch(c.device_id!)) ? c : null;
@@ -1116,6 +1221,7 @@ export function dispatchTask(
       if (!nodeDispatchAllowed) continue;
       const nodeId = c.device_id;
       if (!nodeId) continue;
+      if (!c.readyCapabilities.has(capability)) continue;
       if (!(await isNodeAuthorizedForDispatch(nodeId))) continue;
       eligibleNodes.push(c);
     }
@@ -1143,7 +1249,8 @@ export function dispatchTask(
                       c.protocol_rev >= 2 &&
                       c.role === "node" &&
                       typeof c.device_id === "string" &&
-                      c.device_id.trim().length > 0,
+                      c.device_id.trim().length > 0 &&
+                      c.ready_capabilities.includes(capability),
                   )
                   .map(async (c) => {
                     return (await isNodeAuthorizedForDispatch(c.device_id!)) ? c : null;

@@ -21,7 +21,7 @@ import {
   ExecutionStepId,
 } from "./execution.js";
 import { NodePairingRequest, NodePairingTrustLevel } from "./node.js";
-import { AgentId, Lane, TyrumKey } from "./keys.js";
+import { AgentId, Lane, NodeId, TyrumKey } from "./keys.js";
 import { PresenceBeacon, PresenceEntry } from "./presence.js";
 import { PolicyOverride } from "./policy-bundle.js";
 
@@ -215,6 +215,35 @@ export const WsPingRequest = WsRequestEnvelope.extend({
   payload: WsPingPayload,
 });
 export type WsPingRequest = z.infer<typeof WsPingRequest>;
+
+export const WsCapabilityReadyPayload = z
+  .object({
+    capabilities: z.array(CapabilityDescriptor).default([]),
+  })
+  .strict();
+export type WsCapabilityReadyPayload = z.infer<typeof WsCapabilityReadyPayload>;
+
+export const WsCapabilityReadyRequest = WsRequestEnvelope.extend({
+  type: z.literal("capability.ready"),
+  payload: WsCapabilityReadyPayload,
+});
+export type WsCapabilityReadyRequest = z.infer<typeof WsCapabilityReadyRequest>;
+
+export const WsAttemptEvidencePayload = z
+  .object({
+    run_id: ExecutionRunId,
+    step_id: ExecutionStepId,
+    attempt_id: ExecutionAttemptId,
+    evidence: z.unknown(),
+  })
+  .strict();
+export type WsAttemptEvidencePayload = z.infer<typeof WsAttemptEvidencePayload>;
+
+export const WsAttemptEvidenceRequest = WsRequestEnvelope.extend({
+  type: z.literal("attempt.evidence"),
+  payload: WsAttemptEvidencePayload,
+});
+export type WsAttemptEvidenceRequest = z.infer<typeof WsAttemptEvidenceRequest>;
 
 export const WsTaskExecutePayload = z
   .object({
@@ -742,6 +771,50 @@ export const WsPingResponseEnvelope = z.union([
 ]);
 export type WsPingResponseEnvelope = z.infer<typeof WsPingResponseEnvelope>;
 
+export const WsCapabilityReadyResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("capability.ready"),
+});
+export type WsCapabilityReadyResponseOkEnvelope = z.infer<
+  typeof WsCapabilityReadyResponseOkEnvelope
+>;
+
+export const WsCapabilityReadyResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("capability.ready"),
+});
+export type WsCapabilityReadyResponseErrEnvelope = z.infer<
+  typeof WsCapabilityReadyResponseErrEnvelope
+>;
+
+export const WsCapabilityReadyResponseEnvelope = z.union([
+  WsCapabilityReadyResponseOkEnvelope,
+  WsCapabilityReadyResponseErrEnvelope,
+]);
+export type WsCapabilityReadyResponseEnvelope = z.infer<
+  typeof WsCapabilityReadyResponseEnvelope
+>;
+
+export const WsAttemptEvidenceResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("attempt.evidence"),
+});
+export type WsAttemptEvidenceResponseOkEnvelope = z.infer<
+  typeof WsAttemptEvidenceResponseOkEnvelope
+>;
+
+export const WsAttemptEvidenceResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("attempt.evidence"),
+});
+export type WsAttemptEvidenceResponseErrEnvelope = z.infer<
+  typeof WsAttemptEvidenceResponseErrEnvelope
+>;
+
+export const WsAttemptEvidenceResponseEnvelope = z.union([
+  WsAttemptEvidenceResponseOkEnvelope,
+  WsAttemptEvidenceResponseErrEnvelope,
+]);
+export type WsAttemptEvidenceResponseEnvelope = z.infer<
+  typeof WsAttemptEvidenceResponseEnvelope
+>;
+
 export const WsTaskExecuteResponseOkEnvelope = WsResponseOkEnvelope.extend({
   type: z.literal("task.execute"),
   result: WsTaskExecuteResult,
@@ -859,6 +932,10 @@ export const WsResponse = z.union([
   WsPresenceBeaconResponseErrEnvelope,
   WsPingResponseOkEnvelope,
   WsPingResponseErrEnvelope,
+  WsCapabilityReadyResponseOkEnvelope,
+  WsCapabilityReadyResponseErrEnvelope,
+  WsAttemptEvidenceResponseOkEnvelope,
+  WsAttemptEvidenceResponseErrEnvelope,
   WsTaskExecuteResponseOkEnvelope,
   WsTaskExecuteResponseErrEnvelope,
   WsApprovalRequestResponseOkEnvelope,
@@ -962,6 +1039,37 @@ export const WsArtifactCreatedEvent = WsEventEnvelope.extend({
   payload: WsArtifactCreatedEventPayload,
 });
 export type WsArtifactCreatedEvent = z.infer<typeof WsArtifactCreatedEvent>;
+
+export const WsCapabilityReadyEventPayload = z
+  .object({
+    node_id: NodeId,
+    capabilities: z.array(CapabilityDescriptor).default([]),
+  })
+  .strict();
+export type WsCapabilityReadyEventPayload = z.infer<typeof WsCapabilityReadyEventPayload>;
+
+export const WsCapabilityReadyEvent = WsEventEnvelope.extend({
+  type: z.literal("capability.ready"),
+  payload: WsCapabilityReadyEventPayload,
+});
+export type WsCapabilityReadyEvent = z.infer<typeof WsCapabilityReadyEvent>;
+
+export const WsAttemptEvidenceEventPayload = z
+  .object({
+    node_id: NodeId,
+    run_id: ExecutionRunId,
+    step_id: ExecutionStepId,
+    attempt_id: ExecutionAttemptId,
+    evidence: z.unknown(),
+  })
+  .strict();
+export type WsAttemptEvidenceEventPayload = z.infer<typeof WsAttemptEvidenceEventPayload>;
+
+export const WsAttemptEvidenceEvent = WsEventEnvelope.extend({
+  type: z.literal("attempt.evidence"),
+  payload: WsAttemptEvidenceEventPayload,
+});
+export type WsAttemptEvidenceEvent = z.infer<typeof WsAttemptEvidenceEvent>;
 
 export const WsPairingRequestedEventPayload = z
   .object({
@@ -1096,7 +1204,9 @@ export const WsRequest = z.discriminatedUnion("type", [
   WsPairingRevokeRequest,
   WsPairingApproveRequest,
   WsPairingDenyRequest,
+  WsCapabilityReadyRequest,
   WsTaskExecuteRequest,
+  WsAttemptEvidenceRequest,
   WsApprovalRequest,
   WsApprovalListRequest,
   WsApprovalResolveRequest,
@@ -1111,6 +1221,8 @@ export const WsEvent = z.discriminatedUnion("type", [
   WsStepUpdatedEvent,
   WsAttemptUpdatedEvent,
   WsArtifactCreatedEvent,
+  WsCapabilityReadyEvent,
+  WsAttemptEvidenceEvent,
   WsPairingRequestedEvent,
   WsPairingApprovedEvent,
   WsPairingResolvedEvent,
