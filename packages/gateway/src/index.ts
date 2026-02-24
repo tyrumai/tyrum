@@ -1379,6 +1379,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     watcherScheduler?.stop();
     artifactLifecycleScheduler?.stop();
     outboxLifecycleScheduler?.stop();
+    stateStoreLifecycleScheduler?.stop();
     outboxPoller?.stop();
     telegramProcessor?.stop();
     container.modelsDev.stopBackgroundRefresh();
