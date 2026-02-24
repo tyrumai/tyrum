@@ -686,24 +686,39 @@ describe("Failure matrix (scaling-ha)", () => {
   });
 
   it("tolerates transient DB failures in watcher scheduler interval (scheduler↔DB partition)", async () => {
-    let ticks = 0;
-    const failingDb = {
+    const dir = await mkdtemp(join(tmpdir(), "tyrum-failure-matrix-scheduler-db-partition-"));
+    dirs.push(dir);
+    const dbPath = join(dir, "gateway.db");
+
+    const db = openTestSqliteDb(dbPath);
+    dbs.push(db);
+
+    await db.run(
+      `INSERT INTO watchers (plan_id, trigger_type, trigger_config, active, created_at, updated_at)
+       VALUES ('plan-1', 'periodic', ?, 1, datetime('now'), datetime('now'))`,
+      [JSON.stringify({ intervalMs: 1000 })],
+    );
+
+    let allCalls = 0;
+    let failAllOnce = true;
+    const flakyDb = {
       kind: "sqlite" as const,
-      all: async () => {
-        ticks += 1;
-        throw new Error("db down");
+      get: db.get.bind(db),
+      run: db.run.bind(db),
+      exec: db.exec.bind(db),
+      transaction: db.transaction.bind(db),
+      all: async <T>(sql: string, params: readonly unknown[] = []): Promise<T[]> => {
+        allCalls += 1;
+        if (failAllOnce) {
+          failAllOnce = false;
+          throw new Error("db down");
+        }
+        return await db.all<T>(sql, params);
       },
-      get: async () => undefined,
-      run: async () => ({ changes: 0 }),
-      exec: async () => undefined,
-      transaction: async () => {
-        throw new Error("db down");
-      },
-      close: async () => undefined,
     } as unknown as SqliteDb;
 
     const scheduler = new WatcherScheduler({
-      db: failingDb,
+      db: flakyDb,
       memoryDal: { insertEpisodicEvent: async () => undefined } as never,
       eventBus: { emit: () => undefined } as never,
       tickMs: 10,
@@ -711,8 +726,20 @@ describe("Failure matrix (scaling-ha)", () => {
 
     scheduler.start();
     try {
-      await delay(50);
-      expect(ticks).toBeGreaterThan(0);
+      const deadlineMs = Date.now() + 1_000;
+      let enqueued = false;
+      while (Date.now() < deadlineMs) {
+        const firing = await db.get<{ status: string }>(
+          "SELECT status FROM watcher_firings ORDER BY scheduled_at_ms ASC LIMIT 1",
+        );
+        if (firing?.status === "enqueued") {
+          enqueued = true;
+          break;
+        }
+        await delay(10);
+      }
+      expect(allCalls).toBeGreaterThan(0);
+      expect(enqueued).toBe(true);
     } finally {
       scheduler.stop();
     }
