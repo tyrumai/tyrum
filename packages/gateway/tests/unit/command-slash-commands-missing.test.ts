@@ -131,6 +131,15 @@ describe("missing slash commands", () => {
     }
   });
 
+  it("returns unavailable for /usage provider without agents", async () => {
+    db = openTestSqliteDb();
+
+    const result = await executeCommand("/usage provider", { db });
+
+    expect(result.output).toBe("Provider usage polling is not available on this gateway instance.");
+    expect(result.data).toBeNull();
+  });
+
   it("supports /model <provider/model> for a session", async () => {
     db = openTestSqliteDb();
 
@@ -153,6 +162,45 @@ describe("missing slash commands", () => {
        FROM session_model_overrides
        WHERE agent_id = ? AND session_id = ?`,
       ["default", "ui:thread-1"],
+    );
+    expect(row?.model_id).toBe("openai/gpt-4.1");
+  });
+
+  it("supports /model using key/lane context (resolves session)", async () => {
+    db = openTestSqliteDb();
+
+    const nowMs = Date.now();
+    const key = "agent:default:telegram:work:group:thread-1";
+
+    await db.run(
+      `INSERT INTO channel_inbox (
+         source,
+         thread_id,
+         message_id,
+         key,
+         lane,
+         received_at_ms,
+         payload_json,
+         status
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, 'completed')`,
+      ["telegram:work", "thread-1", "msg-1", key, "main", nowMs, "{}"],
+    );
+
+    const result = await executeCommand("/model openai/gpt-4.1", {
+      db,
+      commandContext: { key, lane: "main" },
+    });
+
+    expect(result.data).toMatchObject({
+      session_id: "telegram:thread-1",
+      model_id: "openai/gpt-4.1",
+    });
+
+    const row = await db.get<{ model_id: string }>(
+      `SELECT model_id
+       FROM session_model_overrides
+       WHERE agent_id = ? AND session_id = ?`,
+      ["default", "telegram:thread-1"],
     );
     expect(row?.model_id).toBe("openai/gpt-4.1");
   });

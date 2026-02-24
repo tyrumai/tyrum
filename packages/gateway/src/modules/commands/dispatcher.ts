@@ -1,4 +1,4 @@
-import { AttemptCost } from "@tyrum/schemas";
+import { AttemptCost, parseTyrumKey } from "@tyrum/schemas";
 import type { SqlDb, StateStoreKind } from "../../statestore/types.js";
 import type { ConnectionManager } from "../../ws/connection-manager.js";
 import type { ApprovalDal } from "../approval/dal.js";
@@ -19,6 +19,7 @@ import { SessionModelOverrideDal } from "../models/session-model-override-dal.js
 import { isAuthProfilesEnabled } from "../models/auth-profiles-enabled.js";
 import { LaneQueueModeOverrideDal } from "../lanes/queue-mode-override-dal.js";
 import { SessionSendPolicyOverrideDal } from "../channels/send-policy-override-dal.js";
+import { parseChannelSourceKey } from "../channels/interface.js";
 
 export type CommandExecuteResult = {
   output: string;
@@ -107,6 +108,76 @@ async function resolveKeyLane(db: SqlDb, ctx: CommandDeps["commandContext"] | un
   );
   if (!row?.key) return undefined;
   return { key: row.key, lane: row.lane };
+}
+
+function resolveAgentId(ctx: CommandDeps["commandContext"] | undefined): string {
+  const explicit = ctx?.agentId?.trim();
+  if (explicit) return explicit;
+
+  const key = ctx?.key?.trim();
+  if (key) {
+    try {
+      const parsed = parseTyrumKey(key as never);
+      if (parsed.kind === "agent") return parsed.agent_id;
+    } catch {
+      // ignore invalid keys; fall back to default agent
+    }
+  }
+
+  return "default";
+}
+
+async function resolveChannelThread(db: SqlDb, ctx: CommandDeps["commandContext"] | undefined): Promise<{ channel: string; threadId: string } | undefined> {
+  const channelRaw = ctx?.channel?.trim();
+  const threadIdRaw = ctx?.threadId?.trim();
+  if (channelRaw && threadIdRaw) {
+    let channel = channelRaw;
+    try {
+      channel = parseChannelSourceKey(channelRaw).connector;
+    } catch {
+      const idx = channel.indexOf(":");
+      if (idx > 0) channel = channel.slice(0, idx);
+    }
+    return { channel, threadId: threadIdRaw };
+  }
+
+  const key = ctx?.key?.trim();
+  const lane = ctx?.lane?.trim() || "main";
+  if (!key) return undefined;
+
+  const row = await db.get<{ source: string; thread_id: string }>(
+    `SELECT source, thread_id
+     FROM channel_inbox
+     WHERE key = ? AND lane = ?
+     ORDER BY received_at_ms DESC, inbox_id DESC
+     LIMIT 1`,
+    [key, lane],
+  );
+  if (row?.source && row?.thread_id) {
+    let channel = row.source.trim();
+    try {
+      channel = parseChannelSourceKey(channel).connector;
+    } catch {
+      const idx = channel.indexOf(":");
+      if (idx > 0) channel = channel.slice(0, idx);
+    }
+    const threadId = row.thread_id.trim();
+    if (!channel || !threadId) return undefined;
+    return { channel, threadId };
+  }
+
+  try {
+    const parsed = parseTyrumKey(key as never);
+    if (parsed.kind === "agent" && "channel" in parsed && "id" in parsed) {
+      const channel = String(parsed.channel).trim();
+      const threadId = String(parsed.id).trim();
+      if (channel && threadId) return { channel, threadId };
+    }
+  } catch {
+    // ignore parse errors
+  }
+
+  return undefined;
 }
 
 function addOptional(total: number, value: unknown): number {
@@ -400,7 +471,7 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
   if (cmd === "usage") {
     const sub = toks[1]?.toLowerCase();
     if (sub === "provider") {
-      if (!deps.db) {
+      if (!deps.db || !deps.agents) {
         return { output: "Provider usage polling is not available on this gateway instance.", data: null };
       }
       const poller = new ProviderUsagePoller({
@@ -431,12 +502,12 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
     }
 
     const ctx = deps.commandContext;
-    const channel = ctx?.channel?.trim();
-    const threadId = ctx?.threadId?.trim();
-    if (!channel || !threadId) {
-      return { output: "Usage: /model <provider/model> (requires session context)", data: null };
+    const agentId = resolveAgentId(ctx);
+    const resolved = await resolveChannelThread(deps.db, ctx);
+    if (!resolved) {
+      return { output: "Usage: /model <provider/model> (requires key or channel/thread context)", data: null };
     }
-    const agentId = ctx?.agentId?.trim() || "default";
+    const { channel, threadId } = resolved;
 
     const sessionDal = new SessionDal(deps.db);
     const session = await sessionDal.getOrCreate(channel, threadId, agentId);
