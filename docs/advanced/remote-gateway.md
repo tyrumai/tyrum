@@ -15,7 +15,10 @@ Use this when Tyrum needs to run on a different machine than your local workstat
 Example:
 
 ```bash
-GATEWAY_HOST=0.0.0.0 GATEWAY_PORT=8788 tyrum-gateway
+GATEWAY_HOST=0.0.0.0 GATEWAY_PORT=8788 \
+  GATEWAY_TOKEN="$(openssl rand -hex 32)" \
+  TYRUM_TLS_READY=1 \
+  tyrum start
 ```
 
 ## Security expectations
@@ -28,6 +31,8 @@ Recommended minimum controls:
 - Use TLS termination in front of the gateway.
 - Avoid direct internet exposure without access controls.
 - Rotate API keys used by external model providers.
+
+If you are operating in a trusted internal network without TLS (not recommended), you can acknowledge plaintext HTTP by setting `TYRUM_ALLOW_INSECURE_HTTP=1`.
 
 ## Operations checklist
 

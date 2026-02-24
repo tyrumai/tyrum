@@ -10,6 +10,8 @@ services:
       TYRUM_HOME: /var/lib/tyrum
       GATEWAY_HOST: 0.0.0.0
       GATEWAY_PORT: "8788"
+      # Local dev default: allow plaintext HTTP. For remote access, configure TLS termination and set TYRUM_TLS_READY=1.
+      TYRUM_ALLOW_INSECURE_HTTP: "1"
       GATEWAY_DB_PATH: /var/lib/tyrum/gateway.db
       TYRUM_ENGINE_API_ENABLED: "1"
       # Artifact storage: default to filesystem; set TYRUM_ARTIFACT_STORE=s3 and
@@ -41,10 +43,12 @@ services:
       TYRUM_HOME: /var/lib/tyrum
       GATEWAY_HOST: 0.0.0.0
       GATEWAY_PORT: "8788"
+      # Local dev default: allow plaintext HTTP. For remote access, configure TLS termination and set TYRUM_TLS_READY=1.
+      TYRUM_ALLOW_INSECURE_HTTP: "1"
       TYRUM_ENGINE_API_ENABLED: "1"
       GATEWAY_DB_PATH: ${GATEWAY_DB_PATH:-postgres://${POSTGRES_USER:-tyrum}:${POSTGRES_PASSWORD:-tyrum}@postgres:5432/${POSTGRES_DB:-tyrum}}
       # In split mode, ensure all services share the same admin token.
-      GATEWAY_TOKEN: ${GATEWAY_TOKEN:-tyrum-dev-token}
+      GATEWAY_TOKEN: ${GATEWAY_TOKEN:?Set GATEWAY_TOKEN (>=32 chars) for split mode}
       # Split mode should not rely on shared filesystem secrets.
       TYRUM_SECRET_PROVIDER: env
       # Artifact storage: default to filesystem; set TYRUM_ARTIFACT_STORE=s3 and
@@ -70,7 +74,7 @@ services:
     environment:
       TYRUM_HOME: /var/lib/tyrum
       GATEWAY_DB_PATH: ${GATEWAY_DB_PATH:-postgres://${POSTGRES_USER:-tyrum}:${POSTGRES_PASSWORD:-tyrum}@postgres:5432/${POSTGRES_DB:-tyrum}}
-      GATEWAY_TOKEN: ${GATEWAY_TOKEN:-tyrum-dev-token}
+      GATEWAY_TOKEN: ${GATEWAY_TOKEN:?Set GATEWAY_TOKEN (>=32 chars) for split mode}
       TYRUM_SECRET_PROVIDER: env
       TYRUM_ARTIFACT_STORE: ${TYRUM_ARTIFACT_STORE:-fs}
       TYRUM_ARTIFACTS_DIR: /var/lib/tyrum/artifacts
@@ -93,7 +97,7 @@ services:
     environment:
       TYRUM_HOME: /var/lib/tyrum
       GATEWAY_DB_PATH: ${GATEWAY_DB_PATH:-postgres://${POSTGRES_USER:-tyrum}:${POSTGRES_PASSWORD:-tyrum}@postgres:5432/${POSTGRES_DB:-tyrum}}
-      GATEWAY_TOKEN: ${GATEWAY_TOKEN:-tyrum-dev-token}
+      GATEWAY_TOKEN: ${GATEWAY_TOKEN:?Set GATEWAY_TOKEN (>=32 chars) for split mode}
       TYRUM_SECRET_PROVIDER: env
       TYRUM_ARTIFACT_STORE: ${TYRUM_ARTIFACT_STORE:-fs}
       TYRUM_ARTIFACTS_DIR: /var/lib/tyrum/artifacts

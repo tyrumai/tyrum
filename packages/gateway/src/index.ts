@@ -91,6 +91,56 @@ type UpdateChannel = "stable" | "beta" | "dev";
 
 type GatewayRole = "all" | "edge" | "worker" | "scheduler";
 
+export type NonLoopbackTransportPolicy = "local" | "tls" | "insecure";
+
+function isTruthyEnvFlag(value: string | undefined): boolean {
+  const trimmed = value?.trim().toLowerCase();
+  if (!trimmed) return false;
+  return !["0", "false", "off", "no"].includes(trimmed);
+}
+
+export function assertNonLoopbackDeploymentGuardrails(input: {
+  role: GatewayRole;
+  host: string;
+  token: string | undefined;
+}): NonLoopbackTransportPolicy {
+  const shouldRunEdge = input.role === "all" || input.role === "edge";
+  if (!shouldRunEdge) return "local";
+
+  const hostSplit = splitHostAndPort(input.host);
+  const hostForLoopback = hostSplit.host.length > 0 ? hostSplit.host : input.host;
+  const isLocalOnly = isLoopbackHost(hostForLoopback);
+  if (isLocalOnly) return "local";
+
+  const token = input.token?.trim() ?? "";
+  if (token.length === 0) {
+    throw new Error(
+      "Gateway is exposed beyond loopback but no admin token is configured. " +
+        "Set GATEWAY_TOKEN (recommended) or provide a non-empty TYRUM_HOME/.admin-token file.",
+    );
+  }
+
+  const minTokenLength = 32;
+  if (token.length < minTokenLength) {
+    throw new Error(
+      `Gateway is exposed beyond loopback but the admin token is too short (${token.length}). ` +
+        `Set GATEWAY_TOKEN to a high-entropy secret of at least ${minTokenLength} characters.`,
+    );
+  }
+
+  const tlsReady = isTruthyEnvFlag(process.env["TYRUM_TLS_READY"]);
+  if (tlsReady) return "tls";
+
+  const allowInsecureHttp = isTruthyEnvFlag(process.env["TYRUM_ALLOW_INSECURE_HTTP"]);
+  if (allowInsecureHttp) return "insecure";
+
+  throw new Error(
+    "Gateway is configured to bind to a non-loopback address. Remote operation requires TLS. " +
+      "Set TYRUM_TLS_READY=1 after configuring TLS termination (recommended), " +
+      "or set TYRUM_ALLOW_INSECURE_HTTP=1 to acknowledge and allow plaintext HTTP in a trusted network.",
+  );
+}
+
 type CliCommand =
   | { kind: "start"; role: GatewayRole }
   | { kind: "check" }
@@ -826,12 +876,18 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   const tokenStore = new TokenStore(tyrumHome);
   const token = await tokenStore.initialize();
 
-  if (!isLocalOnly) {
+  const transportPolicy = assertNonLoopbackDeploymentGuardrails({ role, host, token });
+
+  if (transportPolicy !== "local") {
     const tokenPath = join(tyrumHome, ".admin-token");
     console.log("---");
     console.log("Gateway is exposed on a non-local interface.");
     console.log(`Admin token stored at: ${tokenPath}`);
     console.log("Read it with: cat " + tokenPath);
+    if (transportPolicy === "insecure") {
+      console.log("WARNING: TYRUM_ALLOW_INSECURE_HTTP=1 is set; plaintext HTTP is allowed.");
+      console.log("Configure TLS termination and set TYRUM_TLS_READY=1 for remote access.");
+    }
     console.log("---");
   }
 
@@ -890,10 +946,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   }
 
   const shouldRunEdge = role === "all" || role === "edge";
-  const engineApiEnabledRaw = process.env["TYRUM_ENGINE_API_ENABLED"]?.trim();
-  const engineApiEnabled =
-    engineApiEnabledRaw &&
-    !["0", "false", "off", "no"].includes(engineApiEnabledRaw.toLowerCase());
+  const engineApiEnabled = isTruthyEnvFlag(process.env["TYRUM_ENGINE_API_ENABLED"]);
 
   const connectionManager = new ConnectionManager();
   const outboxDal = new OutboxDal(container.db, container.redactionEngine);
