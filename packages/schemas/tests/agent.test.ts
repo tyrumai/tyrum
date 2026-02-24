@@ -17,6 +17,7 @@ describe("AgentConfig", () => {
 
     expect(parsed.model.model).toBe("openai/gpt-4.1");
     expect(parsed.skills.enabled).toEqual([]);
+    expect(parsed.skills.workspace_trusted).toBe(false);
     expect(parsed.mcp.enabled).toEqual([]);
     expect(parsed.tools.allow).toEqual([]);
     expect(parsed.sessions.ttl_days).toBe(30);

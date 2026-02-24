@@ -322,6 +322,8 @@ export {
   SkillRequires,
   SkillFrontmatter,
   SkillManifest,
+  SkillProvenanceSource,
+  SkillStatus,
   McpServerSpec,
   AgentTurnRequest,
   AgentTurnResponse,

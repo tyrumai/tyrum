@@ -24,6 +24,7 @@ export type AgentModelConfig = z.infer<typeof AgentModelConfig>;
 
 export const AgentSkillConfig = z.object({
   enabled: z.array(z.string().trim().min(1)).default([]),
+  workspace_trusted: z.boolean().default(false),
 });
 export type AgentSkillConfig = z.infer<typeof AgentSkillConfig>;
 
@@ -50,7 +51,7 @@ export type AgentMemoryConfig = z.infer<typeof AgentMemoryConfig>;
 
 export const AgentConfig = z.object({
   model: AgentModelConfig,
-  skills: AgentSkillConfig.default({ enabled: [] }),
+  skills: AgentSkillConfig.default({ enabled: [], workspace_trusted: false }),
   mcp: AgentMcpConfig.default({ enabled: [] }),
   tools: AgentToolConfig.default({ allow: [] }),
   sessions: AgentSessionConfig.default({ ttl_days: 30, max_turns: 20 }),
@@ -101,6 +102,19 @@ export const SkillManifest = z.object({
   body: z.string(),
 });
 export type SkillManifest = z.infer<typeof SkillManifest>;
+
+export const SkillProvenanceSource = z.enum(["workspace", "user", "bundled"]);
+export type SkillProvenanceSource = z.infer<typeof SkillProvenanceSource>;
+
+export const SkillStatus = z
+  .object({
+    id: z.string().trim().min(1),
+    name: z.string().trim().min(1),
+    version: z.string().trim().min(1),
+    source: SkillProvenanceSource,
+  })
+  .strict();
+export type SkillStatus = z.infer<typeof SkillStatus>;
 
 const McpServerBase = z.object({
   id: z.string().trim().min(1),
@@ -196,6 +210,8 @@ export const AgentStatusResponse = z.object({
   }),
   model: AgentModelConfig,
   skills: z.array(z.string()),
+  skills_detailed: z.array(SkillStatus).optional(),
+  workspace_skills_trusted: z.boolean().optional(),
   mcp: z.array(
     z.object({
       id: z.string(),

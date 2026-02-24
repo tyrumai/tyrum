@@ -23,6 +23,10 @@ import {
 } from "./home.js";
 import { parseFrontmatterDocument } from "./frontmatter.js";
 
+export type SkillProvenanceSource = "workspace" | "user" | "bundled";
+export type SkillProvenance = { source: SkillProvenanceSource; path: string };
+export type LoadedSkillManifest = SkillManifestT & { provenance: SkillProvenance };
+
 function readYamlObject(contents: string): Record<string, unknown> {
   const parsed = parseYaml(contents);
   if (!parsed || typeof parsed !== "object") {
@@ -50,15 +54,23 @@ export async function loadIdentity(home: string): Promise<IdentityPackT> {
 async function loadSkillFromDir(
   skillsDir: string,
   skillId: string,
-): Promise<SkillManifestT | undefined> {
+  source: SkillProvenanceSource,
+): Promise<LoadedSkillManifest | undefined> {
   const skillPath = join(skillsDir, skillId, "SKILL.md");
   try {
     const contents = await readFile(skillPath, "utf-8");
     const parsed = parseFrontmatterDocument(contents);
-    return SkillManifest.parse({
+    const manifest = SkillManifest.parse({
       meta: parsed.frontmatter,
       body: parsed.body.trim(),
     });
+    return {
+      ...manifest,
+      provenance: {
+        source,
+        path: skillPath,
+      },
+    };
   } catch {
     return undefined;
   }
@@ -67,18 +79,21 @@ async function loadSkillFromDir(
 export async function loadEnabledSkills(
   home: string,
   config: AgentConfigT,
-): Promise<SkillManifestT[]> {
-  const loaded: SkillManifestT[] = [];
+): Promise<LoadedSkillManifest[]> {
+  const loaded: LoadedSkillManifest[] = [];
 
-  const workspaceSkillsDir = resolveSkillsDir(home);
   const userSkillsDir = resolveUserSkillsDir();
   const bundledSkillsDir = resolveBundledSkillsDir();
+  const workspaceSkillsDir = resolveSkillsDir(home);
+  const workspaceTrusted = config.skills.workspace_trusted === true;
 
   for (const skillId of config.skills.enabled) {
     const manifest =
-      (await loadSkillFromDir(workspaceSkillsDir, skillId)) ??
-      (await loadSkillFromDir(userSkillsDir, skillId)) ??
-      (await loadSkillFromDir(bundledSkillsDir, skillId));
+      (workspaceTrusted
+        ? await loadSkillFromDir(workspaceSkillsDir, skillId, "workspace")
+        : undefined) ??
+      (await loadSkillFromDir(userSkillsDir, skillId, "user")) ??
+      (await loadSkillFromDir(bundledSkillsDir, skillId, "bundled"));
     if (manifest) {
       loaded.push(manifest);
     }
