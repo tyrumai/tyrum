@@ -46,6 +46,18 @@ function newTotals(): UsageTotals {
   };
 }
 
+function safeDetail(err: unknown): string | undefined {
+  if (err instanceof Error) {
+    const msg = err.message.trim();
+    if (msg.length > 0) return msg.slice(0, 512);
+  }
+  if (typeof err === "string") {
+    const msg = err.trim();
+    if (msg.length > 0) return msg.slice(0, 512);
+  }
+  return undefined;
+}
+
 export function createUsageRoutes(deps: UsageRouteDeps): Hono {
   const app = new Hono();
   const providerUsagePoller = new ProviderUsagePoller({
@@ -101,7 +113,28 @@ export function createUsageRoutes(deps: UsageRouteDeps): Hono {
     }
 
     const provider: ProviderUsageResult | null = isAuthProfilesEnabled()
-      ? await providerUsagePoller.pollLatestPinned()
+      ? await (async () => {
+          try {
+            return await providerUsagePoller.pollLatestPinned();
+          } catch (err) {
+            const detail = safeDetail(err);
+            deps.logger?.warn("usage.provider_poll_unhandled", {
+              code: "provider_poll_failed",
+              error: detail ?? "unknown error",
+            });
+            return {
+              status: "unavailable",
+              cached: false,
+              polled_at: null,
+              error: {
+                code: "provider_poll_failed",
+                message: "Provider usage polling failed.",
+                detail,
+                retryable: true,
+              },
+            };
+          }
+        })()
       : null;
 
     return c.json({

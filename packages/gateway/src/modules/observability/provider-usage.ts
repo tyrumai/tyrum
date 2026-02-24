@@ -1,7 +1,7 @@
 import type { AgentRegistry } from "../agent/registry.js";
 import { isAuthProfilesEnabled } from "../models/auth-profiles-enabled.js";
 import type { AuthProfileDal, AuthProfileRow } from "../models/auth-profile-dal.js";
-import type { SessionProviderPinDal } from "../models/session-pin-dal.js";
+import type { SessionProviderPinDal, SessionProviderPinRow } from "../models/session-pin-dal.js";
 import { createSecretHandleResolver } from "../secret/handle-resolver.js";
 import type { Logger } from "./logger.js";
 
@@ -55,6 +55,18 @@ function toError(err: unknown, fallback: ProviderUsageError): ProviderUsageError
     if (msg.length > 0) return { ...fallback, message: msg };
   }
   return fallback;
+}
+
+function safeDetail(err: unknown): string | undefined {
+  if (err instanceof Error) {
+    const msg = err.message.trim();
+    if (msg.length > 0) return msg.slice(0, 512);
+  }
+  if (typeof err === "string") {
+    const msg = err.trim();
+    if (msg.length > 0) return msg.slice(0, 512);
+  }
+  return undefined;
 }
 
 function isProviderUsageError(value: unknown): value is ProviderUsageError {
@@ -117,7 +129,27 @@ export class ProviderUsagePoller {
       };
     }
 
-    const pins = await this.deps.pinDal.list({ limit: 1 });
+    let pins: SessionProviderPinRow[] = [];
+    try {
+      pins = await this.deps.pinDal.list({ limit: 1 });
+    } catch (err) {
+      const error: ProviderUsageError = {
+        code: "pin_list_failed",
+        message: "Failed to load pinned provider profiles.",
+        detail: safeDetail(err),
+        retryable: true,
+      };
+      this.deps.logger?.warn("usage.pin_list_failed", {
+        code: error.code,
+        error: error.detail ?? error.message,
+      });
+      return {
+        status: "unavailable",
+        cached: false,
+        polled_at: null,
+        error,
+      };
+    }
     const pin = pins[0];
     if (!pin) {
       return {
@@ -160,7 +192,33 @@ export class ProviderUsagePoller {
   }): Promise<ProviderUsageResult> {
     const { provider, profileId, agentId } = input;
 
-    const profile = await this.deps.authProfileDal?.getById(profileId);
+    const nowIso = new Date().toISOString();
+
+    let profile: AuthProfileRow | undefined;
+    try {
+      profile = await this.deps.authProfileDal?.getById(profileId);
+    } catch (err) {
+      const error: ProviderUsageError = {
+        code: "auth_profile_lookup_failed",
+        message: "Failed to load pinned auth profile.",
+        detail: safeDetail(err),
+        retryable: true,
+      };
+      this.deps.logger?.warn("usage.auth_profile_lookup_failed", {
+        provider,
+        profile_id: profileId,
+        code: error.code,
+        error: error.detail ?? error.message,
+      });
+      return {
+        status: "error",
+        provider,
+        profile_id: profileId,
+        cached: false,
+        polled_at: nowIso,
+        error,
+      };
+    }
     if (!profile) {
       return {
         status: "error",
@@ -222,8 +280,6 @@ export class ProviderUsagePoller {
         },
       };
     }
-
-    const nowIso = new Date().toISOString();
 
     let token: string | null = null;
     try {

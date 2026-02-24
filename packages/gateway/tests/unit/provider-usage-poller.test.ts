@@ -164,4 +164,66 @@ describe("ProviderUsagePoller", () => {
       vi.useRealTimers();
     }
   });
+
+  it("returns a structured result when pin listing throws", async () => {
+    const prevEnabled = process.env["TYRUM_AUTH_PROFILES_ENABLED"];
+    process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "1";
+
+    try {
+      const authProfileDal = {} as unknown as AuthProfileDal;
+      const pinDal = {
+        async list() {
+          throw new Error("db down");
+        },
+      } as unknown as SessionProviderPinDal;
+
+      const poller = new ProviderUsagePoller({ authProfileDal, pinDal });
+
+      await expect(poller.pollLatestPinned()).resolves.toMatchObject({
+        status: "unavailable",
+        error: { code: "pin_list_failed", retryable: true },
+      });
+    } finally {
+      process.env["TYRUM_AUTH_PROFILES_ENABLED"] = prevEnabled;
+    }
+  });
+
+  it("returns a structured result when auth profile lookup throws", async () => {
+    const prevEnabled = process.env["TYRUM_AUTH_PROFILES_ENABLED"];
+    process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "1";
+
+    try {
+      const pin: SessionProviderPinRow = {
+        agent_id: "default",
+        session_id: "session-1",
+        provider: "openrouter",
+        profile_id: "profile-1",
+        pinned_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const authProfileDal = {
+        async getById() {
+          throw new Error("db down");
+        },
+      } as unknown as AuthProfileDal;
+
+      const pinDal = {
+        async list() {
+          return [pin];
+        },
+      } as unknown as SessionProviderPinDal;
+
+      const poller = new ProviderUsagePoller({ authProfileDal, pinDal });
+
+      await expect(poller.pollLatestPinned()).resolves.toMatchObject({
+        status: "error",
+        provider: "openrouter",
+        profile_id: "profile-1",
+        error: { code: "auth_profile_lookup_failed", retryable: true },
+      });
+    } finally {
+      process.env["TYRUM_AUTH_PROFILES_ENABLED"] = prevEnabled;
+    }
+  });
 });
