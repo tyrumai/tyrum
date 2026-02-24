@@ -11,12 +11,14 @@ import {
   ApprovalResolveResponse,
 } from "./approval.js";
 import { ArtifactRef } from "./artifact.js";
+import { ContextReport } from "./context.js";
 import {
   ExecutionAttempt,
   ExecutionAttemptId,
   ExecutionBudgets,
   ExecutionRun,
   ExecutionRunId,
+  ExecutionRunPausedPayload,
   ExecutionStep,
   ExecutionStepId,
 } from "./execution.js";
@@ -1010,6 +1012,42 @@ export const WsRunUpdatedEvent = WsEventEnvelope.extend({
 });
 export type WsRunUpdatedEvent = z.infer<typeof WsRunUpdatedEvent>;
 
+export const WsRunPausedEventPayload = ExecutionRunPausedPayload;
+export type WsRunPausedEventPayload = z.infer<typeof WsRunPausedEventPayload>;
+
+export const WsRunPausedEvent = WsEventEnvelope.extend({
+  type: z.literal("run.paused"),
+  payload: WsRunPausedEventPayload,
+});
+export type WsRunPausedEvent = z.infer<typeof WsRunPausedEvent>;
+
+export const WsRunResumedEventPayload = z
+  .object({
+    run_id: ExecutionRunId,
+  })
+  .strict();
+export type WsRunResumedEventPayload = z.infer<typeof WsRunResumedEventPayload>;
+
+export const WsRunResumedEvent = WsEventEnvelope.extend({
+  type: z.literal("run.resumed"),
+  payload: WsRunResumedEventPayload,
+});
+export type WsRunResumedEvent = z.infer<typeof WsRunResumedEvent>;
+
+export const WsRunCancelledEventPayload = z
+  .object({
+    run_id: ExecutionRunId,
+    reason: z.string().optional(),
+  })
+  .strict();
+export type WsRunCancelledEventPayload = z.infer<typeof WsRunCancelledEventPayload>;
+
+export const WsRunCancelledEvent = WsEventEnvelope.extend({
+  type: z.literal("run.cancelled"),
+  payload: WsRunCancelledEventPayload,
+});
+export type WsRunCancelledEvent = z.infer<typeof WsRunCancelledEvent>;
+
 export const WsStepUpdatedEventPayload = z
   .object({
     step: ExecutionStep,
@@ -1048,6 +1086,53 @@ export const WsArtifactCreatedEvent = WsEventEnvelope.extend({
   payload: WsArtifactCreatedEventPayload,
 });
 export type WsArtifactCreatedEvent = z.infer<typeof WsArtifactCreatedEvent>;
+
+export const WsArtifactAttachedEventPayload = z
+  .object({
+    artifact: ArtifactRef,
+    step_id: ExecutionStepId,
+    attempt_id: ExecutionAttemptId,
+  })
+  .strict();
+export type WsArtifactAttachedEventPayload = z.infer<typeof WsArtifactAttachedEventPayload>;
+
+export const WsArtifactAttachedEvent = WsEventEnvelope.extend({
+  type: z.literal("artifact.attached"),
+  payload: WsArtifactAttachedEventPayload,
+});
+export type WsArtifactAttachedEvent = z.infer<typeof WsArtifactAttachedEvent>;
+
+export const WsArtifactFetchedBy = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("http"),
+      request_id: z.string().trim().min(1).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("ws"),
+      request_id: z.string().trim().min(1).optional(),
+      client_id: z.string().trim().min(1).optional(),
+      device_id: z.string().trim().min(1).optional(),
+    })
+    .strict(),
+]);
+export type WsArtifactFetchedBy = z.infer<typeof WsArtifactFetchedBy>;
+
+export const WsArtifactFetchedEventPayload = z
+  .object({
+    artifact: ArtifactRef,
+    fetched_by: WsArtifactFetchedBy,
+  })
+  .strict();
+export type WsArtifactFetchedEventPayload = z.infer<typeof WsArtifactFetchedEventPayload>;
+
+export const WsArtifactFetchedEvent = WsEventEnvelope.extend({
+  type: z.literal("artifact.fetched"),
+  payload: WsArtifactFetchedEventPayload,
+});
+export type WsArtifactFetchedEvent = z.infer<typeof WsArtifactFetchedEvent>;
 
 export const WsCapabilityReadyEventPayload = z
   .object({
@@ -1254,6 +1339,212 @@ export const WsPluginToolInvokedEvent = WsEventEnvelope.extend({
 });
 export type WsPluginToolInvokedEvent = z.infer<typeof WsPluginToolInvokedEvent>;
 
+export const WsTypingEventPayload = z
+  .object({
+    session_id: z.string().trim().min(1),
+    lane: Lane.optional(),
+  })
+  .strict();
+export type WsTypingEventPayload = z.infer<typeof WsTypingEventPayload>;
+
+export const WsTypingStartedEvent = WsEventEnvelope.extend({
+  type: z.literal("typing.started"),
+  payload: WsTypingEventPayload,
+});
+export type WsTypingStartedEvent = z.infer<typeof WsTypingStartedEvent>;
+
+export const WsTypingStoppedEvent = WsEventEnvelope.extend({
+  type: z.literal("typing.stopped"),
+  payload: WsTypingEventPayload,
+});
+export type WsTypingStoppedEvent = z.infer<typeof WsTypingStoppedEvent>;
+
+export const WsMessageRole = z.enum(["assistant", "user", "system"]);
+export type WsMessageRole = z.infer<typeof WsMessageRole>;
+
+export const WsMessageDeltaEventPayload = z
+  .object({
+    session_id: z.string().trim().min(1),
+    lane: Lane.optional(),
+    message_id: z.string().trim().min(1),
+    role: WsMessageRole,
+    delta: z.string(),
+  })
+  .strict();
+export type WsMessageDeltaEventPayload = z.infer<typeof WsMessageDeltaEventPayload>;
+
+export const WsMessageDeltaEvent = WsEventEnvelope.extend({
+  type: z.literal("message.delta"),
+  payload: WsMessageDeltaEventPayload,
+});
+export type WsMessageDeltaEvent = z.infer<typeof WsMessageDeltaEvent>;
+
+export const WsMessageFinalEventPayload = z
+  .object({
+    session_id: z.string().trim().min(1),
+    lane: Lane.optional(),
+    message_id: z.string().trim().min(1),
+    role: WsMessageRole,
+    content: z.string(),
+  })
+  .strict();
+export type WsMessageFinalEventPayload = z.infer<typeof WsMessageFinalEventPayload>;
+
+export const WsMessageFinalEvent = WsEventEnvelope.extend({
+  type: z.literal("message.final"),
+  payload: WsMessageFinalEventPayload,
+});
+export type WsMessageFinalEvent = z.infer<typeof WsMessageFinalEvent>;
+
+export const WsFormattingFallbackEventPayload = z
+  .object({
+    session_id: z.string().trim().min(1),
+    message_id: z.string().trim().min(1),
+    reason: z.string().trim().min(1),
+  })
+  .strict();
+export type WsFormattingFallbackEventPayload = z.infer<typeof WsFormattingFallbackEventPayload>;
+
+export const WsFormattingFallbackEvent = WsEventEnvelope.extend({
+  type: z.literal("formatting.fallback"),
+  payload: WsFormattingFallbackEventPayload,
+});
+export type WsFormattingFallbackEvent = z.infer<typeof WsFormattingFallbackEvent>;
+
+export const WsDeliveryReceiptStatus = z.enum(["sent", "failed"]);
+export type WsDeliveryReceiptStatus = z.infer<typeof WsDeliveryReceiptStatus>;
+
+export const WsDeliveryReceiptEventPayload = z
+  .object({
+    session_id: z.string().trim().min(1),
+    lane: Lane.optional(),
+    channel: z.string().trim().min(1),
+    thread_id: z.string().trim().min(1),
+    status: WsDeliveryReceiptStatus.optional(),
+    receipt: z.unknown().optional(),
+    error: WsError.optional(),
+  })
+  .strict();
+export type WsDeliveryReceiptEventPayload = z.infer<typeof WsDeliveryReceiptEventPayload>;
+
+export const WsDeliveryReceiptEvent = WsEventEnvelope.extend({
+  type: z.literal("delivery.receipt"),
+  payload: WsDeliveryReceiptEventPayload,
+});
+export type WsDeliveryReceiptEvent = z.infer<typeof WsDeliveryReceiptEvent>;
+
+export const WsUsageScopeKind = z.enum(["run", "session", "agent", "deployment"]);
+export type WsUsageScopeKind = z.infer<typeof WsUsageScopeKind>;
+
+export const WsUsageScope = z
+  .object({
+    kind: WsUsageScopeKind,
+    run_id: ExecutionRunId.nullable(),
+    key: TyrumKey.nullable(),
+    agent_id: AgentId.nullable(),
+  })
+  .strict();
+export type WsUsageScope = z.infer<typeof WsUsageScope>;
+
+export const WsUsageTotals = z
+  .object({
+    duration_ms: z.number().int().nonnegative(),
+    input_tokens: z.number().int().nonnegative(),
+    output_tokens: z.number().int().nonnegative(),
+    total_tokens: z.number().int().nonnegative(),
+    usd_micros: z.number().int().nonnegative(),
+  })
+  .strict();
+export type WsUsageTotals = z.infer<typeof WsUsageTotals>;
+
+export const WsUsageSnapshotEventPayload = z
+  .object({
+    scope: WsUsageScope,
+    local: z
+      .object({
+        totals: WsUsageTotals,
+      })
+      .strict(),
+    provider: z.unknown().nullable(),
+  })
+  .strict();
+export type WsUsageSnapshotEventPayload = z.infer<typeof WsUsageSnapshotEventPayload>;
+
+export const WsUsageSnapshotEvent = WsEventEnvelope.extend({
+  type: z.literal("usage.snapshot"),
+  payload: WsUsageSnapshotEventPayload,
+});
+export type WsUsageSnapshotEvent = z.infer<typeof WsUsageSnapshotEvent>;
+
+export const WsProviderUsageError = z
+  .object({
+    code: z.string().trim().min(1),
+    message: z.string().trim().min(1),
+    detail: z.string().trim().min(1).optional(),
+    retryable: z.boolean(),
+  })
+  .strict();
+export type WsProviderUsageError = z.infer<typeof WsProviderUsageError>;
+
+export const WsProviderUsageResult = z.discriminatedUnion("status", [
+  z
+    .object({
+      status: z.literal("ok"),
+      provider: z.string().trim().min(1),
+      profile_id: z.string().trim().min(1),
+      cached: z.boolean(),
+      polled_at: DateTimeSchema,
+      data: z.unknown(),
+    })
+    .strict(),
+  z
+    .object({
+      status: z.literal("error"),
+      provider: z.string().trim().min(1).nullable(),
+      profile_id: z.string().trim().min(1).nullable(),
+      cached: z.boolean(),
+      polled_at: DateTimeSchema.nullable(),
+      error: WsProviderUsageError,
+    })
+    .strict(),
+  z
+    .object({
+      status: z.literal("unavailable"),
+      cached: z.boolean(),
+      polled_at: DateTimeSchema.nullable(),
+      error: WsProviderUsageError,
+    })
+    .strict(),
+]);
+export type WsProviderUsageResult = z.infer<typeof WsProviderUsageResult>;
+
+export const WsProviderUsagePolledEventPayload = z
+  .object({
+    result: WsProviderUsageResult,
+  })
+  .strict();
+export type WsProviderUsagePolledEventPayload = z.infer<typeof WsProviderUsagePolledEventPayload>;
+
+export const WsProviderUsagePolledEvent = WsEventEnvelope.extend({
+  type: z.literal("provider_usage.polled"),
+  payload: WsProviderUsagePolledEventPayload,
+});
+export type WsProviderUsagePolledEvent = z.infer<typeof WsProviderUsagePolledEvent>;
+
+export const WsContextReportCreatedEventPayload = z
+  .object({
+    run_id: ExecutionRunId,
+    report: ContextReport,
+  })
+  .strict();
+export type WsContextReportCreatedEventPayload = z.infer<typeof WsContextReportCreatedEventPayload>;
+
+export const WsContextReportCreatedEvent = WsEventEnvelope.extend({
+  type: z.literal("context_report.created"),
+  payload: WsContextReportCreatedEventPayload,
+});
+export type WsContextReportCreatedEvent = z.infer<typeof WsContextReportCreatedEvent>;
+
 export const WsErrorEventPayload = z
   .object({
     code: z.string().min(1),
@@ -1296,9 +1587,14 @@ export const WsEvent = z.discriminatedUnion("type", [
   WsApprovalRequestedEvent,
   WsApprovalResolvedEvent,
   WsRunUpdatedEvent,
+  WsRunPausedEvent,
+  WsRunResumedEvent,
+  WsRunCancelledEvent,
   WsStepUpdatedEvent,
   WsAttemptUpdatedEvent,
   WsArtifactCreatedEvent,
+  WsArtifactAttachedEvent,
+  WsArtifactFetchedEvent,
   WsCapabilityReadyEvent,
   WsAttemptEvidenceEvent,
   WsPairingRequestedEvent,
@@ -1311,6 +1607,15 @@ export const WsEvent = z.discriminatedUnion("type", [
   WsPolicyOverrideExpiredEvent,
   WsPluginLifecycleEvent,
   WsPluginToolInvokedEvent,
+  WsTypingStartedEvent,
+  WsTypingStoppedEvent,
+  WsMessageDeltaEvent,
+  WsMessageFinalEvent,
+  WsFormattingFallbackEvent,
+  WsDeliveryReceiptEvent,
+  WsUsageSnapshotEvent,
+  WsProviderUsagePolledEvent,
+  WsContextReportCreatedEvent,
   WsErrorEvent,
 ]);
 export type WsEvent = z.infer<typeof WsEvent>;

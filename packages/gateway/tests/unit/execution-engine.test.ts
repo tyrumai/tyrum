@@ -143,7 +143,7 @@ describe("ExecutionEngine (normalized)", () => {
       db,
       clock: () => ({ nowMs: Date.now(), nowIso: new Date().toISOString() }),
     });
-    await engine.enqueuePlan({
+    const { runId } = await engine.enqueuePlan({
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-budget-1",
@@ -171,6 +171,16 @@ describe("ExecutionEngine (normalized)", () => {
     expect(await engine.workerTick({ workerId: "w1", executor: mockExecutor })).toBe(true);
     expect((mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(1);
 
+    const outboxPaused = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ?",
+      ["ws.broadcast"],
+    );
+    const pausedTypes = outboxPaused
+      .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
+      .map((row) => row.message?.type)
+      .filter((value): value is string => typeof value === "string");
+    expect(pausedTypes).toContain("run.paused");
+
     const runPaused = await db.get<{ status: string; paused_reason: string | null }>(
       "SELECT status, paused_reason FROM execution_runs LIMIT 1",
     );
@@ -185,6 +195,16 @@ describe("ExecutionEngine (normalized)", () => {
 
     await engine.resumeRun(approval!.resume_token!);
 
+    const outboxResumed = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ?",
+      ["ws.broadcast"],
+    );
+    const resumedTypes = outboxResumed
+      .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
+      .map((row) => row.message?.type)
+      .filter((value): value is string => typeof value === "string");
+    expect(resumedTypes).toContain("run.resumed");
+
     const runResumed = await db.get<{ status: string; budget_overridden_at: string | null }>(
       "SELECT status, budget_overridden_at FROM execution_runs LIMIT 1",
     );
@@ -197,6 +217,64 @@ describe("ExecutionEngine (normalized)", () => {
       "SELECT status FROM execution_runs LIMIT 1",
     );
     expect(runDone?.status).toBe("succeeded");
+  });
+
+  it("does not emit run.resumed when a resume token is used after the run is no longer paused", async () => {
+    db = openTestSqliteDb();
+
+    const engine = new ExecutionEngine({
+      db,
+      clock: () => ({ nowMs: Date.now(), nowIso: new Date().toISOString() }),
+    });
+    const { runId } = await engine.enqueuePlan({
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-budget-cancel-1",
+      requestId: "test-req-1",
+      budgets: { max_usd_micros: 5 },
+      steps: [action("Research"), action("Research")],
+    });
+
+    let calls = 0;
+    const mockExecutor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => {
+        calls += 1;
+        if (calls === 1) {
+          return { success: true, result: { ok: true }, cost: { usd_micros: 10 } };
+        }
+        return { success: true, result: { ok: true } };
+      }),
+    };
+
+    // First tick executes step 0 and records cost.
+    expect(await engine.workerTick({ workerId: "w1", executor: mockExecutor })).toBe(true);
+    expect((mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(1);
+
+    // Second tick pauses before starting step 1 due to the run budget.
+    expect(await engine.workerTick({ workerId: "w1", executor: mockExecutor })).toBe(true);
+    expect((mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(1);
+
+    const approval = await db.get<{ id: number; kind: string; resume_token: string | null }>(
+      "SELECT id, kind, resume_token FROM approvals WHERE status = 'pending' ORDER BY id ASC LIMIT 1",
+    );
+    expect(approval?.kind).toBe("budget");
+    expect(approval?.resume_token).toBeTruthy();
+
+    expect(await engine.cancelRun(runId, "cancelled by test")).toBe("cancelled");
+
+    const resumed = await engine.resumeRun(approval!.resume_token!);
+    expect(resumed).toBeUndefined();
+
+    const outbox = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ?",
+      ["ws.broadcast"],
+    );
+    const types = outbox
+      .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
+      .map((row) => row.message?.type)
+      .filter((value): value is string => typeof value === "string");
+    expect(types).toContain("run.cancelled");
+    expect(types).not.toContain("run.resumed");
   });
 
   it("pauses when policy requires approval for a step and resumes after approval", async () => {
@@ -471,6 +549,58 @@ describe("ExecutionEngine (normalized)", () => {
     expect(metadata?.step_id).toBe(attempt!.step_id);
     expect(metadata?.attempt_id).toBe(attempt!.attempt_id);
     expect(metadata?.kind).toBe(artifactRef.kind);
+
+    const outbox = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ?",
+      ["ws.broadcast"],
+    );
+    const types = outbox
+      .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
+      .map((row) => row.message?.type)
+      .filter((value): value is string => typeof value === "string");
+    expect(types).toContain("artifact.created");
+    expect(types).toContain("artifact.attached");
+  });
+
+  it("only emits artifact.created when the artifact is first inserted", async () => {
+    db = openTestSqliteDb();
+
+    const engine = new ExecutionEngine({ db });
+    await engine.enqueuePlan({
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-artifacts-created-1",
+      requestId: "test-req-1",
+      steps: [action("Research"), action("Research")],
+    });
+
+    const artifactRef = {
+      artifact_id: "550e8400-e29b-41d4-a716-446655440000",
+      uri: "artifact://550e8400-e29b-41d4-a716-446655440000",
+      kind: "log",
+      created_at: new Date().toISOString(),
+      labels: [],
+    } as const;
+
+    const mockExecutor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => {
+        return { success: true, result: { ok: true }, artifacts: [artifactRef] };
+      }),
+    };
+
+    await drain(engine, "w1", mockExecutor);
+
+    const outbox = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ?",
+      ["ws.broadcast"],
+    );
+    const types = outbox
+      .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
+      .map((row) => row.message?.type)
+      .filter((value): value is string => typeof value === "string");
+
+    expect(types.filter((type) => type === "artifact.created")).toHaveLength(1);
+    expect(types.filter((type) => type === "artifact.attached")).toHaveLength(2);
   });
 
   it("redacts registered secrets from persisted attempt results", async () => {
@@ -539,6 +669,31 @@ describe("ExecutionEngine (normalized)", () => {
     const cost = JSON.parse(row!.cost_json!) as { total_tokens?: number; duration_ms?: number };
     expect(cost.total_tokens).toBe(30);
     expect(typeof cost.duration_ms).toBe("number");
+  });
+
+  it("emits run.cancelled when a run is cancelled", async () => {
+    db = openTestSqliteDb();
+
+    const engine = new ExecutionEngine({ db });
+    const { runId } = await engine.enqueuePlan({
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-cancel-1",
+      requestId: "test-req-1",
+      steps: [action("Research")],
+    });
+
+    await expect(engine.cancelRun(runId, "operator cancelled")).resolves.toBe("cancelled");
+
+    const outbox = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ?",
+      ["ws.broadcast"],
+    );
+    const types = outbox
+      .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
+      .map((row) => row.message?.type)
+      .filter((value): value is string => typeof value === "string");
+    expect(types).toContain("run.cancelled");
   });
 
   it("persists policy decisions (reasons + snapshot + applied override ids) on attempts", async () => {
