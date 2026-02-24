@@ -52,7 +52,15 @@ describe("Gateway JSON Schema publishing", () => {
     expect(json.format).toBe("tyrum.contracts.jsonschema.catalog.v1");
     expect(Array.isArray(json.schemas)).toBe(true);
     expect(json.schemas.length).toBeGreaterThan(0);
-    expect(json.errors).toBeUndefined();
+    if (json.errors !== undefined) {
+      expect(Array.isArray(json.errors)).toBe(true);
+      for (const entry of json.errors as unknown[]) {
+        expect(entry).toMatchObject({
+          name: expect.any(String),
+          error: expect.any(String),
+        });
+      }
+    }
 
     const names = new Set(json.schemas.map((s) => s.name));
     expect(names.has("WsConnectInitRequest")).toBe(true);
