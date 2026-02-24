@@ -19,6 +19,7 @@ async function writeWorkspace(home: string): Promise<void> {
 skills:
   enabled:
     - file-reader
+  workspace_trusted: true
 mcp:
   enabled:
     - calendar
@@ -116,6 +117,8 @@ describe("agent routes", () => {
       enabled: boolean;
       identity: { name: string };
       skills: string[];
+      skills_detailed?: Array<{ id: string; source: string }>;
+      workspace_skills_trusted?: boolean;
       mcp: Array<{ id: string }>;
       tools: string[];
     };
@@ -123,6 +126,10 @@ describe("agent routes", () => {
     expect(payload.enabled).toBe(true);
     expect(payload.identity.name).toBe("Tyrum Local");
     expect(payload.skills).toEqual(["file-reader"]);
+    expect(payload.workspace_skills_trusted).toBe(true);
+    expect(payload.skills_detailed).toEqual([
+      expect.objectContaining({ id: "file-reader", source: "workspace" }),
+    ]);
     expect(payload.mcp.map((server) => server.id)).toEqual(["calendar"]);
     expect(payload.tools).toContain("tool.fs.read");
 

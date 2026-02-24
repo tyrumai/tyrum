@@ -85,6 +85,7 @@ const DEFAULT_AGENT_YAML = `model:
   model: openai/gpt-4.1
 skills:
   enabled: []
+  workspace_trusted: false
 mcp:
   enabled: []
 tools:

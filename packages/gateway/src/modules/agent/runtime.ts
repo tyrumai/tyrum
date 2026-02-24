@@ -33,6 +33,7 @@ import {
   loadEnabledMcpServers,
   loadEnabledSkills,
   loadIdentity,
+  type LoadedSkillManifest,
 } from "./workspace.js";
 import { selectToolDirectory, type ToolDescriptor } from "./tools.js";
 import { McpManager } from "./mcp-manager.js";
@@ -158,7 +159,7 @@ async function deriveElevatedExecutionAvailable(
 interface AgentLoadedContext {
   config: AgentConfigT;
   identity: IdentityPackT;
-  skills: SkillManifestT[];
+  skills: LoadedSkillManifest[];
   mcpServers: McpServerSpecT[];
   memoryStore: MarkdownMemoryStore;
 }
@@ -1437,6 +1438,13 @@ export class AgentRuntime {
       },
       model: ctx.config.model,
       skills: ctx.skills.map((skill) => skill.meta.id),
+      skills_detailed: ctx.skills.map((skill) => ({
+        id: skill.meta.id,
+        name: skill.meta.name,
+        version: skill.meta.version,
+        source: skill.provenance.source,
+      })),
+      workspace_skills_trusted: ctx.config.skills.workspace_trusted,
       mcp: ctx.mcpServers.map((server) => ({
         id: server.id,
         name: server.name,
