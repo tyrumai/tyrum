@@ -394,11 +394,29 @@ export class PolicyService {
     const snapshot = await this.getOrCreateSnapshot(effective.bundle);
 
     const connectorsDomain = normalizeDomain(effective.bundle.connectors, "require_approval");
-    const decision = evaluateDomain(connectorsDomain, params.matchTarget);
+    let decision = evaluateDomain(connectorsDomain, params.matchTarget);
+
+    const appliedOverrides: string[] = [];
+    if (decision === "require_approval") {
+      const overrides = await this.opts.overrideDal.listActiveForTool({
+        agentId: params.agentId,
+        workspaceId: params.workspaceId,
+        toolId: "connector.send",
+      });
+      for (const override of overrides) {
+        if (wildcardMatch(override.pattern, params.matchTarget)) {
+          appliedOverrides.push(override.policy_override_id);
+        }
+      }
+      if (appliedOverrides.length > 0) {
+        decision = "allow";
+      }
+    }
 
     return {
       decision,
       policy_snapshot: snapshot,
+      applied_override_ids: appliedOverrides.length > 0 ? appliedOverrides : undefined,
     };
   }
 
