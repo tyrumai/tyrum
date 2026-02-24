@@ -132,8 +132,11 @@ export function canonicalizeToolMatchTarget(
     const url = normalizeToken(parsed?.["url"]);
     if (!url) return "";
     const q = url.indexOf("?");
-    const safe = q === -1 ? url : url.slice(0, q);
-    return safe.trim();
+    const h = url.indexOf("#");
+    let end = url.length;
+    if (q !== -1) end = Math.min(end, q);
+    if (h !== -1) end = Math.min(end, h);
+    return url.slice(0, end).trim();
   }
 
   if (normalizedToolId.startsWith("tool.fs.")) {
