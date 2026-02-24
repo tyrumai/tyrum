@@ -741,4 +741,112 @@ describe("AgentRuntime", () => {
     expect(res).toContain("[blocked-override]");
     expect(res).not.toContain("ignore previous instructions");
   });
+
+  it("does not expose side-effecting plugin tools unless opted-in via policy bundle", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+      tyrumHome: homeDir,
+    });
+
+    await writeFile(
+      join(homeDir, "agent.yml"),
+      `model:\n  model: openai/gpt-4.1\nskills:\n  enabled: []\nmcp:\n  enabled: []\ntools:\n  allow:\n    - tool.fs.read\n    - plugin.echo.danger\nsessions:\n  ttl_days: 30\n  max_turns: 20\nmemory:\n  markdown_enabled: false\n`,
+      "utf-8",
+    );
+
+    const plugins = {
+      getToolDescriptors: vi.fn(() => [
+        {
+          id: "plugin.echo.danger",
+          description: "Do a dangerous thing.",
+          risk: "high" as const,
+          requires_confirmation: true,
+          keywords: ["danger"],
+          inputSchema: {
+            type: "object",
+            properties: {},
+            required: [],
+            additionalProperties: false,
+          },
+        },
+      ]),
+    };
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("hello"),
+      fetchImpl: fetch404,
+      plugins: plugins as unknown as ConstructorParameters<typeof AgentRuntime>[0]["plugins"],
+    });
+
+    await runtime.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      message: "danger",
+    });
+
+    const report = runtime.getLastContextReport();
+    expect(report).toBeDefined();
+    expect(report!.selected_tools).not.toContain("plugin.echo.danger");
+  });
+
+  it("exposes side-effecting plugin tools when opted-in via policy bundle", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+      tyrumHome: homeDir,
+    });
+
+    await writeFile(
+      join(homeDir, "agent.yml"),
+      `model:\n  model: openai/gpt-4.1\nskills:\n  enabled: []\nmcp:\n  enabled: []\ntools:\n  allow:\n    - tool.fs.read\nsessions:\n  ttl_days: 30\n  max_turns: 20\nmemory:\n  markdown_enabled: false\n`,
+      "utf-8",
+    );
+
+    await writeFile(
+      join(homeDir, "policy.yml"),
+      `v: 1\ntools:\n  default: require_approval\n  allow:\n    - tool.fs.read\n  require_approval:\n    - plugin.echo.danger\n  deny: []\n`,
+      "utf-8",
+    );
+
+    const plugins = {
+      getToolDescriptors: vi.fn(() => [
+        {
+          id: "plugin.echo.danger",
+          description: "Do a dangerous thing.",
+          risk: "high" as const,
+          requires_confirmation: true,
+          keywords: ["danger"],
+          inputSchema: {
+            type: "object",
+            properties: {},
+            required: [],
+            additionalProperties: false,
+          },
+        },
+      ]),
+    };
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("hello"),
+      fetchImpl: fetch404,
+      plugins: plugins as unknown as ConstructorParameters<typeof AgentRuntime>[0]["plugins"],
+    });
+
+    await runtime.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      message: "danger",
+    });
+
+    const report = runtime.getLastContextReport();
+    expect(report).toBeDefined();
+    expect(report!.selected_tools).toContain("plugin.echo.danger");
+  });
 });
