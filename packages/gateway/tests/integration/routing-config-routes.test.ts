@@ -74,6 +74,7 @@ describe("routing config routes", () => {
     const evt = JSON.parse(String(payload)) as { type?: string; payload?: unknown };
     expect(evt.type).toBe("routing.config.updated");
     expect(evt.payload).toMatchObject({ revision: body.revision, reason: "seed" });
+    expect(evt.payload as Record<string, unknown>).not.toHaveProperty("config");
   });
 
   it("reverts to an earlier revision", async () => {
@@ -138,5 +139,25 @@ describe("routing config routes", () => {
     const revertedBody = (await reverted.json()) as { revision: number; config: unknown };
     expect(revertedBody.revision).toBeGreaterThan(createdBody.revision);
     expect(revertedBody.config).toEqual(createdBody.config);
+  });
+
+  it("returns a structured error when the durable routing config state is corrupt", async () => {
+    await db.run(
+      "INSERT INTO routing_configs (config_json, created_by_json, reason) VALUES (?, ?, ?)",
+      ["not-json", "{}", "corrupt"],
+    );
+
+    const app = new Hono();
+    app.route(
+      "/",
+      createRoutingConfigRoutes({
+        routingConfigDal: new RoutingConfigDal(db),
+      } as never),
+    );
+
+    const res = await app.request("/routing/config", { method: "GET" });
+
+    expect(res.status).toBe(500);
+    await expect(res.json()).resolves.toMatchObject({ error: "corrupt_state" });
   });
 });

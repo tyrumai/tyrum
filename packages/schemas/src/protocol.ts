@@ -36,7 +36,6 @@ import { PresenceBeacon, PresenceEntry } from "./presence.js";
 import { PolicyOverride, PolicySnapshotId } from "./policy-bundle.js";
 import { PluginId } from "./plugin.js";
 import { DeviceTokenClaims } from "./device-token.js";
-import { RoutingConfig } from "./routing.js";
 
 export {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
@@ -1626,7 +1625,6 @@ export const WsRoutingConfigUpdatedEventPayload = z
       .trim()
       .regex(/^[0-9a-f]{64}$/, "config_sha256 must be a lowercase hex SHA-256")
       .optional(),
-    config: RoutingConfig,
     reverted_from_revision: z.number().int().positive().optional(),
   })
   .strict();

@@ -102,14 +102,25 @@ export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
   const app = new Hono();
 
   app.get("/routing/config", async (c) => {
-    const latest = await deps.routingConfigDal.getLatest();
-    return c.json({
-      revision: latest?.revision ?? 0,
-      config: latest?.config ?? { v: 1 },
-      created_at: latest?.createdAt ?? undefined,
-      created_by: latest?.createdBy ?? undefined,
-      reason: latest?.reason ?? undefined,
-    });
+    try {
+      const latest = await deps.routingConfigDal.getLatest();
+      return c.json({
+        revision: latest?.revision ?? 0,
+        config: latest?.config ?? { v: 1 },
+        created_at: latest?.createdAt ?? undefined,
+        created_by: latest?.createdBy ?? undefined,
+        reason: latest?.reason ?? undefined,
+      });
+    } catch {
+      return c.json(
+        {
+          error: "corrupt_state",
+          message:
+            "durable routing config state is invalid; write a new revision via PUT /routing/config to recover",
+        },
+        500,
+      );
+    }
   });
 
   app.put("/routing/config", async (c) => {
@@ -140,7 +151,6 @@ export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
         revision: persisted.revision,
         reason: parsed.data.reason,
         config_sha256: persisted.configSha256,
-        config: persisted.config,
       },
     };
     const evt = WsRoutingConfigUpdatedEvent.safeParse(candidate);
@@ -193,7 +203,6 @@ export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
         revision: persisted.revision,
         reason: parsed.data.reason,
         config_sha256: persisted.configSha256,
-        config: persisted.config,
         reverted_from_revision: parsed.data.revision,
       },
     };

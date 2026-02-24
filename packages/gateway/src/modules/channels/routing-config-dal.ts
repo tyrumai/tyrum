@@ -35,13 +35,30 @@ function parseJsonOrFallback(raw: string, fallback: unknown): unknown {
   }
 }
 
-function rowToRevision(row: RawRoutingConfigRow): RoutingConfigRevision {
-  const parsed = parseJsonOrFallback(row.config_json, { v: 1 });
+function parseRoutingConfigOrThrow(row: RawRoutingConfigRow): RoutingConfig {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(row.config_json) as unknown;
+  } catch {
+    throw new Error(`routing config revision ${String(row.revision)} has invalid JSON`);
+  }
+
   const config = RoutingConfigSchema.safeParse(parsed);
+  if (!config.success) {
+    throw new Error(
+      `routing config revision ${String(row.revision)} failed schema validation: ${config.error.message}`,
+    );
+  }
+
+  return config.data;
+}
+
+function rowToRevision(row: RawRoutingConfigRow): RoutingConfigRevision {
+  const config = parseRoutingConfigOrThrow(row);
   const configSha256 = createHash("sha256").update(row.config_json).digest("hex");
   return {
     revision: row.revision,
-    config: config.success ? config.data : { v: 1 },
+    config,
     configSha256,
     createdAt: normalizeTime(row.created_at),
     createdBy: parseJsonOrFallback(row.created_by_json, {}),

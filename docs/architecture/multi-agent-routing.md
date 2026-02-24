@@ -23,7 +23,7 @@ Routing rules are persisted as versioned config snapshots in the StateStore:
 
 - Table: `routing_configs` (append-only revisions; newest revision is effective)
 - Audit stream: `planner_events.plan_id = "routing.config"` (exportable via `/audit/export/routing.config`)
-- WS event: `routing.config.updated` (payload includes `revision`, `config`, and optional `reverted_from_revision`)
+- WS event: `routing.config.updated` (payload includes `revision`, optional `config_sha256`, and optional `reverted_from_revision`; clients should `GET /routing/config` to fetch the effective config)
 
 Operator API:
 
@@ -39,7 +39,7 @@ Authentication/authorization:
 Bootstrap behavior:
 
 - If no durable routing config exists, the gateway falls back to the legacy static file config under `TYRUM_HOME` (for example `routing.yml` / `routing.yaml` / `routing.json`).
-- Once a durable revision exists, it becomes the source of truth for routing decisions.
+- Once a durable revision exists and validates against the routing config schema, it becomes the source of truth for routing decisions.
 
 ## Key taxonomy
 

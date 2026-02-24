@@ -250,15 +250,7 @@ describe("WS event catalog", () => {
       payload: {
         revision: 1,
         reason: "seed",
-        config: {
-          v: 1,
-          telegram: {
-            default_agent_id: "default",
-            threads: {
-              "123": "agent-b",
-            },
-          },
-        },
+        config_sha256: "0000000000000000000000000000000000000000000000000000000000000000",
       },
     });
     expect(parsed.success).toBe(true);

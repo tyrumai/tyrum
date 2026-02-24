@@ -53,6 +53,15 @@ describe("RoutingConfigDal", () => {
     expect(action.config_sha256).toMatch(/^[0-9a-f]{64}$/);
   });
 
+  it("throws when a stored routing config revision is invalid", async () => {
+    await db.run(
+      "INSERT INTO routing_configs (config_json, created_by_json, reason) VALUES (?, ?, ?)",
+      ["not-json", "{}", "corrupt"],
+    );
+
+    await expect(dal.getLatest()).rejects.toThrow();
+  });
+
   it("reverts to an earlier revision by creating a new revision", async () => {
     const initial = await dal.set({
       config: {

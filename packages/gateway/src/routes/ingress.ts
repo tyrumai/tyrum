@@ -90,7 +90,14 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
     }
 
     const home = deps.home?.trim() || process.env["TYRUM_HOME"]?.trim() || undefined;
-    const durable = deps.routingConfigDal ? await deps.routingConfigDal.getLatest() : undefined;
+    let durable;
+    if (deps.routingConfigDal) {
+      try {
+        durable = await deps.routingConfigDal.getLatest();
+      } catch {
+        durable = undefined;
+      }
+    }
     const routing = durable?.config ?? (home ? await loadRoutingConfig(home) : { v: 1 });
     const routedAgentId = c.req.query("agent_id")?.trim() || resolveTelegramAgentId(routing, chatId);
 
