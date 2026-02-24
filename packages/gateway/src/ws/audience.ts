@@ -1,18 +1,13 @@
+import { normalizeScopes } from "../modules/auth/token-store.js";
 import type { AuthTokenClaims } from "../modules/auth/token-store.js";
+
+export { normalizeScopes };
 
 export type WsBroadcastRole = "client" | "node";
 export type WsBroadcastAudience = {
   roles?: WsBroadcastRole[];
   required_scopes?: string[];
 };
-
-export function normalizeScopes(scopes: string[] | undefined): string[] {
-  if (!Array.isArray(scopes)) return [];
-  const normalized = scopes
-    .map((scope) => scope.trim())
-    .filter((scope) => scope.length > 0);
-  return [...new Set(normalized)];
-}
 
 function hasAnyRequiredScope(claims: AuthTokenClaims, requiredScopes: string[]): boolean {
   if (requiredScopes.length === 0) return true;
@@ -43,4 +38,3 @@ export function shouldDeliverToWsAudience(
 
   return true;
 }
-

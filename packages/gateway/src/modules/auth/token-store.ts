@@ -63,7 +63,7 @@ interface ParseDeviceTokenOptions {
   allowRevoked?: boolean;
 }
 
-function normalizeScopes(scopes: string[] | undefined): string[] {
+export function normalizeScopes(scopes: string[] | undefined): string[] {
   if (!Array.isArray(scopes)) return [];
   const normalized = scopes
     .map((scope) => scope.trim())
