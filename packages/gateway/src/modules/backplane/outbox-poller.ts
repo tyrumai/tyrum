@@ -89,7 +89,10 @@ function parseBroadcastPayload(
   if (isObject(maybeMessage)) {
     const sourceEdgeId = payload["source_edge_id"];
     const skipLocal = payload["skip_local"];
-    const audience = parseBroadcastAudience(payload["audience"]);
+    const hasAudienceKey = Object.prototype.hasOwnProperty.call(payload, "audience");
+    const audience = hasAudienceKey ? parseBroadcastAudience(payload["audience"]) : undefined;
+    // Fail closed: malformed/empty audiences must not bypass the delivery filter.
+    if (hasAudienceKey && !audience) return undefined;
     return {
       message: maybeMessage as WsEnvelope,
       source_edge_id: typeof sourceEdgeId === "string" ? sourceEdgeId : undefined,
