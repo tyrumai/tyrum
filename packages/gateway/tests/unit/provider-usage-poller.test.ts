@@ -61,7 +61,11 @@ describe("ProviderUsagePoller", () => {
         status: "error",
         provider: "openrouter",
         profile_id: profile.profile_id,
-        error: { code: "secret_resolution_failed" },
+        error: {
+          code: "secret_resolution_failed",
+          message: "Auth profile credential could not be resolved from the secret provider.",
+          detail: "secret backend down",
+        },
       });
     } finally {
       process.env["TYRUM_AUTH_PROFILES_ENABLED"] = prevEnabled;

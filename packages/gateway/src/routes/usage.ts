@@ -15,6 +15,7 @@ import type { SessionProviderPinDal } from "../modules/models/session-pin-dal.js
 import type { Logger } from "../modules/observability/logger.js";
 import { ProviderUsagePoller, type ProviderUsageResult } from "../modules/observability/provider-usage.js";
 import type { SqlDb } from "../statestore/types.js";
+import { safeDetail } from "../utils/safe-detail.js";
 
 export interface UsageRouteDeps {
   db: SqlDb;
@@ -44,18 +45,6 @@ function newTotals(): UsageTotals {
     total_tokens: 0,
     usd_micros: 0,
   };
-}
-
-function safeDetail(err: unknown): string | undefined {
-  if (err instanceof Error) {
-    const msg = err.message.trim();
-    if (msg.length > 0) return msg.slice(0, 512);
-  }
-  if (typeof err === "string") {
-    const msg = err.trim();
-    if (msg.length > 0) return msg.slice(0, 512);
-  }
-  return undefined;
 }
 
 export function createUsageRoutes(deps: UsageRouteDeps): Hono {

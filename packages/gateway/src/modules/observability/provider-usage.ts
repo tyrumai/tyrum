@@ -3,6 +3,7 @@ import { isAuthProfilesEnabled } from "../models/auth-profiles-enabled.js";
 import type { AuthProfileDal, AuthProfileRow } from "../models/auth-profile-dal.js";
 import type { SessionProviderPinDal, SessionProviderPinRow } from "../models/session-pin-dal.js";
 import { createSecretHandleResolver } from "../secret/handle-resolver.js";
+import { safeDetail } from "../../utils/safe-detail.js";
 import type { Logger } from "./logger.js";
 
 export type ProviderUsageError = {
@@ -50,23 +51,9 @@ function withCached(result: ProviderUsageResult, cached: boolean): ProviderUsage
 }
 
 function toError(err: unknown, fallback: ProviderUsageError): ProviderUsageError {
-  if (err instanceof Error) {
-    const msg = err.message.trim();
-    if (msg.length > 0) return { ...fallback, message: msg };
-  }
+  const detail = fallback.detail ?? safeDetail(err);
+  if (detail) return { ...fallback, detail };
   return fallback;
-}
-
-function safeDetail(err: unknown): string | undefined {
-  if (err instanceof Error) {
-    const msg = err.message.trim();
-    if (msg.length > 0) return msg.slice(0, 512);
-  }
-  if (typeof err === "string") {
-    const msg = err.trim();
-    if (msg.length > 0) return msg.slice(0, 512);
-  }
-  return undefined;
 }
 
 function isProviderUsageError(value: unknown): value is ProviderUsageError {
@@ -296,7 +283,7 @@ export class ProviderUsagePoller {
         provider,
         profile_id: profileId,
         code: error.code,
-        error: error.message,
+        error: error.detail ?? error.message,
       });
       return {
         status: "error",
@@ -347,7 +334,7 @@ export class ProviderUsagePoller {
         this.deps.logger?.warn("usage.openrouter_poll_failed", {
           provider,
           profile_id: profileId,
-          error: parsedError.message,
+          error: parsedError.detail ?? parsedError.message,
           code: parsedError.code,
         });
 
