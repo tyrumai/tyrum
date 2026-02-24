@@ -20,6 +20,7 @@ import { isAgentEnabled } from "./modules/agent/enabled.js";
 import { TokenStore } from "./modules/auth/token-store.js";
 import { WatcherScheduler } from "./modules/watcher/scheduler.js";
 import { createSecretProviderFromEnv, resolveSecretProviderKind } from "./modules/secret/create-secret-provider.js";
+import { ArtifactLifecycleScheduler } from "./modules/artifact/lifecycle.js";
 import { WsNotifier } from "./modules/approval/notifier.js";
 import { OutboxDal } from "./modules/backplane/outbox-dal.js";
 import { ConnectionDirectoryDal } from "./modules/backplane/connection-directory.js";
@@ -784,12 +785,25 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
           keepProcessAlive: role === "scheduler",
         })
       : undefined;
+  const artifactLifecycleScheduler =
+    role === "all" || role === "scheduler"
+      ? new ArtifactLifecycleScheduler({
+          db: container.db,
+          artifactStore: container.artifactStore,
+          policySnapshotDal: container.policySnapshotDal,
+          keepProcessAlive: role === "scheduler",
+          logger: container.logger,
+        })
+      : undefined;
 
   if (role === "all" || role === "edge") {
     container.watcherProcessor.start();
   }
   if (watcherScheduler) {
     watcherScheduler.start();
+  }
+  if (artifactLifecycleScheduler) {
+    artifactLifecycleScheduler.start();
   }
 
   const logger = container.logger.child({
@@ -1116,6 +1130,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
 
     container.watcherProcessor.stop();
     watcherScheduler?.stop();
+    artifactLifecycleScheduler?.stop();
     outboxPoller?.stop();
     telegramProcessor?.stop();
     workerLoop?.stop();

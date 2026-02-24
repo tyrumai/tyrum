@@ -92,3 +92,28 @@ Exports preserve:
 - artifact references and metadata (including hashes)
 - minimal indexes needed to inspect and replay runs
 - optional artifact bytes, depending on policy and operator selection
+
+### Retention + quota policy shape
+
+Retention and quotas are configured in `PolicyBundle.artifacts`:
+
+- `artifacts.retention.default_days`: default retention window in days.
+- `artifacts.retention.by_label.<label>`: label-specific retention in days.
+- `artifacts.retention.by_sensitivity.(normal|sensitive)`: sensitivity-specific retention in days.
+- `artifacts.retention.by_label_sensitivity.<label>.(normal|sensitive)`: most-specific retention in days.
+
+- `artifacts.quota.default_max_bytes`: default quota in bytes.
+- `artifacts.quota.by_label.<label>`: label-specific quota in bytes.
+- `artifacts.quota.by_sensitivity.(normal|sensitive)`: sensitivity-specific quota in bytes.
+- `artifacts.quota.by_label_sensitivity.<label>.(normal|sensitive)`: most-specific quota in bytes.
+
+For lifecycle purposes, the label is the artifact `kind` (for example: `log`, `screenshot`, `diff`, `http_trace`), and sensitivity is `normal` or `sensitive`.
+
+Precedence is “most-specific rule wins”:
+
+1. `by_label_sensitivity.<label>.<sensitivity>`
+2. `by_sensitivity.<sensitivity>`
+3. `by_label.<label>`
+4. `default_days` / `default_max_bytes` (or legacy `retention_days` / `max_bytes`)
+
+The gateway enforces retention/quota by pruning artifact bytes from the ArtifactStore while keeping durable metadata in the StateStore. When bytes are pruned, `execution_artifacts.bytes_deleted_at` and `execution_artifacts.bytes_deleted_reason` are populated; subsequent fetches may return “bytes not found” while metadata remains available for audit.
