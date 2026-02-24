@@ -1,4 +1,4 @@
-import { chunkIr, irToPlainText, markdownToIr } from "./ir.js";
+import { chunkIr, chunkText, irToPlainText, markdownToIr } from "./ir.js";
 
 const TELEGRAM_MAX_MESSAGE_CHARS = 4096;
 
@@ -12,7 +12,19 @@ export function renderMarkdownForTelegram(markdown: string, opts?: { maxChars?: 
   const plain = irToPlainText(ir).trim();
   if (plain.length === 0) return [];
 
-  return chunkIr(ir, maxChars, { measure: (chunk) => irToPlainText(chunk).length })
-    .map(irToPlainText)
-    .filter((chunk) => chunk.trim().length > 0);
+  if (plain.length <= maxChars) return [plain];
+
+  const rendered = chunkIr(ir, maxChars, { measure: (chunk) => irToPlainText(chunk).length }).map(irToPlainText);
+
+  const chunks: string[] = [];
+  for (const chunk of rendered) {
+    if (chunk.length === 0) continue;
+    if (chunk.length <= maxChars) {
+      chunks.push(chunk);
+      continue;
+    }
+    chunks.push(...chunkText(chunk, maxChars));
+  }
+
+  return chunks.filter((chunk) => chunk.length > 0);
 }

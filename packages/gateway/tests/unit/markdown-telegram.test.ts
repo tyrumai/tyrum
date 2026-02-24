@@ -14,5 +14,13 @@ describe("renderMarkdownForTelegram", () => {
       expect(chunk.endsWith("```")).toBe(true);
     }
   });
-});
 
+  it("never returns a chunk that exceeds maxChars, even when formatting overhead is unavoidable", () => {
+    const chunks = renderMarkdownForTelegram("```ts\nX\n```", { maxChars: 5 });
+    expect(chunks.length).toBeGreaterThan(0);
+    for (const chunk of chunks) {
+      expect(chunk.length).toBeLessThanOrEqual(5);
+    }
+    expect(chunks.join("")).toBe("```ts\nX\n```");
+  });
+});

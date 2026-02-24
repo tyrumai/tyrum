@@ -1,7 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { chunkIr, irToPlainText, markdownToIr } from "../../src/modules/markdown/ir.js";
+import { chunkIr, chunkText, irToPlainText, markdownToIr } from "../../src/modules/markdown/ir.js";
+
+describe("chunkText", () => {
+  it("does not emit a chunk that exceeds maxChars when a paragraph boundary begins at end - 1", () => {
+    const chunks = chunkText("abcd\n\nefgh", 5);
+    for (const chunk of chunks) {
+      expect(chunk.length).toBeLessThanOrEqual(5);
+    }
+  });
+});
 
 describe("chunkIr", () => {
+  it("does not emit a chunk that exceeds maxChars when a paragraph boundary begins at hardEnd - 1", () => {
+    const ir = markdownToIr("abcd\n\nefgh");
+    const chunks = chunkIr(ir, 5);
+
+    for (const chunk of chunks) {
+      expect(chunk.text.length).toBeLessThanOrEqual(5);
+    }
+  });
+
   it("prefers breaking at paragraph boundaries (including the separator)", () => {
     const ir = markdownToIr("one\n\ntwo");
     expect(chunkIr(ir, 5)).toEqual([
@@ -88,5 +106,33 @@ describe("chunkIr", () => {
       "```ts\n6789\n```",
     ]);
   });
-});
 
+  it("does not loop when protected spans overlap across the chunk cut", () => {
+    const ir = {
+      text: "abcdefghijklmno",
+      spans: [
+        { kind: "block", block: "paragraph", start: 0, end: 15 },
+        { kind: "style", style: "bold", start: 0, end: 8 },
+        { kind: "link", start: 5, end: 12, href: "https://example.com" },
+      ],
+    } as const;
+
+    expect(chunkIr(ir, 10)).toEqual([
+      {
+        text: "abcdefghij",
+        spans: [
+          { kind: "block", block: "paragraph", start: 0, end: 10 },
+          { kind: "style", style: "bold", start: 0, end: 8 },
+          { kind: "link", start: 5, end: 10, href: "https://example.com" },
+        ],
+      },
+      {
+        text: "klmno",
+        spans: [
+          { kind: "block", block: "paragraph", start: 0, end: 5 },
+          { kind: "link", start: 0, end: 2, href: "https://example.com" },
+        ],
+      },
+    ]);
+  });
+});
