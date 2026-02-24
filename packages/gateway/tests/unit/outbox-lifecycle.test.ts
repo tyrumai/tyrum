@@ -59,5 +59,32 @@ describe("OutboxLifecycleScheduler", () => {
     );
     expect(consumerRows).toEqual([{ consumer_id: "edge-new" }]);
   });
-});
 
+  it("prunes multiple batches per tick when backlog exceeds batch size", async () => {
+    db = openTestSqliteDb();
+
+    const now = new Date("2026-02-24T00:10:00.000Z");
+    const retentionMs = 5 * 60_000;
+    const expiredAt = "2026-02-24T00:00:00.000Z";
+
+    for (let i = 0; i < 3; i += 1) {
+      await db.run(
+        `INSERT INTO outbox (topic, target_edge_id, payload_json, created_at)
+         VALUES (?, ?, ?, ?)`,
+        ["ws.broadcast", null, "{}", expiredAt],
+      );
+    }
+
+    const scheduler = new OutboxLifecycleScheduler({
+      db,
+      retentionMs,
+      batchSize: 1,
+      clock: () => ({ nowIso: now.toISOString(), nowMs: now.getTime() }),
+    });
+
+    await scheduler.tick();
+
+    const outboxCount = await db.get<{ count: number }>("SELECT COUNT(*) as count FROM outbox");
+    expect(outboxCount?.count).toBe(0);
+  });
+});

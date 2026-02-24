@@ -4,6 +4,7 @@ import type { Logger } from "../observability/logger.js";
 const DEFAULT_TICK_MS = 5 * 60_000;
 const DEFAULT_RETENTION_MS = 24 * 60 * 60_000;
 const DEFAULT_BATCH_SIZE = 10_000;
+const DEFAULT_MAX_BATCHES_PER_TICK = 10;
 
 const OUTBOX_RETENTION_ENV = "TYRUM_OUTBOX_RETENTION_MS";
 const OUTBOX_TICK_ENV = "TYRUM_OUTBOX_COMPACTION_TICK_MS";
@@ -25,6 +26,7 @@ export interface OutboxLifecycleSchedulerOptions {
   retentionMs?: number;
   tickMs?: number;
   batchSize?: number;
+  maxBatchesPerTick?: number;
   keepProcessAlive?: boolean;
   clock?: OutboxLifecycleSchedulerClockFn;
 }
@@ -64,6 +66,7 @@ export class OutboxLifecycleScheduler {
   private readonly tickMs: number;
   private readonly retentionMs: number;
   private readonly batchSize: number;
+  private readonly maxBatchesPerTick: number;
   private readonly keepProcessAlive: boolean;
   private readonly clock?: OutboxLifecycleSchedulerClockFn;
   private timer: ReturnType<typeof setInterval> | undefined;
@@ -75,6 +78,10 @@ export class OutboxLifecycleScheduler {
     this.tickMs = resolveTickMs(opts.tickMs);
     this.retentionMs = resolveRetentionMs(opts.retentionMs);
     this.batchSize = Math.max(1, Math.min(1_000_000, resolveBatchSize(opts.batchSize)));
+    this.maxBatchesPerTick = Math.max(
+      1,
+      Math.min(1000, Math.floor(opts.maxBatchesPerTick ?? DEFAULT_MAX_BATCHES_PER_TICK)),
+    );
     this.keepProcessAlive = opts.keepProcessAlive ?? false;
     this.clock = opts.clock;
   }
@@ -108,11 +115,7 @@ export class OutboxLifecycleScheduler {
         if (tx.kind === "postgres") {
           const acquired = await this.tryAcquirePostgresLock(tx);
           if (!acquired) return;
-          try {
-            await this.runCompaction(tx);
-          } finally {
-            await this.releasePostgresLock(tx);
-          }
+          await this.runCompaction(tx);
           return;
         }
 
@@ -127,32 +130,42 @@ export class OutboxLifecycleScheduler {
     if (this.clock) {
       const { nowMs } = this.clock();
       const cutoffIso = new Date(nowMs - this.retentionMs).toISOString();
-      await this.pruneOutboxConsumers(db, { cutoffIso });
-      await this.pruneOutboxRows(db, { cutoffIso });
+      await this.pruneInBatches("outbox_consumers", () => this.pruneOutboxConsumers(db, { cutoffIso }));
+      await this.pruneInBatches("outbox", () => this.pruneOutboxRows(db, { cutoffIso }));
       return;
     }
 
-    await this.pruneOutboxConsumers(db, { retentionMs: this.retentionMs });
-    await this.pruneOutboxRows(db, { retentionMs: this.retentionMs });
+    await this.pruneInBatches(
+      "outbox_consumers",
+      () => this.pruneOutboxConsumers(db, { retentionMs: this.retentionMs }),
+    );
+    await this.pruneInBatches(
+      "outbox",
+      () => this.pruneOutboxRows(db, { retentionMs: this.retentionMs }),
+    );
   }
 
   private async tryAcquirePostgresLock(db: SqlDb): Promise<boolean> {
     const row = await db.get<{ locked: boolean }>(
-      "SELECT pg_try_advisory_lock(?, ?) AS locked",
+      "SELECT pg_try_advisory_xact_lock(?, ?) AS locked",
       [PG_COMPACTION_LOCK_KEY1, PG_COMPACTION_LOCK_KEY2],
     );
     return row?.locked ?? false;
   }
 
-  private async releasePostgresLock(db: SqlDb): Promise<void> {
-    try {
-      await db.run(
-        "SELECT pg_advisory_unlock(?, ?)",
-        [PG_COMPACTION_LOCK_KEY1, PG_COMPACTION_LOCK_KEY2],
-      );
-    } catch {
-      // ignore best-effort unlock errors
+  private async pruneInBatches(
+    table: "outbox" | "outbox_consumers",
+    pruneOnce: () => Promise<number>,
+  ): Promise<void> {
+    for (let i = 0; i < this.maxBatchesPerTick; i += 1) {
+      const changes = await pruneOnce();
+      if (changes < this.batchSize) return;
     }
+    this.logger?.warn("outbox.lifecycle_prune_budget_exhausted", {
+      table,
+      batch_size: this.batchSize,
+      max_batches: this.maxBatchesPerTick,
+    });
   }
 
   private async pruneOutboxConsumers(
