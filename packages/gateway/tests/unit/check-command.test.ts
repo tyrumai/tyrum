@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -33,6 +33,10 @@ vi.mock("../../src/container.js", () => {
 });
 
 describe("tyrum check", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
   afterEach(() => {
     closeDb.mockClear();
     ensureLoaded.mockClear();
