@@ -63,6 +63,7 @@ type ChannelTypingMode = "never" | "message" | "thinking" | "instant";
 const CHANNEL_TYPING_REFRESH_DEFAULT_MS = 4000;
 const CHANNEL_TYPING_REFRESH_MIN_MS = 1000;
 const CHANNEL_TYPING_REFRESH_MAX_MS = 10_000;
+const CHANNEL_TYPING_MESSAGE_START_DELAY_MS = 250;
 
 function resolveChannelTypingMode(): ChannelTypingMode {
   const raw = process.env["TYRUM_CHANNEL_TYPING_MODE"]?.trim().toLowerCase();
@@ -788,10 +789,15 @@ export class TelegramChannelProcessor {
       && isChannelTypingEnabledForLane(leader.lane)
       && typeof connector?.sendTyping === "function";
 
+    let typingTimeout: ReturnType<typeof setTimeout> | undefined;
     let typingInterval: ReturnType<typeof setInterval> | undefined;
     let typingStarted = false;
     const stopTyping = (): void => {
       typingStarted = false;
+      if (typingTimeout) {
+        clearTimeout(typingTimeout);
+        typingTimeout = undefined;
+      }
       if (typingInterval) {
         clearInterval(typingInterval);
         typingInterval = undefined;
@@ -832,8 +838,9 @@ export class TelegramChannelProcessor {
 
       const runtime = await this.agents.getRuntime(agentId);
 
-      if (typingMode === "instant" || typingMode === "thinking") {
-        startTyping();
+      if (typingMode === "instant" || typingMode === "thinking") startTyping();
+      else if (typingMode === "message") {
+        typingTimeout = setTimeout(startTyping, CHANNEL_TYPING_MESSAGE_START_DELAY_MS);
       }
       const result = await runtime.turn({
         ...(combined.length > 0 ? { message: combined } : {}),
@@ -846,10 +853,6 @@ export class TelegramChannelProcessor {
         thread_id: leader.thread_id,
       });
       reply = result.reply ?? "";
-
-      if (typingMode === "message" && reply.trim().length > 0) {
-        startTyping();
-      }
     } catch (err) {
       if (err instanceof LaneQueueInterruptError) {
         this.logger?.info("channels.ingress.agent_interrupted", {

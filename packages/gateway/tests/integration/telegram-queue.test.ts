@@ -262,7 +262,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
     }
   });
 
-  it("defers typing chat actions until assistant text exists when mode is message", async () => {
+  it("starts typing chat actions during response generation when mode is message", async () => {
     db = openTestSqliteDb();
 
     process.env["TYRUM_CHANNEL_TYPING_MODE"] = "message";
@@ -300,18 +300,25 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
       const tickPromise = processor.tick();
 
-      await vi.advanceTimersByTimeAsync(2000);
-      expect(
-        (fetchFn as ReturnType<typeof vi.fn>).mock.calls.some(([url]) => String(url).endsWith("/sendChatAction")),
-      ).toBe(false);
+      await vi.advanceTimersByTimeAsync(200);
+      const typingCallsAt200 = (fetchFn as ReturnType<typeof vi.fn>).mock.calls.filter(([url]) =>
+        String(url).endsWith("/sendChatAction"),
+      );
+      expect(typingCallsAt200).toHaveLength(0);
 
-      await vi.advanceTimersByTimeAsync(500);
+      await vi.advanceTimersByTimeAsync(100);
+      const typingCallsAt300 = (fetchFn as ReturnType<typeof vi.fn>).mock.calls.filter(([url]) =>
+        String(url).endsWith("/sendChatAction"),
+      );
+      expect(typingCallsAt300).toHaveLength(1);
+
+      await vi.advanceTimersByTimeAsync(2200);
       await tickPromise;
 
       const typingCalls = (fetchFn as ReturnType<typeof vi.fn>).mock.calls.filter(([url]) =>
         String(url).endsWith("/sendChatAction"),
       );
-      expect(typingCalls).toHaveLength(1);
+      expect(typingCalls).toHaveLength(3);
     } finally {
       vi.useRealTimers();
     }
