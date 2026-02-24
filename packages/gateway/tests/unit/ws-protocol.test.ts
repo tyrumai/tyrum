@@ -1225,6 +1225,67 @@ describe("requestApproval", () => {
     });
   });
 
+  it("skips node peers when selecting an approval recipient", () => {
+    const cm = new ConnectionManager();
+    const nodeWs = createMockWs();
+    cm.addClient(nodeWs as never, ["playwright"] as never, {
+      id: "node-1",
+      role: "node",
+      protocolRev: 2,
+      authClaims: { token_kind: "admin", role: "admin", scopes: ["*"] },
+    } as never);
+
+    const { ws: operatorWs } = makeClient(cm, ["playwright"]);
+    const deps = makeDeps(cm);
+
+    requestApproval(
+      {
+        approval_id: 7,
+        plan_id: "plan-1",
+        step_index: 2,
+        prompt: "Approve payment?",
+        context: { amount: 100 },
+        expires_at: null,
+      },
+      deps,
+    );
+
+    expect(nodeWs.send).not.toHaveBeenCalled();
+    expect(operatorWs.send).toHaveBeenCalledOnce();
+  });
+
+  it("skips scoped clients without operator.approvals when selecting an approval recipient", () => {
+    const cm = new ConnectionManager();
+    const { ws: unscopedWs } = makeClient(cm, ["playwright"], {
+      role: "client",
+      deviceId: "dev_client_1",
+      protocolRev: 2,
+      authClaims: {
+        token_kind: "device",
+        role: "client",
+        device_id: "dev_client_1",
+        scopes: ["operator.read"],
+      },
+    });
+    const { ws: operatorWs } = makeClient(cm, ["playwright"]);
+    const deps = makeDeps(cm);
+
+    requestApproval(
+      {
+        approval_id: 7,
+        plan_id: "plan-1",
+        step_index: 2,
+        prompt: "Approve payment?",
+        context: { amount: 100 },
+        expires_at: null,
+      },
+      deps,
+    );
+
+    expect(unscopedWs.send).not.toHaveBeenCalled();
+    expect(operatorWs.send).toHaveBeenCalledOnce();
+  });
+
   it("does nothing when no clients are connected", () => {
     const cm = new ConnectionManager();
     const deps = makeDeps(cm);

@@ -1214,10 +1214,10 @@ export function dispatchTask(
 }
 
 /**
- * Send an approval.request to the first connected client.
+ * Send an approval.request to the first connected operator client.
  *
  * Approval requests are not capability-scoped; any connected client
- * with a human operator can respond.
+ * with a human operator can respond as long as they are authorized to do so.
  */
 export function requestApproval(
   approval: {
@@ -1238,11 +1238,13 @@ export function requestApproval(
   };
   const payload = JSON.stringify(message);
 
-  // Send to the first available client.
-  const iter = deps.connectionManager.allClients();
-  const first = iter.next();
-  if (!first.done) {
-    first.value.ws.send(payload);
+  for (const peer of deps.connectionManager.allClients()) {
+    const authClaims = peer.auth_claims;
+    if (!authClaims) continue;
+    if (peer.role !== "client") continue;
+    if (authClaims.token_kind === "device" && !hasAnyRequiredScope(authClaims, ["operator.approvals"])) continue;
+
+    peer.ws.send(payload);
     if (deps.cluster) {
       void deps.cluster.outboxDal
         .enqueue("ws.broadcast", {
