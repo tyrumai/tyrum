@@ -36,4 +36,40 @@ describe("ConnectionDirectoryDal", () => {
     expect(await dir.cleanupExpired(now + 10_000)).toBe(1);
     expect(await dir.listConnectionsForCapability("playwright", now + 10_000)).toHaveLength(0);
   });
+
+  it("treats missing readiness as ready=capabilities (rolling upgrade safe)", async () => {
+    const dir = setup();
+    const now = 1_000_000;
+
+    // Simulate an older edge writing a directory row that does not set readiness.
+    await db!.run(
+      `INSERT INTO connection_directory (
+         connection_id,
+         edge_id,
+         role,
+         protocol_rev,
+         device_id,
+         capabilities_json,
+         connected_at_ms,
+         last_seen_at_ms,
+         expires_at_ms
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        "c-node-1",
+        "edge-a",
+        "node",
+        2,
+        "dev_test",
+        JSON.stringify(["cli"]),
+        now,
+        now,
+        now + 5_000,
+      ],
+    );
+
+    const rows = await dir.listNonExpired(now);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.capabilities).toEqual(["cli"]);
+    expect(rows[0]!.ready_capabilities).toEqual(["cli"]);
+  });
 });

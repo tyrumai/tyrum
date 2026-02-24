@@ -29,7 +29,7 @@ interface RawConnectionDirectoryRow {
   version: string | null;
   mode: string | null;
   capabilities_json: string;
-  ready_capabilities_json: string;
+  ready_capabilities_json: string | null;
   connected_at_ms: number;
   last_seen_at_ms: number;
   expires_at_ms: number;
@@ -45,14 +45,18 @@ function toRow(raw: RawConnectionDirectoryRow): ConnectionDirectoryRow {
   } catch {
     // leave empty
   }
-  let readyCapabilities: ClientCapability[] = [];
-  try {
-    const parsed = JSON.parse(raw.ready_capabilities_json) as unknown;
-    if (Array.isArray(parsed)) {
-      readyCapabilities = parsed.filter((v): v is ClientCapability => typeof v === "string") as ClientCapability[];
+  let readyCapabilities: ClientCapability[] | undefined;
+  if (typeof raw.ready_capabilities_json === "string") {
+    try {
+      const parsed = JSON.parse(raw.ready_capabilities_json) as unknown;
+      if (Array.isArray(parsed)) {
+        readyCapabilities = parsed.filter((v): v is ClientCapability => typeof v === "string") as ClientCapability[];
+      } else {
+        readyCapabilities = [];
+      }
+    } catch {
+      readyCapabilities = [];
     }
-  } catch {
-    // leave empty
   }
   const role = raw.role === "node" ? "node" : "client";
   return {
@@ -69,7 +73,7 @@ function toRow(raw: RawConnectionDirectoryRow): ConnectionDirectoryRow {
     version: raw.version,
     mode: raw.mode,
     capabilities,
-    ready_capabilities: readyCapabilities,
+    ready_capabilities: readyCapabilities ?? capabilities,
     connected_at_ms: raw.connected_at_ms,
     last_seen_at_ms: raw.last_seen_at_ms,
     expires_at_ms: raw.expires_at_ms,
