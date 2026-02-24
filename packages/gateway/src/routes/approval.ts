@@ -14,6 +14,7 @@ import type { WsEventEnvelope } from "@tyrum/schemas";
 import type { ExecutionEngine } from "../modules/execution/engine.js";
 import { toApprovalContract } from "../modules/approval/to-contract.js";
 import { isSafeSuggestedOverridePattern } from "../modules/policy/override-guardrails.js";
+import { getClientIp } from "../modules/auth/client-ip.js";
 
 const VALID_STATUSES = new Set<ApprovalStatus>([
   "pending",
@@ -280,7 +281,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
     if (decisionMatches && updated.status === "approved" && shouldCreateOverrides && overrideDalForRequest) {
       const createdBy = {
         kind: "http",
-        ip: c.req.header("x-forwarded-for") ?? undefined,
+        ip: getClientIp(c),
         user_agent: c.req.header("user-agent") ?? undefined,
       };
       const agentId = extractAgentId(updated.context) ?? "default";

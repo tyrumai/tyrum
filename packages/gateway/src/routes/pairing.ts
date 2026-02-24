@@ -9,6 +9,7 @@ import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
 import { emitPairingApprovedEvent } from "../ws/pairing-approved.js";
 import { CapabilityDescriptor, NodePairingTrustLevel, type WsEventEnvelope } from "@tyrum/schemas";
+import { getClientIp } from "../modules/auth/client-ip.js";
 
 export interface PairingRouteDeps {
   nodePairingDal: NodePairingDal;
@@ -99,7 +100,7 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
       capabilityAllowlist: allowlistParsed.data,
       resolvedBy: {
         kind: "http",
-        ip: c.req.header("x-forwarded-for") ?? undefined,
+        ip: getClientIp(c),
         user_agent: c.req.header("user-agent") ?? undefined,
       },
     });
@@ -138,7 +139,7 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
       reason: typeof body.reason === "string" ? body.reason : undefined,
       resolvedBy: {
         kind: "http",
-        ip: c.req.header("x-forwarded-for") ?? undefined,
+        ip: getClientIp(c),
         user_agent: c.req.header("user-agent") ?? undefined,
       },
     });
@@ -172,7 +173,7 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
       reason: typeof body.reason === "string" ? body.reason : undefined,
       resolvedBy: {
         kind: "http",
-        ip: c.req.header("x-forwarded-for") ?? undefined,
+        ip: getClientIp(c),
         user_agent: c.req.header("user-agent") ?? undefined,
       },
     });

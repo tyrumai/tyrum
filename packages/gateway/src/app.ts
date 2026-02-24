@@ -53,6 +53,7 @@ import { createHttpScopeAuthorizationMiddleware } from "./modules/authz/http-sco
 import { randomUUID } from "node:crypto";
 import { VERSION } from "./version.js";
 import { isAuthProfilesEnabled } from "./modules/models/auth-profiles-enabled.js";
+import { createClientIpMiddleware, createTrustedProxyAllowlistFromEnv } from "./modules/auth/client-ip.js";
 
 export interface AppOptions {
   agents?: AgentRegistry;
@@ -131,6 +132,9 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       return defaultSecretProvider;
     };
   })();
+
+  const trustedProxies = createTrustedProxyAllowlistFromEnv(process.env["GATEWAY_TRUSTED_PROXIES"]);
+  app.use("*", createClientIpMiddleware({ trustedProxies }));
 
   // Apply auth middleware if a token store is provided
   if (opts.tokenStore) {

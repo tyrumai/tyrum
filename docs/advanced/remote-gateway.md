@@ -29,6 +29,7 @@ Recommended minimum controls:
 
 - Allowlist source IPs.
 - Use TLS termination in front of the gateway.
+- If running behind a reverse proxy, configure `GATEWAY_TRUSTED_PROXIES` so the gateway only trusts `Forwarded` / `X-Forwarded-For` / `X-Real-IP` from known proxy addresses.
 - Avoid direct internet exposure without access controls.
 - Rotate API keys used by external model providers.
 
