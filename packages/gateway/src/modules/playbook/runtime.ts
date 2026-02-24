@@ -14,6 +14,12 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function isValidationError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const name = (err as { name?: unknown }).name;
+  return name === "ZodError" || name === "YAMLParseError";
+}
+
 function resolvePlaybookFromPipeline(pipeline: string, loaded: Playbook[]): Playbook {
   const trimmed = pipeline.trim();
 
@@ -166,86 +172,141 @@ export interface PlaybookRuntimeDeps {
 export async function runPlaybookRuntimeEnvelope(
   deps: PlaybookRuntimeDeps,
   input:
-    | { action: "run"; pipeline: string; timeoutMs?: number }
+    | { action: "run"; pipeline: string; argsJson?: string; cwd?: string; maxOutputBytes?: number; timeoutMs?: number }
     | { action: "resume"; token: string; approve: boolean; reason?: string; timeoutMs?: number },
 ): Promise<PlaybookRuntimeEnvelopeT> {
   const timeoutMs = input.timeoutMs ?? 30_000;
 
-  if (input.action === "run") {
-    const playbook = resolvePlaybookFromPipeline(input.pipeline, deps.playbooks);
-    const compiled = deps.runner.run(playbook);
-    const steps = compiled.steps;
+  try {
+    if (input.action === "run") {
+      let runtimeArgs: unknown | undefined;
+      if (input.argsJson !== undefined) {
+        try {
+          runtimeArgs = JSON.parse(input.argsJson) as unknown;
+        } catch {
+          return {
+            ok: false,
+            status: "error",
+            output: [],
+            error: { message: "argsJson must be valid JSON", code: "invalid_request" },
+          };
+        }
+      }
 
-    const planId = `playbook-${playbook.manifest.id}-${randomUUID()}`;
-    const requestId = `req-${randomUUID()}`;
-    const key = `playbook:${playbook.manifest.id}`;
-    const lane = "main";
+      const playbook = resolvePlaybookFromPipeline(input.pipeline, deps.playbooks);
+      const compiled = deps.runner.run(playbook);
+      const steps = compiled.steps.map((step) => {
+        if (!input.cwd && input.maxOutputBytes === undefined && runtimeArgs === undefined) {
+          return step;
+        }
 
-    const playbookBundle = resolvePlaybookPolicyBundle(playbook);
-    const effectivePolicy = await deps.policyService.loadEffectiveBundle({ playbookBundle });
-    const snapshot = await deps.policyService.getOrCreateSnapshot(effectivePolicy.bundle);
+        const nextArgs: Record<string, unknown> = { ...(step.args ?? {}) };
+        if (runtimeArgs !== undefined) {
+          nextArgs["__playbook_runtime_args"] = runtimeArgs;
+        }
+        if (input.cwd) {
+          nextArgs["cwd"] = input.cwd;
+        }
+        if (typeof input.maxOutputBytes === "number" && Number.isFinite(input.maxOutputBytes)) {
+          nextArgs["max_output_bytes"] = Math.floor(input.maxOutputBytes);
+        }
 
-    const res = await deps.engine.enqueuePlan({
-      key,
-      lane,
-      planId,
-      requestId,
-      steps,
-      policySnapshotId: snapshot.policy_snapshot_id,
-      trigger: { kind: "api", key, lane, metadata: { source: "playbook-runtime", playbook_id: playbook.manifest.id } },
-    });
+        return { ...step, args: nextArgs };
+      });
 
-    return await envelopeForRunStatus(deps.db, res.runId, timeoutMs);
-  }
+      const planId = `playbook-${playbook.manifest.id}-${randomUUID()}`;
+      const requestId = `req-${randomUUID()}`;
+      const key = `playbook:${playbook.manifest.id}`;
+      const lane = "main";
 
-  const approval = await deps.approvalDal.getByResumeToken(input.token);
-  if (!approval) {
-    return {
-      ok: false,
-      status: "error",
-      output: [],
-      error: { message: "resume token not found", code: "not_found" },
-    };
-  }
+      const playbookBundle = resolvePlaybookPolicyBundle(playbook);
+      const effectivePolicy = await deps.policyService.loadEffectiveBundle({ playbookBundle });
+      const snapshot = await deps.policyService.getOrCreateSnapshot(effectivePolicy.bundle);
 
-  const resolveRunId = (row: ApprovalRow): string | undefined => {
-    const id = row.run_id?.trim();
-    return id && id.length > 0 ? id : undefined;
-  };
+      const triggerMetadata: Record<string, unknown> = {
+        source: "playbook-runtime",
+        playbook_id: playbook.manifest.id,
+      };
+      if (runtimeArgs !== undefined) {
+        triggerMetadata["args"] = runtimeArgs;
+      }
+      if (input.cwd) {
+        triggerMetadata["cwd"] = input.cwd;
+      }
+      if (typeof input.maxOutputBytes === "number" && Number.isFinite(input.maxOutputBytes)) {
+        triggerMetadata["max_output_bytes"] = Math.floor(input.maxOutputBytes);
+      }
 
-  const runId = resolveRunId(approval);
-  if (!runId) {
-    return {
-      ok: false,
-      status: "error",
-      output: [],
-      error: { message: "approval is missing run_id", code: "invalid_state" },
-    };
-  }
+      const res = await deps.engine.enqueuePlan({
+        key,
+        lane,
+        planId,
+        requestId,
+        steps,
+        policySnapshotId: snapshot.policy_snapshot_id,
+        trigger: { kind: "api", key, lane, metadata: triggerMetadata },
+      });
 
-  if (approval.status === "pending") {
-    await deps.approvalDal.respond(approval.id, input.approve, input.reason);
-  } else {
-    const matches =
-      (input.approve && approval.status === "approved") ||
-      (!input.approve && approval.status === "denied");
-    if (!matches) {
+      return await envelopeForRunStatus(deps.db, res.runId, timeoutMs);
+    }
+
+    const approval = await deps.approvalDal.getByResumeToken(input.token);
+    if (!approval) {
       return {
         ok: false,
         status: "error",
         output: [],
-        error: { message: "approval already resolved", code: "conflict" },
+        error: { message: "resume token not found", code: "not_found" },
       };
     }
-  }
 
-  if (input.approve) {
-    // Best-effort; if already resumed, this may return undefined.
-    await deps.engine.resumeRun(input.token);
-  } else {
-    await deps.engine.cancelRun(runId, input.reason ?? "approval denied");
-  }
+    const resolveRunId = (row: ApprovalRow): string | undefined => {
+      const id = row.run_id?.trim();
+      return id && id.length > 0 ? id : undefined;
+    };
 
-  return await envelopeForRunStatus(deps.db, runId, timeoutMs);
+    const runId = resolveRunId(approval);
+    if (!runId) {
+      return {
+        ok: false,
+        status: "error",
+        output: [],
+        error: { message: "approval is missing run_id", code: "invalid_state" },
+      };
+    }
+
+    if (approval.status === "pending") {
+      await deps.approvalDal.respond(approval.id, input.approve, input.reason);
+    } else {
+      const matches =
+        (input.approve && approval.status === "approved") ||
+        (!input.approve && approval.status === "denied");
+      if (!matches) {
+        return {
+          ok: false,
+          status: "error",
+          output: [],
+          error: { message: "approval already resolved", code: "conflict" },
+        };
+      }
+    }
+
+    if (input.approve) {
+      // Best-effort; if already resumed, this may return undefined.
+      await deps.engine.resumeRun(input.token);
+    } else {
+      await deps.engine.cancelRun(runId, input.reason ?? "approval denied");
+    }
+
+    return await envelopeForRunStatus(deps.db, runId, timeoutMs);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const code = isValidationError(err) ? "invalid_request" : "internal";
+    return {
+      ok: false,
+      status: "error",
+      output: [],
+      error: { message, code },
+    };
+  }
 }
-

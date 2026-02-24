@@ -89,7 +89,14 @@ export function createPlaybookRoutes(deps: PlaybookRouteDeps): Hono {
         runner: deps.runner,
       },
       input.action === "run"
-        ? { action: "run", pipeline: input.pipeline, timeoutMs: input.timeoutMs }
+        ? {
+            action: "run",
+            pipeline: input.pipeline,
+            argsJson: input.argsJson,
+            cwd: input.cwd,
+            maxOutputBytes: input.maxOutputBytes,
+            timeoutMs: input.timeoutMs,
+          }
         : {
             action: "resume",
             token: input.token,

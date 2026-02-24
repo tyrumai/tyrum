@@ -97,6 +97,62 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     }
   });
 
+  it("returns status=error envelope for invalid pipelines (no run created)", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
+    const engine = new ExecutionEngine({
+      db: container.db,
+      redactionEngine: container.redactionEngine,
+      policyService: container.policyService,
+      logger: container.logger,
+    });
+    const playbooks = loadAllPlaybooks(fixturesDir, { onInvalidPlaybook: () => {} });
+    const app = createApp(container, { engine, playbooks });
+
+    const res = await app.request("/playbooks/runtime", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "run", pipeline: "not: a playbook", timeoutMs: 50 }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; status: string; error?: { code?: string } };
+    expect(body.ok).toBe(false);
+    expect(body.status).toBe("error");
+    expect(body.error?.code).toBe("invalid_request");
+
+    const runCount = await container.db.get<{ count: number }>("SELECT COUNT(*) as count FROM execution_runs");
+    expect(runCount?.count ?? 0).toBe(0);
+  });
+
+  it("returns status=error envelope when argsJson is invalid (no run created)", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
+    const engine = new ExecutionEngine({
+      db: container.db,
+      redactionEngine: container.redactionEngine,
+      policyService: container.policyService,
+      logger: container.logger,
+    });
+    const playbooks = loadAllPlaybooks(fixturesDir, { onInvalidPlaybook: () => {} });
+    const app = createApp(container, { engine, playbooks });
+
+    const res = await app.request("/playbooks/runtime", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "run", pipeline: INLINE_PLAYBOOK, argsJson: "{not json", timeoutMs: 50 }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; status: string; error?: { code?: string } };
+    expect(body.ok).toBe(false);
+    expect(body.status).toBe("error");
+    expect(body.error?.code).toBe("invalid_request");
+
+    const runCount = await container.db.get<{ count: number }>("SELECT COUNT(*) as count FROM execution_runs");
+    expect(runCount?.count ?? 0).toBe(0);
+  });
+
   it("returns status=needs_approval with resumeToken when paused for policy approval", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
@@ -112,10 +168,24 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     const resPromise = app.request("/playbooks/runtime", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "run", pipeline: INLINE_PLAYBOOK, timeoutMs: 2_000 }),
+      body: JSON.stringify({
+        action: "run",
+        pipeline: INLINE_PLAYBOOK,
+        argsJson: "{\"k\":\"v\"}",
+        cwd: "subdir",
+        maxOutputBytes: 1234,
+        timeoutMs: 2_000,
+      }),
     });
 
     const runId = await waitForRunId(container);
+    const step = await container.db.get<{ action_json: string }>(
+      "SELECT action_json FROM execution_steps WHERE run_id = ? AND step_index = 0",
+      [runId],
+    );
+    const action = step?.action_json ? (JSON.parse(step.action_json) as { args?: { cwd?: unknown; max_output_bytes?: unknown } }) : undefined;
+    expect(action?.args?.cwd).toBe("subdir");
+    expect(action?.args?.max_output_bytes).toBe(1234);
 
     const executor: StepExecutor = {
       execute: vi.fn(async () => {
@@ -315,4 +385,3 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     expect(body.error?.message).toBeTruthy();
   });
 });
-
