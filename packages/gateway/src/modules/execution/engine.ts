@@ -24,6 +24,8 @@ import type { Logger } from "../observability/logger.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { PolicyService } from "../policy/service.js";
 import { canonicalizeToolMatchTarget } from "../policy/match-target.js";
+import type { SecretProvider } from "../secret/provider.js";
+import { collectSecretHandleIds } from "../secret/collect-secret-handle-ids.js";
 
 export interface StepResult {
   success: boolean;
@@ -235,6 +237,7 @@ export class ExecutionEngine {
   private readonly db: SqlDb;
   private readonly clock: ClockFn;
   private readonly redactionEngine?: RedactionEngine;
+  private readonly secretProvider?: SecretProvider;
   private readonly logger?: Logger;
   private readonly policyService?: PolicyService;
   private readonly eventsEnabled: boolean;
@@ -244,6 +247,7 @@ export class ExecutionEngine {
     db: SqlDb;
     clock?: ClockFn;
     redactionEngine?: RedactionEngine;
+    secretProvider?: SecretProvider;
     logger?: Logger;
     policyService?: PolicyService;
     eventsEnabled?: boolean;
@@ -252,6 +256,7 @@ export class ExecutionEngine {
     this.db = opts.db;
     this.clock = opts.clock ?? defaultClock;
     this.redactionEngine = opts.redactionEngine;
+    this.secretProvider = opts.secretProvider;
     this.logger = opts.logger;
     this.policyService = opts.policyService;
     this.eventsEnabled = opts.eventsEnabled ?? true;
@@ -268,6 +273,44 @@ export class ExecutionEngine {
 
   private redactText(text: string): string {
     return this.redactionEngine ? this.redactionEngine.redactText(text).redacted : text;
+  }
+
+  private async resolveSecretScopesFromArgs(args: unknown): Promise<string[]> {
+    const handleIds = collectSecretHandleIds(args);
+    if (handleIds.length === 0) return [];
+
+    if (!this.secretProvider) {
+      return handleIds;
+    }
+
+    try {
+      const handles = await this.secretProvider.list();
+      const byId = new Map(handles.map((h) => [h.handle_id, h]));
+      const scopes = new Set<string>();
+
+      for (const id of handleIds) {
+        const handle = byId.get(id);
+        if (handle?.scope) {
+          scopes.add(`${handle.provider}:${handle.scope}`);
+        } else {
+          scopes.add(id);
+        }
+      }
+
+      return [...scopes];
+    } catch {
+      return handleIds;
+    }
+  }
+
+  private async isApprovedPolicyGateTx(tx: SqlDb, approvalId: number | null): Promise<boolean> {
+    if (approvalId === null) return false;
+    const row = await tx.get<{ kind: string; status: string }>(
+      "SELECT kind, status FROM approvals WHERE id = ? LIMIT 1",
+      [approvalId],
+    );
+    if (!row) return false;
+    return row.kind === "policy" && row.status === "approved";
   }
 
   private async enqueueWsMessage(tx: SqlDb, message: WsEventEnvelopeT | WsRequestEnvelopeT): Promise<void> {
@@ -1222,13 +1265,158 @@ export class ExecutionEngine {
       }
 
       let actionType: ActionPrimitiveT["type"] | undefined;
+      let parsedAction: ActionPrimitiveT | undefined;
       try {
-        const parsed = JSON.parse(next.action_json) as { type?: unknown };
+        const parsed = JSON.parse(next.action_json) as ActionPrimitiveT;
+        parsedAction = parsed;
         if (typeof parsed?.type === "string") {
           actionType = parsed.type as ActionPrimitiveT["type"];
         }
       } catch {
         // ignore malformed action_json
+      }
+
+      const policy = this.policyService;
+      if (
+        policy &&
+        policy.isEnabled() &&
+        !policy.isObserveOnly() &&
+        parsedAction &&
+        (actionType === "CLI" || actionType === "Http")
+      ) {
+        const secretScopes = await this.resolveSecretScopesFromArgs(parsedAction.args ?? {});
+
+        if (secretScopes.length > 0) {
+          const secretsDecision = (
+            await policy.evaluateSecretsFromSnapshot({
+              policySnapshotId: run.policy_snapshot_id,
+              secretScopes,
+            })
+          ).decision;
+
+          if (secretsDecision === "deny") {
+            const stepFailed = await tx.run(
+              `UPDATE execution_steps
+               SET status = 'failed'
+               WHERE step_id = ? AND status = 'queued'`,
+              [next.step_id],
+            );
+
+            if (stepFailed.changes !== 1) {
+              return { kind: "noop" as const };
+            }
+
+            await tx.run(
+              `INSERT INTO execution_attempts (
+                 attempt_id,
+                 step_id,
+                 attempt,
+                 status,
+                 started_at,
+                 finished_at,
+                 policy_snapshot_id,
+                 artifacts_json,
+                 result_json,
+                 error
+               ) VALUES (?, ?, ?, 'failed', ?, ?, ?, '[]', NULL, ?)`,
+              [
+                attemptId,
+                next.step_id,
+                attemptNum,
+                clock.nowIso,
+                clock.nowIso,
+                run.policy_snapshot_id ?? null,
+                this.redactText(
+                  `policy denied secret resolution for scopes: ${secretScopes.join(", ")}`,
+                ),
+              ],
+            );
+
+            await tx.run(
+              `UPDATE execution_steps
+               SET status = 'cancelled'
+               WHERE run_id = ?
+                 AND step_id != ?
+                 AND status IN ('queued', 'paused', 'running')`,
+              [run.run_id, next.step_id],
+            );
+
+            await tx.run(
+              `UPDATE execution_runs
+               SET status = 'failed', finished_at = ?
+               WHERE run_id = ? AND status IN ('running', 'queued')`,
+              [clock.nowIso, run.run_id],
+            );
+
+            await tx.run(
+              `UPDATE execution_jobs
+               SET status = 'failed'
+               WHERE job_id = ? AND status IN ('queued', 'running')`,
+              [run.job_id],
+            );
+
+            await tx.run(
+              `DELETE FROM lane_leases
+               WHERE key = ? AND lane = ? AND lease_owner = ?`,
+              [run.key, run.lane, input.workerId],
+            );
+
+            await tx.run(
+              `DELETE FROM workspace_leases
+               WHERE workspace_id = ? AND lease_owner = ?`,
+              [run.workspace_id, input.workerId],
+            );
+
+            await this.emitAttemptUpdatedTx(tx, attemptId);
+            await this.emitRunUpdatedTx(tx, run.run_id);
+
+            const stepIds = await tx.all<{ step_id: string }>(
+              "SELECT step_id FROM execution_steps WHERE run_id = ? ORDER BY step_index ASC",
+              [run.run_id],
+            );
+            for (const row of stepIds) {
+              await this.emitStepUpdatedTx(tx, row.step_id);
+            }
+
+            return { kind: "finalized" as const };
+          }
+
+          if (secretsDecision === "require_approval") {
+            const alreadyApproved = await this.isApprovedPolicyGateTx(tx, next.approval_id);
+            if (!alreadyApproved) {
+              const planId = parsePlanIdFromTriggerJson(run.trigger_json) ?? run.run_id;
+              const paused = await this.pauseRunForApproval(
+                tx,
+                {
+                  planId,
+                  stepIndex: next.step_index,
+                  runId: run.run_id,
+                  jobId: run.job_id,
+                  stepId: next.step_id,
+                  workspaceId: run.workspace_id,
+                  key: run.key,
+                  lane: run.lane,
+                  workerId: input.workerId,
+                },
+                {
+                  kind: "policy",
+                  prompt: "Policy approval required — secret resolution",
+                  detail: `Step requires resolving ${String(secretScopes.length)} secret scope(s): ${secretScopes.join(", ")}`,
+                  context: {
+                    action_type: actionType,
+                    secret_scopes: secretScopes,
+                    policy_snapshot_id: run.policy_snapshot_id ?? null,
+                  },
+                },
+              );
+              return {
+                kind: "paused" as const,
+                reason: "policy" as const,
+                approvalId: paused.approvalId,
+              };
+            }
+          }
+        }
       }
 
       const agentId = this.deriveAgentIdFromKey(run.key) ?? "default";
@@ -1756,6 +1944,7 @@ export class ExecutionEngine {
     if (!tool) return;
 
     const agentId = this.deriveAgentIdFromKey(opts.key) ?? "default";
+    const secretScopes = await this.resolveSecretScopesFromArgs(opts.action.args ?? {});
     const evaluation = await this.policyService.evaluateToolCallFromSnapshot({
       policySnapshotId,
       agentId,
@@ -1763,6 +1952,7 @@ export class ExecutionEngine {
       toolId: tool.toolId,
       toolMatchTarget: tool.matchTarget,
       url: tool.url,
+      secretScopes: secretScopes.length > 0 ? secretScopes : undefined,
       inputProvenance: { source: "workflow", trusted: true },
     });
 
