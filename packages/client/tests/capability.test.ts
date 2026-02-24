@@ -3,7 +3,7 @@ import { WebSocketServer } from "ws";
 import type { WebSocket as WsWebSocket } from "ws";
 import { TyrumClient } from "../src/ws-client.js";
 import { autoExecute } from "../src/capability.js";
-import type { CapabilityProvider } from "../src/capability.js";
+import type { CapabilityProvider, TaskExecuteContext } from "../src/capability.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -101,10 +101,10 @@ describe("autoExecute", () => {
       runId: "550e8400-e29b-41d4-a716-446655440000",
       stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
       attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
-    };
+    } satisfies TaskExecuteContext;
     const httpProvider: CapabilityProvider = {
       capability: "http",
-      execute: async (action, ctx?: unknown) => {
+      execute: async (action, ctx?: TaskExecuteContext) => {
         expect(action.type).toBe("Http");
         expect(ctx).toEqual(expectedContext);
         return {
@@ -139,6 +139,62 @@ describe("autoExecute", () => {
       type: "task.execute",
       ok: true,
       result: { evidence: { statusCode: 200 } },
+    });
+  });
+
+  it("forwards provider result payload in task.execute response", async () => {
+    server = createTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: ["http"],
+      reconnect: false,
+    });
+
+    const expectedContext = {
+      requestId: "t-1",
+      runId: "550e8400-e29b-41d4-a716-446655440000",
+      stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+      attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+    } satisfies TaskExecuteContext;
+
+    const httpProvider: CapabilityProvider = {
+      capability: "http",
+      execute: async (_action, ctx) => {
+        expect(ctx).toEqual(expectedContext);
+        return {
+          success: true,
+          result: { ok: true },
+          evidence: { statusCode: 200 },
+        };
+      },
+    };
+
+    autoExecute(client, [httpProvider]);
+
+    client.connect();
+    const ws = await server.waitForClient();
+    await acceptConnect(ws);
+
+    ws.send(
+      JSON.stringify({
+        request_id: "t-1",
+        type: "task.execute",
+        payload: {
+          run_id: expectedContext.runId,
+          step_id: expectedContext.stepId,
+          attempt_id: expectedContext.attemptId,
+          action: { type: "Http", args: { url: "https://example.com" } },
+        },
+      }),
+    );
+
+    const result = await waitForMessage(ws);
+    expect(result).toEqual({
+      request_id: "t-1",
+      type: "task.execute",
+      ok: true,
+      result: { result: { ok: true }, evidence: { statusCode: 200 } },
     });
   });
 
