@@ -221,6 +221,17 @@ export class ApprovalDal {
     return rows.map(toApprovalRow);
   }
 
+  /** Get the most recent approval associated with a resume token. */
+  async getByResumeToken(resumeToken: string): Promise<ApprovalRow | undefined> {
+    const token = resumeToken.trim();
+    if (!token) return undefined;
+    const row = await this.db.get<RawApprovalRow>(
+      "SELECT * FROM approvals WHERE resume_token = ? ORDER BY created_at DESC LIMIT 1",
+      [token],
+    );
+    return row ? toApprovalRow(row) : undefined;
+  }
+
   /** Get all approvals for a given plan. */
   async getByPlanId(planId: string): Promise<ApprovalRow[]> {
     const rows = await this.db.all<RawApprovalRow>(

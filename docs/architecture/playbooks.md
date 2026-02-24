@@ -49,6 +49,7 @@ The runtime returns an envelope with a **status**:
 - `ok` → finished successfully
 - `needs_approval` → paused; a `resumeToken` is required to resume
 - `cancelled` → explicitly denied/cancelled (no further side effects)
+- `error` → failed; `ok: false` with a structured error payload
 
 Example (paused):
 

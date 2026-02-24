@@ -1,0 +1,251 @@
+import type { Playbook, PlaybookRuntimeEnvelope as PlaybookRuntimeEnvelopeT } from "@tyrum/schemas";
+import { PlaybookManifest, PolicyBundle } from "@tyrum/schemas";
+import { randomUUID } from "node:crypto";
+import { isAbsolute } from "node:path";
+import { parse as parseYaml } from "yaml";
+import type { ExecutionEngine } from "../execution/engine.js";
+import type { PolicyService } from "../policy/service.js";
+import type { ApprovalDal, ApprovalRow } from "../approval/dal.js";
+import type { SqlDb } from "../../statestore/types.js";
+import type { PlaybookRunner } from "./runner.js";
+import { loadPlaybook } from "./loader.js";
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function resolvePlaybookFromPipeline(pipeline: string, loaded: Playbook[]): Playbook {
+  const trimmed = pipeline.trim();
+
+  const byId = loaded.find((p) => p.manifest.id === trimmed);
+  if (byId) return byId;
+
+  if (isAbsolute(trimmed)) {
+    return loadPlaybook(trimmed);
+  }
+
+  const parsed = parseYaml(trimmed) as unknown;
+  const manifest = PlaybookManifest.parse(parsed);
+  return {
+    manifest,
+    file_path: "<inline>",
+    loaded_at: new Date().toISOString(),
+  };
+}
+
+function resolvePlaybookPolicyBundle(playbook: Playbook) {
+  const allowed = playbook.manifest.allowed_domains ?? [];
+  if (allowed.length === 0) return undefined;
+  return PolicyBundle.parse({
+    v: 1,
+    network_egress: {
+      default: "require_approval",
+      allow: allowed.flatMap((d) => [`https://${d}/*`, `http://${d}/*`]),
+      require_approval: [],
+      deny: [],
+    },
+  });
+}
+
+async function loadPendingApprovalForRun(db: SqlDb, runId: string): Promise<{
+  prompt: string;
+  resumeToken: string;
+} | undefined> {
+  const row = await db.get<{ prompt: string; resume_token: string | null }>(
+    `SELECT prompt, resume_token
+     FROM approvals
+     WHERE run_id = ? AND status = 'pending'
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [runId],
+  );
+  const resumeToken = row?.resume_token?.trim();
+  if (!row?.prompt || !resumeToken) return undefined;
+  return { prompt: row.prompt, resumeToken };
+}
+
+async function loadRunErrorMessage(db: SqlDb, runId: string): Promise<string | undefined> {
+  const row = await db.get<{ error: string | null }>(
+    `SELECT a.error
+     FROM execution_attempts a
+     JOIN execution_steps s ON s.step_id = a.step_id
+     WHERE s.run_id = ? AND a.error IS NOT NULL
+     ORDER BY a.started_at DESC
+     LIMIT 1`,
+    [runId],
+  );
+  const message = row?.error?.trim();
+  return message && message.length > 0 ? message : undefined;
+}
+
+async function waitForRunToSettle(
+  db: SqlDb,
+  runId: string,
+  timeoutMs: number,
+): Promise<{ status: string; paused_reason: string | null; paused_detail: string | null }> {
+  const deadline = Date.now() + Math.max(1, timeoutMs);
+
+  for (;;) {
+    const row = await db.get<{ status: string; paused_reason: string | null; paused_detail: string | null }>(
+      "SELECT status, paused_reason, paused_detail FROM execution_runs WHERE run_id = ?",
+      [runId],
+    );
+    if (!row) {
+      throw new Error(`execution run '${runId}' not found`);
+    }
+
+    if (row.status === "paused" || row.status === "succeeded" || row.status === "failed" || row.status === "cancelled") {
+      return row;
+    }
+
+    if (Date.now() >= deadline) {
+      throw new Error(`execution run '${runId}' did not settle within ${String(timeoutMs)}ms`);
+    }
+
+    await sleep(25);
+  }
+}
+
+async function envelopeForRunStatus(db: SqlDb, runId: string, timeoutMs: number): Promise<PlaybookRuntimeEnvelopeT> {
+  let row: { status: string; paused_reason: string | null; paused_detail: string | null };
+  try {
+    row = await waitForRunToSettle(db, runId, timeoutMs);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, status: "error", output: [], error: { message, code: "timeout" } };
+  }
+
+  if (row.status === "succeeded") {
+    return { ok: true, status: "ok", output: [] };
+  }
+
+  if (row.status === "cancelled") {
+    return { ok: true, status: "cancelled", output: [] };
+  }
+
+  if (row.status === "paused") {
+    const approval = await loadPendingApprovalForRun(db, runId);
+    if (!approval) {
+      return {
+        ok: false,
+        status: "error",
+        output: [],
+        error: { message: `run '${runId}' is paused but no pending approval was found` },
+      };
+    }
+    return {
+      ok: true,
+      status: "needs_approval",
+      output: [],
+      requiresApproval: {
+        prompt: approval.prompt,
+        items: [],
+        resumeToken: approval.resumeToken,
+      },
+    };
+  }
+
+  const errorMessage =
+    row.paused_detail?.trim() ||
+    row.paused_reason?.trim() ||
+    (await loadRunErrorMessage(db, runId)) ||
+    `execution run '${runId}' failed`;
+
+  return { ok: false, status: "error", output: [], error: { message: errorMessage } };
+}
+
+export interface PlaybookRuntimeDeps {
+  db: SqlDb;
+  engine: ExecutionEngine;
+  policyService: PolicyService;
+  approvalDal: ApprovalDal;
+  playbooks: Playbook[];
+  runner: PlaybookRunner;
+}
+
+export async function runPlaybookRuntimeEnvelope(
+  deps: PlaybookRuntimeDeps,
+  input:
+    | { action: "run"; pipeline: string; timeoutMs?: number }
+    | { action: "resume"; token: string; approve: boolean; reason?: string; timeoutMs?: number },
+): Promise<PlaybookRuntimeEnvelopeT> {
+  const timeoutMs = input.timeoutMs ?? 30_000;
+
+  if (input.action === "run") {
+    const playbook = resolvePlaybookFromPipeline(input.pipeline, deps.playbooks);
+    const compiled = deps.runner.run(playbook);
+    const steps = compiled.steps;
+
+    const planId = `playbook-${playbook.manifest.id}-${randomUUID()}`;
+    const requestId = `req-${randomUUID()}`;
+    const key = `playbook:${playbook.manifest.id}`;
+    const lane = "main";
+
+    const playbookBundle = resolvePlaybookPolicyBundle(playbook);
+    const effectivePolicy = await deps.policyService.loadEffectiveBundle({ playbookBundle });
+    const snapshot = await deps.policyService.getOrCreateSnapshot(effectivePolicy.bundle);
+
+    const res = await deps.engine.enqueuePlan({
+      key,
+      lane,
+      planId,
+      requestId,
+      steps,
+      policySnapshotId: snapshot.policy_snapshot_id,
+      trigger: { kind: "api", key, lane, metadata: { source: "playbook-runtime", playbook_id: playbook.manifest.id } },
+    });
+
+    return await envelopeForRunStatus(deps.db, res.runId, timeoutMs);
+  }
+
+  const approval = await deps.approvalDal.getByResumeToken(input.token);
+  if (!approval) {
+    return {
+      ok: false,
+      status: "error",
+      output: [],
+      error: { message: "resume token not found", code: "not_found" },
+    };
+  }
+
+  const resolveRunId = (row: ApprovalRow): string | undefined => {
+    const id = row.run_id?.trim();
+    return id && id.length > 0 ? id : undefined;
+  };
+
+  const runId = resolveRunId(approval);
+  if (!runId) {
+    return {
+      ok: false,
+      status: "error",
+      output: [],
+      error: { message: "approval is missing run_id", code: "invalid_state" },
+    };
+  }
+
+  if (approval.status === "pending") {
+    await deps.approvalDal.respond(approval.id, input.approve, input.reason);
+  } else {
+    const matches =
+      (input.approve && approval.status === "approved") ||
+      (!input.approve && approval.status === "denied");
+    if (!matches) {
+      return {
+        ok: false,
+        status: "error",
+        output: [],
+        error: { message: "approval already resolved", code: "conflict" },
+      };
+    }
+  }
+
+  if (input.approve) {
+    // Best-effort; if already resumed, this may return undefined.
+    await deps.engine.resumeRun(input.token);
+  } else {
+    await deps.engine.cancelRun(runId, input.reason ?? "approval denied");
+  }
+
+  return await envelopeForRunStatus(deps.db, runId, timeoutMs);
+}
+

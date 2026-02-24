@@ -1816,23 +1816,29 @@ export class AgentRuntime {
     ];
     let stepsUsedSoFar = 0;
 
-    const stepApprovalId = opts?.execution?.stepApprovalId;
-    if (stepApprovalId) {
-      const approval = await this.approvalDal.getById(stepApprovalId);
-      if (
-        approval &&
-        (approval.status === "approved" || approval.status === "denied" || approval.status === "expired")
-      ) {
-        const resumeState = extractToolApprovalResumeState(approval.context);
-        if (resumeState) {
-          for (const toolId of resumeState.used_tools ?? []) {
-            usedTools.add(toolId);
-          }
+	    const stepApprovalId = opts?.execution?.stepApprovalId;
+	    if (stepApprovalId) {
+	      const approval = await this.approvalDal.getById(stepApprovalId);
+	      if (
+	        approval &&
+	        (approval.status === "approved" || approval.status === "denied" || approval.status === "expired")
+	      ) {
+	        const resumeState = extractToolApprovalResumeState(approval.context);
+	        if (resumeState) {
+	          for (const toolId of resumeState.used_tools ?? []) {
+	            usedTools.add(toolId);
+	          }
           stepsUsedSoFar = resumeState.steps_used ?? countAssistantMessages(resumeState.messages);
           messages = appendToolApprovalResponseMessage(resumeState.messages, {
             approvalId: resumeState.approval_id,
             approved: approval.status === "approved",
-            reason: approval.response_reason ?? undefined,
+            reason:
+              approval.response_reason ??
+              (approval.status === "expired"
+                ? "approval expired"
+                : approval.status === "cancelled"
+                  ? "approval cancelled"
+                  : undefined),
           });
         }
       }
@@ -2220,11 +2226,58 @@ export class AgentRuntime {
         return resolved;
       }
 
-      const didWork = await this.executionEngine.workerTick({
+      const maybeAdvancePausedApproval = async (): Promise<boolean> => {
+        if (run.status !== "paused") return false;
+
+        const pausedStep = await this.opts.container.db.get<{ approval_id: number | null }>(
+          `SELECT approval_id
+           FROM execution_steps
+           WHERE run_id = ? AND status = 'paused'
+           ORDER BY step_index ASC
+           LIMIT 1`,
+          [runId],
+        );
+        const approvalId = pausedStep?.approval_id;
+        if (!approvalId) return false;
+
+        await this.approvalDal.expireStale();
+        const approval = await this.approvalDal.getById(approvalId);
+        if (!approval) return false;
+
+        if (approval.status === "pending") return false;
+
+        const context = coerceRecord(approval.context);
+        const isAgentToolExecution = context?.["source"] === "agent-tool-execution";
+
+        const resolvedReason =
+          approval.response_reason ??
+          (approval.status === "expired"
+            ? "approval expired"
+            : approval.status === "cancelled"
+              ? "approval cancelled"
+              : "approval denied");
+
+        const resumeToken = approval.resume_token?.trim();
+        if (resumeToken && (approval.status === "approved" || isAgentToolExecution)) {
+          await this.executionEngine.resumeRun(resumeToken);
+          return true;
+        }
+
+        if (approval.run_id) {
+          await this.executionEngine.cancelRun(approval.run_id, resolvedReason);
+          return true;
+        }
+
+        return false;
+      };
+
+      const advancedPausedRun = await maybeAdvancePausedApproval();
+
+      const didWork = (await this.executionEngine.workerTick({
         workerId,
         executor,
         runId,
-      });
+      })) || advancedPausedRun;
 
       if (!didWork) {
         const remainingMs = Math.max(1, deadlineMs - Date.now());

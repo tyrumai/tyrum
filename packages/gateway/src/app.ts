@@ -348,6 +348,8 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       runner: playbookRunner,
       engine,
       policyService: container.policyService,
+      approvalDal: container.approvalDal,
+      db: container.db,
     }),
   );
 

@@ -473,6 +473,15 @@ export {
 } from "./playbook.js";
 
 export {
+  PlaybookRuntimeRunRequest,
+  PlaybookRuntimeResumeRequest,
+  PlaybookRuntimeRequest,
+  PlaybookRuntimeRequiresApproval,
+  PlaybookRuntimeError,
+  PlaybookRuntimeEnvelope,
+} from "./playbook-runtime.js";
+
+export {
   AgentId,
   ChannelKey,
   AccountId,
