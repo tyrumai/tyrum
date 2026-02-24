@@ -31,6 +31,17 @@ function replacesSecretHandleId(input: Record<string, string>, from: string, to:
   return { changed, next };
 }
 
+class SecretRotationPropagationError extends Error {
+  constructor(
+    message: string,
+    public readonly updated_profile_ids: string[],
+    options?: { cause?: unknown },
+  ) {
+    super(message, options);
+    this.name = "SecretRotationPropagationError";
+  }
+}
+
 async function disableAuthProfilesReferencingSecretHandleId(params: {
   authProfileDal: AuthProfileDal;
   agentId: string;
@@ -52,9 +63,10 @@ async function rotateAuthProfilesReferencingSecretHandleId(params: {
   agentId: string;
   fromHandleId: string;
   toHandleId: string;
-}): Promise<void> {
-  if (params.fromHandleId === params.toHandleId) return;
+}): Promise<string[]> {
+  if (params.fromHandleId === params.toHandleId) return [];
 
+  const updatedProfileIds: string[] = [];
   const profiles = await params.authProfileDal.list({ agentId: params.agentId, limit: 500 });
   for (const profile of profiles) {
     const { changed, next } = replacesSecretHandleId(
@@ -63,15 +75,26 @@ async function rotateAuthProfilesReferencingSecretHandleId(params: {
       params.toHandleId,
     );
     if (!changed) continue;
-    await params.authProfileDal.updateSecretHandles(profile.profile_id, {
-      secretHandles: next,
-      updatedBy: {
-        kind: "secret_rotate",
-        from_handle_id: params.fromHandleId,
-        to_handle_id: params.toHandleId,
-      },
-    });
+    try {
+      await params.authProfileDal.updateSecretHandles(profile.profile_id, {
+        secretHandles: next,
+        updatedBy: {
+          kind: "secret_rotate",
+          from_handle_id: params.fromHandleId,
+          to_handle_id: params.toHandleId,
+        },
+      });
+      updatedProfileIds.push(profile.profile_id);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new SecretRotationPropagationError(
+        `auth profile update failed: ${message}`,
+        updatedProfileIds,
+        { cause: err },
+      );
+    }
   }
+  return updatedProfileIds;
 }
 
 export function createSecretRoutes(deps: SecretRouteDeps): Hono {
@@ -217,7 +240,11 @@ export function createSecretRoutes(deps: SecretRouteDeps): Hono {
           toHandleId: handle.handle_id,
         });
       } catch (err) {
-        await secretProvider.revoke(handle.handle_id).catch(() => {});
+        const updated =
+          err instanceof SecretRotationPropagationError ? err.updated_profile_ids : [];
+        if (updated.length === 0) {
+          await secretProvider.revoke(handle.handle_id).catch(() => {});
+        }
         const message = err instanceof Error ? err.message : String(err);
         return c.json(
           { error: "internal_error", message: `secret rotation failed: ${message}` },
