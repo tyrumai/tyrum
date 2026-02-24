@@ -75,6 +75,7 @@ describe("StateStore schema contract (sqlite vs postgres)", () => {
         "channel_outbox",
         "concurrency_slots",
         "lane_leases",
+        "lane_queue_signals",
         "idempotency_records",
         "resume_tokens",
       ] as const;

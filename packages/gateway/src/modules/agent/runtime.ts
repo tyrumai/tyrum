@@ -60,6 +60,7 @@ import { isAuthProfilesEnabled } from "../models/auth-profiles-enabled.js";
 import { ExecutionEngine, type StepExecutor } from "../execution/engine.js";
 import { resolveSandboxHardeningProfile } from "../sandbox/hardening.js";
 import { deriveElevatedExecutionAvailableFromPolicyBundle } from "../sandbox/elevated-execution.js";
+import { LaneQueueSignalDal, LaneQueueInterruptError } from "../lanes/queue-signal-dal.js";
 
 const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_APPROVAL_WAIT_MS = 120_000;
@@ -220,6 +221,17 @@ type ResolvedAgentTurnInput = {
   metadata?: Record<string, unknown>;
 };
 
+type LaneQueueScope = { key: string; lane: string };
+
+type LaneQueueState = {
+  scope: LaneQueueScope;
+  signals: LaneQueueSignalDal;
+  interruptError: LaneQueueInterruptError | undefined;
+  cancelToolCalls: boolean;
+  pendingInjectionTexts: string[];
+  injectedTranscriptTexts: string[];
+};
+
 function formatNormalizedAttachment(attachment: NormalizedAttachmentT): string {
   const fields = [`kind=${attachment.kind}`];
   if (attachment.mime_type) fields.push(`mime_type=${attachment.mime_type}`);
@@ -260,6 +272,19 @@ function resolveAgentTurnInput(input: AgentTurnRequestT): ResolvedAgentTurnInput
     envelope,
     metadata: input.metadata,
   };
+}
+
+function resolveLaneQueueScope(metadata: Record<string, unknown> | undefined): LaneQueueScope | undefined {
+  if (!metadata) return undefined;
+
+  const rawKey = metadata["tyrum_key"];
+  const rawLane = metadata["lane"];
+
+  const key = typeof rawKey === "string" ? rawKey.trim() : "";
+  const lane = typeof rawLane === "string" ? rawLane.trim() : "";
+  if (key.length === 0 || lane.length === 0) return undefined;
+
+  return { key, lane };
 }
 
 export interface AgentRuntimeOptions {
@@ -1432,13 +1457,13 @@ export class AgentRuntime {
     streamResult: ReturnType<typeof streamText>;
     sessionId: string;
     finalize: () => Promise<AgentTurnResponseT>;
-  }> {
-    const prepared = await this.prepareTurn(input);
-    const { ctx, session, model, toolSet, usedTools, userContent, contextReport, systemPrompt, resolved } = prepared;
+	  }> {
+	    const prepared = await this.prepareTurn(input);
+	    const { ctx, session, model, toolSet, laneQueue, usedTools, userContent, contextReport, systemPrompt, resolved } = prepared;
 
-    const streamResult = streamText({
-      model,
-      system: systemPrompt,
+	    const streamResult = streamText({
+	      model,
+	      system: systemPrompt,
       messages: [
         {
           role: "user" as const,
@@ -1448,8 +1473,25 @@ export class AgentRuntime {
       tools: toolSet,
       stopWhen: [stepCountIs(this.maxSteps)],
       prepareStep: ({ messages }) => {
+        let preparedMessages = messages;
+        if (laneQueue) {
+          if (laneQueue.interruptError) throw laneQueue.interruptError;
+
+          const injectionTexts = laneQueue.pendingInjectionTexts.splice(0, laneQueue.pendingInjectionTexts.length);
+          laneQueue.cancelToolCalls = false;
+          if (injectionTexts.length > 0) {
+            preparedMessages = [
+              ...preparedMessages,
+              ...injectionTexts.map((text) => ({
+                role: "user" as const,
+                content: [{ type: "text" as const, text }],
+              })),
+            ];
+          }
+        }
+
         return {
-          messages: applyDeterministicContextCompactionAndToolPruning(messages),
+          messages: applyDeterministicContextCompactionAndToolPruning(preparedMessages),
         };
       },
     });
@@ -1472,7 +1514,8 @@ export class AgentRuntime {
     opts?: { abortSignal?: AbortSignal; timeoutMs?: number },
   ): Promise<AgentTurnResponseT> {
     const prepared = await this.prepareTurn(input);
-    const { ctx, session, model, toolSet, usedTools, userContent, contextReport, systemPrompt, resolved } = prepared;
+    const { ctx, session, model, toolSet, laneQueue, usedTools, userContent, contextReport, systemPrompt, resolved } =
+      prepared;
 
     const result = await generateText({
       model,
@@ -1486,8 +1529,25 @@ export class AgentRuntime {
       tools: toolSet,
       stopWhen: [stepCountIs(this.maxSteps)],
       prepareStep: ({ messages }) => {
+        let preparedMessages = messages;
+        if (laneQueue) {
+          if (laneQueue.interruptError) throw laneQueue.interruptError;
+
+          const injectionTexts = laneQueue.pendingInjectionTexts.splice(0, laneQueue.pendingInjectionTexts.length);
+          laneQueue.cancelToolCalls = false;
+          if (injectionTexts.length > 0) {
+            preparedMessages = [
+              ...preparedMessages,
+              ...injectionTexts.map((text) => ({
+                role: "user" as const,
+                content: [{ type: "text" as const, text }],
+              })),
+            ];
+          }
+        }
+
         return {
-          messages: applyDeterministicContextCompactionAndToolPruning(messages),
+          messages: applyDeterministicContextCompactionAndToolPruning(preparedMessages),
         };
       },
       abortSignal: opts?.abortSignal,
@@ -1933,6 +1993,7 @@ export class AgentRuntime {
     session: SessionRow;
     model: LanguageModel;
     toolSet: ToolSet;
+    laneQueue?: LaneQueueState;
     usedTools: Set<string>;
     userContent: Array<{ type: "text"; text: string }>;
     contextReport: AgentContextReport;
@@ -1943,6 +2004,17 @@ export class AgentRuntime {
     this.maybeCleanupSessions(ctx.config.sessions.ttl_days);
 
     const resolved = resolveAgentTurnInput(input);
+    const laneQueueScope = resolveLaneQueueScope(resolved.metadata);
+	    const laneQueue: LaneQueueState | undefined = laneQueueScope
+	      ? {
+	          scope: laneQueueScope,
+	          signals: new LaneQueueSignalDal(this.opts.container.db),
+	          interruptError: undefined,
+	          cancelToolCalls: false,
+	          pendingInjectionTexts: [],
+	          injectedTranscriptTexts: [],
+	        }
+	      : undefined;
     const session = await this.sessionDal.getOrCreate(resolved.channel, resolved.thread_id, this.agentId);
     const agentId = this.agentId;
     const workspaceId = this.workspaceId;
@@ -2098,6 +2170,7 @@ export class AgentRuntime {
         threadId: resolved.thread_id,
       },
       validatedReport,
+      laneQueue,
     );
 
     const userContent: Array<{ type: "text"; text: string }> = [
@@ -2134,6 +2207,7 @@ export class AgentRuntime {
       session,
       model,
       toolSet,
+      laneQueue,
       usedTools,
       userContent,
       contextReport: validatedReport,
@@ -2234,6 +2308,7 @@ export class AgentRuntime {
     usedTools: Set<string>,
     toolExecutionContext: ToolExecutionContext,
     contextReport: AgentContextReport,
+    laneQueue?: LaneQueueState,
   ): ToolSet {
     const result: Record<string, Tool> = {};
     let approvalStepIndex = 0;
@@ -2249,6 +2324,29 @@ export class AgentRuntime {
         description: toolDesc.description,
         inputSchema: jsonSchema(schema),
         execute: async (args: unknown) => {
+	          if (laneQueue) {
+	            const signal = await laneQueue.signals.claimSignal(laneQueue.scope);
+	            if (signal?.kind === "interrupt") {
+	              laneQueue.interruptError ??= new LaneQueueInterruptError();
+	              laneQueue.cancelToolCalls = true;
+	            }
+	            if (signal?.kind === "steer") {
+	              const text = signal.message_text.trim();
+	              if (text.length > 0) {
+	                laneQueue.pendingInjectionTexts.push(text);
+	                laneQueue.injectedTranscriptTexts.push(text);
+              }
+              laneQueue.cancelToolCalls = true;
+	            }
+
+	            if (laneQueue.cancelToolCalls) {
+	              return JSON.stringify({
+	                error: "cancelled",
+	                reason: laneQueue.interruptError ? "interrupt" : "steer",
+	              });
+	            }
+	          }
+
           const toolCallId = `tc-${randomUUID()}`;
           const inputProvenance = { ...drivingProvenance };
           const policy = this.policyService;

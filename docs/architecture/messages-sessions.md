@@ -89,6 +89,11 @@ When a run is active for a `(session_key, lane)`, inbound messages are handled b
 - **`steer_backlog`:** steer now and also preserve the message for a follow-up turn.
 - **`interrupt`:** abort the active run (at the next safe boundary) and run the newest message.
 
+Implementation notes:
+
+- Queue mode is persisted per message (for example `channel_inbox.queue_mode`, default `collect`) so batch/debounce behavior is deterministic.
+- `steer`/`interrupt` are represented as durable lane-scoped signals (for example `lane_queue_signals`) so they remain correct even if the gateway restarts mid-run.
+
 ### Queue limits and overflow policy
 
 Queueing is bounded to keep the system predictable:

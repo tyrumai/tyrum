@@ -32,6 +32,7 @@ export interface ChannelInboxRow {
   message_id: string;
   key: string;
   lane: string;
+  queue_mode: string;
   received_at_ms: number;
   payload: unknown;
   status: ChannelInboxStatus;
@@ -50,6 +51,7 @@ interface RawChannelInboxRow {
   message_id: string;
   key: string;
   lane: string;
+  queue_mode: string;
   received_at_ms: number;
   payload_json: string;
   status: string;
@@ -91,6 +93,7 @@ function toRow(raw: RawChannelInboxRow): ChannelInboxRow {
     message_id: raw.message_id,
     key: raw.key,
     lane: raw.lane,
+    queue_mode: raw.queue_mode,
     received_at_ms: raw.received_at_ms,
     payload: safeJsonParse(raw.payload_json, {}),
     status: raw.status as ChannelInboxStatus,
@@ -112,6 +115,7 @@ export class ChannelInboxDal {
     message_id: string;
     key: string;
     lane: string;
+    queue_mode?: string;
     received_at_ms: number;
     payload: unknown;
   }): Promise<{ row: ChannelInboxRow; deduped: boolean }> {
@@ -126,6 +130,7 @@ export class ChannelInboxDal {
     const accountId = address.accountId;
     const containerId = input.thread_id.trim();
     const messageId = input.message_id.trim();
+    const queueMode = input.queue_mode?.trim() || "collect";
 
     return await this.db.transaction(async (tx) => {
       // Best-effort prune of expired keys to keep the dedupe table bounded.
@@ -232,11 +237,12 @@ export class ChannelInboxDal {
              message_id,
              key,
              lane,
+             queue_mode,
              received_at_ms,
              payload_json,
              status
            )
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'queued')
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued')
            RETURNING inbox_id`,
           [
             source,
@@ -244,6 +250,7 @@ export class ChannelInboxDal {
             messageId,
             input.key,
             input.lane,
+            queueMode,
             receivedAtMs,
             payloadJson,
           ],
@@ -257,17 +264,19 @@ export class ChannelInboxDal {
              message_id,
              key,
              lane,
+             queue_mode,
              received_at_ms,
              payload_json,
              status
            )
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'queued')`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued')`,
           [
             source,
             containerId,
             messageId,
             input.key,
             input.lane,
+            queueMode,
             receivedAtMs,
             payloadJson,
           ],

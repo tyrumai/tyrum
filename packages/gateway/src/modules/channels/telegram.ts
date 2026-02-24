@@ -14,6 +14,7 @@ import type { SqlDb } from "../../statestore/types.js";
 import type { Logger } from "../observability/logger.js";
 import { ChannelInboxDal, type ChannelInboxRow } from "./inbox-dal.js";
 import { ChannelOutboxDal } from "./outbox-dal.js";
+import { LaneQueueSignalDal } from "../lanes/queue-signal-dal.js";
 import { renderMarkdownForTelegram } from "../markdown/telegram.js";
 import type { AgentRegistry } from "../agent/registry.js";
 import type { ApprovalDal } from "../approval/dal.js";
@@ -240,6 +241,7 @@ async function releaseLaneLease(db: SqlDb, opts: { key: string; lane: string; ow
 }
 
 export class TelegramChannelQueue {
+  private readonly db: SqlDb;
   private readonly inbox: ChannelInboxDal;
   private readonly peerIdentityLinks: PeerIdentityLinkDal;
   private readonly agentId: string;
@@ -248,6 +250,7 @@ export class TelegramChannelQueue {
   private readonly dmScope: DmScope;
 
   constructor(db: SqlDb, opts?: { agentId?: string; accountId?: string; channelKey?: string; lane?: string; dmScope?: DmScope }) {
+    this.db = db;
     this.inbox = new ChannelInboxDal(db);
     this.peerIdentityLinks = new PeerIdentityLinkDal(db);
     this.agentId = opts?.agentId?.trim() || agentIdFromEnv();
@@ -258,13 +261,14 @@ export class TelegramChannelQueue {
 
   async enqueue(
     normalized: NormalizedThreadMessage,
-    opts?: { agentId?: string; accountId?: string; channelKey?: string; lane?: string; dmScope?: DmScope },
+    opts?: { agentId?: string; accountId?: string; channelKey?: string; lane?: string; dmScope?: DmScope; queueMode?: string },
   ): Promise<{ inbox: ChannelInboxRow; deduped: boolean; message_text: string }> {
     const text = extractMessageText(normalized).trim();
     const agentId = opts?.agentId?.trim() || this.agentId;
     const accountId = opts?.accountId?.trim() || opts?.channelKey?.trim() || this.accountId;
     const lane = opts?.lane?.trim() || this.lane;
     const dmScope = opts?.dmScope ?? this.dmScope;
+    const queueMode = opts?.queueMode?.trim() || "collect";
     let key = telegramThreadKey(normalized, {
       agentId,
       accountId,
@@ -317,15 +321,55 @@ export class TelegramChannelQueue {
       }
     }
 
+    const nowMs = Date.now();
+    const activeLease = await this.db.get<{ lease_expires_at_ms: number }>(
+      `SELECT lease_expires_at_ms
+       FROM lane_leases
+       WHERE key = ? AND lane = ?`,
+      [key, lane],
+    );
+    const runActive = typeof activeLease?.lease_expires_at_ms === "number" && activeLease.lease_expires_at_ms > nowMs;
+
     const { row, deduped } = await this.inbox.enqueue({
       source,
       thread_id: payload.thread.id,
       message_id: payload.message.id,
       key,
       lane,
-      received_at_ms: Date.now(),
+      queue_mode: queueMode,
+      received_at_ms: nowMs,
       payload,
     });
+
+    if (runActive && (queueMode === "steer" || queueMode === "steer_backlog" || queueMode === "interrupt")) {
+      const signals = new LaneQueueSignalDal(this.db);
+      await signals.setSignal({
+        key,
+        lane,
+        kind: queueMode === "interrupt" ? "interrupt" : "steer",
+        inbox_id: row.inbox_id,
+        queue_mode: queueMode,
+        message_text: text,
+        created_at_ms: nowMs,
+      });
+
+      if (queueMode === "interrupt") {
+        const nowIso = new Date(nowMs).toISOString();
+        await this.db.run(
+          `UPDATE channel_inbox
+           SET status = 'completed',
+               lease_owner = NULL,
+               lease_expires_at_ms = NULL,
+               processed_at = COALESCE(processed_at, ?),
+               error = NULL,
+               reply_text = COALESCE(reply_text, '')
+           WHERE key = ? AND lane = ?
+             AND status = 'queued'
+             AND inbox_id <> ?`,
+          [nowIso, key, lane, row.inbox_id],
+        );
+      }
+    }
 
     return { inbox: row, deduped, message_text: text };
   }
@@ -533,6 +577,7 @@ export class TelegramChannelProcessor {
 
   private async claimDebouncedBatch(leader: ChannelInboxRow): Promise<ChannelInboxRow[]> {
     if (this.debounceMs <= 0) return [leader];
+    if (leader.queue_mode !== "collect") return [leader];
 
     const windowStart = leader.received_at_ms;
     const windowEnd = windowStart + this.debounceMs;
@@ -629,6 +674,10 @@ export class TelegramChannelProcessor {
       const runtime = await this.agents.getRuntime(agentId);
       const result = await runtime.turn({
         ...(combined.length > 0 ? { message: combined } : {}),
+        metadata: {
+          tyrum_key: leader.key,
+          lane: leader.lane,
+        },
         envelope: mergedEnvelope,
         channel: connectorId,
         thread_id: leader.thread_id,
