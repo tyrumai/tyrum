@@ -470,7 +470,7 @@ describe("gateway startup process", () => {
             db.close();
           }
         } finally {
-          await stopChildProcess(child);
+          await stopChildProcess(child, 20_000);
         }
 
         const db = new Database(dbPath);
