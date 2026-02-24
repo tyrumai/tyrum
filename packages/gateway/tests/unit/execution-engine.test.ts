@@ -329,6 +329,42 @@ describe("ExecutionEngine (normalized)", () => {
     expect(types).not.toContain("run.resumed");
   });
 
+  it("revokes existing resume tokens when cancelling an already-cancelled run", async () => {
+    db = openTestSqliteDb();
+
+    const nowIso = "2026-02-24T00:00:00.000Z";
+    const engine = new ExecutionEngine({
+      db,
+      clock: () => ({ nowMs: Date.parse(nowIso), nowIso }),
+    });
+    const { runId } = await engine.enqueuePlan({
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-cancel-idempotent-1",
+      requestId: "test-req-1",
+      steps: [action("Research")],
+    });
+
+    const token = "resume-token-preexisting-1";
+    await db.run("INSERT INTO resume_tokens (token, run_id) VALUES (?, ?)", [token, runId]);
+
+    await db.run("UPDATE execution_runs SET status = 'cancelled' WHERE run_id = ?", [runId]);
+
+    const before = await db.get<{ revoked_at: string | null }>(
+      "SELECT revoked_at FROM resume_tokens WHERE token = ?",
+      [token],
+    );
+    expect(before?.revoked_at).toBeNull();
+
+    await expect(engine.cancelRun(runId, "idempotent cleanup")).resolves.toBe("cancelled");
+
+    const after = await db.get<{ revoked_at: string | null }>(
+      "SELECT revoked_at FROM resume_tokens WHERE token = ?",
+      [token],
+    );
+    expect(after?.revoked_at).toBe(nowIso);
+  });
+
   it("pauses when policy requires approval for a step and resumes after approval", async () => {
     db = openTestSqliteDb();
 
