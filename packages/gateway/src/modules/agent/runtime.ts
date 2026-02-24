@@ -1585,9 +1585,39 @@ export class AgentRuntime {
     }
 
     const elapsed = Math.max(0, Date.now() - startMs);
-    throw new Error(
-      `execution run '${runId}' did not complete within ${String(elapsed)}ms`,
+    const timeoutMessage = `execution run '${runId}' did not complete within ${String(elapsed)}ms`;
+
+    const cancelOutcome = await this.executionEngine.cancelRun(runId, timeoutMessage);
+
+    // Best-effort: avoid leaving our lane/workspace leases behind when we give up waiting.
+    // (Leases held by other workers expire and are cleaned up via the normal TTL/takeover flow.)
+    await this.opts.container.db.run(
+      `DELETE FROM lane_leases
+       WHERE key = ? AND lane = ? AND lease_owner = ?`,
+      [key, lane, workerId],
     );
+    await this.opts.container.db.run(
+      `DELETE FROM workspace_leases
+       WHERE workspace_id = ? AND lease_owner = ?`,
+      [this.workspaceId, workerId],
+    );
+
+    if (cancelOutcome === "already_terminal") {
+      const latest = await this.opts.container.db.get<RunStatusRow>(
+        `SELECT status, paused_reason, paused_detail
+         FROM execution_runs
+         WHERE run_id = ?`,
+        [runId],
+      );
+      if (latest) {
+        const terminal = await resolveIfTerminal(latest);
+        if (terminal) {
+          return terminal;
+        }
+      }
+    }
+
+    throw new Error(timeoutMessage);
   }
 
   private async loadTurnResultFromRun(runId: string): Promise<AgentTurnResponseT | undefined> {

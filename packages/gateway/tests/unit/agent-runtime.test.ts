@@ -471,6 +471,73 @@ describe("AgentRuntime", () => {
     }
   });
 
+  it("cancels execution runs when turn engine wait times out", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2020-01-01T00:00:00.000Z"));
+
+    try {
+      homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+      container = await createContainer({
+        dbPath: ":memory:",
+        migrationsDir,
+      });
+
+      const runtime = new AgentRuntime({
+        container,
+        home: homeDir,
+        languageModel: createStubLanguageModel("hello"),
+        fetchImpl: fetch404,
+        turnEngineWaitMs: 50,
+      } as ConstructorParameters<typeof AgentRuntime>[0]);
+
+      const key = "agent:default:test:channel:thread-1";
+      await container.db.run(
+        `INSERT INTO lane_leases (key, lane, lease_owner, lease_expires_at_ms)
+         VALUES (?, 'main', 'other', ?)`,
+        [key, Date.now() + 10_000],
+      );
+
+      const turnPromise = runtime
+        .turn({
+          channel: "test",
+          thread_id: "thread-1",
+          message: "hello",
+        })
+        .catch((err) => err as unknown);
+      await vi.advanceTimersByTimeAsync(250);
+      const result = await turnPromise;
+
+      expect(result).toBeInstanceOf(Error);
+      expect((result as Error).message).toMatch(/did not complete within/i);
+
+      const run = await container.db.get<{ run_id: string; status: string; job_id: string }>(
+        `SELECT run_id, status, job_id
+         FROM execution_runs
+         ORDER BY rowid DESC
+         LIMIT 1`,
+      );
+
+      expect(run).toBeTruthy();
+      expect(run!.status).toBe("cancelled");
+
+      const job = await container.db.get<{ status: string }>(
+        "SELECT status FROM execution_jobs WHERE job_id = ?",
+        [run!.job_id],
+      );
+      expect(job).toBeTruthy();
+      expect(job!.status).toBe("cancelled");
+
+      const steps = await container.db.all<{ status: string }>(
+        "SELECT status FROM execution_steps WHERE run_id = ? ORDER BY step_index ASC",
+        [run!.run_id],
+      );
+      expect(steps.length).toBeGreaterThan(0);
+      expect(steps.every((s) => s.status === "cancelled")).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("enforces the engine deadline against slow model calls", async () => {
     let aborted = false;
 
