@@ -404,6 +404,187 @@ describe("handleClientMessage", () => {
     expect(res.result.approval.resolution.decision).toBe("approved");
   });
 
+  it("does not create approve-always overrides when the approval resolves to denied", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["playwright"]);
+    const client = cm.getClient(id)!;
+
+    const approvalDal = {
+      getPending: vi.fn(async () => []),
+      getByStatus: vi.fn(async () => []),
+      getById: vi.fn(async () => {
+        return {
+          id: 2,
+          plan_id: "p-2",
+          step_index: 1,
+          prompt: "Ok?",
+          context: {
+            policy: {
+              agent_id: "agent-1",
+              policy_snapshot_id: "00000000-0000-0000-0000-000000000000",
+              suggested_overrides: [
+                { tool_id: "tool.exec", pattern: "echo hi", workspace_id: "default" },
+              ],
+            },
+          },
+          status: "pending",
+          created_at: "2026-02-20 22:00:00",
+          responded_at: null,
+          response_reason: null,
+          expires_at: null,
+        };
+      }),
+      respond: vi.fn(async () => {
+        return {
+          id: 2,
+          plan_id: "p-2",
+          step_index: 1,
+          prompt: "Ok?",
+          context: {},
+          status: "denied",
+          created_at: "2026-02-20 22:00:00",
+          responded_at: "2026-02-20 22:00:05",
+          response_reason: "no",
+          expires_at: null,
+        };
+      }),
+    };
+
+    const policyOverrideDal = {
+      create: vi.fn(async () => {
+        return {
+          policy_override_id: "00000000-0000-4000-8000-000000000001",
+          status: "active",
+          created_at: new Date().toISOString(),
+          created_by: { kind: "ws" },
+          agent_id: "agent-1",
+          workspace_id: "default",
+          tool_id: "tool.exec",
+          pattern: "echo hi",
+          created_from_approval_id: 2,
+          created_from_policy_snapshot_id: "00000000-0000-0000-0000-000000000000",
+        };
+      }),
+    };
+
+    const deps = makeDeps(cm, {
+      approvalDal: approvalDal as never,
+      policyOverrideDal: policyOverrideDal as never,
+    });
+
+    const result = await handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "r-3",
+        type: "approval.resolve",
+        payload: {
+          approval_id: 2,
+          decision: "approved",
+          mode: "always",
+          overrides: [{ tool_id: "tool.exec", pattern: "echo hi", workspace_id: "default" }],
+        },
+      }),
+      deps,
+    );
+
+    expect(result).toBeDefined();
+    expect((result as unknown as { ok: boolean }).ok).toBe(true);
+    const res = result as unknown as { result: { approval: { status: string }; created_overrides?: unknown[] } };
+    expect(res.result.approval.status).toBe("denied");
+    expect(res.result.created_overrides).toBeUndefined();
+    expect(policyOverrideDal.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects approve-always override selection when the pattern violates guardrails", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["playwright"]);
+    const client = cm.getClient(id)!;
+
+    const approvalDal = {
+      getPending: vi.fn(async () => []),
+      getByStatus: vi.fn(async () => []),
+      getById: vi.fn(async () => {
+        return {
+          id: 2,
+          plan_id: "p-2",
+          step_index: 1,
+          prompt: "Ok?",
+          context: {
+            policy: {
+              agent_id: "agent-1",
+              policy_snapshot_id: "00000000-0000-0000-0000-000000000000",
+              suggested_overrides: [
+                { tool_id: "tool.exec", pattern: "echo *", workspace_id: "default" },
+              ],
+            },
+          },
+          status: "pending",
+          created_at: "2026-02-20 22:00:00",
+          responded_at: null,
+          response_reason: null,
+          expires_at: null,
+        };
+      }),
+      respond: vi.fn(async () => {
+        return {
+          id: 2,
+          plan_id: "p-2",
+          step_index: 1,
+          prompt: "Ok?",
+          context: {},
+          status: "approved",
+          created_at: "2026-02-20 22:00:00",
+          responded_at: "2026-02-20 22:00:05",
+          response_reason: "looks good",
+          expires_at: null,
+        };
+      }),
+    };
+
+    const policyOverrideDal = {
+      create: vi.fn(async () => {
+        return {
+          policy_override_id: "00000000-0000-4000-8000-000000000001",
+          status: "active",
+          created_at: new Date().toISOString(),
+          created_by: { kind: "ws" },
+          agent_id: "agent-1",
+          workspace_id: "default",
+          tool_id: "tool.exec",
+          pattern: "echo *",
+          created_from_approval_id: 2,
+          created_from_policy_snapshot_id: "00000000-0000-0000-0000-000000000000",
+        };
+      }),
+    };
+
+    const deps = makeDeps(cm, {
+      approvalDal: approvalDal as never,
+      policyOverrideDal: policyOverrideDal as never,
+    });
+
+    const result = await handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "r-4",
+        type: "approval.resolve",
+        payload: {
+          approval_id: 2,
+          decision: "approved",
+          mode: "always",
+          overrides: [{ tool_id: "tool.exec", pattern: "echo *", workspace_id: "default" }],
+        },
+      }),
+      deps,
+    );
+
+    expect(result).toBeDefined();
+    expect((result as unknown as { ok: boolean }).ok).toBe(false);
+    const err = result as unknown as { error: { code: string; message: string } };
+    expect(err.error.code).toBe("invalid_request");
+    expect(policyOverrideDal.create).not.toHaveBeenCalled();
+  });
+
   it("rejects pairing.approve when trust_level is missing", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["cli"]);

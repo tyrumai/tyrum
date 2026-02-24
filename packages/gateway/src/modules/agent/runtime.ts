@@ -38,6 +38,7 @@ import type { ApprovalDal, ApprovalStatus } from "../approval/dal.js";
 import type { PluginRegistry } from "../plugins/registry.js";
 import type { PolicyService } from "../policy/service.js";
 import { canonicalizeToolMatchTarget } from "../policy/match-target.js";
+import { isSafeSuggestedOverridePattern } from "../policy/override-guardrails.js";
 import { AuthProfileDal, type AuthProfileRow } from "../models/auth-profile-dal.js";
 import { SessionProviderPinDal } from "../models/session-pin-dal.js";
 import { createProviderFromNpm } from "../models/provider-factory.js";
@@ -1930,7 +1931,10 @@ export class AgentRuntime {
               : toolDesc.requires_confirmation;
 
           if (shouldRequireApproval) {
-            const suggestedOverrides = policyEnabled
+            const suggestedOverrides =
+              policyEnabled &&
+              matchTarget.trim().length > 0 &&
+              isSafeSuggestedOverridePattern(matchTarget)
                 ? [
                     {
                       tool_id: toolDesc.id,
@@ -1938,7 +1942,7 @@ export class AgentRuntime {
                       workspace_id: this.workspaceId,
                     },
                   ]
-              : undefined;
+                : undefined;
 
             const decision = await this.awaitApprovalForToolExecution(
               toolDesc,

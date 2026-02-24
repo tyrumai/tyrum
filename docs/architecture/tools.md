@@ -54,6 +54,15 @@ Suggested override patterns use a simple wildcard language:
 - `*` matches zero or more characters
 - `?` matches exactly one character
 
+### Suggested override deny guardrails (hard rule)
+
+Because suggested overrides can become durable policy overrides, they MUST be conservative:
+
+- No **leading wildcards** (for example `*foo`), and avoid broad patterns like `*`.
+- Prefer **prefix patterns** over complex matching (for example a single trailing `*`).
+- Avoid `?` in suggested overrides (too easy to broaden unintentionally).
+- Do not suggest patterns that look like shell-glob arguments (for example `echo *`), since the wildcard language has no escape syntax.
+
 ### Match target normalization (hard rule)
 
 Policy overrides and suggested patterns MUST match against a tool-defined **match target** that is:
