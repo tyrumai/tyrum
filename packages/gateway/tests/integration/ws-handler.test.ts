@@ -43,9 +43,9 @@ function waitForOpen(ws: WebSocket): Promise<void> {
   });
 }
 
-function waitForClose(ws: WebSocket): Promise<{ code: number; reason: string }> {
+function waitForClose(ws: WebSocket, timeoutMs = 5_000): Promise<{ code: number; reason: string }> {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("close timeout")), 5_000);
+    const timer = setTimeout(() => reject(new Error("close timeout")), timeoutMs);
     ws.once("close", (code, reason) => {
       clearTimeout(timer);
       resolve({ code, reason: reason.toString("utf-8") });
@@ -345,6 +345,81 @@ describe("WS handler integration", () => {
     const stats = connectionManager.getStats();
     expect(stats.totalClients).toBe(1);
     expect(stats.capabilityCounts["playwright"]).toBe(1);
+
+    stopHeartbeat();
+  });
+
+  it("rejects cookie-authenticated upgrade without Origin header", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
+    const tokenStore = new TokenStore(homeDir);
+    const adminToken = await tokenStore.initialize();
+
+    const connectionManager = new ConnectionManager();
+    const { handleUpgrade, stopHeartbeat } = createWsHandler({
+      connectionManager,
+      protocolDeps: { connectionManager },
+      tokenStore,
+    });
+
+    server = createServer();
+    server.on("upgrade", (req, socket, head) => {
+      handleUpgrade(req, socket, head);
+    });
+
+    const port = await new Promise<number>((resolve) => {
+      server!.listen(0, "127.0.0.1", () => {
+        const addr = server!.address();
+        resolve(typeof addr === "object" && addr ? addr.port : 0);
+      });
+    });
+
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, ["tyrum-v1"], {
+      headers: {
+        Cookie: `${AUTH_COOKIE_NAME}=${adminToken}`,
+      },
+    });
+    clients.push(ws);
+
+    const { code } = await waitForClose(ws, 2_000);
+    expect(code).toBe(4001);
+
+    stopHeartbeat();
+  });
+
+  it("rejects cookie-authenticated upgrade when Origin does not match Host", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
+    const tokenStore = new TokenStore(homeDir);
+    const adminToken = await tokenStore.initialize();
+
+    const connectionManager = new ConnectionManager();
+    const { handleUpgrade, stopHeartbeat } = createWsHandler({
+      connectionManager,
+      protocolDeps: { connectionManager },
+      tokenStore,
+    });
+
+    server = createServer();
+    server.on("upgrade", (req, socket, head) => {
+      handleUpgrade(req, socket, head);
+    });
+
+    const port = await new Promise<number>((resolve) => {
+      server!.listen(0, "127.0.0.1", () => {
+        const addr = server!.address();
+        resolve(typeof addr === "object" && addr ? addr.port : 0);
+      });
+    });
+
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, ["tyrum-v1"], {
+      headers: {
+        Cookie: `${AUTH_COOKIE_NAME}=${adminToken}`,
+        Origin: "http://evil.example",
+      },
+    });
+    clients.push(ws);
+
+    const { code } = await waitForClose(ws, 2_000);
+    expect(code).toBe(4001);
 
     stopHeartbeat();
   });

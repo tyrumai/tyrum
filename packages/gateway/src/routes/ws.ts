@@ -139,12 +139,67 @@ function extractCookieValue(
   return undefined;
 }
 
+function toSingleHeaderValue(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) return value[0];
+  return typeof value === "string" ? value : undefined;
+}
+
+function parseHostHeader(value: string): { hostname: string; port: string | undefined } | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  if (trimmed.startsWith("[")) {
+    const closingIdx = trimmed.indexOf("]");
+    if (closingIdx <= 1) return undefined;
+    const hostname = trimmed.slice(1, closingIdx);
+    const rest = trimmed.slice(closingIdx + 1);
+    if (!rest) return { hostname, port: undefined };
+    if (!rest.startsWith(":")) return undefined;
+    const port = rest.slice(1).trim();
+    if (!port) return undefined;
+    return { hostname, port };
+  }
+
+  const parts = trimmed.split(":");
+  if (parts.length === 1) {
+    return { hostname: parts[0]!.trim(), port: undefined };
+  }
+  if (parts.length === 2) {
+    const hostname = parts[0]!.trim();
+    const port = parts[1]!.trim();
+    if (!hostname || !port) return undefined;
+    return { hostname, port };
+  }
+  return undefined;
+}
+
+function isSameOriginUpgrade(req: IncomingMessage): boolean {
+  const originValue = toSingleHeaderValue(req.headers["origin"]);
+  const hostValue = toSingleHeaderValue(req.headers["host"]);
+  if (!originValue || !hostValue) return false;
+
+  let originUrl: URL;
+  try {
+    originUrl = new URL(originValue);
+  } catch {
+    return false;
+  }
+  if (originUrl.protocol !== "http:" && originUrl.protocol !== "https:") return false;
+
+  const originPort = originUrl.port || (originUrl.protocol === "https:" ? "443" : "80");
+  const host = parseHostHeader(hostValue);
+  if (!host) return false;
+  const hostPort = host.port ?? originPort;
+
+  return host.hostname.toLowerCase() === originUrl.hostname.toLowerCase() && hostPort === originPort;
+}
+
 function extractWsToken(req: IncomingMessage): string | undefined {
   const bearer = extractBearerToken(req.headers["authorization"]);
   if (bearer) return bearer;
 
   const cookieToken = extractCookieValue(req.headers["cookie"], AUTH_COOKIE_NAME);
-  if (cookieToken) return cookieToken;
+  if (cookieToken && isSameOriginUpgrade(req)) return cookieToken;
 
   return extractWsTokenFromProtocols(req);
 }
