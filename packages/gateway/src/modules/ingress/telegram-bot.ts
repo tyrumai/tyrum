@@ -18,6 +18,8 @@ export interface SendMessageOptions {
   reply_to_message_id?: number;
 }
 
+export type TelegramChatAction = "typing";
+
 export class TelegramBot {
   private readonly apiBase: string;
 
@@ -69,6 +71,11 @@ export class TelegramBot {
   /** Register a webhook URL with Telegram. */
   async setWebhook(url: string): Promise<unknown> {
     return this.call("setWebhook", { url });
+  }
+
+  /** Send a chat action (for example typing) to a chat. */
+  async sendChatAction(chatId: string | number, action: TelegramChatAction): Promise<unknown> {
+    return this.call("sendChatAction", { chat_id: chatId, action });
   }
 
   private async call(method: string, body: Record<string, unknown>): Promise<unknown> {

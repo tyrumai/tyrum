@@ -40,6 +40,12 @@ function isFalsyEnvFlag(value: string | undefined): boolean {
   return v.length > 0 && ["0", "false", "off", "no"].includes(v);
 }
 
+function isTruthyEnvFlag(value: string | undefined): boolean {
+  const trimmed = value?.trim().toLowerCase();
+  if (!trimmed) return false;
+  return !["0", "false", "off", "no"].includes(trimmed);
+}
+
 function normalizeLane(raw: string | undefined): "main" | "cron" | "subagent" {
   const normalized = raw?.trim().toLowerCase();
   if (normalized === "main" || normalized === "cron" || normalized === "subagent") {
@@ -50,6 +56,36 @@ function normalizeLane(raw: string | undefined): "main" | "cron" | "subagent" {
 
 export function isChannelPipelineEnabled(): boolean {
   return !isFalsyEnvFlag(process.env["TYRUM_CHANNEL_PIPELINE_ENABLED"]);
+}
+
+type ChannelTypingMode = "never" | "message" | "thinking" | "instant";
+
+const CHANNEL_TYPING_REFRESH_DEFAULT_MS = 4000;
+const CHANNEL_TYPING_REFRESH_MIN_MS = 1000;
+const CHANNEL_TYPING_REFRESH_MAX_MS = 10_000;
+const CHANNEL_TYPING_MESSAGE_START_DELAY_MS = 250;
+
+function resolveChannelTypingMode(): ChannelTypingMode {
+  const raw = process.env["TYRUM_CHANNEL_TYPING_MODE"]?.trim().toLowerCase();
+  if (raw === "never" || raw === "message" || raw === "thinking" || raw === "instant") {
+    return raw;
+  }
+  return "never";
+}
+
+function resolveChannelTypingRefreshMs(): number {
+  const raw = process.env["TYRUM_CHANNEL_TYPING_REFRESH_MS"]?.trim();
+  if (!raw) return CHANNEL_TYPING_REFRESH_DEFAULT_MS;
+  if (!/^-?[0-9]+$/.test(raw)) return CHANNEL_TYPING_REFRESH_DEFAULT_MS;
+  const parsed = Number(raw);
+  if (!Number.isSafeInteger(parsed)) return CHANNEL_TYPING_REFRESH_DEFAULT_MS;
+  if (parsed <= 0) return 0;
+  return Math.min(CHANNEL_TYPING_REFRESH_MAX_MS, Math.max(CHANNEL_TYPING_REFRESH_MIN_MS, parsed));
+}
+
+function isChannelTypingEnabledForLane(lane: string): boolean {
+  if (lane === "main") return true;
+  return isTruthyEnvFlag(process.env["TYRUM_CHANNEL_TYPING_AUTOMATION_ENABLED"]);
 }
 
 function extractMessageText(normalized: NormalizedThreadMessage): string {
@@ -212,6 +248,9 @@ export function createTelegramEgressConnector(telegramBot: TelegramBot): Channel
         input.text,
         parseMode ? { parse_mode: parseMode } : undefined,
       );
+    },
+    sendTyping: async (input) => {
+      await telegramBot.sendChatAction(input.containerId, "typing");
     },
   };
 }
@@ -741,6 +780,50 @@ export class TelegramChannelProcessor {
       return;
     }
 
+    const sourceKey = buildChannelSourceKey(address);
+    const connector = this.egressConnectors.get(sourceKey) ?? this.egressConnectors.get(connectorId);
+    const typingMode = resolveChannelTypingMode();
+    const typingRefreshMs = resolveChannelTypingRefreshMs();
+    const typingEnabled =
+      typingMode !== "never"
+      && isChannelTypingEnabledForLane(leader.lane)
+      && typeof connector?.sendTyping === "function";
+
+    let typingTimeout: ReturnType<typeof setTimeout> | undefined;
+    let typingInterval: ReturnType<typeof setInterval> | undefined;
+    let typingStarted = false;
+    const stopTyping = (): void => {
+      typingStarted = false;
+      if (typingTimeout) {
+        clearTimeout(typingTimeout);
+        typingTimeout = undefined;
+      }
+      if (typingInterval) {
+        clearInterval(typingInterval);
+        typingInterval = undefined;
+      }
+    };
+
+    const sendTyping = (): void => {
+      if (!typingEnabled) return;
+      connector
+        ?.sendTyping?.({
+          accountId,
+          containerId: leader.thread_id,
+        })
+        .catch(() => undefined);
+    };
+
+    const startTyping = (): void => {
+      if (!typingEnabled) return;
+      if (typingStarted) return;
+      typingStarted = true;
+      sendTyping();
+      if (typingRefreshMs > 0) {
+        typingInterval = setInterval(sendTyping, typingRefreshMs);
+      }
+    };
+
     let reply: string;
     let agentId = "default";
     try {
@@ -754,6 +837,11 @@ export class TelegramChannelProcessor {
       }
 
       const runtime = await this.agents.getRuntime(agentId);
+
+      if (typingMode === "instant" || typingMode === "thinking") startTyping();
+      else if (typingMode === "message") {
+        typingTimeout = setTimeout(startTyping, CHANNEL_TYPING_MESSAGE_START_DELAY_MS);
+      }
       const result = await runtime.turn({
         ...(combined.length > 0 ? { message: combined } : {}),
         metadata: {
@@ -789,8 +877,6 @@ export class TelegramChannelProcessor {
         thread_id: leader.thread_id,
         error: message,
       });
-      const sourceKey = buildChannelSourceKey(address);
-      const connector = this.egressConnectors.get(sourceKey) ?? this.egressConnectors.get(connectorId);
       if (connector) {
         await connector
           .sendMessage({
@@ -805,6 +891,8 @@ export class TelegramChannelProcessor {
         await this.inbox.markFailed(row.inbox_id, this.owner, message);
       }
       return;
+    } finally {
+      stopTyping();
     }
 
     const formattingFallbacks: TelegramFormattingFallbackEvent[] = [];

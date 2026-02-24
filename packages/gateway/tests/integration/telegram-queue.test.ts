@@ -59,11 +59,17 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
   const originalPolicyBundlePath = process.env["TYRUM_POLICY_BUNDLE_PATH"];
   const originalTelegramChannelKey = process.env["TYRUM_TELEGRAM_CHANNEL_KEY"];
   const originalTelegramAccountId = process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
+  const originalTypingMode = process.env["TYRUM_CHANNEL_TYPING_MODE"];
+  const originalTypingRefreshMs = process.env["TYRUM_CHANNEL_TYPING_REFRESH_MS"];
+  const originalTypingAutomationEnabled = process.env["TYRUM_CHANNEL_TYPING_AUTOMATION_ENABLED"];
 
   beforeEach(() => {
     process.env["TELEGRAM_WEBHOOK_SECRET"] = "test-telegram-secret";
     delete process.env["TYRUM_TELEGRAM_CHANNEL_KEY"];
     delete process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
+    delete process.env["TYRUM_CHANNEL_TYPING_MODE"];
+    delete process.env["TYRUM_CHANNEL_TYPING_REFRESH_MS"];
+    delete process.env["TYRUM_CHANNEL_TYPING_AUTOMATION_ENABLED"];
   });
 
   afterEach(async () => {
@@ -92,6 +98,24 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       delete process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
     } else {
       process.env["TYRUM_TELEGRAM_ACCOUNT_ID"] = originalTelegramAccountId;
+    }
+
+    if (originalTypingMode === undefined) {
+      delete process.env["TYRUM_CHANNEL_TYPING_MODE"];
+    } else {
+      process.env["TYRUM_CHANNEL_TYPING_MODE"] = originalTypingMode;
+    }
+
+    if (originalTypingRefreshMs === undefined) {
+      delete process.env["TYRUM_CHANNEL_TYPING_REFRESH_MS"];
+    } else {
+      process.env["TYRUM_CHANNEL_TYPING_REFRESH_MS"] = originalTypingRefreshMs;
+    }
+
+    if (originalTypingAutomationEnabled === undefined) {
+      delete process.env["TYRUM_CHANNEL_TYPING_AUTOMATION_ENABLED"];
+    } else {
+      process.env["TYRUM_CHANNEL_TYPING_AUTOMATION_ENABLED"] = originalTypingAutomationEnabled;
     }
   });
 
@@ -181,6 +205,320 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
     await processor.tick();
     expect(fetchFn).toHaveBeenCalledOnce();
+  });
+
+  it("sends typing chat actions in instant mode with bounded cadence", async () => {
+    db = openTestSqliteDb();
+
+    process.env["TYRUM_CHANNEL_TYPING_MODE"] = "instant";
+    process.env["TYRUM_CHANNEL_TYPING_REFRESH_MS"] = "1";
+
+    vi.useFakeTimers();
+    try {
+      const fetchFn = mockFetch();
+      const bot = new TelegramBot("test-token", fetchFn);
+
+      const mockRuntime = {
+        turn: vi.fn().mockImplementation(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 2500));
+          return {
+            reply: "I can help with that!",
+            session_id: "session-abc",
+            used_tools: [],
+            memory_written: false,
+          };
+        }),
+      };
+
+      const queue = new TelegramChannelQueue(db);
+      const processor = new TelegramChannelProcessor({
+        db,
+        agents: makeAgents(mockRuntime),
+        telegramBot: bot,
+        owner: "test-owner",
+        debounceMs: 0,
+        maxBatch: 1,
+      });
+
+      const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
+      await queue.enqueue(normalized);
+
+      const tickPromise = processor.tick();
+      await vi.advanceTimersByTimeAsync(2500);
+      await tickPromise;
+
+      const typingCalls = (fetchFn as ReturnType<typeof vi.fn>).mock.calls.filter(([url]) =>
+        String(url).endsWith("/sendChatAction"),
+      );
+      expect(typingCalls).toHaveLength(3);
+
+      await vi.advanceTimersByTimeAsync(5000);
+      const typingCallsAfter = (fetchFn as ReturnType<typeof vi.fn>).mock.calls.filter(([url]) =>
+        String(url).endsWith("/sendChatAction"),
+      );
+      expect(typingCallsAfter).toHaveLength(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("starts typing chat actions during response generation when mode is message", async () => {
+    db = openTestSqliteDb();
+
+    process.env["TYRUM_CHANNEL_TYPING_MODE"] = "message";
+    process.env["TYRUM_CHANNEL_TYPING_REFRESH_MS"] = "1";
+
+    vi.useFakeTimers();
+    try {
+      const fetchFn = mockFetch();
+      const bot = new TelegramBot("test-token", fetchFn);
+
+      const mockRuntime = {
+        turn: vi.fn().mockImplementation(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 2500));
+          return {
+            reply: "I can help with that!",
+            session_id: "session-abc",
+            used_tools: [],
+            memory_written: false,
+          };
+        }),
+      };
+
+      const queue = new TelegramChannelQueue(db);
+      const processor = new TelegramChannelProcessor({
+        db,
+        agents: makeAgents(mockRuntime),
+        telegramBot: bot,
+        owner: "test-owner",
+        debounceMs: 0,
+        maxBatch: 1,
+      });
+
+      const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
+      await queue.enqueue(normalized);
+
+      const tickPromise = processor.tick();
+
+      await vi.advanceTimersByTimeAsync(200);
+      const typingCallsAt200 = (fetchFn as ReturnType<typeof vi.fn>).mock.calls.filter(([url]) =>
+        String(url).endsWith("/sendChatAction"),
+      );
+      expect(typingCallsAt200).toHaveLength(0);
+
+      await vi.advanceTimersByTimeAsync(100);
+      const typingCallsAt300 = (fetchFn as ReturnType<typeof vi.fn>).mock.calls.filter(([url]) =>
+        String(url).endsWith("/sendChatAction"),
+      );
+      expect(typingCallsAt300).toHaveLength(1);
+
+      await vi.advanceTimersByTimeAsync(2200);
+      await tickPromise;
+
+      const typingCalls = (fetchFn as ReturnType<typeof vi.fn>).mock.calls.filter(([url]) =>
+        String(url).endsWith("/sendChatAction"),
+      );
+      expect(typingCalls).toHaveLength(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("treats thinking mode as instant typing in non-streaming channel turns", async () => {
+    db = openTestSqliteDb();
+
+    process.env["TYRUM_CHANNEL_TYPING_MODE"] = "thinking";
+    process.env["TYRUM_CHANNEL_TYPING_REFRESH_MS"] = "1";
+
+    vi.useFakeTimers();
+    try {
+      const fetchFn = mockFetch();
+      const bot = new TelegramBot("test-token", fetchFn);
+
+      const mockRuntime = {
+        turn: vi.fn().mockImplementation(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 2500));
+          return {
+            reply: "I can help with that!",
+            session_id: "session-abc",
+            used_tools: [],
+            memory_written: false,
+          };
+        }),
+      };
+
+      const queue = new TelegramChannelQueue(db);
+      const processor = new TelegramChannelProcessor({
+        db,
+        agents: makeAgents(mockRuntime),
+        telegramBot: bot,
+        owner: "test-owner",
+        debounceMs: 0,
+        maxBatch: 1,
+      });
+
+      const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
+      await queue.enqueue(normalized);
+
+      const tickPromise = processor.tick();
+      await vi.advanceTimersByTimeAsync(2500);
+      await tickPromise;
+
+      const typingCalls = (fetchFn as ReturnType<typeof vi.fn>).mock.calls.filter(([url]) =>
+        String(url).endsWith("/sendChatAction"),
+      );
+      expect(typingCalls).toHaveLength(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not send typing chat actions when mode is never", async () => {
+    db = openTestSqliteDb();
+
+    process.env["TYRUM_CHANNEL_TYPING_MODE"] = "never";
+    process.env["TYRUM_CHANNEL_TYPING_REFRESH_MS"] = "1";
+
+    vi.useFakeTimers();
+    try {
+      const fetchFn = mockFetch();
+      const bot = new TelegramBot("test-token", fetchFn);
+
+      const mockRuntime = {
+        turn: vi.fn().mockImplementation(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 2500));
+          return {
+            reply: "I can help with that!",
+            session_id: "session-abc",
+            used_tools: [],
+            memory_written: false,
+          };
+        }),
+      };
+
+      const queue = new TelegramChannelQueue(db);
+      const processor = new TelegramChannelProcessor({
+        db,
+        agents: makeAgents(mockRuntime),
+        telegramBot: bot,
+        owner: "test-owner",
+        debounceMs: 0,
+        maxBatch: 1,
+      });
+
+      const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
+      await queue.enqueue(normalized);
+
+      const tickPromise = processor.tick();
+      await vi.advanceTimersByTimeAsync(2500);
+      await tickPromise;
+
+      const typingCalls = (fetchFn as ReturnType<typeof vi.fn>).mock.calls.filter(([url]) =>
+        String(url).endsWith("/sendChatAction"),
+      );
+      expect(typingCalls).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("disables typing indicators for automation lanes unless explicitly enabled", async () => {
+    db = openTestSqliteDb();
+
+    process.env["TYRUM_CHANNEL_TYPING_MODE"] = "instant";
+    process.env["TYRUM_CHANNEL_TYPING_REFRESH_MS"] = "1";
+
+    vi.useFakeTimers();
+    try {
+      const fetchFn = mockFetch();
+      const bot = new TelegramBot("test-token", fetchFn);
+
+      const mockRuntime = {
+        turn: vi.fn().mockImplementation(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 2500));
+          return {
+            reply: "I can help with that!",
+            session_id: "session-abc",
+            used_tools: [],
+            memory_written: false,
+          };
+        }),
+      };
+
+      const queue = new TelegramChannelQueue(db);
+      const processor = new TelegramChannelProcessor({
+        db,
+        agents: makeAgents(mockRuntime),
+        telegramBot: bot,
+        owner: "test-owner",
+        debounceMs: 0,
+        maxBatch: 1,
+      });
+
+      const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
+      await queue.enqueue(normalized, { lane: "cron" });
+
+      const tickPromise = processor.tick();
+      await vi.advanceTimersByTimeAsync(2500);
+      await tickPromise;
+
+      const typingCalls = (fetchFn as ReturnType<typeof vi.fn>).mock.calls.filter(([url]) =>
+        String(url).endsWith("/sendChatAction"),
+      );
+      expect(typingCalls).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("enables typing indicators for automation lanes when explicitly enabled", async () => {
+    db = openTestSqliteDb();
+
+    process.env["TYRUM_CHANNEL_TYPING_MODE"] = "instant";
+    process.env["TYRUM_CHANNEL_TYPING_REFRESH_MS"] = "1";
+    process.env["TYRUM_CHANNEL_TYPING_AUTOMATION_ENABLED"] = "enabled";
+
+    vi.useFakeTimers();
+    try {
+      const fetchFn = mockFetch();
+      const bot = new TelegramBot("test-token", fetchFn);
+
+      const mockRuntime = {
+        turn: vi.fn().mockImplementation(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 2500));
+          return {
+            reply: "I can help with that!",
+            session_id: "session-abc",
+            used_tools: [],
+            memory_written: false,
+          };
+        }),
+      };
+
+      const queue = new TelegramChannelQueue(db);
+      const processor = new TelegramChannelProcessor({
+        db,
+        agents: makeAgents(mockRuntime),
+        telegramBot: bot,
+        owner: "test-owner",
+        debounceMs: 0,
+        maxBatch: 1,
+      });
+
+      const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
+      await queue.enqueue(normalized, { lane: "cron" });
+
+      const tickPromise = processor.tick();
+      await vi.advanceTimersByTimeAsync(2500);
+      await tickPromise;
+
+      const typingCalls = (fetchFn as ReturnType<typeof vi.fn>).mock.calls.filter(([url]) =>
+        String(url).endsWith("/sendChatAction"),
+      );
+      expect(typingCalls).toHaveLength(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("processes attachment-only messages by passing the normalized envelope through", async () => {

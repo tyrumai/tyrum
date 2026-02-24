@@ -167,6 +167,12 @@ Typing start behavior is explicit and policy-driven:
 
 Typing refresh cadence is bounded and disabled for non-interactive automation lanes unless explicitly enabled.
 
+Implementation notes:
+
+- `TYRUM_CHANNEL_TYPING_MODE`: `never|message|thinking|instant` (default `never`)
+- `TYRUM_CHANNEL_TYPING_REFRESH_MS`: refresh cadence in milliseconds (default `4000`, clamped to `1000–10000`, set `0` to disable refresh)
+- Typing is disabled for non-`main` lanes unless `TYRUM_CHANNEL_TYPING_AUTOMATION_ENABLED=1`.
+
 ## Markdown formatting and chunking (channel-safe)
 
 Tyrum preserves consistent formatting across channels by chunking **before** rendering into channel-specific markup:
