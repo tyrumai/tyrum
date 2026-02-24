@@ -76,6 +76,202 @@ describe("usage routes", () => {
     await container.db.close();
   });
 
+  it("rolls up usage by session key and agent id", async () => {
+    const { app, container } = await createTestApp();
+
+    const alphaKey = "agent:alpha:main";
+    const alphaSecondaryKey = "agent:alpha:dm:peer-alpha";
+    const betaKey = "agent:beta:main";
+
+    const insertAttempt = async (input: {
+      jobId: string;
+      runId: string;
+      stepId: string;
+      attemptId: string;
+      key: string;
+      lane: string;
+      totalTokens: number;
+    }): Promise<void> => {
+      await container.db.run(
+        `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json, input_json, latest_run_id)
+         VALUES (?, ?, ?, 'completed', ?, ?, ?)`,
+        [input.jobId, input.key, input.lane, "{}", "{}", input.runId],
+      );
+      await container.db.run(
+        `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
+         VALUES (?, ?, ?, ?, 'succeeded', 1)`,
+        [input.runId, input.jobId, input.key, input.lane],
+      );
+      await container.db.run(
+        `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
+         VALUES (?, ?, 0, 'succeeded', ?)`,
+        [input.stepId, input.runId, "{}"],
+      );
+
+      const costJson = JSON.stringify({
+        duration_ms: 1000,
+        total_tokens: input.totalTokens,
+        usd_micros: input.totalTokens,
+      });
+
+      await container.db.run(
+        `INSERT INTO execution_attempts (
+           attempt_id,
+           step_id,
+           attempt,
+           status,
+           started_at,
+           finished_at,
+           artifacts_json,
+           cost_json
+         ) VALUES (?, ?, 1, 'succeeded', ?, ?, '[]', ?)`,
+        [input.attemptId, input.stepId, new Date().toISOString(), new Date().toISOString(), costJson],
+      );
+    };
+
+    await insertAttempt({
+      jobId: "job-alpha-1",
+      runId: "run-alpha-1",
+      stepId: "step-alpha-1",
+      attemptId: "attempt-alpha-1",
+      key: alphaKey,
+      lane: "main",
+      totalTokens: 10,
+    });
+
+    await insertAttempt({
+      jobId: "job-alpha-2",
+      runId: "run-alpha-2",
+      stepId: "step-alpha-2",
+      attemptId: "attempt-alpha-2",
+      key: alphaKey,
+      lane: "subagent",
+      totalTokens: 5,
+    });
+
+    await insertAttempt({
+      jobId: "job-alpha-3",
+      runId: "run-alpha-3",
+      stepId: "step-alpha-3",
+      attemptId: "attempt-alpha-3",
+      key: alphaSecondaryKey,
+      lane: "main",
+      totalTokens: 7,
+    });
+
+    await insertAttempt({
+      jobId: "job-beta-1",
+      runId: "run-beta-1",
+      stepId: "step-beta-1",
+      attemptId: "attempt-beta-1",
+      key: betaKey,
+      lane: "main",
+      totalTokens: 3,
+    });
+
+    const sessionAlpha = await app.request(`/usage?key=${encodeURIComponent(alphaKey)}`);
+    expect(sessionAlpha.status).toBe(200);
+    const sessionAlphaPayload = (await sessionAlpha.json()) as { scope: { kind: string }; local: { totals: { total_tokens: number } } };
+    expect(sessionAlphaPayload.scope.kind).toBe("session");
+    expect(sessionAlphaPayload.local.totals.total_tokens).toBe(15);
+
+    const agentAlpha = await app.request(`/usage?agent_id=${encodeURIComponent("alpha")}`);
+    expect(agentAlpha.status).toBe(200);
+    const agentAlphaPayload = (await agentAlpha.json()) as { scope: { kind: string }; local: { totals: { total_tokens: number } } };
+    expect(agentAlphaPayload.scope.kind).toBe("agent");
+    expect(agentAlphaPayload.local.totals.total_tokens).toBe(22);
+
+    const deployment = await app.request("/usage");
+    expect(deployment.status).toBe(200);
+    const deploymentPayload = (await deployment.json()) as { scope: { kind: string }; local: { totals: { total_tokens: number } } };
+    expect(deploymentPayload.scope.kind).toBe("deployment");
+    expect(deploymentPayload.local.totals.total_tokens).toBe(25);
+
+    await container.db.close();
+  });
+
+  it("treats agent_id rollups as case-sensitive", async () => {
+    const { app, container } = await createTestApp();
+
+    const insertAttempt = async (input: {
+      jobId: string;
+      runId: string;
+      stepId: string;
+      attemptId: string;
+      key: string;
+      lane: string;
+      totalTokens: number;
+    }): Promise<void> => {
+      await container.db.run(
+        `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json, input_json, latest_run_id)
+         VALUES (?, ?, ?, 'completed', ?, ?, ?)`,
+        [input.jobId, input.key, input.lane, "{}", "{}", input.runId],
+      );
+      await container.db.run(
+        `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
+         VALUES (?, ?, ?, ?, 'succeeded', 1)`,
+        [input.runId, input.jobId, input.key, input.lane],
+      );
+      await container.db.run(
+        `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
+         VALUES (?, ?, 0, 'succeeded', ?)`,
+        [input.stepId, input.runId, "{}"],
+      );
+
+      const costJson = JSON.stringify({
+        duration_ms: 1000,
+        total_tokens: input.totalTokens,
+        usd_micros: input.totalTokens,
+      });
+
+      await container.db.run(
+        `INSERT INTO execution_attempts (
+           attempt_id,
+           step_id,
+           attempt,
+           status,
+           started_at,
+           finished_at,
+           artifacts_json,
+           cost_json
+         ) VALUES (?, ?, 1, 'succeeded', ?, ?, '[]', ?)`,
+        [input.attemptId, input.stepId, new Date().toISOString(), new Date().toISOString(), costJson],
+      );
+    };
+
+    await insertAttempt({
+      jobId: "job-alpha-lower-1",
+      runId: "run-alpha-lower-1",
+      stepId: "step-alpha-lower-1",
+      attemptId: "attempt-alpha-lower-1",
+      key: "agent:alpha:main",
+      lane: "main",
+      totalTokens: 10,
+    });
+
+    await insertAttempt({
+      jobId: "job-alpha-upper-1",
+      runId: "run-alpha-upper-1",
+      stepId: "step-alpha-upper-1",
+      attemptId: "attempt-alpha-upper-1",
+      key: "agent:Alpha:main",
+      lane: "main",
+      totalTokens: 100,
+    });
+
+    const lower = await app.request(`/usage?agent_id=${encodeURIComponent("alpha")}`);
+    expect(lower.status).toBe(200);
+    const lowerPayload = (await lower.json()) as { local: { totals: { total_tokens: number } } };
+    expect(lowerPayload.local.totals.total_tokens).toBe(10);
+
+    const upper = await app.request(`/usage?agent_id=${encodeURIComponent("Alpha")}`);
+    expect(upper.status).toBe(200);
+    const upperPayload = (await upper.json()) as { local: { totals: { total_tokens: number } } };
+    expect(upperPayload.local.totals.total_tokens).toBe(100);
+
+    await container.db.close();
+  });
+
   it("includes cached provider usage when auth profiles are enabled and a profile is pinned", async () => {
     const prevAuthProfilesEnabled = process.env["TYRUM_AUTH_PROFILES_ENABLED"];
     const prevOpenRouterKey = process.env["OPENROUTER_API_KEY"];
