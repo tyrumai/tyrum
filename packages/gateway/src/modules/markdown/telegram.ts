@@ -1,4 +1,4 @@
-import { chunkIr, chunkText, irToPlainText, markdownToIr } from "./ir.js";
+import { chunkIr, irToPlainText, markdownToIr } from "./ir.js";
 
 const TELEGRAM_MAX_MESSAGE_CHARS = 4096;
 
@@ -73,11 +73,7 @@ function chunkPlainTextForTelegramHtml(plainText: string, maxChars: number): str
 
     if (cut <= offset) {
       const escaped = escapeTelegramHtmlText(text.slice(offset, offset + 1));
-      if (escaped.length <= max) {
-        chunks.push(escaped);
-      } else {
-        chunks.push(...chunkText(escaped, max));
-      }
+      chunks.push(escaped);
       offset += 1;
       continue;
     }
