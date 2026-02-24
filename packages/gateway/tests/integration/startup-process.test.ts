@@ -162,13 +162,14 @@ async function findAvailablePort(): Promise<number> {
 
 async function stopChildProcess(
   child: ChildProcessWithoutNullStreams,
+  timeoutMs = 5_000,
 ): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return;
 
   child.kill("SIGTERM");
   const maybeExit = await Promise.race([
     once(child, "exit"),
-    delay(5_000).then(() => null),
+    delay(timeoutMs).then(() => null),
   ]);
 
   if (maybeExit !== null) return;
@@ -341,7 +342,7 @@ describe("gateway startup process", () => {
           const healthUrl = `http://127.0.0.1:${port}/healthz`;
           await waitForGatewayHealth(healthUrl, child, output);
         } finally {
-          await stopChildProcess(child);
+          await stopChildProcess(child, 20_000);
         }
 
         const db = new Database(dbPath);
