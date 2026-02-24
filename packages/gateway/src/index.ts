@@ -42,6 +42,8 @@ import { PluginRegistry, resolveBundledPluginsDirFrom } from "./modules/plugins/
 import { installPluginFromDir } from "./modules/plugins/installer.js";
 import { AgentRegistry } from "./modules/agent/registry.js";
 import { isRecord, parseJsonOrYaml } from "./utils/parse-json-or-yaml.js";
+import { loadLifecycleHooksFromHome } from "./modules/hooks/config.js";
+import { LifecycleHooksRuntime } from "./modules/hooks/runtime.js";
 
 // Re-export for library consumers
 export { VERSION } from "./version.js";
@@ -872,6 +874,13 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   });
   container.modelsDev.startBackgroundRefresh();
 
+  const logger = container.logger.child({
+    role,
+    instance_id: instanceId,
+    version: VERSION,
+  });
+  logger.info("gateway.instance", { instance_id: instanceId });
+
   // Initialize auth token store
   const tokenStore = new TokenStore(tyrumHome);
   const token = await tokenStore.initialize();
@@ -893,6 +902,10 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
 
   // Initialize secret provider (defaults per ADR-0007; override via TYRUM_SECRET_PROVIDER)
   const secretProvider = await createSecretProviderFromEnv(tyrumHome, token);
+
+  const lifecycleHooks = await loadLifecycleHooksFromHome(tyrumHome, logger);
+  const shouldRunEdge = role === "all" || role === "edge";
+  const shouldRunWorker = role === "all" || role === "worker";
 
   if (container.telegramBot) {
     console.log("Telegram bot initialized");
@@ -919,7 +932,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
         })
       : undefined;
 
-  if (role === "all" || role === "edge") {
+  if (shouldRunEdge) {
     container.watcherProcessor.start();
   }
   if (watcherScheduler) {
@@ -928,13 +941,6 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   if (artifactLifecycleScheduler) {
     artifactLifecycleScheduler.start();
   }
-
-  const logger = container.logger.child({
-    role,
-    instance_id: instanceId,
-    version: VERSION,
-  });
-  logger.info("gateway.instance", { instance_id: instanceId });
 
   const otel = await maybeStartOtel({
     serviceName: "tyrum-gateway",
@@ -945,7 +951,6 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     logger.info("otel.started");
   }
 
-  const shouldRunEdge = role === "all" || role === "edge";
   const engineApiEnabled = isTruthyEnvFlag(process.env["TYRUM_ENGINE_API_ENABLED"]);
 
   const connectionManager = new ConnectionManager();
@@ -959,6 +964,23 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
           secretProvider,
           policyService: container.policyService,
           logger,
+        })
+      : undefined;
+
+  const hooksRuntime =
+    lifecycleHooks.length > 0 && (shouldRunEdge || shouldRunWorker)
+      ? new LifecycleHooksRuntime({
+          db: container.db,
+          engine:
+            edgeEngine ??
+            new ExecutionEngine({
+              db: container.db,
+              redactionEngine: container.redactionEngine,
+              policyService: container.policyService,
+              logger,
+            }),
+          policyService: container.policyService,
+          hooks: lifecycleHooks,
         })
       : undefined;
   const protocolDeps: ProtocolDeps = {
@@ -988,6 +1010,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
           connectionDirectory,
         }
       : undefined,
+    hooks: hooksRuntime,
     onApprovalDecision: (
       approvalId: number,
       approved: boolean,
@@ -1159,7 +1182,18 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     console.log(`Tyrum gateway v${VERSION} started in role '${role}'.`);
   }
 
-  const shouldRunWorker = role === "all" || role === "worker";
+  if (hooksRuntime && shouldRunWorker) {
+    void hooksRuntime
+      .fire({
+        event: "gateway.start",
+        metadata: { instance_id: instanceId, role },
+      })
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        logger.warn("hooks.fire_failed", { event: "gateway.start", error: message });
+      });
+  }
+
   const workerLoop = shouldRunWorker
     ? (() => {
         const engine = new ExecutionEngine({
@@ -1221,13 +1255,43 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   let shuttingDown = false;
   const shutdown = (signal: string): void => {
     if (shuttingDown) return;
-    shuttingDown = true;
-    console.log(`Gateway shutting down (${signal})`);
+	    shuttingDown = true;
+	    console.log(`Gateway shutting down (${signal})`);
+	    const shutdownStartedAtMs = Date.now();
+	    // Shutdown hooks may need to enqueue and start execution even when the worker
+	    // is busy finishing an in-flight step. Keep a hard cap to avoid hanging, but
+	    // allow enough time for CI and slower environments to drain.
+	    const hardExitTimeoutMs = 15_000;
+	    const hardExitDeadlineMs = shutdownStartedAtMs + hardExitTimeoutMs;
 
-    const hardExitTimer = setTimeout(() => {
-      console.warn("Gateway forced shutdown after 5 seconds.");
-      process.exit(1);
-    }, 5_000);
+    const sleep = (ms: number): Promise<void> => {
+      return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
+    };
+
+    const waitForRunsToStart = async (runIds: readonly string[], timeoutMs: number): Promise<void> => {
+      if (runIds.length === 0) return;
+      if (timeoutMs <= 0) return;
+      const placeholders = runIds.map(() => "?").join(", ");
+      const startedAt = Date.now();
+      while (Date.now() - startedAt < timeoutMs) {
+        const rows = await container.db.all<{ run_id: string; status: string }>(
+          `SELECT run_id, status FROM execution_runs WHERE run_id IN (${placeholders})`,
+          runIds,
+        );
+        const statusByRunId = new Map(rows.map((row) => [row.run_id, row.status]));
+        const allStarted = runIds.every((runId) => {
+          const status = statusByRunId.get(runId);
+          return status !== undefined && status !== "queued";
+        });
+        if (allStarted) return;
+        await sleep(50);
+      }
+    };
+
+	    const hardExitTimer = setTimeout(() => {
+	      console.warn("Gateway forced shutdown after 15 seconds.");
+	      process.exit(1);
+	    }, hardExitTimeoutMs);
     hardExitTimer.unref();
 
     const closeServer = new Promise<void>((resolve) => {
@@ -1240,6 +1304,35 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     });
 
     wsHandler?.stopHeartbeat();
+
+    const shutdownHookRuns = hooksRuntime && shouldRunWorker
+      ? hooksRuntime
+          .fire({
+            event: "gateway.shutdown",
+            metadata: { signal, instance_id: instanceId, role },
+          })
+          .catch((err) => {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.warn("hooks.fire_failed", { event: "gateway.shutdown", error: message });
+            return [];
+          })
+      : Promise.resolve([]);
+
+    const stopWorker = (async () => {
+      if (!workerLoop) return;
+      try {
+        const runIds = await shutdownHookRuns;
+        if (runIds.length > 0) {
+          // Give the worker loop as much time as possible to pick up shutdown hooks before stopping.
+          // If we stop too early (under load), shutdown hooks can remain queued and never run.
+          const remainingMs = Math.max(0, hardExitDeadlineMs - Date.now() - 250);
+          await waitForRunsToStart(runIds, remainingMs);
+        }
+      } finally {
+        workerLoop.stop();
+        await workerLoop.done;
+      }
+    })();
 
     const closeWss = new Promise<void>((resolve) => {
       try {
@@ -1255,16 +1348,16 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     artifactLifecycleScheduler?.stop();
     outboxPoller?.stop();
     telegramProcessor?.stop();
-    workerLoop?.stop();
     container.modelsDev.stopBackgroundRefresh();
 
     void runShutdownCleanup(
       [
         closeServer,
         closeWss,
+        shutdownHookRuns,
         agents?.shutdown() ?? Promise.resolve(),
         otel.shutdown(),
-        workerLoop?.done ?? Promise.resolve(),
+        stopWorker,
       ],
       () => container.db.close(),
     )

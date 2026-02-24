@@ -146,6 +146,36 @@ describe("handleClientMessage", () => {
     );
   });
 
+  it("fires command.execute lifecycle hooks after executing a command", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["cli"]);
+    const client = cm.getClient(id)!;
+
+    const hooks = {
+      fire: vi.fn(async () => undefined),
+    };
+
+    const deps = makeDeps(cm, { hooks: hooks as never });
+
+    const res = await handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "r-1",
+        type: "command.execute",
+        payload: { command: "/help" },
+      }),
+      deps,
+    );
+
+    expect(res).toBeDefined();
+    expect((res as unknown as { ok: boolean }).ok).toBe(true);
+    expect(hooks.fire).toHaveBeenCalledOnce();
+    expect(hooks.fire.mock.calls[0]?.[0]).toMatchObject({
+      event: "command.execute",
+      metadata: { command: "/help" },
+    });
+  });
+
   it("dispatches task.execute error response", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["cli"]);

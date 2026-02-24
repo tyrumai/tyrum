@@ -148,10 +148,11 @@ if (typeof runId !== "string" || runId.length === 0) {
 const deadlineMs = Date.now() + 120_000;
 for (;;) {
   const { rows } = await client.query(
-    "SELECT status FROM execution_runs WHERE run_id = $1",
+    "SELECT status, paused_reason FROM execution_runs WHERE run_id = $1",
     [runId],
   );
   const status = rows[0]?.status;
+  const pausedReason = rows[0]?.paused_reason;
   if (status === "succeeded") {
     console.log(`[smoke] run ${runId} succeeded`);
     break;
@@ -159,8 +160,43 @@ for (;;) {
   if (status === "failed" || status === "cancelled") {
     throw new Error(`[smoke] run ${runId} ended with status=${status}`);
   }
+  if (status === "paused") {
+    if (pausedReason !== "policy") {
+      throw new Error(`[smoke] run ${runId} paused unexpectedly: reason=${pausedReason ?? "<none>"}`);
+    }
+
+    const approvalRes = await client.query(
+      "SELECT id FROM approvals WHERE run_id = $1 AND status = $2 AND kind = $3 ORDER BY id ASC LIMIT 1",
+      [runId, "pending", "policy"],
+    );
+    const approvalIdRaw = approvalRes.rows[0]?.id;
+    const approvalId = approvalIdRaw !== undefined && approvalIdRaw !== null ? String(approvalIdRaw) : "";
+    if (!approvalId) {
+      throw new Error(`[smoke] run ${runId} paused for policy but no pending approval found`);
+    }
+
+    const approveRes = await fetch(
+      `http://tyrum-edge:8788/approvals/${approvalId}/respond`,
+      {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ decision: "approved" }),
+      },
+    );
+    if (!approveRes.ok) {
+      const text = await approveRes.text().catch(() => "<no body>");
+      throw new Error(`[smoke] approval.respond failed: status=${approveRes.status} body=${text}`);
+    }
+
+    console.log(`[smoke] approved policy gate: run_id=${runId} approval_id=${approvalId}`);
+  }
   if (Date.now() > deadlineMs) {
-    throw new Error(`[smoke] timed out waiting for run ${runId} to complete`);
+    throw new Error(
+      `[smoke] timed out waiting for run ${runId} to complete (status=${status ?? "<missing>"} paused_reason=${pausedReason ?? "<none>"})`,
+    );
   }
   await new Promise((r) => setTimeout(r, 1000));
 }

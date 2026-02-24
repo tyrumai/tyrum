@@ -7,17 +7,17 @@ import type {
 import { PolicyBundle } from "@tyrum/schemas";
 import { access } from "node:fs/promises";
 import { wildcardMatch } from "./wildcard.js";
+import {
+  evaluateDomain,
+  mostRestrictiveDecision,
+  normalizeDomain,
+  normalizeUrlForPolicy,
+  type PolicyDomainConfig,
+} from "./domain.js";
 import { defaultPolicyBundle, loadPolicyBundleFromFile } from "./bundle-loader.js";
 import type { PolicySnapshotDal, PolicySnapshotRow } from "./snapshot-dal.js";
 import type { PolicyOverrideDal } from "./override-dal.js";
 import { sha256HexFromString, stableJsonStringify } from "./canonical-json.js";
-
-type PolicyDomainConfig = {
-  default: Decision;
-  allow: readonly string[];
-  require_approval: readonly string[];
-  deny: readonly string[];
-};
 
 function isFalsyEnvFlag(value: string | undefined): boolean {
   if (!value) return false;
@@ -32,12 +32,6 @@ async function fileExists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-function mostRestrictive(a: Decision, b: Decision): Decision {
-  if (a === "deny" || b === "deny") return "deny";
-  if (a === "require_approval" || b === "require_approval") return "require_approval";
-  return "allow";
 }
 
 function unionStrings(a: readonly string[], b: readonly string[]): string[] {
@@ -57,7 +51,7 @@ function mergeDomain(
 
   for (const domain of domains) {
     if (!domain) continue;
-    defaultDecision = mostRestrictive(defaultDecision, domain.default);
+    defaultDecision = mostRestrictiveDecision(defaultDecision, domain.default);
     allow = unionStrings(allow, domain.allow);
     requireApproval = unionStrings(requireApproval, domain.require_approval);
     deny = unionStrings(deny, domain.deny);
@@ -69,58 +63,6 @@ function mergeDomain(
     require_approval: requireApproval,
     deny,
   };
-}
-
-function normalizeDomain(
-  value:
-    | {
-        default: Decision;
-        allow: string[];
-        require_approval: string[];
-        deny: string[];
-      }
-    | undefined,
-  fallbackDefault: Decision,
-): PolicyDomainConfig {
-  if (!value) {
-    return { default: fallbackDefault, allow: [], require_approval: [], deny: [] };
-  }
-  return {
-    default: value.default,
-    allow: value.allow ?? [],
-    require_approval: value.require_approval ?? [],
-    deny: value.deny ?? [],
-  };
-}
-
-function evaluateDomain(domain: PolicyDomainConfig, matchTarget: string): Decision {
-  const target = matchTarget.trim();
-
-  for (const pat of domain.deny) {
-    if (wildcardMatch(pat, target)) return "deny";
-  }
-  for (const pat of domain.require_approval) {
-    if (wildcardMatch(pat, target)) return "require_approval";
-  }
-  for (const pat of domain.allow) {
-    if (wildcardMatch(pat, target)) return "allow";
-  }
-
-  return domain.default;
-}
-
-function normalizeUrlForPolicy(raw: string): string {
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) return "";
-  try {
-    const url = new URL(trimmed);
-    const pathname = url.pathname || "/";
-    return `${url.protocol}//${url.host}${pathname}`;
-  } catch {
-    // Avoid leaking query params (may contain secrets) by truncating at '?'.
-    const q = trimmed.indexOf("?");
-    return q === -1 ? trimmed : trimmed.slice(0, q);
-  }
 }
 
 export interface PolicyEvaluation {
@@ -315,7 +257,7 @@ export class PolicyService {
 
     let decision: Decision = "allow";
     for (const scope of params.secretScopes) {
-      decision = mostRestrictive(decision, evaluateDomain(secretsDomain, scope));
+      decision = mostRestrictiveDecision(decision, evaluateDomain(secretsDomain, scope));
     }
 
     const decisionRecord: PolicyDecisionT = {
@@ -366,7 +308,7 @@ export class PolicyService {
       params.inputProvenance?.trusted === false &&
       params.toolId.trim() === "tool.exec"
     ) {
-      toolDecision = mostRestrictive(toolDecision, "require_approval");
+      toolDecision = mostRestrictiveDecision(toolDecision, "require_approval");
       rules.push({
         rule: "provenance",
         outcome: "require_approval",
@@ -391,7 +333,7 @@ export class PolicyService {
     if (params.secretScopes && params.secretScopes.length > 0) {
       let decision: Decision = "allow";
       for (const scope of params.secretScopes) {
-        decision = mostRestrictive(decision, evaluateDomain(secretsDomain, scope));
+        decision = mostRestrictiveDecision(decision, evaluateDomain(secretsDomain, scope));
       }
       secretsDecision = decision;
       rules.push({
@@ -401,7 +343,10 @@ export class PolicyService {
       });
     }
 
-    let decision = mostRestrictive(toolDecision, mostRestrictive(egressDecision, secretsDecision));
+    let decision = mostRestrictiveDecision(
+      toolDecision,
+      mostRestrictiveDecision(egressDecision, secretsDecision),
+    );
 
     const appliedOverrides: string[] = [];
     if (decision === "require_approval" && toolDecision === "require_approval") {
@@ -417,7 +362,10 @@ export class PolicyService {
       }
       if (appliedOverrides.length > 0) {
         toolDecision = "allow";
-        decision = mostRestrictive(toolDecision, mostRestrictive(egressDecision, secretsDecision));
+        decision = mostRestrictiveDecision(
+          toolDecision,
+          mostRestrictiveDecision(egressDecision, secretsDecision),
+        );
         rules.push({
           rule: "policy_override",
           outcome: "allow",
@@ -560,7 +508,7 @@ function mergePolicyBundles(bundles: Array<PolicyBundleT | undefined>): PolicyBu
   );
 
   const artifactsDefault = bundles.reduce<Decision>(
-    (acc, b) => (b?.artifacts?.default ? mostRestrictive(acc, b.artifacts.default) : acc),
+    (acc, b) => (b?.artifacts?.default ? mostRestrictiveDecision(acc, b.artifacts.default) : acc),
     base.artifacts?.default ?? "allow",
   );
   const retentionDaysLegacy = bundles

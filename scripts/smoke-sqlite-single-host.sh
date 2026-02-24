@@ -114,7 +114,7 @@ enqueue_and_wait_sqlite_run() {
     try {
       const deadlineMs = Date.now() + 120_000;
       for (;;) {
-        const row = db.prepare("SELECT status FROM execution_runs WHERE run_id = ?").get(runId);
+        const row = db.prepare("SELECT status, paused_reason FROM execution_runs WHERE run_id = ?").get(runId);
         const status = row?.status;
         if (status === "succeeded") {
           console.log(`[smoke] run ${runId} succeeded`);
@@ -123,8 +123,44 @@ enqueue_and_wait_sqlite_run() {
         if (status === "failed" || status === "cancelled") {
           throw new Error(`[smoke] run ${runId} ended with status=${status}`);
         }
+        if (status === "paused") {
+          const pausedReason = row?.paused_reason;
+          if (pausedReason !== "policy") {
+            throw new Error(`[smoke] run ${runId} paused unexpectedly: reason=${pausedReason ?? "<none>"}`);
+          }
+
+          const approval = db
+            .prepare(
+              "SELECT id FROM approvals WHERE run_id = ? AND status = ? AND kind = ? ORDER BY id ASC LIMIT 1",
+            )
+            .get(runId, "pending", "policy");
+          const approvalId = approval?.id;
+          if (typeof approvalId !== "number") {
+            throw new Error(`[smoke] run ${runId} paused for policy but no pending approval found`);
+          }
+
+          const approveRes = await fetch(
+            `http://127.0.0.1:8788/approvals/${approvalId}/respond`,
+            {
+              method: "POST",
+              headers: {
+                authorization: `Bearer ${token}`,
+                "content-type": "application/json",
+              },
+              body: JSON.stringify({ decision: "approved" }),
+            },
+          );
+          if (!approveRes.ok) {
+            const text = await approveRes.text().catch(() => "<no body>");
+            throw new Error(`[smoke] approval.respond failed: status=${approveRes.status} body=${text}`);
+          }
+
+          console.log(`[smoke] approved policy gate: run_id=${runId} approval_id=${approvalId}`);
+        }
         if (Date.now() > deadlineMs) {
-          throw new Error(`[smoke] timed out waiting for run ${runId} to complete`);
+          throw new Error(
+            `[smoke] timed out waiting for run ${runId} to complete (status=${status ?? "<missing>"} paused_reason=${row?.paused_reason ?? "<none>"})`,
+          );
         }
         await new Promise((r) => setTimeout(r, 1000));
       }
