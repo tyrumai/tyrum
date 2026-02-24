@@ -1255,11 +1255,14 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   let shuttingDown = false;
   const shutdown = (signal: string): void => {
     if (shuttingDown) return;
-    shuttingDown = true;
-    console.log(`Gateway shutting down (${signal})`);
-    const shutdownStartedAtMs = Date.now();
-    const hardExitTimeoutMs = 5_000;
-    const hardExitDeadlineMs = shutdownStartedAtMs + hardExitTimeoutMs;
+	    shuttingDown = true;
+	    console.log(`Gateway shutting down (${signal})`);
+	    const shutdownStartedAtMs = Date.now();
+	    // Shutdown hooks may need to enqueue and start execution even when the worker
+	    // is busy finishing an in-flight step. Keep a hard cap to avoid hanging, but
+	    // allow enough time for CI and slower environments to drain.
+	    const hardExitTimeoutMs = 15_000;
+	    const hardExitDeadlineMs = shutdownStartedAtMs + hardExitTimeoutMs;
 
     const sleep = (ms: number): Promise<void> => {
       return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
@@ -1285,10 +1288,10 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
       }
     };
 
-    const hardExitTimer = setTimeout(() => {
-      console.warn("Gateway forced shutdown after 5 seconds.");
-      process.exit(1);
-    }, hardExitTimeoutMs);
+	    const hardExitTimer = setTimeout(() => {
+	      console.warn("Gateway forced shutdown after 15 seconds.");
+	      process.exit(1);
+	    }, hardExitTimeoutMs);
     hardExitTimer.unref();
 
     const closeServer = new Promise<void>((resolve) => {
