@@ -96,6 +96,16 @@ export class ConnectionManager {
     }
   }
 
+  /** Replace the ready capabilities set for a connected peer. */
+  setReadyCapabilities(id: string, capabilities: readonly ClientCapability[]): void {
+    const client = this.clients.get(id);
+    if (!client) return;
+    client.readyCapabilities.clear();
+    for (const cap of capabilities) {
+      client.readyCapabilities.add(cap);
+    }
+  }
+
   /** Remove a client (e.g. on disconnect or eviction). */
   removeClient(id: string): void {
     this.clients.delete(id);

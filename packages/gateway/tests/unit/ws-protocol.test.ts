@@ -287,6 +287,40 @@ describe("handleClientMessage", () => {
     ).toBe(true);
   });
 
+  it("rejects oversized attempt.evidence payloads", async () => {
+    const cm = new ConnectionManager();
+    const { id: nodeConnId } = makeClient(cm, ["cli"], {
+      role: "node",
+      deviceId: "dev_test",
+      protocolRev: 2,
+    });
+    const { ws: operatorWs } = makeClient(cm, ["cli"], { protocolRev: 2 });
+    const node = cm.getClient(nodeConnId)!;
+
+    const deps = makeDeps(cm);
+
+    const result = await handleClientMessage(
+      node,
+      JSON.stringify({
+        request_id: "r-attempt-evidence-big-1",
+        type: "attempt.evidence",
+        payload: {
+          run_id: "550e8400-e29b-41d4-a716-446655440000",
+          step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+          attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+          evidence: { log: "x".repeat(400_000) },
+        },
+      }),
+      deps,
+    );
+
+    expect(result).toBeDefined();
+    expect((result as unknown as { ok: boolean }).ok).toBe(false);
+    expect((result as unknown as { type: string }).type).toBe("attempt.evidence");
+    expect((result as unknown as { error: { code: string } }).error.code).toBe("invalid_request");
+    expect(operatorWs.send).not.toHaveBeenCalled();
+  });
+
   it("dispatches approval.request decision to callback", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
@@ -790,6 +824,76 @@ describe("dispatchTask", () => {
         }) as never,
       } as never,
     });
+
+    const action: ActionPrimitive = {
+      type: "CLI",
+      args: { command: "echo hi" },
+    };
+
+    await expect(
+      dispatchTask(
+        action,
+        {
+          runId: "550e8400-e29b-41d4-a716-446655440000",
+          stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+          attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+        },
+        deps,
+      ),
+    ).rejects.toBeInstanceOf(NoCapableClientError);
+    expect(nodeWs.send).not.toHaveBeenCalled();
+  });
+
+  it("stops dispatching to a paired node when it reports readiness removed", async () => {
+    const cm = new ConnectionManager();
+    const nodeWs = createMockWs();
+    cm.addClient(nodeWs as never, ["cli"] as never, {
+      id: "node-1",
+      role: "node",
+      deviceId: "dev_test",
+      protocolRev: 2,
+    });
+
+    const deps = makeDeps(cm, {
+      nodePairingDal: {
+        getByNodeId: async () => ({
+          status: "approved",
+          capability_allowlist: [
+            {
+              id: descriptorIdForClientCapability("cli"),
+              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+            },
+          ],
+        }) as never,
+      } as never,
+    });
+
+    await handleClientMessage(
+      cm.getClient("node-1")!,
+      JSON.stringify({
+        request_id: "r-cap-ready-1",
+        type: "capability.ready",
+        payload: {
+          capabilities: [
+            {
+              id: descriptorIdForClientCapability("cli"),
+              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+            },
+          ],
+        },
+      }),
+      deps,
+    );
+    await handleClientMessage(
+      cm.getClient("node-1")!,
+      JSON.stringify({
+        request_id: "r-cap-ready-2",
+        type: "capability.ready",
+        payload: { capabilities: [] },
+      }),
+      deps,
+    );
+    nodeWs.send.mockClear();
 
     const action: ActionPrimitive = {
       type: "CLI",

@@ -637,7 +637,7 @@ export async function handleClientMessage(
       .filter((capability): capability is ClientCapability => capability !== undefined)
       .filter((capability) => client.capabilities.includes(capability));
 
-    deps.connectionManager.markCapabilitiesReady(client.id, readyLegacyCaps);
+    deps.connectionManager.setReadyCapabilities(client.id, readyLegacyCaps);
 
     if (deps.cluster) {
       void deps.cluster.connectionDirectory
@@ -675,6 +675,17 @@ export async function handleClientMessage(
         msg.type,
         "unauthorized",
         "only nodes may report attempt evidence",
+      );
+    }
+
+    const maxAttemptEvidenceChars = 256 * 1024;
+    if (raw.length > maxAttemptEvidenceChars) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "invalid_request",
+        "attempt evidence payload too large",
+        { max_chars: maxAttemptEvidenceChars, actual_chars: raw.length },
       );
     }
 
