@@ -58,35 +58,54 @@ export function autoExecute(
       stepId: msg.payload.step_id,
       attemptId: msg.payload.attempt_id,
     };
+
+    const respond = (
+      success: boolean,
+      result?: unknown,
+      evidence?: unknown,
+      error?: string,
+    ): void => {
+      try {
+        client.respondTaskExecute(msg.request_id, success, result, evidence, error);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        try {
+          client.respondTaskExecute(
+            msg.request_id,
+            false,
+            undefined,
+            undefined,
+            `task.execute response serialization failed: ${message}`,
+          );
+        } catch {
+          // ignore
+        }
+      }
+    };
+
     const required = requiredCapability(action.type);
     const provider = required ? capMap.get(required) : undefined;
 
     if (!provider) {
-      client.respondTaskExecute(
-        msg.request_id,
-        false,
-        undefined,
-        undefined,
-        `no provider for capability: ${required ?? action.type}`,
-      );
+      respond(false, undefined, undefined, `no provider for capability: ${required ?? action.type}`);
       return;
     }
 
-    provider.execute(action, ctx).then(
-      (result) => {
-        client.respondTaskExecute(
-          msg.request_id,
-          result.success,
-          result.result,
-          result.evidence,
-          result.error,
-        );
-      },
-      (err: unknown) => {
-        const errorMsg =
-          err instanceof Error ? err.message : String(err);
-        client.respondTaskExecute(msg.request_id, false, undefined, undefined, errorMsg);
-      },
-    );
+    void Promise.resolve()
+      .then(async () => await provider.execute(action, ctx))
+      .then(
+        (taskResult) => {
+          respond(
+            taskResult.success,
+            taskResult.result,
+            taskResult.evidence,
+            taskResult.error,
+          );
+        },
+        (err: unknown) => {
+          const errorMsg = err instanceof Error ? err.message : String(err);
+          respond(false, undefined, undefined, errorMsg);
+        },
+      );
   });
 }
