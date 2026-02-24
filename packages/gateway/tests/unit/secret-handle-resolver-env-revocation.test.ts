@@ -3,11 +3,22 @@ import { EnvSecretProvider } from "../../src/modules/secret/provider.js";
 import { createSecretHandleResolver } from "../../src/modules/secret/handle-resolver.js";
 
 describe("SecretHandleResolver + EnvSecretProvider", () => {
+  let hadPrevious = false;
+  let previousValue: string | undefined;
+
   afterEach(() => {
-    delete process.env["MY_API_KEY"];
+    if (hadPrevious) {
+      process.env["MY_API_KEY"] = previousValue;
+    } else {
+      delete process.env["MY_API_KEY"];
+    }
+    hadPrevious = false;
+    previousValue = undefined;
   });
 
   it("does not resolve revoked handles from resolver cache", async () => {
+    hadPrevious = Object.prototype.hasOwnProperty.call(process.env, "MY_API_KEY");
+    previousValue = process.env["MY_API_KEY"];
     process.env["MY_API_KEY"] = "v1";
 
     const provider = new EnvSecretProvider();
@@ -23,4 +34,3 @@ describe("SecretHandleResolver + EnvSecretProvider", () => {
     expect(second).toBeNull();
   });
 });
-

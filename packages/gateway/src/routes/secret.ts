@@ -145,19 +145,19 @@ export function createSecretRoutes(deps: SecretRouteDeps): Hono {
     }
     const revoked = await secretProvider.revoke(handleId);
 
-    if (!revoked) {
-      return c.json(
-        { error: "not_found", message: `secret ${handleId} not found` },
-        404,
-      );
-    }
-
     if (deps.authProfileDal) {
       await disableAuthProfilesReferencingSecretHandleId({
         authProfileDal: deps.authProfileDal,
         agentId: agentIdFromReq(c),
         handleId,
       });
+    }
+
+    if (!revoked) {
+      return c.json(
+        { error: "not_found", message: `secret ${handleId} not found` },
+        404,
+      );
     }
 
     return c.json({ revoked: true });
@@ -208,16 +208,25 @@ export function createSecretRoutes(deps: SecretRouteDeps): Hono {
     }
 
     const handle = await secretProvider.store(existing.scope, parsed.data.value);
-    const revoked = await secretProvider.revoke(handleId);
-
     if (deps.authProfileDal) {
-      await rotateAuthProfilesReferencingSecretHandleId({
-        authProfileDal: deps.authProfileDal,
-        agentId: agentIdFromReq(c),
-        fromHandleId: handleId,
-        toHandleId: handle.handle_id,
-      });
+      try {
+        await rotateAuthProfilesReferencingSecretHandleId({
+          authProfileDal: deps.authProfileDal,
+          agentId: agentIdFromReq(c),
+          fromHandleId: handleId,
+          toHandleId: handle.handle_id,
+        });
+      } catch (err) {
+        await secretProvider.revoke(handle.handle_id).catch(() => {});
+        const message = err instanceof Error ? err.message : String(err);
+        return c.json(
+          { error: "internal_error", message: `secret rotation failed: ${message}` },
+          500,
+        );
+      }
     }
+
+    const revoked = await secretProvider.revoke(handleId);
     return c.json({ revoked, handle }, 201);
   });
 

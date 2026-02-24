@@ -19,6 +19,7 @@ export interface SafeStorageLike {
 /** Environment variable-based secret provider (no persistence). */
 export class EnvSecretProvider implements SecretProvider {
   private handles = new Map<string, SecretHandleT>();
+  private revokedHandleIds = new Set<string>();
 
   private normalizeScope(scope: string): string {
     const trimmed = scope.trim();
@@ -31,8 +32,9 @@ export class EnvSecretProvider implements SecretProvider {
   }
 
   async resolve(handle: SecretHandleT): Promise<string | null> {
-    const scope = this.normalizeScope(handle.scope);
-    if (!this.handles.has(handle.handle_id)) return null;
+    if (this.revokedHandleIds.has(handle.handle_id)) return null;
+    const stored = this.handles.get(handle.handle_id);
+    const scope = this.normalizeScope(stored?.scope ?? handle.scope);
     return process.env[scope] ?? null;
   }
 
@@ -45,10 +47,12 @@ export class EnvSecretProvider implements SecretProvider {
       created_at: new Date().toISOString(),
     };
     this.handles.set(handle.handle_id, handle);
+    this.revokedHandleIds.delete(handle.handle_id);
     return handle;
   }
 
   async revoke(handleId: string): Promise<boolean> {
+    this.revokedHandleIds.add(handleId);
     return this.handles.delete(handleId);
   }
 
