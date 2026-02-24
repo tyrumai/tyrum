@@ -27,6 +27,7 @@ import { rawDataToUtf8 } from "../ws/raw-data.js";
 import { handleClientMessage } from "../ws/protocol.js";
 import type { ProtocolDeps } from "../ws/protocol.js";
 import type { TokenStore } from "../modules/auth/token-store.js";
+import { AUTH_COOKIE_NAME, extractBearerToken } from "../modules/auth/http.js";
 import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
 import type { PresenceDal } from "../modules/presence/dal.js";
 import type { NodePairingDal } from "../modules/node/pairing-dal.js";
@@ -117,6 +118,35 @@ function extractWsTokenFromProtocols(req: IncomingMessage): string | undefined {
     if (decoded) return decoded;
   }
   return undefined;
+}
+
+function extractCookieValue(
+  headerValue: string | string[] | undefined,
+  cookieName: string,
+): string | undefined {
+  if (!headerValue) return undefined;
+  const text = Array.isArray(headerValue) ? headerValue.join(";") : headerValue;
+  for (const part of text.split(";")) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const idx = trimmed.indexOf("=");
+    if (idx <= 0) continue;
+    const name = trimmed.slice(0, idx).trim();
+    if (name !== cookieName) continue;
+    const value = trimmed.slice(idx + 1).trim();
+    return value.length > 0 ? value : undefined;
+  }
+  return undefined;
+}
+
+function extractWsToken(req: IncomingMessage): string | undefined {
+  const bearer = extractBearerToken(req.headers["authorization"]);
+  if (bearer) return bearer;
+
+  const cookieToken = extractCookieValue(req.headers["cookie"], AUTH_COOKIE_NAME);
+  if (cookieToken) return cookieToken;
+
+  return extractWsTokenFromProtocols(req);
 }
 
 function selectWsSubprotocol(protocols: Set<string>): string | false {
@@ -250,7 +280,7 @@ export function createWsHandler(opts: WsRouteOptions): {
 
   // --- connection handler ---
   wss.on("connection", (ws, req) => {
-    const token = extractWsTokenFromProtocols(req);
+    const token = extractWsToken(req);
     const upgradeClaims = authenticateWsToken(token, tokenStore);
 
     type UpgradeClaims = NonNullable<typeof upgradeClaims>;
