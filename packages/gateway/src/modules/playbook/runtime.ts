@@ -219,7 +219,7 @@ export async function runPlaybookRuntimeEnvelope(
           return step;
         }
 
-        const nextArgs: Record<string, unknown> = { ...(step.args ?? {}) };
+        const nextArgs: Record<string, unknown> = { ...step.args };
         if (runtimeArgs !== undefined) {
           nextArgs["__playbook_runtime_args"] = runtimeArgs;
         }
