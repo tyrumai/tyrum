@@ -77,15 +77,10 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
       return c.json(normalized);
     }
 
-    // Extract text from the normalized message
     const chatId = normalized.thread.id;
-    const messageText =
-      normalized.message.content.kind === "text"
-        ? normalized.message.content.text
-        : normalized.message.content.caption ?? "";
-
-    if (!messageText) {
-      // Non-text messages without captions — acknowledge silently
+    const envelope = normalized.message.envelope;
+    if (!envelope) {
+      // Envelope omitted when connector content is empty (e.g., whitespace-only text).
       return c.json({ ok: true });
     }
 
@@ -118,10 +113,18 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
 
     try {
       const runtime = await deps.agents.getRuntime(routedAgentId);
+      const patchedEnvelope = {
+        ...envelope,
+        delivery: {
+          ...envelope.delivery,
+          channel: "telegram",
+          account: "default",
+        },
+      };
       const result = await runtime.turn({
         channel: "telegram",
         thread_id: chatId,
-        message: messageText,
+        envelope: patchedEnvelope,
       });
 
       const chunks = renderMarkdownForTelegram(result.reply);

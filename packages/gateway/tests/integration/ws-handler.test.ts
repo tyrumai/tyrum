@@ -60,6 +60,49 @@ function waitForJsonMessage(ws: WebSocket): Promise<Record<string, unknown>> {
   });
 }
 
+function waitForMessageOrClose(
+  ws: WebSocket,
+  timeoutMs = 5_000,
+): Promise<
+  | { kind: "close"; code: number; reason: string }
+  | { kind: "message"; msg: Record<string, unknown> }
+> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error("timeout"));
+    }, timeoutMs);
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      ws.off("message", onMessage);
+      ws.off("close", onClose);
+      ws.off("error", onError);
+    };
+
+    const onMessage = (data: unknown) => {
+      cleanup();
+      try {
+        resolve({ kind: "message", msg: JSON.parse(String(data)) as Record<string, unknown> });
+      } catch (err) {
+        reject(err instanceof Error ? err : new Error(String(err)));
+      }
+    };
+    const onClose = (code: number, reason: Buffer) => {
+      cleanup();
+      resolve({ kind: "close", code, reason: reason.toString("utf-8") });
+    };
+    const onError = (err: unknown) => {
+      cleanup();
+      reject(err instanceof Error ? err : new Error(String(err)));
+    };
+
+    ws.on("message", onMessage);
+    ws.on("close", onClose);
+    ws.on("error", onError);
+  });
+}
+
 function waitForJsonMessageMatching(
   ws: WebSocket,
   predicate: (msg: Record<string, unknown>) => boolean,
@@ -445,6 +488,200 @@ describe("WS handler integration", () => {
     expect(close.code).toBe(4005);
     expect(close.reason).toBe("protocol_rev mismatch");
     expect(connectionManager.getStats().totalClients).toBe(0);
+    stopHeartbeat();
+  });
+
+  it("rejects legacy connect handshake when using a device token", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
+    const tokenStore = new TokenStore(homeDir);
+    await tokenStore.initialize();
+
+    const issued = await tokenStore.issueDeviceToken({
+      deviceId: "dev_client_legacy",
+      role: "client",
+      scopes: ["operator.read"],
+      ttlSeconds: 300,
+    });
+
+    const connectionManager = new ConnectionManager();
+    const { handleUpgrade, stopHeartbeat } = createWsHandler({
+      connectionManager,
+      protocolDeps: { connectionManager },
+      tokenStore,
+    });
+
+    server = createServer();
+    server.on("upgrade", (req, socket, head) => {
+      handleUpgrade(req, socket, head);
+    });
+
+    const port = await new Promise<number>((resolve) => {
+      server!.listen(0, "127.0.0.1", () => {
+        const addr = server!.address();
+        resolve(typeof addr === "object" && addr ? addr.port : 0);
+      });
+    });
+
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(issued.token));
+    clients.push(ws);
+    await waitForOpen(ws);
+
+    const firstPromise = waitForMessageOrClose(ws);
+    ws.send(
+      JSON.stringify({
+        request_id: "r-connect",
+        type: "connect",
+        payload: { capabilities: [] },
+      }),
+    );
+
+    const first = await firstPromise;
+    expect(first.kind).toBe("close");
+    if (first.kind === "close") {
+      expect(first.code).toBe(4001);
+    }
+
+    expect(connectionManager.getStats().totalClients).toBe(0);
+
+    stopHeartbeat();
+  });
+
+  it("rejects connect.init when device token device_id does not match the proved device identity", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
+    const tokenStore = new TokenStore(homeDir);
+    await tokenStore.initialize();
+
+    const { publicKey: publicKeyA } = generateKeyPairSync("ed25519");
+    const pubkeyDerA = publicKeyA.export({ format: "der", type: "spki" }) as Buffer;
+    const deviceIdA = computeDeviceId(pubkeyDerA);
+    const tokenA = await tokenStore.issueDeviceToken({
+      deviceId: deviceIdA,
+      role: "client",
+      scopes: ["operator.read"],
+      ttlSeconds: 300,
+    });
+
+    const connectionManager = new ConnectionManager();
+    const { handleUpgrade, stopHeartbeat } = createWsHandler({
+      connectionManager,
+      protocolDeps: { connectionManager },
+      tokenStore,
+    });
+
+    server = createServer();
+    server.on("upgrade", (req, socket, head) => {
+      handleUpgrade(req, socket, head);
+    });
+
+    const port = await new Promise<number>((resolve) => {
+      server!.listen(0, "127.0.0.1", () => {
+        const addr = server!.address();
+        resolve(typeof addr === "object" && addr ? addr.port : 0);
+      });
+    });
+
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(tokenA.token));
+    clients.push(ws);
+    await waitForOpen(ws);
+
+    const { publicKey: publicKeyB } = generateKeyPairSync("ed25519");
+    const pubkeyDerB = publicKeyB.export({ format: "der", type: "spki" }) as Buffer;
+    const pubkeyB64UrlB = pubkeyDerB.toString("base64url");
+    const deviceIdB = computeDeviceId(pubkeyDerB);
+
+    ws.send(
+      JSON.stringify({
+        request_id: "r-init",
+        type: "connect.init",
+        payload: {
+          protocol_rev: 2,
+          role: "client",
+          device: { device_id: deviceIdB, pubkey: pubkeyB64UrlB, label: "test" },
+          capabilities: [
+            {
+              id: descriptorIdForClientCapability("http"),
+              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+            },
+          ],
+        },
+      }),
+    );
+
+    const first = await waitForMessageOrClose(ws);
+    expect(first.kind).toBe("close");
+    if (first.kind === "close") {
+      expect(first.code).toBe(4001);
+    } else {
+      expect(first.msg).toMatchObject({ type: "connect.init", ok: false });
+    }
+
+    stopHeartbeat();
+  });
+
+  it("rejects connect.init when device token role does not match the declared WS role", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
+    const tokenStore = new TokenStore(homeDir);
+    await tokenStore.initialize();
+
+    const { publicKey } = generateKeyPairSync("ed25519");
+    const pubkeyDer = publicKey.export({ format: "der", type: "spki" }) as Buffer;
+    const pubkeyB64Url = pubkeyDer.toString("base64url");
+    const deviceId = computeDeviceId(pubkeyDer);
+    const token = await tokenStore.issueDeviceToken({
+      deviceId,
+      role: "client",
+      scopes: ["operator.read"],
+      ttlSeconds: 300,
+    });
+
+    const connectionManager = new ConnectionManager();
+    const { handleUpgrade, stopHeartbeat } = createWsHandler({
+      connectionManager,
+      protocolDeps: { connectionManager },
+      tokenStore,
+    });
+
+    server = createServer();
+    server.on("upgrade", (req, socket, head) => {
+      handleUpgrade(req, socket, head);
+    });
+
+    const port = await new Promise<number>((resolve) => {
+      server!.listen(0, "127.0.0.1", () => {
+        const addr = server!.address();
+        resolve(typeof addr === "object" && addr ? addr.port : 0);
+      });
+    });
+
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(token.token));
+    clients.push(ws);
+    await waitForOpen(ws);
+
+    ws.send(
+      JSON.stringify({
+        request_id: "r-init",
+        type: "connect.init",
+        payload: {
+          protocol_rev: 2,
+          role: "node",
+          device: { device_id: deviceId, pubkey: pubkeyB64Url, label: "test" },
+          capabilities: [
+            {
+              id: descriptorIdForClientCapability("http"),
+              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+            },
+          ],
+        },
+      }),
+    );
+
+    const first = await waitForMessageOrClose(ws);
+    expect(first.kind).toBe("close");
+    if (first.kind === "close") {
+      expect(first.code).toBe(4001);
+    } else {
+      expect(first.msg).toMatchObject({ type: "connect.init", ok: false });
+    }
 
     stopHeartbeat();
   });

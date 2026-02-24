@@ -10,6 +10,8 @@ import type {
   McpServerSpec as McpServerSpecT,
   SkillManifest as SkillManifestT,
   IdentityPack as IdentityPackT,
+  NormalizedAttachment as NormalizedAttachmentT,
+  NormalizedMessageEnvelope as NormalizedMessageEnvelopeT,
 } from "@tyrum/schemas";
 import { AgentStatusResponse, AgentTurnResponse, DEFAULT_WORKSPACE_ID } from "@tyrum/schemas";
 import type { Decision } from "@tyrum/schemas";
@@ -116,6 +118,56 @@ function collectSecretHandleIds(args: unknown): string[] {
 
   walk(args);
   return [...out];
+}
+
+type ResolvedAgentTurnInput = {
+  channel: string;
+  thread_id: string;
+  message: string;
+  envelope?: NormalizedMessageEnvelopeT;
+  metadata?: Record<string, unknown>;
+};
+
+function formatNormalizedAttachment(attachment: NormalizedAttachmentT): string {
+  const fields = [`kind=${attachment.kind}`];
+  if (attachment.mime_type) fields.push(`mime_type=${attachment.mime_type}`);
+  if (typeof attachment.size_bytes === "number") fields.push(`size_bytes=${String(attachment.size_bytes)}`);
+  if (attachment.sha256) fields.push(`sha256=${attachment.sha256}`);
+  return `- ${fields.join(" ")}`;
+}
+
+function formatAttachmentSummary(attachments: NormalizedAttachmentT[]): string | undefined {
+  if (!attachments || attachments.length === 0) return undefined;
+  return `Attachments:\n${attachments.map(formatNormalizedAttachment).join("\n")}`;
+}
+
+function resolveAgentTurnInput(input: AgentTurnRequestT): ResolvedAgentTurnInput {
+  const envelope = input.envelope;
+  const channel = envelope?.delivery.channel ?? input.channel;
+  const threadId = envelope?.container.id ?? input.thread_id;
+
+  if (typeof channel !== "string" || channel.trim().length === 0) {
+    throw new Error("channel is required");
+  }
+  if (typeof threadId !== "string" || threadId.trim().length === 0) {
+    throw new Error("thread_id is required");
+  }
+
+  const baseText = (input.message ?? envelope?.content.text ?? "").trim();
+  const attachmentsSummary = envelope ? formatAttachmentSummary(envelope.content.attachments) : undefined;
+  const message = [baseText, attachmentsSummary].filter((part) => part && part.trim().length > 0).join("\n\n").trim();
+
+  if (message.length === 0) {
+    throw new Error("message is required (either message text or envelope content)");
+  }
+
+  return {
+    channel,
+    thread_id: threadId,
+    message,
+    envelope,
+    metadata: input.metadata,
+  };
 }
 
 export interface AgentRuntimeOptions {
@@ -1235,7 +1287,7 @@ export class AgentRuntime {
     finalize: () => Promise<AgentTurnResponseT>;
   }> {
     const prepared = await this.prepareTurn(input);
-    const { ctx, session, model, toolSet, usedTools, userContent, systemPrompt } = prepared;
+    const { ctx, session, model, toolSet, usedTools, userContent, systemPrompt, resolved } = prepared;
 
     const streamResult = streamText({
       model,
@@ -1253,7 +1305,7 @@ export class AgentRuntime {
     const finalize = async (): Promise<AgentTurnResponseT> => {
       const result = await streamResult;
       const reply = (await result.text) || "No assistant response returned.";
-      return this.finalizeTurn(ctx, session, input, reply, usedTools);
+      return this.finalizeTurn(ctx, session, resolved, reply, usedTools);
     };
 
     return { streamResult, sessionId: session.session_id, finalize };
@@ -1261,7 +1313,7 @@ export class AgentRuntime {
 
   async turn(input: AgentTurnRequestT): Promise<AgentTurnResponseT> {
     const prepared = await this.prepareTurn(input);
-    const { ctx, session, model, toolSet, usedTools, userContent, systemPrompt } = prepared;
+    const { ctx, session, model, toolSet, usedTools, userContent, systemPrompt, resolved } = prepared;
 
     const result = await generateText({
       model,
@@ -1277,7 +1329,7 @@ export class AgentRuntime {
     });
 
     const reply = result.text || "No assistant response returned.";
-    return this.finalizeTurn(ctx, session, input, reply, usedTools);
+    return this.finalizeTurn(ctx, session, resolved, reply, usedTools);
   }
 
   private async semanticSearch(
@@ -1487,11 +1539,13 @@ export class AgentRuntime {
     usedTools: Set<string>;
     userContent: Array<{ type: "text"; text: string }>;
     systemPrompt: string;
+    resolved: ResolvedAgentTurnInput;
   }> {
     const ctx = await this.loadContext();
     this.maybeCleanupSessions(ctx.config.sessions.ttl_days);
 
-    const session = await this.sessionDal.getOrCreate(input.channel, input.thread_id, this.agentId);
+    const resolved = resolveAgentTurnInput(input);
+    const session = await this.sessionDal.getOrCreate(resolved.channel, resolved.thread_id, this.agentId);
     const agentId = this.agentId;
     const workspaceId = this.workspaceId;
 
@@ -1501,12 +1555,12 @@ export class AgentRuntime {
 
     // Semantic search via embedding pipeline (graceful -- skipped if memory disabled)
     const semanticSearchPromise = ctx.config.memory.markdown_enabled
-      ? this.semanticSearch(input.message, ctx.config.model.model, session.session_id)
+      ? this.semanticSearch(resolved.message, ctx.config.model.model, session.session_id)
       : Promise.resolve([]);
 
     const [memoryHits, mcpTools, semanticHits] = await Promise.all([
       ctx.config.memory.markdown_enabled
-        ? ctx.memoryStore.search(input.message, 5)
+        ? ctx.memoryStore.search(resolved.message, 5)
         : Promise.resolve([]),
       wantsMcpTools
         ? this.mcpManager.listToolDescriptors(ctx.mcpServers)
@@ -1516,7 +1570,7 @@ export class AgentRuntime {
 
     const pluginTools = this.plugins?.getToolDescriptors() ?? [];
     const tools = selectToolDirectory(
-      input.message,
+      resolved.message,
       ctx.config.tools.allow,
       [...mcpTools, ...pluginTools],
       8,
@@ -1547,8 +1601,8 @@ export class AgentRuntime {
       {
         planId: `agent-turn-${session.session_id}-${randomUUID()}`,
         sessionId: session.session_id,
-        channel: input.channel,
-        threadId: input.thread_id,
+        channel: resolved.channel,
+        threadId: resolved.thread_id,
       },
     );
 
@@ -1593,8 +1647,8 @@ export class AgentRuntime {
       context_report_id: contextReportId,
       generated_at: new Date().toISOString(),
       session_id: session.session_id,
-      channel: input.channel,
-      thread_id: input.thread_id,
+      channel: resolved.channel,
+      thread_id: resolved.thread_id,
       agent_id: agentId,
       workspace_id: workspaceId,
       system_prompt: { chars: systemPrompt.length },
@@ -1603,7 +1657,7 @@ export class AgentRuntime {
         { id: "tools", chars: toolsText.length },
         { id: "session_context", chars: sessionText.length },
         { id: "memory_matches", chars: memoryText.length },
-        { id: "message", chars: input.message.length },
+        { id: "message", chars: resolved.message.length },
       ],
       selected_tools: tools.map((t) => t.id),
       tool_schema_top: toolSchemaTop,
@@ -1620,8 +1674,8 @@ export class AgentRuntime {
       await this.opts.container.contextReportDal.insert({
         contextReportId,
         sessionId: session.session_id,
-        channel: input.channel,
-        threadId: input.thread_id,
+        channel: resolved.channel,
+        threadId: resolved.thread_id,
         agentId: report.agent_id,
         workspaceId: report.workspace_id,
         report,
@@ -1654,7 +1708,7 @@ export class AgentRuntime {
       },
       {
         type: "text",
-        text: input.message,
+        text: resolved.message,
       },
     ];
 
@@ -1672,13 +1726,14 @@ export class AgentRuntime {
       usedTools,
       userContent,
       systemPrompt,
+      resolved,
     };
   }
 
   private async finalizeTurn(
     ctx: AgentLoadedContext,
     session: SessionRow,
-    input: AgentTurnRequestT,
+    input: ResolvedAgentTurnInput,
     reply: string,
     usedTools: Set<string>,
   ): Promise<AgentTurnResponseT> {

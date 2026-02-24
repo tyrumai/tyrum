@@ -10,29 +10,16 @@ import { getCookie } from "hono/cookie";
 import { matchedRoutes } from "hono/route";
 import { APP_PATH_PREFIX, matchesPathPrefixSegment } from "../../app-path.js";
 import type { TokenStore } from "./token-store.js";
+import { AUTH_COOKIE_NAME, extractBearerToken } from "./http.js";
 
 const AUTH_ERROR_BODY = {
   error: "unauthorized",
   message: "Provide a valid token via Authorization: Bearer <token> header",
 };
 
-const AUTH_COOKIE_NAME = "tyrum_admin_token";
 const APP_TOKEN_QUERY_KEY = "token";
 const OAUTH_CALLBACK_ROUTE_PATH_SUFFIX = "/providers/:provider/oauth/callback";
 const OAUTH_CALLBACK_REQUEST_PATH_PATTERN = /(?:^|\/)providers\/[^/]+\/oauth\/callback$/;
-
-function extractBearerToken(authorizationHeader: string | undefined): string | undefined {
-  if (!authorizationHeader) {
-    return undefined;
-  }
-
-  const parts = authorizationHeader.split(" ");
-  if (parts.length !== 2 || parts[0] !== "Bearer" || !parts[1]) {
-    return undefined;
-  }
-
-  return parts[1];
-}
 
 function extractAppQueryToken(c: Context): string | undefined {
   // Guard against prefix-collisions like "/application" or "/appdata".
@@ -84,6 +71,7 @@ export function createAuthMiddleware(
       );
     }
 
+    // HTTP routes are an operator surface; require an admin bootstrap token.
     if (!tokenStore.validate(token)) {
       return c.json(
         AUTH_ERROR_BODY,
