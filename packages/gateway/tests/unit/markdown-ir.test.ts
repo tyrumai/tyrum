@@ -116,6 +116,31 @@ describe("markdownToIr", () => {
     });
   });
 
+  it("does not drop trailing content after a leading fenced code block", () => {
+    expect(
+      markdownToIr("```ts\ncode\n```\n\nafter"),
+    ).toEqual({
+      text: "code\n\nafter",
+      spans: [
+        { kind: "block", block: "code_block", language: "ts", start: 0, end: 4 },
+        { kind: "block", block: "paragraph", start: 6, end: 11 },
+      ],
+    });
+  });
+
+  it("parses fenced code blocks with blank lines when mixed with other blocks", () => {
+    expect(
+      markdownToIr("before\n\n```ts\nline1\n\nline3\n```\n\nafter"),
+    ).toEqual({
+      text: "before\n\nline1\n\nline3\n\nafter",
+      spans: [
+        { kind: "block", block: "paragraph", start: 0, end: 6 },
+        { kind: "block", block: "code_block", language: "ts", start: 8, end: 20 },
+        { kind: "block", block: "paragraph", start: 22, end: 27 },
+      ],
+    });
+  });
+
   it("captures blockquotes as block spans", () => {
     expect(markdownToIr("> quoted")).toEqual({
       text: "quoted",
@@ -150,6 +175,17 @@ describe("markdownToIr", () => {
       spans: [
         { kind: "block", block: "list_item", ordered: true, index: 1, depth: 0, start: 0, end: 3 },
         { kind: "block", block: "list_item", ordered: true, index: 2, depth: 0, start: 4, end: 7 },
+      ],
+    });
+  });
+
+  it("captures nested inline styles deterministically", () => {
+    expect(markdownToIr("**`code`**")).toEqual({
+      text: "code",
+      spans: [
+        { kind: "block", block: "paragraph", start: 0, end: 4 },
+        { kind: "style", style: "bold", start: 0, end: 4 },
+        { kind: "style", style: "inline_code", start: 0, end: 4 },
       ],
     });
   });

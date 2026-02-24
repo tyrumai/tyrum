@@ -14,6 +14,8 @@ export type MarkdownIr = {
 };
 
 function sortSpans(spans: MarkdownIrSpan[]): MarkdownIrSpan[] {
+  const compareStrings = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
   const kindRank = (span: MarkdownIrSpan): number => {
     switch (span.kind) {
       case "block":
@@ -33,7 +35,7 @@ function sortSpans(spans: MarkdownIrSpan[]): MarkdownIrSpan[] {
     if (kindCmp !== 0) return kindCmp;
 
     if (a.kind === "block" && b.kind === "block") {
-      const blockCmp = a.block.localeCompare(b.block);
+      const blockCmp = compareStrings(a.block, b.block);
       if (blockCmp !== 0) return blockCmp;
       if (a.block === "list_item" && b.block === "list_item") {
         if (a.ordered !== b.ordered) return a.ordered ? 1 : -1;
@@ -41,17 +43,17 @@ function sortSpans(spans: MarkdownIrSpan[]): MarkdownIrSpan[] {
         if (a.depth !== b.depth) return a.depth - b.depth;
       }
       if (a.block === "code_block" && b.block === "code_block") {
-        return (a.language ?? "").localeCompare(b.language ?? "");
+        return compareStrings(a.language ?? "", b.language ?? "");
       }
       return 0;
     }
 
     if (a.kind === "link" && b.kind === "link") {
-      return a.href.localeCompare(b.href);
+      return compareStrings(a.href, b.href);
     }
 
     if (a.kind === "style" && b.kind === "style") {
-      return a.style.localeCompare(b.style);
+      return compareStrings(a.style, b.style);
     }
 
     return 0;
@@ -111,8 +113,12 @@ function parseInlineMarkdown(input: string): { text: string; spans: MarkdownIrSp
       const end = input.indexOf("||", idx + 2);
       if (end !== -1) {
         const start = out.length;
-        out += input.slice(idx + 2, end);
+        const inner = parseInlineMarkdown(input.slice(idx + 2, end));
+        out += inner.text;
         const finish = out.length;
+        for (const span of inner.spans) {
+          spans.push({ ...span, start: span.start + start, end: span.end + start });
+        }
         if (finish > start) {
           spans.push({ kind: "style", style: "spoiler", start, end: finish });
         }
@@ -125,8 +131,12 @@ function parseInlineMarkdown(input: string): { text: string; spans: MarkdownIrSp
       const end = input.indexOf("**", idx + 2);
       if (end !== -1) {
         const start = out.length;
-        out += input.slice(idx + 2, end);
+        const inner = parseInlineMarkdown(input.slice(idx + 2, end));
+        out += inner.text;
         const finish = out.length;
+        for (const span of inner.spans) {
+          spans.push({ ...span, start: span.start + start, end: span.end + start });
+        }
         if (finish > start) {
           spans.push({ kind: "style", style: "bold", start, end: finish });
         }
@@ -139,8 +149,12 @@ function parseInlineMarkdown(input: string): { text: string; spans: MarkdownIrSp
       const end = input.indexOf("~~", idx + 2);
       if (end !== -1) {
         const start = out.length;
-        out += input.slice(idx + 2, end);
+        const inner = parseInlineMarkdown(input.slice(idx + 2, end));
+        out += inner.text;
         const finish = out.length;
+        for (const span of inner.spans) {
+          spans.push({ ...span, start: span.start + start, end: span.end + start });
+        }
         if (finish > start) {
           spans.push({ kind: "style", style: "strike", start, end: finish });
         }
@@ -153,8 +167,12 @@ function parseInlineMarkdown(input: string): { text: string; spans: MarkdownIrSp
       const end = input.indexOf("*", idx + 1);
       if (end !== -1) {
         const start = out.length;
-        out += input.slice(idx + 1, end);
+        const inner = parseInlineMarkdown(input.slice(idx + 1, end));
+        out += inner.text;
         const finish = out.length;
+        for (const span of inner.spans) {
+          spans.push({ ...span, start: span.start + start, end: span.end + start });
+        }
         if (finish > start) {
           spans.push({ kind: "style", style: "italic", start, end: finish });
         }
@@ -170,84 +188,144 @@ function parseInlineMarkdown(input: string): { text: string; spans: MarkdownIrSp
   return { text: out, spans };
 }
 
-function tryParseSingleFencedCodeBlock(input: string): MarkdownIr | undefined {
-  if (!input.startsWith("```")) return undefined;
+type MarkdownBlockSeparator = "" | "\n" | "\n\n";
 
-  const headerEnd = input.indexOf("\n");
-  if (headerEnd === -1) return undefined;
+type MarkdownBlock =
+  | { kind: "paragraph"; raw: string }
+  | { kind: "blockquote"; raw: string }
+  | { kind: "list_item"; ordered: boolean; index?: number; depth: number; raw: string }
+  | { kind: "code_block"; language?: string; code: string };
 
-  const langRaw = input.slice(3, headerEnd).trim();
-  const language = langRaw.length > 0 ? langRaw : undefined;
+type MarkdownBlockWithSeparator = MarkdownBlock & { sepBefore: MarkdownBlockSeparator };
 
-  let fenceStart = input.indexOf("\n```", headerEnd + 1);
-  if (fenceStart === -1 && input.endsWith("```")) {
-    fenceStart = input.length - 3;
-  }
-  if (fenceStart === -1) return undefined;
+function scanBlocks(input: string): MarkdownBlockWithSeparator[] {
+  const lines = input.split("\n");
+  const blocks: MarkdownBlockWithSeparator[] = [];
+  let nextSep: MarkdownBlockSeparator | undefined;
 
-  const codeRaw = input.slice(headerEnd + 1, fenceStart);
-  const code = codeRaw.endsWith("\n") ? codeRaw.slice(0, -1) : codeRaw;
+  const pushBlock = (block: MarkdownBlock): void => {
+    const sepBefore: MarkdownBlockSeparator =
+      blocks.length === 0
+        ? ""
+        : nextSep === "\n\n"
+          ? "\n\n"
+          : blocks[blocks.length - 1].kind === "list_item" && block.kind === "list_item"
+            ? "\n"
+            : "\n\n";
 
-  if (code.length === 0) return { text: "", spans: [] };
-
-  return {
-    text: code,
-    spans: [
-      { kind: "block", block: "code_block", language, start: 0, end: code.length },
-    ],
+    blocks.push({ ...block, sepBefore });
+    nextSep = undefined;
   };
-}
 
-function isBlockquoteBlock(raw: string): boolean {
-  const lines = raw.split("\n");
-  return lines.every((line) => line.trimStart().startsWith(">"));
-}
+  let idx = 0;
+  while (idx < lines.length) {
+    const line = lines[idx]!;
 
-function stripBlockquotePrefix(raw: string): string {
-  return raw
-    .split("\n")
-    .map((line) => {
-      const trimmed = line.trimStart();
-      if (!trimmed.startsWith(">")) return line;
-      const rest = trimmed.slice(1);
-      return rest.startsWith(" ") ? rest.slice(1) : rest;
-    })
-    .join("\n");
-}
+    if (line.trim().length === 0) {
+      nextSep = "\n\n";
+      idx += 1;
+      continue;
+    }
 
-function tryParseListItems(raw: string): Array<{ ordered: boolean; index?: number; depth: number; content: string }> | undefined {
-  const lines = raw.split("\n");
-  if (lines.length === 0) return undefined;
+    const trimmedStart = line.trimStart();
 
-  const items: Array<{ ordered: boolean; index?: number; depth: number; content: string }> = [];
-  let listKind: "unordered" | "ordered" | undefined;
-  for (const line of lines) {
+    if (trimmedStart.startsWith("```")) {
+      const langRaw = trimmedStart.slice(3).trim();
+      const language = langRaw.length > 0 ? langRaw : undefined;
+
+      idx += 1;
+      const codeLines: string[] = [];
+      while (idx < lines.length) {
+        const codeLine = lines[idx]!;
+        if (codeLine.trimStart().startsWith("```")) {
+          idx += 1;
+          break;
+        }
+        codeLines.push(codeLine);
+        idx += 1;
+      }
+
+      pushBlock({ kind: "code_block", language, code: codeLines.join("\n") });
+      continue;
+    }
+
+    if (trimmedStart.startsWith(">")) {
+      const quoteLines: string[] = [];
+      while (idx < lines.length) {
+        const quoteLine = lines[idx]!;
+        const quoteTrimmed = quoteLine.trimStart();
+        if (!quoteTrimmed.startsWith(">")) break;
+        let rest = quoteTrimmed.slice(1);
+        if (rest.startsWith(" ")) rest = rest.slice(1);
+        quoteLines.push(rest);
+        idx += 1;
+      }
+      pushBlock({ kind: "blockquote", raw: quoteLines.join("\n") });
+      continue;
+    }
+
     const unorderedMatch = /^(\s*)[-+*]\s+(.*)$/.exec(line);
-    if (unorderedMatch) {
-      if (listKind && listKind !== "unordered") return undefined;
-      listKind = "unordered";
-      const indent = unorderedMatch[1] ?? "";
-      const content = unorderedMatch[2] ?? "";
-      const depth = Math.floor(indent.length / 2);
-      items.push({ ordered: false, depth, content });
-      continue;
-    }
-
     const orderedMatch = /^(\s*)(\d+)[.)]\s+(.*)$/.exec(line);
-    if (orderedMatch) {
-      if (listKind && listKind !== "ordered") return undefined;
-      listKind = "ordered";
-      const indent = orderedMatch[1] ?? "";
-      const index = Number.parseInt(orderedMatch[2] ?? "", 10);
-      const content = orderedMatch[3] ?? "";
-      const depth = Math.floor(indent.length / 2);
-      items.push({ ordered: true, index: Number.isFinite(index) ? index : undefined, depth, content });
+    if (unorderedMatch || orderedMatch) {
+      const listKind: "unordered" | "ordered" = orderedMatch ? "ordered" : "unordered";
+      while (idx < lines.length) {
+        const listLine = lines[idx]!;
+        if (listLine.trim().length === 0) break;
+
+        const unordered = /^(\s*)[-+*]\s+(.*)$/.exec(listLine);
+        const ordered = /^(\s*)(\d+)[.)]\s+(.*)$/.exec(listLine);
+
+        if (listKind === "unordered") {
+          if (!unordered) break;
+          const indent = unordered[1] ?? "";
+          const depth = Math.floor(indent.length / 2);
+          const raw = unordered[2] ?? "";
+          pushBlock({ kind: "list_item", ordered: false, depth, raw });
+          idx += 1;
+          continue;
+        }
+
+        if (!ordered) break;
+        const indent = ordered[1] ?? "";
+        const depth = Math.floor(indent.length / 2);
+        const parsedIndex = Number.parseInt(ordered[2] ?? "", 10);
+        const index = Number.isFinite(parsedIndex) ? parsedIndex : undefined;
+        const raw = ordered[3] ?? "";
+        pushBlock({ kind: "list_item", ordered: true, index, depth, raw });
+        idx += 1;
+      }
       continue;
     }
 
-    return undefined;
+    const paragraphLines: string[] = [];
+    while (idx < lines.length) {
+      const paragraphLine = lines[idx]!;
+      if (paragraphLine.trim().length === 0) break;
+
+      const paragraphTrimmed = paragraphLine.trimStart();
+      if (
+        paragraphTrimmed.startsWith("```")
+        || paragraphTrimmed.startsWith(">")
+        || /^(\s*)[-+*]\s+/.test(paragraphLine)
+        || /^(\s*)(\d+)[.)]\s+/.test(paragraphLine)
+      ) {
+        break;
+      }
+
+      paragraphLines.push(paragraphLine);
+      idx += 1;
+    }
+
+    if (paragraphLines.length > 0) {
+      pushBlock({ kind: "paragraph", raw: paragraphLines.join("\n") });
+      continue;
+    }
+
+    pushBlock({ kind: "paragraph", raw: line });
+    idx += 1;
   }
-  return items.length > 0 ? items : undefined;
+
+  return blocks;
 }
 
 /**
@@ -258,70 +336,43 @@ function tryParseListItems(raw: string): Array<{ ordered: boolean; index?: numbe
  */
 export function markdownToIr(markdown: string): MarkdownIr {
   const input = normalizeLineEndings(markdown ?? "");
-  const codeBlock = tryParseSingleFencedCodeBlock(input);
-  if (codeBlock) return { ...codeBlock, spans: sortSpans(codeBlock.spans) };
-
-  const rawParagraphs = input.split(/\n{2,}/g);
   let text = "";
   const spans: MarkdownIrSpan[] = [];
 
-  for (const raw of rawParagraphs) {
-    const codeBlock = tryParseSingleFencedCodeBlock(raw);
-    if (codeBlock) {
-      if (codeBlock.text.length === 0) continue;
-      if (text.length > 0) text += "\n\n";
-      const start = text.length;
-      text += codeBlock.text;
-      for (const span of codeBlock.spans) {
-        spans.push({ ...span, start: span.start + start, end: span.end + start });
-      }
-      continue;
-    }
-
-    const listItems = tryParseListItems(raw);
-    if (listItems) {
-      if (text.length > 0) text += "\n\n";
-      for (let i = 0; i < listItems.length; i += 1) {
-        const item = listItems[i]!;
-        const inline = parseInlineMarkdown(item.content);
-        if (inline.text.length === 0) continue;
-
-        if (i > 0) text += "\n";
-        const start = text.length;
-        text += inline.text;
-        const end = text.length;
-
-        spans.push({
-          kind: "block",
-          block: "list_item",
-          ordered: item.ordered,
-          ...(item.index === undefined ? {} : { index: item.index }),
-          depth: item.depth,
-          start,
-          end,
-        });
-        for (const span of inline.spans) {
-          spans.push({ ...span, start: span.start + start, end: span.end + start });
-        }
-      }
-      continue;
-    }
-
-    const rawBlock = isBlockquoteBlock(raw) ? stripBlockquotePrefix(raw) : raw;
-    const inline = parseInlineMarkdown(rawBlock);
-    if (inline.text.length === 0) continue;
-
-    if (text.length > 0) text += "\n\n";
+  for (const block of scanBlocks(input)) {
+    text += block.sepBefore;
     const start = text.length;
+
+    if (block.kind === "code_block") {
+      text += block.code;
+      const end = text.length;
+      if (end > start) {
+        spans.push({ kind: "block", block: "code_block", language: block.language, start, end });
+      }
+      continue;
+    }
+
+    const inline = parseInlineMarkdown(block.raw);
     text += inline.text;
     const end = text.length;
+    if (end <= start) continue;
 
-    spans.push({
-      kind: "block",
-      block: isBlockquoteBlock(raw) ? "blockquote" : "paragraph",
-      start,
-      end,
-    });
+    if (block.kind === "list_item") {
+      spans.push({
+        kind: "block",
+        block: "list_item",
+        ordered: block.ordered,
+        ...(block.index === undefined ? {} : { index: block.index }),
+        depth: block.depth,
+        start,
+        end,
+      });
+    } else if (block.kind === "blockquote") {
+      spans.push({ kind: "block", block: "blockquote", start, end });
+    } else {
+      spans.push({ kind: "block", block: "paragraph", start, end });
+    }
+
     for (const span of inline.spans) {
       spans.push({ ...span, start: span.start + start, end: span.end + start });
     }
