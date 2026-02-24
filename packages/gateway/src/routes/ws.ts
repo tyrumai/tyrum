@@ -827,25 +827,43 @@ export function createWsHandler(opts: WsRouteOptions): {
       return;
     }
 
-    void resolveAuth()
-      .then(async (resolved) => {
-        if (!resolved) {
-          await protocolDeps.authAudit?.recordAuthFailed({
+    const requestPath = (() => {
+      try {
+        return new URL(req.url ?? "/", "http://localhost").pathname;
+      } catch {
+        return undefined;
+      }
+    })();
+
+    const userAgent = toSingleHeaderValue(req.headers["user-agent"])?.trim() || undefined;
+    const requestId = toSingleHeaderValue(req.headers["x-request-id"])?.trim() || undefined;
+
+    const recordUpgradeAuthFailed = (): void => {
+      const authAudit = protocolDeps.authAudit;
+      if (!authAudit) return;
+
+      try {
+        void authAudit
+          .recordAuthFailed({
             surface: "ws.upgrade",
             reason: token ? "invalid_token" : "missing_token",
             token_transport: tokenInfo.transport,
             client_ip: parseRemoteIp(req),
             method: req.method,
-            path: (() => {
-              try {
-                return new URL(req.url ?? "/", "http://localhost").pathname;
-              } catch {
-                return undefined;
-              }
-            })(),
-            user_agent: toSingleHeaderValue(req.headers["user-agent"])?.trim() || undefined,
-            request_id: toSingleHeaderValue(req.headers["x-request-id"])?.trim() || undefined,
-          });
+            path: requestPath,
+            user_agent: userAgent,
+            request_id: requestId,
+          })
+          .catch(() => {});
+      } catch {
+        // ignore audit failures; the socket still must close
+      }
+    };
+
+    void resolveAuth()
+      .then((resolved) => {
+        if (!resolved) {
+          recordUpgradeAuthFailed();
           ws.close(4001, "unauthorized");
           return;
         }
@@ -853,23 +871,8 @@ export function createWsHandler(opts: WsRouteOptions): {
         startHandshakeTimeout();
         flushEarlyMessages();
       })
-      .catch(async () => {
-        await protocolDeps.authAudit?.recordAuthFailed({
-          surface: "ws.upgrade",
-          reason: token ? "invalid_token" : "missing_token",
-          token_transport: tokenInfo.transport,
-          client_ip: parseRemoteIp(req),
-          method: req.method,
-          path: (() => {
-            try {
-              return new URL(req.url ?? "/", "http://localhost").pathname;
-            } catch {
-              return undefined;
-            }
-          })(),
-          user_agent: toSingleHeaderValue(req.headers["user-agent"])?.trim() || undefined,
-          request_id: toSingleHeaderValue(req.headers["x-request-id"])?.trim() || undefined,
-        });
+      .catch(() => {
+        recordUpgradeAuthFailed();
         ws.close(4001, "unauthorized");
       });
   });
