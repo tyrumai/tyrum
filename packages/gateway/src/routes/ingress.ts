@@ -2,6 +2,7 @@
  * Ingress routes — Telegram webhook normalization + agent flow.
  */
 
+import { randomUUID } from "node:crypto";
 import { Hono } from "hono";
 import {
   normalizeUpdate,
@@ -11,13 +12,15 @@ import { secureStringEqual } from "../utils/secure-string-equal.js";
 import type { TelegramBot } from "../modules/ingress/telegram-bot.js";
 import type { AgentRegistry } from "../modules/agent/registry.js";
 import type { TelegramChannelQueue } from "../modules/channels/telegram.js";
-import { renderMarkdownForTelegram } from "../modules/markdown/telegram.js";
+import { renderMarkdownForTelegram, type TelegramFormattingFallbackEvent } from "../modules/markdown/telegram.js";
 import { loadRoutingConfig, resolveTelegramAgentId } from "../modules/channels/routing.js";
+import type { MemoryDal } from "../modules/memory/dal.js";
 
 export interface IngressDeps {
   telegramBot?: TelegramBot;
   agents?: AgentRegistry;
   telegramQueue?: TelegramChannelQueue;
+  memoryDal?: MemoryDal;
   home?: string;
 }
 
@@ -127,9 +130,38 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
         envelope: patchedEnvelope,
       });
 
-      const chunks = renderMarkdownForTelegram(result.reply);
+      const formattingFallbacks: TelegramFormattingFallbackEvent[] = [];
+      const chunks = renderMarkdownForTelegram(result.reply, {
+        onFormattingFallback: (event) => {
+          formattingFallbacks.push(event);
+        },
+      });
+
+      if (deps.memoryDal && formattingFallbacks.length > 0) {
+        const occurredAt = new Date().toISOString();
+        await Promise.allSettled(
+          formattingFallbacks.map(async (fallback) => {
+            await deps.memoryDal?.insertEpisodicEvent(
+              `channel-formatting-fallback-${randomUUID()}`,
+              occurredAt,
+              "telegram",
+              "channel_formatting_fallback",
+              {
+                mode: "direct",
+                agent_id: routedAgentId,
+                session_id: result.session_id,
+                reason: fallback.reason,
+                chunk_index: fallback.chunk_index,
+                ...(fallback.detail ? { detail: fallback.detail } : {}),
+              },
+              routedAgentId,
+            );
+          }),
+        );
+      }
+
       for (const chunk of chunks) {
-        await deps.telegramBot.sendMessage(chatId, chunk);
+        await deps.telegramBot.sendMessage(chatId, chunk, { parse_mode: "HTML" });
       }
       return c.json({ ok: true, session_id: result.session_id });
     } catch {
@@ -137,6 +169,7 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
         await deps.telegramBot.sendMessage(
           chatId,
           "Sorry, something went wrong. Please try again later.",
+          { parse_mode: "HTML" },
         );
       } catch {
         // If we can't even send the error message, just return 200 to Telegram

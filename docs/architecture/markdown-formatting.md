@@ -56,9 +56,10 @@ If parsing or rendering fails for a chunk:
 - fall back to plain text for that chunk
 - emit an event indicating a formatting fallback occurred
 
+Current implementation emits a durable episodic event (`event_type=channel_formatting_fallback`) so operators can inspect fallbacks via `/app/activity`.
+
 This keeps delivery robust under channel-specific formatting quirks without losing the underlying content.
 
 ## Interaction with streaming
 
 Block streaming uses the same IR chunker. This guarantees that streamed partial replies and final replies share identical chunk boundaries and formatting rules.
-
