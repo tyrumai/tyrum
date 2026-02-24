@@ -976,6 +976,20 @@ export const WsPairingRequestedEvent = WsEventEnvelope.extend({
 });
 export type WsPairingRequestedEvent = z.infer<typeof WsPairingRequestedEvent>;
 
+export const WsPairingApprovedEventPayload = z
+  .object({
+    pairing: NodePairingRequest,
+    scoped_token: z.string().trim().min(1),
+  })
+  .strict();
+export type WsPairingApprovedEventPayload = z.infer<typeof WsPairingApprovedEventPayload>;
+
+export const WsPairingApprovedEvent = WsEventEnvelope.extend({
+  type: z.literal("pairing.approved"),
+  payload: WsPairingApprovedEventPayload,
+});
+export type WsPairingApprovedEvent = z.infer<typeof WsPairingApprovedEvent>;
+
 export const WsPairingResolvedEventPayload = z
   .object({
     pairing: NodePairingRequest,
@@ -1098,6 +1112,7 @@ export const WsEvent = z.discriminatedUnion("type", [
   WsAttemptUpdatedEvent,
   WsArtifactCreatedEvent,
   WsPairingRequestedEvent,
+  WsPairingApprovedEvent,
   WsPairingResolvedEvent,
   WsPresenceUpsertedEvent,
   WsPresencePrunedEvent,

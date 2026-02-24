@@ -251,22 +251,46 @@ export function createWsHandler(opts: WsRouteOptions): {
   // --- connection handler ---
   wss.on("connection", (ws, req) => {
     const token = extractWsTokenFromProtocols(req);
-
     const upgradeClaims = authenticateWsToken(token, tokenStore);
-    if (!upgradeClaims) {
-      ws.close(4001, "unauthorized");
-      return;
-    }
+
+    type UpgradeClaims = NonNullable<typeof upgradeClaims>;
+    type AuthState =
+      | { kind: "claims"; claims: UpgradeClaims }
+      | { kind: "scoped_node"; expectedNodeId: string };
+
+    const EARLY_MESSAGE_MAX_COUNT = 8;
+    const EARLY_MESSAGE_MAX_BYTES = 64 * 1024;
+
+    const earlyMessages: string[] = [];
+    let earlyMessageBytes = 0;
+    let authState: AuthState | undefined = upgradeClaims ? { kind: "claims", claims: upgradeClaims } : undefined;
 
     // Mutable slot: filled once the hello handshake completes.
     let clientId: string | undefined;
     let deviceId: string | undefined;
 
-    const handshakeTimeout = setTimeout(() => {
-      if (clientId === undefined) {
-        ws.close(4002, "handshake timeout");
-      }
-    }, 10_000);
+    let handshakeTimeout: ReturnType<typeof setTimeout> | undefined;
+
+    const clearHandshakeTimeout = (): void => {
+      if (!handshakeTimeout) return;
+      clearTimeout(handshakeTimeout);
+      handshakeTimeout = undefined;
+    };
+
+    const startHandshakeTimeout = (): void => {
+      if (handshakeTimeout) return;
+      handshakeTimeout = setTimeout(() => {
+        if (clientId === undefined) {
+          ws.close(4002, "handshake timeout");
+        }
+      }, 10_000);
+      handshakeTimeout.unref();
+    };
+
+    // Ensure handshake timeout is cleared even if the socket closes before completing a handshake.
+    ws.once("close", () => {
+      clearHandshakeTimeout();
+    });
 
     let pendingInit:
       | undefined
@@ -284,8 +308,26 @@ export function createWsHandler(opts: WsRouteOptions): {
           challenge: string;
         };
 
-    ws.on("message", (data) => {
-      const raw = rawDataToUtf8(data);
+    const resolveAuth = async (): Promise<AuthState | undefined> => {
+      if (authState) return authState;
+      if (!token || !nodePairingDal) return undefined;
+      const nodeId = await nodePairingDal.getNodeIdForScopedToken(token).catch(() => undefined);
+      return nodeId ? { kind: "scoped_node", expectedNodeId: nodeId } : undefined;
+    };
+
+    const flushEarlyMessages = (): void => {
+      for (const raw of earlyMessages.splice(0)) {
+        handleRawMessage(raw);
+      }
+      earlyMessageBytes = 0;
+    };
+
+    const handleRawMessage = (raw: string): void => {
+      const auth = authState;
+      if (!auth) return;
+
+      const scopedExpectedNodeId = auth.kind === "scoped_node" ? auth.expectedNodeId : undefined;
+      const claims = auth.kind === "claims" ? auth.claims : undefined;
 
       if (clientId === undefined) {
         let json: unknown;
@@ -304,6 +346,11 @@ export function createWsHandler(opts: WsRouteOptions): {
             return;
           }
 
+          if (auth.kind === "scoped_node" && init.data.payload.role !== "node") {
+            ws.close(4001, "unauthorized");
+            return;
+          }
+
           const pubkeyDer = Buffer.from(init.data.payload.device.pubkey, "base64url");
           const expectedDeviceId = deviceIdFromSha256Digest(
             createHash("sha256").update(pubkeyDer).digest(),
@@ -315,15 +362,20 @@ export function createWsHandler(opts: WsRouteOptions): {
 
           // Bind device tokens to the peer identity proof. This prevents replaying
           // a valid device token across different device proofs.
-          if (upgradeClaims.token_kind === "device") {
-            if (upgradeClaims.role !== init.data.payload.role) {
+          if (claims?.token_kind === "device") {
+            if (claims.role !== init.data.payload.role) {
               ws.close(4001, "unauthorized");
               return;
             }
-            if (upgradeClaims.device_id !== expectedDeviceId) {
+            if (claims.device_id !== expectedDeviceId) {
               ws.close(4001, "unauthorized");
               return;
             }
+          }
+
+          if (scopedExpectedNodeId && expectedDeviceId !== scopedExpectedNodeId) {
+            ws.close(4008, "scoped token mismatch");
+            return;
           }
 
           const connectionId = crypto.randomUUID();
@@ -389,7 +441,7 @@ export function createWsHandler(opts: WsRouteOptions): {
             return;
           }
 
-          clearTimeout(handshakeTimeout);
+          clearHandshakeTimeout();
           clientId = pendingInit.connectionId;
           deviceId = pendingInit.deviceId;
           connectionManager.addClient(ws, pendingInit.capabilities, {
@@ -564,18 +616,23 @@ export function createWsHandler(opts: WsRouteOptions): {
         }
 
         // Legacy handshake: connect
+        if (auth.kind === "scoped_node") {
+          ws.close(4001, "unauthorized");
+          return;
+        }
+
         const legacy = WsConnectRequest.safeParse(json);
         if (!legacy.success) {
           ws.close(4003, "expected connect request");
           return;
         }
 
-        if (upgradeClaims.token_kind === "device") {
+        if (claims?.token_kind === "device") {
           ws.close(4001, "unauthorized");
           return;
         }
 
-        clearTimeout(handshakeTimeout);
+        clearHandshakeTimeout();
         clientId = connectionManager.addClient(ws, legacy.data.payload.capabilities, {
           role: "client",
           protocolRev: 1,
@@ -648,7 +705,40 @@ export function createWsHandler(opts: WsRouteOptions): {
         .catch(() => {
           // ignore per-connection handler errors; caller may retry
         });
+    };
+
+    ws.on("message", (data) => {
+      const raw = rawDataToUtf8(data);
+      if (!authState) {
+        earlyMessageBytes += Buffer.byteLength(raw, "utf-8");
+        if (earlyMessages.length >= EARLY_MESSAGE_MAX_COUNT || earlyMessageBytes > EARLY_MESSAGE_MAX_BYTES) {
+          ws.close(4003, "handshake overflow");
+          return;
+        }
+        earlyMessages.push(raw);
+        return;
+      }
+      handleRawMessage(raw);
     });
+
+    if (authState) {
+      startHandshakeTimeout();
+      return;
+    }
+
+    void resolveAuth()
+      .then((resolved) => {
+        if (!resolved) {
+          ws.close(4001, "unauthorized");
+          return;
+        }
+        authState = resolved;
+        startHandshakeTimeout();
+        flushEarlyMessages();
+      })
+      .catch(() => {
+        ws.close(4001, "unauthorized");
+      });
   });
 
   function handleUpgrade(

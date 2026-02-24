@@ -41,6 +41,7 @@ import type {
   ActionPrimitive,
   ClientCapability,
   Approval as ApprovalT,
+  NodePairingRequest as NodePairingRequestT,
   WsEventEnvelope,
   WsRequestEnvelope,
   WsResponseEnvelope,
@@ -48,6 +49,7 @@ import type {
 } from "@tyrum/schemas";
 import type { ConnectedClient } from "./connection-manager.js";
 import type { ConnectionManager } from "./connection-manager.js";
+import { emitPairingApprovedEvent } from "./pairing-approved.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
 import type { ApprovalDal } from "../modules/approval/dal.js";
@@ -491,7 +493,8 @@ export async function handleClientMessage(
     };
 
     let pairingId: number;
-    let pairing: unknown;
+    let pairing: NodePairingRequestT | undefined;
+    let scopedToken: string | undefined;
 
     if (msg.type === "pairing.approve") {
       const parsedReq = WsPairingApproveRequest.safeParse(msg);
@@ -506,7 +509,7 @@ export async function handleClientMessage(
       }
 
       pairingId = parsedReq.data.payload.pairing_id;
-      pairing = await deps.nodePairingDal.resolve({
+      const resolved = await deps.nodePairingDal.resolve({
         pairingId,
         decision: "approved",
         reason: parsedReq.data.payload.reason,
@@ -514,6 +517,8 @@ export async function handleClientMessage(
         trustLevel: parsedReq.data.payload.trust_level,
         capabilityAllowlist: parsedReq.data.payload.capability_allowlist,
       });
+      pairing = resolved?.pairing;
+      scopedToken = resolved?.scopedToken;
     } else if (msg.type === "pairing.deny") {
       const parsedReq = WsPairingDenyRequest.safeParse(msg);
       if (!parsedReq.success) {
@@ -527,12 +532,13 @@ export async function handleClientMessage(
       }
 
       pairingId = parsedReq.data.payload.pairing_id;
-      pairing = await deps.nodePairingDal.resolve({
+      const resolved = await deps.nodePairingDal.resolve({
         pairingId,
         decision: "denied",
         reason: parsedReq.data.payload.reason,
         resolvedBy,
       });
+      pairing = resolved?.pairing;
     } else {
       const parsedReq = WsPairingRevokeRequest.safeParse(msg);
       if (!parsedReq.success) {
@@ -554,6 +560,10 @@ export async function handleClientMessage(
     }
 
     if (!pairing) return notFound(pairingId);
+
+    if (msg.type === "pairing.approve" && scopedToken) {
+      emitPairingApprovedEvent(deps, { pairing, nodeId: pairing.node.node_id, scopedToken });
+    }
     return ok(pairing);
   }
 

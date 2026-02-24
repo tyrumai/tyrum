@@ -6,6 +6,8 @@ import { Hono } from "hono";
 import type { NodePairingDal } from "../modules/node/pairing-dal.js";
 import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
+import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
+import { emitPairingApprovedEvent } from "../ws/pairing-approved.js";
 import { CapabilityDescriptor, NodePairingTrustLevel, type WsEventEnvelope } from "@tyrum/schemas";
 
 export interface PairingRouteDeps {
@@ -15,6 +17,7 @@ export interface PairingRouteDeps {
     cluster?: {
       edgeId: string;
       outboxDal: OutboxDal;
+      connectionDirectory: ConnectionDirectoryDal;
     };
   };
 }
@@ -88,7 +91,7 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
       );
     }
 
-    const pairing = await deps.nodePairingDal.resolve({
+    const resolved = await deps.nodePairingDal.resolve({
       pairingId: id,
       decision: "approved",
       reason,
@@ -100,8 +103,13 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
         user_agent: c.req.header("user-agent") ?? undefined,
       },
     });
-    if (!pairing) {
+    if (!resolved) {
       return c.json({ error: "not_found", message: "pairing not found or not pending" }, 404);
+    }
+    const { pairing, scopedToken } = resolved;
+
+    if (scopedToken && deps.ws) {
+      emitPairingApprovedEvent(deps.ws, { pairing, nodeId: pairing.node.node_id, scopedToken });
     }
 
     emitEvent(
@@ -124,7 +132,7 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
     }
     const body = (await c.req.json()) as { reason?: string };
 
-    const pairing = await deps.nodePairingDal.resolve({
+    const resolved = await deps.nodePairingDal.resolve({
       pairingId: id,
       decision: "denied",
       reason: typeof body.reason === "string" ? body.reason : undefined,
@@ -134,9 +142,10 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
         user_agent: c.req.header("user-agent") ?? undefined,
       },
     });
-    if (!pairing) {
+    if (!resolved) {
       return c.json({ error: "not_found", message: "pairing not found or not pending" }, 404);
     }
+    const { pairing } = resolved;
 
     emitEvent(
       deps,

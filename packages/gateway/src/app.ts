@@ -198,7 +198,10 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       ws: opts.connectionManager
         ? {
             connectionManager: opts.connectionManager,
-            cluster: opts.wsCluster,
+            cluster:
+              opts.wsCluster && opts.connectionDirectory
+                ? { ...opts.wsCluster, connectionDirectory: opts.connectionDirectory }
+                : undefined,
           }
         : undefined,
     }),

@@ -39,12 +39,12 @@ describe("NodePairingDal.upsertOnConnect", () => {
       nowIso: "2026-02-23T00:00:01.000Z",
     });
     expect(approved).toBeDefined();
-    expect(approved!.status).toBe("approved");
-    expect(approved!.trust_level).toBe("local");
-    expect(approved!.capability_allowlist).toEqual([cliDescriptor]);
+    expect(approved!.pairing.status).toBe("approved");
+    expect(approved!.pairing.trust_level).toBe("local");
+    expect(approved!.pairing.capability_allowlist).toEqual([cliDescriptor]);
 
     const revoked = await dal.revoke({
-      pairingId: approved!.pairing_id,
+      pairingId: approved!.pairing.pairing_id,
       reason: "revoked for test",
       resolvedBy: { kind: "test" },
       nowIso: "2026-02-23T00:00:02.000Z",
@@ -139,11 +139,11 @@ describe("NodePairingDal.upsertOnConnect", () => {
     });
 
     expect(approved).toBeDefined();
-    expect(approved!.status).toBe("approved");
-    expect(approved!.trust_level).toBe("remote");
-    expect(approved!.capability_allowlist).toEqual([]);
+    expect(approved!.pairing.status).toBe("approved");
+    expect(approved!.pairing.trust_level).toBe("remote");
+    expect(approved!.pairing.capability_allowlist).toEqual([]);
 
-    const approvedReloaded = await dal.getById(approved!.pairing_id);
+    const approvedReloaded = await dal.getById(approved!.pairing.pairing_id);
     expect(approvedReloaded).toBeDefined();
     expect(approvedReloaded!.capability_allowlist).toEqual([]);
   });
