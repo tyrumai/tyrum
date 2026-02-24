@@ -10,6 +10,8 @@ import {
   WsPingRequest,
   WsPlanUpdateEvent,
   WsRequest,
+  WsPluginLifecycleEvent,
+  WsPluginToolInvokedEvent,
   WsRequestEnvelope,
   WsResponseEnvelope,
   WsTaskExecuteRequest,
@@ -126,6 +128,54 @@ describe("WS envelopes", () => {
       payload: { ok: true },
     });
     expect(msg.type).toBe("something");
+  });
+
+  it("parses plugin.lifecycle event", () => {
+    const msg = WsPluginLifecycleEvent.parse({
+      event_id: "e-plugin-1",
+      type: "plugin.lifecycle",
+      occurred_at: "2026-02-19T12:00:00Z",
+      scope: { kind: "global" },
+      payload: {
+        kind: "loaded",
+        plugin: {
+          id: "echo",
+          name: "Echo",
+          version: "0.0.1",
+          source_kind: "workspace",
+          source_dir: "/tmp/plugins/echo",
+        },
+        audit: { plan_id: "gateway.plugins.lifecycle", step_index: 0, event_id: 12 },
+      },
+    });
+    expect(msg.payload.kind).toBe("loaded");
+    expect(msg.payload.plugin.id).toBe("echo");
+  });
+
+  it("parses plugin_tool.invoked event", () => {
+    const msg = WsPluginToolInvokedEvent.parse({
+      event_id: "e-plugin-tool-1",
+      type: "plugin_tool.invoked",
+      occurred_at: "2026-02-19T12:00:00Z",
+      scope: { kind: "agent", agent_id: "default" },
+      payload: {
+        plugin_id: "echo",
+        plugin_version: "0.0.1",
+        tool_id: "plugin.echo.echo",
+        tool_call_id: "call-1",
+        agent_id: "default",
+        workspace_id: "default",
+        session_id: "session-1",
+        channel: "local",
+        thread_id: "thread-1",
+        policy_snapshot_id: "550e8400-e29b-41d4-a716-446655440000",
+        outcome: "succeeded",
+        duration_ms: 12,
+        audit: { plan_id: "agent-turn-test", step_index: 1, event_id: 13 },
+      },
+    });
+    expect(msg.payload.tool_id).toBe("plugin.echo.echo");
+    expect(msg.payload.outcome).toBe("succeeded");
   });
 
   it("parses union message envelope", () => {
