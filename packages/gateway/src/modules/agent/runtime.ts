@@ -922,6 +922,35 @@ function looksLikeSecretText(text: string): boolean {
   return false;
 }
 
+function redactSecretLikeText(text: string): string {
+  let next = text;
+  if (next.length === 0) return next;
+
+  // Secret handle references ("secret:<handle_id>") should not be sent to providers.
+  next = next.replace(/\bsecret:[A-Za-z0-9][A-Za-z0-9._-]*\b/g, "secret:[REDACTED]");
+  // Common provider token formats.
+  next = next.replace(/\bsk-[A-Za-z0-9]{20,}\b/g, "[REDACTED]");
+  next = next.replace(/\bgh[pousr]_[A-Za-z0-9]{20,}\b/g, "[REDACTED]");
+  next = next.replace(/\bgithub_pat_[A-Za-z0-9_]{20,}\b/g, "[REDACTED]");
+  next = next.replace(/\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g, "[REDACTED]");
+  next = next.replace(/\b(AKIA|ASIA)[0-9A-Z]{16}\b/g, "[REDACTED]");
+  next = next.replace(/\bBearer\s+[A-Za-z0-9._-]{20,}\b/g, "Bearer [REDACTED]");
+
+  // Private key blocks can span multiple lines.
+  next = next.replace(
+    /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/gi,
+    "[REDACTED_PRIVATE_KEY]",
+  );
+
+  // Generic key/value patterns.
+  next = next.replace(
+    /\b(password|passwd|pwd|api_key|apikey|token)\s*[:=]\s*\S{8,}/gi,
+    "$1: [REDACTED]",
+  );
+
+  return next;
+}
+
 function isSideEffectingPluginTool(tool: ToolDescriptor): boolean {
   const id = tool.id.trim();
   return id.startsWith("plugin.") && tool.requires_confirmation;
@@ -1583,7 +1612,7 @@ export class AgentRuntime {
   ): string {
     const lines = droppedTurns.map((turn) => {
       const role = turn.role === "assistant" ? "Assistant" : "User";
-      return `${role} (${turn.timestamp}): ${turn.content.trim()}`;
+      return `${role} (${turn.timestamp}): ${redactSecretLikeText(turn.content.trim())}`;
     });
 
     return [
@@ -1623,8 +1652,14 @@ export class AgentRuntime {
         return DEFAULT_PRE_COMPACTION_FLUSH_TIMEOUT_MS;
       }
       const slice = Math.floor(totalTimeoutMs * 0.1);
-      return Math.max(250, Math.min(DEFAULT_PRE_COMPACTION_FLUSH_TIMEOUT_MS, slice));
+      if (slice <= 0) {
+        return 0;
+      }
+      return Math.min(DEFAULT_PRE_COMPACTION_FLUSH_TIMEOUT_MS, slice);
     })();
+    if (flushTimeoutMs <= 0) {
+      return;
+    }
 
     try {
       const flushResult = await generateText({
