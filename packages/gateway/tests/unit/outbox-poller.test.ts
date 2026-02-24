@@ -506,7 +506,7 @@ describe("OutboxPoller", () => {
     expect(wsNode.send).toHaveBeenCalledTimes(0);
   });
 
-  it("fails closed when ws.broadcast audience is present but invalid", async () => {
+  it("treats empty ws.broadcast audience as no constraints", async () => {
     const connectionManager = new ConnectionManager();
 
     const wsAdmin = createMockWs();
@@ -564,6 +564,90 @@ describe("OutboxPoller", () => {
             audience: {
               roles: [],
               required_scopes: [],
+            },
+          },
+          created_at: nowIso,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    const ackConsumerCursor = vi.fn(async () => undefined);
+    const outboxDal = {
+      poll,
+      ackConsumerCursor,
+    } as unknown as import("../../src/modules/backplane/outbox-dal.js").OutboxDal;
+
+    const poller = new OutboxPoller({
+      consumerId: "edge-a",
+      outboxDal,
+      connectionManager,
+    });
+
+    await poller.tick();
+
+    expect(ackConsumerCursor).toHaveBeenCalledWith("edge-a", 1);
+    expect(wsAdmin.send).toHaveBeenCalledTimes(1);
+    expect(wsReadOnly.send).toHaveBeenCalledTimes(1);
+    expect(wsNode.send).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails closed when ws.broadcast audience is malformed", async () => {
+    const connectionManager = new ConnectionManager();
+
+    const wsAdmin = createMockWs();
+    connectionManager.addClient(wsAdmin as never, ["cli"] as never, {
+      id: "client-admin",
+      role: "client",
+      protocolRev: 2,
+      authClaims: {
+        token_kind: "device",
+        role: "client",
+        scopes: ["operator.admin"],
+      },
+    });
+
+    const wsReadOnly = createMockWs();
+    connectionManager.addClient(wsReadOnly as never, ["cli"] as never, {
+      id: "client-readonly",
+      role: "client",
+      protocolRev: 2,
+      authClaims: {
+        token_kind: "device",
+        role: "client",
+        scopes: ["operator.read"],
+      },
+    });
+
+    const wsNode = createMockWs();
+    connectionManager.addClient(wsNode as never, ["cli"] as never, {
+      id: "node-1",
+      role: "node",
+      protocolRev: 2,
+      authClaims: {
+        token_kind: "device",
+        role: "node",
+        scopes: ["*"],
+      },
+    });
+
+    const nowIso = new Date().toISOString();
+    const poll = vi
+      .fn()
+      .mockResolvedValueOnce([
+        {
+          id: 1,
+          topic: "ws.broadcast",
+          target_edge_id: null,
+          payload: {
+            message: {
+              event_id: "evt-routing-1",
+              type: "routing.config.updated",
+              occurred_at: nowIso,
+              scope: { kind: "global" },
+              payload: { revision: 1, config: { v: 1 } },
+            },
+            audience: {
+              roles: ["client", "bogus"],
             },
           },
           created_at: nowIso,

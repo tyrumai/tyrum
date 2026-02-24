@@ -47,28 +47,38 @@ function parseDirectPayload(payload: unknown): { connection_id: string; message:
   return { connection_id: connectionId, message: message as WsEnvelope };
 }
 
-function parseBroadcastAudience(payload: unknown): WsBroadcastAudience | undefined {
-  if (!isObject(payload)) return undefined;
+function parseBroadcastAudience(payload: unknown): WsBroadcastAudience | undefined | null {
+  if (!isObject(payload)) return null;
 
-  const rolesRaw = payload["roles"];
-  const roles =
-    Array.isArray(rolesRaw) && rolesRaw.every((role) => role === "client" || role === "node")
-      ? (rolesRaw as WsBroadcastRole[])
-      : undefined;
+  const hasRolesKey = Object.prototype.hasOwnProperty.call(payload, "roles");
+  const hasRequiredScopesKey = Object.prototype.hasOwnProperty.call(payload, "required_scopes");
 
-  const requiredScopesRaw = payload["required_scopes"];
-  const requiredScopes =
-    Array.isArray(requiredScopesRaw) && requiredScopesRaw.every((scope) => typeof scope === "string")
-      ? normalizeScopes(requiredScopesRaw as string[])
-      : undefined;
+  let roles: WsBroadcastRole[] | undefined;
+  if (hasRolesKey) {
+    const rolesRaw = payload["roles"];
+    if (!Array.isArray(rolesRaw)) return null;
+    if (!rolesRaw.every((role) => role === "client" || role === "node")) return null;
+    roles = rolesRaw as WsBroadcastRole[];
+  }
 
-  if ((!roles || roles.length === 0) && (!requiredScopes || requiredScopes.length === 0)) {
+  let requiredScopes: string[] | undefined;
+  if (hasRequiredScopesKey) {
+    const requiredScopesRaw = payload["required_scopes"];
+    if (!Array.isArray(requiredScopesRaw) || requiredScopesRaw.some((scope) => typeof scope !== "string")) {
+      return null;
+    }
+    requiredScopes = normalizeScopes(requiredScopesRaw as string[]);
+  }
+
+  const rolesConstraints = roles && roles.length > 0 ? roles : undefined;
+  const scopeConstraints = requiredScopes && requiredScopes.length > 0 ? requiredScopes : undefined;
+  if (!rolesConstraints && !scopeConstraints) {
     return undefined;
   }
 
   return {
-    roles: roles && roles.length > 0 ? roles : undefined,
-    required_scopes: requiredScopes && requiredScopes.length > 0 ? requiredScopes : undefined,
+    roles: rolesConstraints,
+    required_scopes: scopeConstraints,
   };
 }
 
@@ -91,13 +101,13 @@ function parseBroadcastPayload(
     const skipLocal = payload["skip_local"];
     const hasAudienceKey = Object.prototype.hasOwnProperty.call(payload, "audience");
     const audience = hasAudienceKey ? parseBroadcastAudience(payload["audience"]) : undefined;
-    // Fail closed: malformed/empty audiences must not bypass the delivery filter.
-    if (hasAudienceKey && !audience) return undefined;
+    // Fail closed: malformed audiences must not bypass the delivery filter.
+    if (audience === null) return undefined;
     return {
       message: maybeMessage as WsEnvelope,
       source_edge_id: typeof sourceEdgeId === "string" ? sourceEdgeId : undefined,
       skip_local: typeof skipLocal === "boolean" ? skipLocal : undefined,
-      audience,
+      audience: audience ?? undefined,
     };
   }
 
