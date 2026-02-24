@@ -188,7 +188,7 @@ describe("AgentRuntime", () => {
     );
     expect(run).toBeTruthy();
     expect(run!.status).toBe("succeeded");
-    expect(run!.key.startsWith("agent:default:test:channel:")).toBe(true);
+    expect(run!.key).toBe("agent:default:test:default:channel:thread-1");
     expect(run!.lane).toBe("main");
 
     const step = await container.db.get<{ action_json: string }>(
@@ -350,6 +350,7 @@ describe("AgentRuntime", () => {
     const runtime = new AgentRuntime({
       container,
       home: homeDir,
+      workspaceId: "work",
       languageModel: createStubLanguageModel("ok"),
       fetchImpl: fetch404,
     });
@@ -364,7 +365,7 @@ describe("AgentRuntime", () => {
       "SELECT key FROM execution_runs ORDER BY rowid DESC LIMIT 1",
     );
     expect(run).toBeTruthy();
-    expect(run!.key).toBe("agent:default:test:channel:thread-1");
+    expect(run!.key).toBe("agent:default:test:work:channel:thread-1");
   });
 
   it("does not execute other agents' queued runs when ticking inline", async () => {
@@ -438,7 +439,7 @@ describe("AgentRuntime", () => {
         fetchImpl: fetch404,
       });
 
-      const key = "agent:default:test:channel:thread-1";
+      const key = "agent:default:test:default:channel:thread-1";
       await container.db.run(
         `INSERT INTO lane_leases (key, lane, lease_owner, lease_expires_at_ms)
          VALUES (?, 'main', 'other', ?)`,
@@ -490,7 +491,7 @@ describe("AgentRuntime", () => {
         turnEngineWaitMs: 50,
       } as ConstructorParameters<typeof AgentRuntime>[0]);
 
-      const key = "agent:default:test:channel:thread-1";
+      const key = "agent:default:test:default:channel:thread-1";
       await container.db.run(
         `INSERT INTO lane_leases (key, lane, lease_owner, lease_expires_at_ms)
          VALUES (?, 'main', 'other', ?)`,
@@ -965,7 +966,7 @@ describe("AgentRuntime", () => {
         runs = await container.db.all<{ run_id: string; status: string }>(
           `SELECT run_id, status
            FROM execution_runs
-           WHERE key = 'agent:default:test:channel:thread-1' AND lane = 'main'
+           WHERE key = 'agent:default:test:default:channel:thread-1' AND lane = 'main'
            ORDER BY rowid ASC`,
         );
         if (runs.length >= 2) break;

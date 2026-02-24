@@ -120,13 +120,19 @@ function encodeKeyPart(value: string): string {
 
 function buildAgentTurnKey(
   agentId: string,
+  workspaceId: string,
   channel: string,
   containerKind: NormalizedContainerKind,
   threadId: string,
+  deliveryAccount?: string,
 ): string {
   const safeChannel = encodeKeyPart(channel.trim());
   const safeThread = encodeKeyPart(threadId.trim());
-  return `agent:${agentId}:${safeChannel}:${containerKind}:${safeThread}`;
+  const rawAccount = deliveryAccount
+    ? `${workspaceId.trim()}~${deliveryAccount.trim()}`
+    : workspaceId.trim();
+  const safeAccount = encodeKeyPart(rawAccount);
+  return `agent:${agentId}:${safeChannel}:${safeAccount}:${containerKind}:${safeThread}`;
 }
 
 function resolveTurnRequestId(input: AgentTurnRequestT): string {
@@ -1438,9 +1444,11 @@ export class AgentRuntime {
       input.container_kind ?? resolvedInput.envelope?.container.kind ?? "channel";
     const key = buildAgentTurnKey(
       this.agentId,
+      this.workspaceId,
       resolvedInput.channel,
       containerKind,
       resolvedInput.thread_id,
+      resolvedInput.envelope?.delivery.account,
     );
     const lane = "main";
     const planId = `agent-turn-${this.agentId}-${randomUUID()}`;
