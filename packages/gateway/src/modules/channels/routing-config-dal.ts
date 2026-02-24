@@ -3,6 +3,7 @@ import { RoutingConfig as RoutingConfigSchema } from "@tyrum/schemas";
 import type { RoutingConfig as RoutingConfigT } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
 import { computeEventHash } from "../audit/hash-chain.js";
+import { isUniqueViolation } from "../../utils/sql-errors.js";
 
 export type RoutingConfig = RoutingConfigT;
 
@@ -75,17 +76,6 @@ function rowToRevision(row: RawRoutingConfigRow): RoutingConfigRevision {
 }
 
 const ROUTING_CONFIG_AUDIT_PLAN_ID = "routing.config";
-
-function isUniqueViolation(err: unknown): boolean {
-  if (err && typeof err === "object") {
-    const code = (err as { code?: unknown }).code;
-    if (code === "23505") return true; // Postgres unique_violation
-    if (typeof code === "string" && code.toUpperCase().startsWith("SQLITE_CONSTRAINT")) {
-      return true;
-    }
-  }
-  return false;
-}
 
 async function appendAuditEventNext(
   tx: SqlDb,

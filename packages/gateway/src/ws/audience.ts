@@ -1,5 +1,6 @@
 import { normalizeScopes } from "../modules/auth/token-store.js";
 import type { AuthTokenClaims } from "../modules/auth/token-store.js";
+import { hasAnyRequiredScope } from "../modules/auth/scopes.js";
 
 export { normalizeScopes };
 
@@ -8,13 +9,6 @@ export type WsBroadcastAudience = {
   roles?: WsBroadcastRole[];
   required_scopes?: string[];
 };
-
-function hasAnyRequiredScope(claims: AuthTokenClaims, requiredScopes: string[]): boolean {
-  if (requiredScopes.length === 0) return true;
-  const scopes = normalizeScopes(claims.scopes);
-  if (scopes.includes("*")) return true;
-  return requiredScopes.some((scope) => scopes.includes(scope));
-}
 
 export function shouldDeliverToWsAudience(
   client: { role: string; auth_claims?: AuthTokenClaims },
