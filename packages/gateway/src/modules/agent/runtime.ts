@@ -1433,17 +1433,25 @@ export class AgentRuntime {
   }
 
   private async turnViaExecutionEngine(input: AgentTurnRequestT): Promise<AgentTurnResponseT> {
-    const containerKind: NormalizedContainerKind = input.container_kind ?? "channel";
-    const key = buildAgentTurnKey(this.agentId, input.channel, containerKind, input.thread_id);
+    const resolvedInput = resolveAgentTurnInput(input);
+    const containerKind: NormalizedContainerKind =
+      input.container_kind ?? resolvedInput.envelope?.container.kind ?? "channel";
+    const key = buildAgentTurnKey(
+      this.agentId,
+      resolvedInput.channel,
+      containerKind,
+      resolvedInput.thread_id,
+    );
     const lane = "main";
     const planId = `agent-turn-${this.agentId}-${randomUUID()}`;
     const requestId = resolveTurnRequestId(input);
 
     const stepArgs: Record<string, unknown> = {
-      channel: input.channel,
-      thread_id: input.thread_id,
+      channel: resolvedInput.channel,
+      thread_id: resolvedInput.thread_id,
       container_kind: containerKind,
       message: input.message,
+      envelope: resolvedInput.envelope,
       agent_id: this.agentId,
       workspace_id: this.workspaceId,
     };
