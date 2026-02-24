@@ -107,7 +107,7 @@ export class ConnectionManager {
   }
 
   getDispatchedAttemptExecutor(attemptId: string): string | undefined {
-    return this.dispatchedAttemptExecutors.get(attemptId);
+    return this.dispatchedAttemptExecutors.get(attemptId.trim());
   }
 
   /** Replace the ready capabilities set for a connected peer. */
