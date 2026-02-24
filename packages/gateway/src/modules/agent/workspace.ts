@@ -10,6 +10,7 @@ import {
 import type {
   AgentConfig as AgentConfigT,
   IdentityPack as IdentityPackT,
+  SkillProvenanceSource as SkillProvenanceSourceT,
   SkillManifest as SkillManifestT,
   McpServerSpec as McpServerSpecT,
 } from "@tyrum/schemas";
@@ -23,7 +24,7 @@ import {
 } from "./home.js";
 import { parseFrontmatterDocument } from "./frontmatter.js";
 
-export type SkillProvenanceSource = "workspace" | "user" | "bundled";
+export type SkillProvenanceSource = SkillProvenanceSourceT;
 export type SkillProvenance = { source: SkillProvenanceSource; path: string };
 export type LoadedSkillManifest = SkillManifestT & { provenance: SkillProvenance };
 
