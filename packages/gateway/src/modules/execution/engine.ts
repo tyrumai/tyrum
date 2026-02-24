@@ -912,19 +912,19 @@ export class ExecutionEngine {
         [row.run_id],
       );
 
-    await this.emitRunUpdatedTx(tx, row.run_id);
-    const stepIds = await tx.all<{ step_id: string }>(
-      "SELECT step_id FROM execution_steps WHERE run_id = ? ORDER BY step_index ASC",
-      [row.run_id],
-    );
-    for (const step of stepIds) {
-      await this.emitStepUpdatedTx(tx, step.step_id);
-    }
+      await this.emitRunUpdatedTx(tx, row.run_id);
+      const stepIds = await tx.all<{ step_id: string }>(
+        "SELECT step_id FROM execution_steps WHERE run_id = ? ORDER BY step_index ASC",
+        [row.run_id],
+      );
+      for (const step of stepIds) {
+        await this.emitStepUpdatedTx(tx, step.step_id);
+      }
 
-    await this.emitRunResumedTx(tx, row.run_id);
+      await this.emitRunResumedTx(tx, row.run_id);
 
-    return row.run_id;
-  });
+      return row.run_id;
+    });
 }
 
   async cancelRun(
