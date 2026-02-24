@@ -2192,10 +2192,10 @@ export class AgentRuntime {
         for (const pat of deny) {
           if (wildcardMatch(pat, toolId)) return false;
         }
-        for (const pat of allow) {
+        for (const pat of requireApproval) {
           if (wildcardMatch(pat, toolId)) return true;
         }
-        for (const pat of requireApproval) {
+        for (const pat of allow) {
           if (wildcardMatch(pat, toolId)) return true;
         }
         return false;
