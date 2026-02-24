@@ -74,4 +74,29 @@ describe("Channel inbound dedupe TTL", () => {
     expect(second.deduped).toBe(true);
     expect(second.row.inbox_id).toBe(first.row.inbox_id);
   });
+
+  it("dedupes concurrent enqueues for the same delivery key", async () => {
+    const input = {
+      source: "telegram",
+      thread_id: "chat-1",
+      message_id: "msg-1",
+      key: "agent:default:telegram:default:dm:chat-1",
+      lane: "main",
+      received_at_ms: 1_000,
+      payload: { message: "hello" },
+    };
+
+    const [a, b] = await Promise.all([inbox.enqueue(input), inbox.enqueue(input)]);
+
+    expect(a.row.inbox_id).toBe(b.row.inbox_id);
+    expect(a.deduped || b.deduped).toBe(true);
+
+    const rows = await db.all<{ inbox_id: number }>(
+      `SELECT inbox_id
+       FROM channel_inbox
+       WHERE source = ? AND thread_id = ? AND message_id = ?`,
+      [input.source, input.thread_id, input.message_id],
+    );
+    expect(rows).toHaveLength(1);
+  });
 });
