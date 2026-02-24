@@ -112,6 +112,15 @@ Replays happen in practice (restarts, takeovers, reconnect).
 
 If a peer is offline beyond the outbox retention window, it may miss incremental events; recovery MUST be possible by re-reading durable StateStore-backed state.
 
+### Implementation note (gateway defaults)
+
+The gateway enforces outbox retention by periodically pruning:
+
+- `outbox` rows older than `TYRUM_OUTBOX_RETENTION_MS` (default: 24 hours)
+- stale `outbox_consumers` rows on the same window
+
+Compaction runs on the `all` and `scheduler` gateway roles, with tick interval configurable via `TYRUM_OUTBOX_COMPACTION_TICK_MS` (default: 5 minutes).
+
 ## Safety and privacy
 
 - Outbox payloads SHOULD avoid embedding raw secret values (prefer secret handles and redaction).

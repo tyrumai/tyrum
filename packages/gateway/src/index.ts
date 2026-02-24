@@ -24,6 +24,7 @@ import { ArtifactLifecycleScheduler } from "./modules/artifact/lifecycle.js";
 import { WsNotifier } from "./modules/approval/notifier.js";
 import { OutboxDal } from "./modules/backplane/outbox-dal.js";
 import { ConnectionDirectoryDal } from "./modules/backplane/connection-directory.js";
+import { OutboxLifecycleScheduler } from "./modules/backplane/outbox-lifecycle.js";
 import { OutboxPoller } from "./modules/backplane/outbox-poller.js";
 import { ConnectionManager } from "./ws/connection-manager.js";
 import type { ProtocolDeps } from "./ws/protocol.js";
@@ -936,6 +937,14 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
           logger: container.logger,
         })
       : undefined;
+  const outboxLifecycleScheduler =
+    role === "all" || role === "scheduler"
+      ? new OutboxLifecycleScheduler({
+          db: container.db,
+          keepProcessAlive: role === "scheduler",
+          logger: container.logger,
+        })
+      : undefined;
 
   if (shouldRunEdge) {
     container.watcherProcessor.start();
@@ -945,6 +954,9 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   }
   if (artifactLifecycleScheduler) {
     artifactLifecycleScheduler.start();
+  }
+  if (outboxLifecycleScheduler) {
+    outboxLifecycleScheduler.start();
   }
 
   const otel = await maybeStartOtel({
@@ -1352,6 +1364,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     container.watcherProcessor.stop();
     watcherScheduler?.stop();
     artifactLifecycleScheduler?.stop();
+    outboxLifecycleScheduler?.stop();
     outboxPoller?.stop();
     telegramProcessor?.stop();
     container.modelsDev.stopBackgroundRefresh();
