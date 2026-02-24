@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { WebSocket } from "ws";
 import Database from "better-sqlite3";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -20,6 +21,29 @@ const GATEWAY_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
+}
+
+function authProtocols(token: string): string[] {
+  return [
+    "tyrum-v1",
+    `tyrum-auth.${Buffer.from(token, "utf-8").toString("base64url")}`,
+  ];
+}
+
+function waitForOpen(ws: WebSocket, timeoutMs = 5_000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (ws.readyState === WebSocket.OPEN) return resolve();
+
+    const timer = setTimeout(() => reject(new Error("open timeout")), timeoutMs);
+    ws.once("open", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+    ws.once("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
 }
 
 function pnpmCommand(): string {
@@ -274,6 +298,151 @@ describe("gateway startup process", () => {
             enabled: boolean;
           };
           expect(agentStatusBody.enabled).toBe(true);
+        } finally {
+          await stopChildProcess(child);
+          rmSync(tempRoot, { recursive: true, force: true });
+        }
+      } finally {
+        releaseBuildLock();
+      }
+    },
+  );
+
+  it(
+    "resumes agent tool-execution runs on denied approvals over WebSocket",
+    { timeout: 60_000 },
+    async () => {
+      const releaseBuildLock = acquireGatewayBuildLock();
+      try {
+        ensureGatewayBuild();
+
+        const port = await findAvailablePort();
+        const gatewayToken = "tyrum-test-token";
+        const tempRoot = mkdtempSync(join(tmpdir(), "tyrum-gateway-ws-approval-"));
+        const tyrumHome = join(tempRoot, ".tyrum");
+        mkdirSync(tyrumHome, { recursive: true });
+        const dbPath = join(tempRoot, "gateway.db");
+
+        let stdout = "";
+        let stderr = "";
+
+        const child = spawn(process.execPath, [GATEWAY_ENTRYPOINT, "start"], {
+          cwd: REPO_ROOT,
+          env: {
+            ...process.env,
+            GATEWAY_HOST: "127.0.0.1",
+            GATEWAY_PORT: String(port),
+            GATEWAY_DB_PATH: dbPath,
+            GATEWAY_MIGRATIONS_DIR,
+            GATEWAY_TOKEN: gatewayToken,
+            TYRUM_HOME: tyrumHome,
+            TYRUM_ROLE: "all",
+            TYRUM_ENGINE_API_ENABLED: "1",
+          },
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+
+        child.stdout.setEncoding("utf8");
+        child.stderr.setEncoding("utf8");
+        child.stdout.on("data", (chunk: string) => {
+          stdout += chunk;
+        });
+        child.stderr.on("data", (chunk: string) => {
+          stderr += chunk;
+        });
+
+        const output = () => `--- stdout ---\n${stdout}\n--- stderr ---\n${stderr}`;
+
+        try {
+          const healthUrl = `http://127.0.0.1:${port}/healthz`;
+          await waitForGatewayHealth(healthUrl, child, output);
+
+          const db = new Database(dbPath);
+          try {
+            db.pragma("journal_mode = WAL");
+            db.pragma("foreign_keys = ON");
+            db.pragma("busy_timeout = 5000");
+
+            const nowIso = new Date().toISOString();
+            const jobId = "job-ws-approval-test";
+            const runId = "run-ws-approval-test";
+            const resumeToken = "resume-ws-approval-test";
+            const key = "test:ws-approval";
+            const lane = "main";
+            const actionJson = JSON.stringify({ type: "Decide", args: {} });
+            const contextJson = JSON.stringify({ source: "agent-tool-execution" });
+
+            db.prepare(
+              `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
+               VALUES (?, ?, ?, 'queued', '{}')`,
+            ).run(jobId, key, lane);
+
+            db.prepare(
+              `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt, started_at, paused_reason, paused_detail)
+               VALUES (?, ?, ?, ?, 'paused', 1, ?, 'approval', 'waiting on approval')`,
+            ).run(runId, jobId, key, lane, nowIso);
+
+            db.prepare(
+              `INSERT INTO resume_tokens (token, run_id, created_at)
+               VALUES (?, ?, ?)`,
+            ).run(resumeToken, runId, nowIso);
+
+            const approvalInsert = db.prepare(
+              `INSERT INTO approvals (plan_id, step_index, prompt, context_json, expires_at, kind, agent_id, key, lane, run_id, resume_token)
+               VALUES ('plan-ws-approval-test', 0, 'test approval', ?, NULL, 'workflow_step', 'default', ?, ?, ?, ?)`,
+            ).run(contextJson, key, lane, runId, resumeToken);
+            const approvalId = Number(approvalInsert.lastInsertRowid);
+
+            db.prepare(
+              `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json, approval_id)
+               VALUES ('step-ws-approval-test', ?, 0, 'paused', ?, ?)`,
+            ).run(runId, actionJson, approvalId);
+
+            const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(gatewayToken));
+            try {
+              await waitForOpen(ws);
+              ws.send(
+                JSON.stringify({
+                  request_id: "r-1",
+                  type: "connect",
+                  payload: { capabilities: ["playwright"] },
+                }),
+              );
+              await delay(100);
+
+              ws.send(
+                JSON.stringify({
+                  request_id: `approval-${approvalId}`,
+                  type: "approval.request",
+                  ok: true,
+                  result: { approved: false, reason: "denied in ws test" },
+                }),
+              );
+
+              const deadline = Date.now() + 5_000;
+              let status: string | undefined;
+              let pausedReason: string | null | undefined;
+
+              while (Date.now() < deadline) {
+                const row = db.prepare("SELECT status, paused_reason FROM execution_runs WHERE run_id = ?").get(runId) as
+                  | { status?: string; paused_reason?: string | null }
+                  | undefined;
+                status = row?.status;
+                pausedReason = row?.paused_reason;
+                if (status && status !== "paused") break;
+                await delay(25);
+              }
+
+              expect(status).not.toBe("cancelled");
+              expect(pausedReason ?? null).toBeNull();
+            } finally {
+              if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+                ws.close();
+              }
+            }
+          } finally {
+            db.close();
+          }
         } finally {
           await stopChildProcess(child);
           rmSync(tempRoot, { recursive: true, force: true });

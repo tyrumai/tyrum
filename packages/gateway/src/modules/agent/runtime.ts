@@ -2158,7 +2158,6 @@ export class AgentRuntime {
       paused_reason: string | null;
       paused_detail: string | null;
     };
-
     const resolveIfTerminal = async (row: RunStatusRow): Promise<AgentTurnResponseT | undefined> => {
       if (row.status === "succeeded") {
         const persisted = await this.loadTurnResultFromRun(runId);
@@ -2320,7 +2319,15 @@ export class AgentRuntime {
 
     const ctx = coerceRecord(approval.context);
     const isAgentToolExecution = ctx?.["source"] === "agent-tool-execution";
-    const resumeToken = approval.resume_token;
+    const resumeToken = approval.resume_token?.trim();
+
+    if (approval.status === "approved" && !resumeToken) {
+      await this.executionEngine.cancelRun(
+        approval.run_id ?? runId,
+        approval.response_reason ?? "approved approval missing resume token",
+      );
+      return true;
+    }
 
     if (
       resumeToken &&

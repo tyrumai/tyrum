@@ -1066,10 +1066,20 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
           }
 
           try {
-            if (row.status === "approved" && row.resume_token) {
-              await protocolDeps.engine.resumeRun(row.resume_token);
-            } else if (row.status === "denied" && row.run_id) {
-              await protocolDeps.engine.cancelRun(row.run_id, row.response_reason ?? reason ?? "approval denied");
+            const isAgentToolExecution = isRecord(row.context) && row.context["source"] === "agent-tool-execution";
+            const resumeToken = row.resume_token?.trim();
+
+            if (row.status === "approved" && resumeToken) {
+              await protocolDeps.engine.resumeRun(resumeToken);
+            } else if (row.status === "denied") {
+              if (isAgentToolExecution && resumeToken) {
+                await protocolDeps.engine.resumeRun(resumeToken);
+              } else if (row.run_id) {
+                await protocolDeps.engine.cancelRun(
+                  row.run_id,
+                  row.response_reason ?? reason ?? "approval denied",
+                );
+              }
             }
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
