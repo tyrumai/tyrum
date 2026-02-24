@@ -408,6 +408,14 @@ export class TyrumClient {
     return [WS_BASE_PROTOCOL, `${WS_AUTH_PROTOCOL_PREFIX}${token}`];
   }
 
+  private destroyPinnedDispatcher(ws: WebSocket): void {
+    const anyWs = ws as unknown as { __tyrumDispatcher?: { destroy?: () => unknown } | null };
+    const dispatcher = anyWs.__tyrumDispatcher;
+    if (!dispatcher || typeof dispatcher.destroy !== "function") return;
+    anyWs.__tyrumDispatcher = null;
+    void Promise.resolve(dispatcher.destroy()).catch(() => {});
+  }
+
   private openSocket(): void {
     this.ready = false;
     this.clientId = null;
@@ -440,8 +448,12 @@ export class TyrumClient {
       throw new Error("tlsCertFingerprint256 is supported only in Node.js clients.");
     }
 
-    const undici = await import("undici");
-    const tls = await import("node:tls");
+    // Avoid static-bundler resolution of Node-only modules in browser builds.
+    const undiciSpecifier = "un" + "dici";
+    const tlsSpecifier = "node" + ":tls";
+
+    const undici = await import(undiciSpecifier);
+    const tls = await import(tlsSpecifier);
 
     const agent = new undici.Agent({
       connect: (opts, callback) => {
@@ -501,10 +513,12 @@ export class TyrumClient {
     });
 
     const WebSocketCtor = (globalThis as unknown as { WebSocket: new (...args: any[]) => WebSocket }).WebSocket;
-    return new WebSocketCtor(this.opts.url, {
+    const ws = new WebSocketCtor(this.opts.url, {
       protocols: this.buildProtocols(),
       dispatcher: agent,
     });
+    (ws as unknown as { __tyrumDispatcher?: unknown }).__tyrumDispatcher = agent;
+    return ws;
   }
 
   private async openSocketAttempt(attempt: number): Promise<void> {
@@ -514,14 +528,12 @@ export class TyrumClient {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.emitter.emit("transport_error", { message });
-      if (!this.intentionalClose && this.opts.reconnect) {
-        this.scheduleReconnect();
-      }
       return;
     }
 
     if (this.intentionalClose || attempt !== this.connectionAttempt) {
       ws.close(1000, "stale connect attempt");
+      this.destroyPinnedDispatcher(ws);
       return;
     }
 
@@ -548,6 +560,7 @@ export class TyrumClient {
       if (!this.intentionalClose && this.opts.reconnect) {
         this.scheduleReconnect();
       }
+      this.destroyPinnedDispatcher(ws);
     });
 
     // WebSocket errors surface as a close event; emit and await close to handle cleanup/reconnect.

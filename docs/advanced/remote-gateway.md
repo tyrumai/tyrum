@@ -62,6 +62,7 @@ Configure pinning:
 Notes:
 - Pinning is enforced only for `wss://` URLs.
 - Browser-based clients cannot enforce certificate pinning.
+- When pinning is configured, clients use **trust-by-fingerprint** (the pinned cert is accepted even if it is not CA-trusted); hostname validation still applies.
 
 ## Troubleshooting
 

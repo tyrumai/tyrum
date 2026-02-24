@@ -189,4 +189,30 @@ describe("TLS certificate pinning", () => {
     expect(err.message.toLowerCase()).toContain("fingerprint");
     expect(connectedSpy).not.toHaveBeenCalled();
   });
+
+  it("does not auto-reconnect on invalid tlsCertFingerprint256", async () => {
+    vi.useFakeTimers();
+    try {
+      const misconfigured = new TyrumClient({
+        url: "wss://localhost:8788/ws",
+        token: "test-token",
+        capabilities: [],
+        reconnect: true,
+        tlsCertFingerprint256: "not-a-fingerprint",
+      });
+
+      const transportError = new Promise<void>((resolve) => {
+        misconfigured.on("transport_error", () => resolve());
+      });
+
+      misconfigured.connect();
+      await transportError;
+
+      expect(vi.getTimerCount()).toBe(0);
+
+      misconfigured.disconnect();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
