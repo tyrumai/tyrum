@@ -257,7 +257,7 @@ export class PolicyService {
 
     let decision: Decision = "allow";
     for (const scope of params.secretScopes) {
-      decision = mostRestrictive(decision, evaluateDomain(secretsDomain, scope));
+      decision = mostRestrictiveDecision(decision, evaluateDomain(secretsDomain, scope));
     }
 
     const decisionRecord: PolicyDecisionT = {

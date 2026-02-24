@@ -673,6 +673,12 @@ describe("ExecutionEngine (normalized)", () => {
 
     const bundle = PolicyBundle.parse({
       v: 1,
+      tools: {
+        default: "deny",
+        allow: ["tool.exec"],
+        require_approval: [],
+        deny: [],
+      },
       secrets: {
         default: "deny",
         allow: ["env:MY_API_KEY"],
@@ -715,6 +721,7 @@ describe("ExecutionEngine (normalized)", () => {
     await drain(engine, "w1", executor);
 
     expect((executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(1);
+    expect(secretProvider.list).toHaveBeenCalled();
 
     const approvalCount = await db.get<{ n: number }>(
       "SELECT COUNT(*) AS n FROM approvals",
