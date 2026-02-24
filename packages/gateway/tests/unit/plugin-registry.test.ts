@@ -413,7 +413,7 @@ describe("PluginRegistry", () => {
     const audit = msg?.payload?.audit as
       | { plan_id: string; step_index: number; event_id: number }
       | undefined;
-    expect(audit?.plan_id).toBe("agent-turn-test");
+    expect(audit?.plan_id).toBe("gateway.plugins.tool_invoked:agent-turn-test");
 
     const auditRow = await container.db.get<{
       id: number;
@@ -431,6 +431,106 @@ describe("PluginRegistry", () => {
     expect(action?.tool_id).toBe("plugin.echo.echo");
     expect(action?.tool_call_id).toBe("call-1");
     expect(action?.plugin_id).toBe("echo");
+
+    await container.db.close();
+  });
+
+  it("does not steal step indices from planner append on shared plans", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
+    const pluginDir = join(home, "plugins/echo");
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(join(pluginDir, "plugin.yml"), pluginManifestYaml(), "utf-8");
+    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
+
+    const container = createContainer({
+      dbPath: ":memory:",
+      migrationsDir: SQLITE_MIGRATIONS_DIR,
+      tyrumHome: home,
+    });
+
+    const plugins = await PluginRegistry.load({
+      home,
+      logger: new Logger({ level: "silent" }),
+      container,
+    });
+
+    await plugins.executeTool({
+      toolId: "plugin.echo.echo",
+      toolCallId: "call-1",
+      args: { text: "hi" },
+      home,
+      agentId: "default",
+      workspaceId: "default",
+      auditPlanId: "agent-turn-test",
+    });
+
+    const plannerAppend = await container.eventLog.append({
+      replayId: "planner-replay-1",
+      planId: "agent-turn-test",
+      stepIndex: 0,
+      occurredAt: new Date().toISOString(),
+      action: { type: "planner.step" },
+    });
+    expect(plannerAppend.kind).toBe("inserted");
+
+    await container.db.close();
+  });
+
+  it("does not persist tool audit records when outbox insert fails", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
+    const pluginDir = join(home, "plugins/echo");
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(join(pluginDir, "plugin.yml"), pluginManifestYaml(), "utf-8");
+    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
+
+    const container = createContainer({
+      dbPath: ":memory:",
+      migrationsDir: SQLITE_MIGRATIONS_DIR,
+      tyrumHome: home,
+    });
+
+    const plugins = await PluginRegistry.load({
+      home,
+      logger: new Logger({ level: "silent" }),
+      container,
+    });
+
+    await container.db.exec("DROP TABLE outbox");
+
+    const auditBefore = await container.db.all<{ action: string }>(
+      "SELECT action FROM planner_events",
+    );
+    const invokedBefore = auditBefore.filter((row) => {
+      try {
+        return (JSON.parse(row.action) as { type?: unknown }).type === "plugin_tool.invoked";
+      } catch {
+        return false;
+      }
+    });
+    expect(invokedBefore.length).toBe(0);
+
+    const toolRes = await plugins.executeTool({
+      toolId: "plugin.echo.echo",
+      toolCallId: "call-1",
+      args: { text: "hi" },
+      home,
+      agentId: "default",
+      workspaceId: "default",
+      auditPlanId: "agent-turn-test",
+    });
+    expect(toolRes?.output).toBe("hi");
+
+    const auditAfter = await container.db.all<{ action: string }>(
+      "SELECT action FROM planner_events",
+    );
+    const invokedAfter = auditAfter.filter((row) => {
+      try {
+        return (JSON.parse(row.action) as { type?: unknown }).type === "plugin_tool.invoked";
+      } catch {
+        return false;
+      }
+    });
+    expect(invokedAfter.length).toBe(0);
 
     await container.db.close();
   });

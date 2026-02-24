@@ -17,6 +17,7 @@ import type { Logger } from "../observability/logger.js";
 import type { ToolDescriptor } from "../agent/tools.js";
 
 const PLUGIN_LIFECYCLE_AUDIT_PLAN_ID = "gateway.plugins.lifecycle";
+const PLUGIN_TOOL_INVOKED_AUDIT_PLAN_PREFIX = "gateway.plugins.tool_invoked";
 
 export type PluginCommandExecuteResult = {
   output: string;
@@ -1131,44 +1132,47 @@ export class PluginRegistry {
         error: params.error,
       };
 
-      const auditEvent = await container.eventLog.appendNext({
-        replayId: randomUUID(),
-        planId: PLUGIN_LIFECYCLE_AUDIT_PLAN_ID,
-        occurredAt,
-        action,
-      });
-
-      const evt: WsEventEnvelope = {
-        event_id: randomUUID(),
-        type: "plugin.lifecycle",
-        occurred_at: occurredAt,
-        scope: { kind: "global" },
-        payload: {
-          kind: params.kind,
-          plugin: {
-            id: params.plugin?.id,
-            name: params.plugin?.name,
-            version: params.plugin?.version,
-            source_kind: params.sourceKind,
-            source_dir: params.sourceDir,
-            tools_count: params.toolsCount,
-            commands_count: params.commandsCount,
-            router: params.router,
-          },
-          reason: params.reason,
-          error: params.error,
-          audit: {
-            plan_id: PLUGIN_LIFECYCLE_AUDIT_PLAN_ID,
-            step_index: auditEvent.stepIndex,
-            event_id: auditEvent.id,
-          },
+      await container.eventLog.appendNext(
+        {
+          replayId: randomUUID(),
+          planId: PLUGIN_LIFECYCLE_AUDIT_PLAN_ID,
+          occurredAt,
+          action,
         },
-      };
+        async (tx, auditEvent) => {
+          const evt: WsEventEnvelope = {
+            event_id: randomUUID(),
+            type: "plugin.lifecycle",
+            occurred_at: occurredAt,
+            scope: { kind: "global" },
+            payload: {
+              kind: params.kind,
+              plugin: {
+                id: params.plugin?.id,
+                name: params.plugin?.name,
+                version: params.plugin?.version,
+                source_kind: params.sourceKind,
+                source_dir: params.sourceDir,
+                tools_count: params.toolsCount,
+                commands_count: params.commandsCount,
+                router: params.router,
+              },
+              reason: params.reason,
+              error: params.error,
+              audit: {
+                plan_id: PLUGIN_LIFECYCLE_AUDIT_PLAN_ID,
+                step_index: auditEvent.stepIndex,
+                event_id: auditEvent.id,
+              },
+            },
+          };
 
-      await container.db.run(
-        `INSERT INTO outbox (topic, target_edge_id, payload_json)
-         VALUES (?, ?, ?)`,
-        ["ws.broadcast", null, JSON.stringify({ message: evt })],
+          await tx.run(
+            `INSERT INTO outbox (topic, target_edge_id, payload_json)
+             VALUES (?, ?, ?)`,
+            ["ws.broadcast", null, JSON.stringify({ message: evt })],
+          );
+        },
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -1199,10 +1203,11 @@ export class PluginRegistry {
     durationMs: number;
   }): Promise<void> {
     const container = this.opts.container;
-    const auditPlanId = params.auditPlanId?.trim();
-    if (!container || !auditPlanId) return;
+    const sourcePlanId = params.auditPlanId?.trim();
+    if (!container || !sourcePlanId) return;
 
     try {
+      const auditPlanId = `${PLUGIN_TOOL_INVOKED_AUDIT_PLAN_PREFIX}:${sourcePlanId}`;
       const occurredAt = new Date().toISOString();
       const action = {
         type: "plugin_tool.invoked",
@@ -1221,44 +1226,47 @@ export class PluginRegistry {
         error: params.error,
       };
 
-      const auditEvent = await container.eventLog.appendNext({
-        replayId: randomUUID(),
-        planId: auditPlanId,
-        occurredAt,
-        action,
-      });
-
-      const evt: WsEventEnvelope = {
-        event_id: randomUUID(),
-        type: "plugin_tool.invoked",
-        occurred_at: occurredAt,
-        scope: { kind: "agent", agent_id: params.agentId },
-        payload: {
-          plugin_id: params.pluginId,
-          plugin_version: params.pluginVersion,
-          tool_id: params.toolId,
-          tool_call_id: params.toolCallId,
-          agent_id: params.agentId,
-          workspace_id: params.workspaceId,
-          session_id: params.sessionId,
-          channel: params.channel,
-          thread_id: params.threadId,
-          policy_snapshot_id: params.policySnapshotId,
-          outcome: params.outcome,
-          duration_ms: params.durationMs,
-          error: params.error,
-          audit: {
-            plan_id: auditPlanId,
-            step_index: auditEvent.stepIndex,
-            event_id: auditEvent.id,
-          },
+      await container.eventLog.appendNext(
+        {
+          replayId: randomUUID(),
+          planId: auditPlanId,
+          occurredAt,
+          action,
         },
-      };
+        async (tx, auditEvent) => {
+          const evt: WsEventEnvelope = {
+            event_id: randomUUID(),
+            type: "plugin_tool.invoked",
+            occurred_at: occurredAt,
+            scope: { kind: "agent", agent_id: params.agentId },
+            payload: {
+              plugin_id: params.pluginId,
+              plugin_version: params.pluginVersion,
+              tool_id: params.toolId,
+              tool_call_id: params.toolCallId,
+              agent_id: params.agentId,
+              workspace_id: params.workspaceId,
+              session_id: params.sessionId,
+              channel: params.channel,
+              thread_id: params.threadId,
+              policy_snapshot_id: params.policySnapshotId,
+              outcome: params.outcome,
+              duration_ms: params.durationMs,
+              error: params.error,
+              audit: {
+                plan_id: auditPlanId,
+                step_index: auditEvent.stepIndex,
+                event_id: auditEvent.id,
+              },
+            },
+          };
 
-      await container.db.run(
-        `INSERT INTO outbox (topic, target_edge_id, payload_json)
-         VALUES (?, ?, ?)`,
-        ["ws.broadcast", null, JSON.stringify({ message: evt })],
+          await tx.run(
+            `INSERT INTO outbox (topic, target_edge_id, payload_json)
+             VALUES (?, ?, ?)`,
+            ["ws.broadcast", null, JSON.stringify({ message: evt })],
+          );
+        },
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -1266,7 +1274,8 @@ export class PluginRegistry {
         plugin_id: params.pluginId,
         tool_id: params.toolId,
         tool_call_id: params.toolCallId,
-        plan_id: auditPlanId,
+        plan_id: sourcePlanId,
+        audit_plan_id: `${PLUGIN_TOOL_INVOKED_AUDIT_PLAN_PREFIX}:${sourcePlanId}`,
         error: message,
       });
     }

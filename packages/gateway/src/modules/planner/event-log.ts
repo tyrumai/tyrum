@@ -157,7 +157,10 @@ export class EventLog {
    * Useful for audit streams that aren't naturally indexed by an existing
    * step counter (for example lifecycle event streams).
    */
-  async appendNext(event: Omit<NewPlannerEvent, "stepIndex">): Promise<PersistedPlannerEvent> {
+  async appendNext(
+    event: Omit<NewPlannerEvent, "stepIndex">,
+    afterInsert?: (tx: SqlDb, persisted: PersistedPlannerEvent) => Promise<void>,
+  ): Promise<PersistedPlannerEvent> {
     const action = this.redactionEngine
       ? this.redactionEngine.redactUnknown(event.action).redacted
       : event.action;
@@ -213,6 +216,7 @@ export class EventLog {
             step_index: stepIndex,
             row_id: persisted.id,
           });
+          await afterInsert?.(tx, persisted);
           return persisted;
         });
       } catch (err) {
