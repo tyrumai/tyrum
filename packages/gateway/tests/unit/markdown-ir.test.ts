@@ -169,6 +169,15 @@ describe("markdownToIr", () => {
     });
   });
 
+  it("does not insert phantom separators for empty list items", () => {
+    expect(markdownToIr("- \n- two")).toEqual({
+      text: "two",
+      spans: [
+        { kind: "block", block: "list_item", ordered: false, depth: 0, start: 0, end: 3 },
+      ],
+    });
+  });
+
   it("captures ordered list items as block spans", () => {
     expect(markdownToIr("1. one\n2. two")).toEqual({
       text: "one\ntwo",
@@ -186,6 +195,16 @@ describe("markdownToIr", () => {
         { kind: "block", block: "paragraph", start: 0, end: 4 },
         { kind: "style", style: "bold", start: 0, end: 4 },
         { kind: "style", style: "inline_code", start: 0, end: 4 },
+      ],
+    });
+  });
+
+  it("does not insert phantom separators for empty fenced code blocks", () => {
+    expect(markdownToIr("before\n\n```\n```\n\nafter")).toEqual({
+      text: "before\n\nafter",
+      spans: [
+        { kind: "block", block: "paragraph", start: 0, end: 6 },
+        { kind: "block", block: "paragraph", start: 8, end: 13 },
       ],
     });
   });

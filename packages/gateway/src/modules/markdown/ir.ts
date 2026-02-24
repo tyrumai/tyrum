@@ -338,24 +338,34 @@ export function markdownToIr(markdown: string): MarkdownIr {
   const input = normalizeLineEndings(markdown ?? "");
   let text = "";
   const spans: MarkdownIrSpan[] = [];
+  let prevEmittedKind: MarkdownBlock["kind"] | undefined;
 
   for (const block of scanBlocks(input)) {
-    text += block.sepBefore;
-    const start = text.length;
+    const separator =
+      prevEmittedKind === undefined
+        ? ""
+        : prevEmittedKind === "list_item" && block.kind === "list_item" && block.sepBefore === "\n"
+          ? "\n"
+          : "\n\n";
 
     if (block.kind === "code_block") {
+      if (block.code.length === 0) continue;
+      text += separator;
+      const start = text.length;
       text += block.code;
       const end = text.length;
-      if (end > start) {
-        spans.push({ kind: "block", block: "code_block", language: block.language, start, end });
-      }
+      spans.push({ kind: "block", block: "code_block", language: block.language, start, end });
+      prevEmittedKind = block.kind;
       continue;
     }
 
     const inline = parseInlineMarkdown(block.raw);
+    if (inline.text.length === 0) continue;
+
+    text += separator;
+    const start = text.length;
     text += inline.text;
     const end = text.length;
-    if (end <= start) continue;
 
     if (block.kind === "list_item") {
       spans.push({
@@ -376,6 +386,7 @@ export function markdownToIr(markdown: string): MarkdownIr {
     for (const span of inline.spans) {
       spans.push({ ...span, start: span.start + start, end: span.end + start });
     }
+    prevEmittedKind = block.kind;
   }
 
   if (text.length === 0) return { text: "", spans: [] };
