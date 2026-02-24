@@ -34,6 +34,19 @@ describe("DesktopNodeConfig schema", () => {
     expect(parsed.capabilities.http).toBe(false);
   });
 
+  it("defaults remote.tlsCertFingerprint256 to empty string", () => {
+    const parsed = DesktopNodeConfig.parse({});
+    expect((parsed.remote as any).tlsCertFingerprint256).toBe("");
+  });
+
+  it("accepts remote.tlsCertFingerprint256", () => {
+    const parsed = DesktopNodeConfig.parse({
+      mode: "remote",
+      remote: { tlsCertFingerprint256: "AA:BB" },
+    } as any);
+    expect((parsed.remote as any).tlsCertFingerprint256).toBe("AA:BB");
+  });
+
   it("rejects invalid mode", () => {
     const result = DesktopNodeConfig.safeParse({ mode: "invalid" });
     expect(result.success).toBe(false);

@@ -132,9 +132,13 @@ export class NodeRuntime {
     const capabilities = this.getEnabledCapabilities();
 
     const device = this.ensureDeviceIdentity();
+    const tlsCertFingerprint256Raw =
+      this.config.mode === "remote" ? this.config.remote.tlsCertFingerprint256.trim() : "";
+    const tlsCertFingerprint256 = tlsCertFingerprint256Raw.length > 0 ? tlsCertFingerprint256Raw : undefined;
     this.client = new TyrumClient({
       url: wsUrl,
       token,
+      tlsCertFingerprint256,
       capabilities,
       useDeviceProof: Boolean(device),
       role: device ? "node" : "client",
@@ -181,6 +185,14 @@ export class NodeRuntime {
       this.callbacks.onLog({
         level: "error",
         message: `Gateway error: ${msg.payload.message}`,
+        timestamp: new Date().toISOString(),
+      });
+    });
+
+    this.client.on("transport_error", (msg) => {
+      this.callbacks.onLog({
+        level: "error",
+        message: `Transport error: ${msg.message}`,
         timestamp: new Date().toISOString(),
       });
     });
