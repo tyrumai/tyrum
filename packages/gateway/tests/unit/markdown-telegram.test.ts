@@ -59,4 +59,14 @@ describe("renderMarkdownForTelegram", () => {
       expect(residual.includes("&")).toBe(false);
     }
   });
+
+  it("renders invalid-link fallback suffix outside adjacent formatting spans", () => {
+    const chunks = renderMarkdownForTelegram("[label](ftp://example)*after*");
+    expect(chunks).toEqual(["label (ftp://example)<i>after</i>"]);
+  });
+
+  it("renders empty-link markdown without an empty parentheses suffix", () => {
+    const chunks = renderMarkdownForTelegram("[label]()");
+    expect(chunks).toEqual(["label"]);
+  });
 });

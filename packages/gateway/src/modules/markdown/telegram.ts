@@ -171,13 +171,13 @@ function renderInlineRangeToTelegramHtml(
     }
 
     const href = span.href.trim();
-    if (href.length === 0 || !isAllowedHref(href)) {
-      const labelSuffix = ` (${escapeTelegramHtmlText(href)})`;
-      if (labelSuffix.trim().length > 0) {
-        const bucket = suffixes.get(span.end) ?? [];
-        bucket.push(labelSuffix);
-        suffixes.set(span.end, bucket);
-      }
+    if (href.length === 0) {
+      continue;
+    }
+    if (!isAllowedHref(href)) {
+      const bucket = suffixes.get(span.end) ?? [];
+      bucket.push(` (${escapeTelegramHtmlText(href)})`);
+      suffixes.set(span.end, bucket);
       continue;
     }
 
@@ -224,14 +224,14 @@ function renderInlineRangeToTelegramHtml(
       for (const span of closes) out += closeInlineTag(span);
     }
 
-    const opens = opensByIndex.get(i);
-    if (opens) {
-      for (const span of opens) out += openInlineTag(span);
-    }
-
     const suffix = suffixes.get(i);
     if (suffix) {
       for (const part of suffix) out += part;
+    }
+
+    const opens = opensByIndex.get(i);
+    if (opens) {
+      for (const span of opens) out += openInlineTag(span);
     }
 
     out += escapeTelegramHtmlText(ir.text[i]!);
