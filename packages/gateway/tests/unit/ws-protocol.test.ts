@@ -489,6 +489,97 @@ describe("handleClientMessage", () => {
     }
   });
 
+  it("accepts attempt.evidence when executor metadata is missing but the node was dispatched", async () => {
+    const db = openTestSqliteDb();
+    try {
+      const cm = new ConnectionManager();
+      const { id: nodeConnId } = makeClient(cm, ["cli"], {
+        role: "node",
+        deviceId: "dev_test",
+        protocolRev: 2,
+      });
+      const { ws: operatorWs } = makeClient(cm, ["cli"], { protocolRev: 2 });
+      const node = cm.getClient(nodeConnId)!;
+
+      await db.run(
+        `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
+         VALUES (?, ?, ?, ?, ?)`,
+        ["job-1", "agent:default", "default", "running", "{}"],
+      );
+      await db.run(
+        `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        ["550e8400-e29b-41d4-a716-446655440000", "job-1", "agent:default", "default", "running", 1],
+      );
+      await db.run(
+        `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
+         VALUES (?, ?, ?, ?, ?)`,
+        [
+          "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+          "550e8400-e29b-41d4-a716-446655440000",
+          0,
+          "running",
+          JSON.stringify({ type: "CLI", args: { command: "echo hi" } }),
+        ],
+      );
+      await db.run(
+        `INSERT INTO execution_attempts (attempt_id, step_id, attempt, status, metadata_json)
+         VALUES (?, ?, ?, ?, ?)`,
+        [
+          "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+          "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+          1,
+          "running",
+          null,
+        ],
+      );
+
+      cm.recordDispatchedAttemptExecutor(
+        "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+        "dev_test",
+      );
+
+      const deps = makeDeps(cm, {
+        db,
+        nodePairingDal: {
+          getByNodeId: async () => ({ status: "approved" }) as never,
+        } as never,
+      });
+
+      const result = await handleClientMessage(
+        node,
+        JSON.stringify({
+          request_id: "r-attempt-evidence-1",
+          type: "attempt.evidence",
+          payload: {
+            run_id: "550e8400-e29b-41d4-a716-446655440000",
+            step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+            attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+            evidence: { http: { status: 200 } },
+          },
+        }),
+        deps,
+      );
+
+      expect(result).toBeDefined();
+      expect((result as unknown as { ok: boolean }).ok).toBe(true);
+      expect((result as unknown as { type: string }).type).toBe("attempt.evidence");
+
+      const frames = operatorWs.send.mock.calls.map((call) => JSON.parse(call[0] as string)) as Array<
+        Record<string, unknown>
+      >;
+      expect(
+        frames.some(
+          (msg) =>
+            msg["type"] === "attempt.evidence" &&
+            (msg["payload"] as { node_id?: string } | undefined)?.node_id === "dev_test",
+        ),
+      ).toBe(true);
+    } finally {
+      await db.close();
+    }
+  });
+
   it("dispatches approval.request decision to callback", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
@@ -1239,6 +1330,7 @@ describe("dispatchTask", () => {
     );
     expect(taskId).toMatch(/^task-[0-9a-f-]{36}$/);
     expect(nodeWs.send).toHaveBeenCalledOnce();
+    expect(cm.getDispatchedAttemptExecutor("0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e")).toBe("dev_test");
   });
 
   it("persists execution attempt executor metadata when dispatching to a node", async () => {

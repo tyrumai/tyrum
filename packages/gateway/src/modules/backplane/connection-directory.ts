@@ -51,11 +51,9 @@ function toRow(raw: RawConnectionDirectoryRow): ConnectionDirectoryRow {
       const parsed = JSON.parse(raw.ready_capabilities_json) as unknown;
       if (Array.isArray(parsed)) {
         readyCapabilities = parsed.filter((v): v is ClientCapability => typeof v === "string") as ClientCapability[];
-      } else {
-        readyCapabilities = [];
       }
     } catch {
-      readyCapabilities = [];
+      // leave undefined so callers fall back to advertised capabilities
     }
   }
   const role = raw.role === "node" ? "node" : "client";

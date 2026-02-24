@@ -860,7 +860,19 @@ export async function handleClientMessage(
       }
     }
 
-    if (!dispatchedNodeId || dispatchedNodeId !== nodeId) {
+    if (!dispatchedNodeId) {
+      dispatchedNodeId = deps.connectionManager.getDispatchedAttemptExecutor(payload.attempt_id);
+      if (!dispatchedNodeId) {
+        return errorResponse(
+          msg.request_id,
+          msg.type,
+          "invalid_state",
+          "attempt executor metadata missing; evidence cannot be authorized",
+        );
+      }
+    }
+
+    if (dispatchedNodeId !== nodeId) {
       return errorResponse(
         msg.request_id,
         msg.type,
@@ -1520,6 +1532,10 @@ export function dispatchTask(
       trace: selected.role === "node" ? trace : undefined,
     };
     selected.ws.send(JSON.stringify(message));
+    if (selected.role === "node") {
+      const dispatchedNodeId = selected.device_id ?? selected.id;
+      deps.connectionManager.recordDispatchedAttemptExecutor(scope.attemptId, dispatchedNodeId);
+    }
     return requestId;
   })();
 }

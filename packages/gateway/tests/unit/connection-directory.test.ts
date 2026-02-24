@@ -72,4 +72,42 @@ describe("ConnectionDirectoryDal", () => {
     expect(rows[0]!.capabilities).toEqual(["cli"]);
     expect(rows[0]!.ready_capabilities).toEqual(["cli"]);
   });
+
+  it("treats malformed readiness as ready=capabilities (rolling upgrade safe)", async () => {
+    const dir = setup();
+    const now = 1_000_000;
+
+    // Simulate a corrupted readiness payload; should fall back to advertised capabilities.
+    await db!.run(
+      `INSERT INTO connection_directory (
+         connection_id,
+         edge_id,
+         role,
+         protocol_rev,
+         device_id,
+         capabilities_json,
+         ready_capabilities_json,
+         connected_at_ms,
+         last_seen_at_ms,
+         expires_at_ms
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        "c-node-1",
+        "edge-a",
+        "node",
+        2,
+        "dev_test",
+        JSON.stringify(["cli"]),
+        "{ not valid json",
+        now,
+        now,
+        now + 5_000,
+      ],
+    );
+
+    const rows = await dir.listNonExpired(now);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.capabilities).toEqual(["cli"]);
+    expect(rows[0]!.ready_capabilities).toEqual(["cli"]);
+  });
 });

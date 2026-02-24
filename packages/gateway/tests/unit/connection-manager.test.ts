@@ -125,6 +125,15 @@ describe("ConnectionManager", () => {
     });
   });
 
+  it("normalizes dispatched attempt ids for lookup", () => {
+    const cm = new ConnectionManager();
+
+    cm.recordDispatchedAttemptExecutor("attempt-1", "dev_test");
+
+    expect(cm.getDispatchedAttemptExecutor("attempt-1")).toBe("dev_test");
+    expect(cm.getDispatchedAttemptExecutor("  attempt-1  ")).toBe("dev_test");
+  });
+
   describe("heartbeat", () => {
     it("sends WebSocket ping control frames to all connected clients", () => {
       const cm = new ConnectionManager();

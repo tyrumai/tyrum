@@ -43,6 +43,7 @@ const HEARTBEAT_TIMEOUT_MS = 10_000;
 
 export class ConnectionManager {
   private readonly clients = new Map<string, ConnectedClient>();
+  private readonly dispatchedAttemptExecutors = new Map<string, string>();
 
   /**
    * Register a new client after a successful `connect` handshake.
@@ -79,6 +80,34 @@ export class ConnectionManager {
     });
     this.clients.set(id, client);
     return id;
+  }
+
+  /**
+   * Record which node was dispatched as the executor for an attempt.
+   *
+   * This is a best-effort, in-memory cache used as a fallback when attempt
+   * executor metadata cannot be persisted to the DB.
+   */
+  recordDispatchedAttemptExecutor(attemptId: string, nodeId: string): void {
+    const normalizedAttemptId = attemptId.trim();
+    const normalizedNodeId = nodeId.trim();
+    if (normalizedAttemptId.length === 0) return;
+    if (normalizedNodeId.length === 0) return;
+
+    // Refresh insertion order for simple eviction.
+    this.dispatchedAttemptExecutors.delete(normalizedAttemptId);
+    this.dispatchedAttemptExecutors.set(normalizedAttemptId, normalizedNodeId);
+
+    const maxEntries = 10_000;
+    while (this.dispatchedAttemptExecutors.size > maxEntries) {
+      const oldest = this.dispatchedAttemptExecutors.keys().next().value as string | undefined;
+      if (!oldest) break;
+      this.dispatchedAttemptExecutors.delete(oldest);
+    }
+  }
+
+  getDispatchedAttemptExecutor(attemptId: string): string | undefined {
+    return this.dispatchedAttemptExecutors.get(attemptId.trim());
   }
 
   /** Replace the ready capabilities set for a connected peer. */
