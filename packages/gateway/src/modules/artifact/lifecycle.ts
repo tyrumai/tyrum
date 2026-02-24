@@ -147,6 +147,10 @@ function whereNullableEquals(column: string, value: string | null): { clause: st
   return { clause: `${column} = ?`, params: [value] };
 }
 
+function normalizedSensitivitySql(column: string): string {
+  return `CASE WHEN LOWER(TRIM(${column})) = 'sensitive' THEN 'sensitive' ELSE 'normal' END`;
+}
+
 export class ArtifactLifecycleScheduler {
   private readonly db: SqlDb;
   private readonly artifactStore: ArtifactStore;
@@ -278,7 +282,7 @@ export class ArtifactLifecycleScheduler {
       kind: string;
       sensitivity: string;
     }>(
-      `SELECT DISTINCT workspace_id, agent_id, kind, sensitivity
+      `SELECT DISTINCT workspace_id, agent_id, kind, ${normalizedSensitivitySql("sensitivity")} AS sensitivity
        FROM execution_artifacts
        WHERE bytes_deleted_at IS NULL`,
     );
@@ -314,23 +318,23 @@ export class ArtifactLifecycleScheduler {
   ): Promise<number | undefined> {
     const agent = whereNullableEquals("agent_id", bucket.agent_id);
 
-    const snapshots = await this.db.all<{ policy_snapshot_id: string | null }>(
-      `SELECT DISTINCT policy_snapshot_id
+    const row = await this.db.get<{ policy_snapshot_id: string }>(
+      `SELECT policy_snapshot_id
        FROM execution_artifacts
        WHERE bytes_deleted_at IS NULL
          AND workspace_id = ?
          AND kind = ?
-         AND sensitivity = ?
-         AND ${agent.clause}`,
+         AND ${normalizedSensitivitySql("sensitivity")} = ?
+         AND policy_snapshot_id IS NOT NULL
+         AND ${agent.clause}
+       ORDER BY created_at DESC, artifact_id DESC
+       LIMIT 1`,
       [bucket.workspace_id, bucket.kind, bucket.sensitivity, ...agent.params],
     );
 
-    const maxes: Array<number | undefined> = [];
-    for (const row of snapshots) {
-      const bundle = await this.bundleForSnapshot(bundleCache, row.policy_snapshot_id);
-      maxes.push(resolveQuotaMaxBytes(bundle, bucket.kind, bucket.sensitivity));
-    }
-    return minPositive(maxes);
+    if (!row?.policy_snapshot_id) return undefined;
+    const bundle = await this.bundleForSnapshot(bundleCache, row.policy_snapshot_id);
+    return resolveQuotaMaxBytes(bundle, bucket.kind, bucket.sensitivity);
   }
 
   private async sumBucketBytes(bucket: BucketKey): Promise<number> {
@@ -341,7 +345,7 @@ export class ArtifactLifecycleScheduler {
        WHERE bytes_deleted_at IS NULL
          AND workspace_id = ?
          AND kind = ?
-         AND sensitivity = ?
+         AND ${normalizedSensitivitySql("sensitivity")} = ?
          AND ${agent.clause}`,
       [bucket.workspace_id, bucket.kind, bucket.sensitivity, ...agent.params],
     );
@@ -356,7 +360,7 @@ export class ArtifactLifecycleScheduler {
        WHERE bytes_deleted_at IS NULL
          AND workspace_id = ?
          AND kind = ?
-         AND sensitivity = ?
+         AND ${normalizedSensitivitySql("sensitivity")} = ?
          AND ${agent.clause}
        ORDER BY created_at ASC, artifact_id ASC`,
       [bucket.workspace_id, bucket.kind, bucket.sensitivity, ...agent.params],
