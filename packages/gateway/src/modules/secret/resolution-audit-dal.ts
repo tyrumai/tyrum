@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { SecretProviderKind, WsEventEnvelope } from "@tyrum/schemas";
 import type { Logger } from "../observability/logger.js";
 import type { SqlDb } from "../../statestore/types.js";
+import { enqueueWsBroadcastMessage } from "../../ws/outbox.js";
 
 export type SecretResolutionOutcome = "resolved" | "failed";
 
@@ -63,14 +64,6 @@ function toRow(raw: RawSecretResolutionRow): SecretResolutionRow {
     error: raw.error,
     occurred_at: normalizeTime(raw.occurred_at),
   };
-}
-
-async function enqueueWsEvent(db: SqlDb, evt: WsEventEnvelope): Promise<void> {
-  await db.run(
-    `INSERT INTO outbox (topic, target_edge_id, payload_json)
-     VALUES (?, ?, ?)`,
-    ["ws.broadcast", null, JSON.stringify({ message: evt })],
-  );
 }
 
 export class SecretResolutionAuditDal {
@@ -166,7 +159,7 @@ export class SecretResolutionAuditDal {
             },
           },
         };
-        await enqueueWsEvent(this.db, evt);
+        await enqueueWsBroadcastMessage(this.db, evt);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         this.logger?.warn("secret.resolution_emit_failed", {

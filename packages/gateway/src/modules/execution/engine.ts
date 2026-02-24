@@ -37,6 +37,7 @@ import {
 import type { SecretProvider } from "../secret/provider.js";
 import { collectSecretHandleIds } from "../secret/collect-secret-handle-ids.js";
 import { releaseLaneLease } from "../lanes/lane-lease.js";
+import { enqueueWsBroadcastMessage } from "../../ws/outbox.js";
 
 export interface StepResult {
   success: boolean;
@@ -327,11 +328,7 @@ export class ExecutionEngine {
 
   private async enqueueWsMessage(tx: SqlDb, message: WsEventEnvelopeT | WsRequestEnvelopeT): Promise<void> {
     if (!this.eventsEnabled) return;
-    await tx.run(
-      `INSERT INTO outbox (topic, target_edge_id, payload_json)
-       VALUES (?, ?, ?)`,
-      ["ws.broadcast", null, JSON.stringify({ message })],
-    );
+    await enqueueWsBroadcastMessage(tx, message);
   }
 
   private async enqueueWsEvent(tx: SqlDb, evt: WsEventEnvelopeT): Promise<void> {

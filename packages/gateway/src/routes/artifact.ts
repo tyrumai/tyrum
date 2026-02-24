@@ -11,6 +11,7 @@ import type { Logger } from "../modules/observability/logger.js";
 import type { PolicySnapshotDal } from "../modules/policy/snapshot-dal.js";
 import type { PolicyService } from "../modules/policy/service.js";
 import type { SqlDb } from "../statestore/types.js";
+import { enqueueWsBroadcastMessage } from "../ws/outbox.js";
 
 export interface ArtifactRouteDeps {
   db: SqlDb;
@@ -124,14 +125,6 @@ function synthArtifactRefFromRow(row: ExecutionArtifactRow): ArtifactRefT {
     created_at: new Date().toISOString(),
     labels: [],
   };
-}
-
-async function enqueueWsEvent(db: SqlDb, evt: WsEventEnvelope): Promise<void> {
-  await db.run(
-    `INSERT INTO outbox (topic, target_edge_id, payload_json)
-     VALUES (?, ?, ?)`,
-    ["ws.broadcast", null, JSON.stringify({ message: evt })],
-  );
 }
 
 function requestIdForAudit(c: { req: { header(name: string): string | undefined }; res: { headers: Headers } }): string | undefined {
@@ -399,7 +392,7 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
             },
           },
         };
-        await enqueueWsEvent(deps.db, evt);
+        await enqueueWsBroadcastMessage(deps.db, evt);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         deps.logger?.warn("artifact.fetched_emit_failed", {
@@ -440,7 +433,7 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
           },
         },
       };
-      await enqueueWsEvent(deps.db, evt);
+      await enqueueWsBroadcastMessage(deps.db, evt);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       deps.logger?.warn("artifact.fetched_emit_failed", {
