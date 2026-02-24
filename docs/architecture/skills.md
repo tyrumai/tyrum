@@ -29,4 +29,7 @@ Skills are discoverable and installable from a curated catalog.
 Workspace skill loading is gated by agent configuration:
 
 - Set `skills.workspace_trusted: true` in `agent.yml` (under `TYRUM_HOME`) to allow loading skills from the workspace skills directory.
+- This is a behavior change from the historical “workspace always wins” load order; set `workspace_trusted: true` to restore workspace overrides for a given `TYRUM_HOME`.
 - Operator clients can display provenance via `GET /agent/status` (`skills_detailed[].source`) and show whether workspace skills are trusted (`workspace_skills_trusted`).
+
+Security note: treat `workspace_trusted: true` as a workspace trust decision. Do not point `TYRUM_HOME` at an unreviewed checkout and expect skills to remain untrusted.
