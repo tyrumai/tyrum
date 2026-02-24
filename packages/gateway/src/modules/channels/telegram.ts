@@ -665,6 +665,7 @@ export class TelegramChannelProcessor {
       received_at_ms_gte: windowStart,
       received_at_ms_lte: windowEnd,
       limit: Math.max(0, this.maxBatch - 1),
+      queue_mode: "collect",
     });
 
     const ids = extra.map((r) => r.inbox_id);

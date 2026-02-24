@@ -10,8 +10,10 @@ function makeNormalizedTextMessage(input: {
   threadId: string;
   messageId: string;
   text: string;
+  accountId?: string;
 }): NormalizedThreadMessage {
   const nowIso = new Date().toISOString();
+  const accountId = input.accountId ?? "default";
   return {
     thread: {
       id: input.threadId,
@@ -36,7 +38,7 @@ function makeNormalizedTextMessage(input: {
       envelope: {
         message_id: input.messageId,
         received_at: nowIso,
-        delivery: { channel: "telegram", account: "default" },
+        delivery: { channel: "telegram", account: accountId },
         container: { kind: "dm", id: input.threadId },
         sender: { id: "peer-1", display: "peer" },
         content: { text: input.text, attachments: [] },
@@ -223,6 +225,53 @@ describe("Channel inbox queue overflow policies", () => {
       ["synthetic", "queued"],
       ["msg-3", "queued"],
     ]);
+  });
+
+  it("summarize_dropped derives delivery identity from the dropped rows", async () => {
+    process.env["TYRUM_CHANNEL_INBOUND_QUEUE_CAP"] = "2";
+    process.env["TYRUM_CHANNEL_INBOUND_QUEUE_OVERFLOW"] = "summarize_dropped";
+
+    const key = "agent:default:telegram:work:dm:chat-1";
+
+    await inbox.enqueue({
+      source: "telegram:work",
+      thread_id: "chat-1",
+      message_id: "msg-1",
+      key,
+      lane: "main",
+      received_at_ms: 1_000,
+      payload: makeNormalizedTextMessage({ threadId: "chat-1", messageId: "msg-1", text: "one", accountId: "work" }),
+    });
+
+    await inbox.enqueue({
+      source: "telegram:work",
+      thread_id: "chat-1",
+      message_id: "msg-2",
+      key,
+      lane: "main",
+      received_at_ms: 2_000,
+      payload: makeNormalizedTextMessage({ threadId: "chat-1", messageId: "msg-2", text: "two", accountId: "work" }),
+    });
+
+    await inbox.enqueue({
+      source: "telegram:work",
+      thread_id: "chat-1",
+      message_id: "msg-3",
+      key,
+      lane: "main",
+      received_at_ms: 3_000,
+      payload: makeNormalizedTextMessage({ threadId: "chat-1", messageId: "msg-3", text: "three", accountId: "work" }),
+    });
+
+    const rows = await db.all<{ message_id: string; payload_json: string }>(
+      "SELECT message_id, payload_json FROM channel_inbox ORDER BY received_at_ms ASC, inbox_id ASC",
+    );
+    const synthetic = rows.find((row) => row.message_id.startsWith("queue_overflow:"));
+    expect(synthetic).toBeTruthy();
+
+    const payload = JSON.parse(synthetic!.payload_json) as { message?: { envelope?: { delivery?: { channel?: string; account?: string } } } };
+    expect(payload.message?.envelope?.delivery?.channel).toBe("telegram");
+    expect(payload.message?.envelope?.delivery?.account).toBe("work");
   });
 
   it("emits a WS event when overflow occurs (telegram queue)", async () => {

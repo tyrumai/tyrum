@@ -414,6 +414,14 @@ async function applyInboundQueueOverflowPolicy(tx: SqlDb, input: {
   const syntheticMessageId = `queue_overflow:${randomUUID()}`;
   const basePayload = rows.length > 0 ? safeJsonParse(rows[0]!.payload_json, {}) : {};
   const parsedBase = NormalizedThreadMessageSchema.safeParse(basePayload);
+  const summarySource = rows[0]?.source ?? "telegram";
+  const summaryAddress = (() => {
+    try {
+      return parseChannelSourceKey(summarySource);
+    } catch {
+      return { connector: "telegram", accountId: DEFAULT_CHANNEL_ACCOUNT_ID };
+    }
+  })();
   const fallbackThreadId = rows[0]?.thread_id ?? input.key;
   const thread = parsedBase.success
     ? parsedBase.data.thread
@@ -431,7 +439,7 @@ async function applyInboundQueueOverflowPolicy(tx: SqlDb, input: {
     message: {
       id: syntheticMessageId,
       thread_id: thread.id,
-      source: "telegram",
+      source: parsedBase.success ? parsedBase.data.message.source : "telegram",
       content: { kind: "text", text: summaryText },
       sender: {
         id: "system",
@@ -444,7 +452,7 @@ async function applyInboundQueueOverflowPolicy(tx: SqlDb, input: {
       envelope: {
         message_id: syntheticMessageId,
         received_at: createdIso,
-        delivery: { channel: "telegram", account: "default" },
+        delivery: { channel: summaryAddress.connector, account: summaryAddress.accountId },
         container: { kind: containerKind, id: thread.id },
         sender: { id: "system", display: "Tyrum" },
         content: { text: summaryText, attachments: [] },
@@ -840,8 +848,12 @@ export class ChannelInboxDal {
     received_at_ms_gte: number;
     received_at_ms_lte: number;
     limit: number;
+    queue_mode?: string;
   }): Promise<ChannelInboxRow[]> {
     if (input.limit <= 0) return [];
+    const queueMode = input.queue_mode?.trim();
+    const queueModeClause = queueMode ? " AND queue_mode = ?" : "";
+    const queueModeArgs = queueMode ? [queueMode] : [];
     const rows = await this.db.all<RawChannelInboxRow>(
       `SELECT *
        FROM channel_inbox
@@ -850,6 +862,7 @@ export class ChannelInboxDal {
          AND lane = ?
          AND received_at_ms >= ?
          AND received_at_ms <= ?
+         ${queueModeClause}
        ORDER BY received_at_ms ASC, inbox_id ASC
        LIMIT ?`,
       [
@@ -857,6 +870,7 @@ export class ChannelInboxDal {
         input.lane,
         input.received_at_ms_gte,
         input.received_at_ms_lte,
+        ...queueModeArgs,
         Math.max(1, input.limit),
       ],
     );
