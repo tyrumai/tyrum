@@ -310,6 +310,38 @@ describe("missing slash commands", () => {
     expect(row?.queue_mode).toBe("interrupt");
   });
 
+  it("supports /queue using channel/thread context (resolves key + lane)", async () => {
+    db = openTestSqliteDb();
+
+    const key = "agent:default:telegram:default:dm:chat-1";
+    const lane = "main";
+
+    await db.run(
+      `INSERT INTO channel_inbox (
+         source,
+         thread_id,
+         message_id,
+         key,
+         lane,
+         received_at_ms,
+         payload_json,
+         status
+       ) VALUES (?, ?, ?, ?, ?, ?, '{}', 'completed')`,
+      ["telegram", "chat-1", "msg-1", key, lane, 1_000],
+    );
+
+    const result = await executeCommand("/queue interrupt", {
+      db,
+      commandContext: { channel: "telegram", threadId: "chat-1" },
+    });
+
+    expect(result.data).toMatchObject({
+      key,
+      lane,
+      queue_mode: "interrupt",
+    });
+  });
+
   it("supports /queue (show)", async () => {
     db = openTestSqliteDb();
 
@@ -371,5 +403,32 @@ describe("missing slash commands", () => {
       [key],
     );
     expect(afterClear).toBeUndefined();
+  });
+
+  it("supports /send using channel/thread context (resolves key)", async () => {
+    db = openTestSqliteDb();
+
+    const key = "agent:default:telegram:default:dm:chat-1";
+
+    await db.run(
+      `INSERT INTO channel_inbox (
+         source,
+         thread_id,
+         message_id,
+         key,
+         lane,
+         received_at_ms,
+         payload_json,
+         status
+       ) VALUES (?, ?, ?, ?, 'main', ?, '{}', 'completed')`,
+      ["telegram", "chat-1", "msg-1", key, 1_000],
+    );
+
+    const result = await executeCommand("/send off", {
+      db,
+      commandContext: { channel: "telegram", threadId: "chat-1" },
+    });
+
+    expect(result.data).toMatchObject({ key, send_policy: "off" });
   });
 });

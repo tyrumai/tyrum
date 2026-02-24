@@ -80,6 +80,28 @@ type UsageTotals = {
   usd_micros: number;
 };
 
+async function resolveKeyLane(db: SqlDb, ctx: CommandDeps["commandContext"] | undefined): Promise<{ key: string; lane: string } | undefined> {
+  const key = ctx?.key?.trim();
+  const lane = ctx?.lane?.trim() || "main";
+  if (key) return { key, lane };
+
+  const channel = ctx?.channel?.trim();
+  const threadId = ctx?.threadId?.trim();
+  if (!channel || !threadId) return undefined;
+
+  const row = await db.get<{ key: string; lane: string }>(
+    `SELECT key, lane
+     FROM channel_inbox
+     WHERE thread_id = ?
+       AND (source = ? OR source LIKE ?)
+     ORDER BY received_at_ms DESC, inbox_id DESC
+     LIMIT 1`,
+    [threadId, channel, `${channel}:%`],
+  );
+  if (!row?.key) return undefined;
+  return { key: row.key, lane: row.lane };
+}
+
 function addOptional(total: number, value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? total + value : total;
 }
@@ -500,12 +522,11 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
       return { output: "Queue mode overrides are not available on this gateway instance.", data: null };
     }
 
-    const ctx = deps.commandContext;
-    const key = ctx?.key?.trim();
-    const lane = ctx?.lane?.trim() || "main";
-    if (!key) {
-      return { output: "Usage: /queue <collect|followup|steer|steer_backlog|interrupt> (requires key + lane context)", data: null };
+    const resolved = await resolveKeyLane(deps.db, deps.commandContext);
+    if (!resolved) {
+      return { output: "Usage: /queue <collect|followup|steer|steer_backlog|interrupt> (requires key or channel/thread context)", data: null };
     }
+    const { key, lane } = resolved;
 
     const dal = new LaneQueueModeOverrideDal(deps.db);
     const modeArg = toks[1]?.trim().toLowerCase();
@@ -535,11 +556,11 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
       return { output: "Send policy overrides are not available on this gateway instance.", data: null };
     }
 
-    const ctx = deps.commandContext;
-    const key = ctx?.key?.trim();
-    if (!key) {
-      return { output: "Usage: /send <on|off|inherit> (requires key context)", data: null };
+    const resolved = await resolveKeyLane(deps.db, deps.commandContext);
+    if (!resolved?.key) {
+      return { output: "Usage: /send <on|off|inherit> (requires key or channel/thread context)", data: null };
     }
+    const { key } = resolved;
 
     const dal = new SessionSendPolicyOverrideDal(deps.db);
     const arg = toks[1]?.trim().toLowerCase();
