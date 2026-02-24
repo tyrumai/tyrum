@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
+import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
 import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { LaneQueueSignalDal } from "../../src/modules/lanes/queue-signal-dal.js";
 import { simulateReadableStream } from "ai";
@@ -96,7 +97,7 @@ describe("AgentRuntime", () => {
     expect(result.used_tools).toEqual([]);
   }, 10_000);
 
-  it("clears unclaimed lane interrupt signals before the next turn's first tool boundary", async () => {
+  it("clears lane interrupt signals when the lane lease is released", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({
       dbPath: ":memory:",
@@ -127,7 +128,14 @@ describe("AgentRuntime", () => {
 
     const key = "agent:default:test:thread-1";
     const lane = "main";
+    const leaseOwner = "test-owner";
     const nowMs = Date.now();
+
+    await container.db.run(
+      `INSERT INTO lane_leases (key, lane, lease_owner, lease_expires_at_ms)
+       VALUES (?, ?, ?, ?)`,
+      [key, lane, leaseOwner, nowMs + 60_000],
+    );
 
     const signals = new LaneQueueSignalDal(container.db);
     await signals.setSignal({
@@ -158,7 +166,27 @@ describe("AgentRuntime", () => {
       "SELECT COUNT(*) AS n FROM lane_queue_signals WHERE key = ? AND lane = ?",
       [key, lane],
     );
-    expect(remaining?.n).toBe(0);
+    expect(remaining?.n).toBe(1);
+
+    await container.db.transaction(async (tx) => {
+      const res = await tx.run(
+        `DELETE FROM lane_leases
+         WHERE key = ? AND lane = ? AND lease_owner = ?`,
+        [key, lane, leaseOwner],
+      );
+      if (res.changes === 1) {
+        await tx.run(
+          "DELETE FROM lane_queue_signals WHERE key = ? AND lane = ?",
+          [key, lane],
+        );
+      }
+    });
+
+    const afterRelease = await container.db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM lane_queue_signals WHERE key = ? AND lane = ?",
+      [key, lane],
+    );
+    expect(afterRelease?.n).toBe(0);
 
     const usage = () => ({
       inputTokens: {
@@ -219,6 +247,168 @@ describe("AgentRuntime", () => {
 
     expect(res2.reply).toBe("done");
     expect(res2.used_tools).toContain("tool.fs.read");
+  }, 10_000);
+
+  it("does not clear unclaimed steer signals mid-run (so they can be claimed at a later tool boundary)", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    await writeFile(join(homeDir, "notes.txt"), "important notes", "utf-8");
+    await writeFile(
+      join(homeDir, "agent.yml"),
+      [
+        "model:",
+        "  model: openai/gpt-4.1",
+        "skills:",
+        "  enabled: []",
+        "mcp:",
+        "  enabled: []",
+        "tools:",
+        "  allow:",
+        "    - tool.fs.read",
+        "sessions:",
+        "  ttl_days: 30",
+        "  max_turns: 20",
+        "memory:",
+        "  markdown_enabled: false",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const key = "agent:default:test:thread-1";
+    const lane = "main";
+    const leaseOwner = "test-owner";
+    const nowMs = Date.now();
+
+    await container.db.run(
+      `INSERT INTO lane_leases (key, lane, lease_owner, lease_expires_at_ms)
+       VALUES (?, ?, ?, ?)`,
+      [key, lane, leaseOwner, nowMs + 60_000],
+    );
+
+    const inbox = new ChannelInboxDal(container.db);
+    const { row: steerInbox } = await inbox.enqueue({
+      source: "telegram",
+      thread_id: "thread-1",
+      message_id: "steer-1",
+      key,
+      lane,
+      queue_mode: "steer",
+      received_at_ms: nowMs,
+      payload: {},
+    });
+
+    const signals = new LaneQueueSignalDal(container.db);
+    await signals.setSignal({
+      key,
+      lane,
+      kind: "steer",
+      inbox_id: steerInbox.inbox_id,
+      queue_mode: "steer",
+      message_text: "use plan B",
+      created_at_ms: nowMs,
+    });
+
+    const runtime1 = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("hello"),
+      fetchImpl: fetch404,
+    });
+
+    await runtime1.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      message: "hello",
+      metadata: { tyrum_key: key, lane },
+    });
+
+    const signalStillThere = await container.db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM lane_queue_signals WHERE key = ? AND lane = ?",
+      [key, lane],
+    );
+    expect(signalStillThere?.n).toBe(1);
+
+    const inboxQueued = await container.db.get<{ status: string }>(
+      "SELECT status FROM channel_inbox WHERE inbox_id = ?",
+      [steerInbox.inbox_id],
+    );
+    expect(inboxQueued?.status).toBe("queued");
+
+    const usage = () => ({
+      inputTokens: {
+        total: 10,
+        noCache: 10,
+        cacheRead: undefined,
+        cacheWrite: undefined,
+      },
+      outputTokens: {
+        total: 5,
+        text: 5,
+        reasoning: undefined,
+      },
+    });
+
+    let callCount = 0;
+    const toolLoopModel = new MockLanguageModelV3({
+      doGenerate: async () => {
+        callCount += 1;
+        if (callCount === 1) {
+          return {
+            content: [
+              {
+                type: "tool-call" as const,
+                toolCallId: "tc-1",
+                toolName: "tool.fs.read",
+                input: JSON.stringify({ path: "notes.txt" }),
+              },
+            ],
+            finishReason: { unified: "tool-calls" as const, raw: undefined },
+            usage: usage(),
+            warnings: [],
+          };
+        }
+
+        return {
+          content: [{ type: "text" as const, text: "done" }],
+          finishReason: { unified: "stop" as const, raw: undefined },
+          usage: usage(),
+          warnings: [],
+        };
+      },
+    });
+
+    const runtime2 = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: toolLoopModel,
+      fetchImpl: fetch404,
+    });
+
+    const res2 = await runtime2.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      message: "read notes",
+      metadata: { tyrum_key: key, lane },
+    });
+
+    expect(res2.reply).toBe("done");
+    expect(res2.used_tools).not.toContain("tool.fs.read");
+
+    const signalConsumed = await container.db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM lane_queue_signals WHERE key = ? AND lane = ?",
+      [key, lane],
+    );
+    expect(signalConsumed?.n).toBe(0);
+
+    const inboxCompleted = await container.db.get<{ status: string }>(
+      "SELECT status FROM channel_inbox WHERE inbox_id = ?",
+      [steerInbox.inbox_id],
+    );
+    expect(inboxCompleted?.status).toBe("completed");
   }, 10_000);
 
   it("reports system prompt section char counts as string lengths", async () => {

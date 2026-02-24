@@ -1495,26 +1495,11 @@ export class AgentRuntime {
       },
     });
 
-    const finalize = async (): Promise<AgentTurnResponseT> => {
-      const result = await streamResult;
-      const reply = (await result.text) || "No assistant response returned.";
-      try {
-        return await this.finalizeTurn(ctx, session, resolved, reply, usedTools, contextReport);
-      } finally {
-        if (laneQueue) {
-          try {
-            await laneQueue.signals.clearSignal(laneQueue.scope);
-          } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            this.opts.container.logger.warn("lane_queue.signal_cleanup_failed", {
-              key: laneQueue.scope.key,
-              lane: laneQueue.scope.lane,
-              error: message,
-            });
-          }
-        }
-      }
-    };
+	    const finalize = async (): Promise<AgentTurnResponseT> => {
+	      const result = await streamResult;
+	      const reply = (await result.text) || "No assistant response returned.";
+	      return await this.finalizeTurn(ctx, session, resolved, reply, usedTools, contextReport);
+	    };
 
     return { streamResult, sessionId: session.session_id, finalize };
   }
@@ -1568,24 +1553,9 @@ export class AgentRuntime {
       timeout: opts?.timeoutMs,
     });
 
-    const reply = result.text || "No assistant response returned.";
-    try {
-      return await this.finalizeTurn(ctx, session, resolved, reply, usedTools, contextReport);
-    } finally {
-      if (laneQueue) {
-        try {
-          await laneQueue.signals.clearSignal(laneQueue.scope);
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          this.opts.container.logger.warn("lane_queue.signal_cleanup_failed", {
-            key: laneQueue.scope.key,
-            lane: laneQueue.scope.lane,
-            error: message,
-          });
-        }
-      }
-    }
-  }
+	    const reply = result.text || "No assistant response returned.";
+	    return await this.finalizeTurn(ctx, session, resolved, reply, usedTools, contextReport);
+	  }
 
   private async turnViaExecutionEngine(input: AgentTurnRequestT): Promise<AgentTurnResponseT> {
     const resolvedInput = resolveAgentTurnInput(input);
