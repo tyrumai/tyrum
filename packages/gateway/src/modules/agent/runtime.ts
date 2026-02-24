@@ -2572,10 +2572,16 @@ export class AgentRuntime {
 
           const pluginRes = await this.plugins?.executeTool({
             toolId: toolDesc.id,
+            toolCallId,
             args,
             home: this.home,
             agentId,
             workspaceId,
+            auditPlanId: toolExecutionContext.planId,
+            sessionId: toolExecutionContext.sessionId,
+            channel: toolExecutionContext.channel,
+            threadId: toolExecutionContext.threadId,
+            policySnapshotId,
           });
 
           const res: ToolResult = pluginRes

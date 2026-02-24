@@ -98,6 +98,11 @@ Plugin lifecycle is observable:
 - record plugin id/version/source in status surfaces and exported bundles
 - record when plugin tools are invoked (tool id + scope + policy snapshot reference)
 
+Event contracts (WebSocket server-push):
+
+- `plugin.lifecycle` — `kind=loaded|failed|unloaded` plus plugin metadata, failure reason/error, and an `audit` link.
+- `plugin_tool.invoked` — plugin tool invocation metadata (`tool_call_id`, scope identifiers, `policy_snapshot_id`, outcome, duration) plus an `audit` link.
+
 ## Safety expectations
 
 - Plugins run **in-process**. Installing/enabling a plugin is equivalent to running trusted code with the gateway’s privileges.

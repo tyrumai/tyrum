@@ -21,9 +21,18 @@ import {
   ExecutionStepId,
 } from "./execution.js";
 import { NodePairingRequest, NodePairingTrustLevel } from "./node.js";
-import { AgentId, Lane, NodeId, TyrumKey } from "./keys.js";
+import {
+  AgentId,
+  ChannelKey,
+  Lane,
+  NodeId,
+  ThreadId,
+  TyrumKey,
+  WorkspaceId,
+} from "./keys.js";
 import { PresenceBeacon, PresenceEntry } from "./presence.js";
-import { PolicyOverride } from "./policy-bundle.js";
+import { PolicyOverride, PolicySnapshotId } from "./policy-bundle.js";
+import { PluginId } from "./plugin.js";
 
 export {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
@@ -1176,6 +1185,75 @@ export const WsPolicyOverrideExpiredEvent = WsEventEnvelope.extend({
 });
 export type WsPolicyOverrideExpiredEvent = z.infer<typeof WsPolicyOverrideExpiredEvent>;
 
+export const WsAuditLink = z
+  .object({
+    plan_id: z.string().min(1),
+    step_index: z.number().int().nonnegative(),
+    event_id: z.number().int().positive(),
+  })
+  .strict();
+export type WsAuditLink = z.infer<typeof WsAuditLink>;
+
+export const WsPluginLifecycleKind = z.enum(["loaded", "unloaded", "failed"]);
+export type WsPluginLifecycleKind = z.infer<typeof WsPluginLifecycleKind>;
+
+export const WsPluginLifecycleEventPayload = z
+  .object({
+    kind: WsPluginLifecycleKind,
+    plugin: z
+      .object({
+        id: PluginId.optional(),
+        name: z.string().trim().min(1).optional(),
+        version: z.string().trim().min(1).optional(),
+        source_kind: z.enum(["workspace", "user", "bundled"]),
+        source_dir: z.string().trim().min(1),
+        tools_count: z.number().int().nonnegative().optional(),
+        commands_count: z.number().int().nonnegative().optional(),
+        router: z.boolean().optional(),
+      })
+      .strict(),
+    reason: z.string().trim().min(1).optional(),
+    error: z.string().trim().min(1).optional(),
+    audit: WsAuditLink,
+  })
+  .strict();
+export type WsPluginLifecycleEventPayload = z.infer<typeof WsPluginLifecycleEventPayload>;
+
+export const WsPluginLifecycleEvent = WsEventEnvelope.extend({
+  type: z.literal("plugin.lifecycle"),
+  payload: WsPluginLifecycleEventPayload,
+});
+export type WsPluginLifecycleEvent = z.infer<typeof WsPluginLifecycleEvent>;
+
+export const WsPluginToolInvocationOutcome = z.enum(["succeeded", "failed"]);
+export type WsPluginToolInvocationOutcome = z.infer<typeof WsPluginToolInvocationOutcome>;
+
+export const WsPluginToolInvokedEventPayload = z
+  .object({
+    plugin_id: PluginId,
+    plugin_version: z.string().trim().min(1),
+    tool_id: z.string().trim().min(1),
+    tool_call_id: z.string().trim().min(1),
+    agent_id: AgentId,
+    workspace_id: WorkspaceId,
+    session_id: z.string().trim().min(1).optional(),
+    channel: ChannelKey.optional(),
+    thread_id: ThreadId.optional(),
+    policy_snapshot_id: PolicySnapshotId.optional(),
+    outcome: WsPluginToolInvocationOutcome,
+    duration_ms: z.number().int().nonnegative(),
+    error: z.string().trim().min(1).optional(),
+    audit: WsAuditLink,
+  })
+  .strict();
+export type WsPluginToolInvokedEventPayload = z.infer<typeof WsPluginToolInvokedEventPayload>;
+
+export const WsPluginToolInvokedEvent = WsEventEnvelope.extend({
+  type: z.literal("plugin_tool.invoked"),
+  payload: WsPluginToolInvokedEventPayload,
+});
+export type WsPluginToolInvokedEvent = z.infer<typeof WsPluginToolInvokedEvent>;
+
 export const WsErrorEventPayload = z
   .object({
     code: z.string().min(1),
@@ -1231,6 +1309,8 @@ export const WsEvent = z.discriminatedUnion("type", [
   WsPolicyOverrideCreatedEvent,
   WsPolicyOverrideRevokedEvent,
   WsPolicyOverrideExpiredEvent,
+  WsPluginLifecycleEvent,
+  WsPluginToolInvokedEvent,
   WsErrorEvent,
 ]);
 export type WsEvent = z.infer<typeof WsEvent>;

@@ -1,7 +1,9 @@
 import { PluginManifest } from "@tyrum/schemas";
 import type { PluginManifest as PluginManifestT } from "@tyrum/schemas";
+import type { WsEventEnvelope } from "@tyrum/schemas";
 import { Ajv2019 } from "ajv/dist/2019.js";
 import type { ErrorObject } from "ajv";
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { readdir, readFile, realpath, stat } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative } from "node:path";
@@ -13,6 +15,9 @@ import { parsePluginLockFile, pluginIntegritySha256Hex, PLUGIN_LOCK_FILENAME, ty
 import { missingRequiredManifestFields, resolveSafeChildPath } from "./validation.js";
 import type { Logger } from "../observability/logger.js";
 import type { ToolDescriptor } from "../agent/tools.js";
+
+const PLUGIN_LIFECYCLE_AUDIT_PLAN_ID = "gateway.plugins.lifecycle";
+const PLUGIN_TOOL_INVOKED_AUDIT_PLAN_PREFIX = "gateway.plugins.tool_invoked";
 
 export type PluginCommandExecuteResult = {
   output: string;
@@ -591,16 +596,25 @@ export class PluginRegistry {
 
   async executeTool(params: {
     toolId: string;
+    toolCallId: string;
     args: unknown;
     home: string;
     agentId: string;
     workspaceId: string;
+    auditPlanId?: string;
+    sessionId?: string;
+    channel?: string;
+    threadId?: string;
+    policySnapshotId?: string;
   }): Promise<PluginToolExecuteResult | undefined> {
     const found = this.getTool(params.toolId);
     if (!found) return undefined;
 
+    const startMs = Date.now();
+
+    let result: PluginToolExecuteResult;
     try {
-      return await found.tool.execute(params.args, {
+      result = await found.tool.execute(params.args, {
         home: params.home,
         agent_id: params.agentId,
         workspace_id: params.workspaceId,
@@ -610,8 +624,27 @@ export class PluginRegistry {
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      return { output: "", error: message };
+      result = { output: "", error: message };
     }
+
+    await this.emitPluginToolInvokedEvent({
+      pluginId: found.plugin.id,
+      pluginVersion: found.plugin.version,
+      toolId: params.toolId,
+      toolCallId: params.toolCallId,
+      agentId: params.agentId,
+      workspaceId: params.workspaceId,
+      sessionId: params.sessionId,
+      channel: params.channel,
+      threadId: params.threadId,
+      policySnapshotId: params.policySnapshotId,
+      auditPlanId: params.auditPlanId,
+      outcome: result.error ? "failed" : "succeeded",
+      error: result.error,
+      durationMs: Math.max(0, Date.now() - startMs),
+    });
+
+    return result;
   }
 
   async tryExecuteCommand(
@@ -777,6 +810,13 @@ export class PluginRegistry {
             source_dir: pluginDir,
             error: message,
           });
+          await this.emitPluginLifecycleEvent({
+            kind: "failed",
+            sourceKind: dir.kind,
+            sourceDir: pluginDir,
+            reason: "invalid_manifest",
+            error: message,
+          });
           continue;
         }
         if (!manifestFile) continue;
@@ -792,6 +832,13 @@ export class PluginRegistry {
           this.opts.logger.warn("plugins.missing_entry", {
             plugin_id: id,
             source_dir: pluginDir,
+          });
+          await this.emitPluginLifecycleEvent({
+            kind: "failed",
+            plugin: manifest,
+            sourceKind: dir.kind,
+            sourceDir: pluginDir,
+            reason: "missing_entry",
           });
           continue;
         }
@@ -859,6 +906,14 @@ export class PluginRegistry {
             plugin_id: id,
             source_dir: pluginDir,
             config_path: configPath,
+            error: configValidation.error,
+          });
+          await this.emitPluginLifecycleEvent({
+            kind: "failed",
+            plugin: manifest,
+            sourceKind: dir.kind,
+            sourceDir: pluginDir,
+            reason: "invalid_config",
             error: configValidation.error,
           });
           continue;
@@ -1032,7 +1087,197 @@ export class PluginRegistry {
           router: Boolean(registration.router),
           kind: dir.kind,
         });
+
+        await this.emitPluginLifecycleEvent({
+          kind: "loaded",
+          plugin: manifest,
+          sourceKind: dir.kind,
+          sourceDir: pluginDir,
+          toolsCount: tools.size,
+          commandsCount: commands.size,
+          router: Boolean(registration.router),
+        });
       }
+    }
+  }
+
+  private async emitPluginLifecycleEvent(params: {
+    kind: "loaded" | "failed";
+    plugin?: Pick<PluginManifestT, "id" | "name" | "version">;
+    sourceKind: "workspace" | "user" | "bundled";
+    sourceDir: string;
+    toolsCount?: number;
+    commandsCount?: number;
+    router?: boolean;
+    reason?: string;
+    error?: string;
+  }): Promise<void> {
+    const container = this.opts.container;
+    if (!container) return;
+
+    try {
+      const occurredAt = new Date().toISOString();
+      const action = {
+        type: "plugin.lifecycle",
+        kind: params.kind,
+        plugin_id: params.plugin?.id,
+        plugin_name: params.plugin?.name,
+        plugin_version: params.plugin?.version,
+        source_kind: params.sourceKind,
+        source_dir: params.sourceDir,
+        tools_count: params.toolsCount,
+        commands_count: params.commandsCount,
+        router: params.router,
+        reason: params.reason,
+        error: params.error,
+      };
+
+      await container.eventLog.appendNext(
+        {
+          replayId: randomUUID(),
+          planId: PLUGIN_LIFECYCLE_AUDIT_PLAN_ID,
+          occurredAt,
+          action,
+        },
+        async (tx, auditEvent) => {
+          const evt: WsEventEnvelope = {
+            event_id: randomUUID(),
+            type: "plugin.lifecycle",
+            occurred_at: occurredAt,
+            scope: { kind: "global" },
+            payload: {
+              kind: params.kind,
+              plugin: {
+                id: params.plugin?.id,
+                name: params.plugin?.name,
+                version: params.plugin?.version,
+                source_kind: params.sourceKind,
+                source_dir: params.sourceDir,
+                tools_count: params.toolsCount,
+                commands_count: params.commandsCount,
+                router: params.router,
+              },
+              reason: params.reason,
+              error: params.error,
+              audit: {
+                plan_id: PLUGIN_LIFECYCLE_AUDIT_PLAN_ID,
+                step_index: auditEvent.stepIndex,
+                event_id: auditEvent.id,
+              },
+            },
+          };
+
+          await tx.run(
+            `INSERT INTO outbox (topic, target_edge_id, payload_json)
+             VALUES (?, ?, ?)`,
+            ["ws.broadcast", null, JSON.stringify({ message: evt })],
+          );
+        },
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.opts.logger.warn("plugins.lifecycle_emit_failed", {
+        plugin_id: params.plugin?.id,
+        source_dir: params.sourceDir,
+        kind: params.kind,
+        reason: params.reason,
+        error: message,
+      });
+    }
+  }
+
+  private async emitPluginToolInvokedEvent(params: {
+    pluginId: string;
+    pluginVersion: string;
+    toolId: string;
+    toolCallId: string;
+    agentId: string;
+    workspaceId: string;
+    auditPlanId?: string;
+    sessionId?: string;
+    channel?: string;
+    threadId?: string;
+    policySnapshotId?: string;
+    outcome: "succeeded" | "failed";
+    error?: string;
+    durationMs: number;
+  }): Promise<void> {
+    const container = this.opts.container;
+    const sourcePlanId = params.auditPlanId?.trim();
+    if (!container || !sourcePlanId) return;
+
+    try {
+      const auditPlanId = `${PLUGIN_TOOL_INVOKED_AUDIT_PLAN_PREFIX}:${sourcePlanId}`;
+      const occurredAt = new Date().toISOString();
+      const action = {
+        type: "plugin_tool.invoked",
+        plugin_id: params.pluginId,
+        plugin_version: params.pluginVersion,
+        tool_id: params.toolId,
+        tool_call_id: params.toolCallId,
+        agent_id: params.agentId,
+        workspace_id: params.workspaceId,
+        session_id: params.sessionId,
+        channel: params.channel,
+        thread_id: params.threadId,
+        policy_snapshot_id: params.policySnapshotId,
+        outcome: params.outcome,
+        duration_ms: params.durationMs,
+        error: params.error,
+      };
+
+      await container.eventLog.appendNext(
+        {
+          replayId: randomUUID(),
+          planId: auditPlanId,
+          occurredAt,
+          action,
+        },
+        async (tx, auditEvent) => {
+          const evt: WsEventEnvelope = {
+            event_id: randomUUID(),
+            type: "plugin_tool.invoked",
+            occurred_at: occurredAt,
+            scope: { kind: "agent", agent_id: params.agentId },
+            payload: {
+              plugin_id: params.pluginId,
+              plugin_version: params.pluginVersion,
+              tool_id: params.toolId,
+              tool_call_id: params.toolCallId,
+              agent_id: params.agentId,
+              workspace_id: params.workspaceId,
+              session_id: params.sessionId,
+              channel: params.channel,
+              thread_id: params.threadId,
+              policy_snapshot_id: params.policySnapshotId,
+              outcome: params.outcome,
+              duration_ms: params.durationMs,
+              error: params.error,
+              audit: {
+                plan_id: auditPlanId,
+                step_index: auditEvent.stepIndex,
+                event_id: auditEvent.id,
+              },
+            },
+          };
+
+          await tx.run(
+            `INSERT INTO outbox (topic, target_edge_id, payload_json)
+             VALUES (?, ?, ?)`,
+            ["ws.broadcast", null, JSON.stringify({ message: evt })],
+          );
+        },
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.opts.logger.warn("plugins.tool_invoked_emit_failed", {
+        plugin_id: params.pluginId,
+        tool_id: params.toolId,
+        tool_call_id: params.toolCallId,
+        plan_id: sourcePlanId,
+        audit_plan_id: `${PLUGIN_TOOL_INVOKED_AUDIT_PLAN_PREFIX}:${sourcePlanId}`,
+        error: message,
+      });
     }
   }
 }
