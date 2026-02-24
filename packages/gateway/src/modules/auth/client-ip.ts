@@ -214,14 +214,15 @@ export function resolveClientIp(input: {
   if (!remoteAddress) return undefined;
   if (!input.trustedProxies?.isTrustedProxy(remoteAddress)) return remoteAddress;
 
-  const headerIps =
-    input.forwardedHeader
-      ? parseForwardedHeaderIps(input.forwardedHeader)
-      : input.xForwardedForHeader
-        ? parseXForwardedForHeaderIps(input.xForwardedForHeader)
-        : input.xRealIpHeader
-          ? parseXRealIpHeaderIps(input.xRealIpHeader)
-          : [];
+  const forwardedIps = input.forwardedHeader ? parseForwardedHeaderIps(input.forwardedHeader) : [];
+  const xForwardedForIps = input.xForwardedForHeader ? parseXForwardedForHeaderIps(input.xForwardedForHeader) : [];
+  const xRealIpIps = input.xRealIpHeader ? parseXRealIpHeaderIps(input.xRealIpHeader) : [];
+
+  const headerIps = forwardedIps.length > 0
+    ? forwardedIps
+    : xForwardedForIps.length > 0
+      ? xForwardedForIps
+      : xRealIpIps;
 
   if (headerIps.length === 0) return remoteAddress;
 
