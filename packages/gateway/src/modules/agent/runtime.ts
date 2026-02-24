@@ -1482,13 +1482,21 @@ export class AgentRuntime {
     streamResult: ReturnType<typeof streamText>;
     sessionId: string;
     finalize: () => Promise<AgentTurnResponseT>;
-	  }> {
-	    const prepared = await this.prepareTurn(input);
-	    const { ctx, session, model, toolSet, laneQueue, usedTools, userContent, contextReport, systemPrompt, resolved } = prepared;
+  }> {
+    const prepared = await this.prepareTurn(input);
+    const { ctx, session, model, toolSet, laneQueue, usedTools, userContent, contextReport, systemPrompt, resolved } =
+      prepared;
 
-	    const streamResult = streamText({
-	      model,
-	      system: systemPrompt,
+    await this.maybeRunPreCompactionMemoryFlush({
+      ctx,
+      session,
+      model,
+      systemPrompt,
+    });
+
+    const streamResult = streamText({
+      model,
+      system: systemPrompt,
       messages: [
         {
           role: "user" as const,
@@ -1500,11 +1508,11 @@ export class AgentRuntime {
       prepareStep: ({ messages }) => this.prepareLaneQueueStep(laneQueue, messages),
     });
 
-	    const finalize = async (): Promise<AgentTurnResponseT> => {
-	      const result = await streamResult;
-	      const reply = (await result.text) || "No assistant response returned.";
-	      return await this.finalizeTurn(ctx, session, resolved, reply, usedTools, contextReport);
-	    };
+    const finalize = async (): Promise<AgentTurnResponseT> => {
+      const result = await streamResult;
+      const reply = (await result.text) || "No assistant response returned.";
+      return await this.finalizeTurn(ctx, session, resolved, reply, usedTools, contextReport);
+    };
 
     return { streamResult, sessionId: session.session_id, finalize };
   }
@@ -1520,6 +1528,15 @@ export class AgentRuntime {
     const prepared = await this.prepareTurn(input);
     const { ctx, session, model, toolSet, laneQueue, usedTools, userContent, contextReport, systemPrompt, resolved } =
       prepared;
+
+    await this.maybeRunPreCompactionMemoryFlush({
+      ctx,
+      session,
+      model,
+      systemPrompt,
+      abortSignal: opts?.abortSignal,
+      timeoutMs: opts?.timeoutMs,
+    });
 
     const result = await generateText({
       model,
@@ -1540,6 +1557,102 @@ export class AgentRuntime {
 	    const reply = result.text || "No assistant response returned.";
 	    return await this.finalizeTurn(ctx, session, resolved, reply, usedTools, contextReport);
 	  }
+
+  private computeTurnsDroppedByNextAppend(
+    turns: readonly SessionMessage[],
+    maxTurns: number,
+  ): SessionMessage[] {
+    const maxMessages = Math.max(1, maxTurns) * 2;
+    const overflow = turns.length + 2 - maxMessages;
+    if (overflow <= 0) return [];
+    return turns.slice(0, overflow);
+  }
+
+  private formatPreCompactionFlushPrompt(
+    droppedTurns: readonly SessionMessage[],
+  ): string {
+    const lines = droppedTurns.map((turn) => {
+      const role = turn.role === "assistant" ? "Assistant" : "User";
+      return `${role} (${turn.timestamp}): ${turn.content.trim()}`;
+    });
+
+    return [
+      "This is a silent internal pre-compaction memory flush.",
+      "The following messages are about to be compacted from the session context due to the session max_turns limit.",
+      "Extract any durable, non-secret memory worth keeping (preferences, constraints, decisions, procedures).",
+      "If there is nothing worth storing, respond with NOOP.",
+      "",
+      "Messages being compacted:",
+      ...lines,
+    ].join("\n");
+  }
+
+  private async maybeRunPreCompactionMemoryFlush(input: {
+    ctx: AgentLoadedContext;
+    session: SessionRow;
+    model: LanguageModel;
+    systemPrompt: string;
+    abortSignal?: AbortSignal;
+    timeoutMs?: number;
+  }): Promise<void> {
+    if (!input.ctx.config.memory.markdown_enabled) {
+      return;
+    }
+
+    const droppedTurns = this.computeTurnsDroppedByNextAppend(
+      input.session.turns,
+      input.ctx.config.sessions.max_turns,
+    );
+    if (droppedTurns.length === 0) {
+      return;
+    }
+
+    try {
+      const flushResult = await generateText({
+        model: input.model,
+        system: input.systemPrompt,
+        messages: [
+          {
+            role: "user" as const,
+            content: [
+              {
+                type: "text" as const,
+                text: this.formatPreCompactionFlushPrompt(droppedTurns),
+              },
+            ],
+          },
+        ],
+        stopWhen: [stepCountIs(1)],
+        abortSignal: input.abortSignal,
+        timeout: input.timeoutMs,
+      });
+
+      const flushText = (flushResult.text ?? "").trim();
+      if (flushText.length === 0 || flushText.toUpperCase() === "NOOP") {
+        return;
+      }
+
+      const entry = ["Pre-compaction memory flush", "", flushText].join("\n").trim();
+      if (looksLikeSecretText(entry)) {
+        this.opts.container.logger.warn("memory.flush_skipped_secret_like", {
+          session_id: input.session.session_id,
+          channel: input.session.channel,
+          thread_id: input.session.thread_id,
+        });
+        return;
+      }
+
+      await input.ctx.memoryStore.appendDaily(entry);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.opts.container.logger.warn("memory.flush_failed", {
+        session_id: input.session.session_id,
+        channel: input.session.channel,
+        thread_id: input.session.thread_id,
+        error: message,
+      });
+    }
+  }
 
   private async turnViaExecutionEngine(input: AgentTurnRequestT): Promise<AgentTurnResponseT> {
     const resolvedInput = resolveAgentTurnInput(input);
