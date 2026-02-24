@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
+import { WsEvent } from "@tyrum/schemas";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,6 +12,7 @@ import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { AuthAudit, GATEWAY_AUTH_AUDIT_PLAN_ID } from "../../src/modules/auth/audit.js";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { handleClientMessage } from "../../src/ws/protocol.js";
+import { createWsHandler } from "../../src/routes/ws.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
 describe("auth audit events", () => {
@@ -60,8 +62,12 @@ describe("auth audit events", () => {
     expect(outbox).toBeDefined();
     expect(outbox!.payload_json).not.toContain(secret);
 
-    const payload = JSON.parse(outbox!.payload_json) as { message?: { type?: string } };
-    expect(payload.message?.type).toBe("auth.failed");
+    const payload = JSON.parse(outbox!.payload_json) as { message?: unknown };
+    const parsedEvent = WsEvent.safeParse(payload.message);
+    expect(parsedEvent.success).toBe(true);
+    if (parsedEvent.success) {
+      expect(parsedEvent.data.type).toBe("auth.failed");
+    }
   });
 
   it("rate-limits repeated auth failures by client IP", async () => {
@@ -100,6 +106,40 @@ describe("auth audit events", () => {
       [GATEWAY_AUTH_AUDIT_PLAN_ID],
     );
     expect(rowsAfterWindow).toHaveLength(2);
+  });
+
+  it("bounds failed-auth rate limiter key cardinality", async () => {
+    const eventLog = new EventLog(db);
+    const audit = new AuthAudit({
+      eventLog,
+      nowMs: () => 0,
+      failedAuthWindowMs: 10_000,
+      failedAuthMaxKeys: 2,
+    } as unknown as ConstructorParameters<typeof AuthAudit>[0]);
+
+    await audit.recordAuthFailed({
+      surface: "http",
+      reason: "missing_token",
+      token_transport: "missing",
+      client_ip: "203.0.113.1",
+    });
+    await audit.recordAuthFailed({
+      surface: "http",
+      reason: "missing_token",
+      token_transport: "missing",
+      client_ip: "203.0.113.2",
+    });
+    await audit.recordAuthFailed({
+      surface: "http",
+      reason: "missing_token",
+      token_transport: "missing",
+      client_ip: "203.0.113.3",
+    });
+
+    const limiter = (audit as unknown as { failedAuthLimiter: unknown }).failedAuthLimiter as {
+      nextAllowedAtByKey: Map<string, number>;
+    };
+    expect(limiter.nextAllowedAtByKey.size).toBeLessThanOrEqual(2);
   });
 
   it("records authz.denied when a scoped token lacks required scope", async () => {
@@ -201,7 +241,11 @@ describe("auth audit events", () => {
     );
     expect(outbox).toBeDefined();
     const payload = JSON.parse(outbox!.payload_json) as { message?: { type?: string } };
-    expect(payload.message?.type).toBe("authz.denied");
+    const parsedEvent = WsEvent.safeParse(payload.message);
+    expect(parsedEvent.success).toBe(true);
+    if (parsedEvent.success) {
+      expect(parsedEvent.data.type).toBe("authz.denied");
+    }
   });
 
   it("records authz.denied for WS requests when scoped token lacks required scope", async () => {
@@ -297,5 +341,57 @@ describe("auth audit events", () => {
 
     expect((result as unknown as { ok?: boolean }).ok).toBe(false);
     expect(auditCompleted).toBe(true);
+  });
+
+  it("awaits auth.failed persistence before closing WS upgrade for unauthorized clients", async () => {
+    const tokenHome = await mkdtemp(join(tmpdir(), "tyrum-ws-auth-audit-token-"));
+    try {
+      const tokenStore = new TokenStore(tokenHome);
+      await tokenStore.initialize();
+
+      let resolveAudit: (() => void) | undefined;
+      const auditPromise = new Promise<void>((resolve) => {
+        resolveAudit = resolve;
+      });
+      const authAudit = {
+        recordAuthFailed: vi.fn(async () => auditPromise),
+      } as unknown as AuthAudit;
+
+      const cm = new ConnectionManager();
+      const { wss, stopHeartbeat } = createWsHandler({
+        connectionManager: cm,
+        tokenStore,
+        protocolDeps: { connectionManager: cm, authAudit },
+      });
+
+      const ws = {
+        send: vi.fn(),
+        close: vi.fn(),
+        on: vi.fn(() => undefined as never),
+        once: vi.fn(() => undefined as never),
+        readyState: 1,
+      };
+
+      const req = {
+        method: "GET",
+        url: "/ws",
+        headers: {},
+        socket: { remoteAddress: "203.0.113.10" },
+      } as never;
+
+      wss.emit("connection", ws as never, req);
+
+      await Promise.resolve();
+      expect(authAudit.recordAuthFailed).toHaveBeenCalledTimes(1);
+      expect(ws.close).not.toHaveBeenCalled();
+
+      resolveAudit?.();
+      await auditPromise;
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(ws.close).toHaveBeenCalledWith(4001, "unauthorized");
+      stopHeartbeat();
+    } finally {
+      await rm(tokenHome, { recursive: true, force: true });
+    }
   });
 });

@@ -19,6 +19,67 @@ function createMockWs(): MockWebSocket {
 }
 
 describe("OutboxPoller", () => {
+  it("broadcasts auth audit events only to operator-scoped clients", async () => {
+    const connectionManager = new ConnectionManager();
+    const operatorWs = createMockWs();
+    const otherWs = createMockWs();
+    connectionManager.addClient(operatorWs as never, ["cli"] as never, {
+      authClaims: {
+        token_kind: "device",
+        role: "client",
+        device_id: "dev_operator_1",
+        scopes: ["operator.read"],
+      },
+    });
+    connectionManager.addClient(otherWs as never, ["cli"] as never, {
+      authClaims: {
+        token_kind: "device",
+        role: "client",
+        device_id: "dev_client_2",
+        scopes: [],
+      },
+    });
+
+    const nowIso = new Date().toISOString();
+    const poll = vi
+      .fn()
+      .mockResolvedValueOnce([
+        {
+          id: 1,
+          topic: "ws.broadcast",
+          target_edge_id: null,
+          payload: {
+            message: {
+              event_id: "evt-1",
+              type: "auth.failed",
+              occurred_at: nowIso,
+              scope: { kind: "global" },
+              payload: { surface: "ws.upgrade" },
+            },
+          },
+          created_at: nowIso,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    const ackConsumerCursor = vi.fn(async () => undefined);
+    const outboxDal = {
+      poll,
+      ackConsumerCursor,
+    } as unknown as import("../../src/modules/backplane/outbox-dal.js").OutboxDal;
+
+    const poller = new OutboxPoller({
+      consumerId: "edge-a",
+      outboxDal,
+      connectionManager,
+    });
+
+    await poller.tick();
+    expect(ackConsumerCursor).toHaveBeenCalledWith("edge-a", 1);
+    expect(operatorWs.send).toHaveBeenCalledTimes(1);
+    expect(otherWs.send).not.toHaveBeenCalled();
+  });
+
   it("acks only after processing succeeds (retries on processing error)", async () => {
     const connectionManager = new ConnectionManager();
     const ws = createMockWs();

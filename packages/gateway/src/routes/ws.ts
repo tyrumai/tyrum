@@ -828,9 +828,9 @@ export function createWsHandler(opts: WsRouteOptions): {
     }
 
     void resolveAuth()
-      .then((resolved) => {
+      .then(async (resolved) => {
         if (!resolved) {
-          void protocolDeps.authAudit?.recordAuthFailed({
+          await protocolDeps.authAudit?.recordAuthFailed({
             surface: "ws.upgrade",
             reason: token ? "invalid_token" : "missing_token",
             token_transport: tokenInfo.transport,
@@ -853,8 +853,8 @@ export function createWsHandler(opts: WsRouteOptions): {
         startHandshakeTimeout();
         flushEarlyMessages();
       })
-      .catch(() => {
-        void protocolDeps.authAudit?.recordAuthFailed({
+      .catch(async () => {
+        await protocolDeps.authAudit?.recordAuthFailed({
           surface: "ws.upgrade",
           reason: token ? "invalid_token" : "missing_token",
           token_transport: tokenInfo.transport,

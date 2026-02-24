@@ -10,17 +10,32 @@ type TokenTransport = "authorization" | "cookie" | "query" | "subprotocol" | "mi
 
 class FixedWindowRateLimiter {
   private readonly nextAllowedAtByKey = new Map<string, number>();
+  private readonly maxEntries: number;
 
   constructor(
     private readonly windowMs: number,
     private readonly nowMs: () => number,
-  ) {}
+    opts?: {
+      maxEntries?: number;
+    },
+  ) {
+    this.maxEntries = Math.max(1, opts?.maxEntries ?? 10_000);
+  }
 
   allow(key: string): boolean {
     const now = this.nowMs();
     const nextAllowedAt = this.nextAllowedAtByKey.get(key) ?? 0;
     if (now < nextAllowedAt) return false;
+
+    // Refresh insertion order to support simple oldest-entry eviction.
+    this.nextAllowedAtByKey.delete(key);
     this.nextAllowedAtByKey.set(key, now + this.windowMs);
+
+    while (this.nextAllowedAtByKey.size > this.maxEntries) {
+      const oldest = this.nextAllowedAtByKey.keys().next().value as string | undefined;
+      if (!oldest) break;
+      this.nextAllowedAtByKey.delete(oldest);
+    }
     return true;
   }
 }
@@ -36,6 +51,7 @@ export class AuthAudit {
     logger?: Logger;
     nowMs?: () => number;
     failedAuthWindowMs?: number;
+    failedAuthMaxKeys?: number;
   }) {
     this.eventLog = opts.eventLog;
     this.logger = opts.logger;
@@ -43,6 +59,9 @@ export class AuthAudit {
     this.failedAuthLimiter = new FixedWindowRateLimiter(
       Math.max(1, opts.failedAuthWindowMs ?? 10_000),
       this.nowMs,
+      {
+        maxEntries: Math.max(1, opts.failedAuthMaxKeys ?? 10_000),
+      },
     );
   }
 
@@ -191,4 +210,3 @@ export class AuthAudit {
     }
   }
 }
-
