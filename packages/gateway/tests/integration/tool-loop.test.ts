@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -889,6 +889,95 @@ describe("Tool execution loop", () => {
     expect(result.used_tools).not.toContain("tool.fs.write");
     await expect(access(join(homeDir, "blocked.txt"))).rejects.toThrow();
   });
+
+  it("does not corrupt tool approval resume state via redaction", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
+
+    const secret = "sk-test-secret-token-12345678901234567890";
+    container.redactionEngine.registerSecrets([secret]);
+
+    await writeFile(
+      join(homeDir, "agent.yml"),
+      [
+        "model:",
+        "  model: openai/gpt-4.1",
+        "skills:",
+        "  enabled: []",
+        "mcp:",
+        "  enabled: []",
+        "tools:",
+        "  allow:",
+        "    - tool.fs.write",
+        "sessions:",
+        "  ttl_days: 30",
+        "  max_turns: 20",
+        "memory:",
+        "  markdown_enabled: false",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const languageModel = createToolLoopLanguageModel({
+      toolCalls: [
+        {
+          id: "tc-write",
+          name: "tool.fs.write",
+          arguments: JSON.stringify({ path: "secret.txt", content: secret }),
+        },
+      ],
+      finalReply: "done",
+    });
+
+    const mcpManager = {
+      listToolDescriptors: vi.fn(async () => []),
+      shutdown: vi.fn(async () => {}),
+      callTool: vi.fn(async () => ({ content: [] })),
+    };
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel,
+      mcpManager: mcpManager as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
+      approvalWaitMs: 10_000,
+      approvalPollMs: 20,
+    });
+
+    const turnPromise = runtime.turn({
+      channel: "test",
+      thread_id: "thread-redaction-resume",
+      message: "write a file with secret content",
+    });
+
+    const pending = await waitForPendingApproval(container);
+    expect(pending.prompt).toContain("tool.fs.write");
+
+    const approvalEngine = new ExecutionEngine({ db: container.db });
+    const approvalApp = new Hono();
+    approvalApp.route(
+      "/",
+      createApprovalRoutes({
+        approvalDal: container.approvalDal,
+        engine: approvalEngine,
+      }),
+    );
+
+    const res = await approvalApp.request(`/approvals/${String(pending.id)}/respond`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ decision: "approved", reason: "approved in test" }),
+    });
+    expect(res.status).toBe(200);
+
+    const result = await turnPromise;
+    expect(result.reply).toBe("done");
+
+    const content = await readFile(join(homeDir, "secret.txt"), "utf-8");
+    expect(content).toBe(secret);
+  }, 10_000);
 
   it("supports approve-always by creating a policy override that skips future approvals", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));

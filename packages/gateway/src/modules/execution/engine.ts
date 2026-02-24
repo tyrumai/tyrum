@@ -2658,8 +2658,11 @@ export class ExecutionEngine {
       [resumeToken, opts.runId, nowIso],
     );
 
-    const contextToPersist = this.redactUnknown({
-      ...(input.context && typeof input.context === "object" ? input.context : {}),
+    const isRecord = (value: unknown): value is Record<string, unknown> =>
+      value !== null && typeof value === "object" && !Array.isArray(value);
+
+    const baseContext: Record<string, unknown> = {
+      ...(isRecord(input.context) ? input.context : {}),
       resume_token: resumeToken,
       run_id: opts.runId,
       job_id: opts.jobId,
@@ -2667,7 +2670,27 @@ export class ExecutionEngine {
       ...(opts.attemptId ? { attempt_id: opts.attemptId } : {}),
       paused_reason: pausedReason,
       paused_detail: input.detail,
-    });
+    };
+
+    const aiSdkMessages =
+      baseContext["source"] === "agent-tool-execution" &&
+      isRecord(baseContext["ai_sdk"]) &&
+      Array.isArray(baseContext["ai_sdk"]["messages"])
+        ? baseContext["ai_sdk"]["messages"]
+        : undefined;
+
+    const contextToPersist = (() => {
+      const redacted = this.redactUnknown(baseContext);
+      if (aiSdkMessages === undefined) {
+        return redacted;
+      }
+
+      const persisted = { ...redacted };
+      const persistedAi = isRecord(persisted["ai_sdk"]) ? { ...persisted["ai_sdk"] } : {};
+      persistedAi["messages"] = aiSdkMessages;
+      persisted["ai_sdk"] = persistedAi;
+      return persisted;
+    })();
 
     const agentId =
       opts.key.startsWith("agent:") && opts.key.split(":").length > 1
