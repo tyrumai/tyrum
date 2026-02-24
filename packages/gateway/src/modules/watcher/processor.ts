@@ -13,6 +13,8 @@ import type { MemoryDal } from "../memory/dal.js";
 import type { SqlDb } from "../../statestore/types.js";
 import { WatcherFiringDal } from "./firing-dal.js";
 
+const DEFAULT_WEBHOOK_SCHEDULED_AT_CURSOR_MAX_ENTRIES = 10_000;
+
 // ---------------------------------------------------------------------------
 // Row types
 // ---------------------------------------------------------------------------
@@ -60,6 +62,8 @@ export interface WatcherProcessorOptions {
   db: SqlDb;
   memoryDal: MemoryDal;
   eventBus: Emitter<GatewayEvents>;
+  /** Max entries for the webhook scheduled_at cursor cache (default: 10_000). Set to 0 to disable caching. */
+  webhookScheduledAtCursorMaxEntries?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -80,6 +84,7 @@ export class WatcherProcessor {
   private readonly memoryDal: MemoryDal;
   private readonly eventBus: Emitter<GatewayEvents>;
   private readonly firingDal: WatcherFiringDal;
+  private readonly webhookScheduledAtCursorMaxEntries: number;
   private readonly webhookScheduledAtCursor = new Map<number, { baseMs: number; nextMs: number }>();
 
   private completedHandler: Handler<GatewayEvents["plan:completed"]> | undefined;
@@ -90,11 +95,35 @@ export class WatcherProcessor {
     this.memoryDal = opts.memoryDal;
     this.eventBus = opts.eventBus;
     this.firingDal = new WatcherFiringDal(opts.db);
+    this.webhookScheduledAtCursorMaxEntries = (() => {
+      const raw = opts.webhookScheduledAtCursorMaxEntries;
+      if (raw === undefined) return DEFAULT_WEBHOOK_SCHEDULED_AT_CURSOR_MAX_ENTRIES;
+      if (typeof raw !== "number" || !Number.isFinite(raw)) {
+        return DEFAULT_WEBHOOK_SCHEDULED_AT_CURSOR_MAX_ENTRIES;
+      }
+      return Math.max(0, Math.floor(raw));
+    })();
   }
 
   // -----------------------------------------------------------------------
   // Lifecycle
   // -----------------------------------------------------------------------
+
+  private setWebhookScheduledAtCursorEntry(watcherId: number, entry: { baseMs: number; nextMs: number }): void {
+    if (this.webhookScheduledAtCursorMaxEntries <= 0) return;
+
+    // Maintain insertion order as an LRU by moving touched keys to the end.
+    if (this.webhookScheduledAtCursor.has(watcherId)) {
+      this.webhookScheduledAtCursor.delete(watcherId);
+    }
+    this.webhookScheduledAtCursor.set(watcherId, entry);
+
+    while (this.webhookScheduledAtCursor.size > this.webhookScheduledAtCursorMaxEntries) {
+      const oldest = this.webhookScheduledAtCursor.keys().next().value as number | undefined;
+      if (oldest === undefined) break;
+      this.webhookScheduledAtCursor.delete(oldest);
+    }
+  }
 
   start(): void {
     this.completedHandler = (event) => {
@@ -209,6 +238,7 @@ export class WatcherProcessor {
       "UPDATE watchers SET active = 0, updated_at = ? WHERE id = ?",
       [nowIso, watcherId],
     );
+    this.webhookScheduledAtCursor.delete(watcherId);
   }
 
   async recordWebhookTrigger(
@@ -273,7 +303,7 @@ export class WatcherProcessor {
       });
       if (created.row.firing_id === firingId) {
         const nextMs = Math.max(startScheduledAtMs, created.row.scheduled_at_ms + 1);
-        this.webhookScheduledAtCursor.set(watcher.id, { baseMs: baseScheduledAtMs, nextMs });
+        this.setWebhookScheduledAtCursorEntry(watcher.id, { baseMs: baseScheduledAtMs, nextMs });
         break;
       }
       if (attempt === maxScheduledAtSearch - 1) {

@@ -296,6 +296,69 @@ describe("WatcherProcessor", () => {
     }
   });
 
+  it("clears webhook scheduled_at cursor entries when watchers deactivate", async () => {
+    const id = await processor.createWatcher("plan-1", "webhook", {
+      secret_handle: {
+        handle_id: "secret-handle",
+        provider: "file",
+        scope: "watcher:webhook:test",
+        created_at: new Date().toISOString(),
+      },
+    });
+    const watcher = await processor.getActiveWatcherById(id);
+    expect(watcher).not.toBeNull();
+
+    const recorded = await processor.recordWebhookTrigger(watcher!, {
+      timestampMs: 1_700_000_000_000,
+      nonce: "nonce-cursor-1",
+      bodySha256: "abc123",
+      bodyBytes: 11,
+    });
+    expect(recorded).toBe(true);
+
+    const cursor = (processor as unknown as { webhookScheduledAtCursor: Map<number, unknown> }).webhookScheduledAtCursor;
+    expect(cursor.has(id)).toBe(true);
+
+    await processor.deactivateWatcher(id);
+    expect(cursor.has(id)).toBe(false);
+  });
+
+  it("bounds webhook scheduled_at cursor map size", async () => {
+    const limitedProcessor = new WatcherProcessor({
+      db,
+      memoryDal,
+      eventBus,
+      webhookScheduledAtCursorMaxEntries: 3,
+    });
+
+    const ids: number[] = [];
+    for (let i = 0; i < 4; i += 1) {
+      const id = await limitedProcessor.createWatcher("plan-1", "webhook", {
+        secret_handle: {
+          handle_id: "secret-handle",
+          provider: "file",
+          scope: "watcher:webhook:test",
+          created_at: new Date().toISOString(),
+        },
+      });
+      ids.push(id);
+      const watcher = await limitedProcessor.getActiveWatcherById(id);
+      expect(watcher).not.toBeNull();
+
+      const recorded = await limitedProcessor.recordWebhookTrigger(watcher!, {
+        timestampMs: 1_700_000_000_000,
+        nonce: `nonce-cursor-${String(i)}`,
+        bodySha256: "abc123",
+        bodyBytes: 11,
+      });
+      expect(recorded).toBe(true);
+    }
+
+    const cursor = (limitedProcessor as unknown as { webhookScheduledAtCursor: Map<number, unknown> }).webhookScheduledAtCursor;
+    expect(cursor.size).toBe(3);
+    expect(cursor.has(ids[0]!)).toBe(false);
+  });
+
   it("does not record webhook trigger events for non-webhook watchers", async () => {
     const id = await processor.createWatcher("plan-1", "plan_complete", { planId: "plan-1" });
     const watcher = await processor.getActiveWatcherById(id);
