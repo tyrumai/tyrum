@@ -3,6 +3,7 @@ import {
   type MessageProvenance,
   PeerId,
   WsChannelQueueOverflowEvent,
+  WsDeliveryReceiptEvent,
   buildAgentSessionKey,
   normalizedContainerKindFromThreadKind,
   parseTyrumKey,
@@ -22,6 +23,7 @@ import type { AgentRegistry } from "../agent/registry.js";
 import type { ApprovalDal } from "../approval/dal.js";
 import type { ApprovalNotifier } from "../approval/notifier.js";
 import type { PolicyService } from "../policy/service.js";
+import { isSafeSuggestedOverridePattern } from "../policy/override-guardrails.js";
 import type { MemoryDal } from "../memory/dal.js";
 import {
   type ChannelEgressConnector,
@@ -33,6 +35,7 @@ import {
 import { PeerIdentityLinkDal } from "./peer-identity-link-dal.js";
 import { telegramAccountIdFromEnv } from "./telegram-account.js";
 import { randomUUID } from "node:crypto";
+import { enqueueWsBroadcastMessage } from "../../ws/outbox.js";
 
 function isFalsyEnvFlag(value: string | undefined): boolean {
   if (!value) return false;
@@ -661,6 +664,11 @@ export class TelegramChannelProcessor {
     if (!connector) {
       const message = `no egress connector registered for source '${address.connector}'`;
       await this.outbox.markFailed(next.outbox_id, this.owner, message);
+      await this.enqueueDeliveryReceiptEvent({
+        outbox: next,
+        status: "failed",
+        error: { code: "channels.connector_missing", message },
+      });
       this.logger?.warn("channels.egress.connector_missing", {
         outbox_id: next.outbox_id,
         source: next.source,
@@ -678,10 +686,34 @@ export class TelegramChannelProcessor {
         text: next.text,
         parseMode: next.parse_mode ?? undefined,
       });
-      await this.outbox.markSent(next.outbox_id, this.owner, resp);
+      const marked = await this.outbox.markSent(next.outbox_id, this.owner, resp);
+      if (marked) {
+        await this.enqueueDeliveryReceiptEvent({
+          outbox: next,
+          status: "sent",
+          receipt: {
+            outbox_id: next.outbox_id,
+            dedupe_key: next.dedupe_key,
+            chunk_index: next.chunk_index,
+            response: resp,
+          },
+        });
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      await this.outbox.markFailed(next.outbox_id, this.owner, message);
+      const marked = await this.outbox.markFailed(next.outbox_id, this.owner, message);
+      if (marked) {
+        await this.enqueueDeliveryReceiptEvent({
+          outbox: next,
+          status: "failed",
+          receipt: {
+            outbox_id: next.outbox_id,
+            dedupe_key: next.dedupe_key,
+            chunk_index: next.chunk_index,
+          },
+          error: { code: "channels.send_failed", message },
+        });
+      }
       this.logger?.warn("channels.egress.send_failed", {
         outbox_id: next.outbox_id,
         source: next.source,
@@ -693,6 +725,37 @@ export class TelegramChannelProcessor {
     }
 
     return true;
+  }
+
+  private async enqueueDeliveryReceiptEvent(input: {
+    outbox: { inbox_id: number; source: string; thread_id: string; dedupe_key: string; chunk_index: number };
+    status: "sent" | "failed";
+    receipt?: unknown;
+    error?: { code: string; message: string; details?: unknown };
+  }): Promise<void> {
+    const inbox = await this.inbox.getById(input.outbox.inbox_id);
+    if (!inbox) return;
+
+    const candidate = {
+      event_id: `delivery.receipt:${input.outbox.dedupe_key}`,
+      type: "delivery.receipt",
+      occurred_at: new Date().toISOString(),
+      scope: { kind: "key", key: inbox.key, lane: inbox.lane },
+      payload: {
+        session_id: inbox.key,
+        lane: inbox.lane,
+        channel: parseChannelSourceKey(input.outbox.source).connector,
+        thread_id: input.outbox.thread_id,
+        status: input.status,
+        ...(input.receipt === undefined ? {} : { receipt: input.receipt }),
+        ...(input.error === undefined ? {} : { error: input.error }),
+      },
+    };
+
+    const parsed = WsDeliveryReceiptEvent.safeParse(candidate);
+    if (!parsed.success) return;
+
+    await enqueueWsBroadcastMessage(this.db, parsed.data);
   }
 
   private async claimDebouncedBatch(leader: ChannelInboxRow): Promise<ChannelInboxRow[]> {
@@ -930,6 +993,8 @@ export class TelegramChannelProcessor {
     // Apply outbound send policy before enqueueing side effects.
     let decision: "allow" | "deny" | "require_approval" = "allow";
     let policySnapshotId: string | undefined;
+    let connectorMatchTarget: string | undefined;
+    let appliedOverrideIds: string[] | undefined;
     const policyService =
       typeof (this.agents as unknown as { getPolicyService?: (id: string) => PolicyService }).getPolicyService ===
       "function"
@@ -937,17 +1002,18 @@ export class TelegramChannelProcessor {
         : undefined;
     if (policyService?.isEnabled()) {
       try {
-        const matchTarget =
+        connectorMatchTarget =
           accountId === DEFAULT_CHANNEL_ACCOUNT_ID
             ? `${source}:${leader.thread_id}`
             : `${source}:${accountId}:${leader.thread_id}`;
         const evalRes = await policyService.evaluateConnectorAction({
           agentId,
           workspaceId: agentId,
-          matchTarget,
+          matchTarget: connectorMatchTarget,
         });
         decision = evalRes.decision;
         policySnapshotId = evalRes.policy_snapshot?.policy_snapshot_id;
+        appliedOverrideIds = evalRes.applied_override_ids;
       } catch {
         // Fail closed: require approval when policy evaluation fails.
         decision = "require_approval";
@@ -972,6 +1038,13 @@ export class TelegramChannelProcessor {
         return;
       }
 
+      const suggestedOverrides =
+        connectorMatchTarget &&
+        policySnapshotId &&
+        isSafeSuggestedOverridePattern(connectorMatchTarget)
+          ? [{ tool_id: "connector.send", pattern: connectorMatchTarget }]
+          : undefined;
+
       const planSource =
         accountId === DEFAULT_CHANNEL_ACCOUNT_ID ? connectorId : `${connectorId}@${accountId}`;
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
@@ -990,6 +1063,14 @@ export class TelegramChannelProcessor {
           thread_id: leader.thread_id,
           inbox_id: leader.inbox_id,
           policy_snapshot_id: policySnapshotId,
+          policy: policyService?.isEnabled()
+            ? {
+                policy_snapshot_id: policySnapshotId,
+                agent_id: agentId,
+                suggested_overrides: suggestedOverrides,
+                applied_override_ids: appliedOverrideIds,
+              }
+            : undefined,
           chunks: chunks.length,
           preview: chunks.slice(0, 1)[0] ?? "",
         },

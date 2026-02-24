@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 import { createIngressRoutes } from "../../src/routes/ingress.js";
+import { createApprovalRoutes } from "../../src/routes/approval.js";
 import { TelegramBot } from "../../src/modules/ingress/telegram-bot.js";
 import { TelegramChannelProcessor, TelegramChannelQueue } from "../../src/modules/channels/telegram.js";
 import { normalizeUpdate } from "../../src/modules/ingress/telegram.js";
@@ -12,6 +13,7 @@ import { PolicyService } from "../../src/modules/policy/service.js";
 import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
 import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
 import { ApprovalDal } from "../../src/modules/approval/dal.js";
+import { WsDeliveryReceiptEvent } from "@tyrum/schemas";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -1232,5 +1234,163 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
     } finally {
       await rm(tmp, { recursive: true, force: true });
     }
+  });
+
+  it("supports approve-always destination policies for connector sends", async () => {
+    db = openTestSqliteDb();
+
+    const tmp = await mkdtemp(join(tmpdir(), "tyrum-policy-"));
+    try {
+      const bundlePath = join(tmp, "policy.yml");
+      await writeFile(
+        bundlePath,
+        [
+          "v: 1",
+          "connectors:",
+          "  default: require_approval",
+          "  allow: []",
+          "  require_approval:",
+          "    - \"telegram:*\"",
+          "  deny: []",
+          "",
+        ].join("\n"),
+        "utf-8",
+      );
+      process.env["TYRUM_POLICY_BUNDLE_PATH"] = bundlePath;
+
+      const fetchFn = mockFetch();
+      const bot = new TelegramBot("test-token", fetchFn);
+      const queue = new TelegramChannelQueue(db, { agentId: "agent-1" });
+
+      const mockRuntime = {
+        turn: vi.fn().mockResolvedValue({
+          reply: "This requires approval",
+          session_id: "session-abc",
+          used_tools: [],
+          memory_written: false,
+        }),
+      };
+
+      const approvalDal = new ApprovalDal(db);
+      const policyOverrideDal = new PolicyOverrideDal(db);
+      const policyService = new PolicyService({
+        home: tmp,
+        snapshotDal: new PolicySnapshotDal(db),
+        overrideDal: policyOverrideDal,
+      });
+
+      const processor = new TelegramChannelProcessor({
+        db,
+        agents: {
+          getRuntime: async () => mockRuntime,
+          getPolicyService: () => policyService,
+        } as unknown as AgentRegistry,
+        telegramBot: bot,
+        owner: "test-owner",
+        debounceMs: 0,
+        maxBatch: 1,
+        approvalDal,
+        approvalNotifier: { notify: () => {} },
+      });
+
+      const normalized1 = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
+      await queue.enqueue(normalized1, { accountId: "work" });
+
+      await processor.tick();
+      expect(fetchFn).not.toHaveBeenCalled();
+
+      const pending = await approvalDal.getPending();
+      expect(pending).toHaveLength(1);
+
+      const matchTarget = "telegram:work:123";
+
+      const approvalsApp = new Hono();
+      approvalsApp.route("/", createApprovalRoutes({ approvalDal, policyOverrideDal }));
+
+      const respondRes = await approvalsApp.request(`/approvals/${String(pending[0]!.id)}/respond`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          decision: "approved",
+          mode: "always",
+          overrides: [{ tool_id: "connector.send", pattern: matchTarget }],
+        }),
+      });
+      expect(respondRes.status).toBe(200);
+
+      expect(await policyOverrideDal.list({ agentId: "agent-1", toolId: "connector.send" })).toHaveLength(1);
+
+      await processor.tick();
+      expect(fetchFn).toHaveBeenCalledOnce();
+
+      const normalized2 = normalizeUpdate(
+        JSON.stringify(makeTelegramUpdate("Help me again", 123, { messageId: 43 })),
+      );
+      await queue.enqueue(normalized2, { accountId: "work" });
+
+      await processor.tick();
+      expect(fetchFn).toHaveBeenCalledTimes(2);
+      expect(await approvalDal.getPending()).toHaveLength(0);
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("emits delivery receipt events for outbound sends", async () => {
+    db = openTestSqliteDb();
+
+    const fetchFn = mockFetch();
+    const bot = new TelegramBot("test-token", fetchFn);
+
+    const mockRuntime = {
+      turn: vi.fn().mockResolvedValue({
+        reply: "I can help with that!",
+        session_id: "session-abc",
+        used_tools: [],
+        memory_written: false,
+      }),
+    };
+
+    const queue = new TelegramChannelQueue(db);
+    const processor = new TelegramChannelProcessor({
+      db,
+      agents: makeAgents(mockRuntime),
+      telegramBot: bot,
+      owner: "test-owner",
+      debounceMs: 0,
+      maxBatch: 1,
+    });
+
+    const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
+    const enqueued = await queue.enqueue(normalized);
+
+    await processor.tick();
+
+    expect(fetchFn).toHaveBeenCalledOnce();
+
+    const expectedDedupeKey = `${enqueued.inbox.source}:${enqueued.inbox.thread_id}:${enqueued.inbox.message_id}:reply:0`;
+
+    const rows = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = 'ws.broadcast' ORDER BY id ASC",
+    );
+    expect(rows).toHaveLength(1);
+
+    const envelope = JSON.parse(rows[0]!.payload_json) as { message?: unknown };
+    const parsed = WsDeliveryReceiptEvent.safeParse(envelope.message);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+
+    expect(parsed.data.event_id).toBe(`delivery.receipt:${expectedDedupeKey}`);
+    expect(parsed.data.payload).toMatchObject({
+      session_id: enqueued.inbox.key,
+      lane: enqueued.inbox.lane,
+      channel: "telegram",
+      thread_id: enqueued.inbox.thread_id,
+      status: "sent",
+      receipt: expect.objectContaining({
+        dedupe_key: expectedDedupeKey,
+        chunk_index: 0,
+      }),
+    });
   });
 });
