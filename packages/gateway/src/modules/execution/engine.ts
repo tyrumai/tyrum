@@ -36,6 +36,7 @@ import {
 } from "../policy/domain.js";
 import type { SecretProvider } from "../secret/provider.js";
 import { collectSecretHandleIds } from "../secret/collect-secret-handle-ids.js";
+import { releaseLaneLease } from "../lanes/lane-lease.js";
 
 export interface StepResult {
   success: boolean;
@@ -986,7 +987,7 @@ export class ExecutionEngine {
         ttlMs: 5_000,
       });
       if (!workspaceOk) {
-        await this.releaseLaneLease({
+        await releaseLaneLease(this.db, {
           key: run.key,
           lane: run.lane,
           owner: input.workerId,
@@ -2892,15 +2893,4 @@ export class ExecutionEngine {
     });
   }
 
-  private async releaseLaneLease(opts: {
-    key: string;
-    lane: string;
-    owner: string;
-  }): Promise<void> {
-    await this.db.run(
-      `DELETE FROM lane_leases
-       WHERE key = ? AND lane = ? AND lease_owner = ?`,
-      [opts.key, opts.lane, opts.owner],
-    );
-  }
 }
