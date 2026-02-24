@@ -14,6 +14,8 @@ The repo ships a `docker-compose.yml` with two profiles:
 - default: single-host (`tyrum` service)
 - `split`: split-role (`tyrum-edge`, `tyrum-worker`, `tyrum-scheduler` + `postgres`)
 
+> Safety note: `docker-compose.yml` is **local-first**. It allows plaintext HTTP for convenience and publishes Postgres on `5432`. For remote deployments, add firewalling/allowlists, use TLS termination, and set strong database credentials. See `docs/advanced/remote-gateway.md`.
+
 ### Single-host
 
 ```bash
@@ -52,3 +54,5 @@ helm install tyrum charts/tyrum -f config/deployments/helm-split-role.values.yam
 ```
 
 Replace `REPLACE_ME` in `config/deployments/helm-split-role.values.yaml` with your Postgres password (or set `env.GATEWAY_DB_PATH` to your full Postgres URI).
+
+Once `env.GATEWAY_DB_PATH` contains real credentials, treat the resulting Helm values as sensitive (avoid committing it; prefer an untracked values file or a secret manager workflow).
