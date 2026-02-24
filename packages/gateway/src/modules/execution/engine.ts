@@ -925,7 +925,7 @@ export class ExecutionEngine {
 
       return row.run_id;
     });
-}
+  }
 
   async cancelRun(
     runId: string,
