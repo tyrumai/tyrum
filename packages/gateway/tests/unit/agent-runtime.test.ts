@@ -1554,6 +1554,226 @@ describe("AgentRuntime", () => {
     expect(usedTools.has("tool.exec")).toBe(true);
   });
 
+  it("rejects approvals that don't match tool_call_id during execution resume", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const policyService = {
+      isEnabled: () => false,
+      isObserveOnly: () => false,
+      evaluateToolCall: vi.fn(),
+    };
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("hello"),
+      fetchImpl: fetch404,
+      policyService: policyService as unknown as ConstructorParameters<typeof AgentRuntime>[0]["policyService"],
+    });
+
+    const approval = await container.approvalDal.create({
+      planId: "plan-1",
+      stepIndex: 0,
+      kind: "workflow_step",
+      prompt: "Approve tool.exec",
+      context: {
+        source: "agent-tool-execution",
+        tool_id: "tool.exec",
+        tool_call_id: "tc-other",
+        tool_match_target: "echo hi",
+      },
+    });
+    await container.approvalDal.respond(approval.id, true);
+
+    const toolDesc = {
+      id: "tool.exec",
+      description: "Execute shell commands on the local machine.",
+      risk: "high" as const,
+      requires_confirmation: true,
+      keywords: [],
+      inputSchema: {
+        type: "object",
+        properties: { command: { type: "string" } },
+        required: ["command"],
+        additionalProperties: false,
+      },
+    };
+
+    const toolExecutor = {
+      execute: vi.fn(async () => ({
+        tool_call_id: "tc-test",
+        output: "ok",
+        error: undefined,
+        provenance: undefined,
+      })),
+    };
+
+    const usedTools = new Set<string>();
+    const toolSet = (
+      runtime as unknown as {
+        buildToolSet: (
+          tools: readonly unknown[],
+          toolExecutor: unknown,
+          usedTools: Set<string>,
+          context: {
+            planId: string;
+            sessionId: string;
+            channel: string;
+            threadId: string;
+            execution?: {
+              runId: string;
+              stepIndex: number;
+              stepId: string;
+              stepApprovalId?: number;
+            };
+          },
+          contextReport: unknown,
+        ) => Record<string, { execute: (args: unknown, options?: unknown) => Promise<string> }>;
+      }
+    ).buildToolSet([toolDesc], toolExecutor, usedTools, {
+      planId: "plan-1",
+      sessionId: "session-1",
+      channel: "test",
+      threadId: "thread-1",
+      execution: {
+        runId: "run-1",
+        stepIndex: 0,
+        stepId: "step-1",
+        stepApprovalId: approval.id,
+      },
+    }, makeContextReport());
+
+    const res = await toolSet["tool.exec"]!.execute(
+      { command: "echo hi" },
+      { toolCallId: "tc-expected" } as unknown,
+    );
+
+    expect(res).toContain("tool execution not approved");
+    expect(toolExecutor.execute).toHaveBeenCalledTimes(0);
+    expect(usedTools.has("tool.exec")).toBe(false);
+  });
+
+  it("trims secret handle fields when resolving resumed tool args", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const secretProvider = {
+      resolve: vi.fn(
+        async (handle: { scope: string; created_at: string }) =>
+          handle.scope === "SCOPE" && handle.created_at === "2026-02-23T00:00:00.000Z"
+            ? JSON.stringify({ command: "echo from-secret" })
+            : undefined,
+      ),
+    };
+
+    const policyService = {
+      isEnabled: () => false,
+      isObserveOnly: () => false,
+      evaluateToolCall: vi.fn(),
+    };
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("hello"),
+      fetchImpl: fetch404,
+      secretProvider: secretProvider as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["secretProvider"],
+      policyService: policyService as unknown as ConstructorParameters<typeof AgentRuntime>[0]["policyService"],
+    });
+
+    const approval = await container.approvalDal.create({
+      planId: "plan-1",
+      stepIndex: 0,
+      kind: "workflow_step",
+      prompt: "Resume tool.exec",
+      context: {
+        source: "agent-tool-execution",
+        tool_id: "tool.exec",
+        tool_call_id: "tc-secret",
+        ai_sdk: {
+          tool_args_handle: {
+            handle_id: "h1",
+            provider: "env",
+            scope: "  SCOPE  ",
+            created_at: " 2026-02-23T00:00:00.000Z ",
+          },
+        },
+      },
+    });
+
+    const toolDesc = {
+      id: "tool.exec",
+      description: "Execute shell commands on the local machine.",
+      risk: "high" as const,
+      requires_confirmation: false,
+      keywords: [],
+      inputSchema: {
+        type: "object",
+        properties: { command: { type: "string" } },
+        required: ["command"],
+        additionalProperties: false,
+      },
+    };
+
+    const toolExecutor = {
+      execute: vi.fn(async () => ({
+        tool_call_id: "tc-secret",
+        output: "ok",
+        error: undefined,
+        provenance: undefined,
+      })),
+    };
+
+    const usedTools = new Set<string>();
+    const toolSet = (
+      runtime as unknown as {
+        buildToolSet: (
+          tools: readonly unknown[],
+          toolExecutor: unknown,
+          usedTools: Set<string>,
+          context: {
+            planId: string;
+            sessionId: string;
+            channel: string;
+            threadId: string;
+            execution?: {
+              runId: string;
+              stepIndex: number;
+              stepId: string;
+              stepApprovalId?: number;
+            };
+          },
+          contextReport: unknown,
+        ) => Record<string, { execute: (args: unknown, options?: unknown) => Promise<string> }>;
+      }
+    ).buildToolSet([toolDesc], toolExecutor, usedTools, {
+      planId: "plan-1",
+      sessionId: "session-1",
+      channel: "test",
+      threadId: "thread-1",
+      execution: {
+        runId: "run-1",
+        stepIndex: 0,
+        stepId: "step-1",
+        stepApprovalId: approval.id,
+      },
+    }, makeContextReport());
+
+    await toolSet["tool.exec"]!.execute({ command: "echo hi" }, { toolCallId: "tc-secret" } as unknown);
+
+    expect(toolExecutor.execute).toHaveBeenCalledTimes(1);
+    expect(toolExecutor.execute.mock.calls[0]?.[2]).toEqual({ command: "echo from-secret" });
+  });
+
   it("does not let concurrent tool calls change input provenance mid-flight for policy evaluation", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({

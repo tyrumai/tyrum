@@ -46,6 +46,13 @@ export interface StepResult {
   evidence?: EvaluationContext;
   artifacts?: ArtifactRefT[];
   cost?: AttemptCostT;
+  pause?: {
+    kind: string;
+    prompt: string;
+    detail: string;
+    context?: unknown;
+    expiresAt?: string | null;
+  };
 }
 
 export interface StepExecutor {
@@ -2045,6 +2052,42 @@ export class ExecutionEngine {
       }
 
       if (result.success) {
+        if (result.pause) {
+          await this.markAttemptSucceeded(
+            tx,
+            opts,
+            result,
+            evidenceJson,
+            postconditionReportJson,
+            artifactsJson,
+            costJson,
+          );
+          const artifacts = safeJsonParse(artifactsJson, [] as ArtifactRefT[]);
+          await this.recordArtifactsTx(
+            tx,
+            {
+              runId: opts.runId,
+              stepId: opts.stepId,
+              attemptId: opts.attemptId,
+              workspaceId: opts.workspaceId,
+              key: opts.key,
+            },
+            artifacts,
+          );
+          const paused = await this.pauseRunForApproval(tx, opts, {
+            kind: result.pause.kind,
+            prompt: result.pause.prompt,
+            detail: result.pause.detail,
+            context: result.pause.context,
+            expiresAt: result.pause.expiresAt ?? undefined,
+          });
+          return {
+            kind: "paused" as const,
+            reason: "approval" as const,
+            approvalId: paused.approvalId,
+          };
+        }
+
         if (pauseDetail) {
           await this.markAttemptSucceeded(
             tx,
@@ -2630,8 +2673,11 @@ export class ExecutionEngine {
       [resumeToken, opts.runId, nowIso],
     );
 
-    const contextToPersist = this.redactUnknown({
-      ...(input.context && typeof input.context === "object" ? input.context : {}),
+    const isRecord = (value: unknown): value is Record<string, unknown> =>
+      value !== null && typeof value === "object" && !Array.isArray(value);
+
+    const baseContext: Record<string, unknown> = {
+      ...(isRecord(input.context) ? input.context : {}),
       resume_token: resumeToken,
       run_id: opts.runId,
       job_id: opts.jobId,
@@ -2639,7 +2685,8 @@ export class ExecutionEngine {
       ...(opts.attemptId ? { attempt_id: opts.attemptId } : {}),
       paused_reason: pausedReason,
       paused_detail: input.detail,
-    });
+    };
+    const contextToPersist = this.redactUnknown(baseContext);
 
     const agentId =
       opts.key.startsWith("agent:") && opts.key.split(":").length > 1

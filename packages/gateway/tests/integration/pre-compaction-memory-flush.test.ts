@@ -140,5 +140,170 @@ describe("Pre-compaction memory flush", () => {
     expect(daily).toContain("Pre-compaction memory flush");
     expect(daily).toContain("FLUSH_OK");
   });
-});
 
+  it("redacts secret-like text from the flush prompt", async () => {
+    const secret = "sk-123456789012345678901234567890";
+
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-preflush-secret-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
+
+    await writeFile(
+      join(homeDir, "agent.yml"),
+      [
+        "model:",
+        "  model: openai/gpt-4.1",
+        "skills:",
+        "  enabled: []",
+        "mcp:",
+        "  enabled: []",
+        "tools:",
+        "  allow: []",
+        "sessions:",
+        "  ttl_days: 30",
+        "  max_turns: 1",
+        "memory:",
+        "  markdown_enabled: true",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const languageModel = createSequencedTextLanguageModel([
+      "a1",
+      "FLUSH_OK",
+      "a2",
+    ]);
+
+    const mcpManager = {
+      listToolDescriptors: vi.fn(async () => []),
+      shutdown: vi.fn(async () => {}),
+      callTool: vi.fn(async () => ({ content: [] })),
+    };
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel,
+      mcpManager: mcpManager as unknown as ConstructorParameters<typeof AgentRuntime>[0]["mcpManager"],
+    });
+
+    const first = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-secret",
+      message: `my key is ${secret}`,
+    });
+    expect(first.reply).toBe("a1");
+
+    const second = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-secret",
+      message: "second",
+    });
+    expect(second.reply).toBe("a2");
+
+    expect(languageModel.doGenerateCalls).toHaveLength(3);
+    const flushCall = languageModel.doGenerateCalls[1];
+    const flushPromptText = flushCall
+      ? flushCall.prompt
+        .filter((msg) => msg.role === "user")
+        .flatMap((msg) => (Array.isArray(msg.content) ? msg.content : []))
+        .filter((part) => part.type === "text")
+        .map((part) => part.text)
+        .join("\n")
+      : "";
+
+    expect(flushPromptText).not.toContain(secret);
+    expect(flushPromptText).toContain("[REDACTED]");
+  });
+
+  it("bounds pre-compaction flush timeout to a slice of the turn timeout", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-preflush-timeout-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
+
+    await writeFile(
+      join(homeDir, "agent.yml"),
+      [
+        "model:",
+        "  model: openai/gpt-4.1",
+        "skills:",
+        "  enabled: []",
+        "mcp:",
+        "  enabled: []",
+        "tools:",
+        "  allow: []",
+        "sessions:",
+        "  ttl_days: 30",
+        "  max_turns: 1",
+        "memory:",
+        "  markdown_enabled: true",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    let callCount = 0;
+    const languageModel = new MockLanguageModelV3({
+      doGenerate: async (options) => {
+        callCount += 1;
+
+        if (callCount === 1) {
+          return {
+            content: [{ type: "text" as const, text: "a1" }],
+            finishReason: { unified: "stop" as const, raw: undefined },
+            usage: usage(),
+            warnings: [],
+          };
+        }
+
+        if (callCount === 2) {
+          const signal = options.abortSignal;
+          if (!signal) {
+            throw new Error("expected abortSignal for pre-compaction flush call");
+          }
+
+          await new Promise((_, reject) => {
+            if (signal.aborted) {
+              reject(new Error("aborted"));
+              return;
+            }
+            signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+          });
+        }
+
+        return {
+          content: [{ type: "text" as const, text: "a2" }],
+          finishReason: { unified: "stop" as const, raw: undefined },
+          usage: usage(),
+          warnings: [],
+        };
+      },
+    });
+
+    const mcpManager = {
+      listToolDescriptors: vi.fn(async () => []),
+      shutdown: vi.fn(async () => {}),
+      callTool: vi.fn(async () => ({ content: [] })),
+    };
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel,
+      mcpManager: mcpManager as unknown as ConstructorParameters<typeof AgentRuntime>[0]["mcpManager"],
+    });
+
+    const first = await (runtime as unknown as { turnDirect: Function }).turnDirect(
+      { channel: "test", thread_id: "thread-timeout", message: "first" },
+      { timeoutMs: 1_000 },
+    );
+    expect(first.reply).toBe("a1");
+
+    const startMs = performance.now();
+    const second = await (runtime as unknown as { turnDirect: Function }).turnDirect(
+      { channel: "test", thread_id: "thread-timeout", message: "second" },
+      { timeoutMs: 100 },
+    );
+    const elapsedMs = performance.now() - startMs;
+
+    expect(second.reply).toBe("a2");
+    expect(elapsedMs).toBeLessThan(200);
+  });
+});
