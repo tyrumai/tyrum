@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { ContextReport } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
 
 export interface ContextReportRow {
@@ -31,7 +32,9 @@ function normalizeTime(value: string | Date): string {
 
 function parseReport(raw: string): unknown {
   try {
-    return JSON.parse(raw) as unknown;
+    const json = JSON.parse(raw) as unknown;
+    const parsed = ContextReport.safeParse(json);
+    return parsed.success ? parsed.data : json;
   } catch {
     return null;
   }
@@ -135,4 +138,3 @@ export class ContextReportDal {
     return rows.map(toRow);
   }
 }
-
