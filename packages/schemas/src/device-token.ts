@@ -6,15 +6,11 @@ const Role = z.enum(["client", "node"]);
 
 export const MAX_DEVICE_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30;
 
-function dedupeScopes(scopes: string[]): string[] {
-  return [...new Set(scopes.map((scope) => scope.trim()))];
-}
-
 export const DeviceTokenIssueRequest = z
   .object({
     device_id: z.string().trim().min(1),
     role: Role,
-    scopes: z.array(Scope).default([]).transform(dedupeScopes),
+    scopes: z.array(Scope).default([]),
     ttl_seconds: z.number().int().positive().max(MAX_DEVICE_TOKEN_TTL_SECONDS).optional(),
   })
   .strict();
@@ -27,7 +23,7 @@ export const DeviceTokenIssueResponse = z
     token_id: z.string().trim().min(1),
     device_id: z.string().trim().min(1),
     role: Role,
-    scopes: z.array(Scope).transform(dedupeScopes),
+    scopes: z.array(Scope),
     issued_at: DateTimeSchema,
     expires_at: DateTimeSchema,
   })
@@ -55,7 +51,7 @@ export const DeviceTokenClaims = z
     token_id: z.string().trim().min(1).optional(),
     device_id: z.string().trim().min(1).optional(),
     role: z.enum(["admin", "client", "node"]),
-    scopes: z.array(Scope).transform(dedupeScopes),
+    scopes: z.array(Scope),
     issued_at: DateTimeSchema.optional(),
     expires_at: DateTimeSchema.optional(),
   })

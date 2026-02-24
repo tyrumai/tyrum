@@ -1,12 +1,13 @@
 import {
   NormalizedThreadMessage as NormalizedThreadMessageSchema,
+  type MessageProvenance,
   PeerId,
   buildAgentSessionKey,
   normalizedContainerKindFromThreadKind,
   parseTyrumKey,
   resolveDmScope,
 } from "@tyrum/schemas";
-import type { NormalizedThreadMessage } from "@tyrum/schemas";
+import type { NormalizedMessageEnvelope, NormalizedThreadMessage } from "@tyrum/schemas";
 import type { DmScope } from "@tyrum/schemas";
 import type { TelegramBot } from "../ingress/telegram-bot.js";
 import type { SqlDb } from "../../statestore/types.js";
@@ -41,6 +42,28 @@ function extractMessageText(normalized: NormalizedThreadMessage): string {
   const content = normalized.message.content;
   if (content.kind === "text") return content.text;
   return content.caption ?? "";
+}
+
+function mergeInboundEnvelopes(envelopes: NormalizedMessageEnvelope[], mergedText: string): NormalizedMessageEnvelope | undefined {
+  if (envelopes.length === 0) return undefined;
+
+  const base = envelopes[0]!;
+  const attachments = envelopes.flatMap((env) => env.content.attachments);
+  const provenanceSet = new Set<MessageProvenance>();
+  for (const env of envelopes) {
+    for (const tag of env.provenance) {
+      provenanceSet.add(tag);
+    }
+  }
+
+  return {
+    ...base,
+    content: {
+      text: mergedText.length > 0 ? mergedText : undefined,
+      attachments,
+    },
+    provenance: provenanceSet.size > 0 ? [...provenanceSet] : base.provenance,
+  };
 }
 
 function agentIdFromEnv(): string {
@@ -256,6 +279,23 @@ export class TelegramChannelQueue {
       accountId === telegramAccountIdFromEnv()
         ? "telegram"
         : buildChannelSourceKey({ connector: "telegram", accountId });
+    const deliveryAccount = source === "telegram" ? DEFAULT_CHANNEL_ACCOUNT_ID : accountId;
+    const payload: NormalizedThreadMessage = normalized.message.envelope
+      ? {
+        ...normalized,
+        message: {
+          ...normalized.message,
+          envelope: {
+            ...normalized.message.envelope,
+            delivery: {
+              ...normalized.message.envelope.delivery,
+              channel: "telegram",
+              account: deliveryAccount,
+            },
+          },
+        },
+      }
+      : normalized;
     const parsed = parseTyrumKey(key as never);
     if (
       parsed.kind === "agent" &&
@@ -284,12 +324,12 @@ export class TelegramChannelQueue {
 
     const { row, deduped } = await this.inbox.enqueue({
       source,
-      thread_id: normalized.thread.id,
-      message_id: normalized.message.id,
+      thread_id: payload.thread.id,
+      message_id: payload.message.id,
       key,
       lane,
       received_at_ms: Date.now(),
-      payload: normalized,
+      payload,
     });
 
     return { inbox: row, deduped, message_text: text };
@@ -538,16 +578,41 @@ export class TelegramChannelProcessor {
     const connectorId = address.connector;
     const accountId = address.accountId;
     const messages: string[] = [];
+    const envelopes: NormalizedMessageEnvelope[] = [];
+    let hasAttachments = false;
 
     for (const row of rows) {
       const parsed = NormalizedThreadMessageSchema.safeParse(row.payload);
       if (!parsed.success) continue;
+
+      const envelope = parsed.data.message.envelope;
+      if (envelope) {
+        const patchedEnvelope: NormalizedMessageEnvelope = {
+          ...envelope,
+          delivery: {
+            ...envelope.delivery,
+            channel: connectorId,
+            account: accountId,
+          },
+        };
+        envelopes.push(patchedEnvelope);
+
+        const text = patchedEnvelope.content.text?.trim();
+        if (text) messages.push(text);
+
+        if (patchedEnvelope.content.attachments.length > 0) {
+          hasAttachments = true;
+        }
+        continue;
+      }
+
       const text = extractMessageText(parsed.data).trim();
       if (text.length > 0) messages.push(text);
     }
 
     const combined = messages.join("\n\n").trim();
-    if (combined.length === 0) {
+    const mergedEnvelope = mergeInboundEnvelopes(envelopes, combined);
+    if (combined.length === 0 && !hasAttachments) {
       for (const row of rows) {
         await this.inbox.markCompleted(row.inbox_id, this.owner, "");
       }
@@ -568,9 +633,10 @@ export class TelegramChannelProcessor {
 
       const runtime = await this.agents.getRuntime(agentId);
       const result = await runtime.turn({
+        ...(combined.length > 0 ? { message: combined } : {}),
+        envelope: mergedEnvelope,
         channel: connectorId,
         thread_id: leader.thread_id,
-        message: combined,
       });
       reply = result.reply ?? "";
     } catch (err) {

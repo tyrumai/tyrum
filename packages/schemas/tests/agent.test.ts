@@ -98,6 +98,34 @@ describe("McpServerSpec", () => {
 });
 
 describe("AgentTurnRequest", () => {
+  it("accepts an envelope-only request with attachments", () => {
+    const parsed = AgentTurnRequest.safeParse({
+      envelope: {
+        message_id: "msg-1",
+        received_at: "2025-10-05T16:31:09Z",
+        delivery: {
+          channel: "telegram",
+          account: "default",
+        },
+        container: {
+          kind: "dm",
+          id: "chat-123",
+        },
+        sender: {
+          id: "user-42",
+        },
+        content: {
+          attachments: [{ kind: "photo" }],
+        },
+        provenance: ["user"],
+      },
+    });
+
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.envelope?.content.attachments).toEqual([{ kind: "photo" }]);
+  });
+
   it("rejects blank message content", () => {
     const parsed = AgentTurnRequest.safeParse({
       channel: "telegram",
