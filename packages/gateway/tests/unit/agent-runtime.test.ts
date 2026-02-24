@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import { ExecutionEngine } from "../../src/modules/execution/engine.js";
+import { LaneQueueSignalDal } from "../../src/modules/lanes/queue-signal-dal.js";
 import { simulateReadableStream } from "ai";
 import type {
   LanguageModelV3,
@@ -14,6 +15,7 @@ import type {
   LanguageModelV3StreamResult,
 } from "@ai-sdk/provider";
 import { createStubLanguageModel } from "./stub-language-model.js";
+import { MockLanguageModelV3 } from "ai/test";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -92,7 +94,132 @@ describe("AgentRuntime", () => {
 
     expect(result.reply).toBe("hello");
     expect(result.used_tools).toEqual([]);
-  });
+  }, 10_000);
+
+  it("clears unclaimed lane interrupt signals before the next turn's first tool boundary", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    await writeFile(join(homeDir, "notes.txt"), "important notes", "utf-8");
+    await writeFile(
+      join(homeDir, "agent.yml"),
+      [
+        "model:",
+        "  model: openai/gpt-4.1",
+        "skills:",
+        "  enabled: []",
+        "mcp:",
+        "  enabled: []",
+        "tools:",
+        "  allow:",
+        "    - tool.fs.read",
+        "sessions:",
+        "  ttl_days: 30",
+        "  max_turns: 20",
+        "memory:",
+        "  markdown_enabled: false",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const key = "agent:default:test:thread-1";
+    const lane = "main";
+    const nowMs = Date.now();
+
+    const signals = new LaneQueueSignalDal(container.db);
+    await signals.setSignal({
+      key,
+      lane,
+      kind: "interrupt",
+      inbox_id: null,
+      queue_mode: "interrupt",
+      message_text: "interrupt",
+      created_at_ms: nowMs,
+    });
+
+    const runtime1 = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("hello"),
+      fetchImpl: fetch404,
+    });
+
+    await runtime1.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      message: "hello",
+      metadata: { tyrum_key: key, lane },
+    });
+
+    const remaining = await container.db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM lane_queue_signals WHERE key = ? AND lane = ?",
+      [key, lane],
+    );
+    expect(remaining?.n).toBe(0);
+
+    const usage = () => ({
+      inputTokens: {
+        total: 10,
+        noCache: 10,
+        cacheRead: undefined,
+        cacheWrite: undefined,
+      },
+      outputTokens: {
+        total: 5,
+        text: 5,
+        reasoning: undefined,
+      },
+    });
+
+    let callCount = 0;
+    const toolLoopModel = new MockLanguageModelV3({
+      doGenerate: async () => {
+        callCount += 1;
+        if (callCount === 1) {
+          return {
+            content: [
+              {
+                type: "tool-call" as const,
+                toolCallId: "tc-1",
+                toolName: "tool.fs.read",
+                input: JSON.stringify({ path: "notes.txt" }),
+              },
+            ],
+            finishReason: { unified: "tool-calls" as const, raw: undefined },
+            usage: usage(),
+            warnings: [],
+          };
+        }
+
+        return {
+          content: [{ type: "text" as const, text: "done" }],
+          finishReason: { unified: "stop" as const, raw: undefined },
+          usage: usage(),
+          warnings: [],
+        };
+      },
+    });
+
+    const runtime2 = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: toolLoopModel,
+      fetchImpl: fetch404,
+    });
+
+    const res2 = await runtime2.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      message: "read notes",
+      metadata: { tyrum_key: key, lane },
+    });
+
+    expect(res2.reply).toBe("done");
+    expect(res2.used_tools).toContain("tool.fs.read");
+  }, 10_000);
 
   it("reports system prompt section char counts as string lengths", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));

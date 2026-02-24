@@ -2625,10 +2625,19 @@ export class ExecutionEngine {
     lane: string;
     owner: string;
   }): Promise<void> {
-    await this.db.run(
-      `DELETE FROM lane_leases
-       WHERE key = ? AND lane = ? AND lease_owner = ?`,
-      [opts.key, opts.lane, opts.owner],
-    );
+    await this.db.transaction(async (tx) => {
+      const res = await tx.run(
+        `DELETE FROM lane_leases
+         WHERE key = ? AND lane = ? AND lease_owner = ?`,
+        [opts.key, opts.lane, opts.owner],
+      );
+
+      if (res.changes === 1) {
+        await tx.run(
+          "DELETE FROM lane_queue_signals WHERE key = ? AND lane = ?",
+          [opts.key, opts.lane],
+        );
+      }
+    });
   }
 }

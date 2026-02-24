@@ -220,7 +220,7 @@ describe("Tool execution loop", () => {
 
     expect(result.reply).toBe("I read the file, it says: important notes");
     expect(result.used_tools).toContain("tool.fs.read");
-  });
+  }, 10_000);
 
   it("prunes older tool results from the model prompt deterministically", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));

@@ -126,6 +126,72 @@ describe("Telegram channel queue modes", () => {
     expect(turnCalls[0]?.message).toBe("one\n\ntwo");
   });
 
+  it("treats invalid queue_mode values as collect (so batching is preserved)", async () => {
+    const turnCalls: Array<{ message: string | undefined }> = [];
+
+    const agents: AgentRegistry = {
+      getRuntime: vi.fn(async () => ({
+        turn: vi.fn(async (req: { message?: string }) => {
+          turnCalls.push({ message: req.message });
+          return {
+            reply: req.message ?? "",
+            session_id: "session-1",
+            used_tools: [],
+            memory_written: false,
+          };
+        }),
+      })),
+    } as unknown as AgentRegistry;
+
+    const telegramBot: TelegramBot = {
+      sendMessage: vi.fn(async () => ({ ok: true, result: { message_id: 1 } })),
+    } as unknown as TelegramBot;
+
+    await inbox.enqueue({
+      source: "telegram",
+      thread_id: "chat-1",
+      message_id: "msg-1",
+      key: "agent:default:telegram:default:dm:chat-1",
+      lane: "main",
+      received_at_ms: 1_000,
+      queue_mode: "not-a-real-mode",
+      payload: makeNormalizedTextMessage({
+        threadId: "chat-1",
+        messageId: "msg-1",
+        text: "one",
+      }),
+    });
+
+    await inbox.enqueue({
+      source: "telegram",
+      thread_id: "chat-1",
+      message_id: "msg-2",
+      key: "agent:default:telegram:default:dm:chat-1",
+      lane: "main",
+      received_at_ms: 1_500,
+      queue_mode: "not-a-real-mode",
+      payload: makeNormalizedTextMessage({
+        threadId: "chat-1",
+        messageId: "msg-2",
+        text: "two",
+      }),
+    });
+
+    const processor = new TelegramChannelProcessor({
+      db,
+      agents,
+      telegramBot,
+      owner: "worker-1",
+      debounceMs: 1_000,
+      maxBatch: 5,
+    });
+
+    await processor.tick();
+
+    expect(turnCalls).toHaveLength(1);
+    expect(turnCalls[0]?.message).toBe("one\n\ntwo");
+  });
+
   it("does not batch followup-mode messages", async () => {
     const turnCalls: Array<{ message: string | undefined }> = [];
 
@@ -194,4 +260,3 @@ describe("Telegram channel queue modes", () => {
     expect(turnCalls[1]?.message).toBe("two");
   });
 });
-

@@ -229,7 +229,6 @@ type LaneQueueState = {
   interruptError: LaneQueueInterruptError | undefined;
   cancelToolCalls: boolean;
   pendingInjectionTexts: string[];
-  injectedTranscriptTexts: string[];
 };
 
 function formatNormalizedAttachment(attachment: NormalizedAttachmentT): string {
@@ -1499,7 +1498,22 @@ export class AgentRuntime {
     const finalize = async (): Promise<AgentTurnResponseT> => {
       const result = await streamResult;
       const reply = (await result.text) || "No assistant response returned.";
-      return this.finalizeTurn(ctx, session, resolved, reply, usedTools, contextReport);
+      try {
+        return await this.finalizeTurn(ctx, session, resolved, reply, usedTools, contextReport);
+      } finally {
+        if (laneQueue) {
+          try {
+            await laneQueue.signals.clearSignal(laneQueue.scope);
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            this.opts.container.logger.warn("lane_queue.signal_cleanup_failed", {
+              key: laneQueue.scope.key,
+              lane: laneQueue.scope.lane,
+              error: message,
+            });
+          }
+        }
+      }
     };
 
     return { streamResult, sessionId: session.session_id, finalize };
@@ -1555,7 +1569,22 @@ export class AgentRuntime {
     });
 
     const reply = result.text || "No assistant response returned.";
-    return this.finalizeTurn(ctx, session, resolved, reply, usedTools, contextReport);
+    try {
+      return await this.finalizeTurn(ctx, session, resolved, reply, usedTools, contextReport);
+    } finally {
+      if (laneQueue) {
+        try {
+          await laneQueue.signals.clearSignal(laneQueue.scope);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          this.opts.container.logger.warn("lane_queue.signal_cleanup_failed", {
+            key: laneQueue.scope.key,
+            lane: laneQueue.scope.lane,
+            error: message,
+          });
+        }
+      }
+    }
   }
 
   private async turnViaExecutionEngine(input: AgentTurnRequestT): Promise<AgentTurnResponseT> {
@@ -2012,7 +2041,6 @@ export class AgentRuntime {
 	          interruptError: undefined,
 	          cancelToolCalls: false,
 	          pendingInjectionTexts: [],
-	          injectedTranscriptTexts: [],
 	        }
 	      : undefined;
     const session = await this.sessionDal.getOrCreate(resolved.channel, resolved.thread_id, this.agentId);
@@ -2334,7 +2362,6 @@ export class AgentRuntime {
 	              const text = signal.message_text.trim();
 	              if (text.length > 0) {
 	                laneQueue.pendingInjectionTexts.push(text);
-	                laneQueue.injectedTranscriptTexts.push(text);
               }
               laneQueue.cancelToolCalls = true;
 	            }

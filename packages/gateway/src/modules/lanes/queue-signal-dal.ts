@@ -75,6 +75,13 @@ export class LaneQueueSignalDal {
     );
   }
 
+  async clearSignal(input: { key: string; lane: string }): Promise<void> {
+    await this.db.run(
+      "DELETE FROM lane_queue_signals WHERE key = ? AND lane = ?",
+      [input.key, input.lane],
+    );
+  }
+
   async claimSignal(input: { key: string; lane: string }): Promise<LaneQueueSignal | undefined> {
     const nowIso = new Date().toISOString();
 

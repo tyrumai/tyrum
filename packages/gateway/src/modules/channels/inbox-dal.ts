@@ -5,6 +5,19 @@ export type ChannelInboxStatus = "queued" | "processing" | "completed" | "failed
 
 const DEFAULT_INBOUND_DEDUPE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const INBOUND_DEDUPE_TTL_ENV = "TYRUM_CHANNEL_INBOUND_DEDUPE_TTL_MS";
+const DEFAULT_QUEUE_MODE = "collect";
+const ALLOWED_QUEUE_MODES = new Set([
+  "collect",
+  "followup",
+  "steer",
+  "steer_backlog",
+  "interrupt",
+]);
+
+function normalizeQueueMode(raw: string | undefined): string {
+  const normalized = raw?.trim().toLowerCase() ?? "";
+  return ALLOWED_QUEUE_MODES.has(normalized) ? normalized : DEFAULT_QUEUE_MODE;
+}
 
 function inboundDedupeTtlMs(): number {
   const raw = process.env[INBOUND_DEDUPE_TTL_ENV]?.trim();
@@ -130,7 +143,7 @@ export class ChannelInboxDal {
     const accountId = address.accountId;
     const containerId = input.thread_id.trim();
     const messageId = input.message_id.trim();
-    const queueMode = input.queue_mode?.trim() || "collect";
+    const queueMode = normalizeQueueMode(input.queue_mode);
 
     return await this.db.transaction(async (tx) => {
       // Best-effort prune of expired keys to keep the dedupe table bounded.

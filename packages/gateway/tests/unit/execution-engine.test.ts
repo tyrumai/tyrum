@@ -933,5 +933,5 @@ describe("ExecutionEngine (normalized)", () => {
       await dbB.close();
       await rm(dir, { recursive: true, force: true });
     }
-  }, 20_000);
+	  }, 20_000);
 });

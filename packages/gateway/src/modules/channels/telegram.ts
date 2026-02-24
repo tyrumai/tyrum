@@ -233,11 +233,20 @@ async function tryAcquireLaneLease(db: SqlDb, opts: {
 }
 
 async function releaseLaneLease(db: SqlDb, opts: { key: string; lane: string; owner: string }): Promise<void> {
-  await db.run(
-    `DELETE FROM lane_leases
-     WHERE key = ? AND lane = ? AND lease_owner = ?`,
-    [opts.key, opts.lane, opts.owner],
-  );
+  await db.transaction(async (tx) => {
+    const res = await tx.run(
+      `DELETE FROM lane_leases
+       WHERE key = ? AND lane = ? AND lease_owner = ?`,
+      [opts.key, opts.lane, opts.owner],
+    );
+
+    if (res.changes === 1) {
+      await tx.run(
+        "DELETE FROM lane_queue_signals WHERE key = ? AND lane = ?",
+        [opts.key, opts.lane],
+      );
+    }
+  });
 }
 
 export class TelegramChannelQueue {
@@ -341,34 +350,43 @@ export class TelegramChannelQueue {
       payload,
     });
 
-    if (runActive && (queueMode === "steer" || queueMode === "steer_backlog" || queueMode === "interrupt")) {
-      const signals = new LaneQueueSignalDal(this.db);
-      await signals.setSignal({
-        key,
-        lane,
-        kind: queueMode === "interrupt" ? "interrupt" : "steer",
-        inbox_id: row.inbox_id,
-        queue_mode: queueMode,
-        message_text: text,
-        created_at_ms: nowMs,
-      });
+    const effectiveQueueMode = row.queue_mode;
+    if (
+      !deduped &&
+      runActive &&
+      (effectiveQueueMode === "steer" ||
+        effectiveQueueMode === "steer_backlog" ||
+        effectiveQueueMode === "interrupt")
+    ) {
+      await this.db.transaction(async (tx) => {
+        const signals = new LaneQueueSignalDal(tx);
+        await signals.setSignal({
+          key,
+          lane,
+          kind: effectiveQueueMode === "interrupt" ? "interrupt" : "steer",
+          inbox_id: row.inbox_id,
+          queue_mode: effectiveQueueMode,
+          message_text: text,
+          created_at_ms: nowMs,
+        });
 
-      if (queueMode === "interrupt") {
-        const nowIso = new Date(nowMs).toISOString();
-        await this.db.run(
-          `UPDATE channel_inbox
-           SET status = 'completed',
-               lease_owner = NULL,
-               lease_expires_at_ms = NULL,
-               processed_at = COALESCE(processed_at, ?),
-               error = NULL,
-               reply_text = COALESCE(reply_text, '')
-           WHERE key = ? AND lane = ?
-             AND status = 'queued'
-             AND inbox_id <> ?`,
-          [nowIso, key, lane, row.inbox_id],
-        );
-      }
+        if (effectiveQueueMode === "interrupt") {
+          const nowIso = new Date(nowMs).toISOString();
+          await tx.run(
+            `UPDATE channel_inbox
+             SET status = 'completed',
+                 lease_owner = NULL,
+                 lease_expires_at_ms = NULL,
+                 processed_at = COALESCE(processed_at, ?),
+                 error = NULL,
+                 reply_text = COALESCE(reply_text, '')
+             WHERE key = ? AND lane = ?
+               AND status = 'queued'
+               AND inbox_id <> ?`,
+            [nowIso, key, lane, row.inbox_id],
+          );
+        }
+      });
     }
 
     return { inbox: row, deduped, message_text: text };
