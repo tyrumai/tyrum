@@ -39,6 +39,14 @@ function isFalsyEnvFlag(value: string | undefined): boolean {
   return v.length > 0 && ["0", "false", "off", "no"].includes(v);
 }
 
+function normalizeLane(raw: string | undefined): "main" | "cron" | "subagent" {
+  const normalized = raw?.trim().toLowerCase();
+  if (normalized === "main" || normalized === "cron" || normalized === "subagent") {
+    return normalized;
+  }
+  return "main";
+}
+
 export function isChannelPipelineEnabled(): boolean {
   return !isFalsyEnvFlag(process.env["TYRUM_CHANNEL_PIPELINE_ENABLED"]);
 }
@@ -258,7 +266,7 @@ export class TelegramChannelQueue {
     this.peerIdentityLinks = new PeerIdentityLinkDal(db);
     this.agentId = opts?.agentId?.trim() || agentIdFromEnv();
     this.accountId = opts?.accountId?.trim() || opts?.channelKey?.trim() || telegramAccountIdFromEnv();
-    this.lane = opts?.lane?.trim() || "main";
+    this.lane = normalizeLane(opts?.lane);
     this.dmScope = resolveDmScope({ configured: opts?.dmScope ?? "per_account_channel_peer" });
     this.ws = opts?.ws;
   }
@@ -296,7 +304,7 @@ export class TelegramChannelQueue {
     const text = extractMessageText(normalized).trim();
     const agentId = opts?.agentId?.trim() || this.agentId;
     const accountId = opts?.accountId?.trim() || opts?.channelKey?.trim() || this.accountId;
-    const lane = opts?.lane?.trim() || this.lane;
+    const lane = typeof opts?.lane === "string" ? normalizeLane(opts.lane) : this.lane;
     const dmScope = opts?.dmScope ?? this.dmScope;
     const queueMode = opts?.queueMode?.trim() || "collect";
     let key = telegramThreadKey(normalized, {

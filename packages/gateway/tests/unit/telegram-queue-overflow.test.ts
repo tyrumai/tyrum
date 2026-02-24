@@ -261,5 +261,40 @@ describe("Channel inbox queue overflow policies", () => {
     const typed = WsEvent.safeParse(parsed.data);
     expect(typed.success).toBe(true);
   });
-});
 
+  it("normalizes invalid lane values so overflow events are not dropped", async () => {
+    process.env["TYRUM_CHANNEL_INBOUND_QUEUE_CAP"] = "1";
+    process.env["TYRUM_CHANNEL_INBOUND_QUEUE_OVERFLOW"] = "drop_newest";
+
+    const send = vi.fn();
+    const ws = {
+      connectionManager: {
+        allClients: () => [{ ws: { send } }],
+      },
+    };
+
+    const queue = new TelegramChannelQueue(db, {
+      agentId: "default",
+      accountId: "default",
+      lane: "not-a-real-lane",
+      dmScope: "per_account_channel_peer",
+      ws,
+    });
+
+    await queue.enqueue(
+      makeNormalizedTextMessage({ threadId: "chat-1", messageId: "msg-1", text: "one" }),
+      { queueMode: "followup" },
+    );
+    await queue.enqueue(
+      makeNormalizedTextMessage({ threadId: "chat-1", messageId: "msg-2", text: "two" }),
+      { queueMode: "followup" },
+    );
+
+    expect(send).toHaveBeenCalledTimes(1);
+    const raw = send.mock.calls[0]?.[0];
+    const parsed = WsEventEnvelope.safeParse(JSON.parse(String(raw)));
+    expect(parsed.success).toBe(true);
+    expect(parsed.data.type).toBe("channel.queue.overflow");
+    expect((parsed.data.payload as { lane?: string }).lane).toBe("main");
+  });
+});
