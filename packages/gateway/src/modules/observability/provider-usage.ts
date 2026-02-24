@@ -147,7 +147,9 @@ export class ProviderUsagePoller {
 
     const result = await this.pollProviderUsage({ provider, profileId, agentId: pin.agent_id });
     const ttlMs = result.status === "ok" ? cacheTtlMs : errorCacheTtlMs;
-    this.cache.set(cacheKey, { expires_at_ms: nowMs + ttlMs, result });
+    const storedAtMs = Date.now();
+    const baseMs = storedAtMs >= nowMs ? storedAtMs : nowMs;
+    this.cache.set(cacheKey, { expires_at_ms: baseMs + ttlMs, result });
     return result;
   }
 
