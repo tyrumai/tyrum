@@ -1819,7 +1819,10 @@ export class AgentRuntime {
     const stepApprovalId = opts?.execution?.stepApprovalId;
     if (stepApprovalId) {
       const approval = await this.approvalDal.getById(stepApprovalId);
-      if (approval && (approval.status === "approved" || approval.status === "denied")) {
+      if (
+        approval &&
+        (approval.status === "approved" || approval.status === "denied" || approval.status === "expired")
+      ) {
         const resumeState = extractToolApprovalResumeState(approval.context);
         if (resumeState) {
           for (const toolId of resumeState.used_tools ?? []) {
@@ -3100,7 +3103,12 @@ export class AgentRuntime {
               const stepApprovalId = toolExecutionContext.execution?.stepApprovalId;
               if (stepApprovalId) {
                 const approval = await this.approvalDal.getById(stepApprovalId);
-                if (approval && (approval.status === "approved" || approval.status === "denied")) {
+                if (
+                  approval &&
+                  (approval.status === "approved" ||
+                    approval.status === "denied" ||
+                    approval.status === "expired")
+                ) {
                   const ctx = coerceRecord(approval.context);
                   const matches =
                     ctx?.["source"] === "agent-tool-execution" &&
