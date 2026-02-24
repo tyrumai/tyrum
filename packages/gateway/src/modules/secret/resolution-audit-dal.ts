@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { SecretProviderKind, WsEventEnvelope } from "@tyrum/schemas";
+import type { Logger } from "../observability/logger.js";
 import type { SqlDb } from "../../statestore/types.js";
 
 export type SecretResolutionOutcome = "resolved" | "failed";
@@ -73,7 +74,10 @@ async function enqueueWsEvent(db: SqlDb, evt: WsEventEnvelope): Promise<void> {
 }
 
 export class SecretResolutionAuditDal {
-  constructor(private readonly db: SqlDb) {}
+  constructor(
+    private readonly db: SqlDb,
+    private readonly logger?: Logger,
+  ) {}
 
   async record(params: {
     toolCallId: string;
@@ -163,8 +167,13 @@ export class SecretResolutionAuditDal {
           },
         };
         await enqueueWsEvent(this.db, evt);
-      } catch {
-        // ignore event emission failures
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger?.warn("secret.resolution_emit_failed", {
+          tool_call_id: row.tool_call_id,
+          handle_id: row.handle_id,
+          error: message,
+        });
       }
       return row;
     }
