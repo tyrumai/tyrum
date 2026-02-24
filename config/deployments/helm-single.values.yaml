@@ -1,0 +1,15 @@
+# Reference values for `charts/tyrum` single-host mode.
+mode: single
+
+env:
+  TYRUM_HOME: /var/lib/tyrum
+  GATEWAY_HOST: 0.0.0.0
+  GATEWAY_PORT: "8788"
+  TYRUM_TLS_READY: "1"
+  GATEWAY_DB_PATH: /var/lib/tyrum/gateway.db
+  TYRUM_ENGINE_API_ENABLED: "1"
+  TYRUM_SECRET_PROVIDER: env
+
+persistence:
+  enabled: true
+

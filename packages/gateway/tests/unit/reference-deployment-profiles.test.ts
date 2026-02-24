@@ -1,0 +1,70 @@
+import { describe, expect, it } from "vitest";
+import { readFile, stat } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parse as parseYaml } from "yaml";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(__dirname, "../../../..");
+
+async function expectFile(path: string): Promise<string> {
+  const fullPath = resolve(repoRoot, path);
+  const info = await stat(fullPath);
+  expect(info.isFile()).toBe(true);
+  return await readFile(fullPath, "utf-8");
+}
+
+function parseEnvFile(text: string): Map<string, string> {
+  const entries = new Map<string, string>();
+  for (const line of text.split(/\r?\n/u)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    const value = trimmed.slice(eq + 1).trim();
+    entries.set(key, value);
+  }
+  return entries;
+}
+
+describe("reference deployment profiles", () => {
+  it("ships reproducible single-host and split-role env templates", async () => {
+    const singleHostEnv = parseEnvFile(
+      await expectFile("config/deployments/single-host.env.example"),
+    );
+    const splitRoleEnv = parseEnvFile(
+      await expectFile("config/deployments/split-role.env.example"),
+    );
+
+    expect(singleHostEnv.get("TYRUM_HOME")).toBeDefined();
+    expect(singleHostEnv.get("GATEWAY_DB_PATH")).toBeDefined();
+
+    expect(splitRoleEnv.get("GATEWAY_TOKEN")).toBeDefined();
+    const dbPath = splitRoleEnv.get("GATEWAY_DB_PATH");
+    expect(dbPath).toBeDefined();
+    expect(dbPath).toMatch(/^postgres(ql)?:\/\//u);
+  });
+
+  it("ships reference Helm values for single-host and split-role", async () => {
+    const singleValuesRaw = await expectFile("config/deployments/helm-single.values.yaml");
+    const splitValuesRaw = await expectFile("config/deployments/helm-split-role.values.yaml");
+
+    const singleValues = parseYaml(singleValuesRaw) as any;
+    const splitValues = parseYaml(splitValuesRaw) as any;
+
+    expect(singleValues.mode).toBe("single");
+    expect(splitValues.mode).toBe("split");
+
+    expect(splitValues.env?.GATEWAY_DB_PATH).toMatch(/^postgres(ql)?:\/\//u);
+  });
+
+  it("documents how to use the profiles", async () => {
+    const doc = await expectFile("docs/advanced/deployment-profiles.md");
+    expect(doc).toContain("single-host");
+    expect(doc).toContain("split-role");
+    expect(doc).toContain("docker compose");
+    expect(doc).toContain("Helm");
+  });
+});
+
