@@ -891,6 +891,16 @@ export class ExecutionEngine {
         "SELECT kind FROM approvals WHERE resume_token = ? LIMIT 1",
         [token],
       );
+      const runResumed = await tx.run(
+        `UPDATE execution_runs
+         SET status = 'queued', paused_reason = NULL, paused_detail = NULL
+         WHERE run_id = ? AND status = 'paused'`,
+        [row.run_id],
+      );
+      if (runResumed.changes !== 1) {
+        return undefined;
+      }
+
       if (approval?.kind === "budget") {
         await tx.run(
           `UPDATE execution_runs
@@ -899,13 +909,6 @@ export class ExecutionEngine {
           [nowIso, row.run_id],
         );
       }
-
-      await tx.run(
-        `UPDATE execution_runs
-         SET status = 'queued', paused_reason = NULL, paused_detail = NULL
-         WHERE run_id = ? AND status = 'paused'`,
-        [row.run_id],
-      );
 
       await tx.run(
         `UPDATE execution_steps

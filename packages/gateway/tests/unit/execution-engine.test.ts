@@ -143,7 +143,7 @@ describe("ExecutionEngine (normalized)", () => {
       db,
       clock: () => ({ nowMs: Date.now(), nowIso: new Date().toISOString() }),
     });
-    await engine.enqueuePlan({
+    const { runId } = await engine.enqueuePlan({
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-budget-1",
@@ -217,6 +217,64 @@ describe("ExecutionEngine (normalized)", () => {
       "SELECT status FROM execution_runs LIMIT 1",
     );
     expect(runDone?.status).toBe("succeeded");
+  });
+
+  it("does not emit run.resumed when a resume token is used after the run is no longer paused", async () => {
+    db = openTestSqliteDb();
+
+    const engine = new ExecutionEngine({
+      db,
+      clock: () => ({ nowMs: Date.now(), nowIso: new Date().toISOString() }),
+    });
+    const { runId } = await engine.enqueuePlan({
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-budget-cancel-1",
+      requestId: "test-req-1",
+      budgets: { max_usd_micros: 5 },
+      steps: [action("Research"), action("Research")],
+    });
+
+    let calls = 0;
+    const mockExecutor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => {
+        calls += 1;
+        if (calls === 1) {
+          return { success: true, result: { ok: true }, cost: { usd_micros: 10 } };
+        }
+        return { success: true, result: { ok: true } };
+      }),
+    };
+
+    // First tick executes step 0 and records cost.
+    expect(await engine.workerTick({ workerId: "w1", executor: mockExecutor })).toBe(true);
+    expect((mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(1);
+
+    // Second tick pauses before starting step 1 due to the run budget.
+    expect(await engine.workerTick({ workerId: "w1", executor: mockExecutor })).toBe(true);
+    expect((mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(1);
+
+    const approval = await db.get<{ id: number; kind: string; resume_token: string | null }>(
+      "SELECT id, kind, resume_token FROM approvals WHERE status = 'pending' ORDER BY id ASC LIMIT 1",
+    );
+    expect(approval?.kind).toBe("budget");
+    expect(approval?.resume_token).toBeTruthy();
+
+    expect(await engine.cancelRun(runId, "cancelled by test")).toBe("cancelled");
+
+    const resumed = await engine.resumeRun(approval!.resume_token!);
+    expect(resumed).toBeUndefined();
+
+    const outbox = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ?",
+      ["ws.broadcast"],
+    );
+    const types = outbox
+      .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
+      .map((row) => row.message?.type)
+      .filter((value): value is string => typeof value === "string");
+    expect(types).toContain("run.cancelled");
+    expect(types).not.toContain("run.resumed");
   });
 
   it("pauses when policy requires approval for a step and resumes after approval", async () => {
