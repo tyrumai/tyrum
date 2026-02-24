@@ -950,7 +950,15 @@ export class ExecutionEngine {
       );
       if (!row) return "not_found";
 
-      if (row.status === "cancelled") return "cancelled";
+      if (row.status === "cancelled") {
+        await tx.run(
+          `UPDATE resume_tokens
+           SET revoked_at = ?
+           WHERE run_id = ? AND revoked_at IS NULL`,
+          [nowIso, runId],
+        );
+        return "cancelled";
+      }
       if (row.status === "succeeded" || row.status === "failed") {
         return "already_terminal";
       }
@@ -978,6 +986,13 @@ export class ExecutionEngine {
          WHERE run_id = ?
            AND status IN ('queued', 'paused', 'running')`,
         [runId],
+      );
+
+      await tx.run(
+        `UPDATE resume_tokens
+         SET revoked_at = ?
+         WHERE run_id = ? AND revoked_at IS NULL`,
+        [nowIso, runId],
       );
 
       // Best-effort: mark any in-flight attempts as cancelled so they don't linger.
