@@ -111,6 +111,21 @@ function inlineKindRank(span: InlineSpan): number {
   return span.kind === "link" ? 0 : 1;
 }
 
+function inlineStyleRank(style: import("./ir.js").MarkdownIrStyle): number {
+  switch (style) {
+    case "spoiler":
+      return 0;
+    case "bold":
+      return 1;
+    case "italic":
+      return 2;
+    case "strike":
+      return 3;
+    case "inline_code":
+      return 4;
+  }
+}
+
 function openInlineTag(span: InlineSpan): string {
   if (span.kind === "link") {
     const href = span.href.trim();
@@ -195,9 +210,21 @@ function renderInlineRangeToTelegramHtml(
 
   for (const [idx, spans] of opensByIndex) {
     spans.sort((a, b) => {
+      if (a.end !== b.end) return b.end - a.end;
+
       const kindCmp = inlineKindRank(a) - inlineKindRank(b);
       if (kindCmp !== 0) return kindCmp;
-      if (a.end !== b.end) return b.end - a.end;
+
+      if (a.kind === "style" && b.kind === "style") {
+        const styleCmp = inlineStyleRank(a.style) - inlineStyleRank(b.style);
+        if (styleCmp !== 0) return styleCmp;
+      }
+
+      if (a.kind === "link" && b.kind === "link") {
+        const hrefCmp = a.href.localeCompare(b.href);
+        if (hrefCmp !== 0) return hrefCmp;
+      }
+
       return 0;
     });
     opensByIndex.set(idx, spans);
@@ -205,9 +232,21 @@ function renderInlineRangeToTelegramHtml(
 
   for (const [idx, spans] of closesByIndex) {
     spans.sort((a, b) => {
+      if (a.start !== b.start) return b.start - a.start;
+
       const kindCmp = inlineKindRank(b) - inlineKindRank(a);
       if (kindCmp !== 0) return kindCmp;
-      if (a.start !== b.start) return b.start - a.start;
+
+      if (a.kind === "style" && b.kind === "style") {
+        const styleCmp = inlineStyleRank(b.style) - inlineStyleRank(a.style);
+        if (styleCmp !== 0) return styleCmp;
+      }
+
+      if (a.kind === "link" && b.kind === "link") {
+        const hrefCmp = b.href.localeCompare(a.href);
+        if (hrefCmp !== 0) return hrefCmp;
+      }
+
       return 0;
     });
     closesByIndex.set(idx, spans);

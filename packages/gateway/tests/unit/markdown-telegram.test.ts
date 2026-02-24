@@ -54,6 +54,16 @@ describe("renderMarkdownForTelegram", () => {
     expect(chunks).toEqual(['<a href="https://example.com?a=1&amp;b=2">label</a>']);
   });
 
+  it("nests links inside surrounding italics without crossing tags when spans share the same start index", () => {
+    const chunks = renderMarkdownForTelegram("*[click here](https://example.com) more text*");
+    expect(chunks).toEqual(['<i><a href="https://example.com">click here</a> more text</i>']);
+  });
+
+  it("nests links inside surrounding italics without crossing tags when spans share the same end index", () => {
+    const chunks = renderMarkdownForTelegram("*before [link](https://example.com)*");
+    expect(chunks).toEqual(['<i>before <a href="https://example.com">link</a></i>']);
+  });
+
   it("keeps plain-text fallback chunks within maxChars even when HTML escaping expands the output", () => {
     const maxChars = 5;
     const chunks = renderMarkdownForTelegram("```ts\n<<<<<\n```", { maxChars });
