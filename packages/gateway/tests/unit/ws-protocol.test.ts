@@ -282,6 +282,68 @@ describe("handleClientMessage", () => {
     expect(payload.message).toContain("insufficient scope");
   });
 
+  it("forbids approval.request ok:false responses when scoped device token lacks operator.approvals", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["playwright"], {
+      role: "client",
+      deviceId: "dev_client_1",
+      protocolRev: 2,
+      authClaims: {
+        token_kind: "device",
+        role: "client",
+        device_id: "dev_client_1",
+        scopes: ["operator.read"],
+      },
+    });
+    const client = cm.getClient(id)!;
+    const onApprovalDecision = vi.fn();
+    const deps = makeDeps(cm, { onApprovalDecision });
+
+    const result = await handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "approval-200",
+        type: "approval.request",
+        ok: false,
+        error: { code: "invalid_request", message: "payload validation failed" },
+      }),
+      deps,
+    );
+
+    expect(onApprovalDecision).not.toHaveBeenCalled();
+    expect(result).toBeDefined();
+    expect(result!.type).toBe("error");
+    const payload = (result as unknown as { payload: { code: string; message: string } }).payload;
+    expect(payload.code).toBe("forbidden");
+    expect(payload.message).toContain("insufficient scope");
+  });
+
+  it("rejects approval.request ok:false responses from non-client peers", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["playwright"], { role: "node" });
+    const client = cm.getClient(id)!;
+    const onApprovalDecision = vi.fn();
+    const deps = makeDeps(cm, { onApprovalDecision });
+
+    const result = await handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "approval-200",
+        type: "approval.request",
+        ok: false,
+        error: { code: "invalid_request", message: "payload validation failed" },
+      }),
+      deps,
+    );
+
+    expect(onApprovalDecision).not.toHaveBeenCalled();
+    expect(result).toBeDefined();
+    expect(result!.type).toBe("error");
+    const payload = (result as unknown as { payload: { code: string; message: string } }).payload;
+    expect(payload.code).toBe("unauthorized");
+    expect(payload.message).toContain("only operator clients");
+  });
+
   it("does not auto-deny approval.request when client responds ok:false", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);

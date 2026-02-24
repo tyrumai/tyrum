@@ -205,6 +205,17 @@ export async function handleClientMessage(
     }
 
     if (msg.type === "approval.request") {
+      const authClaims = client.auth_claims;
+      if (!authClaims) {
+        return errorEvent("unauthorized", "missing auth claims");
+      }
+      if (client.role !== "client") {
+        return errorEvent("unauthorized", "only operator clients may resolve approvals");
+      }
+      if (authClaims.token_kind === "device" && !hasAnyRequiredScope(authClaims, ["operator.approvals"])) {
+        return errorEvent("forbidden", "insufficient scope");
+      }
+
       const approvalId = parseApprovalId(msg.request_id);
       if (approvalId === undefined) {
         return errorEvent(
@@ -218,17 +229,6 @@ export async function handleClientMessage(
           "approval_request_failed",
           `client error for ${msg.request_id} (${msg.error.code}): ${msg.error.message}`,
         );
-      }
-
-      const authClaims = client.auth_claims;
-      if (!authClaims) {
-        return errorEvent("unauthorized", "missing auth claims");
-      }
-      if (client.role !== "client") {
-        return errorEvent("unauthorized", "only operator clients may resolve approvals");
-      }
-      if (authClaims.token_kind === "device" && !hasAnyRequiredScope(authClaims, ["operator.approvals"])) {
-        return errorEvent("forbidden", "insufficient scope");
       }
 
       const decision = WsApprovalDecision.safeParse(msg.result ?? {});
