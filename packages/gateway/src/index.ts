@@ -874,6 +874,13 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   });
   container.modelsDev.startBackgroundRefresh();
 
+  const logger = container.logger.child({
+    role,
+    instance_id: instanceId,
+    version: VERSION,
+  });
+  logger.info("gateway.instance", { instance_id: instanceId });
+
   // Initialize auth token store
   const tokenStore = new TokenStore(tyrumHome);
   const token = await tokenStore.initialize();
@@ -896,7 +903,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   // Initialize secret provider (defaults per ADR-0007; override via TYRUM_SECRET_PROVIDER)
   const secretProvider = await createSecretProviderFromEnv(tyrumHome, token);
 
-  const lifecycleHooks = await loadLifecycleHooksFromHome(tyrumHome);
+  const lifecycleHooks = await loadLifecycleHooksFromHome(tyrumHome, logger);
 
   if (container.telegramBot) {
     console.log("Telegram bot initialized");
@@ -932,13 +939,6 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   if (artifactLifecycleScheduler) {
     artifactLifecycleScheduler.start();
   }
-
-  const logger = container.logger.child({
-    role,
-    instance_id: instanceId,
-    version: VERSION,
-  });
-  logger.info("gateway.instance", { instance_id: instanceId });
 
   const otel = await maybeStartOtel({
     serviceName: "tyrum-gateway",

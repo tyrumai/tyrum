@@ -2,6 +2,7 @@ import type { LifecycleHookDefinition as LifecycleHookDefinitionT } from "@tyrum
 import { LifecycleHooksConfig } from "@tyrum/schemas";
 import { access, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { Logger } from "../observability/logger.js";
 import { parseJsonOrYaml } from "../../utils/parse-json-or-yaml.js";
 
 async function fileExists(path: string): Promise<boolean> {
@@ -13,7 +14,10 @@ async function fileExists(path: string): Promise<boolean> {
   }
 }
 
-export async function loadLifecycleHooksFromHome(home: string): Promise<LifecycleHookDefinitionT[]> {
+export async function loadLifecycleHooksFromHome(
+  home: string,
+  logger: Pick<Logger, "warn"> = new Logger({ base: { service: "tyrum-gateway" } }),
+): Promise<LifecycleHookDefinitionT[]> {
   const candidates = ["hooks.yml", "hooks.yaml", "hooks.json"].map((name) => join(home, name));
   let path: string | undefined;
   for (const candidate of candidates) {
@@ -27,18 +31,25 @@ export async function loadLifecycleHooksFromHome(home: string): Promise<Lifecycl
   let raw: string;
   try {
     raw = await readFile(path, "utf-8");
-  } catch {
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.warn("hooks.config_read_failed", { path, error: message });
     return [];
   }
 
   let parsed: unknown;
   try {
     parsed = parseJsonOrYaml(raw, path);
-  } catch {
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.warn("hooks.config_parse_failed", { path, error: message });
     return [];
   }
 
   const cfg = LifecycleHooksConfig.safeParse(parsed);
-  if (!cfg.success) return [];
+  if (!cfg.success) {
+    logger.warn("hooks.config_validation_failed", { path, issues: cfg.error.issues });
+    return [];
+  }
   return cfg.data.hooks;
 }
