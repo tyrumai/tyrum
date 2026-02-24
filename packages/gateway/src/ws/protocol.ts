@@ -49,6 +49,7 @@ import type {
 } from "@tyrum/schemas";
 import type { ConnectedClient } from "./connection-manager.js";
 import type { ConnectionManager } from "./connection-manager.js";
+import { emitPairingApprovedEvent } from "./pairing-approved.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
 import type { ApprovalDal } from "../modules/approval/dal.js";
@@ -561,43 +562,7 @@ export async function handleClientMessage(
     if (!pairing) return notFound(pairingId);
 
     if (msg.type === "pairing.approve" && scopedToken) {
-      const evt = {
-        event_id: crypto.randomUUID(),
-        type: "pairing.approved",
-        occurred_at: new Date().toISOString(),
-        payload: { pairing, scoped_token: scopedToken },
-      } satisfies WsEventEnvelope;
-
-      const nodeId = pairing.node.node_id;
-      for (const peer of deps.connectionManager.allClients()) {
-        if (peer.role !== "node") continue;
-        if (peer.device_id !== nodeId) continue;
-        try {
-          peer.ws.send(JSON.stringify(evt));
-        } catch {
-          // ignore
-        }
-      }
-
-      if (deps.cluster) {
-        const cluster = deps.cluster;
-        void (async () => {
-          const nowMs = Date.now();
-          const peers = await cluster.connectionDirectory.listNonExpired(nowMs);
-          for (const peer of peers) {
-            if (peer.role !== "node") continue;
-            if (peer.device_id !== nodeId) continue;
-            if (peer.edge_id === cluster.edgeId) continue;
-            await cluster.outboxDal.enqueue(
-              "ws.direct",
-              { connection_id: peer.connection_id, message: evt },
-              { targetEdgeId: peer.edge_id },
-            );
-          }
-        })().catch(() => {
-          // ignore
-        });
-      }
+      emitPairingApprovedEvent(deps, { pairing, nodeId: pairing.node.node_id, scopedToken });
     }
     return ok(pairing);
   }

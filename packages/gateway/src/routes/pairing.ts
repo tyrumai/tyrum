@@ -7,6 +7,7 @@ import type { NodePairingDal } from "../modules/node/pairing-dal.js";
 import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
+import { emitPairingApprovedEvent } from "../ws/pairing-approved.js";
 import { CapabilityDescriptor, NodePairingTrustLevel, type WsEventEnvelope } from "@tyrum/schemas";
 
 export interface PairingRouteDeps {
@@ -44,54 +45,6 @@ function emitEvent(deps: PairingRouteDeps, evt: WsEventEnvelope): void {
       .catch(() => {
         // ignore
       });
-  }
-}
-
-function emitPairingApprovedEvent(
-  deps: PairingRouteDeps,
-  input: { pairing: unknown; nodeId: string; scopedToken: string },
-): void {
-  const ws = deps.ws;
-  if (!ws) return;
-
-  const evt = {
-    event_id: crypto.randomUUID(),
-    type: "pairing.approved",
-    occurred_at: new Date().toISOString(),
-    payload: { pairing: input.pairing, scoped_token: input.scopedToken },
-  } satisfies WsEventEnvelope;
-
-  // Local, direct (do not broadcast tokens).
-  const payload = JSON.stringify(evt);
-  for (const client of ws.connectionManager.allClients()) {
-    if (client.role !== "node") continue;
-    if (client.device_id !== input.nodeId) continue;
-    try {
-      client.ws.send(payload);
-    } catch {
-      // ignore
-    }
-  }
-
-  // Cluster, direct (best-effort).
-  if (ws.cluster) {
-    const cluster = ws.cluster;
-    void (async () => {
-      const nowMs = Date.now();
-      const peers = await cluster.connectionDirectory.listNonExpired(nowMs);
-      for (const peer of peers) {
-        if (peer.role !== "node") continue;
-        if (peer.device_id !== input.nodeId) continue;
-        if (peer.edge_id === cluster.edgeId) continue;
-        await cluster.outboxDal.enqueue(
-          "ws.direct",
-          { connection_id: peer.connection_id, message: evt },
-          { targetEdgeId: peer.edge_id },
-        );
-      }
-    })().catch(() => {
-      // ignore
-    });
   }
 }
 
@@ -155,8 +108,8 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
     }
     const { pairing, scopedToken } = resolved;
 
-    if (scopedToken) {
-      emitPairingApprovedEvent(deps, { pairing, nodeId: pairing.node.node_id, scopedToken });
+    if (scopedToken && deps.ws) {
+      emitPairingApprovedEvent(deps.ws, { pairing, nodeId: pairing.node.node_id, scopedToken });
     }
 
     emitEvent(
@@ -169,7 +122,7 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
       },
     );
 
-    return c.json({ status: "ok", pairing, scoped_token: scopedToken });
+    return c.json({ status: "ok", pairing });
   });
 
   app.post("/pairings/:id/deny", async (c) => {
