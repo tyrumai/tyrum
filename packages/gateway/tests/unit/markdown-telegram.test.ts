@@ -55,6 +55,8 @@ describe("renderMarkdownForTelegram", () => {
     expect(chunks.length).toBeGreaterThan(0);
     for (const chunk of chunks) {
       expect(chunk.length).toBeLessThanOrEqual(maxChars);
+      const residual = chunk.replaceAll("&amp;", "").replaceAll("&lt;", "").replaceAll("&gt;", "");
+      expect(residual.includes("&")).toBe(false);
     }
   });
 });

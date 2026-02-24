@@ -16,6 +16,79 @@ function escapeTelegramHtmlAttr(input: string): string {
   return escapeTelegramHtmlText(input).replaceAll("\"", "&quot;");
 }
 
+function escapedTelegramHtmlCharLen(char: string): number {
+  switch (char) {
+    case "&":
+      return 5; // &amp;
+    case "<":
+      return 4; // &lt;
+    case ">":
+      return 4; // &gt;
+    default:
+      return char.length;
+  }
+}
+
+function chunkPlainTextForTelegramHtml(plainText: string, maxChars: number): string[] {
+  const max = Math.max(1, Math.floor(maxChars));
+  const text = plainText ?? "";
+  if (text.length === 0) return [];
+
+  const chunks: string[] = [];
+  let offset = 0;
+
+  while (offset < text.length) {
+    let escapedLen = 0;
+    let end = offset;
+
+    let lastParagraphBreak = -1;
+    let lastNewlineBreak = -1;
+    let lastSpaceBreak = -1;
+    let prevChar: string | undefined;
+
+    while (end < text.length) {
+      const char = text[end]!;
+      const add = escapedTelegramHtmlCharLen(char);
+      if (escapedLen + add > max) break;
+      escapedLen += add;
+      end += 1;
+
+      if (char === " ") lastSpaceBreak = end;
+      if (char === "\n") {
+        lastNewlineBreak = end;
+        if (prevChar === "\n") lastParagraphBreak = end;
+      }
+      prevChar = char;
+    }
+
+    if (end >= text.length) {
+      chunks.push(escapeTelegramHtmlText(text.slice(offset)));
+      break;
+    }
+
+    let cut = end;
+    if (lastParagraphBreak > offset) cut = lastParagraphBreak;
+    else if (lastNewlineBreak > offset) cut = lastNewlineBreak;
+    else if (lastSpaceBreak > offset) cut = lastSpaceBreak;
+
+    if (cut <= offset) {
+      const escaped = escapeTelegramHtmlText(text.slice(offset, offset + 1));
+      if (escaped.length <= max) {
+        chunks.push(escaped);
+      } else {
+        chunks.push(...chunkText(escaped, max));
+      }
+      offset += 1;
+      continue;
+    }
+
+    chunks.push(escapeTelegramHtmlText(text.slice(offset, cut)));
+    offset = cut;
+  }
+
+  return chunks.filter((chunk) => chunk.length > 0);
+}
+
 function sanitizeCodeLanguage(language: string | undefined): string | undefined {
   const trimmed = language?.trim();
   if (!trimmed) return undefined;
@@ -318,18 +391,7 @@ export function renderMarkdownForTelegram(
     const fallbackPlain = irToPlainText(chunkIr);
     if (fallbackPlain.length === 0) continue;
 
-    const fallbackChunks = fallbackPlain.length <= maxChars ? [fallbackPlain] : chunkText(fallbackPlain, maxChars);
-    for (const fallbackChunk of fallbackChunks) {
-      if (fallbackChunk.length === 0) continue;
-      const escaped = escapeTelegramHtmlText(fallbackChunk);
-      if (escaped.length <= maxChars) {
-        chunks.push(escaped);
-        continue;
-      }
-      // Last-ditch: ensure we always make progress even when escaping overhead
-      // expands beyond `maxChars`.
-      chunks.push(...chunkText(escaped, maxChars));
-    }
+    chunks.push(...chunkPlainTextForTelegramHtml(fallbackPlain, maxChars));
   }
 
   return trimOuterWhitespaceChunks(chunks);
