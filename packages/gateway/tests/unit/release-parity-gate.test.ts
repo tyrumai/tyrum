@@ -45,8 +45,8 @@ describe("release workflow parity gate", () => {
       .join("\n");
 
     expect(runScript).toContain("actions/workflows/ci.yml/runs");
+    expect(runScript).toContain("head_sha=");
     expect(runScript).toContain("GITHUB_SHA");
     expect(runScript).toContain("conclusion");
   });
 });
-
