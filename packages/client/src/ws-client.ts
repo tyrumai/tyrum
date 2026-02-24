@@ -279,6 +279,7 @@ export class TyrumClient {
   private intentionalClose = false;
   private connectionAttempt = 0;
   private transportErrorHint: string | null = null;
+  private suppressReconnect = false;
 
   constructor(options: TyrumClientOptions) {
     this.emitter = mitt<TyrumClientEvents>();
@@ -420,6 +421,7 @@ export class TyrumClient {
     this.ready = false;
     this.clientId = null;
     this.transportErrorHint = null;
+    this.suppressReconnect = false;
     const attempt = ++this.connectionAttempt;
     void this.openSocketAttempt(attempt);
   }
@@ -448,18 +450,23 @@ export class TyrumClient {
       throw new Error("tlsCertFingerprint256 is supported only in Node.js clients.");
     }
 
-    // Avoid static-bundler resolution of Node-only modules in browser builds.
-    const undiciSpecifier = "un" + "dici";
-    const tlsSpecifier = "node" + ":tls";
+    // Avoid bundlers eagerly resolving Node-only modules in browser builds.
+    const globalAny = globalThis as unknown as Record<PropertyKey, unknown>;
+    const undiciSpecifier = "undici" + String(globalAny[Symbol.for("tyrum:undici")] ?? "");
+    const tlsSpecifier = "node:tls" + String(globalAny[Symbol.for("tyrum:tls")] ?? "");
 
     const undici = await import(undiciSpecifier);
     const tls = await import(tlsSpecifier);
 
     const agent = new undici.Agent({
-      connect: (opts, callback) => {
+      connect: (
+        opts: { port?: unknown; hostname?: unknown; servername?: unknown },
+        callback: (err: Error | null, socket: unknown | null) => void,
+      ) => {
         const port = Number.parseInt(String(opts.port ?? ""), 10);
         const hostname = String(opts.hostname ?? "");
-        const servername = typeof opts.servername === "string" && opts.servername.trim() ? opts.servername : hostname;
+        const servername =
+          typeof opts.servername === "string" && opts.servername.trim() ? opts.servername : hostname;
 
         if (!hostname || !Number.isFinite(port)) {
           callback(new Error("Invalid TLS connector options"), null);
@@ -470,7 +477,7 @@ export class TyrumClient {
         const done = (err: Error | null, socket: unknown | null) => {
           if (settled) return;
           settled = true;
-          callback(err, socket as never);
+          callback(err, socket);
         };
 
         const socket = tls.connect({
@@ -478,9 +485,9 @@ export class TyrumClient {
           port,
           servername,
           rejectUnauthorized: false,
-        });
+        }) as import("node:tls").TLSSocket;
 
-        socket.once("error", (err) => {
+        socket.once("error", (err: Error) => {
           this.transportErrorHint = err.message;
           done(err, null);
         });
@@ -505,6 +512,7 @@ export class TyrumClient {
           } catch (err) {
             const error = err instanceof Error ? err : new Error(String(err));
             this.transportErrorHint = error.message;
+            this.suppressReconnect = true;
             socket.destroy(error);
             done(error, null);
           }
@@ -557,7 +565,9 @@ export class TyrumClient {
       this.ready = false;
       this.clientId = null;
       this.rejectPending(new Error("WebSocket disconnected"));
-      if (!this.intentionalClose && this.opts.reconnect) {
+      const suppressReconnect = this.suppressReconnect;
+      this.suppressReconnect = false;
+      if (!this.intentionalClose && this.opts.reconnect && !suppressReconnect) {
         this.scheduleReconnect();
       }
       this.destroyPinnedDispatcher(ws);

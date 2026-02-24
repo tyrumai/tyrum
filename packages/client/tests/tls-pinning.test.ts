@@ -190,6 +190,36 @@ describe("TLS certificate pinning", () => {
     expect(connectedSpy).not.toHaveBeenCalled();
   });
 
+  it("does not auto-reconnect on fingerprint mismatch", async () => {
+    server = await createSecureTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "test-token",
+      capabilities: [],
+      reconnect: true,
+      tlsCertFingerprint256: server.fingerprint256.replace(/[0-9A-F]/, (c) => (c === "A" ? "B" : "A")),
+    });
+
+    const scheduleSpy = vi.spyOn(client as unknown as { scheduleReconnect: () => void }, "scheduleReconnect");
+
+    const disconnected = new Promise<void>((resolve) => {
+      client!.on("disconnected", () => resolve());
+    });
+
+    const transportError = new Promise<{ message: string }>((resolve) => {
+      client!.on("transport_error", resolve);
+    });
+
+    client.connect();
+
+    const err = await withTimeout(transportError, 2_000, "transport_error");
+    expect(err.message.toLowerCase()).toContain("fingerprint");
+
+    await withTimeout(disconnected, 2_000, "disconnected");
+
+    expect(scheduleSpy).not.toHaveBeenCalled();
+  });
+
   it("does not auto-reconnect on invalid tlsCertFingerprint256", async () => {
     vi.useFakeTimers();
     try {
