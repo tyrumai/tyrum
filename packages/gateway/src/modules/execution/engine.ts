@@ -637,7 +637,7 @@ export class ExecutionEngine {
       const labelsJson = JSON.stringify(this.redactUnknown(artifact.labels ?? []));
       const metadataJson = JSON.stringify(this.redactUnknown(artifact.metadata ?? {}));
 
-      await tx.run(
+      const insertResult = await tx.run(
         `INSERT INTO execution_artifacts (
            artifact_id,
            workspace_id,
@@ -678,7 +678,9 @@ export class ExecutionEngine {
         ],
       );
 
-      await this.emitArtifactCreatedTx(tx, { runId: scope.runId, artifact });
+      if (insertResult.changes > 0) {
+        await this.emitArtifactCreatedTx(tx, { runId: scope.runId, artifact });
+      }
       await this.emitArtifactAttachedTx(tx, {
         runId: scope.runId,
         stepId: scope.stepId,

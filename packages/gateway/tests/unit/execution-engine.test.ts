@@ -504,6 +504,47 @@ describe("ExecutionEngine (normalized)", () => {
     expect(types).toContain("artifact.attached");
   });
 
+  it("only emits artifact.created when the artifact is first inserted", async () => {
+    db = openTestSqliteDb();
+
+    const engine = new ExecutionEngine({ db });
+    await engine.enqueuePlan({
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-artifacts-created-1",
+      requestId: "test-req-1",
+      steps: [action("Research"), action("Research")],
+    });
+
+    const artifactRef = {
+      artifact_id: "550e8400-e29b-41d4-a716-446655440000",
+      uri: "artifact://550e8400-e29b-41d4-a716-446655440000",
+      kind: "log",
+      created_at: new Date().toISOString(),
+      labels: [],
+    } as const;
+
+    const mockExecutor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => {
+        return { success: true, result: { ok: true }, artifacts: [artifactRef] };
+      }),
+    };
+
+    await drain(engine, "w1", mockExecutor);
+
+    const outbox = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ?",
+      ["ws.broadcast"],
+    );
+    const types = outbox
+      .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
+      .map((row) => row.message?.type)
+      .filter((value): value is string => typeof value === "string");
+
+    expect(types.filter((type) => type === "artifact.created")).toHaveLength(1);
+    expect(types.filter((type) => type === "artifact.attached")).toHaveLength(2);
+  });
+
   it("redacts registered secrets from persisted attempt results", async () => {
     db = openTestSqliteDb();
 
