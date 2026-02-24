@@ -797,6 +797,7 @@ export class TelegramChannelProcessor {
             accountId,
             containerId: leader.thread_id,
             text: "Sorry, something went wrong. Please try again later.",
+            parseMode: "HTML",
           })
           .catch(() => undefined);
       }

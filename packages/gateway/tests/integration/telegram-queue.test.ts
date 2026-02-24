@@ -626,6 +626,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       accountId: "work",
       containerId: "123",
       text: "Sorry, something went wrong. Please try again later.",
+      parseMode: "HTML",
     });
     expect(fetchFn).not.toHaveBeenCalled();
   });
