@@ -22,6 +22,7 @@ import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { createWsHandler } from "../../src/routes/ws.js";
 import { dispatchTask, NoCapableClientError } from "../../src/ws/protocol.js";
 import { WatcherFiringDal } from "../../src/modules/watcher/firing-dal.js";
+import { WatcherScheduler } from "../../src/modules/watcher/scheduler.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
@@ -357,6 +358,123 @@ describe("Failure matrix (scaling-ha)", () => {
     expect((taskMsg2["payload"] as Record<string, unknown>)["run_id"]).toBe(taskScopeZ.runId);
   });
 
+  it("recovers ws.direct routing after edge crash+restart (client reconnects; directory + outbox resume)", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "tyrum-failure-matrix-edge-restart-"));
+    dirs.push(dir);
+    const dbPath = join(dir, "gateway.db");
+
+    const tokenStore = new TokenStore(join(dir, "tokens"));
+    const token = await tokenStore.initialize();
+
+    const dbA1 = openTestSqliteDb(dbPath);
+    const dbB = openTestSqliteDb(dbPath);
+    dbs.push(dbA1, dbB);
+
+    const startEdge = async (edgeId: string, db: SqliteDb) => {
+      const connectionManager = new ConnectionManager();
+      const connectionDirectory = new ConnectionDirectoryDal(db);
+      const outboxDal = new OutboxDal(db);
+      const outboxPoller = new OutboxPoller({ consumerId: edgeId, outboxDal, connectionManager });
+      await outboxDal.ensureConsumer(edgeId);
+
+      const wsHandler = createWsHandler({
+        connectionManager,
+        protocolDeps: { connectionManager },
+        tokenStore,
+        cluster: { instanceId: edgeId, connectionDirectory, connectionTtlMs: connectionsTtlMs },
+      });
+      heartbeats.push(wsHandler.stopHeartbeat);
+
+      const { server, port } = await listen(wsHandler);
+      servers.push(server);
+
+      return { connectionManager, connectionDirectory, outboxDal, outboxPoller, wsHandler, port };
+    };
+
+    const edgeA1 = await startEdge("edge-a", dbA1);
+    const edgeB = await startEdge("edge-b", dbB);
+
+    const { ws: clientA1 } = await connectClientWithProof({
+      port: edgeA1.port,
+      token,
+      role: "client",
+      capabilities: ["cli"],
+    });
+    sockets.push(clientA1);
+
+    const listA1 = await edgeA1.connectionDirectory.listConnectionsForCapability("cli", Date.now());
+    expect(listA1.length).toBe(1);
+    expect(listA1[0]!.edge_id).toBe("edge-a");
+
+    const taskScope1 = {
+      runId: "550e8400-e29b-41d4-a716-446655440010",
+      stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+      attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+    };
+    await dispatchTask({ type: "CLI", args: {} }, taskScope1, {
+      connectionManager: edgeB.connectionManager,
+      cluster: { edgeId: "edge-b", outboxDal: edgeB.outboxDal, connectionDirectory: edgeB.connectionDirectory },
+    } as never);
+    await edgeA1.outboxPoller.tick();
+
+    const msg1 = await waitForJsonMessageMatching(
+      clientA1,
+      (msg) => msg["type"] === "task.execute",
+      5_000,
+      "task.execute (pre-restart)",
+    );
+    expect((msg1["payload"] as Record<string, unknown>)["run_id"]).toBe(taskScope1.runId);
+
+    // Simulate a hard edge crash by stopping directory heartbeats. The stale entry must be cleaned up by other edges.
+    edgeA1.wsHandler.stopHeartbeat();
+    await delay(connectionsTtlMs + 25);
+    expect(await edgeB.connectionDirectory.cleanupExpired(Date.now())).toBe(1);
+
+    await expect(
+      dispatchTask({ type: "CLI", args: {} }, taskScope1, {
+        connectionManager: edgeB.connectionManager,
+        cluster: { edgeId: "edge-b", outboxDal: edgeB.outboxDal, connectionDirectory: edgeB.connectionDirectory },
+      } as never),
+    ).rejects.toBeInstanceOf(NoCapableClientError);
+
+    clientA1.close();
+
+    const dbA2 = openTestSqliteDb(dbPath);
+    dbs.push(dbA2);
+    const edgeA2 = await startEdge("edge-a", dbA2);
+
+    const { ws: clientA2 } = await connectClientWithProof({
+      port: edgeA2.port,
+      token,
+      role: "client",
+      capabilities: ["cli"],
+    });
+    sockets.push(clientA2);
+
+    const listA2 = await edgeA2.connectionDirectory.listConnectionsForCapability("cli", Date.now());
+    expect(listA2.length).toBe(1);
+    expect(listA2[0]!.edge_id).toBe("edge-a");
+
+    const taskScope2 = {
+      runId: "550e8400-e29b-41d4-a716-446655440011",
+      stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+      attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+    };
+    await dispatchTask({ type: "CLI", args: {} }, taskScope2, {
+      connectionManager: edgeB.connectionManager,
+      cluster: { edgeId: "edge-b", outboxDal: edgeB.outboxDal, connectionDirectory: edgeB.connectionDirectory },
+    } as never);
+    await edgeA2.outboxPoller.tick();
+
+    const msg2 = await waitForJsonMessageMatching(
+      clientA2,
+      (msg) => msg["type"] === "task.execute",
+      5_000,
+      "task.execute (post-restart)",
+    );
+    expect((msg2["payload"] as Record<string, unknown>)["run_id"]).toBe(taskScope2.runId);
+  });
+
   it("recovers from worker crash mid-attempt via lease expiry/takeover", async () => {
     const dir = await mkdtemp(join(tmpdir(), "tyrum-failure-matrix-worker-"));
     dirs.push(dir);
@@ -565,6 +683,165 @@ describe("Failure matrix (scaling-ha)", () => {
       [watcher!.id, slotMs],
     );
     expect(count?.n).toBe(1);
+  });
+
+  it("tolerates transient DB failures in watcher scheduler interval (scheduler↔DB partition)", async () => {
+    let ticks = 0;
+    const failingDb = {
+      kind: "sqlite" as const,
+      all: async () => {
+        ticks += 1;
+        throw new Error("db down");
+      },
+      get: async () => undefined,
+      run: async () => ({ changes: 0 }),
+      exec: async () => undefined,
+      transaction: async () => {
+        throw new Error("db down");
+      },
+      close: async () => undefined,
+    } as unknown as SqliteDb;
+
+    const scheduler = new WatcherScheduler({
+      db: failingDb,
+      memoryDal: { insertEpisodicEvent: async () => undefined } as never,
+      eventBus: { emit: () => undefined } as never,
+      tickMs: 10,
+    });
+
+    scheduler.start();
+    try {
+      await delay(50);
+      expect(ticks).toBeGreaterThan(0);
+    } finally {
+      scheduler.stop();
+    }
+  });
+
+  it("replays ws.direct outbox rows after DB restart between poll and ack (at-least-once)", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "tyrum-failure-matrix-db-restart-outbox-"));
+    dirs.push(dir);
+    const dbPath = join(dir, "gateway.db");
+
+    const db1 = openTestSqliteDb(dbPath);
+    dbs.push(db1);
+
+    const tokenStore = new TokenStore(join(dir, "tokens"));
+    const token = await tokenStore.initialize();
+
+    const connectionManager = new ConnectionManager();
+    const wsHandler = createWsHandler({
+      connectionManager,
+      protocolDeps: { connectionManager },
+      tokenStore,
+    });
+    heartbeats.push(wsHandler.stopHeartbeat);
+
+    const { server, port } = await listen(wsHandler);
+    servers.push(server);
+
+    const { ws, connectionId } = await connectClientWithProof({
+      port,
+      token,
+      role: "client",
+      capabilities: ["cli"],
+    });
+    sockets.push(ws);
+
+    const consumerId = "edge-db-restart";
+    const outboxDal1 = new OutboxDal(db1);
+    await outboxDal1.ensureConsumer(consumerId);
+
+    const runId = "550e8400-e29b-41d4-a716-446655440020";
+    const message = {
+      request_id: "task-db-restart",
+      type: "task.execute",
+      payload: {
+        run_id: runId,
+        step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+        attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+        action: { type: "CLI", args: {} },
+      },
+    };
+
+    const row = await outboxDal1.enqueue(
+      "ws.direct",
+      { connection_id: connectionId, message },
+      { targetEdgeId: consumerId },
+    );
+
+    let db2: SqliteDb | undefined;
+    let outboxDal2: OutboxDal | undefined;
+    let didRestart = false;
+    let didFailAck = false;
+
+    const restartingOutboxDal = {
+      poll: async (id: string, batchSize?: number) => {
+        if (didRestart) {
+          return await outboxDal2!.poll(id, batchSize);
+        }
+        const rows = await outboxDal1.poll(id, batchSize);
+
+        // Simulate DB restart after the poll but before the ack.
+        await db1.close();
+        dbs = dbs.filter((db) => db !== db1);
+
+        db2 = openTestSqliteDb(dbPath);
+        dbs.push(db2);
+        outboxDal2 = new OutboxDal(db2);
+        didRestart = true;
+
+        return rows;
+      },
+      ackConsumerCursor: async (id: string, lastOutboxId: number) => {
+        if (didRestart && !didFailAck) {
+          didFailAck = true;
+          return await outboxDal1.ackConsumerCursor(id, lastOutboxId);
+        }
+        return await outboxDal2!.ackConsumerCursor(id, lastOutboxId);
+      },
+      ensureConsumer: async (id: string) => {
+        if (didRestart) {
+          await outboxDal2!.ensureConsumer(id);
+          return;
+        }
+        await outboxDal1.ensureConsumer(id);
+      },
+    } as unknown as OutboxDal;
+
+    const poller = new OutboxPoller({
+      consumerId,
+      outboxDal: restartingOutboxDal,
+      connectionManager,
+    });
+
+    const firstMsgPromise = waitForJsonMessageMatching(
+      ws,
+      (msg) =>
+        msg["type"] === "task.execute" &&
+        (msg["payload"] as Record<string, unknown>)["run_id"] === runId,
+      5_000,
+      "task.execute (first)",
+    );
+    await poller.tick();
+    await firstMsgPromise;
+
+    const replayMsgPromise = waitForJsonMessageMatching(
+      ws,
+      (msg) =>
+        msg["type"] === "task.execute" &&
+        (msg["payload"] as Record<string, unknown>)["run_id"] === runId,
+      5_000,
+      "task.execute (replay)",
+    );
+    await poller.tick();
+    await replayMsgPromise;
+
+    const cursor = await db2!.get<{ last_outbox_id: number }>(
+      "SELECT last_outbox_id FROM outbox_consumers WHERE consumer_id = ?",
+      [consumerId],
+    );
+    expect(cursor?.last_outbox_id).toBe(row.id);
   });
 
   it("tolerates transient DB failures in outbox polling (edge↔DB partition)", async () => {
