@@ -501,10 +501,12 @@ export function chunkText(input: string, maxChars: number): string[] {
       break;
     }
 
+    const maxFromIndex = Math.max(offset, end - 1);
+
     // Prefer to cut at a newline reasonably close to the end.
-    let cut = text.lastIndexOf("\n", end);
+    let cut = text.lastIndexOf("\n", maxFromIndex);
     if (cut <= offset) {
-      cut = text.lastIndexOf(" ", end);
+      cut = text.lastIndexOf(" ", maxFromIndex);
     }
     if (cut <= offset) {
       cut = end;
@@ -517,4 +519,145 @@ export function chunkText(input: string, maxChars: number): string[] {
   }
 
   return chunks.filter((c) => c.length > 0);
+}
+
+function sliceIr(ir: MarkdownIr, start: number, end: number): MarkdownIr {
+  const text = ir.text.slice(start, end);
+  if (text.length === 0) return { text: "", spans: [] };
+
+  const spans: MarkdownIrSpan[] = [];
+  for (const span of ir.spans) {
+    const spanStart = Math.max(span.start, start);
+    const spanEnd = Math.min(span.end, end);
+    if (spanEnd <= spanStart) continue;
+    spans.push({ ...span, start: spanStart - start, end: spanEnd - start });
+  }
+
+  return { text, spans: sortSpans(spans) };
+}
+
+function pickChunkCut(text: string, start: number, hardEnd: number): number {
+  // Prefer paragraph boundaries, then newlines, then whitespace.
+  const maxFromIndex = Math.max(start, hardEnd - 1);
+  const paragraphFromIndex = Math.max(start, hardEnd - 2);
+
+  let idx = text.lastIndexOf("\n\n", paragraphFromIndex);
+  if (idx >= start) return idx + 2;
+
+  idx = text.lastIndexOf("\n", maxFromIndex);
+  if (idx >= start) return idx + 1;
+
+  idx = text.lastIndexOf(" ", maxFromIndex);
+  if (idx >= start) return idx + 1;
+
+  return hardEnd;
+}
+
+function isProtectedInlineSpan(span: MarkdownIrSpan): boolean {
+  if (span.kind === "style" || span.kind === "link") return true;
+  if (span.kind === "block" && span.block === "code_block") return true;
+  return false;
+}
+
+function avoidSplittingProtectedSpan(
+  spans: MarkdownIrSpan[],
+  chunkStart: number,
+  hardEnd: number,
+  maxLen: number,
+  cut: number,
+): number {
+  type Interval = { start: number; end: number };
+
+  const intervals = spans
+    .filter(
+      (span): span is MarkdownIrSpan & { start: number; end: number } =>
+        isProtectedInlineSpan(span) &&
+        span.end - span.start <= maxLen &&
+        span.start < hardEnd &&
+        span.end > chunkStart,
+    )
+    .map((span): Interval => ({ start: span.start, end: span.end }))
+    .toSorted((a, b) => (a.start !== b.start ? a.start - b.start : a.end - b.end));
+
+  if (intervals.length === 0) return cut;
+
+  const merged: Interval[] = [];
+  for (const interval of intervals) {
+    const prev = merged.at(-1);
+    if (!prev || interval.start >= prev.end) {
+      merged.push(interval);
+      continue;
+    }
+    prev.end = Math.max(prev.end, interval.end);
+  }
+
+  const container = merged.find((interval) => interval.start < cut && cut < interval.end);
+  if (!container) return cut;
+
+  if (container.start > chunkStart) return container.start;
+  if (container.end <= hardEnd) return container.end;
+  return cut;
+}
+
+function findMaxChunkEnd(
+  ir: MarkdownIr,
+  start: number,
+  maxMeasure: number,
+  measure: (chunk: MarkdownIr) => number,
+): number {
+  const textLen = ir.text.length;
+  if (start >= textLen) return textLen;
+
+  let lo = start + 1;
+  let hi = textLen;
+  let best = start;
+  while (lo <= hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    const candidate = sliceIr(ir, start, mid);
+    if (measure(candidate) <= maxMeasure) {
+      best = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+
+  return best;
+}
+
+export function chunkIr(
+  ir: MarkdownIr,
+  maxChars: number,
+  opts?: { measure?: (chunk: MarkdownIr) => number },
+): MarkdownIr[] {
+  const maxMeasure = Math.max(1, Math.floor(maxChars));
+  const text = ir.text ?? "";
+  const measure = opts?.measure ?? ((chunk: MarkdownIr) => chunk.text.length);
+
+  if (text.length === 0) return [];
+  if (measure(ir) <= maxMeasure) return [ir];
+
+  const chunks: MarkdownIr[] = [];
+  let offset = 0;
+  while (offset < text.length) {
+    let hardEnd = findMaxChunkEnd(ir, offset, maxMeasure, measure);
+    if (hardEnd === offset) {
+      // No chunk fits the requested measure (for example: renderer overhead).
+      // Fall back to chunking by underlying text length to guarantee progress.
+      hardEnd = Math.min(text.length, offset + maxMeasure);
+    }
+    if (hardEnd >= text.length) {
+      chunks.push(sliceIr(ir, offset, text.length));
+      break;
+    }
+
+    let cut = pickChunkCut(text, offset, hardEnd);
+    cut = avoidSplittingProtectedSpan(ir.spans, offset, hardEnd, maxMeasure, cut);
+
+    if (cut <= offset) cut = hardEnd;
+    chunks.push(sliceIr(ir, offset, cut));
+    offset = cut;
+  }
+
+  return chunks;
 }
