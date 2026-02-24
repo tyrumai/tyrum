@@ -663,12 +663,19 @@ export class TelegramChannelProcessor {
     const connector = this.egressConnectors.get(sourceKey) ?? this.egressConnectors.get(address.connector);
     if (!connector) {
       const message = `no egress connector registered for source '${address.connector}'`;
-      await this.outbox.markFailed(next.outbox_id, this.owner, message);
-      await this.enqueueDeliveryReceiptEvent({
-        outbox: next,
-        status: "failed",
-        error: { code: "channels.connector_missing", message },
-      });
+      const marked = await this.outbox.markFailed(next.outbox_id, this.owner, message);
+      if (marked) {
+        await this.enqueueDeliveryReceiptEvent({
+          outbox: next,
+          status: "failed",
+          receipt: {
+            outbox_id: next.outbox_id,
+            dedupe_key: next.dedupe_key,
+            chunk_index: next.chunk_index,
+          },
+          error: { code: "channels.connector_missing", message },
+        });
+      }
       this.logger?.warn("channels.egress.connector_missing", {
         outbox_id: next.outbox_id,
         source: next.source,
@@ -733,29 +740,54 @@ export class TelegramChannelProcessor {
     receipt?: unknown;
     error?: { code: string; message: string; details?: unknown };
   }): Promise<void> {
-    const inbox = await this.inbox.getById(input.outbox.inbox_id);
-    if (!inbox) return;
+    try {
+      const inbox = await this.inbox.getById(input.outbox.inbox_id);
+      if (!inbox) return;
 
-    const candidate = {
-      event_id: `delivery.receipt:${input.outbox.dedupe_key}`,
-      type: "delivery.receipt",
-      occurred_at: new Date().toISOString(),
-      scope: { kind: "key", key: inbox.key, lane: inbox.lane },
-      payload: {
-        session_id: inbox.key,
-        lane: inbox.lane,
-        channel: parseChannelSourceKey(input.outbox.source).connector,
-        thread_id: input.outbox.thread_id,
+      const candidate = {
+        event_id: `delivery.receipt:${input.outbox.dedupe_key}`,
+        type: "delivery.receipt",
+        occurred_at: new Date().toISOString(),
+        scope: { kind: "key", key: inbox.key, lane: inbox.lane },
+        payload: {
+          session_id: inbox.key,
+          lane: inbox.lane,
+          channel: parseChannelSourceKey(input.outbox.source).connector,
+          thread_id: input.outbox.thread_id,
+          status: input.status,
+          ...(input.receipt === undefined ? {} : { receipt: input.receipt }),
+          ...(input.error === undefined ? {} : { error: input.error }),
+        },
+      };
+
+      const parsed = WsDeliveryReceiptEvent.safeParse(candidate);
+      if (!parsed.success) {
+        this.logger?.warn("channels.egress.delivery_receipt.invalid", {
+          dedupe_key: input.outbox.dedupe_key,
+          status: input.status,
+          error: parsed.error.message,
+        });
+        return;
+      }
+
+      try {
+        await enqueueWsBroadcastMessage(this.db, parsed.data);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger?.warn("channels.egress.delivery_receipt.enqueue_failed", {
+          dedupe_key: input.outbox.dedupe_key,
+          status: input.status,
+          error: message,
+        });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger?.warn("channels.egress.delivery_receipt.failed", {
+        dedupe_key: input.outbox.dedupe_key,
         status: input.status,
-        ...(input.receipt === undefined ? {} : { receipt: input.receipt }),
-        ...(input.error === undefined ? {} : { error: input.error }),
-      },
-    };
-
-    const parsed = WsDeliveryReceiptEvent.safeParse(candidate);
-    if (!parsed.success) return;
-
-    await enqueueWsBroadcastMessage(this.db, parsed.data);
+        error: message,
+      });
+    }
   }
 
   private async claimDebouncedBatch(leader: ChannelInboxRow): Promise<ChannelInboxRow[]> {
@@ -1017,6 +1049,15 @@ export class TelegramChannelProcessor {
       } catch {
         // Fail closed: require approval when policy evaluation fails.
         decision = "require_approval";
+      }
+
+      if (decision === "allow" && appliedOverrideIds && appliedOverrideIds.length > 0) {
+        this.logger?.debug("channels.egress.policy_override_applied", {
+          agent_id: agentId,
+          inbox_id: leader.inbox_id,
+          match_target: connectorMatchTarget,
+          applied_override_ids: appliedOverrideIds,
+        });
       }
 
       if (policyService.isObserveOnly()) {

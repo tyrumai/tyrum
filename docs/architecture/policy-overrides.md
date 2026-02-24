@@ -64,6 +64,21 @@ Prefer patterns that encode intent and scope, for example:
 - `fs`: `write:docs/architecture/*`
 - `bash`: `git status*`
 - `messaging`: `send:slack:acct_123:chan_C024BE91L`
+- `connectors` (channel pipeline): `telegram:work:123` (paired with `tool_id: connector.send`)
+
+### Connector sends
+
+Outbound connector sends (the channel pipeline) support **approve always** by creating policy overrides with:
+
+- `tool_id`: `connector.send`
+- `pattern`: a connector match target (wildcard-glob)
+
+Current match target examples (v1):
+
+- Default account: `telegram:123`
+- Account-scoped: `telegram:work:123`
+
+Suggested overrides default to an exact destination match target (no wildcards).
 
 ## Evaluation semantics
 

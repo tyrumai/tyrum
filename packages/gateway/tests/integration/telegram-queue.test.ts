@@ -1393,4 +1393,70 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       }),
     });
   });
+
+  it("emits failed delivery receipts when no egress connector is registered", async () => {
+    db = openTestSqliteDb();
+
+    const fetchFn = mockFetch();
+    const bot = new TelegramBot("test-token", fetchFn);
+
+    const mockRuntime = {
+      turn: vi.fn().mockResolvedValue({
+        reply: "I can help with that!",
+        session_id: "session-abc",
+        used_tools: [],
+        memory_written: false,
+      }),
+    };
+
+    const workSend = vi.fn().mockResolvedValue({ ok: true, account: "work" });
+
+    const queue = new TelegramChannelQueue(db);
+    const processor = new TelegramChannelProcessor({
+      db,
+      agents: makeAgents(mockRuntime),
+      telegramBot: bot,
+      owner: "test-owner",
+      debounceMs: 0,
+      maxBatch: 1,
+      egressConnectors: [{ connector: "telegram", accountId: "work", sendMessage: workSend }],
+    });
+
+    const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
+    const enqueued = await queue.enqueue(normalized);
+
+    await processor.tick();
+
+    expect(workSend).not.toHaveBeenCalled();
+    expect(fetchFn).not.toHaveBeenCalled();
+
+    const expectedDedupeKey = `${enqueued.inbox.source}:${enqueued.inbox.thread_id}:${enqueued.inbox.message_id}:reply:0`;
+
+    const rows = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = 'ws.broadcast' ORDER BY id ASC",
+    );
+    expect(rows).toHaveLength(1);
+
+    const envelope = JSON.parse(rows[0]!.payload_json) as { message?: unknown };
+    const parsed = WsDeliveryReceiptEvent.safeParse(envelope.message);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+
+    expect(parsed.data.event_id).toBe(`delivery.receipt:${expectedDedupeKey}`);
+    expect(parsed.data.payload).toMatchObject({
+      session_id: enqueued.inbox.key,
+      lane: enqueued.inbox.lane,
+      channel: "telegram",
+      thread_id: enqueued.inbox.thread_id,
+      status: "failed",
+      receipt: expect.objectContaining({
+        dedupe_key: expectedDedupeKey,
+        chunk_index: 0,
+      }),
+      error: {
+        code: "channels.connector_missing",
+        message: expect.stringContaining("no egress connector registered"),
+      },
+    });
+  });
 });

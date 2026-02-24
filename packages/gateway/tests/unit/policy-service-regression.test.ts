@@ -184,6 +184,48 @@ describe("PolicyService regressions (precedence + overrides)", () => {
     });
   });
 
+  it("does not allow connector send overrides to bypass explicit connector denies", async () => {
+    await withTempDir(async (home) => {
+      const db = openTestSqliteDb();
+      try {
+        const playbookBundle = PolicyBundle.parse({
+          v: 1,
+          connectors: {
+            default: "allow",
+            allow: [],
+            require_approval: [],
+            deny: ["telegram:work:123"],
+          },
+        });
+
+        const overrideDal = new PolicyOverrideDal(db);
+        const policy = new PolicyService({
+          home,
+          snapshotDal: new PolicySnapshotDal(db),
+          overrideDal,
+        });
+
+        await overrideDal.create({
+          agentId: "agent-1",
+          toolId: "connector.send",
+          pattern: "telegram:work:123",
+        });
+
+        const res = await policy.evaluateConnectorAction({
+          agentId: "agent-1",
+          workspaceId: "ws-1",
+          matchTarget: "telegram:work:123",
+          playbookBundle,
+        });
+
+        expect(res.decision).toBe("deny");
+        expect(res.applied_override_ids).toBeUndefined();
+      } finally {
+        await db.close();
+      }
+    });
+  });
+
   it("does not allow policy overrides to bypass non-tool approval gates (egress)", async () => {
     await withTempDir(async (home) => {
       const db = openTestSqliteDb();
