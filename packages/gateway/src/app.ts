@@ -206,7 +206,16 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
         : undefined,
     }),
   );
-  app.route("/", createUsageRoutes({ db: container.db }));
+  app.route(
+    "/",
+    createUsageRoutes({
+      db: container.db,
+      authProfileDal,
+      pinDal,
+      agents: opts.agents,
+      logger: container.logger,
+    }),
+  );
   app.route("/", policy);
   app.route(
     "/",

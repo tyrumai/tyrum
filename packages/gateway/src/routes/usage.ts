@@ -1,17 +1,27 @@
 /**
  * Usage routes — local accounting for execution attempts.
  *
- * This is intentionally minimal: it exposes rollups from the durable
- * execution tables (attempt cost attribution) without provider-side quota
- * polling (which depends on auth profiles).
+ * Provider quota polling is best-effort (when auth profiles are enabled):
+ * results are cached + rate-limited and failures surface as structured,
+ * non-fatal status fields.
  */
 
 import { AttemptCost } from "@tyrum/schemas";
 import { Hono } from "hono";
+import type { AgentRegistry } from "../modules/agent/registry.js";
+import { isAuthProfilesEnabled } from "../modules/models/auth-profiles-enabled.js";
+import type { AuthProfileDal } from "../modules/models/auth-profile-dal.js";
+import type { SessionProviderPinDal } from "../modules/models/session-pin-dal.js";
+import type { Logger } from "../modules/observability/logger.js";
+import { ProviderUsagePoller, type ProviderUsageResult } from "../modules/observability/provider-usage.js";
 import type { SqlDb } from "../statestore/types.js";
 
 export interface UsageRouteDeps {
   db: SqlDb;
+  authProfileDal?: AuthProfileDal;
+  pinDal?: SessionProviderPinDal;
+  agents?: AgentRegistry;
+  logger?: Logger;
 }
 
 type UsageTotals = {
@@ -38,6 +48,12 @@ function newTotals(): UsageTotals {
 
 export function createUsageRoutes(deps: UsageRouteDeps): Hono {
   const app = new Hono();
+  const providerUsagePoller = new ProviderUsagePoller({
+    authProfileDal: deps.authProfileDal,
+    pinDal: deps.pinDal,
+    agents: deps.agents,
+    logger: deps.logger,
+  });
 
   app.get("/usage", async (c) => {
     const runId = c.req.query("run_id")?.trim() || undefined;
@@ -84,6 +100,10 @@ export function createUsageRoutes(deps: UsageRouteDeps): Hono {
       totals.usd_micros = addOptional(totals.usd_micros, cost.data.usd_micros);
     }
 
+    const provider: ProviderUsageResult | null = isAuthProfilesEnabled()
+      ? await providerUsagePoller.pollLatestPinned()
+      : null;
+
     return c.json({
       status: "ok",
       generated_at: new Date().toISOString(),
@@ -99,10 +119,9 @@ export function createUsageRoutes(deps: UsageRouteDeps): Hono {
         },
         totals,
       },
-      provider: null as null,
+      provider,
     });
   });
 
   return app;
 }
-
