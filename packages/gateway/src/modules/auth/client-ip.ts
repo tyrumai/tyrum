@@ -60,7 +60,6 @@ export function createTrustedProxyAllowlistFromEnv(
     if (slashIndex !== -1) {
       const baseIp = normalizeIp(entry.slice(0, slashIndex));
       const prefixRaw = entry.slice(slashIndex + 1).trim();
-      const prefix = Number(prefixRaw);
       if (!baseIp) {
         throw new Error(`invalid trusted proxy subnet '${entry}' (missing IP)`);
       }
@@ -68,8 +67,15 @@ export function createTrustedProxyAllowlistFromEnv(
       if (!family) {
         throw new Error(`invalid trusted proxy subnet '${entry}' (invalid IP)`);
       }
+      if (!/^[0-9]+$/.test(prefixRaw)) {
+        throw new Error(`invalid trusted proxy subnet '${entry}' (invalid prefix)`);
+      }
+      const prefix = Number(prefixRaw);
       if (!Number.isInteger(prefix)) {
         throw new Error(`invalid trusted proxy subnet '${entry}' (invalid prefix)`);
+      }
+      if (prefix === 0) {
+        throw new Error(`invalid trusted proxy subnet '${entry}' (prefix too broad)`);
       }
       const maxPrefix = family === "ipv4" ? 32 : 128;
       if (prefix < 0 || prefix > maxPrefix) {
@@ -156,7 +162,8 @@ function splitHeader(value: string, delimiter: "," | ";"): string[] {
   return out.map((part) => part.trim()).filter((part) => part.length > 0);
 }
 
-function parseForwardedHeader(value: string): string | undefined {
+function parseForwardedHeaderIps(value: string): string[] {
+  const ips: string[] = [];
   for (const entry of splitHeader(value, ",")) {
     for (const pair of splitHeader(entry, ";")) {
       const idx = pair.indexOf("=");
@@ -167,31 +174,33 @@ function parseForwardedHeader(value: string): string | undefined {
       const host = extractHostFromMaybeAddress(rawFor);
       const normalized = normalizeIp(host);
       if (normalized && ipFamily(normalized)) {
-        return normalized;
+        ips.push(normalized);
+        break;
       }
     }
   }
-  return undefined;
+  return ips;
 }
 
-function parseXForwardedForHeader(value: string): string | undefined {
+function parseXForwardedForHeaderIps(value: string): string[] {
+  const ips: string[] = [];
   for (const part of value.split(",")) {
     const host = extractHostFromMaybeAddress(part);
     const normalized = normalizeIp(host);
     if (normalized && ipFamily(normalized)) {
-      return normalized;
+      ips.push(normalized);
     }
   }
-  return undefined;
+  return ips;
 }
 
-function parseXRealIpHeader(value: string): string | undefined {
+function parseXRealIpHeaderIps(value: string): string[] {
   const host = extractHostFromMaybeAddress(value);
   const normalized = normalizeIp(host);
   if (normalized && ipFamily(normalized)) {
-    return normalized;
+    return [normalized];
   }
-  return undefined;
+  return [];
 }
 
 export function resolveClientIp(input: {
@@ -202,24 +211,29 @@ export function resolveClientIp(input: {
   trustedProxies: TrustedProxyAllowlist | undefined;
 }): string | undefined {
   const remoteAddress = normalizeIp(input.remoteAddress);
-  const isTrustedHop = remoteAddress && input.trustedProxies?.isTrustedProxy(remoteAddress);
-
   if (!remoteAddress) return undefined;
-  if (!isTrustedHop) return remoteAddress;
+  if (!input.trustedProxies?.isTrustedProxy(remoteAddress)) return remoteAddress;
 
-  const forwarded =
-    input.forwardedHeader ? parseForwardedHeader(input.forwardedHeader) : undefined;
-  if (forwarded) return forwarded;
+  const headerIps =
+    input.forwardedHeader
+      ? parseForwardedHeaderIps(input.forwardedHeader)
+      : input.xForwardedForHeader
+        ? parseXForwardedForHeaderIps(input.xForwardedForHeader)
+        : input.xRealIpHeader
+          ? parseXRealIpHeaderIps(input.xRealIpHeader)
+          : [];
 
-  const xff =
-    input.xForwardedForHeader ? parseXForwardedForHeader(input.xForwardedForHeader) : undefined;
-  if (xff) return xff;
+  if (headerIps.length === 0) return remoteAddress;
 
-  const xReal =
-    input.xRealIpHeader ? parseXRealIpHeader(input.xRealIpHeader) : undefined;
-  if (xReal) return xReal;
+  // Trust model: only trust forwarding headers when the *direct* peer is a trusted proxy.
+  // To mitigate spoofing in X-Forwarded-For chains, compute the client IP by stripping
+  // trusted proxies from the right-most end and returning the closest remaining hop.
+  const chain = [...headerIps, remoteAddress];
+  while (chain.length > 1 && input.trustedProxies.isTrustedProxy(chain[chain.length - 1]!)) {
+    chain.pop();
+  }
 
-  return remoteAddress;
+  return chain[chain.length - 1] ?? remoteAddress;
 }
 
 function resolveSocketRemoteAddress(c: Context): string | undefined {
@@ -249,4 +263,3 @@ export function getClientIp(c: Context): string | undefined {
   if (typeof value !== "string") return undefined;
   return normalizeIp(value);
 }
-
