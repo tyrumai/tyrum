@@ -164,7 +164,13 @@ function parseInlineMarkdown(input: string): { text: string; spans: MarkdownIrSp
     }
 
     if (input[idx] === "*" && !input.startsWith("**", idx)) {
-      const end = input.indexOf("*", idx + 1);
+      let end = -1;
+      for (let i = idx + 1; i < input.length; i += 1) {
+        if (input[i] !== "*") continue;
+        if (input[i - 1] === "*" || input[i + 1] === "*") continue;
+        end = i;
+        break;
+      }
       if (end !== -1) {
         const start = out.length;
         const inner = parseInlineMarkdown(input.slice(idx + 1, end));
@@ -340,28 +346,44 @@ export function markdownToIr(markdown: string): MarkdownIr {
   let text = "";
   const spans: MarkdownIrSpan[] = [];
   let prevEmittedKind: MarkdownBlock["kind"] | undefined;
+  let pendingSep: MarkdownBlockSeparator = "";
+
+  const maxSep = (a: MarkdownBlockSeparator, b: MarkdownBlockSeparator): MarkdownBlockSeparator => {
+    if (a === "\n\n" || b === "\n\n") return "\n\n";
+    if (a === "\n" || b === "\n") return "\n";
+    return "";
+  };
 
   for (const block of scanBlocks(input)) {
-    const separator =
+    const baseSeparator: MarkdownBlockSeparator =
       prevEmittedKind === undefined
         ? ""
         : prevEmittedKind === "list_item" && block.kind === "list_item" && block.sepBefore === "\n"
           ? "\n"
           : "\n\n";
 
+    const separator = prevEmittedKind === undefined ? "" : maxSep(pendingSep, baseSeparator);
+
     if (block.kind === "code_block") {
-      if (block.code.length === 0) continue;
+      if (block.code.length === 0) {
+        pendingSep = maxSep(pendingSep, baseSeparator);
+        continue;
+      }
       text += separator;
       const start = text.length;
       text += block.code;
       const end = text.length;
       spans.push({ kind: "block", block: "code_block", language: block.language, start, end });
+      pendingSep = "";
       prevEmittedKind = block.kind;
       continue;
     }
 
     const inline = parseInlineMarkdown(block.raw);
-    if (inline.text.length === 0) continue;
+    if (inline.text.length === 0) {
+      pendingSep = maxSep(pendingSep, baseSeparator);
+      continue;
+    }
 
     text += separator;
     const start = text.length;
@@ -387,6 +409,7 @@ export function markdownToIr(markdown: string): MarkdownIr {
     for (const span of inline.spans) {
       spans.push({ ...span, start: span.start + start, end: span.end + start });
     }
+    pendingSep = "";
     prevEmittedKind = block.kind;
   }
 

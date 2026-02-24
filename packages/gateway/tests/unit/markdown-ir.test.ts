@@ -41,6 +41,17 @@ describe("markdownToIr", () => {
     });
   });
 
+  it("does not close italic spans on bold delimiters", () => {
+    expect(markdownToIr("*foo **bar** baz*")).toEqual({
+      text: "foo bar baz",
+      spans: [
+        { kind: "block", block: "paragraph", start: 0, end: 11 },
+        { kind: "style", style: "italic", start: 0, end: 11 },
+        { kind: "style", style: "bold", start: 4, end: 7 },
+      ],
+    });
+  });
+
   it("captures strike spans and strips formatting markers from text", () => {
     expect(markdownToIr("~~strike~~")).toEqual({
       text: "strike",
@@ -174,6 +185,16 @@ describe("markdownToIr", () => {
       text: "two",
       spans: [
         { kind: "block", block: "list_item", ordered: false, depth: 0, start: 0, end: 3 },
+      ],
+    });
+  });
+
+  it("preserves blank line separators when skipping empty list items", () => {
+    expect(markdownToIr("- a\n\n- \n- c")).toEqual({
+      text: "a\n\nc",
+      spans: [
+        { kind: "block", block: "list_item", ordered: false, depth: 0, start: 0, end: 1 },
+        { kind: "block", block: "list_item", ordered: false, depth: 0, start: 3, end: 4 },
       ],
     });
   });
