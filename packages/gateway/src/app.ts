@@ -285,18 +285,20 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       home: container.config?.tyrumHome,
     }),
   );
-  app.route(
-    "/",
-    createRoutingConfigRoutes({
-      routingConfigDal,
-      ws: opts.connectionManager
-        ? {
-            connectionManager: opts.connectionManager,
-            cluster: opts.wsCluster,
-          }
-        : undefined,
-    }),
-  );
+  if (opts.tokenStore) {
+    app.route(
+      "/",
+      createRoutingConfigRoutes({
+        routingConfigDal,
+        ws: opts.connectionManager
+          ? {
+              connectionManager: opts.connectionManager,
+              cluster: opts.wsCluster,
+            }
+          : undefined,
+      }),
+    );
+  }
   app.route("/", createPlanRoutes(container));
   if (engine) {
     app.route("/", createWorkflowRoutes({ engine, policyService: container.policyService, agents: opts.agents }));

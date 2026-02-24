@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createTestApp } from "./helpers.js";
+import { RoutingConfigDal } from "../../src/modules/channels/routing-config-dal.js";
 
 describe("snapshot routes", () => {
   it("exports and imports a snapshot bundle (empty-db import)", async () => {
@@ -67,23 +68,19 @@ describe("snapshot routes", () => {
 
     const { app, container } = await createTestApp();
 
-    const setRes = await app.request("/routing/config", {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        config: {
-          v: 1,
-          telegram: {
-            default_agent_id: "default",
-            threads: {
-              "123": "agent-b",
-            },
+    await new RoutingConfigDal(container.db).set({
+      config: {
+        v: 1,
+        telegram: {
+          default_agent_id: "default",
+          threads: {
+            "123": "agent-b",
           },
         },
-        reason: "snapshot-seed",
-      }),
+      },
+      reason: "snapshot-seed",
+      createdBy: { kind: "test" },
     });
-    expect(setRes.status).toBe(201);
 
     const exportRes = await app.request("/snapshot/export");
     expect(exportRes.status).toBe(200);
@@ -102,10 +99,8 @@ describe("snapshot routes", () => {
     );
     expect(imported?.revision).toBeGreaterThan(0);
 
-    const fetchRes = await app2.request("/routing/config", { method: "GET" });
-    expect(fetchRes.status).toBe(200);
-    const fetchBody = (await fetchRes.json()) as { config: unknown };
-    expect(fetchBody.config).toMatchObject({
+    const latest = await new RoutingConfigDal(container2.db).getLatest();
+    expect(latest?.config).toMatchObject({
       telegram: { threads: { "123": "agent-b" } },
     });
 
