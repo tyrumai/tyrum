@@ -204,14 +204,15 @@ function scanBlocks(input: string): MarkdownBlockWithSeparator[] {
   let nextSep: MarkdownBlockSeparator | undefined;
 
   const pushBlock = (block: MarkdownBlock): void => {
-    const sepBefore: MarkdownBlockSeparator =
-      blocks.length === 0
-        ? ""
-        : nextSep === "\n\n"
-          ? "\n\n"
-          : blocks[blocks.length - 1].kind === "list_item" && block.kind === "list_item"
-            ? "\n"
-            : "\n\n";
+    let sepBefore: MarkdownBlockSeparator = "";
+    if (blocks.length === 0) {
+      sepBefore = "";
+    } else if (nextSep === "\n\n") {
+      sepBefore = "\n\n";
+    } else {
+      const prev = blocks[blocks.length - 1]!;
+      sepBefore = prev.kind === "list_item" && block.kind === "list_item" ? "\n" : "\n\n";
+    }
 
     blocks.push({ ...block, sepBefore });
     nextSep = undefined;
