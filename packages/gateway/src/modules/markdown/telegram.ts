@@ -277,10 +277,7 @@ function renderIrChunkToTelegramHtml(chunk: import("./ir.js").MarkdownIr): strin
       }
       case "blockquote": {
         const inner = renderInlineRangeToTelegramHtml(chunk, block.start, block.end);
-        out += inner
-          .split("\n")
-          .map((line) => `&gt; ${line}`)
-          .join("\n");
+        out += `<blockquote>${inner}</blockquote>`;
         break;
       }
       case "list_item": {

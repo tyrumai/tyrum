@@ -44,6 +44,11 @@ describe("renderMarkdownForTelegram", () => {
     expect(chunks).toEqual(["Hello <b>&lt;world&gt; &amp; friends</b>"]);
   });
 
+  it("renders blockquotes using Telegram HTML <blockquote> tags", () => {
+    const chunks = renderMarkdownForTelegram("> hello");
+    expect(chunks).toEqual(["<blockquote>hello</blockquote>"]);
+  });
+
   it("renders labeled links as Telegram HTML anchors with safe escaping", () => {
     const chunks = renderMarkdownForTelegram("[label](https://example.com?a=1&b=2)");
     expect(chunks).toEqual(['<a href="https://example.com?a=1&amp;b=2">label</a>']);
