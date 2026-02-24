@@ -1,4 +1,4 @@
-import { AttemptCost } from "@tyrum/schemas";
+import { AttemptCost, parseTyrumKey } from "@tyrum/schemas";
 import type { SqlDb, StateStoreKind } from "../../statestore/types.js";
 import type { ConnectionManager } from "../../ws/connection-manager.js";
 import type { ApprovalDal } from "../approval/dal.js";
@@ -11,6 +11,15 @@ import type { PluginRegistry } from "../plugins/registry.js";
 import type { ModelsDevService } from "../models/models-dev-service.js";
 import type { AgentRegistry } from "../agent/registry.js";
 import { buildStatusDetails } from "../observability/status-details.js";
+import { AuthProfileDal } from "../models/auth-profile-dal.js";
+import { SessionProviderPinDal } from "../models/session-pin-dal.js";
+import { ProviderUsagePoller } from "../observability/provider-usage.js";
+import { SessionDal } from "../agent/session-dal.js";
+import { SessionModelOverrideDal } from "../models/session-model-override-dal.js";
+import { isAuthProfilesEnabled } from "../models/auth-profiles-enabled.js";
+import { LaneQueueModeOverrideDal } from "../lanes/queue-mode-override-dal.js";
+import { SessionSendPolicyOverrideDal } from "../channels/send-policy-override-dal.js";
+import { parseChannelSourceKey } from "../channels/interface.js";
 
 export type CommandExecuteResult = {
   output: string;
@@ -26,6 +35,13 @@ export interface CommandDeps {
     isExposed: boolean;
     otelEnabled: boolean;
   };
+  commandContext?: {
+    agentId?: string;
+    channel?: string;
+    threadId?: string;
+    key?: string;
+    lane?: string;
+  };
   connectionManager?: ConnectionManager;
   db?: SqlDb;
   approvalDal?: ApprovalDal;
@@ -37,6 +53,40 @@ export interface CommandDeps {
   plugins?: PluginRegistry;
   modelsDev?: ModelsDevService;
   agents?: AgentRegistry;
+  fetchImpl?: typeof fetch;
+}
+
+const DEFAULT_PROVIDER_USAGE_FETCH_KEY = Symbol("default-provider-usage-fetch");
+
+const providerUsagePollers = new WeakMap<SqlDb, WeakMap<AgentRegistry, Map<unknown, ProviderUsagePoller>>>();
+
+function getProviderUsagePoller(deps: CommandDeps): ProviderUsagePoller | undefined {
+  if (!deps.db || !deps.agents) return undefined;
+
+  let byAgents = providerUsagePollers.get(deps.db);
+  if (!byAgents) {
+    byAgents = new WeakMap();
+    providerUsagePollers.set(deps.db, byAgents);
+  }
+
+  let byFetch = byAgents.get(deps.agents);
+  if (!byFetch) {
+    byFetch = new Map();
+    byAgents.set(deps.agents, byFetch);
+  }
+
+  const fetchKey = deps.fetchImpl ?? DEFAULT_PROVIDER_USAGE_FETCH_KEY;
+  let poller = byFetch.get(fetchKey);
+  if (!poller) {
+    poller = new ProviderUsagePoller({
+      authProfileDal: new AuthProfileDal(deps.db),
+      pinDal: new SessionProviderPinDal(deps.db),
+      agents: deps.agents,
+      fetchImpl: deps.fetchImpl,
+    });
+    byFetch.set(fetchKey, poller);
+  }
+  return poller;
 }
 
 function tokensFromCommand(raw: string): string[] {
@@ -64,6 +114,104 @@ type UsageTotals = {
   total_tokens: number;
   usd_micros: number;
 };
+
+async function resolveKeyLane(db: SqlDb, ctx: CommandDeps["commandContext"] | undefined): Promise<{ key: string; lane: string } | undefined> {
+  const key = ctx?.key?.trim();
+  const lane = ctx?.lane?.trim() || "main";
+  if (key) return { key, lane };
+
+  const channel = ctx?.channel?.trim();
+  const threadId = ctx?.threadId?.trim();
+  if (!channel || !threadId) return undefined;
+
+  const agentId = ctx?.agentId?.trim();
+  const agentKeyPrefix = agentId ? `agent:${agentId}:` : undefined;
+
+  const row = await db.get<{ key: string; lane: string }>(
+    `SELECT key, lane
+     FROM channel_inbox
+     WHERE thread_id = ?
+       AND (source = ? OR source LIKE ?)
+       ${agentKeyPrefix ? "AND substr(key, 1, ?) = ?" : ""}
+     ORDER BY received_at_ms DESC, inbox_id DESC
+     LIMIT 1`,
+    agentKeyPrefix
+      ? [threadId, channel, `${channel}:%`, agentKeyPrefix.length, agentKeyPrefix]
+      : [threadId, channel, `${channel}:%`],
+  );
+  if (!row?.key) return undefined;
+  return { key: row.key, lane: row.lane };
+}
+
+function resolveAgentId(ctx: CommandDeps["commandContext"] | undefined): string {
+  const explicit = ctx?.agentId?.trim();
+  if (explicit) return explicit;
+
+  const key = ctx?.key?.trim();
+  if (key) {
+    try {
+      const parsed = parseTyrumKey(key as never);
+      if (parsed.kind === "agent") return parsed.agent_id;
+    } catch {
+      // ignore invalid keys; fall back to default agent
+    }
+  }
+
+  return "default";
+}
+
+async function resolveChannelThread(db: SqlDb, ctx: CommandDeps["commandContext"] | undefined): Promise<{ channel: string; threadId: string } | undefined> {
+  const channelRaw = ctx?.channel?.trim();
+  const threadIdRaw = ctx?.threadId?.trim();
+  if (channelRaw && threadIdRaw) {
+    let channel = channelRaw;
+    try {
+      channel = parseChannelSourceKey(channelRaw).connector;
+    } catch {
+      const idx = channel.indexOf(":");
+      if (idx > 0) channel = channel.slice(0, idx);
+    }
+    return { channel, threadId: threadIdRaw };
+  }
+
+  const key = ctx?.key?.trim();
+  const lane = ctx?.lane?.trim() || "main";
+  if (!key) return undefined;
+
+  const row = await db.get<{ source: string; thread_id: string }>(
+    `SELECT source, thread_id
+     FROM channel_inbox
+     WHERE key = ? AND lane = ?
+     ORDER BY received_at_ms DESC, inbox_id DESC
+     LIMIT 1`,
+    [key, lane],
+  );
+  if (row?.source && row?.thread_id) {
+    let channel = row.source.trim();
+    try {
+      channel = parseChannelSourceKey(channel).connector;
+    } catch {
+      const idx = channel.indexOf(":");
+      if (idx > 0) channel = channel.slice(0, idx);
+    }
+    const threadId = row.thread_id.trim();
+    if (!channel || !threadId) return undefined;
+    return { channel, threadId };
+  }
+
+  try {
+    const parsed = parseTyrumKey(key as never);
+    if (parsed.kind === "agent" && "channel" in parsed && "id" in parsed) {
+      const channel = String(parsed.channel).trim();
+      const threadId = String(parsed.id).trim();
+      if (channel && threadId) return { channel, threadId };
+    }
+  } catch {
+    // ignore parse errors
+  }
+
+  return undefined;
+}
 
 function addOptional(total: number, value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? total + value : total;
@@ -143,16 +291,22 @@ function helpText(): string {
     "- /presence",
     "- /approvals [pending|approved|denied|expired]",
     "- /pairings [pending|approved|denied|revoked]",
+    "- /model [provider/model[@profile]]",
+    "- /queue [collect|followup|steer|steer_backlog|interrupt]",
+    "- /send [on|off|inherit]",
     "- /policy bundle",
     "- /policy overrides list [agent_id] [tool_id] [status]",
+    "- /policy overrides describe <policy_override_id>",
     "- /policy overrides revoke <policy_override_id> [reason...]",
     "- /context last",
     "- /context list [limit]",
     "- /context detail <context_report_id>",
     "- /usage [run_id]",
+    "- /usage provider",
     "",
     "Notes:",
     "- Commands are handled by the gateway (not the model).",
+    "- Some commands require session context (channel/thread_id or key/lane).",
     "- Some commands require optional subsystems (presence, policy, etc.).",
   ].join("\n");
 }
@@ -277,7 +431,20 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
         return { output: jsonBlock(payload), data: payload };
       }
 
-      return { output: "Usage: /policy overrides list|revoke", data: null };
+      if (action === "describe") {
+        const id = toks[3];
+        if (!id) {
+          return { output: "Usage: /policy overrides describe <policy_override_id>", data: null };
+        }
+        const row = await deps.policyOverrideDal.getById(id);
+        if (!row) {
+          return { output: `Override ${id} not found.`, data: null };
+        }
+        const payload = { override: row };
+        return { output: jsonBlock(payload), data: payload };
+      }
+
+      return { output: "Usage: /policy overrides list|describe|revoke", data: null };
     }
 
     return { output: "Usage: /policy bundle | /policy overrides ...", data: null };
@@ -335,6 +502,16 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
   }
 
   if (cmd === "usage") {
+    const sub = toks[1]?.toLowerCase();
+    if (sub === "provider") {
+      const poller = getProviderUsagePoller(deps);
+      if (!poller) {
+        return { output: "Provider usage polling is not available on this gateway instance.", data: null };
+      }
+      const provider = await poller.pollLatestPinned();
+      return { output: jsonBlock(provider), data: provider };
+    }
+
     if (!deps.db) {
       return { output: "Usage reporting is not available on this gateway instance.", data: null };
     }
@@ -345,6 +522,198 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
       local: usage,
     };
     return { output: formatUsageTotals(payload), data: payload };
+  }
+
+  if (cmd === "model") {
+    if (!deps.db) {
+      return { output: "Model overrides are not available on this gateway instance.", data: null };
+    }
+
+    const ctx = deps.commandContext;
+    const agentId = resolveAgentId(ctx);
+    const resolved = await resolveChannelThread(deps.db, ctx);
+    if (!resolved) {
+      return { output: "Usage: /model <provider/model> (requires key or channel/thread context)", data: null };
+    }
+    const { channel, threadId } = resolved;
+
+    const sessionDal = new SessionDal(deps.db);
+    const session = await sessionDal.getOrCreate(channel, threadId, agentId);
+    const overrides = new SessionModelOverrideDal(deps.db);
+
+    const modelArg = toks[1];
+    if (!modelArg) {
+      const existing = await overrides.get({ agentId, sessionId: session.session_id });
+      const payload = {
+        session_id: session.session_id,
+        model_id: existing?.model_id ?? null,
+      };
+      return { output: jsonBlock(payload), data: payload };
+    }
+
+    const trimmed = modelArg.trim();
+    const at = trimmed.indexOf("@");
+    const modelIdRaw = at >= 0 ? trimmed.slice(0, at).trim() : trimmed;
+    const profileIdRaw = at >= 0 ? trimmed.slice(at + 1).trim() : undefined;
+
+    if (profileIdRaw !== undefined && profileIdRaw.length === 0) {
+      return { output: "Usage: /model <provider/model>@<profile>", data: null };
+    }
+
+    const slash = modelIdRaw.indexOf("/");
+    if (slash <= 0 || slash === modelIdRaw.length - 1) {
+      return { output: `Invalid model '${modelIdRaw}' (expected provider/model).`, data: null };
+    }
+
+    const providerId = modelIdRaw.slice(0, slash);
+    const modelId = modelIdRaw.slice(slash + 1);
+
+    if (deps.modelsDev) {
+      const loaded = await deps.modelsDev.ensureLoaded();
+      const provider = loaded.catalog[providerId];
+      const model = provider?.models?.[modelId];
+      if (!provider || !model) {
+        return { output: `Model '${modelIdRaw}' not found in models.dev catalog.`, data: null };
+      }
+    }
+
+    if (profileIdRaw) {
+      if (!isAuthProfilesEnabled()) {
+        return { output: "Auth profiles are not enabled on this gateway instance.", data: null };
+      }
+
+      const authProfileDal = new AuthProfileDal(deps.db);
+      const profile = await authProfileDal.getById(profileIdRaw);
+      if (!profile) {
+        return { output: `Auth profile ${profileIdRaw} not found.`, data: null };
+      }
+      if (profile.agent_id !== agentId) {
+        return { output: `Auth profile ${profileIdRaw} is not scoped to agent '${agentId}'.`, data: null };
+      }
+      if (profile.provider !== providerId) {
+        return { output: `Auth profile ${profileIdRaw} is for provider '${profile.provider}', not '${providerId}'.`, data: null };
+      }
+      if (profile.status !== "active") {
+        return { output: `Auth profile ${profileIdRaw} is not active.`, data: null };
+      }
+
+      const res = await deps.db.transaction(async (tx) => {
+        const modelOverrideDal = new SessionModelOverrideDal(tx);
+        const row = await modelOverrideDal.upsert({
+          agentId,
+          sessionId: session.session_id,
+          modelId: modelIdRaw,
+        });
+        const pins = new SessionProviderPinDal(tx);
+        const pinned = await pins.upsert({
+          agentId,
+          sessionId: session.session_id,
+          provider: providerId,
+          profileId: profileIdRaw,
+        });
+        return { row, pinned };
+      });
+
+      const payload = {
+        session_id: res.row.session_id,
+        model_id: res.row.model_id,
+        provider: res.pinned.provider,
+        profile_id: res.pinned.profile_id,
+      };
+      return { output: jsonBlock(payload), data: payload };
+    }
+
+    const row = await deps.db.transaction(async (tx) => {
+      const modelOverrideDal = new SessionModelOverrideDal(tx);
+      const row = await modelOverrideDal.upsert({
+        agentId,
+        sessionId: session.session_id,
+        modelId: modelIdRaw,
+      });
+      const pins = new SessionProviderPinDal(tx);
+      await pins.clear({ agentId, sessionId: session.session_id, provider: providerId });
+      return row;
+    });
+
+    const payload = {
+      session_id: row.session_id,
+      model_id: row.model_id,
+    };
+    return { output: jsonBlock(payload), data: payload };
+  }
+
+  if (cmd === "queue") {
+    if (!deps.db) {
+      return { output: "Queue mode overrides are not available on this gateway instance.", data: null };
+    }
+
+    const resolved = await resolveKeyLane(deps.db, deps.commandContext);
+    if (!resolved) {
+      return { output: "Usage: /queue <collect|followup|steer|steer_backlog|interrupt> (requires key or channel/thread context)", data: null };
+    }
+    const { key, lane } = resolved;
+
+    const dal = new LaneQueueModeOverrideDal(deps.db);
+    const modeArg = toks[1]?.trim().toLowerCase();
+    const allowed = new Set(["collect", "followup", "steer", "steer_backlog", "interrupt"]);
+
+    if (!modeArg) {
+      const existing = await dal.get({ key, lane });
+      const payload = {
+        key,
+        lane,
+        queue_mode: existing?.queue_mode ?? "collect",
+      };
+      return { output: jsonBlock(payload), data: payload };
+    }
+
+    if (!allowed.has(modeArg)) {
+      return { output: "Usage: /queue <collect|followup|steer|steer_backlog|interrupt>", data: null };
+    }
+
+    const row = await dal.upsert({ key, lane, queueMode: modeArg });
+    const payload = { key: row.key, lane: row.lane, queue_mode: row.queue_mode };
+    return { output: jsonBlock(payload), data: payload };
+  }
+
+  if (cmd === "send") {
+    if (!deps.db) {
+      return { output: "Send policy overrides are not available on this gateway instance.", data: null };
+    }
+
+    const resolved = await resolveKeyLane(deps.db, deps.commandContext);
+    if (!resolved?.key) {
+      return { output: "Usage: /send <on|off|inherit> (requires key or channel/thread context)", data: null };
+    }
+    const { key } = resolved;
+
+    const dal = new SessionSendPolicyOverrideDal(deps.db);
+    const arg = toks[1]?.trim().toLowerCase();
+
+    if (!arg) {
+      const existing = await dal.get({ key });
+      const payload = { key, send_policy: existing?.send_policy ?? "inherit" };
+      return { output: jsonBlock(payload), data: payload };
+    }
+
+    if (arg === "inherit") {
+      try {
+        await dal.clear({ key });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { output: `Failed to clear send policy override: ${message}`, data: null };
+      }
+      const payload = { key, send_policy: "inherit" };
+      return { output: jsonBlock(payload), data: payload };
+    }
+
+    if (arg !== "on" && arg !== "off") {
+      return { output: "Usage: /send <on|off|inherit>", data: null };
+    }
+
+    const row = await dal.upsert({ key, sendPolicy: arg });
+    const payload = { key: row.key, send_policy: row.send_policy };
+    return { output: jsonBlock(payload), data: payload };
   }
 
   if (deps.plugins) {

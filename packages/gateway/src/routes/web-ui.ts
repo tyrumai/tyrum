@@ -1170,7 +1170,7 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
 
           if (helpBtn) {
             helpBtn.addEventListener("click", () => {
-              request("command.execute", { command: "/help" });
+              request("command.execute", { command: "/help", channel, thread_id: threadId });
             });
           }
 
@@ -1182,7 +1182,7 @@ export function createWebUiRoutes(deps: WebUiDeps): Hono {
               inputEl.value = "";
 
               if (text.startsWith("/")) {
-                request("command.execute", { command: text });
+                request("command.execute", { command: text, channel, thread_id: threadId });
                 return;
               }
 
