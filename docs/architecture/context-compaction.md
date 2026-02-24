@@ -51,3 +51,15 @@ Pruning:
 - applies only to tool-result messages (never to user or assistant turns)
 - is deterministic and policy-controlled
 - is designed to improve cost and cache behavior for providers that support prompt caching
+
+### Runtime policy (gateway)
+
+The gateway applies deterministic pruning/compaction between tool-loop steps during an agent turn:
+
+- Tool call/results are pruned before each step, keeping only the most recent tool interactions.
+- Total messages sent per step are capped (system + instruction head is preserved).
+
+Configuration (environment variables):
+
+- `TYRUM_CONTEXT_TOOL_PRUNE_KEEP_LAST_MESSAGES` — number of trailing messages allowed to retain tool call/results (default `4`, minimum `2`).
+- `TYRUM_CONTEXT_MAX_MESSAGES` — hard cap on total messages sent to the model per step (default `32`, minimum `8`).
