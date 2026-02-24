@@ -238,6 +238,74 @@ describe("missing slash commands", () => {
     }
   });
 
+  it("does not persist /model override when auth profiles are disabled", async () => {
+    const prevEnabled = process.env["TYRUM_AUTH_PROFILES_ENABLED"];
+    process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "0";
+
+    try {
+      db = openTestSqliteDb();
+
+      const result = await executeCommand("/model openrouter/gpt-4o@profile-openrouter-1", {
+        db,
+        commandContext: { agentId: "default", channel: "ui", threadId: "thread-1" },
+      });
+
+      expect(result.data).toBeNull();
+
+      const override = await db.get<{ model_id: string }>(
+        `SELECT model_id
+         FROM session_model_overrides
+         WHERE agent_id = ? AND session_id = ?`,
+        ["default", "ui:thread-1"],
+      );
+      expect(override).toBeUndefined();
+
+      const pin = await db.get<{ profile_id: string }>(
+        `SELECT profile_id
+         FROM session_provider_pins
+         WHERE agent_id = ? AND session_id = ? AND provider = ?`,
+        ["default", "ui:thread-1", "openrouter"],
+      );
+      expect(pin).toBeUndefined();
+    } finally {
+      process.env["TYRUM_AUTH_PROFILES_ENABLED"] = prevEnabled;
+    }
+  });
+
+  it("does not persist /model override when the auth profile is missing", async () => {
+    const prevEnabled = process.env["TYRUM_AUTH_PROFILES_ENABLED"];
+    process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "1";
+
+    try {
+      db = openTestSqliteDb();
+
+      const result = await executeCommand("/model openrouter/gpt-4o@profile-missing", {
+        db,
+        commandContext: { agentId: "default", channel: "ui", threadId: "thread-1" },
+      });
+
+      expect(result.data).toBeNull();
+
+      const override = await db.get<{ model_id: string }>(
+        `SELECT model_id
+         FROM session_model_overrides
+         WHERE agent_id = ? AND session_id = ?`,
+        ["default", "ui:thread-1"],
+      );
+      expect(override).toBeUndefined();
+
+      const pin = await db.get<{ profile_id: string }>(
+        `SELECT profile_id
+         FROM session_provider_pins
+         WHERE agent_id = ? AND session_id = ? AND provider = ?`,
+        ["default", "ui:thread-1", "openrouter"],
+      );
+      expect(pin).toBeUndefined();
+    } finally {
+      process.env["TYRUM_AUTH_PROFILES_ENABLED"] = prevEnabled;
+    }
+  });
+
   it("rejects /model <provider/model> when the model is missing from models.dev catalog", async () => {
     db = openTestSqliteDb();
 
@@ -430,5 +498,44 @@ describe("missing slash commands", () => {
     });
 
     expect(result.data).toMatchObject({ key, send_policy: "off" });
+  });
+
+  it("fails /send inherit when clearing the override fails", async () => {
+    db = openTestSqliteDb();
+
+    const key = "agent:default:telegram:default:dm:chat-1";
+
+    await executeCommand("/send off", {
+      db,
+      commandContext: { key },
+    });
+
+    const failingDb = {
+      kind: db.kind,
+      get: db.get.bind(db),
+      all: db.all.bind(db),
+      run: async () => {
+        throw new Error("db down");
+      },
+      exec: db.exec.bind(db),
+      transaction: db.transaction.bind(db),
+      close: db.close.bind(db),
+    };
+
+    const result = await executeCommand("/send inherit", {
+      db: failingDb,
+      commandContext: { key },
+    });
+
+    expect(result.data).toBeNull();
+    expect(result.output).toContain("Failed to clear send policy override");
+
+    const stillStored = await db.get<{ send_policy: string }>(
+      `SELECT send_policy
+       FROM session_send_policy_overrides
+       WHERE key = ?`,
+      [key],
+    );
+    expect(stillStored?.send_policy).toBe("off");
   });
 });

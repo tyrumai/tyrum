@@ -471,13 +471,6 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
       }
     }
 
-    const row = await overrides.upsert({
-      agentId,
-      sessionId: session.session_id,
-      modelId: modelIdRaw,
-    });
-
-    let pin: { provider: string; profile_id: string } | undefined;
     if (profileIdRaw) {
       const authProfilesEnabled = process.env["TYRUM_AUTH_PROFILES_ENABLED"]?.trim();
       if (!authProfilesEnabled || ["0", "false", "off", "no"].includes(authProfilesEnabled.toLowerCase())) {
@@ -499,20 +492,41 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
         return { output: `Auth profile ${profileIdRaw} is not active.`, data: null };
       }
 
-      const pins = new SessionProviderPinDal(deps.db);
-      const pinned = await pins.upsert({
-        agentId,
-        sessionId: session.session_id,
-        provider: providerId,
-        profileId: profileIdRaw,
+      const res = await deps.db.transaction(async (tx) => {
+        const modelOverrideDal = new SessionModelOverrideDal(tx);
+        const row = await modelOverrideDal.upsert({
+          agentId,
+          sessionId: session.session_id,
+          modelId: modelIdRaw,
+        });
+        const pins = new SessionProviderPinDal(tx);
+        const pinned = await pins.upsert({
+          agentId,
+          sessionId: session.session_id,
+          provider: providerId,
+          profileId: profileIdRaw,
+        });
+        return { row, pinned };
       });
-      pin = { provider: pinned.provider, profile_id: pinned.profile_id };
+
+      const payload = {
+        session_id: res.row.session_id,
+        model_id: res.row.model_id,
+        provider: res.pinned.provider,
+        profile_id: res.pinned.profile_id,
+      };
+      return { output: jsonBlock(payload), data: payload };
     }
+
+    const row = await overrides.upsert({
+      agentId,
+      sessionId: session.session_id,
+      modelId: modelIdRaw,
+    });
 
     const payload = {
       session_id: row.session_id,
       model_id: row.model_id,
-      ...(pin ? { provider: pin.provider, profile_id: pin.profile_id } : {}),
     };
     return { output: jsonBlock(payload), data: payload };
   }
@@ -572,7 +586,12 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
     }
 
     if (arg === "inherit") {
-      await dal.clear({ key }).catch(() => {});
+      try {
+        await dal.clear({ key });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { output: `Failed to clear send policy override: ${message}`, data: null };
+      }
       const payload = { key, send_policy: "inherit" };
       return { output: jsonBlock(payload), data: payload };
     }
