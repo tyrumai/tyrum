@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import mitt from "mitt";
 import { MemoryDal } from "../../src/modules/memory/dal.js";
 import { WatcherProcessor } from "../../src/modules/watcher/processor.js";
@@ -207,6 +207,41 @@ describe("WatcherProcessor", () => {
 
     const firings = await db.all<{ firing_id: string }>("SELECT firing_id FROM watcher_firings");
     expect(firings).toHaveLength(2);
+  });
+
+  it("does not fail when many webhook firings share a coarse timestamp", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-02-24T00:00:00.000Z"));
+    try {
+      const id = await processor.createWatcher("plan-1", "webhook", {
+        secret_handle: {
+          handle_id: "secret-handle",
+          provider: "file",
+          scope: "watcher:webhook:test",
+          created_at: new Date().toISOString(),
+        },
+      });
+      const watcher = await processor.getActiveWatcherById(id);
+      expect(watcher).not.toBeNull();
+
+      const timestampMs = 1_700_000_000_000;
+      const n = 1001;
+      for (let i = 0; i < n; i += 1) {
+        const recorded = await processor.recordWebhookTrigger(watcher!, {
+          timestampMs,
+          nonce: `nonce-${String(i)}`,
+          bodySha256: `sha-${String(i)}`,
+          bodyBytes: i,
+        });
+        expect(recorded).toBe(true);
+        vi.advanceTimersByTime(1);
+      }
+
+      const count = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM watcher_firings");
+      expect(count?.n).toBe(n);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not record webhook trigger events for non-webhook watchers", async () => {

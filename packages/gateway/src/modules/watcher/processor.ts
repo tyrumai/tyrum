@@ -245,8 +245,9 @@ export class WatcherProcessor {
     }
 
     const maxScheduledAtSearch = 1_000;
+    const baseScheduledAtMs = Date.now();
     for (let i = 0; i < maxScheduledAtSearch; i += 1) {
-      const scheduledAtMs = event.timestampMs + i;
+      const scheduledAtMs = baseScheduledAtMs + i;
       const created = await this.firingDal.createIfAbsent({
         firingId,
         watcherId: watcher.id,
