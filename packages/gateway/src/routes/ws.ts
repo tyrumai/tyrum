@@ -838,42 +838,46 @@ export function createWsHandler(opts: WsRouteOptions): {
     const userAgent = toSingleHeaderValue(req.headers["user-agent"])?.trim() || undefined;
     const requestId = toSingleHeaderValue(req.headers["x-request-id"])?.trim() || undefined;
 
-    const recordUpgradeAuthFailed = (): void => {
+    const recordUpgradeAuthFailed = async (): Promise<void> => {
       const authAudit = protocolDeps.authAudit;
       if (!authAudit) return;
 
       try {
-        void authAudit
-          .recordAuthFailed({
-            surface: "ws.upgrade",
-            reason: token ? "invalid_token" : "missing_token",
-            token_transport: tokenInfo.transport,
-            client_ip: parseRemoteIp(req),
-            method: req.method,
-            path: requestPath,
-            user_agent: userAgent,
-            request_id: requestId,
-          })
-          .catch(() => {});
+        await authAudit.recordAuthFailed({
+          surface: "ws.upgrade",
+          reason: token ? "invalid_token" : "missing_token",
+          token_transport: tokenInfo.transport,
+          client_ip: parseRemoteIp(req),
+          method: req.method,
+          path: requestPath,
+          user_agent: userAgent,
+          request_id: requestId,
+        });
       } catch {
         // ignore audit failures; the socket still must close
       }
     };
 
     void resolveAuth()
-      .then((resolved) => {
+      .then(async (resolved) => {
         if (!resolved) {
-          recordUpgradeAuthFailed();
-          ws.close(4001, "unauthorized");
+          try {
+            await recordUpgradeAuthFailed();
+          } finally {
+            ws.close(4001, "unauthorized");
+          }
           return;
         }
         authState = resolved;
         startHandshakeTimeout();
         flushEarlyMessages();
       })
-      .catch(() => {
-        recordUpgradeAuthFailed();
-        ws.close(4001, "unauthorized");
+      .catch(async () => {
+        try {
+          await recordUpgradeAuthFailed();
+        } finally {
+          ws.close(4001, "unauthorized");
+        }
       });
   });
 
