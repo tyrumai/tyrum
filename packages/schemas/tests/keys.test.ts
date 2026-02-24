@@ -14,6 +14,7 @@ describe("Lane", () => {
   it("accepts known lanes", () => {
     expect(Lane.parse("main")).toBe("main");
     expect(Lane.parse("cron")).toBe("cron");
+    expect(Lane.parse("heartbeat")).toBe("heartbeat");
     expect(Lane.parse("subagent")).toBe("subagent");
   });
 });

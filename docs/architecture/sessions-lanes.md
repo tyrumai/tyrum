@@ -78,6 +78,7 @@ Lanes separate concurrent concerns while keeping execution serialized per lane:
 
 - `main` — interactive chat
 - `cron` — scheduled work
+- `heartbeat` — context-aware periodic batching inside the main session
 - `subagent` — delegated work with a narrower scope
 
 ### Relationship to execution runs
