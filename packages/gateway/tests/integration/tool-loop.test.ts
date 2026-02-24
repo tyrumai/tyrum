@@ -222,6 +222,99 @@ describe("Tool execution loop", () => {
     expect(result.used_tools).toContain("tool.fs.read");
   });
 
+  it("prunes older tool results from the model prompt deterministically", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
+
+    await writeFile(join(homeDir, "one.txt"), "FIRST_TOOL_OUTPUT_123", "utf-8");
+    await writeFile(join(homeDir, "two.txt"), "SECOND_TOOL_OUTPUT_456", "utf-8");
+    await writeFile(join(homeDir, "three.txt"), "THIRD_TOOL_OUTPUT_789", "utf-8");
+
+    await writeFile(
+      join(homeDir, "agent.yml"),
+      [
+        "model:",
+        "  model: openai/gpt-4.1",
+        "skills:",
+        "  enabled: []",
+        "mcp:",
+        "  enabled: []",
+        "tools:",
+        "  allow:",
+        "    - tool.fs.read",
+        "sessions:",
+        "  ttl_days: 30",
+        "  max_turns: 20",
+        "memory:",
+        "  markdown_enabled: false",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const languageModel = createSequencedToolLoopLanguageModel([
+      {
+        kind: "tool-calls",
+        toolCalls: [
+          {
+            id: "tc-1",
+            name: "tool.fs.read",
+            arguments: JSON.stringify({ path: "one.txt" }),
+          },
+        ],
+      },
+      {
+        kind: "tool-calls",
+        toolCalls: [
+          {
+            id: "tc-2",
+            name: "tool.fs.read",
+            arguments: JSON.stringify({ path: "two.txt" }),
+          },
+        ],
+      },
+      {
+        kind: "tool-calls",
+        toolCalls: [
+          {
+            id: "tc-3",
+            name: "tool.fs.read",
+            arguments: JSON.stringify({ path: "three.txt" }),
+          },
+        ],
+      },
+      { kind: "text", text: "done" },
+    ]);
+
+    const mcpManager = {
+      listToolDescriptors: vi.fn(async () => []),
+      shutdown: vi.fn(async () => {}),
+      callTool: vi.fn(async () => ({ content: [] })),
+    };
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel,
+      mcpManager: mcpManager as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
+    });
+
+    const result = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-pruning-1",
+      message: "read three files",
+    });
+    expect(result.reply).toBe("done");
+
+    const lastCall = languageModel.doGenerateCalls.at(-1);
+    expect(lastCall).toBeTruthy();
+    const promptText = JSON.stringify(lastCall!.prompt);
+    expect(promptText).toContain("SECOND_TOOL_OUTPUT_456");
+    expect(promptText).toContain("THIRD_TOOL_OUTPUT_789");
+    expect(promptText).not.toContain("FIRST_TOOL_OUTPUT_123");
+  });
+
   it("queues high-risk tool calls and resumes after approval", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });
