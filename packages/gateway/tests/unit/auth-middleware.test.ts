@@ -88,7 +88,7 @@ describe("Auth middleware", () => {
     expect(body.data).toBe("secret");
   });
 
-  it("rejects requests authenticated with a client device token", async () => {
+  it("allows requests authenticated with a client device token", async () => {
     const app = buildApp();
     const issued = await tokenStore.issueDeviceToken({
       deviceId: "dev_client_1",
@@ -100,7 +100,7 @@ describe("Auth middleware", () => {
     const res = await app.request("/api/data", {
       headers: { Authorization: `Bearer ${issued.token}` },
     });
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(200);
   });
 
   it("allows requests with valid auth cookie", async () => {

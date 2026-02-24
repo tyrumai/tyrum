@@ -10,6 +10,7 @@ import { getCookie } from "hono/cookie";
 import { matchedRoutes } from "hono/route";
 import { APP_PATH_PREFIX, matchesPathPrefixSegment } from "../../app-path.js";
 import type { TokenStore } from "./token-store.js";
+import type { AuthTokenClaims } from "./token-store.js";
 import { AUTH_COOKIE_NAME, extractBearerToken } from "./http.js";
 
 const AUTH_ERROR_BODY = {
@@ -71,14 +72,15 @@ export function createAuthMiddleware(
       );
     }
 
-    // HTTP routes are an operator surface; require an admin bootstrap token.
-    if (!tokenStore.validate(token)) {
+    const claims: AuthTokenClaims | null = tokenStore.authenticate(token);
+    if (!claims) {
       return c.json(
         AUTH_ERROR_BODY,
         401,
       );
     }
 
+    c.set("authClaims", claims);
     return next();
   };
 }
