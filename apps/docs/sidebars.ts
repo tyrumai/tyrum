@@ -15,7 +15,7 @@ const sidebars: SidebarsConfig = {
     {
       type: "category",
       label: "Advanced",
-      items: ["advanced/remote-gateway", "advanced/multi-node"],
+      items: ["advanced/remote-gateway", "advanced/multi-node", "advanced/deployment-profiles"],
     },
     {
       type: "category",

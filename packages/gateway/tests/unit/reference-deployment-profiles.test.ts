@@ -40,10 +40,25 @@ describe("reference deployment profiles", () => {
     expect(singleHostEnv.get("TYRUM_HOME")).toBeDefined();
     expect(singleHostEnv.get("GATEWAY_DB_PATH")).toBeDefined();
 
-    expect(splitRoleEnv.get("GATEWAY_TOKEN")).toBeDefined();
-    const dbPath = splitRoleEnv.get("GATEWAY_DB_PATH");
-    expect(dbPath).toBeDefined();
-    expect(dbPath).toMatch(/^postgres(ql)?:\/\//u);
+    const splitRoleToken = splitRoleEnv.get("GATEWAY_TOKEN");
+    expect(splitRoleToken).toBeDefined();
+    expect(splitRoleToken).toBe("");
+    expect(splitRoleEnv.get("GATEWAY_DB_PATH")).toBeUndefined();
+  });
+
+  it("keeps split-role reference deployments Postgres-backed", async () => {
+    const composeRaw = await expectFile("docker-compose.yml");
+    const compose = parseYaml(composeRaw) as any;
+    const services = compose.services as Record<string, any> | undefined;
+
+    const splitServices = ["tyrum-edge", "tyrum-worker", "tyrum-scheduler"];
+    for (const serviceName of splitServices) {
+      const service = services?.[serviceName];
+      expect(service).toBeDefined();
+
+      const env = service.environment as Record<string, unknown> | undefined;
+      expect(env?.GATEWAY_DB_PATH).toEqual(expect.stringMatching(/postgres(ql)?:\/\//u));
+    }
   });
 
   it("ships reference Helm values for single-host and split-role", async () => {
@@ -57,6 +72,7 @@ describe("reference deployment profiles", () => {
     expect(splitValues.mode).toBe("split");
 
     expect(splitValues.env?.GATEWAY_DB_PATH).toMatch(/^postgres(ql)?:\/\//u);
+    expect(splitValues.env?.GATEWAY_DB_PATH).toContain("REPLACE_ME");
   });
 
   it("documents how to use the profiles", async () => {
@@ -67,4 +83,3 @@ describe("reference deployment profiles", () => {
     expect(doc).toContain("Helm");
   });
 });
-

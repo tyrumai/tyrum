@@ -51,3 +51,4 @@ Split-role requires Postgres:
 helm install tyrum charts/tyrum -f config/deployments/helm-split-role.values.yaml
 ```
 
+Replace `REPLACE_ME` in `config/deployments/helm-split-role.values.yaml` with your Postgres password (or set `env.GATEWAY_DB_PATH` to your full Postgres URI).

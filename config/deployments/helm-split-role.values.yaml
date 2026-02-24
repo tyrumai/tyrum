@@ -7,10 +7,9 @@ env:
   GATEWAY_PORT: "8788"
   TYRUM_TLS_READY: "1"
   # Split-role requires Postgres.
-  GATEWAY_DB_PATH: postgres://tyrum:tyrum@postgres.default.svc.cluster.local:5432/tyrum
+  GATEWAY_DB_PATH: postgres://tyrum:REPLACE_ME@postgres.default.svc.cluster.local:5432/tyrum
   TYRUM_ENGINE_API_ENABLED: "1"
   TYRUM_SECRET_PROVIDER: env
 
 persistence:
   enabled: true
-
