@@ -23,3 +23,4 @@ flowchart TB
 
 - Gateway RPC: `agent` and `agent.wait` (or equivalent HTTP endpoints)
 - Channel ingress: a message mapped into a session enqueue
+- Runtime behavior: each agent turn is enqueued as an execution-engine `Decide` step so turn side effects flow through the same durable control plane.

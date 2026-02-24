@@ -10,10 +10,12 @@ import type {
 import {
   evaluatePostcondition,
   Lane,
+  DEFAULT_WORKSPACE_ID,
   PostconditionError,
   requiredCapability,
   requiresPostcondition,
   TyrumKey,
+  WorkspaceId,
 } from "@tyrum/schemas";
 import type { EvaluationContext } from "@tyrum/schemas";
 import { randomUUID } from "node:crypto";
@@ -51,6 +53,8 @@ export type ClockFn = () => ExecutionClock;
 export interface EnqueuePlanInput {
   key: string;
   lane: string;
+  /** Workspace identifier used for workspace leases and audit scoping (default: "default"). */
+  workspaceId?: string;
   planId: string;
   requestId: string;
   steps: ActionPrimitiveT[];
@@ -66,6 +70,8 @@ export interface EnqueuePlanResult {
 export interface WorkerTickInput {
   workerId: string;
   executor: StepExecutor;
+  /** When set, only this run_id will be considered for execution. */
+  runId?: string;
 }
 
 export interface ExecutionConcurrencyLimits {
@@ -216,6 +222,13 @@ function parsePlanIdFromTriggerJson(triggerJson: string): string | undefined {
     // ignore
   }
   return undefined;
+}
+
+function normalizeWorkspaceId(input: string | undefined): string {
+  const trimmed = input?.trim();
+  if (!trimmed) return DEFAULT_WORKSPACE_ID;
+  const parsed = WorkspaceId.safeParse(trimmed);
+  return parsed.success ? parsed.data : DEFAULT_WORKSPACE_ID;
 }
 
 export class ExecutionEngine {
@@ -553,6 +566,7 @@ export class ExecutionEngine {
   async enqueuePlanInTx(tx: SqlDb, input: EnqueuePlanInput): Promise<EnqueuePlanResult> {
     const jobId = randomUUID();
     const runId = randomUUID();
+    const workspaceId = normalizeWorkspaceId(input.workspaceId);
 
     const trigger = {
       kind: "session",
@@ -579,10 +593,20 @@ export class ExecutionEngine {
          trigger_json,
          input_json,
          latest_run_id,
-         policy_snapshot_id
+         policy_snapshot_id,
+         workspace_id
        )
-       VALUES (?, ?, ?, 'queued', ?, ?, ?, ?)`,
-      [jobId, input.key, input.lane, triggerJson, inputJson, runId, input.policySnapshotId ?? null],
+       VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, ?)`,
+      [
+        jobId,
+        input.key,
+        input.lane,
+        triggerJson,
+        inputJson,
+        runId,
+        input.policySnapshotId ?? null,
+        workspaceId,
+      ],
     );
 
     await tx.run(
@@ -825,6 +849,11 @@ export class ExecutionEngine {
   async workerTick(input: WorkerTickInput): Promise<boolean> {
     const { nowMs, nowIso } = this.clock();
 
+    const runIdFilter = input.runId?.trim();
+    const whereRunId = runIdFilter ? " AND r.run_id = ?" : "";
+    const params = runIdFilter ? [runIdFilter] : [];
+    const limit = runIdFilter ? 1 : 10;
+
     const candidates = await this.db.all<RunnableRunRow>(
       `SELECT
          r.run_id,
@@ -842,10 +871,12 @@ export class ExecutionEngine {
            SELECT 1 FROM execution_runs p
            WHERE p.key = r.key AND p.lane = r.lane AND p.status = 'paused'
          )
+         ${whereRunId}
        ORDER BY
          CASE r.status WHEN 'running' THEN 0 ELSE 1 END,
          r.created_at ASC
-       LIMIT 10`,
+       LIMIT ${String(limit)}`,
+      params,
     );
 
     for (const run of candidates) {

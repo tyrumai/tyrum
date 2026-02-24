@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { AgentId, WorkspaceId } from "./keys.js";
-import { NormalizedMessageEnvelope } from "./message.js";
+import { NormalizedContainerKind, NormalizedMessageEnvelope } from "./message.js";
 
 export const AgentModelConfig = z.object({
   model: z
@@ -132,6 +132,7 @@ export const AgentTurnRequest = z.object({
   workspace_id: WorkspaceId.optional(),
   channel: z.string().trim().min(1).optional(),
   thread_id: z.string().trim().min(1).optional(),
+  container_kind: NormalizedContainerKind.optional(),
   message: z.string().trim().min(1).optional(),
   envelope: NormalizedMessageEnvelope.optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
