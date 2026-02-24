@@ -11,6 +11,7 @@
 import { SnapshotBundle, SnapshotImportRequest, type SnapshotTable as SnapshotTableT } from "@tyrum/schemas";
 import { Hono } from "hono";
 import type { SqlDb } from "../statestore/types.js";
+import { repairPostgresSequences } from "./snapshot-sequence-repair.js";
 
 export interface SnapshotRouteDeps {
   db: SqlDb;
@@ -226,32 +227,6 @@ async function repairSqliteAutoincrement(db: SqlDb, tables: string[]): Promise<v
       );
     } catch {
       // ignore: sqlite_sequence may not exist for non-AUTOINCREMENT tables
-    }
-  }
-}
-
-async function repairPostgresSequences(db: SqlDb, tables: string[]): Promise<void> {
-  if (db.kind !== "postgres") return;
-
-  for (const table of tables) {
-    const serialCols = await db.all<{ column_name: string }>(
-      `SELECT column_name
-       FROM information_schema.columns
-       WHERE table_schema = 'public'
-         AND table_name = ?
-         AND column_default LIKE 'nextval(%'`,
-      [table],
-    );
-    for (const col of serialCols) {
-      const colName = col.column_name;
-      const maxRow = await db.get<{ max: number | null }>(
-        `SELECT MAX(${quoteIdent(colName)}) as max FROM ${quoteIdent(table)}`,
-      );
-      const max = typeof maxRow?.max === "number" && Number.isFinite(maxRow.max) ? maxRow.max : 0;
-      await db.get(
-        `SELECT setval(pg_get_serial_sequence(?, ?), ?, true)`,
-        [table, colName, max],
-      );
     }
   }
 }
