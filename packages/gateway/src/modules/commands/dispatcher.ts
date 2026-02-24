@@ -16,6 +16,7 @@ import { SessionProviderPinDal } from "../models/session-pin-dal.js";
 import { ProviderUsagePoller } from "../observability/provider-usage.js";
 import { SessionDal } from "../agent/session-dal.js";
 import { SessionModelOverrideDal } from "../models/session-model-override-dal.js";
+import { isAuthProfilesEnabled } from "../models/auth-profiles-enabled.js";
 import { LaneQueueModeOverrideDal } from "../lanes/queue-mode-override-dal.js";
 import { SessionSendPolicyOverrideDal } from "../channels/send-policy-override-dal.js";
 
@@ -478,8 +479,7 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
     }
 
     if (profileIdRaw) {
-      const authProfilesEnabled = process.env["TYRUM_AUTH_PROFILES_ENABLED"]?.trim();
-      if (!authProfilesEnabled || ["0", "false", "off", "no"].includes(authProfilesEnabled.toLowerCase())) {
+      if (!isAuthProfilesEnabled()) {
         return { output: "Auth profiles are not enabled on this gateway instance.", data: null };
       }
 
