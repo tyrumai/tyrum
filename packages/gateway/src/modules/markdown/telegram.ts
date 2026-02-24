@@ -402,10 +402,10 @@ export function renderMarkdownForTelegram(
 
   const chunks: string[] = [];
   for (let i = 0; i < chunksIr.length; i += 1) {
-    const chunkIr = chunksIr[i]!;
+    const irChunk = chunksIr[i]!;
     let rendered: string | undefined;
     try {
-      rendered = renderIrChunkToTelegramHtml(chunkIr);
+      rendered = renderIrChunkToTelegramHtml(irChunk);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       opts?.onFormattingFallback?.({ reason: "render_error", chunk_index: i, detail: message });
@@ -420,7 +420,7 @@ export function renderMarkdownForTelegram(
       opts?.onFormattingFallback?.({ reason: "max_chars_overflow", chunk_index: i });
     }
 
-    const fallbackPlain = irToPlainText(chunkIr);
+    const fallbackPlain = irToPlainText(irChunk);
     if (fallbackPlain.length === 0) continue;
 
     chunks.push(...chunkPlainTextForTelegramHtml(fallbackPlain, maxChars));
