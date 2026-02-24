@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { RoutingConfigDal } from "../../src/modules/channels/routing-config-dal.js";
+import { DateTimeSchema } from "@tyrum/schemas";
 
 describe("RoutingConfigDal", () => {
   let db: SqliteDb;
@@ -51,6 +52,17 @@ describe("RoutingConfigDal", () => {
       reason: "seed",
     });
     expect(action.config_sha256).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("normalizes sqlite routing config timestamps to ISO-8601", async () => {
+    await db.run(
+      "INSERT INTO routing_configs (config_json, created_by_json, reason) VALUES (?, ?, ?)",
+      [JSON.stringify({ v: 1 }), "{}", "seed-default-time"],
+    );
+
+    const latest = await dal.getLatest();
+    expect(latest).toBeDefined();
+    expect(DateTimeSchema.safeParse(latest!.createdAt).success).toBe(true);
   });
 
   it("throws when a stored routing config revision is invalid", async () => {

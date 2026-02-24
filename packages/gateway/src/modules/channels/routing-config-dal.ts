@@ -24,7 +24,12 @@ interface RawRoutingConfigRow {
 }
 
 function normalizeTime(value: string | Date): string {
-  return value instanceof Date ? value.toISOString() : value;
+  const raw = value instanceof Date ? value.toISOString() : value;
+  // SQLite `datetime('now')` format: "YYYY-MM-DD HH:MM:SS" (UTC).
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(raw)) {
+    return `${raw.replace(" ", "T")}Z`;
+  }
+  return raw;
 }
 
 function parseJsonOrFallback(raw: string, fallback: unknown): unknown {
