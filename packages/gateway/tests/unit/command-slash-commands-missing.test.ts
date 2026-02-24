@@ -296,6 +296,66 @@ describe("missing slash commands", () => {
     }
   });
 
+  it("clears any pinned auth profile when /model is set without @profile", async () => {
+    const prevEnabled = process.env["TYRUM_AUTH_PROFILES_ENABLED"];
+    process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "1";
+
+    try {
+      db = openTestSqliteDb();
+      const nowIso = new Date().toISOString();
+
+      await db.run(
+        `INSERT INTO auth_profiles (
+           profile_id,
+           agent_id,
+           provider,
+           type,
+           secret_handles_json,
+           labels_json,
+           status,
+           created_at,
+           updated_at
+         ) VALUES (?, ?, ?, 'api_key', ?, '{}', 'active', ?, ?)`,
+        [
+          "profile-openrouter-1",
+          "default",
+          "openrouter",
+          JSON.stringify({ api_key_handle: "handle-openrouter-1" }),
+          nowIso,
+          nowIso,
+        ],
+      );
+
+      await executeCommand("/model openrouter/gpt-4o@profile-openrouter-1", {
+        db,
+        commandContext: { agentId: "default", channel: "ui", threadId: "thread-1" },
+      });
+
+      const before = await db.get<{ profile_id: string }>(
+        `SELECT profile_id
+         FROM session_provider_pins
+         WHERE agent_id = ? AND session_id = ? AND provider = ?`,
+        ["default", "ui:thread-1", "openrouter"],
+      );
+      expect(before?.profile_id).toBe("profile-openrouter-1");
+
+      await executeCommand("/model openrouter/gpt-4o", {
+        db,
+        commandContext: { agentId: "default", channel: "ui", threadId: "thread-1" },
+      });
+
+      const after = await db.get<{ profile_id: string }>(
+        `SELECT profile_id
+         FROM session_provider_pins
+         WHERE agent_id = ? AND session_id = ? AND provider = ?`,
+        ["default", "ui:thread-1", "openrouter"],
+      );
+      expect(after).toBeUndefined();
+    } finally {
+      process.env["TYRUM_AUTH_PROFILES_ENABLED"] = prevEnabled;
+    }
+  });
+
   it("does not persist /model override when auth profiles are disabled", async () => {
     const prevEnabled = process.env["TYRUM_AUTH_PROFILES_ENABLED"];
     process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "0";

@@ -623,10 +623,16 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
       return { output: jsonBlock(payload), data: payload };
     }
 
-    const row = await overrides.upsert({
-      agentId,
-      sessionId: session.session_id,
-      modelId: modelIdRaw,
+    const row = await deps.db.transaction(async (tx) => {
+      const modelOverrideDal = new SessionModelOverrideDal(tx);
+      const row = await modelOverrideDal.upsert({
+        agentId,
+        sessionId: session.session_id,
+        modelId: modelIdRaw,
+      });
+      const pins = new SessionProviderPinDal(tx);
+      await pins.clear({ agentId, sessionId: session.session_id, provider: providerId });
+      return row;
     });
 
     const payload = {
