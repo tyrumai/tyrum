@@ -8,6 +8,7 @@ import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { createWsHandler } from "../../src/routes/ws.js";
 import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { AuthAudit, GATEWAY_AUTH_AUDIT_PLAN_ID } from "../../src/modules/auth/audit.js";
+import { AUTH_COOKIE_NAME } from "../../src/modules/auth/http.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { EventLog } from "../../src/modules/planner/event-log.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
@@ -130,5 +131,43 @@ describe("WS auth audit events", () => {
     );
     expect(rows3).toHaveLength(2);
   });
-});
 
+  it("records token_transport cookie when an auth cookie is present but rejected cross-origin", async () => {
+    db = openTestSqliteDb();
+    const eventLog = new EventLog(db);
+
+    const authAudit = new AuthAudit({
+      eventLog,
+      nowMs: () => 0,
+      failedAuthWindowMs: 10_000,
+    });
+
+    tokenHome = await mkdtemp(join(tmpdir(), "tyrum-ws-auth-audit-token-"));
+    const tokenStore = new TokenStore(tokenHome);
+    const adminToken = await tokenStore.initialize();
+
+    const started = await startWsServer({ authAudit, tokenStore });
+    server = started.server;
+    stopHeartbeat = started.stopHeartbeat;
+
+    const ws = new WebSocket(`ws://127.0.0.1:${started.port}/ws`, ["tyrum-v1"], {
+      headers: {
+        cookie: `${AUTH_COOKIE_NAME}=${encodeURIComponent(adminToken)}`,
+        origin: "https://evil.example",
+      },
+    });
+    const close = await waitForClose(ws);
+    expect(close.code).toBe(4001);
+
+    const rows = await db.all<{ action: string }>(
+      "SELECT action FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
+      [GATEWAY_AUTH_AUDIT_PLAN_ID],
+    );
+    expect(rows).toHaveLength(1);
+    const action = JSON.parse(rows[0]!.action) as Record<string, unknown>;
+    expect(action["type"]).toBe("auth.failed");
+    expect(action["surface"]).toBe("ws.upgrade");
+    expect(action["reason"]).toBe("missing_token");
+    expect(action["token_transport"]).toBe("cookie");
+  });
+});

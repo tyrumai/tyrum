@@ -214,6 +214,10 @@ function extractWsTokenWithTransport(req: IncomingMessage): {
     return { token: subprotocolToken, transport: "subprotocol" };
   }
 
+  if (cookieToken) {
+    return { token: undefined, transport: "cookie" };
+  }
+
   return { token: undefined, transport: "missing" };
 }
 
