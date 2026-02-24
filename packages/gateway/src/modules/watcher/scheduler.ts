@@ -8,7 +8,7 @@
 
 import type { Emitter } from "mitt";
 import type { GatewayEvents } from "../../event-bus.js";
-import type { ActionPrimitive, Lane as LaneT, Playbook, PolicyBundle as PolicyBundleT } from "@tyrum/schemas";
+import type { ActionPrimitive, Playbook, PolicyBundle as PolicyBundleT } from "@tyrum/schemas";
 import { ActionPrimitive as ActionPrimitiveSchema, Lane, PolicyBundle } from "@tyrum/schemas";
 import type { MemoryDal } from "../memory/dal.js";
 import type { SqlDb } from "../../statestore/types.js";
@@ -45,7 +45,7 @@ export interface PeriodicTriggerConfig {
   intervalMs: number;
   playbook_id?: string;
   key?: string;
-  lane?: LaneT;
+  lane?: string;
   steps?: unknown;
 }
 
@@ -217,8 +217,9 @@ export class WatcherScheduler {
         if (typeof lane !== "string") return undefined;
         const trimmed = lane.trim();
         if (!trimmed) return undefined;
-        const parsed = Lane.safeParse(trimmed);
-        return parsed.success ? parsed.data : undefined;
+        const normalized = trimmed.toLowerCase();
+        const parsed = Lane.safeParse(normalized);
+        return parsed.success ? parsed.data : trimmed;
       })(),
       steps,
     };
@@ -326,6 +327,11 @@ export class WatcherScheduler {
     const lane = cfg?.lane ?? "cron";
     const playbookId = cfg?.playbook_id ?? firing.plan_id;
 
+    const triggerLane = (() => {
+      const parsed = Lane.safeParse(lane);
+      return parsed.success ? parsed.data : undefined;
+    })();
+
     let steps: ActionPrimitive[] | undefined = cfg?.steps ? this.parseInlineSteps(cfg.steps) : undefined;
     let playbook: Playbook | undefined;
 
@@ -378,7 +384,7 @@ export class WatcherScheduler {
           trigger: {
             kind: lane === "heartbeat" ? "heartbeat" : "cron",
             key,
-            lane,
+            lane: triggerLane,
             metadata: {
               firing_id: firing.firing_id,
               watcher_id: firing.watcher_id,

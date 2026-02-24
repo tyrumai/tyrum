@@ -305,4 +305,61 @@ describe("WatcherScheduler", () => {
       }
     }
   });
+
+  it("preserves custom lanes from periodic watcher trigger_config", async () => {
+    const prev = process.env["TYRUM_AUTOMATION_ENABLED"];
+    process.env["TYRUM_AUTOMATION_ENABLED"] = "1";
+
+    const enqueuedInputs: Array<Record<string, unknown>> = [];
+    const policyBundle = PolicyBundle.parse({ v: 1 });
+    const schedulerWithEngine = new WatcherScheduler({
+      db,
+      memoryDal,
+      eventBus,
+      owner: "scheduler-1",
+      firingLeaseTtlMs: 10_000,
+      engine: {
+        enqueuePlanInTx: async (_tx, input) => {
+          enqueuedInputs.push(input as unknown as Record<string, unknown>);
+          return { jobId: "job-1", runId: "run-1" };
+        },
+      } as unknown as ExecutionEngine,
+      policyService: {
+        loadEffectiveBundle: async () => ({
+          bundle: policyBundle,
+          sha256: "sha256",
+          sources: { deployment: "default", agent: null, playbook: null },
+        }),
+        getOrCreateSnapshot: async () => ({
+          policy_snapshot_id: "snapshot-1",
+          sha256: "sha256",
+          created_at: new Date().toISOString(),
+          bundle: policyBundle,
+        }),
+      } as unknown as PolicyService,
+    });
+
+    try {
+      await processor.createWatcher("plan-1", "periodic", {
+        intervalMs: 1000,
+        lane: "custom-lane",
+        steps: [{ type: "CLI", args: { cmd: "echo", args: ["hi"] } }],
+      });
+
+      await schedulerWithEngine.tick();
+
+      expect(enqueuedInputs).toHaveLength(1);
+      expect(enqueuedInputs[0]?.["lane"]).toBe("custom-lane");
+
+      const trigger = enqueuedInputs[0]?.["trigger"] as Record<string, unknown> | undefined;
+      expect(trigger).toBeDefined();
+      expect(trigger?.["kind"]).toBe("cron");
+    } finally {
+      if (prev === undefined) {
+        delete process.env["TYRUM_AUTOMATION_ENABLED"];
+      } else {
+        process.env["TYRUM_AUTOMATION_ENABLED"] = prev;
+      }
+    }
+  });
 });
