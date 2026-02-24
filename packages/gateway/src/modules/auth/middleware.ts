@@ -9,6 +9,7 @@ import type { Context, Next } from "hono";
 import { getCookie } from "hono/cookie";
 import { matchedRoutes } from "hono/route";
 import { APP_PATH_PREFIX, matchesPathPrefixSegment } from "../../app-path.js";
+import { getClientIp } from "./client-ip.js";
 import type { TokenStore } from "./token-store.js";
 import type { AuthTokenClaims } from "./token-store.js";
 import { AUTH_COOKIE_NAME, extractBearerToken } from "./http.js";
@@ -81,14 +82,7 @@ export function createAuthMiddleware(
         surface: "http",
         reason: "missing_token",
         token_transport: tokenTransport,
-        client_ip: (() => {
-          try {
-            const value = c.get("clientIp") as unknown;
-            return typeof value === "string" && value.trim().length > 0 ? value : undefined;
-          } catch {
-            return undefined;
-          }
-        })(),
+        client_ip: getClientIp(c),
         method: c.req.method,
         path: c.req.path,
         user_agent: c.req.header("user-agent")?.trim() || undefined,
@@ -106,14 +100,7 @@ export function createAuthMiddleware(
         surface: "http",
         reason: "invalid_token",
         token_transport: tokenTransport,
-        client_ip: (() => {
-          try {
-            const value = c.get("clientIp") as unknown;
-            return typeof value === "string" && value.trim().length > 0 ? value : undefined;
-          } catch {
-            return undefined;
-          }
-        })(),
+        client_ip: getClientIp(c),
         method: c.req.method,
         path: c.req.path,
         user_agent: c.req.header("user-agent")?.trim() || undefined,

@@ -260,7 +260,11 @@ export function createClientIpMiddleware(opts: {
 }
 
 export function getClientIp(c: Context): string | undefined {
-  const value = c.get("clientIp");
-  if (typeof value !== "string") return undefined;
-  return normalizeIp(value);
+  try {
+    const value = c.get("clientIp");
+    if (typeof value !== "string") return undefined;
+    return normalizeIp(value);
+  } catch {
+    return undefined;
+  }
 }

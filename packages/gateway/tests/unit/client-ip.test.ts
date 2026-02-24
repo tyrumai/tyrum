@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createTrustedProxyAllowlistFromEnv, resolveClientIp } from "../../src/modules/auth/client-ip.js";
+import type { Context } from "hono";
+import { createTrustedProxyAllowlistFromEnv, getClientIp, resolveClientIp } from "../../src/modules/auth/client-ip.js";
 
 describe("trusted proxy allowlist parsing", () => {
   it("returns undefined when unset", () => {
@@ -31,5 +32,17 @@ describe("trusted proxy allowlist parsing", () => {
     });
 
     expect(ip).toBe("198.51.100.10");
+  });
+});
+
+describe("getClientIp", () => {
+  it("returns undefined when the Context accessor throws", () => {
+    const c = {
+      get: () => {
+        throw new Error("boom");
+      },
+    } as unknown as Context;
+
+    expect(getClientIp(c)).toBeUndefined();
   });
 });

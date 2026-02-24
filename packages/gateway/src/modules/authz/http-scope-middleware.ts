@@ -13,6 +13,7 @@ import { matchedRoutes } from "hono/route";
 import type { AuthTokenClaims } from "../auth/token-store.js";
 import { matchesPathPrefixSegment } from "../../app-path.js";
 import type { AuthAudit } from "../auth/audit.js";
+import { getClientIp } from "../auth/client-ip.js";
 
 const FORBIDDEN_BODY = {
   error: "forbidden",
@@ -171,14 +172,7 @@ export function createHttpScopeAuthorizationMiddleware(opts?: {
         method: c.req.method,
         path: routePath,
         request_id: c.req.header("x-request-id")?.trim() || undefined,
-        client_ip: (() => {
-          try {
-            const value = c.get("clientIp") as unknown;
-            return typeof value === "string" && value.trim().length > 0 ? value : undefined;
-          } catch {
-            return undefined;
-          }
-        })(),
+        client_ip: getClientIp(c),
       });
       return c.json(
         {
@@ -204,14 +198,7 @@ export function createHttpScopeAuthorizationMiddleware(opts?: {
         method: c.req.method,
         path: routePath,
         request_id: c.req.header("x-request-id")?.trim() || undefined,
-        client_ip: (() => {
-          try {
-            const value = c.get("clientIp") as unknown;
-            return typeof value === "string" && value.trim().length > 0 ? value : undefined;
-          } catch {
-            return undefined;
-          }
-        })(),
+        client_ip: getClientIp(c),
       });
       return c.json(FORBIDDEN_BODY, 403);
     }
