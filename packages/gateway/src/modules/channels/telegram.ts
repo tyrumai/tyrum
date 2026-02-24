@@ -41,9 +41,9 @@ function isFalsyEnvFlag(value: string | undefined): boolean {
 }
 
 function isTruthyEnvFlag(value: string | undefined): boolean {
-  if (!value) return false;
-  const v = value.trim().toLowerCase();
-  return v.length > 0 && ["1", "true", "on", "yes"].includes(v);
+  const trimmed = value?.trim().toLowerCase();
+  if (!trimmed) return false;
+  return !["0", "false", "off", "no"].includes(trimmed);
 }
 
 function normalizeLane(raw: string | undefined): "main" | "cron" | "subagent" {
