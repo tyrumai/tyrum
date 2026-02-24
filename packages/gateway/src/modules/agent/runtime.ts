@@ -171,6 +171,22 @@ function hasToolApprovalResponse(messages: readonly ModelMessage[], approvalId: 
   return false;
 }
 
+function hasToolResult(messages: readonly ModelMessage[], toolCallId: string): boolean {
+  for (const message of messages) {
+    if (!message || typeof message !== "object") continue;
+    if (message.role !== "tool") continue;
+    const content = (message as { content?: unknown }).content;
+    if (!Array.isArray(content)) continue;
+    for (const part of content) {
+      const record = coerceRecord(part);
+      if (!record) continue;
+      if (record["type"] !== "tool-result") continue;
+      if (record["toolCallId"] === toolCallId) return true;
+    }
+  }
+  return false;
+}
+
 function appendToolApprovalResponseMessage(
   messages: readonly ModelMessage[],
   input: { approvalId: string; approved: boolean; reason?: string },
@@ -2963,7 +2979,10 @@ export class AgentRuntime {
         description: toolDesc.description,
         inputSchema: jsonSchema(schema),
         needsApproval: toolExecutionContext.execution
-          ? async (args: unknown, options: { toolCallId: string }): Promise<boolean> => {
+          ? async (
+              args: unknown,
+              options: { toolCallId: string; messages: ModelMessage[]; experimental_context?: unknown },
+            ): Promise<boolean> => {
               if (laneQueue) {
                 if (laneQueue.cancelToolCalls || laneQueue.interruptError) {
                   return false;
@@ -3000,6 +3019,22 @@ export class AgentRuntime {
 
               if (!state.shouldRequireApproval) {
                 return false;
+              }
+
+              const stepApprovalId = toolExecutionContext.execution?.stepApprovalId;
+              if (stepApprovalId) {
+                const approval = await this.approvalDal.getById(stepApprovalId);
+                if (approval && (approval.status === "approved" || approval.status === "denied")) {
+                  const ctx = coerceRecord(approval.context);
+                  const matches =
+                    ctx?.["source"] === "agent-tool-execution" &&
+                    ctx["tool_id"] === toolDesc.id &&
+                    ctx["tool_call_id"] === options.toolCallId &&
+                    ctx["tool_match_target"] === state.matchTarget;
+                  if (matches && !hasToolResult(options.messages, options.toolCallId)) {
+                    return false;
+                  }
+                }
               }
 
               if (state.approvalStepIndex === undefined) {

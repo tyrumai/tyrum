@@ -555,6 +555,92 @@ describe("Tool execution loop", () => {
     expect(result.used_tools).toContain("tool.exec");
   });
 
+  it("does not re-request approval when an engine step already has an approved stepApprovalId", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
+
+    await writeFile(
+      join(homeDir, "agent.yml"),
+      [
+        "model:",
+        "  model: openai/gpt-4.1",
+        "skills:",
+        "  enabled: []",
+        "mcp:",
+        "  enabled: []",
+        "tools:",
+        "  allow:",
+        "    - tool.exec",
+        "sessions:",
+        "  ttl_days: 30",
+        "  max_turns: 20",
+        "memory:",
+        "  markdown_enabled: false",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const toolCallId = "tc-already-approved";
+    const command = "echo approved";
+
+    const approval = await container.approvalDal.create({
+      planId: "plan-1",
+      stepIndex: 0,
+      kind: "workflow_step",
+      prompt: "Approve execution of 'tool.exec' (risk=high)",
+      context: {
+        source: "agent-tool-execution",
+        tool_id: "tool.exec",
+        tool_call_id: toolCallId,
+        tool_match_target: command,
+      },
+    });
+    await container.approvalDal.respond(approval.id, true, "approved in test");
+
+    const languageModel = createToolLoopLanguageModel({
+      toolCalls: [
+        {
+          id: toolCallId,
+          name: "tool.exec",
+          arguments: JSON.stringify({ command }),
+        },
+      ],
+      finalReply: "done",
+    });
+
+    const mcpManager = {
+      listToolDescriptors: vi.fn(async () => []),
+      shutdown: vi.fn(async () => {}),
+      callTool: vi.fn(async () => ({ content: [] })),
+    };
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel,
+      mcpManager: mcpManager as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
+    });
+
+    const result = await (runtime as unknown as { turnDirect: Function }).turnDirect(
+      { channel: "test", thread_id: "thread-resume-approved", message: "run command" },
+      {
+        execution: {
+          planId: "plan-1",
+          runId: "run-1",
+          stepIndex: 0,
+          stepId: "step-1",
+          stepApprovalId: approval.id,
+        },
+      },
+    );
+
+    expect(result.reply).toBe("done");
+    expect(result.used_tools).toContain("tool.exec");
+    expect(await container.approvalDal.getPending()).toHaveLength(0);
+  }, 10_000);
+
   it("preserves multi-step tool messages when pausing for approval", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });
