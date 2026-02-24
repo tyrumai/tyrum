@@ -1,14 +1,13 @@
 import type { Playbook, PlaybookRuntimeEnvelope as PlaybookRuntimeEnvelopeT } from "@tyrum/schemas";
 import { PlaybookManifest, PolicyBundle } from "@tyrum/schemas";
 import { randomUUID } from "node:crypto";
-import { isAbsolute } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { ExecutionEngine } from "../execution/engine.js";
 import type { PolicyService } from "../policy/service.js";
 import type { ApprovalDal, ApprovalRow } from "../approval/dal.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { PlaybookRunner } from "./runner.js";
-import { loadPlaybook } from "./loader.js";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -27,7 +26,10 @@ function resolvePlaybookFromPipeline(pipeline: string, loaded: Playbook[]): Play
   if (byId) return byId;
 
   if (isAbsolute(trimmed)) {
-    return loadPlaybook(trimmed);
+    const normalized = resolve(trimmed);
+    const byPath = loaded.find((p) => p.file_path === normalized);
+    if (byPath) return byPath;
+    throw new Error("playbook file path is not loaded");
   }
 
   const parsed = parseYaml(trimmed) as unknown;
@@ -118,7 +120,12 @@ async function envelopeForRunStatus(db: SqlDb, runId: string, timeoutMs: number)
     row = await waitForRunToSettle(db, runId, timeoutMs);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return { ok: false, status: "error", output: [], error: { message, code: "timeout" } };
+    const code = message.includes("did not settle")
+      ? "timeout"
+      : message.includes("not found")
+        ? "not_found"
+        : "internal";
+    return { ok: false, status: "error", output: [], error: { message, code } };
   }
 
   if (row.status === "succeeded") {
@@ -189,6 +196,18 @@ export async function runPlaybookRuntimeEnvelope(
             status: "error",
             output: [],
             error: { message: "argsJson must be valid JSON", code: "invalid_request" },
+          };
+        }
+      }
+
+      if (input.cwd) {
+        const trimmed = input.cwd.trim();
+        if (trimmed.length === 0 || isAbsolute(trimmed) || trimmed.split(/[\\/]+/).includes("..")) {
+          return {
+            ok: false,
+            status: "error",
+            output: [],
+            error: { message: "cwd must be a workspace-relative path", code: "invalid_request" },
           };
         }
       }
@@ -301,7 +320,7 @@ export async function runPlaybookRuntimeEnvelope(
     return await envelopeForRunStatus(deps.db, runId, timeoutMs);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    const code = isValidationError(err) ? "invalid_request" : "internal";
+    const code = isValidationError(err) || message.includes("not loaded") ? "invalid_request" : "internal";
     return {
       ok: false,
       status: "error",

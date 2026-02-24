@@ -24,13 +24,16 @@ The playbook runtime exposes a small contract that supports two operations:
 ```json
 {
   "action": "run",
-  "pipeline": "<inline pipeline string OR absolute playbook file path>",
+  "pipeline": "<inline pipeline YAML OR loaded playbook id OR absolute file path of a loaded playbook>",
   "argsJson": "{\"key\":\"value\"}",
   "cwd": "<workspace-relative cwd>",
   "timeoutMs": 30000,
   "maxOutputBytes": 512000
 }
 ```
+
+Notes:
+- When `pipeline` is an absolute file path, it must refer to a playbook file already loaded by the gateway (typically under `TYRUM_HOME/playbooks`).
 
 Resume:
 
