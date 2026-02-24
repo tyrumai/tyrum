@@ -9,7 +9,7 @@ The canonical wire shape lives in `@tyrum/schemas` (`packages/schemas/src/protoc
 - `event_id`: unique id for dedupe.
 - `type`: event name (for example `run.updated`, `approval.requested`, `artifact.created`, `capability.ready`, `attempt.evidence`).
 - `occurred_at`: timestamp.
-- `scope`: routing scope (session, device, or global).
+- `scope`: routing scope (global, agent, session key/lane, run, node, or client).
 - `payload`: typed fields defined by a contract.
 
 ## Common event categories
@@ -25,6 +25,57 @@ The canonical wire shape lives in `@tyrum/schemas` (`packages/schemas/src/protoc
 - **Memory:** items written/accessed/tombstoned, consolidation runs, and budget GC outcomes.
 - **Messaging UX:** typing indicators, outbound delivery receipts, and formatting fallbacks.
 - **Observability:** context reports, usage snapshots, and provider quota polling status.
+
+## Event catalog (v1)
+
+This is the canonical list of `type` values and payload contracts for the v1 WebSocket event stream (protocol revision `2`).
+
+### Approvals and policy
+
+- `approval.requested` — `{ approval: Approval }`
+- `approval.resolved` — `{ approval: Approval }`
+- `run.paused` — `ExecutionRunPausedPayload` (pause reason + optional `approval_id`)
+- `run.resumed` — `{ run_id }`
+- `run.cancelled` — `{ run_id, reason? }`
+- `policy_override.created` — `{ override: PolicyOverride }`
+- `policy_override.revoked` — `{ override: PolicyOverride }`
+- `policy_override.expired` — `{ override: PolicyOverride }`
+
+### Execution and evidence
+
+- `run.updated` — `{ run: ExecutionRun }`
+- `step.updated` — `{ step: ExecutionStep }`
+- `attempt.updated` — `{ attempt: ExecutionAttempt }` (includes cost + policy decision fields when available)
+- `artifact.created` — `{ artifact: ArtifactRef }`
+- `artifact.attached` — `{ artifact: ArtifactRef, step_id, attempt_id }`
+- `artifact.fetched` — `{ artifact: ArtifactRef, fetched_by }`
+
+### Pairing and presence
+
+- `pairing.requested` — `{ pairing: NodePairingRequest }`
+- `pairing.approved` — `{ pairing: NodePairingRequest, scoped_token }`
+- `pairing.resolved` — `{ pairing: NodePairingRequest }`
+- `presence.upserted` — `{ entry: PresenceEntry }`
+- `presence.pruned` — `{ instance_id }`
+
+### Messaging UX
+
+- `typing.started` / `typing.stopped` — `{ session_id, lane? }`
+- `message.delta` — `{ session_id, lane?, message_id, role, delta }`
+- `message.final` — `{ session_id, lane?, message_id, role, content }`
+- `formatting.fallback` — `{ session_id, message_id, reason }`
+- `delivery.receipt` — `{ session_id, lane?, channel, thread_id, status?, receipt?, error? }`
+
+### Observability
+
+- `context_report.created` — `{ run_id, report: ContextReport }`
+- `usage.snapshot` — `{ scope, local.totals, provider }`
+- `provider_usage.polled` — `{ result }`
+
+### Misc
+
+- `plan.update` — `{ plan_id, status, detail? }`
+- `error` — `{ code, message }`
 
 ## Notes
 

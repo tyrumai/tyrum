@@ -539,6 +539,73 @@ export class ExecutionEngine {
     await this.enqueueWsEvent(tx, evt);
   }
 
+  private async emitArtifactAttachedTx(
+    tx: SqlDb,
+    opts: { runId: string; stepId: string; attemptId: string; artifact: ArtifactRefT },
+  ): Promise<void> {
+    const evt: WsEventEnvelopeT = {
+      event_id: randomUUID(),
+      type: "artifact.attached",
+      occurred_at: this.clock().nowIso,
+      scope: { kind: "run", run_id: opts.runId },
+      payload: {
+        artifact: opts.artifact,
+        step_id: opts.stepId,
+        attempt_id: opts.attemptId,
+      },
+    };
+    await this.enqueueWsEvent(tx, evt);
+  }
+
+  private async emitRunPausedTx(
+    tx: SqlDb,
+    opts: {
+      runId: string;
+      reason: string;
+      approvalId?: number;
+      detail?: string;
+    },
+  ): Promise<void> {
+    const evt: WsEventEnvelopeT = {
+      event_id: randomUUID(),
+      type: "run.paused",
+      occurred_at: this.clock().nowIso,
+      scope: { kind: "run", run_id: opts.runId },
+      payload: {
+        run_id: opts.runId,
+        reason: opts.reason,
+        approval_id: opts.approvalId,
+        detail: opts.detail,
+      },
+    };
+    await this.enqueueWsEvent(tx, evt);
+  }
+
+  private async emitRunResumedTx(tx: SqlDb, runId: string): Promise<void> {
+    const evt: WsEventEnvelopeT = {
+      event_id: randomUUID(),
+      type: "run.resumed",
+      occurred_at: this.clock().nowIso,
+      scope: { kind: "run", run_id: runId },
+      payload: { run_id: runId },
+    };
+    await this.enqueueWsEvent(tx, evt);
+  }
+
+  private async emitRunCancelledTx(
+    tx: SqlDb,
+    opts: { runId: string; reason?: string },
+  ): Promise<void> {
+    const evt: WsEventEnvelopeT = {
+      event_id: randomUUID(),
+      type: "run.cancelled",
+      occurred_at: this.clock().nowIso,
+      scope: { kind: "run", run_id: opts.runId },
+      payload: { run_id: opts.runId, reason: opts.reason },
+    };
+    await this.enqueueWsEvent(tx, evt);
+  }
+
   private deriveAgentIdFromKey(key: string): string | null {
     if (!key.startsWith("agent:")) return null;
     const parts = key.split(":");
@@ -612,6 +679,12 @@ export class ExecutionEngine {
       );
 
       await this.emitArtifactCreatedTx(tx, { runId: scope.runId, artifact });
+      await this.emitArtifactAttachedTx(tx, {
+        runId: scope.runId,
+        stepId: scope.stepId,
+        attemptId: scope.attemptId,
+        artifact,
+      });
     }
   }
 
@@ -839,18 +912,20 @@ export class ExecutionEngine {
         [row.run_id],
       );
 
-      await this.emitRunUpdatedTx(tx, row.run_id);
-      const stepIds = await tx.all<{ step_id: string }>(
-        "SELECT step_id FROM execution_steps WHERE run_id = ? ORDER BY step_index ASC",
-        [row.run_id],
-      );
-      for (const step of stepIds) {
-        await this.emitStepUpdatedTx(tx, step.step_id);
-      }
+    await this.emitRunUpdatedTx(tx, row.run_id);
+    const stepIds = await tx.all<{ step_id: string }>(
+      "SELECT step_id FROM execution_steps WHERE run_id = ? ORDER BY step_index ASC",
+      [row.run_id],
+    );
+    for (const step of stepIds) {
+      await this.emitStepUpdatedTx(tx, step.step_id);
+    }
 
-      return row.run_id;
-    });
-  }
+    await this.emitRunResumedTx(tx, row.run_id);
+
+    return row.run_id;
+  });
+}
 
   async cancelRun(
     runId: string,
@@ -929,6 +1004,8 @@ export class ExecutionEngine {
       for (const attempt of runningAttempts) {
         await this.emitAttemptUpdatedTx(tx, attempt.attempt_id);
       }
+
+      await this.emitRunCancelledTx(tx, { runId, reason: detail ?? undefined });
 
       return "cancelled";
     });
@@ -2616,6 +2693,13 @@ export class ExecutionEngine {
     // Emit run/step state updates and approval events/requests.
     await this.emitRunUpdatedTx(tx, opts.runId);
     await this.emitStepUpdatedTx(tx, opts.stepId);
+
+    await this.emitRunPausedTx(tx, {
+      runId: opts.runId,
+      reason: pausedReason,
+      approvalId: approval.id,
+      detail: pausedDetail,
+    });
 
     const approvalContext = safeJsonParse(approval.context_json, {}) as unknown;
     const approvalRequestedEvt: WsEventEnvelopeT = {
