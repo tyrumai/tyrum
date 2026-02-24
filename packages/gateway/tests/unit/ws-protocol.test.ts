@@ -14,6 +14,7 @@ import {
   NoCapableClientError,
 } from "../../src/ws/protocol.js";
 import type { ProtocolDeps } from "../../src/ws/protocol.js";
+import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 
 // ---------------------------------------------------------------------------
 // Mock WebSocket helper
@@ -245,6 +246,8 @@ describe("handleClientMessage", () => {
   });
 
   it("accepts attempt.evidence from nodes and broadcasts an attempt.evidence event", async () => {
+    const db = openTestSqliteDb();
+    try {
     const cm = new ConnectionManager();
     const { id: nodeConnId } = makeClient(cm, ["cli"], {
       role: "node",
@@ -254,7 +257,47 @@ describe("handleClientMessage", () => {
     const { ws: operatorWs } = makeClient(cm, ["cli"], { protocolRev: 2 });
     const node = cm.getClient(nodeConnId)!;
 
-    const deps = makeDeps(cm);
+    await db.run(
+      `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
+       VALUES (?, ?, ?, ?, ?)`,
+      ["job-1", "agent:default", "default", "running", "{}"],
+    );
+    await db.run(
+      `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      ["550e8400-e29b-41d4-a716-446655440000", "job-1", "agent:default", "default", "running", 1],
+    );
+    await db.run(
+      `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
+       VALUES (?, ?, ?, ?, ?)`,
+      [
+        "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+        "550e8400-e29b-41d4-a716-446655440000",
+        0,
+        "running",
+        JSON.stringify({ type: "CLI", args: { command: "echo hi" } }),
+      ],
+    );
+    await db.run(
+      `INSERT INTO execution_attempts (attempt_id, step_id, attempt, status, metadata_json)
+       VALUES (?, ?, ?, ?, ?)`,
+      [
+        "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+        "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+        1,
+        "running",
+        JSON.stringify({
+          executor: { kind: "node", node_id: "dev_test", connection_id: nodeConnId },
+        }),
+      ],
+    );
+
+    const deps = makeDeps(cm, {
+      db,
+      nodePairingDal: {
+        getByNodeId: async () => ({ status: "approved" }) as never,
+      } as never,
+    });
 
     const result = await handleClientMessage(
       node,
@@ -285,6 +328,9 @@ describe("handleClientMessage", () => {
           (msg["payload"] as { node_id?: string } | undefined)?.node_id === "dev_test",
       ),
     ).toBe(true);
+    } finally {
+      await db.close();
+    }
   });
 
   it("rejects oversized attempt.evidence payloads", async () => {
@@ -319,6 +365,90 @@ describe("handleClientMessage", () => {
     expect((result as unknown as { type: string }).type).toBe("attempt.evidence");
     expect((result as unknown as { error: { code: string } }).error.code).toBe("invalid_request");
     expect(operatorWs.send).not.toHaveBeenCalled();
+  });
+
+  it("rejects attempt.evidence from nodes that are not the dispatched executor", async () => {
+    const db = openTestSqliteDb();
+    try {
+      const cm = new ConnectionManager();
+      const { id: executorConnId } = makeClient(cm, ["cli"], {
+        role: "node",
+        deviceId: "dev_executor",
+        protocolRev: 2,
+      });
+      const { id: attackerConnId } = makeClient(cm, ["cli"], {
+        role: "node",
+        deviceId: "dev_attacker",
+        protocolRev: 2,
+      });
+      const { ws: operatorWs } = makeClient(cm, ["cli"], { protocolRev: 2 });
+
+      await db.run(
+        `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
+         VALUES (?, ?, ?, ?, ?)`,
+        ["job-1", "agent:default", "default", "running", "{}"],
+      );
+      await db.run(
+        `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        ["550e8400-e29b-41d4-a716-446655440000", "job-1", "agent:default", "default", "running", 1],
+      );
+      await db.run(
+        `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
+         VALUES (?, ?, ?, ?, ?)`,
+        [
+          "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+          "550e8400-e29b-41d4-a716-446655440000",
+          0,
+          "running",
+          JSON.stringify({ type: "CLI", args: { command: "echo hi" } }),
+        ],
+      );
+      await db.run(
+        `INSERT INTO execution_attempts (attempt_id, step_id, attempt, status, metadata_json)
+         VALUES (?, ?, ?, ?, ?)`,
+        [
+          "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+          "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+          1,
+          "running",
+          JSON.stringify({
+            executor: { kind: "node", node_id: "dev_executor", connection_id: executorConnId },
+          }),
+        ],
+      );
+
+      const deps = makeDeps(cm, {
+        db,
+        nodePairingDal: {
+          getByNodeId: async () => ({ status: "approved" }) as never,
+        } as never,
+      });
+
+      const attacker = cm.getClient(attackerConnId)!;
+      const result = await handleClientMessage(
+        attacker,
+        JSON.stringify({
+          request_id: "r-attempt-evidence-inject-1",
+          type: "attempt.evidence",
+          payload: {
+            run_id: "550e8400-e29b-41d4-a716-446655440000",
+            step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+            attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+            evidence: { log: "spoofed" },
+          },
+        }),
+        deps,
+      );
+
+      expect(result).toBeDefined();
+      expect((result as unknown as { ok: boolean }).ok).toBe(false);
+      expect((result as unknown as { type: string }).type).toBe("attempt.evidence");
+      expect((result as unknown as { error: { code: string } }).error.code).toBe("unauthorized");
+      expect(operatorWs.send).not.toHaveBeenCalled();
+    } finally {
+      await db.close();
+    }
   });
 
   it("dispatches approval.request decision to callback", async () => {
@@ -841,6 +971,89 @@ describe("dispatchTask", () => {
     );
     expect(taskId).toMatch(/^task-[0-9a-f-]{36}$/);
     expect(nodeWs.send).toHaveBeenCalledOnce();
+  });
+
+  it("persists execution attempt executor metadata when dispatching to a node", async () => {
+    const db = openTestSqliteDb();
+    try {
+      await db.run(
+        `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
+         VALUES (?, ?, ?, ?, ?)`,
+        ["job-1", "agent:default", "default", "running", "{}"],
+      );
+      await db.run(
+        `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        ["550e8400-e29b-41d4-a716-446655440000", "job-1", "agent:default", "default", "running", 1],
+      );
+      await db.run(
+        `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
+         VALUES (?, ?, ?, ?, ?)`,
+        [
+          "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+          "550e8400-e29b-41d4-a716-446655440000",
+          0,
+          "running",
+          JSON.stringify({ type: "CLI", args: { command: "echo hi" } }),
+        ],
+      );
+      await db.run(
+        `INSERT INTO execution_attempts (attempt_id, step_id, attempt, status)
+         VALUES (?, ?, ?, ?)`,
+        [
+          "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+          "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+          1,
+          "running",
+        ],
+      );
+
+      const cm = new ConnectionManager();
+      const nodeWs = createMockWs();
+      cm.addClient(nodeWs as never, ["cli"] as never, {
+        id: "node-1",
+        role: "node",
+        deviceId: "dev_test",
+        protocolRev: 2,
+      });
+
+      const deps = makeDeps(cm, {
+        db,
+        nodePairingDal: {
+          getByNodeId: async () => ({
+            status: "approved",
+            capability_allowlist: [
+              {
+                id: descriptorIdForClientCapability("cli"),
+                version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+              },
+            ],
+          }) as never,
+        } as never,
+      });
+
+      await dispatchTask(
+        { type: "CLI", args: { command: "echo hi" } },
+        {
+          runId: "550e8400-e29b-41d4-a716-446655440000",
+          stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+          attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+        },
+        deps,
+      );
+
+      const row = await db.get<{ metadata_json: string | null }>(
+        "SELECT metadata_json FROM execution_attempts WHERE attempt_id = ?",
+        ["0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e"],
+      );
+      expect(row).toBeDefined();
+      const meta = JSON.parse(row!.metadata_json ?? "{}") as { executor?: { kind?: string; node_id?: string; connection_id?: string } };
+      expect(meta.executor?.kind).toBe("node");
+      expect(meta.executor?.node_id).toBe("dev_test");
+      expect(meta.executor?.connection_id).toBe("node-1");
+    } finally {
+      await db.close();
+    }
   });
 
   it("stops dispatching to a paired node when it reports readiness removed", async () => {
