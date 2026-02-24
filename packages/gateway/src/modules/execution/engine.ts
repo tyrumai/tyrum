@@ -1301,14 +1301,18 @@ export class ExecutionEngine {
               return "require_approval";
             }
 
-	            const toolsDomain = normalizeDomain(policyBundle.tools, "require_approval");
-	            const egressDomain = normalizeDomain(policyBundle.network_egress, "require_approval");
+		            const toolsDomain = normalizeDomain(policyBundle.tools, "require_approval");
+		            const egressDomain = normalizeDomain(policyBundle.network_egress, "require_approval");
 
-	            const toolDecision = evaluateDomain(toolsDomain, toolId);
-	            const egressDecision: DecisionT = url
-	              ? (() => {
-	                  const normalizedUrl = normalizeUrlForPolicy(url);
-	                  if (normalizedUrl.length === 0) return "allow";
+		            // Tool policy is evaluated on the coarse-grained `tool_id` (e.g. `tool.exec`).
+		            // Fine-grained, argument-aware allow rules are handled via policy overrides
+		            // matched against the tool's normalized `toolMatchTarget`, which requires an
+		            // enabled PolicyService (evaluateToolCallFromSnapshot).
+		            const toolDecision = evaluateDomain(toolsDomain, toolId);
+		            const egressDecision: DecisionT = url
+		              ? (() => {
+		                  const normalizedUrl = normalizeUrlForPolicy(url);
+		                  if (normalizedUrl.length === 0) return "allow";
 	                  return evaluateDomain(egressDomain, normalizedUrl);
 	                })()
 	              : "allow";
@@ -1316,15 +1320,15 @@ export class ExecutionEngine {
 	            return mostRestrictiveDecision(toolDecision, egressDecision);
 	          })();
 
-	          if (decision === "deny") {
-	            const updated = await tx.run(
-	              `UPDATE execution_steps
-	               SET status = 'failed'
-	               WHERE step_id = ? AND status = 'queued'`,
-	              [next.step_id],
-	            );
+		          if (decision === "deny") {
+		            const updated = await tx.run(
+		              `UPDATE execution_steps
+		               SET status = 'failed'
+		               WHERE step_id = ? AND status = 'queued'`,
+		              [next.step_id],
+		            );
 
-	            if (updated.changes === 1) {
+		            if (updated.changes === 1) {
 	              const attemptAgg = await tx.get<{ n: number }>(
 	                "SELECT COALESCE(MAX(attempt), 0) AS n FROM execution_attempts WHERE step_id = ?",
 	                [next.step_id],
@@ -1398,11 +1402,15 @@ export class ExecutionEngine {
 	                [run.workspace_id, input.workerId],
 	              );
 
-	              await this.emitStepUpdatedTx(tx, next.step_id);
-	              await this.emitAttemptUpdatedTx(tx, attemptId);
-	              return { kind: "recovered" as const };
-	            }
-	          }
+		              await this.emitStepUpdatedTx(tx, next.step_id);
+		              await this.emitAttemptUpdatedTx(tx, attemptId);
+		              return { kind: "recovered" as const };
+		            }
+
+		            // Fail closed: if we can't atomically transition the queued step to a terminal
+		            // state, do not proceed to execute the policy-denied action.
+		            return { kind: "noop" as const };
+		          }
 
 	          if (decision === "require_approval") {
 	            const approvalStatus = next.approval_id

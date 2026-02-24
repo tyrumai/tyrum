@@ -975,6 +975,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
             new ExecutionEngine({
               db: container.db,
               redactionEngine: container.redactionEngine,
+              policyService: container.policyService,
               logger,
             }),
           policyService: container.policyService,
