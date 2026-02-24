@@ -12,10 +12,16 @@ export interface ChannelEgressRequest {
   parseMode?: string;
 }
 
+export interface ChannelTypingRequest {
+  accountId: string;
+  containerId: string;
+}
+
 export interface ChannelEgressConnector {
   connector: string;
   accountId?: string;
   sendMessage(input: ChannelEgressRequest): Promise<unknown>;
+  sendTyping?(input: ChannelTypingRequest): Promise<unknown>;
 }
 
 function normalizeIdentityPart(kind: "connector" | "account", value: string): string {
