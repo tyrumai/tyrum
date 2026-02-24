@@ -18,9 +18,9 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object";
 }
 
-function isAuthAuditEvent(message: WsEnvelope): message is WsEventEnvelope {
-  if (!("event_id" in message)) return false;
-  return message.type === "auth.failed" || message.type === "authz.denied";
+function isAuthAuditEvent(message: unknown): boolean {
+  if (!isObject(message)) return false;
+  return message["type"] === "auth.failed" || message["type"] === "authz.denied";
 }
 
 function canReceiveAuthAudit(client: ConnectedClient): boolean {
@@ -29,7 +29,7 @@ function canReceiveAuthAudit(client: ConnectedClient): boolean {
   if (!claims) return false;
   const scopes = Array.isArray(claims.scopes) ? claims.scopes : [];
   if (scopes.includes("*")) return true;
-  return scopes.some((scope) => scope.startsWith("operator."));
+  return scopes.some((scope) => typeof scope === "string" && scope.startsWith("operator."));
 }
 
 function parseDirectPayload(payload: unknown): { connection_id: string; message: WsEnvelope } | undefined {

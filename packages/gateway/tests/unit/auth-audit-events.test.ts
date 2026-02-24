@@ -150,38 +150,40 @@ describe("auth audit events", () => {
     });
 
     const tokenHome = await mkdtemp(join(tmpdir(), "tyrum-auth-audit-token-"));
-    const tokenStore = new TokenStore(tokenHome);
-    await tokenStore.initialize();
+    try {
+      const tokenStore = new TokenStore(tokenHome);
+      await tokenStore.initialize();
 
-    const deviceToken = await tokenStore.issueDeviceToken({
-      deviceId: "dev_client_1",
-      role: "client",
-      scopes: ["operator.read"],
-      ttlSeconds: 300,
-    });
+      const deviceToken = await tokenStore.issueDeviceToken({
+        deviceId: "dev_client_1",
+        role: "client",
+        scopes: ["operator.read"],
+        ttlSeconds: 300,
+      });
 
-    const app = new Hono();
-    app.use("*", createAuthMiddleware(tokenStore, { audit }));
-    app.use("*", createHttpScopeAuthorizationMiddleware({ audit }));
-    app.post("/memory/facts", (c) => c.json({ ok: true }));
+      const app = new Hono();
+      app.use("*", createAuthMiddleware(tokenStore, { audit }));
+      app.use("*", createHttpScopeAuthorizationMiddleware({ audit }));
+      app.post("/memory/facts", (c) => c.json({ ok: true }));
 
-    const res = await app.request("/memory/facts", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${deviceToken.token}` },
-    });
-    expect(res.status).toBe(403);
+      const res = await app.request("/memory/facts", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${deviceToken.token}` },
+      });
+      expect(res.status).toBe(403);
 
-    const rows = await db.all<{ action: string }>(
-      "SELECT action FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
-      [GATEWAY_AUTH_AUDIT_PLAN_ID],
-    );
-    expect(rows).toHaveLength(1);
+      const rows = await db.all<{ action: string }>(
+        "SELECT action FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
+        [GATEWAY_AUTH_AUDIT_PLAN_ID],
+      );
+      expect(rows).toHaveLength(1);
 
-    const action = JSON.parse(rows[0]!.action) as Record<string, unknown>;
-    expect(action["type"]).toBe("authz.denied");
-    expect(action["required_scopes"]).toEqual(["operator.write"]);
-
-    await rm(tokenHome, { recursive: true, force: true });
+      const action = JSON.parse(rows[0]!.action) as Record<string, unknown>;
+      expect(action["type"]).toBe("authz.denied");
+      expect(action["required_scopes"]).toEqual(["operator.write"]);
+    } finally {
+      await rm(tokenHome, { recursive: true, force: true });
+    }
   });
 
   it("records authz.denied for WS approval.request when scoped token lacks operator.approvals", async () => {
