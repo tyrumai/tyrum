@@ -631,23 +631,28 @@ export class TelegramChannelProcessor {
     // Expire approvals before checking gating.
     await this.approvalDal.expireStale();
 
-    const pending = await this.db.get<{ approval_id: number; key: string }>(
-      `SELECT o.approval_id AS approval_id, i.key AS key
-       FROM channel_outbox o
-       JOIN channel_inbox i ON i.inbox_id = o.inbox_id
-       WHERE o.approval_id IS NOT NULL AND o.status = 'queued'
-       ORDER BY o.created_at ASC, o.outbox_id ASC
+    const pending = await this.db.get<{ approval_id: number; inbox_id: number }>(
+      `SELECT approval_id, inbox_id
+       FROM channel_outbox
+       WHERE approval_id IS NOT NULL AND status = 'queued'
+       ORDER BY created_at ASC, outbox_id ASC
        LIMIT 1`,
     );
     if (pending?.approval_id) {
-      const sendOverride = await new SessionSendPolicyOverrideDal(this.db).get({ key: pending.key });
-      if (sendOverride?.send_policy === "on") {
-        await this.outbox.clearApprovalById(pending.approval_id);
-        return true;
-      }
-      if (sendOverride?.send_policy === "off") {
-        await this.outbox.markFailedByApproval(pending.approval_id, "send disabled by operator");
-        return true;
+      const scope = await this.db.get<{ key: string }>(
+        "SELECT key FROM channel_inbox WHERE inbox_id = ?",
+        [pending.inbox_id],
+      );
+      if (scope?.key) {
+        const sendOverride = await new SessionSendPolicyOverrideDal(this.db).get({ key: scope.key });
+        if (sendOverride?.send_policy === "on") {
+          await this.outbox.clearApprovalById(pending.approval_id);
+          return true;
+        }
+        if (sendOverride?.send_policy === "off") {
+          await this.outbox.markFailedByApproval(pending.approval_id, "send disabled by operator");
+          return true;
+        }
       }
 
       const approval = await this.approvalDal.getById(pending.approval_id);
