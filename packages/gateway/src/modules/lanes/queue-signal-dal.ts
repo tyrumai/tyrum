@@ -108,7 +108,7 @@ export class LaneQueueSignalDal {
                processed_at = COALESCE(processed_at, ?),
                error = NULL,
                reply_text = COALESCE(reply_text, '')
-           WHERE inbox_id = ? AND status = 'queued'`,
+           WHERE inbox_id = ? AND status IN ('queued', 'processing')`,
           [nowIso, row.inbox_id],
         );
       }
@@ -125,4 +125,3 @@ export class LaneQueueSignalDal {
     });
   }
 }
-
