@@ -4,12 +4,13 @@ import { Ajv2019 } from "ajv/dist/2019.js";
 import type { ErrorObject } from "ajv";
 import { readFileSync } from "node:fs";
 import { readdir, readFile, realpath, stat } from "node:fs/promises";
-import { dirname, isAbsolute, join, resolve, relative } from "node:path";
+import { dirname, isAbsolute, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { Hono } from "hono";
 import type { GatewayContainer } from "../../container.js";
 import { isRecord, parseJsonOrYaml } from "../../utils/parse-json-or-yaml.js";
 import { parsePluginLockFile, pluginIntegritySha256Hex, PLUGIN_LOCK_FILENAME, type PluginInstallInfo } from "./lockfile.js";
+import { missingRequiredManifestFields, resolveSafeChildPath } from "./validation.js";
 import type { Logger } from "../observability/logger.js";
 import type { ToolDescriptor } from "../agent/tools.js";
 
@@ -69,12 +70,6 @@ type LoadedPlugin = {
   router?: Hono;
   loaded_at: string;
 };
-
-const REQUIRED_MANIFEST_FIELDS = ["id", "name", "version", "entry", "contributes", "permissions", "config_schema"] as const;
-
-function missingRequiredManifestFields(value: Record<string, unknown>): string[] {
-  return REQUIRED_MANIFEST_FIELDS.filter((field) => !Object.prototype.hasOwnProperty.call(value, field));
-}
 
 function isJsonSchemaObject(value: unknown): value is Record<string, unknown> {
   return isRecord(value);
@@ -459,17 +454,6 @@ export function resolveBundledPluginsDirFrom(startDir: string): string {
 
 function resolvePluginsDir(home: string): string {
   return join(home, "plugins");
-}
-
-function resolveSafeChildPath(parent: string, child: string): string {
-  const absParent = resolve(parent);
-  const absChild = resolve(absParent, child);
-  const rel = relative(absParent, absChild);
-  if (rel === "") return absChild;
-  if (isAbsolute(rel)) throw new Error(`path escapes plugin directory: ${child}`);
-  const firstSegment = rel.split(/[\\/]/g)[0];
-  if (firstSegment === "..") throw new Error(`path escapes plugin directory: ${child}`);
-  return absChild;
 }
 
 function getCurrentUid(): number | undefined {
@@ -931,7 +915,8 @@ export class PluginRegistry {
             continue;
           }
           const integritySha256 = pluginIntegritySha256Hex(manifestFile.raw, entryRaw);
-          if (integritySha256 !== pluginInstall.integrity_sha256) {
+          const expectedIntegritySha256 = pluginInstall.integrity_sha256.toLowerCase();
+          if (integritySha256 !== expectedIntegritySha256) {
             this.opts.logger.warn("plugins.lock_integrity_mismatch", {
               plugin_id: id,
               source_dir: pluginDir,

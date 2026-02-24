@@ -1,7 +1,7 @@
 import { PluginManifest } from "@tyrum/schemas";
 import type { PluginManifest as PluginManifestT } from "@tyrum/schemas";
 import { cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { join } from "node:path";
 import { isRecord, parseJsonOrYaml } from "../../utils/parse-json-or-yaml.js";
 import {
   PLUGIN_LOCK_FILENAME,
@@ -9,30 +9,15 @@ import {
   renderPluginLockFile,
   type PluginInstallInfo,
 } from "./lockfile.js";
+import { missingRequiredManifestFields, resolveSafeChildPath } from "./validation.js";
 
-const REQUIRED_MANIFEST_FIELDS = ["id", "name", "version", "entry", "contributes", "permissions", "config_schema"] as const;
 const SAFE_PLUGIN_ID_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-
-function missingRequiredManifestFields(value: Record<string, unknown>): string[] {
-  return REQUIRED_MANIFEST_FIELDS.filter((field) => !Object.prototype.hasOwnProperty.call(value, field));
-}
 
 function assertSafePluginIdSegment(value: string): string {
   if (!SAFE_PLUGIN_ID_SEGMENT.test(value)) {
     throw new Error(`invalid plugin id '${value}' (expected ${String(SAFE_PLUGIN_ID_SEGMENT)})`);
   }
   return value;
-}
-
-function resolveSafeChildPath(parent: string, child: string): string {
-  const absParent = resolve(parent);
-  const absChild = resolve(absParent, child);
-  const rel = relative(absParent, absChild);
-  if (rel === "") return absChild;
-  if (isAbsolute(rel)) throw new Error(`path escapes plugin directory: ${child}`);
-  const firstSegment = rel.split(/[\\/]/g)[0];
-  if (firstSegment === "..") throw new Error(`path escapes plugin directory: ${child}`);
-  return absChild;
 }
 
 async function loadPluginManifestFromDir(dir: string): Promise<{

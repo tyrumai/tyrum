@@ -869,6 +869,35 @@ describe("PluginRegistry", () => {
     expect((listed[0]?.["install"] as Record<string, unknown> | undefined)?.["integrity_sha256"]).toBe(integritySha256);
   });
 
+  it("loads plugins when plugin.lock.json integrity uses uppercase hex", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
+    const pluginDir = join(home, "plugins/echo");
+    await mkdir(pluginDir, { recursive: true });
+
+    await writeFile(join(pluginDir, "plugin.yml"), pluginManifestYaml(), "utf-8");
+    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
+
+    const manifestRaw = await readFile(join(pluginDir, "plugin.yml"), "utf-8");
+    const entryRaw = await readFile(join(pluginDir, "index.mjs"), "utf-8");
+    const integritySha256 = pluginIntegritySha256Hex(manifestRaw, entryRaw);
+
+    await writeFile(
+      join(pluginDir, "plugin.lock.json"),
+      pluginLockJson({ pinnedVersion: "0.0.1", integritySha256: integritySha256.toUpperCase() }),
+      "utf-8",
+    );
+
+    const { logger, warnings } = createCapturingLogger();
+    const plugins = await PluginRegistry.load({
+      home,
+      logger,
+    });
+
+    const listed = plugins.list() as unknown as Array<Record<string, unknown>>;
+    expect(listed.map((p) => p["id"])).toEqual(["echo"]);
+    expect(warnings.some((entry) => entry.msg === "plugins.lock_integrity_mismatch")).toBe(false);
+  });
+
   it("skips plugins when plugin.lock.json pinned_version does not match manifest version", async () => {
     home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
     const pluginDir = join(home, "plugins/echo");
