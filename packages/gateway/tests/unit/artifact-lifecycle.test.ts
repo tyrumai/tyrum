@@ -140,6 +140,186 @@ describe("Artifact lifecycle (retention + quotas)", () => {
     expect(kept?.bytes_deleted_at).toBeNull();
   });
 
+  it("normalizes SQLite datetime('now') timestamps as UTC when backfilling retention_expires_at", async () => {
+    const originalTz = process.env["TZ"];
+    process.env["TZ"] = "America/Los_Angeles";
+    try {
+      const nowIso = "2026-02-24T12:00:00.000Z";
+      const nowMs = Date.parse(nowIso);
+      const createdAt = "2026-02-24 00:00:00"; // SQLite `datetime('now')` format (UTC).
+
+      const snapshot = await snapshotDal.getOrCreate(
+        PolicyBundle.parse({
+          v: 1,
+          artifacts: {
+            default: "allow",
+            retention: {
+              by_label: { log: 1 },
+            },
+          },
+        }),
+      );
+
+      const ref = await artifactStore.put({
+        kind: "log",
+        mime_type: "text/plain",
+        body: Buffer.from("bytes", "utf8"),
+        created_at: createdAt,
+        labels: ["log"],
+      });
+
+      await db.run(
+        `INSERT INTO execution_artifacts (
+           artifact_id,
+           workspace_id,
+           agent_id,
+           kind,
+           uri,
+           created_at,
+           mime_type,
+           size_bytes,
+           sha256,
+           labels_json,
+           metadata_json,
+           sensitivity,
+           policy_snapshot_id
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          ref.artifact_id,
+          "default",
+          "agent-1",
+          ref.kind,
+          ref.uri,
+          createdAt,
+          ref.mime_type ?? null,
+          ref.size_bytes ?? null,
+          ref.sha256 ?? null,
+          JSON.stringify(ref.labels ?? []),
+          JSON.stringify(ref.metadata ?? {}),
+          "normal",
+          snapshot.policy_snapshot_id,
+        ],
+      );
+
+      const { ArtifactLifecycleScheduler } = await import("../../src/modules/artifact/lifecycle.js");
+      const scheduler = new ArtifactLifecycleScheduler({
+        db,
+        artifactStore,
+        policySnapshotDal: snapshotDal,
+        clock: () => ({ nowMs, nowIso }),
+        tickMs: 10_000,
+      });
+
+      await scheduler.tick();
+
+      const row = await db.get<{ retention_expires_at: string | null }>(
+        "SELECT retention_expires_at FROM execution_artifacts WHERE artifact_id = ?",
+        [ref.artifact_id],
+      );
+
+      // If SQLite timestamps are treated as local time, this will be offset by TZ.
+      expect(row?.retention_expires_at).toBe("2026-02-25T00:00:00.000Z");
+    } finally {
+      if (originalTz === undefined) delete process.env["TZ"];
+      else process.env["TZ"] = originalTz;
+    }
+  });
+
+  it("does not starve retention backfill when oldest artifacts have no retention policy", async () => {
+    const nowMs = Date.now();
+    const oldIso1 = new Date(nowMs - 3 * 60 * 60 * 1000).toISOString();
+    const oldIso2 = new Date(nowMs - 2 * 60 * 60 * 1000).toISOString();
+    const newerIso = new Date(nowMs - 1 * 60 * 60 * 1000).toISOString();
+
+    const snapshot = await snapshotDal.getOrCreate(
+      PolicyBundle.parse({
+        v: 1,
+        artifacts: {
+          default: "allow",
+          retention: {
+            by_label: { log: 1 },
+          },
+        },
+      }),
+    );
+
+    const noPolicy1 = await artifactStore.put({
+      kind: "diff",
+      mime_type: "text/plain",
+      body: Buffer.from("old-1", "utf8"),
+      created_at: oldIso1,
+      labels: ["diff"],
+    });
+    const noPolicy2 = await artifactStore.put({
+      kind: "diff",
+      mime_type: "text/plain",
+      body: Buffer.from("old-2", "utf8"),
+      created_at: oldIso2,
+      labels: ["diff"],
+    });
+    const withPolicy = await artifactStore.put({
+      kind: "log",
+      mime_type: "text/plain",
+      body: Buffer.from("new", "utf8"),
+      created_at: newerIso,
+      labels: ["log"],
+    });
+
+    for (const ref of [noPolicy1, noPolicy2, withPolicy]) {
+      await db.run(
+        `INSERT INTO execution_artifacts (
+           artifact_id,
+           workspace_id,
+           agent_id,
+           kind,
+           uri,
+           created_at,
+           mime_type,
+           size_bytes,
+           sha256,
+           labels_json,
+           metadata_json,
+           sensitivity,
+           policy_snapshot_id
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          ref.artifact_id,
+          "default",
+          "agent-1",
+          ref.kind,
+          ref.uri,
+          ref.created_at,
+          ref.mime_type ?? null,
+          ref.size_bytes ?? null,
+          ref.sha256 ?? null,
+          JSON.stringify(ref.labels ?? []),
+          JSON.stringify(ref.metadata ?? {}),
+          "normal",
+          snapshot.policy_snapshot_id,
+        ],
+      );
+    }
+
+    const { ArtifactLifecycleScheduler } = await import("../../src/modules/artifact/lifecycle.js");
+    const scheduler = new ArtifactLifecycleScheduler({
+      db,
+      artifactStore,
+      policySnapshotDal: snapshotDal,
+      clock: () => ({ nowMs, nowIso: new Date(nowMs).toISOString() }),
+      tickMs: 10_000,
+      batchSize: 2,
+    });
+
+    await scheduler.tick();
+    await scheduler.tick();
+
+    const row = await db.get<{ retention_expires_at: string | null }>(
+      "SELECT retention_expires_at FROM execution_artifacts WHERE artifact_id = ?",
+      [withPolicy.artifact_id],
+    );
+    expect(row?.retention_expires_at).toBeTruthy();
+  });
+
   it("prunes oldest artifacts to satisfy per-label quota (by label + sensitivity)", async () => {
     const nowMs = Date.now();
     const olderIso = new Date(nowMs - 2 * 60 * 60 * 1000).toISOString();

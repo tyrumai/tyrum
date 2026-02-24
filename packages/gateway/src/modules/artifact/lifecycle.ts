@@ -13,6 +13,7 @@ import type { ArtifactStore } from "./store.js";
 
 const DEFAULT_TICK_MS = 5 * 60_000;
 const DEFAULT_BATCH = 100;
+const NO_RETENTION_EXPIRES_AT = "9999-12-31T23:59:59.999Z";
 
 type ArtifactSensitivity = "normal" | "sensitive";
 
@@ -62,7 +63,7 @@ function normalizeDbDateTime(value: string | Date | null): string | null {
   if (value === null) return null;
   const raw = value instanceof Date ? value.toISOString() : value;
   // SQLite `datetime('now')` format: "YYYY-MM-DD HH:MM:SS" (UTC).
-  if (/^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}$/.test(raw)) {
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(raw)) {
     return `${raw.replace(" ", "T")}Z`;
   }
   return raw;
@@ -239,7 +240,17 @@ export class ArtifactLifecycleScheduler {
       const sensitivity = normalizeSensitivity(row.sensitivity);
       const bundle = await this.bundleForSnapshot(bundleCache, row.policy_snapshot_id);
       const retentionDays = resolveRetentionDays(bundle, row.kind, sensitivity);
-      if (!retentionDays) continue;
+      if (!retentionDays) {
+        // Mark as evaluated so old rows without retention policy don't
+        // permanently starve the backfill batch.
+        await this.db.run(
+          `UPDATE execution_artifacts
+           SET retention_expires_at = ?
+           WHERE artifact_id = ? AND retention_expires_at IS NULL`,
+          [NO_RETENTION_EXPIRES_AT, row.artifact_id],
+        );
+        continue;
+      }
 
       const createdIso = normalizeDbDateTime(row.created_at);
       if (!createdIso) continue;
