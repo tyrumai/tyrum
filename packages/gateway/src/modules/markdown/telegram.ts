@@ -321,13 +321,14 @@ export function renderMarkdownForTelegram(
     const fallbackChunks = fallbackPlain.length <= maxChars ? [fallbackPlain] : chunkText(fallbackPlain, maxChars);
     for (const fallbackChunk of fallbackChunks) {
       if (fallbackChunk.length === 0) continue;
-      if (fallbackChunk.length <= maxChars) {
-        chunks.push(escapeTelegramHtmlText(fallbackChunk));
+      const escaped = escapeTelegramHtmlText(fallbackChunk);
+      if (escaped.length <= maxChars) {
+        chunks.push(escaped);
         continue;
       }
       // Last-ditch: ensure we always make progress even when escaping overhead
-      // or formatting wrappers exceed `maxChars`.
-      chunks.push(...chunkText(escapeTelegramHtmlText(fallbackChunk), maxChars));
+      // expands beyond `maxChars`.
+      chunks.push(...chunkText(escaped, maxChars));
     }
   }
 

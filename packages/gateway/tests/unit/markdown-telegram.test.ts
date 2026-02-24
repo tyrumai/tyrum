@@ -48,4 +48,13 @@ describe("renderMarkdownForTelegram", () => {
     const chunks = renderMarkdownForTelegram("[label](https://example.com?a=1&b=2)");
     expect(chunks).toEqual(['<a href="https://example.com?a=1&amp;b=2">label</a>']);
   });
+
+  it("keeps plain-text fallback chunks within maxChars even when HTML escaping expands the output", () => {
+    const maxChars = 5;
+    const chunks = renderMarkdownForTelegram("```ts\n<<<<<\n```", { maxChars });
+    expect(chunks.length).toBeGreaterThan(0);
+    for (const chunk of chunks) {
+      expect(chunk.length).toBeLessThanOrEqual(maxChars);
+    }
+  });
 });
