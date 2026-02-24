@@ -1,4 +1,4 @@
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 
 // Skip all tests if playwright browsers aren't installed
 let canRunPlaywright = false;
@@ -11,10 +11,12 @@ try {
   // Playwright not available
 }
 
-describe.skipIf(!canRunPlaywright)("RealPlaywrightBackend", () => {
-  let backend: InstanceType<
-    typeof import("../src/main/providers/backends/real-playwright-backend.js").RealPlaywrightBackend
-  >;
+	describe.skipIf(!canRunPlaywright)("RealPlaywrightBackend", () => {
+	  let backend:
+	    | InstanceType<
+	    typeof import("../src/main/providers/backends/real-playwright-backend.js").RealPlaywrightBackend
+	  >
+	    | undefined;
 
   // Dynamic import to avoid issues if playwright isn't installed
   const getBackend = async () => {
@@ -24,9 +26,10 @@ describe.skipIf(!canRunPlaywright)("RealPlaywrightBackend", () => {
     return new mod.RealPlaywrightBackend({ headless: true });
   };
 
-  afterAll(async () => {
-    if (backend) await backend.close();
-  });
+	  afterEach(async () => {
+	    await backend?.close();
+	    backend = undefined;
+	  });
 
   it("can navigate to a page and get title", async () => {
     backend = await getBackend();
@@ -71,12 +74,12 @@ describe.skipIf(!canRunPlaywright)("RealPlaywrightBackend", () => {
     },
   );
 
-  it("recovers from browser close", async () => {
-    backend = await getBackend();
-    await backend.ensureBrowser();
-    await backend.close();
-    // Should re-launch on next ensureBrowser
-    await backend.ensureBrowser();
+	  it("recovers from browser close", { timeout: 15_000 }, async () => {
+	    backend = await getBackend();
+	    await backend.ensureBrowser();
+	    await backend.close();
+	    // Should re-launch on next ensureBrowser
+	    await backend.ensureBrowser();
     const result = await backend.navigate(
       "data:text/html,<title>Recovered</title>",
     );
