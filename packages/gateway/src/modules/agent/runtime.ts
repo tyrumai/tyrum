@@ -69,6 +69,8 @@ const MAX_TURN_ENGINE_WAIT_MS = 60_000;
 const TURN_ENGINE_MIN_BACKOFF_MS = 5;
 const TURN_ENGINE_MAX_BACKOFF_MS = 250;
 
+const DEFAULT_PRE_COMPACTION_FLUSH_TIMEOUT_MS = 2_500;
+
 const DEFAULT_CONTEXT_MAX_MESSAGES = 32;
 const DEFAULT_CONTEXT_TOOL_PRUNE_KEEP_LAST_MESSAGES = 4;
 
@@ -1607,6 +1609,15 @@ export class AgentRuntime {
       return;
     }
 
+    const totalTimeoutMs = input.timeoutMs;
+    const flushTimeoutMs = (() => {
+      if (typeof totalTimeoutMs !== "number" || !Number.isFinite(totalTimeoutMs) || totalTimeoutMs <= 0) {
+        return DEFAULT_PRE_COMPACTION_FLUSH_TIMEOUT_MS;
+      }
+      const slice = Math.floor(totalTimeoutMs * 0.1);
+      return Math.max(250, Math.min(DEFAULT_PRE_COMPACTION_FLUSH_TIMEOUT_MS, slice));
+    })();
+
     try {
       const flushResult = await generateText({
         model: input.model,
@@ -1624,7 +1635,7 @@ export class AgentRuntime {
         ],
         stopWhen: [stepCountIs(1)],
         abortSignal: input.abortSignal,
-        timeout: input.timeoutMs,
+        timeout: flushTimeoutMs,
       });
 
       const flushText = (flushResult.text ?? "").trim();
