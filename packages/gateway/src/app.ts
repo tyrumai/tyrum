@@ -366,6 +366,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   app.route(
     "/",
     createWebUiRoutes({
+      db: container.db,
       approvalDal: container.approvalDal,
       memoryDal: container.memoryDal,
       watcherProcessor: container.watcherProcessor,
