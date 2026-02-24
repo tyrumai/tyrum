@@ -14,7 +14,7 @@ import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { RoutingConfigDal } from "../modules/channels/routing-config-dal.js";
 import { getClientIp } from "../modules/auth/client-ip.js";
-import type { AuthTokenClaims } from "../modules/auth/token-store.js";
+import { shouldDeliverToWsAudience, type WsBroadcastAudience } from "../ws/audience.js";
 
 export interface RoutingConfigRouteDeps {
   routingConfigDal: RoutingConfigDal;
@@ -25,44 +25,6 @@ export interface RoutingConfigRouteDeps {
       outboxDal: OutboxDal;
     };
   };
-}
-
-type WsBroadcastAudience = {
-  roles?: Array<"client" | "node">;
-  required_scopes?: string[];
-};
-
-function normalizeScopes(scopes: string[] | undefined): string[] {
-  if (!Array.isArray(scopes)) return [];
-  const normalized = scopes
-    .map((scope) => scope.trim())
-    .filter((scope) => scope.length > 0);
-  return [...new Set(normalized)];
-}
-
-function hasAnyRequiredScope(claims: AuthTokenClaims, requiredScopes: string[]): boolean {
-  if (requiredScopes.length === 0) return true;
-  const scopes = normalizeScopes(claims.scopes);
-  if (scopes.includes("*")) return true;
-  return requiredScopes.some((scope) => scopes.includes(scope));
-}
-
-function shouldDeliver(client: { role: string; auth_claims?: AuthTokenClaims }, audience: WsBroadcastAudience): boolean {
-  const roles = audience.roles;
-  if (roles && roles.length > 0 && !roles.includes(client.role as never)) {
-    return false;
-  }
-
-  const required = audience.required_scopes;
-  if (required && required.length > 0) {
-    const claims = client.auth_claims;
-    if (!claims) return false;
-    if (claims.token_kind !== "admin" && !hasAnyRequiredScope(claims, required)) {
-      return false;
-    }
-  }
-
-  return true;
 }
 
 const ROUTING_CONFIG_WS_AUDIENCE: WsBroadcastAudience = {
@@ -76,7 +38,7 @@ function emitEvent(deps: RoutingConfigRouteDeps, evt: WsEventEnvelope): void {
 
   const payload = JSON.stringify(evt);
   for (const client of ws.connectionManager.allClients()) {
-    if (!shouldDeliver(client, ROUTING_CONFIG_WS_AUDIENCE)) continue;
+    if (!shouldDeliverToWsAudience(client, ROUTING_CONFIG_WS_AUDIENCE)) continue;
     try {
       client.ws.send(payload);
     } catch {
@@ -192,6 +154,7 @@ export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
       config: target.config,
       reason: parsed.data.reason,
       createdBy,
+      revertedFromRevision: parsed.data.revision,
     });
 
     const candidate: WsEventEnvelope = {

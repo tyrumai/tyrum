@@ -2,7 +2,12 @@ import type { WsEventEnvelope, WsRequestEnvelope } from "@tyrum/schemas";
 import type { ConnectedClient, ConnectionManager } from "../../ws/connection-manager.js";
 import type { OutboxDal, OutboxRow } from "./outbox-dal.js";
 import type { Logger } from "../observability/logger.js";
-import type { AuthTokenClaims } from "../auth/token-store.js";
+import {
+  normalizeScopes,
+  shouldDeliverToWsAudience,
+  type WsBroadcastAudience,
+  type WsBroadcastRole,
+} from "../../ws/audience.js";
 
 export interface OutboxPollerOptions {
   consumerId: string;
@@ -14,11 +19,6 @@ export interface OutboxPollerOptions {
 }
 
 type WsEnvelope = WsEventEnvelope | WsRequestEnvelope;
-type WsBroadcastRole = "client" | "node";
-type WsBroadcastAudience = {
-  roles?: WsBroadcastRole[];
-  required_scopes?: string[];
-};
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object";
@@ -45,21 +45,6 @@ function parseDirectPayload(payload: unknown): { connection_id: string; message:
   if (typeof connectionId !== "string") return undefined;
   if (!isObject(message)) return undefined;
   return { connection_id: connectionId, message: message as WsEnvelope };
-}
-
-function normalizeScopes(scopes: string[] | undefined): string[] {
-  if (!Array.isArray(scopes)) return [];
-  const normalized = scopes
-    .map((scope) => scope.trim())
-    .filter((scope) => scope.length > 0);
-  return [...new Set(normalized)];
-}
-
-function hasAnyRequiredScope(claims: AuthTokenClaims, requiredScopes: string[]): boolean {
-  if (requiredScopes.length === 0) return true;
-  const scopes = normalizeScopes(claims.scopes);
-  if (scopes.includes("*")) return true;
-  return requiredScopes.some((scope) => scopes.includes(scope));
 }
 
 function parseBroadcastAudience(payload: unknown): WsBroadcastAudience | undefined {
@@ -222,17 +207,7 @@ export class OutboxPoller {
       const payload = JSON.stringify(parsed.message);
       for (const client of this.connectionManager.allClients()) {
         if (authAudit && !canReceiveAuthAudit(client)) continue;
-        const audience = parsed.audience;
-        if (audience?.roles && !audience.roles.includes(client.role)) {
-          continue;
-        }
-        if (audience?.required_scopes && audience.required_scopes.length > 0) {
-          const claims = client.auth_claims;
-          if (!claims) continue;
-          if (claims.token_kind !== "admin" && !hasAnyRequiredScope(claims, audience.required_scopes)) {
-            continue;
-          }
-        }
+        if (!shouldDeliverToWsAudience(client, parsed.audience)) continue;
 
         try {
           client.ws.send(payload);

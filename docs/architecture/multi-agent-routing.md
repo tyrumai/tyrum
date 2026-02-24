@@ -22,7 +22,7 @@ Inbound events are mapped to an agent via explicit, auditable bindings.
 Routing rules are persisted as versioned config snapshots in the StateStore:
 
 - Table: `routing_configs` (append-only revisions; newest revision is effective)
-- Audit stream: `planner_events.plan_id = "routing.config"` (exportable via `/audit/export/routing.config`)
+- Audit stream: `planner_events.plan_id = "routing.config"` (exportable via `/audit/export/routing.config`; action includes `revision`, `config_sha256`, and optional `reverted_from_revision`)
 - WS event: `routing.config.updated` (payload includes `revision`, optional `config_sha256`, and optional `reverted_from_revision`; clients should `GET /routing/config` to fetch the effective config)
 
 Operator API:

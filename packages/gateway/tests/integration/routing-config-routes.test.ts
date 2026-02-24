@@ -139,6 +139,18 @@ describe("routing config routes", () => {
     const revertedBody = (await reverted.json()) as { revision: number; config: unknown };
     expect(revertedBody.revision).toBeGreaterThan(createdBody.revision);
     expect(revertedBody.config).toEqual(createdBody.config);
+
+    const audit = await db.all<{ action: string }>(
+      "SELECT action FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
+      ["routing.config"],
+    );
+    expect(audit).toHaveLength(3);
+    const action = JSON.parse(audit[2]!.action) as Record<string, unknown>;
+    expect(action).toMatchObject({
+      type: "routing.config.updated",
+      revision: revertedBody.revision,
+      reverted_from_revision: createdBody.revision,
+    });
   });
 
   it("returns a structured error when the durable routing config state is corrupt", async () => {

@@ -184,6 +184,7 @@ export class RoutingConfigDal {
     createdBy?: unknown;
     reason?: string;
     occurredAtIso?: string;
+    revertedFromRevision?: number;
   }): Promise<RoutingConfigRevision> {
     const createdAt = params.occurredAtIso ?? new Date().toISOString();
     const normalizedConfig = RoutingConfigSchema.parse(params.config);
@@ -217,6 +218,9 @@ export class RoutingConfigDal {
           reason: params.reason,
           created_by: params.createdBy ?? {},
           config_sha256: configSha256,
+          ...(typeof params.revertedFromRevision === "number"
+            ? { reverted_from_revision: params.revertedFromRevision }
+            : {}),
         },
       });
 
@@ -241,6 +245,7 @@ export class RoutingConfigDal {
       createdBy: params.createdBy,
       reason: params.reason,
       occurredAtIso: params.occurredAtIso,
+      revertedFromRevision: params.revision,
     });
   }
 }

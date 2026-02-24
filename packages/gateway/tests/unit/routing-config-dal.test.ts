@@ -100,6 +100,18 @@ describe("RoutingConfigDal", () => {
     expect(updated.revision).toBeGreaterThan(initial.revision);
     expect(reverted.revision).toBeGreaterThan(updated.revision);
     expect(reverted.config).toEqual(initial.config);
+
+    const audit = await db.all<{ action: string }>(
+      "SELECT action FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
+      ["routing.config"],
+    );
+    expect(audit).toHaveLength(3);
+    const revertAction = JSON.parse(audit[2]!.action) as Record<string, unknown>;
+    expect(revertAction).toMatchObject({
+      type: "routing.config.updated",
+      revision: reverted.revision,
+      reverted_from_revision: initial.revision,
+    });
   });
 
   it("rolls back routing config insert if audit append fails", async () => {
