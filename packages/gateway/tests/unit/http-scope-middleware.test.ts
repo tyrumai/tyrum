@@ -47,5 +47,9 @@ describe("HTTP scope middleware route mapping", () => {
       "operator.admin",
     ]);
   });
-});
 
+  it("denies unknown routes by default", () => {
+    expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/unmapped" })).toBeNull();
+    expect(resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/unmapped" })).toBeNull();
+  });
+});

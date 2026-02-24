@@ -11,11 +11,34 @@
 import type { Context, Next } from "hono";
 import { matchedRoutes } from "hono/route";
 import type { AuthTokenClaims } from "../auth/token-store.js";
+import { matchesPathPrefixSegment } from "../../app-path.js";
 
 const FORBIDDEN_BODY = {
   error: "forbidden",
   message: "insufficient scope",
 };
+
+const METHOD_SCOPED_OPERATOR_ROUTE_PREFIXES = [
+  "/agent",
+  "/app",
+  "/artifacts",
+  "/canvas",
+  "/connections",
+  "/consent",
+  "/context",
+  "/contracts",
+  "/ingress",
+  "/memory",
+  "/models",
+  "/plan",
+  "/playbooks",
+  "/presence",
+  "/runs",
+  "/status",
+  "/usage",
+  "/watchers",
+  "/workflow",
+] as const satisfies readonly string[];
 
 function getAuthClaims(c: Context): AuthTokenClaims | undefined {
   // Populated by createAuthMiddleware.
@@ -44,6 +67,11 @@ function hasAnyRequiredScope(claims: AuthTokenClaims, requiredScopes: string[]):
   return requiredScopes.some((scope) => scopes.includes(scope));
 }
 
+function isMethodScopedOperatorRoute(routePath: string): boolean {
+  if (routePath === "/") return true;
+  return METHOD_SCOPED_OPERATOR_ROUTE_PREFIXES.some((prefix) => matchesPathPrefixSegment(routePath, prefix));
+}
+
 export function resolveHttpRouteRequiredScopes(input: {
   method: string;
   routePath: string;
@@ -53,31 +81,43 @@ export function resolveHttpRouteRequiredScopes(input: {
 
   // Tenant administration surfaces.
   if (
-    routePath.startsWith("/api/") ||
-    routePath.startsWith("/auth/") ||
-    routePath.startsWith("/audit") ||
-    routePath.startsWith("/policy") ||
-    routePath.startsWith("/plugins") ||
-    routePath.startsWith("/providers/") ||
-    routePath.startsWith("/secrets") ||
-    routePath.startsWith("/snapshot") ||
+    matchesPathPrefixSegment(routePath, "/api") ||
+    matchesPathPrefixSegment(routePath, "/auth") ||
+    matchesPathPrefixSegment(routePath, "/audit") ||
+    matchesPathPrefixSegment(routePath, "/policy") ||
+    matchesPathPrefixSegment(routePath, "/plugins") ||
+    matchesPathPrefixSegment(routePath, "/providers") ||
+    matchesPathPrefixSegment(routePath, "/secrets") ||
+    matchesPathPrefixSegment(routePath, "/snapshot") ||
     routePath === "/models/refresh" ||
-    routePath.startsWith("/app/settings") ||
-    routePath.startsWith("/app/actions/account") ||
-    routePath.startsWith("/app/actions/settings") ||
-    routePath.startsWith("/app/actions/onboarding")
+    matchesPathPrefixSegment(routePath, "/app/settings") ||
+    matchesPathPrefixSegment(routePath, "/app/actions/account") ||
+    matchesPathPrefixSegment(routePath, "/app/actions/settings") ||
+    matchesPathPrefixSegment(routePath, "/app/actions/onboarding")
   ) {
     return ["operator.admin"];
   }
 
   // Dedicated approval surface.
-  if (routePath.startsWith("/approvals") || routePath.startsWith("/app/approvals") || routePath.startsWith("/app/actions/approvals")) {
+  if (
+    matchesPathPrefixSegment(routePath, "/approvals") ||
+    matchesPathPrefixSegment(routePath, "/app/approvals") ||
+    matchesPathPrefixSegment(routePath, "/app/actions/approvals")
+  ) {
     return ["operator.approvals"];
   }
 
   // Pairing / device enrollment surface.
-  if (routePath.startsWith("/pairings") || routePath.startsWith("/app/linking") || routePath.startsWith("/app/actions/linking")) {
+  if (
+    matchesPathPrefixSegment(routePath, "/pairings") ||
+    matchesPathPrefixSegment(routePath, "/app/linking") ||
+    matchesPathPrefixSegment(routePath, "/app/actions/linking")
+  ) {
     return ["operator.pairing"];
+  }
+
+  if (!isMethodScopedOperatorRoute(routePath)) {
+    return null;
   }
 
   // Default operator surface scopes by method.
