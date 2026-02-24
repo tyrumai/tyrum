@@ -82,6 +82,31 @@ describe("loadLifecycleHooksFromHome", () => {
     expect(hooks[0]?.steps[0]?.type).toBe("CLI");
   });
 
+  it("accepts hooks.yml entries targeting the heartbeat lane", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-hooks-config-"));
+    await writeFile(
+      join(homeDir, "hooks.yml"),
+      [
+        "v: 1",
+        "hooks:",
+        "  - hook_key: hook:550e8400-e29b-41d4-a716-446655440000",
+        "    event: command.execute",
+        "    lane: heartbeat",
+        "    steps:",
+        "      - type: CLI",
+        "        args:",
+        "          cmd: echo",
+        "          args: [\"hi\"]",
+        "",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const hooks = await loadLifecycleHooksFromHome(homeDir);
+    expect(hooks).toHaveLength(1);
+    expect(hooks[0]?.lane).toBe("heartbeat");
+  });
+
   it("warns and returns [] when hooks.yml contains invalid YAML", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-hooks-config-"));
     const configPath = join(homeDir, "hooks.yml");

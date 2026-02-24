@@ -258,7 +258,7 @@ export type TyrumKey = z.infer<typeof TyrumKey>;
 // Lanes and queue modes
 // ---------------------------------------------------------------------------
 
-export const Lane = z.enum(["main", "cron", "subagent"]);
+export const Lane = z.enum(["main", "cron", "heartbeat", "subagent"]);
 export type Lane = z.infer<typeof Lane>;
 
 export const QueueMode = z.enum(["collect", "followup", "steer", "steer_backlog", "interrupt"]);

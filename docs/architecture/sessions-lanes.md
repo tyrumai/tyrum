@@ -1,6 +1,6 @@
 # Sessions and Lanes
 
-A session is a durable conversation container. A lane is an execution stream within a session (for example `main` vs `cron` vs `subagent`).
+A session is a durable conversation container. A lane is an execution stream within a session (for example `main` vs `cron` vs `heartbeat` vs `subagent`).
 
 ## Sessions
 
@@ -78,6 +78,7 @@ Lanes separate concurrent concerns while keeping execution serialized per lane:
 
 - `main` — interactive chat
 - `cron` — scheduled work
+- `heartbeat` — context-aware periodic batching inside the main session
 - `subagent` — delegated work with a narrower scope
 
 ### Relationship to execution runs
@@ -85,7 +86,7 @@ Lanes separate concurrent concerns while keeping execution serialized per lane:
 Each run is associated with:
 
 - a **key** (one of the keys above)
-- a **lane** (`main`, `cron`, `subagent`, …)
+- a **lane** (`main`, `cron`, `heartbeat`, `subagent`, …)
 - a unique `run_id`
 
 Serialization is enforced per `(key, lane)` so concurrent work does not trample shared state, while still allowing independent lanes to progress.

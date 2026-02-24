@@ -7,7 +7,7 @@ Automation lets Tyrum act on schedules and triggers while keeping behavior obser
 - **Hooks:** small scripts that run on gateway lifecycle events (for example session start/stop, reset, command events).
 - **Webhooks:** an HTTP endpoint for external triggers (scoped and authenticated).
 - **Cron jobs:** scheduled tasks with their own lane/session context.
-- **Heartbeat:** a periodic run in the main session that batches multiple checks and follow-ups.
+- **Heartbeat:** a periodic run in the main session (lane `heartbeat`) that batches multiple checks and follow-ups.
 
 ## When to use heartbeat vs cron
 
