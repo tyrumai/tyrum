@@ -76,6 +76,22 @@ describe("canonicalizeToolMatchTarget", () => {
     expect(target).toBe("git status --porcelain");
   });
 
+  it("canonicalizes http fetch urls by stripping fragments (and query params)", () => {
+    expect(
+      canonicalizeToolMatchTarget(
+        "tool.http.fetch",
+        { url: "https://example.com/a?token=secret#frag" },
+      ),
+    ).toBe("https://example.com/a");
+
+    expect(
+      canonicalizeToolMatchTarget(
+        "tool.http.fetch",
+        { url: "https://example.com/a#access_token=secret" },
+      ),
+    ).toBe("https://example.com/a");
+  });
+
   it("canonicalizes messaging destinations without matching on message body", () => {
     const target = canonicalizeToolMatchTarget(
       "tool.messaging.send",
