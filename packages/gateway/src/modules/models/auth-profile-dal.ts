@@ -131,6 +131,29 @@ export class AuthProfileDal {
     return rows.map(toRow);
   }
 
+  async listByAgentAfter(params: {
+    agentId: string;
+    after?: { createdAt: string; profileId: string };
+    limit?: number;
+  }): Promise<AuthProfileRow[]> {
+    const limit = Math.max(1, Math.min(500, params.limit ?? 200));
+    const where: string[] = ["agent_id = ?"];
+    const values: unknown[] = [params.agentId];
+
+    if (params.after) {
+      where.push("(created_at > ? OR (created_at = ? AND profile_id > ?))");
+      values.push(params.after.createdAt, params.after.createdAt, params.after.profileId);
+    }
+
+    const sql =
+      `SELECT * FROM auth_profiles` +
+      ` WHERE ${where.join(" AND ")}` +
+      ` ORDER BY created_at ASC, profile_id ASC LIMIT ${String(limit)}`;
+
+    const rows = await this.db.all<RawAuthProfileRow>(sql, values);
+    return rows.map(toRow);
+  }
+
   async listEligibleForProvider(params: { agentId: string; provider: string; nowMs: number }): Promise<AuthProfileRow[]> {
     const rows = await this.db.all<RawAuthProfileRow>(
       `SELECT *

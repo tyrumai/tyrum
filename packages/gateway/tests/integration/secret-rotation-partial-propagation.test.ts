@@ -88,8 +88,10 @@ describe("secret rotation partial propagation (integration)", () => {
 
     const updatedA = await authProfileDal.getById(profileA);
     const updatedB = await authProfileDal.getById(profileB);
-    expect(updatedA?.secret_handles["api_key_handle"]).toBe(rotated!.handle_id);
-    expect(updatedB?.secret_handles["api_key_handle"]).toBe(oldHandle.handle_id);
+    const handleIds = [
+      updatedA?.secret_handles["api_key_handle"],
+      updatedB?.secret_handles["api_key_handle"],
+    ].sort();
+    expect(handleIds).toEqual([oldHandle.handle_id, rotated!.handle_id].sort());
   });
 });
-
