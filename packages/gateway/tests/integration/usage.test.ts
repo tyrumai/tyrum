@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createTestApp } from "./helpers.js";
 
 describe("usage routes", () => {
@@ -75,5 +75,145 @@ describe("usage routes", () => {
 
     await container.db.close();
   });
-});
 
+  it("includes cached provider usage when auth profiles are enabled and a profile is pinned", async () => {
+    const prevAuthProfilesEnabled = process.env["TYRUM_AUTH_PROFILES_ENABLED"];
+    const prevOpenRouterKey = process.env["OPENROUTER_API_KEY"];
+    process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "1";
+    process.env["OPENROUTER_API_KEY"] = "test-openrouter-key";
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(JSON.stringify({ data: { label: "test-key", usage: 123, limit: 456 } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    try {
+      const { app, container, agents } = await createTestApp();
+      expect(agents).toBeDefined();
+
+      const secretProvider = await agents!.getSecretProvider("default");
+      const handle = await secretProvider.store("OPENROUTER_API_KEY", "ignored-by-env-provider");
+
+      const profileId = "profile-openrouter-1";
+      await container.db.run(
+        `INSERT INTO auth_profiles (profile_id, agent_id, provider, type, secret_handles_json)
+         VALUES (?, 'default', 'openrouter', 'api_key', ?)`,
+        [profileId, JSON.stringify({ api_key_handle: handle.handle_id })],
+      );
+
+      const sessionId = "session-usage-provider-1";
+      await container.db.run(
+        `INSERT INTO sessions (session_id, channel, thread_id)
+         VALUES (?, 'test', 'thread-usage-provider-1')`,
+        [sessionId],
+      );
+      await container.db.run(
+        `INSERT INTO session_provider_pins (agent_id, session_id, provider, profile_id)
+         VALUES ('default', ?, 'openrouter', ?)`,
+        [sessionId, profileId],
+      );
+
+      const first = await app.request("/usage");
+      expect(first.status).toBe(200);
+      const firstPayload = (await first.json()) as { provider: unknown };
+      expect(firstPayload.provider).toMatchObject({
+        status: "ok",
+        provider: "openrouter",
+        profile_id: profileId,
+        cached: false,
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      const second = await app.request("/usage");
+      expect(second.status).toBe(200);
+      const secondPayload = (await second.json()) as { provider: unknown };
+      expect(secondPayload.provider).toMatchObject({
+        status: "ok",
+        provider: "openrouter",
+        profile_id: profileId,
+        cached: true,
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      await container.db.close();
+    } finally {
+      process.env["TYRUM_AUTH_PROFILES_ENABLED"] = prevAuthProfilesEnabled;
+      process.env["OPENROUTER_API_KEY"] = prevOpenRouterKey;
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("returns structured provider errors and caches failures", async () => {
+    const prevAuthProfilesEnabled = process.env["TYRUM_AUTH_PROFILES_ENABLED"];
+    const prevOpenRouterKey = process.env["OPENROUTER_API_KEY"];
+    process.env["TYRUM_AUTH_PROFILES_ENABLED"] = "1";
+    process.env["OPENROUTER_API_KEY"] = "test-openrouter-key";
+
+    const fetchMock = vi.fn(async () => {
+      return new Response("rate limited", { status: 429, headers: { "content-type": "text/plain" } });
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    try {
+      const { app, container, agents } = await createTestApp();
+      expect(agents).toBeDefined();
+
+      const secretProvider = await agents!.getSecretProvider("default");
+      const handle = await secretProvider.store("OPENROUTER_API_KEY", "ignored-by-env-provider");
+
+      const profileId = "profile-openrouter-error-1";
+      await container.db.run(
+        `INSERT INTO auth_profiles (profile_id, agent_id, provider, type, secret_handles_json)
+         VALUES (?, 'default', 'openrouter', 'api_key', ?)`,
+        [profileId, JSON.stringify({ api_key_handle: handle.handle_id })],
+      );
+
+      const sessionId = "session-usage-provider-error-1";
+      await container.db.run(
+        `INSERT INTO sessions (session_id, channel, thread_id)
+         VALUES (?, 'test', 'thread-usage-provider-error-1')`,
+        [sessionId],
+      );
+      await container.db.run(
+        `INSERT INTO session_provider_pins (agent_id, session_id, provider, profile_id)
+         VALUES ('default', ?, 'openrouter', ?)`,
+        [sessionId, profileId],
+      );
+
+      const first = await app.request("/usage");
+      expect(first.status).toBe(200);
+      const firstPayload = (await first.json()) as { provider: unknown };
+      expect(firstPayload.provider).toMatchObject({
+        status: "error",
+        provider: "openrouter",
+        profile_id: profileId,
+        cached: false,
+        error: { code: "provider_http_error" },
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      const second = await app.request("/usage");
+      expect(second.status).toBe(200);
+      const secondPayload = (await second.json()) as { provider: unknown };
+      expect(secondPayload.provider).toMatchObject({
+        status: "error",
+        provider: "openrouter",
+        profile_id: profileId,
+        cached: true,
+        error: { code: "provider_http_error" },
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      await container.db.close();
+    } finally {
+      process.env["TYRUM_AUTH_PROFILES_ENABLED"] = prevAuthProfilesEnabled;
+      process.env["OPENROUTER_API_KEY"] = prevOpenRouterKey;
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+    }
+  });
+});
