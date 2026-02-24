@@ -86,12 +86,11 @@ export class OutboxDal {
 
   async ackConsumerCursor(consumerId: string, lastOutboxId: number): Promise<void> {
     await this.ensureConsumer(consumerId);
-    const nowIso = new Date().toISOString();
     await this.db.run(
       `UPDATE outbox_consumers
-       SET last_outbox_id = ?, updated_at = ?
+       SET last_outbox_id = ?, updated_at = CURRENT_TIMESTAMP
        WHERE consumer_id = ?`,
-      [lastOutboxId, nowIso, consumerId],
+      [lastOutboxId, consumerId],
     );
   }
 
@@ -109,4 +108,3 @@ export class OutboxDal {
     return rows.map(toOutboxRow);
   }
 }
-
