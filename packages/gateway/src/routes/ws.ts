@@ -27,6 +27,7 @@ import { rawDataToUtf8 } from "../ws/raw-data.js";
 import { handleClientMessage } from "../ws/protocol.js";
 import type { ProtocolDeps } from "../ws/protocol.js";
 import type { TokenStore } from "../modules/auth/token-store.js";
+import { AUTH_COOKIE_NAME, extractBearerToken } from "../modules/auth/http.js";
 import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
 import type { PresenceDal } from "../modules/presence/dal.js";
 import type { NodePairingDal } from "../modules/node/pairing-dal.js";
@@ -117,6 +118,91 @@ function extractWsTokenFromProtocols(req: IncomingMessage): string | undefined {
     if (decoded) return decoded;
   }
   return undefined;
+}
+
+function extractCookieValue(
+  headerValue: string | string[] | undefined,
+  cookieName: string,
+): string | undefined {
+  if (!headerValue) return undefined;
+  const text = Array.isArray(headerValue) ? headerValue.join(";") : headerValue;
+  for (const part of text.split(";")) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const idx = trimmed.indexOf("=");
+    if (idx <= 0) continue;
+    const name = trimmed.slice(0, idx).trim();
+    if (name !== cookieName) continue;
+    const value = trimmed.slice(idx + 1).trim();
+    return value.length > 0 ? value : undefined;
+  }
+  return undefined;
+}
+
+function toSingleHeaderValue(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) return value[0];
+  return typeof value === "string" ? value : undefined;
+}
+
+function parseHostHeader(value: string): { hostname: string; port: string | undefined } | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  if (trimmed.startsWith("[")) {
+    const closingIdx = trimmed.indexOf("]");
+    if (closingIdx <= 1) return undefined;
+    const hostname = trimmed.slice(1, closingIdx);
+    const rest = trimmed.slice(closingIdx + 1);
+    if (!rest) return { hostname, port: undefined };
+    if (!rest.startsWith(":")) return undefined;
+    const port = rest.slice(1).trim();
+    if (!port) return undefined;
+    return { hostname, port };
+  }
+
+  const parts = trimmed.split(":");
+  if (parts.length === 1) {
+    return { hostname: parts[0]!.trim(), port: undefined };
+  }
+  if (parts.length === 2) {
+    const hostname = parts[0]!.trim();
+    const port = parts[1]!.trim();
+    if (!hostname || !port) return undefined;
+    return { hostname, port };
+  }
+  return undefined;
+}
+
+function isSameOriginUpgrade(req: IncomingMessage): boolean {
+  const originValue = toSingleHeaderValue(req.headers["origin"]);
+  const hostValue = toSingleHeaderValue(req.headers["host"]);
+  if (!originValue || !hostValue) return false;
+
+  let originUrl: URL;
+  try {
+    originUrl = new URL(originValue);
+  } catch {
+    return false;
+  }
+  if (originUrl.protocol !== "http:" && originUrl.protocol !== "https:") return false;
+
+  const defaultPort = originUrl.protocol === "https:" ? "443" : "80";
+  const originPort = originUrl.port || defaultPort;
+  const host = parseHostHeader(hostValue);
+  if (!host) return false;
+  const hostPort = host.port ?? defaultPort;
+
+  return host.hostname.toLowerCase() === originUrl.hostname.toLowerCase() && hostPort === originPort;
+}
+
+function extractWsToken(req: IncomingMessage): string | undefined {
+  const bearer = extractBearerToken(req.headers["authorization"]);
+  if (bearer) return bearer;
+
+  const cookieToken = extractCookieValue(req.headers["cookie"], AUTH_COOKIE_NAME);
+  if (cookieToken && isSameOriginUpgrade(req)) return cookieToken;
+
+  return extractWsTokenFromProtocols(req);
 }
 
 function selectWsSubprotocol(protocols: Set<string>): string | false {
@@ -250,7 +336,7 @@ export function createWsHandler(opts: WsRouteOptions): {
 
   // --- connection handler ---
   wss.on("connection", (ws, req) => {
-    const token = extractWsTokenFromProtocols(req);
+    const token = extractWsToken(req);
     const upgradeClaims = authenticateWsToken(token, tokenStore);
 
     type UpgradeClaims = NonNullable<typeof upgradeClaims>;

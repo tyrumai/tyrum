@@ -5,9 +5,10 @@ import { Hono } from "hono";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { createWsHandler } from "../../src/routes/ws.js";
 import { TokenStore } from "../../src/modules/auth/token-store.js";
+import { AUTH_COOKIE_NAME } from "../../src/modules/auth/http.js";
 import { createTestContainer } from "./helpers.js";
 import { createPairingRoutes } from "../../src/routes/pairing.js";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
@@ -42,9 +43,9 @@ function waitForOpen(ws: WebSocket): Promise<void> {
   });
 }
 
-function waitForClose(ws: WebSocket): Promise<{ code: number; reason: string }> {
+function waitForClose(ws: WebSocket, timeoutMs = 5_000): Promise<{ code: number; reason: string }> {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("close timeout")), 5_000);
+    const timer = setTimeout(() => reject(new Error("close timeout")), timeoutMs);
     ws.once("close", (code, reason) => {
       clearTimeout(timer);
       resolve({ code, reason: reason.toString("utf-8") });
@@ -235,6 +236,285 @@ describe("WS handler integration", () => {
     // Verify we can find a client for the playwright capability
     const client = connectionManager.getClientForCapability("playwright");
     expect(client).toBeDefined();
+
+    stopHeartbeat();
+  });
+
+  it("accepts connection authenticated via Authorization header during upgrade", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
+    const tokenStore = new TokenStore(homeDir);
+    const adminToken = await tokenStore.initialize();
+
+    const connectionManager = new ConnectionManager();
+    const { handleUpgrade, stopHeartbeat } = createWsHandler({
+      connectionManager,
+      protocolDeps: { connectionManager },
+      tokenStore,
+    });
+
+    server = createServer();
+    server.on("upgrade", (req, socket, head) => {
+      handleUpgrade(req, socket, head);
+    });
+
+    const port = await new Promise<number>((resolve) => {
+      server!.listen(0, "127.0.0.1", () => {
+        const addr = server!.address();
+        resolve(typeof addr === "object" && addr ? addr.port : 0);
+      });
+    });
+
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, ["tyrum-v1"], {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    clients.push(ws);
+    await waitForOpen(ws);
+
+    expect(connectionManager.getStats().totalClients).toBe(0);
+
+    ws.send(
+      JSON.stringify({
+        request_id: "r-1",
+        type: "connect",
+        payload: { capabilities: ["playwright"] },
+      }),
+    );
+
+    const first = await waitForMessageOrClose(ws, 2_000);
+    if (first.kind !== "message") {
+      throw new Error(`Expected connect response; got close ${String(first.code)}: ${first.reason}`);
+    }
+    expect(first.msg).toMatchObject({ type: "connect", ok: true });
+
+    const stats = connectionManager.getStats();
+    expect(stats.totalClients).toBe(1);
+    expect(stats.capabilityCounts["playwright"]).toBe(1);
+
+    stopHeartbeat();
+  });
+
+  it("accepts connection authenticated via cookie during upgrade", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
+    const tokenStore = new TokenStore(homeDir);
+    const adminToken = await tokenStore.initialize();
+
+    const connectionManager = new ConnectionManager();
+    const { handleUpgrade, stopHeartbeat } = createWsHandler({
+      connectionManager,
+      protocolDeps: { connectionManager },
+      tokenStore,
+    });
+
+    server = createServer();
+    server.on("upgrade", (req, socket, head) => {
+      handleUpgrade(req, socket, head);
+    });
+
+    const port = await new Promise<number>((resolve) => {
+      server!.listen(0, "127.0.0.1", () => {
+        const addr = server!.address();
+        resolve(typeof addr === "object" && addr ? addr.port : 0);
+      });
+    });
+
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, ["tyrum-v1"], {
+      headers: {
+        Cookie: `${AUTH_COOKIE_NAME}=${adminToken}`,
+        Origin: `http://127.0.0.1:${port}`,
+      },
+    });
+    clients.push(ws);
+    await waitForOpen(ws);
+
+    expect(connectionManager.getStats().totalClients).toBe(0);
+
+    ws.send(
+      JSON.stringify({
+        request_id: "r-1",
+        type: "connect",
+        payload: { capabilities: ["playwright"] },
+      }),
+    );
+
+    const first = await waitForMessageOrClose(ws, 2_000);
+    if (first.kind !== "message") {
+      throw new Error(`Expected connect response; got close ${String(first.code)}: ${first.reason}`);
+    }
+    expect(first.msg).toMatchObject({ type: "connect", ok: true });
+
+    const stats = connectionManager.getStats();
+    expect(stats.totalClients).toBe(1);
+    expect(stats.capabilityCounts["playwright"]).toBe(1);
+
+    stopHeartbeat();
+  });
+
+  it("accepts cookie-authenticated upgrade when token contains '=' characters", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
+    const adminToken = "tyrum-test-token==with=equals==";
+    await writeFile(join(homeDir, ".admin-token"), adminToken + "\n", { mode: 0o600 });
+    const tokenStore = new TokenStore(homeDir);
+    expect(await tokenStore.initialize()).toBe(adminToken);
+
+    const connectionManager = new ConnectionManager();
+    const { handleUpgrade, stopHeartbeat } = createWsHandler({
+      connectionManager,
+      protocolDeps: { connectionManager },
+      tokenStore,
+    });
+
+    server = createServer();
+    server.on("upgrade", (req, socket, head) => {
+      handleUpgrade(req, socket, head);
+    });
+
+    const port = await new Promise<number>((resolve) => {
+      server!.listen(0, "127.0.0.1", () => {
+        const addr = server!.address();
+        resolve(typeof addr === "object" && addr ? addr.port : 0);
+      });
+    });
+
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, ["tyrum-v1"], {
+      headers: {
+        Cookie: `${AUTH_COOKIE_NAME}=${adminToken}`,
+        Origin: `http://127.0.0.1:${port}`,
+      },
+    });
+    clients.push(ws);
+    await waitForOpen(ws);
+
+    ws.send(
+      JSON.stringify({
+        request_id: "r-1",
+        type: "connect",
+        payload: { capabilities: ["playwright"] },
+      }),
+    );
+
+    const first = await waitForMessageOrClose(ws, 2_000);
+    if (first.kind !== "message") {
+      throw new Error(`Expected connect response; got close ${String(first.code)}: ${first.reason}`);
+    }
+    expect(first.msg).toMatchObject({ type: "connect", ok: true });
+
+    const stats = connectionManager.getStats();
+    expect(stats.totalClients).toBe(1);
+    expect(stats.capabilityCounts["playwright"]).toBe(1);
+
+    stopHeartbeat();
+  });
+
+  it("rejects cookie-authenticated upgrade without Origin header", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
+    const tokenStore = new TokenStore(homeDir);
+    const adminToken = await tokenStore.initialize();
+
+    const connectionManager = new ConnectionManager();
+    const { handleUpgrade, stopHeartbeat } = createWsHandler({
+      connectionManager,
+      protocolDeps: { connectionManager },
+      tokenStore,
+    });
+
+    server = createServer();
+    server.on("upgrade", (req, socket, head) => {
+      handleUpgrade(req, socket, head);
+    });
+
+    const port = await new Promise<number>((resolve) => {
+      server!.listen(0, "127.0.0.1", () => {
+        const addr = server!.address();
+        resolve(typeof addr === "object" && addr ? addr.port : 0);
+      });
+    });
+
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, ["tyrum-v1"], {
+      headers: {
+        Cookie: `${AUTH_COOKIE_NAME}=${adminToken}`,
+      },
+    });
+    clients.push(ws);
+
+    const { code } = await waitForClose(ws, 2_000);
+    expect(code).toBe(4001);
+
+    stopHeartbeat();
+  });
+
+  it("rejects cookie-authenticated upgrade when Origin does not match Host", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
+    const tokenStore = new TokenStore(homeDir);
+    const adminToken = await tokenStore.initialize();
+
+    const connectionManager = new ConnectionManager();
+    const { handleUpgrade, stopHeartbeat } = createWsHandler({
+      connectionManager,
+      protocolDeps: { connectionManager },
+      tokenStore,
+    });
+
+    server = createServer();
+    server.on("upgrade", (req, socket, head) => {
+      handleUpgrade(req, socket, head);
+    });
+
+    const port = await new Promise<number>((resolve) => {
+      server!.listen(0, "127.0.0.1", () => {
+        const addr = server!.address();
+        resolve(typeof addr === "object" && addr ? addr.port : 0);
+      });
+    });
+
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, ["tyrum-v1"], {
+      headers: {
+        Cookie: `${AUTH_COOKIE_NAME}=${adminToken}`,
+        Origin: "http://evil.example",
+      },
+    });
+    clients.push(ws);
+
+    const { code } = await waitForClose(ws, 2_000);
+    expect(code).toBe(4001);
+
+    stopHeartbeat();
+  });
+
+  it("rejects cookie-authenticated upgrade when Origin port does not match default Host port", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
+    const tokenStore = new TokenStore(homeDir);
+    const adminToken = await tokenStore.initialize();
+
+    const connectionManager = new ConnectionManager();
+    const { handleUpgrade, stopHeartbeat } = createWsHandler({
+      connectionManager,
+      protocolDeps: { connectionManager },
+      tokenStore,
+    });
+
+    server = createServer();
+    server.on("upgrade", (req, socket, head) => {
+      handleUpgrade(req, socket, head);
+    });
+
+    const port = await new Promise<number>((resolve) => {
+      server!.listen(0, "127.0.0.1", () => {
+        const addr = server!.address();
+        resolve(typeof addr === "object" && addr ? addr.port : 0);
+      });
+    });
+
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, ["tyrum-v1"], {
+      headers: {
+        Cookie: `${AUTH_COOKIE_NAME}=${adminToken}`,
+        Origin: "http://127.0.0.1:9999",
+        Host: "127.0.0.1",
+      },
+    });
+    clients.push(ws);
+
+    const { code } = await waitForClose(ws, 2_000);
+    expect(code).toBe(4001);
 
     stopHeartbeat();
   });
