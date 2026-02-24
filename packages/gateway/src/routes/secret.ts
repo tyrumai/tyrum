@@ -8,13 +8,70 @@
 import { Hono } from "hono";
 import { SecretRotateRequest, SecretStoreRequest } from "@tyrum/schemas";
 import { EnvSecretProvider, type SecretProvider } from "../modules/secret/provider.js";
+import type { AuthProfileDal } from "../modules/models/auth-profile-dal.js";
 
 export interface SecretRouteDeps {
   secretProviderForAgent: (agentId: string) => Promise<SecretProvider>;
+  authProfileDal?: AuthProfileDal;
 }
 
 function agentIdFromReq(c: { req: { query: (key: string) => string | undefined; header: (key: string) => string | undefined } }): string {
   return c.req.query("agent_id")?.trim() || c.req.header("x-tyrum-agent-id")?.trim() || "default";
+}
+
+function replacesSecretHandleId(input: Record<string, string>, from: string, to: string): { changed: boolean; next: Record<string, string> } {
+  let changed = false;
+  const next: Record<string, string> = { ...input };
+  for (const [k, v] of Object.entries(next)) {
+    if (v === from) {
+      next[k] = to;
+      changed = true;
+    }
+  }
+  return { changed, next };
+}
+
+async function disableAuthProfilesReferencingSecretHandleId(params: {
+  authProfileDal: AuthProfileDal;
+  agentId: string;
+  handleId: string;
+}): Promise<void> {
+  const profiles = await params.authProfileDal.list({ agentId: params.agentId, limit: 500 });
+  for (const profile of profiles) {
+    const handleIds = Object.values(profile.secret_handles ?? {});
+    if (!handleIds.includes(params.handleId)) continue;
+    await params.authProfileDal.disableProfile(profile.profile_id, {
+      reason: "secret_handle_revoked",
+      updatedBy: { kind: "secret_revoke", handle_id: params.handleId },
+    });
+  }
+}
+
+async function rotateAuthProfilesReferencingSecretHandleId(params: {
+  authProfileDal: AuthProfileDal;
+  agentId: string;
+  fromHandleId: string;
+  toHandleId: string;
+}): Promise<void> {
+  if (params.fromHandleId === params.toHandleId) return;
+
+  const profiles = await params.authProfileDal.list({ agentId: params.agentId, limit: 500 });
+  for (const profile of profiles) {
+    const { changed, next } = replacesSecretHandleId(
+      profile.secret_handles ?? {},
+      params.fromHandleId,
+      params.toHandleId,
+    );
+    if (!changed) continue;
+    await params.authProfileDal.updateSecretHandles(profile.profile_id, {
+      secretHandles: next,
+      updatedBy: {
+        kind: "secret_rotate",
+        from_handle_id: params.fromHandleId,
+        to_handle_id: params.toHandleId,
+      },
+    });
+  }
 }
 
 export function createSecretRoutes(deps: SecretRouteDeps): Hono {
@@ -95,6 +152,14 @@ export function createSecretRoutes(deps: SecretRouteDeps): Hono {
       );
     }
 
+    if (deps.authProfileDal) {
+      await disableAuthProfilesReferencingSecretHandleId({
+        authProfileDal: deps.authProfileDal,
+        agentId: agentIdFromReq(c),
+        handleId,
+      });
+    }
+
     return c.json({ revoked: true });
   });
 
@@ -144,6 +209,15 @@ export function createSecretRoutes(deps: SecretRouteDeps): Hono {
 
     const handle = await secretProvider.store(existing.scope, parsed.data.value);
     const revoked = await secretProvider.revoke(handleId);
+
+    if (deps.authProfileDal) {
+      await rotateAuthProfilesReferencingSecretHandleId({
+        authProfileDal: deps.authProfileDal,
+        agentId: agentIdFromReq(c),
+        fromHandleId: handleId,
+        toHandleId: handle.handle_id,
+      });
+    }
     return c.json({ revoked, handle }, 201);
   });
 

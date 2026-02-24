@@ -32,6 +32,7 @@ export class EnvSecretProvider implements SecretProvider {
 
   async resolve(handle: SecretHandleT): Promise<string | null> {
     const scope = this.normalizeScope(handle.scope);
+    if (!this.handles.has(handle.handle_id)) return null;
     return process.env[scope] ?? null;
   }
 

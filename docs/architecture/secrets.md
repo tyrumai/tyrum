@@ -46,6 +46,11 @@ Secret handles support rotation:
 - rotate creates a new secret version and updates the handle mapping
 - revoke invalidates access and forces failures in dependent steps until updated
 
+For provider credentials stored as **auth profiles**, rotation/revocation must propagate to dependent execution:
+
+- rotating a handle updates any auth profiles that reference it to use the new handle
+- revoking a handle disables any auth profiles that reference it
+
 ## Cluster notes
 
 In a single-host deployment, secret resolution can be local (for example OS keychain, encrypted local store, or environment variables). In multi-process and clustered deployments, secret handling must still preserve the same invariant: **raw secret values are never exposed to the model and are never persisted to the StateStore**.

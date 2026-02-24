@@ -324,6 +324,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       "/",
       createSecretRoutes({
         secretProviderForAgent,
+        authProfileDal,
       }),
     );
   }
