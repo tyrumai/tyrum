@@ -294,7 +294,7 @@ function renderIrChunkToTelegramHtml(chunk: import("./ir.js").MarkdownIr): strin
     .toSorted((a, b) => a.start - b.start);
 
   if (blocks.length === 0) {
-    return escapeTelegramHtmlText(text);
+    return renderInlineRangeToTelegramHtml(chunk, 0, text.length);
   }
 
   let out = "";
