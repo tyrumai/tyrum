@@ -5,7 +5,7 @@ export { TyrumClient } from "./ws-client.js";
 export type { TyrumClientOptions, TyrumClientEvents } from "./ws-client.js";
 
 export { autoExecute } from "./capability.js";
-export type { CapabilityProvider, TaskResult } from "./capability.js";
+export type { CapabilityProvider, TaskExecuteContext, TaskResult } from "./capability.js";
 
 export type {
   ClientCapability,

@@ -16,13 +16,21 @@ import type { TyrumClient } from "./ws-client.js";
 
 export interface TaskResult {
   success: boolean;
+  result?: unknown;
   evidence?: unknown;
   error?: string;
 }
 
+export interface TaskExecuteContext {
+  requestId: string;
+  runId: string;
+  stepId: string;
+  attemptId: string;
+}
+
 export interface CapabilityProvider {
   readonly capability: ClientCapability;
-  execute(action: ActionPrimitive): Promise<TaskResult>;
+  execute(action: ActionPrimitive, ctx?: TaskExecuteContext): Promise<TaskResult>;
 }
 
 // ---------------------------------------------------------------------------
@@ -44,6 +52,12 @@ export function autoExecute(
 
   client.on("task_execute", (msg) => {
     const action = msg.payload.action;
+    const ctx: TaskExecuteContext = {
+      requestId: msg.request_id,
+      runId: msg.payload.run_id,
+      stepId: msg.payload.step_id,
+      attemptId: msg.payload.attempt_id,
+    };
     const required = requiredCapability(action.type);
     const provider = required ? capMap.get(required) : undefined;
 
@@ -58,12 +72,12 @@ export function autoExecute(
       return;
     }
 
-    provider.execute(action).then(
+    provider.execute(action, ctx).then(
       (result) => {
         client.respondTaskExecute(
           msg.request_id,
           result.success,
-          undefined,
+          result.result,
           result.evidence,
           result.error,
         );

@@ -96,12 +96,22 @@ describe("autoExecute", () => {
       reconnect: false,
     });
 
+    const expectedContext = {
+      requestId: "t-1",
+      runId: "550e8400-e29b-41d4-a716-446655440000",
+      stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+      attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+    };
     const httpProvider: CapabilityProvider = {
       capability: "http",
-      execute: async () => ({
-        success: true,
-        evidence: { statusCode: 200 },
-      }),
+      execute: async (action, ctx?: unknown) => {
+        expect(action.type).toBe("Http");
+        expect(ctx).toEqual(expectedContext);
+        return {
+          success: true,
+          evidence: { statusCode: 200 },
+        };
+      },
     };
 
     autoExecute(client, [httpProvider]);
@@ -115,9 +125,9 @@ describe("autoExecute", () => {
         request_id: "t-1",
         type: "task.execute",
         payload: {
-          run_id: "550e8400-e29b-41d4-a716-446655440000",
-          step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-          attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+          run_id: expectedContext.runId,
+          step_id: expectedContext.stepId,
+          attempt_id: expectedContext.attemptId,
           action: { type: "Http", args: { url: "https://example.com" } },
         },
       }),
