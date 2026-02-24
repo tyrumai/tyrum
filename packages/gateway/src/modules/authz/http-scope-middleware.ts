@@ -88,6 +88,7 @@ export function resolveHttpRouteRequiredScopes(input: {
     matchesPathPrefixSegment(routePath, "/auth") ||
     matchesPathPrefixSegment(routePath, "/audit") ||
     matchesPathPrefixSegment(routePath, "/policy") ||
+    matchesPathPrefixSegment(routePath, "/routing") ||
     matchesPathPrefixSegment(routePath, "/plugins") ||
     matchesPathPrefixSegment(routePath, "/providers") ||
     matchesPathPrefixSegment(routePath, "/secrets") ||

@@ -42,6 +42,8 @@ describe("HTTP scope middleware route mapping", () => {
     expect(resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/providers/:provider/oauth/authorize" })).toEqual([
       "operator.admin",
     ]);
+    expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/routing/config" })).toEqual(["operator.admin"]);
+    expect(resolveHttpRouteRequiredScopes({ method: "PUT", routePath: "/routing/config" })).toEqual(["operator.admin"]);
     expect(resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/api/account/delete" })).toEqual(["operator.admin"]);
     expect(resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/app/actions/account/delete" })).toEqual([
       "operator.admin",

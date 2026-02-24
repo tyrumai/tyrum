@@ -11,6 +11,7 @@ import { policy } from "./routes/policy.js";
 import { createPolicyBundleRoutes } from "./routes/policy-bundle.js";
 import { createMemoryRoutes } from "./routes/memory.js";
 import { createIngressRoutes } from "./routes/ingress.js";
+import { createRoutingConfigRoutes } from "./routes/routing-config.js";
 import { createPlanRoutes } from "./routes/plan.js";
 import { createAgentRoutes } from "./routes/agent.js";
 import { createContextRoutes } from "./routes/context.js";
@@ -38,6 +39,7 @@ import { createPresenceRoutes } from "./routes/presence.js";
 import { loadAllPlaybooks } from "./modules/playbook/loader.js";
 import { ExecutionEngine } from "./modules/execution/engine.js";
 import { isChannelPipelineEnabled, TelegramChannelQueue } from "./modules/channels/telegram.js";
+import { RoutingConfigDal } from "./modules/channels/routing-config-dal.js";
 import { AuthProfileDal } from "./modules/models/auth-profile-dal.js";
 import { SessionProviderPinDal } from "./modules/models/session-pin-dal.js";
 import type { Playbook } from "@tyrum/schemas";
@@ -107,6 +109,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
 
   const authProfileDal = new AuthProfileDal(container.db);
   const pinDal = new SessionProviderPinDal(container.db);
+  const routingConfigDal = new RoutingConfigDal(container.db, { eventLog: container.eventLog });
 
   const secretProviderForAgent = (() => {
     if (!opts.secretProvider) return undefined;
@@ -278,7 +281,20 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
           : undefined,
       agents: opts.agents,
       memoryDal: container.memoryDal,
+      routingConfigDal,
       home: container.config?.tyrumHome,
+    }),
+  );
+  app.route(
+    "/",
+    createRoutingConfigRoutes({
+      routingConfigDal,
+      ws: opts.connectionManager
+        ? {
+            connectionManager: opts.connectionManager,
+            cluster: opts.wsCluster,
+          }
+        : undefined,
     }),
   );
   app.route("/", createPlanRoutes(container));

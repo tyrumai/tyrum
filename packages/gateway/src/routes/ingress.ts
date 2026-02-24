@@ -14,12 +14,14 @@ import type { AgentRegistry } from "../modules/agent/registry.js";
 import type { TelegramChannelQueue } from "../modules/channels/telegram.js";
 import { renderMarkdownForTelegram, type TelegramFormattingFallbackEvent } from "../modules/markdown/telegram.js";
 import { loadRoutingConfig, resolveTelegramAgentId } from "../modules/channels/routing.js";
+import type { RoutingConfigDal } from "../modules/channels/routing-config-dal.js";
 import type { MemoryDal } from "../modules/memory/dal.js";
 
 export interface IngressDeps {
   telegramBot?: TelegramBot;
   agents?: AgentRegistry;
   telegramQueue?: TelegramChannelQueue;
+  routingConfigDal?: RoutingConfigDal;
   memoryDal?: MemoryDal;
   home?: string;
 }
@@ -88,7 +90,8 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
     }
 
     const home = deps.home?.trim() || process.env["TYRUM_HOME"]?.trim() || undefined;
-    const routing = home ? await loadRoutingConfig(home) : { v: 1 };
+    const durable = deps.routingConfigDal ? await deps.routingConfigDal.getLatest() : undefined;
+    const routing = durable?.config ?? (home ? await loadRoutingConfig(home) : { v: 1 });
     const routedAgentId = c.req.query("agent_id")?.trim() || resolveTelegramAgentId(routing, chatId);
 
     if (deps.telegramQueue) {
