@@ -17,7 +17,7 @@ function sortValue(value: unknown): unknown {
     return value.map(sortValue);
   }
   if (isPlainObject(value)) {
-    const sortedKeys = Object.keys(value).sort((a, b) => a.localeCompare(b));
+    const sortedKeys = Object.keys(value).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
     const out: Record<string, unknown> = {};
     for (const key of sortedKeys) {
       out[key] = sortValue(value[key]);
@@ -26,4 +26,3 @@ function sortValue(value: unknown): unknown {
   }
   return value;
 }
-
