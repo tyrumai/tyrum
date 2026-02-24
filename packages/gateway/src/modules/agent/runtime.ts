@@ -1452,6 +1452,32 @@ export class AgentRuntime {
     return this.lastContextReport;
   }
 
+  private prepareLaneQueueStep(
+    laneQueue: LaneQueueState | undefined,
+    messages: Array<ModelMessage>,
+  ): { messages: Array<ModelMessage> } {
+    let preparedMessages = messages;
+    if (laneQueue) {
+      if (laneQueue.interruptError) throw laneQueue.interruptError;
+
+      const injectionTexts = laneQueue.pendingInjectionTexts.splice(0, laneQueue.pendingInjectionTexts.length);
+      laneQueue.cancelToolCalls = false;
+      if (injectionTexts.length > 0) {
+        preparedMessages = [
+          ...preparedMessages,
+          ...injectionTexts.map((text) => ({
+            role: "user" as const,
+            content: [{ type: "text" as const, text }],
+          })),
+        ];
+      }
+    }
+
+    return {
+      messages: applyDeterministicContextCompactionAndToolPruning(preparedMessages),
+    };
+  }
+
   async turnStream(input: AgentTurnRequestT): Promise<{
     streamResult: ReturnType<typeof streamText>;
     sessionId: string;
@@ -1471,28 +1497,7 @@ export class AgentRuntime {
       ],
       tools: toolSet,
       stopWhen: [stepCountIs(this.maxSteps)],
-      prepareStep: ({ messages }) => {
-        let preparedMessages = messages;
-        if (laneQueue) {
-          if (laneQueue.interruptError) throw laneQueue.interruptError;
-
-          const injectionTexts = laneQueue.pendingInjectionTexts.splice(0, laneQueue.pendingInjectionTexts.length);
-          laneQueue.cancelToolCalls = false;
-          if (injectionTexts.length > 0) {
-            preparedMessages = [
-              ...preparedMessages,
-              ...injectionTexts.map((text) => ({
-                role: "user" as const,
-                content: [{ type: "text" as const, text }],
-              })),
-            ];
-          }
-        }
-
-        return {
-          messages: applyDeterministicContextCompactionAndToolPruning(preparedMessages),
-        };
-      },
+      prepareStep: ({ messages }) => this.prepareLaneQueueStep(laneQueue, messages),
     });
 
 	    const finalize = async (): Promise<AgentTurnResponseT> => {
@@ -1527,28 +1532,7 @@ export class AgentRuntime {
       ],
       tools: toolSet,
       stopWhen: [stepCountIs(this.maxSteps)],
-      prepareStep: ({ messages }) => {
-        let preparedMessages = messages;
-        if (laneQueue) {
-          if (laneQueue.interruptError) throw laneQueue.interruptError;
-
-          const injectionTexts = laneQueue.pendingInjectionTexts.splice(0, laneQueue.pendingInjectionTexts.length);
-          laneQueue.cancelToolCalls = false;
-          if (injectionTexts.length > 0) {
-            preparedMessages = [
-              ...preparedMessages,
-              ...injectionTexts.map((text) => ({
-                role: "user" as const,
-                content: [{ type: "text" as const, text }],
-              })),
-            ];
-          }
-        }
-
-        return {
-          messages: applyDeterministicContextCompactionAndToolPruning(preparedMessages),
-        };
-      },
+      prepareStep: ({ messages }) => this.prepareLaneQueueStep(laneQueue, messages),
       abortSignal: opts?.abortSignal,
       timeout: opts?.timeoutMs,
     });

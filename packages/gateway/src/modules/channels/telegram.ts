@@ -14,7 +14,8 @@ import type { SqlDb } from "../../statestore/types.js";
 import type { Logger } from "../observability/logger.js";
 import { ChannelInboxDal, type ChannelInboxRow } from "./inbox-dal.js";
 import { ChannelOutboxDal } from "./outbox-dal.js";
-import { LaneQueueSignalDal } from "../lanes/queue-signal-dal.js";
+import { LaneQueueInterruptError, LaneQueueSignalDal } from "../lanes/queue-signal-dal.js";
+import { releaseLaneLease } from "../lanes/lane-lease.js";
 import { renderMarkdownForTelegram } from "../markdown/telegram.js";
 import type { AgentRegistry } from "../agent/registry.js";
 import type { ApprovalDal } from "../approval/dal.js";
@@ -229,23 +230,6 @@ async function tryAcquireLaneLease(db: SqlDb, opts: {
       [opts.owner, expiresAt, opts.key, opts.lane, opts.now_ms, opts.owner],
     );
     return updated.changes === 1;
-  });
-}
-
-async function releaseLaneLease(db: SqlDb, opts: { key: string; lane: string; owner: string }): Promise<void> {
-  await db.transaction(async (tx) => {
-    const res = await tx.run(
-      `DELETE FROM lane_leases
-       WHERE key = ? AND lane = ? AND lease_owner = ?`,
-      [opts.key, opts.lane, opts.owner],
-    );
-
-    if (res.changes === 1) {
-      await tx.run(
-        "DELETE FROM lane_queue_signals WHERE key = ? AND lane = ?",
-        [opts.key, opts.lane],
-      );
-    }
   });
 }
 
@@ -702,6 +686,20 @@ export class TelegramChannelProcessor {
       });
       reply = result.reply ?? "";
     } catch (err) {
+      if (err instanceof LaneQueueInterruptError) {
+        this.logger?.info("channels.ingress.agent_interrupted", {
+          inbox_id: leader.inbox_id,
+          source: leader.source,
+          connector: connectorId,
+          account_id: accountId,
+          thread_id: leader.thread_id,
+          error: err.message,
+        });
+        for (const row of rows) {
+          await this.inbox.markCompleted(row.inbox_id, this.owner, "");
+        }
+        return;
+      }
       const message = err instanceof Error ? err.message : String(err);
       this.logger?.warn("channels.ingress.agent_failed", {
         inbox_id: leader.inbox_id,
