@@ -1600,6 +1600,8 @@ export class AgentRuntime {
 
     const startMs = Date.now();
     const deadlineMs = startMs + this.turnEngineWaitMs;
+    let laneQueueInterrupted = false;
+    let laneQueueInterruptReason: string | undefined;
 
     const executor: StepExecutor = {
       execute: async (action, _planId, _stepIndex, timeoutMs) => {
@@ -1629,6 +1631,12 @@ export class AgentRuntime {
           if (controller.signal.aborted) {
             return { success: false, error: `timed out after ${String(effectiveTimeoutMs)}ms` };
           }
+          if (err instanceof LaneQueueInterruptError) {
+            laneQueueInterrupted = true;
+            laneQueueInterruptReason = err.message;
+            await this.executionEngine.cancelRun(runId, err.message);
+            return { success: false, error: err.message };
+          }
           const message = err instanceof Error ? err.message : String(err);
           return { success: false, error: message };
         } finally {
@@ -1652,12 +1660,19 @@ export class AgentRuntime {
         throw new Error("execution engine turn completed without a result payload");
       }
 
-      if (row.status === "failed" || row.status === "cancelled") {
+      if (row.status === "failed") {
         const failure = await this.loadTurnFailureFromRun(runId);
         const reason =
-          row.status === "failed"
-            ? failure ?? row.paused_detail ?? row.paused_reason ?? `execution run ${row.status}`
-            : row.paused_detail ?? row.paused_reason ?? failure ?? `execution run ${row.status}`;
+          failure ?? row.paused_detail ?? row.paused_reason ?? `execution run ${row.status}`;
+        throw new Error(reason);
+      }
+
+      if (row.status === "cancelled") {
+        if (laneQueueInterrupted) {
+          throw new LaneQueueInterruptError(laneQueueInterruptReason);
+        }
+        const failure = await this.loadTurnFailureFromRun(runId);
+        const reason = row.paused_detail ?? row.paused_reason ?? failure ?? `execution run ${row.status}`;
         throw new Error(reason);
       }
 
