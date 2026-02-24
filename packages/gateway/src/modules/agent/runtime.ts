@@ -103,8 +103,8 @@ function coerceSecretHandle(value: unknown): SecretHandleT | undefined {
   if (!record) return undefined;
   const handleId = typeof record["handle_id"] === "string" ? record["handle_id"].trim() : "";
   const provider = typeof record["provider"] === "string" ? record["provider"].trim() : "";
-  const scope = typeof record["scope"] === "string" ? record["scope"] : "";
-  const createdAt = typeof record["created_at"] === "string" ? record["created_at"] : "";
+  const scope = typeof record["scope"] === "string" ? record["scope"].trim() : "";
+  const createdAt = typeof record["created_at"] === "string" ? record["created_at"].trim() : "";
   if (!handleId || !provider || !scope || !createdAt) return undefined;
   if (provider !== "env" && provider !== "file" && provider !== "keychain") return undefined;
   return {
@@ -3131,6 +3131,7 @@ export class AgentRuntime {
               const matches =
                 ctx?.["source"] === "agent-tool-execution" &&
                 ctx["tool_id"] === toolDesc.id &&
+                ctx["tool_call_id"] === toolCallId &&
                 ctx["tool_match_target"] === state.matchTarget;
 
               if (!approved || !matches) {
