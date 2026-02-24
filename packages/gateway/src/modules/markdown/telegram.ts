@@ -72,8 +72,9 @@ function chunkPlainTextForTelegramHtml(plainText: string, maxChars: number): str
     else if (lastSpaceBreak > offset) cut = lastSpaceBreak;
 
     if (cut <= offset) {
-      const escaped = escapeTelegramHtmlText(text.slice(offset, offset + 1));
-      chunks.push(escaped);
+      const char = text[offset]!;
+      const escaped = escapeTelegramHtmlText(char);
+      chunks.push(escaped.length <= max ? escaped : char);
       offset += 1;
       continue;
     }

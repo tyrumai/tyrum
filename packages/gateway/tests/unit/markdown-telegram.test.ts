@@ -85,13 +85,13 @@ describe("renderMarkdownForTelegram", () => {
     expect(chunks).toEqual(["label"]);
   });
 
-  it("does not split HTML entities across fallback chunks when maxChars is smaller than an entity length", () => {
-    const chunks = renderMarkdownForTelegram("```ts\n&<\n```", { maxChars: 1 });
+  it("keeps fallback chunks within maxChars even when escaping expands a single character beyond maxChars", () => {
+    const maxChars = 1;
+    const chunks = renderMarkdownForTelegram("&<", { maxChars });
     expect(chunks.length).toBeGreaterThan(0);
     for (const chunk of chunks) {
-      expect(chunk).not.toMatch(/&(?!(amp;|lt;|gt;))/);
+      expect(chunk.length).toBeLessThanOrEqual(maxChars);
     }
-    expect(chunks.some((chunk) => chunk.includes("&amp;"))).toBe(true);
-    expect(chunks.some((chunk) => chunk.includes("&lt;"))).toBe(true);
+    expect(chunks.join("")).toBe("&<");
   });
 });
