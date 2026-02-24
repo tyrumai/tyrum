@@ -3,6 +3,7 @@ import { executeCommand } from "../../src/modules/commands/dispatcher.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
+import type { ModelsDevService } from "../../src/modules/models/models-dev-service.js";
 
 describe("missing slash commands", () => {
   let db: ReturnType<typeof openTestSqliteDb> | undefined;
@@ -235,6 +236,52 @@ describe("missing slash commands", () => {
     } finally {
       process.env["TYRUM_AUTH_PROFILES_ENABLED"] = prevEnabled;
     }
+  });
+
+  it("rejects /model <provider/model> when the model is missing from models.dev catalog", async () => {
+    db = openTestSqliteDb();
+
+    const modelsDev: ModelsDevService = {
+      ensureLoaded: async () => ({
+        catalog: {
+          openai: {
+            id: "openai",
+            name: "OpenAI",
+            env: [],
+            npm: "@ai-sdk/openai",
+            models: {
+              "gpt-4.1": { id: "gpt-4.1", name: "GPT-4.1" },
+            },
+          },
+        },
+        status: {
+          source: "bundled",
+          fetched_at: null,
+          updated_at: new Date().toISOString(),
+          etag: null,
+          sha256: "sha",
+          provider_count: 1,
+          model_count: 1,
+          last_error: null,
+        },
+      }),
+    } as unknown as ModelsDevService;
+
+    const result = await executeCommand("/model openai/not-a-real-model", {
+      db,
+      modelsDev,
+      commandContext: { agentId: "default", channel: "ui", threadId: "thread-1" },
+    });
+
+    expect(result.data).toBeNull();
+
+    const stored = await db.get<{ model_id: string }>(
+      `SELECT model_id
+       FROM session_model_overrides
+       WHERE agent_id = ? AND session_id = ?`,
+      ["default", "ui:thread-1"],
+    );
+    expect(stored).toBeUndefined();
   });
 
   it("supports /queue <collect|followup|steer|steer_backlog|interrupt>", async () => {

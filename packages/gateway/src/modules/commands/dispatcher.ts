@@ -438,6 +438,16 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
     }
 
     const providerId = modelIdRaw.slice(0, slash);
+    const modelId = modelIdRaw.slice(slash + 1);
+
+    if (deps.modelsDev) {
+      const loaded = await deps.modelsDev.ensureLoaded();
+      const provider = loaded.catalog[providerId];
+      const model = provider?.models?.[modelId];
+      if (!provider || !model) {
+        return { output: `Model '${modelIdRaw}' not found in models.dev catalog.`, data: null };
+      }
+    }
 
     const row = await overrides.upsert({
       agentId,
