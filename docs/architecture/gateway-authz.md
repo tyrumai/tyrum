@@ -141,6 +141,13 @@ Requirements:
 - When `trusted_proxies` is unset, treat forwarding headers as untrusted data and derive client IP from the socket.
 - When the gateway is exposed beyond loopback, require auth and require device-bound tokens; do not rely on IP-based trust.
 
+Configuration:
+
+- Set `GATEWAY_TRUSTED_PROXIES` to a comma-separated list of IPs and/or CIDR subnets (example: `127.0.0.1,::1,10.0.0.0/8`).
+- Avoid overly-broad ranges (for example `/0`); the gateway rejects `/0` allowlists to prevent accidentally trusting every hop.
+- When set and the socket remote address matches the allowlist, the gateway derives the client IP from `Forwarded` (preferred), then `X-Forwarded-For`, then `X-Real-IP` (falling back to the socket IP if parsing fails).
+- When unset, forwarding headers are ignored and the client IP is always taken from the socket.
+
 ## TLS and pinning
 
 Remote operation requires TLS (direct or terminated at a proxy).

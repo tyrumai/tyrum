@@ -19,6 +19,7 @@ import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { PolicyOverrideDal } from "../modules/policy/override-dal.js";
 import type { PolicyService } from "../modules/policy/service.js";
+import { getClientIp } from "../modules/auth/client-ip.js";
 
 export interface PolicyBundleRouteDeps {
   policyService: PolicyService;
@@ -107,7 +108,7 @@ export function createPolicyBundleRoutes(deps: PolicyBundleRouteDeps): Hono {
 
     const createdBy = parsed.data.created_by ?? {
       kind: "http",
-      ip: c.req.header("x-forwarded-for") ?? undefined,
+      ip: getClientIp(c),
       user_agent: c.req.header("user-agent") ?? undefined,
     };
 
@@ -143,7 +144,7 @@ export function createPolicyBundleRoutes(deps: PolicyBundleRouteDeps): Hono {
 
     const revokedBy = {
       kind: "http",
-      ip: c.req.header("x-forwarded-for") ?? undefined,
+      ip: getClientIp(c),
       user_agent: c.req.header("user-agent") ?? undefined,
     };
 

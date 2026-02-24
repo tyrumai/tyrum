@@ -6,10 +6,11 @@ env:
   GATEWAY_HOST: 0.0.0.0
   GATEWAY_PORT: "8788"
   TYRUM_TLS_READY: "1"
+  # Optional: trusted reverse proxy allowlist (comma-separated IPs/CIDRs).
+  GATEWAY_TRUSTED_PROXIES: ""
   GATEWAY_DB_PATH: /var/lib/tyrum/gateway.db
   TYRUM_ENGINE_API_ENABLED: "1"
   TYRUM_SECRET_PROVIDER: env
 
 persistence:
   enabled: true
-

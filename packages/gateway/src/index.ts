@@ -58,6 +58,11 @@ export type { WsRouteOptions } from "./routes/ws.js";
 export { ConnectionManager } from "./ws/connection-manager.js";
 export type { ConnectedClient, ConnectionStats } from "./ws/connection-manager.js";
 
+export function formatFatalErrorForConsole(error: unknown): string {
+  void error;
+  return "Error";
+}
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const LOOPBACK_HOSTNAMES = new Set(["localhost"]);
@@ -1388,8 +1393,7 @@ if (isMain) {
       }
     })
     .catch((error) => {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`error: ${message}`);
+      console.error(`error: ${formatFatalErrorForConsole(error)}`);
       process.exit(1);
     });
 }

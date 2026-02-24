@@ -20,6 +20,10 @@ env:
   GATEWAY_PORT: "8788"
   # Remote deployments should be fronted by TLS termination (Ingress/reverse proxy).
   TYRUM_TLS_READY: "1"
+  # Optional: trusted reverse proxy allowlist (comma-separated IPs/CIDRs).
+  # When unset, the gateway ignores Forwarded/X-Forwarded-For/X-Real-IP headers
+  # and derives the client IP from the socket.
+  GATEWAY_TRUSTED_PROXIES: ""
   GATEWAY_DB_PATH: /var/lib/tyrum/gateway.db
   # Enable durable workflow APIs and engine-backed WS control plane.
   TYRUM_ENGINE_API_ENABLED: "1"
