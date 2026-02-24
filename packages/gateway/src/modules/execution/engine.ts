@@ -3,7 +3,6 @@ import type {
   ArtifactRef as ArtifactRefT,
   AttemptCost as AttemptCostT,
   ClientCapability as ClientCapabilityT,
-  Decision as DecisionT,
   ExecutionBudgets as ExecutionBudgetsT,
   WsEventEnvelope as WsEventEnvelopeT,
   WsRequestEnvelope as WsRequestEnvelopeT,
@@ -12,7 +11,6 @@ import {
   evaluatePostcondition,
   Lane,
   DEFAULT_WORKSPACE_ID,
-  PolicyBundle,
   PostconditionError,
   requiredCapability,
   requiresPostcondition,
@@ -26,7 +24,6 @@ import type { Logger } from "../observability/logger.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { PolicyService } from "../policy/service.js";
 import { canonicalizeToolMatchTarget } from "../policy/match-target.js";
-import { wildcardMatch } from "../policy/wildcard.js";
 import type { SecretProvider } from "../secret/provider.js";
 
 export interface StepResult {
@@ -327,71 +324,6 @@ export class ExecutionEngine {
     } catch {
       return handleIds;
     }
-  }
-
-  private mostRestrictiveDecision(a: DecisionT, b: DecisionT): DecisionT {
-    if (a === "deny" || b === "deny") return "deny";
-    if (a === "require_approval" || b === "require_approval") return "require_approval";
-    return "allow";
-  }
-
-  private evaluateDomain(domain: {
-    default: DecisionT;
-    allow: readonly string[];
-    require_approval: readonly string[];
-    deny: readonly string[];
-  }, matchTarget: string): DecisionT {
-    const target = matchTarget.trim();
-
-    for (const pat of domain.deny) {
-      if (wildcardMatch(pat, target)) return "deny";
-    }
-    for (const pat of domain.require_approval) {
-      if (wildcardMatch(pat, target)) return "require_approval";
-    }
-    for (const pat of domain.allow) {
-      if (wildcardMatch(pat, target)) return "allow";
-    }
-
-    return domain.default;
-  }
-
-  private async evaluateSecretsDecisionTx(
-    tx: SqlDb,
-    policySnapshotId: string | null,
-    secretScopes: readonly string[],
-  ): Promise<DecisionT> {
-    if (secretScopes.length === 0) return "allow";
-
-    const id = policySnapshotId?.trim() ?? "";
-    if (!id) return "require_approval";
-
-    const row = await tx.get<{ bundle_json: string }>(
-      "SELECT bundle_json FROM policy_snapshots WHERE policy_snapshot_id = ?",
-      [id],
-    );
-    if (!row?.bundle_json) return "require_approval";
-
-    const bundle = (() => {
-      try {
-        return PolicyBundle.parse(JSON.parse(row.bundle_json) as unknown);
-      } catch {
-        return PolicyBundle.parse({ v: 1 });
-      }
-    })();
-
-    const secretsDomain = {
-      default: bundle.secrets?.default ?? ("require_approval" as const),
-      allow: bundle.secrets?.allow ?? [],
-      require_approval: bundle.secrets?.require_approval ?? [],
-      deny: bundle.secrets?.deny ?? [],
-    } as const;
-
-    let decision: DecisionT = "allow";
-    for (const scope of secretScopes) {
-      decision = this.mostRestrictiveDecision(decision, this.evaluateDomain(secretsDomain, scope));
-    }
-    return decision;
   }
 
   private async isApprovedPolicyGateTx(tx: SqlDb, approvalId: number | null): Promise<boolean> {
@@ -1368,20 +1300,22 @@ export class ExecutionEngine {
       }
 
       const policy = this.policyService;
-      const shouldEnforceSecretsPolicy = Boolean(policy?.isEnabled() && !policy?.isObserveOnly());
       if (
-        shouldEnforceSecretsPolicy &&
+        policy &&
+        policy.isEnabled() &&
+        !policy.isObserveOnly() &&
         parsedAction &&
         (actionType === "CLI" || actionType === "Http")
       ) {
         const secretScopes = await this.resolveSecretScopesFromArgs(parsedAction.args ?? {});
 
         if (secretScopes.length > 0) {
-          const secretsDecision = await this.evaluateSecretsDecisionTx(
-            tx,
-            run.policy_snapshot_id,
-            secretScopes,
-          );
+          const secretsDecision = (
+            await policy.evaluateSecretsFromSnapshot({
+              policySnapshotId: run.policy_snapshot_id,
+              secretScopes,
+            })
+          ).decision;
 
           if (secretsDecision === "deny") {
             const stepFailed = await tx.run(

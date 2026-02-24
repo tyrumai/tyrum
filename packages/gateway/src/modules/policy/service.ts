@@ -257,6 +257,86 @@ export class PolicyService {
     });
   }
 
+  async evaluateSecretsFromSnapshot(params: {
+    policySnapshotId: string | null;
+    secretScopes: readonly string[];
+  }): Promise<PolicyEvaluation> {
+    if (params.secretScopes.length === 0) {
+      const record: PolicyDecisionT = { decision: "allow", rules: [] };
+      return {
+        decision: "allow",
+        policy_snapshot: undefined,
+        applied_override_ids: undefined,
+        decision_record: record,
+      };
+    }
+
+    const id = params.policySnapshotId?.trim() ?? "";
+    if (!id) {
+      const record: PolicyDecisionT = {
+        decision: "require_approval",
+        rules: [
+          {
+            rule: "secrets",
+            outcome: "require_approval",
+            detail: "missing policy snapshot id",
+          },
+        ],
+      };
+      return {
+        decision: "require_approval",
+        policy_snapshot: undefined,
+        applied_override_ids: undefined,
+        decision_record: record,
+      };
+    }
+
+    const snapshot = await this.opts.snapshotDal.getById(id);
+    if (!snapshot) {
+      const record: PolicyDecisionT = {
+        decision: "require_approval",
+        rules: [
+          {
+            rule: "secrets",
+            outcome: "require_approval",
+            detail: `missing policy snapshot: ${id}`,
+          },
+        ],
+      };
+      return {
+        decision: "require_approval",
+        policy_snapshot: undefined,
+        applied_override_ids: undefined,
+        decision_record: record,
+      };
+    }
+
+    const secretsDomain = normalizeDomain(snapshot.bundle.secrets, "require_approval");
+
+    let decision: Decision = "allow";
+    for (const scope of params.secretScopes) {
+      decision = mostRestrictive(decision, evaluateDomain(secretsDomain, scope));
+    }
+
+    const decisionRecord: PolicyDecisionT = {
+      decision,
+      rules: [
+        {
+          rule: "secrets",
+          outcome: decision,
+          detail: `scopes=${params.secretScopes.length}`,
+        },
+      ],
+    };
+
+    return {
+      decision,
+      policy_snapshot: snapshot,
+      applied_override_ids: undefined,
+      decision_record: decisionRecord,
+    };
+  }
+
   private async evaluateToolCallAgainstBundle(params: {
     bundle: PolicyBundleT;
     snapshot: PolicySnapshotRow;
