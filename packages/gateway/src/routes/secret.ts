@@ -9,10 +9,12 @@ import { Hono } from "hono";
 import { SecretRotateRequest, SecretStoreRequest } from "@tyrum/schemas";
 import { EnvSecretProvider, type SecretProvider } from "../modules/secret/provider.js";
 import type { AuthProfileDal } from "../modules/models/auth-profile-dal.js";
+import type { Logger } from "../modules/observability/logger.js";
 
 export interface SecretRouteDeps {
   secretProviderForAgent: (agentId: string) => Promise<SecretProvider>;
   authProfileDal?: AuthProfileDal;
+  logger?: Logger;
 }
 
 function agentIdFromReq(c: { req: { query: (key: string) => string | undefined; header: (key: string) => string | undefined } }): string {
@@ -192,9 +194,10 @@ export function createSecretRoutes(deps: SecretRouteDeps): Hono {
   /** Revoke a secret by handle ID. */
   app.delete("/secrets/:id", async (c) => {
     const handleId = c.req.param("id");
+    const agentId = agentIdFromReq(c);
     let secretProvider: SecretProvider;
     try {
-      secretProvider = await deps.secretProviderForAgent(agentIdFromReq(c));
+      secretProvider = await deps.secretProviderForAgent(agentId);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: "invalid_request", message }, 400);
@@ -202,11 +205,27 @@ export function createSecretRoutes(deps: SecretRouteDeps): Hono {
     const revoked = await secretProvider.revoke(handleId);
 
     if (deps.authProfileDal) {
-      await disableAuthProfilesReferencingSecretHandleId({
-        authProfileDal: deps.authProfileDal,
-        agentId: agentIdFromReq(c),
-        handleId,
-      });
+      try {
+        await disableAuthProfilesReferencingSecretHandleId({
+          authProfileDal: deps.authProfileDal,
+          agentId,
+          handleId,
+        });
+      } catch (err) {
+        const error = err instanceof Error ? err.message : String(err);
+        const fields = {
+          agent_id: agentId,
+          handle_id: handleId,
+          error,
+          revoked,
+        };
+        if (deps.logger) {
+          deps.logger.warn("secret.revoke.auth_profiles_disable_failed", fields);
+        } else {
+          // eslint-disable-next-line no-console
+          console.warn(`secret.revoke.auth_profiles_disable_failed ${JSON.stringify(fields)}`);
+        }
+      }
     }
 
     if (!revoked) {
