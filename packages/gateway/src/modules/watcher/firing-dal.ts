@@ -86,7 +86,7 @@ export class WatcherFiringDal {
          updated_at
        )
        VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)
-       ON CONFLICT (watcher_id, scheduled_at_ms) DO NOTHING`,
+       ON CONFLICT DO NOTHING`,
       [
         input.firingId,
         input.watcherId,

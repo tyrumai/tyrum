@@ -241,7 +241,14 @@ export class WatcherProcessor {
     );
 
     if (!inserted) {
-      return false;
+      // Replay marker exists already. This normally indicates the nonce was
+      // handled, but a prior process may have crashed after writing the episodic
+      // event and before creating the durable watcher_firings row. Only reject
+      // the replay if the durable firing exists as well.
+      const existing = await this.firingDal.getById(firingId);
+      if (existing) {
+        return false;
+      }
     }
 
     const maxScheduledAtSearch = 1_000;

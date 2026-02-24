@@ -147,6 +147,56 @@ describe("WatcherProcessor", () => {
     expect(payload["firingId"]).toBe(`webhook-${String(id)}-${replayDigest}`);
   });
 
+  it("repairs missing durable webhook firings on replay", async () => {
+    const id = await processor.createWatcher("plan-1", "webhook", {
+      secret_handle: {
+        handle_id: "secret-handle",
+        provider: "file",
+        scope: "watcher:webhook:test",
+        created_at: new Date().toISOString(),
+      },
+    });
+    const watcher = await processor.getActiveWatcherById(id);
+    expect(watcher).not.toBeNull();
+
+    const timestampMs = Date.now();
+    const nonce = "nonce-repair-1";
+    const replayDigest = createHash("sha256").update(nonce).digest("hex");
+    const firingId = `webhook-${String(id)}-${replayDigest}`;
+    const eventId = `watcher-${String(id)}-webhook-${replayDigest}`;
+
+    // Simulate a crash after recording the replay marker episodic event but before
+    // creating the durable watcher_firings row.
+    const inserted = await memoryDal.insertEpisodicEventIfAbsent(
+      eventId,
+      new Date(timestampMs).toISOString(),
+      "watcher",
+      "webhook_fired",
+      { firingId, watcherId: id, planId: "plan-1" },
+    );
+    expect(inserted).toBe(true);
+
+    const repaired = await processor.recordWebhookTrigger(watcher!, {
+      timestampMs,
+      nonce,
+      bodySha256: "abc123",
+      bodyBytes: 11,
+    });
+    expect(repaired).toBe(true);
+
+    const firings = await db.all<{ firing_id: string }>("SELECT firing_id FROM watcher_firings");
+    expect(firings).toHaveLength(1);
+    expect(firings[0]!.firing_id).toBe(firingId);
+
+    const replay = await processor.recordWebhookTrigger(watcher!, {
+      timestampMs,
+      nonce,
+      bodySha256: "abc123",
+      bodyBytes: 11,
+    });
+    expect(replay).toBe(false);
+  });
+
   it("rejects webhook nonce replays even when timestamp differs", async () => {
     const id = await processor.createWatcher("plan-1", "webhook", {
       secret_handle: {
