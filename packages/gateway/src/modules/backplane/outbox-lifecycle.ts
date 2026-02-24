@@ -9,6 +9,9 @@ const OUTBOX_RETENTION_ENV = "TYRUM_OUTBOX_RETENTION_MS";
 const OUTBOX_TICK_ENV = "TYRUM_OUTBOX_COMPACTION_TICK_MS";
 const OUTBOX_BATCH_ENV = "TYRUM_OUTBOX_COMPACTION_BATCH_SIZE";
 
+const PG_COMPACTION_LOCK_KEY1 = 1959359839; // "tyru" as int-ish
+const PG_COMPACTION_LOCK_KEY2 = 1868961640; // "obxc" as int-ish
+
 export interface OutboxLifecycleSchedulerClock {
   nowMs: number;
   nowIso: string;
@@ -101,23 +104,62 @@ export class OutboxLifecycleScheduler {
     if (this.ticking) return;
     this.ticking = true;
     try {
-      if (this.clock) {
-        const { nowMs } = this.clock();
-        const cutoffIso = new Date(nowMs - this.retentionMs).toISOString();
-        await this.pruneOutboxConsumers({ cutoffIso });
-        await this.pruneOutboxRows({ cutoffIso });
-        return;
-      }
+      await this.db.transaction(async (tx) => {
+        if (tx.kind === "postgres") {
+          const acquired = await this.tryAcquirePostgresLock(tx);
+          if (!acquired) return;
+          try {
+            await this.runCompaction(tx);
+          } finally {
+            await this.releasePostgresLock(tx);
+          }
+          return;
+        }
 
-      await this.pruneOutboxConsumers({ retentionMs: this.retentionMs });
-      await this.pruneOutboxRows({ retentionMs: this.retentionMs });
+        await this.runCompaction(tx);
+      });
     } finally {
       this.ticking = false;
     }
   }
 
-  private async pruneOutboxConsumers(input: { cutoffIso: string } | { retentionMs: number }): Promise<number> {
-    if (this.db.kind === "sqlite") {
+  private async runCompaction(db: SqlDb): Promise<void> {
+    if (this.clock) {
+      const { nowMs } = this.clock();
+      const cutoffIso = new Date(nowMs - this.retentionMs).toISOString();
+      await this.pruneOutboxConsumers(db, { cutoffIso });
+      await this.pruneOutboxRows(db, { cutoffIso });
+      return;
+    }
+
+    await this.pruneOutboxConsumers(db, { retentionMs: this.retentionMs });
+    await this.pruneOutboxRows(db, { retentionMs: this.retentionMs });
+  }
+
+  private async tryAcquirePostgresLock(db: SqlDb): Promise<boolean> {
+    const row = await db.get<{ locked: boolean }>(
+      "SELECT pg_try_advisory_lock(?, ?) AS locked",
+      [PG_COMPACTION_LOCK_KEY1, PG_COMPACTION_LOCK_KEY2],
+    );
+    return row?.locked ?? false;
+  }
+
+  private async releasePostgresLock(db: SqlDb): Promise<void> {
+    try {
+      await db.run(
+        "SELECT pg_advisory_unlock(?, ?)",
+        [PG_COMPACTION_LOCK_KEY1, PG_COMPACTION_LOCK_KEY2],
+      );
+    } catch {
+      // ignore best-effort unlock errors
+    }
+  }
+
+  private async pruneOutboxConsumers(
+    db: SqlDb,
+    input: { cutoffIso: string } | { retentionMs: number },
+  ): Promise<number> {
+    if (db.kind === "sqlite") {
       const cutoff = "cutoffIso" in input
         ? { clause: "datetime(updated_at) < datetime(?)", params: [input.cutoffIso] }
         : {
@@ -125,7 +167,7 @@ export class OutboxLifecycleScheduler {
             params: [Math.ceil(Math.max(1, input.retentionMs) / 1000)],
           };
 
-      return (await this.db.run(
+      return (await db.run(
         `DELETE FROM outbox_consumers
          WHERE consumer_id IN (
            SELECT consumer_id
@@ -142,7 +184,7 @@ export class OutboxLifecycleScheduler {
       ? { clause: "updated_at < ?", params: [input.cutoffIso] }
       : { clause: "updated_at < now() - (? * interval '1 millisecond')", params: [input.retentionMs] };
 
-    return (await this.db.run(
+    return (await db.run(
       `DELETE FROM outbox_consumers
        WHERE consumer_id IN (
          SELECT consumer_id
@@ -155,8 +197,11 @@ export class OutboxLifecycleScheduler {
     )).changes;
   }
 
-  private async pruneOutboxRows(input: { cutoffIso: string } | { retentionMs: number }): Promise<number> {
-    if (this.db.kind === "sqlite") {
+  private async pruneOutboxRows(
+    db: SqlDb,
+    input: { cutoffIso: string } | { retentionMs: number },
+  ): Promise<number> {
+    if (db.kind === "sqlite") {
       const cutoff = "cutoffIso" in input
         ? { clause: "datetime(created_at) < datetime(?)", params: [input.cutoffIso] }
         : {
@@ -164,7 +209,7 @@ export class OutboxLifecycleScheduler {
             params: [Math.ceil(Math.max(1, input.retentionMs) / 1000)],
           };
 
-      return (await this.db.run(
+      return (await db.run(
         `DELETE FROM outbox
          WHERE id IN (
            SELECT id
@@ -181,7 +226,7 @@ export class OutboxLifecycleScheduler {
       ? { clause: "created_at < ?", params: [input.cutoffIso] }
       : { clause: "created_at < now() - (? * interval '1 millisecond')", params: [input.retentionMs] };
 
-    return (await this.db.run(
+    return (await db.run(
       `DELETE FROM outbox
        WHERE id IN (
          SELECT id

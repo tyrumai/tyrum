@@ -120,7 +120,8 @@ The gateway enforces outbox retention by periodically pruning:
 - stale `outbox_consumers` rows on the same window
 
 Compaction runs on the `all` and `scheduler` gateway roles, with tick interval configurable via `TYRUM_OUTBOX_COMPACTION_TICK_MS` (default: 5 minutes).
-The maximum number of rows pruned per tick can be tuned via `TYRUM_OUTBOX_COMPACTION_BATCH_SIZE` (default: 10,000).
+The maximum number of rows pruned per tick can be tuned via `TYRUM_OUTBOX_COMPACTION_BATCH_SIZE` (default: 10,000; applied independently to `outbox` and `outbox_consumers` per tick).
+In Postgres deployments, the gateway uses an advisory lock so only one instance performs compaction at a time.
 
 ## Safety and privacy
 
