@@ -4,13 +4,14 @@
 
 import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
-import { ArtifactId, ArtifactKind, ArtifactRef } from "@tyrum/schemas";
-import type { ArtifactRef as ArtifactRefT, WsEventEnvelope } from "@tyrum/schemas";
+import { ArtifactId, ArtifactKind, ArtifactRef, DeviceTokenClaims } from "@tyrum/schemas";
+import type { ArtifactRef as ArtifactRefT, DeviceTokenClaims as DeviceTokenClaimsT, WsEventEnvelope } from "@tyrum/schemas";
 import type { ArtifactStore } from "../modules/artifact/store.js";
 import type { Logger } from "../modules/observability/logger.js";
 import type { PolicySnapshotDal } from "../modules/policy/snapshot-dal.js";
 import type { PolicyService } from "../modules/policy/service.js";
 import type { SqlDb } from "../statestore/types.js";
+import { enqueueWsBroadcastMessage } from "../ws/outbox.js";
 
 export interface ArtifactRouteDeps {
   db: SqlDb;
@@ -126,20 +127,24 @@ function synthArtifactRefFromRow(row: ExecutionArtifactRow): ArtifactRefT {
   };
 }
 
-async function enqueueWsEvent(db: SqlDb, evt: WsEventEnvelope): Promise<void> {
-  await db.run(
-    `INSERT INTO outbox (topic, target_edge_id, payload_json)
-     VALUES (?, ?, ?)`,
-    ["ws.broadcast", null, JSON.stringify({ message: evt })],
-  );
-}
-
 function requestIdForAudit(c: { req: { header(name: string): string | undefined }; res: { headers: Headers } }): string | undefined {
   const fromRequest = c.req.header("x-request-id")?.trim();
   if (fromRequest) return fromRequest;
   const fromResponse = c.res.headers.get("x-request-id")?.trim();
   if (fromResponse) return fromResponse;
   return undefined;
+}
+
+function authClaimsForAudit(c: { get?: (key: string) => unknown }): DeviceTokenClaimsT | undefined {
+  const rawGet = c.get;
+  if (typeof rawGet !== "function") return undefined;
+  try {
+    const raw = rawGet.call(c, "authClaims") as unknown;
+    const parsed = DeviceTokenClaims.safeParse(raw);
+    return parsed.success ? parsed.data : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 async function evaluateAccessDecision(
@@ -379,13 +384,15 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
           scope: { kind: "run", run_id: durableScope.run_id },
           payload: {
             artifact: ref,
+            policy_snapshot_id: row.policy_snapshot_id ?? null,
             fetched_by: {
               kind: "http",
               request_id: requestIdForAudit(c),
+              auth: authClaimsForAudit(c),
             },
           },
         };
-        await enqueueWsEvent(deps.db, evt);
+        await enqueueWsBroadcastMessage(deps.db, evt);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         deps.logger?.warn("artifact.fetched_emit_failed", {
@@ -418,13 +425,15 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
         scope: { kind: "run", run_id: durableScope.run_id },
         payload: {
           artifact: ref,
+          policy_snapshot_id: row.policy_snapshot_id ?? null,
           fetched_by: {
             kind: "http",
             request_id: requestIdForAudit(c),
+            auth: authClaimsForAudit(c),
           },
         },
       };
-      await enqueueWsEvent(deps.db, evt);
+      await enqueueWsBroadcastMessage(deps.db, evt);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       deps.logger?.warn("artifact.fetched_emit_failed", {

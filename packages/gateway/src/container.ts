@@ -137,9 +137,9 @@ function wireContainer(
 ): GatewayContainer {
   const memoryDal = new MemoryDalImpl(db);
   const contextReportDal = new ContextReportDalImpl(db);
-  const secretResolutionAuditDal = new SecretResolutionAuditDalImpl(db);
   const redactionEngine = opts?.redactionEngine ?? new RedactionEngine();
   const logger = new Logger({ base: { service: "tyrum-gateway" } });
+  const secretResolutionAuditDal = new SecretResolutionAuditDalImpl(db, logger);
   const eventLog = new EventLogImpl(db, redactionEngine, logger);
   const connectorCache = new InMemoryConnectorCache();
   const discoveryPipeline = new DiscoveryPipelineImpl(connectorCache, {

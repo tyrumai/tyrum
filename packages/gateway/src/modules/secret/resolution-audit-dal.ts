@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
-import type { SecretProviderKind } from "@tyrum/schemas";
+import type { SecretProviderKind, WsEventEnvelope } from "@tyrum/schemas";
+import type { Logger } from "../observability/logger.js";
 import type { SqlDb } from "../../statestore/types.js";
+import { enqueueWsBroadcastMessage } from "../../ws/outbox.js";
 
 export type SecretResolutionOutcome = "resolved" | "failed";
 
@@ -65,7 +67,10 @@ function toRow(raw: RawSecretResolutionRow): SecretResolutionRow {
 }
 
 export class SecretResolutionAuditDal {
-  constructor(private readonly db: SqlDb) {}
+  constructor(
+    private readonly db: SqlDb,
+    private readonly logger?: Logger,
+  ) {}
 
   async record(params: {
     toolCallId: string;
@@ -125,7 +130,46 @@ export class SecretResolutionAuditDal {
         occurredAt,
       ],
     );
-    if (inserted) return toRow(inserted);
+    if (inserted) {
+      const row = toRow(inserted);
+      try {
+        const evt: WsEventEnvelope = {
+          event_id: randomUUID(),
+          type: "secret.resolution",
+          occurred_at: row.occurred_at,
+          payload: {
+            requester: {
+              agent_id: row.agent_id,
+              workspace_id: row.workspace_id,
+              session_id: row.session_id,
+              channel: row.channel,
+              thread_id: row.thread_id,
+            },
+            resolution: {
+              secret_resolution_id: row.secret_resolution_id,
+              tool_call_id: row.tool_call_id,
+              tool_id: row.tool_id,
+              handle_id: row.handle_id,
+              provider: row.provider,
+              scope: row.scope,
+              policy_snapshot_id: row.policy_snapshot_id,
+              outcome: row.outcome,
+              error: row.error,
+              occurred_at: row.occurred_at,
+            },
+          },
+        };
+        await enqueueWsBroadcastMessage(this.db, evt);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger?.warn("secret.resolution_emit_failed", {
+          tool_call_id: row.tool_call_id,
+          handle_id: row.handle_id,
+          error: message,
+        });
+      }
+      return row;
+    }
 
     const existing = await this.db.get<RawSecretResolutionRow>(
       `SELECT *
@@ -142,4 +186,3 @@ export class SecretResolutionAuditDal {
     return toRow(existing);
   }
 }
-
