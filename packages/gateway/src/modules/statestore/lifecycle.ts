@@ -138,75 +138,101 @@ export class StateStoreLifecycleScheduler {
   }
 
   private async runOnce(db: SqlDb): Promise<void> {
-    const { nowMs } = this.clock();
+    const { nowMs, nowIso } = this.clock();
     const sessionsTtlDays = resolveSessionsTtlDays();
     const sessionsCutoffIso = new Date(nowMs - sessionsTtlDays * 24 * 60 * 60 * 1000).toISOString();
 
-    await this.pruneInBatches("sessions", () => this.pruneExpiredSessions(db, { cutoffIso: sessionsCutoffIso }));
-    await this.pruneInBatches(
+    const sessionsPruned = await this.pruneInBatches(
+      "sessions",
+      () => this.pruneExpiredSessions(db, { cutoffIso: sessionsCutoffIso }),
+    );
+    const presencePruned = await this.pruneInBatches(
       "presence_entries",
       () => this.pruneExpiredByMsColumn(db, { table: "presence_entries", pk: "instance_id", nowMs }),
     );
-    await this.pruneInBatches(
+    const directoryPruned = await this.pruneInBatches(
       "connection_directory",
       () => this.pruneExpiredByMsColumn(db, { table: "connection_directory", pk: "connection_id", nowMs }),
     );
-    await this.pruneInBatches(
+    const dedupePruned = await this.pruneInBatches(
       "channel_inbound_dedupe",
       () => this.pruneExpiredInboundDedupe(db, { nowMs }),
     );
+
+    if (sessionsPruned + presencePruned + directoryPruned + dedupePruned > 0) {
+      this.logger?.info("statestore.lifecycle_pruned", {
+        now: nowIso,
+        sessions: sessionsPruned,
+        presence_entries: presencePruned,
+        connection_directory: directoryPruned,
+        channel_inbound_dedupe: dedupePruned,
+      });
+    }
   }
 
   private async pruneInBatches(
     name: string,
     pruneOnce: () => Promise<number>,
-  ): Promise<void> {
+  ): Promise<number> {
+    let total = 0;
     for (let i = 0; i < this.maxBatchesPerTick; i += 1) {
       const changes = await pruneOnce();
-      if (changes < this.batchSize) return;
+      total += changes;
+      if (changes < this.batchSize) return total;
     }
     this.logger?.warn("statestore.lifecycle_prune_budget_exhausted", {
       task: name,
       batch_size: this.batchSize,
       max_batches: this.maxBatchesPerTick,
     });
+    return total;
   }
 
   private async pruneExpiredSessions(db: SqlDb, input: { cutoffIso: string }): Promise<number> {
-    const selectSql =
-      db.kind === "sqlite"
-        ? `SELECT session_id
-           FROM sessions
-           WHERE datetime(updated_at) < datetime(?)
-           ORDER BY datetime(updated_at) ASC
-           LIMIT ?`
-        : `SELECT session_id
-           FROM sessions
-           WHERE updated_at < ?
-           ORDER BY updated_at ASC
-           LIMIT ?`;
+    const sessionCutoff = db.kind === "sqlite"
+      ? {
+          clause: "datetime(updated_at) < datetime(?)",
+          order: "updated_at ASC",
+          params: [input.cutoffIso],
+        }
+      : { clause: "updated_at < ?", order: "updated_at ASC", params: [input.cutoffIso] };
 
-    const rows = await db.all<{ session_id: string }>(selectSql, [input.cutoffIso, this.batchSize]);
-    const sessionIds = rows
-      .map((r) => r.session_id)
-      .filter((v): v is string => typeof v === "string" && v.length > 0);
-    if (sessionIds.length === 0) return 0;
+    const batch = [...sessionCutoff.params, this.batchSize];
 
-    const placeholders = sessionIds.map(() => "?").join(", ");
     await db.run(
       `DELETE FROM session_provider_pins
-       WHERE session_id IN (${placeholders})`,
-      sessionIds,
+       WHERE session_id IN (
+         SELECT session_id
+         FROM sessions
+         WHERE ${sessionCutoff.clause}
+         ORDER BY ${sessionCutoff.order}
+         LIMIT ?
+       )`,
+      batch,
     );
+
     await db.run(
       `DELETE FROM context_reports
-       WHERE session_id IN (${placeholders})`,
-      sessionIds,
+       WHERE session_id IN (
+         SELECT session_id
+         FROM sessions
+         WHERE ${sessionCutoff.clause}
+         ORDER BY ${sessionCutoff.order}
+         LIMIT ?
+       )`,
+      batch,
     );
+
     return (await db.run(
       `DELETE FROM sessions
-       WHERE session_id IN (${placeholders})`,
-      sessionIds,
+       WHERE session_id IN (
+         SELECT session_id
+         FROM sessions
+         WHERE ${sessionCutoff.clause}
+         ORDER BY ${sessionCutoff.order}
+         LIMIT ?
+       )`,
+      batch,
     )).changes;
   }
 
@@ -245,4 +271,3 @@ export class StateStoreLifecycleScheduler {
     )).changes;
   }
 }
-
