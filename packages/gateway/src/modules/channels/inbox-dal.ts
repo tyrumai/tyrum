@@ -161,7 +161,7 @@ function extractTextFromNormalizedMessage(normalized: NormalizedThreadMessage): 
   if (content.kind === "text") {
     return { text: content.text.trim(), attachments: 0 };
   }
-  return { text: (content.caption ?? "").trim(), attachments: 0 };
+  return { text: (content.caption ?? "").trim(), attachments: 1 };
 }
 
 function summarizeText(value: string): string {

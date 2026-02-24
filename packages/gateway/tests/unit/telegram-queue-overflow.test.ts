@@ -49,6 +49,31 @@ function makeNormalizedTextMessage(input: {
   };
 }
 
+function makeLegacyMediaPlaceholderMessage(input: {
+  threadId: string;
+  messageId: string;
+  caption?: string;
+}): NormalizedThreadMessage {
+  const nowIso = new Date().toISOString();
+  return {
+    thread: {
+      id: input.threadId,
+      kind: "private",
+      title: undefined,
+      username: undefined,
+      pii_fields: [],
+    },
+    message: {
+      id: input.messageId,
+      thread_id: input.threadId,
+      source: "telegram",
+      content: { kind: "media_placeholder", media_kind: "photo", caption: input.caption },
+      timestamp: nowIso,
+      pii_fields: input.caption ? ["message_caption"] : [],
+    },
+  };
+}
+
 class InjectingOverflowDb implements SqlDb {
   readonly kind: SqlDb["kind"];
 
@@ -318,6 +343,43 @@ describe("Channel inbox queue overflow policies", () => {
     );
 
     expect(queued.map((row) => row.message_id)).toEqual(["msg-2"]);
+  });
+
+  it("summarize_dropped includes attachment counts for legacy media placeholders without envelopes", async () => {
+    process.env["TYRUM_CHANNEL_INBOUND_QUEUE_CAP"] = "1";
+    process.env["TYRUM_CHANNEL_INBOUND_QUEUE_OVERFLOW"] = "summarize_dropped";
+
+    const key = "agent:default:telegram:default:dm:chat-1";
+
+    await inbox.enqueue({
+      source: "telegram",
+      thread_id: "chat-1",
+      message_id: "media-1",
+      key,
+      lane: "main",
+      received_at_ms: 1_000,
+      payload: makeLegacyMediaPlaceholderMessage({ threadId: "chat-1", messageId: "media-1", caption: "first photo" }),
+    });
+
+    await inbox.enqueue({
+      source: "telegram",
+      thread_id: "chat-1",
+      message_id: "media-2",
+      key,
+      lane: "main",
+      received_at_ms: 2_000,
+      payload: makeLegacyMediaPlaceholderMessage({ threadId: "chat-1", messageId: "media-2", caption: "second photo" }),
+    });
+
+    const rows = await db.all<{ message_id: string; status: string; payload_json: string }>(
+      "SELECT message_id, status, payload_json FROM channel_inbox ORDER BY received_at_ms ASC, inbox_id ASC",
+    );
+    const synthetic = rows.find((row) => row.message_id.startsWith("queue_overflow:"));
+    expect(synthetic).toBeTruthy();
+    expect(synthetic?.status).toBe("queued");
+
+    const payload = JSON.parse(synthetic!.payload_json) as { message?: { content?: { text?: string } } };
+    expect(payload.message?.content?.text ?? "").toContain("attachments=1");
   });
 
   it("summarize_dropped replaces overflow with a synthetic follow-up message", async () => {
