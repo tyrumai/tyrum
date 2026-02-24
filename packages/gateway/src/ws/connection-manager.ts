@@ -19,7 +19,7 @@ export interface ConnectedClient {
   readonly device_id?: string;
   readonly protocol_rev: number;
   readonly capabilities: readonly ClientCapability[];
-  readonly readyCapabilities: Set<ClientCapability>;
+  readyCapabilities: Set<ClientCapability>;
   lastPong: number;
 }
 
@@ -59,8 +59,7 @@ export class ConnectionManager {
   ): string {
     const id = opts?.id ?? crypto.randomUUID();
     const role = opts?.role ?? "client";
-    const readyCapabilities = new Set<ClientCapability>();
-    for (const cap of capabilities) readyCapabilities.add(cap);
+    const readyCapabilities = new Set<ClientCapability>(capabilities);
     const client: ConnectedClient = {
       id,
       ws,
@@ -78,30 +77,11 @@ export class ConnectionManager {
     return id;
   }
 
-  /** Mark a capability as ready for a connected peer. */
-  markCapabilityReady(id: string, capability: ClientCapability): void {
-    const client = this.clients.get(id);
-    if (!client) return;
-    client.readyCapabilities.add(capability);
-  }
-
-  /** Mark multiple capabilities as ready for a connected peer. */
-  markCapabilitiesReady(id: string, capabilities: readonly ClientCapability[]): void {
-    const client = this.clients.get(id);
-    if (!client) return;
-    for (const cap of capabilities) {
-      client.readyCapabilities.add(cap);
-    }
-  }
-
   /** Replace the ready capabilities set for a connected peer. */
   setReadyCapabilities(id: string, capabilities: readonly ClientCapability[]): void {
     const client = this.clients.get(id);
     if (!client) return;
-    client.readyCapabilities.clear();
-    for (const cap of capabilities) {
-      client.readyCapabilities.add(cap);
-    }
+    client.readyCapabilities = new Set<ClientCapability>(capabilities);
   }
 
   /** Remove a client (e.g. on disconnect or eviction). */
