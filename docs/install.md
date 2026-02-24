@@ -69,6 +69,8 @@ From each `v*` release, download:
 
 Release workflow: `.github/workflows/release.yml`
 
+Release publishing is gated on the `ci` workflow passing for the tagged commit (`.github/workflows/ci.yml`).
+
 ## Release Channels and Naming
 
 - **stable**: `vYYYY.M.D` (npm dist-tag: `latest`)
