@@ -33,6 +33,10 @@ type UsageTotals = {
   usd_micros: number;
 };
 
+function escapeSqlLikePattern(value: string): string {
+  return value.replace(/([\\%_])/g, "\\$1");
+}
+
 function addOptional(total: number, value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? total + value : total;
 }
@@ -58,21 +62,59 @@ export function createUsageRoutes(deps: UsageRouteDeps): Hono {
 
   app.get("/usage", async (c) => {
     const runId = c.req.query("run_id")?.trim() || undefined;
+    const key = c.req.query("key")?.trim() || undefined;
+    const agentId = c.req.query("agent_id")?.trim() || undefined;
 
-    const rows = runId
-      ? await deps.db.all<{ cost_json: string | null }>(
-          `SELECT a.cost_json
-           FROM execution_attempts a
-           JOIN execution_steps s ON s.step_id = a.step_id
-           WHERE s.run_id = ?
-             AND a.cost_json IS NOT NULL`,
-          [runId],
-        )
-      : await deps.db.all<{ cost_json: string | null }>(
-          `SELECT cost_json
-           FROM execution_attempts
-           WHERE cost_json IS NOT NULL`,
-        );
+    const scopeParams = [runId ? "run_id" : null, key ? "key" : null, agentId ? "agent_id" : null].filter(
+      (value): value is string => value !== null,
+    );
+    if (scopeParams.length > 1) {
+      return c.json(
+        {
+          error: "invalid_request",
+          message: `usage scoping params are mutually exclusive: ${scopeParams.join(", ")}`,
+        },
+        400,
+      );
+    }
+
+    let rows: Array<{ cost_json: string | null }>;
+    if (runId) {
+      rows = await deps.db.all<{ cost_json: string | null }>(
+        `SELECT a.cost_json
+         FROM execution_attempts a
+         JOIN execution_steps s ON s.step_id = a.step_id
+         WHERE s.run_id = ?
+           AND a.cost_json IS NOT NULL`,
+        [runId],
+      );
+    } else if (key) {
+      rows = await deps.db.all<{ cost_json: string | null }>(
+        `SELECT a.cost_json
+         FROM execution_attempts a
+         JOIN execution_steps s ON s.step_id = a.step_id
+         JOIN execution_runs r ON r.run_id = s.run_id
+         WHERE r.key = ?
+           AND a.cost_json IS NOT NULL`,
+        [key],
+      );
+    } else if (agentId) {
+      rows = await deps.db.all<{ cost_json: string | null }>(
+        `SELECT a.cost_json
+         FROM execution_attempts a
+         JOIN execution_steps s ON s.step_id = a.step_id
+         JOIN execution_runs r ON r.run_id = s.run_id
+         WHERE r.key LIKE ? ESCAPE '\\'
+           AND a.cost_json IS NOT NULL`,
+        [`${escapeSqlLikePattern(`agent:${agentId}:`)}%`],
+      );
+    } else {
+      rows = await deps.db.all<{ cost_json: string | null }>(
+        `SELECT cost_json
+         FROM execution_attempts
+         WHERE cost_json IS NOT NULL`,
+      );
+    }
 
     const totals = newTotals();
     let parsed = 0;
@@ -130,8 +172,10 @@ export function createUsageRoutes(deps: UsageRouteDeps): Hono {
       status: "ok",
       generated_at: new Date().toISOString(),
       scope: {
-        kind: runId ? "run" : "deployment",
+        kind: runId ? "run" : key ? "session" : agentId ? "agent" : "deployment",
         run_id: runId ?? null,
+        key: key ?? null,
+        agent_id: agentId ?? null,
       },
       local: {
         attempts: {

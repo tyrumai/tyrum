@@ -36,6 +36,13 @@ Context reports are generated deterministically by the gateway and persisted alo
 
 Usage is scoped to the current session by default, with agent-wide and tenant-wide rollups available in operator clients. Platform-wide rollups are restricted to platform administration.
 
+Implementation notes (gateway HTTP):
+
+- `GET /usage` returns a deployment rollup across all locally-accounted execution attempts.
+- `GET /usage?key=<sessionKey>` returns a session rollup (all lanes/runs for a single session key).
+- `GET /usage?agent_id=<agentId>` returns an agent rollup (all session keys for a single agent).
+- `GET /usage?run_id=<runId>` returns a per-run rollup (debugging / drilldown).
+
 ## Events, logs, and evidence
 
 Tyrum emits typed events for:
