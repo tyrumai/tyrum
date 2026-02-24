@@ -33,10 +33,6 @@ type UsageTotals = {
   usd_micros: number;
 };
 
-function escapeSqlLikePattern(value: string): string {
-  return value.replace(/([\\%_])/g, "\\$1");
-}
-
 function addOptional(total: number, value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? total + value : total;
 }
@@ -99,14 +95,15 @@ export function createUsageRoutes(deps: UsageRouteDeps): Hono {
         [key],
       );
     } else if (agentId) {
+      const keyPrefix = `agent:${agentId}:`;
       rows = await deps.db.all<{ cost_json: string | null }>(
         `SELECT a.cost_json
          FROM execution_attempts a
          JOIN execution_steps s ON s.step_id = a.step_id
          JOIN execution_runs r ON r.run_id = s.run_id
-         WHERE r.key LIKE ? ESCAPE '\\'
+         WHERE substr(r.key, 1, length(?)) = ?
            AND a.cost_json IS NOT NULL`,
-        [`${escapeSqlLikePattern(`agent:${agentId}:`)}%`],
+        [keyPrefix, keyPrefix],
       );
     } else {
       rows = await deps.db.all<{ cost_json: string | null }>(
