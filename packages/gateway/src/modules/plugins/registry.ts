@@ -626,26 +626,22 @@ export class PluginRegistry {
       result = { output: "", error: message };
     }
 
-    try {
-      await this.emitPluginToolInvokedEvent({
-        pluginId: found.plugin.id,
-        pluginVersion: found.plugin.version,
-        toolId: params.toolId,
-        toolCallId: params.toolCallId,
-        agentId: params.agentId,
-        workspaceId: params.workspaceId,
-        sessionId: params.sessionId,
-        channel: params.channel,
-        threadId: params.threadId,
-        policySnapshotId: params.policySnapshotId,
-        auditPlanId: params.auditPlanId,
-        outcome: result.error ? "failed" : "succeeded",
-        error: result.error,
-        durationMs: Math.max(0, Date.now() - startMs),
-      });
-    } catch {
-      // Ignore audit emission failures.
-    }
+    await this.emitPluginToolInvokedEvent({
+      pluginId: found.plugin.id,
+      pluginVersion: found.plugin.version,
+      toolId: params.toolId,
+      toolCallId: params.toolCallId,
+      agentId: params.agentId,
+      workspaceId: params.workspaceId,
+      sessionId: params.sessionId,
+      channel: params.channel,
+      threadId: params.threadId,
+      policySnapshotId: params.policySnapshotId,
+      auditPlanId: params.auditPlanId,
+      outcome: result.error ? "failed" : "succeeded",
+      error: result.error,
+      durationMs: Math.max(0, Date.now() - startMs),
+    });
 
     return result;
   }
@@ -1206,37 +1202,10 @@ export class PluginRegistry {
     const auditPlanId = params.auditPlanId?.trim();
     if (!container || !auditPlanId) return;
 
-    const occurredAt = new Date().toISOString();
-    const action = {
-      type: "plugin_tool.invoked",
-      plugin_id: params.pluginId,
-      plugin_version: params.pluginVersion,
-      tool_id: params.toolId,
-      tool_call_id: params.toolCallId,
-      agent_id: params.agentId,
-      workspace_id: params.workspaceId,
-      session_id: params.sessionId,
-      channel: params.channel,
-      thread_id: params.threadId,
-      policy_snapshot_id: params.policySnapshotId,
-      outcome: params.outcome,
-      duration_ms: params.durationMs,
-      error: params.error,
-    };
-
-    const auditEvent = await container.eventLog.appendNext({
-      replayId: randomUUID(),
-      planId: auditPlanId,
-      occurredAt,
-      action,
-    });
-
-    const evt: WsEventEnvelope = {
-      event_id: randomUUID(),
-      type: "plugin_tool.invoked",
-      occurred_at: occurredAt,
-      scope: { kind: "agent", agent_id: params.agentId },
-      payload: {
+    try {
+      const occurredAt = new Date().toISOString();
+      const action = {
+        type: "plugin_tool.invoked",
         plugin_id: params.pluginId,
         plugin_version: params.pluginVersion,
         tool_id: params.toolId,
@@ -1250,18 +1219,56 @@ export class PluginRegistry {
         outcome: params.outcome,
         duration_ms: params.durationMs,
         error: params.error,
-        audit: {
-          plan_id: auditPlanId,
-          step_index: auditEvent.stepIndex,
-          event_id: auditEvent.id,
-        },
-      },
-    };
+      };
 
-    await container.db.run(
-      `INSERT INTO outbox (topic, target_edge_id, payload_json)
-       VALUES (?, ?, ?)`,
-      ["ws.broadcast", null, JSON.stringify({ message: evt })],
-    );
+      const auditEvent = await container.eventLog.appendNext({
+        replayId: randomUUID(),
+        planId: auditPlanId,
+        occurredAt,
+        action,
+      });
+
+      const evt: WsEventEnvelope = {
+        event_id: randomUUID(),
+        type: "plugin_tool.invoked",
+        occurred_at: occurredAt,
+        scope: { kind: "agent", agent_id: params.agentId },
+        payload: {
+          plugin_id: params.pluginId,
+          plugin_version: params.pluginVersion,
+          tool_id: params.toolId,
+          tool_call_id: params.toolCallId,
+          agent_id: params.agentId,
+          workspace_id: params.workspaceId,
+          session_id: params.sessionId,
+          channel: params.channel,
+          thread_id: params.threadId,
+          policy_snapshot_id: params.policySnapshotId,
+          outcome: params.outcome,
+          duration_ms: params.durationMs,
+          error: params.error,
+          audit: {
+            plan_id: auditPlanId,
+            step_index: auditEvent.stepIndex,
+            event_id: auditEvent.id,
+          },
+        },
+      };
+
+      await container.db.run(
+        `INSERT INTO outbox (topic, target_edge_id, payload_json)
+         VALUES (?, ?, ?)`,
+        ["ws.broadcast", null, JSON.stringify({ message: evt })],
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.opts.logger.warn("plugins.tool_invoked_emit_failed", {
+        plugin_id: params.pluginId,
+        tool_id: params.toolId,
+        tool_call_id: params.toolCallId,
+        plan_id: auditPlanId,
+        error: message,
+      });
+    }
   }
 }

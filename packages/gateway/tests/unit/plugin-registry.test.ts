@@ -435,6 +435,49 @@ describe("PluginRegistry", () => {
     await container.db.close();
   });
 
+  it("logs a warning when plugin tool audit emission fails", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
+    const pluginDir = join(home, "plugins/echo");
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(join(pluginDir, "plugin.yml"), pluginManifestYaml(), "utf-8");
+    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
+
+    const container = createContainer({
+      dbPath: ":memory:",
+      migrationsDir: SQLITE_MIGRATIONS_DIR,
+      tyrumHome: home,
+    });
+
+    const { logger, warnings } = createCapturingLogger();
+    const plugins = await PluginRegistry.load({
+      home,
+      logger,
+      container,
+    });
+
+    const originalAppendNext = container.eventLog.appendNext.bind(container.eventLog);
+    container.eventLog.appendNext = async () => {
+      throw new Error("simulated audit failure");
+    };
+
+    const toolRes = await plugins.executeTool({
+      toolId: "plugin.echo.echo",
+      toolCallId: "call-1",
+      args: { text: "hi" },
+      home,
+      agentId: "default",
+      workspaceId: "default",
+      auditPlanId: "agent-turn-test",
+    });
+    expect(toolRes?.output).toBe("hi");
+
+    container.eventLog.appendNext = originalAppendNext;
+
+    expect(warnings.some((entry) => entry.msg === "plugins.tool_invoked_emit_failed")).toBe(true);
+
+    await container.db.close();
+  });
+
   it("rejects plugins whose manifest omits required 'contributes' field", async () => {
     home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
     const pluginDir = join(home, "plugins/echo");
