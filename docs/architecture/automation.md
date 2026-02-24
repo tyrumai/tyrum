@@ -67,3 +67,4 @@ Automation triggers use DB-leases stored in the StateStore:
 - **Lease acquisition:** one scheduler instance owns a time-bounded lease for a trigger/schedule shard.
 - **Renewal + takeover:** leases are renewed periodically; on expiry, another instance can take over.
 - **Durable dedupe:** each firing should have a durable unique id so downstream enqueue/execution can dedupe under retries.
+- **Stable identifiers:** cron/webhook/heartbeat triggers carry a durable `firing_id` and lease metadata so operators and downstream systems can correlate/replay safely (for example via execution job `trigger.metadata.firing_id`, `trigger.metadata.lease_owner`, and `trigger.metadata.lease_expires_at_ms`).

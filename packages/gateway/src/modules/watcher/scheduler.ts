@@ -8,9 +8,8 @@
 
 import type { Emitter } from "mitt";
 import type { GatewayEvents } from "../../event-bus.js";
-import type { ActionPrimitive, Playbook } from "@tyrum/schemas";
-import type { PolicyBundle as PolicyBundleT } from "@tyrum/schemas";
-import { ActionPrimitive as ActionPrimitiveSchema, PolicyBundle } from "@tyrum/schemas";
+import type { ActionPrimitive, Lane as LaneT, Playbook, PolicyBundle as PolicyBundleT } from "@tyrum/schemas";
+import { ActionPrimitive as ActionPrimitiveSchema, Lane, PolicyBundle } from "@tyrum/schemas";
 import type { MemoryDal } from "../memory/dal.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { Logger } from "../observability/logger.js";
@@ -46,7 +45,7 @@ export interface PeriodicTriggerConfig {
   intervalMs: number;
   playbook_id?: string;
   key?: string;
-  lane?: string;
+  lane?: LaneT;
   steps?: unknown;
 }
 
@@ -214,7 +213,13 @@ export class WatcherScheduler {
       intervalMs: Math.floor(intervalMs),
       playbook_id: typeof playbookId === "string" && playbookId.trim().length > 0 ? playbookId.trim() : undefined,
       key: typeof key === "string" && key.trim().length > 0 ? key.trim() : undefined,
-      lane: typeof lane === "string" && lane.trim().length > 0 ? lane.trim() : undefined,
+      lane: (() => {
+        if (typeof lane !== "string") return undefined;
+        const trimmed = lane.trim();
+        if (!trimmed) return undefined;
+        const parsed = Lane.safeParse(trimmed);
+        return parsed.success ? parsed.data : undefined;
+      })(),
       steps,
     };
   }
@@ -255,6 +260,24 @@ export class WatcherScheduler {
   }
 
   private async processFiring(firing: WatcherFiringRow): Promise<void> {
+    if (firing.trigger_type === "webhook") {
+      // Webhook firings already have an operator-visible episodic event recorded
+      // at ingestion time (for replay detection). The scheduler's responsibility
+      // is to lease + finalize the durable firing row.
+      if (!this.isAutomationExecutionEnabled()) {
+        await this.firingDal.markEnqueued({ firingId: firing.firing_id, owner: this.owner });
+        return;
+      }
+
+      // Automation execution is enabled, but webhook-triggered automation is not yet wired here.
+      await this.firingDal.markFailed({
+        firingId: firing.firing_id,
+        owner: this.owner,
+        error: "webhook-triggered automation execution is not configured",
+      });
+      return;
+    }
+
     const occurredAtIso = new Date(firing.scheduled_at_ms).toISOString();
     const eventId = `scheduler-${firing.firing_id}`;
 
@@ -352,6 +375,20 @@ export class WatcherScheduler {
           requestId,
           steps: steps!,
           policySnapshotId: snapshot.policy_snapshot_id,
+          trigger: {
+            kind: lane === "heartbeat" ? "heartbeat" : "cron",
+            key,
+            lane,
+            metadata: {
+              firing_id: firing.firing_id,
+              watcher_id: firing.watcher_id,
+              plan_id: firing.plan_id,
+              trigger_type: firing.trigger_type,
+              scheduled_at_ms: firing.scheduled_at_ms,
+              lease_owner: firing.lease_owner,
+              lease_expires_at_ms: firing.lease_expires_at_ms,
+            },
+          },
         });
 
         const updated = await tx.run(

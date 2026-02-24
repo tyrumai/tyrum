@@ -11,6 +11,7 @@ import { createHash } from "node:crypto";
 import type { GatewayEvents } from "../../event-bus.js";
 import type { MemoryDal } from "../memory/dal.js";
 import type { SqlDb } from "../../statestore/types.js";
+import { WatcherFiringDal } from "./firing-dal.js";
 
 // ---------------------------------------------------------------------------
 // Row types
@@ -78,6 +79,7 @@ export class WatcherProcessor {
   private readonly db: SqlDb;
   private readonly memoryDal: MemoryDal;
   private readonly eventBus: Emitter<GatewayEvents>;
+  private readonly firingDal: WatcherFiringDal;
 
   private completedHandler: Handler<GatewayEvents["plan:completed"]> | undefined;
   private failedHandler: Handler<GatewayEvents["plan:failed"]> | undefined;
@@ -86,6 +88,7 @@ export class WatcherProcessor {
     this.db = opts.db;
     this.memoryDal = opts.memoryDal;
     this.eventBus = opts.eventBus;
+    this.firingDal = new WatcherFiringDal(opts.db);
   }
 
   // -----------------------------------------------------------------------
@@ -218,6 +221,7 @@ export class WatcherProcessor {
     const replayDigest = createHash("sha256")
       .update(event.nonce)
       .digest("hex");
+    const firingId = `webhook-${String(watcher.id)}-${replayDigest}`;
 
     const inserted = await this.memoryDal.insertEpisodicEventIfAbsent(
       `watcher-${String(watcher.id)}-webhook-${replayDigest}`,
@@ -225,6 +229,7 @@ export class WatcherProcessor {
       "watcher",
       "webhook_fired",
       {
+        firingId,
         watcherId: watcher.id,
         planId: watcher.plan_id,
         triggerType: watcher.trigger_type,
@@ -237,6 +242,24 @@ export class WatcherProcessor {
 
     if (!inserted) {
       return false;
+    }
+
+    const maxScheduledAtSearch = 1_000;
+    for (let i = 0; i < maxScheduledAtSearch; i += 1) {
+      const scheduledAtMs = event.timestampMs + i;
+      const created = await this.firingDal.createIfAbsent({
+        firingId,
+        watcherId: watcher.id,
+        planId: watcher.plan_id,
+        triggerType: watcher.trigger_type,
+        scheduledAtMs,
+      });
+      if (created.row.firing_id === firingId) {
+        break;
+      }
+      if (i === maxScheduledAtSearch - 1) {
+        throw new Error("failed to allocate unique scheduled_at_ms for webhook firing");
+      }
     }
 
     this.eventBus.emit("watcher:fired", {

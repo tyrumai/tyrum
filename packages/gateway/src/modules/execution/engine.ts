@@ -630,7 +630,9 @@ export class ExecutionEngine {
       if (
         normalized === "session" ||
         normalized === "cron" ||
+        normalized === "heartbeat" ||
         normalized === "hook" ||
+        normalized === "webhook" ||
         normalized === "manual" ||
         normalized === "api"
       ) {

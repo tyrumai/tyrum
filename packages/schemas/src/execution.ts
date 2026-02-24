@@ -121,7 +121,23 @@ export const ExecutionTrigger = z.discriminatedUnion("kind", [
     .strict(),
   z
     .object({
+      kind: z.literal("heartbeat"),
+      key: TyrumKey,
+      lane: Lane.optional(),
+      metadata: z.unknown().optional(),
+    })
+    .strict(),
+  z
+    .object({
       kind: z.literal("hook"),
+      key: TyrumKey,
+      lane: Lane.optional(),
+      metadata: z.unknown().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("webhook"),
       key: TyrumKey,
       lane: Lane.optional(),
       metadata: z.unknown().optional(),
