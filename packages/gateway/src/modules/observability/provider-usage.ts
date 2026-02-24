@@ -221,9 +221,34 @@ export class ProviderUsagePoller {
       };
     }
 
-    const secretProvider = await this.deps.agents.getSecretProvider(agentId);
-    const resolver = createSecretHandleResolver(secretProvider);
-    const token = await resolver.resolveById(handleId);
+    const nowIso = new Date().toISOString();
+
+    let token: string | null = null;
+    try {
+      const secretProvider = await this.deps.agents.getSecretProvider(agentId);
+      const resolver = createSecretHandleResolver(secretProvider);
+      token = await resolver.resolveById(handleId);
+    } catch (err) {
+      const error = toError(err, {
+        code: "secret_resolution_failed",
+        message: "Auth profile credential could not be resolved from the secret provider.",
+        retryable: true,
+      });
+      this.deps.logger?.warn("usage.secret_resolution_failed", {
+        provider,
+        profile_id: profileId,
+        code: error.code,
+        error: error.message,
+      });
+      return {
+        status: "error",
+        provider,
+        profile_id: profileId,
+        cached: false,
+        polled_at: nowIso,
+        error,
+      };
+    }
     if (!token) {
       return {
         status: "error",
@@ -240,7 +265,6 @@ export class ProviderUsagePoller {
     }
 
     const fetchImpl = this.deps.fetchImpl ?? fetch;
-    const nowIso = new Date().toISOString();
 
     if (provider === "openrouter") {
       try {
