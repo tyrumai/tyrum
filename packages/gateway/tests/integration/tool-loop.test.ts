@@ -554,6 +554,110 @@ describe("Tool execution loop", () => {
     expect(result.used_tools).toContain("tool.exec");
   });
 
+  it("preserves multi-step tool messages when pausing for approval", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
+
+    const safeOutput = "SAFE_TOOL_OUTPUT_123";
+    await writeFile(join(homeDir, "safe.txt"), safeOutput, "utf-8");
+
+    await writeFile(
+      join(homeDir, "agent.yml"),
+      [
+        "model:",
+        "  model: openai/gpt-4.1",
+        "skills:",
+        "  enabled: []",
+        "mcp:",
+        "  enabled: []",
+        "tools:",
+        "  allow:",
+        "    - tool.fs.read",
+        "    - tool.exec",
+        "sessions:",
+        "  ttl_days: 30",
+        "  max_turns: 20",
+        "memory:",
+        "  markdown_enabled: false",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const languageModel = createSequencedToolLoopLanguageModel([
+      {
+        kind: "tool-calls",
+        toolCalls: [
+          {
+            id: "tc-read",
+            name: "tool.fs.read",
+            arguments: JSON.stringify({ path: "safe.txt" }),
+          },
+        ],
+      },
+      {
+        kind: "tool-calls",
+        toolCalls: [
+          {
+            id: "tc-exec",
+            name: "tool.exec",
+            arguments: JSON.stringify({ command: "echo ok" }),
+          },
+        ],
+      },
+      { kind: "text", text: "done" },
+    ]);
+
+    const mcpManager = {
+      listToolDescriptors: vi.fn(async () => []),
+      shutdown: vi.fn(async () => {}),
+      callTool: vi.fn(async () => ({ content: [] })),
+    };
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel,
+      mcpManager: mcpManager as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
+      approvalWaitMs: 10_000,
+      approvalPollMs: 20,
+    });
+
+    const turnPromise = runtime.turn({
+      channel: "test",
+      thread_id: "thread-approval-multistep",
+      message: "read a file then run a command",
+    });
+
+    const pending = await waitForPendingApproval(container);
+    expect(pending.prompt).toContain("tool.exec");
+
+    const approvalEngine = new ExecutionEngine({ db: container.db });
+    const approvalApp = new Hono();
+    approvalApp.route(
+      "/",
+      createApprovalRoutes({
+        approvalDal: container.approvalDal,
+        engine: approvalEngine,
+      }),
+    );
+
+    const res = await approvalApp.request(`/approvals/${String(pending.id)}/respond`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ decision: "approved", reason: "approved in test" }),
+    });
+    expect(res.status).toBe(200);
+
+    const result = await turnPromise;
+    expect(result.reply).toBe("done");
+
+    const finalCall = languageModel.doGenerateCalls.at(-1);
+    expect(finalCall).toBeTruthy();
+    expect(JSON.stringify(finalCall!.prompt)).toContain(safeOutput);
+  }, 10_000);
+
   it("requires approval for tool.exec when driven by untrusted tool output", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });

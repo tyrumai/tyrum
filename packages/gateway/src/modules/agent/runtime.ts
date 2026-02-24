@@ -1810,7 +1810,7 @@ export class AgentRuntime {
         throw new Error(`tool approval request missing policy state for tool_call_id=${toolCallId}`);
       }
 
-      const responseMessages = (lastStep?.response?.messages ?? []) as unknown as ModelMessage[];
+      const responseMessages = (result.response?.messages ?? []) as unknown as ModelMessage[];
       const resumeMessages = [...messages, ...responseMessages];
 
       const expiresAt = new Date(Date.now() + this.approvalWaitMs).toISOString();
