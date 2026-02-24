@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+temp_dir=""
+
 if [[ -z "${COMPOSE_PROJECT_NAME:-}" ]]; then
   export COMPOSE_PROJECT_NAME="tyrum-smoke-sqlite-${RANDOM}"
 fi
@@ -27,6 +29,9 @@ cleanup() {
     return
   fi
   docker compose down -v >/dev/null 2>&1 || true
+  if [[ -n "$temp_dir" ]]; then
+    rm -rf "$temp_dir" >/dev/null 2>&1 || true
+  fi
 }
 
 trap cleanup EXIT
@@ -34,7 +39,7 @@ trap cleanup EXIT
 wait_for_healthz() {
   echo "[smoke] waiting for /healthz"
   for _ in $(seq 1 60); do
-    if curl -fsS "http://localhost:8788/healthz" >/dev/null; then
+    if curl -fsS "http://localhost:8788/healthz" >/dev/null 2>&1; then
       echo "[smoke] healthz ok"
       return 0
     fi

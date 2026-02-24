@@ -91,7 +91,7 @@ jobs:
             sudo apt-get install --yes shellcheck
           fi
       - name: Lint shell scripts
-        run: shellcheck scripts/install.sh scripts/check-public-docs.sh
+        run: shellcheck scripts/install.sh scripts/check-public-docs.sh scripts/smoke-postgres-split.sh scripts/smoke-sqlite-single-host.sh
 
   docs-public-content:
     name: Docs Public Content Gate
@@ -177,8 +177,9 @@ jobs:
   reference-deployment-smoke:
     name: Reference Deployment Smoke (Docker)
     needs: changes
-    if: needs.changes.outputs.ci == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.workflows == 'true'
+    if: needs.changes.outputs.ci == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.workflows == 'true' || needs.changes.outputs.deps == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
 
