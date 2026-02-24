@@ -17,12 +17,12 @@ import { ChannelInboxDal, type ChannelInboxRow } from "./inbox-dal.js";
 import { ChannelOutboxDal } from "./outbox-dal.js";
 import { LaneQueueInterruptError, LaneQueueSignalDal } from "../lanes/queue-signal-dal.js";
 import { releaseLaneLease } from "../lanes/lane-lease.js";
-import { renderMarkdownForTelegram } from "../markdown/telegram.js";
+import { renderMarkdownForTelegram, type TelegramFormattingFallbackEvent } from "../markdown/telegram.js";
 import type { AgentRegistry } from "../agent/registry.js";
 import type { ApprovalDal } from "../approval/dal.js";
 import type { ApprovalNotifier } from "../approval/notifier.js";
 import type { PolicyService } from "../policy/service.js";
-import { randomUUID } from "node:crypto";
+import type { MemoryDal } from "../memory/dal.js";
 import {
   type ChannelEgressConnector,
   DEFAULT_CHANNEL_ACCOUNT_ID,
@@ -32,6 +32,7 @@ import {
 } from "./interface.js";
 import { PeerIdentityLinkDal } from "./peer-identity-link-dal.js";
 import { telegramAccountIdFromEnv } from "./telegram-account.js";
+import { randomUUID } from "node:crypto";
 
 function isFalsyEnvFlag(value: string | undefined): boolean {
   if (!value) return false;
@@ -460,6 +461,7 @@ export class TelegramChannelProcessor {
   private readonly egressConnectors: Map<string, ChannelEgressConnector>;
   private readonly owner: string;
   private readonly logger?: Logger;
+  private readonly memoryDal?: MemoryDal;
   private readonly approvalDal?: ApprovalDal;
   private readonly approvalNotifier?: ApprovalNotifier;
   private readonly pollIntervalMs: number;
@@ -477,6 +479,7 @@ export class TelegramChannelProcessor {
     telegramBot: TelegramBot;
     owner: string;
     logger?: Logger;
+    memoryDal?: MemoryDal;
     approvalDal?: ApprovalDal;
     approvalNotifier?: ApprovalNotifier;
     egressConnectors?: ChannelEgressConnector[];
@@ -499,6 +502,7 @@ export class TelegramChannelProcessor {
     );
     this.owner = opts.owner;
     this.logger = opts.logger;
+    this.memoryDal = opts.memoryDal;
     this.approvalDal = opts.approvalDal;
     this.approvalNotifier = opts.approvalNotifier;
     this.pollIntervalMs = opts.pollIntervalMs ?? 250;
@@ -793,6 +797,7 @@ export class TelegramChannelProcessor {
             accountId,
             containerId: leader.thread_id,
             text: "Sorry, something went wrong. Please try again later.",
+            parseMode: "HTML",
           })
           .catch(() => undefined);
       }
@@ -802,7 +807,36 @@ export class TelegramChannelProcessor {
       return;
     }
 
-    const chunks = renderMarkdownForTelegram(reply);
+    const formattingFallbacks: TelegramFormattingFallbackEvent[] = [];
+    const chunks = renderMarkdownForTelegram(reply, {
+      onFormattingFallback: (event) => {
+        formattingFallbacks.push(event);
+      },
+    });
+
+    if (this.memoryDal && formattingFallbacks.length > 0) {
+      const occurredAt = new Date().toISOString();
+      await Promise.allSettled(
+        formattingFallbacks.map(async (fallback) => {
+          await this.memoryDal?.insertEpisodicEvent(
+            `channel-formatting-fallback-${randomUUID()}`,
+            occurredAt,
+            connectorId,
+            "channel_formatting_fallback",
+            {
+              mode: "pipeline",
+              agent_id: agentId,
+              inbox_id: leader.inbox_id,
+              source: leader.source,
+              reason: fallback.reason,
+              chunk_index: fallback.chunk_index,
+              ...(fallback.detail ? { detail: fallback.detail } : {}),
+            },
+            agentId,
+          );
+        }),
+      );
+    }
     const source = connectorId;
 
     // Apply outbound send policy before enqueueing side effects.
@@ -892,6 +926,7 @@ export class TelegramChannelProcessor {
         dedupe_key: dedupeKey,
         chunk_index: i,
         text,
+        parse_mode: "HTML",
       });
     }
 

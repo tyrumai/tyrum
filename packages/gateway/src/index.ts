@@ -1151,6 +1151,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
           telegramBot: container.telegramBot,
           owner: instanceId,
           logger,
+          memoryDal: container.memoryDal,
           approvalDal: container.approvalDal,
           approvalNotifier,
         })

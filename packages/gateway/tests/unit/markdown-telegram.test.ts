@@ -2,26 +2,34 @@ import { describe, expect, it } from "vitest";
 import { renderMarkdownForTelegram } from "../../src/modules/markdown/telegram.js";
 
 describe("renderMarkdownForTelegram", () => {
-  it("chunks fenced code blocks without breaking fences", () => {
-    const chunks = renderMarkdownForTelegram("```ts\n0123456789\n```", { maxChars: 18 });
+  it("renders fenced code blocks as Telegram HTML and chunks without breaking <pre><code> wrappers", () => {
+    const chunks = renderMarkdownForTelegram("```ts\n0123456789\n```", { maxChars: 50 });
     expect(chunks).toEqual([
-      "```ts\n01234567\n```",
-      "```ts\n89\n```",
+      '<pre><code class="language-ts">012345</code></pre>',
+      '<pre><code class="language-ts">6789</code></pre>',
     ]);
     for (const chunk of chunks) {
-      expect(chunk.length).toBeLessThanOrEqual(18);
-      expect(chunk.startsWith("```")).toBe(true);
-      expect(chunk.endsWith("```")).toBe(true);
+      expect(chunk.length).toBeLessThanOrEqual(50);
+      expect(chunk.startsWith("<pre><code")).toBe(true);
+      expect(chunk.endsWith("</code></pre>")).toBe(true);
     }
   });
 
-  it("never returns a chunk that exceeds maxChars, even when formatting overhead is unavoidable", () => {
-    const chunks = renderMarkdownForTelegram("```ts\nX\n```", { maxChars: 5 });
+  it("falls back to plain text and reports a formatting-fallback event when maxChars is too small for Telegram HTML wrappers", () => {
+    const fallbacks: unknown[] = [];
+    const opts = {
+      maxChars: 5,
+      onFormattingFallback: (event: unknown) => {
+        fallbacks.push(event);
+      },
+    };
+    const chunks = renderMarkdownForTelegram("```ts\nX\n```", opts);
     expect(chunks.length).toBeGreaterThan(0);
     for (const chunk of chunks) {
       expect(chunk.length).toBeLessThanOrEqual(5);
     }
     expect(chunks.join("")).toBe("```ts\nX\n```");
+    expect(fallbacks.length).toBeGreaterThan(0);
   });
 
   it("trims leading and trailing whitespace consistently when chunked", () => {
@@ -29,5 +37,61 @@ describe("renderMarkdownForTelegram", () => {
     expect(chunks.join("")).toBe("0123456789");
     expect(chunks.at(0)?.startsWith(" ")).toBe(false);
     expect(chunks.at(-1)?.endsWith(" ")).toBe(false);
+  });
+
+  it("renders bold and escapes HTML special characters", () => {
+    const chunks = renderMarkdownForTelegram("Hello **<world> & friends**");
+    expect(chunks).toEqual(["Hello <b>&lt;world&gt; &amp; friends</b>"]);
+  });
+
+  it("renders blockquotes using Telegram HTML <blockquote> tags", () => {
+    const chunks = renderMarkdownForTelegram("> hello");
+    expect(chunks).toEqual(["<blockquote>hello</blockquote>"]);
+  });
+
+  it("renders labeled links as Telegram HTML anchors with safe escaping", () => {
+    const chunks = renderMarkdownForTelegram("[label](https://example.com?a=1&b=2)");
+    expect(chunks).toEqual(['<a href="https://example.com?a=1&amp;b=2">label</a>']);
+  });
+
+  it("nests links inside surrounding italics without crossing tags when spans share the same start index", () => {
+    const chunks = renderMarkdownForTelegram("*[click here](https://example.com) more text*");
+    expect(chunks).toEqual(['<i><a href="https://example.com">click here</a> more text</i>']);
+  });
+
+  it("nests links inside surrounding italics without crossing tags when spans share the same end index", () => {
+    const chunks = renderMarkdownForTelegram("*before [link](https://example.com)*");
+    expect(chunks).toEqual(['<i>before <a href="https://example.com">link</a></i>']);
+  });
+
+  it("keeps plain-text fallback chunks within maxChars even when HTML escaping expands the output", () => {
+    const maxChars = 5;
+    const chunks = renderMarkdownForTelegram("```ts\n<<<<<\n```", { maxChars });
+    expect(chunks.length).toBeGreaterThan(0);
+    for (const chunk of chunks) {
+      expect(chunk.length).toBeLessThanOrEqual(maxChars);
+      const residual = chunk.replaceAll("&amp;", "").replaceAll("&lt;", "").replaceAll("&gt;", "");
+      expect(residual.includes("&")).toBe(false);
+    }
+  });
+
+  it("renders invalid-link fallback suffix outside adjacent formatting spans", () => {
+    const chunks = renderMarkdownForTelegram("[label](ftp://example)*after*");
+    expect(chunks).toEqual(["label (ftp://example)<i>after</i>"]);
+  });
+
+  it("renders empty-link markdown without an empty parentheses suffix", () => {
+    const chunks = renderMarkdownForTelegram("[label]()");
+    expect(chunks).toEqual(["label"]);
+  });
+
+  it("keeps fallback chunks within maxChars even when escaping expands a single character beyond maxChars", () => {
+    const maxChars = 1;
+    const chunks = renderMarkdownForTelegram("&<", { maxChars });
+    expect(chunks.length).toBeGreaterThan(0);
+    for (const chunk of chunks) {
+      expect(chunk.length).toBeLessThanOrEqual(maxChars);
+    }
+    expect(chunks.join("")).toBe("&<");
   });
 });

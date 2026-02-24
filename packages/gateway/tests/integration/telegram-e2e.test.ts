@@ -100,6 +100,7 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     const parsedBody = JSON.parse(opts.body as string) as Record<string, unknown>;
     expect(parsedBody["chat_id"]).toBe("123");
     expect(parsedBody["text"]).toBe("I can help with that!");
+    expect(parsedBody["parse_mode"]).toBe("HTML");
   });
 
   it("sends error message when agent throws", async () => {
@@ -140,6 +141,7 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     expect(parsedBody["text"]).toBe(
       "Sorry, something went wrong. Please try again later.",
     );
+    expect(parsedBody["parse_mode"]).toBe("HTML");
   });
 
   it("falls back to normalization-only when no deps provided", async () => {

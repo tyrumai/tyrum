@@ -158,6 +158,12 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       }),
     );
     expect(fetchFn).toHaveBeenCalledOnce();
+    const [, sendOpts] = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    const sendBody = JSON.parse(sendOpts.body as string) as Record<string, unknown>;
+    expect(sendBody["parse_mode"]).toBe("HTML");
 
     const res2 = await app.request("/ingress/telegram", {
       method: "POST",
@@ -620,6 +626,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       accountId: "work",
       containerId: "123",
       text: "Sorry, something went wrong. Please try again later.",
+      parseMode: "HTML",
     });
     expect(fetchFn).not.toHaveBeenCalled();
   });
