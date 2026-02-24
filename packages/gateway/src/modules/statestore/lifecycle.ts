@@ -192,12 +192,28 @@ export class StateStoreLifecycleScheduler {
     const sessionCutoff = db.kind === "sqlite"
       ? {
           clause: "datetime(updated_at) < datetime(?)",
-          order: "updated_at ASC",
+          order: "updated_at ASC, session_id ASC",
           params: [input.cutoffIso],
         }
-      : { clause: "updated_at < ?", order: "updated_at ASC", params: [input.cutoffIso] };
+      : {
+          clause: "updated_at < ?",
+          order: "updated_at ASC, session_id ASC",
+          params: [input.cutoffIso],
+        };
 
     const batch = [...sessionCutoff.params, this.batchSize];
+
+    await db.run(
+      `DELETE FROM session_model_overrides
+       WHERE session_id IN (
+         SELECT session_id
+         FROM sessions
+         WHERE ${sessionCutoff.clause}
+         ORDER BY ${sessionCutoff.order}
+         LIMIT ?
+       )`,
+      batch,
+    );
 
     await db.run(
       `DELETE FROM session_provider_pins
