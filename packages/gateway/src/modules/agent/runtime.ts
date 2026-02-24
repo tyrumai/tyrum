@@ -2201,6 +2201,18 @@ export class AgentRuntime {
         throw new Error(`execution run '${runId}' not found`);
       }
 
+      if (run.status === "paused") {
+        const resolvedPause = await this.maybeResolvePausedRun(runId);
+        if (!resolvedPause) {
+          const remainingMs = Math.max(1, deadlineMs - Date.now());
+          const sleepMs = Math.min(this.approvalPollMs, remainingMs);
+          await new Promise((resolve) => setTimeout(resolve, sleepMs));
+        } else {
+          backoffMs = TURN_ENGINE_MIN_BACKOFF_MS;
+        }
+        continue;
+      }
+
       const resolved = await resolveIfTerminal(run);
       if (resolved) {
         return resolved;
@@ -2273,6 +2285,62 @@ export class AgentRuntime {
     }
 
     throw new Error(timeoutMessage);
+  }
+
+  private async maybeResolvePausedRun(runId: string): Promise<boolean> {
+    const pausedStep = await this.opts.container.db.get<{ approval_id: number | null }>(
+      `SELECT approval_id
+       FROM execution_steps
+       WHERE run_id = ? AND status = 'paused'
+       ORDER BY step_index ASC
+       LIMIT 1`,
+      [runId],
+    );
+    const approvalId = pausedStep?.approval_id ?? null;
+    if (approvalId === null) return false;
+
+    let approval = await this.approvalDal.getById(approvalId);
+    if (!approval) {
+      await this.executionEngine.cancelRun(runId, "approval record not found");
+      return true;
+    }
+
+    if (approval.status === "pending") {
+      const expiresAt = approval.expires_at;
+      const expiresAtMs = expiresAt ? Date.parse(expiresAt) : Number.NaN;
+      if (Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now()) {
+        approval = (await this.approvalDal.expireById(approval.id)) ?? approval;
+      } else {
+        return false;
+      }
+    }
+
+    const ctx = coerceRecord(approval.context);
+    const isAgentToolExecution = ctx?.["source"] === "agent-tool-execution";
+    const resumeToken = approval.resume_token;
+
+    if (
+      resumeToken &&
+      (approval.status === "approved" ||
+        (isAgentToolExecution && (approval.status === "denied" || approval.status === "expired")))
+    ) {
+      await this.executionEngine.resumeRun(resumeToken);
+      return true;
+    }
+
+    if (approval.status === "denied" || approval.status === "expired") {
+      const reason = approval.response_reason ??
+        (approval.status === "expired" ? "approval timed out" : "approval denied");
+      await this.executionEngine.cancelRun(runId, reason);
+      return true;
+    }
+
+    if (approval.status === "cancelled") {
+      await this.executionEngine.cancelRun(runId, approval.response_reason ?? "approval cancelled");
+      return true;
+    }
+
+    return false;
   }
 
   private async loadTurnResultFromRun(runId: string): Promise<AgentTurnResponseT | undefined> {
