@@ -60,9 +60,7 @@ export class ConnectionManager {
     const id = opts?.id ?? crypto.randomUUID();
     const role = opts?.role ?? "client";
     const readyCapabilities = new Set<ClientCapability>();
-    if (role !== "node") {
-      for (const cap of capabilities) readyCapabilities.add(cap);
-    }
+    for (const cap of capabilities) readyCapabilities.add(cap);
     const client: ConnectedClient = {
       id,
       ws,

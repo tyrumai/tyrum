@@ -95,8 +95,7 @@ export class ConnectionDirectoryDal {
     ttlMs: number;
   }): Promise<void> {
     const expiresAtMs = params.nowMs + params.ttlMs;
-    const readyCapabilities =
-      params.readyCapabilities ?? (params.role === "node" ? [] : params.capabilities ?? []);
+    const readyCapabilities = params.readyCapabilities ?? (params.capabilities ?? []);
     await this.db.run(
       `INSERT INTO connection_directory (
          connection_id,

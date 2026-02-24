@@ -801,7 +801,7 @@ describe("dispatchTask", () => {
     });
   });
 
-  it("does not dispatch to a paired node before it signals readiness", async () => {
+  it("dispatches to a paired node before it signals readiness (backward-compatible)", async () => {
     const cm = new ConnectionManager();
     const nodeWs = createMockWs();
     cm.addClient(nodeWs as never, ["cli"] as never, {
@@ -830,18 +830,17 @@ describe("dispatchTask", () => {
       args: { command: "echo hi" },
     };
 
-    await expect(
-      dispatchTask(
-        action,
-        {
-          runId: "550e8400-e29b-41d4-a716-446655440000",
-          stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-          attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
-        },
-        deps,
-      ),
-    ).rejects.toBeInstanceOf(NoCapableClientError);
-    expect(nodeWs.send).not.toHaveBeenCalled();
+    const taskId = await dispatchTask(
+      action,
+      {
+        runId: "550e8400-e29b-41d4-a716-446655440000",
+        stepId: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+        attemptId: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+      },
+      deps,
+    );
+    expect(taskId).toMatch(/^task-[0-9a-f-]{36}$/);
+    expect(nodeWs.send).toHaveBeenCalledOnce();
   });
 
   it("stops dispatching to a paired node when it reports readiness removed", async () => {
