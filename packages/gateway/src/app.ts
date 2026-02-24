@@ -262,7 +262,14 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       telegramBot: container.telegramBot,
       telegramQueue:
         isChannelPipelineEnabled() && container.telegramBot && opts.agents
-          ? new TelegramChannelQueue(container.db)
+          ? new TelegramChannelQueue(container.db, {
+              ws: opts.connectionManager
+                ? {
+                    connectionManager: opts.connectionManager,
+                    cluster: opts.wsCluster,
+                  }
+                : undefined,
+            })
           : undefined,
       agents: opts.agents,
       home: container.config?.tyrumHome,

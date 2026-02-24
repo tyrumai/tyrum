@@ -1545,6 +1545,35 @@ export const WsContextReportCreatedEvent = WsEventEnvelope.extend({
 });
 export type WsContextReportCreatedEvent = z.infer<typeof WsContextReportCreatedEvent>;
 
+export const ChannelQueueOverflowPolicy = z.enum([
+  "drop_oldest",
+  "drop_newest",
+  "summarize_dropped",
+]);
+export type ChannelQueueOverflowPolicy = z.infer<typeof ChannelQueueOverflowPolicy>;
+
+export const WsChannelQueueOverflowEventPayload = z
+  .object({
+    key: TyrumKey,
+    lane: Lane,
+    cap: z.number().int().positive(),
+    overflow: ChannelQueueOverflowPolicy,
+    queued_before: z.number().int().nonnegative(),
+    queued_after: z.number().int().nonnegative(),
+    dropped_inbox_ids: z.array(z.number().int().positive()).default([]),
+    dropped_message_ids: z.array(z.string().trim().min(1)).default([]),
+    summary_inbox_id: z.number().int().positive().optional(),
+    summary_message_id: z.string().trim().min(1).optional(),
+  })
+  .strict();
+export type WsChannelQueueOverflowEventPayload = z.infer<typeof WsChannelQueueOverflowEventPayload>;
+
+export const WsChannelQueueOverflowEvent = WsEventEnvelope.extend({
+  type: z.literal("channel.queue.overflow"),
+  payload: WsChannelQueueOverflowEventPayload,
+});
+export type WsChannelQueueOverflowEvent = z.infer<typeof WsChannelQueueOverflowEvent>;
+
 export const WsErrorEventPayload = z
   .object({
     code: z.string().min(1),
@@ -1607,6 +1636,7 @@ export const WsEvent = z.discriminatedUnion("type", [
   WsPolicyOverrideExpiredEvent,
   WsPluginLifecycleEvent,
   WsPluginToolInvokedEvent,
+  WsChannelQueueOverflowEvent,
   WsTypingStartedEvent,
   WsTypingStoppedEvent,
   WsMessageDeltaEvent,

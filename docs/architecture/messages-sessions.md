@@ -105,7 +105,11 @@ Queueing is bounded to keep the system predictable:
   - `drop_newest`
   - `summarize_dropped` (creates a synthetic follow-up message that summarizes the dropped items)
 
-Overflow handling is observable via events so operators can see when messages were dropped or summarized.
+Implementation notes:
+
+- `cap` is configured via `TYRUM_CHANNEL_INBOUND_QUEUE_CAP` (default `100`; set `0` to disable bounding).
+- `overflow` is configured via `TYRUM_CHANNEL_INBOUND_QUEUE_OVERFLOW` (default `drop_oldest`).
+- Overflow emits a WS event (`channel.queue.overflow`) so operators can see when messages were dropped or summarized.
 
 ### Interaction with execution guarantees
 
