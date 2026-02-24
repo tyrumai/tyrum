@@ -1236,6 +1236,91 @@ describe("Tool execution loop", () => {
     expect(result.used_tools).toHaveLength(2);
   });
 
+  it("queues approval requests even when maxSteps is exhausted", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
+
+    await writeFile(
+      join(homeDir, "agent.yml"),
+      [
+        "model:",
+        "  model: openai/gpt-4.1",
+        "skills:",
+        "  enabled: []",
+        "mcp:",
+        "  enabled: []",
+        "tools:",
+        "  allow:",
+        "    - tool.exec",
+        "sessions:",
+        "  ttl_days: 30",
+        "  max_turns: 20",
+        "memory:",
+        "  markdown_enabled: false",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const languageModel = createToolLoopLanguageModel({
+      toolCalls: [
+        {
+          id: "tc-budget",
+          name: "tool.exec",
+          arguments: JSON.stringify({ command: "echo approved" }),
+        },
+      ],
+      finalReply: "approved and executed",
+    });
+
+    const mcpManager = {
+      listToolDescriptors: vi.fn(async () => []),
+      shutdown: vi.fn(async () => {}),
+      callTool: vi.fn(async () => ({ content: [] })),
+    };
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel,
+      mcpManager: mcpManager as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
+      maxSteps: 1,
+      approvalWaitMs: 10_000,
+      approvalPollMs: 20,
+    });
+
+    const turnPromise = runtime.turn({
+      channel: "test",
+      thread_id: "thread-approval-maxsteps",
+      message: "run command",
+    });
+
+    const pending = await waitForPendingApproval(container, 1_000);
+    expect(pending.prompt).toContain("tool.exec");
+    expect(pending.kind).toBe("workflow_step");
+
+    const approvalEngine = new ExecutionEngine({ db: container.db });
+    const approvalApp = new Hono();
+    approvalApp.route(
+      "/",
+      createApprovalRoutes({
+        approvalDal: container.approvalDal,
+        engine: approvalEngine,
+      }),
+    );
+
+    const res = await approvalApp.request(`/approvals/${String(pending.id)}/respond`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ decision: "approved", reason: "approved in test" }),
+    });
+    expect(res.status).toBe(200);
+
+    const result = await turnPromise;
+    expect(result.reply).toBe("No assistant response returned.");
+  });
+
   it("respects maxSteps and stops looping", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir });

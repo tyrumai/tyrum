@@ -1836,11 +1836,6 @@ export class AgentRuntime {
     });
 
     if (approvalPart) {
-      if (stepsUsedAfterCall >= this.maxSteps) {
-        const reply = result.text || "No assistant response returned.";
-        return await this.finalizeTurn(ctx, session, resolved, reply, usedTools, contextReport);
-      }
-
       const record = coerceRecord(approvalPart);
       const approvalId = typeof record?.["approvalId"] === "string" ? record["approvalId"].trim() : "";
       const toolCall = coerceRecord(record?.["toolCall"]);
