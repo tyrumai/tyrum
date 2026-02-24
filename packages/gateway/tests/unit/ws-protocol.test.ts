@@ -1058,8 +1058,7 @@ describe("dispatchTask", () => {
 
   it("stops dispatching to a paired node when it reports readiness removed", async () => {
     const cm = new ConnectionManager();
-    const nodeWs = createMockWs();
-    cm.addClient(nodeWs as never, ["cli"] as never, {
+    const { ws: nodeWs } = makeClient(cm, ["cli"], {
       id: "node-1",
       role: "node",
       deviceId: "dev_test",
