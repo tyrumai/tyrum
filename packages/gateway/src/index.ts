@@ -904,6 +904,8 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   const secretProvider = await createSecretProviderFromEnv(tyrumHome, token);
 
   const lifecycleHooks = await loadLifecycleHooksFromHome(tyrumHome, logger);
+  const shouldRunEdge = role === "all" || role === "edge";
+  const shouldRunWorker = role === "all" || role === "worker";
 
   if (container.telegramBot) {
     console.log("Telegram bot initialized");
@@ -930,7 +932,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
         })
       : undefined;
 
-  if (role === "all" || role === "edge") {
+  if (shouldRunEdge) {
     container.watcherProcessor.start();
   }
   if (watcherScheduler) {
@@ -949,7 +951,6 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     logger.info("otel.started");
   }
 
-  const shouldRunEdge = role === "all" || role === "edge";
   const engineApiEnabled = isTruthyEnvFlag(process.env["TYRUM_ENGINE_API_ENABLED"]);
 
   const connectionManager = new ConnectionManager();
@@ -967,7 +968,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
       : undefined;
 
   const hooksRuntime =
-    lifecycleHooks.length > 0
+    lifecycleHooks.length > 0 && (shouldRunEdge || shouldRunWorker)
       ? new LifecycleHooksRuntime({
           db: container.db,
           engine:
@@ -1181,7 +1182,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     console.log(`Tyrum gateway v${VERSION} started in role '${role}'.`);
   }
 
-  if (hooksRuntime) {
+  if (hooksRuntime && shouldRunWorker) {
     void hooksRuntime
       .fire({
         event: "gateway.start",
@@ -1193,7 +1194,6 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
       });
   }
 
-  const shouldRunWorker = role === "all" || role === "worker";
   const workerLoop = shouldRunWorker
     ? (() => {
         const engine = new ExecutionEngine({
@@ -1305,7 +1305,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
 
     wsHandler?.stopHeartbeat();
 
-    const shutdownHookRuns = hooksRuntime
+    const shutdownHookRuns = hooksRuntime && shouldRunWorker
       ? hooksRuntime
           .fire({
             event: "gateway.shutdown",

@@ -76,6 +76,32 @@ describe("ExecutionEngine (normalized)", () => {
     expect(stepCount!.n).toBe(2);
   });
 
+  it("normalizes trigger_json even when provided trigger is missing kind", async () => {
+    db = openTestSqliteDb();
+
+    const engine = new ExecutionEngine({ db });
+    await engine.enqueuePlan({
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-trigger-1",
+      requestId: "req-trigger-1",
+      steps: [action("Research")],
+      trigger: {
+        key: "agent:agent-1:telegram-1:group:thread-1",
+        lane: "main",
+        metadata: { source: "test" },
+      } as unknown as never,
+    });
+
+    const job = await db.get<{ trigger_json: string }>(
+      "SELECT trigger_json FROM execution_jobs LIMIT 1",
+    );
+    const trigger = JSON.parse(job!.trigger_json) as { kind?: string; key?: string; lane?: string };
+    expect(trigger.kind).toBe("session");
+    expect(trigger.key).toBe("agent:agent-1:telegram-1:group:thread-1");
+    expect(trigger.lane).toBe("main");
+  });
+
   it("worker executes a 2-step plan and completes the run", async () => {
     db = openTestSqliteDb();
 
@@ -275,6 +301,12 @@ describe("ExecutionEngine (normalized)", () => {
       "SELECT step_index, status FROM execution_steps ORDER BY step_index ASC",
     );
     expect(stepRows.map((row) => row.status)).toEqual(["failed", "cancelled"]);
+
+    const attempt = await db.get<{ status: string; policy_snapshot_id: string | null }>(
+      "SELECT status, policy_snapshot_id FROM execution_attempts ORDER BY attempt DESC LIMIT 1",
+    );
+    expect(attempt?.status).toBe("failed");
+    expect(attempt?.policy_snapshot_id).toBe(snapshot.policy_snapshot_id);
 
     const laneLeases = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM lane_leases");
     expect(laneLeases?.n).toBe(0);

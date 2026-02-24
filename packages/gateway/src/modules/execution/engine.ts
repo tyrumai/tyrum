@@ -627,6 +627,20 @@ export class ExecutionEngine {
       request_id: input.requestId,
     };
 
+    const normalizeTriggerKind = (value: unknown): ExecutionTriggerT["kind"] => {
+      const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+      if (
+        normalized === "session" ||
+        normalized === "cron" ||
+        normalized === "hook" ||
+        normalized === "manual" ||
+        normalized === "api"
+      ) {
+        return normalized;
+      }
+      return "session";
+    };
+
     const trigger = (() => {
       if (!input.trigger) {
         return {
@@ -643,8 +657,11 @@ export class ExecutionEngine {
           ? { ...(provided["metadata"] as Record<string, unknown>), ...baseMetadata }
           : baseMetadata;
 
+      const kind = normalizeTriggerKind(provided["kind"]);
+
       return {
         ...provided,
+        kind,
         key: typeof provided["key"] === "string" ? provided["key"] : input.key,
         lane: typeof provided["lane"] === "string" ? provided["lane"] : input.lane,
         metadata,
@@ -1336,29 +1353,31 @@ export class ExecutionEngine {
 	              const attemptNum = (attemptAgg?.n ?? 0) + 1;
 	              const attemptId = randomUUID();
 
-	              await tx.run(
-	                `INSERT INTO execution_attempts (
-	                   attempt_id,
-	                   step_id,
-	                   attempt,
-	                   status,
-	                   started_at,
-	                   finished_at,
-	                   result_json,
-	                   error,
-	                   artifacts_json,
-	                   metadata_json
-	                 ) VALUES (?, ?, ?, 'failed', ?, ?, NULL, ?, '[]', ?)`,
-	                [
-	                  attemptId,
-	                  next.step_id,
-	                  attemptNum,
-	                  clock.nowIso,
-	                  clock.nowIso,
-	                  this.redactText(`policy denied ${toolId}`).trim() || "policy denied",
-	                  JSON.stringify(
-	                    this.redactUnknown({
-	                      policy_snapshot_id: policySnapshotId,
+		              await tx.run(
+		                `INSERT INTO execution_attempts (
+		                   attempt_id,
+		                   step_id,
+		                   attempt,
+		                   status,
+		                   started_at,
+		                   finished_at,
+		                   policy_snapshot_id,
+		                   result_json,
+		                   error,
+		                   artifacts_json,
+		                   metadata_json
+		                 ) VALUES (?, ?, ?, 'failed', ?, ?, ?, NULL, ?, '[]', ?)`,
+		                [
+		                  attemptId,
+		                  next.step_id,
+		                  attemptNum,
+		                  clock.nowIso,
+		                  clock.nowIso,
+		                  policySnapshotId,
+		                  this.redactText(`policy denied ${toolId}`).trim() || "policy denied",
+		                  JSON.stringify(
+		                    this.redactUnknown({
+		                      policy_snapshot_id: policySnapshotId,
 	                      tool_id: toolId,
 	                      tool_match_target: toolMatchTarget,
 	                      url,
