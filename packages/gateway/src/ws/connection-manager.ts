@@ -7,6 +7,7 @@
 
 import type { WebSocket } from "ws";
 import type { ClientCapability, WsEventEnvelope, WsRequestEnvelope } from "@tyrum/schemas";
+import type { AuthTokenClaims } from "../modules/auth/token-store.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -17,6 +18,7 @@ export interface ConnectedClient {
   readonly ws: WebSocket;
   readonly role: "client" | "node";
   readonly device_id?: string;
+  readonly auth_claims?: AuthTokenClaims;
   readonly protocol_rev: number;
   readonly capabilities: readonly ClientCapability[];
   lastPong: number;
@@ -53,6 +55,7 @@ export class ConnectionManager {
       id?: string;
       role?: "client" | "node";
       deviceId?: string;
+      authClaims?: AuthTokenClaims;
       protocolRev?: number;
     },
   ): string {
@@ -62,6 +65,7 @@ export class ConnectionManager {
       ws,
       role: opts?.role ?? "client",
       device_id: opts?.deviceId,
+      auth_claims: opts?.authClaims,
       protocol_rev: opts?.protocolRev ?? 1,
       capabilities,
       lastPong: Date.now(),

@@ -49,11 +49,19 @@ function makeClient(
     id?: string;
     role?: "client" | "node";
     deviceId?: string;
+    authClaims?: unknown;
     protocolRev?: number;
   },
 ): { id: string; ws: MockWebSocket } {
   const ws = createMockWs();
-  const id = cm.addClient(ws as never, capabilities as never, opts);
+  const authClaims =
+    opts?.authClaims ??
+    ({
+      token_kind: "admin",
+      role: "admin",
+      scopes: ["*"],
+    } as const);
+  const id = cm.addClient(ws as never, capabilities as never, { ...opts, authClaims } as never);
   return { id, ws };
 }
 
@@ -238,6 +246,42 @@ describe("handleClientMessage", () => {
     expect(onApprovalDecision).toHaveBeenCalledWith(124, false, "too risky");
   });
 
+  it("forbids approval.request decisions when scoped device token lacks operator.approvals", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["playwright"], {
+      role: "client",
+      deviceId: "dev_client_1",
+      protocolRev: 2,
+      authClaims: {
+        token_kind: "device",
+        role: "client",
+        device_id: "dev_client_1",
+        scopes: ["operator.read"],
+      },
+    });
+    const client = cm.getClient(id)!;
+    const onApprovalDecision = vi.fn();
+    const deps = makeDeps(cm, { onApprovalDecision });
+
+    const result = await handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "approval-123",
+        type: "approval.request",
+        ok: true,
+        result: { approved: true },
+      }),
+      deps,
+    );
+
+    expect(onApprovalDecision).not.toHaveBeenCalled();
+    expect(result).toBeDefined();
+    expect(result!.type).toBe("error");
+    const payload = (result as unknown as { payload: { code: string; message: string } }).payload;
+    expect(payload.code).toBe("forbidden");
+    expect(payload.message).toContain("insufficient scope");
+  });
+
   it("does not auto-deny approval.request when client responds ok:false", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
@@ -360,6 +404,34 @@ describe("handleClientMessage", () => {
     expect(res.result.approvals[0]!.resolution).toBeNull();
   });
 
+  it("rejects approval.list when peer role is node", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["cli"], { role: "node" });
+    const client = cm.getClient(id)!;
+
+    const approvalDal = {
+      getPending: vi.fn(async () => []),
+      getByStatus: vi.fn(async () => []),
+      respond: vi.fn(async () => undefined),
+    };
+
+    const deps = makeDeps(cm, { approvalDal: approvalDal as never });
+
+    const result = await handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "r-1",
+        type: "approval.list",
+        payload: {},
+      }),
+      deps,
+    );
+
+    expect(result).toBeDefined();
+    expect((result as unknown as { ok: boolean }).ok).toBe(false);
+    expect((result as unknown as { error: { code: string } }).error.code).toBe("unauthorized");
+  });
+
   it("handles approval.resolve requests when approvalDal is configured", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
@@ -448,6 +520,110 @@ describe("handleClientMessage", () => {
     expect((result as unknown as { ok: boolean }).ok).toBe(false);
     expect((result as unknown as { error: { code: string } }).error.code).toBe("invalid_request");
     expect(nodePairingDal.resolve).not.toHaveBeenCalled();
+  });
+
+  it("forbids command.execute when scoped device token lacks operator.admin", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["cli"], { role: "client", deviceId: "dev_client_1", protocolRev: 2 });
+    const client = cm.getClient(id)! as unknown as { auth_claims?: unknown };
+    client.auth_claims = {
+      token_kind: "device",
+      role: "client",
+      device_id: "dev_client_1",
+      scopes: ["operator.read"],
+    };
+
+    const deps = makeDeps(cm);
+    const result = await handleClientMessage(
+      cm.getClient(id)!,
+      JSON.stringify({ request_id: "r-1", type: "command.execute", payload: { command: "/help" } }),
+      deps,
+    );
+
+    expect(result).toBeDefined();
+    expect((result as unknown as { ok: boolean }).ok).toBe(false);
+    expect((result as unknown as { error: { code: string } }).error.code).toBe("forbidden");
+  });
+
+  it("allows command.execute when scoped device token includes operator.admin", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["cli"], {
+      role: "client",
+      protocolRev: 2,
+      authClaims: {
+        token_kind: "device",
+        role: "client",
+        device_id: "dev_client_1",
+        scopes: ["operator.admin"],
+      },
+    });
+    const client = cm.getClient(id)!;
+    const deps = makeDeps(cm);
+
+    const result = await handleClientMessage(
+      client,
+      JSON.stringify({ request_id: "r-1", type: "command.execute", payload: { command: "/help" } }),
+      deps,
+    );
+
+    expect(result).toBeDefined();
+    expect((result as unknown as { ok: boolean }).ok).toBe(true);
+    expect(String((result as unknown as { result: { output?: string } }).result.output)).toContain(
+      "Available commands",
+    );
+  });
+
+  it("denies unmapped request types by default for scoped device tokens", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["cli"], {
+      role: "client",
+      protocolRev: 2,
+      authClaims: {
+        token_kind: "device",
+        role: "client",
+        device_id: "dev_client_1",
+        scopes: ["operator.admin"],
+      },
+    });
+    const client = cm.getClient(id)!;
+    const deps = makeDeps(cm);
+
+    const result = await handleClientMessage(
+      client,
+      JSON.stringify({ request_id: "r-1", type: "connect", payload: { capabilities: [] } }),
+      deps,
+    );
+
+    expect(result).toBeDefined();
+    expect((result as unknown as { ok: boolean }).ok).toBe(false);
+    expect((result as unknown as { error: { code: string } }).error.code).toBe("forbidden");
+  });
+
+  it("does not forbid presence.beacon when no scopes are required", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["cli"], {
+      role: "client",
+      deviceId: "dev_client_1",
+      protocolRev: 2,
+      authClaims: {
+        token_kind: "device",
+        role: "client",
+        device_id: "dev_client_1",
+        scopes: [],
+      },
+    });
+    const client = cm.getClient(id)!;
+    const deps = makeDeps(cm);
+
+    const result = await handleClientMessage(
+      client,
+      JSON.stringify({ request_id: "r-1", type: "presence.beacon", payload: {} }),
+      deps,
+    );
+
+    expect(result).toBeDefined();
+    expect((result as unknown as { ok: boolean }).ok).toBe(false);
+    expect((result as unknown as { error: { code: string } }).error.code).toBe("unsupported_request");
   });
 });
 

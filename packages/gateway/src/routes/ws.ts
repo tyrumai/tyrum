@@ -397,6 +397,7 @@ export function createWsHandler(opts: WsRouteOptions): {
             role: pendingInit.role,
             deviceId,
             protocolRev: pendingInit.protocolRev,
+            authClaims: upgradeClaims,
           });
 
           if (cluster) {
@@ -579,6 +580,7 @@ export function createWsHandler(opts: WsRouteOptions): {
         clientId = connectionManager.addClient(ws, legacy.data.payload.capabilities, {
           role: "client",
           protocolRev: 1,
+          authClaims: upgradeClaims,
         });
         if (cluster) {
           const nowMs = Date.now();
