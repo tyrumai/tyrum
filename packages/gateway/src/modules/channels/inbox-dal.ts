@@ -211,9 +211,10 @@ type RawQueuedInboxRow = {
   payload_json: string;
 };
 
-async function completeInboxRows(tx: SqlDb, inboxIds: number[], nowIso: string): Promise<void> {
+async function completeInboxRows(tx: SqlDb, inboxIds: number[], nowIso: string): Promise<number[]> {
+  const completed: number[] = [];
   for (const inboxId of inboxIds) {
-    await tx.run(
+    const updated = await tx.run(
       `UPDATE channel_inbox
        SET status = 'completed',
            lease_owner = NULL,
@@ -224,7 +225,11 @@ async function completeInboxRows(tx: SqlDb, inboxIds: number[], nowIso: string):
        WHERE inbox_id = ? AND status = 'queued'`,
       [nowIso, inboxId],
     );
+    if (updated.changes === 1) {
+      completed.push(inboxId);
+    }
   }
+  return completed;
 }
 
 async function countQueued(tx: SqlDb, input: { key: string; lane: string }): Promise<number> {
@@ -325,167 +330,164 @@ async function applyInboundQueueOverflowPolicy(tx: SqlDb, input: {
   const queuedBefore = await countQueued(tx, { key: input.key, lane: input.lane });
   if (queuedBefore <= input.cap) return undefined;
 
-  const overflow = Math.max(0, queuedBefore - input.cap);
-  if (overflow === 0) return undefined;
-
   const nowIso = new Date().toISOString();
+  const dropped: ChannelInboundQueueOverflowResult["dropped"] = [];
+  let summary: ChannelInboundQueueOverflowResult["summary"] | undefined;
 
-  if (input.policy === "drop_oldest") {
-    const rows = await tx.all<Pick<RawQueuedInboxRow, "inbox_id" | "thread_id" | "message_id" | "received_at_ms">>(
-      `SELECT inbox_id, thread_id, message_id, received_at_ms
+  let queued = queuedBefore;
+  const maxAttempts = 5;
+
+  for (let attempt = 0; attempt < maxAttempts && queued > input.cap; attempt += 1) {
+    const overflow = Math.max(0, queued - input.cap);
+    if (overflow === 0) break;
+
+    const effectivePolicy: ChannelInboundQueueOverflowPolicy =
+      input.policy === "summarize_dropped" && summary ? "drop_oldest" : input.policy;
+
+    if (effectivePolicy === "drop_oldest" || effectivePolicy === "drop_newest") {
+      const ordering = effectivePolicy === "drop_oldest" ? "ASC" : "DESC";
+      const rows = await tx.all<Pick<RawQueuedInboxRow, "inbox_id" | "thread_id" | "message_id" | "received_at_ms">>(
+        `SELECT inbox_id, thread_id, message_id, received_at_ms
+         FROM channel_inbox
+         WHERE status = 'queued' AND key = ? AND lane = ?
+         ORDER BY received_at_ms ${ordering}, inbox_id ${ordering}
+         LIMIT ?`,
+        [input.key, input.lane, overflow],
+      );
+      if (rows.length === 0) break;
+
+      const completedIds = await completeInboxRows(tx, rows.map((r) => r.inbox_id), nowIso);
+      const completedSet = new Set(completedIds);
+      for (const row of rows) {
+        if (!completedSet.has(row.inbox_id)) continue;
+        dropped.push({
+          inbox_id: row.inbox_id,
+          thread_id: row.thread_id,
+          message_id: row.message_id,
+          received_at_ms: row.received_at_ms,
+        });
+      }
+
+      queued = await countQueued(tx, { key: input.key, lane: input.lane });
+      continue;
+    }
+
+    // summarize_dropped (insert only one synthetic summary row per enforcement call)
+    const dropCount = overflow + 1;
+    const rows = await tx.all<RawQueuedInboxRow>(
+      `SELECT inbox_id, source, thread_id, message_id, received_at_ms, payload_json
        FROM channel_inbox
        WHERE status = 'queued' AND key = ? AND lane = ?
        ORDER BY received_at_ms ASC, inbox_id ASC
        LIMIT ?`,
-      [input.key, input.lane, overflow],
+      [input.key, input.lane, dropCount],
     );
-    const droppedIds = rows.map((r) => r.inbox_id);
-    await completeInboxRows(tx, droppedIds, nowIso);
+    if (rows.length === 0) break;
 
-    const queuedAfter = await countQueued(tx, { key: input.key, lane: input.lane });
-    return {
-      cap: input.cap,
-      policy: input.policy,
-      queued_before: queuedBefore,
-      queued_after: queuedAfter,
-      dropped: rows.map((r) => ({
-        inbox_id: r.inbox_id,
-        thread_id: r.thread_id,
-        message_id: r.message_id,
-        received_at_ms: r.received_at_ms,
-      })),
-    };
-  }
+    const completedIds = await completeInboxRows(tx, rows.map((r) => r.inbox_id), nowIso);
+    const completedSet = new Set(completedIds);
+    const completedRows = rows.filter((r) => completedSet.has(r.inbox_id));
 
-  if (input.policy === "drop_newest") {
-    const rows = await tx.all<Pick<RawQueuedInboxRow, "inbox_id" | "thread_id" | "message_id" | "received_at_ms">>(
-      `SELECT inbox_id, thread_id, message_id, received_at_ms
-       FROM channel_inbox
-       WHERE status = 'queued' AND key = ? AND lane = ?
-       ORDER BY received_at_ms DESC, inbox_id DESC
-       LIMIT ?`,
-      [input.key, input.lane, overflow],
-    );
-    const droppedIds = rows.map((r) => r.inbox_id);
-    await completeInboxRows(tx, droppedIds, nowIso);
-
-    const queuedAfter = await countQueued(tx, { key: input.key, lane: input.lane });
-    return {
-      cap: input.cap,
-      policy: input.policy,
-      queued_before: queuedBefore,
-      queued_after: queuedAfter,
-      dropped: rows.map((r) => ({
-        inbox_id: r.inbox_id,
-        thread_id: r.thread_id,
-        message_id: r.message_id,
-        received_at_ms: r.received_at_ms,
-      })),
-    };
-  }
-
-  // summarize_dropped
-  const dropCount = overflow + 1;
-  const rows = await tx.all<RawQueuedInboxRow>(
-    `SELECT inbox_id, source, thread_id, message_id, received_at_ms, payload_json
-     FROM channel_inbox
-     WHERE status = 'queued' AND key = ? AND lane = ?
-     ORDER BY received_at_ms ASC, inbox_id ASC
-     LIMIT ?`,
-    [input.key, input.lane, dropCount],
-  );
-  const droppedIds = rows.map((r) => r.inbox_id);
-  await completeInboxRows(tx, droppedIds, nowIso);
-
-  const droppedDescriptions: Array<{ messageText: string; attachments: number }> = [];
-  for (const row of rows) {
-    const parsed = NormalizedThreadMessageSchema.safeParse(
-      safeJsonParse(row.payload_json, {}),
-    );
-    if (parsed.success) {
-      const extracted = extractTextFromNormalizedMessage(parsed.data);
-      droppedDescriptions.push({ messageText: extracted.text, attachments: extracted.attachments });
-    } else {
-      droppedDescriptions.push({ messageText: "", attachments: 0 });
+    for (const row of completedRows) {
+      dropped.push({
+        inbox_id: row.inbox_id,
+        thread_id: row.thread_id,
+        message_id: row.message_id,
+        received_at_ms: row.received_at_ms,
+      });
     }
-  }
 
-  const summaryText = buildQueueOverflowSummaryText({ cap: input.cap, dropped: droppedDescriptions });
-  const syntheticMessageId = `queue_overflow:${randomUUID()}`;
-  const basePayload = rows.length > 0 ? safeJsonParse(rows[0]!.payload_json, {}) : {};
-  const parsedBase = NormalizedThreadMessageSchema.safeParse(basePayload);
-  const summarySource = rows[0]?.source ?? "telegram";
-  const summaryAddress = (() => {
-    try {
-      return parseChannelSourceKey(summarySource);
-    } catch {
-      return { connector: "telegram", accountId: DEFAULT_CHANNEL_ACCOUNT_ID };
-    }
-  })();
-  const fallbackThreadId = rows[0]?.thread_id ?? input.key;
-  const thread = parsedBase.success
-    ? parsedBase.data.thread
-    : {
-        id: fallbackThreadId,
-        kind: "other" as const,
-        title: undefined,
-        username: undefined,
-        pii_fields: [],
+    if (completedRows.length > 0 && !summary) {
+      const droppedDescriptions: Array<{ messageText: string; attachments: number }> = [];
+      for (const row of completedRows) {
+        const parsed = NormalizedThreadMessageSchema.safeParse(
+          safeJsonParse(row.payload_json, {}),
+        );
+        if (parsed.success) {
+          const extracted = extractTextFromNormalizedMessage(parsed.data);
+          droppedDescriptions.push({ messageText: extracted.text, attachments: extracted.attachments });
+        } else {
+          droppedDescriptions.push({ messageText: "", attachments: 0 });
+        }
+      }
+
+      const summaryText = buildQueueOverflowSummaryText({ cap: input.cap, dropped: droppedDescriptions });
+      const syntheticMessageId = `queue_overflow:${randomUUID()}`;
+      const basePayload = safeJsonParse(completedRows[0]!.payload_json, {});
+      const parsedBase = NormalizedThreadMessageSchema.safeParse(basePayload);
+      const summarySource = completedRows[0]?.source ?? "telegram";
+      const summaryAddress = (() => {
+        try {
+          return parseChannelSourceKey(summarySource);
+        } catch {
+          return { connector: "telegram", accountId: DEFAULT_CHANNEL_ACCOUNT_ID };
+        }
+      })();
+      const fallbackThreadId = completedRows[0]?.thread_id ?? input.key;
+      const thread = parsedBase.success
+        ? parsedBase.data.thread
+        : {
+            id: fallbackThreadId,
+            kind: "other" as const,
+            title: undefined,
+            username: undefined,
+            pii_fields: [],
+          };
+      const containerKind = normalizedContainerKindFromThreadKind(thread.kind);
+      const createdIso = new Date().toISOString();
+      const syntheticPayload: NormalizedThreadMessage = {
+        thread,
+        message: {
+          id: syntheticMessageId,
+          thread_id: thread.id,
+          source: parsedBase.success ? parsedBase.data.message.source : "telegram",
+          content: { kind: "text", text: summaryText },
+          sender: {
+            id: "system",
+            is_bot: true,
+            username: "tyrum",
+          },
+          timestamp: createdIso,
+          edited_timestamp: undefined,
+          pii_fields: ["message_text"],
+          envelope: {
+            message_id: syntheticMessageId,
+            received_at: createdIso,
+            delivery: { channel: summaryAddress.connector, account: summaryAddress.accountId },
+            container: { kind: containerKind, id: thread.id },
+            sender: { id: "system", display: "Tyrum" },
+            content: { text: summaryText, attachments: [] },
+            provenance: ["system"],
+          },
+        },
       };
-  const containerKind = normalizedContainerKindFromThreadKind(thread.kind);
-  const createdIso = new Date().toISOString();
-  const syntheticPayload: NormalizedThreadMessage = {
-    thread,
-    message: {
-      id: syntheticMessageId,
-      thread_id: thread.id,
-      source: parsedBase.success ? parsedBase.data.message.source : "telegram",
-      content: { kind: "text", text: summaryText },
-      sender: {
-        id: "system",
-        is_bot: true,
-        username: "tyrum",
-      },
-      timestamp: createdIso,
-      edited_timestamp: undefined,
-      pii_fields: ["message_text"],
-      envelope: {
+
+      const summaryReceivedAtMs = completedRows[completedRows.length - 1]!.received_at_ms;
+      const summaryInboxId = await insertSyntheticInboxRow(tx, {
+        source: completedRows[0]?.source ?? "telegram",
+        thread_id: completedRows[0]?.thread_id ?? fallbackThreadId,
         message_id: syntheticMessageId,
-        received_at: createdIso,
-        delivery: { channel: summaryAddress.connector, account: summaryAddress.accountId },
-        container: { kind: containerKind, id: thread.id },
-        sender: { id: "system", display: "Tyrum" },
-        content: { text: summaryText, attachments: [] },
-        provenance: ["system"],
-      },
-    },
-  };
+        key: input.key,
+        lane: input.lane,
+        queue_mode: "followup",
+        received_at_ms: summaryReceivedAtMs,
+        payload_json: JSON.stringify(syntheticPayload),
+      });
 
-  const summaryReceivedAtMs = rows.length > 0 ? rows[rows.length - 1]!.received_at_ms : Date.now();
-  const summaryInboxId = await insertSyntheticInboxRow(tx, {
-    source: rows[0]?.source ?? "telegram",
-    thread_id: rows[0]?.thread_id ?? fallbackThreadId,
-    message_id: syntheticMessageId,
-    key: input.key,
-    lane: input.lane,
-    queue_mode: "followup",
-    received_at_ms: summaryReceivedAtMs,
-    payload_json: JSON.stringify(syntheticPayload),
-  });
+      summary = { inbox_id: summaryInboxId, message_id: syntheticMessageId };
+    }
 
-  const queuedAfter = await countQueued(tx, { key: input.key, lane: input.lane });
+    queued = await countQueued(tx, { key: input.key, lane: input.lane });
+  }
+
+  const queuedAfter = queued;
   return {
     cap: input.cap,
     policy: input.policy,
     queued_before: queuedBefore,
     queued_after: queuedAfter,
-    dropped: rows.map((r) => ({
-      inbox_id: r.inbox_id,
-      thread_id: r.thread_id,
-      message_id: r.message_id,
-      received_at_ms: r.received_at_ms,
-    })),
-    summary: { inbox_id: summaryInboxId, message_id: syntheticMessageId },
+    dropped,
+    ...(summary ? { summary } : {}),
   };
 }
 

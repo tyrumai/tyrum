@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
+import type { RunResult, SqlDb } from "../../src/statestore/types.js";
 import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
 import { TelegramChannelQueue } from "../../src/modules/channels/telegram.js";
 import { WsEventEnvelope, WsEvent } from "@tyrum/schemas";
@@ -46,6 +47,101 @@ function makeNormalizedTextMessage(input: {
       },
     },
   };
+}
+
+class InjectingOverflowDb implements SqlDb {
+  readonly kind: SqlDb["kind"];
+
+  private injected = false;
+
+  constructor(
+    private readonly db: SqlDb,
+    private readonly injection: {
+      key: string;
+      lane: string;
+      source: string;
+      threadId: string;
+      messageId: string;
+      receivedAtMs: number;
+      payload: NormalizedThreadMessage;
+    },
+  ) {
+    this.kind = db.kind;
+  }
+
+  async get<T>(sql: string, params?: readonly unknown[]): Promise<T | undefined> {
+    return await this.db.get(sql, params);
+  }
+
+  async all<T>(sql: string, params?: readonly unknown[]): Promise<T[]> {
+    return await this.db.all(sql, params);
+  }
+
+  async run(sql: string, params?: readonly unknown[]): Promise<RunResult> {
+    return await this.db.run(sql, params);
+  }
+
+  async exec(sql: string): Promise<void> {
+    await this.db.exec(sql);
+  }
+
+  async transaction<T>(fn: (tx: SqlDb) => Promise<T>): Promise<T> {
+    return await this.db.transaction(async (tx) => await fn(this.wrapTx(tx)));
+  }
+
+  async close(): Promise<void> {
+    await this.db.close();
+  }
+
+  private wrapTx(tx: SqlDb): SqlDb {
+    return {
+      kind: tx.kind,
+      get: async <T>(sql: string, params?: readonly unknown[]) => await tx.get<T>(sql, params),
+      all: async <T>(sql: string, params?: readonly unknown[]) => await tx.all<T>(sql, params),
+      run: async (sql: string, params?: readonly unknown[]) => {
+        const result = await tx.run(sql, params);
+
+        if (
+          !this.injected
+          && result.changes === 1
+          && sql.includes("UPDATE channel_inbox")
+          && sql.includes("SET status = 'completed'")
+        ) {
+          this.injected = true;
+          await tx.run(
+            `INSERT INTO channel_inbox (
+               source,
+               thread_id,
+               message_id,
+               key,
+               lane,
+               queue_mode,
+               received_at_ms,
+               payload_json,
+               status
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued')`,
+            [
+              this.injection.source,
+              this.injection.threadId,
+              this.injection.messageId,
+              this.injection.key,
+              this.injection.lane,
+              "followup",
+              this.injection.receivedAtMs,
+              JSON.stringify(this.injection.payload),
+            ],
+          );
+        }
+
+        return result;
+      },
+      exec: async (sql: string) => await tx.exec(sql),
+      transaction: async <T>(fn: (inner: SqlDb) => Promise<T>) =>
+        await tx.transaction(async (inner) => await fn(this.wrapTx(inner))),
+      close: async () => await tx.close(),
+    } satisfies SqlDb;
+  }
 }
 
 describe("Channel inbox queue overflow policies", () => {
@@ -168,6 +264,60 @@ describe("Channel inbox queue overflow policies", () => {
       ["msg-2", "queued"],
       ["msg-3", "completed"],
     ]);
+  });
+
+  it("enforces cap when the queue grows during trimming (simulated concurrency)", async () => {
+    process.env["TYRUM_CHANNEL_INBOUND_QUEUE_CAP"] = "1";
+    process.env["TYRUM_CHANNEL_INBOUND_QUEUE_OVERFLOW"] = "drop_oldest";
+
+    const key = "agent:default:telegram:default:dm:chat-1";
+    const lane = "main";
+
+    const injectingDb = new InjectingOverflowDb(db, {
+      key,
+      lane,
+      source: "telegram",
+      threadId: "chat-1",
+      messageId: "msg-injected",
+      receivedAtMs: 1_500,
+      payload: makeNormalizedTextMessage({
+        threadId: "chat-1",
+        messageId: "msg-injected",
+        text: "injected",
+      }),
+    });
+
+    inbox = new ChannelInboxDal(injectingDb);
+
+    await inbox.enqueue({
+      source: "telegram",
+      thread_id: "chat-1",
+      message_id: "msg-1",
+      key,
+      lane,
+      received_at_ms: 1_000,
+      payload: makeNormalizedTextMessage({ threadId: "chat-1", messageId: "msg-1", text: "one" }),
+    });
+
+    await inbox.enqueue({
+      source: "telegram",
+      thread_id: "chat-1",
+      message_id: "msg-2",
+      key,
+      lane,
+      received_at_ms: 2_000,
+      payload: makeNormalizedTextMessage({ threadId: "chat-1", messageId: "msg-2", text: "two" }),
+    });
+
+    const queued = await db.all<{ message_id: string }>(
+      `SELECT message_id
+       FROM channel_inbox
+       WHERE status = 'queued' AND key = ? AND lane = ?
+       ORDER BY received_at_ms ASC, inbox_id ASC`,
+      [key, lane],
+    );
+
+    expect(queued.map((row) => row.message_id)).toEqual(["msg-2"]);
   });
 
   it("summarize_dropped replaces overflow with a synthetic follow-up message", async () => {
