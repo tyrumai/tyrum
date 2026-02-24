@@ -97,11 +97,19 @@ describe("AgentRuntime", () => {
 
     const identitySection = report!.system_prompt.sections.find((section) => section.id === "identity");
     const safetySection = report!.system_prompt.sections.find((section) => section.id === "safety");
+    const sandboxSection = report!.system_prompt.sections.find((section) => section.id === "sandbox");
     expect(identitySection).toBeDefined();
     expect(safetySection).toBeDefined();
+    expect(sandboxSection).toBeDefined();
 
     const delimiter = "\n\n";
-    expect(report!.system_prompt.chars).toBe(identitySection!.chars + delimiter.length + safetySection!.chars);
+    expect(report!.system_prompt.chars).toBe(
+      identitySection!.chars +
+        delimiter.length +
+        safetySection!.chars +
+        delimiter.length +
+        sandboxSection!.chars,
+    );
   });
 
   it("scopes session cleanup to the current agentId", async () => {
