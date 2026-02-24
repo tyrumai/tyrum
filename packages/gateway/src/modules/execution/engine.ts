@@ -25,6 +25,7 @@ import type { SqlDb } from "../../statestore/types.js";
 import type { PolicyService } from "../policy/service.js";
 import { canonicalizeToolMatchTarget } from "../policy/match-target.js";
 import type { SecretProvider } from "../secret/provider.js";
+import { collectSecretHandleIds } from "../secret/collect-secret-handle-ids.js";
 
 export interface StepResult {
   success: boolean;
@@ -274,32 +275,8 @@ export class ExecutionEngine {
     return this.redactionEngine ? this.redactionEngine.redactText(text).redacted : text;
   }
 
-  private collectSecretHandleIds(args: unknown): string[] {
-    const out = new Set<string>();
-
-    const walk = (value: unknown): void => {
-      if (typeof value === "string" && value.startsWith("secret:")) {
-        const id = value.slice("secret:".length).trim();
-        if (id) out.add(id);
-        return;
-      }
-      if (Array.isArray(value)) {
-        for (const entry of value) walk(entry);
-        return;
-      }
-      if (value !== null && typeof value === "object") {
-        for (const v of Object.values(value as Record<string, unknown>)) {
-          walk(v);
-        }
-      }
-    };
-
-    walk(args);
-    return [...out];
-  }
-
   private async resolveSecretScopesFromArgs(args: unknown): Promise<string[]> {
-    const handleIds = this.collectSecretHandleIds(args);
+    const handleIds = collectSecretHandleIds(args);
     if (handleIds.length === 0) return [];
 
     if (!this.secretProvider) {
@@ -327,7 +304,7 @@ export class ExecutionEngine {
   }
 
   private async isApprovedPolicyGateTx(tx: SqlDb, approvalId: number | null): Promise<boolean> {
-    if (!approvalId) return false;
+    if (approvalId === null) return false;
     const row = await tx.get<{ kind: string; status: string }>(
       "SELECT kind, status FROM approvals WHERE id = ? LIMIT 1",
       [approvalId],

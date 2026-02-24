@@ -441,6 +441,24 @@ describe("ExecutionEngine (normalized)", () => {
     await rm(home, { recursive: true, force: true });
   });
 
+  it("treats approval id 0 as a valid approved policy gate", async () => {
+    db = openTestSqliteDb();
+
+    const engine = new ExecutionEngine({ db });
+    await db.run(
+      `INSERT INTO approvals (id, plan_id, step_index, prompt, status, kind)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [0, "plan-0", 0, "ok", "approved", "policy"],
+    );
+
+    const ok = await (
+      engine as unknown as {
+        isApprovedPolicyGateTx: (tx: unknown, approvalId: number) => Promise<boolean>;
+      }
+    ).isApprovedPolicyGateTx(db, 0);
+    expect(ok).toBe(true);
+  });
+
   it("evaluates secret policy using provider:scope when possible", async () => {
     db = openTestSqliteDb();
 
