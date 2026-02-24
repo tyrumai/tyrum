@@ -2172,13 +2172,22 @@ export class AgentRuntime {
   }): Promise<{ allowlist: string[]; pluginTools: ToolDescriptor[] }> {
     const policy = this.policyService;
 
-    const sideEffecting = params.pluginTools.filter(isSideEffectingPluginTool);
+    const pluginTools = params.pluginTools
+      .map((tool) => {
+        const id = tool.id.trim();
+        if (!id) return undefined;
+        if (id === tool.id) return tool;
+        return { ...tool, id };
+      })
+      .filter((tool): tool is ToolDescriptor => Boolean(tool));
+
+    const sideEffecting = pluginTools.filter(isSideEffectingPluginTool);
     if (sideEffecting.length === 0) {
-      return { allowlist: [...params.allowlist], pluginTools: [...params.pluginTools] };
+      return { allowlist: [...params.allowlist], pluginTools };
     }
 
     if (!policy.isEnabled() || policy.isObserveOnly()) {
-      return { allowlist: [...params.allowlist], pluginTools: [...params.pluginTools] };
+      return { allowlist: [...params.allowlist], pluginTools };
     }
 
     try {
@@ -2201,22 +2210,22 @@ export class AgentRuntime {
         return false;
       };
 
-      const pluginTools = params.pluginTools.filter(
+      const gatedPluginTools = pluginTools.filter(
         (tool) => !isSideEffectingPluginTool(tool) || isOptedIn(tool.id),
       );
 
       const allowlist = new Set<string>(params.allowlist);
-      for (const tool of pluginTools) {
-        if (isSideEffectingPluginTool(tool) && isOptedIn(tool.id)) {
+      for (const tool of gatedPluginTools) {
+        if (isSideEffectingPluginTool(tool)) {
           allowlist.add(tool.id);
         }
       }
 
-      return { allowlist: [...allowlist], pluginTools };
+      return { allowlist: [...allowlist], pluginTools: gatedPluginTools };
     } catch {
       // Fail closed: side-effecting plugin tools are opt-in and require a readable policy bundle.
-      const pluginTools = params.pluginTools.filter((tool) => !isSideEffectingPluginTool(tool));
-      return { allowlist: [...params.allowlist], pluginTools };
+      const gatedPluginTools = pluginTools.filter((tool) => !isSideEffectingPluginTool(tool));
+      return { allowlist: [...params.allowlist], pluginTools: gatedPluginTools };
     }
   }
 }
