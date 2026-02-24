@@ -27,6 +27,14 @@ function parseDirectPayload(payload: unknown): { connection_id: string; message:
   return { connection_id: connectionId, message: message as WsEnvelope };
 }
 
+function extractAttemptId(message: WsEnvelope): string | undefined {
+  if (message.type !== "task.execute") return undefined;
+  const payload = (message as unknown as { payload?: unknown }).payload;
+  if (!isObject(payload)) return undefined;
+  const attemptId = payload["attempt_id"];
+  return typeof attemptId === "string" && attemptId.trim().length > 0 ? attemptId : undefined;
+}
+
 function parseBroadcastPayload(
   payload: unknown,
 ): { message: WsEnvelope; source_edge_id?: string; skip_local?: boolean } | undefined {
@@ -171,6 +179,13 @@ export class OutboxPoller {
       if (!client) return;
       try {
         client.ws.send(JSON.stringify(parsed.message));
+        if (client.role === "node") {
+          const attemptId = extractAttemptId(parsed.message);
+          if (attemptId) {
+            const nodeId = client.device_id ?? client.id;
+            this.connectionManager.recordDispatchedAttemptExecutor(attemptId, nodeId);
+          }
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         this.logger?.warn("outbox.ws_send_failed", {
