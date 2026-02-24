@@ -186,10 +186,11 @@ function isSameOriginUpgrade(req: IncomingMessage): boolean {
   }
   if (originUrl.protocol !== "http:" && originUrl.protocol !== "https:") return false;
 
-  const originPort = originUrl.port || (originUrl.protocol === "https:" ? "443" : "80");
+  const defaultPort = originUrl.protocol === "https:" ? "443" : "80";
+  const originPort = originUrl.port || defaultPort;
   const host = parseHostHeader(hostValue);
   if (!host) return false;
-  const hostPort = host.port ?? originPort;
+  const hostPort = host.port ?? defaultPort;
 
   return host.hostname.toLowerCase() === originUrl.hostname.toLowerCase() && hostPort === originPort;
 }

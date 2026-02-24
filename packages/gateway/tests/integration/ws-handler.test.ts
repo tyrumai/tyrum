@@ -424,6 +424,45 @@ describe("WS handler integration", () => {
     stopHeartbeat();
   });
 
+  it("rejects cookie-authenticated upgrade when Origin port does not match default Host port", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
+    const tokenStore = new TokenStore(homeDir);
+    const adminToken = await tokenStore.initialize();
+
+    const connectionManager = new ConnectionManager();
+    const { handleUpgrade, stopHeartbeat } = createWsHandler({
+      connectionManager,
+      protocolDeps: { connectionManager },
+      tokenStore,
+    });
+
+    server = createServer();
+    server.on("upgrade", (req, socket, head) => {
+      handleUpgrade(req, socket, head);
+    });
+
+    const port = await new Promise<number>((resolve) => {
+      server!.listen(0, "127.0.0.1", () => {
+        const addr = server!.address();
+        resolve(typeof addr === "object" && addr ? addr.port : 0);
+      });
+    });
+
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, ["tyrum-v1"], {
+      headers: {
+        Cookie: `${AUTH_COOKIE_NAME}=${adminToken}`,
+        Origin: "http://127.0.0.1:9999",
+        Host: "127.0.0.1",
+      },
+    });
+    clients.push(ws);
+
+    const { code } = await waitForClose(ws, 2_000);
+    expect(code).toBe(4001);
+
+    stopHeartbeat();
+  });
+
   it("emits a deprecation warning event after legacy connect", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
     const tokenStore = new TokenStore(homeDir);
