@@ -8,11 +8,12 @@ describe("gateway CLI fatal error logging", () => {
 
     const secret = "postgres://user:supersecret@db.example.com:5432/tyrum";
     const err = new Error(`boom ${secret}`);
+    err.name = `Error ${secret}`;
+    (err as NodeJS.ErrnoException).code = secret;
     const formatted = (formatter as (error: unknown) => string)(err);
 
-    expect(formatted).toContain("Error");
+    expect(formatted).toBe("Error");
     expect(formatted).not.toContain("boom");
     expect(formatted).not.toContain(secret);
   });
 });
-
