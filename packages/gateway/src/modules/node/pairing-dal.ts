@@ -7,6 +7,7 @@ import {
 } from "@tyrum/schemas";
 import { NodePairingRequest } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
+import { createHash, randomBytes } from "node:crypto";
 
 type NodePairingStatus = "pending" | "approved" | "denied" | "revoked";
 
@@ -70,6 +71,14 @@ function parseTrustLevel(raw: string): NodePairingTrustLevel | undefined {
   return undefined;
 }
 
+function sha256Hex(input: string): string {
+  return createHash("sha256").update(input, "utf-8").digest("hex");
+}
+
+function generateScopedToken(): string {
+  return randomBytes(32).toString("hex");
+}
+
 function toPairing(row: RawNodePairingRow): NodePairingRequestT {
   const status: NodePairingStatus =
     row.status === "approved" || row.status === "denied" || row.status === "revoked"
@@ -110,6 +119,20 @@ function toPairing(row: RawNodePairingRow): NodePairingRequestT {
 
 export class NodePairingDal {
   constructor(private readonly db: SqlDb) {}
+
+  async getNodeIdForScopedToken(scopedToken: string): Promise<string | undefined> {
+    const token = scopedToken.trim();
+    if (token.length === 0) return undefined;
+    const hash = sha256Hex(token);
+    const row = await this.db.get<{ node_id: string }>(
+      `SELECT node_id
+       FROM node_pairings
+       WHERE status = 'approved'
+         AND scoped_token_sha256 = ?`,
+      [hash],
+    );
+    return row?.node_id;
+  }
 
   async getByNodeId(nodeId: string): Promise<NodePairingRequestT | undefined> {
     const row = await this.db.get<RawNodePairingRow>(
@@ -257,6 +280,7 @@ export class NodePairingDal {
            label = COALESCE(?, label),
            capabilities_json = ?,
            metadata_json = ?,
+           scoped_token_sha256 = NULL,
            requested_at = ?,
            last_seen_at = ?,
            resolved_at = NULL,
@@ -295,7 +319,7 @@ export class NodePairingDal {
     reason?: string;
     resolvedBy?: unknown;
     nowIso?: string;
-  }): Promise<NodePairingRequestT | undefined> {
+  }): Promise<{ pairing: NodePairingRequestT; scopedToken?: string } | undefined> {
     const nowIso = params.nowIso ?? new Date().toISOString();
 
     const existing = await this.db.get<RawNodePairingRow>(
@@ -317,11 +341,15 @@ export class NodePairingDal {
         ? params.capabilityAllowlist
         : parseAllowlist(existing.capability_allowlist_json);
 
+    const scopedToken = params.decision === "approved" ? generateScopedToken() : undefined;
+    const scopedTokenSha256 = scopedToken ? sha256Hex(scopedToken) : null;
+
     const result = await this.db.run(
       `UPDATE node_pairings
        SET status = ?,
            trust_level = ?,
            capability_allowlist_json = ?,
+           scoped_token_sha256 = ?,
            resolved_at = ?,
            resolved_by_json = ?,
            resolution_reason = ?,
@@ -332,6 +360,7 @@ export class NodePairingDal {
         params.decision,
         trustLevel,
         JSON.stringify(allowlist),
+        scopedTokenSha256,
         nowIso,
         JSON.stringify(params.resolvedBy ?? {}),
         params.reason ?? null,
@@ -340,7 +369,9 @@ export class NodePairingDal {
       ],
     );
     if (result.changes === 0) return undefined;
-    return await this.getById(params.pairingId);
+    const pairing = await this.getById(params.pairingId);
+    if (!pairing) return undefined;
+    return { pairing, scopedToken };
   }
 
   async revoke(params: {
@@ -354,6 +385,7 @@ export class NodePairingDal {
     const result = await this.db.run(
       `UPDATE node_pairings
        SET status = 'revoked',
+           scoped_token_sha256 = NULL,
            resolved_at = ?,
            resolved_by_json = ?,
            resolution_reason = ?,

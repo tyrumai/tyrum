@@ -65,6 +65,8 @@ Dedupe is keyed by stable identifiers, typically:
 
 Dedupe entries are time-bounded (TTL) and stored in a way that remains correct under clustered gateway edges. When a duplicate delivery is detected, Tyrum records an audit event and drops the duplicate without starting another run.
 
+Implementation note: the gateway persists inbound dedupe keys in `channel_inbound_dedupe` and prunes expired entries using `TYRUM_CHANNEL_INBOUND_DEDUPE_TTL_MS` (default 7 days).
+
 ## Inbound debouncing (batch rapid bursts)
 
 Rapid consecutive messages from the same sender/container are batched into a single agent turn using a per-container debounce window:

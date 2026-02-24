@@ -330,7 +330,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
     expect(enqueued.inbox.key).toBe("agent:agent-c1:dm:123");
   });
 
-  it("defaults telegram account id to legacy channel key", async () => {
+  it("defaults telegram account id to default", async () => {
     db = openTestSqliteDb();
 
     const originalAccountId = process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
@@ -343,7 +343,12 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me", 123, { senderId: 777 })));
       const enqueued = await queue.enqueue(normalized);
 
-      expect(enqueued.inbox.key).toBe("agent:agent-c1:telegram:telegram-1:dm:123");
+      expect(enqueued.inbox.key).toBe("agent:agent-c1:telegram:default:dm:123");
+
+      const inbox = new ChannelInboxDal(db);
+      const row = await inbox.getById(enqueued.inbox.inbox_id);
+      expect((row?.payload as { message?: { envelope?: { delivery?: { account?: string } } } })?.message?.envelope?.delivery?.account)
+        .toBe("default");
     } finally {
       if (originalAccountId === undefined) {
         delete process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
@@ -394,6 +399,19 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
     expect(workAccount.deduped).toBe(false);
     expect(personalAccount.deduped).toBe(false);
     expect(personalAccount.inbox.inbox_id).not.toBe(workAccount.inbox.inbox_id);
+  });
+
+  it("stamps the normalized envelope delivery identity with the queue account id", async () => {
+    db = openTestSqliteDb();
+    const queue = new TelegramChannelQueue(db);
+    const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me")));
+
+    const enqueued = await queue.enqueue(normalized, { accountId: "work" });
+
+    const inbox = new ChannelInboxDal(db);
+    const row = await inbox.getById(enqueued.inbox.inbox_id);
+    expect((row?.payload as { message?: { envelope?: { delivery?: { account?: string } } } })?.message?.envelope?.delivery?.account)
+      .toBe("work");
   });
 
   it("dedupes default-account messages against legacy source keys", async () => {

@@ -83,4 +83,21 @@ describe("Pairing routes", () => {
     expect(body.pairing?.status).toBe("approved");
     expect(body.pairing?.capability_allowlist).toEqual([]);
   });
+
+  it("does not return scoped_token in the approve response body", async () => {
+    const pairingId = await seedPendingPairing();
+    const res = await app.request(`/pairings/${String(pairingId)}/approve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        reason: "ok",
+        trust_level: "remote",
+        capability_allowlist: [],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(Object.prototype.hasOwnProperty.call(body, "scoped_token")).toBe(false);
+  });
 });

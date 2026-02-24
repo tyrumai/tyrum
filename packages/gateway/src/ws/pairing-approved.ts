@@ -1,0 +1,59 @@
+import type { WsEventEnvelope } from "@tyrum/schemas";
+import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
+import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
+import type { ConnectionManager } from "./connection-manager.js";
+
+export interface PairingApprovedDeliveryDeps {
+  connectionManager: ConnectionManager;
+  cluster?: {
+    edgeId: string;
+    outboxDal: OutboxDal;
+    connectionDirectory: ConnectionDirectoryDal;
+  };
+}
+
+export function emitPairingApprovedEvent(
+  deps: PairingApprovedDeliveryDeps,
+  input: { pairing: unknown; nodeId: string; scopedToken: string },
+): void {
+  const evt = {
+    event_id: crypto.randomUUID(),
+    type: "pairing.approved",
+    occurred_at: new Date().toISOString(),
+    payload: { pairing: input.pairing, scoped_token: input.scopedToken },
+  } satisfies WsEventEnvelope;
+
+  // Local, direct (do not broadcast tokens).
+  const payload = JSON.stringify(evt);
+  for (const client of deps.connectionManager.allClients()) {
+    if (client.role !== "node") continue;
+    if (client.device_id !== input.nodeId) continue;
+    try {
+      client.ws.send(payload);
+    } catch {
+      // ignore
+    }
+  }
+
+  // Cluster, direct (best-effort).
+  if (deps.cluster) {
+    const cluster = deps.cluster;
+    void (async () => {
+      const nowMs = Date.now();
+      const peers = await cluster.connectionDirectory.listNonExpired(nowMs);
+      for (const peer of peers) {
+        if (peer.role !== "node") continue;
+        if (peer.device_id !== input.nodeId) continue;
+        if (peer.edge_id === cluster.edgeId) continue;
+        await cluster.outboxDal.enqueue(
+          "ws.direct",
+          { connection_id: peer.connection_id, message: evt },
+          { targetEdgeId: peer.edge_id },
+        );
+      }
+    })().catch(() => {
+      // ignore
+    });
+  }
+}
+

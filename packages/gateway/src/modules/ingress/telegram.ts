@@ -16,6 +16,7 @@ import type {
   SenderMetadata,
   ThreadKind,
 } from "@tyrum/schemas";
+import { telegramAccountIdFromEnv } from "../channels/telegram-account.js";
 
 // ---------------------------------------------------------------------------
 // Error
@@ -263,14 +264,14 @@ export function normalizeUpdate(
         received_at: timestamp,
         delivery: {
           channel: "telegram",
-          account: "default",
-	        },
-	        container: {
-	          kind: normalizedContainerKindFromThreadKind(thread.kind),
-	          id: thread.id,
-	        },
-	        sender: {
-	          id: sender?.id ?? `chat:${thread.id}`,
+          account: telegramAccountIdFromEnv(),
+        },
+        container: {
+          kind: normalizedContainerKindFromThreadKind(thread.kind),
+          id: thread.id,
+        },
+        sender: {
+          id: sender?.id ?? `chat:${thread.id}`,
           ...(sender?.username != null ? { display: sender.username } : {}),
         },
         content: envelopeContent,

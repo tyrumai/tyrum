@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { NormalizedThreadMessage as NormalizedThreadMessageSchema } from "@tyrum/schemas";
 import {
   normalizeUpdate,
@@ -21,6 +21,28 @@ function loadFixture(name: string): string {
 }
 
 describe("Telegram normalization", () => {
+  const originalAccountId = process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
+  const originalChannelKey = process.env["TYRUM_TELEGRAM_CHANNEL_KEY"];
+
+  beforeEach(() => {
+    delete process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
+    delete process.env["TYRUM_TELEGRAM_CHANNEL_KEY"];
+  });
+
+  afterEach(() => {
+    if (originalAccountId === undefined) {
+      delete process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
+    } else {
+      process.env["TYRUM_TELEGRAM_ACCOUNT_ID"] = originalAccountId;
+    }
+
+    if (originalChannelKey === undefined) {
+      delete process.env["TYRUM_TELEGRAM_CHANNEL_KEY"];
+    } else {
+      process.env["TYRUM_TELEGRAM_CHANNEL_KEY"] = originalChannelKey;
+    }
+  });
+
   it("normalizes text message", () => {
     const update = normalizeUpdate(loadFixture("text_message.json"));
 
@@ -77,6 +99,18 @@ describe("Telegram normalization", () => {
       "sender_username",
       "sender_language_code",
     ]);
+  });
+
+  it("uses configured Telegram account id in the normalized envelope delivery identity", () => {
+    process.env["TYRUM_TELEGRAM_ACCOUNT_ID"] = "work";
+    const update = normalizeUpdate(loadFixture("text_message.json"));
+    expect(update.message.envelope?.delivery.account).toBe("work");
+  });
+
+  it("falls back to legacy Telegram channel key when account id is unset", () => {
+    process.env["TYRUM_TELEGRAM_CHANNEL_KEY"] = "legacy-telegram-1";
+    const update = normalizeUpdate(loadFixture("text_message.json"));
+    expect(update.message.envelope?.delivery.account).toBe("legacy-telegram-1");
   });
 
   it("normalizes edited message", () => {

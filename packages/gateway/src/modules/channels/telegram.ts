@@ -27,6 +27,7 @@ import {
   parseChannelSourceKey,
 } from "./interface.js";
 import { PeerIdentityLinkDal } from "./peer-identity-link-dal.js";
+import { telegramAccountIdFromEnv } from "./telegram-account.js";
 
 function isFalsyEnvFlag(value: string | undefined): boolean {
   if (!value) return false;
@@ -68,12 +69,6 @@ function mergeInboundEnvelopes(envelopes: NormalizedMessageEnvelope[], mergedTex
 
 function agentIdFromEnv(): string {
   return process.env["TYRUM_AGENT_ID"]?.trim() || "default";
-}
-
-function telegramAccountIdFromEnv(): string {
-  return process.env["TYRUM_TELEGRAM_ACCOUNT_ID"]?.trim()
-    || process.env["TYRUM_TELEGRAM_CHANNEL_KEY"]?.trim()
-    || "telegram-1";
 }
 
 function toTelegramParseMode(value: string | undefined): "HTML" | "Markdown" | "MarkdownV2" | undefined {
@@ -282,19 +277,19 @@ export class TelegramChannelQueue {
     const deliveryAccount = source === "telegram" ? DEFAULT_CHANNEL_ACCOUNT_ID : accountId;
     const payload: NormalizedThreadMessage = normalized.message.envelope
       ? {
-        ...normalized,
-        message: {
-          ...normalized.message,
-          envelope: {
-            ...normalized.message.envelope,
-            delivery: {
-              ...normalized.message.envelope.delivery,
-              channel: "telegram",
-              account: deliveryAccount,
+          ...normalized,
+          message: {
+            ...normalized.message,
+            envelope: {
+              ...normalized.message.envelope,
+              delivery: {
+                ...normalized.message.envelope.delivery,
+                channel: "telegram",
+                account: deliveryAccount,
+              },
             },
           },
-        },
-      }
+        }
       : normalized;
     const parsed = parseTyrumKey(key as never);
     if (

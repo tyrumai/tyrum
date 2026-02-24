@@ -86,6 +86,8 @@ Example operator scopes:
 
 **Per-method authorization:** every HTTP route and WS request type declares the scopes required to call it. Deny-by-default is the baseline.
 
+**HTTP scope enforcement:** HTTP requests authenticated with **device tokens** are authorized per-route based on required scopes (for example `operator.read`, `operator.write`). Requests missing the required scope are rejected with `403 forbidden`. The **admin bootstrap token** is break-glass and is treated as wildcard scope for HTTP (intentionally not scope-limited).
+
 ### Admin mode (step-up)
 
 Operator clients support an **Admin Mode** that grants elevated scopes for a short duration. Entering Admin Mode requires step-up authentication and/or an explicit approval, and it is audited.
