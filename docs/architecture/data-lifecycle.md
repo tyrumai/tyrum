@@ -52,6 +52,12 @@ Lifecycle expectations:
 - TTL pruning is safe under clustered edges (no correctness dependence on long-lived cache rows).
 - TTL windows are chosen to tolerate normal jitter and brief partitions without creating “ghost ownership”.
 
+Implementation note (gateway defaults):
+
+- The gateway periodically prunes TTL-derived tables (`presence_entries`, `connection_directory`, `channel_inbound_dedupe`) based on their `expires_at_ms` columns.
+- The gateway also prunes expired sessions/transcripts by deleting `sessions` rows whose `updated_at` is older than `TYRUM_SESSIONS_TTL_DAYS` (default: 30 days), including dependent rows in `session_provider_pins` and `context_reports`.
+- Pruning runs on the `all` and `scheduler` gateway roles, with tick interval configurable via `TYRUM_STATESTORE_RETENTION_TICK_MS` (default: 5 minutes) and batch size configurable via `TYRUM_STATESTORE_RETENTION_BATCH_SIZE` (default: 10,000). In Postgres deployments, an advisory lock ensures only one instance runs per tick.
+
 ### Artifact bytes (FS/S3)
 
 Artifact bytes live outside the StateStore; the StateStore holds metadata and durable linkage.

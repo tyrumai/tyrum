@@ -26,6 +26,7 @@ import { OutboxDal } from "./modules/backplane/outbox-dal.js";
 import { ConnectionDirectoryDal } from "./modules/backplane/connection-directory.js";
 import { OutboxLifecycleScheduler } from "./modules/backplane/outbox-lifecycle.js";
 import { OutboxPoller } from "./modules/backplane/outbox-poller.js";
+import { StateStoreLifecycleScheduler } from "./modules/statestore/lifecycle.js";
 import { ConnectionManager } from "./ws/connection-manager.js";
 import type { ProtocolDeps } from "./ws/protocol.js";
 import { createWsHandler } from "./routes/ws.js";
@@ -946,6 +947,14 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
           logger: container.logger,
         })
       : undefined;
+  const stateStoreLifecycleScheduler =
+    role === "all" || role === "scheduler"
+      ? new StateStoreLifecycleScheduler({
+          db: container.db,
+          keepProcessAlive: role === "scheduler",
+          logger: container.logger,
+        })
+      : undefined;
 
   if (shouldRunEdge) {
     container.watcherProcessor.start();
@@ -958,6 +967,9 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   }
   if (outboxLifecycleScheduler) {
     outboxLifecycleScheduler.start();
+  }
+  if (stateStoreLifecycleScheduler) {
+    stateStoreLifecycleScheduler.start();
   }
 
   const otel = await maybeStartOtel({
