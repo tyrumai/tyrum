@@ -2,6 +2,7 @@ import {
   NormalizedThreadMessage as NormalizedThreadMessageSchema,
   type MessageProvenance,
   PeerId,
+  WsChannelQueueOverflowEvent,
   buildAgentSessionKey,
   normalizedContainerKindFromThreadKind,
   parseTyrumKey,
@@ -21,6 +22,7 @@ import type { AgentRegistry } from "../agent/registry.js";
 import type { ApprovalDal } from "../approval/dal.js";
 import type { ApprovalNotifier } from "../approval/notifier.js";
 import type { PolicyService } from "../policy/service.js";
+import { randomUUID } from "node:crypto";
 import {
   type ChannelEgressConnector,
   DEFAULT_CHANNEL_ACCOUNT_ID,
@@ -35,6 +37,14 @@ function isFalsyEnvFlag(value: string | undefined): boolean {
   if (!value) return false;
   const v = value.trim().toLowerCase();
   return v.length > 0 && ["0", "false", "off", "no"].includes(v);
+}
+
+function normalizeLane(raw: string | undefined): "main" | "cron" | "subagent" {
+  const normalized = raw?.trim().toLowerCase();
+  if (normalized === "main" || normalized === "cron" || normalized === "subagent") {
+    return normalized;
+  }
+  return "main";
 }
 
 export function isChannelPipelineEnabled(): boolean {
@@ -233,6 +243,13 @@ async function tryAcquireLaneLease(db: SqlDb, opts: {
   });
 }
 
+type WsBroadcastClient = { ws: { send: (payload: string) => void } };
+
+type WsBroadcastDeps = {
+  connectionManager: { allClients: () => Iterable<WsBroadcastClient> };
+  cluster?: { edgeId: string; outboxDal: { enqueue: (kind: string, payload: unknown) => Promise<unknown> } };
+};
+
 export class TelegramChannelQueue {
   private readonly db: SqlDb;
   private readonly inbox: ChannelInboxDal;
@@ -241,15 +258,43 @@ export class TelegramChannelQueue {
   private readonly accountId: string;
   private readonly lane: string;
   private readonly dmScope: DmScope;
+  private readonly ws?: WsBroadcastDeps;
 
-  constructor(db: SqlDb, opts?: { agentId?: string; accountId?: string; channelKey?: string; lane?: string; dmScope?: DmScope }) {
+  constructor(db: SqlDb, opts?: { agentId?: string; accountId?: string; channelKey?: string; lane?: string; dmScope?: DmScope; ws?: WsBroadcastDeps }) {
     this.db = db;
     this.inbox = new ChannelInboxDal(db);
     this.peerIdentityLinks = new PeerIdentityLinkDal(db);
     this.agentId = opts?.agentId?.trim() || agentIdFromEnv();
     this.accountId = opts?.accountId?.trim() || opts?.channelKey?.trim() || telegramAccountIdFromEnv();
-    this.lane = opts?.lane?.trim() || "main";
+    this.lane = normalizeLane(opts?.lane);
     this.dmScope = resolveDmScope({ configured: opts?.dmScope ?? "per_account_channel_peer" });
+    this.ws = opts?.ws;
+  }
+
+  private emitWsEvent(evt: unknown): void {
+    const ws = this.ws;
+    if (!ws) return;
+
+    const payload = JSON.stringify(evt);
+    for (const client of ws.connectionManager.allClients()) {
+      try {
+        client.ws.send(payload);
+      } catch {
+        // ignore
+      }
+    }
+
+    if (ws.cluster) {
+      void ws.cluster.outboxDal
+        .enqueue("ws.broadcast", {
+          source_edge_id: ws.cluster.edgeId,
+          skip_local: true,
+          message: evt,
+        })
+        .catch(() => {
+          // ignore
+        });
+    }
   }
 
   async enqueue(
@@ -259,7 +304,7 @@ export class TelegramChannelQueue {
     const text = extractMessageText(normalized).trim();
     const agentId = opts?.agentId?.trim() || this.agentId;
     const accountId = opts?.accountId?.trim() || opts?.channelKey?.trim() || this.accountId;
-    const lane = opts?.lane?.trim() || this.lane;
+    const lane = typeof opts?.lane === "string" ? normalizeLane(opts.lane) : this.lane;
     const dmScope = opts?.dmScope ?? this.dmScope;
     const queueMode = opts?.queueMode?.trim() || "collect";
     let key = telegramThreadKey(normalized, {
@@ -323,7 +368,7 @@ export class TelegramChannelQueue {
     );
     const runActive = typeof activeLease?.lease_expires_at_ms === "number" && activeLease.lease_expires_at_ms > nowMs;
 
-    const { row, deduped } = await this.inbox.enqueue({
+    const { row, deduped, overflow } = await this.inbox.enqueue({
       source,
       thread_id: payload.thread.id,
       message_id: payload.message.id,
@@ -334,9 +379,39 @@ export class TelegramChannelQueue {
       payload,
     });
 
+    if (!deduped && overflow && overflow.dropped.length > 0) {
+      const candidate = {
+        event_id: randomUUID(),
+        type: "channel.queue.overflow",
+        occurred_at: new Date().toISOString(),
+        scope: { kind: "key", key, lane },
+        payload: {
+          key,
+          lane,
+          cap: overflow.cap,
+          overflow: overflow.policy,
+          queued_before: overflow.queued_before,
+          queued_after: overflow.queued_after,
+          dropped_inbox_ids: overflow.dropped.map((dropped) => dropped.inbox_id),
+          dropped_message_ids: overflow.dropped.map((dropped) => dropped.message_id),
+          ...(overflow.summary
+            ? {
+                summary_inbox_id: overflow.summary.inbox_id,
+                summary_message_id: overflow.summary.message_id,
+              }
+            : {}),
+        },
+      };
+      const parsed = WsChannelQueueOverflowEvent.safeParse(candidate);
+      if (parsed.success) {
+        this.emitWsEvent(parsed.data);
+      }
+    }
+
     const effectiveQueueMode = row.queue_mode;
     if (
       !deduped &&
+      row.status === "queued" &&
       runActive &&
       (effectiveQueueMode === "steer" ||
         effectiveQueueMode === "steer_backlog" ||
@@ -590,6 +665,7 @@ export class TelegramChannelProcessor {
       received_at_ms_gte: windowStart,
       received_at_ms_lte: windowEnd,
       limit: Math.max(0, this.maxBatch - 1),
+      queue_mode: "collect",
     });
 
     const ids = extra.map((r) => r.inbox_id);
