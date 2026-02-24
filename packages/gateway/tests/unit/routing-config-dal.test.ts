@@ -112,6 +112,7 @@ describe("RoutingConfigDal", () => {
     expect(updated.revision).toBeGreaterThan(initial.revision);
     expect(reverted.revision).toBeGreaterThan(updated.revision);
     expect(reverted.config).toEqual(initial.config);
+    expect(reverted.revertedFromRevision).toBe(initial.revision);
 
     const audit = await db.all<{ action: string }>(
       "SELECT action FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",

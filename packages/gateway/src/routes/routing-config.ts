@@ -72,6 +72,7 @@ export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
         created_at: latest?.createdAt ?? undefined,
         created_by: latest?.createdBy ?? undefined,
         reason: latest?.reason ?? undefined,
+        reverted_from_revision: latest?.revertedFromRevision ?? undefined,
       });
     } catch {
       return c.json(
@@ -127,6 +128,7 @@ export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
         created_at: persisted.createdAt,
         created_by: persisted.createdBy,
         reason: persisted.reason,
+        reverted_from_revision: persisted.revertedFromRevision ?? undefined,
       },
       201,
     );
@@ -181,7 +183,7 @@ export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
         created_at: persisted.createdAt,
         created_by: persisted.createdBy,
         reason: persisted.reason,
-        reverted_from_revision: parsed.data.revision,
+        reverted_from_revision: persisted.revertedFromRevision ?? parsed.data.revision,
       },
       201,
     );

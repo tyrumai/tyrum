@@ -140,6 +140,13 @@ describe("routing config routes", () => {
     expect(revertedBody.revision).toBeGreaterThan(createdBody.revision);
     expect(revertedBody.config).toEqual(createdBody.config);
 
+    const latest = await app.request("/routing/config", { method: "GET" });
+    expect(latest.status).toBe(200);
+    await expect(latest.json()).resolves.toMatchObject({
+      revision: revertedBody.revision,
+      reverted_from_revision: createdBody.revision,
+    });
+
     const audit = await db.all<{ action: string }>(
       "SELECT action FROM planner_events WHERE plan_id = ? ORDER BY step_index ASC",
       ["routing.config"],

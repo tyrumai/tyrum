@@ -13,6 +13,7 @@ export type RoutingConfigRevision = {
   createdAt: string;
   createdBy: unknown;
   reason?: string;
+  revertedFromRevision?: number;
 };
 
 interface RawRoutingConfigRow {
@@ -21,6 +22,7 @@ interface RawRoutingConfigRow {
   created_at: string | Date;
   created_by_json: string;
   reason: string | null;
+  reverted_from_revision: number | null;
 }
 
 function normalizeTime(value: string | Date): string {
@@ -68,6 +70,7 @@ function rowToRevision(row: RawRoutingConfigRow): RoutingConfigRevision {
     createdAt: normalizeTime(row.created_at),
     createdBy: parseJsonOrFallback(row.created_by_json, {}),
     reason: row.reason ?? undefined,
+    revertedFromRevision: row.reverted_from_revision ?? undefined,
   };
 }
 
@@ -166,7 +169,7 @@ export class RoutingConfigDal {
 
   async getLatest(): Promise<RoutingConfigRevision | undefined> {
     const row = await this.db.get<RawRoutingConfigRow>(
-      `SELECT revision, config_json, created_at, created_by_json, reason
+      `SELECT revision, config_json, created_at, created_by_json, reason, reverted_from_revision
        FROM routing_configs
        ORDER BY revision DESC
        LIMIT 1`,
@@ -176,7 +179,7 @@ export class RoutingConfigDal {
 
   async getByRevision(revision: number): Promise<RoutingConfigRevision | undefined> {
     const row = await this.db.get<RawRoutingConfigRow>(
-      `SELECT revision, config_json, created_at, created_by_json, reason
+      `SELECT revision, config_json, created_at, created_by_json, reason, reverted_from_revision
        FROM routing_configs
        WHERE revision = ?`,
       [revision],
@@ -199,14 +202,15 @@ export class RoutingConfigDal {
 
     return await this.db.transaction(async (tx) => {
       const row = await tx.get<RawRoutingConfigRow>(
-        `INSERT INTO routing_configs (config_json, created_at, created_by_json, reason)
-         VALUES (?, ?, ?, ?)
-         RETURNING revision, config_json, created_at, created_by_json, reason`,
+        `INSERT INTO routing_configs (config_json, created_at, created_by_json, reason, reverted_from_revision)
+         VALUES (?, ?, ?, ?, ?)
+         RETURNING revision, config_json, created_at, created_by_json, reason, reverted_from_revision`,
         [
           configJson,
           createdAt,
           JSON.stringify(params.createdBy ?? {}),
           params.reason ?? null,
+          params.revertedFromRevision ?? null,
         ],
       );
       if (!row) {
