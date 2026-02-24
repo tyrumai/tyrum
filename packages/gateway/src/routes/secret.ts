@@ -89,11 +89,21 @@ async function rotateAuthProfilesReferencingSecretHandleId(params: {
   let updatedCount = 0;
 
   for (;;) {
-    const profiles = await params.authProfileDal.listByAgentAfter({
-      agentId: params.agentId,
-      after,
-      limit: pageSize,
-    });
+    let profiles: Awaited<ReturnType<AuthProfileDal["listByAgentAfter"]>>;
+    try {
+      profiles = await params.authProfileDal.listByAgentAfter({
+        agentId: params.agentId,
+        after,
+        limit: pageSize,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new SecretRotationPropagationError(
+        `auth profile list failed: ${message}`,
+        updatedCount,
+        { cause: err },
+      );
+    }
     if (profiles.length === 0) return updatedCount;
 
     for (const profile of profiles) {

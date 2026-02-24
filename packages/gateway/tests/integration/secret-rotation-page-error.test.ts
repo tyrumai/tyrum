@@ -22,6 +22,19 @@ class FailSecondPageAuthProfileDal extends AuthProfileDal {
   }
 }
 
+class FailFirstPageAuthProfileDal extends AuthProfileDal {
+  override async listByAgentAfter(params: {
+    agentId: string;
+    after?: { createdAt: string; profileId: string };
+    limit?: number;
+  }): Promise<AuthProfileRow[]> {
+    if (!params.after) {
+      throw new Error("simulated paging failure");
+    }
+    return await super.listByAgentAfter(params);
+  }
+}
+
 describe("secret rotation page error handling (integration)", () => {
   let tempDir: string;
   let secretsPath: string;
@@ -91,5 +104,42 @@ describe("secret rotation page error handling (integration)", () => {
     const firstProfile = await authProfileDal.getById(firstProfileId);
     expect(firstProfile?.secret_handles["api_key_handle"]).toBe(rotated!.handle_id);
   });
-});
 
+  it("revokes the new handle when pagination fails before any profiles are updated", async () => {
+    const container = await createTestContainer();
+    const secretProvider = await FileSecretProvider.create(secretsPath, "test-admin-token-for-testing");
+    const authProfileDal = new FailFirstPageAuthProfileDal(container.db);
+
+    const app = new Hono();
+    app.route(
+      "/",
+      createSecretRoutes({
+        secretProviderForAgent: async () => secretProvider,
+        authProfileDal,
+      }),
+    );
+
+    const oldHandle = await secretProvider.store("OPENAI_API_KEY", "v1");
+    await authProfileDal.create({
+      profileId: randomUUID(),
+      agentId: "default",
+      provider: "openai",
+      type: "api_key",
+      secretHandles: { api_key_handle: oldHandle.handle_id },
+    });
+
+    const rotateRes = await app.request(`/secrets/${oldHandle.handle_id}/rotate`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ value: "v2" }),
+    });
+    expect(rotateRes.status).toBe(500);
+
+    const handles = await secretProvider.list();
+    const rotated = handles.find((h) => h.scope === oldHandle.scope && h.handle_id !== oldHandle.handle_id);
+    expect(rotated).toBeFalsy();
+
+    const oldResolved = await secretProvider.resolve(oldHandle);
+    expect(oldResolved).toBe("v1");
+  });
+});
