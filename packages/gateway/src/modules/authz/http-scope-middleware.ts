@@ -14,6 +14,7 @@ import type { AuthTokenClaims } from "../auth/token-store.js";
 import { matchesPathPrefixSegment } from "../../app-path.js";
 import type { AuthAudit } from "../auth/audit.js";
 import { getClientIp } from "../auth/client-ip.js";
+import { requestIdForAudit } from "../observability/request-id.js";
 
 const FORBIDDEN_BODY = {
   error: "forbidden",
@@ -171,7 +172,7 @@ export function createHttpScopeAuthorizationMiddleware(opts?: {
         required_scopes: null,
         method: c.req.method,
         path: routePath,
-        request_id: c.req.header("x-request-id")?.trim() || undefined,
+        request_id: requestIdForAudit(c),
         client_ip: getClientIp(c),
       });
       return c.json(
@@ -197,7 +198,7 @@ export function createHttpScopeAuthorizationMiddleware(opts?: {
         required_scopes: requiredScopes,
         method: c.req.method,
         path: routePath,
-        request_id: c.req.header("x-request-id")?.trim() || undefined,
+        request_id: requestIdForAudit(c),
         client_ip: getClientIp(c),
       });
       return c.json(FORBIDDEN_BODY, 403);

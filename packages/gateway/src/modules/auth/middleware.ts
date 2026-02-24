@@ -10,6 +10,7 @@ import { getCookie } from "hono/cookie";
 import { matchedRoutes } from "hono/route";
 import { APP_PATH_PREFIX, matchesPathPrefixSegment } from "../../app-path.js";
 import { getClientIp } from "./client-ip.js";
+import { requestIdForAudit } from "../observability/request-id.js";
 import type { TokenStore } from "./token-store.js";
 import type { AuthTokenClaims } from "./token-store.js";
 import { AUTH_COOKIE_NAME, extractBearerToken } from "./http.js";
@@ -86,7 +87,7 @@ export function createAuthMiddleware(
         method: c.req.method,
         path: c.req.path,
         user_agent: c.req.header("user-agent")?.trim() || undefined,
-        request_id: c.req.header("x-request-id")?.trim() || undefined,
+        request_id: requestIdForAudit(c),
       });
       return c.json(
         AUTH_ERROR_BODY,
@@ -104,7 +105,7 @@ export function createAuthMiddleware(
         method: c.req.method,
         path: c.req.path,
         user_agent: c.req.header("user-agent")?.trim() || undefined,
-        request_id: c.req.header("x-request-id")?.trim() || undefined,
+        request_id: requestIdForAudit(c),
       });
       return c.json(
         AUTH_ERROR_BODY,

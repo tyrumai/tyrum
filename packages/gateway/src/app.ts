@@ -137,16 +137,6 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   const trustedProxies = createTrustedProxyAllowlistFromEnv(process.env["GATEWAY_TRUSTED_PROXIES"]);
   app.use("*", createClientIpMiddleware({ trustedProxies }));
 
-  // Apply auth middleware if a token store is provided
-  if (opts.tokenStore) {
-    const authAudit = new AuthAudit({
-      eventLog: container.eventLog,
-      logger: container.logger,
-    });
-    app.use("*", createAuthMiddleware(opts.tokenStore, { audit: authAudit }));
-    app.use("*", createHttpScopeAuthorizationMiddleware({ audit: authAudit }));
-  }
-
   // Baseline structured request logging with stable request_id.
   app.use("*", async (c, next) => {
     const startedAt = Date.now();
@@ -172,6 +162,16 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       });
     }
   });
+
+  // Apply auth middleware if a token store is provided
+  if (opts.tokenStore) {
+    const authAudit = new AuthAudit({
+      eventLog: container.eventLog,
+      logger: container.logger,
+    });
+    app.use("*", createAuthMiddleware(opts.tokenStore, { audit: authAudit }));
+    app.use("*", createHttpScopeAuthorizationMiddleware({ audit: authAudit }));
+  }
 
   // Register all routes
   app.route("/", createHealthRoute({ isLocalOnly }));
