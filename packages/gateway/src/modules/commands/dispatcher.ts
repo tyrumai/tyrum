@@ -56,6 +56,39 @@ export interface CommandDeps {
   fetchImpl?: typeof fetch;
 }
 
+const DEFAULT_PROVIDER_USAGE_FETCH_KEY = Symbol("default-provider-usage-fetch");
+
+const providerUsagePollers = new WeakMap<SqlDb, WeakMap<AgentRegistry, Map<unknown, ProviderUsagePoller>>>();
+
+function getProviderUsagePoller(deps: CommandDeps): ProviderUsagePoller | undefined {
+  if (!deps.db || !deps.agents) return undefined;
+
+  let byAgents = providerUsagePollers.get(deps.db);
+  if (!byAgents) {
+    byAgents = new WeakMap();
+    providerUsagePollers.set(deps.db, byAgents);
+  }
+
+  let byFetch = byAgents.get(deps.agents);
+  if (!byFetch) {
+    byFetch = new Map();
+    byAgents.set(deps.agents, byFetch);
+  }
+
+  const fetchKey = deps.fetchImpl ?? DEFAULT_PROVIDER_USAGE_FETCH_KEY;
+  let poller = byFetch.get(fetchKey);
+  if (!poller) {
+    poller = new ProviderUsagePoller({
+      authProfileDal: new AuthProfileDal(deps.db),
+      pinDal: new SessionProviderPinDal(deps.db),
+      agents: deps.agents,
+      fetchImpl: deps.fetchImpl,
+    });
+    byFetch.set(fetchKey, poller);
+  }
+  return poller;
+}
+
 function tokensFromCommand(raw: string): string[] {
   const line = raw.trim();
   if (line.length === 0) return [];
@@ -471,15 +504,10 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
   if (cmd === "usage") {
     const sub = toks[1]?.toLowerCase();
     if (sub === "provider") {
-      if (!deps.db || !deps.agents) {
+      const poller = getProviderUsagePoller(deps);
+      if (!poller) {
         return { output: "Provider usage polling is not available on this gateway instance.", data: null };
       }
-      const poller = new ProviderUsagePoller({
-        authProfileDal: new AuthProfileDal(deps.db),
-        pinDal: new SessionProviderPinDal(deps.db),
-        agents: deps.agents,
-        fetchImpl: deps.fetchImpl,
-      });
       const provider = await poller.pollLatestPinned();
       return { output: jsonBlock(provider), data: provider };
     }

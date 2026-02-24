@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { executeCommand } from "../../src/modules/commands/dispatcher.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { PolicyOverrideDal } from "../../src/modules/policy/override-dal.js";
@@ -112,20 +112,30 @@ describe("missing slash commands", () => {
         }),
       } as unknown as AgentRegistry;
 
-      const fetchImpl: typeof fetch = async () => {
+      const fetchMock = vi.fn(async () => {
         return new Response(JSON.stringify({ data: { label: "test" } }), {
           status: 200,
           headers: { "content-type": "application/json" },
         });
-      };
+      });
+      const fetchImpl = fetchMock as unknown as typeof fetch;
 
-      const result = await executeCommand("/usage provider", { db, agents, fetchImpl });
+      const first = await executeCommand("/usage provider", { db, agents, fetchImpl });
+      const second = await executeCommand("/usage provider", { db, agents, fetchImpl });
 
-      expect(result.data).toMatchObject({
+      expect(first.data).toMatchObject({
         status: "ok",
         provider: "openrouter",
         profile_id: "profile-openrouter-1",
+        cached: false,
       });
+      expect(second.data).toMatchObject({
+        status: "ok",
+        provider: "openrouter",
+        profile_id: "profile-openrouter-1",
+        cached: true,
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     } finally {
       process.env["TYRUM_AUTH_PROFILES_ENABLED"] = prevEnabled;
     }
