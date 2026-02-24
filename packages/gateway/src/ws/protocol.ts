@@ -7,6 +7,7 @@
 
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  clientCapabilityFromDescriptorId,
   descriptorIdForClientCapability,
   requiredCapability,
   ApprovalListRequest,
@@ -34,6 +35,8 @@ import {
   WsPairingResolveResult,
   WsPresenceBeaconRequest,
   WsPresenceBeaconResult,
+  WsCapabilityReadyRequest,
+  WsAttemptEvidenceRequest,
   WsMessageEnvelope,
   WsTaskExecuteResult,
 } from "@tyrum/schemas";
@@ -674,6 +677,216 @@ export async function handleClientMessage(
     return ok(pairing);
   }
 
+  if (msg.type === "capability.ready") {
+    if (client.role !== "node") {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unauthorized",
+        "only nodes may report capability readiness",
+      );
+    }
+
+    const parsedReq = WsCapabilityReadyRequest.safeParse(msg);
+    if (!parsedReq.success) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "invalid_request",
+        parsedReq.error.message,
+        { issues: parsedReq.error.issues },
+      );
+    }
+
+    const readyLegacyCaps = parsedReq.data.payload.capabilities
+      .map((capability) => clientCapabilityFromDescriptorId(capability.id))
+      .filter((capability): capability is ClientCapability => capability !== undefined)
+      .filter((capability) => client.capabilities.includes(capability));
+
+    deps.connectionManager.setReadyCapabilities(client.id, readyLegacyCaps);
+
+    if (deps.cluster) {
+      void deps.cluster.connectionDirectory
+        .setReadyCapabilities({
+          connectionId: client.id,
+          readyCapabilities: [...client.readyCapabilities].sort(),
+        })
+        .catch(() => {
+          // ignore readiness persistence failures (best-effort)
+        });
+    }
+
+    const nodeId = client.device_id ?? client.id;
+    broadcastEvent(
+      {
+        event_id: crypto.randomUUID(),
+        type: "capability.ready",
+        occurred_at: new Date().toISOString(),
+        scope: { kind: "node", node_id: nodeId },
+        payload: {
+          node_id: nodeId,
+          capabilities: parsedReq.data.payload.capabilities,
+        },
+      },
+      deps,
+    );
+
+    return { request_id: msg.request_id, type: msg.type, ok: true };
+  }
+
+  if (msg.type === "attempt.evidence") {
+    if (client.role !== "node") {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unauthorized",
+        "only nodes may report attempt evidence",
+      );
+    }
+
+    const maxAttemptEvidenceChars = 256 * 1024;
+    if (raw.length > maxAttemptEvidenceChars) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "invalid_request",
+        "attempt evidence payload too large",
+        { max_chars: maxAttemptEvidenceChars, actual_chars: raw.length },
+      );
+    }
+
+    const parsedReq = WsAttemptEvidenceRequest.safeParse(msg);
+    if (!parsedReq.success) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "invalid_request",
+        parsedReq.error.message,
+        { issues: parsedReq.error.issues },
+      );
+    }
+
+    const nodeId = client.device_id ?? client.id;
+    const payload = parsedReq.data.payload;
+
+    if (!deps.nodePairingDal) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unsupported_request",
+        "attempt evidence not supported",
+      );
+    }
+    const pairing = await deps.nodePairingDal.getByNodeId(nodeId).catch(() => undefined);
+    if (pairing?.status !== "approved") {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unauthorized",
+        "node is not paired",
+      );
+    }
+
+    if (!deps.db) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unsupported_request",
+        "attempt evidence not supported",
+      );
+    }
+
+    const attempt = await deps.db.get<{
+      run_id: string;
+      step_id: string;
+      status: string;
+      metadata_json: string | null;
+    }>(
+      `SELECT
+         s.run_id AS run_id,
+         a.step_id AS step_id,
+         a.status AS status,
+         a.metadata_json AS metadata_json
+       FROM execution_attempts a
+       JOIN execution_steps s ON s.step_id = a.step_id
+       WHERE a.attempt_id = ?`,
+      [payload.attempt_id],
+    );
+    if (!attempt) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "invalid_request",
+        "unknown attempt_id",
+      );
+    }
+
+    if (attempt.run_id !== payload.run_id || attempt.step_id !== payload.step_id) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "invalid_request",
+        "attempt scope mismatch",
+      );
+    }
+
+    if (attempt.status !== "running") {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "invalid_state",
+        "attempt is not running",
+        { status: attempt.status },
+      );
+    }
+
+    let dispatchedNodeId: string | undefined;
+    if (typeof attempt.metadata_json === "string" && attempt.metadata_json.trim().length > 0) {
+      try {
+        const meta = JSON.parse(attempt.metadata_json) as unknown;
+        if (isObject(meta)) {
+          const executor = meta["executor"];
+          if (isObject(executor) && executor["kind"] === "node") {
+            const executorNodeId = executor["node_id"];
+            dispatchedNodeId = typeof executorNodeId === "string" && executorNodeId.trim().length > 0
+              ? executorNodeId
+              : undefined;
+          }
+        }
+      } catch {
+        // ignore malformed metadata_json
+      }
+    }
+
+    if (!dispatchedNodeId || dispatchedNodeId !== nodeId) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unauthorized",
+        "node is not the dispatched executor for this attempt",
+      );
+    }
+
+    broadcastEvent(
+      {
+        event_id: crypto.randomUUID(),
+        type: "attempt.evidence",
+        occurred_at: new Date().toISOString(),
+        scope: { kind: "run", run_id: payload.run_id },
+        payload: {
+          node_id: nodeId,
+          run_id: payload.run_id,
+          step_id: payload.step_id,
+          attempt_id: payload.attempt_id,
+          evidence: payload.evidence,
+        },
+      },
+      deps,
+    );
+
+    return { request_id: msg.request_id, type: msg.type, ok: true };
+  }
+
   if (msg.type === "session.send") {
     if (client.role !== "client") {
       return errorResponse(
@@ -1111,7 +1324,8 @@ export function dispatchTask(
                       c.protocol_rev >= 2 &&
                       c.role === "node" &&
                       typeof c.device_id === "string" &&
-                      c.device_id.trim().length > 0,
+                      c.device_id.trim().length > 0 &&
+                      c.ready_capabilities.includes(capability),
                   )
                   .map(async (c) => {
                     return (await isNodeAuthorizedForDispatch(c.device_id!)) ? c : null;
@@ -1126,6 +1340,14 @@ export function dispatchTask(
       const target = eligible.find((c) => c.edge_id !== cluster.edgeId) ?? eligible[0];
       if (!target || target.edge_id === cluster.edgeId) {
         throw new NoCapableClientError(capability);
+      }
+
+      if (target.role === "node" && typeof target.device_id === "string" && target.device_id.trim().length > 0) {
+        await upsertAttemptExecutorMetadata(deps, scope.attemptId, {
+          nodeId: target.device_id,
+          connectionId: target.connection_id,
+          edgeId: target.edge_id,
+        });
       }
 
       const requestId = `task-${crypto.randomUUID()}`;
@@ -1182,6 +1404,7 @@ export function dispatchTask(
       if (!nodeDispatchAllowed) continue;
       const nodeId = c.device_id;
       if (!nodeId) continue;
+      if (!c.readyCapabilities.has(capability)) continue;
       if (!(await isNodeAuthorizedForDispatch(nodeId))) continue;
       eligibleNodes.push(c);
     }
@@ -1209,7 +1432,8 @@ export function dispatchTask(
                       c.protocol_rev >= 2 &&
                       c.role === "node" &&
                       typeof c.device_id === "string" &&
-                      c.device_id.trim().length > 0,
+                      c.device_id.trim().length > 0 &&
+                      c.ready_capabilities.includes(capability),
                   )
                   .map(async (c) => {
                     return (await isNodeAuthorizedForDispatch(c.device_id!)) ? c : null;
@@ -1224,6 +1448,14 @@ export function dispatchTask(
       const target = eligible2.find((c) => c.edge_id !== cluster.edgeId) ?? eligible2[0];
       if (!target || target.edge_id === cluster.edgeId) {
         throw new NoCapableClientError(capability);
+      }
+
+      if (target.role === "node" && typeof target.device_id === "string" && target.device_id.trim().length > 0) {
+        await upsertAttemptExecutorMetadata(deps, scope.attemptId, {
+          nodeId: target.device_id,
+          connectionId: target.connection_id,
+          edgeId: target.edge_id,
+        });
       }
 
       const requestId = `task-${crypto.randomUUID()}`;
@@ -1245,6 +1477,17 @@ export function dispatchTask(
         { targetEdgeId: target.edge_id },
       );
       return requestId;
+    }
+
+    if (selected.role === "node") {
+      const nodeId = selected.device_id;
+      if (nodeId) {
+        await upsertAttemptExecutorMetadata(deps, scope.attemptId, {
+          nodeId,
+          connectionId: selected.id,
+          edgeId: deps.cluster?.edgeId,
+        });
+      }
     }
 
     const requestId = `task-${crypto.randomUUID()}`;
@@ -1426,6 +1669,60 @@ function broadcastEvent(evt: WsEventEnvelope, deps: ProtocolDeps): void {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+async function upsertAttemptExecutorMetadata(
+  deps: ProtocolDeps,
+  attemptId: string,
+  executor: { nodeId: string; connectionId: string; edgeId?: string },
+): Promise<void> {
+  const db = deps.db;
+  if (!db) return;
+  if (!attemptId || attemptId.trim().length === 0) return;
+  if (!executor.nodeId || executor.nodeId.trim().length === 0) return;
+  if (!executor.connectionId || executor.connectionId.trim().length === 0) return;
+
+  try {
+    const row = await db.get<{ metadata_json: string | null }>(
+      "SELECT metadata_json FROM execution_attempts WHERE attempt_id = ?",
+      [attemptId],
+    );
+    if (!row) return;
+
+    let meta: Record<string, unknown> = {};
+    if (typeof row.metadata_json === "string" && row.metadata_json.trim().length > 0) {
+      try {
+        const parsed = JSON.parse(row.metadata_json) as unknown;
+        if (isObject(parsed)) meta = parsed;
+      } catch {
+        // ignore malformed metadata_json
+      }
+    }
+
+    const executorMeta: Record<string, unknown> = {
+      kind: "node",
+      node_id: executor.nodeId,
+      connection_id: executor.connectionId,
+    };
+    if (typeof executor.edgeId === "string" && executor.edgeId.trim().length > 0) {
+      executorMeta["edge_id"] = executor.edgeId;
+    }
+
+    meta["executor"] = executorMeta;
+    await db.run(
+      "UPDATE execution_attempts SET metadata_json = ? WHERE attempt_id = ?",
+      [JSON.stringify(meta), attemptId],
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    deps.logger?.warn("execution.attempt.executor_metadata_persist_failed", {
+      attempt_id: attemptId,
+      node_id: executor.nodeId,
+      connection_id: executor.connectionId,
+      edge_id: executor.edgeId,
+      error: message,
+    });
+  }
 }
 
 function extractSuggestedOverrides(approvalContext: unknown): Array<{ tool_id: string; pattern: string; workspace_id?: string }> {

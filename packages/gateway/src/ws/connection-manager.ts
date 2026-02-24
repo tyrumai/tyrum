@@ -21,6 +21,7 @@ export interface ConnectedClient {
   readonly auth_claims?: AuthTokenClaims;
   readonly protocol_rev: number;
   readonly capabilities: readonly ClientCapability[];
+  readyCapabilities: Set<ClientCapability>;
   lastPong: number;
 }
 
@@ -60,14 +61,17 @@ export class ConnectionManager {
     },
   ): string {
     const id = opts?.id ?? crypto.randomUUID();
+    const role = opts?.role ?? "client";
+    const readyCapabilities = new Set<ClientCapability>(capabilities);
     const client: ConnectedClient = {
       id,
       ws,
-      role: opts?.role ?? "client",
+      role,
       device_id: opts?.deviceId,
       auth_claims: opts?.authClaims,
       protocol_rev: opts?.protocolRev ?? 1,
       capabilities,
+      readyCapabilities,
       lastPong: Date.now(),
     };
     ws.on("pong", () => {
@@ -75,6 +79,13 @@ export class ConnectionManager {
     });
     this.clients.set(id, client);
     return id;
+  }
+
+  /** Replace the ready capabilities set for a connected peer. */
+  setReadyCapabilities(id: string, capabilities: readonly ClientCapability[]): void {
+    const client = this.clients.get(id);
+    if (!client) return;
+    client.readyCapabilities = new Set<ClientCapability>(capabilities);
   }
 
   /** Remove a client (e.g. on disconnect or eviction). */

@@ -3,11 +3,13 @@ import {
   WsApprovalResolveRequest,
   WsApprovalListRequest,
   WsConnectRequest,
+  WsEvent,
   WsResponse,
   WsEventEnvelope,
   WsMessageEnvelope,
   WsPingRequest,
   WsPlanUpdateEvent,
+  WsRequest,
   WsRequestEnvelope,
   WsResponseEnvelope,
   WsTaskExecuteRequest,
@@ -133,6 +135,57 @@ describe("WS envelopes", () => {
       payload: {},
     });
     expect("request_id" in msg).toBe(true);
+  });
+
+  it("parses capability.ready request via typed union", () => {
+    const msg = WsRequest.parse({
+      request_id: "r-cap-ready-1",
+      type: "capability.ready",
+      payload: { capabilities: [{ id: "tyrum.cli", version: "1.0.0" }] },
+    });
+    expect(msg.type).toBe("capability.ready");
+  });
+
+  it("parses attempt.evidence request via typed union", () => {
+    const msg = WsRequest.parse({
+      request_id: "r-attempt-evidence-1",
+      type: "attempt.evidence",
+      payload: {
+        run_id: "550e8400-e29b-41d4-a716-446655440000",
+        step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+        attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+        evidence: { http: { status: 200 } },
+      },
+    });
+    expect(msg.type).toBe("attempt.evidence");
+  });
+
+  it("parses capability.ready event via typed union", () => {
+    const msg = WsEvent.parse({
+      event_id: "e-cap-ready-1",
+      type: "capability.ready",
+      occurred_at: "2026-02-19T12:00:00Z",
+      scope: { kind: "node", node_id: "dev_test" },
+      payload: { node_id: "dev_test", capabilities: [{ id: "tyrum.cli", version: "1.0.0" }] },
+    });
+    expect(msg.type).toBe("capability.ready");
+  });
+
+  it("parses attempt.evidence event via typed union", () => {
+    const msg = WsEvent.parse({
+      event_id: "e-attempt-evidence-1",
+      type: "attempt.evidence",
+      occurred_at: "2026-02-19T12:00:00Z",
+      scope: { kind: "run", run_id: "550e8400-e29b-41d4-a716-446655440000" },
+      payload: {
+        node_id: "dev_test",
+        run_id: "550e8400-e29b-41d4-a716-446655440000",
+        step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+        attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+        evidence: { http: { status: 200 } },
+      },
+    });
+    expect(msg.type).toBe("attempt.evidence");
   });
 });
 

@@ -7,7 +7,7 @@ The canonical wire shape lives in `@tyrum/schemas` (`packages/schemas/src/protoc
 ## Event envelope
 
 - `event_id`: unique id for dedupe.
-- `type`: event name (for example `run.updated`, `approval.requested`, `artifact.created`).
+- `type`: event name (for example `run.updated`, `approval.requested`, `artifact.created`, `capability.ready`, `attempt.evidence`).
 - `occurred_at`: timestamp.
 - `scope`: routing scope (session, device, or global).
 - `payload`: typed fields defined by a contract.
@@ -17,6 +17,7 @@ The canonical wire shape lives in `@tyrum/schemas` (`packages/schemas/src/protoc
 - **Connection lifecycle:** connected/disconnected, heartbeat timeouts.
 - **Presence:** gateway/client/node presence upserts, prunes, and snapshots (see [Presence](../presence.md)).
 - **Pairing:** node requested/approved/denied/revoked.
+- **Node capability readiness:** nodes report capability readiness (for example `capability.ready`).
 - **Approvals:** requests/resolutions, expiry.
 - **Execution engine:** run queued/started/paused/resumed/completed/failed; step started/completed; retries and budget events.
 - **Evidence:** artifacts captured/attached; postconditions passed/failed.

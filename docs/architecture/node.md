@@ -41,7 +41,12 @@ sequenceDiagram
   Client->>Gateway: pairing.approve(node_id)
   Gateway-->>Node: pairing.approved(scoped_token)
   Node-->>Gateway: capability.ready(...)
+  Node-->>Gateway: attempt.evidence(...)
 ```
+
+After pairing approval, nodes SHOULD report which capabilities are currently ready to execute via `capability.ready` (for example after verifying OS permissions, local dependencies, or warmup).
+
+During capability execution, nodes MAY stream operator-visible evidence for a given attempt via `attempt.evidence` so UIs and audits can observe progress without polling.
 
 ## Trust and capability scope
 
