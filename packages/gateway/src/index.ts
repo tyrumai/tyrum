@@ -863,10 +863,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   }
 
   const shouldRunEdge = role === "all" || role === "edge";
-  const engineApiEnabledRaw = process.env["TYRUM_ENGINE_API_ENABLED"]?.trim();
-  const engineApiEnabled =
-    engineApiEnabledRaw &&
-    !["0", "false", "off", "no"].includes(engineApiEnabledRaw.toLowerCase());
+  const engineApiEnabled = isTruthyEnvFlag(process.env["TYRUM_ENGINE_API_ENABLED"]);
 
   const connectionManager = new ConnectionManager();
   const outboxDal = new OutboxDal(container.db, container.redactionEngine);
