@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import mitt from "mitt";
 import { MemoryDal } from "../../src/modules/memory/dal.js";
 import { WatcherProcessor } from "../../src/modules/watcher/processor.js";
@@ -106,6 +107,98 @@ describe("WatcherProcessor", () => {
     expect(events.filter((event) => event.event_type === "webhook_fired")).toHaveLength(1);
   });
 
+  it("creates durable firing rows for webhook triggers", async () => {
+    const id = await processor.createWatcher("plan-1", "webhook", {
+      secret_handle: {
+        handle_id: "secret-handle",
+        provider: "file",
+        scope: "watcher:webhook:test",
+        created_at: new Date().toISOString(),
+      },
+    });
+    const watcher = await processor.getActiveWatcherById(id);
+    expect(watcher).not.toBeNull();
+    const timestampMs = 1_700_000_000_000;
+    const nonce = "nonce-1";
+
+    const first = await processor.recordWebhookTrigger(watcher!, {
+      timestampMs,
+      nonce,
+      bodySha256: "abc123",
+      bodyBytes: 11,
+    });
+    expect(first).toBe(true);
+
+    const replayDigest = createHash("sha256").update(nonce).digest("hex");
+    const firings = await db.all<{
+      firing_id: string;
+      trigger_type: string;
+      status: string;
+      scheduled_at_ms: number;
+    }>("SELECT firing_id, trigger_type, status, scheduled_at_ms FROM watcher_firings");
+    expect(firings).toHaveLength(1);
+    expect(firings[0]!.firing_id).toBe(`webhook-${String(id)}-${replayDigest}`);
+    expect(firings[0]!.trigger_type).toBe("webhook");
+    expect(firings[0]!.status).toBe("queued");
+    expect(firings[0]!.scheduled_at_ms).toBe(timestampMs);
+
+    const events = await memoryDal.getEpisodicEvents();
+    const fired = events.find((event) => event.event_type === "webhook_fired");
+    expect(fired).toBeDefined();
+    const payload = fired!.payload as Record<string, unknown>;
+    expect(payload["firingId"]).toBe(`webhook-${String(id)}-${replayDigest}`);
+  });
+
+  it("repairs missing durable webhook firings on replay", async () => {
+    const id = await processor.createWatcher("plan-1", "webhook", {
+      secret_handle: {
+        handle_id: "secret-handle",
+        provider: "file",
+        scope: "watcher:webhook:test",
+        created_at: new Date().toISOString(),
+      },
+    });
+    const watcher = await processor.getActiveWatcherById(id);
+    expect(watcher).not.toBeNull();
+
+    const timestampMs = Date.now();
+    const nonce = "nonce-repair-1";
+    const replayDigest = createHash("sha256").update(nonce).digest("hex");
+    const firingId = `webhook-${String(id)}-${replayDigest}`;
+    const eventId = `watcher-${String(id)}-webhook-${replayDigest}`;
+
+    // Simulate a crash after recording the replay marker episodic event but before
+    // creating the durable watcher_firings row.
+    const inserted = await memoryDal.insertEpisodicEventIfAbsent(
+      eventId,
+      new Date(timestampMs).toISOString(),
+      "watcher",
+      "webhook_fired",
+      { firingId, watcherId: id, planId: "plan-1" },
+    );
+    expect(inserted).toBe(true);
+
+    const repaired = await processor.recordWebhookTrigger(watcher!, {
+      timestampMs,
+      nonce,
+      bodySha256: "abc123",
+      bodyBytes: 11,
+    });
+    expect(repaired).toBe(true);
+
+    const firings = await db.all<{ firing_id: string }>("SELECT firing_id FROM watcher_firings");
+    expect(firings).toHaveLength(1);
+    expect(firings[0]!.firing_id).toBe(firingId);
+
+    const replay = await processor.recordWebhookTrigger(watcher!, {
+      timestampMs,
+      nonce,
+      bodySha256: "abc123",
+      bodyBytes: 11,
+    });
+    expect(replay).toBe(false);
+  });
+
   it("rejects webhook nonce replays even when timestamp differs", async () => {
     const id = await processor.createWatcher("plan-1", "webhook", {
       secret_handle: {
@@ -133,6 +226,137 @@ describe("WatcherProcessor", () => {
       bodyBytes: 11,
     });
     expect(replay).toBe(false);
+  });
+
+  it("persists multiple webhook firings even when timestamp matches", async () => {
+    const id = await processor.createWatcher("plan-1", "webhook", {
+      secret_handle: {
+        handle_id: "secret-handle",
+        provider: "file",
+        scope: "watcher:webhook:test",
+        created_at: new Date().toISOString(),
+      },
+    });
+    const watcher = await processor.getActiveWatcherById(id);
+    expect(watcher).not.toBeNull();
+
+    const timestampMs = 1_700_000_000_000;
+    const first = await processor.recordWebhookTrigger(watcher!, {
+      timestampMs,
+      nonce: "nonce-1",
+      bodySha256: "abc123",
+      bodyBytes: 11,
+    });
+    expect(first).toBe(true);
+
+    const second = await processor.recordWebhookTrigger(watcher!, {
+      timestampMs,
+      nonce: "nonce-2",
+      bodySha256: "def456",
+      bodyBytes: 22,
+    });
+    expect(second).toBe(true);
+
+    const firings = await db.all<{ firing_id: string }>("SELECT firing_id FROM watcher_firings");
+    expect(firings).toHaveLength(2);
+  });
+
+  it("does not fail when many webhook firings share a coarse timestamp", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-02-24T00:00:00.000Z"));
+    try {
+      const id = await processor.createWatcher("plan-1", "webhook", {
+        secret_handle: {
+          handle_id: "secret-handle",
+          provider: "file",
+          scope: "watcher:webhook:test",
+          created_at: new Date().toISOString(),
+        },
+      });
+      const watcher = await processor.getActiveWatcherById(id);
+      expect(watcher).not.toBeNull();
+
+      const timestampMs = 1_700_000_000_000;
+      const n = 1001;
+      for (let i = 0; i < n; i += 1) {
+        const recorded = await processor.recordWebhookTrigger(watcher!, {
+          timestampMs,
+          nonce: `nonce-${String(i)}`,
+          bodySha256: `sha-${String(i)}`,
+          bodyBytes: i,
+        });
+        expect(recorded).toBe(true);
+        vi.advanceTimersByTime(1);
+      }
+
+      const count = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM watcher_firings");
+      expect(count?.n).toBe(n);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("clears webhook scheduled_at cursor entries when watchers deactivate", async () => {
+    const id = await processor.createWatcher("plan-1", "webhook", {
+      secret_handle: {
+        handle_id: "secret-handle",
+        provider: "file",
+        scope: "watcher:webhook:test",
+        created_at: new Date().toISOString(),
+      },
+    });
+    const watcher = await processor.getActiveWatcherById(id);
+    expect(watcher).not.toBeNull();
+
+    const recorded = await processor.recordWebhookTrigger(watcher!, {
+      timestampMs: 1_700_000_000_000,
+      nonce: "nonce-cursor-1",
+      bodySha256: "abc123",
+      bodyBytes: 11,
+    });
+    expect(recorded).toBe(true);
+
+    const cursor = (processor as unknown as { webhookScheduledAtCursor: Map<number, unknown> }).webhookScheduledAtCursor;
+    expect(cursor.has(id)).toBe(true);
+
+    await processor.deactivateWatcher(id);
+    expect(cursor.has(id)).toBe(false);
+  });
+
+  it("bounds webhook scheduled_at cursor map size", async () => {
+    const limitedProcessor = new WatcherProcessor({
+      db,
+      memoryDal,
+      eventBus,
+      webhookScheduledAtCursorMaxEntries: 3,
+    });
+
+    const ids: number[] = [];
+    for (let i = 0; i < 4; i += 1) {
+      const id = await limitedProcessor.createWatcher("plan-1", "webhook", {
+        secret_handle: {
+          handle_id: "secret-handle",
+          provider: "file",
+          scope: "watcher:webhook:test",
+          created_at: new Date().toISOString(),
+        },
+      });
+      ids.push(id);
+      const watcher = await limitedProcessor.getActiveWatcherById(id);
+      expect(watcher).not.toBeNull();
+
+      const recorded = await limitedProcessor.recordWebhookTrigger(watcher!, {
+        timestampMs: 1_700_000_000_000,
+        nonce: `nonce-cursor-${String(i)}`,
+        bodySha256: "abc123",
+        bodyBytes: 11,
+      });
+      expect(recorded).toBe(true);
+    }
+
+    const cursor = (limitedProcessor as unknown as { webhookScheduledAtCursor: Map<number, unknown> }).webhookScheduledAtCursor;
+    expect(cursor.size).toBe(3);
+    expect(cursor.has(ids[0]!)).toBe(false);
   });
 
   it("does not record webhook trigger events for non-webhook watchers", async () => {

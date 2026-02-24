@@ -11,6 +11,9 @@ import { createHash } from "node:crypto";
 import type { GatewayEvents } from "../../event-bus.js";
 import type { MemoryDal } from "../memory/dal.js";
 import type { SqlDb } from "../../statestore/types.js";
+import { WatcherFiringDal } from "./firing-dal.js";
+
+const DEFAULT_WEBHOOK_SCHEDULED_AT_CURSOR_MAX_ENTRIES = 10_000;
 
 // ---------------------------------------------------------------------------
 // Row types
@@ -59,6 +62,8 @@ export interface WatcherProcessorOptions {
   db: SqlDb;
   memoryDal: MemoryDal;
   eventBus: Emitter<GatewayEvents>;
+  /** Max entries for the webhook scheduled_at cursor cache (default: 10_000). Set to 0 to disable caching. */
+  webhookScheduledAtCursorMaxEntries?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -78,6 +83,9 @@ export class WatcherProcessor {
   private readonly db: SqlDb;
   private readonly memoryDal: MemoryDal;
   private readonly eventBus: Emitter<GatewayEvents>;
+  private readonly firingDal: WatcherFiringDal;
+  private readonly webhookScheduledAtCursorMaxEntries: number;
+  private readonly webhookScheduledAtCursor = new Map<number, { baseMs: number; nextMs: number }>();
 
   private completedHandler: Handler<GatewayEvents["plan:completed"]> | undefined;
   private failedHandler: Handler<GatewayEvents["plan:failed"]> | undefined;
@@ -86,11 +94,36 @@ export class WatcherProcessor {
     this.db = opts.db;
     this.memoryDal = opts.memoryDal;
     this.eventBus = opts.eventBus;
+    this.firingDal = new WatcherFiringDal(opts.db);
+    this.webhookScheduledAtCursorMaxEntries = (() => {
+      const raw = opts.webhookScheduledAtCursorMaxEntries;
+      if (raw === undefined) return DEFAULT_WEBHOOK_SCHEDULED_AT_CURSOR_MAX_ENTRIES;
+      if (typeof raw !== "number" || !Number.isFinite(raw)) {
+        return DEFAULT_WEBHOOK_SCHEDULED_AT_CURSOR_MAX_ENTRIES;
+      }
+      return Math.max(0, Math.floor(raw));
+    })();
   }
 
   // -----------------------------------------------------------------------
   // Lifecycle
   // -----------------------------------------------------------------------
+
+  private setWebhookScheduledAtCursorEntry(watcherId: number, entry: { baseMs: number; nextMs: number }): void {
+    if (this.webhookScheduledAtCursorMaxEntries <= 0) return;
+
+    // Maintain insertion order as an LRU by moving touched keys to the end.
+    if (this.webhookScheduledAtCursor.has(watcherId)) {
+      this.webhookScheduledAtCursor.delete(watcherId);
+    }
+    this.webhookScheduledAtCursor.set(watcherId, entry);
+
+    while (this.webhookScheduledAtCursor.size > this.webhookScheduledAtCursorMaxEntries) {
+      const oldest = this.webhookScheduledAtCursor.keys().next().value as number | undefined;
+      if (oldest === undefined) break;
+      this.webhookScheduledAtCursor.delete(oldest);
+    }
+  }
 
   start(): void {
     this.completedHandler = (event) => {
@@ -205,6 +238,7 @@ export class WatcherProcessor {
       "UPDATE watchers SET active = 0, updated_at = ? WHERE id = ?",
       [nowIso, watcherId],
     );
+    this.webhookScheduledAtCursor.delete(watcherId);
   }
 
   async recordWebhookTrigger(
@@ -218,6 +252,7 @@ export class WatcherProcessor {
     const replayDigest = createHash("sha256")
       .update(event.nonce)
       .digest("hex");
+    const firingId = `webhook-${String(watcher.id)}-${replayDigest}`;
 
     const inserted = await this.memoryDal.insertEpisodicEventIfAbsent(
       `watcher-${String(watcher.id)}-webhook-${replayDigest}`,
@@ -225,6 +260,7 @@ export class WatcherProcessor {
       "watcher",
       "webhook_fired",
       {
+        firingId,
         watcherId: watcher.id,
         planId: watcher.plan_id,
         triggerType: watcher.trigger_type,
@@ -236,7 +272,43 @@ export class WatcherProcessor {
     );
 
     if (!inserted) {
-      return false;
+      // Replay marker exists already. This normally indicates the nonce was
+      // handled, but a prior process may have crashed after writing the episodic
+      // event and before creating the durable watcher_firings row. Only reject
+      // the replay if the durable firing exists as well.
+      const existing = await this.firingDal.getById(firingId);
+      if (existing) {
+        return false;
+      }
+    }
+
+    const maxScheduledAtSearch = 10_000;
+    const baseScheduledAtMs = Math.floor(event.timestampMs);
+    const scheduledAtMaxExclusive = baseScheduledAtMs + maxScheduledAtSearch;
+    const cursor = this.webhookScheduledAtCursor.get(watcher.id);
+    const startScheduledAtMs = cursor && cursor.baseMs === baseScheduledAtMs ? cursor.nextMs : baseScheduledAtMs;
+
+    for (let attempt = 0; attempt < maxScheduledAtSearch; attempt += 1) {
+      const scheduledAtMs = startScheduledAtMs + attempt;
+      if (scheduledAtMs >= scheduledAtMaxExclusive) {
+        throw new Error("failed to allocate unique scheduled_at_ms for webhook firing");
+      }
+
+      const created = await this.firingDal.createIfAbsent({
+        firingId,
+        watcherId: watcher.id,
+        planId: watcher.plan_id,
+        triggerType: watcher.trigger_type,
+        scheduledAtMs,
+      });
+      if (created.row.firing_id === firingId) {
+        const nextMs = Math.max(startScheduledAtMs, created.row.scheduled_at_ms + 1);
+        this.setWebhookScheduledAtCursorEntry(watcher.id, { baseMs: baseScheduledAtMs, nextMs });
+        break;
+      }
+      if (attempt === maxScheduledAtSearch - 1) {
+        throw new Error("failed to allocate unique scheduled_at_ms for webhook firing");
+      }
     }
 
     this.eventBus.emit("watcher:fired", {

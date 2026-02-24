@@ -103,7 +103,7 @@ Postconditions are typed assertion kinds (not arbitrary expression evaluation). 
 
 ```mermaid
 flowchart TB
-  Trigger["Trigger (session/cron/hook)"] --> Enqueue["Enqueue job"]
+  Trigger["Trigger (session/cron/webhook/heartbeat/hook)"] --> Enqueue["Enqueue job"]
   Enqueue --> Engine["ExecutionEngine"]
 
   Engine -->|claim/lease| Worker["Worker"]

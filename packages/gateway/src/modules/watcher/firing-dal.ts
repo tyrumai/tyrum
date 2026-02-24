@@ -73,39 +73,80 @@ export class WatcherFiringDal {
     triggerType: string;
     scheduledAtMs: number;
   }): Promise<{ row: WatcherFiringRow; created: boolean }> {
-    const nowIso = new Date().toISOString();
-    const result = await this.db.run(
-      `INSERT INTO watcher_firings (
-         firing_id,
-         watcher_id,
-         plan_id,
-         trigger_type,
-         scheduled_at_ms,
-         status,
-         created_at,
-         updated_at
-       )
-       VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)
-       ON CONFLICT (watcher_id, scheduled_at_ms) DO NOTHING`,
-      [
-        input.firingId,
-        input.watcherId,
-        input.planId,
-        input.triggerType,
-        input.scheduledAtMs,
-        nowIso,
-        nowIso,
-      ],
-    );
-
-    const row = await this.getById(input.firingId);
-    if (row) return { row, created: result.changes === 1 };
-
-    const existing = await this.getByWatcherAndSlot(input.watcherId, input.scheduledAtMs);
-    if (!existing) {
-      throw new Error("failed to create watcher firing");
+    const existing = await this.getById(input.firingId);
+    if (existing) {
+      if (
+        existing.watcher_id !== input.watcherId ||
+        existing.plan_id !== input.planId ||
+        existing.trigger_type !== input.triggerType
+      ) {
+        throw new Error(`watcher firing '${input.firingId}' already exists with different attributes`);
+      }
+      return { row: existing, created: false };
     }
-    return { row: existing, created: false };
+
+    const nowIso = new Date().toISOString();
+    try {
+      const result = await this.db.run(
+        `INSERT INTO watcher_firings (
+           firing_id,
+           watcher_id,
+           plan_id,
+           trigger_type,
+           scheduled_at_ms,
+           status,
+           created_at,
+           updated_at
+         )
+         VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)
+         ON CONFLICT (watcher_id, scheduled_at_ms) DO NOTHING`,
+        [
+          input.firingId,
+          input.watcherId,
+          input.planId,
+          input.triggerType,
+          input.scheduledAtMs,
+          nowIso,
+          nowIso,
+        ],
+      );
+      if (result.changes === 1) {
+        const createdRow = await this.getById(input.firingId);
+        if (!createdRow) {
+          throw new Error("failed to create watcher firing");
+        }
+        if (
+          createdRow.watcher_id !== input.watcherId ||
+          createdRow.plan_id !== input.planId ||
+          createdRow.trigger_type !== input.triggerType
+        ) {
+          throw new Error(`watcher firing '${input.firingId}' already exists with different attributes`);
+        }
+        return { row: createdRow, created: true };
+      }
+
+      const slot = await this.getByWatcherAndSlot(input.watcherId, input.scheduledAtMs);
+      if (!slot) {
+        throw new Error("failed to create watcher firing");
+      }
+      if (slot.plan_id !== input.planId || slot.trigger_type !== input.triggerType) {
+        throw new Error("watcher firing slot already occupied with different attributes");
+      }
+      return { row: slot, created: false };
+    } catch (err) {
+      const raced = await this.getById(input.firingId);
+      if (raced) {
+        if (
+          raced.watcher_id !== input.watcherId ||
+          raced.plan_id !== input.planId ||
+          raced.trigger_type !== input.triggerType
+        ) {
+          throw new Error(`watcher firing '${input.firingId}' already exists with different attributes`);
+        }
+        return { row: raced, created: false };
+      }
+      throw err;
+    }
   }
 
   async getById(firingId: string): Promise<WatcherFiringRow | undefined> {

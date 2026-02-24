@@ -38,6 +38,70 @@ describe("WatcherFiringDal", () => {
     expect(second.row.firing_id).toBe("firing-1");
   });
 
+  it("dedupes firings by firing_id", async () => {
+    const first = await dal.createIfAbsent({
+      firingId: "firing-1",
+      watcherId: 1,
+      planId: "plan-1",
+      triggerType: "periodic",
+      scheduledAtMs: 1000,
+    });
+    expect(first.created).toBe(true);
+
+    const second = await dal.createIfAbsent({
+      firingId: "firing-1",
+      watcherId: 1,
+      planId: "plan-1",
+      triggerType: "periodic",
+      scheduledAtMs: 2000,
+    });
+    expect(second.created).toBe(false);
+    expect(second.row.firing_id).toBe("firing-1");
+    expect(second.row.scheduled_at_ms).toBe(1000);
+  });
+
+  it("throws on unexpected unique constraint violations", async () => {
+    await db.run("CREATE UNIQUE INDEX watcher_firings_plan_id_unique_idx ON watcher_firings (plan_id)");
+
+    await dal.createIfAbsent({
+      firingId: "firing-1",
+      watcherId: 1,
+      planId: "plan-1",
+      triggerType: "periodic",
+      scheduledAtMs: 1000,
+    });
+
+    await expect(
+      dal.createIfAbsent({
+        firingId: "firing-2",
+        watcherId: 1,
+        planId: "plan-1",
+        triggerType: "periodic",
+        scheduledAtMs: 2000,
+      }),
+    ).rejects.toThrow(/plan_id/i);
+  });
+
+  it("throws when firing_id exists with different attributes", async () => {
+    await dal.createIfAbsent({
+      firingId: "firing-1",
+      watcherId: 1,
+      planId: "plan-1",
+      triggerType: "periodic",
+      scheduledAtMs: 1000,
+    });
+
+    await expect(
+      dal.createIfAbsent({
+        firingId: "firing-1",
+        watcherId: 2,
+        planId: "plan-1",
+        triggerType: "periodic",
+        scheduledAtMs: 1000,
+      }),
+    ).rejects.toThrow(/different attributes/i);
+  });
+
   it("claims queued firings in schedule order", async () => {
     await dal.createIfAbsent({
       firingId: "firing-1",
@@ -111,4 +175,3 @@ describe("WatcherFiringDal", () => {
     expect(row?.run_id).toBe("run-1");
   });
 });
-

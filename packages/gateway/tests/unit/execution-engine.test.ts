@@ -102,6 +102,58 @@ describe("ExecutionEngine (normalized)", () => {
     expect(trigger.lane).toBe("main");
   });
 
+  it("preserves heartbeat trigger kind when provided", async () => {
+    db = openTestSqliteDb();
+
+    const engine = new ExecutionEngine({ db });
+    await engine.enqueuePlan({
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "heartbeat",
+      planId: "plan-trigger-heartbeat-1",
+      requestId: "req-trigger-heartbeat-1",
+      steps: [action("Research")],
+      trigger: {
+        kind: "heartbeat",
+        key: "agent:agent-1:telegram-1:group:thread-1",
+        lane: "heartbeat",
+        metadata: { source: "test" },
+      } as unknown as never,
+    });
+
+    const job = await db.get<{ trigger_json: string }>(
+      "SELECT trigger_json FROM execution_jobs LIMIT 1",
+    );
+    const trigger = JSON.parse(job!.trigger_json) as { kind?: string; lane?: string };
+    expect(trigger.kind).toBe("heartbeat");
+    expect(trigger.lane).toBe("heartbeat");
+  });
+
+  it("preserves webhook trigger kind when provided", async () => {
+    db = openTestSqliteDb();
+
+    const engine = new ExecutionEngine({ db });
+    await engine.enqueuePlan({
+      key: "cron:webhook-1",
+      lane: "cron",
+      planId: "plan-trigger-webhook-1",
+      requestId: "req-trigger-webhook-1",
+      steps: [action("Research")],
+      trigger: {
+        kind: "webhook",
+        key: "cron:webhook-1",
+        lane: "cron",
+        metadata: { source: "test" },
+      } as unknown as never,
+    });
+
+    const job = await db.get<{ trigger_json: string }>(
+      "SELECT trigger_json FROM execution_jobs LIMIT 1",
+    );
+    const trigger = JSON.parse(job!.trigger_json) as { kind?: string; lane?: string };
+    expect(trigger.kind).toBe("webhook");
+    expect(trigger.lane).toBe("cron");
+  });
+
   it("worker executes a 2-step plan and completes the run", async () => {
     db = openTestSqliteDb();
 
