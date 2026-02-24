@@ -465,10 +465,11 @@ function resolveSafeChildPath(parent: string, child: string): string {
   const absParent = resolve(parent);
   const absChild = resolve(absParent, child);
   const rel = relative(absParent, absChild);
-  if (rel === "" || (!rel.startsWith("..") && !rel.startsWith("../") && !rel.includes(".."))) {
-    return absChild;
-  }
-  throw new Error(`path escapes plugin directory: ${child}`);
+  if (rel === "") return absChild;
+  if (isAbsolute(rel)) throw new Error(`path escapes plugin directory: ${child}`);
+  const firstSegment = rel.split(/[\\/]/g)[0];
+  if (firstSegment === "..") throw new Error(`path escapes plugin directory: ${child}`);
+  return absChild;
 }
 
 function getCurrentUid(): number | undefined {

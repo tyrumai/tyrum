@@ -108,4 +108,48 @@ describe("tyrum plugin install", () => {
     await expect(stat(join(home, "evil"))).rejects.toMatchObject({ code: "ENOENT" });
     await expect(stat(join(home, "plugins", "echo"))).rejects.toMatchObject({ code: "ENOENT" });
   });
+
+  it("allows plugin entry paths that include '..' in a segment name", async () => {
+    home = await mkdtemp(join(tmpdir(), "tyrum-home-"));
+    source = await mkdtemp(join(tmpdir(), "tyrum-plugin-src-"));
+
+    await mkdir(join(source, "nested..dir"), { recursive: true });
+    await writeFile(
+      join(source, "plugin.yml"),
+      [
+        "id: echo",
+        "name: Echo",
+        "version: 0.0.1",
+        "entry: ./nested..dir/index.mjs",
+        "contributes:",
+        "  tools: []",
+        "  commands: []",
+        "  routes: []",
+        "  mcp_servers: []",
+        "permissions:",
+        "  tools: []",
+        "  network_egress: []",
+        "  secrets: []",
+        "  db: false",
+        "config_schema:",
+        "  type: object",
+        "  properties: {}",
+        "  required: []",
+        "  additionalProperties: false",
+        "",
+      ].join("\n"),
+      "utf-8",
+    );
+    await writeFile(join(source, "nested..dir/index.mjs"), pluginEntryModule(), "utf-8");
+
+    const exitCode = await runCli(["plugin", "install", source, "--home", home]);
+    expect(exitCode).toBe(0);
+
+    const registry = await PluginRegistry.load({
+      home,
+      logger: new Logger({ level: "silent" }),
+    });
+    const listed = registry.list() as unknown as Array<Record<string, unknown>>;
+    expect(listed.map((p) => p["id"])).toEqual(["echo"]);
+  });
 });

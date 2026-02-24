@@ -1,7 +1,7 @@
 import { PluginManifest } from "@tyrum/schemas";
 import type { PluginManifest as PluginManifestT } from "@tyrum/schemas";
 import { cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { isRecord, parseJsonOrYaml } from "../../utils/parse-json-or-yaml.js";
 import {
   PLUGIN_LOCK_FILENAME,
@@ -28,10 +28,11 @@ function resolveSafeChildPath(parent: string, child: string): string {
   const absParent = resolve(parent);
   const absChild = resolve(absParent, child);
   const rel = relative(absParent, absChild);
-  if (rel === "" || (!rel.startsWith("..") && !rel.startsWith("../") && !rel.includes(".."))) {
-    return absChild;
-  }
-  throw new Error(`path escapes plugin directory: ${child}`);
+  if (rel === "") return absChild;
+  if (isAbsolute(rel)) throw new Error(`path escapes plugin directory: ${child}`);
+  const firstSegment = rel.split(/[\\/]/g)[0];
+  if (firstSegment === "..") throw new Error(`path escapes plugin directory: ${child}`);
+  return absChild;
 }
 
 async function loadPluginManifestFromDir(dir: string): Promise<{
