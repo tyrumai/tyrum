@@ -118,7 +118,7 @@ describe("WatcherProcessor", () => {
     });
     const watcher = await processor.getActiveWatcherById(id);
     expect(watcher).not.toBeNull();
-    const timestampMs = Date.now();
+    const timestampMs = 1_700_000_000_000;
     const nonce = "nonce-1";
 
     const first = await processor.recordWebhookTrigger(watcher!, {
@@ -134,11 +134,13 @@ describe("WatcherProcessor", () => {
       firing_id: string;
       trigger_type: string;
       status: string;
-    }>("SELECT firing_id, trigger_type, status FROM watcher_firings");
+      scheduled_at_ms: number;
+    }>("SELECT firing_id, trigger_type, status, scheduled_at_ms FROM watcher_firings");
     expect(firings).toHaveLength(1);
     expect(firings[0]!.firing_id).toBe(`webhook-${String(id)}-${replayDigest}`);
     expect(firings[0]!.trigger_type).toBe("webhook");
     expect(firings[0]!.status).toBe("queued");
+    expect(firings[0]!.scheduled_at_ms).toBe(timestampMs);
 
     const events = await memoryDal.getEpisodicEvents();
     const fired = events.find((event) => event.event_type === "webhook_fired");

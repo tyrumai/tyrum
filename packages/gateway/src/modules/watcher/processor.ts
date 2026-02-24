@@ -80,6 +80,7 @@ export class WatcherProcessor {
   private readonly memoryDal: MemoryDal;
   private readonly eventBus: Emitter<GatewayEvents>;
   private readonly firingDal: WatcherFiringDal;
+  private readonly webhookScheduledAtCursor = new Map<number, { baseMs: number; nextMs: number }>();
 
   private completedHandler: Handler<GatewayEvents["plan:completed"]> | undefined;
   private failedHandler: Handler<GatewayEvents["plan:failed"]> | undefined;
@@ -251,10 +252,18 @@ export class WatcherProcessor {
       }
     }
 
-    const maxScheduledAtSearch = 1_000;
-    const baseScheduledAtMs = Date.now();
-    for (let i = 0; i < maxScheduledAtSearch; i += 1) {
-      const scheduledAtMs = baseScheduledAtMs + i;
+    const maxScheduledAtSearch = 10_000;
+    const baseScheduledAtMs = Math.floor(event.timestampMs);
+    const scheduledAtMaxExclusive = baseScheduledAtMs + maxScheduledAtSearch;
+    const cursor = this.webhookScheduledAtCursor.get(watcher.id);
+    const startScheduledAtMs = cursor && cursor.baseMs === baseScheduledAtMs ? cursor.nextMs : baseScheduledAtMs;
+
+    for (let attempt = 0; attempt < maxScheduledAtSearch; attempt += 1) {
+      const scheduledAtMs = startScheduledAtMs + attempt;
+      if (scheduledAtMs >= scheduledAtMaxExclusive) {
+        throw new Error("failed to allocate unique scheduled_at_ms for webhook firing");
+      }
+
       const created = await this.firingDal.createIfAbsent({
         firingId,
         watcherId: watcher.id,
@@ -263,9 +272,11 @@ export class WatcherProcessor {
         scheduledAtMs,
       });
       if (created.row.firing_id === firingId) {
+        const nextMs = Math.max(startScheduledAtMs, created.row.scheduled_at_ms + 1);
+        this.webhookScheduledAtCursor.set(watcher.id, { baseMs: baseScheduledAtMs, nextMs });
         break;
       }
-      if (i === maxScheduledAtSearch - 1) {
+      if (attempt === maxScheduledAtSearch - 1) {
         throw new Error("failed to allocate unique scheduled_at_ms for webhook firing");
       }
     }
