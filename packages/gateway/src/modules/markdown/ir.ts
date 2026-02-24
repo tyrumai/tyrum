@@ -634,7 +634,7 @@ export function chunkIr(
   const text = ir.text ?? "";
   const measure = opts?.measure ?? ((chunk: MarkdownIr) => chunk.text.length);
 
-  if (text.length === 0) return [{ text: "", spans: [] }];
+  if (text.length === 0) return [];
   if (measure(ir) <= maxMeasure) return [ir];
 
   const chunks: MarkdownIr[] = [];

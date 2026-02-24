@@ -23,4 +23,11 @@ describe("renderMarkdownForTelegram", () => {
     }
     expect(chunks.join("")).toBe("```ts\nX\n```");
   });
+
+  it("trims leading and trailing whitespace consistently when chunked", () => {
+    const chunks = renderMarkdownForTelegram("   0123456789   ", { maxChars: 4 });
+    expect(chunks.join("")).toBe("0123456789");
+    expect(chunks.at(0)?.startsWith(" ")).toBe(false);
+    expect(chunks.at(-1)?.endsWith(" ")).toBe(false);
+  });
 });

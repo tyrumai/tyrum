@@ -11,6 +11,10 @@ describe("chunkText", () => {
 });
 
 describe("chunkIr", () => {
+  it("returns no chunks for empty input", () => {
+    expect(chunkIr(markdownToIr(""), 5)).toEqual([]);
+  });
+
   it("does not emit a chunk that exceeds maxChars when a paragraph boundary begins at hardEnd - 1", () => {
     const ir = markdownToIr("abcd\n\nefgh");
     const chunks = chunkIr(ir, 5);

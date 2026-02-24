@@ -2,6 +2,33 @@ import { chunkIr, chunkText, irToPlainText, markdownToIr } from "./ir.js";
 
 const TELEGRAM_MAX_MESSAGE_CHARS = 4096;
 
+function trimOuterWhitespaceChunks(chunks: string[]): string[] {
+  const out = chunks.filter((chunk) => chunk.length > 0);
+
+  while (out.length > 0) {
+    const trimmed = out[0]!.trimStart();
+    if (trimmed.length === 0) {
+      out.shift();
+      continue;
+    }
+    out[0] = trimmed;
+    break;
+  }
+
+  while (out.length > 0) {
+    const idx = out.length - 1;
+    const trimmed = out[idx]!.trimEnd();
+    if (trimmed.length === 0) {
+      out.pop();
+      continue;
+    }
+    out[idx] = trimmed;
+    break;
+  }
+
+  return out;
+}
+
 export function renderMarkdownForTelegram(markdown: string, opts?: { maxChars?: number }): string[] {
   const maxChars = Math.max(
     1,
@@ -26,5 +53,5 @@ export function renderMarkdownForTelegram(markdown: string, opts?: { maxChars?: 
     chunks.push(...chunkText(chunk, maxChars));
   }
 
-  return chunks.filter((chunk) => chunk.length > 0);
+  return trimOuterWhitespaceChunks(chunks);
 }
