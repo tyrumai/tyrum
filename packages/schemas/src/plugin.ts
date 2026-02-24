@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DateTimeSchema } from "./common.js";
 
 export const PluginId = z.string().trim().min(1);
 export type PluginId = z.infer<typeof PluginId>;
@@ -39,3 +40,17 @@ export const PluginManifest = z
   })
   .strict();
 export type PluginManifest = z.infer<typeof PluginManifest>;
+
+export const PluginLockFormat = z.literal("tyrum.plugin.lock.v1");
+export type PluginLockFormat = z.infer<typeof PluginLockFormat>;
+
+export const PluginLockFile = z
+  .object({
+    format: PluginLockFormat,
+    recorded_at: DateTimeSchema,
+    source: z.record(z.string(), z.unknown()).optional(),
+    pinned_version: z.string().trim().min(1),
+    integrity_sha256: z.string().trim().regex(/^[0-9a-f]{64}$/i),
+  })
+  .strict();
+export type PluginLockFile = z.infer<typeof PluginLockFile>;
