@@ -88,6 +88,18 @@ Example operator scopes:
 
 **HTTP scope enforcement:** HTTP requests authenticated with **device tokens** are authorized per-route based on required scopes (for example `operator.read`, `operator.write`). Requests missing the required scope are rejected with `403 forbidden`. The **admin bootstrap token** is break-glass and is treated as wildcard scope for HTTP (intentionally not scope-limited).
 
+**WebSocket scope enforcement:** WebSocket requests authenticated with **device tokens** are authorized per-request based on required scopes. WS requests missing the required scope are rejected with a `forbidden` error response. Deny-by-default applies: if a request type has no scope mapping, scoped tokens are forbidden. The **admin bootstrap token** is break-glass and is treated as wildcard scope for WS.
+
+WebSocket scope matrix (request type → required scope):
+
+| Request type | Required scope |
+| --- | --- |
+| `approval.list`, `approval.resolve` | `operator.approvals` |
+| `pairing.approve`, `pairing.deny`, `pairing.revoke` | `operator.pairing` |
+| `session.send`, `workflow.run`, `workflow.resume`, `workflow.cancel` | `operator.write` |
+| `command.execute` | `operator.admin` |
+| `presence.beacon` | *(none)* |
+
 ### Admin mode (step-up)
 
 Operator clients support an **Admin Mode** that grants elevated scopes for a short duration. Entering Admin Mode requires step-up authentication and/or an explicit approval, and it is audited.

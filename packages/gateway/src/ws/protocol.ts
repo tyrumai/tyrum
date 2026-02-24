@@ -67,6 +67,8 @@ import type { Logger } from "../modules/observability/logger.js";
 import type { SqlDb, StateStoreKind } from "../statestore/types.js";
 import type { ModelsDevService } from "../modules/models/models-dev-service.js";
 import { executeCommand } from "../modules/commands/dispatcher.js";
+import type { AuthTokenClaims } from "../modules/auth/token-store.js";
+import { resolveWsRequestRequiredScopes } from "../modules/authz/ws-scope-matrix.js";
 
 // ---------------------------------------------------------------------------
 // Dependency injection
@@ -137,6 +139,13 @@ export class NoCapableClientError extends Error {
   }
 }
 
+function hasAnyRequiredScope(claims: AuthTokenClaims, requiredScopes: string[]): boolean {
+  if (requiredScopes.length === 0) return true;
+  const scopes = Array.isArray(claims.scopes) ? claims.scopes : [];
+  if (scopes.includes("*")) return true;
+  return requiredScopes.some((scope) => scopes.includes(scope));
+}
+
 // ---------------------------------------------------------------------------
 // Client message handling
 // ---------------------------------------------------------------------------
@@ -199,6 +208,17 @@ export async function handleClientMessage(
     }
 
     if (msg.type === "approval.request") {
+      const authClaims = client.auth_claims;
+      if (!authClaims) {
+        return errorEvent("unauthorized", "missing auth claims");
+      }
+      if (client.role !== "client") {
+        return errorEvent("unauthorized", "only operator clients may resolve approvals");
+      }
+      if (authClaims.token_kind === "device" && !hasAnyRequiredScope(authClaims, ["operator.approvals"])) {
+        return errorEvent("forbidden", "insufficient scope");
+      }
+
       const approvalId = parseApprovalId(msg.request_id);
       if (approvalId === undefined) {
         return errorEvent(
@@ -234,9 +254,47 @@ export async function handleClientMessage(
     return undefined;
   }
 
-  // Requests (client -> gateway). In the current runtime, we don't accept
-  // post-handshake client requests via WS (use HTTP routes for now).
+  // Requests (peer -> gateway) — WS control-plane operations.
+  const authClaims = client.auth_claims;
+  if (!authClaims) {
+    return errorResponse(
+      msg.request_id,
+      msg.type,
+      "unauthorized",
+      "missing auth claims",
+    );
+  }
+
+  if (authClaims.token_kind === "device") {
+    const requiredScopes = resolveWsRequestRequiredScopes(msg.type);
+    if (!requiredScopes) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "forbidden",
+        "request is not scope-authorized for scoped tokens",
+      );
+    }
+
+    if (!hasAnyRequiredScope(authClaims, requiredScopes)) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "forbidden",
+        "insufficient scope",
+      );
+    }
+  }
+
   if (msg.type === "approval.list") {
+    if (client.role !== "client") {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unauthorized",
+        "only operator clients may list approvals",
+      );
+    }
     if (!deps.approvalDal) {
       return errorResponse(
         msg.request_id,
@@ -285,6 +343,14 @@ export async function handleClientMessage(
   }
 
   if (msg.type === "approval.resolve") {
+    if (client.role !== "client") {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unauthorized",
+        "only operator clients may resolve approvals",
+      );
+    }
     if (!deps.approvalDal) {
       return errorResponse(
         msg.request_id,
@@ -1199,10 +1265,10 @@ export function dispatchTask(
 }
 
 /**
- * Send an approval.request to the first connected client.
+ * Send an approval.request to the first connected operator client.
  *
  * Approval requests are not capability-scoped; any connected client
- * with a human operator can respond.
+ * with a human operator can respond as long as they are authorized to do so.
  */
 export function requestApproval(
   approval: {
@@ -1223,11 +1289,13 @@ export function requestApproval(
   };
   const payload = JSON.stringify(message);
 
-  // Send to the first available client.
-  const iter = deps.connectionManager.allClients();
-  const first = iter.next();
-  if (!first.done) {
-    first.value.ws.send(payload);
+  for (const peer of deps.connectionManager.allClients()) {
+    const authClaims = peer.auth_claims;
+    if (!authClaims) continue;
+    if (peer.role !== "client") continue;
+    if (authClaims.token_kind === "device" && !hasAnyRequiredScope(authClaims, ["operator.approvals"])) continue;
+
+    peer.ws.send(payload);
     if (deps.cluster) {
       void deps.cluster.outboxDal
         .enqueue("ws.broadcast", {
