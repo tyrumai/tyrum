@@ -637,14 +637,21 @@ describe("AgentRuntime", () => {
           toolExecutor: unknown,
           usedTools: Set<string>,
           context: { planId: string; sessionId: string; channel: string; threadId: string },
+          contextReport: unknown,
         ) => Record<string, { execute: (args: unknown) => Promise<string> }>;
       }
-    ).buildToolSet([toolDesc], toolExecutor, usedTools, {
-      planId: "plan-1",
-      sessionId: "session-1",
-      channel: "test",
-      threadId: "thread-1",
-    });
+    ).buildToolSet(
+      [toolDesc],
+      toolExecutor,
+      usedTools,
+      {
+        planId: "plan-1",
+        sessionId: "session-1",
+        channel: "test",
+        threadId: "thread-1",
+      },
+      makeContextReport(),
+    );
 
     const result = await toolSet["tool.exec"]!.execute({ command: "echo *" });
     expect(result).toBe("ok");
