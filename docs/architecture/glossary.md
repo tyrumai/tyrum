@@ -109,7 +109,7 @@ A durable event log/table used to publish events reliably to the backplane (supp
 
 ## Lane
 
-An execution stream within a session (for example `main`, `cron`, `subagent`) used to separate concerns.
+An execution stream within a session (for example `main`, `cron`, `heartbeat`, `subagent`) used to separate concerns.
 
 ## Node
 
