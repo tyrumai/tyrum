@@ -109,7 +109,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
 
   const authProfileDal = new AuthProfileDal(container.db);
   const pinDal = new SessionProviderPinDal(container.db);
-  const routingConfigDal = new RoutingConfigDal(container.db, { eventLog: container.eventLog });
+  const routingConfigDal = new RoutingConfigDal(container.db);
 
   const secretProviderForAgent = (() => {
     if (!opts.secretProvider) return undefined;

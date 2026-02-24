@@ -1,14 +1,15 @@
 import { createHash, randomUUID } from "node:crypto";
 import { RoutingConfig as RoutingConfigSchema } from "@tyrum/schemas";
 import type { RoutingConfig as RoutingConfigT } from "@tyrum/schemas";
-import type { EventLog } from "../planner/event-log.js";
 import type { SqlDb } from "../../statestore/types.js";
+import { computeEventHash } from "../audit/hash-chain.js";
 
 export type RoutingConfig = RoutingConfigT;
 
 export type RoutingConfigRevision = {
   revision: number;
   config: RoutingConfig;
+  configSha256: string;
   createdAt: string;
   createdBy: unknown;
   reason?: string;
@@ -37,9 +38,11 @@ function parseJsonOrFallback(raw: string, fallback: unknown): unknown {
 function rowToRevision(row: RawRoutingConfigRow): RoutingConfigRevision {
   const parsed = parseJsonOrFallback(row.config_json, { v: 1 });
   const config = RoutingConfigSchema.safeParse(parsed);
+  const configSha256 = createHash("sha256").update(row.config_json).digest("hex");
   return {
     revision: row.revision,
     config: config.success ? config.data : { v: 1 },
+    configSha256,
     createdAt: normalizeTime(row.created_at),
     createdBy: parseJsonOrFallback(row.created_by_json, {}),
     reason: row.reason ?? undefined,
@@ -48,13 +51,96 @@ function rowToRevision(row: RawRoutingConfigRow): RoutingConfigRevision {
 
 const ROUTING_CONFIG_AUDIT_PLAN_ID = "routing.config";
 
+function isUniqueViolation(err: unknown): boolean {
+  if (err && typeof err === "object") {
+    const code = (err as { code?: unknown }).code;
+    if (code === "23505") return true; // Postgres unique_violation
+    if (typeof code === "string" && code.toUpperCase().startsWith("SQLITE_CONSTRAINT")) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function appendAuditEventNext(
+  tx: SqlDb,
+  event: {
+    replayId: string;
+    planId: string;
+    occurredAt: string;
+    action: unknown;
+  },
+): Promise<void> {
+  const actionJson = JSON.stringify(event.action);
+
+  const maxAttempts = 10;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const savepoint = `tyrum_routing_config_audit_${attempt + 1}`;
+    await tx.exec(`SAVEPOINT ${savepoint}`);
+
+    try {
+      const lastRow = await tx.get<{ step_index: number; event_hash: string | null }>(
+        "SELECT step_index, event_hash FROM planner_events WHERE plan_id = ? ORDER BY step_index DESC LIMIT 1",
+        [event.planId],
+      );
+      const prevHash = lastRow?.event_hash ?? null;
+      const stepIndex = (lastRow?.step_index ?? -1) + 1;
+      if (stepIndex < 0) {
+        throw new Error("planner_events step_index overflow");
+      }
+
+      const eventHash = computeEventHash(
+        {
+          plan_id: event.planId,
+          step_index: stepIndex,
+          occurred_at: event.occurredAt,
+          action: actionJson,
+        },
+        prevHash,
+      );
+
+      const inserted = await tx.get<{ id: number }>(
+        `INSERT INTO planner_events (replay_id, plan_id, step_index, occurred_at, action, prev_hash, event_hash)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         RETURNING id`,
+        [
+          event.replayId,
+          event.planId,
+          stepIndex,
+          event.occurredAt,
+          actionJson,
+          prevHash,
+          eventHash,
+        ],
+      );
+
+      if (!inserted) {
+        throw new Error("planner_events insert returned no row");
+      }
+
+      await tx.exec(`RELEASE SAVEPOINT ${savepoint}`);
+      return;
+    } catch (err) {
+      try {
+        await tx.exec(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+        await tx.exec(`RELEASE SAVEPOINT ${savepoint}`);
+      } catch {
+        // ignore
+      }
+
+      if (isUniqueViolation(err)) {
+        continue;
+      }
+
+      throw err;
+    }
+  }
+
+  throw new Error("failed to append routing config audit event after retries");
+}
+
 export class RoutingConfigDal {
-  constructor(
-    private readonly db: SqlDb,
-    private readonly deps?: {
-      eventLog?: EventLog;
-    },
-  ) {}
+  constructor(private readonly db: SqlDb) {}
 
   async getLatest(): Promise<RoutingConfigRevision | undefined> {
     const row = await this.db.get<RawRoutingConfigRow>(
@@ -86,39 +172,40 @@ export class RoutingConfigDal {
     const normalizedConfig = RoutingConfigSchema.parse(params.config);
     const configJson = JSON.stringify(normalizedConfig);
     const configSha256 = createHash("sha256").update(configJson).digest("hex");
-    const row = await this.db.get<RawRoutingConfigRow>(
-      `INSERT INTO routing_configs (config_json, created_at, created_by_json, reason)
-       VALUES (?, ?, ?, ?)
-       RETURNING revision, config_json, created_at, created_by_json, reason`,
-      [
-        configJson,
-        createdAt,
-        JSON.stringify(params.createdBy ?? {}),
-        params.reason ?? null,
-      ],
-    );
-    if (!row) {
-      throw new Error("routing config insert failed");
-    }
+    const replayId = `routing-config-${randomUUID()}`;
 
-    const persisted = rowToRevision(row);
+    return await this.db.transaction(async (tx) => {
+      const row = await tx.get<RawRoutingConfigRow>(
+        `INSERT INTO routing_configs (config_json, created_at, created_by_json, reason)
+         VALUES (?, ?, ?, ?)
+         RETURNING revision, config_json, created_at, created_by_json, reason`,
+        [
+          configJson,
+          createdAt,
+          JSON.stringify(params.createdBy ?? {}),
+          params.reason ?? null,
+        ],
+      );
+      if (!row) {
+        throw new Error("routing config insert failed");
+      }
 
-    if (this.deps?.eventLog) {
-      await this.deps.eventLog.appendNext({
-        replayId: `routing-config-${randomUUID()}`,
+      await appendAuditEventNext(tx, {
+        replayId,
         planId: ROUTING_CONFIG_AUDIT_PLAN_ID,
         occurredAt: createdAt,
         action: {
           type: "routing.config.updated",
-          revision: persisted.revision,
+          revision: row.revision,
           reason: params.reason,
           created_by: params.createdBy ?? {},
           config_sha256: configSha256,
         },
       });
-    }
 
-    return persisted;
+      const persisted = rowToRevision(row);
+      return { ...persisted, configSha256 };
+    });
   }
 
   async revertToRevision(params: {

@@ -3,7 +3,7 @@
  */
 
 import { Hono } from "hono";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   RoutingConfigRevertRequest,
   RoutingConfigUpdateRequest,
@@ -14,6 +14,7 @@ import type { ConnectionManager } from "../ws/connection-manager.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
 import type { RoutingConfigDal } from "../modules/channels/routing-config-dal.js";
 import { getClientIp } from "../modules/auth/client-ip.js";
+import type { AuthTokenClaims } from "../modules/auth/token-store.js";
 
 export interface RoutingConfigRouteDeps {
   routingConfigDal: RoutingConfigDal;
@@ -26,12 +27,56 @@ export interface RoutingConfigRouteDeps {
   };
 }
 
+type WsBroadcastAudience = {
+  roles?: Array<"client" | "node">;
+  required_scopes?: string[];
+};
+
+function normalizeScopes(scopes: string[] | undefined): string[] {
+  if (!Array.isArray(scopes)) return [];
+  const normalized = scopes
+    .map((scope) => scope.trim())
+    .filter((scope) => scope.length > 0);
+  return [...new Set(normalized)];
+}
+
+function hasAnyRequiredScope(claims: AuthTokenClaims, requiredScopes: string[]): boolean {
+  if (requiredScopes.length === 0) return true;
+  const scopes = normalizeScopes(claims.scopes);
+  if (scopes.includes("*")) return true;
+  return requiredScopes.some((scope) => scopes.includes(scope));
+}
+
+function shouldDeliver(client: { role: string; auth_claims?: AuthTokenClaims }, audience: WsBroadcastAudience): boolean {
+  const roles = audience.roles;
+  if (roles && roles.length > 0 && !roles.includes(client.role as never)) {
+    return false;
+  }
+
+  const required = audience.required_scopes;
+  if (required && required.length > 0) {
+    const claims = client.auth_claims;
+    if (!claims) return false;
+    if (claims.token_kind !== "admin" && !hasAnyRequiredScope(claims, required)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+const ROUTING_CONFIG_WS_AUDIENCE: WsBroadcastAudience = {
+  roles: ["client"],
+  required_scopes: ["operator.admin"],
+};
+
 function emitEvent(deps: RoutingConfigRouteDeps, evt: WsEventEnvelope): void {
   const ws = deps.ws;
   if (!ws) return;
 
   const payload = JSON.stringify(evt);
   for (const client of ws.connectionManager.allClients()) {
+    if (!shouldDeliver(client, ROUTING_CONFIG_WS_AUDIENCE)) continue;
     try {
       client.ws.send(payload);
     } catch {
@@ -45,6 +90,7 @@ function emitEvent(deps: RoutingConfigRouteDeps, evt: WsEventEnvelope): void {
         source_edge_id: ws.cluster.edgeId,
         skip_local: true,
         message: evt,
+        audience: ROUTING_CONFIG_WS_AUDIENCE,
       })
       .catch(() => {
         // ignore
@@ -85,10 +131,6 @@ export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
       createdBy,
     });
 
-    const configSha256 = createHash("sha256")
-      .update(JSON.stringify(persisted.config))
-      .digest("hex");
-
     const candidate: WsEventEnvelope = {
       event_id: randomUUID(),
       type: "routing.config.updated",
@@ -97,7 +139,7 @@ export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
       payload: {
         revision: persisted.revision,
         reason: parsed.data.reason,
-        config_sha256: configSha256,
+        config_sha256: persisted.configSha256,
         config: persisted.config,
       },
     };
@@ -142,10 +184,6 @@ export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
       createdBy,
     });
 
-    const configSha256 = createHash("sha256")
-      .update(JSON.stringify(persisted.config))
-      .digest("hex");
-
     const candidate: WsEventEnvelope = {
       event_id: randomUUID(),
       type: "routing.config.updated",
@@ -154,7 +192,7 @@ export function createRoutingConfigRoutes(deps: RoutingConfigRouteDeps): Hono {
       payload: {
         revision: persisted.revision,
         reason: parsed.data.reason,
-        config_sha256: configSha256,
+        config_sha256: persisted.configSha256,
         config: persisted.config,
         reverted_from_revision: parsed.data.revision,
       },

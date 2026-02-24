@@ -1,18 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { EventLog } from "../../src/modules/planner/event-log.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { RoutingConfigDal } from "../../src/modules/channels/routing-config-dal.js";
 
 describe("RoutingConfigDal", () => {
   let db: SqliteDb;
-  let eventLog: EventLog;
   let dal: RoutingConfigDal;
 
   beforeEach(() => {
     db = openTestSqliteDb();
-    eventLog = new EventLog(db);
-    dal = new RoutingConfigDal(db, { eventLog });
+    dal = new RoutingConfigDal(db);
   });
 
   afterEach(async () => {
@@ -94,5 +91,21 @@ describe("RoutingConfigDal", () => {
     expect(updated.revision).toBeGreaterThan(initial.revision);
     expect(reverted.revision).toBeGreaterThan(updated.revision);
     expect(reverted.config).toEqual(initial.config);
+  });
+
+  it("rolls back routing config insert if audit append fails", async () => {
+    await db.exec("DROP TABLE planner_events");
+
+    await expect(
+      dal.set({
+        config: { v: 1 },
+        createdBy: { kind: "test" },
+        reason: "should-fail",
+        occurredAtIso: "2026-02-24T00:00:00.000Z",
+      }),
+    ).rejects.toThrow();
+
+    const rows = await db.all<{ revision: number }>("SELECT revision FROM routing_configs");
+    expect(rows).toHaveLength(0);
   });
 });

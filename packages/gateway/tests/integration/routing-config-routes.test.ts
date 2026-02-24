@@ -4,7 +4,6 @@ import { createRoutingConfigRoutes } from "../../src/routes/routing-config.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { RoutingConfigDal } from "../../src/modules/channels/routing-config-dal.js";
-import { EventLog } from "../../src/modules/planner/event-log.js";
 
 describe("routing config routes", () => {
   let db: SqliteDb;
@@ -21,15 +20,20 @@ describe("routing config routes", () => {
     const send = vi.fn();
     const app = new Hono();
 
-    const eventLog = new EventLog(db);
-    const routing = new RoutingConfigDal(db, { eventLog });
+    const routing = new RoutingConfigDal(db);
     app.route(
       "/",
       createRoutingConfigRoutes({
         routingConfigDal: routing,
         ws: {
           connectionManager: {
-            allClients: () => [{ ws: { send } }],
+            allClients: () => [
+              {
+                role: "client",
+                auth_claims: { token_kind: "admin", role: "admin", scopes: ["*"] },
+                ws: { send },
+              },
+            ],
           },
         },
       } as never),
@@ -76,15 +80,20 @@ describe("routing config routes", () => {
     const send = vi.fn();
     const app = new Hono();
 
-    const eventLog = new EventLog(db);
-    const routing = new RoutingConfigDal(db, { eventLog });
+    const routing = new RoutingConfigDal(db);
     app.route(
       "/",
       createRoutingConfigRoutes({
         routingConfigDal: routing,
         ws: {
           connectionManager: {
-            allClients: () => [{ ws: { send } }],
+            allClients: () => [
+              {
+                role: "client",
+                auth_claims: { token_kind: "admin", role: "admin", scopes: ["*"] },
+                ws: { send },
+              },
+            ],
           },
         },
       } as never),

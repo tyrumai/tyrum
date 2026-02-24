@@ -2,6 +2,7 @@ import type { WsEventEnvelope, WsRequestEnvelope } from "@tyrum/schemas";
 import type { ConnectedClient, ConnectionManager } from "../../ws/connection-manager.js";
 import type { OutboxDal, OutboxRow } from "./outbox-dal.js";
 import type { Logger } from "../observability/logger.js";
+import type { AuthTokenClaims } from "../auth/token-store.js";
 
 export interface OutboxPollerOptions {
   consumerId: string;
@@ -13,6 +14,11 @@ export interface OutboxPollerOptions {
 }
 
 type WsEnvelope = WsEventEnvelope | WsRequestEnvelope;
+type WsBroadcastRole = "client" | "node";
+type WsBroadcastAudience = {
+  roles?: WsBroadcastRole[];
+  required_scopes?: string[];
+};
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object";
@@ -41,6 +47,46 @@ function parseDirectPayload(payload: unknown): { connection_id: string; message:
   return { connection_id: connectionId, message: message as WsEnvelope };
 }
 
+function normalizeScopes(scopes: string[] | undefined): string[] {
+  if (!Array.isArray(scopes)) return [];
+  const normalized = scopes
+    .map((scope) => scope.trim())
+    .filter((scope) => scope.length > 0);
+  return [...new Set(normalized)];
+}
+
+function hasAnyRequiredScope(claims: AuthTokenClaims, requiredScopes: string[]): boolean {
+  if (requiredScopes.length === 0) return true;
+  const scopes = normalizeScopes(claims.scopes);
+  if (scopes.includes("*")) return true;
+  return requiredScopes.some((scope) => scopes.includes(scope));
+}
+
+function parseBroadcastAudience(payload: unknown): WsBroadcastAudience | undefined {
+  if (!isObject(payload)) return undefined;
+
+  const rolesRaw = payload["roles"];
+  const roles =
+    Array.isArray(rolesRaw) && rolesRaw.every((role) => role === "client" || role === "node")
+      ? (rolesRaw as WsBroadcastRole[])
+      : undefined;
+
+  const requiredScopesRaw = payload["required_scopes"];
+  const requiredScopes =
+    Array.isArray(requiredScopesRaw) && requiredScopesRaw.every((scope) => typeof scope === "string")
+      ? normalizeScopes(requiredScopesRaw as string[])
+      : undefined;
+
+  if ((!roles || roles.length === 0) && (!requiredScopes || requiredScopes.length === 0)) {
+    return undefined;
+  }
+
+  return {
+    roles: roles && roles.length > 0 ? roles : undefined,
+    required_scopes: requiredScopes && requiredScopes.length > 0 ? requiredScopes : undefined,
+  };
+}
+
 function extractAttemptId(message: WsEnvelope): string | undefined {
   if (message.type !== "task.execute") return undefined;
   const payload = (message as unknown as { payload?: unknown }).payload;
@@ -51,17 +97,19 @@ function extractAttemptId(message: WsEnvelope): string | undefined {
 
 function parseBroadcastPayload(
   payload: unknown,
-): { message: WsEnvelope; source_edge_id?: string; skip_local?: boolean } | undefined {
+): { message: WsEnvelope; source_edge_id?: string; skip_local?: boolean; audience?: WsBroadcastAudience } | undefined {
   if (!isObject(payload)) return undefined;
 
   const maybeMessage = payload["message"];
   if (isObject(maybeMessage)) {
     const sourceEdgeId = payload["source_edge_id"];
     const skipLocal = payload["skip_local"];
+    const audience = parseBroadcastAudience(payload["audience"]);
     return {
       message: maybeMessage as WsEnvelope,
       source_edge_id: typeof sourceEdgeId === "string" ? sourceEdgeId : undefined,
       skip_local: typeof skipLocal === "boolean" ? skipLocal : undefined,
+      audience,
     };
   }
 
@@ -174,6 +222,18 @@ export class OutboxPoller {
       const payload = JSON.stringify(parsed.message);
       for (const client of this.connectionManager.allClients()) {
         if (authAudit && !canReceiveAuthAudit(client)) continue;
+        const audience = parsed.audience;
+        if (audience?.roles && !audience.roles.includes(client.role)) {
+          continue;
+        }
+        if (audience?.required_scopes && audience.required_scopes.length > 0) {
+          const claims = client.auth_claims;
+          if (!claims) continue;
+          if (claims.token_kind !== "admin" && !hasAnyRequiredScope(claims, audience.required_scopes)) {
+            continue;
+          }
+        }
+
         try {
           client.ws.send(payload);
         } catch (err) {
