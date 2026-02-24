@@ -46,6 +46,13 @@ export interface StepResult {
   evidence?: EvaluationContext;
   artifacts?: ArtifactRefT[];
   cost?: AttemptCostT;
+  pause?: {
+    kind: string;
+    prompt: string;
+    detail: string;
+    context?: unknown;
+    expiresAt?: string | null;
+  };
 }
 
 export interface StepExecutor {
@@ -2030,6 +2037,42 @@ export class ExecutionEngine {
       }
 
       if (result.success) {
+        if (result.pause) {
+          await this.markAttemptSucceeded(
+            tx,
+            opts,
+            result,
+            evidenceJson,
+            postconditionReportJson,
+            artifactsJson,
+            costJson,
+          );
+          const artifacts = safeJsonParse(artifactsJson, [] as ArtifactRefT[]);
+          await this.recordArtifactsTx(
+            tx,
+            {
+              runId: opts.runId,
+              stepId: opts.stepId,
+              attemptId: opts.attemptId,
+              workspaceId: opts.workspaceId,
+              key: opts.key,
+            },
+            artifacts,
+          );
+          const paused = await this.pauseRunForApproval(tx, opts, {
+            kind: result.pause.kind,
+            prompt: result.pause.prompt,
+            detail: result.pause.detail,
+            context: result.pause.context,
+            expiresAt: result.pause.expiresAt ?? undefined,
+          });
+          return {
+            kind: "paused" as const,
+            reason: "approval" as const,
+            approvalId: paused.approvalId,
+          };
+        }
+
         if (pauseDetail) {
           await this.markAttemptSucceeded(
             tx,

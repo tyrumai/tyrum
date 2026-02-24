@@ -7,6 +7,7 @@ import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import type { ApprovalRow } from "../../src/modules/approval/dal.js";
 import { createApprovalRoutes } from "../../src/routes/approval.js";
+import { ExecutionEngine } from "../../src/modules/execution/engine.js";
 import { Hono } from "hono";
 import { simulateReadableStream } from "ai";
 import { MockLanguageModelV3 } from "ai/test";
@@ -527,14 +528,26 @@ describe("Tool execution loop", () => {
     expect(pending.kind).toBe("workflow_step");
     expect(pending.agent_id).toBe("agent-test");
     expect(pending.workspace_id).toBe("ws-test");
+    expect(pending.run_id).not.toBeNull();
+    expect(pending.resume_token).toMatch(/^resume-/);
     expect(pending.status).toBe("pending");
 
-    const updated = await container.approvalDal.respond(
-      pending.id,
-      true,
-      "approved in test",
+    const approvalEngine = new ExecutionEngine({ db: container.db });
+    const approvalApp = new Hono();
+    approvalApp.route(
+      "/",
+      createApprovalRoutes({
+        approvalDal: container.approvalDal,
+        engine: approvalEngine,
+      }),
     );
-    expect(updated?.status).toBe("approved");
+
+    const res = await approvalApp.request(`/approvals/${String(pending.id)}/respond`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ decision: "approved", reason: "approved in test" }),
+    });
+    expect(res.status).toBe(200);
 
     const result = await turnPromise;
     expect(result.reply).toBe("approved and executed");
@@ -658,7 +671,22 @@ describe("Tool execution loop", () => {
       const pending = await waitForPendingApproval(container);
       expect(pending.prompt).toContain("tool.exec");
 
-      await container.approvalDal.respond(pending.id, true, "approved in test");
+      const approvalEngine = new ExecutionEngine({ db: container.db });
+      const approvalApp = new Hono();
+      approvalApp.route(
+        "/",
+        createApprovalRoutes({
+          approvalDal: container.approvalDal,
+          engine: approvalEngine,
+        }),
+      );
+
+      const res = await approvalApp.request(`/approvals/${String(pending.id)}/respond`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ decision: "approved", reason: "approved in test" }),
+      });
+      expect(res.status).toBe(200);
 
       const result = await turnPromise;
       expect(result.reply).toBe("done");
@@ -733,12 +761,24 @@ describe("Tool execution loop", () => {
     });
 
     const pending = await waitForPendingApproval(container);
-    const updated = await container.approvalDal.respond(
-      pending.id,
-      false,
-      "denied in test",
+    const approvalEngine = new ExecutionEngine({ db: container.db });
+    const approvalApp = new Hono();
+    approvalApp.route(
+      "/",
+      createApprovalRoutes({
+        approvalDal: container.approvalDal,
+        engine: approvalEngine,
+      }),
     );
-    expect(updated?.status).toBe("denied");
+
+    const res = await approvalApp.request(`/approvals/${String(pending.id)}/respond`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ decision: "denied", reason: "denied in test" }),
+    });
+    expect(res.status).toBe(200);
+    const payload = (await res.json()) as { approval?: ApprovalRow };
+    expect(payload.approval?.status).toBe("denied");
 
     const result = await turnPromise;
     expect(result.reply).toBe("approval denied");
@@ -808,11 +848,13 @@ describe("Tool execution loop", () => {
     expect(pending.prompt).toContain("tool.exec");
 
     const approvalApp = new Hono();
+    const approvalEngine = new ExecutionEngine({ db: container.db });
     approvalApp.route(
       "/",
       createApprovalRoutes({
         approvalDal: container.approvalDal,
         policyOverrideDal: container.policyOverrideDal,
+        engine: approvalEngine,
       }),
     );
 
@@ -962,9 +1004,13 @@ describe("Tool execution loop", () => {
       void (async () => {
         const c = container;
         if (!c) return;
+        const approvalEngine = new ExecutionEngine({ db: c.db });
         const pending = await c.approvalDal.getPending();
         for (const approval of pending) {
-          await c.approvalDal.respond(approval.id, true, "approved in test");
+          const updated = await c.approvalDal.respond(approval.id, true, "approved in test");
+          if (updated?.resume_token) {
+            await approvalEngine.resumeRun(updated.resume_token);
+          }
         }
       })().catch(() => {
         // ignore (tests may tear down while timer is running)
@@ -1048,9 +1094,13 @@ describe("Tool execution loop", () => {
       void (async () => {
         const c = container;
         if (!c) return;
+        const approvalEngine = new ExecutionEngine({ db: c.db });
         const pending = await c.approvalDal.getPending();
         for (const approval of pending) {
-          await c.approvalDal.respond(approval.id, true, "approved in test");
+          const updated = await c.approvalDal.respond(approval.id, true, "approved in test");
+          if (updated?.resume_token) {
+            await approvalEngine.resumeRun(updated.resume_token);
+          }
         }
       })().catch(() => {
         // ignore (tests may tear down while timer is running)

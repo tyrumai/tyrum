@@ -269,10 +269,21 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
     const desiredStatus = isApproved ? "approved" : "denied";
     const decisionMatches = updated.status === desiredStatus;
     if (deps.engine && decisionMatches) {
-      if (updated.status === "approved" && updated.resume_token) {
+      const ctx = updated.context;
+      const isAgentToolExecution =
+        isObject(ctx) && ctx["source"] === "agent-tool-execution";
+
+      if (
+        updated.resume_token &&
+        (updated.status === "approved" ||
+          (updated.status === "denied" && isAgentToolExecution))
+      ) {
         await deps.engine.resumeRun(updated.resume_token);
       } else if (updated.status === "denied" && updated.run_id) {
-        await deps.engine.cancelRun(updated.run_id, updated.response_reason ?? body.reason ?? "approval denied");
+        await deps.engine.cancelRun(
+          updated.run_id,
+          updated.response_reason ?? body.reason ?? "approval denied",
+        );
       }
     }
 
