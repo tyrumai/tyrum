@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createApp } from "../../src/app.js";
 import { S3ArtifactStore } from "../../src/modules/artifact/store.js";
+import { TokenStore } from "../../src/modules/auth/token-store.js";
 import { GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { createTestContainer } from "./helpers.js";
 
@@ -161,9 +162,11 @@ describe("artifact routes", () => {
     await container.db.close();
   });
 
-  it("GET /runs/:runId/artifacts/:id emits artifact.fetched with request_id for traceability", async () => {
+  it("GET /runs/:runId/artifacts/:id emits artifact.fetched with requester identity and policy snapshot refs", async () => {
     const container = await createTestContainer();
-    const app = createApp(container);
+    const tokenStore = new TokenStore(homeDir!);
+    const token = await tokenStore.initialize();
+    const app = createApp(container, { tokenStore });
     const scope: ExecutionScopeIds = {
       jobId: "job-artifacts-request-id",
       runId: "run-artifacts-request-id",
@@ -216,13 +219,14 @@ describe("artifact routes", () => {
         JSON.stringify(ref.labels ?? []),
         JSON.stringify(ref.metadata ?? {}),
         "normal",
-        null,
+        "ps-artifacts-request-id",
       ],
     );
 
     const requestId = "req-artifacts-123";
     const res = await app.request(`/runs/${scope.runId}/artifacts/${ref.artifact_id}`, {
       headers: {
+        authorization: `Bearer ${token}`,
         "x-request-id": requestId,
       },
     });
@@ -239,9 +243,14 @@ describe("artifact routes", () => {
 
     expect(fetched).toBeTruthy();
     expect(fetched?.payload).toMatchObject({
+      policy_snapshot_id: "ps-artifacts-request-id",
       fetched_by: {
         kind: "http",
         request_id: requestId,
+        auth: {
+          token_kind: "admin",
+          role: "admin",
+        },
       },
     });
 

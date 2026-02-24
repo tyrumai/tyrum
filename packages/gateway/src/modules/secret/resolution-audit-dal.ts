@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { SecretProviderKind } from "@tyrum/schemas";
+import type { SecretProviderKind, WsEventEnvelope } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
 
 export type SecretResolutionOutcome = "resolved" | "failed";
@@ -64,6 +64,14 @@ function toRow(raw: RawSecretResolutionRow): SecretResolutionRow {
   };
 }
 
+async function enqueueWsEvent(db: SqlDb, evt: WsEventEnvelope): Promise<void> {
+  await db.run(
+    `INSERT INTO outbox (topic, target_edge_id, payload_json)
+     VALUES (?, ?, ?)`,
+    ["ws.broadcast", null, JSON.stringify({ message: evt })],
+  );
+}
+
 export class SecretResolutionAuditDal {
   constructor(private readonly db: SqlDb) {}
 
@@ -125,7 +133,41 @@ export class SecretResolutionAuditDal {
         occurredAt,
       ],
     );
-    if (inserted) return toRow(inserted);
+    if (inserted) {
+      const row = toRow(inserted);
+      try {
+        const evt: WsEventEnvelope = {
+          event_id: randomUUID(),
+          type: "secret.resolution",
+          occurred_at: row.occurred_at,
+          payload: {
+            requester: {
+              agent_id: row.agent_id,
+              workspace_id: row.workspace_id,
+              session_id: row.session_id,
+              channel: row.channel,
+              thread_id: row.thread_id,
+            },
+            resolution: {
+              secret_resolution_id: row.secret_resolution_id,
+              tool_call_id: row.tool_call_id,
+              tool_id: row.tool_id,
+              handle_id: row.handle_id,
+              provider: row.provider,
+              scope: row.scope,
+              policy_snapshot_id: row.policy_snapshot_id,
+              outcome: row.outcome,
+              error: row.error,
+              occurred_at: row.occurred_at,
+            },
+          },
+        };
+        await enqueueWsEvent(this.db, evt);
+      } catch {
+        // ignore event emission failures
+      }
+      return row;
+    }
 
     const existing = await this.db.get<RawSecretResolutionRow>(
       `SELECT *
@@ -142,4 +184,3 @@ export class SecretResolutionAuditDal {
     return toRow(existing);
   }
 }
-
