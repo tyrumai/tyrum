@@ -1069,8 +1069,15 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
             const isAgentToolExecution = isRecord(row.context) && row.context["source"] === "agent-tool-execution";
             const resumeToken = row.resume_token?.trim();
 
-            if (row.status === "approved" && resumeToken) {
-              await protocolDeps.engine.resumeRun(resumeToken);
+            if (row.status === "approved") {
+              if (resumeToken) {
+                await protocolDeps.engine.resumeRun(resumeToken);
+              } else if (row.run_id) {
+                await protocolDeps.engine.cancelRun(
+                  row.run_id,
+                  row.response_reason ?? reason ?? "approved approval missing resume token",
+                );
+              }
             } else if (row.status === "denied") {
               if (isAgentToolExecution && resumeToken) {
                 await protocolDeps.engine.resumeRun(resumeToken);

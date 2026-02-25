@@ -453,6 +453,142 @@ describe("gateway startup process", () => {
     },
   );
 
+  it(
+    "cancels runs when an approval is approved but missing a resume token over WebSocket",
+    { timeout: 60_000 },
+    async () => {
+      const releaseBuildLock = acquireGatewayBuildLock();
+      try {
+        ensureGatewayBuild();
+
+        const port = await findAvailablePort();
+        const gatewayToken = "tyrum-test-token";
+        const tempRoot = mkdtempSync(join(tmpdir(), "tyrum-gateway-ws-approval-missing-token-"));
+        const tyrumHome = join(tempRoot, ".tyrum");
+        mkdirSync(tyrumHome, { recursive: true });
+        const dbPath = join(tempRoot, "gateway.db");
+
+        let stdout = "";
+        let stderr = "";
+
+        const child = spawn(process.execPath, [GATEWAY_ENTRYPOINT, "start"], {
+          cwd: REPO_ROOT,
+          env: {
+            ...process.env,
+            GATEWAY_HOST: "127.0.0.1",
+            GATEWAY_PORT: String(port),
+            GATEWAY_DB_PATH: dbPath,
+            GATEWAY_MIGRATIONS_DIR,
+            GATEWAY_TOKEN: gatewayToken,
+            TYRUM_HOME: tyrumHome,
+            TYRUM_ROLE: "all",
+            TYRUM_ENGINE_API_ENABLED: "1",
+          },
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+
+        child.stdout.setEncoding("utf8");
+        child.stderr.setEncoding("utf8");
+        child.stdout.on("data", (chunk: string) => {
+          stdout += chunk;
+        });
+        child.stderr.on("data", (chunk: string) => {
+          stderr += chunk;
+        });
+
+        const output = () => `--- stdout ---\n${stdout}\n--- stderr ---\n${stderr}`;
+
+        try {
+          const healthUrl = `http://127.0.0.1:${port}/healthz`;
+          await waitForGatewayHealth(healthUrl, child, output);
+
+          const db = new Database(dbPath);
+          try {
+            db.pragma("journal_mode = WAL");
+            db.pragma("foreign_keys = ON");
+            db.pragma("busy_timeout = 5000");
+
+            const nowIso = new Date().toISOString();
+            const jobId = "job-ws-approval-missing-token";
+            const runId = "run-ws-approval-missing-token";
+            const key = "test:ws-approval-missing-token";
+            const lane = "main";
+            const actionJson = JSON.stringify({ type: "Decide", args: {} });
+            const contextJson = JSON.stringify({ source: "agent-tool-execution" });
+
+            db.prepare(
+              `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
+               VALUES (?, ?, ?, 'queued', '{}')`,
+            ).run(jobId, key, lane);
+
+            db.prepare(
+              `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt, started_at, paused_reason, paused_detail)
+               VALUES (?, ?, ?, ?, 'paused', 1, ?, 'approval', 'waiting on approval')`,
+            ).run(runId, jobId, key, lane, nowIso);
+
+            const approvalInsert = db.prepare(
+              `INSERT INTO approvals (plan_id, step_index, prompt, context_json, expires_at, kind, agent_id, key, lane, run_id, resume_token)
+               VALUES ('plan-ws-approval-missing-token', 0, 'test approval', ?, NULL, 'workflow_step', 'default', ?, ?, ?, ?)`,
+            ).run(contextJson, key, lane, runId, null);
+            const approvalId = Number(approvalInsert.lastInsertRowid);
+
+            db.prepare(
+              `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json, approval_id)
+               VALUES ('step-ws-approval-missing-token', ?, 0, 'paused', ?, ?)`,
+            ).run(runId, actionJson, approvalId);
+
+            const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(gatewayToken));
+            try {
+              await waitForOpen(ws);
+              ws.send(
+                JSON.stringify({
+                  request_id: "r-1",
+                  type: "connect",
+                  payload: { capabilities: ["playwright"] },
+                }),
+              );
+              await delay(100);
+
+              ws.send(
+                JSON.stringify({
+                  request_id: `approval-${approvalId}`,
+                  type: "approval.request",
+                  ok: true,
+                  result: { approved: true, reason: "approved in ws test (missing resume token)" },
+                }),
+              );
+
+              const deadline = Date.now() + 5_000;
+              let status: string | undefined;
+
+              while (Date.now() < deadline) {
+                const row = db.prepare("SELECT status FROM execution_runs WHERE run_id = ?").get(runId) as
+                  | { status?: string }
+                  | undefined;
+                status = row?.status;
+                if (status === "cancelled") break;
+                await delay(25);
+              }
+
+              expect(status, output()).toBe("cancelled");
+            } finally {
+              if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+                ws.close();
+              }
+            }
+          } finally {
+            db.close();
+          }
+        } finally {
+          await stopChildProcess(child);
+          rmSync(tempRoot, { recursive: true, force: true });
+        }
+      } finally {
+        releaseBuildLock();
+      }
+    },
+  );
+
   // Windows runners do not reliably deliver a catchable SIGTERM/SIGINT to a Node child
   // process when its stdio is piped, so we can't assert graceful shutdown behavior there.
   const itShutdown = process.platform === "win32" ? it.skip : it;
