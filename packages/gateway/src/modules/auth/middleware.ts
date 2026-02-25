@@ -1,14 +1,14 @@
 /**
  * HTTP authentication middleware for Hono.
  *
- * Enforces token authentication on all routes except /healthz.
- * Web UI routes under /app may also authenticate via ?token=...
+ * Enforces token authentication on all routes except a small public allowlist
+ * (health checks, web UI shell, and auth bootstrap endpoints).
  */
 
 import type { Context, Next } from "hono";
 import { getCookie } from "hono/cookie";
 import { matchedRoutes } from "hono/route";
-import { APP_PATH_PREFIX, matchesPathPrefixSegment } from "../../app-path.js";
+import { matchesPathPrefixSegment } from "../../app-path.js";
 import { getClientIp } from "./client-ip.js";
 import { requestIdForAudit } from "../observability/request-id.js";
 import type { TokenStore } from "./token-store.js";
@@ -21,17 +21,11 @@ const AUTH_ERROR_BODY = {
   message: "Provide a valid token via Authorization: Bearer <token> header",
 };
 
-const APP_TOKEN_QUERY_KEY = "token";
+const AUTH_SESSION_ROUTE_PATH = "/auth/session";
+const AUTH_LOGOUT_ROUTE_PATH = "/auth/logout";
+const UI_PATH_PREFIX = "/ui";
 const OAUTH_CALLBACK_ROUTE_PATH_SUFFIX = "/providers/:provider/oauth/callback";
 const OAUTH_CALLBACK_REQUEST_PATH_PATTERN = /(?:^|\/)providers\/[^/]+\/oauth\/callback$/;
-
-function extractAppQueryToken(c: Context): string | undefined {
-  // Guard against prefix-collisions like "/application" or "/appdata".
-  if (!matchesPathPrefixSegment(c.req.path, APP_PATH_PREFIX)) {
-    return undefined;
-  }
-  return c.req.query(APP_TOKEN_QUERY_KEY)?.trim() || undefined;
-}
 
 function isPublicOAuthCallbackRoute(c: Context): boolean {
   if (c.req.method !== "GET") return false;
@@ -58,25 +52,26 @@ export function createAuthMiddleware(
       return next();
     }
 
+    // /ui/* is public (static operator SPA).
+    if (matchesPathPrefixSegment(c.req.path, UI_PATH_PREFIX)) {
+      return next();
+    }
+
+    // Cookie bootstrap/logout endpoints must be accessible before authentication.
+    if (c.req.path === AUTH_SESSION_ROUTE_PATH || c.req.path === AUTH_LOGOUT_ROUTE_PATH) {
+      return next();
+    }
+
     // OAuth callback is public (state/PKCE-protected) and should not require an admin token.
     // Use the router's matched route to avoid accidentally exempting other paths with similar suffixes.
     if (isPublicOAuthCallbackRoute(c)) {
       return next();
     }
 
-    // Accept query-token auth for the web UI path subtree. This keeps
-    // embedded desktop navigation working when third-party cookies are blocked.
-    const appQueryToken = extractAppQueryToken(c);
     const bearerToken = extractBearerToken(c.req.header("authorization"));
     const cookieToken = getCookie(c, AUTH_COOKIE_NAME);
-    const token = appQueryToken ?? bearerToken ?? cookieToken;
-    const tokenTransport = appQueryToken
-      ? "query"
-      : bearerToken
-        ? "authorization"
-        : cookieToken
-          ? "cookie"
-          : "missing";
+    const token = bearerToken ?? cookieToken;
+    const tokenTransport = bearerToken ? "authorization" : cookieToken ? "cookie" : "missing";
     if (!token) {
       await opts?.audit?.recordAuthFailed({
         surface: "http",
