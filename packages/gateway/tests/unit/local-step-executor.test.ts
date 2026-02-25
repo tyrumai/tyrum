@@ -147,4 +147,23 @@ describe("LocalStepExecutor playbook output contracts", () => {
     const res = await executor.execute(action, "plan-6", 0, 5_000);
     expect(res.success).toBe(true);
   });
+
+  it("preserves JSON null output as null evidence", async () => {
+    const executor = await makeExecutor();
+    const action = ActionPrimitive.parse({
+      type: "CLI",
+      args: {
+        cmd: process.execPath,
+        args: ["-e", "process.stdout.write('null')"],
+        __playbook: {
+          output: "json",
+        },
+      },
+    });
+
+    const res = await executor.execute(action, "plan-7", 0, 5_000);
+    expect(res.success).toBe(true);
+    const evidence = res.evidence as { json?: unknown } | undefined;
+    expect(evidence?.json).toBeNull();
+  });
 });

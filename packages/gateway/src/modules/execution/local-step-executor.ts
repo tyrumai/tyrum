@@ -528,7 +528,12 @@ class LocalStepExecutor implements StepExecutor {
     };
     const outputContract = parsePlaybookOutputContract(args);
     const contract = enforceJsonOutputContract(outputContract, output.stdout, "stdout", output.stdoutTruncated);
-    const evidenceJson = contract.parsed ?? tryParseJson(output.stdout) ?? fallbackEvidence;
+    const parsedStdout = tryParseJson(output.stdout);
+    const evidenceJson = contract.parsed !== undefined
+      ? contract.parsed
+      : parsedStdout !== undefined
+      ? parsedStdout
+      : fallbackEvidence;
 
     if (exitCode !== 0 || output.signal) {
       const message = output.signal
