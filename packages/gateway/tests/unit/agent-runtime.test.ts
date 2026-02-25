@@ -856,6 +856,125 @@ describe("AgentRuntime", () => {
     }
   });
 
+  it("backs off when advancing a paused approval but resumeRun does not resume", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    await writeFile(
+      join(homeDir, "agent.yml"),
+      [
+        "model:",
+        "  model: openai/gpt-4.1",
+        "skills:",
+        "  enabled: []",
+        "mcp:",
+        "  enabled: []",
+        "tools:",
+        "  allow:",
+        "    - tool.exec",
+        "sessions:",
+        "  ttl_days: 30",
+        "  max_turns: 20",
+        "memory:",
+        "  markdown_enabled: false",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const policyService = {
+      isEnabled: () => false,
+      isObserveOnly: () => false,
+      evaluateToolCall: vi.fn(),
+    };
+
+    const usage = () => ({
+      inputTokens: {
+        total: 10,
+        noCache: 10,
+        cacheRead: undefined,
+        cacheWrite: undefined,
+      },
+      outputTokens: {
+        total: 5,
+        text: 5,
+        reasoning: undefined,
+      },
+    });
+
+    let callCount = 0;
+    const model = new MockLanguageModelV3({
+      doGenerate: async () => {
+        callCount += 1;
+        if (callCount === 1) {
+          return {
+            content: [
+              {
+                type: "tool-call" as const,
+                toolCallId: "tc-1",
+                toolName: "tool.exec",
+                input: JSON.stringify({ command: "echo hi" }),
+              },
+            ],
+            finishReason: { unified: "tool-calls" as const, raw: undefined },
+            usage: usage(),
+            warnings: [],
+          };
+        }
+
+        return {
+          content: [{ type: "text" as const, text: "done" }],
+          finishReason: { unified: "stop" as const, raw: undefined },
+          usage: usage(),
+          warnings: [],
+        };
+      },
+    });
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: model,
+      fetchImpl: fetch404,
+      turnEngineWaitMs: 350,
+      policyService: policyService as unknown as ConstructorParameters<typeof AgentRuntime>[0]["policyService"],
+    } as ConstructorParameters<typeof AgentRuntime>[0]);
+
+    const engine = (runtime as unknown as { executionEngine: ExecutionEngine }).executionEngine;
+    const resumeSpy = vi.fn(async () => undefined as string | undefined);
+    engine.resumeRun = resumeSpy;
+
+    const turnPromise = runtime
+      .turn({
+        channel: "test",
+        thread_id: "thread-1",
+        message: "run tool",
+      })
+      .catch((err) => err as unknown);
+
+    const deadlineMs = Date.now() + 2_000;
+    let approvalId: number | undefined;
+    while (Date.now() < deadlineMs) {
+      const pending = await container.approvalDal.getPending();
+      if (pending.length > 0) {
+        approvalId = pending[0]!.id;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    if (!approvalId) {
+      throw new Error("timed out waiting for pending approval");
+    }
+
+    await container.approvalDal.respond(approvalId, true);
+
+    const result = await turnPromise;
+    expect(result).toBeInstanceOf(Error);
+    expect(resumeSpy.mock.calls.length).toBeLessThanOrEqual(12);
+  }, 10_000);
+
   it("enforces the engine deadline against slow model calls", async () => {
     let aborted = false;
 

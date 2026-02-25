@@ -2254,8 +2254,8 @@ export class AgentRuntime {
           (typeof context?.["resume_token"] === "string" ? context["resume_token"].trim() : "");
 
         if (resumeToken && (approval.status === "approved" || isAgentToolExecution)) {
-          await this.executionEngine.resumeRun(resumeToken);
-          return true;
+          const resumedRunId = await this.executionEngine.resumeRun(resumeToken);
+          return Boolean(resumedRunId);
         }
 
         if (approval.status === "approved") {
