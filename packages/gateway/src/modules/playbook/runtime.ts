@@ -159,9 +159,9 @@ async function envelopeForRunStatus(db: SqlDb, runId: string, timeoutMs: number)
   }
 
   const errorMessage =
+    (await loadRunErrorMessage(db, runId)) ||
     row.paused_detail?.trim() ||
     row.paused_reason?.trim() ||
-    (await loadRunErrorMessage(db, runId)) ||
     `execution run '${runId}' failed`;
 
   return { ok: false, status: "error", output: [], error: { message: errorMessage } };

@@ -428,6 +428,12 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
 
     await waitForRunStatus(container, runId, ["queued", "running"]);
 
+    // Regression: ensure stale paused metadata doesn't shadow the actual execution error.
+    await container.db.run(
+      "UPDATE execution_runs SET paused_reason = ?, paused_detail = ? WHERE run_id = ?",
+      ["stale paused reason", "stale paused detail", runId],
+    );
+
     const executor: StepExecutor = {
       execute: vi.fn(async () => ({ success: false, error: "boom" })),
     };
@@ -446,6 +452,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     const body = (await resumeRes.json()) as { ok: boolean; status: string; error?: { message?: string } };
     expect(body.ok).toBe(false);
     expect(body.status).toBe("error");
-    expect(body.error?.message).toBeTruthy();
+    expect(body.error?.message).toContain("boom");
+    expect(body.error?.message).not.toContain("stale paused detail");
   });
 });
