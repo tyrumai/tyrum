@@ -183,9 +183,9 @@ jobs:
 
           def grab(label: str):
               pat = (
-                  rf'<span class="strong">\\s*([0-9.]+)%\\s*</span>'
-                  rf'\\s*<span class="quiet">{re.escape(label)}</span>'
-                  r"\\s*<span class='fraction'>(\\d+)/(\\d+)</span>"
+                  rf'<span class="strong">\s*([0-9.]+)%\s*</span>'
+                  rf'\s*<span class="quiet">{re.escape(label)}</span>'
+                  r"\s*<span class='fraction'>(\d+)/(\d+)</span>"
               )
               match = re.search(pat, html, re.S)
               if not match:
