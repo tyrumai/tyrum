@@ -53,7 +53,9 @@ if (prettierFiles.length === 0) {
   process.exit(0);
 }
 
-const prettier = spawnSync("pnpm", ["exec", "prettier", prettierFlag, ...prettierFiles], {
+const pnpmCommand = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+
+const prettier = spawnSync(pnpmCommand, ["exec", "prettier", prettierFlag, ...prettierFiles], {
   stdio: "inherit",
 });
 
