@@ -16,7 +16,7 @@ function sleep(ms: number): Promise<void> {
 function isValidationError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
   const name = (err as { name?: unknown }).name;
-  return name === "ZodError" || name === "YAMLParseError";
+  return name === "ZodError" || name === "YAMLParseError" || name === "PlaybookCompileError";
 }
 
 function resolvePlaybookFromPipeline(pipeline: string, loaded: Playbook[]): Playbook {

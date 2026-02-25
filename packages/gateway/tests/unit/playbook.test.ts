@@ -304,4 +304,9 @@ describe("PlaybookRunner", () => {
     });
     expect(result.steps[2]!.idempotency_key).toBe("playbook:ns-test:http");
   });
+
+  it("rejects http namespace without a URL", () => {
+    const pb = makePlaybook("bad-http", [{ id: "s1", command: "http GET" }]);
+    expect(() => runner.run(pb)).toThrow(/http command requires a URL/i);
+  });
 });
