@@ -8,14 +8,25 @@ import { z } from "zod";
 export const PlaybookOutputKind = z.enum(["text", "json"]);
 export type PlaybookOutputKind = z.infer<typeof PlaybookOutputKind>;
 
+const PlaybookOutputJsonSchema = z.union([z.boolean(), z.record(z.string(), z.unknown())]);
+
 export const PlaybookOutputSpec = z.union([
   PlaybookOutputKind,
   z
     .object({
       type: PlaybookOutputKind,
-      schema: z.unknown().optional(),
+      schema: PlaybookOutputJsonSchema.optional(),
     })
-    .strict(),
+    .strict()
+    .superRefine((value, ctx) => {
+      if (value.schema !== undefined && value.type !== "json") {
+        ctx.addIssue({
+          code: "custom",
+          message: "output schema is only allowed when output.type is 'json'",
+          path: ["schema"],
+        });
+      }
+    }),
 ]);
 export type PlaybookOutputSpec = z.infer<typeof PlaybookOutputSpec>;
 

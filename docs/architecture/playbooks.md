@@ -34,6 +34,8 @@ The playbook runtime exposes a small contract that supports two operations:
 
 Notes:
 - When `pipeline` is an absolute file path, it must refer to a playbook file already loaded by the gateway (typically under `TYRUM_HOME/playbooks`).
+- `maxOutputBytes` is a positive integer cap applied by the runtime/executor to step output capture.
+- When omitted, a safe default cap is applied.
 
 Resume:
 
@@ -118,6 +120,8 @@ Steps can reference prior step outputs, for example:
 - `stdin: $stepId.json` (parsed JSON output)
 
 The runtime is responsible for enforcing output caps and for refusing ambiguous/non-JSON output when a step declares JSON (via `output: json` and/or an explicit output schema).
+
+If a step declares an explicit output schema, the output contract type must be JSON (for example `output: { type: json, schema: ... }`).
 
 ### Approval gates
 
