@@ -257,6 +257,69 @@ describe("ExecutionEngine (normalized)", () => {
     expect(types.filter((type) => type === "run.completed")).toHaveLength(0);
   });
 
+  it("does not reset started_at or re-emit run.started when resuming a paused run", async () => {
+    db = openTestSqliteDb();
+
+    const startedAtIso = "2026-02-24T00:00:00.000Z";
+    let nowMs = Date.parse(startedAtIso);
+    const clock = () => ({ nowMs, nowIso: new Date(nowMs).toISOString() });
+
+    const engine = new ExecutionEngine({ db, clock });
+    await engine.enqueuePlan({
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-resume-started-at-1",
+      requestId: "req-resume-started-at-1",
+      budgets: { max_usd_micros: 5 },
+      steps: [action("Research"), action("Research")],
+    });
+
+    let calls = 0;
+    const executor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => {
+        calls += 1;
+        if (calls === 1) {
+          return { success: true, result: { ok: true }, cost: { usd_micros: 10 } };
+        }
+        return { success: true, result: { ok: true } };
+      }),
+    };
+
+    expect(await engine.workerTick({ workerId: "w1", executor })).toBe(true);
+
+    const before = await db.get<{ started_at: string | null }>(
+      "SELECT started_at FROM execution_runs LIMIT 1",
+    );
+    expect(before?.started_at).toBe(startedAtIso);
+
+    expect(await engine.workerTick({ workerId: "w1", executor })).toBe(true);
+
+    const approval = await db.get<{ resume_token: string | null }>(
+      "SELECT resume_token FROM approvals WHERE status = 'pending' ORDER BY id ASC LIMIT 1",
+    );
+    expect(approval?.resume_token).toBeTruthy();
+
+    await engine.resumeRun(approval!.resume_token!);
+
+    nowMs += 60_000;
+    await drain(engine, "w1", executor);
+
+    const after = await db.get<{ started_at: string | null }>(
+      "SELECT started_at FROM execution_runs LIMIT 1",
+    );
+    expect(after?.started_at).toBe(startedAtIso);
+
+    const outbox = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ?",
+      ["ws.broadcast"],
+    );
+    const types = outbox
+      .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
+      .map((row) => row.message?.type)
+      .filter((value): value is string => typeof value === "string");
+    expect(types.filter((type) => type === "run.started")).toHaveLength(1);
+  });
+
   it("worker executes a 2-step plan and completes the run", async () => {
     db = openTestSqliteDb();
 

@@ -40,12 +40,12 @@ This is the canonical list of `type` values and payload contracts for the v1 Web
 
 ### Execution and evidence
 
-- `run.queued` — `{ run_id }`
-- `run.started` — `{ run_id }`
+- `run.queued` — `{ run_id }` (initial enqueue)
+- `run.started` — `{ run_id }` (first transition to `running`)
 - `run.paused` — `ExecutionRunPausedPayload` (pause reason + optional `approval_id`)
-- `run.resumed` — `{ run_id }`
-- `run.completed` — `{ run_id }`
-- `run.failed` — `{ run_id }`
+- `run.resumed` — `{ run_id }` (resume from `paused`)
+- `run.completed` — `{ run_id }` (run status becomes `succeeded`)
+- `run.failed` — `{ run_id }` (run status becomes `failed`)
 - `run.cancelled` — `{ run_id, reason? }`
 - `run.updated` — `{ run: ExecutionRun }`
 - `step.updated` — `{ step: ExecutionStep }`

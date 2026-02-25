@@ -1002,8 +1002,12 @@ export class ExecutionEngine {
     clock: ExecutionClock,
   ): Promise<boolean> {
     const outcome = await this.db.transaction(async (tx) => {
-      const current = await tx.get<{ run_status: string; job_status: string }>(
-        `SELECT r.status AS run_status, j.status AS job_status
+      const current = await tx.get<{
+        run_status: string;
+        job_status: string;
+        started_at: string | Date | null;
+      }>(
+        `SELECT r.status AS run_status, j.status AS job_status, r.started_at AS started_at
          FROM execution_runs r
          JOIN execution_jobs j ON j.job_id = r.job_id
          WHERE r.run_id = ?`,
@@ -1027,15 +1031,18 @@ export class ExecutionEngine {
       }
 
       if (run.status === "queued") {
+        const shouldEmitRunStarted = current.started_at === null;
         const updated = await tx.run(
           `UPDATE execution_runs
-           SET status = 'running', started_at = ?
+           SET status = 'running', started_at = COALESCE(started_at, ?)
            WHERE run_id = ? AND status = 'queued'`,
           [clock.nowIso, run.run_id],
         );
         if (updated.changes === 1) {
           await this.emitRunUpdatedTx(tx, run.run_id);
-          await this.emitRunStartedTx(tx, run.run_id);
+          if (shouldEmitRunStarted) {
+            await this.emitRunStartedTx(tx, run.run_id);
+          }
         }
       }
 
