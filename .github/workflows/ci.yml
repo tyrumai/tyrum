@@ -151,7 +151,71 @@ jobs:
           pnpm --filter tyrum-desktop exec playwright install --with-deps chromium
 
       - name: Test + coverage
-        run: xvfb-run -a --server-args="-screen 0 1920x1080x24" pnpm test -- --coverage
+        run: >
+          xvfb-run -a --server-args="-screen 0 1920x1080x24"
+          pnpm test
+          --coverage
+          --coverage.reporter=text-summary
+          --coverage.reporter=html
+          --coverage.reporter=clover
+
+      - name: Coverage summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "## Coverage (ubuntu-latest)"
+            echo ""
+            echo "Download the full HTML report from the \`coverage-report-ubuntu\` artifact."
+            echo ""
+
+            if [ ! -f coverage/index.html ]; then
+              echo "No coverage report found at \`coverage/index.html\`."
+              exit 0
+            fi
+
+            python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          html = Path("coverage/index.html").read_text("utf-8", errors="ignore")
+
+          def grab(label: str):
+              pat = (
+                  rf'<span class="strong">\s*([0-9.]+)%\s*</span>'
+                  rf'\s*<span class="quiet">{re.escape(label)}</span>'
+                  r"\s*<span class='fraction'>(\d+)/(\d+)</span>"
+              )
+              match = re.search(pat, html, re.S)
+              if not match:
+                  return None
+              pct, covered, total = match.groups()
+              return float(pct), int(covered), int(total)
+
+          labels = ["Statements", "Branches", "Functions", "Lines"]
+          rows = {label: grab(label) for label in labels}
+
+          print("| Metric | % | Covered / Total |")
+          print("|---|---:|---:|")
+          for label in labels:
+              row = rows[label]
+              if row is None:
+                  print(f"| {label} | n/a | n/a |")
+                  continue
+              pct, covered, total = row
+              print(f"| {label} | {pct:.2f}% | {covered}/{total} |")
+          PY
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage-report-ubuntu
+          path: coverage/
+          if-no-files-found: ignore
+          retention-days: 7
 
   validation-cross-os:
     name: Validation (${{ matrix.os }})
