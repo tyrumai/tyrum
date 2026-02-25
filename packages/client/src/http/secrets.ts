@@ -31,9 +31,17 @@ export type SecretRotateInput = z.input<typeof SecretRotateRequest>;
 export type SecretRotateResult = z.output<typeof SecretRotateResponse>;
 
 export interface SecretsApi {
-  store(input: SecretStoreInput, query?: { agent_id?: string }, options?: TyrumRequestOptions): Promise<SecretStoreResponse>;
+  store(
+    input: SecretStoreInput,
+    query?: { agent_id?: string },
+    options?: TyrumRequestOptions,
+  ): Promise<SecretStoreResponse>;
   list(query?: { agent_id?: string }, options?: TyrumRequestOptions): Promise<SecretListResult>;
-  revoke(secretId: string, query?: { agent_id?: string }, options?: TyrumRequestOptions): Promise<SecretRevokeResult>;
+  revoke(
+    secretId: string,
+    query?: { agent_id?: string },
+    options?: TyrumRequestOptions,
+  ): Promise<SecretRevokeResult>;
   rotate(
     secretId: string,
     input: SecretRotateInput,

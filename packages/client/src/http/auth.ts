@@ -13,7 +13,12 @@ import {
   SessionProviderPinSetRequest,
 } from "@tyrum/schemas";
 import { z } from "zod";
-import { HttpTransport, NonEmptyString, validateOrThrow, type TyrumRequestOptions } from "./shared.js";
+import {
+  HttpTransport,
+  NonEmptyString,
+  validateOrThrow,
+  type TyrumRequestOptions,
+} from "./shared.js";
 
 const AuthProfileListQuery = z
   .object({
@@ -67,8 +72,14 @@ export type AuthPinListResult = z.output<typeof SessionProviderPinListResponse>;
 const AuthProfilePathId = z.string().trim().min(1);
 
 export interface AuthProfilesApi {
-  list(query?: z.input<typeof AuthProfileListQuery>, options?: TyrumRequestOptions): Promise<AuthProfileListResult>;
-  create(input: AuthProfileCreateInput, options?: TyrumRequestOptions): Promise<AuthProfileCreateResult>;
+  list(
+    query?: z.input<typeof AuthProfileListQuery>,
+    options?: TyrumRequestOptions,
+  ): Promise<AuthProfileListResult>;
+  create(
+    input: AuthProfileCreateInput,
+    options?: TyrumRequestOptions,
+  ): Promise<AuthProfileCreateResult>;
   update(
     profileId: string,
     input: AuthProfileUpdateInput,
@@ -87,7 +98,10 @@ export interface AuthProfilesApi {
 }
 
 export interface AuthPinsApi {
-  list(query?: z.input<typeof AuthPinListQuery>, options?: TyrumRequestOptions): Promise<AuthPinListResult>;
+  list(
+    query?: z.input<typeof AuthPinListQuery>,
+    options?: TyrumRequestOptions,
+  ): Promise<AuthPinListResult>;
   set(input: AuthPinSetInput, options?: TyrumRequestOptions): Promise<AuthPinSetResult>;
 }
 

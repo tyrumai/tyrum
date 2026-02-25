@@ -152,7 +152,10 @@ export interface PresenceApi {
 }
 
 export interface PairingsApi {
-  list(query?: z.input<typeof PairingsListQuery>, options?: TyrumRequestOptions): Promise<PairingListResponse>;
+  list(
+    query?: z.input<typeof PairingsListQuery>,
+    options?: TyrumRequestOptions,
+  ): Promise<PairingListResponse>;
   approve(
     pairingId: number,
     input: z.input<typeof PairingApproveRequest>,

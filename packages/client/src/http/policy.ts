@@ -41,9 +41,18 @@ export type PolicyOverrideRevokeResult = z.output<typeof PolicyOverrideRevokeRes
 
 export interface PolicyApi {
   getBundle(options?: TyrumRequestOptions): Promise<PolicyBundleResponse>;
-  listOverrides(query?: PolicyOverrideListInput, options?: TyrumRequestOptions): Promise<PolicyOverrideListResult>;
-  createOverride(input: PolicyOverrideCreateInput, options?: TyrumRequestOptions): Promise<PolicyOverrideCreateResult>;
-  revokeOverride(input: PolicyOverrideRevokeInput, options?: TyrumRequestOptions): Promise<PolicyOverrideRevokeResult>;
+  listOverrides(
+    query?: PolicyOverrideListInput,
+    options?: TyrumRequestOptions,
+  ): Promise<PolicyOverrideListResult>;
+  createOverride(
+    input: PolicyOverrideCreateInput,
+    options?: TyrumRequestOptions,
+  ): Promise<PolicyOverrideCreateResult>;
+  revokeOverride(
+    input: PolicyOverrideRevokeInput,
+    options?: TyrumRequestOptions,
+  ): Promise<PolicyOverrideRevokeResult>;
 }
 
 export function createPolicyApi(transport: HttpTransport): PolicyApi {

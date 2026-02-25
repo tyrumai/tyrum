@@ -18,8 +18,14 @@ export interface ModelsApi {
   status(options?: TyrumRequestOptions): Promise<ModelsStatusResponse>;
   refresh(options?: TyrumRequestOptions): Promise<ModelsStatusResponse>;
   listProviders(options?: TyrumRequestOptions): Promise<ModelsProviderListResponse>;
-  getProvider(providerId: string, options?: TyrumRequestOptions): Promise<ModelsProviderDetailResponse>;
-  listProviderModels(providerId: string, options?: TyrumRequestOptions): Promise<ModelsProviderModelsResponse>;
+  getProvider(
+    providerId: string,
+    options?: TyrumRequestOptions,
+  ): Promise<ModelsProviderDetailResponse>;
+  listProviderModels(
+    providerId: string,
+    options?: TyrumRequestOptions,
+  ): Promise<ModelsProviderModelsResponse>;
 }
 
 export function createModelsApi(transport: HttpTransport): ModelsApi {

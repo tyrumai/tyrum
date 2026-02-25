@@ -13,8 +13,14 @@ export type DeviceTokenRevokeInput = z.input<typeof DeviceTokenRevokeRequest>;
 export type DeviceTokenRevokeResult = z.output<typeof DeviceTokenRevokeResponse>;
 
 export interface DeviceTokensApi {
-  issue(input: DeviceTokenIssueInput, options?: TyrumRequestOptions): Promise<DeviceTokenIssueResult>;
-  revoke(input: DeviceTokenRevokeInput, options?: TyrumRequestOptions): Promise<DeviceTokenRevokeResult>;
+  issue(
+    input: DeviceTokenIssueInput,
+    options?: TyrumRequestOptions,
+  ): Promise<DeviceTokenIssueResult>;
+  revoke(
+    input: DeviceTokenRevokeInput,
+    options?: TyrumRequestOptions,
+  ): Promise<DeviceTokenRevokeResult>;
 }
 
 export function createDeviceTokensApi(transport: HttpTransport): DeviceTokensApi {

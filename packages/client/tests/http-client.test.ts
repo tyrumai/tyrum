@@ -738,9 +738,7 @@ describe("createTyrumHttpClient", () => {
   // --- Models ---
 
   it("models.status sends GET /models/status", async () => {
-    const fetch = makeFetchMock(async () =>
-      jsonResponse({ status: "ok", models_dev: null }),
-    );
+    const fetch = makeFetchMock(async () => jsonResponse({ status: "ok", models_dev: null }));
     const client = createTyrumHttpClient({
       baseUrl: "https://gateway.example",
       auth: { type: "bearer", token: "root-token" },
