@@ -56,7 +56,7 @@ function toBase64UrlBytes(value: Uint8Array): string {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
-function fromBase64Url(value: string): Uint8Array {
+export function fromBase64Url(value: string): Uint8Array {
   if (typeof Buffer !== "undefined") {
     return Buffer.from(value, "base64url");
   }

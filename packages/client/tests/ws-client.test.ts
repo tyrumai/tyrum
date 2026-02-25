@@ -6,6 +6,7 @@ import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
 } from "@tyrum/schemas";
+import * as deviceIdentity from "../src/device-identity.js";
 import { TyrumClient } from "../src/ws-client.js";
 
 // ---------------------------------------------------------------------------
@@ -179,6 +180,28 @@ describe("TyrumClient", () => {
         },
       ],
     });
+  });
+
+  it("derives device id using shared base64url decoder", async () => {
+    server = createTestServer();
+    const spy = vi.spyOn(deviceIdentity, "fromBase64Url");
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: [],
+      reconnect: false,
+      role: "node",
+      device: {
+        publicKey: "AQID",
+        privateKey: "BAUG",
+      },
+    });
+
+    client.connect();
+    const ws = await server.waitForClient();
+    const init = (await waitForMessage(ws)) as Record<string, unknown>;
+    expect(init["type"]).toBe("connect.init");
+    expect(spy).toHaveBeenCalled();
   });
 
   it("omits empty optional device strings in connect.init payload", async () => {

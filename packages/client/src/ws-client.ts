@@ -47,6 +47,7 @@ import {
   buildConnectProofTranscript,
   computeDeviceIdFromPublicKeyDer,
   createDeviceIdentity,
+  fromBase64Url,
   formatDeviceIdentityError,
   signProofWithPrivateKey,
 } from "./device-identity.js";
@@ -150,21 +151,6 @@ function toOptionalTrimmedString(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
-}
-
-function fromBase64Url(value: string): Uint8Array {
-  if (typeof Buffer !== "undefined") {
-    return Buffer.from(value, "base64url");
-  }
-
-  const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
-  const binary = atob(padded);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
 }
 
 function toBase64UrlUtf8(value: string): string {

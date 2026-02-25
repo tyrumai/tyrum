@@ -9,6 +9,11 @@ import {
 } from "../src/index.js";
 
 describe("device identity helpers", () => {
+  it("exports fromBase64Url for internal reuse", async () => {
+    const mod = (await import("../src/device-identity.js")) as unknown as Record<string, unknown>;
+    expect(typeof mod["fromBase64Url"]).toBe("function");
+  });
+
   it("creates an identity and derives device id from public key", async () => {
     const identity = await createDeviceIdentity();
     expect(identity.deviceId).toMatch(/^dev_[a-z2-7]+$/);
