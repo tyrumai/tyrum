@@ -129,17 +129,32 @@ async function resolveKeyLane(db: SqlDb, ctx: CommandDeps["commandContext"] | un
   const agentId = ctx?.agentId?.trim();
   const agentKeyPrefix = agentId ? `agent:${agentId}:` : undefined;
 
+  const sources: Array<{ exact: string; like: string }> = [{ exact: channel, like: `${channel}:%` }];
+  if (channel.includes(":")) {
+    try {
+      const parsed = parseChannelSourceKey(channel);
+      if (parsed.accountId === "default") {
+        sources.push({ exact: parsed.connector, like: `${parsed.connector}:%` });
+      }
+    } catch {
+      // ignore parse errors; fall back to matching the provided channel only
+    }
+  }
+
+  const sourceClause = sources.map(() => "(source = ? OR source LIKE ?)").join(" OR ");
+  const sourceArgs = sources.flatMap((entry) => [entry.exact, entry.like]);
+
   const row = await db.get<{ key: string; lane: string }>(
     `SELECT key, lane
      FROM channel_inbox
      WHERE thread_id = ?
-       AND (source = ? OR source LIKE ?)
+       AND (${sourceClause})
        ${agentKeyPrefix ? "AND substr(key, 1, ?) = ?" : ""}
      ORDER BY received_at_ms DESC, inbox_id DESC
      LIMIT 1`,
     agentKeyPrefix
-      ? [threadId, channel, `${channel}:%`, agentKeyPrefix.length, agentKeyPrefix]
-      : [threadId, channel, `${channel}:%`],
+      ? [threadId, ...sourceArgs, agentKeyPrefix.length, agentKeyPrefix]
+      : [threadId, ...sourceArgs],
   );
   if (!row?.key) return undefined;
   return { key: row.key, lane: row.lane };

@@ -528,6 +528,38 @@ describe("missing slash commands", () => {
     });
   });
 
+  it("supports /queue using channel:default + thread context (legacy source compat)", async () => {
+    db = openTestSqliteDb();
+
+    const key = "agent:default:telegram:default:dm:chat-1";
+    const lane = "main";
+
+    await db.run(
+      `INSERT INTO channel_inbox (
+         source,
+         thread_id,
+         message_id,
+         key,
+         lane,
+         received_at_ms,
+         payload_json,
+         status
+       ) VALUES (?, ?, ?, ?, ?, ?, '{}', 'completed')`,
+      ["telegram", "chat-1", "msg-1", key, lane, 1_000],
+    );
+
+    const result = await executeCommand("/queue interrupt", {
+      db,
+      commandContext: { channel: "telegram:default", threadId: "chat-1" },
+    });
+
+    expect(result.data).toMatchObject({
+      key,
+      lane,
+      queue_mode: "interrupt",
+    });
+  });
+
   it("supports /queue (show)", async () => {
     db = openTestSqliteDb();
 
