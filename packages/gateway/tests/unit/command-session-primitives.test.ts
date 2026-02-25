@@ -15,7 +15,7 @@ describe("session command primitives", () => {
 
     const result = await executeCommand("/new", {
       db,
-      commandContext: { agentId: "default", channel: "ui", threadId: "thread-1" },
+      commandContext: { agentId: "default", channel: "ui:default", threadId: "thread-1" },
     });
 
     expect(result.data).toMatchObject({ channel: "ui" });
@@ -28,6 +28,7 @@ describe("session command primitives", () => {
     };
     expect(payload.agent_id).toBe("default");
     expect(payload.thread_id).not.toBe("thread-1");
+    expect(payload.thread_id).toMatch(/^ui-/);
     expect(payload.session_id).toContain("ui:");
 
     const stored = await db.get<{ channel: string; thread_id: string; summary: string; turns_json: string }>(
@@ -174,6 +175,47 @@ describe("session command primitives", () => {
       ["msg-done"],
     );
     expect(done?.status).toBe("completed");
+  });
+
+  it("supports /stop using channel/thread context (no key required)", async () => {
+    db = openTestSqliteDb();
+
+    const key = "agent:default:ui:default:channel:thread-1";
+    const lane = "main";
+
+    await db.run(
+      `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
+       VALUES (?, ?, ?, 'running', '{}')`,
+      ["job-ctx-1", key, lane],
+    );
+    await db.run(
+      `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
+       VALUES (?, ?, ?, ?, 'running', 1)`,
+      ["run-ctx-1", "job-ctx-1", key, lane],
+    );
+    await db.run(
+      `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
+       VALUES (?, ?, 0, 'running', '{}')`,
+      ["step-ctx-1", "run-ctx-1"],
+    );
+
+    const result = await executeCommand("/stop", {
+      db,
+      commandContext: { agentId: "default", channel: "ui", threadId: "thread-1" },
+    });
+
+    expect(result.data).toMatchObject({
+      key,
+      lane,
+      cancelled_runs: 1,
+      cleared_inbox: 0,
+    });
+
+    const run = await db.get<{ status: string }>(
+      `SELECT status FROM execution_runs WHERE run_id = ?`,
+      ["run-ctx-1"],
+    );
+    expect(run?.status).toBe("cancelled");
   });
 
   it("supports /reset (clears durable session state + overrides)", async () => {

@@ -356,7 +356,18 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
 
     const ctx = deps.commandContext;
     const agentId = resolveAgentId(ctx);
-    const channel = ctx?.channel?.trim();
+    const channelRaw = ctx?.channel?.trim();
+    if (!channelRaw) {
+      return { output: "Usage: /new (requires channel context)", data: null };
+    }
+
+    let channel = channelRaw;
+    try {
+      channel = parseChannelSourceKey(channelRaw).connector;
+    } catch {
+      const idx = channel.indexOf(":");
+      if (idx > 0) channel = channel.slice(0, idx);
+    }
     if (!channel) {
       return { output: "Usage: /new (requires channel context)", data: null };
     }
@@ -510,26 +521,30 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
       );
     }
 
-    await sessionDal.reset(session.session_id, agentId);
+    await deps.db.transaction(async (tx) => {
+      const sessionDalTx = new SessionDal(tx);
+      const didReset = await sessionDalTx.reset(session.session_id, agentId);
+      if (!didReset) {
+        throw new Error(`Session ${session.session_id} not found`);
+      }
 
-    await deps.db.run(
-      `DELETE FROM session_model_overrides
-       WHERE agent_id = ? AND session_id = ?`,
-      [agentId, session.session_id],
-    );
-    await deps.db.run(
-      `DELETE FROM session_provider_pins
-       WHERE agent_id = ? AND session_id = ?`,
-      [agentId, session.session_id],
-    );
+      await tx.run(
+        `DELETE FROM session_model_overrides
+         WHERE agent_id = ? AND session_id = ?`,
+        [agentId, session.session_id],
+      );
+      await tx.run(
+        `DELETE FROM session_provider_pins
+         WHERE agent_id = ? AND session_id = ?`,
+        [agentId, session.session_id],
+      );
 
-    if (keyLane) {
-      const queueOverrideDal = new LaneQueueModeOverrideDal(deps.db);
+      const queueOverrideDal = new LaneQueueModeOverrideDal(tx);
       await queueOverrideDal.clear({ key: keyLane.key, lane: keyLane.lane });
 
-      const sendOverrideDal = new SessionSendPolicyOverrideDal(deps.db);
+      const sendOverrideDal = new SessionSendPolicyOverrideDal(tx);
       await sendOverrideDal.clear({ key: keyLane.key });
-    }
+    });
 
     const payload = {
       agent_id: agentId,
