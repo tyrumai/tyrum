@@ -521,12 +521,20 @@ export class TyrumClient {
     });
 
     const WebSocketCtor = (globalThis as unknown as { WebSocket: new (...args: any[]) => WebSocket }).WebSocket;
-    const ws = new WebSocketCtor(this.opts.url, {
-      protocols: this.buildProtocols(),
-      dispatcher: agent,
-    });
-    (ws as unknown as { __tyrumDispatcher?: unknown }).__tyrumDispatcher = agent;
-    return ws;
+    try {
+      const ws = new WebSocketCtor(this.opts.url, {
+        protocols: this.buildProtocols(),
+        dispatcher: agent,
+      });
+      (ws as unknown as { __tyrumDispatcher?: unknown }).__tyrumDispatcher = agent;
+      return ws;
+    } catch (err) {
+      const dispatcher = agent as unknown as { destroy?: () => unknown };
+      if (typeof dispatcher.destroy === "function") {
+        void Promise.resolve(dispatcher.destroy()).catch(() => {});
+      }
+      throw err;
+    }
   }
 
   private async openSocketAttempt(attempt: number): Promise<void> {
