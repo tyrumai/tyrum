@@ -86,21 +86,35 @@ async function acceptConnect(
   ws: WsWebSocket,
   clientId = "client-1",
 ): Promise<{ request_id: string }> {
-  const connect = (await waitForMessage(ws)) as Record<string, unknown>;
-  expect(connect["type"]).toBe("connect");
-  expect(typeof connect["request_id"]).toBe("string");
-  const requestId = String(connect["request_id"]);
+  const init = (await waitForMessage(ws)) as Record<string, unknown>;
+  expect(init["type"]).toBe("connect.init");
+  expect(typeof init["request_id"]).toBe("string");
+  const initRequestId = String(init["request_id"]);
 
   ws.send(
     JSON.stringify({
-      request_id: requestId,
-      type: "connect",
+      request_id: initRequestId,
+      type: "connect.init",
       ok: true,
-      result: { client_id: clientId },
+      result: { connection_id: "conn-1", challenge: "nonce-1" },
     }),
   );
 
-  return { request_id: requestId };
+  const proof = (await waitForMessage(ws)) as Record<string, unknown>;
+  expect(proof["type"]).toBe("connect.proof");
+  expect(typeof proof["request_id"]).toBe("string");
+  const proofRequestId = String(proof["request_id"]);
+
+  ws.send(
+    JSON.stringify({
+      request_id: proofRequestId,
+      type: "connect.proof",
+      ok: true,
+      result: { client_id: clientId, device_id: "device-1", role: "client" },
+    }),
+  );
+
+  return { request_id: proofRequestId };
 }
 
 /** Small delay helper. */
@@ -135,7 +149,7 @@ describe("TyrumClient", () => {
     vi.restoreAllMocks();
   });
 
-  it("connects and sends hello with capabilities", async () => {
+  it("connects and sends connect.init with capability descriptors", async () => {
     server = createTestServer();
     client = new TyrumClient({
       url: server.url,
@@ -146,8 +160,25 @@ describe("TyrumClient", () => {
     client.connect();
     const ws = await server.waitForClient();
     const connect = (await waitForMessage(ws)) as Record<string, unknown>;
-    expect(connect["type"]).toBe("connect");
-    expect(connect["payload"]).toEqual({ capabilities: ["playwright", "http"] });
+    expect(connect["type"]).toBe("connect.init");
+    expect(connect["payload"]).toEqual({
+      protocol_rev: 2,
+      role: "client",
+      device: expect.objectContaining({
+        device_id: expect.any(String),
+        pubkey: expect.any(String),
+      }),
+      capabilities: [
+        {
+          id: descriptorIdForClientCapability("playwright"),
+          version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+        },
+        {
+          id: descriptorIdForClientCapability("http"),
+          version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+        },
+      ],
+    });
   });
 
   it("omits empty optional device strings in connect.init payload", async () => {
@@ -157,7 +188,6 @@ describe("TyrumClient", () => {
       token: "t",
       capabilities: [],
       reconnect: false,
-      useDeviceProof: true,
       role: "node",
       device: {
         publicKey: "AQID",
@@ -194,7 +224,6 @@ describe("TyrumClient", () => {
       token: "t",
       capabilities: ["cli", "http"],
       reconnect: false,
-      useDeviceProof: true,
       role: "node",
       device: {
         publicKey: "AQID",
@@ -919,14 +948,35 @@ describe("TyrumClient", () => {
     client.connect();
     const ws1 = await server.waitForClient();
     const connect1 = (await waitForMessage(ws1)) as Record<string, unknown>;
-    expect(connect1["type"]).toBe("connect");
-    expect(connect1["payload"]).toEqual({ capabilities: ["cli"] });
+    expect(connect1["type"]).toBe("connect.init");
+    expect(connect1["payload"]).toEqual(
+      expect.objectContaining({
+        protocol_rev: 2,
+        role: "client",
+        capabilities: [
+          {
+            id: descriptorIdForClientCapability("cli"),
+            version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+          },
+        ],
+      }),
+    );
     ws1.send(
       JSON.stringify({
         request_id: String(connect1["request_id"]),
-        type: "connect",
+        type: "connect.init",
         ok: true,
-        result: { client_id: "client-1" },
+        result: { connection_id: "conn-1", challenge: "nonce-1" },
+      }),
+    );
+    const proof1 = (await waitForMessage(ws1)) as Record<string, unknown>;
+    expect(proof1["type"]).toBe("connect.proof");
+    ws1.send(
+      JSON.stringify({
+        request_id: String(proof1["request_id"]),
+        type: "connect.proof",
+        ok: true,
+        result: { client_id: "client-1", device_id: "dev-1", role: "client" },
       }),
     );
 
@@ -936,14 +986,35 @@ describe("TyrumClient", () => {
     // Client should reconnect — wait for a second connection
     const ws2 = await server.waitForClient();
     const connect2 = (await waitForMessage(ws2)) as Record<string, unknown>;
-    expect(connect2["type"]).toBe("connect");
-    expect(connect2["payload"]).toEqual({ capabilities: ["cli"] });
+    expect(connect2["type"]).toBe("connect.init");
+    expect(connect2["payload"]).toEqual(
+      expect.objectContaining({
+        protocol_rev: 2,
+        role: "client",
+        capabilities: [
+          {
+            id: descriptorIdForClientCapability("cli"),
+            version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+          },
+        ],
+      }),
+    );
     ws2.send(
       JSON.stringify({
         request_id: String(connect2["request_id"]),
-        type: "connect",
+        type: "connect.init",
         ok: true,
-        result: { client_id: "client-2" },
+        result: { connection_id: "conn-2", challenge: "nonce-2" },
+      }),
+    );
+    const proof2 = (await waitForMessage(ws2)) as Record<string, unknown>;
+    expect(proof2["type"]).toBe("connect.proof");
+    ws2.send(
+      JSON.stringify({
+        request_id: String(proof2["request_id"]),
+        type: "connect.proof",
+        ok: true,
+        result: { client_id: "client-2", device_id: "dev-2", role: "client" },
       }),
     );
   });
@@ -961,7 +1032,6 @@ describe("TyrumClient", () => {
       capabilities: [],
       reconnect: true,
       maxReconnectDelay: 25,
-      useDeviceProof: true,
       role: "node",
       device: {
         publicKey: Buffer.from(publicKeyDer).toString("base64url"),

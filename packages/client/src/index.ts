@@ -7,6 +7,19 @@ export type { TyrumClientOptions, TyrumClientEvents } from "./ws-client.js";
 export { autoExecute } from "./capability.js";
 export type { CapabilityProvider, TaskExecuteContext, TaskResult } from "./capability.js";
 
+export {
+  buildConnectProofTranscript,
+  computeDeviceIdFromPublicKeyDer,
+  createBrowserLocalStorageDeviceIdentityStorage,
+  createDeviceIdentity,
+  createNodeFileDeviceIdentityStorage,
+  DeviceIdentityError,
+  formatDeviceIdentityError,
+  loadOrCreateDeviceIdentity,
+  signProofWithPrivateKey,
+} from "./device-identity.js";
+export type { DeviceIdentity, DeviceIdentityStorage } from "./device-identity.js";
+
 export type {
   ClientCapability,
   WsError,
