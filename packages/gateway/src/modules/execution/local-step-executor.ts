@@ -77,8 +77,13 @@ function enforceJsonOutputContract(
   contract: PlaybookOutputContract | undefined,
   rawOutput: string,
   source: string,
+  truncated: boolean,
 ): { parsed?: unknown; error?: string } {
   if (!contract || contract.kind !== "json") return {};
+
+  if (truncated) {
+    return { error: `Output contract violated: ${source} was truncated` };
+  }
 
   const parsed = tryParseJson(rawOutput);
   if (parsed === undefined) {
@@ -347,7 +352,7 @@ class LocalStepExecutor implements StepExecutor {
       };
 
       const outputContract = parsePlaybookOutputContract(args);
-      const contract = enforceJsonOutputContract(outputContract, bodyText, "response body");
+      const contract = enforceJsonOutputContract(outputContract, bodyText, "response body", truncated);
       if (contract.error) {
         return { success: false, error: contract.error, result, evidence };
       }
@@ -514,7 +519,7 @@ class LocalStepExecutor implements StepExecutor {
       stderr: output.stderr,
     };
     const outputContract = parsePlaybookOutputContract(args);
-    const contract = enforceJsonOutputContract(outputContract, output.stdout, "stdout");
+    const contract = enforceJsonOutputContract(outputContract, output.stdout, "stdout", output.truncated);
     const evidenceJson = contract.parsed ?? tryParseJson(output.stdout) ?? fallbackEvidence;
 
     if (exitCode !== 0 || output.signal) {

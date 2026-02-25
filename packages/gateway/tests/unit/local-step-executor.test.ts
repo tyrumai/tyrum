@@ -107,4 +107,23 @@ describe("LocalStepExecutor playbook output contracts", () => {
     expect(res.success).toBe(false);
     expect(res.error).toContain("expected JSON");
   });
+
+  it("fails JSON output contracts when stdout was truncated", async () => {
+    const executor = await makeExecutor();
+    const action = ActionPrimitive.parse({
+      type: "CLI",
+      args: {
+        cmd: process.execPath,
+        args: ["-e", "process.stdout.write('{\"ok\":true} trailing')"],
+        max_output_bytes: 11,
+        __playbook: {
+          output: "json",
+        },
+      },
+    });
+
+    const res = await executor.execute(action, "plan-5", 0, 5_000);
+    expect(res.success).toBe(false);
+    expect(res.error).toContain("truncated");
+  });
 });
