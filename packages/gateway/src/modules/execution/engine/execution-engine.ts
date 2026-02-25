@@ -37,9 +37,8 @@ import { normalizeDbDateTime } from "../../../utils/db-time.js";
 import { safeJsonParse } from "../../../utils/json.js";
 import { defaultClock } from "./clock.js";
 import { normalizePositiveInt } from "../normalize-positive-int.js";
-import { normalizeNonnegativeInt, parseConcurrencyLimitsFromEnv } from "./concurrency.js";
+import { parseConcurrencyLimitsFromEnv } from "./concurrency.js";
 import { normalizeWorkspaceId, parsePlanIdFromTriggerJson } from "./db.js";
-import type { ResumeTokenRow, RunnableRunRow, StepRow } from "./db.js";
 import type {
   ClockFn,
   EnqueuePlanInput,
@@ -50,6 +49,46 @@ import type {
   StepResult,
   WorkerTickInput,
 } from "./types.js";
+
+interface ResumeTokenRow {
+  token: string;
+  run_id: string;
+  expires_at: string | Date | null;
+  revoked_at: string | Date | null;
+}
+
+interface RunnableRunRow {
+  run_id: string;
+  job_id: string;
+  key: string;
+  lane: string;
+  status: "queued" | "running";
+  trigger_json: string;
+  workspace_id: string;
+  policy_snapshot_id: string | null;
+}
+
+interface StepRow {
+  step_id: string;
+  run_id: string;
+  step_index: number;
+  status: string;
+  action_json: string;
+  created_at: string | Date;
+  idempotency_key: string | null;
+  postcondition_json: string | null;
+  approval_id: number | null;
+  max_attempts: number;
+  timeout_ms: number;
+}
+
+function normalizeNonnegativeInt(value: unknown): number | undefined {
+  if (typeof value !== "number") return undefined;
+  if (!Number.isFinite(value)) return undefined;
+  const n = Math.floor(value);
+  if (n < 0) return undefined;
+  return n;
+}
 
 export class ExecutionEngine {
   private readonly db: SqlDb;
