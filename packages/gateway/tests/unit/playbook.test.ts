@@ -67,7 +67,7 @@ describe("PlaybookManifest schema", () => {
           command: "llm",
           llm: {
             model: "openai/gpt-4.1",
-            prompt: "Return JSON: {\"ok\": true}",
+            prompt: 'Return JSON: {"ok": true}',
             max_tool_calls: 2,
             tools: {
               allow: ["tool.http.fetch"],
@@ -320,7 +320,7 @@ describe("PlaybookRunner", () => {
         name: "Namespaces",
         version: "1.0.0",
         steps: [
-          { id: "cli", command: "cli echo \"hello world\"" },
+          { id: "cli", command: 'cli echo "hello world"' },
           { id: "web", command: "web navigate https://example.com" },
           { id: "http", command: "http GET https://example.com" },
           {
@@ -328,7 +328,7 @@ describe("PlaybookRunner", () => {
             command: "llm",
             llm: {
               model: "openai/gpt-4.1",
-              prompt: "Return JSON: {\"ok\": true}",
+              prompt: 'Return JSON: {"ok": true}',
               max_tool_calls: 2,
               tools: { allow: ["tool.http.fetch"] },
             },
@@ -394,7 +394,7 @@ describe("PlaybookRunner", () => {
     expect(result.steps[3]!.type).toBe("Llm");
     expect(result.steps[3]!.args).toEqual({
       model: "openai/gpt-4.1",
-      prompt: "Return JSON: {\"ok\": true}",
+      prompt: 'Return JSON: {"ok": true}',
       max_tool_calls: 2,
       tools: { allow: ["tool.http.fetch"] },
       __playbook: {

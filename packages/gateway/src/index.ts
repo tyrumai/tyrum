@@ -1281,7 +1281,10 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
         };
 
         const toolExecutor = resolveExecutor() satisfies ExecutionStepExecutor;
-        const executor = createGatewayStepExecutor({ container, toolExecutor }) satisfies ExecutionStepExecutor;
+        const executor = createGatewayStepExecutor({
+          container,
+          toolExecutor,
+        }) satisfies ExecutionStepExecutor;
 
         return startExecutionWorkerLoop({
           engine,

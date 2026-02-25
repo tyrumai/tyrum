@@ -92,13 +92,19 @@ describe("Playbook LLM step executor", () => {
       "SELECT step_id FROM execution_steps WHERE run_id = ? LIMIT 1",
       [runId],
     );
-    await container.db.run("UPDATE execution_steps SET max_attempts = 1 WHERE step_id = ?", [stepRow?.step_id]);
+    await container.db.run("UPDATE execution_steps SET max_attempts = 1 WHERE step_id = ?", [
+      stepRow?.step_id,
+    ]);
 
     const executor = createGatewayStepExecutor({
       container,
       languageModel,
       toolExecutor: {
-        execute: async () => ({ success: true, result: { ok: true }, evidence: { json: { ok: true } } }),
+        execute: async () => ({
+          success: true,
+          result: { ok: true },
+          evidence: { json: { ok: true } },
+        }),
       },
     });
 
@@ -434,7 +440,9 @@ describe("Playbook LLM step executor", () => {
       "SELECT step_id FROM execution_steps WHERE run_id = ? LIMIT 1",
       [runId],
     );
-    await container.db.run("UPDATE execution_steps SET max_attempts = 1 WHERE step_id = ?", [stepRow?.step_id]);
+    await container.db.run("UPDATE execution_steps SET max_attempts = 1 WHERE step_id = ?", [
+      stepRow?.step_id,
+    ]);
 
     const executor = createGatewayStepExecutor({
       container,

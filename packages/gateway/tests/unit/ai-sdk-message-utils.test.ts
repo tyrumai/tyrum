@@ -38,7 +38,9 @@ describe("AI SDK message utils", () => {
   });
 
   it("appends approval response messages once", () => {
-    const base: ModelMessage[] = [{ role: "assistant", content: [{ type: "text", text: "call tool" }] }];
+    const base: ModelMessage[] = [
+      { role: "assistant", content: [{ type: "text", text: "call tool" }] },
+    ];
     const appended = appendToolApprovalResponseMessage(base, {
       approvalId: "approval-2",
       approved: false,
@@ -65,4 +67,3 @@ describe("AI SDK message utils", () => {
     expect(countAssistantMessages(messages)).toBe(2);
   });
 });
-

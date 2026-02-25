@@ -22,7 +22,9 @@ export function resolveMaxOutputBytes(args: Record<string, unknown>): number {
   return Math.min(requested, MAX_OUTPUT_BYTES_HARD_LIMIT);
 }
 
-export function parsePlaybookOutputContract(args: Record<string, unknown>): PlaybookOutputContract | undefined {
+export function parsePlaybookOutputContract(
+  args: Record<string, unknown>,
+): PlaybookOutputContract | undefined {
   const meta = args["__playbook"];
   if (!meta || typeof meta !== "object" || Array.isArray(meta)) return undefined;
 
@@ -56,4 +58,3 @@ export function validateJsonAgainstSchema(value: unknown, schema: JsonSchema): s
     return `invalid output schema: ${message}`;
   }
 }
-

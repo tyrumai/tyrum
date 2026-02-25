@@ -26,7 +26,9 @@ describe("playbook output-contract utilities", () => {
   it("resolves max_output_bytes defaults and clamps to hard limit", () => {
     expect(resolveMaxOutputBytes({})).toBe(DEFAULT_MAX_OUTPUT_BYTES);
     expect(resolveMaxOutputBytes({ max_output_bytes: 1 })).toBe(1);
-    expect(resolveMaxOutputBytes({ max_output_bytes: MAX_OUTPUT_BYTES_HARD_LIMIT + 10 })).toBe(MAX_OUTPUT_BYTES_HARD_LIMIT);
+    expect(resolveMaxOutputBytes({ max_output_bytes: MAX_OUTPUT_BYTES_HARD_LIMIT + 10 })).toBe(
+      MAX_OUTPUT_BYTES_HARD_LIMIT,
+    );
     expect(resolveMaxOutputBytes({ max_output_bytes: 0 })).toBe(DEFAULT_MAX_OUTPUT_BYTES);
     expect(resolveMaxOutputBytes({ max_output_bytes: -5 })).toBe(DEFAULT_MAX_OUTPUT_BYTES);
   });
@@ -45,4 +47,3 @@ describe("playbook output-contract utilities", () => {
     expect(err?.length).toBeGreaterThan(0);
   });
 });
-
