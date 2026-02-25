@@ -62,7 +62,7 @@ function resolveSessionsTtlDays(): number {
   if (raw) {
     const parsed = Number(raw);
     if (Number.isFinite(parsed) && parsed > 0) {
-      return Math.floor(parsed);
+      return Math.max(1, Math.floor(parsed));
     }
   }
   return DEFAULT_SESSIONS_TTL_DAYS;

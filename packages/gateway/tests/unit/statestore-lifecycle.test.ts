@@ -296,4 +296,32 @@ describe("StateStoreLifecycleScheduler", () => {
     expect(runs.some((sql) => /datetime\s*\(\s*updated_at\s*\)/i.test(sql))).toBe(false);
     expect(runs.some((sql) => /WHERE\s+updated_at\s*<\s*\?/i.test(sql))).toBe(true);
   });
+
+  it("does not floor fractional session TTL days to zero (data-loss guard)", async () => {
+    process.env["TYRUM_SESSIONS_TTL_DAYS"] = "0.5";
+    db = openTestSqliteDb();
+
+    const now = new Date("2026-02-24T00:00:00.000Z");
+    const nowMs = now.getTime();
+
+    const sessionUpdatedAt = new Date(nowMs - 1000).toISOString();
+
+    await db.run(
+      `INSERT INTO sessions (session_id, channel, thread_id, summary, turns_json, created_at, updated_at, workspace_id, agent_id)
+       VALUES (?, ?, ?, '', '[]', ?, ?, 'default', 'default')`,
+      ["session-recent", "telegram", "thread-ttl", now.toISOString(), sessionUpdatedAt],
+    );
+
+    const scheduler = new StateStoreLifecycleScheduler({
+      db,
+      clock: () => ({ nowIso: now.toISOString(), nowMs }),
+    });
+
+    await scheduler.tick();
+
+    const sessions = await db.all<{ session_id: string }>(
+      "SELECT session_id FROM sessions ORDER BY session_id ASC",
+    );
+    expect(sessions).toEqual([{ session_id: "session-recent" }]);
+  });
 });
