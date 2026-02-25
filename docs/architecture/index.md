@@ -72,6 +72,7 @@ flowchart LR
 - **StateStore:** durable state and logs (SQLite local; Postgres for HA/scale). See [Scaling and high availability](./scaling-ha.md).
 - **Event backplane:** cross-instance delivery via a durable outbox (in-process for replica count = 1; shared for clusters). See [Backplane](./backplane.md), [Scaling and high availability](./scaling-ha.md), and [Events](./protocol/events.md).
 - **Execution engine:** the durable orchestration runtime (retries, idempotency, pause/resume, evidence). See [Execution engine](./execution-engine.md).
+- **WorkBoard:** workspace-scoped work tracking (Kanban) that keeps interactive sessions responsive by delegating long-running work. See [Work board and delegated execution](./workboard.md).
 - **Workers:** step executors that claim work (leases), perform side effects, and publish results/events. See [Execution engine](./execution-engine.md).
 - **ToolRunner:** a workspace-mounted execution context that runs filesystem/CLI tools. In single-host deployments it can be a local subprocess; in clusters it is typically a sandboxed job/pod. See [Scaling and high availability](./scaling-ha.md).
 - **Scheduler:** cron/watchers/heartbeat enqueuers coordinated by DB-leases. See [Automation](./automation.md).
@@ -112,6 +113,7 @@ flowchart LR
 - [Gateway authN/authZ](./gateway-authz.md)
 - [Identity](./identity.md)
 - [Execution engine](./execution-engine.md)
+- [Work board and delegated execution](./workboard.md)
 - [Messages and Sessions](./messages-sessions.md)
 - [Memory](./memory.md)
 - [Playbooks](./playbooks.md)
