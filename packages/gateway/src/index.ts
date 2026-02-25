@@ -37,6 +37,7 @@ import { startExecutionWorkerLoop } from "./modules/execution/worker-loop.js";
 import { isChannelPipelineEnabled, TelegramChannelProcessor } from "./modules/channels/telegram.js";
 import { createToolRunnerStepExecutor } from "./modules/execution/toolrunner-step-executor.js";
 import { createKubernetesToolRunnerStepExecutor } from "./modules/execution/kubernetes-toolrunner-step-executor.js";
+import { createGatewayStepExecutor } from "./modules/execution/gateway-step-executor.js";
 import { runToolRunnerFromStdio } from "./toolrunner.js";
 import { isPostgresDbUri } from "./statestore/db-uri.js";
 import { VERSION } from "./version.js";
@@ -1290,7 +1291,8 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
           });
         };
 
-        const executor = resolveExecutor() satisfies ExecutionStepExecutor;
+        const toolExecutor = resolveExecutor() satisfies ExecutionStepExecutor;
+        const executor = createGatewayStepExecutor({ container, toolExecutor }) satisfies ExecutionStepExecutor;
 
         return startExecutionWorkerLoop({
           engine,

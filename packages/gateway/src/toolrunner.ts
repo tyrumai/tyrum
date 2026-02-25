@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { TokenStore } from "./modules/auth/token-store.js";
 import { createSecretProviderFromEnv } from "./modules/secret/create-secret-provider.js";
 import { createLocalStepExecutor } from "./modules/execution/local-step-executor.js";
+import type { StepExecutionContext } from "./modules/execution/engine.js";
 import { RedactionEngine } from "./modules/redaction/engine.js";
 import { createArtifactStoreFromEnv } from "./modules/artifact/create-artifact-store.js";
 import { Logger } from "./modules/observability/logger.js";
@@ -82,7 +83,18 @@ export async function runToolRunnerFromStdio(): Promise<number> {
       logger,
     });
 
-    const result = await executor.execute(action, planId, stepIndex, timeoutMs);
+    const context: StepExecutionContext = {
+      runId: "toolrunner",
+      stepId: `toolrunner:${planId}:${String(stepIndex)}`,
+      attemptId: "toolrunner",
+      approvalId: null,
+      key: "toolrunner",
+      lane: "toolrunner",
+      workspaceId: "default",
+      policySnapshotId: null,
+    };
+
+    const result = await executor.execute(action, planId, stepIndex, timeoutMs, context);
     process.stdout.write(JSON.stringify(result) + "\n");
     return 0;
   } catch (err) {

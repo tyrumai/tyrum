@@ -24,12 +24,24 @@ export interface StepResult {
   };
 }
 
+export interface StepExecutionContext {
+  runId: string;
+  stepId: string;
+  attemptId: string;
+  approvalId: number | null;
+  key: string;
+  lane: string;
+  workspaceId: string;
+  policySnapshotId: string | null;
+}
+
 export interface StepExecutor {
   execute(
     action: ActionPrimitiveT,
     planId: string,
     stepIndex: number,
     timeoutMs: number,
+    context: StepExecutionContext,
   ): Promise<StepResult>;
 }
 

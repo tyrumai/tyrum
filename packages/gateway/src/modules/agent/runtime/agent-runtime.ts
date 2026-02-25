@@ -91,6 +91,12 @@ import { wildcardMatch } from "../../policy/wildcard.js";
 import type { AuthProfileRow } from "../../models/auth-profile-dal.js";
 import { SessionModelOverrideDal } from "../../models/session-model-override-dal.js";
 import { createProviderFromNpm } from "../../models/provider-factory.js";
+import {
+  appendToolApprovalResponseMessage,
+  coerceModelMessages,
+  countAssistantMessages,
+  hasToolResult,
+} from "../../ai-sdk/message-utils.js";
 import { coerceRecord, coerceStringRecord } from "../../util/coerce.js";
 import { ExecutionEngine, type StepExecutor } from "../../execution/engine.js";
 import { resolveSandboxHardeningProfile } from "../../sandbox/hardening.js";
@@ -154,19 +160,6 @@ function coerceSecretHandle(value: unknown): SecretHandleT | undefined {
   };
 }
 
-function coerceModelMessages(value: unknown): ModelMessage[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const out: ModelMessage[] = [];
-  for (const entry of value) {
-    const record = coerceRecord(entry);
-    if (!record) return undefined;
-    if (typeof record["role"] !== "string") return undefined;
-    // Accept content as-is; it is produced internally by the AI SDK.
-    out.push(entry as ModelMessage);
-  }
-  return out;
-}
-
 function extractToolApprovalResumeState(context: unknown): ToolApprovalResumeState | undefined {
   const record = coerceRecord(context);
   if (!record) return undefined;
@@ -192,80 +185,6 @@ function extractToolApprovalResumeState(context: unknown): ToolApprovalResumeSta
       : undefined;
 
   return { approval_id: approvalId, messages, used_tools: usedTools, steps_used: stepsUsed };
-}
-
-function hasToolApprovalResponse(messages: readonly ModelMessage[], approvalId: string): boolean {
-  for (const message of messages) {
-    if (!message || typeof message !== "object") continue;
-    if (message.role !== "tool") continue;
-    const content = (message as { content?: unknown }).content;
-    if (!Array.isArray(content)) continue;
-    for (const part of content) {
-      const record = coerceRecord(part);
-      if (!record) continue;
-      if (record["type"] !== "tool-approval-response") continue;
-      if (record["approvalId"] === approvalId) return true;
-    }
-  }
-  return false;
-}
-
-function hasToolResult(messages: readonly ModelMessage[], toolCallId: string): boolean {
-  for (const message of messages) {
-    if (!message || typeof message !== "object") continue;
-    if (message.role !== "tool") continue;
-    const content = (message as { content?: unknown }).content;
-    if (!Array.isArray(content)) continue;
-    for (const part of content) {
-      const record = coerceRecord(part);
-      if (!record) continue;
-      if (record["type"] !== "tool-result") continue;
-      if (record["toolCallId"] === toolCallId) return true;
-    }
-  }
-  return false;
-}
-
-function appendToolApprovalResponseMessage(
-  messages: readonly ModelMessage[],
-  input: { approvalId: string; approved: boolean; reason?: string },
-): ModelMessage[] {
-  if (hasToolApprovalResponse(messages, input.approvalId)) {
-    return messages.slice() as ModelMessage[];
-  }
-
-  const approvalPart: Record<string, unknown> = {
-    type: "tool-approval-response",
-    approvalId: input.approvalId,
-    approved: input.approved,
-  };
-  if (input.reason && input.reason.trim().length > 0) {
-    approvalPart["reason"] = input.reason.trim();
-  }
-
-  const next = messages.slice() as ModelMessage[];
-  const last = next.at(-1);
-  if (last && last.role === "tool" && Array.isArray((last as { content?: unknown }).content)) {
-    const updated = {
-      ...last,
-      content: [...((last as { content: unknown[] }).content ?? []), approvalPart],
-    } as unknown as ModelMessage;
-    next[next.length - 1] = updated;
-    return next;
-  }
-
-  next.push({ role: "tool", content: [approvalPart] } as unknown as ModelMessage);
-  return next;
-}
-
-function countAssistantMessages(messages: readonly ModelMessage[]): number {
-  let count = 0;
-  for (const message of messages) {
-    if (message && typeof message === "object" && message.role === "assistant") {
-      count += 1;
-    }
-  }
-  return count;
 }
 
 async function deriveElevatedExecutionAvailable(
@@ -1520,7 +1439,7 @@ export class AgentRuntime {
     let laneQueueInterruptReason: string | undefined;
 
     const executor: StepExecutor = {
-      execute: async (action, planId, stepIndex, timeoutMs) => {
+      execute: async (action, planId, stepIndex, timeoutMs, _context) => {
         if (action.type !== "Decide") {
           return { success: false, error: `unsupported action type: ${action.type}` };
         }

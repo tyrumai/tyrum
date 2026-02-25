@@ -1,5 +1,6 @@
 export type {
   StepResult,
+  StepExecutionContext,
   StepExecutor,
   ExecutionClock,
   ClockFn,
