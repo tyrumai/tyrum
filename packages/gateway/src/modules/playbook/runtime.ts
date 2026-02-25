@@ -41,7 +41,7 @@ function resolvePlaybookFromPipeline(pipeline: string, loaded: Playbook[]): Play
   };
 }
 
-function resolvePlaybookPolicyBundle(playbook: Playbook) {
+export function resolvePlaybookPolicyBundle(playbook: Playbook) {
   const allowed = playbook.manifest.allowed_domains ?? [];
   if (allowed.length === 0) return undefined;
   return PolicyBundle.parse({

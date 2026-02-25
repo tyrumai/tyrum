@@ -3,11 +3,11 @@
  */
 
 import { Hono } from "hono";
-import { ExecutionBudgets, PolicyBundle, PlaybookRuntimeRequest } from "@tyrum/schemas";
+import { ExecutionBudgets, PlaybookRuntimeRequest } from "@tyrum/schemas";
 import type { Playbook } from "@tyrum/schemas";
 import type { ExecutionBudgets as ExecutionBudgetsT } from "@tyrum/schemas";
 import { PlaybookRunner } from "../modules/playbook/runner.js";
-import { runPlaybookRuntimeEnvelope } from "../modules/playbook/runtime.js";
+import { resolvePlaybookPolicyBundle, runPlaybookRuntimeEnvelope } from "../modules/playbook/runtime.js";
 import { randomUUID } from "node:crypto";
 import type { ExecutionEngine } from "../modules/execution/engine.js";
 import type { PolicyService } from "../modules/policy/service.js";
@@ -149,18 +149,7 @@ export function createPlaybookRoutes(deps: PlaybookRouteDeps): Hono {
     const compiled = deps.runner.run(pb);
     const steps = compiled.steps;
 
-    const playbookBundle =
-      pb.manifest.allowed_domains && pb.manifest.allowed_domains.length > 0
-        ? PolicyBundle.parse({
-            v: 1,
-            network_egress: {
-              default: "require_approval",
-              allow: pb.manifest.allowed_domains.flatMap((d) => [`https://${d}/*`, `http://${d}/*`]),
-              require_approval: [],
-              deny: [],
-            },
-          })
-        : undefined;
+    const playbookBundle = resolvePlaybookPolicyBundle(pb);
 
     const effectivePolicy = await deps.policyService.loadEffectiveBundle({
       playbookBundle,
