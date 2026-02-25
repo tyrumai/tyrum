@@ -15,6 +15,7 @@
     "lint": "oxlint --ignore-pattern '**/dist/**' .",
     "format": "node scripts/format-repo.mjs --write",
     "format:check": "node scripts/format-repo.mjs --check",
+    "format:check-staged": "node scripts/format-changed.mjs --check --staged",
     "typecheck": "tsc -b"
   },
   "pnpm": {

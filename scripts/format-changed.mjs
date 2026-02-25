@@ -1,11 +1,12 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 
-const mode = process.argv.slice(2)[0];
+const mode = process.argv[2];
+const useStagedOnly = process.argv.includes("--staged");
 const prettierFlag = mode === "--check" ? "--check" : mode === "--write" ? "--write" : null;
 
 if (!prettierFlag) {
-  console.error("Usage: node scripts/format-changed.mjs --write|--check");
+  console.error("Usage: node scripts/format-changed.mjs --write|--check [--staged]");
   process.exit(1);
 }
 
@@ -23,10 +24,12 @@ function runGitNameOnly(args) {
     .filter(Boolean);
 }
 
-const changedFiles = [
-  ...runGitNameOnly(["diff", "--name-only"]),
-  ...runGitNameOnly(["diff", "--name-only", "--cached"]),
-];
+const changedFiles = useStagedOnly
+  ? runGitNameOnly(["diff", "--name-only", "--cached", "--diff-filter=ACM"])
+  : [
+      ...runGitNameOnly(["diff", "--name-only"]),
+      ...runGitNameOnly(["diff", "--name-only", "--cached"]),
+    ];
 
 const allowedExtensions = new Set([
   ".ts",

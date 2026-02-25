@@ -31,6 +31,15 @@ Thanks for helping build the Tyrum assistant platform.
 | Build all packages   | `pnpm build`                         |
 | Start gateway        | `pnpm --filter @tyrum/gateway start` |
 
+Optional: local commit checks (pre-commit hook)
+
+```bash
+git config core.hooksPath .githooks
+```
+
+This enables a repo-local `pre-commit` hook that runs `pnpm format:check-staged` to catch
+formatting issues on staged files before committing.
+
 ## 4. Before Opening a PR
 
 Run these commands and verify all pass:
