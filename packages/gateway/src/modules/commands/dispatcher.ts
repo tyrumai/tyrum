@@ -202,9 +202,10 @@ async function resolveStoredKeyLaneByChannelThread(
   db: SqlDb,
   input: { agentId: string; channel: string; threadId: string },
 ): Promise<{ key: string; lane: string } | undefined> {
+  const safeAgentId = escapeLikePattern(encodeTurnKeyPart(input.agentId.trim()));
   const safeChannel = escapeLikePattern(encodeTurnKeyPart(input.channel.trim()));
   const safeThread = escapeLikePattern(encodeTurnKeyPart(input.threadId.trim()));
-  const keyPattern = `agent:${input.agentId.trim()}:${safeChannel}:%:%:${safeThread}`;
+  const keyPattern = `agent:${safeAgentId}:${safeChannel}:%:%:${safeThread}`;
 
   const runRow = await db.get<{ key: string; lane: string }>(
     `SELECT key, lane
@@ -262,6 +263,50 @@ async function resolveFallbackKeyLane(
     }),
     lane: "main",
   };
+}
+
+async function cancelRunsAndClearQueuedInbox(input: {
+  db: SqlDb;
+  policyService: CommandDeps["policyService"];
+  key: string;
+  lane: string;
+  runReason: string;
+  inboxReason: string;
+}): Promise<{ cancelledRuns: number; clearedInbox: number }> {
+  const engine = new ExecutionEngine({
+    db: input.db,
+    policyService: input.policyService,
+    eventsEnabled: true,
+  });
+
+  const activeRuns = await input.db.all<{ run_id: string }>(
+    `SELECT run_id
+     FROM execution_runs
+     WHERE key = ? AND lane = ? AND status IN ('queued', 'running', 'paused')
+     ORDER BY created_at DESC`,
+    [input.key, input.lane],
+  );
+
+  let cancelledRuns = 0;
+  for (const row of activeRuns) {
+    const status = await engine.cancelRun(row.run_id, input.runReason);
+    if (status === "cancelled") cancelledRuns += 1;
+  }
+
+  const nowIso = new Date().toISOString();
+  const cleared = await input.db.run(
+    `UPDATE channel_inbox
+     SET status = 'failed',
+         lease_owner = NULL,
+         lease_expires_at_ms = NULL,
+         processed_at = COALESCE(processed_at, ?),
+         error = COALESCE(error, ?),
+         reply_text = COALESCE(reply_text, '')
+     WHERE status = 'queued' AND key = ? AND lane = ?`,
+    [nowIso, input.inboxReason, input.key, input.lane],
+  );
+
+  return { cancelledRuns, clearedInbox: cleared.changes };
 }
 
 async function resolveChannelThread(db: SqlDb, ctx: CommandDeps["commandContext"] | undefined): Promise<{ channel: string; threadId: string } | undefined> {
@@ -503,44 +548,20 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
     }
     const { key, lane } = resolved;
 
-    const engine = new ExecutionEngine({
+    const stopped = await cancelRunsAndClearQueuedInbox({
       db: deps.db,
       policyService: deps.policyService,
-      eventsEnabled: true,
+      key,
+      lane,
+      runReason: "stopped by /stop",
+      inboxReason: "cancelled by /stop",
     });
-
-    const activeRuns = await deps.db.all<{ run_id: string }>(
-      `SELECT run_id
-       FROM execution_runs
-       WHERE key = ? AND lane = ? AND status IN ('queued', 'running', 'paused')
-       ORDER BY created_at DESC`,
-      [key, lane],
-    );
-
-    let cancelledRuns = 0;
-    for (const row of activeRuns) {
-      const status = await engine.cancelRun(row.run_id, "stopped by /stop");
-      if (status === "cancelled") cancelledRuns += 1;
-    }
-
-    const nowIso = new Date().toISOString();
-    const cleared = await deps.db.run(
-      `UPDATE channel_inbox
-       SET status = 'failed',
-           lease_owner = NULL,
-           lease_expires_at_ms = NULL,
-           processed_at = COALESCE(processed_at, ?),
-           error = COALESCE(error, 'cancelled by /stop'),
-           reply_text = COALESCE(reply_text, '')
-       WHERE status = 'queued' AND key = ? AND lane = ?`,
-      [nowIso, key, lane],
-    );
 
     const payload = {
       key,
       lane,
-      cancelled_runs: cancelledRuns,
-      cleared_inbox: cleared.changes,
+      cancelled_runs: stopped.cancelledRuns,
+      cleared_inbox: stopped.clearedInbox,
     };
     return { output: jsonBlock(payload), data: payload };
   }
@@ -569,34 +590,14 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
         lane: "main",
       };
     if (keyLane?.key) {
-      const engine = new ExecutionEngine({
+      await cancelRunsAndClearQueuedInbox({
         db: deps.db,
         policyService: deps.policyService,
-        eventsEnabled: true,
+        key: keyLane.key,
+        lane: keyLane.lane,
+        runReason: "reset by /reset",
+        inboxReason: "cancelled by /reset",
       });
-      const activeRuns = await deps.db.all<{ run_id: string }>(
-        `SELECT run_id
-         FROM execution_runs
-         WHERE key = ? AND lane = ? AND status IN ('queued', 'running', 'paused')
-         ORDER BY created_at DESC`,
-        [keyLane.key, keyLane.lane],
-      );
-      for (const row of activeRuns) {
-        await engine.cancelRun(row.run_id, "reset by /reset");
-      }
-
-      const nowIso = new Date().toISOString();
-      await deps.db.run(
-        `UPDATE channel_inbox
-         SET status = 'failed',
-             lease_owner = NULL,
-             lease_expires_at_ms = NULL,
-             processed_at = COALESCE(processed_at, ?),
-             error = COALESCE(error, 'cancelled by /reset'),
-             reply_text = COALESCE(reply_text, '')
-         WHERE status = 'queued' AND key = ? AND lane = ?`,
-        [nowIso, keyLane.key, keyLane.lane],
-      );
     }
 
     await deps.db.transaction(async (tx) => {

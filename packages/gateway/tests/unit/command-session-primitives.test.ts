@@ -259,6 +259,45 @@ describe("session command primitives", () => {
     expect(run?.status).toBe("cancelled");
   });
 
+  it("does not wildcard-match agent_id when resolving /stop fallback keys", async () => {
+    db = openTestSqliteDb();
+
+    const lane = "main";
+    const otherAgentKey = "agent:agent-2:telegram:default:dm:chat-1";
+
+    await db.run(
+      `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
+       VALUES (?, ?, ?, 'running', '{}')`,
+      ["job-agent-pattern-1", otherAgentKey, lane],
+    );
+    await db.run(
+      `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
+       VALUES (?, ?, ?, ?, 'running', 1)`,
+      ["run-agent-pattern-1", "job-agent-pattern-1", otherAgentKey, lane],
+    );
+    await db.run(
+      `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
+       VALUES (?, ?, 0, 'running', '{}')`,
+      ["step-agent-pattern-1", "run-agent-pattern-1"],
+    );
+
+    const result = await executeCommand("/stop", {
+      db,
+      commandContext: { agentId: "agent_%", channel: "telegram", threadId: "chat-1" },
+    });
+
+    expect(result.data).toMatchObject({
+      cancelled_runs: 0,
+      cleared_inbox: 0,
+    });
+
+    const run = await db.get<{ status: string }>(
+      `SELECT status FROM execution_runs WHERE run_id = ?`,
+      ["run-agent-pattern-1"],
+    );
+    expect(run?.status).toBe("running");
+  });
+
   it("supports /reset (clears durable session state + overrides)", async () => {
     db = openTestSqliteDb();
 
@@ -427,6 +466,19 @@ describe("session command primitives", () => {
        VALUES (?, ?, 0, 'running', '{}')`,
       ["step-reset-dm-1", "run-reset-dm-1"],
     );
+    await db.run(
+      `INSERT INTO channel_inbox (
+         source,
+         thread_id,
+         message_id,
+         key,
+         lane,
+         received_at_ms,
+         payload_json,
+         status
+       ) VALUES (?, ?, ?, ?, ?, ?, '{}', 'queued')`,
+      ["telegram", "chat-1", "msg-reset-queued", key, lane, 1_000],
+    );
 
     await db.run(
       `INSERT INTO lane_queue_mode_overrides (key, lane, queue_mode, updated_at_ms)
@@ -454,6 +506,15 @@ describe("session command primitives", () => {
       ["run-reset-dm-1"],
     );
     expect(run?.status).toBe("cancelled");
+
+    const queued = await db.get<{ status: string; error: string | null }>(
+      `SELECT status, error
+       FROM channel_inbox
+       WHERE message_id = ?`,
+      ["msg-reset-queued"],
+    );
+    expect(queued?.status).toBe("failed");
+    expect(queued?.error).toContain("reset");
 
     const queueOverride = await db.get<{ queue_mode: string }>(
       `SELECT queue_mode
