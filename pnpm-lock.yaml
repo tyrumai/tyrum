@@ -291,6 +291,12 @@ importers:
         specifier: ^3.0.13
         version: 3.0.13
 
+  packages/operator-core:
+    dependencies:
+      '@tyrum/client':
+        specifier: workspace:*
+        version: link:../client
+
   packages/schemas:
     dependencies:
       zod:
