@@ -258,4 +258,52 @@ export class SessionDal {
     );
     return result.changes;
   }
+
+  async reset(sessionId: string, agentId?: string): Promise<boolean> {
+    const nowIso = new Date().toISOString();
+    const normalizedAgentId = normalizeAgentId(agentId);
+    const res = await this.db.run(
+      `UPDATE sessions
+       SET summary = '',
+           turns_json = '[]',
+           updated_at = ?
+       WHERE agent_id = ? AND session_id = ?`,
+      [nowIso, normalizedAgentId, sessionId],
+    );
+    return res.changes === 1;
+  }
+
+  async compact(input: {
+    sessionId: string;
+    agentId?: string;
+    keepLastMessages?: number;
+  }): Promise<{ droppedMessages: number; keptMessages: number }> {
+    const keepLastMessages = Math.max(1, Math.floor(input.keepLastMessages ?? 8));
+    const normalizedAgentId = normalizeAgentId(input.agentId);
+
+    const session = await this.getById(input.sessionId, normalizedAgentId);
+    if (!session) {
+      return { droppedMessages: 0, keptMessages: 0 };
+    }
+
+    const turns = session.turns.slice();
+    const droppedCount = Math.max(0, turns.length - keepLastMessages);
+    if (droppedCount === 0) {
+      return { droppedMessages: 0, keptMessages: turns.length };
+    }
+
+    const dropped = turns.slice(0, droppedCount);
+    const kept = turns.slice(turns.length - keepLastMessages);
+    const summary = compactSessionSummary(session.summary, dropped);
+
+    const nowIso = new Date().toISOString();
+    await this.db.run(
+      `UPDATE sessions
+       SET turns_json = ?, summary = ?, updated_at = ?
+       WHERE agent_id = ? AND session_id = ?`,
+      [JSON.stringify(kept), summary, nowIso, normalizedAgentId, input.sessionId],
+    );
+
+    return { droppedMessages: droppedCount, keptMessages: kept.length };
+  }
 }
