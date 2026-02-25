@@ -27,7 +27,7 @@ describe("CI coverage summary parser", () => {
     const workflow = readCiWorkflow();
 
     const match = workflow.match(
-      /- name: Test \+ coverage[\s\S]*?run:\s*>\n([\s\S]*?)\n\s*- name:/,
+      /- name: Test \+ coverage[\s\S]*?run:\s*>\r?\n([\s\S]*?)\r?\n\s*- name:/,
     );
     expect(match, "expected to find Test + coverage run block").not.toBeNull();
 
