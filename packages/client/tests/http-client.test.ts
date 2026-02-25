@@ -228,6 +228,32 @@ describe("createTyrumHttpClient", () => {
     });
   });
 
+  it("preserves server error context when response contains extra fields", async () => {
+    const fetch = makeFetchMock(async () =>
+      jsonResponse(
+        {
+          error: "rate_limited",
+          message: "too many requests, retry after 30s",
+          request_id: "req-abc-123",
+          details: { retry_after: 30 },
+        },
+        429,
+      ),
+    );
+    const client = createTyrumHttpClient({
+      baseUrl: "https://gateway.example",
+      auth: { type: "bearer", token: "test-token" },
+      fetch,
+    });
+
+    await expect(client.plugins.list()).rejects.toMatchObject<TyrumHttpClientError>({
+      code: "http_error",
+      status: 429,
+      error: "rate_limited",
+      message: "too many requests, retry after 30s",
+    });
+  });
+
   it("maps fetch failures to network_error", async () => {
     const fetch = makeFetchMock(async () => {
       throw new Error("network down");

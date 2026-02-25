@@ -6,7 +6,7 @@ const ErrorBodySchema = z
     error: z.string().trim().min(1).optional(),
     message: z.string().trim().min(1).optional(),
   })
-  .strict();
+  .passthrough();
 
 export type TyrumHttpFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
