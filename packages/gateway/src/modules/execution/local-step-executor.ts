@@ -1,5 +1,6 @@
 import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/schemas";
 import type { EvaluationContext } from "@tyrum/schemas";
+import { Ajv2019 } from "ajv/dist/2019.js";
 import { spawn } from "node:child_process";
 import { resolve, relative, isAbsolute } from "node:path";
 import { isBlockedUrl, resolvesToBlockedAddress, sanitizeEnv } from "../agent/tool-executor.js";
@@ -8,12 +9,96 @@ import type { Logger } from "../observability/logger.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { SecretProvider } from "../secret/provider.js";
 import type { StepExecutor, StepResult } from "./engine.js";
+import { normalizePositiveInt } from "./normalize-positive-int.js";
 
-const MAX_OUTPUT_BYTES = 32_768;
+const DEFAULT_MAX_OUTPUT_BYTES = 32_768;
+const MAX_OUTPUT_BYTES_HARD_LIMIT = 512_000;
 const DEFAULT_HTTP_TIMEOUT_MS = 30_000;
 const DEFAULT_EXEC_TIMEOUT_MS = 60_000;
 const MAX_EXEC_TIMEOUT_MS = 300_000;
 const SECRET_HANDLE_PREFIX = "secret:";
+
+function createOutputSchemaValidator(): Ajv2019 {
+  return new Ajv2019({ allErrors: true, strict: false, unevaluated: true });
+}
+
+type PlaybookOutputKind = "text" | "json";
+type JsonSchema = boolean | Record<string, unknown>;
+
+interface PlaybookOutputContract {
+  kind: PlaybookOutputKind;
+  schema?: JsonSchema;
+}
+
+function resolveMaxOutputBytes(args: Record<string, unknown>): number {
+  const requested = normalizePositiveInt(args["max_output_bytes"]);
+  if (requested === undefined) return DEFAULT_MAX_OUTPUT_BYTES;
+  return Math.min(requested, MAX_OUTPUT_BYTES_HARD_LIMIT);
+}
+
+function parsePlaybookOutputContract(args: Record<string, unknown>): PlaybookOutputContract | undefined {
+  const meta = args["__playbook"];
+  if (!meta || typeof meta !== "object" || Array.isArray(meta)) return undefined;
+
+  const output = (meta as Record<string, unknown>)["output"];
+  if (output === "text" || output === "json") {
+    return { kind: output };
+  }
+  if (!output || typeof output !== "object" || Array.isArray(output)) return undefined;
+
+  const outputObj = output as Record<string, unknown>;
+  const kind = outputObj["type"];
+  if (kind !== "text" && kind !== "json") return undefined;
+
+  const schema = outputObj["schema"];
+  if (schema === undefined) return { kind };
+  if (typeof schema === "boolean") return { kind, schema };
+  if (schema && typeof schema === "object" && !Array.isArray(schema)) {
+    return { kind, schema: schema as Record<string, unknown> };
+  }
+  return { kind };
+}
+
+function validateJsonAgainstSchema(value: unknown, schema: JsonSchema): string | undefined {
+  try {
+    const validator = createOutputSchemaValidator();
+    const validate = validator.compile(schema);
+    if (validate(value)) return undefined;
+    return validator.errorsText(validate.errors, { separator: "; " });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return `invalid output schema: ${message}`;
+  }
+}
+
+function enforceJsonOutputContract(
+  contract: PlaybookOutputContract | undefined,
+  rawOutput: string,
+  source: string,
+  truncated: boolean,
+): { parsed?: unknown; error?: string } {
+  if (!contract || contract.kind !== "json") return {};
+
+  if (truncated) {
+    return { error: `Output contract violated: ${source} was truncated` };
+  }
+
+  const parsed = tryParseJson(rawOutput);
+  if (parsed === undefined) {
+    return { error: `Output contract violated: expected JSON ${source}` };
+  }
+  if (contract.schema !== undefined) {
+    const schemaError = validateJsonAgainstSchema(parsed, contract.schema);
+    if (schemaError) {
+      return {
+        parsed,
+        error: `Output contract violated: ${source} failed schema validation (${schemaError})`,
+      };
+    }
+  }
+
+  return { parsed };
+}
 
 function assertSandboxed(baseDir: string, filePath: string): string {
   const resolvedBase = resolve(baseDir);
@@ -252,33 +337,45 @@ class LocalStepExecutor implements StepExecutor {
         signal: controller.signal,
       });
 
+      const maxOutputBytes = resolveMaxOutputBytes(args);
       const contentType = response.headers.get("content-type");
-      const { text: bodyText, truncated } = await readTextWithLimit(response, MAX_OUTPUT_BYTES);
+      const { text: bodyText, truncated } = await readTextWithLimit(response, maxOutputBytes);
 
       const evidence: EvaluationContext = { http: { status: response.status } };
+      const result = {
+        ok: true,
+        type: action.type,
+        url,
+        method,
+        status: response.status,
+        content_type: contentType ?? undefined,
+        truncated,
+      };
 
-      if (isLikelyJson(contentType, bodyText)) {
-        const parsed = tryParseJson(bodyText);
-        if (parsed !== undefined) {
-          evidence.json = parsed;
-        }
+      const outputContract = parsePlaybookOutputContract(args);
+      const contract = enforceJsonOutputContract(outputContract, bodyText, "response body", truncated);
+      if (contract.parsed !== undefined) {
+        evidence.json = contract.parsed;
+      }
+      if (contract.error) {
+        return { success: false, error: contract.error, result, evidence };
       }
 
-      if (isLikelyHtml(contentType, bodyText)) {
-        evidence.dom = { html: bodyText };
+      if (contract.parsed === undefined) {
+        if (isLikelyJson(contentType, bodyText)) {
+          const parsed = tryParseJson(bodyText);
+          if (parsed !== undefined) {
+            evidence.json = parsed;
+          }
+        }
+        if (isLikelyHtml(contentType, bodyText)) {
+          evidence.dom = { html: bodyText };
+        }
       }
 
       return {
         success: true,
-        result: {
-          ok: true,
-          type: action.type,
-          url,
-          method,
-          status: response.status,
-          content_type: contentType ?? undefined,
-          truncated,
-        },
+        result,
         evidence,
       };
     } catch (err) {
@@ -311,12 +408,16 @@ class LocalStepExecutor implements StepExecutor {
     const timeoutMs = typeof timeoutMsRaw === "number" && Number.isFinite(timeoutMsRaw)
       ? Math.max(1, Math.min(stepCapMs, Math.min(MAX_EXEC_TIMEOUT_MS, Math.floor(timeoutMsRaw))))
       : Math.min(stepCapMs, DEFAULT_EXEC_TIMEOUT_MS);
+    const maxOutputBytes = resolveMaxOutputBytes(args);
 
     const output = await new Promise<{
       exitCode: number | null;
       signal: NodeJS.Signals | null;
       stdout: string;
       stderr: string;
+      truncated: boolean;
+      stdoutTruncated: boolean;
+      stderrTruncated: boolean;
     }>((resolvePromise) => {
       const child = spawn(cmd, cmdArgs, {
         cwd,
@@ -328,27 +429,33 @@ class LocalStepExecutor implements StepExecutor {
       const stderrChunks: Buffer[] = [];
       let stdoutSize = 0;
       let stderrSize = 0;
+      let stdoutTruncated = false;
+      let stderrTruncated = false;
 
       const pushLimited = (
         data: Buffer,
         chunks: Buffer[],
         size: number,
-      ): number => {
-        if (size >= MAX_OUTPUT_BYTES) return size;
-        const remaining = MAX_OUTPUT_BYTES - size;
+      ): { size: number; truncated: boolean } => {
+        if (size >= maxOutputBytes) return { size, truncated: true };
+        const remaining = maxOutputBytes - size;
         if (data.length <= remaining) {
           chunks.push(data);
-          return size + data.length;
+          return { size: size + data.length, truncated: false };
         }
         chunks.push(data.subarray(0, remaining));
-        return size + remaining;
+        return { size: size + remaining, truncated: true };
       };
 
       child.stdout.on("data", (data: Buffer) => {
-        stdoutSize = pushLimited(data, stdoutChunks, stdoutSize);
+        const next = pushLimited(data, stdoutChunks, stdoutSize);
+        stdoutSize = next.size;
+        stdoutTruncated ||= next.truncated;
       });
       child.stderr.on("data", (data: Buffer) => {
-        stderrSize = pushLimited(data, stderrChunks, stderrSize);
+        const next = pushLimited(data, stderrChunks, stderrSize);
+        stderrSize = next.size;
+        stderrTruncated ||= next.truncated;
       });
 
       const timer = setTimeout(() => {
@@ -374,6 +481,9 @@ class LocalStepExecutor implements StepExecutor {
           signal,
           stdout: Buffer.concat(stdoutChunks).toString("utf-8"),
           stderr: Buffer.concat(stderrChunks).toString("utf-8"),
+          truncated: stdoutTruncated || stderrTruncated,
+          stdoutTruncated,
+          stderrTruncated,
         });
       });
 
@@ -384,28 +494,23 @@ class LocalStepExecutor implements StepExecutor {
           signal: null,
           stdout: "",
           stderr: err.message,
+          truncated: false,
+          stdoutTruncated: false,
+          stderrTruncated: false,
         });
       });
     });
 
     const exitCode = output.exitCode;
-    const evidenceJson = (() => {
-      const parsed = tryParseJson(output.stdout);
-      if (parsed !== undefined) return parsed;
-      return {
-        exit_code: exitCode,
-        signal: output.signal ?? undefined,
-        stdout: output.stdout,
-        stderr: output.stderr,
-      };
-    })();
-
     const result = {
       ok: exitCode === 0 && !output.signal,
       exit_code: exitCode,
       signal: output.signal ?? undefined,
       stdout: output.stdout,
       stderr: output.stderr,
+      truncated: output.truncated,
+      stdout_truncated: output.stdoutTruncated,
+      stderr_truncated: output.stderrTruncated,
     };
 
     const artifacts = await this.tryStoreCliArtifact({
@@ -417,6 +522,21 @@ class LocalStepExecutor implements StepExecutor {
       result,
     });
 
+    const fallbackEvidence = {
+      exit_code: exitCode,
+      signal: output.signal ?? undefined,
+      stdout: output.stdout,
+      stderr: output.stderr,
+    };
+    const outputContract = parsePlaybookOutputContract(args);
+    const contract = enforceJsonOutputContract(outputContract, output.stdout, "stdout", output.stdoutTruncated);
+    const parsedStdout = tryParseJson(output.stdout);
+    const evidenceJson = contract.parsed !== undefined
+      ? contract.parsed
+      : parsedStdout !== undefined
+      ? parsedStdout
+      : fallbackEvidence;
+
     if (exitCode !== 0 || output.signal) {
       const message = output.signal
         ? `command terminated by signal ${output.signal}`
@@ -424,6 +544,15 @@ class LocalStepExecutor implements StepExecutor {
       return {
         success: false,
         error: message,
+        result,
+        evidence: { json: evidenceJson },
+        artifacts,
+      };
+    }
+    if (contract.error) {
+      return {
+        success: false,
+        error: contract.error,
         result,
         evidence: { json: evidenceJson },
         artifacts,

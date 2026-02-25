@@ -3,7 +3,9 @@ import { spawn } from "node:child_process";
 import type { Logger } from "../observability/logger.js";
 import type { StepExecutor, StepResult } from "./engine.js";
 
-const MAX_STDIO_BYTES = 256_000;
+// Transport ceiling for toolrunner JSON over stdio. This must be high enough
+// to carry the largest StepResult payload without truncating JSON.
+const MAX_STDIO_BYTES = 4 * 1024 * 1024;
 
 export interface ToolRunnerStepExecutorOptions {
   entrypoint: string;
@@ -57,27 +59,33 @@ class ToolRunnerStepExecutor implements StepExecutor {
       const stderrChunks: Buffer[] = [];
       let stdoutSize = 0;
       let stderrSize = 0;
+      let stdoutTruncated = false;
+      let stderrTruncated = false;
 
       const pushLimited = (
         data: Buffer,
         chunks: Buffer[],
         size: number,
-      ): number => {
-        if (size >= MAX_STDIO_BYTES) return size;
+      ): { size: number; truncated: boolean } => {
+        if (size >= MAX_STDIO_BYTES) return { size, truncated: true };
         const remaining = MAX_STDIO_BYTES - size;
         if (data.length <= remaining) {
           chunks.push(data);
-          return size + data.length;
+          return { size: size + data.length, truncated: false };
         }
         chunks.push(data.subarray(0, remaining));
-        return size + remaining;
+        return { size: size + remaining, truncated: true };
       };
 
       child.stdout.on("data", (data: Buffer) => {
-        stdoutSize = pushLimited(data, stdoutChunks, stdoutSize);
+        const next = pushLimited(data, stdoutChunks, stdoutSize);
+        stdoutSize = next.size;
+        stdoutTruncated ||= next.truncated;
       });
       child.stderr.on("data", (data: Buffer) => {
-        stderrSize = pushLimited(data, stderrChunks, stderrSize);
+        const next = pushLimited(data, stderrChunks, stderrSize);
+        stderrSize = next.size;
+        stderrTruncated ||= next.truncated;
       });
 
       const killTimer = setTimeout(() => {
@@ -101,6 +109,7 @@ class ToolRunnerStepExecutor implements StepExecutor {
         const stdout = Buffer.concat(stdoutChunks).toString("utf-8").trim();
         const stderr = Buffer.concat(stderrChunks).toString("utf-8").trim();
         const durationMs = Math.max(0, Date.now() - startedAt);
+        const transportTruncated = stdoutTruncated || stderrTruncated;
 
         if (signal) {
           resolve({
@@ -116,6 +125,20 @@ class ToolRunnerStepExecutor implements StepExecutor {
           resolve({
             success: false,
             error: stderr || `toolrunner exited with code ${String(code)}`,
+            cost: { duration_ms: durationMs },
+          });
+          return;
+        }
+
+        if (transportTruncated) {
+          this.logger?.warn("toolrunner.transport_truncated", {
+            stdout_truncated: stdoutTruncated,
+            stderr_truncated: stderrTruncated,
+            max_stdio_bytes: MAX_STDIO_BYTES,
+          });
+          resolve({
+            success: false,
+            error: `toolrunner transport exceeded ${String(MAX_STDIO_BYTES)} bytes`,
             cost: { duration_ms: durationMs },
           });
           return;
@@ -149,4 +172,3 @@ class ToolRunnerStepExecutor implements StepExecutor {
     });
   }
 }
-

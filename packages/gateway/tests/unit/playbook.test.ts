@@ -88,6 +88,46 @@ describe("PlaybookManifest schema", () => {
     expect(result.steps[0]!.rollback_hint).toBe("try again");
   });
 
+  it("rejects output schema when output type is text", () => {
+    const raw = {
+      id: "bad-output-text-schema",
+      name: "Bad Output Text Schema",
+      version: "1.0.0",
+      steps: [
+        {
+          id: "step-1",
+          command: "cli echo hello",
+          output: {
+            type: "text",
+            schema: {
+              type: "object",
+            },
+          },
+        },
+      ],
+    };
+    expect(() => PlaybookManifest.parse(raw)).toThrow();
+  });
+
+  it("rejects non-object output schemas", () => {
+    const raw = {
+      id: "bad-output-schema-shape",
+      name: "Bad Output Schema Shape",
+      version: "1.0.0",
+      steps: [
+        {
+          id: "step-1",
+          command: "cli echo hello",
+          output: {
+            type: "json",
+            schema: "not-a-schema-object",
+          },
+        },
+      ],
+    };
+    expect(() => PlaybookManifest.parse(raw)).toThrow();
+  });
+
   it("rejects manifest with empty steps", () => {
     const raw = {
       id: "empty",
