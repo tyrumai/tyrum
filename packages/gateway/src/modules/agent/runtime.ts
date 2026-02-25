@@ -1928,7 +1928,6 @@ export class AgentRuntime {
       stopWhen,
       prepareStep: ({ messages }) => this.prepareLaneQueueStep(laneQueue, messages),
       abortSignal: opts?.abortSignal,
-      timeout: opts?.timeoutMs,
     });
     const stepsUsedAfterCall = stepsUsedSoFar + result.steps.length;
 
