@@ -2223,65 +2223,11 @@ export class AgentRuntime {
         return resolved;
       }
 
-      const maybeAdvancePausedApproval = async (): Promise<boolean> => {
-        if (run.status !== "paused") return false;
-
-        const pausedStep = await this.opts.container.db.get<{ approval_id: number | null }>(
-          `SELECT approval_id
-           FROM execution_steps
-           WHERE run_id = ? AND status = 'paused'
-           ORDER BY step_index ASC
-           LIMIT 1`,
-          [runId],
-        );
-        const approvalId = pausedStep?.approval_id;
-        if (!approvalId) return false;
-
-        await this.approvalDal.expireStale();
-        const approval = await this.approvalDal.getById(approvalId);
-        if (!approval) return false;
-
-        if (approval.status === "pending") return false;
-
-        const context = coerceRecord(approval.context);
-        const isAgentToolExecution = context?.["source"] === "agent-tool-execution";
-
-        const resumeToken =
-          approval.resume_token?.trim() ||
-          (typeof context?.["resume_token"] === "string" ? context["resume_token"].trim() : "");
-
-        if (resumeToken && (approval.status === "approved" || isAgentToolExecution)) {
-          const resumedRunId = await this.executionEngine.resumeRun(resumeToken);
-          return Boolean(resumedRunId);
-        }
-
-        if (approval.status === "approved") {
-          return false;
-        }
-
-        const resolvedReason =
-          approval.response_reason ??
-          (approval.status === "expired"
-            ? "approval expired"
-            : approval.status === "cancelled"
-              ? "approval cancelled"
-              : "approval denied");
-
-        if (approval.run_id) {
-          await this.executionEngine.cancelRun(approval.run_id, resolvedReason);
-          return true;
-        }
-
-        return false;
-      };
-
-      const advancedPausedRun = await maybeAdvancePausedApproval();
-
       const didWork = (await this.executionEngine.workerTick({
         workerId,
         executor,
         runId,
-      })) || advancedPausedRun;
+      }));
 
       if (!didWork) {
         const remainingMs = Math.max(1, deadlineMs - Date.now());
@@ -2358,6 +2304,7 @@ export class AgentRuntime {
     const approvalId = pausedStep?.approval_id ?? null;
     if (approvalId === null) return false;
 
+    await this.approvalDal.expireStale();
     let approval = await this.approvalDal.getById(approvalId);
     if (!approval) {
       await this.executionEngine.cancelRun(runId, "approval record not found");
@@ -2376,7 +2323,9 @@ export class AgentRuntime {
 
     const ctx = coerceRecord(approval.context);
     const isAgentToolExecution = ctx?.["source"] === "agent-tool-execution";
-    const resumeToken = approval.resume_token?.trim();
+    const resumeToken =
+      approval.resume_token?.trim() ||
+      (typeof ctx?.["resume_token"] === "string" ? ctx["resume_token"].trim() : "");
 
     if (approval.status === "approved" && !resumeToken) {
       await this.executionEngine.cancelRun(
