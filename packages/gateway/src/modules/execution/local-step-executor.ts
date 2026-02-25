@@ -414,6 +414,8 @@ class LocalStepExecutor implements StepExecutor {
       stdout: string;
       stderr: string;
       truncated: boolean;
+      stdoutTruncated: boolean;
+      stderrTruncated: boolean;
     }>((resolvePromise) => {
       const child = spawn(cmd, cmdArgs, {
         cwd,
@@ -478,6 +480,8 @@ class LocalStepExecutor implements StepExecutor {
           stdout: Buffer.concat(stdoutChunks).toString("utf-8"),
           stderr: Buffer.concat(stderrChunks).toString("utf-8"),
           truncated: stdoutTruncated || stderrTruncated,
+          stdoutTruncated,
+          stderrTruncated,
         });
       });
 
@@ -489,6 +493,8 @@ class LocalStepExecutor implements StepExecutor {
           stdout: "",
           stderr: err.message,
           truncated: false,
+          stdoutTruncated: false,
+          stderrTruncated: false,
         });
       });
     });
@@ -501,6 +507,8 @@ class LocalStepExecutor implements StepExecutor {
       stdout: output.stdout,
       stderr: output.stderr,
       truncated: output.truncated,
+      stdout_truncated: output.stdoutTruncated,
+      stderr_truncated: output.stderrTruncated,
     };
 
     const artifacts = await this.tryStoreCliArtifact({
@@ -519,7 +527,7 @@ class LocalStepExecutor implements StepExecutor {
       stderr: output.stderr,
     };
     const outputContract = parsePlaybookOutputContract(args);
-    const contract = enforceJsonOutputContract(outputContract, output.stdout, "stdout", output.truncated);
+    const contract = enforceJsonOutputContract(outputContract, output.stdout, "stdout", output.stdoutTruncated);
     const evidenceJson = contract.parsed ?? tryParseJson(output.stdout) ?? fallbackEvidence;
 
     if (exitCode !== 0 || output.signal) {

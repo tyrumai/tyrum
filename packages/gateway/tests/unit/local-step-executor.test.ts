@@ -126,4 +126,25 @@ describe("LocalStepExecutor playbook output contracts", () => {
     expect(res.success).toBe(false);
     expect(res.error).toContain("truncated");
   });
+
+  it("accepts JSON output when only stderr was truncated", async () => {
+    const executor = await makeExecutor();
+    const action = ActionPrimitive.parse({
+      type: "CLI",
+      args: {
+        cmd: process.execPath,
+        args: [
+          "-e",
+          "process.stdout.write('{\"ok\":true}'); process.stderr.write('x'.repeat(64));",
+        ],
+        max_output_bytes: 16,
+        __playbook: {
+          output: "json",
+        },
+      },
+    });
+
+    const res = await executor.execute(action, "plan-6", 0, 5_000);
+    expect(res.success).toBe(true);
+  });
 });
