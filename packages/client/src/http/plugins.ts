@@ -1,6 +1,6 @@
 import { PluginManifest, type PluginManifest as PluginManifestT } from "@tyrum/schemas";
 import { z } from "zod";
-import { HttpTransport, validateOrThrow } from "./shared.js";
+import { HttpTransport, validateOrThrow, type TyrumRequestOptions } from "./shared.js";
 
 const PluginListResponse = z
   .object({
@@ -22,26 +22,28 @@ export type PluginListResponse = z.infer<typeof PluginListResponse>;
 export type PluginGetResponse = z.infer<typeof PluginGetResponse>;
 
 export interface PluginsApi {
-  list(): Promise<PluginListResponse>;
-  get(pluginId: string): Promise<PluginGetResponse>;
+  list(options?: TyrumRequestOptions): Promise<PluginListResponse>;
+  get(pluginId: string, options?: TyrumRequestOptions): Promise<PluginGetResponse>;
 }
 
 export function createPluginsApi(transport: HttpTransport): PluginsApi {
   return {
-    async list() {
+    async list(options) {
       return await transport.request({
         method: "GET",
         path: "/plugins",
         response: PluginListResponse,
+        signal: options?.signal,
       });
     },
 
-    async get(pluginId) {
+    async get(pluginId, options) {
       const parsedPluginId = validateOrThrow(PluginIdPath, pluginId, "plugin id");
       return await transport.request({
         method: "GET",
         path: `/plugins/${encodeURIComponent(parsedPluginId)}`,
         response: PluginGetResponse,
+        signal: options?.signal,
       });
     },
   };

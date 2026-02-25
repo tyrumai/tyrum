@@ -13,9 +13,7 @@ import {
   SessionProviderPinSetRequest,
 } from "@tyrum/schemas";
 import { z } from "zod";
-import { HttpTransport, validateOrThrow } from "./shared.js";
-
-const NonEmptyString = z.string().trim().min(1);
+import { HttpTransport, NonEmptyString, validateOrThrow, type TyrumRequestOptions } from "./shared.js";
 
 const AuthProfileListQuery = z
   .object({
@@ -69,30 +67,33 @@ export type AuthPinListResult = z.output<typeof SessionProviderPinListResponse>;
 const AuthProfilePathId = z.string().trim().min(1);
 
 export interface AuthProfilesApi {
-  list(query?: z.input<typeof AuthProfileListQuery>): Promise<AuthProfileListResult>;
-  create(input: AuthProfileCreateInput): Promise<AuthProfileCreateResult>;
+  list(query?: z.input<typeof AuthProfileListQuery>, options?: TyrumRequestOptions): Promise<AuthProfileListResult>;
+  create(input: AuthProfileCreateInput, options?: TyrumRequestOptions): Promise<AuthProfileCreateResult>;
   update(
     profileId: string,
     input: AuthProfileUpdateInput,
+    options?: TyrumRequestOptions,
   ): Promise<z.infer<typeof AuthProfileMutateResponse>>;
   disable(
     profileId: string,
     input: AuthProfileDisableInput,
+    options?: TyrumRequestOptions,
   ): Promise<z.infer<typeof AuthProfileMutateResponse>>;
   enable(
     profileId: string,
     input: AuthProfileEnableInput,
+    options?: TyrumRequestOptions,
   ): Promise<z.infer<typeof AuthProfileMutateResponse>>;
 }
 
 export interface AuthPinsApi {
-  list(query?: z.input<typeof AuthPinListQuery>): Promise<AuthPinListResult>;
-  set(input: AuthPinSetInput): Promise<AuthPinSetResult>;
+  list(query?: z.input<typeof AuthPinListQuery>, options?: TyrumRequestOptions): Promise<AuthPinListResult>;
+  set(input: AuthPinSetInput, options?: TyrumRequestOptions): Promise<AuthPinSetResult>;
 }
 
 export function createAuthProfilesApi(transport: HttpTransport): AuthProfilesApi {
   return {
-    async list(query) {
+    async list(query, options) {
       const parsedQuery = validateOrThrow(
         AuthProfileListQuery,
         query ?? {},
@@ -103,10 +104,11 @@ export function createAuthProfilesApi(transport: HttpTransport): AuthProfilesApi
         path: "/auth/profiles",
         query: parsedQuery,
         response: AuthProfileListResponse,
+        signal: options?.signal,
       });
     },
 
-    async create(input) {
+    async create(input, options) {
       const body = validateOrThrow(AuthProfileCreateRequest, input, "auth profile create request");
       return await transport.request({
         method: "POST",
@@ -114,10 +116,11 @@ export function createAuthProfilesApi(transport: HttpTransport): AuthProfilesApi
         body,
         response: AuthProfileCreateResponse,
         expectedStatus: 201,
+        signal: options?.signal,
       });
     },
 
-    async update(profileId, input) {
+    async update(profileId, input, options) {
       const parsedProfileId = validateOrThrow(AuthProfilePathId, profileId, "auth profile id");
       const body = validateOrThrow(AuthProfileUpdateRequest, input, "auth profile update request");
       return await transport.request({
@@ -125,10 +128,11 @@ export function createAuthProfilesApi(transport: HttpTransport): AuthProfilesApi
         path: `/auth/profiles/${encodeURIComponent(parsedProfileId)}`,
         body,
         response: AuthProfileMutateResponse,
+        signal: options?.signal,
       });
     },
 
-    async disable(profileId, input) {
+    async disable(profileId, input, options) {
       const parsedProfileId = validateOrThrow(AuthProfilePathId, profileId, "auth profile id");
       const body = validateOrThrow(
         AuthProfileDisableRequest,
@@ -140,10 +144,11 @@ export function createAuthProfilesApi(transport: HttpTransport): AuthProfilesApi
         path: `/auth/profiles/${encodeURIComponent(parsedProfileId)}/disable`,
         body,
         response: AuthProfileMutateResponse,
+        signal: options?.signal,
       });
     },
 
-    async enable(profileId, input) {
+    async enable(profileId, input, options) {
       const parsedProfileId = validateOrThrow(AuthProfilePathId, profileId, "auth profile id");
       const body = validateOrThrow(AuthProfileEnableRequest, input, "auth profile enable request");
       return await transport.request({
@@ -151,6 +156,7 @@ export function createAuthProfilesApi(transport: HttpTransport): AuthProfilesApi
         path: `/auth/profiles/${encodeURIComponent(parsedProfileId)}/enable`,
         body,
         response: AuthProfileMutateResponse,
+        signal: options?.signal,
       });
     },
   };
@@ -158,17 +164,18 @@ export function createAuthProfilesApi(transport: HttpTransport): AuthProfilesApi
 
 export function createAuthPinsApi(transport: HttpTransport): AuthPinsApi {
   return {
-    async list(query) {
+    async list(query, options) {
       const parsedQuery = validateOrThrow(AuthPinListQuery, query ?? {}, "auth pin list query");
       return await transport.request({
         method: "GET",
         path: "/auth/pins",
         query: parsedQuery,
         response: SessionProviderPinListResponse,
+        signal: options?.signal,
       });
     },
 
-    async set(input) {
+    async set(input, options) {
       const body = validateOrThrow(SessionProviderPinSetRequest, input, "auth pin set request");
 
       if (body.profile_id === null) {
@@ -177,6 +184,7 @@ export function createAuthPinsApi(transport: HttpTransport): AuthPinsApi {
           path: "/auth/pins",
           body,
           response: AuthPinSetClearResponse,
+          signal: options?.signal,
         });
       }
 
@@ -186,6 +194,7 @@ export function createAuthPinsApi(transport: HttpTransport): AuthPinsApi {
         body,
         response: AuthPinSetPinResponse,
         expectedStatus: 201,
+        signal: options?.signal,
       });
     },
   };

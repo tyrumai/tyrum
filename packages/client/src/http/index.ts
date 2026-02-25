@@ -6,6 +6,7 @@ export {
   type TyrumHttpAuthStrategy,
   type TyrumHttpErrorCode,
   type TyrumHttpFetch,
+  type TyrumRequestOptions,
 } from "./shared.js";
 
 export type {

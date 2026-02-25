@@ -1,6 +1,6 @@
 import { z, type ZodType } from "zod";
 
-const NonEmptyString = z.string().trim().min(1);
+export const NonEmptyString = z.string().trim().min(1);
 const ErrorBodySchema = z
   .object({
     error: z.string().trim().min(1).optional(),
@@ -28,6 +28,11 @@ export interface TyrumHttpClientOptions {
   auth?: TyrumHttpAuthStrategy;
   fetch?: TyrumHttpFetch;
   headers?: HeadersInit;
+  signal?: AbortSignal;
+}
+
+export interface TyrumRequestOptions {
+  signal?: AbortSignal;
 }
 
 export type TyrumHttpErrorCode =
@@ -60,13 +65,17 @@ export class TyrumHttpClientError extends Error {
 
 type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
 
+type QueryValue = string | number | boolean | null | undefined;
+type QueryParams = Record<string, QueryValue | QueryValue[]>;
+
 type RequestOptions<TResponse> = {
   path: string;
   method: HttpMethod;
-  query?: Record<string, unknown>;
+  query?: QueryParams;
   body?: unknown;
   response: ZodType<TResponse>;
   expectedStatus?: number | readonly number[];
+  signal?: AbortSignal;
 };
 
 function normalizeBaseUrl(rawBaseUrl: string): string {
@@ -88,7 +97,7 @@ function normalizeBaseUrl(rawBaseUrl: string): string {
   }
 }
 
-function toQueryString(params: Record<string, unknown> | undefined): string {
+function toQueryString(params: QueryParams | undefined): string {
   if (!params) return "";
 
   const search = new URLSearchParams();
@@ -169,12 +178,14 @@ export class HttpTransport {
   private readonly auth: TyrumHttpAuthStrategy;
   private readonly fetchImpl: TyrumHttpFetch;
   private readonly defaultHeaders: Headers;
+  private readonly defaultSignal?: AbortSignal;
 
   constructor(options: TyrumHttpClientOptions) {
     this.baseUrl = normalizeBaseUrl(options.baseUrl);
     this.auth = options.auth ?? { type: "none" };
     this.fetchImpl = options.fetch ?? fetch;
     this.defaultHeaders = new Headers(options.headers);
+    this.defaultSignal = options.signal;
   }
 
   async request<TResponse>(options: RequestOptions<TResponse>): Promise<TResponse> {
@@ -194,6 +205,8 @@ export class HttpTransport {
       }
       init.body = JSON.stringify(options.body);
     }
+
+    init.signal = options.signal ?? this.defaultSignal;
 
     switch (this.auth.type) {
       case "bearer":
@@ -230,7 +243,11 @@ export class HttpTransport {
 
     const parsed = options.response.safeParse(parsedBody);
     if (!parsed.success) {
-      throw new TyrumHttpClientError("response_invalid", formatZodIssues(parsed.error), {
+      const detail =
+        typeof parsedBody === "string"
+          ? "response body is not valid JSON"
+          : formatZodIssues(parsed.error);
+      throw new TyrumHttpClientError("response_invalid", detail, {
         status: response.status,
       });
     }

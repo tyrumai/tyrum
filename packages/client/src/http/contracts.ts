@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { HttpTransport, validateOrThrow } from "./shared.js";
+import { HttpTransport, validateOrThrow, type TyrumRequestOptions } from "./shared.js";
 
 const ContractSchemaFilename = z
   .string()
@@ -30,26 +30,28 @@ export type ContractCatalog = z.infer<typeof ContractCatalogSchema>;
 export type ContractJsonSchema = z.infer<typeof JsonObjectSchema>;
 
 export interface ContractsApi {
-  getCatalog(): Promise<ContractCatalog>;
-  getSchema(file: string): Promise<ContractJsonSchema>;
+  getCatalog(options?: TyrumRequestOptions): Promise<ContractCatalog>;
+  getSchema(file: string, options?: TyrumRequestOptions): Promise<ContractJsonSchema>;
 }
 
 export function createContractsApi(transport: HttpTransport): ContractsApi {
   return {
-    async getCatalog() {
+    async getCatalog(options) {
       return await transport.request({
         method: "GET",
         path: "/contracts/jsonschema/catalog.json",
         response: ContractCatalogSchema,
+        signal: options?.signal,
       });
     },
 
-    async getSchema(file) {
+    async getSchema(file, options) {
       const parsedFile = validateOrThrow(ContractSchemaFilename, file, "contract schema filename");
       return await transport.request({
         method: "GET",
         path: `/contracts/jsonschema/${encodeURIComponent(parsedFile)}`,
         response: JsonObjectSchema,
+        signal: options?.signal,
       });
     },
   };

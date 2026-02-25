@@ -15,6 +15,7 @@ export {
   type TyrumHttpClientOptions,
   type TyrumHttpErrorCode,
   type TyrumHttpFetch,
+  type TyrumRequestOptions,
 } from "./http/index.js";
 
 export {

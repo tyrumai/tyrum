@@ -9,7 +9,7 @@ import {
   DateTimeSchema,
 } from "@tyrum/schemas";
 import { z } from "zod";
-import { HttpTransport, validateOrThrow } from "./shared.js";
+import { HttpTransport, validateOrThrow, type TyrumRequestOptions } from "./shared.js";
 
 const PolicyBundleResponse = z
   .object({
@@ -40,23 +40,24 @@ export type PolicyOverrideRevokeInput = z.input<typeof PolicyOverrideRevokeReque
 export type PolicyOverrideRevokeResult = z.output<typeof PolicyOverrideRevokeResponse>;
 
 export interface PolicyApi {
-  getBundle(): Promise<PolicyBundleResponse>;
-  listOverrides(query?: PolicyOverrideListInput): Promise<PolicyOverrideListResult>;
-  createOverride(input: PolicyOverrideCreateInput): Promise<PolicyOverrideCreateResult>;
-  revokeOverride(input: PolicyOverrideRevokeInput): Promise<PolicyOverrideRevokeResult>;
+  getBundle(options?: TyrumRequestOptions): Promise<PolicyBundleResponse>;
+  listOverrides(query?: PolicyOverrideListInput, options?: TyrumRequestOptions): Promise<PolicyOverrideListResult>;
+  createOverride(input: PolicyOverrideCreateInput, options?: TyrumRequestOptions): Promise<PolicyOverrideCreateResult>;
+  revokeOverride(input: PolicyOverrideRevokeInput, options?: TyrumRequestOptions): Promise<PolicyOverrideRevokeResult>;
 }
 
 export function createPolicyApi(transport: HttpTransport): PolicyApi {
   return {
-    async getBundle() {
+    async getBundle(options) {
       return await transport.request({
         method: "GET",
         path: "/policy/bundle",
         response: PolicyBundleResponse,
+        signal: options?.signal,
       });
     },
 
-    async listOverrides(query) {
+    async listOverrides(query, options) {
       const parsedQuery = validateOrThrow(
         PolicyOverrideListRequest,
         query ?? {},
@@ -68,10 +69,11 @@ export function createPolicyApi(transport: HttpTransport): PolicyApi {
         path: "/policy/overrides",
         query: parsedQuery,
         response: PolicyOverrideListResponse,
+        signal: options?.signal,
       });
     },
 
-    async createOverride(input) {
+    async createOverride(input, options) {
       const body = validateOrThrow(
         PolicyOverrideCreateRequest,
         input,
@@ -83,10 +85,11 @@ export function createPolicyApi(transport: HttpTransport): PolicyApi {
         body,
         response: PolicyOverrideCreateResponse,
         expectedStatus: 201,
+        signal: options?.signal,
       });
     },
 
-    async revokeOverride(input) {
+    async revokeOverride(input, options) {
       const body = validateOrThrow(
         PolicyOverrideRevokeRequest,
         input,
@@ -97,6 +100,7 @@ export function createPolicyApi(transport: HttpTransport): PolicyApi {
         path: "/policy/overrides/revoke",
         body,
         response: PolicyOverrideRevokeResponse,
+        signal: options?.signal,
       });
     },
   };

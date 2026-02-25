@@ -7,7 +7,8 @@ import {
   PresenceEntry,
 } from "@tyrum/schemas";
 import { z } from "zod";
-import { HttpTransport, validateOrThrow } from "./shared.js";
+import { HttpTransport, validateOrThrow, type TyrumRequestOptions } from "./shared.js";
+
 const StatusResponse = z
   .object({
     status: z.literal("ok"),
@@ -139,40 +140,44 @@ export type PairingListResponse = z.infer<typeof PairingListResponse>;
 export type PairingMutateResponse = z.infer<typeof PairingMutateResponse>;
 
 export interface StatusApi {
-  get(): Promise<StatusResponse>;
+  get(options?: TyrumRequestOptions): Promise<StatusResponse>;
 }
 
 export interface UsageApi {
-  get(query?: z.input<typeof UsageQuery>): Promise<UsageResponse>;
+  get(query?: z.input<typeof UsageQuery>, options?: TyrumRequestOptions): Promise<UsageResponse>;
 }
 
 export interface PresenceApi {
-  list(): Promise<PresenceResponse>;
+  list(options?: TyrumRequestOptions): Promise<PresenceResponse>;
 }
 
 export interface PairingsApi {
-  list(query?: z.input<typeof PairingsListQuery>): Promise<PairingListResponse>;
+  list(query?: z.input<typeof PairingsListQuery>, options?: TyrumRequestOptions): Promise<PairingListResponse>;
   approve(
     pairingId: number,
     input: z.input<typeof PairingApproveRequest>,
+    options?: TyrumRequestOptions,
   ): Promise<PairingMutateResponse>;
   deny(
     pairingId: number,
     input?: z.input<typeof PairingDenyOrRevokeRequest>,
+    options?: TyrumRequestOptions,
   ): Promise<PairingMutateResponse>;
   revoke(
     pairingId: number,
     input?: z.input<typeof PairingDenyOrRevokeRequest>,
+    options?: TyrumRequestOptions,
   ): Promise<PairingMutateResponse>;
 }
 
 export function createStatusApi(transport: HttpTransport): StatusApi {
   return {
-    async get() {
+    async get(options) {
       return await transport.request({
         method: "GET",
         path: "/status",
         response: StatusResponse,
+        signal: options?.signal,
       });
     },
   };
@@ -180,13 +185,14 @@ export function createStatusApi(transport: HttpTransport): StatusApi {
 
 export function createUsageApi(transport: HttpTransport): UsageApi {
   return {
-    async get(query) {
+    async get(query, options) {
       const parsedQuery = validateOrThrow(UsageQuery, query ?? {}, "usage query");
       return await transport.request({
         method: "GET",
         path: "/usage",
         query: parsedQuery,
         response: UsageResponse,
+        signal: options?.signal,
       });
     },
   };
@@ -194,56 +200,58 @@ export function createUsageApi(transport: HttpTransport): UsageApi {
 
 export function createPresenceApi(transport: HttpTransport): PresenceApi {
   return {
-    async list() {
+    async list(options) {
       return await transport.request({
         method: "GET",
         path: "/presence",
         response: PresenceResponse,
+        signal: options?.signal,
       });
     },
   };
 }
 
-function pairingPath(action: "base" | "approve" | "deny" | "revoke", pairingId: number): string {
+function pairingPath(action: "approve" | "deny" | "revoke", pairingId: number): string {
   const parsedPairingId = validateOrThrow(PairingIdParam, pairingId, "pairing id");
-  const basePath = `/pairings/${String(parsedPairingId)}`;
-  if (action === "base") return basePath;
-  return `${basePath}/${action}`;
+  return `/pairings/${String(parsedPairingId)}/${action}`;
 }
 
 export function createPairingsApi(transport: HttpTransport): PairingsApi {
   return {
-    async list(query) {
+    async list(query, options) {
       const parsedQuery = validateOrThrow(PairingsListQuery, query ?? {}, "pairings list query");
       return await transport.request({
         method: "GET",
         path: "/pairings",
         query: parsedQuery,
         response: PairingListResponse,
+        signal: options?.signal,
       });
     },
 
-    async approve(pairingId, input) {
+    async approve(pairingId, input, options) {
       const body = validateOrThrow(PairingApproveRequest, input, "pairing approve request");
       return await transport.request({
         method: "POST",
         path: pairingPath("approve", pairingId),
         body,
         response: PairingMutateResponse,
+        signal: options?.signal,
       });
     },
 
-    async deny(pairingId, input) {
+    async deny(pairingId, input, options) {
       const body = validateOrThrow(PairingDenyOrRevokeRequest, input ?? {}, "pairing deny request");
       return await transport.request({
         method: "POST",
         path: pairingPath("deny", pairingId),
         body,
         response: PairingMutateResponse,
+        signal: options?.signal,
       });
     },
 
-    async revoke(pairingId, input) {
+    async revoke(pairingId, input, options) {
       const body = validateOrThrow(
         PairingDenyOrRevokeRequest,
         input ?? {},
@@ -254,6 +262,7 @@ export function createPairingsApi(transport: HttpTransport): PairingsApi {
         path: pairingPath("revoke", pairingId),
         body,
         response: PairingMutateResponse,
+        signal: options?.signal,
       });
     },
   };
