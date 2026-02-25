@@ -1,5 +1,11 @@
 import type { SqlDb } from "../../statestore/types.js";
 import type { Logger } from "../observability/logger.js";
+import {
+  IntervalScheduler,
+  pruneInBatches,
+  resolvePositiveInt,
+  tryAcquirePostgresXactLock,
+} from "../lifecycle/scheduler.js";
 
 const DEFAULT_TICK_MS = 5 * 60_000;
 const DEFAULT_BATCH_SIZE = 10_000;
@@ -35,28 +41,6 @@ function defaultClock(): StateStoreLifecycleSchedulerClock {
   return { nowMs: now.getTime(), nowIso: now.toISOString() };
 }
 
-function readPositiveIntFromEnv(name: string): number | undefined {
-  const raw = process.env[name]?.trim();
-  if (!raw) return undefined;
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
-  return Math.floor(parsed);
-}
-
-function resolveTickMs(explicit: number | undefined): number {
-  if (typeof explicit === "number" && Number.isFinite(explicit) && explicit > 0) {
-    return Math.floor(explicit);
-  }
-  return readPositiveIntFromEnv(RETENTION_TICK_ENV) ?? DEFAULT_TICK_MS;
-}
-
-function resolveBatchSize(explicit: number | undefined): number {
-  if (typeof explicit === "number" && Number.isFinite(explicit) && explicit > 0) {
-    return Math.floor(explicit);
-  }
-  return readPositiveIntFromEnv(RETENTION_BATCH_ENV) ?? DEFAULT_BATCH_SIZE;
-}
-
 function resolveSessionsTtlDays(): number {
   const raw = process.env[SESSIONS_TTL_ENV]?.trim();
   if (raw) {
@@ -71,70 +55,57 @@ function resolveSessionsTtlDays(): number {
 export class StateStoreLifecycleScheduler {
   private readonly db: SqlDb;
   private readonly logger?: Logger;
-  private readonly tickMs: number;
   private readonly batchSize: number;
   private readonly maxBatchesPerTick: number;
-  private readonly keepProcessAlive: boolean;
   private readonly clock: StateStoreLifecycleSchedulerClockFn;
-  private timer: ReturnType<typeof setInterval> | undefined;
-  private ticking = false;
+  private readonly interval: IntervalScheduler;
 
   constructor(opts: StateStoreLifecycleSchedulerOptions) {
     this.db = opts.db;
     this.logger = opts.logger;
-    this.tickMs = resolveTickMs(opts.tickMs);
-    this.batchSize = Math.max(1, Math.min(1_000_000, resolveBatchSize(opts.batchSize)));
+    const tickMs = resolvePositiveInt(opts.tickMs, RETENTION_TICK_ENV, DEFAULT_TICK_MS);
+    this.batchSize = Math.max(
+      1,
+      Math.min(1_000_000, resolvePositiveInt(opts.batchSize, RETENTION_BATCH_ENV, DEFAULT_BATCH_SIZE)),
+    );
     this.maxBatchesPerTick = Math.max(
       1,
       Math.min(1000, Math.floor(opts.maxBatchesPerTick ?? DEFAULT_MAX_BATCHES_PER_TICK)),
     );
-    this.keepProcessAlive = opts.keepProcessAlive ?? false;
     this.clock = opts.clock ?? defaultClock;
+    const keepProcessAlive = opts.keepProcessAlive ?? false;
+    this.interval = new IntervalScheduler({
+      tickMs,
+      keepProcessAlive,
+      onTickError: (err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger?.error("statestore.lifecycle_tick_failed", { error: message });
+      },
+      tick: () => this.tickOnce(),
+    });
   }
 
   start(): void {
-    if (this.timer) return;
-    this.timer = setInterval(() => {
-      void this.tick().catch((err) => {
-        const message = err instanceof Error ? err.message : String(err);
-        this.logger?.error("statestore.lifecycle_tick_failed", { error: message });
-      });
-    }, this.tickMs);
-    if (!this.keepProcessAlive) {
-      this.timer.unref();
-    }
+    this.interval.start();
   }
 
   stop(): void {
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = undefined;
-    }
+    this.interval.stop();
   }
 
   /** Exposed for testing — runs one retention/TTL-prune cycle. */
   async tick(): Promise<void> {
-    if (this.ticking) return;
-    this.ticking = true;
-    try {
-      await this.db.transaction(async (tx) => {
-        if (tx.kind === "postgres") {
-          const acquired = await this.tryAcquirePostgresLock(tx);
-          if (!acquired) return;
-        }
-        await this.runOnce(tx);
-      });
-    } finally {
-      this.ticking = false;
-    }
+    await this.interval.tick();
   }
 
-  private async tryAcquirePostgresLock(db: SqlDb): Promise<boolean> {
-    const row = await db.get<{ locked: boolean }>(
-      "SELECT pg_try_advisory_xact_lock(?, ?) AS locked",
-      [PG_RETENTION_LOCK_KEY1, PG_RETENTION_LOCK_KEY2],
-    );
-    return row?.locked ?? false;
+  private async tickOnce(): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      if (tx.kind === "postgres") {
+        const acquired = await tryAcquirePostgresXactLock(tx, PG_RETENTION_LOCK_KEY1, PG_RETENTION_LOCK_KEY2);
+        if (!acquired) return;
+      }
+      await this.runOnce(tx);
+    });
   }
 
   private async runOnce(db: SqlDb): Promise<void> {
@@ -174,18 +145,20 @@ export class StateStoreLifecycleScheduler {
     name: string,
     pruneOnce: () => Promise<number>,
   ): Promise<number> {
-    let total = 0;
-    for (let i = 0; i < this.maxBatchesPerTick; i += 1) {
-      const changes = await pruneOnce();
-      total += changes;
-      if (changes < this.batchSize) return total;
-    }
-    this.logger?.warn("statestore.lifecycle_prune_budget_exhausted", {
-      task: name,
-      batch_size: this.batchSize,
-      max_batches: this.maxBatchesPerTick,
-    });
-    return total;
+    return await pruneInBatches(
+      {
+        batchSize: this.batchSize,
+        maxBatchesPerTick: this.maxBatchesPerTick,
+        onBudgetExhausted: () => {
+          this.logger?.warn("statestore.lifecycle_prune_budget_exhausted", {
+            task: name,
+            batch_size: this.batchSize,
+            max_batches: this.maxBatchesPerTick,
+          });
+        },
+      },
+      pruneOnce,
+    );
   }
 
   private async pruneExpiredSessions(db: SqlDb, input: { cutoffIso: string }): Promise<number> {
