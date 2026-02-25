@@ -268,6 +268,71 @@ describe("TyrumClient", () => {
     expect(msg).toEqual(dispatchMsg);
   });
 
+  it("dedupes task.execute request retries by request_id across reconnect", async () => {
+    server = createTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: ["http"],
+      reconnect: true,
+      maxReconnectDelay: 25,
+    });
+
+    let calls = 0;
+    const firstReceivedP = new Promise<unknown>((resolve) => {
+      client!.on("task_execute", (msg) => {
+        calls += 1;
+        resolve(msg);
+      });
+    });
+
+    client.connect();
+    const ws1 = await withTimeout(server.waitForClient(), 2_000, "ws1 connection");
+    await acceptConnect(ws1);
+    await delay(10);
+
+    const dispatchMsg = {
+      request_id: "task-1",
+      type: "task.execute",
+      payload: {
+        run_id: "550e8400-e29b-41d4-a716-446655440000",
+        step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+        attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+        action: { type: "Http", args: { url: "https://example.com" } },
+      },
+    };
+    ws1.send(JSON.stringify(dispatchMsg));
+
+    const first = await withTimeout(firstReceivedP, 2_000, "task_execute (first)");
+    expect(first).toEqual(dispatchMsg);
+    expect(calls).toBe(1);
+
+    client.respondTaskExecute("task-1", true, undefined, { status: 200 }, undefined);
+    const response1 = await withTimeout(waitForMessage(ws1), 2_000, "task.execute response (first)");
+    expect(response1).toEqual({
+      request_id: "task-1",
+      type: "task.execute",
+      ok: true,
+      result: { evidence: { status: 200 } },
+    });
+
+    // Simulate gateway retry after abnormal close.
+    ws1.terminate();
+
+    const ws2 = await withTimeout(server.waitForClient(), 2_000, "ws2 reconnect");
+    await acceptConnect(ws2, "client-2");
+    await delay(10);
+
+    const response2P = withTimeout(waitForMessage(ws2), 2_000, "task.execute response (retry)");
+    ws2.send(JSON.stringify(dispatchMsg));
+
+    await delay(25);
+    expect(calls).toBe(1);
+
+    const response2 = await response2P;
+    expect(response2).toEqual(response1);
+  });
+
   it("responds with error envelope when task.execute request fails validation", async () => {
     server = createTestServer();
     client = new TyrumClient({
@@ -333,6 +398,70 @@ describe("TyrumClient", () => {
 
     const msg = await received;
     expect(msg).toEqual(confirmMsg);
+  });
+
+  it("dedupes approval.request retries by request_id across reconnect", async () => {
+    server = createTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: [],
+      reconnect: true,
+      maxReconnectDelay: 25,
+    });
+
+    let calls = 0;
+    const firstReceivedP = new Promise<unknown>((resolve) => {
+      client!.on("approval_request", (msg) => {
+        calls += 1;
+        resolve(msg);
+      });
+    });
+
+    client.connect();
+    const ws1 = await withTimeout(server.waitForClient(), 2_000, "ws1 connection");
+    await acceptConnect(ws1);
+    await delay(10);
+
+    const confirmMsg = {
+      request_id: "approval-7",
+      type: "approval.request",
+      payload: {
+        approval_id: 7,
+        plan_id: "plan-1",
+        step_index: 0,
+        prompt: "Approve this?",
+      },
+    };
+    ws1.send(JSON.stringify(confirmMsg));
+
+    const first = await withTimeout(firstReceivedP, 2_000, "approval_request (first)");
+    expect(first).toEqual(confirmMsg);
+    expect(calls).toBe(1);
+
+    client.respondApprovalRequest("approval-7", false, "too risky");
+    const response1 = await withTimeout(waitForMessage(ws1), 2_000, "approval.request response (first)");
+    expect(response1).toEqual({
+      request_id: "approval-7",
+      type: "approval.request",
+      ok: true,
+      result: { approved: false, reason: "too risky" },
+    });
+
+    ws1.terminate();
+
+    const ws2 = await withTimeout(server.waitForClient(), 2_000, "ws2 reconnect");
+    await acceptConnect(ws2, "client-2");
+    await delay(10);
+
+    const response2P = withTimeout(waitForMessage(ws2), 2_000, "approval.request response (retry)");
+    ws2.send(JSON.stringify(confirmMsg));
+
+    await delay(25);
+    expect(calls).toBe(1);
+
+    const response2 = await response2P;
+    expect(response2).toEqual(response1);
   });
 
   it("responds with error envelope when approval.request fails validation", async () => {
@@ -538,6 +667,55 @@ describe("TyrumClient", () => {
 
     ws.send(JSON.stringify(updateMsg));
     ws.send(JSON.stringify(updateMsg));
+
+    await delay(25);
+    expect(calls).toBe(1);
+  });
+
+  it("dedupes events by event_id across reconnect", async () => {
+    server = createTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: [],
+      reconnect: true,
+      maxReconnectDelay: 25,
+    });
+
+    let calls = 0;
+    const firstReceivedP = new Promise<void>((resolve) => {
+      client!.on("plan_update", () => {
+        calls += 1;
+        resolve();
+      });
+    });
+
+    client.connect();
+    const ws1 = await withTimeout(server.waitForClient(), 2_000, "ws1 connection");
+    await acceptConnect(ws1);
+    await delay(10);
+
+    const updateMsg = {
+      event_id: "evt-dup-1",
+      type: "plan.update",
+      occurred_at: "2026-02-19T12:00:00Z",
+      payload: {
+        plan_id: "plan-1",
+        status: "running",
+      },
+    };
+
+    ws1.send(JSON.stringify(updateMsg));
+    await withTimeout(firstReceivedP, 2_000, "plan_update (first)");
+    expect(calls).toBe(1);
+
+    ws1.terminate();
+
+    const ws2 = await withTimeout(server.waitForClient(), 2_000, "ws2 reconnect");
+    await acceptConnect(ws2, "client-2");
+    await delay(10);
+
+    ws2.send(JSON.stringify(updateMsg));
 
     await delay(25);
     expect(calls).toBe(1);

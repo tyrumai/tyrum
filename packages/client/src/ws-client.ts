@@ -249,6 +249,7 @@ export class TyrumClient {
   private clientId: string | null = null;
   private seenEventIds = new Set<string>();
   private seenEventIdOrder: string[] = [];
+  private inboundRequestCache = new Map<string, WsResponseEnvelope | null>();
   private pending = new Map<
     string,
     { resolve: (msg: WsResponseEnvelope) => void; reject: (err: Error) => void }
@@ -343,6 +344,7 @@ export class TyrumClient {
             details: { evidence },
           }),
         };
+    this.cacheInboundRequestResponse("task.execute", requestId, response);
     this.send(response);
   }
 
@@ -358,6 +360,7 @@ export class TyrumClient {
       ok: true,
       result: WsApprovalDecision.parse({ approved, reason }),
     };
+    this.cacheInboundRequestResponse("approval.request", requestId, response);
     this.send(response);
   }
 
@@ -714,11 +717,19 @@ export class TyrumClient {
         return;
 
       case "task.execute": {
+        const cached = this.getCachedInboundRequestResponse(msg.type, msg.request_id);
+        if (cached === null) return;
+        if (cached) {
+          this.send(cached);
+          return;
+        }
+        this.markInboundRequestPending(msg.type, msg.request_id);
+
         const req = WsTaskExecuteRequest.safeParse(msg);
         if (req.success) {
           this.emitter.emit("task_execute", req.data);
         } else {
-          this.send({
+          const response: WsResponseEnvelope = {
             request_id: msg.request_id,
             type: msg.type,
             ok: false,
@@ -727,17 +738,27 @@ export class TyrumClient {
               message: req.error.message,
               details: { issues: req.error.issues },
             }),
-          } satisfies WsResponseEnvelope);
+          };
+          this.cacheInboundRequestResponse("task.execute", msg.request_id, response);
+          this.send(response);
         }
         return;
       }
 
       case "approval.request": {
+        const cached = this.getCachedInboundRequestResponse(msg.type, msg.request_id);
+        if (cached === null) return;
+        if (cached) {
+          this.send(cached);
+          return;
+        }
+        this.markInboundRequestPending(msg.type, msg.request_id);
+
         const req = WsApprovalRequest.safeParse(msg);
         if (req.success) {
           this.emitter.emit("approval_request", req.data);
         } else {
-          this.send({
+          const response: WsResponseEnvelope = {
             request_id: msg.request_id,
             type: msg.type,
             ok: false,
@@ -746,7 +767,9 @@ export class TyrumClient {
               message: req.error.message,
               details: { issues: req.error.issues },
             }),
-          } satisfies WsResponseEnvelope);
+          };
+          this.cacheInboundRequestResponse("approval.request", msg.request_id, response);
+          this.send(response);
         }
         return;
       }
@@ -797,6 +820,45 @@ export class TyrumClient {
       pending.reject(err);
     }
     this.pending.clear();
+  }
+
+  private inboundRequestKey(type: string, requestId: string): string {
+    return `${type}:${requestId}`;
+  }
+
+  private evictInboundRequestCache(): void {
+    const max = Math.max(1, this.opts.maxSeenEventIds);
+    while (this.inboundRequestCache.size > max) {
+      const oldest = this.inboundRequestCache.keys().next().value as string | undefined;
+      if (!oldest) break;
+      this.inboundRequestCache.delete(oldest);
+    }
+  }
+
+  private markInboundRequestPending(type: string, requestId: string): void {
+    const key = this.inboundRequestKey(type, requestId);
+    if (this.inboundRequestCache.has(key)) return;
+    this.inboundRequestCache.set(key, null);
+    this.evictInboundRequestCache();
+  }
+
+  private cacheInboundRequestResponse(type: string, requestId: string, response: WsResponseEnvelope): void {
+    const key = this.inboundRequestKey(type, requestId);
+    // Refresh insertion order so completed responses remain eligible for retries.
+    this.inboundRequestCache.delete(key);
+    this.inboundRequestCache.set(key, response);
+    this.evictInboundRequestCache();
+  }
+
+  private getCachedInboundRequestResponse(type: string, requestId: string): WsResponseEnvelope | null | undefined {
+    const key = this.inboundRequestKey(type, requestId);
+    const existing = this.inboundRequestCache.get(key);
+    if (existing) {
+      // Refresh insertion order on replay so hot retries remain in cache.
+      this.inboundRequestCache.delete(key);
+      this.inboundRequestCache.set(key, existing);
+    }
+    return existing;
   }
 
   private markEventSeen(eventId: string): boolean {
