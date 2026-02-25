@@ -152,9 +152,18 @@ export interface PresenceApi {
 
 export interface PairingsApi {
   list(query?: z.input<typeof PairingsListQuery>): Promise<PairingListResponse>;
-  approve(pairingId: number, input: z.input<typeof PairingApproveRequest>): Promise<PairingMutateResponse>;
-  deny(pairingId: number, input?: z.input<typeof PairingDenyOrRevokeRequest>): Promise<PairingMutateResponse>;
-  revoke(pairingId: number, input?: z.input<typeof PairingDenyOrRevokeRequest>): Promise<PairingMutateResponse>;
+  approve(
+    pairingId: number,
+    input: z.input<typeof PairingApproveRequest>,
+  ): Promise<PairingMutateResponse>;
+  deny(
+    pairingId: number,
+    input?: z.input<typeof PairingDenyOrRevokeRequest>,
+  ): Promise<PairingMutateResponse>;
+  revoke(
+    pairingId: number,
+    input?: z.input<typeof PairingDenyOrRevokeRequest>,
+  ): Promise<PairingMutateResponse>;
 }
 
 export function createStatusApi(transport: HttpTransport): StatusApi {
@@ -235,7 +244,11 @@ export function createPairingsApi(transport: HttpTransport): PairingsApi {
     },
 
     async revoke(pairingId, input) {
-      const body = validateOrThrow(PairingDenyOrRevokeRequest, input ?? {}, "pairing revoke request");
+      const body = validateOrThrow(
+        PairingDenyOrRevokeRequest,
+        input ?? {},
+        "pairing revoke request",
+      );
       return await transport.request({
         method: "POST",
         path: pairingPath("revoke", pairingId),

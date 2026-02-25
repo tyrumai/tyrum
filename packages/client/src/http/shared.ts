@@ -144,7 +144,10 @@ async function readJsonBody(response: Response): Promise<unknown> {
   }
 }
 
-function statusIsExpected(status: number, expectedStatus: number | readonly number[] | undefined): boolean {
+function statusIsExpected(
+  status: number,
+  expectedStatus: number | readonly number[] | undefined,
+): boolean {
   if (expectedStatus === undefined) return status >= 200 && status < 300;
   if (Array.isArray(expectedStatus)) return expectedStatus.includes(status);
   return status === expectedStatus;
@@ -153,7 +156,10 @@ function statusIsExpected(status: number, expectedStatus: number | readonly numb
 export function validateOrThrow<T>(schema: ZodType<T>, input: unknown, context: string): T {
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
-    throw new TyrumHttpClientError("request_invalid", `${context}: ${formatZodIssues(parsed.error)}`);
+    throw new TyrumHttpClientError(
+      "request_invalid",
+      `${context}: ${formatZodIssues(parsed.error)}`,
+    );
   }
   return parsed.data;
 }
@@ -213,7 +219,7 @@ export class HttpTransport {
       const parsedError = ErrorBodySchema.safeParse(parsedBody);
       const errorCode = parsedError.success ? parsedError.data.error : undefined;
       const errorMessage = parsedError.success
-        ? parsedError.data.message ?? `HTTP ${String(response.status)}`
+        ? (parsedError.data.message ?? `HTTP ${String(response.status)}`)
         : `HTTP ${String(response.status)}`;
 
       throw new TyrumHttpClientError("http_error", errorMessage, {

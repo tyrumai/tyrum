@@ -1,4 +1,9 @@
-import { createAuthPinsApi, createAuthProfilesApi, type AuthPinsApi, type AuthProfilesApi } from "./auth.js";
+import {
+  createAuthPinsApi,
+  createAuthProfilesApi,
+  type AuthPinsApi,
+  type AuthProfilesApi,
+} from "./auth.js";
 import { createContractsApi, type ContractsApi } from "./contracts.js";
 import { createDeviceTokensApi, type DeviceTokensApi } from "./device-tokens.js";
 import { createModelsApi, type ModelsApi } from "./models.js";

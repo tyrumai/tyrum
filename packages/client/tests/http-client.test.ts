@@ -1,10 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { RequestInit } from "undici";
-import {
-  createTyrumHttpClient,
-  TyrumHttpClientError,
-  type TyrumHttpFetch,
-} from "../src/index.js";
+import { createTyrumHttpClient, TyrumHttpClientError, type TyrumHttpFetch } from "../src/index.js";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -255,16 +251,18 @@ describe("createTyrumHttpClient", () => {
       fetch,
     });
 
-    await expect(client.usage.get({ run_id: "r1", key: "k1" })).rejects.toMatchObject<
-      TyrumHttpClientError
-    >({
+    await expect(
+      client.usage.get({ run_id: "r1", key: "k1" }),
+    ).rejects.toMatchObject<TyrumHttpClientError>({
       code: "request_invalid",
     });
     expect(fetch).not.toHaveBeenCalled();
   });
 
   it("validates pairing mutate responses against NodePairingRequest", async () => {
-    const fetch = makeFetchMock(async () => jsonResponse({ status: "ok", pairing: samplePairing() }));
+    const fetch = makeFetchMock(async () =>
+      jsonResponse({ status: "ok", pairing: samplePairing() }),
+    );
     const client = createTyrumHttpClient({
       baseUrl: "https://gateway.example",
       auth: { type: "bearer", token: "root-token" },
@@ -287,9 +285,9 @@ describe("createTyrumHttpClient", () => {
       fetch,
     });
 
-    await expect(client.contracts.getSchema("../secrets.json")).rejects.toMatchObject<
-      TyrumHttpClientError
-    >({
+    await expect(
+      client.contracts.getSchema("../secrets.json"),
+    ).rejects.toMatchObject<TyrumHttpClientError>({
       code: "request_invalid",
     });
     expect(fetch).not.toHaveBeenCalled();

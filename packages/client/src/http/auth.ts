@@ -93,7 +93,11 @@ export interface AuthPinsApi {
 export function createAuthProfilesApi(transport: HttpTransport): AuthProfilesApi {
   return {
     async list(query) {
-      const parsedQuery = validateOrThrow(AuthProfileListQuery, query ?? {}, "auth profile list query");
+      const parsedQuery = validateOrThrow(
+        AuthProfileListQuery,
+        query ?? {},
+        "auth profile list query",
+      );
       return await transport.request({
         method: "GET",
         path: "/auth/profiles",
@@ -126,7 +130,11 @@ export function createAuthProfilesApi(transport: HttpTransport): AuthProfilesApi
 
     async disable(profileId, input) {
       const parsedProfileId = validateOrThrow(AuthProfilePathId, profileId, "auth profile id");
-      const body = validateOrThrow(AuthProfileDisableRequest, input, "auth profile disable request");
+      const body = validateOrThrow(
+        AuthProfileDisableRequest,
+        input,
+        "auth profile disable request",
+      );
       return await transport.request({
         method: "POST",
         path: `/auth/profiles/${encodeURIComponent(parsedProfileId)}/disable`,
