@@ -7,7 +7,7 @@ import type { ArtifactStore } from "../artifact/store.js";
 import type { Logger } from "../observability/logger.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { SecretProvider } from "../secret/provider.js";
-import type { StepExecutor, StepResult } from "./engine.js";
+import type { StepExecutionContext, StepExecutor, StepResult } from "./engine.js";
 import type { PlaybookOutputContract } from "./playbook-output-contract.js";
 import {
   parsePlaybookOutputContract,
@@ -220,6 +220,7 @@ class LocalStepExecutor implements StepExecutor {
     planId: string,
     stepIndex: number,
     timeoutMs: number,
+    _context: StepExecutionContext,
   ): Promise<StepResult> {
     const { resolved, secrets } = await resolveSecrets(action.args ?? {}, this.secretProvider);
     if (secrets.length > 0) {

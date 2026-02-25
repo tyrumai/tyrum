@@ -3,7 +3,7 @@ import { BatchV1Api, CoreV1Api, KubeConfig } from "@kubernetes/client-node";
 import { randomUUID } from "node:crypto";
 import type { Logger } from "../observability/logger.js";
 import { resolveSandboxHardeningProfile, type SandboxHardeningProfile } from "../sandbox/hardening.js";
-import type { StepExecutor, StepResult } from "./engine.js";
+import type { StepExecutionContext, StepExecutor, StepResult } from "./engine.js";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -122,6 +122,7 @@ class KubernetesToolRunnerStepExecutor implements StepExecutor {
     planId: string,
     stepIndex: number,
     timeoutMs: number,
+    _context: StepExecutionContext,
   ): Promise<StepResult> {
     const hardeningProfile: SandboxHardeningProfile = resolveSandboxHardeningProfile();
     const suffix = sanitizeDnsLabelSuffix(randomUUID().replace(/-/g, "").slice(0, 10));

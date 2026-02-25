@@ -1,7 +1,7 @@
 import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/schemas";
 import { spawn } from "node:child_process";
 import type { Logger } from "../observability/logger.js";
-import type { StepExecutor, StepResult } from "./engine.js";
+import type { StepExecutionContext, StepExecutor, StepResult } from "./engine.js";
 
 // Transport ceiling for toolrunner JSON over stdio. This must be high enough
 // to carry the largest StepResult payload without truncating JSON.
@@ -35,6 +35,7 @@ class ToolRunnerStepExecutor implements StepExecutor {
     planId: string,
     stepIndex: number,
     timeoutMs: number,
+    _context: StepExecutionContext,
   ): Promise<StepResult> {
     const payload = JSON.stringify({
       plan_id: planId,

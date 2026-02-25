@@ -10,6 +10,12 @@ import type { GatewayContainer } from "../../container.js";
 import { createProviderFromNpm } from "../models/provider-factory.js";
 import type { StepExecutionContext, StepExecutor, StepResult } from "./engine.js";
 import { parsePlaybookOutputContract, resolveMaxOutputBytes, validateJsonAgainstSchema } from "./playbook-output-contract.js";
+import {
+  appendToolApprovalResponseMessage,
+  coerceModelMessages,
+  countAssistantMessages,
+  hasToolResult,
+} from "../ai-sdk/message-utils.js";
 import { generateText, jsonSchema, stepCountIs, tool as aiTool } from "ai";
 import type { LanguageModel, ModelMessage, Tool, ToolExecutionOptions, ToolSet } from "ai";
 import type { LanguageModelV3 } from "@ai-sdk/provider";
@@ -17,6 +23,7 @@ import { canonicalizeToolMatchTarget } from "../policy/match-target.js";
 import { evaluateDomain, mostRestrictiveDecision, normalizeDomain, normalizeUrlForPolicy } from "../policy/domain.js";
 import { collectSecretHandleIds } from "../secret/collect-secret-handle-ids.js";
 import type { SecretProvider } from "../secret/provider.js";
+import { coerceRecord } from "../util/coerce.js";
 const DEFAULT_TOOL_APPROVAL_WAIT_MS = 120_000;
 
 const SUPPORTED_LLM_TOOL_IDS = new Set<string>(["tool.exec", "tool.http.fetch"]);
@@ -46,11 +53,6 @@ function maybeTruncateText(text: string, maxBytes: number): { text: string; trun
   return { text: decoder.decode(sliced), truncated: true };
 }
 
-function asObject(value: unknown): Record<string, unknown> | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
-  return value as Record<string, unknown>;
-}
-
 function deriveAgentIdFromKey(key: string): string {
   if (!key.startsWith("agent:")) return "default";
   const parts = key.split(":");
@@ -67,23 +69,11 @@ type ToolApprovalResumeState = {
   counted_tool_call_ids?: string[];
 };
 
-function coerceModelMessages(value: unknown): ModelMessage[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const out: ModelMessage[] = [];
-  for (const entry of value) {
-    const record = asObject(entry);
-    if (!record) return undefined;
-    if (typeof record["role"] !== "string") return undefined;
-    out.push(entry as ModelMessage);
-  }
-  return out;
-}
-
 function extractToolApprovalResumeState(context: unknown): ToolApprovalResumeState | undefined {
-  const record = asObject(context);
+  const record = coerceRecord(context);
   if (!record) return undefined;
   if (record["source"] !== "llm-step-tool-execution") return undefined;
-  const ai = asObject(record["ai_sdk"]);
+  const ai = coerceRecord(record["ai_sdk"]);
   if (!ai) return undefined;
   const approvalId = typeof ai["approval_id"] === "string" ? ai["approval_id"].trim() : "";
   if (approvalId.length === 0) return undefined;
@@ -120,80 +110,6 @@ function extractToolApprovalResumeState(context: unknown): ToolApprovalResumeSta
     tool_calls_used: toolCallsUsed,
     counted_tool_call_ids: countedToolCallIds,
   };
-}
-
-function hasToolApprovalResponse(messages: readonly ModelMessage[], approvalId: string): boolean {
-  for (const message of messages) {
-    if (!message || typeof message !== "object") continue;
-    if (message.role !== "tool") continue;
-    const content = (message as { content?: unknown }).content;
-    if (!Array.isArray(content)) continue;
-    for (const part of content) {
-      const record = asObject(part);
-      if (!record) continue;
-      if (record["type"] !== "tool-approval-response") continue;
-      if (record["approvalId"] === approvalId) return true;
-    }
-  }
-  return false;
-}
-
-function hasToolResult(messages: readonly ModelMessage[], toolCallId: string): boolean {
-  for (const message of messages) {
-    if (!message || typeof message !== "object") continue;
-    if (message.role !== "tool") continue;
-    const content = (message as { content?: unknown }).content;
-    if (!Array.isArray(content)) continue;
-    for (const part of content) {
-      const record = asObject(part);
-      if (!record) continue;
-      if (record["type"] !== "tool-result") continue;
-      if (record["toolCallId"] === toolCallId) return true;
-    }
-  }
-  return false;
-}
-
-function appendToolApprovalResponseMessage(
-  messages: readonly ModelMessage[],
-  input: { approvalId: string; approved: boolean; reason?: string },
-): ModelMessage[] {
-  if (hasToolApprovalResponse(messages, input.approvalId)) {
-    return messages.slice() as ModelMessage[];
-  }
-
-  const approvalPart: Record<string, unknown> = {
-    type: "tool-approval-response",
-    approvalId: input.approvalId,
-    approved: input.approved,
-  };
-  if (input.reason && input.reason.trim().length > 0) {
-    approvalPart["reason"] = input.reason.trim();
-  }
-
-  const next = messages.slice() as ModelMessage[];
-  const last = next.at(-1);
-  if (last && last.role === "tool" && Array.isArray((last as { content?: unknown }).content)) {
-    const updated = {
-      ...last,
-      content: [...((last as { content: unknown[] }).content ?? []), approvalPart],
-    } as unknown as ModelMessage;
-    next[next.length - 1] = updated;
-    return next;
-  }
-
-  next.push({ role: "tool", content: [approvalPart] } as unknown as ModelMessage);
-  return next;
-}
-
-function countAssistantMessages(messages: readonly ModelMessage[]): number {
-  let count = 0;
-  for (const message of messages) {
-    if (message && typeof message === "object" && message.role === "assistant") {
-      count += 1;
-    }
-  }
-  return count;
 }
 
 async function loadPolicyBundleFromSnapshot(
@@ -412,7 +328,7 @@ function buildToolSet(input: {
     const url =
       input2.toolId === "tool.http.fetch"
         ? (() => {
-            const rec = asObject(input2.args) ?? {};
+            const rec = coerceRecord(input2.args) ?? {};
             return typeof rec["url"] === "string" ? rec["url"] : undefined;
           })()
         : undefined;
@@ -463,26 +379,48 @@ function buildToolSet(input: {
     return res.result ?? res.evidence ?? null;
   };
 
-  if (allowed.has("tool.exec")) {
-    tools["tool.exec"] = aiTool({
-      description: "Execute a shell command in the workspace sandbox.",
-      inputSchema: jsonSchema({
-        type: "object",
-        properties: {
-          command: { type: "string" },
-          cwd: { type: "string" },
-          timeout_ms: { type: "number" },
-        },
-        required: ["command"],
-        additionalProperties: true,
-      }),
+  const matchesApprovedToolContext = (input2: {
+    context: unknown;
+    toolId: string;
+    toolCallId: string;
+    toolMatchTarget: string;
+  }): boolean => {
+    const ctx = coerceRecord(input2.context);
+    return (
+      ctx?.["source"] === "llm-step-tool-execution" &&
+      ctx["tool_id"] === input2.toolId &&
+      ctx["tool_call_id"] === input2.toolCallId &&
+      ctx["tool_match_target"] === input2.toolMatchTarget
+    );
+  };
+
+  const parseTimeoutMsArg = (record: Record<string, unknown>): number | undefined => {
+    const raw = record["timeout_ms"];
+    if (typeof raw !== "number" || !Number.isFinite(raw)) return undefined;
+    return Math.max(1, Math.floor(raw));
+  };
+
+  const resolveToolCallId = (options: ToolExecutionOptions): string =>
+    typeof options.toolCallId === "string" && options.toolCallId.trim().length > 0
+      ? options.toolCallId.trim()
+      : "tc-unknown";
+
+  const createPolicyAwareTool = (input2: {
+    toolId: "tool.exec" | "tool.http.fetch";
+    description: string;
+    inputSchema: Record<string, unknown>;
+    toAction: (args: Record<string, unknown>) => ActionPrimitiveT;
+  }): Tool =>
+    aiTool({
+      description: input2.description,
+      inputSchema: jsonSchema(input2.inputSchema),
       needsApproval: async (
         args: unknown,
         options: { toolCallId: string; messages: ModelMessage[]; experimental_context?: unknown },
       ): Promise<boolean> => {
         accountToolCall(options.toolCallId);
         const state = await resolveToolCallPolicyState({
-          toolId: "tool.exec",
+          toolId: input2.toolId,
           toolCallId: options.toolCallId,
           args,
         });
@@ -493,12 +431,12 @@ function buildToolSet(input: {
 
         const approval = await loadApproval();
         if (approval && approval.status !== "pending") {
-          const ctx = asObject(approval.context);
-          const matches =
-            ctx?.["source"] === "llm-step-tool-execution" &&
-            ctx["tool_id"] === "tool.exec" &&
-            ctx["tool_call_id"] === options.toolCallId &&
-            ctx["tool_match_target"] === state.matchTarget;
+          const matches = matchesApprovedToolContext({
+            context: approval.context,
+            toolId: input2.toolId,
+            toolCallId: options.toolCallId,
+            toolMatchTarget: state.matchTarget,
+          });
           if (matches && !hasToolResult(options.messages, options.toolCallId)) {
             return false;
           }
@@ -507,44 +445,58 @@ function buildToolSet(input: {
         return true;
       },
       execute: async (args: unknown, options: ToolExecutionOptions) => {
-        const toolCallId =
-          typeof options?.toolCallId === "string" && options.toolCallId.trim().length > 0
-            ? options.toolCallId.trim()
-            : "tc-unknown";
+        const toolCallId = resolveToolCallId(options);
 
         accountToolCall(toolCallId);
         const state = await resolveToolCallPolicyState({
-          toolId: "tool.exec",
+          toolId: input2.toolId,
           toolCallId,
           args,
         });
 
         if (state.decision === "deny") {
-          throw new Error("policy denied tool execution for 'tool.exec'");
+          throw new Error(`policy denied tool execution for '${input2.toolId}'`);
         }
 
         if (state.shouldRequireApproval) {
           const approval = await loadApproval();
           const approved = approval?.status === "approved";
-          const ctx = asObject(approval?.context);
-          const matches =
-            ctx?.["source"] === "llm-step-tool-execution" &&
-            ctx["tool_id"] === "tool.exec" &&
-            ctx["tool_call_id"] === toolCallId &&
-            ctx["tool_match_target"] === state.matchTarget;
+          const matches = matchesApprovedToolContext({
+            context: approval?.context,
+            toolId: input2.toolId,
+            toolCallId,
+            toolMatchTarget: state.matchTarget,
+          });
           if (!approved || !matches) {
-            throw new Error("tool execution not approved for 'tool.exec'");
+            throw new Error(`tool execution not approved for '${input2.toolId}'`);
           }
         }
 
-        const rec = asObject(args) ?? {};
-        const command = typeof rec["command"] === "string" ? rec["command"] : "";
-        const cwd = typeof rec["cwd"] === "string" ? rec["cwd"] : undefined;
-        const timeoutMs = typeof rec["timeout_ms"] === "number" && Number.isFinite(rec["timeout_ms"])
-          ? Math.max(1, Math.floor(rec["timeout_ms"]))
-          : undefined;
+        const record = coerceRecord(args) ?? {};
+        return await runTool(input2.toAction(record));
+      },
+    });
 
-        const action: ActionPrimitiveT = {
+  if (allowed.has("tool.exec")) {
+    tools["tool.exec"] = createPolicyAwareTool({
+      toolId: "tool.exec",
+      description: "Execute a shell command in the workspace sandbox.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          command: { type: "string" },
+          cwd: { type: "string" },
+          timeout_ms: { type: "number" },
+        },
+        required: ["command"],
+        additionalProperties: true,
+      },
+      toAction: (record) => {
+        const command = typeof record["command"] === "string" ? record["command"] : "";
+        const cwd = typeof record["cwd"] === "string" ? record["cwd"] : undefined;
+        const timeoutMs = parseTimeoutMsArg(record);
+
+        return {
           type: "CLI",
           args: {
             cmd: "sh",
@@ -553,15 +505,15 @@ function buildToolSet(input: {
             ...(timeoutMs ? { timeout_ms: timeoutMs } : undefined),
           },
         };
-        return await runTool(action);
       },
     });
   }
 
   if (allowed.has("tool.http.fetch")) {
-    tools["tool.http.fetch"] = aiTool({
+    tools["tool.http.fetch"] = createPolicyAwareTool({
+      toolId: "tool.http.fetch",
       description: "Fetch an HTTP URL (SSRF protected, output capped).",
-      inputSchema: jsonSchema({
+      inputSchema: {
         type: "object",
         properties: {
           url: { type: "string" },
@@ -572,78 +524,15 @@ function buildToolSet(input: {
         },
         required: ["url"],
         additionalProperties: true,
-      }),
-      needsApproval: async (
-        args: unknown,
-        options: { toolCallId: string; messages: ModelMessage[]; experimental_context?: unknown },
-      ): Promise<boolean> => {
-        accountToolCall(options.toolCallId);
-        const state = await resolveToolCallPolicyState({
-          toolId: "tool.http.fetch",
-          toolCallId: options.toolCallId,
-          args,
-        });
-
-        if (!state.shouldRequireApproval) {
-          return false;
-        }
-
-        const approval = await loadApproval();
-        if (approval && approval.status !== "pending") {
-          const ctx = asObject(approval.context);
-          const matches =
-            ctx?.["source"] === "llm-step-tool-execution" &&
-            ctx["tool_id"] === "tool.http.fetch" &&
-            ctx["tool_call_id"] === options.toolCallId &&
-            ctx["tool_match_target"] === state.matchTarget;
-          if (matches && !hasToolResult(options.messages, options.toolCallId)) {
-            return false;
-          }
-        }
-
-        return true;
       },
-      execute: async (args: unknown, options: ToolExecutionOptions) => {
-        const toolCallId =
-          typeof options?.toolCallId === "string" && options.toolCallId.trim().length > 0
-            ? options.toolCallId.trim()
-            : "tc-unknown";
+      toAction: (record) => {
+        const url = typeof record["url"] === "string" ? record["url"] : "";
+        const method = typeof record["method"] === "string" ? record["method"] : undefined;
+        const headers = coerceRecord(record["headers"]);
+        const body = typeof record["body"] === "string" ? record["body"] : undefined;
+        const timeoutMs = parseTimeoutMsArg(record);
 
-        accountToolCall(toolCallId);
-        const state = await resolveToolCallPolicyState({
-          toolId: "tool.http.fetch",
-          toolCallId,
-          args,
-        });
-
-        if (state.decision === "deny") {
-          throw new Error("policy denied tool execution for 'tool.http.fetch'");
-        }
-
-        if (state.shouldRequireApproval) {
-          const approval = await loadApproval();
-          const approved = approval?.status === "approved";
-          const ctx = asObject(approval?.context);
-          const matches =
-            ctx?.["source"] === "llm-step-tool-execution" &&
-            ctx["tool_id"] === "tool.http.fetch" &&
-            ctx["tool_call_id"] === toolCallId &&
-            ctx["tool_match_target"] === state.matchTarget;
-          if (!approved || !matches) {
-            throw new Error("tool execution not approved for 'tool.http.fetch'");
-          }
-        }
-
-        const rec = asObject(args) ?? {};
-        const url = typeof rec["url"] === "string" ? rec["url"] : "";
-        const method = typeof rec["method"] === "string" ? rec["method"] : undefined;
-        const headers = asObject(rec["headers"]);
-        const body = typeof rec["body"] === "string" ? rec["body"] : undefined;
-        const timeoutMs = typeof rec["timeout_ms"] === "number" && Number.isFinite(rec["timeout_ms"])
-          ? Math.max(1, Math.floor(rec["timeout_ms"]))
-          : undefined;
-
-        const action: ActionPrimitiveT = {
+        return {
           type: "Http",
           args: {
             url,
@@ -653,7 +542,6 @@ function buildToolSet(input: {
             ...(timeoutMs ? { timeout_ms: timeoutMs } : undefined),
           },
         };
-        return await runTool(action);
       },
     });
   }
@@ -684,7 +572,7 @@ async function executeLlmAction(input: {
 }): Promise<StepResult> {
   const startedAt = Date.now();
 
-  const args = asObject(input.action.args) ?? {};
+  const args = coerceRecord(input.action.args) ?? {};
   const modelIdRaw = typeof args["model"] === "string" ? args["model"].trim() : "";
   const prompt = typeof args["prompt"] === "string" ? args["prompt"] : "";
   const maxToolCallsRaw = args["max_tool_calls"];
@@ -692,7 +580,7 @@ async function executeLlmAction(input: {
     ? Math.floor(maxToolCallsRaw)
     : 0;
 
-  const toolsObj = asObject(args["tools"]);
+  const toolsObj = coerceRecord(args["tools"]);
   const rawAllowedToolIds = toolsObj?.["allow"];
   const allowedToolIds = Array.isArray(rawAllowedToolIds)
     ? rawAllowedToolIds.filter((v): v is string => typeof v === "string")
@@ -839,11 +727,11 @@ async function executeLlmAction(input: {
 
     if (res.steps) {
       const lastStep = res.steps.at(-1);
-      const approvalPart = lastStep?.content.find((part) => asObject(part)?.["type"] === "tool-approval-request");
+      const approvalPart = lastStep?.content.find((part) => coerceRecord(part)?.["type"] === "tool-approval-request");
       if (approvalPart) {
-        const record = asObject(approvalPart);
+        const record = coerceRecord(approvalPart);
         const approvalId = typeof record?.["approvalId"] === "string" ? record["approvalId"].trim() : "";
-        const toolCall = asObject(record?.["toolCall"]);
+        const toolCall = coerceRecord(record?.["toolCall"]);
 
         const toolCallId = typeof toolCall?.["toolCallId"] === "string" ? toolCall["toolCallId"].trim() : "";
         const toolName = typeof toolCall?.["toolName"] === "string" ? toolCall["toolName"].trim() : "";

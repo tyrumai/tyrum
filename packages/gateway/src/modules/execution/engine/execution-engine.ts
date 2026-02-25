@@ -45,6 +45,7 @@ import type {
   EnqueuePlanResult,
   ExecutionClock,
   ExecutionConcurrencyLimits,
+  StepExecutionContext,
   StepExecutor,
   StepResult,
   WorkerTickInput,
@@ -1805,12 +1806,31 @@ export class ExecutionEngine {
       });
     });
 
+    const approvalRow = await this.db.get<{ approval_id: number | null }>(
+      "SELECT approval_id FROM execution_steps WHERE step_id = ?",
+      [opts.stepId],
+    );
+    const runPolicy = await this.db.get<{ policy_snapshot_id: string | null }>(
+      "SELECT policy_snapshot_id FROM execution_runs WHERE run_id = ?",
+      [opts.runId],
+    );
+
     const result = await this.executeWithTimeout(
       opts.executor,
       opts.action,
       opts.planId,
       opts.stepIndex,
       opts.timeoutMs,
+      {
+        runId: opts.runId,
+        stepId: opts.stepId,
+        attemptId: opts.attemptId,
+        approvalId: approvalRow?.approval_id ?? null,
+        key: opts.key,
+        lane: opts.lane,
+        workspaceId: opts.workspaceId,
+        policySnapshotId: runPolicy?.policy_snapshot_id ?? null,
+      },
     );
     const wallDurationMs = Math.max(0, Date.now() - wallStartMs);
 
@@ -2672,9 +2692,10 @@ export class ExecutionEngine {
     planId: string,
     stepIndex: number,
     timeoutMs: number,
+    context: StepExecutionContext,
   ): Promise<StepResult> {
     try {
-      return await executor.execute(action, planId, stepIndex, timeoutMs);
+      return await executor.execute(action, planId, stepIndex, timeoutMs, context);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { success: false, error: message };
