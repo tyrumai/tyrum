@@ -191,7 +191,10 @@ export function decideCrossTurnLoopWarning(input: {
       return { warn: true, similarity: 1, matchedIndex: i };
     }
 
-    const similarity = jaccardSimilarity(replyTokens, tokenizeForSimilarity(candidate));
+    const candidateTokens = tokenizeForSimilarity(candidate);
+    if (replyTokens.length === 0 || candidateTokens.length === 0) continue;
+
+    const similarity = jaccardSimilarity(replyTokens, candidateTokens);
     if (similarity >= threshold) {
       return { warn: true, similarity, matchedIndex: i };
     }
