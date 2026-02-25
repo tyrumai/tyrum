@@ -1758,8 +1758,12 @@ export class AgentRuntime {
   }
 
   private resolveTurnReply(rawReply: string, withinTurnLoop: ReturnType<typeof detectWithinTurnToolLoop> | undefined): string {
+    if (withinTurnLoop) {
+      if (rawReply.trim().length === 0) return WITHIN_TURN_LOOP_STOP_REPLY;
+      if (rawReply.includes(WITHIN_TURN_LOOP_STOP_REPLY)) return rawReply;
+      return `${rawReply}\n\n${WITHIN_TURN_LOOP_STOP_REPLY}`;
+    }
     if (rawReply.length > 0) return rawReply;
-    if (withinTurnLoop) return WITHIN_TURN_LOOP_STOP_REPLY;
     return "No assistant response returned.";
   }
 
