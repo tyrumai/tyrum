@@ -129,20 +129,20 @@ async function resolveKeyLane(db: SqlDb, ctx: CommandDeps["commandContext"] | un
   const agentId = ctx?.agentId?.trim();
   const agentKeyPrefix = agentId ? `agent:${agentId}:` : undefined;
 
-  const sources: Array<{ exact: string; like: string }> = [{ exact: channel, like: `${channel}:%` }];
+  const sources: Array<{ exact: string; like?: string }> = [{ exact: channel, like: `${channel}:%` }];
   if (channel.includes(":")) {
     try {
       const parsed = parseChannelSourceKey(channel);
       if (parsed.accountId === "default") {
-        sources.push({ exact: parsed.connector, like: `${parsed.connector}:%` });
+        sources.push({ exact: parsed.connector });
       }
     } catch {
       // ignore parse errors; fall back to matching the provided channel only
     }
   }
 
-  const sourceClause = sources.map(() => "(source = ? OR source LIKE ?)").join(" OR ");
-  const sourceArgs = sources.flatMap((entry) => [entry.exact, entry.like]);
+  const sourceClause = sources.map((entry) => (entry.like ? "(source = ? OR source LIKE ?)" : "(source = ?)")).join(" OR ");
+  const sourceArgs = sources.flatMap((entry) => (entry.like ? [entry.exact, entry.like] : [entry.exact]));
 
   const row = await db.get<{ key: string; lane: string }>(
     `SELECT key, lane
