@@ -22,6 +22,14 @@ describe("AgentConfig", () => {
     expect(parsed.tools.allow).toEqual([]);
     expect(parsed.sessions.ttl_days).toBe(30);
     expect(parsed.sessions.max_turns).toBe(20);
+    expect(parsed.sessions.loop_detection.within_turn.enabled).toBe(true);
+    expect(parsed.sessions.loop_detection.within_turn.consecutive_repeat_limit).toBe(3);
+    expect(parsed.sessions.loop_detection.within_turn.cycle_repeat_limit).toBe(3);
+    expect(parsed.sessions.loop_detection.cross_turn.enabled).toBe(true);
+    expect(parsed.sessions.loop_detection.cross_turn.window_assistant_messages).toBe(3);
+    expect(parsed.sessions.loop_detection.cross_turn.similarity_threshold).toBe(0.97);
+    expect(parsed.sessions.loop_detection.cross_turn.min_chars).toBe(120);
+    expect(parsed.sessions.loop_detection.cross_turn.cooldown_assistant_messages).toBe(6);
     expect(parsed.memory.markdown_enabled).toBe(true);
   });
 });

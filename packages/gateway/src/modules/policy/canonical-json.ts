@@ -5,7 +5,8 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 export function stableJsonStringify(value: unknown): string {
-  return JSON.stringify(sortValue(value));
+  const json = JSON.stringify(sortValue(value)) as unknown as string | undefined;
+  return json ?? "null";
 }
 
 export function sha256HexFromString(value: string): string {

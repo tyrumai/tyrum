@@ -240,9 +240,11 @@ describe("gateway startup process", () => {
     "starts the real gateway and serves /healthz and /agent/status",
     { timeout: 60_000 },
     async () => {
-      const releaseBuildLock = acquireGatewayBuildLock();
+      let releaseBuildLock = acquireGatewayBuildLock();
       try {
         ensureGatewayBuild();
+        releaseBuildLock();
+        releaseBuildLock = () => {};
 
         const port = await findAvailablePort();
         const gatewayToken = "tyrum-test-token";
@@ -597,9 +599,11 @@ describe("gateway startup process", () => {
     "processes gateway.shutdown hooks before stopping the worker loop",
     { timeout: 60_000 },
     async () => {
-      const releaseBuildLock = acquireGatewayBuildLock();
+      let releaseBuildLock = acquireGatewayBuildLock();
       try {
         ensureGatewayBuild();
+        releaseBuildLock();
+        releaseBuildLock = () => {};
 
         const port = await findAvailablePort();
         const gatewayToken = "tyrum-test-token";
@@ -689,9 +693,11 @@ describe("gateway startup process", () => {
     "does not miss gateway.shutdown hooks when the worker is busy",
     { timeout: 60_000 },
     async () => {
-      const releaseBuildLock = acquireGatewayBuildLock();
+      let releaseBuildLock = acquireGatewayBuildLock();
       try {
         ensureGatewayBuild();
+        releaseBuildLock();
+        releaseBuildLock = () => {};
 
         const port = await findAvailablePort();
         const gatewayToken = "tyrum-test-token";

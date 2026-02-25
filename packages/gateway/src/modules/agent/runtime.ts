@@ -41,6 +41,7 @@ import { McpManager } from "./mcp-manager.js";
 import { ToolExecutor, type ToolResult } from "./tool-executor.js";
 import { tagContent } from "./provenance.js";
 import { sanitizeForModel, containsInjectionPatterns } from "./sanitizer.js";
+import { decideCrossTurnLoopWarning, detectWithinTurnToolLoop, LOOP_WARNING_PREFIX } from "./loop-detection.js";
 import { EnvSecretProvider, type SecretProvider } from "../secret/provider.js";
 import { collectSecretHandleIds } from "../secret/collect-secret-handle-ids.js";
 import { VectorDal, type VectorSearchResult } from "../memory/vector-dal.js";
@@ -77,6 +78,14 @@ const DEFAULT_PRE_COMPACTION_FLUSH_TIMEOUT_MS = 2_500;
 
 const DEFAULT_CONTEXT_MAX_MESSAGES = 32;
 const DEFAULT_CONTEXT_TOOL_PRUNE_KEEP_LAST_MESSAGES = 4;
+
+const WITHIN_TURN_LOOP_STOP_REPLY =
+  "Loop detected (repeated tool calls); stopping to avoid runaway execution. " +
+  "If you want me to continue, adjust the request/constraints or ask me to try a different approach.";
+
+const CROSS_TURN_LOOP_WARNING_TEXT =
+  `${LOOP_WARNING_PREFIX} I may be repeating myself. If this isn’t progressing, tell me what to change ` +
+  "(goal/constraints/example output) and I’ll take a different approach.";
 
 type StepPauseRequest = {
   kind: string;
@@ -1676,6 +1685,57 @@ export class AgentRuntime {
     };
   }
 
+  private createStopWhenWithWithinTurnLoopDetection(input: {
+    stepLimit: number;
+    withinTurnCfg: {
+      enabled: boolean;
+      consecutive_repeat_limit: number;
+      cycle_repeat_limit: number;
+    };
+    sessionId: string;
+    channel: string;
+    threadId: string;
+  }): {
+    stopWhen: Array<ReturnType<typeof stepCountIs>>;
+    withinTurnLoop: { value: ReturnType<typeof detectWithinTurnToolLoop> | undefined };
+  } {
+    const withinTurnLoop = { value: undefined as ReturnType<typeof detectWithinTurnToolLoop> | undefined };
+    const stopWhen = [stepCountIs(input.stepLimit)];
+
+    if (input.withinTurnCfg.enabled) {
+      stopWhen.push(({ steps }) => {
+        if (withinTurnLoop.value) return true;
+        const detected = detectWithinTurnToolLoop({
+          steps,
+          consecutiveRepeatLimit: input.withinTurnCfg.consecutive_repeat_limit,
+          cycleRepeatLimit: input.withinTurnCfg.cycle_repeat_limit,
+        });
+        if (!detected) return false;
+        withinTurnLoop.value = detected;
+        this.opts.container.logger.warn("agents.loop.within_turn_detected", {
+          session_id: input.sessionId,
+          channel: input.channel,
+          thread_id: input.threadId,
+          kind: detected.kind,
+          tool_names: detected.toolNames,
+        });
+        return true;
+      });
+    }
+
+    return { stopWhen, withinTurnLoop };
+  }
+
+  private resolveTurnReply(rawReply: string, withinTurnLoop: ReturnType<typeof detectWithinTurnToolLoop> | undefined): string {
+    if (withinTurnLoop) {
+      if (rawReply.trim().length === 0) return WITHIN_TURN_LOOP_STOP_REPLY;
+      if (rawReply.includes(WITHIN_TURN_LOOP_STOP_REPLY)) return rawReply;
+      return `${rawReply}\n\n${WITHIN_TURN_LOOP_STOP_REPLY}`;
+    }
+    if (rawReply.length > 0) return rawReply;
+    return "No assistant response returned.";
+  }
+
   async turnStream(input: AgentTurnRequestT): Promise<{
     streamResult: ReturnType<typeof streamText>;
     sessionId: string;
@@ -1692,6 +1752,15 @@ export class AgentRuntime {
       systemPrompt,
     });
 
+    const withinTurnCfg = ctx.config.sessions.loop_detection.within_turn;
+    const { stopWhen, withinTurnLoop } = this.createStopWhenWithWithinTurnLoopDetection({
+      stepLimit: this.maxSteps,
+      withinTurnCfg,
+      sessionId: session.session_id,
+      channel: resolved.channel,
+      threadId: resolved.thread_id,
+    });
+
     const streamResult = streamText({
       model,
       system: systemPrompt,
@@ -1702,13 +1771,14 @@ export class AgentRuntime {
         },
       ],
       tools: toolSet,
-      stopWhen: [stepCountIs(this.maxSteps)],
+      stopWhen,
       prepareStep: ({ messages }) => this.prepareLaneQueueStep(laneQueue, messages),
     });
 
     const finalize = async (): Promise<AgentTurnResponseT> => {
       const result = await streamResult;
-      const reply = (await result.text) || "No assistant response returned.";
+      const rawReply = (await result.text) || "";
+      const reply = this.resolveTurnReply(rawReply, withinTurnLoop.value);
       return await this.finalizeTurn(ctx, session, resolved, reply, usedTools, contextReport);
     };
 
@@ -1816,12 +1886,21 @@ export class AgentRuntime {
       return await this.finalizeTurn(ctx, session, resolved, reply, usedTools, contextReport);
     }
 
+    const withinTurnCfg = ctx.config.sessions.loop_detection.within_turn;
+    const { stopWhen, withinTurnLoop } = this.createStopWhenWithWithinTurnLoopDetection({
+      stepLimit: remainingSteps,
+      withinTurnCfg,
+      sessionId: session.session_id,
+      channel: resolved.channel,
+      threadId: resolved.thread_id,
+    });
+
     const result = await generateText({
       model,
       system: systemPrompt,
       messages,
       tools: toolSet,
-      stopWhen: [stepCountIs(remainingSteps)],
+      stopWhen,
       prepareStep: ({ messages }) => this.prepareLaneQueueStep(laneQueue, messages),
       abortSignal: opts?.abortSignal,
       timeout: opts?.timeoutMs,
@@ -1899,7 +1978,8 @@ export class AgentRuntime {
       });
     }
 
-    const reply = result.text || "No assistant response returned.";
+    const rawReply = result.text || "";
+    const reply = this.resolveTurnReply(rawReply, withinTurnLoop.value);
     return await this.finalizeTurn(ctx, session, resolved, reply, usedTools, contextReport);
   }
 
@@ -2812,6 +2892,33 @@ export class AgentRuntime {
   ): Promise<AgentTurnResponseT> {
     const nowIso = new Date().toISOString();
 
+    let finalizedReply = reply;
+    const crossTurnCfg = ctx.config.sessions.loop_detection.cross_turn;
+    if (crossTurnCfg.enabled && !finalizedReply.includes(LOOP_WARNING_PREFIX)) {
+      const previousAssistantMessages = session.turns
+        .filter((turn) => turn.role === "assistant")
+        .map((turn) => turn.content);
+
+      const decision = decideCrossTurnLoopWarning({
+        previousAssistantMessages,
+        reply: finalizedReply,
+        windowAssistantMessages: crossTurnCfg.window_assistant_messages,
+        similarityThreshold: crossTurnCfg.similarity_threshold,
+        minChars: crossTurnCfg.min_chars,
+        cooldownAssistantMessages: crossTurnCfg.cooldown_assistant_messages,
+      });
+      if (decision.warn) {
+        finalizedReply = `${finalizedReply.trimEnd()}\n\n${CROSS_TURN_LOOP_WARNING_TEXT}`;
+        this.opts.container.logger.info("agents.loop.cross_turn_warned", {
+          session_id: session.session_id,
+          channel: input.channel,
+          thread_id: input.thread_id,
+          similarity: decision.similarity,
+          matched_index: decision.matchedIndex,
+        });
+      }
+    }
+
     this.lastContextReport = contextReport;
     try {
       await this.opts.container.contextReportDal.insert({
@@ -2836,7 +2943,7 @@ export class AgentRuntime {
     await this.sessionDal.appendTurn(
       session.session_id,
       input.message,
-      reply,
+      finalizedReply,
       ctx.config.sessions.max_turns,
       nowIso,
       this.agentId,
@@ -2848,7 +2955,7 @@ export class AgentRuntime {
         `Channel: ${input.channel}`,
         `Thread: ${input.thread_id}`,
         `User: ${input.message}`,
-        `Assistant: ${reply}`,
+        `Assistant: ${finalizedReply}`,
       ].join("\n");
       if (looksLikeSecretText(entry)) {
         this.opts.container.logger.warn("memory.write_skipped_secret_like", {
@@ -2881,7 +2988,7 @@ export class AgentRuntime {
     );
 
     return AgentTurnResponse.parse({
-      reply,
+      reply: finalizedReply,
       session_id: session.session_id,
       used_tools: Array.from(usedTools),
       memory_written: memoryWritten,
