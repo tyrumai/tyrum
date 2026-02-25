@@ -11,14 +11,7 @@
  */
 
 import { describe, it, expect, afterEach } from "vitest";
-import {
-  WsConnectInitRequest,
-  WsConnectInitResponseEnvelope,
-  WsConnectProofRequest,
-  WsConnectProofResponseEnvelope,
-  WsTaskExecuteRequest,
-  WsTaskExecuteResponseEnvelope,
-} from "@tyrum/schemas";
+import { WsTaskExecuteRequest } from "@tyrum/schemas";
 import { TyrumClient } from "../../src/ws-client.js";
 import {
   startGateway,
@@ -67,10 +60,13 @@ function createConnectedClient(
 describe("WS SDK conformance (client <-> gateway)", () => {
   let gw: GatewayHarness | undefined;
   let client: TyrumClient | undefined;
+  const extraClients: TyrumClient[] = [];
 
   afterEach(async () => {
     client?.disconnect();
     client = undefined;
+    for (const c of extraClients) c.disconnect();
+    extraClients.length = 0;
     if (gw) {
       await gw.stop();
       gw = undefined;
@@ -116,15 +112,9 @@ describe("WS SDK conformance (client <-> gateway)", () => {
   // Handshake schema conformance
   // -------------------------------------------------------------------------
 
-  it("connect.init/connect.proof frames conform to @tyrum/schemas", async () => {
-    // Use the protocol deps factory to capture frames
-    const clientToGateway: unknown[] = [];
-    const gatewayToClient: unknown[] = [];
-
+  it("vNext handshake registers client with correct protocol properties", async () => {
     gw = await startGateway((cm) => ({ connectionManager: cm }));
 
-    // Monkey-patch the WS server is not practical from client side,
-    // so we verify by observing the connected state + connection manager.
     const result = createConnectedClient(gw);
     client = result.client;
 
@@ -260,6 +250,7 @@ describe("WS SDK conformance (client <-> gateway)", () => {
 
     const c1 = createConnectedClient(gw, { capabilities: ["http"] });
     const c2 = createConnectedClient(gw, { capabilities: ["playwright"] });
+    extraClients.push(c1.client, c2.client);
 
     await withTimeout(c1.connectedP, TIMEOUT, "client1 connected");
     await withTimeout(c2.connectedP, TIMEOUT, "client2 connected");
@@ -270,10 +261,5 @@ describe("WS SDK conformance (client <-> gateway)", () => {
     const caps = clients.flatMap((c) => c.capabilities);
     expect(caps).toContain("http");
     expect(caps).toContain("playwright");
-
-    c1.client.disconnect();
-    c2.client.disconnect();
-    // Override afterEach cleanup since we manage these manually
-    client = undefined;
   });
 });
