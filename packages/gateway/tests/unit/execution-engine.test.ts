@@ -126,7 +126,10 @@ describe("ExecutionEngine (normalized)", () => {
       .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
       .map((row) => row.message?.type)
       .filter((value): value is string => typeof value === "string");
-    expect(types).toContain("run.queued");
+    expect(types.filter((type) => type === "run.queued")).toHaveLength(1);
+    expect(types).not.toContain("run.started");
+    expect(types).not.toContain("run.completed");
+    expect(types).not.toContain("run.failed");
   });
 
   it("preserves heartbeat trigger kind when provided", async () => {
@@ -210,8 +213,10 @@ describe("ExecutionEngine (normalized)", () => {
       .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
       .map((row) => row.message?.type)
       .filter((value): value is string => typeof value === "string");
-    expect(types).toContain("run.started");
-    expect(types).toContain("run.completed");
+    expect(types.filter((type) => type === "run.queued")).toHaveLength(1);
+    expect(types.filter((type) => type === "run.started")).toHaveLength(1);
+    expect(types.filter((type) => type === "run.completed")).toHaveLength(1);
+    expect(types.filter((type) => type === "run.failed")).toHaveLength(0);
   });
 
   it("emits run.failed when a run exhausts retry attempts", async () => {
@@ -246,7 +251,10 @@ describe("ExecutionEngine (normalized)", () => {
       .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
       .map((row) => row.message?.type)
       .filter((value): value is string => typeof value === "string");
-    expect(types).toContain("run.failed");
+    expect(types.filter((type) => type === "run.queued")).toHaveLength(1);
+    expect(types.filter((type) => type === "run.started")).toHaveLength(1);
+    expect(types.filter((type) => type === "run.failed")).toHaveLength(1);
+    expect(types.filter((type) => type === "run.completed")).toHaveLength(0);
   });
 
   it("worker executes a 2-step plan and completes the run", async () => {
