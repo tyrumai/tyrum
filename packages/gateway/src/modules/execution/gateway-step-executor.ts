@@ -6,10 +6,10 @@ import type {
   SecretHandle as SecretHandleT,
 } from "@tyrum/schemas";
 import { PolicyBundle } from "@tyrum/schemas";
-import { Ajv2019 } from "ajv/dist/2019.js";
 import type { GatewayContainer } from "../../container.js";
 import { createProviderFromNpm } from "../models/provider-factory.js";
 import type { StepExecutionContext, StepExecutor, StepResult } from "./engine.js";
+import { parsePlaybookOutputContract, resolveMaxOutputBytes, validateJsonAgainstSchema } from "./playbook-output-contract.js";
 import { generateText, jsonSchema, stepCountIs, tool as aiTool } from "ai";
 import type { LanguageModel, ModelMessage, Tool, ToolExecutionOptions, ToolSet } from "ai";
 import type { LanguageModelV3 } from "@ai-sdk/provider";
@@ -17,16 +17,6 @@ import { canonicalizeToolMatchTarget } from "../policy/match-target.js";
 import { evaluateDomain, mostRestrictiveDecision, normalizeDomain, normalizeUrlForPolicy } from "../policy/domain.js";
 import { collectSecretHandleIds } from "../secret/collect-secret-handle-ids.js";
 import type { SecretProvider } from "../secret/provider.js";
-
-type JsonSchema = boolean | Record<string, unknown>;
-
-interface PlaybookOutputContract {
-  kind: "text" | "json";
-  schema?: JsonSchema;
-}
-
-const DEFAULT_MAX_OUTPUT_BYTES = 32_768;
-const MAX_OUTPUT_BYTES_HARD_LIMIT = 512_000;
 const DEFAULT_TOOL_APPROVAL_WAIT_MS = 120_000;
 
 const SUPPORTED_LLM_TOOL_IDS = new Set<string>(["tool.exec", "tool.http.fetch"]);
@@ -37,10 +27,6 @@ type ToolBudgetState = {
   limitExceededError?: string;
 };
 
-function createOutputSchemaValidator(): Ajv2019 {
-  return new Ajv2019({ allErrors: true, strict: false, unevaluated: true });
-}
-
 function parseProviderModelId(model: string): { providerId: string; modelId: string } {
   const trimmed = model.trim();
   const slash = trimmed.indexOf("/");
@@ -48,49 +34,6 @@ function parseProviderModelId(model: string): { providerId: string; modelId: str
     throw new Error(`invalid model '${model}' (expected provider/model)`);
   }
   return { providerId: trimmed.slice(0, slash), modelId: trimmed.slice(slash + 1) };
-}
-
-function parsePlaybookOutputContract(args: Record<string, unknown>): PlaybookOutputContract | undefined {
-  const meta = args["__playbook"];
-  if (!meta || typeof meta !== "object" || Array.isArray(meta)) return undefined;
-
-  const output = (meta as Record<string, unknown>)["output"];
-  if (output === "text" || output === "json") {
-    return { kind: output };
-  }
-  if (!output || typeof output !== "object" || Array.isArray(output)) return undefined;
-
-  const outputObj = output as Record<string, unknown>;
-  const kind = outputObj["type"];
-  if (kind !== "text" && kind !== "json") return undefined;
-
-  const schema = outputObj["schema"];
-  if (schema === undefined) return { kind };
-  if (typeof schema === "boolean") return { kind, schema };
-  if (schema && typeof schema === "object" && !Array.isArray(schema)) {
-    return { kind, schema: schema as Record<string, unknown> };
-  }
-  return { kind };
-}
-
-function validateJsonAgainstSchema(value: unknown, schema: JsonSchema): string | undefined {
-  try {
-    const validator = createOutputSchemaValidator();
-    const validate = validator.compile(schema);
-    if (validate(value)) return undefined;
-    return validator.errorsText(validate.errors, { separator: "; " });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return `invalid output schema: ${message}`;
-  }
-}
-
-function resolveMaxOutputBytes(args: Record<string, unknown>): number {
-  const raw = args["max_output_bytes"];
-  if (typeof raw !== "number" || !Number.isFinite(raw)) return DEFAULT_MAX_OUTPUT_BYTES;
-  const value = Math.floor(raw);
-  if (value <= 0) return DEFAULT_MAX_OUTPUT_BYTES;
-  return Math.min(value, MAX_OUTPUT_BYTES_HARD_LIMIT);
 }
 
 function maybeTruncateText(text: string, maxBytes: number): { text: string; truncated: boolean } {
