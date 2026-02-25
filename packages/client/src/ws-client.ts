@@ -53,6 +53,7 @@ import {
 export type TyrumClientEvents = {
   connected: { clientId: string };
   disconnected: { code: number; reason: string };
+  transport_error: { message: string };
   task_execute: WsTaskExecuteRequest;
   approval_request: WsApprovalRequest;
   plan_update: WsPlanUpdateEvent;
@@ -68,6 +69,14 @@ export interface TyrumClientOptions {
   url: string;
   /** Auth token sent via WebSocket subprotocol metadata. */
   token: string;
+  /**
+   * Optional TLS certificate pinning for `wss://` connections (Node only).
+   *
+   * The value is the server certificate's SHA-256 fingerprint, as hex (with or
+   * without `:`), case-insensitive. When set, the client will refuse to
+   * connect if the remote certificate does not match.
+   */
+  tlsCertFingerprint256?: string;
   /** Capabilities to advertise in the hello handshake. */
   capabilities: ClientCapability[];
   /**
@@ -117,6 +126,19 @@ const DEFAULT_MAX_SEEN_EVENT_IDS = 1_000;
 const WS_BASE_PROTOCOL = "tyrum-v1";
 const WS_AUTH_PROTOCOL_PREFIX = "tyrum-auth.";
 const DEFAULT_PROTOCOL_REV = 2;
+
+function normalizeFingerprint256(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const colonMatch = trimmed.match(/[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){31}/);
+  if (colonMatch) return colonMatch[0].replace(/:/g, "").toLowerCase();
+
+  const hexMatch = trimmed.match(/[0-9A-Fa-f]{64}/);
+  if (hexMatch) return hexMatch[0].toLowerCase();
+
+  return null;
+}
 
 function toOptionalTrimmedString(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
@@ -256,6 +278,9 @@ export class TyrumClient {
   private reconnectAttempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private intentionalClose = false;
+  private connectionAttempt = 0;
+  private transportErrorHint: string | null = null;
+  private suppressReconnect = false;
 
   constructor(options: TyrumClientOptions) {
     this.emitter = mitt<TyrumClientEvents>();
@@ -389,22 +414,162 @@ export class TyrumClient {
     return [WS_BASE_PROTOCOL, `${WS_AUTH_PROTOCOL_PREFIX}${token}`];
   }
 
+  private destroyPinnedDispatcher(ws: WebSocket): void {
+    const anyWs = ws as unknown as { __tyrumDispatcher?: { destroy?: () => unknown } | null };
+    const dispatcher = anyWs.__tyrumDispatcher;
+    if (!dispatcher || typeof dispatcher.destroy !== "function") return;
+    anyWs.__tyrumDispatcher = null;
+    void Promise.resolve(dispatcher.destroy()).catch(() => {});
+  }
+
   private openSocket(): void {
     this.ready = false;
     this.clientId = null;
+    this.transportErrorHint = null;
+    this.suppressReconnect = false;
+    const attempt = ++this.connectionAttempt;
+    void this.openSocketAttempt(attempt);
+  }
 
-    this.ws = new WebSocket(this.opts.url, this.buildProtocols());
+  private async createWebSocket(): Promise<WebSocket> {
+    const pinRaw = this.opts.tlsCertFingerprint256?.trim();
+    if (!pinRaw) {
+      return new WebSocket(this.opts.url, this.buildProtocols());
+    }
 
-    this.ws.addEventListener("open", () => {
+    const expected = normalizeFingerprint256(pinRaw);
+    if (!expected) {
+      throw new Error("Invalid tlsCertFingerprint256; expected a SHA-256 hex fingerprint.");
+    }
+
+    const url = new URL(this.opts.url);
+    if (url.protocol !== "wss:") {
+      throw new Error("tlsCertFingerprint256 requires a wss:// URL.");
+    }
+
+    const isNode =
+      typeof process !== "undefined" &&
+      typeof process.versions === "object" &&
+      typeof process.versions.node === "string";
+    if (!isNode) {
+      throw new Error("tlsCertFingerprint256 is supported only in Node.js clients.");
+    }
+
+    // Avoid bundlers eagerly resolving Node-only modules in browser builds.
+    const globalAny = globalThis as unknown as Record<PropertyKey, unknown>;
+    const undiciSpecifier = "undici" + String(globalAny[Symbol.for("tyrum:undici")] ?? "");
+    const tlsSpecifier = "node:tls" + String(globalAny[Symbol.for("tyrum:tls")] ?? "");
+
+    const undici = await import(undiciSpecifier);
+    const tls = await import(tlsSpecifier);
+
+    const agent = new undici.Agent({
+      connect: (
+        opts: { port?: unknown; hostname?: unknown; servername?: unknown },
+        callback: (err: Error | null, socket: unknown | null) => void,
+      ) => {
+        const port = Number.parseInt(String(opts.port ?? ""), 10);
+        const hostname = String(opts.hostname ?? "");
+        const servername =
+          typeof opts.servername === "string" && opts.servername.trim() ? opts.servername : hostname;
+
+        if (!hostname || !Number.isFinite(port)) {
+          callback(new Error("Invalid TLS connector options"), null);
+          return;
+        }
+
+        let settled = false;
+        const done = (err: Error | null, socket: unknown | null) => {
+          if (settled) return;
+          settled = true;
+          callback(err, socket);
+        };
+
+        const socket = tls.connect({
+          host: hostname,
+          port,
+          servername,
+          rejectUnauthorized: false,
+        }) as import("node:tls").TLSSocket;
+
+        socket.once("error", (err: Error) => {
+          this.transportErrorHint = err.message;
+          done(err, null);
+        });
+        socket.once("secureConnect", () => {
+          try {
+            const cert = socket.getPeerCertificate();
+            const identityErr = tls.checkServerIdentity(servername, cert);
+            if (identityErr) throw identityErr;
+
+            const actualRaw = typeof cert.fingerprint256 === "string" ? cert.fingerprint256 : "";
+            const actual = normalizeFingerprint256(actualRaw);
+            if (!actual) {
+              throw new Error("TLS peer certificate missing fingerprint256.");
+            }
+            if (actual !== expected) {
+              throw new Error(
+                `TLS certificate fingerprint mismatch (expected ${pinRaw}, got ${actualRaw}).`,
+              );
+            }
+
+            done(null, socket);
+          } catch (err) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            this.transportErrorHint = error.message;
+            this.suppressReconnect = true;
+            socket.destroy(error);
+            done(error, null);
+          }
+        });
+      },
+    });
+
+    const WebSocketCtor = (globalThis as unknown as { WebSocket: new (...args: any[]) => WebSocket }).WebSocket;
+    try {
+      const ws = new WebSocketCtor(this.opts.url, {
+        protocols: this.buildProtocols(),
+        dispatcher: agent,
+      });
+      (ws as unknown as { __tyrumDispatcher?: unknown }).__tyrumDispatcher = agent;
+      return ws;
+    } catch (err) {
+      const dispatcher = agent as unknown as { destroy?: () => unknown };
+      if (typeof dispatcher.destroy === "function") {
+        void Promise.resolve(dispatcher.destroy()).catch(() => {});
+      }
+      throw err;
+    }
+  }
+
+  private async openSocketAttempt(attempt: number): Promise<void> {
+    let ws: WebSocket;
+    try {
+      ws = await this.createWebSocket();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.emitter.emit("transport_error", { message });
+      return;
+    }
+
+    if (this.intentionalClose || attempt !== this.connectionAttempt) {
+      ws.close(1000, "stale connect attempt");
+      this.destroyPinnedDispatcher(ws);
+      return;
+    }
+
+    this.ws = ws;
+
+    ws.addEventListener("open", () => {
       this.reconnectAttempt = 0;
       this.sendConnect();
     });
 
-    this.ws.addEventListener("message", (event: MessageEvent) => {
+    ws.addEventListener("message", (event: MessageEvent) => {
       this.handleMessage(event.data as string);
     });
 
-    this.ws.addEventListener("close", (event: CloseEvent) => {
+    ws.addEventListener("close", (event: CloseEvent) => {
       this.emitter.emit("disconnected", {
         code: event.code,
         reason: event.reason,
@@ -413,14 +578,31 @@ export class TyrumClient {
       this.ready = false;
       this.clientId = null;
       this.rejectPending(new Error("WebSocket disconnected"));
-      if (!this.intentionalClose && this.opts.reconnect) {
+      const suppressReconnect = this.suppressReconnect;
+      this.suppressReconnect = false;
+      if (!this.intentionalClose && this.opts.reconnect && !suppressReconnect) {
         this.scheduleReconnect();
       }
+      this.destroyPinnedDispatcher(ws);
     });
 
-    // WebSocket errors surface as a close event; absorb error to avoid unhandled throws.
-    this.ws.addEventListener("error", () => {
-      // close event will follow
+    // WebSocket errors surface as a close event; emit and await close to handle cleanup/reconnect.
+    ws.addEventListener("error", (event) => {
+      const anyEvent = event as unknown as { message?: unknown; error?: unknown };
+      const eventErrorMessage =
+        anyEvent.error instanceof Error && anyEvent.error.message.trim().length > 0
+          ? anyEvent.error.message
+          : null;
+      const eventMessage =
+        typeof anyEvent.message === "string" && anyEvent.message.trim().length > 0 ? anyEvent.message : null;
+
+      const message =
+        eventErrorMessage ??
+        eventMessage ??
+        (this.transportErrorHint && this.transportErrorHint.trim().length > 0 ? this.transportErrorHint : null) ??
+        "WebSocket transport error";
+
+      this.emitter.emit("transport_error", { message });
     });
   }
 

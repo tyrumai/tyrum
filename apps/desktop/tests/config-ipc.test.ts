@@ -11,6 +11,7 @@ describe("filterMutableKeys", () => {
     "mode",
     "remote.wsUrl",
     "remote.tokenRef",
+    "remote.tlsCertFingerprint256",
     "embedded.port",
     "embedded.dbPath",
     "permissions.profile",
@@ -92,6 +93,14 @@ describe("filterMutableKeys", () => {
       ALLOWED,
     );
     expect(result).toEqual({ remote: { tokenRef: "stolen" } });
+  });
+
+  it("allows remote.tlsCertFingerprint256", () => {
+    const result = filterMutableKeys(
+      { remote: { tlsCertFingerprint256: "AA:BB" } },
+      ALLOWED,
+    );
+    expect(result).toEqual({ remote: { tlsCertFingerprint256: "AA:BB" } });
   });
 
   it("strips version field", () => {

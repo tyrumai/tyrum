@@ -11,6 +11,7 @@ export function Connection() {
   const [gatewayStatus, setGatewayStatus] = useState("stopped");
   const [remoteUrl, setRemoteUrl] = useState("ws://127.0.0.1:8788/ws");
   const [remoteToken, setRemoteToken] = useState("");
+  const [remoteTlsCertFingerprint256, setRemoteTlsCertFingerprint256] = useState("");
   const [hasSavedRemoteToken, setHasSavedRemoteToken] = useState(false);
   const [nodeStatus, setNodeStatus] = useState("disconnected");
   const [busy, setBusy] = useState(false);
@@ -32,6 +33,9 @@ export function Connection() {
       const remote = c?.["remote"] as Record<string, unknown> | undefined;
       if (remote?.["wsUrl"]) setRemoteUrl(remote["wsUrl"] as string);
       if (remote?.["tokenRef"]) setHasSavedRemoteToken(true);
+      if (typeof remote?.["tlsCertFingerprint256"] === "string") {
+        setRemoteTlsCertFingerprint256(remote["tlsCertFingerprint256"] as string);
+      }
     });
 
     void api.gateway
@@ -101,11 +105,13 @@ export function Connection() {
     setBusy(true);
     try {
       const trimmedToken = remoteToken.trim();
+      const trimmedFingerprint = remoteTlsCertFingerprint256.trim();
       const remoteConfig: Record<string, unknown> = { wsUrl: remoteUrl };
       if (trimmedToken.length > 0) {
         remoteConfig["tokenRef"] = trimmedToken;
         setHasSavedRemoteToken(true);
       }
+      remoteConfig["tlsCertFingerprint256"] = trimmedFingerprint;
 
       await api.setConfig({ mode: "remote", remote: remoteConfig });
       const result = await api.node.connect();
@@ -198,6 +204,15 @@ export function Connection() {
               A token is already saved. Leave blank to reuse it, or enter a new token to replace it.
             </div>
           )}
+
+          <div style={{ ...labelStyle, marginTop: 12 }}>TLS certificate fingerprint (SHA-256, optional)</div>
+          <input
+            style={input}
+            type="text"
+            value={remoteTlsCertFingerprint256}
+            onChange={(e) => setRemoteTlsCertFingerprint256(e.target.value)}
+            placeholder="AA:BB:CC:…"
+          />
 
           <div>
             {nodeStatus === "disconnected" || nodeStatus === "error" ? (

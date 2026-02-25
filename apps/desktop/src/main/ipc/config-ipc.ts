@@ -12,6 +12,7 @@ const RENDERER_MUTABLE_PATHS = new Set([
   "mode",
   "remote.wsUrl",
   "remote.tokenRef",
+  "remote.tlsCertFingerprint256",
   "embedded.port",
   "embedded.dbPath",
   "permissions.profile",

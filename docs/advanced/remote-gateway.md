@@ -29,6 +29,7 @@ Recommended minimum controls:
 
 - Allowlist source IPs.
 - Use TLS termination in front of the gateway.
+- Optionally configure **TLS certificate fingerprint pinning** for higher-assurance remote access.
 - If running behind a reverse proxy, configure `GATEWAY_TRUSTED_PROXIES` so the gateway only trusts `Forwarded` / `X-Forwarded-For` / `X-Real-IP` from known proxy addresses.
 - Avoid direct internet exposure without access controls.
 - Rotate API keys used by external model providers.
@@ -40,6 +41,28 @@ If you are operating in a trusted internal network without TLS (not recommended)
 - Persist `TYRUM_HOME` on durable storage.
 - Keep Node.js and Tyrum updated.
 - Monitor process restarts and disk usage.
+
+## TLS certificate pinning (optional)
+
+Pinning lets a **Node-based client** (desktop app / SDK consumers) refuse to connect unless the
+remote TLS certificate fingerprint matches what you configured.
+
+Get the server fingerprint (SHA-256):
+
+```bash
+openssl s_client -connect example.com:443 -servername example.com < /dev/null 2>/dev/null \
+  | openssl x509 -noout -fingerprint -sha256
+```
+
+Configure pinning:
+
+- **Desktop app:** Connection → Remote → “TLS certificate fingerprint (SHA-256, optional)”
+- **SDK:** pass `tlsCertFingerprint256` when constructing `TyrumClient`
+
+Notes:
+- Pinning is enforced only for `wss://` URLs.
+- Browser-based clients cannot enforce certificate pinning.
+- When pinning is configured, clients use **trust-by-fingerprint** (the pinned cert is accepted even if it is not CA-trusted); hostname validation still applies.
 
 ## Troubleshooting
 
