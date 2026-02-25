@@ -822,6 +822,29 @@ describe("handleClientMessage", () => {
     expect(client.lastPong).toBeLessThanOrEqual(after);
   });
 
+  it("responds to ping requests with pong", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["playwright"]);
+    const client = cm.getClient(id)!;
+    const deps = makeDeps(cm);
+
+    const before = Date.now();
+    const result = await handleClientMessage(
+      client,
+      JSON.stringify({ request_id: "ping-req-1", type: "ping", payload: {} }),
+      deps,
+    );
+    const after = Date.now();
+
+    expect(result).toEqual({
+      request_id: "ping-req-1",
+      type: "ping",
+      ok: true,
+    });
+    expect(client.lastPong).toBeGreaterThanOrEqual(before);
+    expect(client.lastPong).toBeLessThanOrEqual(after);
+  });
+
   it("handles approval.list requests when approvalDal is configured", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm, ["playwright"]);
@@ -1286,6 +1309,33 @@ describe("handleClientMessage", () => {
     expect((result as unknown as { error: { code: string } }).error.code).toBe(
       "unsupported_request",
     );
+  });
+
+  it("does not forbid ping when no scopes are required", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, ["cli"], {
+      role: "client",
+      deviceId: "dev_client_1",
+      protocolRev: 2,
+      authClaims: {
+        token_kind: "device",
+        role: "client",
+        device_id: "dev_client_1",
+        scopes: [],
+      },
+    });
+    const client = cm.getClient(id)!;
+    const deps = makeDeps(cm);
+
+    const result = await handleClientMessage(
+      client,
+      JSON.stringify({ request_id: "r-ping-1", type: "ping", payload: {} }),
+      deps,
+    );
+
+    expect(result).toBeDefined();
+    expect((result as unknown as { ok: boolean }).ok).toBe(true);
+    expect((result as unknown as { type: string }).type).toBe("ping");
   });
 });
 

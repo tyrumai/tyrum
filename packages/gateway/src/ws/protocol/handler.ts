@@ -30,6 +30,7 @@ import {
   WsPairingResolveResult,
   WsPresenceBeaconRequest,
   WsPresenceBeaconResult,
+  WsPingRequest,
   WsCapabilityReadyRequest,
   WsAttemptEvidenceRequest,
   WsMessageEnvelope,
@@ -224,6 +225,21 @@ export async function handleClientMessage(
       });
       return errorResponse(msg.request_id, msg.type, "forbidden", "insufficient scope");
     }
+  }
+
+  if (msg.type === "ping") {
+    const parsedReq = WsPingRequest.safeParse(msg);
+    if (!parsedReq.success) {
+      return errorResponse(msg.request_id, msg.type, "invalid_request", parsedReq.error.message, {
+        issues: parsedReq.error.issues,
+      });
+    }
+    client.lastPong = Date.now();
+    return {
+      request_id: msg.request_id,
+      type: msg.type,
+      ok: true,
+    };
   }
 
   if (msg.type === "approval.list") {
