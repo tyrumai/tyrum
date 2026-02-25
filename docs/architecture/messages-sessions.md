@@ -122,6 +122,39 @@ Queued follow-ups are represented as durable jobs/runs in the execution engine. 
 
 `steer` and `interrupt` are conservative: they only take effect at safe boundaries and never violate the “one run per `(session_key, lane)`” invariant.
 
+## Loop control (avoid runaway execution)
+
+Tyrum uses multiple layers of loop control, because there is no single knob that is correct for every failure mode:
+
+- **Per-turn step budget:** the agent runtime enforces a maximum number of model/tool steps per turn (a hard cap).
+- **Within-turn loop detection:** if the model repeats the same tool-call patterns (for example calling the same tool with the same args in a tight loop), the runtime stops the turn early and returns an explicit “loop detected” response.
+- **Cross-turn repetition warning:** if the assistant reply repeats itself across multiple turns in the same session, Tyrum appends a short warning to prompt the operator/user to change constraints. This is **warning-only** (it does not block execution).
+- **Session context retention (`sessions.max_turns`):** this bounds how many recent user/assistant messages are retained in the session context before compaction; it is **not** an execution limiter.
+
+Loop detection configuration lives in `${TYRUM_HOME}/agent.yml` under `sessions.loop_detection`.
+
+Configuration (defaults):
+
+```yaml
+sessions:
+  loop_detection:
+    within_turn:
+      enabled: true
+      consecutive_repeat_limit: 3 # stop on AAA
+      cycle_repeat_limit: 3       # stop on ABABAB
+    cross_turn:
+      enabled: true
+      window_assistant_messages: 3
+      similarity_threshold: 0.97
+      min_chars: 120
+      cooldown_assistant_messages: 6
+```
+
+Notes:
+
+- “Within-turn” looks at repeated **tool-call signatures** (tool name + canonicalized args) and stops early.
+- “Cross-turn” compares assistant reply text against recent assistant replies and only appends a warning.
+
 ## Outbound delivery (clients vs channels)
 
 Tyrum delivers outputs to two audiences:

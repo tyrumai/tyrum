@@ -94,6 +94,17 @@ tools:
 sessions:
   ttl_days: 30
   max_turns: 20
+  loop_detection:
+    within_turn:
+      enabled: true
+      consecutive_repeat_limit: 3
+      cycle_repeat_limit: 3
+    cross_turn:
+      enabled: true
+      window_assistant_messages: 3
+      similarity_threshold: 0.97
+      min_chars: 120
+      cooldown_assistant_messages: 6
 memory:
   markdown_enabled: true
 `;

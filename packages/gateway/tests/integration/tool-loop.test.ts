@@ -1495,4 +1495,134 @@ describe("Tool execution loop", () => {
     expect(result.reply).toBe("No assistant response returned.");
     expect(result.used_tools).toContain("tool.exec");
   });
+
+  it("detects and stops a within-turn tool loop (consecutive)", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
+
+    await writeFile(join(homeDir, "notes.txt"), "important notes", "utf-8");
+
+    await writeFile(
+      join(homeDir, "agent.yml"),
+      [
+        "model:",
+        "  model: openai/gpt-4.1",
+        "skills:",
+        "  enabled: []",
+        "mcp:",
+        "  enabled: []",
+        "tools:",
+        "  allow:",
+        "    - tool.fs.read",
+        "sessions:",
+        "  ttl_days: 30",
+        "  max_turns: 20",
+        "memory:",
+        "  markdown_enabled: false",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const languageModel = createToolLoopLanguageModel({
+      toolCalls: [
+        {
+          id: "tc-loop",
+          name: "tool.fs.read",
+          arguments: JSON.stringify({ path: "notes.txt" }),
+        },
+      ],
+      finalReply: "ignored",
+      mode: "infinite",
+    });
+
+    const mcpManager = {
+      listToolDescriptors: vi.fn(async () => []),
+      shutdown: vi.fn(async () => {}),
+      callTool: vi.fn(async () => ({ content: [] })),
+    };
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel,
+      mcpManager: mcpManager as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
+      maxSteps: 20,
+    });
+
+    const result = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-loop-detect-consecutive",
+      message: "read the notes file",
+    });
+
+    expect(result.reply).toContain("Loop detected");
+    expect(result.used_tools).toContain("tool.fs.read");
+  });
+
+  it("detects and stops a within-turn tool loop (cycle)", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-tool-loop-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
+
+    await writeFile(join(homeDir, "a.txt"), "A", "utf-8");
+    await writeFile(join(homeDir, "b.txt"), "B", "utf-8");
+
+    await writeFile(
+      join(homeDir, "agent.yml"),
+      [
+        "model:",
+        "  model: openai/gpt-4.1",
+        "skills:",
+        "  enabled: []",
+        "mcp:",
+        "  enabled: []",
+        "tools:",
+        "  allow:",
+        "    - tool.fs.read",
+        "sessions:",
+        "  ttl_days: 30",
+        "  max_turns: 20",
+        "memory:",
+        "  markdown_enabled: false",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const steps: ToolLoopStep[] = [
+      { kind: "tool-calls", toolCalls: [{ id: "tc-a-1", name: "tool.fs.read", arguments: JSON.stringify({ path: "a.txt" }) }] },
+      { kind: "tool-calls", toolCalls: [{ id: "tc-b-1", name: "tool.fs.read", arguments: JSON.stringify({ path: "b.txt" }) }] },
+      { kind: "tool-calls", toolCalls: [{ id: "tc-a-2", name: "tool.fs.read", arguments: JSON.stringify({ path: "a.txt" }) }] },
+      { kind: "tool-calls", toolCalls: [{ id: "tc-b-2", name: "tool.fs.read", arguments: JSON.stringify({ path: "b.txt" }) }] },
+      { kind: "tool-calls", toolCalls: [{ id: "tc-a-3", name: "tool.fs.read", arguments: JSON.stringify({ path: "a.txt" }) }] },
+      { kind: "tool-calls", toolCalls: [{ id: "tc-b-3", name: "tool.fs.read", arguments: JSON.stringify({ path: "b.txt" }) }] },
+    ];
+
+    const languageModel = createSequencedToolLoopLanguageModel(steps);
+
+    const mcpManager = {
+      listToolDescriptors: vi.fn(async () => []),
+      shutdown: vi.fn(async () => {}),
+      callTool: vi.fn(async () => ({ content: [] })),
+    };
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel,
+      mcpManager: mcpManager as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
+      maxSteps: 20,
+    });
+
+    const result = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-loop-detect-cycle",
+      message: "read files repeatedly",
+    });
+
+    expect(result.reply).toContain("Loop detected");
+    expect(result.used_tools).toContain("tool.fs.read");
+  });
 });

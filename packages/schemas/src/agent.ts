@@ -38,9 +38,36 @@ export const AgentToolConfig = z.object({
 });
 export type AgentToolConfig = z.infer<typeof AgentToolConfig>;
 
+export const AgentSessionLoopDetectionWithinTurnConfig = z.object({
+  enabled: z.boolean().default(true),
+  consecutive_repeat_limit: z.number().int().min(2).max(50).default(3),
+  cycle_repeat_limit: z.number().int().min(2).max(50).default(3),
+});
+export type AgentSessionLoopDetectionWithinTurnConfig = z.infer<
+  typeof AgentSessionLoopDetectionWithinTurnConfig
+>;
+
+export const AgentSessionLoopDetectionCrossTurnConfig = z.object({
+  enabled: z.boolean().default(true),
+  window_assistant_messages: z.number().int().min(1).max(20).default(3),
+  similarity_threshold: z.number().min(0).max(1).default(0.97),
+  min_chars: z.number().int().min(0).max(100_000).default(120),
+  cooldown_assistant_messages: z.number().int().min(0).max(100).default(6),
+});
+export type AgentSessionLoopDetectionCrossTurnConfig = z.infer<
+  typeof AgentSessionLoopDetectionCrossTurnConfig
+>;
+
+export const AgentSessionLoopDetectionConfig = z.object({
+  within_turn: AgentSessionLoopDetectionWithinTurnConfig.prefault({}),
+  cross_turn: AgentSessionLoopDetectionCrossTurnConfig.prefault({}),
+});
+export type AgentSessionLoopDetectionConfig = z.infer<typeof AgentSessionLoopDetectionConfig>;
+
 export const AgentSessionConfig = z.object({
   ttl_days: z.number().int().min(1).max(365).default(30),
   max_turns: z.number().int().min(1).max(500).default(20),
+  loop_detection: AgentSessionLoopDetectionConfig.prefault({}),
 });
 export type AgentSessionConfig = z.infer<typeof AgentSessionConfig>;
 
@@ -51,11 +78,11 @@ export type AgentMemoryConfig = z.infer<typeof AgentMemoryConfig>;
 
 export const AgentConfig = z.object({
   model: AgentModelConfig,
-  skills: AgentSkillConfig.default({ enabled: [], workspace_trusted: false }),
-  mcp: AgentMcpConfig.default({ enabled: [] }),
-  tools: AgentToolConfig.default({ allow: [] }),
-  sessions: AgentSessionConfig.default({ ttl_days: 30, max_turns: 20 }),
-  memory: AgentMemoryConfig.default({ markdown_enabled: true }),
+  skills: AgentSkillConfig.prefault({}),
+  mcp: AgentMcpConfig.prefault({}),
+  tools: AgentToolConfig.prefault({}),
+  sessions: AgentSessionConfig.prefault({}),
+  memory: AgentMemoryConfig.prefault({}),
 });
 export type AgentConfig = z.infer<typeof AgentConfig>;
 
