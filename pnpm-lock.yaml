@@ -139,9 +139,15 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
+      '@hono/node-server':
+        specifier: ^1.19.9
+        version: 1.19.9(hono@4.12.2)
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
+      hono:
+        specifier: ^4.12.2
+        version: 4.12.2
       ws:
         specifier: ^8.19.0
         version: 8.19.0

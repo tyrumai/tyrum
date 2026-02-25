@@ -8,6 +8,7 @@
  * - Status, presence, usage, models, pairings endpoints
  * - JSON Schema contract endpoint
  * - Proper error responses for auth failures
+ * - Auth strategy variants (bearer, none)
  *
  * All tests are hermetic: random ports, in-memory SQLite, temp token dirs.
  *
@@ -15,7 +16,7 @@
  * are not available in the minimal test gateway configuration.
  */
 
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import { createTyrumHttpClient, TyrumHttpClientError } from "../../src/index.js";
 import type { TyrumHttpClient } from "../../src/index.js";
 import { startGateway, type GatewayHarness } from "./harness.js";
@@ -31,33 +32,22 @@ function authedClient(gw: GatewayHarness): TyrumHttpClient {
   });
 }
 
-function unauthedClient(gw: GatewayHarness): TyrumHttpClient {
-  return createTyrumHttpClient({
-    baseUrl: gw.baseUrl,
-    auth: { type: "bearer", token: "invalid-token" },
-  });
-}
-
 // ---------------------------------------------------------------------------
-// Tests
+// Read-only endpoint tests — share a single gateway instance
 // ---------------------------------------------------------------------------
 
-describe("HTTP SDK conformance (client <-> gateway)", () => {
-  let gw: GatewayHarness | undefined;
+describe("HTTP SDK conformance — read-only endpoints", () => {
+  let gw: GatewayHarness;
 
-  afterEach(async () => {
-    if (gw) {
-      await gw.stop();
-      gw = undefined;
-    }
+  beforeAll(async () => {
+    gw = await startGateway();
   });
 
-  // -------------------------------------------------------------------------
-  // Status endpoint — smoke test for auth + response validation
-  // -------------------------------------------------------------------------
+  afterAll(async () => {
+    await gw.stop();
+  });
 
   it("status.get returns valid StatusResponse with bearer auth", async () => {
-    gw = await startGateway();
     const client = authedClient(gw);
 
     const status = await client.status.get();
@@ -68,9 +58,11 @@ describe("HTTP SDK conformance (client <-> gateway)", () => {
     expect(typeof status.db_kind).toBe("string");
   });
 
-  it("status.get rejects with http_error for invalid token", async () => {
-    gw = await startGateway();
-    const client = unauthedClient(gw);
+  it("status.get rejects with http_error for invalid bearer token", async () => {
+    const client = createTyrumHttpClient({
+      baseUrl: gw.baseUrl,
+      auth: { type: "bearer", token: "invalid-token" },
+    });
 
     await expect(client.status.get()).rejects.toMatchObject<TyrumHttpClientError>({
       code: "http_error",
@@ -78,9 +70,101 @@ describe("HTTP SDK conformance (client <-> gateway)", () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Device token lifecycle
-  // -------------------------------------------------------------------------
+  it("status.get rejects with http_error for auth type none", async () => {
+    const client = createTyrumHttpClient({
+      baseUrl: gw.baseUrl,
+      auth: { type: "none" },
+    });
+
+    await expect(client.status.get()).rejects.toMatchObject<TyrumHttpClientError>({
+      code: "http_error",
+      status: 401,
+    });
+  });
+
+  it("policy.getBundle returns a valid policy bundle response", async () => {
+    const client = authedClient(gw);
+
+    const bundle = await client.policy.getBundle();
+    expect(bundle.status).toBe("ok");
+    expect(typeof bundle.generated_at).toBe("string");
+    expect(bundle.effective).toBeDefined();
+  });
+
+  it("presence.list returns valid response with entries array", async () => {
+    const client = authedClient(gw);
+
+    const result = await client.presence.list();
+    expect(result.status).toBe("ok");
+    expect(Array.isArray(result.entries)).toBe(true);
+    expect(typeof result.generated_at).toBe("string");
+  });
+
+  it("usage.get returns valid response for global scope", async () => {
+    const client = authedClient(gw);
+
+    const result = await client.usage.get();
+    expect(result).toBeDefined();
+  });
+
+  it("contracts.getCatalog returns the JSON Schema catalog", async () => {
+    const client = authedClient(gw);
+
+    const catalog = await client.contracts.getCatalog();
+    expect(catalog).toBeDefined();
+    expect(typeof catalog).toBe("object");
+  });
+
+  it("models.status returns valid response", async () => {
+    const client = authedClient(gw);
+
+    const result = await client.models.status();
+    expect(result.status).toBe("ok");
+  });
+
+  it("models.listProviders returns provider array", async () => {
+    const client = authedClient(gw);
+
+    const result = await client.models.listProviders();
+    expect(Array.isArray(result.providers)).toBe(true);
+  });
+
+  it("pairings.list returns valid response", async () => {
+    const client = authedClient(gw);
+
+    const result = await client.pairings.list();
+    expect(result.status).toBe("ok");
+    expect(Array.isArray(result.pairings)).toBe(true);
+  });
+
+  it("rejects invalid request bodies before hitting the gateway", async () => {
+    const client = authedClient(gw);
+
+    await expect(
+      client.deviceTokens.issue({
+        device_id: "",
+        role: "client",
+        scopes: [],
+      }),
+    ).rejects.toMatchObject<TyrumHttpClientError>({
+      code: "request_invalid",
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Stateful lifecycle tests — each gets a fresh gateway instance
+// ---------------------------------------------------------------------------
+
+describe("HTTP SDK conformance — stateful lifecycles", () => {
+  let gw: GatewayHarness | undefined;
+
+  afterEach(async () => {
+    if (gw) {
+      await gw.stop();
+      gw = undefined;
+    }
+  });
 
   it("device token issue → use → revoke lifecycle", async () => {
     gw = await startGateway();
@@ -119,25 +203,6 @@ describe("HTTP SDK conformance (client <-> gateway)", () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Policy bundle
-  // -------------------------------------------------------------------------
-
-  it("policy.getBundle returns a valid policy bundle response", async () => {
-    gw = await startGateway();
-    const client = authedClient(gw);
-
-    const bundle = await client.policy.getBundle();
-    expect(bundle.status).toBe("ok");
-    expect(typeof bundle.generated_at).toBe("string");
-    // The effective bundle is present (may be minimal in test env)
-    expect(bundle.effective).toBeDefined();
-  });
-
-  // -------------------------------------------------------------------------
-  // Policy overrides CRUD
-  // -------------------------------------------------------------------------
-
   it("policy override create → list → revoke lifecycle", async () => {
     gw = await startGateway();
     const client = authedClient(gw);
@@ -163,98 +228,5 @@ describe("HTTP SDK conformance (client <-> gateway)", () => {
       policy_override_id: overrideId,
     });
     expect(revoked.override.status).toBe("revoked");
-  });
-
-  // -------------------------------------------------------------------------
-  // Presence
-  // -------------------------------------------------------------------------
-
-  it("presence.list returns valid response with entries array", async () => {
-    gw = await startGateway();
-    const client = authedClient(gw);
-
-    const result = await client.presence.list();
-    expect(result.status).toBe("ok");
-    expect(Array.isArray(result.entries)).toBe(true);
-    expect(typeof result.generated_at).toBe("string");
-  });
-
-  // -------------------------------------------------------------------------
-  // Usage
-  // -------------------------------------------------------------------------
-
-  it("usage.get returns valid response for global scope", async () => {
-    gw = await startGateway();
-    const client = authedClient(gw);
-
-    const result = await client.usage.get();
-    expect(result).toBeDefined();
-  });
-
-  // -------------------------------------------------------------------------
-  // JSON Schema contracts
-  // -------------------------------------------------------------------------
-
-  it("contracts.getCatalog returns the JSON Schema catalog", async () => {
-    gw = await startGateway();
-    const client = authedClient(gw);
-
-    const catalog = await client.contracts.getCatalog();
-    expect(catalog).toBeDefined();
-    // Catalog is a JSON object with schema references
-    expect(typeof catalog).toBe("object");
-  });
-
-  // -------------------------------------------------------------------------
-  // Models
-  // -------------------------------------------------------------------------
-
-  it("models.status returns valid response", async () => {
-    gw = await startGateway();
-    const client = authedClient(gw);
-
-    const result = await client.models.status();
-    expect(result.status).toBe("ok");
-  });
-
-  it("models.listProviders returns provider array", async () => {
-    gw = await startGateway();
-    const client = authedClient(gw);
-
-    const result = await client.models.listProviders();
-    expect(Array.isArray(result.providers)).toBe(true);
-  });
-
-  // -------------------------------------------------------------------------
-  // Pairings
-  // -------------------------------------------------------------------------
-
-  it("pairings.list returns valid response", async () => {
-    gw = await startGateway();
-    const client = authedClient(gw);
-
-    const result = await client.pairings.list();
-    expect(result.status).toBe("ok");
-    expect(Array.isArray(result.pairings)).toBe(true);
-  });
-
-  // -------------------------------------------------------------------------
-  // Client-side request validation still works end-to-end
-  // -------------------------------------------------------------------------
-
-  it("rejects invalid request bodies before hitting the gateway", async () => {
-    gw = await startGateway();
-    const client = authedClient(gw);
-
-    // Empty device_id should fail client-side validation
-    await expect(
-      client.deviceTokens.issue({
-        device_id: "",
-        role: "client",
-        scopes: [],
-      }),
-    ).rejects.toMatchObject<TyrumHttpClientError>({
-      code: "request_invalid",
-    });
   });
 });

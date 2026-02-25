@@ -7,11 +7,12 @@
  */
 
 import { createServer } from "node:http";
-import type { Server, IncomingMessage, ServerResponse } from "node:http";
+import type { Server } from "node:http";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { generateKeyPairSync } from "node:crypto";
+import { getRequestListener } from "@hono/node-server";
 
 import { createTestApp } from "../../../gateway/tests/integration/helpers.js";
 import { createWsHandler } from "../../../gateway/src/routes/ws.js";
@@ -19,7 +20,6 @@ import { ConnectionManager } from "../../../gateway/src/ws/connection-manager.js
 import { TokenStore } from "../../../gateway/src/modules/auth/token-store.js";
 import { dispatchTask } from "../../../gateway/src/ws/protocol.js";
 import type { ProtocolDeps } from "../../../gateway/src/ws/protocol.js";
-import type { Hono } from "hono";
 
 export interface GatewayHarness {
   /** Random port the gateway listens on. */
@@ -66,7 +66,8 @@ export async function startGateway(
     tokenStore,
   });
 
-  const server = createServer(honoListener(app));
+  const requestListener = getRequestListener(app.fetch);
+  const server = createServer(requestListener);
 
   server.on("upgrade", (req, socket, head) => {
     if (req.url?.startsWith("/ws")) {
@@ -102,71 +103,6 @@ export async function startGateway(
 function closeServer(server: Server): Promise<void> {
   return new Promise((resolve) => {
     server.close(() => resolve());
-  });
-}
-
-/**
- * Minimal adapter from Hono's `fetch` API to Node.js `http.RequestListener`.
- *
- * Converts incoming Node requests to WHATWG `Request`, passes them through
- * Hono, and writes the WHATWG `Response` back to the Node `ServerResponse`.
- */
-function honoListener(app: Hono): (req: IncomingMessage, res: ServerResponse) => void {
-  return (req, res) => {
-    handleRequest(app, req, res).catch(() => {
-      if (!res.headersSent) res.writeHead(500);
-      res.end();
-    });
-  };
-}
-
-async function handleRequest(app: Hono, req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const url = `http://${req.headers.host ?? "127.0.0.1"}${req.url ?? "/"}`;
-  const headers = new Headers();
-  for (const [key, value] of Object.entries(req.headers)) {
-    if (value === undefined) continue;
-    if (Array.isArray(value)) {
-      for (const v of value) headers.append(key, v);
-    } else {
-      headers.set(key, value);
-    }
-  }
-
-  const hasBody = req.method !== "GET" && req.method !== "HEAD";
-  const body = hasBody ? await readBody(req) : undefined;
-
-  const request = new Request(url, {
-    method: req.method ?? "GET",
-    headers,
-    body: body ?? null,
-  });
-
-  const response = await app.fetch(request);
-
-  const responseHeaders: Record<string, string> = {};
-  response.headers.forEach((v, k) => {
-    responseHeaders[k] = v;
-  });
-  res.writeHead(response.status, responseHeaders);
-
-  if (response.body) {
-    const reader = response.body.getReader();
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      res.write(value);
-    }
-  }
-  res.end();
-}
-
-/** Collect an IncomingMessage body into a Buffer. */
-function readBody(req: IncomingMessage): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    req.on("data", (chunk: Buffer) => chunks.push(chunk));
-    req.on("end", () => resolve(Buffer.concat(chunks)));
-    req.on("error", reject);
   });
 }
 
