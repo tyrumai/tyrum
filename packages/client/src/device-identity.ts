@@ -122,7 +122,10 @@ function parseStoredIdentity(value: unknown): DeviceIdentity | null {
 }
 
 export async function createDeviceIdentity(): Promise<DeviceIdentity> {
-  const keyPair = await getSubtleCrypto().generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+  const keyPair = await getSubtleCrypto().generateKey({ name: "Ed25519" }, true, [
+    "sign",
+    "verify",
+  ]);
   const publicKeyDer = await exportPublicKeySpki(keyPair.publicKey);
   const privateKeyDer = await exportPrivateKeyPkcs8(keyPair.privateKey);
   return {
@@ -139,9 +142,16 @@ export async function loadOrCreateDeviceIdentity(
   try {
     loadedRaw = await storage.load();
   } catch (error) {
-    throw new DeviceIdentityError("device_identity_storage_load_failed", "Failed to load device identity", {
-      cause: error,
-    });
+    if (error instanceof DeviceIdentityError) {
+      throw error;
+    }
+    throw new DeviceIdentityError(
+      "device_identity_storage_load_failed",
+      "Failed to load device identity",
+      {
+        cause: error,
+      },
+    );
   }
   const loaded = parseStoredIdentity(loadedRaw);
   if (loaded) return loaded;
@@ -149,9 +159,13 @@ export async function loadOrCreateDeviceIdentity(
   try {
     await storage.save(created);
   } catch (error) {
-    throw new DeviceIdentityError("device_identity_storage_save_failed", "Failed to save device identity", {
-      cause: error,
-    });
+    throw new DeviceIdentityError(
+      "device_identity_storage_save_failed",
+      "Failed to save device identity",
+      {
+        cause: error,
+      },
+    );
   }
   return created;
 }
@@ -164,7 +178,16 @@ export function createBrowserLocalStorageDeviceIdentityStorage(
       if (typeof localStorage === "undefined") return null;
       const raw = localStorage.getItem(key);
       if (raw === null) return null;
-      const parsed = JSON.parse(raw) as unknown;
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw) as unknown;
+      } catch (error) {
+        throw new DeviceIdentityError(
+          "device_identity_invalid_stored_value",
+          "Stored device identity is not valid JSON",
+          { cause: error },
+        );
+      }
       return parseStoredIdentity(parsed);
     },
     save: (identity) => {
@@ -185,9 +208,21 @@ export function createNodeFileDeviceIdentityStorage(path: string): DeviceIdentit
       const { readFile } = await import("node:fs/promises");
       try {
         const raw = await readFile(path, "utf8");
-        const parsed = JSON.parse(raw) as unknown;
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(raw) as unknown;
+        } catch (error) {
+          throw new DeviceIdentityError(
+            "device_identity_invalid_stored_value",
+            "Stored device identity file is not valid JSON",
+            { cause: error },
+          );
+        }
         return parseStoredIdentity(parsed);
       } catch (error) {
+        if (error instanceof DeviceIdentityError) {
+          throw error;
+        }
         const asErr = error as NodeJS.ErrnoException;
         if (asErr?.code === "ENOENT") return null;
         throw error;

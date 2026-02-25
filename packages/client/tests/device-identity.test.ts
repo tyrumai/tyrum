@@ -58,8 +58,23 @@ describe("device identity helpers", () => {
     expect(proof).toMatch(/^[A-Za-z0-9\-_]+$/);
   });
 
+  it("does not mask DeviceIdentityError thrown by storage.load()", async () => {
+    const load = vi.fn(() => {
+      throw new DeviceIdentityError(
+        "device_identity_invalid_stored_value",
+        "stored device identity corrupted",
+      );
+    });
+    const save = vi.fn(async () => {});
+
+    await expect(loadOrCreateDeviceIdentity({ load, save })).rejects.toMatchObject({
+      name: "DeviceIdentityError",
+      code: "device_identity_invalid_stored_value",
+    } satisfies Partial<DeviceIdentityError>);
+  });
+
   it("throws structured error when WebCrypto subtle API is unavailable", async () => {
-    const originalCrypto = globalThis.crypto;
+    const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, "crypto");
     Object.defineProperty(globalThis, "crypto", { configurable: true, value: undefined });
     try {
       await expect(createDeviceIdentity()).rejects.toMatchObject({
@@ -67,7 +82,12 @@ describe("device identity helpers", () => {
         code: "device_identity_webcrypto_unavailable",
       } satisfies Partial<DeviceIdentityError>);
     } finally {
-      Object.defineProperty(globalThis, "crypto", { configurable: true, value: originalCrypto });
+      if (originalDescriptor) {
+        Object.defineProperty(globalThis, "crypto", originalDescriptor);
+      } else {
+        // If there was no crypto before, avoid leaking a new property into other test files.
+        void Reflect.deleteProperty(globalThis as unknown as Record<string, unknown>, "crypto");
+      }
     }
   });
 });

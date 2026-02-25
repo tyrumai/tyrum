@@ -214,13 +214,11 @@ export class TyrumClient {
   private connectionAttempt = 0;
   private transportErrorHint: string | null = null;
   private suppressReconnect = false;
-  private generatedDevice:
-    | {
-        publicKey: string;
-        privateKey: string;
-        deviceId: string;
-      }
-    | null = null;
+  private generatedDevice: {
+    publicKey: string;
+    privateKey: string;
+    deviceId: string;
+  } | null = null;
 
   constructor(options: TyrumClientOptions) {
     this.emitter = mitt<TyrumClientEvents>();
