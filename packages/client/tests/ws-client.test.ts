@@ -333,6 +333,59 @@ describe("TyrumClient", () => {
     expect(response2).toEqual(response1);
   });
 
+  it("does not re-emit task.execute retries even when maxSeenRequestIds is very small", async () => {
+    server = createTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: ["http"],
+      reconnect: false,
+      maxSeenRequestIds: 2,
+    });
+
+    const seen: string[] = [];
+    client.on("task_execute", (msg) => {
+      seen.push(msg.request_id);
+    });
+
+    client.connect();
+    const ws = await withTimeout(server.waitForClient(), 2_000, "ws connection");
+    await acceptConnect(ws);
+    await delay(10);
+
+    const mk = (request_id: string) => ({
+      request_id,
+      type: "task.execute",
+      payload: {
+        run_id: "550e8400-e29b-41d4-a716-446655440000",
+        step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+        attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+        action: { type: "Http", args: { url: "https://example.com" } },
+      },
+    });
+
+    ws.send(JSON.stringify(mk("task-1")));
+    ws.send(JSON.stringify(mk("task-2")));
+    ws.send(JSON.stringify(mk("task-3")));
+
+    await withTimeout(
+      (async () => {
+        while (seen.length < 3) {
+          await delay(5);
+        }
+      })(),
+      2_000,
+      "task_execute (3 unique)",
+    );
+
+    // Retry of task-1 should not re-emit even though maxSeenRequestIds is very small.
+    ws.send(JSON.stringify(mk("task-1")));
+    await delay(25);
+
+    expect(seen).toHaveLength(3);
+    expect(seen.filter((id) => id === "task-1")).toHaveLength(1);
+  });
+
   it("responds with error envelope when task.execute request fails validation", async () => {
     server = createTestServer();
     client = new TyrumClient({

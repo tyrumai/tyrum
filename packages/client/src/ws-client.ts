@@ -105,6 +105,13 @@ export interface TyrumClientOptions {
    * Defaults to 1000.
    */
   maxSeenEventIds?: number;
+  /**
+   * Maximum number of recent inbound request ids to keep for retry replay.
+   *
+   * This bounds memory usage for cached responses (for example task evidence).
+   * Defaults to 1000.
+   */
+  maxSeenRequestIds?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -114,6 +121,7 @@ export interface TyrumClientOptions {
 const DEFAULT_MAX_RECONNECT_DELAY = 30_000;
 const BASE_RECONNECT_DELAY = 1_000;
 const DEFAULT_MAX_SEEN_EVENT_IDS = 1_000;
+const DEFAULT_MAX_SEEN_REQUEST_IDS = 1_000;
 const WS_BASE_PROTOCOL = "tyrum-v1";
 const WS_AUTH_PROTOCOL_PREFIX = "tyrum-auth.";
 const DEFAULT_PROTOCOL_REV = 2;
@@ -239,6 +247,7 @@ export class TyrumClient {
     reconnect: boolean;
     maxReconnectDelay: number;
     maxSeenEventIds: number;
+    maxSeenRequestIds: number;
     useDeviceProof: boolean;
     role: WsPeerRole;
     protocolRev: number;
@@ -249,7 +258,8 @@ export class TyrumClient {
   private clientId: string | null = null;
   private seenEventIds = new Set<string>();
   private seenEventIdOrder: string[] = [];
-  private inboundRequestCache = new Map<string, WsResponseEnvelope | null>();
+  private inboundRequestInFlight = new Set<string>();
+  private inboundRequestResponses = new Map<string, WsResponseEnvelope>();
   private pending = new Map<
     string,
     { resolve: (msg: WsResponseEnvelope) => void; reject: (err: Error) => void }
@@ -267,6 +277,7 @@ export class TyrumClient {
       reconnect: true,
       maxReconnectDelay: DEFAULT_MAX_RECONNECT_DELAY,
       maxSeenEventIds: DEFAULT_MAX_SEEN_EVENT_IDS,
+      maxSeenRequestIds: DEFAULT_MAX_SEEN_REQUEST_IDS,
       ...options,
     };
   }
@@ -718,12 +729,11 @@ export class TyrumClient {
 
       case "task.execute": {
         const cached = this.getCachedInboundRequestResponse(msg.type, msg.request_id);
-        if (cached === null) return;
         if (cached) {
           this.send(cached);
           return;
         }
-        this.markInboundRequestPending(msg.type, msg.request_id);
+        if (!this.markInboundRequestPending(msg.type, msg.request_id)) return;
 
         const req = WsTaskExecuteRequest.safeParse(msg);
         if (req.success) {
@@ -747,12 +757,11 @@ export class TyrumClient {
 
       case "approval.request": {
         const cached = this.getCachedInboundRequestResponse(msg.type, msg.request_id);
-        if (cached === null) return;
         if (cached) {
           this.send(cached);
           return;
         }
-        this.markInboundRequestPending(msg.type, msg.request_id);
+        if (!this.markInboundRequestPending(msg.type, msg.request_id)) return;
 
         const req = WsApprovalRequest.safeParse(msg);
         if (req.success) {
@@ -826,37 +835,38 @@ export class TyrumClient {
     return `${type}:${requestId}`;
   }
 
-  private evictInboundRequestCache(): void {
-    const max = Math.max(1, this.opts.maxSeenEventIds);
-    while (this.inboundRequestCache.size > max) {
-      const oldest = this.inboundRequestCache.keys().next().value as string | undefined;
+  private evictInboundRequestResponses(): void {
+    const max = Math.max(1, this.opts.maxSeenRequestIds);
+    while (this.inboundRequestResponses.size > max) {
+      const oldest = this.inboundRequestResponses.keys().next().value as string | undefined;
       if (!oldest) break;
-      this.inboundRequestCache.delete(oldest);
+      this.inboundRequestResponses.delete(oldest);
     }
   }
 
-  private markInboundRequestPending(type: string, requestId: string): void {
+  private markInboundRequestPending(type: string, requestId: string): boolean {
     const key = this.inboundRequestKey(type, requestId);
-    if (this.inboundRequestCache.has(key)) return;
-    this.inboundRequestCache.set(key, null);
-    this.evictInboundRequestCache();
+    if (this.inboundRequestInFlight.has(key)) return false;
+    this.inboundRequestInFlight.add(key);
+    return true;
   }
 
   private cacheInboundRequestResponse(type: string, requestId: string, response: WsResponseEnvelope): void {
     const key = this.inboundRequestKey(type, requestId);
+    this.inboundRequestInFlight.delete(key);
     // Refresh insertion order so completed responses remain eligible for retries.
-    this.inboundRequestCache.delete(key);
-    this.inboundRequestCache.set(key, response);
-    this.evictInboundRequestCache();
+    this.inboundRequestResponses.delete(key);
+    this.inboundRequestResponses.set(key, response);
+    this.evictInboundRequestResponses();
   }
 
-  private getCachedInboundRequestResponse(type: string, requestId: string): WsResponseEnvelope | null | undefined {
+  private getCachedInboundRequestResponse(type: string, requestId: string): WsResponseEnvelope | undefined {
     const key = this.inboundRequestKey(type, requestId);
-    const existing = this.inboundRequestCache.get(key);
-    if (existing) {
+    const existing = this.inboundRequestResponses.get(key);
+    if (existing !== undefined) {
       // Refresh insertion order on replay so hot retries remain in cache.
-      this.inboundRequestCache.delete(key);
-      this.inboundRequestCache.set(key, existing);
+      this.inboundRequestResponses.delete(key);
+      this.inboundRequestResponses.set(key, existing);
     }
     return existing;
   }
