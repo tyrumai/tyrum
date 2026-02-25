@@ -1819,10 +1819,7 @@ export class AgentRuntime {
 	    const stepApprovalId = opts?.execution?.stepApprovalId;
 	    if (stepApprovalId) {
 	      const approval = await this.approvalDal.getById(stepApprovalId);
-	      if (
-	        approval &&
-	        (approval.status === "approved" || approval.status === "denied" || approval.status === "expired")
-	      ) {
+	      if (approval && approval.status !== "pending") {
 	        const resumeState = extractToolApprovalResumeState(approval.context);
 	        if (resumeState) {
 	          for (const toolId of resumeState.used_tools ?? []) {
