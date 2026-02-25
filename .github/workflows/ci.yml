@@ -154,7 +154,7 @@ jobs:
         run: >
           xvfb-run -a --server-args="-screen 0 1920x1080x24"
           pnpm test
-          --coverage
+          --coverage.enabled
           --coverage.reporter=text-summary
           --coverage.reporter=html
           --coverage.reporter=clover
