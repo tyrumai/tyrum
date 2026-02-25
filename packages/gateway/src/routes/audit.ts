@@ -12,6 +12,7 @@ import {
 } from "../modules/audit/hash-chain.js";
 import type { ChainableEvent } from "../modules/audit/hash-chain.js";
 import type { SqlDb } from "../statestore/types.js";
+import { AuditForgetRequest, type AuditForgetDecision } from "@tyrum/schemas";
 
 export interface AuditRouteDeps {
   db: SqlDb;
@@ -56,25 +57,16 @@ export function createAuditRoutes(deps: AuditRouteDeps): Hono {
 
   /** Forget (delete) events matching an entity, preserving chain continuity. */
   audit.post("/audit/forget", async (c) => {
-    const body = (await c.req.json()) as {
-      entity_type?: string;
-      entity_id?: string;
-    };
-
-    if (!body.entity_type || !body.entity_id) {
-      return c.json(
-        {
-          error: "invalid_request",
-          message: "entity_type and entity_id are required",
-        },
-        400,
-      );
+    const body = (await c.req.json()) as unknown;
+    const parsed = AuditForgetRequest.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
     }
 
-    const { entity_type, entity_id } = body;
+    const { entity_type, entity_id, decision } = parsed.data;
 
     // We treat entity_id as a plan_id for planner_events
-    const result = await forgetEvents(deps, entity_type, entity_id);
+    const result = await forgetEvents(deps, entity_type, entity_id, decision);
     return c.json(result);
   });
 
@@ -85,44 +77,49 @@ async function forgetEvents(
   deps: AuditRouteDeps,
   entityType: string,
   entityId: string,
-): Promise<{ deleted_count: number; deletion_event_id: number }> {
-  // Find events to delete
+  decision: AuditForgetDecision,
+): Promise<{ decision: string; deleted_count: number; proof_event_id: number }> {
+  // Find existing events for audit proof linking.
   const events = await deps.eventLog.getEventsForVerification(entityId);
+  const lastEvent = events.length > 0 ? events[events.length - 1]! : undefined;
+  const prevHash = lastEvent?.event_hash ?? null;
+  const maxStepIndex = events.length > 0 ? Math.max(...events.map((e) => e.step_index)) : -1;
+  const occurredAt = new Date().toISOString();
 
-  if (events.length === 0) {
-    return { deleted_count: 0, deletion_event_id: 0 };
+  if (decision === "retain") {
+    const persisted = await deps.eventLog.appendNext({
+      replayId: randomUUID(),
+      planId: entityId,
+      occurredAt,
+      action: {
+        type: "forget.proof",
+        decision,
+        entity_type: entityType,
+        entity_id: entityId,
+        deleted_count: 0,
+      },
+    });
+    return { decision, deleted_count: 0, proof_event_id: persisted.id };
   }
 
-  // Get the last event's hash before deletion to maintain chain link
-  const lastEvent = events[events.length - 1]!;
-  const prevHash = lastEvent.event_hash;
+  // Delete (or anonymize) the events from the table.
+  const deletedCount = (await deps.db.run("DELETE FROM planner_events WHERE plan_id = ?", [entityId])).changes;
 
-  // Find the max step_index so the deletion event goes after all others
-  const maxStepIndex = Math.max(...events.map((e) => e.step_index));
-
-  // Delete the events from the table
-  const deletedCount = (
-    await deps.db.run("DELETE FROM planner_events WHERE plan_id = ?", [entityId])
-  ).changes;
-
-  // Insert a deletion event that links to the chain
-  const deletionAction = JSON.stringify({
-    type: "deletion",
+  // Insert a proof event that links to the prior chain head (if any).
+  const proofAction = JSON.stringify({
+    type: "forget.proof",
+    decision,
     entity_type: entityType,
     entity_id: entityId,
     deleted_count: deletedCount,
-    deleted_at: new Date().toISOString(),
   });
-
-  const deletionStepIndex = maxStepIndex + 1;
-  const occurredAt = new Date().toISOString();
 
   const eventHash = computeEventHash(
     {
       plan_id: entityId,
-      step_index: deletionStepIndex,
+      step_index: maxStepIndex + 1,
       occurred_at: occurredAt,
-      action: deletionAction,
+      action: proofAction,
     },
     prevHash,
   );
@@ -132,21 +129,22 @@ async function forgetEvents(
      VALUES (?, ?, ?, ?, ?, ?, ?)
      RETURNING id`,
     [
-      `deletion-${randomUUID()}`,
+      `forget-${randomUUID()}`,
       entityId,
-      deletionStepIndex,
+      maxStepIndex + 1,
       occurredAt,
-      deletionAction,
+      proofAction,
       prevHash,
       eventHash,
     ],
   );
   if (!result) {
-    throw new Error("failed to insert deletion event");
+    throw new Error("failed to insert forget proof event");
   }
 
   return {
+    decision,
     deleted_count: deletedCount,
-    deletion_event_id: result.id,
+    proof_event_id: result.id,
   };
 }

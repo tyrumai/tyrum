@@ -27,3 +27,25 @@ export const ReceiptBundle = z.object({
   exported_at: DateTimeSchema,
 });
 export type ReceiptBundle = z.infer<typeof ReceiptBundle>;
+
+export const AuditForgetDecision = z.enum(["delete", "anonymize", "retain"]);
+export type AuditForgetDecision = z.infer<typeof AuditForgetDecision>;
+
+export const AuditForgetRequest = z
+  .object({
+    confirm: z.literal("FORGET"),
+    entity_type: z.string().trim().min(1),
+    entity_id: z.string().trim().min(1),
+    decision: AuditForgetDecision,
+  })
+  .strict();
+export type AuditForgetRequest = z.infer<typeof AuditForgetRequest>;
+
+export const AuditForgetResponse = z
+  .object({
+    decision: AuditForgetDecision,
+    deleted_count: z.number().int().nonnegative(),
+    proof_event_id: z.number().int().nonnegative(),
+  })
+  .strict();
+export type AuditForgetResponse = z.infer<typeof AuditForgetResponse>;
