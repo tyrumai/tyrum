@@ -218,6 +218,47 @@ describe("session command primitives", () => {
     expect(run?.status).toBe("cancelled");
   });
 
+  it("supports /stop fallback with dm execution keys", async () => {
+    db = openTestSqliteDb();
+
+    const key = "agent:default:telegram:default:dm:chat-1";
+    const lane = "main";
+
+    await db.run(
+      `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
+       VALUES (?, ?, ?, 'running', '{}')`,
+      ["job-dm-1", key, lane],
+    );
+    await db.run(
+      `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
+       VALUES (?, ?, ?, ?, 'running', 1)`,
+      ["run-dm-1", "job-dm-1", key, lane],
+    );
+    await db.run(
+      `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
+       VALUES (?, ?, 0, 'running', '{}')`,
+      ["step-dm-1", "run-dm-1"],
+    );
+
+    const result = await executeCommand("/stop", {
+      db,
+      commandContext: { agentId: "default", channel: "telegram", threadId: "chat-1" },
+    });
+
+    expect(result.data).toMatchObject({
+      key,
+      lane,
+      cancelled_runs: 1,
+      cleared_inbox: 0,
+    });
+
+    const run = await db.get<{ status: string }>(
+      `SELECT status FROM execution_runs WHERE run_id = ?`,
+      ["run-dm-1"],
+    );
+    expect(run?.status).toBe("cancelled");
+  });
+
   it("supports /reset (clears durable session state + overrides)", async () => {
     db = openTestSqliteDb();
 
@@ -329,6 +370,96 @@ describe("session command primitives", () => {
        FROM lane_queue_mode_overrides
        WHERE key = ? AND lane = ?`,
       [key, "main"],
+    );
+    expect(queueOverride).toBeUndefined();
+
+    const sendOverride = await db.get<{ send_policy: string }>(
+      `SELECT send_policy
+       FROM session_send_policy_overrides
+       WHERE key = ?`,
+      [key],
+    );
+    expect(sendOverride).toBeUndefined();
+  });
+
+  it("supports /reset fallback with dm execution keys", async () => {
+    db = openTestSqliteDb();
+
+    const key = "agent:default:telegram:default:dm:chat-1";
+    const lane = "main";
+    const nowIso = new Date().toISOString();
+
+    await db.run(
+      `INSERT INTO sessions (
+         agent_id,
+         session_id,
+         channel,
+         thread_id,
+         summary,
+         turns_json,
+         created_at,
+         updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        "default",
+        "telegram:chat-1",
+        "telegram",
+        "chat-1",
+        "to-reset",
+        JSON.stringify([{ role: "user", content: "hi", timestamp: "t-1" }]),
+        nowIso,
+        nowIso,
+      ],
+    );
+
+    await db.run(
+      `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
+       VALUES (?, ?, ?, 'running', '{}')`,
+      ["job-reset-dm-1", key, lane],
+    );
+    await db.run(
+      `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
+       VALUES (?, ?, ?, ?, 'running', 1)`,
+      ["run-reset-dm-1", "job-reset-dm-1", key, lane],
+    );
+    await db.run(
+      `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
+       VALUES (?, ?, 0, 'running', '{}')`,
+      ["step-reset-dm-1", "run-reset-dm-1"],
+    );
+
+    await db.run(
+      `INSERT INTO lane_queue_mode_overrides (key, lane, queue_mode, updated_at_ms)
+       VALUES (?, ?, 'interrupt', ?)`,
+      [key, lane, Date.now()],
+    );
+    await db.run(
+      `INSERT INTO session_send_policy_overrides (key, send_policy, updated_at_ms)
+       VALUES (?, 'off', ?)`,
+      [key, Date.now()],
+    );
+
+    const result = await executeCommand("/reset", {
+      db,
+      commandContext: { agentId: "default", channel: "telegram", threadId: "chat-1" },
+    });
+
+    expect(result.data).toMatchObject({
+      agent_id: "default",
+      session_id: "telegram:chat-1",
+    });
+
+    const run = await db.get<{ status: string }>(
+      `SELECT status FROM execution_runs WHERE run_id = ?`,
+      ["run-reset-dm-1"],
+    );
+    expect(run?.status).toBe("cancelled");
+
+    const queueOverride = await db.get<{ queue_mode: string }>(
+      `SELECT queue_mode
+       FROM lane_queue_mode_overrides
+       WHERE key = ? AND lane = ?`,
+      [key, lane],
     );
     expect(queueOverride).toBeUndefined();
 

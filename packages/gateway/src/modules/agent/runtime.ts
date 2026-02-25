@@ -21,12 +21,12 @@ import {
   AgentTurnRequest,
   AgentTurnResponse,
   ContextReport as ContextReportSchema,
-  DEFAULT_WORKSPACE_ID,
   WorkspaceId,
 } from "@tyrum/schemas";
 import type { Decision } from "@tyrum/schemas";
 import type { GatewayContainer } from "../../container.js";
 import { ensureWorkspaceInitialized, resolveTyrumHome } from "./home.js";
+import { buildAgentTurnKey } from "./turn-key.js";
 import { MarkdownMemoryStore } from "./markdown-memory.js";
 import { SessionDal, type SessionMessage, type SessionRow } from "./session-dal.js";
 import {
@@ -64,6 +64,7 @@ import { ExecutionEngine, type StepExecutor } from "../execution/engine.js";
 import { resolveSandboxHardeningProfile } from "../sandbox/hardening.js";
 import { deriveElevatedExecutionAvailableFromPolicyBundle } from "../sandbox/elevated-execution.js";
 import { LaneQueueSignalDal, LaneQueueInterruptError } from "../lanes/queue-signal-dal.js";
+import { resolveWorkspaceId } from "../workspace/id.js";
 
 const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_APPROVAL_WAIT_MS = 120_000;
@@ -357,38 +358,6 @@ type ToolCallPolicyState = {
 function resolveAgentId(): string {
   const raw = process.env["TYRUM_AGENT_ID"]?.trim();
   return raw && raw.length > 0 ? raw : "default";
-}
-
-function resolveWorkspaceId(): string {
-  const raw = process.env["TYRUM_WORKSPACE_ID"]?.trim();
-  return raw && raw.length > 0 ? raw : DEFAULT_WORKSPACE_ID;
-}
-
-function encodeKeyPart(value: string): string {
-  // Collision-safe reversible encoding for colon-delimited key segments.
-  // - Only encode when required (`:`) or when the raw segment could be
-  //   confused with an encoded segment (prefix `~`).
-  const prefix = "~";
-  if (!value.includes(":") && !value.startsWith(prefix)) return value;
-  const encoded = Buffer.from(value, "utf-8").toString("base64url");
-  return `${prefix}${encoded}`;
-}
-
-function buildAgentTurnKey(
-  agentId: string,
-  workspaceId: string,
-  channel: string,
-  containerKind: NormalizedContainerKind,
-  threadId: string,
-  deliveryAccount?: string,
-): string {
-  const safeChannel = encodeKeyPart(channel.trim());
-  const safeThread = encodeKeyPart(threadId.trim());
-  const rawAccount = deliveryAccount
-    ? `${workspaceId.trim()}~${deliveryAccount.trim()}`
-    : workspaceId.trim();
-  const safeAccount = encodeKeyPart(rawAccount);
-  return `agent:${agentId}:${safeChannel}:${safeAccount}:${containerKind}:${safeThread}`;
 }
 
 function resolveTurnRequestId(input: AgentTurnRequestT): string {
@@ -2043,14 +2012,14 @@ export class AgentRuntime {
     const resolvedInput = resolveAgentTurnInput(input);
     const containerKind: NormalizedContainerKind =
       input.container_kind ?? resolvedInput.envelope?.container.kind ?? "channel";
-    const key = buildAgentTurnKey(
-      this.agentId,
-      this.workspaceId,
-      resolvedInput.channel,
+    const key = buildAgentTurnKey({
+      agentId: this.agentId,
+      workspaceId: this.workspaceId,
+      channel: resolvedInput.channel,
       containerKind,
-      resolvedInput.thread_id,
-      resolvedInput.envelope?.delivery.account,
-    );
+      threadId: resolvedInput.thread_id,
+      deliveryAccount: resolvedInput.envelope?.delivery.account,
+    });
     const lane = "main";
     const planId = `agent-turn-${this.agentId}-${randomUUID()}`;
     const requestId = resolveTurnRequestId(input);

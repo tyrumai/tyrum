@@ -20,6 +20,8 @@ import { isAuthProfilesEnabled } from "../models/auth-profiles-enabled.js";
 import { LaneQueueModeOverrideDal } from "../lanes/queue-mode-override-dal.js";
 import { SessionSendPolicyOverrideDal } from "../channels/send-policy-override-dal.js";
 import { parseChannelSourceKey } from "../channels/interface.js";
+import { resolveWorkspaceId } from "../workspace/id.js";
+import { buildAgentTurnKey, encodeTurnKeyPart } from "../agent/turn-key.js";
 import { randomUUID } from "node:crypto";
 import { ExecutionEngine } from "../execution/engine.js";
 
@@ -177,28 +179,89 @@ function resolveAgentId(ctx: CommandDeps["commandContext"] | undefined): string 
   return "default";
 }
 
-function resolveWorkspaceId(): string {
-  const raw = process.env["TYRUM_WORKSPACE_ID"]?.trim();
-  return raw && raw.length > 0 ? raw : "default";
-}
-
-function encodeKeyPart(value: string): string {
-  const prefix = "~";
-  if (!value.includes(":") && !value.startsWith(prefix)) return value;
-  const encoded = Buffer.from(value, "utf-8").toString("base64url");
-  return `${prefix}${encoded}`;
-}
-
 function buildDefaultCommandKey(input: {
   agentId: string;
   channel: string;
   threadId: string;
 }): string {
   const workspaceId = resolveWorkspaceId();
-  const safeChannel = encodeKeyPart(input.channel.trim());
-  const safeAccount = encodeKeyPart(workspaceId.trim());
-  const safeThread = encodeKeyPart(input.threadId.trim());
-  return `agent:${input.agentId}:${safeChannel}:${safeAccount}:channel:${safeThread}`;
+  return buildAgentTurnKey({
+    agentId: input.agentId,
+    workspaceId,
+    channel: input.channel.trim(),
+    containerKind: "channel",
+    threadId: input.threadId.trim(),
+  });
+}
+
+function escapeLikePattern(value: string): string {
+  return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
+}
+
+async function resolveStoredKeyLaneByChannelThread(
+  db: SqlDb,
+  input: { agentId: string; channel: string; threadId: string },
+): Promise<{ key: string; lane: string } | undefined> {
+  const safeChannel = escapeLikePattern(encodeTurnKeyPart(input.channel.trim()));
+  const safeThread = escapeLikePattern(encodeTurnKeyPart(input.threadId.trim()));
+  const keyPattern = `agent:${input.agentId.trim()}:${safeChannel}:%:%:${safeThread}`;
+
+  const runRow = await db.get<{ key: string; lane: string }>(
+    `SELECT key, lane
+     FROM execution_runs
+     WHERE key LIKE ? ESCAPE '\\'
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [keyPattern],
+  );
+  if (runRow?.key) return runRow;
+
+  const queueRow = await db.get<{ key: string; lane: string }>(
+    `SELECT key, lane
+     FROM lane_queue_mode_overrides
+     WHERE key LIKE ? ESCAPE '\\'
+     ORDER BY updated_at_ms DESC
+     LIMIT 1`,
+    [keyPattern],
+  );
+  if (queueRow?.key) return queueRow;
+
+  const sendRow = await db.get<{ key: string }>(
+    `SELECT key
+     FROM session_send_policy_overrides
+     WHERE key LIKE ? ESCAPE '\\'
+     ORDER BY updated_at_ms DESC
+     LIMIT 1`,
+    [keyPattern],
+  );
+  if (sendRow?.key) return { key: sendRow.key, lane: "main" };
+
+  return undefined;
+}
+
+async function resolveFallbackKeyLane(
+  db: SqlDb,
+  ctx: CommandDeps["commandContext"] | undefined,
+  agentId: string,
+): Promise<{ key: string; lane: string } | undefined> {
+  const channelThread = await resolveChannelThread(db, ctx);
+  if (!channelThread) return undefined;
+
+  const existing = await resolveStoredKeyLaneByChannelThread(db, {
+    agentId,
+    channel: channelThread.channel,
+    threadId: channelThread.threadId,
+  });
+  if (existing) return existing;
+
+  return {
+    key: buildDefaultCommandKey({
+      agentId,
+      channel: channelThread.channel,
+      threadId: channelThread.threadId,
+    }),
+    lane: "main",
+  };
 }
 
 async function resolveChannelThread(db: SqlDb, ctx: CommandDeps["commandContext"] | undefined): Promise<{ channel: string; threadId: string } | undefined> {
@@ -434,11 +497,7 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
     const agentId = resolveAgentId(deps.commandContext);
     const resolved =
       (await resolveKeyLane(deps.db, deps.commandContext)) ??
-      (await (async () => {
-        const channelThread = await resolveChannelThread(deps.db!, deps.commandContext);
-        if (!channelThread) return undefined;
-        return { key: buildDefaultCommandKey({ agentId, ...channelThread }), lane: "main" };
-      })());
+      (await resolveFallbackKeyLane(deps.db, deps.commandContext, agentId));
     if (!resolved) {
       return { output: "Usage: /stop (requires key or channel/thread context)", data: null };
     }
@@ -504,7 +563,11 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
 
     // Best-effort: stop active execution + clear queued followups (if we can resolve key/lane).
     const keyLane =
-      (await resolveKeyLane(deps.db, ctx)) ?? { key: buildDefaultCommandKey({ agentId, channel, threadId }), lane: "main" };
+      (await resolveKeyLane(deps.db, ctx)) ??
+      (await resolveFallbackKeyLane(deps.db, ctx, agentId)) ?? {
+        key: buildDefaultCommandKey({ agentId, channel, threadId }),
+        lane: "main",
+      };
     if (keyLane?.key) {
       const engine = new ExecutionEngine({
         db: deps.db,
