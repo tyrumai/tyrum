@@ -453,6 +453,14 @@ export {
 } from "./auth-profile.js";
 
 export { ModelsDevModel, ModelsDevProvider, ModelsDevCatalog } from "./models-dev.js";
+export {
+  ModelsHttpProviderSummary,
+  ModelsHttpModelSummary,
+  ModelsHttpStatusResponse,
+  ModelsHttpProviderListResponse,
+  ModelsHttpProviderDetailResponse,
+  ModelsHttpProviderModelsResponse,
+} from "./models-dev-http.js";
 
 export { EventScope } from "./scope.js";
 

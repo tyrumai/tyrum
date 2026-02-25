@@ -8,6 +8,17 @@ export { autoExecute } from "./capability.js";
 export type { CapabilityProvider, TaskExecuteContext, TaskResult } from "./capability.js";
 
 export {
+  createTyrumHttpClient,
+  TyrumHttpClientError,
+  type TyrumHttpAuthStrategy,
+  type TyrumHttpClient,
+  type TyrumHttpClientOptions,
+  type TyrumHttpErrorCode,
+  type TyrumHttpFetch,
+  type TyrumRequestOptions,
+} from "./http/index.js";
+
+export {
   buildConnectProofTranscript,
   computeDeviceIdFromPublicKeyDer,
   createBrowserLocalStorageDeviceIdentityStorage,
