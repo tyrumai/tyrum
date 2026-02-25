@@ -79,6 +79,14 @@ An isolation boundary for identity, policy, and durable state. A deployment host
 
 A step execution process that claims work (leases) and performs tool/capability calls. Workers scale horizontally.
 
+## WorkBoard
+
+A workspace-scoped backlog and work-tracking system (Kanban) used to keep interactive sessions responsive while background work runs. The WorkBoard is a representation over durable work state in the StateStore.
+
+## WorkItem
+
+An operator-facing unit of work with a clear outcome and acceptance criteria. WorkItems are sized to avoid "one mega task"; large requests are represented as Initiatives that decompose into smaller Action WorkItems.
+
 ## User
 
 A human principal authenticated via a tenant-configured auth provider (built-in or OIDC). Users act through client devices.
@@ -110,6 +118,14 @@ A durable event log/table used to publish events reliably to the backplane (supp
 ## Lane
 
 An execution stream within a session (for example `main`, `cron`, `heartbeat`, `subagent`) used to separate concerns.
+
+## Execution profile
+
+A named execution configuration that selects model settings, tool allowlists, and budgets for a class of runs (for example interactive vs explorer vs executor). Execution profiles are distinct from provider auth profiles, which describe credentials for a provider.
+
+## Subagent
+
+A delegated execution context that shares an agent's identity boundary but runs under a separate session key and an execution profile. Subagents are used to keep channel-facing sessions low-latency and contexts narrow.
 
 ## Node
 

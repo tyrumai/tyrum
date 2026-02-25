@@ -26,6 +26,7 @@ A client is an operator interface that connects to the gateway and participates 
 Operator clients provide oversight and administration. At minimum they should expose:
 
 - **Session:** a session-centric view rendered as a unified timeline that merges chat, runs/steps/attempts, approvals, and artifacts (reconstructible from durable state; live events stream updates). The UI supports lane filters and surfaces queue-mode semantics as pending input items.
+- **Work:** a workspace-scoped WorkBoard view of active WorkItems (Backlog/Doing/Blocked/Done), with WIP visibility and deep links to runs, approvals, and artifacts (see [Work board and delegated execution](./workboard.md)).
 - **Approvals:** an approval queue (approve/deny) with previews and linked evidence.
 - **Nodes/devices:** pairing requests, connected capability providers, revoke controls.
 - **Instances:** a presence view of connected gateway/client/node instances with TTL-based pruning (see [Presence](./presence.md)).

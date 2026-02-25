@@ -57,6 +57,7 @@ VALUES
   - Direct (per account + channel + peer): `agent:<agentId>:<channel>:<account>:dm:<peerId>`
   - Group: `agent:<agentId>:<channel>:<account>:group:<id>`
   - Channel: `agent:<agentId>:<channel>:<account>:channel:<id>`
+  - Delegated (subagent): `agent:<agentId>:subagent:<subagentId>`
 - **Cron**
   - `cron:<jobId>`
 - **Hook**
@@ -71,6 +72,7 @@ VALUES
 - `<account>` identifies a configured account/connector instance (for example `default`, `family`, `work`) so multiple accounts can coexist safely.
 - `<peerId>` is the sender identity for DMs (provider-native or canonical identity when identity linking is enabled).
 - `<id>` is the provider-native thread/container identifier (for example a Telegram chat id).
+- `<subagentId>` is an opaque stable identifier for delegated execution sessions (it must not contain `:`).
 
 ## Lanes
 

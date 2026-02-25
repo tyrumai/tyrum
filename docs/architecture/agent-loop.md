@@ -14,6 +14,8 @@ flowchart TB
   OUT --> PERSIST["Persist state<br/>(transcripts, events, memory)"]
 ```
 
+Workflow/plan selection may create or update WorkItems in the WorkBoard when the agent delegates long-running work while keeping the interactive session responsive (see [Work board and delegated execution](./workboard.md)).
+
 ## Serialization guarantee
 
 - Runs are serialized per session key (and lane) to prevent tool and transcript races.
