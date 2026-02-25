@@ -61,6 +61,7 @@ The gateway supports snapshot export/import for the durable tables required to r
 
 - exports are consistent (transactional) and include the minimal indexes needed for audit and replay
 - imports preserve stable identifiers (`session_key`, `run_id`, `step_id`, `attempt_id`, `approval_id`, `artifact_id`) and hashes
+- snapshot bundles declare whether they include artifact bytes (and for which sensitivity classes), and include artifact retention lifecycle metadata needed to interpret “missing bytes” states
 
 ## WebSocket-first event delivery (the “WS reality”)
 
