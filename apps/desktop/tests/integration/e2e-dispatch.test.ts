@@ -159,7 +159,6 @@ async function connectClient(
     token,
     capabilities,
     reconnect: false,
-    useDeviceProof: true,
     protocolRev: 2,
     device: {
       publicKey: publicKeyDer.toString("base64url"),

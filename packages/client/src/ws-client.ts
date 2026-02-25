@@ -27,7 +27,6 @@ import type { WsPeerRole } from "@tyrum/schemas";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
-  deviceIdFromSha256Digest,
   WsApprovalDecision,
   WsApprovalRequest,
   WsApprovalListResult,
@@ -37,7 +36,6 @@ import {
   WsCommandExecuteResult,
   WsConnectInitResult,
   WsConnectProofResult,
-  WsConnectResult,
   WsError,
   WsErrorEvent,
   WsMessageEnvelope,
@@ -45,6 +43,14 @@ import {
   WsTaskExecuteRequest,
   WsTaskExecuteResult,
 } from "@tyrum/schemas";
+import {
+  buildConnectProofTranscript,
+  computeDeviceIdFromPublicKeyDer,
+  createDeviceIdentity,
+  fromBase64Url,
+  formatDeviceIdentityError,
+  signProofWithPrivateKey,
+} from "./device-identity.js";
 
 // ---------------------------------------------------------------------------
 // Event types
@@ -79,13 +85,6 @@ export interface TyrumClientOptions {
   tlsCertFingerprint256?: string;
   /** Capabilities to advertise in the hello handshake. */
   capabilities: ClientCapability[];
-  /**
-   * Whether to use the `connect.init/connect.proof` handshake (recommended).
-   *
-   * When `false`, the client uses the legacy `connect` handshake (deprecated).
-   * Defaults to `false` for backwards compatibility.
-   */
-  useDeviceProof?: boolean;
   /** Peer role for vNext handshake. Defaults to `client`. */
   role?: WsPeerRole;
   /** Protocol revision for vNext handshake. Defaults to 2. */
@@ -154,93 +153,6 @@ function toOptionalTrimmedString(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function toBase64UrlBytes(value: Uint8Array): string {
-  // Node runtime path.
-  if (typeof Buffer !== "undefined") {
-    return Buffer.from(value).toString("base64url");
-  }
-
-  // Browser runtime path.
-  let binary = "";
-  for (const b of value) {
-    binary += String.fromCharCode(b);
-  }
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-function fromBase64Url(value: string): Uint8Array {
-  if (typeof Buffer !== "undefined") {
-    return Buffer.from(value, "base64url");
-  }
-
-  const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
-  const binary = atob(padded);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-}
-
-function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  const buf = bytes.buffer;
-  if (buf instanceof ArrayBuffer) {
-    return buf.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-  }
-  const copy = new Uint8Array(bytes.byteLength);
-  copy.set(bytes);
-  return copy.buffer;
-}
-
-async function sha256(bytes: Uint8Array): Promise<Uint8Array> {
-  if (!globalThis.crypto?.subtle) {
-    throw new Error("WebCrypto subtle API not available");
-  }
-  const digest = await globalThis.crypto.subtle.digest("SHA-256", toArrayBuffer(bytes));
-  return new Uint8Array(digest);
-}
-
-async function computeDeviceId(pubkeyDer: Uint8Array): Promise<string> {
-  const digest = await sha256(pubkeyDer);
-  return deviceIdFromSha256Digest(digest);
-}
-
-function buildConnectProofTranscript(input: {
-  protocolRev: number;
-  role: WsPeerRole;
-  deviceId: string;
-  connectionId: string;
-  challenge: string;
-}): Uint8Array {
-  const text =
-    `tyrum-connect-proof\n` +
-    `protocol_rev=${String(input.protocolRev)}\n` +
-    `role=${input.role}\n` +
-    `device_id=${input.deviceId}\n` +
-    `connection_id=${input.connectionId}\n` +
-    `challenge=${input.challenge}\n`;
-  return new TextEncoder().encode(text);
-}
-
-async function signEd25519Pkcs8(
-  privateKeyDer: Uint8Array,
-  message: Uint8Array,
-): Promise<Uint8Array> {
-  if (!globalThis.crypto?.subtle) {
-    throw new Error("WebCrypto subtle API not available");
-  }
-  const key = await globalThis.crypto.subtle.importKey(
-    "pkcs8",
-    toArrayBuffer(privateKeyDer),
-    { name: "Ed25519" },
-    false,
-    ["sign"],
-  );
-  const sig = await globalThis.crypto.subtle.sign({ name: "Ed25519" }, key, toArrayBuffer(message));
-  return new Uint8Array(sig);
-}
-
 function toBase64UrlUtf8(value: string): string {
   // Node runtime path.
   if (typeof Buffer !== "undefined") {
@@ -267,7 +179,6 @@ export class TyrumClient {
     maxReconnectDelay: number;
     maxSeenEventIds: number;
     maxSeenRequestIds: number;
-    useDeviceProof: boolean;
     role: WsPeerRole;
     protocolRev: number;
   };
@@ -289,11 +200,15 @@ export class TyrumClient {
   private connectionAttempt = 0;
   private transportErrorHint: string | null = null;
   private suppressReconnect = false;
+  private generatedDevice: {
+    publicKey: string;
+    privateKey: string;
+    deviceId: string;
+  } | null = null;
 
   constructor(options: TyrumClientOptions) {
     this.emitter = mitt<TyrumClientEvents>();
     this.opts = {
-      useDeviceProof: false,
       role: "client",
       protocolRev: DEFAULT_PROTOCOL_REV,
       reconnect: true,
@@ -618,11 +533,7 @@ export class TyrumClient {
   }
 
   private sendConnect(): void {
-    if (this.opts.useDeviceProof && this.opts.device) {
-      void this.sendConnectWithDeviceProof();
-      return;
-    }
-    this.sendLegacyConnect();
+    void this.sendConnectWithDeviceProof();
   }
 
   private disconnectIfHandshakeSocketActive(handshakeWs: WebSocket): void {
@@ -634,48 +545,12 @@ export class TyrumClient {
     this.disconnect();
   }
 
-  private sendLegacyConnect(): void {
-    const requestId = crypto.randomUUID();
-
-    const request: WsRequestEnvelope = {
-      request_id: requestId,
-      type: "connect",
-      payload: { capabilities: this.opts.capabilities },
-    };
-
-    // connect is a request/response handshake; treat it as the gate for
-    // emitting the `connected` event.
-    this.pending.set(requestId, {
-      resolve: (msg) => {
-        if (!msg.ok) {
-          this.disconnect();
-          return;
-        }
-        const parsed = WsConnectResult.safeParse(msg.result ?? {});
-        if (!parsed.success) {
-          this.disconnect();
-          return;
-        }
-        this.ready = true;
-        this.clientId = parsed.data.client_id;
-        this.emitter.emit("connected", { clientId: parsed.data.client_id });
-      },
-      reject: () => {},
-    });
-
-    this.send(request);
-  }
-
   private async sendConnectWithDeviceProof(): Promise<void> {
     const ws = this.ws;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
 
     try {
-      const device = this.opts.device;
-      if (!device) {
-        this.sendLegacyConnect();
-        return;
-      }
+      const device = await this.resolveConnectDevice();
       const pubkey = device.publicKey.trim();
       const privkey = device.privateKey.trim();
       if (!pubkey || !privkey) {
@@ -683,8 +558,7 @@ export class TyrumClient {
         return;
       }
 
-      const pubkeyDer = fromBase64Url(pubkey);
-      const deviceId = device.deviceId?.trim() || (await computeDeviceId(pubkeyDer));
+      const deviceId = device.deviceId.trim();
       if (this.ws !== ws || ws.readyState !== WebSocket.OPEN) {
         return;
       }
@@ -730,9 +604,39 @@ export class TyrumClient {
       });
 
       this.send(request);
-    } catch {
+    } catch (error) {
+      this.emitter.emit("transport_error", { message: formatDeviceIdentityError(error) });
       this.disconnectIfHandshakeSocketActive(ws);
     }
+  }
+
+  private async resolveConnectDevice(): Promise<{
+    publicKey: string;
+    privateKey: string;
+    deviceId: string;
+    label?: string;
+    platform?: string;
+    version?: string;
+    mode?: string;
+  }> {
+    const provided = this.opts.device;
+    if (provided) {
+      const pubkey = provided.publicKey.trim();
+      const privkey = provided.privateKey.trim();
+      if (!pubkey || !privkey) {
+        throw new Error("TyrumClientOptions.device must include publicKey and privateKey");
+      }
+      if (provided.deviceId?.trim()) {
+        return { ...provided, deviceId: provided.deviceId.trim() };
+      }
+      const pubkeyDer = fromBase64Url(pubkey);
+      const computed = await computeDeviceIdFromPublicKeyDer(pubkeyDer);
+      return { ...provided, deviceId: computed };
+    }
+    if (!this.generatedDevice) {
+      this.generatedDevice = await createDeviceIdentity();
+    }
+    return this.generatedDevice;
   }
 
   private async handleConnectInitResponse(
@@ -758,11 +662,10 @@ export class TyrumClient {
         connectionId: parsed.data.connection_id,
         challenge: parsed.data.challenge,
       });
-      const signature = await signEd25519Pkcs8(fromBase64Url(ctx.privateKey), transcript);
+      const proof = await signProofWithPrivateKey(ctx.privateKey, transcript);
       if (this.ws !== handshakeWs || handshakeWs.readyState !== WebSocket.OPEN) {
         return;
       }
-      const proof = toBase64UrlBytes(signature);
 
       const requestId = crypto.randomUUID();
       const request: WsRequestEnvelope = {

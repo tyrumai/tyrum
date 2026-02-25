@@ -25,17 +25,27 @@ function waitForMessage(ws: WsWebSocket): Promise<unknown> {
 }
 
 async function acceptConnect(ws: WsWebSocket, clientId = "client-1"): Promise<void> {
-  const connect = (await waitForMessage(ws)) as Record<string, unknown>;
-  expect(connect["type"]).toBe("connect");
-  expect(typeof connect["request_id"]).toBe("string");
-  const requestId = String(connect["request_id"]);
+  const init = (await waitForMessage(ws)) as Record<string, unknown>;
+  expect(init["type"]).toBe("connect.init");
+  expect(typeof init["request_id"]).toBe("string");
 
   ws.send(
     JSON.stringify({
-      request_id: requestId,
-      type: "connect",
+      request_id: String(init["request_id"]),
+      type: "connect.init",
       ok: true,
-      result: { client_id: clientId },
+      result: { connection_id: "conn-1", challenge: "nonce-1" },
+    }),
+  );
+
+  const proof = (await waitForMessage(ws)) as Record<string, unknown>;
+  expect(proof["type"]).toBe("connect.proof");
+  ws.send(
+    JSON.stringify({
+      request_id: String(proof["request_id"]),
+      type: "connect.proof",
+      ok: true,
+      result: { client_id: clientId, device_id: "device-1", role: "client" },
     }),
   );
 }

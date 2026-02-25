@@ -141,7 +141,6 @@ export class NodeRuntime {
       token,
       tlsCertFingerprint256,
       capabilities,
-      useDeviceProof: Boolean(device),
       role: device ? "node" : "client",
       device: device
         ? {

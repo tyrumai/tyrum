@@ -9,9 +9,6 @@ import {
   WsConnectInitResponseEnvelope,
   WsConnectProofRequest,
   WsConnectProofResponseEnvelope,
-  WsConnectRequest,
-  WsConnectResponseEnvelope,
-  WsErrorEvent,
   WsTaskExecuteRequest,
   WsTaskExecuteResponseEnvelope,
 } from "@tyrum/schemas";
@@ -74,15 +71,6 @@ function isResponseOfType(msg: unknown, type: string): boolean {
     typeof msg["request_id"] === "string" &&
     Object.prototype.hasOwnProperty.call(msg, "ok") &&
     !Object.prototype.hasOwnProperty.call(msg, "event_id")
-  );
-}
-
-function isEventOfType(msg: unknown, type: string): boolean {
-  return (
-    isRecord(msg) &&
-    msg["type"] === type &&
-    typeof msg["event_id"] === "string" &&
-    !Object.prototype.hasOwnProperty.call(msg, "ok")
   );
 }
 
@@ -200,7 +188,6 @@ describe("WS contract conformance (gateway <-> client <-> schemas)", () => {
       token: server.adminToken,
       capabilities: ["http"],
       reconnect: false,
-      useDeviceProof: true,
       role: "client",
       protocolRev: 2,
       device: {
@@ -285,7 +272,7 @@ describe("WS contract conformance (gateway <-> client <-> schemas)", () => {
     WsTaskExecuteResponseEnvelope.parse(resultMsg);
   });
 
-  it("legacy connect handshake frames conform to @tyrum/schemas contracts", async () => {
+  it("connect.init/connect.proof handshake frames conform to @tyrum/schemas contracts", async () => {
     server = await startInstrumentedGateway((connectionManager) => ({ connectionManager }));
 
     client = new TyrumClient({
@@ -303,28 +290,30 @@ describe("WS contract conformance (gateway <-> client <-> schemas)", () => {
     await withTimeout(connectedP, 5_000, "connected");
     await delay(25);
 
-    const connectReq = mustFind(
+    const initReq = mustFind(
       server.clientToGateway,
-      (m) => isRequestOfType(m, "connect"),
-      "connect request",
+      (m) => isRequestOfType(m, "connect.init"),
+      "connect.init request",
     );
-    const connectRes = mustFind(
+    const initRes = mustFind(
       server.gatewayToClient,
-      (m) => isResponseOfType(m, "connect"),
-      "connect response",
+      (m) => isResponseOfType(m, "connect.init"),
+      "connect.init response",
     );
-    const warningEvt = mustFind(
+    const proofReq = mustFind(
+      server.clientToGateway,
+      (m) => isRequestOfType(m, "connect.proof"),
+      "connect.proof request",
+    );
+    const proofRes = mustFind(
       server.gatewayToClient,
-      (m) =>
-        isEventOfType(m, "error") &&
-        isRecord(m) &&
-        isRecord(m["payload"]) &&
-        m["payload"]["code"] === "deprecated_handshake",
-      "deprecated_handshake warning event",
+      (m) => isResponseOfType(m, "connect.proof"),
+      "connect.proof response",
     );
 
-    WsConnectRequest.parse(connectReq);
-    WsConnectResponseEnvelope.parse(connectRes);
-    WsErrorEvent.parse(warningEvt);
+    WsConnectInitRequest.parse(initReq);
+    WsConnectInitResponseEnvelope.parse(initRes);
+    WsConnectProofRequest.parse(proofReq);
+    WsConnectProofResponseEnvelope.parse(proofRes);
   });
 });
