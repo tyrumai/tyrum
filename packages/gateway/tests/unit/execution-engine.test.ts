@@ -164,7 +164,9 @@ describe("ExecutionEngine (normalized)", () => {
     const messages = outbox
       .map((row) => JSON.parse(row.payload_json) as { message?: Record<string, unknown> })
       .map((row) => row.message)
-      .filter((value): value is Record<string, unknown> => Boolean(value) && typeof value === "object");
+      .filter(
+        (value): value is Record<string, unknown> => Boolean(value) && typeof value === "object",
+      );
 
     for (let idx = 0; idx < typesToEmit.length; idx += 1) {
       const msg = messages[idx]!;
