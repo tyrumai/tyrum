@@ -79,6 +79,36 @@ Each channel or client session has an interactive agent loop in `lane=main` that
 
 Delegation should be a deterministic policy step, not a model whim.
 
+```mermaid
+flowchart TB
+  classDef session fill:#f6f8ff,stroke:#4a67d6,stroke-width:1px,color:#111;
+  classDef board fill:#f2fff6,stroke:#2f8f4e,stroke-width:1px,color:#111;
+  classDef exec fill:#fff7ed,stroke:#b45309,stroke-width:1px,color:#111;
+  classDef gate fill:#fff1f2,stroke:#be123c,stroke-width:1px,color:#111;
+
+  subgraph S["Interactive sessions (lane=main)"]
+    Desktop["Desktop client session_key"]:::session
+    Telegram["Telegram DM session_key"]:::session
+  end
+
+  Desktop --> Intake["Intake standard work<br/>classify + acceptance + budget + fingerprint<br/>choose mode (reason-coded)"]:::session
+  Telegram --> Intake
+
+  Intake -->|inline| Inline["Reply in-session"]:::session
+  Intake -->|delegate_execute / delegate_plan| WB["WorkBoard (workspace scope)<br/>WorkItem created/updated"]:::board
+
+  WB -->|dispatch tasks| SA["Subagent session_key<br/>(lane=subagent)"]:::exec
+  SA --> ENG["Execution engine<br/>(jobs/runs/steps)"]:::exec
+  ENG --> ART["Artifacts + postconditions"]:::exec
+  ENG --> APPR["Approvals (pause/resume)"]:::gate
+
+  ART --> WB
+  APPR --> WB
+  WB --> Notify["Notify last_active_session_key<br/>(or created_from_session_key)"]:::session
+  Notify --> Desktop
+  Notify --> Telegram
+```
+
 Standard work at intake:
 
 1. **Classify:** inline response vs Action WorkItem vs Initiative WorkItem.
@@ -146,6 +176,29 @@ Multiple long-running WorkItems are expected. The WorkBoard prevents overload an
 - **Overlap detection:** compare WorkItem fingerprints to warn about resource contention.
 - **No auto-merge:** overlap produces an operator-visible choice (queue, link as dependency, or explicitly merge).
 - **Explicit linking:** prefer dependency links (WorkItem B depends on A) over merging content into a single "blob" item.
+
+```mermaid
+stateDiagram-v2
+  direction LR
+
+  [*] --> Backlog: created
+  Backlog --> Ready: triaged
+  Ready --> Doing: lease acquired (WIP < 2)
+  Ready --> Ready: WIP limit reached (2)
+
+  Doing --> Blocked: awaiting approval / external dependency
+  Blocked --> Doing: unblocked / resumed
+
+  Doing --> Done: acceptance met + evidence
+  Doing --> Failed: hard failure / exhausted retries
+  Doing --> Cancelled: operator cancels
+
+  Blocked --> Cancelled: denied / expired / cancel
+
+  Done --> [*]
+  Failed --> [*]
+  Cancelled --> [*]
+```
 
 ## Profiles and permissions
 
