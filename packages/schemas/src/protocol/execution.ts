@@ -149,6 +149,32 @@ export const WsRunPausedEvent = WsEventEnvelope.extend({
 });
 export type WsRunPausedEvent = z.infer<typeof WsRunPausedEvent>;
 
+export const WsRunQueuedEventPayload = z
+  .object({
+    run_id: ExecutionRunId,
+  })
+  .strict();
+export type WsRunQueuedEventPayload = z.infer<typeof WsRunQueuedEventPayload>;
+
+export const WsRunQueuedEvent = WsEventEnvelope.extend({
+  type: z.literal("run.queued"),
+  payload: WsRunQueuedEventPayload,
+});
+export type WsRunQueuedEvent = z.infer<typeof WsRunQueuedEvent>;
+
+export const WsRunStartedEventPayload = z
+  .object({
+    run_id: ExecutionRunId,
+  })
+  .strict();
+export type WsRunStartedEventPayload = z.infer<typeof WsRunStartedEventPayload>;
+
+export const WsRunStartedEvent = WsEventEnvelope.extend({
+  type: z.literal("run.started"),
+  payload: WsRunStartedEventPayload,
+});
+export type WsRunStartedEvent = z.infer<typeof WsRunStartedEvent>;
+
 export const WsRunResumedEventPayload = z
   .object({
     run_id: ExecutionRunId,
@@ -161,6 +187,32 @@ export const WsRunResumedEvent = WsEventEnvelope.extend({
   payload: WsRunResumedEventPayload,
 });
 export type WsRunResumedEvent = z.infer<typeof WsRunResumedEvent>;
+
+export const WsRunCompletedEventPayload = z
+  .object({
+    run_id: ExecutionRunId,
+  })
+  .strict();
+export type WsRunCompletedEventPayload = z.infer<typeof WsRunCompletedEventPayload>;
+
+export const WsRunCompletedEvent = WsEventEnvelope.extend({
+  type: z.literal("run.completed"),
+  payload: WsRunCompletedEventPayload,
+});
+export type WsRunCompletedEvent = z.infer<typeof WsRunCompletedEvent>;
+
+export const WsRunFailedEventPayload = z
+  .object({
+    run_id: ExecutionRunId,
+  })
+  .strict();
+export type WsRunFailedEventPayload = z.infer<typeof WsRunFailedEventPayload>;
+
+export const WsRunFailedEvent = WsEventEnvelope.extend({
+  type: z.literal("run.failed"),
+  payload: WsRunFailedEventPayload,
+});
+export type WsRunFailedEvent = z.infer<typeof WsRunFailedEvent>;
 
 export const WsRunCancelledEventPayload = z
   .object({

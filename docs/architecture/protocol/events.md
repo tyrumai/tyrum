@@ -34,15 +34,19 @@ This is the canonical list of `type` values and payload contracts for the v1 Web
 
 - `approval.requested` — `{ approval: Approval }`
 - `approval.resolved` — `{ approval: Approval }`
-- `run.paused` — `ExecutionRunPausedPayload` (pause reason + optional `approval_id`)
-- `run.resumed` — `{ run_id }`
-- `run.cancelled` — `{ run_id, reason? }`
 - `policy_override.created` — `{ override: PolicyOverride }`
 - `policy_override.revoked` — `{ override: PolicyOverride }`
 - `policy_override.expired` — `{ override: PolicyOverride }`
 
 ### Execution and evidence
 
+- `run.queued` — `{ run_id }` (initial enqueue)
+- `run.started` — `{ run_id }` (first transition to `running`)
+- `run.paused` — `ExecutionRunPausedPayload` (pause reason + optional `approval_id`)
+- `run.resumed` — `{ run_id }` (resume from `paused`)
+- `run.completed` — `{ run_id }` (run status becomes `succeeded`)
+- `run.failed` — `{ run_id }` (run status becomes `failed`)
+- `run.cancelled` — `{ run_id, reason? }`
 - `run.updated` — `{ run: ExecutionRun }`
 - `step.updated` — `{ step: ExecutionStep }`
 - `attempt.updated` — `{ attempt: ExecutionAttempt }` (includes cost + policy decision fields when available)
@@ -87,6 +91,7 @@ This is the canonical list of `type` values and payload contracts for the v1 Web
 ## Delivery expectations
 
 - Events are delivered **at-least-once**. Consumers must tolerate duplicates and implement idempotent handling.
+- Consumers should tolerate **unknown `type` values** (forward-compat) and ignore events they don't recognize.
 - Deduplicate using `event_id` (and treat `occurred_at` as informational, not a strict ordering guarantee).
 - Clients should tolerate reconnect and resubscribe without losing safety invariants; durable state in the StateStore remains the source of truth.
 

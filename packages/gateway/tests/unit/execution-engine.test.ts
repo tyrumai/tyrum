@@ -106,6 +106,76 @@ describe("ExecutionEngine (normalized)", () => {
     expect(trigger.lane).toBe("main");
   });
 
+  it("emits run.queued when enqueueing a plan", async () => {
+    db = openTestSqliteDb();
+
+    const engine = new ExecutionEngine({ db });
+    await engine.enqueuePlan({
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-queued-1",
+      requestId: "req-queued-1",
+      steps: [action("Research")],
+    });
+
+    const outbox = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ?",
+      ["ws.broadcast"],
+    );
+    const types = outbox
+      .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
+      .map((row) => row.message?.type)
+      .filter((value): value is string => typeof value === "string");
+    expect(types.filter((type) => type === "run.queued")).toHaveLength(1);
+    expect(types).not.toContain("run.started");
+    expect(types).not.toContain("run.completed");
+    expect(types).not.toContain("run.failed");
+  });
+
+  it("emits simple run lifecycle events with { run_id } payload", async () => {
+    db = openTestSqliteDb();
+
+    const engine = new ExecutionEngine({ db });
+    const runId = "550e8400-e29b-41d4-a716-446655440000";
+    const typesToEmit = [
+      "run.queued",
+      "run.started",
+      "run.resumed",
+      "run.completed",
+      "run.failed",
+    ] as const;
+
+    await db.transaction(async (tx) => {
+      const engineAny = engine as unknown as { emitRunIdEventTx?: unknown } & {
+        emitRunIdEventTx: (tx: unknown, type: string, runId: string) => Promise<void>;
+      };
+      expect(typeof engineAny.emitRunIdEventTx).toBe("function");
+      for (const type of typesToEmit) {
+        await engineAny.emitRunIdEventTx(tx, type, runId);
+      }
+    });
+
+    const outbox = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ? ORDER BY id ASC",
+      ["ws.broadcast"],
+    );
+    expect(outbox).toHaveLength(typesToEmit.length);
+
+    const messages = outbox
+      .map((row) => JSON.parse(row.payload_json) as { message?: Record<string, unknown> })
+      .map((row) => row.message)
+      .filter(
+        (value): value is Record<string, unknown> => Boolean(value) && typeof value === "object",
+      );
+
+    for (let idx = 0; idx < typesToEmit.length; idx += 1) {
+      const msg = messages[idx]!;
+      expect(msg["type"]).toBe(typesToEmit[idx]);
+      expect(msg["scope"]).toEqual({ kind: "run", run_id: runId });
+      expect(msg["payload"]).toEqual({ run_id: runId });
+    }
+  });
+
   it("preserves heartbeat trigger kind when provided", async () => {
     db = openTestSqliteDb();
 
@@ -156,6 +226,142 @@ describe("ExecutionEngine (normalized)", () => {
     const trigger = JSON.parse(job!.trigger_json) as { kind?: string; lane?: string };
     expect(trigger.kind).toBe("webhook");
     expect(trigger.lane).toBe("cron");
+  });
+
+  it("emits run.started and run.completed when a run succeeds", async () => {
+    db = openTestSqliteDb();
+
+    const engine = new ExecutionEngine({
+      db,
+      clock: () => ({ nowMs: Date.now(), nowIso: new Date().toISOString() }),
+    });
+    await engine.enqueuePlan({
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-run-events-succeeded-1",
+      requestId: "req-run-events-succeeded-1",
+      steps: [action("Research")],
+    });
+
+    const executor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => ({ success: true, result: { ok: true } })),
+    };
+
+    await drain(engine, "w1", executor);
+
+    const outbox = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ?",
+      ["ws.broadcast"],
+    );
+    const types = outbox
+      .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
+      .map((row) => row.message?.type)
+      .filter((value): value is string => typeof value === "string");
+    expect(types.filter((type) => type === "run.queued")).toHaveLength(1);
+    expect(types.filter((type) => type === "run.started")).toHaveLength(1);
+    expect(types.filter((type) => type === "run.completed")).toHaveLength(1);
+    expect(types.filter((type) => type === "run.failed")).toHaveLength(0);
+  });
+
+  it("emits run.failed when a run exhausts retry attempts", async () => {
+    db = openTestSqliteDb();
+
+    const engine = new ExecutionEngine({
+      db,
+      clock: () => ({ nowMs: Date.now(), nowIso: new Date().toISOString() }),
+    });
+    await engine.enqueuePlan({
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-run-events-failed-1",
+      requestId: "req-run-events-failed-1",
+      steps: [action("Research")],
+    });
+
+    const executor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => ({ success: false, error: "boom" })),
+    };
+
+    await drain(engine, "w1", executor);
+
+    const run = await db.get<{ status: string }>("SELECT status FROM execution_runs LIMIT 1");
+    expect(run?.status).toBe("failed");
+
+    const outbox = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ?",
+      ["ws.broadcast"],
+    );
+    const types = outbox
+      .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
+      .map((row) => row.message?.type)
+      .filter((value): value is string => typeof value === "string");
+    expect(types.filter((type) => type === "run.queued")).toHaveLength(1);
+    expect(types.filter((type) => type === "run.started")).toHaveLength(1);
+    expect(types.filter((type) => type === "run.failed")).toHaveLength(1);
+    expect(types.filter((type) => type === "run.completed")).toHaveLength(0);
+  });
+
+  it("does not reset started_at or re-emit run.started when resuming a paused run", async () => {
+    db = openTestSqliteDb();
+
+    const startedAtIso = "2026-02-24T00:00:00.000Z";
+    let nowMs = Date.parse(startedAtIso);
+    const clock = () => ({ nowMs, nowIso: new Date(nowMs).toISOString() });
+
+    const engine = new ExecutionEngine({ db, clock });
+    await engine.enqueuePlan({
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-resume-started-at-1",
+      requestId: "req-resume-started-at-1",
+      budgets: { max_usd_micros: 5 },
+      steps: [action("Research"), action("Research")],
+    });
+
+    let calls = 0;
+    const executor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => {
+        calls += 1;
+        if (calls === 1) {
+          return { success: true, result: { ok: true }, cost: { usd_micros: 10 } };
+        }
+        return { success: true, result: { ok: true } };
+      }),
+    };
+
+    expect(await engine.workerTick({ workerId: "w1", executor })).toBe(true);
+
+    const before = await db.get<{ started_at: string | null }>(
+      "SELECT started_at FROM execution_runs LIMIT 1",
+    );
+    expect(before?.started_at).toBe(startedAtIso);
+
+    expect(await engine.workerTick({ workerId: "w1", executor })).toBe(true);
+
+    const approval = await db.get<{ resume_token: string | null }>(
+      "SELECT resume_token FROM approvals WHERE status = 'pending' ORDER BY id ASC LIMIT 1",
+    );
+    expect(approval?.resume_token).toBeTruthy();
+
+    await engine.resumeRun(approval!.resume_token!);
+
+    nowMs += 60_000;
+    await drain(engine, "w1", executor);
+
+    const after = await db.get<{ started_at: string | null }>(
+      "SELECT started_at FROM execution_runs LIMIT 1",
+    );
+    expect(after?.started_at).toBe(startedAtIso);
+
+    const outbox = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ?",
+      ["ws.broadcast"],
+    );
+    const types = outbox
+      .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
+      .map((row) => row.message?.type)
+      .filter((value): value is string => typeof value === "string");
+    expect(types.filter((type) => type === "run.started")).toHaveLength(1);
   });
 
   it("worker executes a 2-step plan and completes the run", async () => {
