@@ -404,6 +404,28 @@ export class ExecutionEngine {
     await this.enqueueWsEvent(tx, evt);
   }
 
+  private async emitRunQueuedTx(tx: SqlDb, runId: string): Promise<void> {
+    const evt: WsEventEnvelopeT = {
+      event_id: randomUUID(),
+      type: "run.queued",
+      occurred_at: this.clock().nowIso,
+      scope: { kind: "run", run_id: runId },
+      payload: { run_id: runId },
+    };
+    await this.enqueueWsEvent(tx, evt);
+  }
+
+  private async emitRunStartedTx(tx: SqlDb, runId: string): Promise<void> {
+    const evt: WsEventEnvelopeT = {
+      event_id: randomUUID(),
+      type: "run.started",
+      occurred_at: this.clock().nowIso,
+      scope: { kind: "run", run_id: runId },
+      payload: { run_id: runId },
+    };
+    await this.enqueueWsEvent(tx, evt);
+  }
+
   private async emitRunPausedTx(
     tx: SqlDb,
     opts: {
@@ -432,6 +454,28 @@ export class ExecutionEngine {
     const evt: WsEventEnvelopeT = {
       event_id: randomUUID(),
       type: "run.resumed",
+      occurred_at: this.clock().nowIso,
+      scope: { kind: "run", run_id: runId },
+      payload: { run_id: runId },
+    };
+    await this.enqueueWsEvent(tx, evt);
+  }
+
+  private async emitRunCompletedTx(tx: SqlDb, runId: string): Promise<void> {
+    const evt: WsEventEnvelopeT = {
+      event_id: randomUUID(),
+      type: "run.completed",
+      occurred_at: this.clock().nowIso,
+      scope: { kind: "run", run_id: runId },
+      payload: { run_id: runId },
+    };
+    await this.enqueueWsEvent(tx, evt);
+  }
+
+  private async emitRunFailedTx(tx: SqlDb, runId: string): Promise<void> {
+    const evt: WsEventEnvelopeT = {
+      event_id: randomUUID(),
+      type: "run.failed",
       occurred_at: this.clock().nowIso,
       scope: { kind: "run", run_id: runId },
       payload: { run_id: runId },
@@ -670,6 +714,7 @@ export class ExecutionEngine {
     }
 
     await this.emitRunUpdatedTx(tx, runId);
+    await this.emitRunQueuedTx(tx, runId);
     const stepIds = await tx.all<{ step_id: string }>(
       "SELECT step_id FROM execution_steps WHERE run_id = ? ORDER BY step_index ASC",
       [runId],
@@ -990,6 +1035,7 @@ export class ExecutionEngine {
         );
         if (updated.changes === 1) {
           await this.emitRunUpdatedTx(tx, run.run_id);
+          await this.emitRunStartedTx(tx, run.run_id);
         }
       }
 
@@ -1029,13 +1075,20 @@ export class ExecutionEngine {
         );
         const failed = statuses.some((s) => s.status === "failed" || s.status === "cancelled");
 
-        await tx.run(
+        const runUpdated = await tx.run(
           `UPDATE execution_runs
            SET status = ?, finished_at = ?
            WHERE run_id = ? AND status IN ('running', 'queued')`,
           [failed ? "failed" : "succeeded", clock.nowIso, run.run_id],
         );
         await this.emitRunUpdatedTx(tx, run.run_id);
+        if (runUpdated.changes === 1) {
+          if (failed) {
+            await this.emitRunFailedTx(tx, run.run_id);
+          } else {
+            await this.emitRunCompletedTx(tx, run.run_id);
+          }
+        }
 
         await tx.run(
           `UPDATE execution_jobs
@@ -1361,6 +1414,7 @@ export class ExecutionEngine {
               );
               if (runUpdated.changes === 1) {
                 await this.emitRunUpdatedTx(tx, run.run_id);
+                await this.emitRunFailedTx(tx, run.run_id);
               }
               await tx.run(
                 `DELETE FROM lane_leases
@@ -1564,7 +1618,7 @@ export class ExecutionEngine {
               [run.run_id, next.step_id],
             );
 
-            await tx.run(
+            const runUpdated = await tx.run(
               `UPDATE execution_runs
                SET status = 'failed', finished_at = ?
                WHERE run_id = ? AND status IN ('running', 'queued')`,
@@ -1592,6 +1646,9 @@ export class ExecutionEngine {
 
             await this.emitAttemptUpdatedTx(tx, attemptId);
             await this.emitRunUpdatedTx(tx, run.run_id);
+            if (runUpdated.changes === 1) {
+              await this.emitRunFailedTx(tx, run.run_id);
+            }
 
             const stepIds = await tx.all<{ step_id: string }>(
               "SELECT step_id FROM execution_steps WHERE run_id = ? ORDER BY step_index ASC",
@@ -2475,6 +2532,7 @@ export class ExecutionEngine {
 
     if (runUpdated.changes === 1) {
       await this.emitRunUpdatedTx(tx, opts.runId);
+      await this.emitRunFailedTx(tx, opts.runId);
     }
 
     await tx.run(

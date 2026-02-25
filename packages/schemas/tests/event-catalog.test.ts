@@ -60,6 +60,58 @@ describe("WS event catalog", () => {
     expect(parsed.success).toBe(true);
   });
 
+  it("parses run.queued", () => {
+    const parsed = WsEvent.safeParse({
+      event_id: "e-3a",
+      type: "run.queued",
+      occurred_at: "2026-02-19T12:00:00Z",
+      scope: { kind: "run", run_id: "550e8400-e29b-41d4-a716-446655440000" },
+      payload: {
+        run_id: "550e8400-e29b-41d4-a716-446655440000",
+      },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("parses run.started", () => {
+    const parsed = WsEvent.safeParse({
+      event_id: "e-3b",
+      type: "run.started",
+      occurred_at: "2026-02-19T12:00:00Z",
+      scope: { kind: "run", run_id: "550e8400-e29b-41d4-a716-446655440000" },
+      payload: {
+        run_id: "550e8400-e29b-41d4-a716-446655440000",
+      },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("parses run.completed", () => {
+    const parsed = WsEvent.safeParse({
+      event_id: "e-3c",
+      type: "run.completed",
+      occurred_at: "2026-02-19T12:00:00Z",
+      scope: { kind: "run", run_id: "550e8400-e29b-41d4-a716-446655440000" },
+      payload: {
+        run_id: "550e8400-e29b-41d4-a716-446655440000",
+      },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("parses run.failed", () => {
+    const parsed = WsEvent.safeParse({
+      event_id: "e-3d",
+      type: "run.failed",
+      occurred_at: "2026-02-19T12:00:00Z",
+      scope: { kind: "run", run_id: "550e8400-e29b-41d4-a716-446655440000" },
+      payload: {
+        run_id: "550e8400-e29b-41d4-a716-446655440000",
+      },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
   it("parses run.resumed", () => {
     const parsed = WsEvent.safeParse({
       event_id: "e-4",

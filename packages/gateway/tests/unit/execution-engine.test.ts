@@ -106,6 +106,29 @@ describe("ExecutionEngine (normalized)", () => {
     expect(trigger.lane).toBe("main");
   });
 
+  it("emits run.queued when enqueueing a plan", async () => {
+    db = openTestSqliteDb();
+
+    const engine = new ExecutionEngine({ db });
+    await engine.enqueuePlan({
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-queued-1",
+      requestId: "req-queued-1",
+      steps: [action("Research")],
+    });
+
+    const outbox = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ?",
+      ["ws.broadcast"],
+    );
+    const types = outbox
+      .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
+      .map((row) => row.message?.type)
+      .filter((value): value is string => typeof value === "string");
+    expect(types).toContain("run.queued");
+  });
+
   it("preserves heartbeat trigger kind when provided", async () => {
     db = openTestSqliteDb();
 
@@ -156,6 +179,74 @@ describe("ExecutionEngine (normalized)", () => {
     const trigger = JSON.parse(job!.trigger_json) as { kind?: string; lane?: string };
     expect(trigger.kind).toBe("webhook");
     expect(trigger.lane).toBe("cron");
+  });
+
+  it("emits run.started and run.completed when a run succeeds", async () => {
+    db = openTestSqliteDb();
+
+    const engine = new ExecutionEngine({
+      db,
+      clock: () => ({ nowMs: Date.now(), nowIso: new Date().toISOString() }),
+    });
+    await engine.enqueuePlan({
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-run-events-succeeded-1",
+      requestId: "req-run-events-succeeded-1",
+      steps: [action("Research")],
+    });
+
+    const executor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => ({ success: true, result: { ok: true } })),
+    };
+
+    await drain(engine, "w1", executor);
+
+    const outbox = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ?",
+      ["ws.broadcast"],
+    );
+    const types = outbox
+      .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
+      .map((row) => row.message?.type)
+      .filter((value): value is string => typeof value === "string");
+    expect(types).toContain("run.started");
+    expect(types).toContain("run.completed");
+  });
+
+  it("emits run.failed when a run exhausts retry attempts", async () => {
+    db = openTestSqliteDb();
+
+    const engine = new ExecutionEngine({
+      db,
+      clock: () => ({ nowMs: Date.now(), nowIso: new Date().toISOString() }),
+    });
+    await engine.enqueuePlan({
+      key: "agent:agent-1:telegram-1:group:thread-1",
+      lane: "main",
+      planId: "plan-run-events-failed-1",
+      requestId: "req-run-events-failed-1",
+      steps: [action("Research")],
+    });
+
+    const executor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => ({ success: false, error: "boom" })),
+    };
+
+    await drain(engine, "w1", executor);
+
+    const run = await db.get<{ status: string }>("SELECT status FROM execution_runs LIMIT 1");
+    expect(run?.status).toBe("failed");
+
+    const outbox = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ?",
+      ["ws.broadcast"],
+    );
+    const types = outbox
+      .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string } })
+      .map((row) => row.message?.type)
+      .filter((value): value is string => typeof value === "string");
+    expect(types).toContain("run.failed");
   });
 
   it("worker executes a 2-step plan and completes the run", async () => {

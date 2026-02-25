@@ -34,15 +34,19 @@ This is the canonical list of `type` values and payload contracts for the v1 Web
 
 - `approval.requested` — `{ approval: Approval }`
 - `approval.resolved` — `{ approval: Approval }`
-- `run.paused` — `ExecutionRunPausedPayload` (pause reason + optional `approval_id`)
-- `run.resumed` — `{ run_id }`
-- `run.cancelled` — `{ run_id, reason? }`
 - `policy_override.created` — `{ override: PolicyOverride }`
 - `policy_override.revoked` — `{ override: PolicyOverride }`
 - `policy_override.expired` — `{ override: PolicyOverride }`
 
 ### Execution and evidence
 
+- `run.queued` — `{ run_id }`
+- `run.started` — `{ run_id }`
+- `run.paused` — `ExecutionRunPausedPayload` (pause reason + optional `approval_id`)
+- `run.resumed` — `{ run_id }`
+- `run.completed` — `{ run_id }`
+- `run.failed` — `{ run_id }`
+- `run.cancelled` — `{ run_id, reason? }`
 - `run.updated` — `{ run: ExecutionRun }`
 - `step.updated` — `{ step: ExecutionStep }`
 - `attempt.updated` — `{ attempt: ExecutionAttempt }` (includes cost + policy decision fields when available)
