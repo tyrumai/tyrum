@@ -3,17 +3,17 @@ name: Test Playbook
 description: A playbook used in automated tests
 version: "1.0.0"
 steps:
-  - id: research
-    name: Research the topic
-    command: research test query
+  - id: cli
+    name: Echo something
+    command: cli echo "hello world"
     output: text
-  - id: notify
-    name: Send a message
-    command: message to=user@example.com body="Hello from playbook"
-    rollback_hint: Retry the message
-  - id: store
-    name: Store the result
-    command: store key=result value=done
+  - id: http
+    name: Make HTTP request
+    command: http GET https://example.com/data
+    output: json
+  - id: web
+    name: Navigate
+    command: web navigate https://example.com
 allowed_domains:
   - example.com
 consent_boundary: "requires_approval"

@@ -14,12 +14,32 @@ describe("PlaybookManifest schema", () => {
       id: "my-pb",
       name: "My Playbook",
       version: "1.0.0",
-      steps: [{ id: "step-1", command: "research test" }],
+      steps: [{ id: "step-1", command: "cli echo test" }],
     };
     const result = PlaybookManifest.parse(raw);
     expect(result.id).toBe("my-pb");
     expect(result.steps).toHaveLength(1);
     expect(result.steps[0]!.id).toBe("step-1");
+  });
+
+  it("rejects manifest with an unsupported command namespace", () => {
+    const raw = {
+      id: "bad-ns",
+      name: "Bad Namespace",
+      version: "1.0.0",
+      steps: [{ id: "step-1", command: "research test" }],
+    };
+    expect(() => PlaybookManifest.parse(raw)).toThrow();
+  });
+
+  it("rejects manifest with an implicit shell command (missing namespace)", () => {
+    const raw = {
+      id: "implicit-shell",
+      name: "Implicit Shell",
+      version: "1.0.0",
+      steps: [{ id: "step-1", command: "echo hi" }],
+    };
+    expect(() => PlaybookManifest.parse(raw)).toThrow();
   });
 
   it("rejects manifest with missing required fields", () => {
@@ -84,8 +104,8 @@ describe("PlaybookManifest schema", () => {
       name: "Dup",
       version: "1.0.0",
       steps: [
-        { id: "s1", command: "research a" },
-        { id: "s1", command: "research b" },
+        { id: "s1", command: "cli echo a" },
+        { id: "s1", command: "cli echo b" },
       ],
     };
     expect(() => PlaybookManifest.parse(raw)).toThrow();
@@ -153,19 +173,21 @@ describe("PlaybookRunner", () => {
 
   it("converts steps to action primitives", () => {
     const pb = makePlaybook("conv-test", [
-      { id: "research", command: "research hello" },
-      { id: "message", command: "message to=user body=sent" },
+      { id: "cli", command: "cli echo hello" },
+      { id: "mcp", command: "mcp github.search query=\"hello\"" },
+      { id: "node", command: "node screen capture format=\"png\"" },
     ]);
 
     const result = runner.run(pb);
     expect(result.playbook_id).toBe("conv-test");
-    expect(result.steps).toHaveLength(2);
-    expect(result.steps[0]!.type).toBe("Research");
+    expect(result.steps).toHaveLength(3);
+    expect(result.steps[0]!.type).toBe("CLI");
     expect(result.steps[0]!.args).toEqual({
-      query: "hello",
+      cmd: "echo",
+      args: ["hello"],
       __playbook: {
         playbook_id: "conv-test",
-        step_id: "research",
+        step_id: "cli",
         step_name: null,
         stdin: null,
         condition: null,
@@ -173,13 +195,13 @@ describe("PlaybookRunner", () => {
         output: null,
       },
     });
-    expect(result.steps[1]!.type).toBe("Message");
+    expect(result.steps[1]!.type).toBe("Mcp");
     expect(result.steps[1]!.args).toEqual({
-      to: "user",
-      body: "sent",
+      tool_id: "mcp.github.search",
+      args: { query: "hello" },
       __playbook: {
         playbook_id: "conv-test",
-        step_id: "message",
+        step_id: "mcp",
         step_name: null,
         stdin: null,
         condition: null,
@@ -187,15 +209,31 @@ describe("PlaybookRunner", () => {
         output: null,
       },
     });
-    expect(result.steps[0]!.idempotency_key).toBe("playbook:conv-test:research");
-    expect(result.steps[1]!.idempotency_key).toBe("playbook:conv-test:message");
+    expect(result.steps[2]!.type).toBe("Node");
+    expect(result.steps[2]!.args).toEqual({
+      capability: "screen",
+      action: "capture",
+      args: { format: "png" },
+      __playbook: {
+        playbook_id: "conv-test",
+        step_id: "node",
+        step_name: null,
+        stdin: null,
+        condition: null,
+        approval: null,
+        output: null,
+      },
+    });
+    expect(result.steps[0]!.idempotency_key).toBe("playbook:conv-test:cli");
+    expect(result.steps[1]!.idempotency_key).toBe("playbook:conv-test:mcp");
+    expect(result.steps[2]!.idempotency_key).toBe("playbook:conv-test:node");
     expect(result.created_at).toBeDefined();
   });
 
   it("tracks execution stats", () => {
     const runner2 = new PlaybookRunner();
     const pb = makePlaybook("stats-test", [
-      { id: "step", command: "research x" },
+      { id: "step", command: "cli echo x" },
     ]);
 
     runner2.run(pb);
@@ -212,7 +250,7 @@ describe("PlaybookRunner", () => {
     const pb = makePlaybook("ns-test", [
       { id: "cli", command: "cli echo \"hello world\"" },
       { id: "web", command: "web navigate https://example.com" },
-      { id: "llm", command: "llm draft a short summary" },
+      { id: "http", command: "http GET https://example.com" },
     ]);
 
     const result = runner.run(pb);
@@ -250,12 +288,13 @@ describe("PlaybookRunner", () => {
     });
     expect(result.steps[1]!.idempotency_key).toBe("playbook:ns-test:web");
 
-    expect(result.steps[2]!.type).toBe("Decide");
+    expect(result.steps[2]!.type).toBe("Http");
     expect(result.steps[2]!.args).toEqual({
-      prompt: "draft a short summary",
+      method: "GET",
+      url: "https://example.com",
       __playbook: {
         playbook_id: "ns-test",
-        step_id: "llm",
+        step_id: "http",
         step_name: null,
         stdin: null,
         condition: null,
@@ -263,6 +302,6 @@ describe("PlaybookRunner", () => {
         output: null,
       },
     });
-    expect(result.steps[2]!.idempotency_key).toBe("playbook:ns-test:llm");
+    expect(result.steps[2]!.idempotency_key).toBe("playbook:ns-test:http");
   });
 });

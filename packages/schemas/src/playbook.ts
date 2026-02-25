@@ -22,6 +22,17 @@ export type PlaybookOutputSpec = z.infer<typeof PlaybookOutputSpec>;
 export const PlaybookApprovalSpec = z.enum(["required"]);
 export type PlaybookApprovalSpec = z.infer<typeof PlaybookApprovalSpec>;
 
+const PLAYBOOK_COMMAND_NAMESPACES = ["cli", "http", "web", "mcp", "node"] as const;
+const PLAYBOOK_COMMAND_NAMESPACE_SET = new Set<string>(PLAYBOOK_COMMAND_NAMESPACES);
+
+function playbookCommandNamespace(command: string): string {
+  const trimmed = command.trim();
+  if (trimmed.length === 0) return "";
+  const spaceIdx = trimmed.indexOf(" ");
+  const ns = (spaceIdx === -1 ? trimmed : trimmed.slice(0, spaceIdx)).trim().toLowerCase();
+  return ns;
+}
+
 /** A single step within a playbook. */
 export const PlaybookStep = z
   .object({
@@ -33,7 +44,21 @@ export const PlaybookStep = z
      * Namespaced command string compiled by the runtime.
      * Example: `cli git status`, `http GET https://example.com`.
      */
-    command: z.string().trim().min(1),
+    command: z
+      .string()
+      .trim()
+      .min(1)
+      .superRefine((value, ctx) => {
+        const ns = playbookCommandNamespace(value);
+        if (!PLAYBOOK_COMMAND_NAMESPACE_SET.has(ns)) {
+          ctx.addIssue({
+            code: "custom",
+            message:
+              `unsupported playbook command namespace '${ns || "<missing>"}'; ` +
+              `expected one of: ${PLAYBOOK_COMMAND_NAMESPACES.join(", ")}`,
+          });
+        }
+      }),
     /** Optional stdin reference, e.g. `$stepId.stdout` or `$stepId.json`. */
     stdin: z.string().trim().min(1).optional(),
     /** Optional condition expression for skipping this step. */

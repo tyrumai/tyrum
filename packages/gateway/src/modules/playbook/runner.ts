@@ -77,6 +77,13 @@ function parseKeyValueArgs(raw: string): Record<string, string> {
   return args;
 }
 
+function parseMcpToolId(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return "";
+  if (trimmed.startsWith("mcp.")) return trimmed;
+  return `mcp.${trimmed}`;
+}
+
 /** Convert a PlaybookStep to an ActionPrimitive. */
 function withPlaybookMeta(
   args: Record<string, unknown>,
@@ -106,19 +113,14 @@ function stepToPrimitive(
   const { ns, rest } = splitNamespace(step.command);
   const idempotency_key = `playbook:${playbookId}:${step.id}`;
 
-  if (ns === "research") {
-    return {
-      type: "Research",
-      args: withPlaybookMeta({ query: rest }, playbookId, step),
-      postcondition: step.postcondition,
-      idempotency_key,
-    };
-  }
-
   if (ns === "http") {
     const parts = tokenizeArgs(rest).map(unquote).filter(Boolean);
-    const method = parts[0]?.toUpperCase();
-    const url = parts[1];
+    const [maybeMethod, maybeUrl] = parts;
+    const method = maybeUrl ? maybeMethod?.toUpperCase() : "GET";
+    const url = maybeUrl ?? maybeMethod;
+    if (!url) {
+      throw new Error("http command requires a URL");
+    }
     return {
       type: "Http",
       args: withPlaybookMeta(
@@ -129,26 +131,6 @@ function stepToPrimitive(
         playbookId,
         step,
       ),
-      postcondition: step.postcondition,
-      idempotency_key,
-    };
-  }
-
-  if (ns === "message") {
-    const args = parseKeyValueArgs(rest);
-    return {
-      type: "Message",
-      args: withPlaybookMeta(args, playbookId, step),
-      postcondition: step.postcondition,
-      idempotency_key,
-    };
-  }
-
-  if (ns === "store") {
-    const args = parseKeyValueArgs(rest);
-    return {
-      type: "Store",
-      args: withPlaybookMeta(args, playbookId, step),
       postcondition: step.postcondition,
       idempotency_key,
     };
@@ -233,10 +215,37 @@ function stepToPrimitive(
     };
   }
 
-  if (ns === "llm") {
+  if (ns === "mcp") {
+    const parts = tokenizeArgs(rest).filter(Boolean);
+    const toolToken = unquote(parts[0] ?? "").trim();
+    const tool_id = parseMcpToolId(toolToken);
+    if (!tool_id) {
+      throw new Error("mcp command requires a tool id like 'github.search'");
+    }
+    const idParts = tool_id.split(".").filter((p) => p.trim().length > 0);
+    if (idParts.length < 3 || idParts[0] !== "mcp") {
+      throw new Error(`invalid mcp tool id: '${tool_id}'`);
+    }
+    const args = parseKeyValueArgs(parts.slice(1).join(" "));
     return {
-      type: "Decide",
-      args: withPlaybookMeta({ prompt: rest }, playbookId, step),
+      type: "Mcp",
+      args: withPlaybookMeta({ tool_id, args }, playbookId, step),
+      postcondition: step.postcondition,
+      idempotency_key,
+    };
+  }
+
+  if (ns === "node") {
+    const parts = tokenizeArgs(rest).filter(Boolean);
+    const capability = unquote(parts[0] ?? "").trim();
+    const action = unquote(parts[1] ?? "").trim();
+    if (!capability || !action) {
+      throw new Error("node command requires: node <capability> <action> [key=value ...]");
+    }
+    const args = parseKeyValueArgs(parts.slice(2).join(" "));
+    return {
+      type: "Node",
+      args: withPlaybookMeta({ capability, action, args }, playbookId, step),
       postcondition: step.postcondition,
       idempotency_key,
     };

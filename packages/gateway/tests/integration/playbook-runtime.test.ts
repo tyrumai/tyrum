@@ -64,6 +64,15 @@ steps:
     command: cli echo hi
 `.trim();
 
+const IMPLICIT_SHELL_PLAYBOOK = `
+id: implicit-shell-runtime-test
+name: Implicit shell runtime test
+version: "1.0.0"
+steps:
+  - id: step-1
+    command: echo hi
+`.trim();
+
 describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
   let homeDir: string | undefined;
   let container: GatewayContainer | undefined;
@@ -141,6 +150,34 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ action: "run", pipeline: INLINE_PLAYBOOK, argsJson: "{not json", timeoutMs: 50 }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; status: string; error?: { code?: string } };
+    expect(body.ok).toBe(false);
+    expect(body.status).toBe("error");
+    expect(body.error?.code).toBe("invalid_request");
+
+    const runCount = await container.db.get<{ count: number }>("SELECT COUNT(*) as count FROM execution_runs");
+    expect(runCount?.count ?? 0).toBe(0);
+  });
+
+  it("returns status=error envelope for implicit shell commands (no run created)", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
+    const engine = new ExecutionEngine({
+      db: container.db,
+      redactionEngine: container.redactionEngine,
+      policyService: container.policyService,
+      logger: container.logger,
+    });
+    const playbooks = loadAllPlaybooks(fixturesDir, { onInvalidPlaybook: () => {} });
+    const app = createApp(container, { engine, playbooks });
+
+    const res = await app.request("/playbooks/runtime", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "run", pipeline: IMPLICIT_SHELL_PLAYBOOK, timeoutMs: 50 }),
     });
 
     expect(res.status).toBe(200);
