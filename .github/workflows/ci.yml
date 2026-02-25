@@ -164,18 +164,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          {
+            echo "## Coverage (ubuntu-latest)"
+            echo ""
+            echo "Download the full HTML report from the \`coverage-report-ubuntu\` artifact."
+            echo ""
 
-          echo "## Coverage (ubuntu-latest)" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Download the full HTML report from the \`coverage-report-ubuntu\` artifact." >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
+            if [ ! -f coverage/index.html ]; then
+              echo "No coverage report found at \`coverage/index.html\`."
+              exit 0
+            fi
 
-          if [ ! -f coverage/index.html ]; then
-            echo "No coverage report found at \`coverage/index.html\`." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
-          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+            python3 - <<'PY'
           import re
           from pathlib import Path
 
@@ -206,6 +206,7 @@ jobs:
               pct, covered, total = row
               print(f"| {label} | {pct:.2f}% | {covered}/{total} |")
           PY
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload coverage artifact
         if: always()
