@@ -195,7 +195,7 @@ describe("ExecutionEngine (normalized)", () => {
       db,
       clock: () => ({ nowMs: Date.now(), nowIso: new Date().toISOString() }),
     });
-    const { runId } = await engine.enqueuePlan({
+    await engine.enqueuePlan({
       key: "agent:agent-1:telegram-1:group:thread-1",
       lane: "main",
       planId: "plan-budget-1",

@@ -1,0 +1,12 @@
+**/dist/**
+**/node_modules/**
+**/coverage/**
+**/.next/**
+apps/docs/build/**
+apps/docs/.docusaurus/**
+apps/desktop/release/**
+.worktrees/**
+**/*.db
+**/*.sqlite*
+pnpm-lock.yaml
+web/**
