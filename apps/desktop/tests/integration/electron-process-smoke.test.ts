@@ -118,18 +118,17 @@ function killProcessGroup(pid: number, signal: NodeJS.Signals): void {
   }
 }
 
-function pnpmCommand(): string {
-  return process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-}
+const isWindows = process.platform === "win32";
 
 function electronCommand(): string {
   return process.platform === "win32" ? ELECTRON_BIN_WINDOWS : ELECTRON_BIN;
 }
 
 function runBuildStep(args: string[], failurePrefix: string): void {
-  const result = spawnSync(pnpmCommand(), args, {
+  const result = spawnSync("pnpm", args, {
     cwd: REPO_ROOT,
     encoding: "utf8",
+    shell: isWindows,
   });
 
   if (result.status === 0) return;

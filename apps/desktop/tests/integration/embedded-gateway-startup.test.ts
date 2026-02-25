@@ -15,9 +15,7 @@ const SCHEMAS_DIST = resolve(REPO_ROOT, "packages/schemas/dist/index.mjs");
 const GATEWAY_SRC_ENTRYPOINT = resolve(REPO_ROOT, "packages/gateway/src/index.ts");
 const GATEWAY_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
 
-function pnpmCommand(): string {
-  return process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-}
+const isWindows = process.platform === "win32";
 
 function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
@@ -71,6 +69,7 @@ function tryGatewayBuild(cmd: string, args: string[]): ReturnType<typeof spawnSy
   return spawnSync(cmd, args, {
     cwd: REPO_ROOT,
     encoding: "utf8",
+    shell: isWindows,
   });
 }
 
@@ -105,7 +104,7 @@ function ensureGatewayBuild(): void {
   if (!gatewayBuildIsStale()) return;
 
   const args = ["--filter", "@tyrum/gateway", "build"];
-  const result = tryGatewayBuild(pnpmCommand(), args);
+  const result = tryGatewayBuild("pnpm", args);
   if (result.status === 0 || existsSync(GATEWAY_BIN)) return;
   if (waitForGatewayBuildByAnotherWorker(5_000)) return;
 

@@ -38,9 +38,7 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
 }
 
-function pnpmCommand(): string {
-  return process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-}
+const isWindows = process.platform === "win32";
 
 function maxMtimeMsInDir(dir: string): number {
   let max = 0;
@@ -124,6 +122,7 @@ function tryGatewayBuild(cmd: string, args: string[]): ReturnType<typeof spawnSy
   return spawnSync(cmd, args, {
     cwd: REPO_ROOT,
     encoding: "utf8",
+    shell: isWindows,
   });
 }
 
@@ -142,7 +141,7 @@ async function ensureGatewayBuild(): Promise<void> {
     ];
 
     for (const args of commands) {
-      const result = tryGatewayBuild(pnpmCommand(), args);
+      const result = tryGatewayBuild("pnpm", args);
       if (result.status === 0) continue;
 
       if (result.error?.message.includes("ENOENT")) {
