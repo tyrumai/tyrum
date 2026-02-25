@@ -252,6 +252,82 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
     expect(resolved?.status).toBe("expired");
   }, 10_000);
 
+  it("does not get stuck when a denied tool approval is missing a resume token", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-perms-agent-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
+
+    await writeFile(
+      join(homeDir, "agent.yml"),
+      [
+        "model:",
+        "  model: openai/gpt-4.1",
+        "skills:",
+        "  enabled: []",
+        "mcp:",
+        "  enabled: []",
+        "tools:",
+        "  allow:",
+        "    - tool.exec",
+        "sessions:",
+        "  ttl_days: 30",
+        "  max_turns: 20",
+        "memory:",
+        "  markdown_enabled: false",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const languageModel = createSequencedToolLoopLanguageModel([
+      {
+        kind: "tool-calls",
+        toolCalls: [
+          {
+            id: "tc-deny-missing-token",
+            name: "tool.exec",
+            arguments: JSON.stringify({ command: "echo hi" }),
+          },
+        ],
+      },
+      { kind: "text", text: "done" },
+    ]);
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      agentId: "agent-test",
+      workspaceId: "ws-test",
+      languageModel,
+      mcpManager: stubMcpManager() as unknown as ConstructorParameters<typeof AgentRuntime>[0]["mcpManager"],
+      approvalWaitMs: 10_000,
+      approvalPollMs: 50,
+      turnEngineWaitMs: 800,
+    });
+
+    const turnPromise = runtime.turn({
+      channel: "test",
+      thread_id: "thread-approval-deny-missing-token-1",
+      message: "run a command",
+    });
+
+    const pending = await waitForPendingApproval(container);
+    expect(pending.prompt).toContain("tool.exec");
+    expect(pending.status).toBe("pending");
+
+    await container.approvalDal.respond(pending.id, false, "denied in test");
+    await container.db.run("UPDATE approvals SET resume_token = NULL WHERE id = ?", [pending.id]);
+
+    let err: unknown;
+    try {
+      await turnPromise;
+      throw new Error("expected turn to throw");
+    } catch (caught) {
+      err = caught;
+    }
+
+    const message = err instanceof Error ? err.message : String(err);
+    expect(message).not.toContain("did not complete within");
+  }, 10_000);
+
   it("short-circuits policy denies without creating approvals (tool not executed)", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-perms-agent-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });

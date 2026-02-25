@@ -26,6 +26,7 @@ import { OutboxDal } from "./modules/backplane/outbox-dal.js";
 import { ConnectionDirectoryDal } from "./modules/backplane/connection-directory.js";
 import { OutboxLifecycleScheduler } from "./modules/backplane/outbox-lifecycle.js";
 import { OutboxPoller } from "./modules/backplane/outbox-poller.js";
+import { StateStoreLifecycleScheduler } from "./modules/statestore/lifecycle.js";
 import { ConnectionManager } from "./ws/connection-manager.js";
 import type { ProtocolDeps } from "./ws/protocol.js";
 import { createWsHandler } from "./routes/ws.js";
@@ -946,6 +947,14 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
           logger: container.logger,
         })
       : undefined;
+  const stateStoreLifecycleScheduler =
+    role === "all" || role === "scheduler"
+      ? new StateStoreLifecycleScheduler({
+          db: container.db,
+          keepProcessAlive: role === "scheduler",
+          logger: container.logger,
+        })
+      : undefined;
 
   if (shouldRunEdge) {
     container.watcherProcessor.start();
@@ -958,6 +967,9 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   }
   if (outboxLifecycleScheduler) {
     outboxLifecycleScheduler.start();
+  }
+  if (stateStoreLifecycleScheduler) {
+    stateStoreLifecycleScheduler.start();
   }
 
   const otel = await maybeStartOtel({
@@ -1054,10 +1066,27 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
           }
 
           try {
-            if (row.status === "approved" && row.resume_token) {
-              await protocolDeps.engine.resumeRun(row.resume_token);
-            } else if (row.status === "denied" && row.run_id) {
-              await protocolDeps.engine.cancelRun(row.run_id, row.response_reason ?? reason ?? "approval denied");
+            const isAgentToolExecution = isRecord(row.context) && row.context["source"] === "agent-tool-execution";
+            const resumeToken = row.resume_token?.trim();
+
+            if (row.status === "approved") {
+              if (resumeToken) {
+                await protocolDeps.engine.resumeRun(resumeToken);
+              } else if (row.run_id) {
+                await protocolDeps.engine.cancelRun(
+                  row.run_id,
+                  row.response_reason ?? reason ?? "approved approval missing resume token",
+                );
+              }
+            } else if (row.status === "denied") {
+              if (isAgentToolExecution && resumeToken) {
+                await protocolDeps.engine.resumeRun(resumeToken);
+              } else if (row.run_id) {
+                await protocolDeps.engine.cancelRun(
+                  row.run_id,
+                  row.response_reason ?? reason ?? "approval denied",
+                );
+              }
             }
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
@@ -1367,6 +1396,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     watcherScheduler?.stop();
     artifactLifecycleScheduler?.stop();
     outboxLifecycleScheduler?.stop();
+    stateStoreLifecycleScheduler?.stop();
     outboxPoller?.stop();
     telegramProcessor?.stop();
     container.modelsDev.stopBackgroundRefresh();
