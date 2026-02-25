@@ -122,6 +122,19 @@ export interface TyrumClientOptions {
   maxSeenRequestIds?: number;
 }
 
+type GeneratedDevice = {
+  publicKey: string;
+  privateKey: string;
+  deviceId: string;
+};
+
+type ResolvedConnectDevice = GeneratedDevice & {
+  label?: string;
+  platform?: string;
+  version?: string;
+  mode?: string;
+};
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -200,11 +213,8 @@ export class TyrumClient {
   private connectionAttempt = 0;
   private transportErrorHint: string | null = null;
   private suppressReconnect = false;
-  private generatedDevice: {
-    publicKey: string;
-    privateKey: string;
-    deviceId: string;
-  } | null = null;
+  private generatedDevice: GeneratedDevice | null = null;
+  private generatedDevicePromise: Promise<GeneratedDevice> | null = null;
 
   constructor(options: TyrumClientOptions) {
     this.emitter = mitt<TyrumClientEvents>();
@@ -610,15 +620,7 @@ export class TyrumClient {
     }
   }
 
-  private async resolveConnectDevice(): Promise<{
-    publicKey: string;
-    privateKey: string;
-    deviceId: string;
-    label?: string;
-    platform?: string;
-    version?: string;
-    mode?: string;
-  }> {
+  private async resolveConnectDevice(): Promise<ResolvedConnectDevice> {
     const provided = this.opts.device;
     if (provided) {
       const pubkey = provided.publicKey.trim();
@@ -634,7 +636,18 @@ export class TyrumClient {
       return { ...provided, deviceId: computed };
     }
     if (!this.generatedDevice) {
-      this.generatedDevice = await createDeviceIdentity();
+      if (!this.generatedDevicePromise) {
+        this.generatedDevicePromise = createDeviceIdentity()
+          .then((generatedDevice) => {
+            this.generatedDevice = generatedDevice;
+            return generatedDevice;
+          })
+          .catch((error) => {
+            this.generatedDevicePromise = null;
+            throw error;
+          });
+      }
+      this.generatedDevice = await this.generatedDevicePromise;
     }
     return this.generatedDevice;
   }

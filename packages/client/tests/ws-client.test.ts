@@ -182,6 +182,65 @@ describe("TyrumClient", () => {
     });
   });
 
+  it("reuses one auto-generated device identity across concurrent resolution", async () => {
+    client = new TyrumClient({
+      url: "ws://127.0.0.1:65535",
+      token: "t",
+      capabilities: [],
+      reconnect: false,
+    });
+
+    const firstIdentity = {
+      deviceId: "device-A",
+      publicKey: "pub-A",
+      privateKey: "priv-A",
+    };
+    const secondIdentity = {
+      deviceId: "device-B",
+      publicKey: "pub-B",
+      privateKey: "priv-B",
+    };
+
+    let resolveFirstIdentity!: (value: typeof firstIdentity) => void;
+    let resolveSecondIdentity!: (value: typeof secondIdentity) => void;
+    const firstIdentityPromise = new Promise<typeof firstIdentity>((resolve) => {
+      resolveFirstIdentity = resolve;
+    });
+    const secondIdentityPromise = new Promise<typeof secondIdentity>((resolve) => {
+      resolveSecondIdentity = resolve;
+    });
+
+    const createSpy = vi
+      .spyOn(deviceIdentity, "createDeviceIdentity")
+      .mockImplementationOnce(async () => await firstIdentityPromise)
+      .mockImplementationOnce(async () => await secondIdentityPromise);
+
+    const resolveConnectDevice = (
+      client as unknown as {
+        resolveConnectDevice: () => Promise<{
+          publicKey: string;
+          privateKey: string;
+          deviceId: string;
+        }>;
+      }
+    ).resolveConnectDevice.bind(client);
+
+    const firstCall = resolveConnectDevice();
+    const secondCall = resolveConnectDevice();
+
+    resolveSecondIdentity(secondIdentity);
+    await Promise.resolve();
+    resolveFirstIdentity(firstIdentity);
+
+    const [resolvedFirst, resolvedSecond] = await Promise.all([firstCall, secondCall]);
+    const resolvedThird = await resolveConnectDevice();
+
+    expect(createSpy).toHaveBeenCalledTimes(1);
+    expect(resolvedFirst).toEqual(firstIdentity);
+    expect(resolvedSecond).toEqual(firstIdentity);
+    expect(resolvedThird).toEqual(firstIdentity);
+  });
+
   it("derives device id using shared base64url decoder", async () => {
     server = createTestServer();
     const spy = vi.spyOn(deviceIdentity, "fromBase64Url");
