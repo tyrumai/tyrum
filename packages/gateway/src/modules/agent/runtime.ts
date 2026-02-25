@@ -1716,6 +1716,53 @@ export class AgentRuntime {
     };
   }
 
+  private createStopWhenWithWithinTurnLoopDetection(input: {
+    stepLimit: number;
+    withinTurnCfg: {
+      enabled: boolean;
+      consecutive_repeat_limit: number;
+      cycle_repeat_limit: number;
+    };
+    sessionId: string;
+    channel: string;
+    threadId: string;
+  }): {
+    stopWhen: Array<ReturnType<typeof stepCountIs>>;
+    withinTurnLoop: { value: ReturnType<typeof detectWithinTurnToolLoop> | undefined };
+  } {
+    const withinTurnLoop = { value: undefined as ReturnType<typeof detectWithinTurnToolLoop> | undefined };
+    const stopWhen = [stepCountIs(input.stepLimit)];
+
+    if (input.withinTurnCfg.enabled) {
+      stopWhen.push(({ steps }) => {
+        if (withinTurnLoop.value) return true;
+        const detected = detectWithinTurnToolLoop({
+          steps,
+          consecutiveRepeatLimit: input.withinTurnCfg.consecutive_repeat_limit,
+          cycleRepeatLimit: input.withinTurnCfg.cycle_repeat_limit,
+        });
+        if (!detected) return false;
+        withinTurnLoop.value = detected;
+        this.opts.container.logger.warn("agents.loop.within_turn_detected", {
+          session_id: input.sessionId,
+          channel: input.channel,
+          thread_id: input.threadId,
+          kind: detected.kind,
+          tool_names: detected.toolNames,
+        });
+        return true;
+      });
+    }
+
+    return { stopWhen, withinTurnLoop };
+  }
+
+  private resolveTurnReply(rawReply: string, withinTurnLoop: ReturnType<typeof detectWithinTurnToolLoop> | undefined): string {
+    if (rawReply.length > 0) return rawReply;
+    if (withinTurnLoop) return WITHIN_TURN_LOOP_STOP_REPLY;
+    return "No assistant response returned.";
+  }
+
   async turnStream(input: AgentTurnRequestT): Promise<{
     streamResult: ReturnType<typeof streamText>;
     sessionId: string;
@@ -1732,29 +1779,14 @@ export class AgentRuntime {
       systemPrompt,
     });
 
-    let withinTurnLoop = undefined as ReturnType<typeof detectWithinTurnToolLoop>;
     const withinTurnCfg = ctx.config.sessions.loop_detection.within_turn;
-    const stopWhen = [stepCountIs(this.maxSteps)];
-    if (withinTurnCfg.enabled) {
-      stopWhen.push(({ steps }) => {
-        if (withinTurnLoop) return true;
-        const detected = detectWithinTurnToolLoop({
-          steps,
-          consecutiveRepeatLimit: withinTurnCfg.consecutive_repeat_limit,
-          cycleRepeatLimit: withinTurnCfg.cycle_repeat_limit,
-        });
-        if (!detected) return false;
-        withinTurnLoop = detected;
-        this.opts.container.logger.warn("agents.loop.within_turn_detected", {
-          session_id: session.session_id,
-          channel: resolved.channel,
-          thread_id: resolved.thread_id,
-          kind: detected.kind,
-          tool_names: detected.toolNames,
-        });
-        return true;
-      });
-    }
+    const { stopWhen, withinTurnLoop } = this.createStopWhenWithWithinTurnLoopDetection({
+      stepLimit: this.maxSteps,
+      withinTurnCfg,
+      sessionId: session.session_id,
+      channel: resolved.channel,
+      threadId: resolved.thread_id,
+    });
 
     const streamResult = streamText({
       model,
@@ -1773,11 +1805,7 @@ export class AgentRuntime {
     const finalize = async (): Promise<AgentTurnResponseT> => {
       const result = await streamResult;
       const rawReply = (await result.text) || "";
-      const reply = rawReply.length > 0
-        ? rawReply
-        : withinTurnLoop
-          ? WITHIN_TURN_LOOP_STOP_REPLY
-          : "No assistant response returned.";
+      const reply = this.resolveTurnReply(rawReply, withinTurnLoop.value);
       return await this.finalizeTurn(ctx, session, resolved, reply, usedTools, contextReport);
     };
 
@@ -1879,29 +1907,14 @@ export class AgentRuntime {
       return await this.finalizeTurn(ctx, session, resolved, reply, usedTools, contextReport);
     }
 
-    let withinTurnLoop = undefined as ReturnType<typeof detectWithinTurnToolLoop>;
     const withinTurnCfg = ctx.config.sessions.loop_detection.within_turn;
-    const stopWhen = [stepCountIs(remainingSteps)];
-    if (withinTurnCfg.enabled) {
-      stopWhen.push(({ steps }) => {
-        if (withinTurnLoop) return true;
-        const detected = detectWithinTurnToolLoop({
-          steps,
-          consecutiveRepeatLimit: withinTurnCfg.consecutive_repeat_limit,
-          cycleRepeatLimit: withinTurnCfg.cycle_repeat_limit,
-        });
-        if (!detected) return false;
-        withinTurnLoop = detected;
-        this.opts.container.logger.warn("agents.loop.within_turn_detected", {
-          session_id: session.session_id,
-          channel: resolved.channel,
-          thread_id: resolved.thread_id,
-          kind: detected.kind,
-          tool_names: detected.toolNames,
-        });
-        return true;
-      });
-    }
+    const { stopWhen, withinTurnLoop } = this.createStopWhenWithWithinTurnLoopDetection({
+      stepLimit: remainingSteps,
+      withinTurnCfg,
+      sessionId: session.session_id,
+      channel: resolved.channel,
+      threadId: resolved.thread_id,
+    });
 
     const result = await generateText({
       model,
@@ -1987,11 +2000,7 @@ export class AgentRuntime {
     }
 
     const rawReply = result.text || "";
-    const reply = rawReply.length > 0
-      ? rawReply
-      : withinTurnLoop
-        ? WITHIN_TURN_LOOP_STOP_REPLY
-        : "No assistant response returned.";
+    const reply = this.resolveTurnReply(rawReply, withinTurnLoop.value);
     return await this.finalizeTurn(ctx, session, resolved, reply, usedTools, contextReport);
   }
 

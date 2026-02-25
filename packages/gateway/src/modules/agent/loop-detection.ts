@@ -98,9 +98,16 @@ export function detectWithinTurnToolLoop(input: {
         }
       }
       if (matches) {
+        const toolNames: string[] = [];
+        const seen = new Set<string>();
+        for (const name of [...(toolNamesBySignature.get(a) ?? []), ...(toolNamesBySignature.get(b) ?? [])]) {
+          if (seen.has(name)) continue;
+          seen.add(name);
+          toolNames.push(name);
+        }
         return {
           kind: "cycle",
-          toolNames: toolNamesBySignature.get(tail.at(-1) ?? "") ?? [],
+          toolNames,
         };
       }
     }
@@ -192,4 +199,3 @@ export function decideCrossTurnLoopWarning(input: {
 
   return { warn: false };
 }
-
