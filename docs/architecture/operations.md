@@ -88,5 +88,6 @@ Durable state and auditability are only useful if they survive incidents.
 Requirements:
 
 - Snapshot export/import for StateStore tables required to reconstruct sessions and execution.
+  - Snapshot bundles declare whether artifact bytes are included (and for which sensitivity classes); operators should back up the artifact store separately when bytes are excluded.
 - Artifact retention policies and export options (see [Artifacts](./artifacts.md)).
 - Clear guidance on credential rotation (gateway tokens, device tokens, provider auth profiles).

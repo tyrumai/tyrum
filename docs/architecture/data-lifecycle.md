@@ -101,7 +101,7 @@ Snapshot export/import is part of the lifecycle story:
 
 - Exports are consistent and preserve stable ids/hashes needed for audit and replay (see [Scaling and high availability](./scaling-ha.md)).
 - Export bundles SHOULD document whether they include artifact bytes, and under what sensitivity rules.
-  - Snapshot bundles declare this in `artifacts.bytes` (inclusion + sensitivity classes) and include artifact-byte lifecycle state via `artifacts.retention.execution_artifacts`.
+  - Snapshot bundles declare this in `artifacts.bytes` (inclusion + sensitivity classes) and declare the presence of artifact-byte lifecycle fields via `artifacts.retention.execution_artifacts` (per-artifact lifecycle values live in `tables.execution_artifacts`).
 
 If a deployment supports “forget” or data deletion requests, it MUST define:
 

@@ -86,6 +86,8 @@ export {
 } from "./routing.js";
 
 export {
+  SnapshotFormatV1,
+  SnapshotFormatV2,
   SnapshotFormat,
   SnapshotTable,
   SnapshotBundle,

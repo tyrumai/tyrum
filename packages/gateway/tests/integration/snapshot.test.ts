@@ -62,6 +62,51 @@ describe("snapshot routes", () => {
     }
   });
 
+  it("imports v1 snapshot bundles (backward compatible)", async () => {
+    const originalFlag = process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
+    process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = "1";
+
+    const { app, container } = await createTestApp();
+
+    await container.db.run(
+      `INSERT INTO sessions (session_id, channel, thread_id)
+       VALUES (?, ?, ?)`,
+      ["session-v1", "telegram", "thread-v1"],
+    );
+
+    const exportRes = await app.request("/snapshot/export");
+    expect(exportRes.status).toBe(200);
+    const exported = (await exportRes.json()) as Record<string, unknown>;
+
+    const bundle = { ...exported, format: "tyrum.snapshot.v1" } as Record<string, unknown>;
+    delete bundle["artifacts"];
+
+    const { app: app2, container: container2 } = await createTestApp();
+    const importRes = await app2.request("/snapshot/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ confirm: "IMPORT", bundle }),
+    });
+    expect(importRes.status).toBe(200);
+    const importBody = (await importRes.json()) as Record<string, unknown>;
+    expect(importBody["format"]).toBe("tyrum.snapshot.v1");
+
+    const importedSession = await container2.db.get<{ session_id: string }>(
+      "SELECT session_id FROM sessions WHERE session_id = ?",
+      ["session-v1"],
+    );
+    expect(importedSession?.session_id).toBe("session-v1");
+
+    await container.db.close();
+    await container2.db.close();
+
+    if (originalFlag === undefined) {
+      delete process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
+    } else {
+      process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = originalFlag;
+    }
+  });
+
   it("includes routing config revisions in snapshot bundles", async () => {
     const originalFlag = process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
     process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = "1";
