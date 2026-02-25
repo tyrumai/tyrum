@@ -28,6 +28,10 @@ describe("WS scope authorization matrix", () => {
     expect(resolveWsRequestRequiredScopes("presence.beacon")).toEqual([]);
   });
 
+  it("allows ping without additional scopes", () => {
+    expect(resolveWsRequestRequiredScopes("ping")).toEqual([]);
+  });
+
   it("denies unknown request types by default", () => {
     expect(resolveWsRequestRequiredScopes("unknown.type")).toBeNull();
   });

@@ -95,4 +95,10 @@ This is the canonical list of `type` values and payload contracts for the v1 Web
 - Deduplicate using `event_id` (and treat `occurred_at` as informational, not a strict ordering guarantee).
 - Clients should tolerate reconnect and resubscribe without losing safety invariants; durable state in the StateStore remains the source of truth.
 
+### SDK semantics (`@tyrum/client`)
+
+- The SDK emits parsed events using their wire `type` names (for example `run.updated`, `message.delta`) so operator clients do not need to parse raw WS JSON.
+- Event dedupe is bounded and `event_id`-based across reconnects (`maxSeenEventIds`, default `1000`).
+- Reconnect uses exponential backoff when enabled (`reconnect`, `maxReconnectDelay`) and preserves dedupe/replay safety guarantees across socket churn.
+
 In clustered deployments, events are delivered to the owning gateway edge via the **backplane/outbox** abstraction (see [Backplane](../backplane.md)).

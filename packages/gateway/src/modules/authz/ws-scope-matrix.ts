@@ -28,6 +28,9 @@ export function resolveWsRequestRequiredScopes(type: string): string[] | null {
     case "presence.beacon": {
       return [];
     }
+    case "ping": {
+      return [];
+    }
     default: {
       return null;
     }
