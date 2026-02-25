@@ -8,7 +8,18 @@ if (!prettierFlag) {
   process.exit(1);
 }
 
-const trackedFilesByExtension = ["*.ts", "*.tsx", "*.js", "*.mjs", "*.cjs", "*.json", "*.md", "*.mdx", "*.yml", "*.yaml"];
+const trackedFilesByExtension = [
+  "*.ts",
+  "*.tsx",
+  "*.js",
+  "*.mjs",
+  "*.cjs",
+  "*.json",
+  "*.md",
+  "*.mdx",
+  "*.yml",
+  "*.yaml",
+];
 
 function listTrackedFiles() {
   const result = spawnSync("git", ["ls-files", "-z", "--", ...trackedFilesByExtension], {
