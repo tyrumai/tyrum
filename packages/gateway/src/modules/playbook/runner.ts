@@ -6,6 +6,7 @@
  */
 
 import type { ActionPrimitive, Playbook, PlaybookStep } from "@tyrum/schemas";
+import { PlaybookCompileError } from "./errors.js";
 
 export interface PlaybookRunResult {
   playbook_id: string;
@@ -77,6 +78,13 @@ function parseKeyValueArgs(raw: string): Record<string, string> {
   return args;
 }
 
+function parseMcpToolId(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return "";
+  if (trimmed.startsWith("mcp.")) return trimmed;
+  return `mcp.${trimmed}`;
+}
+
 /** Convert a PlaybookStep to an ActionPrimitive. */
 function withPlaybookMeta(
   args: Record<string, unknown>,
@@ -106,19 +114,13 @@ function stepToPrimitive(
   const { ns, rest } = splitNamespace(step.command);
   const idempotency_key = `playbook:${playbookId}:${step.id}`;
 
-  if (ns === "research") {
-    return {
-      type: "Research",
-      args: withPlaybookMeta({ query: rest }, playbookId, step),
-      postcondition: step.postcondition,
-      idempotency_key,
-    };
-  }
-
   if (ns === "http") {
     const parts = tokenizeArgs(rest).map(unquote).filter(Boolean);
-    const method = parts[0]?.toUpperCase();
-    const url = parts[1];
+    const maybeMethod = parts[0]?.toUpperCase();
+    const isMethod = maybeMethod !== undefined && ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"].includes(maybeMethod);
+    const method = isMethod ? maybeMethod : "GET";
+    const url = isMethod ? parts[1] : parts[0];
+    if (!url) throw new PlaybookCompileError("http command requires a URL");
     return {
       type: "Http",
       args: withPlaybookMeta(
@@ -134,32 +136,12 @@ function stepToPrimitive(
     };
   }
 
-  if (ns === "message") {
-    const args = parseKeyValueArgs(rest);
-    return {
-      type: "Message",
-      args: withPlaybookMeta(args, playbookId, step),
-      postcondition: step.postcondition,
-      idempotency_key,
-    };
-  }
-
-  if (ns === "store") {
-    const args = parseKeyValueArgs(rest);
-    return {
-      type: "Store",
-      args: withPlaybookMeta(args, playbookId, step),
-      postcondition: step.postcondition,
-      idempotency_key,
-    };
-  }
-
   if (ns === "cli") {
     const parts = tokenizeArgs(rest).map(unquote).filter(Boolean);
     const cmd = parts[0];
     const cmdArgs = parts.slice(1);
     if (!cmd) {
-      throw new Error("cli command requires at least one token");
+      throw new PlaybookCompileError("cli command requires at least one token");
     }
     return {
       type: "CLI",
@@ -173,13 +155,15 @@ function stepToPrimitive(
     const parts = tokenizeArgs(rest).map(unquote).filter(Boolean);
     const op = parts[0];
     if (!op) {
-      throw new Error("web command requires an operation (e.g. navigate/click/fill/snapshot)");
+      throw new PlaybookCompileError(
+        "web command requires an operation (e.g. navigate/click/fill/snapshot)",
+      );
     }
 
     if (op === "navigate") {
       const url = parts[1];
       if (!url) {
-        throw new Error("web navigate requires a URL");
+        throw new PlaybookCompileError("web navigate requires a URL");
       }
       return {
         type: "Web",
@@ -192,7 +176,7 @@ function stepToPrimitive(
     if (op === "click") {
       const selector = parts[1];
       if (!selector) {
-        throw new Error("web click requires a selector");
+        throw new PlaybookCompileError("web click requires a selector");
       }
       return {
         type: "Web",
@@ -206,7 +190,7 @@ function stepToPrimitive(
       const selector = parts[1];
       const value = parts[2];
       if (!selector || value === undefined) {
-        throw new Error("web fill requires selector and value");
+        throw new PlaybookCompileError("web fill requires selector and value");
       }
       return {
         type: "Web",
@@ -233,16 +217,43 @@ function stepToPrimitive(
     };
   }
 
-  if (ns === "llm") {
+  if (ns === "mcp") {
+    const parts = tokenizeArgs(rest).filter(Boolean);
+    const toolToken = unquote(parts[0] ?? "").trim();
+    const tool_id = parseMcpToolId(toolToken);
+    if (!tool_id) {
+      throw new PlaybookCompileError("mcp command requires a tool id like 'github.search'");
+    }
+    const idParts = tool_id.split(".").filter((p) => p.trim().length > 0);
+    if (idParts.length < 3 || idParts[0] !== "mcp") {
+      throw new PlaybookCompileError(`invalid mcp tool id: '${tool_id}'`);
+    }
+    const args = parseKeyValueArgs(parts.slice(1).join(" "));
     return {
-      type: "Decide",
-      args: withPlaybookMeta({ prompt: rest }, playbookId, step),
+      type: "Mcp",
+      args: withPlaybookMeta({ tool_id, args }, playbookId, step),
       postcondition: step.postcondition,
       idempotency_key,
     };
   }
 
-  throw new Error(`Unsupported playbook command namespace: '${ns}'`);
+  if (ns === "node") {
+    const parts = tokenizeArgs(rest).filter(Boolean);
+    const capability = unquote(parts[0] ?? "").trim();
+    const action = unquote(parts[1] ?? "").trim();
+    if (!capability || !action) {
+      throw new PlaybookCompileError("node command requires: node <capability> <action> [key=value ...]");
+    }
+    const args = parseKeyValueArgs(parts.slice(2).join(" "));
+    return {
+      type: "Node",
+      args: withPlaybookMeta({ capability, action, args }, playbookId, step),
+      postcondition: step.postcondition,
+      idempotency_key,
+    };
+  }
+
+  throw new PlaybookCompileError(`Unsupported playbook command namespace: '${ns}'`);
 }
 
 export class PlaybookRunner {
