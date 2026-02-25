@@ -3,7 +3,7 @@
 Tyrum is WebSocket-first: most operator UX is powered by server-push events delivered over long-lived WebSocket connections.
 When the gateway is replicated, only the edge instance that owns a connection can write to that socket. The **backplane** is the cross-instance mechanism that makes “cluster with N replicas” behave like “cluster with 1 replica” for event delivery.
 
-This page defines the required *behavior* of the backplane and its durable outbox, independent of any specific implementation (polling, Postgres `LISTEN/NOTIFY`, external pub/sub, etc.).
+This page defines the required _behavior_ of the backplane and its durable outbox, independent of any specific implementation (polling, Postgres `LISTEN/NOTIFY`, external pub/sub, etc.).
 
 References:
 
@@ -37,7 +37,7 @@ The backplane does **not** provide a global total order:
 - Delivery order may differ across peers.
 - Events can be observed out of order, especially during reconnect/replay.
 
-If an operator view depends on ordering, it MUST be reconstructible from durable StateStore state (events are an incremental *signal*, not the only source of truth).
+If an operator view depends on ordering, it MUST be reconstructible from durable StateStore state (events are an incremental _signal_, not the only source of truth).
 
 ### Tenant isolation
 

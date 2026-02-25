@@ -93,13 +93,7 @@ export const ExecutionBudgets = z
   .strict();
 export type ExecutionBudgets = z.infer<typeof ExecutionBudgets>;
 
-export const ExecutionJobStatus = z.enum([
-  "queued",
-  "running",
-  "completed",
-  "failed",
-  "cancelled",
-]);
+export const ExecutionJobStatus = z.enum(["queued", "running", "completed", "failed", "cancelled"]);
 export type ExecutionJobStatus = z.infer<typeof ExecutionJobStatus>;
 
 export const ExecutionTrigger = z.discriminatedUnion("kind", [
@@ -176,13 +170,7 @@ export const ExecutionJob = z
   .strict();
 export type ExecutionJob = z.infer<typeof ExecutionJob>;
 
-export const ExecutionPauseReason = z.enum([
-  "approval",
-  "takeover",
-  "budget",
-  "manual",
-  "policy",
-]);
+export const ExecutionPauseReason = z.enum(["approval", "takeover", "budget", "manual", "policy"]);
 export type ExecutionPauseReason = z.infer<typeof ExecutionPauseReason>;
 
 export const ExecutionRunPausedPayload = z

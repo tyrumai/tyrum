@@ -340,7 +340,9 @@ describe("TokenStore", () => {
     const reloaded = new TokenStore(tempDir);
     await expect(reloaded.initialize()).resolves.toBe(adminToken);
     await expect(readFile(revocationPath, "utf-8")).resolves.toBeTruthy();
-    await expect(readFile(`${revocationPath}.bak`, "utf-8")).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(`${revocationPath}.bak`, "utf-8")).rejects.toMatchObject({
+      code: "ENOENT",
+    });
     await expect(readFile(join(tempDir, ".admin-token"), "utf-8")).resolves.toContain(adminToken);
     expect(reloaded.authenticate(issued.token)).toBeNull();
   });

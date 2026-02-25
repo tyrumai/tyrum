@@ -52,9 +52,7 @@ function isStartupNoiseLine(line: string): boolean {
   return STARTUP_NOISE_PATTERNS.some((pattern) => pattern.test(line));
 }
 
-export function summarizeGatewayStartupFailure(
-  startupLogLines: string[],
-): string | undefined {
+export function summarizeGatewayStartupFailure(startupLogLines: string[]): string | undefined {
   const normalizedLines = startupLogLines
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
@@ -71,9 +69,7 @@ export function summarizeGatewayStartupFailure(
   }
 
   for (const pattern of GENERIC_ERROR_PATTERNS) {
-    const matched = normalizedLines.find(
-      (line) => pattern.test(line) && !isStartupNoiseLine(line),
-    );
+    const matched = normalizedLines.find((line) => pattern.test(line) && !isStartupNoiseLine(line));
     if (matched) {
       return matched;
     }

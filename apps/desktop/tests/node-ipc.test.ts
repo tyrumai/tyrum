@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BrowserWindow } from "electron";
 
-const {
-  ipcMainHandleMock,
-  registeredHandlers,
-} = vi.hoisted(() => ({
+const { ipcMainHandleMock, registeredHandlers } = vi.hoisted(() => ({
   ipcMainHandleMock: vi.fn(),
   registeredHandlers: new Map<string, (...args: unknown[]) => unknown>(),
 }));
@@ -99,9 +96,7 @@ describe("node-ipc", () => {
   });
 
   it("registerNodeIpc registers expected IPC handlers", async () => {
-    const { registerNodeIpc } = await import(
-      "../src/main/ipc/node-ipc.js"
-    );
+    const { registerNodeIpc } = await import("../src/main/ipc/node-ipc.js");
 
     const windowStub = {
       isDestroyed: () => false,
@@ -119,9 +114,7 @@ describe("node-ipc", () => {
   });
 
   it("registerNodeIpc is idempotent — does not register handlers twice", async () => {
-    const { registerNodeIpc } = await import(
-      "../src/main/ipc/node-ipc.js"
-    );
+    const { registerNodeIpc } = await import("../src/main/ipc/node-ipc.js");
 
     const windowStub = {
       isDestroyed: () => false,
@@ -139,9 +132,7 @@ describe("node-ipc", () => {
   });
 
   it("shutdownNodeResources resolves without error", async () => {
-    const { shutdownNodeResources } = await import(
-      "../src/main/ipc/node-ipc.js"
-    );
+    const { shutdownNodeResources } = await import("../src/main/ipc/node-ipc.js");
 
     await expect(shutdownNodeResources()).resolves.toBeUndefined();
   });

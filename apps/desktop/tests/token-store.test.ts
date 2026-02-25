@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  encryptToken,
-  decryptToken,
-  generateToken,
-} from "../src/main/config/token-store.js";
+import { encryptToken, decryptToken, generateToken } from "../src/main/config/token-store.js";
 
 describe("token-store (fallback path)", () => {
   it("encryptToken returns a non-empty base64 string", () => {
@@ -43,9 +39,7 @@ describe("token-store (fallback path)", () => {
     delete process.env["TYRUM_ALLOW_INSECURE_TOKEN_STORAGE"];
 
     try {
-      expect(() => encryptToken("secret")).toThrow(
-        "Secure token storage unavailable",
-      );
+      expect(() => encryptToken("secret")).toThrow("Secure token storage unavailable");
       expect(() => decryptToken(Buffer.from("secret", "utf-8").toString("base64"))).toThrow(
         "Secure token storage unavailable",
       );

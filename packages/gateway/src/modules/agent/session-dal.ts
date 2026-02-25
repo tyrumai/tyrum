@@ -58,10 +58,8 @@ function parseTurns(raw: string): SessionMessage[] {
 }
 
 function toSessionRow(raw: RawSessionRow): SessionRow {
-  const createdAt =
-    raw.created_at instanceof Date ? raw.created_at.toISOString() : raw.created_at;
-  const updatedAt =
-    raw.updated_at instanceof Date ? raw.updated_at.toISOString() : raw.updated_at;
+  const createdAt = raw.created_at instanceof Date ? raw.created_at.toISOString() : raw.created_at;
+  const updatedAt = raw.updated_at instanceof Date ? raw.updated_at.toISOString() : raw.updated_at;
   return {
     agent_id: raw.agent_id,
     session_id: raw.session_id,
@@ -93,8 +91,7 @@ function compactSessionSummary(
   const maxChars = Math.max(200, opts?.maxChars ?? 6000);
   const maxLineChars = Math.max(40, opts?.maxLineChars ?? 240);
 
-  const prevLines =
-    previousSummary.trim().length > 0 ? previousSummary.trim().split("\n") : [];
+  const prevLines = previousSummary.trim().length > 0 ? previousSummary.trim().split("\n") : [];
 
   const newLines = droppedTurns.map((turn) => {
     const role = turn.role === "assistant" ? "A" : "U";
@@ -217,9 +214,8 @@ export class SessionDal {
     const overflow = turns.length - maxMessages;
     const dropped = overflow > 0 ? turns.slice(0, overflow) : [];
     const bounded = turns.slice(-maxMessages);
-    const summary = dropped.length > 0
-      ? compactSessionSummary(session.summary, dropped)
-      : session.summary;
+    const summary =
+      dropped.length > 0 ? compactSessionSummary(session.summary, dropped) : session.summary;
 
     const nowIso = new Date().toISOString();
     await this.db.run(

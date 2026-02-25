@@ -50,7 +50,10 @@ describe("secret rotation page error handling (integration)", () => {
 
   it("does not revoke the new handle when pagination fails after some profiles were updated", async () => {
     const container = await createTestContainer();
-    const secretProvider = await FileSecretProvider.create(secretsPath, "test-admin-token-for-testing");
+    const secretProvider = await FileSecretProvider.create(
+      secretsPath,
+      "test-admin-token-for-testing",
+    );
     const authProfileDal = new FailSecondPageAuthProfileDal(container.db);
 
     const app = new Hono();
@@ -92,7 +95,9 @@ describe("secret rotation page error handling (integration)", () => {
     expect(rotateRes.status).toBe(500);
 
     const handles = await secretProvider.list();
-    const rotated = handles.find((h) => h.scope === oldHandle.scope && h.handle_id !== oldHandle.handle_id);
+    const rotated = handles.find(
+      (h) => h.scope === oldHandle.scope && h.handle_id !== oldHandle.handle_id,
+    );
     expect(rotated).toBeTruthy();
 
     const newResolved = await secretProvider.resolve(rotated!);
@@ -107,7 +112,10 @@ describe("secret rotation page error handling (integration)", () => {
 
   it("revokes the new handle when pagination fails before any profiles are updated", async () => {
     const container = await createTestContainer();
-    const secretProvider = await FileSecretProvider.create(secretsPath, "test-admin-token-for-testing");
+    const secretProvider = await FileSecretProvider.create(
+      secretsPath,
+      "test-admin-token-for-testing",
+    );
     const authProfileDal = new FailFirstPageAuthProfileDal(container.db);
 
     const app = new Hono();
@@ -136,7 +144,9 @@ describe("secret rotation page error handling (integration)", () => {
     expect(rotateRes.status).toBe(500);
 
     const handles = await secretProvider.list();
-    const rotated = handles.find((h) => h.scope === oldHandle.scope && h.handle_id !== oldHandle.handle_id);
+    const rotated = handles.find(
+      (h) => h.scope === oldHandle.scope && h.handle_id !== oldHandle.handle_id,
+    );
     expect(rotated).toBeFalsy();
 
     const oldResolved = await secretProvider.resolve(oldHandle);

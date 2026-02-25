@@ -25,12 +25,24 @@ const DEFAULT_HARD_DENY_LIMIT_MINOR = 50_000;
 function currencyMinorUnits(currency: string): number {
   const upper = currency.toUpperCase();
   const zeroDecimal = new Set([
-    "BIF", "CLP", "DJF", "GNF", "JPY", "KMF", "KRW", "MGA",
-    "PYG", "RWF", "UGX", "VND", "VUV", "XAF", "XOF", "XPF",
+    "BIF",
+    "CLP",
+    "DJF",
+    "GNF",
+    "JPY",
+    "KMF",
+    "KRW",
+    "MGA",
+    "PYG",
+    "RWF",
+    "UGX",
+    "VND",
+    "VUV",
+    "XAF",
+    "XOF",
+    "XPF",
   ]);
-  const threeDecimal = new Set([
-    "BHD", "IQD", "JOD", "KWD", "LYD", "OMR", "TND",
-  ]);
+  const threeDecimal = new Set(["BHD", "IQD", "JOD", "KWD", "LYD", "OMR", "TND"]);
   if (zeroDecimal.has(upper)) return 0;
   if (threeDecimal.has(upper)) return 3;
   return 2;

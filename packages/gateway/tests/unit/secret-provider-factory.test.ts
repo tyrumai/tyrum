@@ -5,10 +5,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { createSecretProviderFromEnv } from "../../src/modules/secret/create-secret-provider.js";
 import { EnvSecretProvider, FileSecretProvider } from "../../src/modules/secret/provider.js";
 
-const ENV_KEYS = [
-  "TYRUM_SECRET_PROVIDER",
-  "KUBERNETES_SERVICE_HOST",
-] as const;
+const ENV_KEYS = ["TYRUM_SECRET_PROVIDER", "KUBERNETES_SERVICE_HOST"] as const;
 
 function snapshotEnv(): Record<(typeof ENV_KEYS)[number], string | undefined> {
   const snapshot = {} as Record<(typeof ENV_KEYS)[number], string | undefined>;

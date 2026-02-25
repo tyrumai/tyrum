@@ -191,9 +191,7 @@ describe("/app/session", () => {
     };
 
     const app = createWebUiRoutes(deps);
-    const res = await app.request(
-      `/app/session?key=${encodeURIComponent(key)}&lanes=main`,
-    );
+    const res = await app.request(`/app/session?key=${encodeURIComponent(key)}&lanes=main`);
 
     expect(res.status).toBe(200);
     const html = await res.text();
@@ -276,15 +274,7 @@ describe("/app/session", () => {
     await db.run(
       `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        "run-main",
-        "job-main",
-        key,
-        "main",
-        "running",
-        1,
-        new Date(nowMs - 1500).toISOString(),
-      ],
+      ["run-main", "job-main", key, "main", "running", 1, new Date(nowMs - 1500).toISOString()],
     );
     await db.run(
       `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt, created_at)
@@ -313,9 +303,7 @@ describe("/app/session", () => {
 
     const app = createWebUiRoutes(deps);
 
-    const onlyMain = await app.request(
-      `/app/session?key=${encodeURIComponent(key)}&lanes=main`,
-    );
+    const onlyMain = await app.request(`/app/session?key=${encodeURIComponent(key)}&lanes=main`);
     expect(onlyMain.status).toBe(200);
     const mainHtml = await onlyMain.text();
     expect(mainHtml).toContain("Main hello");
@@ -394,13 +382,7 @@ describe("/app/session", () => {
     await db.run(
       `INSERT INTO execution_attempts (attempt_id, step_id, attempt, status, started_at)
        VALUES (?, ?, ?, ?, ?)`,
-      [
-        attemptId,
-        stepId,
-        1,
-        "running",
-        new Date(nowMs + 2000).toISOString(),
-      ],
+      [attemptId, stepId, 1, "running", new Date(nowMs + 2000).toISOString()],
     );
 
     const deps: WebUiDeps = {
@@ -423,14 +405,10 @@ describe("/app/session", () => {
     const html = await res.text();
 
     expect(html).toMatch(
-      new RegExp(
-        `<td>subagent</td>\\s*<td>step</td>\\s*<td><pre><code>[^<]*${stepId}`,
-      ),
+      new RegExp(`<td>subagent</td>\\s*<td>step</td>\\s*<td><pre><code>[^<]*${stepId}`),
     );
     expect(html).toMatch(
-      new RegExp(
-        `<td>subagent</td>\\s*<td>attempt</td>\\s*<td><pre><code>[^<]*${attemptId}`,
-      ),
+      new RegExp(`<td>subagent</td>\\s*<td>attempt</td>\\s*<td><pre><code>[^<]*${attemptId}`),
     );
   });
 
@@ -458,9 +436,7 @@ describe("/app/session", () => {
     };
 
     const app = createWebUiRoutes(deps);
-    const res = await app.request(
-      `/app/session?key=${encodeURIComponent(key)}&lanes=main`,
-    );
+    const res = await app.request(`/app/session?key=${encodeURIComponent(key)}&lanes=main`);
 
     expect(res.status).toBe(200);
     const html = await res.text();
@@ -493,9 +469,7 @@ describe("/app/session", () => {
     };
 
     const app = createWebUiRoutes(deps);
-    const res = await app.request(
-      `/app/session?key=${encodeURIComponent(key)}&lanes=main`,
-    );
+    const res = await app.request(`/app/session?key=${encodeURIComponent(key)}&lanes=main`);
 
     expect(res.status).toBe(200);
     const html = await res.text();

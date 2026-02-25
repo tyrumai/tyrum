@@ -116,7 +116,7 @@ describe("LocalStepExecutor playbook output contracts", () => {
       type: "CLI",
       args: {
         cmd: process.execPath,
-        args: ["-e", "process.stdout.write('{\"name\":\"tyrum\"}')"],
+        args: ["-e", 'process.stdout.write(\'{"name":"tyrum"}\')'],
         __playbook: {
           output: {
             type: "json",
@@ -141,7 +141,9 @@ describe("LocalStepExecutor playbook output contracts", () => {
 
     expect(compileSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
     const contexts = new Set(
-      compileSpy.mock.contexts.filter((ctx): ctx is object => typeof ctx === "object" && ctx !== null),
+      compileSpy.mock.contexts.filter(
+        (ctx): ctx is object => typeof ctx === "object" && ctx !== null,
+      ),
     );
     expect(contexts.size).toBeGreaterThanOrEqual(2);
   });
@@ -149,7 +151,10 @@ describe("LocalStepExecutor playbook output contracts", () => {
   it("fails when playbook output contract requires JSON but HTTP response is text", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response("plain text", { status: 200, headers: { "content-type": "text/plain" } })),
+      vi.fn(
+        async () =>
+          new Response("plain text", { status: 200, headers: { "content-type": "text/plain" } }),
+      ),
     );
 
     const executor = await makeExecutor();
@@ -214,7 +219,10 @@ describe("LocalStepExecutor playbook output contracts", () => {
       "fetch",
       vi.fn(
         async () =>
-          new Response("{\"ok\":false}", { status: 422, headers: { "content-type": "application/json" } }),
+          new Response('{"ok":false}', {
+            status: 422,
+            headers: { "content-type": "application/json" },
+          }),
       ),
     );
 

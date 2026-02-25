@@ -47,11 +47,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function captureJson(into: unknown[], data: unknown): void {
   const raw =
-    typeof data === "string"
-      ? data
-      : data instanceof Buffer
-        ? data.toString("utf-8")
-        : undefined;
+    typeof data === "string" ? data : data instanceof Buffer ? data.toString("utf-8") : undefined;
   if (!raw) return;
   try {
     into.push(JSON.parse(raw));
@@ -281,10 +277,7 @@ describe("WS contract conformance (gateway <-> client <-> schemas)", () => {
     );
     const resultMsg = mustFind(
       server.clientToGateway,
-      (m) =>
-        isResponseOfType(m, "task.execute") &&
-        isRecord(m) &&
-        m["request_id"] === taskId,
+      (m) => isResponseOfType(m, "task.execute") && isRecord(m) && m["request_id"] === taskId,
       "task.execute response",
     );
 

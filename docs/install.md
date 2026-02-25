@@ -111,10 +111,12 @@ curl -fsSL https://get.tyrum.ai/install.sh | bash -s -- --channel beta
 ```
 
 Difference:
+
 - `tyrum update` uses your existing installed command and updates `@tyrum/gateway` via npm.
 - `install.sh` fetches signed release assets (`SHA256SUMS` verified) and reinstalls globally.
 
 Desktop app updates:
+
 - The desktop app checks for updates automatically and notifies when one is available.
 - Download/install remains user initiated from the Diagnostics page.
 - You can also install from a local release file via **Diagnostics → Use Local Release File**.

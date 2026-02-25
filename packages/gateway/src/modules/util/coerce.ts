@@ -30,4 +30,3 @@ export function coerceNonEmptyStringRecord(value: unknown): Record<string, strin
   }
   return out;
 }
-

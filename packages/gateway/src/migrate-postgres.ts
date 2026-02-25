@@ -6,10 +6,7 @@ import { join } from "node:path";
  * Applies SQL migration files in filename order from the given directory.
  * Tracks applied migrations in a `_migrations` table to ensure idempotency.
  */
-export async function migratePostgres(
-  client: ClientBase,
-  migrationsDir: string,
-): Promise<void> {
+export async function migratePostgres(client: ClientBase, migrationsDir: string): Promise<void> {
   await client.query(`
     CREATE TABLE IF NOT EXISTS _migrations (
       name TEXT PRIMARY KEY,
@@ -18,9 +15,7 @@ export async function migratePostgres(
   `);
 
   const applied = new Set(
-    (await client.query<{ name: string }>("SELECT name FROM _migrations")).rows.map(
-      (r) => r.name,
-    ),
+    (await client.query<{ name: string }>("SELECT name FROM _migrations")).rows.map((r) => r.name),
   );
 
   const files = readdirSync(migrationsDir)

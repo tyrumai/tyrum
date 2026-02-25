@@ -1,7 +1,17 @@
 import { spawn, spawnSync } from "node:child_process";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { once } from "node:events";
-import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  rmSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -24,10 +34,7 @@ function delay(ms: number): Promise<void> {
 }
 
 function authProtocols(token: string): string[] {
-  return [
-    "tyrum-v1",
-    `tyrum-auth.${Buffer.from(token, "utf-8").toString("base64url")}`,
-  ];
+  return ["tyrum-v1", `tyrum-auth.${Buffer.from(token, "utf-8").toString("base64url")}`];
 }
 
 function waitForOpen(ws: WebSocket, timeoutMs = 5_000): Promise<void> {
@@ -87,10 +94,7 @@ function acquireGatewayBuildLock(timeoutMs = 60_000): () => void {
   }
 }
 
-function formatBuildFailure(
-  prefix: string,
-  result: ReturnType<typeof spawnSync>,
-): string {
+function formatBuildFailure(prefix: string, result: ReturnType<typeof spawnSync>): string {
   const details = [
     prefix,
     result.error ? `spawn error: ${result.error.message}` : undefined,
@@ -157,7 +161,9 @@ function ensureGatewayBuild(): void {
     );
   }
 
-  throw new Error(formatBuildFailure("Failed to build @tyrum/gateway before startup test.", result));
+  throw new Error(
+    formatBuildFailure("Failed to build @tyrum/gateway before startup test.", result),
+  );
 }
 
 async function findAvailablePort(): Promise<number> {
@@ -191,10 +197,7 @@ async function stopChildProcess(
   if (child.exitCode !== null || child.signalCode !== null) return;
 
   child.kill("SIGTERM");
-  const maybeExit = await Promise.race([
-    once(child, "exit"),
-    delay(timeoutMs).then(() => null),
-  ]);
+  const maybeExit = await Promise.race([once(child, "exit"), delay(timeoutMs).then(() => null)]);
 
   if (maybeExit !== null) return;
 
@@ -389,10 +392,12 @@ describe("gateway startup process", () => {
                VALUES (?, ?, ?)`,
             ).run(resumeToken, runId, nowIso);
 
-            const approvalInsert = db.prepare(
-              `INSERT INTO approvals (plan_id, step_index, prompt, context_json, expires_at, kind, agent_id, key, lane, run_id, resume_token)
+            const approvalInsert = db
+              .prepare(
+                `INSERT INTO approvals (plan_id, step_index, prompt, context_json, expires_at, kind, agent_id, key, lane, run_id, resume_token)
                VALUES ('plan-ws-approval-test', 0, 'test approval', ?, NULL, 'workflow_step', 'default', ?, ?, ?, ?)`,
-            ).run(contextJson, key, lane, runId, resumeToken);
+              )
+              .run(contextJson, key, lane, runId, resumeToken);
             const approvalId = Number(approvalInsert.lastInsertRowid);
 
             db.prepare(
@@ -426,9 +431,9 @@ describe("gateway startup process", () => {
               let pausedReason: string | null | undefined;
 
               while (Date.now() < deadline) {
-                const row = db.prepare("SELECT status, paused_reason FROM execution_runs WHERE run_id = ?").get(runId) as
-                  | { status?: string; paused_reason?: string | null }
-                  | undefined;
+                const row = db
+                  .prepare("SELECT status, paused_reason FROM execution_runs WHERE run_id = ?")
+                  .get(runId) as { status?: string; paused_reason?: string | null } | undefined;
                 status = row?.status;
                 pausedReason = row?.paused_reason;
                 if (status && status !== "paused") break;
@@ -528,10 +533,12 @@ describe("gateway startup process", () => {
                VALUES (?, ?, ?, ?, 'paused', 1, ?, 'approval', 'waiting on approval')`,
             ).run(runId, jobId, key, lane, nowIso);
 
-            const approvalInsert = db.prepare(
-              `INSERT INTO approvals (plan_id, step_index, prompt, context_json, expires_at, kind, agent_id, key, lane, run_id, resume_token)
+            const approvalInsert = db
+              .prepare(
+                `INSERT INTO approvals (plan_id, step_index, prompt, context_json, expires_at, kind, agent_id, key, lane, run_id, resume_token)
                VALUES ('plan-ws-approval-missing-token', 0, 'test approval', ?, NULL, 'workflow_step', 'default', ?, ?, ?, ?)`,
-            ).run(contextJson, key, lane, runId, null);
+              )
+              .run(contextJson, key, lane, runId, null);
             const approvalId = Number(approvalInsert.lastInsertRowid);
 
             db.prepare(
@@ -564,9 +571,9 @@ describe("gateway startup process", () => {
               let status: string | undefined;
 
               while (Date.now() < deadline) {
-                const row = db.prepare("SELECT status FROM execution_runs WHERE run_id = ?").get(runId) as
-                  | { status?: string }
-                  | undefined;
+                const row = db
+                  .prepare("SELECT status FROM execution_runs WHERE run_id = ?")
+                  .get(runId) as { status?: string } | undefined;
                 status = row?.status;
                 if (status === "cancelled") break;
                 await delay(25);
@@ -675,7 +682,10 @@ describe("gateway startup process", () => {
           expect(row.status, output()).toBe("paused");
           expect(row.paused_reason, output()).toBe("policy");
 
-          const trigger = JSON.parse(row.trigger_json) as { kind?: string; metadata?: Record<string, unknown> };
+          const trigger = JSON.parse(row.trigger_json) as {
+            kind?: string;
+            metadata?: Record<string, unknown>;
+          };
           expect(trigger.kind, output()).toBe("hook");
           expect(trigger.metadata?.["hook_event"], output()).toBe("gateway.shutdown");
           expect(trigger.metadata?.["hook_key"], output()).toBe(hookKey);
@@ -802,7 +812,10 @@ describe("gateway startup process", () => {
 
           expect(row.status, output()).not.toBe("queued");
 
-          const trigger = JSON.parse(row.trigger_json) as { kind?: string; metadata?: Record<string, unknown> };
+          const trigger = JSON.parse(row.trigger_json) as {
+            kind?: string;
+            metadata?: Record<string, unknown>;
+          };
           expect(trigger.kind, output()).toBe("hook");
           expect(trigger.metadata?.["hook_event"], output()).toBe("gateway.shutdown");
           expect(trigger.metadata?.["hook_key"], output()).toBe(shutdownHookKey);

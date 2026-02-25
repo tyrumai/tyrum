@@ -1,7 +1,4 @@
-export type ConsentToggleKey =
-  | "shareCalendarSignals"
-  | "allowPlannerAutonomy"
-  | "retainAuditTrail";
+export type ConsentToggleKey = "shareCalendarSignals" | "allowPlannerAutonomy" | "retainAuditTrail";
 
 export type ConsentSelections = Record<ConsentToggleKey, boolean>;
 

@@ -144,10 +144,12 @@ export class VectorDal {
 
   /** Delete all embeddings with the given label. Returns the number of rows deleted. */
   async deleteByLabel(label: string, agentId?: string): Promise<number> {
-    return (await this.db.run(
-      "DELETE FROM vector_metadata WHERE agent_id = ? AND label = ?",
-      [this.normalizeAgentId(agentId), label],
-    )).changes;
+    return (
+      await this.db.run("DELETE FROM vector_metadata WHERE agent_id = ? AND label = ?", [
+        this.normalizeAgentId(agentId),
+        label,
+      ])
+    ).changes;
   }
 
   /** Get a single embedding by its embedding_id. */

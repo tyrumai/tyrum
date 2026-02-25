@@ -48,9 +48,7 @@ describe("ConnectionManager", () => {
     const ws = createMockWs();
     const id = cm.addClient(ws as never, ["playwright"]);
 
-    expect(id).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
-    );
+    expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
 
     const client = cm.getClient(id);
     expect(client).toBeDefined();
@@ -113,10 +111,7 @@ describe("ConnectionManager", () => {
     expect(ws2.send).toHaveBeenCalledOnce();
     expect(ws3.send).not.toHaveBeenCalled();
 
-    const sent = JSON.parse(ws1.send.mock.calls[0]![0] as string) as Record<
-      string,
-      unknown
-    >;
+    const sent = JSON.parse(ws1.send.mock.calls[0]![0] as string) as Record<string, unknown>;
     expect(sent).toEqual({
       event_id: "evt-1",
       type: "plan.update",

@@ -30,7 +30,9 @@ function safeToolCallSignature(toolCall: ToolCallLike): string | undefined {
   return `${toolName}:${argsHash}`;
 }
 
-export function signatureForToolStep(step: unknown): { signature: string; toolNames: string[] } | undefined {
+export function signatureForToolStep(
+  step: unknown,
+): { signature: string; toolNames: string[] } | undefined {
   if (!step || typeof step !== "object") return undefined;
   const toolCalls = coerceToolCalls((step as StepLike).toolCalls);
   if (toolCalls.length === 0) return undefined;
@@ -100,7 +102,10 @@ export function detectWithinTurnToolLoop(input: {
       if (matches) {
         const toolNames: string[] = [];
         const seen = new Set<string>();
-        for (const name of [...(toolNamesBySignature.get(a) ?? []), ...(toolNamesBySignature.get(b) ?? [])]) {
+        for (const name of [
+          ...(toolNamesBySignature.get(a) ?? []),
+          ...(toolNamesBySignature.get(b) ?? []),
+        ]) {
           if (seen.has(name)) continue;
           seen.add(name);
           toolNames.push(name);
@@ -170,9 +175,8 @@ export function decideCrossTurnLoopWarning(input: {
   if (windowSize <= 0) return { warn: false };
 
   const recent = input.previousAssistantMessages.slice(-windowSize);
-  const cooldownWindow = cooldownSize > 0
-    ? input.previousAssistantMessages.slice(-cooldownSize)
-    : [];
+  const cooldownWindow =
+    cooldownSize > 0 ? input.previousAssistantMessages.slice(-cooldownSize) : [];
 
   if (cooldownWindow.some((msg) => msg.includes(LOOP_WARNING_PREFIX))) {
     return { warn: false };

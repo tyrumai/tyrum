@@ -78,4 +78,3 @@ describe("Secret contracts", () => {
     expect(res.revoked).toBe(true);
   });
 });
-

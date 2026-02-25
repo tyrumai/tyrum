@@ -418,7 +418,9 @@ describe("OutboxPoller", () => {
 
     await poller.tick();
     expect(ws.send).toHaveBeenCalledTimes(1);
-    expect(connectionManager.getDispatchedAttemptExecutor("0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e")).toBe("dev_test");
+    expect(
+      connectionManager.getDispatchedAttemptExecutor("0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e"),
+    ).toBe("dev_test");
   });
 
   it("filters ws.broadcast delivery using audience constraints", async () => {

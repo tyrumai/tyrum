@@ -76,10 +76,10 @@ export class LaneQueueSignalDal {
   }
 
   async clearSignal(input: { key: string; lane: string }): Promise<void> {
-    await this.db.run(
-      "DELETE FROM lane_queue_signals WHERE key = ? AND lane = ?",
-      [input.key, input.lane],
-    );
+    await this.db.run("DELETE FROM lane_queue_signals WHERE key = ? AND lane = ?", [
+      input.key,
+      input.lane,
+    ]);
   }
 
   async claimSignal(input: { key: string; lane: string }): Promise<LaneQueueSignal | undefined> {
@@ -101,10 +101,10 @@ export class LaneQueueSignalDal {
       );
       if (!row) return undefined;
 
-      await tx.run(
-        "DELETE FROM lane_queue_signals WHERE key = ? AND lane = ?",
-        [input.key, input.lane],
-      );
+      await tx.run("DELETE FROM lane_queue_signals WHERE key = ? AND lane = ?", [
+        input.key,
+        input.lane,
+      ]);
 
       if (row.kind === "steer" && row.queue_mode === "steer" && typeof row.inbox_id === "number") {
         await tx.run(

@@ -237,7 +237,9 @@ describe("artifact routes", () => {
       ["ws.broadcast"],
     );
     const fetched = outbox
-      .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string; payload?: unknown } })
+      .map(
+        (row) => JSON.parse(row.payload_json) as { message?: { type?: string; payload?: unknown } },
+      )
       .map((row) => row.message)
       .find((message) => message?.type === "artifact.fetched");
 
@@ -570,7 +572,9 @@ describe("artifact routes", () => {
       ],
     );
 
-    const metaRes = await app.request(`/runs/run-does-not-matter/artifacts/${ref.artifact_id}/metadata`);
+    const metaRes = await app.request(
+      `/runs/run-does-not-matter/artifacts/${ref.artifact_id}/metadata`,
+    );
     expect(metaRes.status).toBe(403);
 
     const res = await app.request(`/runs/run-does-not-matter/artifacts/${ref.artifact_id}`);
@@ -645,7 +649,9 @@ describe("artifact routes", () => {
       ],
     );
 
-    const metaRes = await app.request(`/runs/${scopeA.runId}/artifacts/${ref.artifact_id}/metadata`);
+    const metaRes = await app.request(
+      `/runs/${scopeA.runId}/artifacts/${ref.artifact_id}/metadata`,
+    );
     expect(metaRes.status).toBe(403);
 
     const res = await app.request(`/runs/${scopeA.runId}/artifacts/${ref.artifact_id}`);
@@ -713,7 +719,9 @@ describe("artifact routes", () => {
       ],
     );
 
-    const metaRes = await app.request(`/runs/run-wrong-scope/artifacts/${ref.artifact_id}/metadata`);
+    const metaRes = await app.request(
+      `/runs/run-wrong-scope/artifacts/${ref.artifact_id}/metadata`,
+    );
     expect(metaRes.status).toBe(404);
     const metaBody = (await metaRes.json()) as { error: string; message: string };
     expect(metaBody).toEqual({ error: "not_found", message: "artifact not found" });

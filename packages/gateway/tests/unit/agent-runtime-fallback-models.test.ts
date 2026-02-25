@@ -103,9 +103,11 @@ describe("AgentRuntime model fallbacks", () => {
       fetchImpl,
     });
 
-    const model = await (runtime as unknown as {
-      resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
-    }).resolveSessionModel({
+    const model = await (
+      runtime as unknown as {
+        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
+      }
+    ).resolveSessionModel({
       config: {
         model: {
           model: "openai/gpt-4.1",
@@ -169,9 +171,11 @@ describe("AgentRuntime model fallbacks", () => {
     });
 
     await expect(
-      (runtime as unknown as {
-        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
-      }).resolveSessionModel({
+      (
+        runtime as unknown as {
+          resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
+        }
+      ).resolveSessionModel({
         config: {
           model: {
             model: "openai/gpt-4.1",
@@ -240,9 +244,11 @@ describe("AgentRuntime model fallbacks", () => {
       fetchImpl,
     });
 
-    const model = await (runtime as unknown as {
-      resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
-    }).resolveSessionModel({
+    const model = await (
+      runtime as unknown as {
+        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
+      }
+    ).resolveSessionModel({
       config: {
         model: {
           model: "openai/gpt-4.1",
@@ -314,9 +320,11 @@ describe("AgentRuntime model fallbacks", () => {
       modelId: "anthropic/claude-3.5-sonnet",
     });
 
-    const model = await (runtime as unknown as {
-      resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
-    }).resolveSessionModel({
+    const model = await (
+      runtime as unknown as {
+        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
+      }
+    ).resolveSessionModel({
       config: {
         model: {
           model: "openai/gpt-4.1",

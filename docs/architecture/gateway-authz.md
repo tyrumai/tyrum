@@ -92,13 +92,13 @@ Example operator scopes:
 
 WebSocket scope matrix (request type → required scope):
 
-| Request type | Required scope |
-| --- | --- |
-| `approval.list`, `approval.resolve` | `operator.approvals` |
-| `pairing.approve`, `pairing.deny`, `pairing.revoke` | `operator.pairing` |
-| `session.send`, `workflow.run`, `workflow.resume`, `workflow.cancel` | `operator.write` |
-| `command.execute` | `operator.admin` |
-| `presence.beacon` | *(none)* |
+| Request type                                                         | Required scope       |
+| -------------------------------------------------------------------- | -------------------- |
+| `approval.list`, `approval.resolve`                                  | `operator.approvals` |
+| `pairing.approve`, `pairing.deny`, `pairing.revoke`                  | `operator.pairing`   |
+| `session.send`, `workflow.run`, `workflow.resume`, `workflow.cancel` | `operator.write`     |
+| `command.execute`                                                    | `operator.admin`     |
+| `presence.beacon`                                                    | _(none)_             |
 
 ### Admin mode (step-up)
 

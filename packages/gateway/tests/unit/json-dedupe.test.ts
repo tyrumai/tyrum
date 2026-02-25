@@ -41,4 +41,3 @@ describe("json parsing utilities", () => {
     expect(parseJsonOrFallbackOccurrences).toBe(0);
   });
 });
-

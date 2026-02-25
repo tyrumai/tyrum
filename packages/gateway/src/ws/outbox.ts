@@ -11,4 +11,3 @@ export async function enqueueWsBroadcastMessage(
     ["ws.broadcast", null, JSON.stringify({ message })],
   );
 }
-

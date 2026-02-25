@@ -32,74 +32,47 @@ describe("filterMutableKeys", () => {
   });
 
   it("allows nested permitted field", () => {
-    const result = filterMutableKeys(
-      { embedded: { port: 9090 } },
-      ALLOWED,
-    );
+    const result = filterMutableKeys({ embedded: { port: 9090 } }, ALLOWED);
     expect(result).toEqual({ embedded: { port: 9090 } });
   });
 
   it("allows permitted sub-object (permissions.overrides)", () => {
-    const result = filterMutableKeys(
-      { permissions: { overrides: { "cli.exec": true } } },
-      ALLOWED,
-    );
+    const result = filterMutableKeys({ permissions: { overrides: { "cli.exec": true } } }, ALLOWED);
     expect(result).toEqual({ permissions: { overrides: { "cli.exec": true } } });
   });
 
   it("allows permissions.profile", () => {
-    const result = filterMutableKeys(
-      { permissions: { profile: "poweruser" } },
-      ALLOWED,
-    );
+    const result = filterMutableKeys({ permissions: { profile: "poweruser" } }, ALLOWED);
     expect(result).toEqual({ permissions: { profile: "poweruser" } });
   });
 
   it("allows cli.allowedCommands", () => {
-    const result = filterMutableKeys(
-      { cli: { allowedCommands: ["rm", "curl"] } },
-      ALLOWED,
-    );
+    const result = filterMutableKeys({ cli: { allowedCommands: ["rm", "curl"] } }, ALLOWED);
     expect(result).toEqual({ cli: { allowedCommands: ["rm", "curl"] } });
   });
 
   it("allows cli.allowedWorkingDirs", () => {
-    const result = filterMutableKeys(
-      { cli: { allowedWorkingDirs: ["/"] } },
-      ALLOWED,
-    );
+    const result = filterMutableKeys({ cli: { allowedWorkingDirs: ["/"] } }, ALLOWED);
     expect(result).toEqual({ cli: { allowedWorkingDirs: ["/"] } });
   });
 
   it("allows web.allowedDomains", () => {
-    const result = filterMutableKeys(
-      { web: { allowedDomains: ["evil.com"] } },
-      ALLOWED,
-    );
+    const result = filterMutableKeys({ web: { allowedDomains: ["evil.com"] } }, ALLOWED);
     expect(result).toEqual({ web: { allowedDomains: ["evil.com"] } });
   });
 
   it("strips embedded.tokenRef", () => {
-    const result = filterMutableKeys(
-      { embedded: { tokenRef: "stolen-token" } },
-      ALLOWED,
-    );
+    const result = filterMutableKeys({ embedded: { tokenRef: "stolen-token" } }, ALLOWED);
     expect(result).toEqual({});
   });
 
   it("allows remote.tokenRef", () => {
-    const result = filterMutableKeys(
-      { remote: { tokenRef: "stolen" } },
-      ALLOWED,
-    );
+    const result = filterMutableKeys({ remote: { tokenRef: "stolen" } }, ALLOWED);
     expect(result).toEqual({ remote: { tokenRef: "stolen" } });
   });
 
   it("allows remote.tlsCertFingerprint256", () => {
-    const result = filterMutableKeys(
-      { remote: { tlsCertFingerprint256: "AA:BB" } },
-      ALLOWED,
-    );
+    const result = filterMutableKeys({ remote: { tlsCertFingerprint256: "AA:BB" } }, ALLOWED);
     expect(result).toEqual({ remote: { tlsCertFingerprint256: "AA:BB" } });
   });
 
@@ -140,10 +113,7 @@ describe("filterMutableKeys", () => {
   });
 
   it("treats arrays as leaf values (not recursed into)", () => {
-    const result = filterMutableKeys(
-      { cli: { allowedCommands: ["git", "ls", "cat"] } },
-      ALLOWED,
-    );
+    const result = filterMutableKeys({ cli: { allowedCommands: ["git", "ls", "cat"] } }, ALLOWED);
     expect(result).toEqual({ cli: { allowedCommands: ["git", "ls", "cat"] } });
   });
 

@@ -34,7 +34,7 @@ function tokenizeArgs(input: string): string[] {
   let inQuotes = false;
   for (let i = 0; i < input.length; i += 1) {
     const ch = input[i]!;
-    if (ch === "\"") {
+    if (ch === '"') {
       inQuotes = !inQuotes;
       buf += ch;
       continue;
@@ -55,7 +55,7 @@ function tokenizeArgs(input: string): string[] {
 }
 
 function unquote(token: string): string {
-  if (token.startsWith("\"") && token.endsWith("\"") && token.length >= 2) {
+  if (token.startsWith('"') && token.endsWith('"') && token.length >= 2) {
     return token.slice(1, -1);
   }
   return token;
@@ -70,7 +70,7 @@ function parseKeyValueArgs(raw: string): Record<string, string> {
     const key = token.slice(0, eqIdx).trim();
     if (!key) continue;
     let value = token.slice(eqIdx + 1).trim();
-    if (value.startsWith("\"") && value.endsWith("\"") && value.length >= 2) {
+    if (value.startsWith('"') && value.endsWith('"') && value.length >= 2) {
       value = value.slice(1, -1);
     }
     args[key] = value;
@@ -106,18 +106,16 @@ function withPlaybookMeta(
 }
 
 /** Convert a PlaybookStep to an ActionPrimitive. */
-function stepToPrimitive(
-  playbookId: string,
-  step: PlaybookStep,
-  _index: number,
-): ActionPrimitive {
+function stepToPrimitive(playbookId: string, step: PlaybookStep, _index: number): ActionPrimitive {
   const { ns, rest } = splitNamespace(step.command);
   const idempotency_key = `playbook:${playbookId}:${step.id}`;
 
   if (ns === "http") {
     const parts = tokenizeArgs(rest).map(unquote).filter(Boolean);
     const maybeMethod = parts[0]?.toUpperCase();
-    const isMethod = maybeMethod !== undefined && ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"].includes(maybeMethod);
+    const isMethod =
+      maybeMethod !== undefined &&
+      ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"].includes(maybeMethod);
     const method = isMethod ? maybeMethod : "GET";
     const url = isMethod ? parts[1] : parts[0];
     if (!url) throw new PlaybookCompileError("http command requires a URL");
@@ -242,7 +240,9 @@ function stepToPrimitive(
     const capability = unquote(parts[0] ?? "").trim();
     const action = unquote(parts[1] ?? "").trim();
     if (!capability || !action) {
-      throw new PlaybookCompileError("node command requires: node <capability> <action> [key=value ...]");
+      throw new PlaybookCompileError(
+        "node command requires: node <capability> <action> [key=value ...]",
+      );
     }
     const args = parseKeyValueArgs(parts.slice(2).join(" "));
     return {

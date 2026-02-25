@@ -201,7 +201,8 @@ describe("Artifact lifecycle (retention + quotas)", () => {
         ],
       );
 
-      const { ArtifactLifecycleScheduler } = await import("../../src/modules/artifact/lifecycle.js");
+      const { ArtifactLifecycleScheduler } =
+        await import("../../src/modules/artifact/lifecycle.js");
       const scheduler = new ArtifactLifecycleScheduler({
         db,
         artifactStore,

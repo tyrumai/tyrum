@@ -173,7 +173,9 @@ describe("TLS certificate pinning", () => {
       token: "test-token",
       capabilities: [],
       reconnect: false,
-      tlsCertFingerprint256: server.fingerprint256.replace(/[0-9A-F]/, (c) => (c === "A" ? "B" : "A")),
+      tlsCertFingerprint256: server.fingerprint256.replace(/[0-9A-F]/, (c) =>
+        c === "A" ? "B" : "A",
+      ),
     });
 
     const connectedSpy = vi.fn();
@@ -197,10 +199,15 @@ describe("TLS certificate pinning", () => {
       token: "test-token",
       capabilities: [],
       reconnect: true,
-      tlsCertFingerprint256: server.fingerprint256.replace(/[0-9A-F]/, (c) => (c === "A" ? "B" : "A")),
+      tlsCertFingerprint256: server.fingerprint256.replace(/[0-9A-F]/, (c) =>
+        c === "A" ? "B" : "A",
+      ),
     });
 
-    const scheduleSpy = vi.spyOn(client as unknown as { scheduleReconnect: () => void }, "scheduleReconnect");
+    const scheduleSpy = vi.spyOn(
+      client as unknown as { scheduleReconnect: () => void },
+      "scheduleReconnect",
+    );
 
     const disconnected = new Promise<void>((resolve) => {
       client!.on("disconnected", () => resolve());

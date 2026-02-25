@@ -108,4 +108,3 @@ describe("TelegramChannelProcessor interrupt handling", () => {
     expect(updated?.reply_text).toBe("");
   });
 });
-

@@ -88,9 +88,7 @@ type ToolLoopStep =
   | { kind: "tool-calls"; toolCalls: Array<{ id: string; name: string; arguments: string }> }
   | { kind: "text"; text: string };
 
-function createSequencedToolLoopLanguageModel(
-  steps: readonly ToolLoopStep[],
-): MockLanguageModelV3 {
+function createSequencedToolLoopLanguageModel(steps: readonly ToolLoopStep[]): MockLanguageModelV3 {
   let callCount = 0;
 
   const getStep = (): ToolLoopStep => {
@@ -1120,7 +1118,9 @@ describe("Tool execution loop", () => {
       container,
       home: homeDir,
       languageModel: languageModel1,
-      mcpManager: mcpManager as unknown as ConstructorParameters<typeof AgentRuntime>[0]["mcpManager"],
+      mcpManager: mcpManager as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
       approvalWaitMs: 10_000,
       approvalPollMs: 20,
     });
@@ -1145,7 +1145,8 @@ describe("Tool execution loop", () => {
       }),
     );
 
-    const suggested = (pending.context as { policy?: { suggested_overrides?: unknown[] } }).policy?.suggested_overrides;
+    const suggested = (pending.context as { policy?: { suggested_overrides?: unknown[] } }).policy
+      ?.suggested_overrides;
     expect(Array.isArray(suggested)).toBe(true);
 
     const res = await approvalApp.request(`/approvals/${pending.id}/respond`, {
@@ -1163,7 +1164,10 @@ describe("Tool execution loop", () => {
     expect(result1.reply).toBe("approved and executed");
     expect(result1.used_tools).toContain("tool.exec");
 
-    const overrides = await container.policyOverrideDal.list({ agentId: "default", toolId: "tool.exec" });
+    const overrides = await container.policyOverrideDal.list({
+      agentId: "default",
+      toolId: "tool.exec",
+    });
     expect(overrides.length).toBeGreaterThan(0);
 
     const languageModel2 = createToolLoopLanguageModel({
@@ -1174,7 +1178,9 @@ describe("Tool execution loop", () => {
       container,
       home: homeDir,
       languageModel: languageModel2,
-      mcpManager: mcpManager as unknown as ConstructorParameters<typeof AgentRuntime>[0]["mcpManager"],
+      mcpManager: mcpManager as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
       approvalWaitMs: 1_000,
       approvalPollMs: 20,
     });
@@ -1256,7 +1262,11 @@ describe("Tool execution loop", () => {
     const languageModel = createToolLoopLanguageModel({
       toolCalls: [
         { id: "tc-1", name: "tool.fs.read", arguments: JSON.stringify({ path: "a.txt" }) },
-        { id: "tc-2", name: "tool.http.fetch", arguments: JSON.stringify({ url: "https://example.com" }) },
+        {
+          id: "tc-2",
+          name: "tool.http.fetch",
+          arguments: JSON.stringify({ url: "https://example.com" }),
+        },
       ],
       finalReply: "done with both tools",
     });
@@ -1590,12 +1600,42 @@ describe("Tool execution loop", () => {
     );
 
     const steps: ToolLoopStep[] = [
-      { kind: "tool-calls", toolCalls: [{ id: "tc-a-1", name: "tool.fs.read", arguments: JSON.stringify({ path: "a.txt" }) }] },
-      { kind: "tool-calls", toolCalls: [{ id: "tc-b-1", name: "tool.fs.read", arguments: JSON.stringify({ path: "b.txt" }) }] },
-      { kind: "tool-calls", toolCalls: [{ id: "tc-a-2", name: "tool.fs.read", arguments: JSON.stringify({ path: "a.txt" }) }] },
-      { kind: "tool-calls", toolCalls: [{ id: "tc-b-2", name: "tool.fs.read", arguments: JSON.stringify({ path: "b.txt" }) }] },
-      { kind: "tool-calls", toolCalls: [{ id: "tc-a-3", name: "tool.fs.read", arguments: JSON.stringify({ path: "a.txt" }) }] },
-      { kind: "tool-calls", toolCalls: [{ id: "tc-b-3", name: "tool.fs.read", arguments: JSON.stringify({ path: "b.txt" }) }] },
+      {
+        kind: "tool-calls",
+        toolCalls: [
+          { id: "tc-a-1", name: "tool.fs.read", arguments: JSON.stringify({ path: "a.txt" }) },
+        ],
+      },
+      {
+        kind: "tool-calls",
+        toolCalls: [
+          { id: "tc-b-1", name: "tool.fs.read", arguments: JSON.stringify({ path: "b.txt" }) },
+        ],
+      },
+      {
+        kind: "tool-calls",
+        toolCalls: [
+          { id: "tc-a-2", name: "tool.fs.read", arguments: JSON.stringify({ path: "a.txt" }) },
+        ],
+      },
+      {
+        kind: "tool-calls",
+        toolCalls: [
+          { id: "tc-b-2", name: "tool.fs.read", arguments: JSON.stringify({ path: "b.txt" }) },
+        ],
+      },
+      {
+        kind: "tool-calls",
+        toolCalls: [
+          { id: "tc-a-3", name: "tool.fs.read", arguments: JSON.stringify({ path: "a.txt" }) },
+        ],
+      },
+      {
+        kind: "tool-calls",
+        toolCalls: [
+          { id: "tc-b-3", name: "tool.fs.read", arguments: JSON.stringify({ path: "b.txt" }) },
+        ],
+      },
     ];
 
     const languageModel = createSequencedToolLoopLanguageModel(steps);

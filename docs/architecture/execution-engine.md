@@ -59,7 +59,7 @@ This keeps execution semantics identical while ensuring that long-lived edge/sch
 
 ## Non-responsibilities
 
-- The execution engine does not decide *what* to do from a user message (planning is in the agent/planner).
+- The execution engine does not decide _what_ to do from a user message (planning is in the agent/planner).
 - The execution engine does not implement device-specific automation (that lives behind node capabilities).
 - The execution engine does not store raw secrets (that lives behind the secret provider).
 

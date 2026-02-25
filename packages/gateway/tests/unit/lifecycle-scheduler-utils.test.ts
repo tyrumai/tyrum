@@ -3,9 +3,9 @@ import { IntervalScheduler, pruneInBatches } from "../../src/modules/lifecycle/s
 
 describe("lifecycle scheduler utilities", () => {
   it("IntervalScheduler does not run tick concurrently", async () => {
-    const gate = vi.fn<[], Promise<void>>().mockImplementation(
-      () => new Promise((resolve) => setTimeout(resolve, 25)),
-    );
+    const gate = vi
+      .fn<[], Promise<void>>()
+      .mockImplementation(() => new Promise((resolve) => setTimeout(resolve, 25)));
     const scheduler = new IntervalScheduler({
       tickMs: 60_000,
       keepProcessAlive: true,
@@ -49,4 +49,3 @@ describe("lifecycle scheduler utilities", () => {
     expect(onBudgetExhausted).toHaveBeenCalledTimes(1);
   });
 });
-

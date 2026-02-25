@@ -13,7 +13,7 @@ function escapeTelegramHtmlText(input: string): string {
 }
 
 function escapeTelegramHtmlAttr(input: string): string {
-  return escapeTelegramHtmlText(input).replaceAll("\"", "&quot;");
+  return escapeTelegramHtmlText(input).replaceAll('"', "&quot;");
 }
 
 function escapedTelegramHtmlCharLen(char: string): number {
@@ -89,7 +89,10 @@ function chunkPlainTextForTelegramHtml(plainText: string, maxChars: number): str
 function sanitizeCodeLanguage(language: string | undefined): string | undefined {
   const trimmed = language?.trim();
   if (!trimmed) return undefined;
-  const cleaned = trimmed.replaceAll(/[^a-zA-Z0-9_-]/g, "-").replaceAll(/-+/g, "-").replaceAll(/^-|-$/g, "");
+  const cleaned = trimmed
+    .replaceAll(/[^a-zA-Z0-9_-]/g, "-")
+    .replaceAll(/-+/g, "-")
+    .replaceAll(/^-|-$/g, "");
   return cleaned.length > 0 ? cleaned : undefined;
 }
 
@@ -171,7 +174,10 @@ function renderInlineRangeToTelegramHtml(
   end: number,
 ): string {
   const spans = ir.spans
-    .filter((span): span is InlineSpan => (span.kind === "style" || span.kind === "link") && span.start >= start && span.end <= end)
+    .filter(
+      (span): span is InlineSpan =>
+        (span.kind === "style" || span.kind === "link") && span.start >= start && span.end <= end,
+    )
     .map((span) => ({ ...span }));
 
   const suffixes = new Map<number, string[]>();
@@ -382,10 +388,7 @@ export function renderMarkdownForTelegram(
     onFormattingFallback?: (event: TelegramFormattingFallbackEvent) => void;
   },
 ): string[] {
-  const maxChars = Math.max(
-    1,
-    Math.min(TELEGRAM_MAX_MESSAGE_CHARS, opts?.maxChars ?? 3500),
-  );
+  const maxChars = Math.max(1, Math.min(TELEGRAM_MAX_MESSAGE_CHARS, opts?.maxChars ?? 3500));
 
   const ir = markdownToIr(markdown ?? "");
   const plain = irToPlainText(ir).trim();

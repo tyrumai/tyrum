@@ -58,4 +58,3 @@ describe("Audit forget contracts", () => {
     expect(parsed).toMatchObject({ decision: "retain" });
   });
 });
-

@@ -16,4 +16,3 @@ describe("gateway entrypoint (src/index.ts)", () => {
     }
   }, 15_000);
 });
-

@@ -99,10 +99,11 @@ describe("ExecutionEngine policy approval scenarios (e2e)", () => {
     expect(step?.approval_id).toBeTruthy();
 
     const approvalId = step?.approval_id ?? 0;
-    const approval = await container.db.get<{ kind: string; status: string; resume_token: string | null }>(
-      "SELECT kind, status, resume_token FROM approvals WHERE id = ?",
-      [approvalId],
-    );
+    const approval = await container.db.get<{
+      kind: string;
+      status: string;
+      resume_token: string | null;
+    }>("SELECT kind, status, resume_token FROM approvals WHERE id = ?", [approvalId]);
     expect(approval?.kind).toBe("policy");
     expect(approval?.status).toBe("pending");
     expect(approval?.resume_token).toBeTruthy();

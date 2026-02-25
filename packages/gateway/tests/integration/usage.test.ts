@@ -49,7 +49,10 @@ describe("usage routes", () => {
     const res = await app.request("/usage");
     expect(res.status).toBe(200);
     const payload = (await res.json()) as {
-      local: { attempts: { total_with_cost: number; parsed: number; invalid: number }; totals: { duration_ms: number; total_tokens: number; usd_micros: number } };
+      local: {
+        attempts: { total_with_cost: number; parsed: number; invalid: number };
+        totals: { duration_ms: number; total_tokens: number; usd_micros: number };
+      };
     };
 
     expect(payload.local.attempts).toEqual({
@@ -125,7 +128,13 @@ describe("usage routes", () => {
            artifacts_json,
            cost_json
          ) VALUES (?, ?, 1, 'succeeded', ?, ?, '[]', ?)`,
-        [input.attemptId, input.stepId, new Date().toISOString(), new Date().toISOString(), costJson],
+        [
+          input.attemptId,
+          input.stepId,
+          new Date().toISOString(),
+          new Date().toISOString(),
+          costJson,
+        ],
       );
     };
 
@@ -171,19 +180,28 @@ describe("usage routes", () => {
 
     const sessionAlpha = await app.request(`/usage?key=${encodeURIComponent(alphaKey)}`);
     expect(sessionAlpha.status).toBe(200);
-    const sessionAlphaPayload = (await sessionAlpha.json()) as { scope: { kind: string }; local: { totals: { total_tokens: number } } };
+    const sessionAlphaPayload = (await sessionAlpha.json()) as {
+      scope: { kind: string };
+      local: { totals: { total_tokens: number } };
+    };
     expect(sessionAlphaPayload.scope.kind).toBe("session");
     expect(sessionAlphaPayload.local.totals.total_tokens).toBe(15);
 
     const agentAlpha = await app.request(`/usage?agent_id=${encodeURIComponent("alpha")}`);
     expect(agentAlpha.status).toBe(200);
-    const agentAlphaPayload = (await agentAlpha.json()) as { scope: { kind: string }; local: { totals: { total_tokens: number } } };
+    const agentAlphaPayload = (await agentAlpha.json()) as {
+      scope: { kind: string };
+      local: { totals: { total_tokens: number } };
+    };
     expect(agentAlphaPayload.scope.kind).toBe("agent");
     expect(agentAlphaPayload.local.totals.total_tokens).toBe(22);
 
     const deployment = await app.request("/usage");
     expect(deployment.status).toBe(200);
-    const deploymentPayload = (await deployment.json()) as { scope: { kind: string }; local: { totals: { total_tokens: number } } };
+    const deploymentPayload = (await deployment.json()) as {
+      scope: { kind: string };
+      local: { totals: { total_tokens: number } };
+    };
     expect(deploymentPayload.scope.kind).toBe("deployment");
     expect(deploymentPayload.local.totals.total_tokens).toBe(25);
 
@@ -235,7 +253,13 @@ describe("usage routes", () => {
            artifacts_json,
            cost_json
          ) VALUES (?, ?, 1, 'succeeded', ?, ?, '[]', ?)`,
-        [input.attemptId, input.stepId, new Date().toISOString(), new Date().toISOString(), costJson],
+        [
+          input.attemptId,
+          input.stepId,
+          new Date().toISOString(),
+          new Date().toISOString(),
+          costJson,
+        ],
       );
     };
 
@@ -350,7 +374,10 @@ describe("usage routes", () => {
     process.env["OPENROUTER_API_KEY"] = "test-openrouter-key";
 
     const fetchMock = vi.fn(async () => {
-      return new Response("rate limited", { status: 429, headers: { "content-type": "text/plain" } });
+      return new Response("rate limited", {
+        status: 429,
+        headers: { "content-type": "text/plain" },
+      });
     });
     vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 

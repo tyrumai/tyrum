@@ -34,21 +34,29 @@ const AUTO_APPROVE_SCOPES: readonly string[] = [
   "mcp://tasks",
 ];
 
-const HARD_DENY_SCOPES: readonly string[] = [
-  "mcp://root",
-  "mcp://secrets",
-  "mcp://admin",
-];
+const HARD_DENY_SCOPES: readonly string[] = ["mcp://root", "mcp://secrets", "mcp://admin"];
 
 export function currencyMinorUnits(currency: string): number {
   const upper = currency.toUpperCase();
   const zeroDecimal = new Set([
-    "BIF", "CLP", "DJF", "GNF", "JPY", "KMF", "KRW", "MGA",
-    "PYG", "RWF", "UGX", "VND", "VUV", "XAF", "XOF", "XPF",
+    "BIF",
+    "CLP",
+    "DJF",
+    "GNF",
+    "JPY",
+    "KMF",
+    "KRW",
+    "MGA",
+    "PYG",
+    "RWF",
+    "UGX",
+    "VND",
+    "VUV",
+    "XAF",
+    "XOF",
+    "XPF",
   ]);
-  const threeDecimal = new Set([
-    "BHD", "IQD", "JOD", "KWD", "LYD", "OMR", "TND",
-  ]);
+  const threeDecimal = new Set(["BHD", "IQD", "JOD", "KWD", "LYD", "OMR", "TND"]);
   if (zeroDecimal.has(upper)) return 0;
   if (threeDecimal.has(upper)) return 3;
   return 2;
@@ -171,9 +179,7 @@ export function evaluateLegal(ctx?: LegalContext): RuleDecision {
     };
   }
 
-  const hasProhibited = ctx.flags.some(
-    (flag) => flag === "prohibited_content",
-  );
+  const hasProhibited = ctx.flags.some((flag) => flag === "prohibited_content");
   if (hasProhibited) {
     return {
       rule: "legal_compliance",
@@ -184,9 +190,7 @@ export function evaluateLegal(ctx?: LegalContext): RuleDecision {
 
   const hasEscalating = ctx.flags.some(
     (flag) =>
-      flag === "requires_review" ||
-      flag === "export_controlled" ||
-      flag === "terms_unknown",
+      flag === "requires_review" || flag === "export_controlled" || flag === "terms_unknown",
   );
   if (hasEscalating) {
     return {
@@ -203,9 +207,7 @@ export function evaluateLegal(ctx?: LegalContext): RuleDecision {
   };
 }
 
-export function evaluateConnectorScope(
-  ctx?: ConnectorScopeContext,
-): RuleDecision | undefined {
+export function evaluateConnectorScope(ctx?: ConnectorScopeContext): RuleDecision | undefined {
   if (ctx == null) {
     return undefined;
   }
@@ -264,9 +266,7 @@ export function evaluatePolicy(request: PolicyCheckRequest): PolicyDecision {
   const spendDecision = evaluateSpend(request.spend ?? undefined);
   const piiDecision = evaluatePii(request.pii ?? undefined);
   const legalDecision = evaluateLegal(request.legal ?? undefined);
-  const connectorDecision = evaluateConnectorScope(
-    request.connector ?? undefined,
-  );
+  const connectorDecision = evaluateConnectorScope(request.connector ?? undefined);
 
   const rules: RuleDecision[] = [spendDecision, piiDecision, legalDecision];
   if (connectorDecision != null) {

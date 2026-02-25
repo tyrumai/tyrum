@@ -83,4 +83,3 @@ describe("repairPostgresSequences", () => {
     expect(setvalCalls[0]?.sql).toContain(", true)");
   });
 });
-

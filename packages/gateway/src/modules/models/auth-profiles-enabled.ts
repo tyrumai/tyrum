@@ -5,4 +5,3 @@ export function isAuthProfilesEnabled(): boolean {
   if (!raw) return false;
   return !DISABLED_VALUES.has(raw.toLowerCase());
 }
-

@@ -56,10 +56,7 @@ function acquireGatewayBuildLock(timeoutMs = 60_000): () => void {
   }
 }
 
-function formatBuildFailure(
-  prefix: string,
-  result: ReturnType<typeof spawnSync>,
-): string {
+function formatBuildFailure(prefix: string, result: ReturnType<typeof spawnSync>): string {
   const details = [
     prefix,
     result.error ? `spawn error: ${result.error.message}` : undefined,
@@ -126,10 +123,7 @@ function ensureGatewayBuild(): void {
   }
 
   throw new Error(
-    formatBuildFailure(
-      "Failed to build @tyrum/gateway before desktop integration test.",
-      result,
-    ),
+    formatBuildFailure("Failed to build @tyrum/gateway before desktop integration test.", result),
   );
 }
 

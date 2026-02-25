@@ -31,7 +31,12 @@ describe("session command primitives", () => {
     expect(payload.thread_id).toMatch(/^ui-/);
     expect(payload.session_id).toContain("ui:");
 
-    const stored = await db.get<{ channel: string; thread_id: string; summary: string; turns_json: string }>(
+    const stored = await db.get<{
+      channel: string;
+      thread_id: string;
+      summary: string;
+      turns_json: string;
+    }>(
       `SELECT channel, thread_id, summary, turns_json
        FROM sessions
        WHERE agent_id = ? AND session_id = ?`,
@@ -64,7 +69,16 @@ describe("session command primitives", () => {
          created_at,
          updated_at
        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      ["default", "ui:thread-1", "ui", "thread-1", "prev-summary", JSON.stringify(turns), nowIso, nowIso],
+      [
+        "default",
+        "ui:thread-1",
+        "ui",
+        "thread-1",
+        "prev-summary",
+        JSON.stringify(turns),
+        nowIso,
+        nowIso,
+      ],
     );
 
     const result = await executeCommand("/compact", {
@@ -88,7 +102,9 @@ describe("session command primitives", () => {
     expect(updated?.summary).toContain("prev-summary");
     expect(updated?.summary).toContain("msg-0");
 
-    const parsed = updated?.turns_json ? (JSON.parse(updated.turns_json) as Array<{ content: string }>) : [];
+    const parsed = updated?.turns_json
+      ? (JSON.parse(updated.turns_json) as Array<{ content: string }>)
+      : [];
     expect(parsed).toHaveLength(8);
     expect(parsed[0]?.content).toBe("msg-4");
     expect(parsed[7]?.content).toBe("msg-11");

@@ -50,7 +50,10 @@ export const PluginLockFile = z
     recorded_at: DateTimeSchema,
     source: z.record(z.string(), z.unknown()).optional(),
     pinned_version: z.string().trim().min(1),
-    integrity_sha256: z.string().trim().regex(/^[0-9a-f]{64}$/i),
+    integrity_sha256: z
+      .string()
+      .trim()
+      .regex(/^[0-9a-f]{64}$/i),
   })
   .strict();
 export type PluginLockFile = z.infer<typeof PluginLockFile>;

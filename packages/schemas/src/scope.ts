@@ -37,4 +37,3 @@ export const EventScope = z.discriminatedUnion("kind", [
     .strict(),
 ]);
 export type EventScope = z.infer<typeof EventScope>;
-

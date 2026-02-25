@@ -122,7 +122,10 @@ describe("AgentRuntime OAuth expired token handling", () => {
 
     const secretProvider = new MemorySecretProvider();
 
-    const oauthAccessHandle = await secretProvider.store("oauth:openai:agent-1:access", "OAUTH_EXPIRED");
+    const oauthAccessHandle = await secretProvider.store(
+      "oauth:openai:agent-1:access",
+      "OAUTH_EXPIRED",
+    );
     const refreshHandle = await secretProvider.store("oauth:openai:agent-1:refresh", "REFRESH");
     const apiKeyHandle = await secretProvider.store("api:openai:agent-1:key", "API_KEY");
 
@@ -161,9 +164,11 @@ describe("AgentRuntime OAuth expired token handling", () => {
       fetchImpl,
     });
 
-    const model = await (runtime as unknown as {
-      resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
-    }).resolveSessionModel({
+    const model = await (
+      runtime as unknown as {
+        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
+      }
+    ).resolveSessionModel({
       config: { model: { model: "openai/gpt-4.1", options: {} } },
       sessionId: "session-1",
       fetchImpl,
@@ -177,4 +182,3 @@ describe("AgentRuntime OAuth expired token handling", () => {
     expect(oauth?.status).toBe("active");
   });
 });
-

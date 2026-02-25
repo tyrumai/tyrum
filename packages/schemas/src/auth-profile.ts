@@ -14,7 +14,10 @@ export type AuthProfileType = z.infer<typeof AuthProfileType>;
 export const AuthProfileStatus = z.enum(["active", "disabled"]);
 export type AuthProfileStatus = z.infer<typeof AuthProfileStatus>;
 
-export const AuthProfileSecretHandles = z.record(z.string().trim().min(1), z.string().trim().min(1));
+export const AuthProfileSecretHandles = z.record(
+  z.string().trim().min(1),
+  z.string().trim().min(1),
+);
 export type AuthProfileSecretHandles = z.infer<typeof AuthProfileSecretHandles>;
 
 export const AuthProfileLabels = z.record(z.string().trim().min(1), z.unknown());
@@ -121,4 +124,3 @@ export const SessionProviderPinSetRequest = z
   })
   .strict();
 export type SessionProviderPinSetRequest = z.infer<typeof SessionProviderPinSetRequest>;
-

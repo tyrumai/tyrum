@@ -38,4 +38,3 @@ describe("OauthPendingDal", () => {
     expect(stillThere).toBeUndefined();
   });
 });
-

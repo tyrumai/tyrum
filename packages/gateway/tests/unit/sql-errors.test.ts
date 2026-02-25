@@ -21,4 +21,3 @@ describe("sql errors", () => {
     expect(isUniqueViolation("nope")).toBe(false);
   });
 });
-

@@ -1,6 +1,16 @@
 import { useEffect, useState } from "react";
 import { toErrorMessage } from "../lib/errors.js";
-import { colors, heading, card, label as labelStyle, input, btn, info, tabRow, tab as tabStyle } from "../theme.js";
+import {
+  colors,
+  heading,
+  card,
+  label as labelStyle,
+  input,
+  btn,
+  info,
+  tabRow,
+  tab as tabStyle,
+} from "../theme.js";
 
 type Tab = "embedded" | "remote";
 
@@ -159,11 +169,19 @@ export function Connection() {
 
           <div>
             {gatewayStatus === "stopped" || gatewayStatus === "error" ? (
-              <button style={{ ...btn("primary"), marginRight: 8, marginTop: 12 }} onClick={startGateway} disabled={busy}>
+              <button
+                style={{ ...btn("primary"), marginRight: 8, marginTop: 12 }}
+                onClick={startGateway}
+                disabled={busy}
+              >
                 {busy ? "Starting..." : "Start Gateway"}
               </button>
             ) : (
-              <button style={{ ...btn("danger"), marginRight: 8, marginTop: 12 }} onClick={stopGateway} disabled={busy}>
+              <button
+                style={{ ...btn("danger"), marginRight: 8, marginTop: 12 }}
+                onClick={stopGateway}
+                disabled={busy}
+              >
                 {busy ? "Stopping..." : "Stop Gateway"}
               </button>
             )}
@@ -173,9 +191,7 @@ export function Connection() {
             Status: {gatewayStatus} {mode === "embedded" ? "(active mode)" : ""}
           </div>
           {gatewayError && (
-            <div style={{ ...info, color: colors.error, marginTop: 6 }}>
-              Reason: {gatewayError}
-            </div>
+            <div style={{ ...info, color: colors.error, marginTop: 6 }}>Reason: {gatewayError}</div>
           )}
         </div>
       )}
@@ -205,7 +221,9 @@ export function Connection() {
             </div>
           )}
 
-          <div style={{ ...labelStyle, marginTop: 12 }}>TLS certificate fingerprint (SHA-256, optional)</div>
+          <div style={{ ...labelStyle, marginTop: 12 }}>
+            TLS certificate fingerprint (SHA-256, optional)
+          </div>
           <input
             style={input}
             type="text"
@@ -216,11 +234,19 @@ export function Connection() {
 
           <div>
             {nodeStatus === "disconnected" || nodeStatus === "error" ? (
-              <button style={{ ...btn("primary"), marginRight: 8, marginTop: 12 }} onClick={connectNode} disabled={busy}>
+              <button
+                style={{ ...btn("primary"), marginRight: 8, marginTop: 12 }}
+                onClick={connectNode}
+                disabled={busy}
+              >
                 {busy ? "Connecting..." : "Connect"}
               </button>
             ) : (
-              <button style={{ ...btn("danger"), marginRight: 8, marginTop: 12 }} onClick={disconnectNode} disabled={busy}>
+              <button
+                style={{ ...btn("danger"), marginRight: 8, marginTop: 12 }}
+                onClick={disconnectNode}
+                disabled={busy}
+              >
                 {busy ? "Disconnecting..." : "Disconnect"}
               </button>
             )}

@@ -31,7 +31,12 @@ export class ModelsDevRefreshLeaseDal {
     return row ? toRow(row) : undefined;
   }
 
-  async tryAcquire(input: { key: string; owner: string; nowMs: number; leaseTtlMs: number }): Promise<boolean> {
+  async tryAcquire(input: {
+    key: string;
+    owner: string;
+    nowMs: number;
+    leaseTtlMs: number;
+  }): Promise<boolean> {
     const leaseExpiresAt = input.nowMs + Math.max(1, input.leaseTtlMs);
     const inserted = await this.db.run(
       `INSERT INTO models_dev_refresh_leases (key, lease_owner, lease_expires_at_ms)
@@ -62,4 +67,3 @@ export class ModelsDevRefreshLeaseDal {
     );
   }
 }
-

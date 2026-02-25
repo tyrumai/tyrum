@@ -19,7 +19,9 @@ vi.mock("../../src/modules/models/provider-factory.js", () => {
             modelId,
             supportedUrls: {},
             async doGenerate() {
-              return { text: "ok" } as unknown as Awaited<ReturnType<LanguageModelV3["doGenerate"]>>;
+              return { text: "ok" } as unknown as Awaited<
+                ReturnType<LanguageModelV3["doGenerate"]>
+              >;
             },
             async doStream() {
               throw new Error("not implemented");
@@ -80,9 +82,11 @@ describe("AgentRuntime language model wrapper metadata", () => {
       fetchImpl,
     });
 
-    const model = await (runtime as unknown as {
-      resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
-    }).resolveSessionModel({
+    const model = await (
+      runtime as unknown as {
+        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
+      }
+    ).resolveSessionModel({
       config: {
         model: {
           model: "openai/gpt-4.1",

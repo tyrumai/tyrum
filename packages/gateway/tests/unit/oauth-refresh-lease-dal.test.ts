@@ -60,4 +60,3 @@ describe("OauthRefreshLeaseDal", () => {
     expect(acquiredAfterExpiry).toBe(true);
   });
 });
-

@@ -1,6 +1,15 @@
 import { useEffect, useState } from "react";
 import { toErrorMessage } from "../lib/errors.js";
-import { colors, heading, card, sectionTitle, btn as btnFn, labelRow, labelKey, labelValue } from "../theme.js";
+import {
+  colors,
+  heading,
+  card,
+  sectionTitle,
+  btn as btnFn,
+  labelRow,
+  labelKey,
+  labelValue,
+} from "../theme.js";
 
 interface CheckItem {
   label: string;
@@ -94,9 +103,7 @@ export function Diagnostics() {
   const [requestingPermission, setRequestingPermission] = useState<
     "accessibility" | "screenRecording" | null
   >(null);
-  const [permissionActionNote, setPermissionActionNote] = useState<string | null>(
-    null,
-  );
+  const [permissionActionNote, setPermissionActionNote] = useState<string | null>(null);
   const [updateState, setUpdateState] = useState<DesktopUpdateState>({
     stage: "idle",
     currentVersion: "unknown",
@@ -108,9 +115,9 @@ export function Diagnostics() {
     message: null,
     checkedAt: null,
   });
-  const [updateBusy, setUpdateBusy] = useState<
-    "check" | "download" | "install" | "manual" | null
-  >(null);
+  const [updateBusy, setUpdateBusy] = useState<"check" | "download" | "install" | "manual" | null>(
+    null,
+  );
   const [updateActionNote, setUpdateActionNote] = useState<string | null>(null);
 
   const runChecks = () => {
@@ -130,9 +137,7 @@ export function Diagnostics() {
 
     // Gateway check via status subscription
     const update = (index: number, patch: Partial<CheckItem>) => {
-      setChecks((prev) =>
-        prev.map((c, i) => (i === index ? { ...c, ...patch } : c)),
-      );
+      setChecks((prev) => prev.map((c, i) => (i === index ? { ...c, ...patch } : c)));
     };
 
     // Check config accessibility
@@ -187,9 +192,7 @@ export function Diagnostics() {
               : "";
           update(3, {
             status: allOk ? "ok" : "warn",
-            detail: allOk
-              ? "All permissions granted"
-              : `Missing: ${missing}.${instructions}`,
+            detail: allOk ? "All permissions granted" : `Missing: ${missing}.${instructions}`,
           });
         }
       })
@@ -216,9 +219,7 @@ export function Diagnostics() {
           setPermissionActionNote(`${permission} permission is granted.`);
           return;
         }
-        setPermissionActionNote(
-          r.instructions ?? `${permission} permission was not granted.`,
-        );
+        setPermissionActionNote(r.instructions ?? `${permission} permission was not granted.`);
       })
       .catch((error: unknown) => {
         setPermissionActionNote(toErrorMessage(error));
@@ -287,8 +288,7 @@ export function Diagnostics() {
     setUpdateActionNote(null);
     setUpdateBusy("manual");
     try {
-      const result =
-        (await api.updates.openReleaseFile()) as ManualReleaseFileResult;
+      const result = (await api.updates.openReleaseFile()) as ManualReleaseFileResult;
       if (result.message) {
         setUpdateActionNote(result.message);
       } else if (result.opened) {
@@ -307,8 +307,7 @@ export function Diagnostics() {
     const api = window.tyrumDesktop;
     if (!api) return;
 
-    void api
-      .updates
+    void api.updates
       .getState()
       .then((snapshot) => setUpdateState(snapshot as DesktopUpdateState))
       .catch(() => {
@@ -335,43 +334,39 @@ export function Diagnostics() {
             <div key={check.label} style={checkRowStyle}>
               <div style={iconStyle(check.status)}>{si.symbol}</div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 500 }}>
-                  {check.label}
-                </div>
-                <div style={{ fontSize: 12, color: colors.fgMuted }}>
-                  {check.detail}
-                </div>
+                <div style={{ fontSize: 14, fontWeight: 500 }}>{check.label}</div>
+                <div style={{ fontSize: 12, color: colors.fgMuted }}>{check.detail}</div>
               </div>
             </div>
           );
         })}
-        <button style={{ ...btnFn("primary"), marginTop: 12 }} onClick={runChecks} disabled={running}>
+        <button
+          style={{ ...btnFn("primary"), marginTop: 12 }}
+          onClick={runChecks}
+          disabled={running}
+        >
           {running ? "Running..." : "Re-run Checks"}
         </button>
         <div style={{ ...sectionTitle, marginTop: 18, marginBottom: 8 }}>
           Permission Requests (User initiated)
         </div>
         <div style={{ fontSize: 12, color: colors.fgMuted, marginBottom: 8 }}>
-          Diagnostics checks never request permissions automatically. Use these
-          buttons to request permissions when needed.
+          Diagnostics checks never request permissions automatically. Use these buttons to request
+          permissions when needed.
         </div>
         <button
           style={{ ...btnFn("secondary"), marginRight: 8 }}
           onClick={() => requestPermission("accessibility")}
           disabled={requestingPermission !== null}
         >
-          {requestingPermission === "accessibility"
-            ? "Requesting..."
-            : "Request Accessibility"}
+          {requestingPermission === "accessibility" ? "Requesting..." : "Request Accessibility"}
         </button>
         <button
           style={{ ...btnFn("secondary"), marginRight: 8 }}
           onClick={() => requestPermission("screenRecording")}
           disabled={requestingPermission !== null}
         >
-          {requestingPermission === "screenRecording"
-            ? "Opening..."
-            : "Request Screen Recording"}
+          {requestingPermission === "screenRecording" ? "Opening..." : "Request Screen Recording"}
         </button>
         {permissionActionNote && (
           <div style={{ fontSize: 12, color: colors.fgMuted, marginTop: 10 }}>
@@ -383,8 +378,8 @@ export function Diagnostics() {
       <div style={card}>
         <div style={sectionTitle}>Desktop Updates</div>
         <div style={{ fontSize: 12, color: colors.fgMuted, marginBottom: 10 }}>
-          Update checks run automatically at startup. Download and install require
-          explicit user actions.
+          Update checks run automatically at startup. Download and install require explicit user
+          actions.
         </div>
 
         <div style={labelRow}>
@@ -406,9 +401,7 @@ export function Diagnostics() {
         {updateState.progressPercent != null && (
           <div style={labelRow}>
             <span style={labelKey}>Download progress</span>
-            <span style={labelValue}>
-              {Math.round(updateState.progressPercent)}%
-            </span>
+            <span style={labelValue}>{Math.round(updateState.progressPercent)}%</span>
           </div>
         )}
         {updateState.message && (
@@ -434,11 +427,7 @@ export function Diagnostics() {
         )}
 
         <div style={{ marginTop: 12 }}>
-          <button
-            style={btnFn("primary")}
-            onClick={checkForUpdates}
-            disabled={updateBusy !== null}
-          >
+          <button style={btnFn("primary")} onClick={checkForUpdates} disabled={updateBusy !== null}>
             {updateBusy === "check" ? "Checking..." : "Check for Updates"}
           </button>
         </div>

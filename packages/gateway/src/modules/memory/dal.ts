@@ -266,10 +266,10 @@ export class MemoryDal {
   }
 
   async forgetEpisodicEventByEventId(eventId: string, agentId?: string): Promise<number> {
-    const res = await this.db.run("DELETE FROM episodic_events WHERE agent_id = ? AND event_id = ?", [
-      this.normalizeAgentId(agentId),
-      eventId,
-    ]);
+    const res = await this.db.run(
+      "DELETE FROM episodic_events WHERE agent_id = ? AND event_id = ?",
+      [this.normalizeAgentId(agentId), eventId],
+    );
     return res.changes;
   }
 
@@ -282,26 +282,26 @@ export class MemoryDal {
   }
 
   async forgetVectorMetadataByEmbeddingId(embeddingId: string, agentId?: string): Promise<number> {
-    const res = await this.db.run("DELETE FROM vector_metadata WHERE agent_id = ? AND embedding_id = ?", [
-      this.normalizeAgentId(agentId),
-      embeddingId,
-    ]);
+    const res = await this.db.run(
+      "DELETE FROM vector_metadata WHERE agent_id = ? AND embedding_id = ?",
+      [this.normalizeAgentId(agentId), embeddingId],
+    );
     return res.changes;
   }
 
   async forgetPamProfile(profileId: string, agentId?: string): Promise<number> {
-    const res = await this.db.run("DELETE FROM pam_profiles WHERE agent_id = ? AND profile_id = ?", [
-      this.normalizeAgentId(agentId),
-      profileId,
-    ]);
+    const res = await this.db.run(
+      "DELETE FROM pam_profiles WHERE agent_id = ? AND profile_id = ?",
+      [this.normalizeAgentId(agentId), profileId],
+    );
     return res.changes;
   }
 
   async forgetPvpProfile(profileId: string, agentId?: string): Promise<number> {
-    const res = await this.db.run("DELETE FROM pvp_profiles WHERE agent_id = ? AND profile_id = ?", [
-      this.normalizeAgentId(agentId),
-      profileId,
-    ]);
+    const res = await this.db.run(
+      "DELETE FROM pvp_profiles WHERE agent_id = ? AND profile_id = ?",
+      [this.normalizeAgentId(agentId), profileId],
+    );
     return res.changes;
   }
 
@@ -385,19 +385,20 @@ export class MemoryDal {
     agentId?: string,
   ): Promise<CapabilityMemoryRow[]> {
     const scopedAgentId = this.normalizeAgentId(agentId);
-    const rows: RawCapabilityMemoryRow[] = capabilityType !== undefined
-      ? await this.db.all<RawCapabilityMemoryRow>(
-          `SELECT * FROM capability_memories
+    const rows: RawCapabilityMemoryRow[] =
+      capabilityType !== undefined
+        ? await this.db.all<RawCapabilityMemoryRow>(
+            `SELECT * FROM capability_memories
            WHERE agent_id = ? AND capability_type = ?
            ORDER BY updated_at DESC`,
-          [scopedAgentId, capabilityType],
-        )
-      : await this.db.all<RawCapabilityMemoryRow>(
-          `SELECT * FROM capability_memories
+            [scopedAgentId, capabilityType],
+          )
+        : await this.db.all<RawCapabilityMemoryRow>(
+            `SELECT * FROM capability_memories
            WHERE agent_id = ?
            ORDER BY updated_at DESC`,
-          [scopedAgentId],
-        );
+            [scopedAgentId],
+          );
     return rows.map((r) => ({
       ...r,
       selectors: parseJsonField(r.selectors),

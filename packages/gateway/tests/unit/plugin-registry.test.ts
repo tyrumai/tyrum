@@ -49,12 +49,7 @@ function pluginManifestYaml(opts?: {
   const commands = opts?.commands ?? ["echo"];
   const entry = opts?.entry ?? "./index.mjs";
 
-  const lines = [
-    "id: echo",
-    "name: Echo",
-    "version: 0.0.1",
-    `entry: ${entry}`,
-  ];
+  const lines = ["id: echo", "name: Echo", "version: 0.0.1", `entry: ${entry}`];
 
   if (includeContributes) {
     lines.push("contributes:");
@@ -260,9 +255,13 @@ describe("PluginRegistry", () => {
       ["ws.broadcast"],
     );
     const lifecycleEvents = outboxRows
-      .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string; payload?: unknown } })
+      .map(
+        (row) => JSON.parse(row.payload_json) as { message?: { type?: string; payload?: unknown } },
+      )
       .map((row) => row.message)
-      .filter((msg): msg is { type: string; payload: any } => Boolean(msg && typeof msg.type === "string"));
+      .filter((msg): msg is { type: string; payload: any } =>
+        Boolean(msg && typeof msg.type === "string"),
+      );
 
     const loaded = lifecycleEvents.find((evt) => evt.type === "plugin.lifecycle");
     expect(loaded).toBeTruthy();
@@ -323,11 +322,17 @@ describe("PluginRegistry", () => {
       ["ws.broadcast"],
     );
     const lifecycleEvents = outboxRows
-      .map((row) => JSON.parse(row.payload_json) as { message?: { type?: string; payload?: unknown } })
+      .map(
+        (row) => JSON.parse(row.payload_json) as { message?: { type?: string; payload?: unknown } },
+      )
       .map((row) => row.message)
-      .filter((msg): msg is { type: string; payload: any } => Boolean(msg && typeof msg.type === "string"));
+      .filter((msg): msg is { type: string; payload: any } =>
+        Boolean(msg && typeof msg.type === "string"),
+      );
 
-    const failed = lifecycleEvents.find((evt) => evt.type === "plugin.lifecycle" && evt.payload?.kind === "failed");
+    const failed = lifecycleEvents.find(
+      (evt) => evt.type === "plugin.lifecycle" && evt.payload?.kind === "failed",
+    );
     expect(failed).toBeTruthy();
     expect(failed?.payload?.plugin?.id).toBe("echo");
     expect(failed?.payload?.reason).toBe("invalid_config");
@@ -340,10 +345,7 @@ describe("PluginRegistry", () => {
     const auditRow = await container.db.get<{
       id: number;
       action: string;
-    }>(
-      "SELECT id, action FROM planner_events WHERE id = ?",
-      [audit?.event_id ?? -1],
-    );
+    }>("SELECT id, action FROM planner_events WHERE id = ?", [audit?.event_id ?? -1]);
     const action = auditRow ? (JSON.parse(auditRow.action) as any) : undefined;
     expect(action?.type).toBe("plugin.lifecycle");
     expect(action?.kind).toBe("failed");
@@ -403,7 +405,9 @@ describe("PluginRegistry", () => {
       "SELECT payload_json FROM outbox WHERE topic = ? ORDER BY id DESC LIMIT 1",
       ["ws.broadcast"],
     );
-    const msg = lastOutbox ? (JSON.parse(lastOutbox.payload_json) as { message?: any }).message : undefined;
+    const msg = lastOutbox
+      ? (JSON.parse(lastOutbox.payload_json) as { message?: any }).message
+      : undefined;
     expect(msg?.type).toBe("plugin_tool.invoked");
     expect(msg?.payload?.plugin_id).toBe("echo");
     expect(msg?.payload?.tool_id).toBe("plugin.echo.echo");
@@ -420,10 +424,9 @@ describe("PluginRegistry", () => {
       plan_id: string;
       step_index: number;
       action: string;
-    }>(
-      "SELECT id, plan_id, step_index, action FROM planner_events WHERE id = ?",
-      [audit?.event_id ?? -1],
-    );
+    }>("SELECT id, plan_id, step_index, action FROM planner_events WHERE id = ?", [
+      audit?.event_id ?? -1,
+    ]);
     expect(auditRow?.plan_id).toBe(audit?.plan_id);
     expect(auditRow?.step_index).toBe(audit?.step_index);
     const action = auditRow ? (JSON.parse(auditRow.action) as any) : undefined;
@@ -582,7 +585,11 @@ describe("PluginRegistry", () => {
     home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
     const pluginDir = join(home, "plugins/echo");
     await mkdir(pluginDir, { recursive: true });
-    await writeFile(join(pluginDir, "plugin.yml"), pluginManifestYaml({ includeContributes: false }), "utf-8");
+    await writeFile(
+      join(pluginDir, "plugin.yml"),
+      pluginManifestYaml({ includeContributes: false }),
+      "utf-8",
+    );
     await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
 
     const plugins = await PluginRegistry.load({
@@ -607,7 +614,11 @@ describe("PluginRegistry", () => {
     home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
     const pluginDir = join(home, "plugins/echo");
     await mkdir(pluginDir, { recursive: true });
-    await writeFile(join(pluginDir, "plugin.yml"), pluginManifestYaml({ includePermissions: false }), "utf-8");
+    await writeFile(
+      join(pluginDir, "plugin.yml"),
+      pluginManifestYaml({ includePermissions: false }),
+      "utf-8",
+    );
     await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
 
     const plugins = await PluginRegistry.load({
@@ -623,7 +634,11 @@ describe("PluginRegistry", () => {
     home = await mkdtemp(join(tmpdir(), "tyrum-plugin-home-"));
     const pluginDir = join(home, "plugins/echo");
     await mkdir(pluginDir, { recursive: true });
-    await writeFile(join(pluginDir, "plugin.yml"), pluginManifestYaml({ includeConfigSchema: false }), "utf-8");
+    await writeFile(
+      join(pluginDir, "plugin.yml"),
+      pluginManifestYaml({ includeConfigSchema: false }),
+      "utf-8",
+    );
     await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
 
     const plugins = await PluginRegistry.load({
@@ -652,7 +667,11 @@ describe("PluginRegistry", () => {
       }),
       "utf-8",
     );
-    await writeFile(join(pluginDir, "config.json"), JSON.stringify({ greeting: "hi", extra: "nope" }), "utf-8");
+    await writeFile(
+      join(pluginDir, "config.json"),
+      JSON.stringify({ greeting: "hi", extra: "nope" }),
+      "utf-8",
+    );
     await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
 
     const plugins = await PluginRegistry.load({
@@ -685,7 +704,11 @@ describe("PluginRegistry", () => {
       }),
       "utf-8",
     );
-    await writeFile(join(pluginDir, "config.json"), JSON.stringify({ greeting: "hi", target: "world" }), "utf-8");
+    await writeFile(
+      join(pluginDir, "config.json"),
+      JSON.stringify({ greeting: "hi", target: "world" }),
+      "utf-8",
+    );
     await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
 
     const plugins = await PluginRegistry.load({
@@ -753,14 +776,18 @@ describe("PluginRegistry", () => {
           "      target:",
           "        type: string",
           "allOf:",
-          "  - $ref: \"#/$defs/Config~01Greeting\"",
-          "  - $ref: \"#/$defs/ConfigTarget\"",
+          '  - $ref: "#/$defs/Config~01Greeting"',
+          '  - $ref: "#/$defs/ConfigTarget"',
           "required: []",
         ],
       }),
       "utf-8",
     );
-    await writeFile(join(pluginDir, "config.json"), JSON.stringify({ greeting: "hi", target: "world" }), "utf-8");
+    await writeFile(
+      join(pluginDir, "config.json"),
+      JSON.stringify({ greeting: "hi", target: "world" }),
+      "utf-8",
+    );
     await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
 
     const plugins = await PluginRegistry.load({
@@ -791,8 +818,8 @@ describe("PluginRegistry", () => {
           "      target:",
           "        type: string",
           "allOf:",
-          "  - $ref: \"#/$defs/Config~01Greeting\"",
-          "  - $ref: \"#/$defs/ConfigTarget\"",
+          '  - $ref: "#/$defs/Config~01Greeting"',
+          '  - $ref: "#/$defs/ConfigTarget"',
           "required: []",
         ],
       }),
@@ -835,10 +862,10 @@ describe("PluginRegistry", () => {
           "type: object",
           "properties:",
           "  nested:",
-          "    $ref: \"#/$defs/Config~01Greeting\"",
+          '    $ref: "#/$defs/Config~01Greeting"',
           "allOf:",
-          "  - $ref: \"#/$defs/Config~01Greeting\"",
-          "  - $ref: \"#/$defs/ConfigTarget\"",
+          '  - $ref: "#/$defs/Config~01Greeting"',
+          '  - $ref: "#/$defs/ConfigTarget"',
           "required: []",
         ],
       }),
@@ -878,7 +905,7 @@ describe("PluginRegistry", () => {
           "      greeting:",
           "        type: string",
           "type: object",
-          "$ref: \"#/$defs/ConfigGreeting\"",
+          '$ref: "#/$defs/ConfigGreeting"',
           "required: []",
         ],
       }),
@@ -913,13 +940,17 @@ describe("PluginRegistry", () => {
           "properties:",
           "  target:",
           "    type: string",
-          "$ref: \"#/$defs/ConfigGreeting\"",
+          '$ref: "#/$defs/ConfigGreeting"',
           "required: []",
         ],
       }),
       "utf-8",
     );
-    await writeFile(join(pluginDir, "config.json"), JSON.stringify({ greeting: "hi", target: "world" }), "utf-8");
+    await writeFile(
+      join(pluginDir, "config.json"),
+      JSON.stringify({ greeting: "hi", target: "world" }),
+      "utf-8",
+    );
     await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
 
     const plugins = await PluginRegistry.load({
@@ -973,10 +1004,7 @@ describe("PluginRegistry", () => {
     await writeFile(
       join(pluginDir, "plugin.yml"),
       pluginManifestYaml({
-        configSchema: [
-          "allOf:",
-          "  - {}",
-        ],
+        configSchema: ["allOf:", "  - {}"],
       }),
       "utf-8",
     );
@@ -1041,7 +1069,11 @@ describe("PluginRegistry", () => {
       }),
       "utf-8",
     );
-    await writeFile(join(pluginDir, "config.json"), JSON.stringify({ greeting: "hi", extra: "ok" }), "utf-8");
+    await writeFile(
+      join(pluginDir, "config.json"),
+      JSON.stringify({ greeting: "hi", extra: "ok" }),
+      "utf-8",
+    );
     await writeFile(join(pluginDir, "index.mjs"), pluginEntryModule(), "utf-8");
 
     const plugins = await PluginRegistry.load({
@@ -1089,7 +1121,11 @@ describe("PluginRegistry", () => {
     const pluginDir = join(home, "plugins/echo");
     await mkdir(pluginDir, { recursive: true });
     await writeFile(join(pluginDir, "plugin.yml"), pluginManifestYaml(), "utf-8");
-    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModuleMutatesRoutesAndRegistersRouter(), "utf-8");
+    await writeFile(
+      join(pluginDir, "index.mjs"),
+      pluginEntryModuleMutatesRoutesAndRegistersRouter(),
+      "utf-8",
+    );
 
     const plugins = await PluginRegistry.load({
       home,
@@ -1111,7 +1147,11 @@ describe("PluginRegistry", () => {
       }),
       "utf-8",
     );
-    await writeFile(join(pluginDir, "index.mjs"), pluginEntryModuleMutatesAllowlistForUndeclaredTool(), "utf-8");
+    await writeFile(
+      join(pluginDir, "index.mjs"),
+      pluginEntryModuleMutatesAllowlistForUndeclaredTool(),
+      "utf-8",
+    );
 
     const plugins = await PluginRegistry.load({
       home,
@@ -1211,8 +1251,12 @@ describe("PluginRegistry", () => {
 
     const listed = plugins.list() as unknown as Array<Record<string, unknown>>;
     expect(listed.map((p) => p["id"])).toEqual(["echo"]);
-    expect((listed[0]?.["install"] as Record<string, unknown> | undefined)?.["pinned_version"]).toBe("0.0.1");
-    expect((listed[0]?.["install"] as Record<string, unknown> | undefined)?.["integrity_sha256"]).toBe(integritySha256);
+    expect(
+      (listed[0]?.["install"] as Record<string, unknown> | undefined)?.["pinned_version"],
+    ).toBe("0.0.1");
+    expect(
+      (listed[0]?.["install"] as Record<string, unknown> | undefined)?.["integrity_sha256"],
+    ).toBe(integritySha256);
   });
 
   it("loads plugins when plugin.lock.json integrity uses uppercase hex", async () => {

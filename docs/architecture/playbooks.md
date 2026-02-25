@@ -33,6 +33,7 @@ The playbook runtime exposes a small contract that supports two operations:
 ```
 
 Notes:
+
 - When `pipeline` is an absolute file path, it must refer to a playbook file already loaded by the gateway (typically under `TYRUM_HOME/playbooks`).
 - `maxOutputBytes` is a positive integer cap applied by the runtime/executor to step output capture.
 - When omitted, a safe default cap is applied.

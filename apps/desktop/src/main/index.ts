@@ -1,9 +1,6 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 import { join } from "node:path";
-import {
-  registerGatewayIpc,
-  startEmbeddedGatewayFromConfig,
-} from "./ipc/gateway-ipc.js";
+import { registerGatewayIpc, startEmbeddedGatewayFromConfig } from "./ipc/gateway-ipc.js";
 import { registerNodeIpc, shutdownNodeResources } from "./ipc/node-ipc.js";
 import { registerConfigIpc } from "./ipc/config-ipc.js";
 import { registerUpdateIpc } from "./ipc/update-ipc.js";

@@ -175,10 +175,7 @@ describe("AgentRuntime", () => {
         [key, lane, leaseOwner],
       );
       if (res.changes === 1) {
-        await tx.run(
-          "DELETE FROM lane_queue_signals WHERE key = ? AND lane = ?",
-          [key, lane],
-        );
+        await tx.run("DELETE FROM lane_queue_signals WHERE key = ? AND lane = ?", [key, lane]);
       }
     });
 
@@ -434,9 +431,13 @@ describe("AgentRuntime", () => {
     const report = runtime.getLastContextReport();
     expect(report).toBeDefined();
 
-    const identitySection = report!.system_prompt.sections.find((section) => section.id === "identity");
+    const identitySection = report!.system_prompt.sections.find(
+      (section) => section.id === "identity",
+    );
     const safetySection = report!.system_prompt.sections.find((section) => section.id === "safety");
-    const sandboxSection = report!.system_prompt.sections.find((section) => section.id === "sandbox");
+    const sandboxSection = report!.system_prompt.sections.find(
+      (section) => section.id === "sandbox",
+    );
     expect(identitySection).toBeDefined();
     expect(safetySection).toBeDefined();
     expect(sandboxSection).toBeDefined();
@@ -939,7 +940,9 @@ describe("AgentRuntime", () => {
       languageModel: model,
       fetchImpl: fetch404,
       turnEngineWaitMs: 350,
-      policyService: policyService as unknown as ConstructorParameters<typeof AgentRuntime>[0]["policyService"],
+      policyService: policyService as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["policyService"],
     } as ConstructorParameters<typeof AgentRuntime>[0]);
 
     const engine = (runtime as unknown as { executionEngine: ExecutionEngine }).executionEngine;
@@ -996,7 +999,12 @@ describe("AgentRuntime", () => {
                 finishReason: { unified: "stop" as const, raw: undefined },
                 logprobs: undefined,
                 usage: {
-                  inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
+                  inputTokens: {
+                    total: 1,
+                    noCache: 1,
+                    cacheRead: undefined,
+                    cacheWrite: undefined,
+                  },
                   outputTokens: { total: 1, text: 1, reasoning: undefined },
                 },
               },
@@ -1006,7 +1014,9 @@ describe("AgentRuntime", () => {
         };
       },
 
-      async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
+      async doGenerate(
+        options: LanguageModelV3CallOptions,
+      ): Promise<LanguageModelV3GenerateResult> {
         return await new Promise<LanguageModelV3GenerateResult>((resolve, reject) => {
           const timer = setTimeout(() => {
             resolve({
@@ -1079,7 +1089,12 @@ describe("AgentRuntime", () => {
                 finishReason: { unified: "stop" as const, raw: undefined },
                 logprobs: undefined,
                 usage: {
-                  inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
+                  inputTokens: {
+                    total: 1,
+                    noCache: 1,
+                    cacheRead: undefined,
+                    cacheWrite: undefined,
+                  },
                   outputTokens: { total: 1, text: 1, reasoning: undefined },
                 },
               },
@@ -1089,7 +1104,9 @@ describe("AgentRuntime", () => {
         };
       },
 
-      async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
+      async doGenerate(
+        options: LanguageModelV3CallOptions,
+      ): Promise<LanguageModelV3GenerateResult> {
         if (options.abortSignal?.aborted) {
           aborted = true;
           throw new Error("timed out");
@@ -1141,17 +1158,15 @@ describe("AgentRuntime", () => {
     const originalEnqueuePlan = engine.enqueuePlan.bind(engine);
     engine.enqueuePlan = async (input) => {
       const res = await originalEnqueuePlan(input);
-      await container!.db.run(
-        "UPDATE execution_steps SET max_attempts = 1 WHERE run_id = ?",
-        [res.runId],
-      );
+      await container!.db.run("UPDATE execution_steps SET max_attempts = 1 WHERE run_id = ?", [
+        res.runId,
+      ]);
       return res;
     };
 
-    const originalExecuteWithTimeout =
-      engineAny["executeWithTimeout"] as
-        | ((...args: unknown[]) => Promise<unknown>)
-        | undefined;
+    const originalExecuteWithTimeout = engineAny["executeWithTimeout"] as
+      | ((...args: unknown[]) => Promise<unknown>)
+      | undefined;
     if (typeof originalExecuteWithTimeout !== "function") {
       throw new Error("expected ExecutionEngine.executeWithTimeout to exist");
     }
@@ -1245,7 +1260,12 @@ describe("AgentRuntime", () => {
                 finishReason: { unified: "stop" as const, raw: undefined },
                 logprobs: undefined,
                 usage: {
-                  inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
+                  inputTokens: {
+                    total: 1,
+                    noCache: 1,
+                    cacheRead: undefined,
+                    cacheWrite: undefined,
+                  },
                   outputTokens: { total: 1, text: 1, reasoning: undefined },
                 },
               },
@@ -1255,7 +1275,9 @@ describe("AgentRuntime", () => {
         };
       },
 
-      async doGenerate(_options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
+      async doGenerate(
+        _options: LanguageModelV3CallOptions,
+      ): Promise<LanguageModelV3GenerateResult> {
         throw new Error("real failure");
       },
     };
@@ -1277,10 +1299,9 @@ describe("AgentRuntime", () => {
     const originalEnqueuePlan = engine.enqueuePlan.bind(engine);
     engine.enqueuePlan = async (input) => {
       const res = await originalEnqueuePlan(input);
-      await container!.db.run(
-        "UPDATE execution_steps SET max_attempts = 1 WHERE run_id = ?",
-        [res.runId],
-      );
+      await container!.db.run("UPDATE execution_steps SET max_attempts = 1 WHERE run_id = ?", [
+        res.runId,
+      ]);
       await container!.db.run(
         "UPDATE execution_runs SET paused_reason = 'stale', paused_detail = 'stale pause' WHERE run_id = ?",
         [res.runId],
@@ -1327,7 +1348,12 @@ describe("AgentRuntime", () => {
                 finishReason: { unified: "stop" as const, raw: undefined },
                 logprobs: undefined,
                 usage: {
-                  inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
+                  inputTokens: {
+                    total: 1,
+                    noCache: 1,
+                    cacheRead: undefined,
+                    cacheWrite: undefined,
+                  },
                   outputTokens: { total: 1, text: 1, reasoning: undefined },
                 },
               },
@@ -1337,7 +1363,9 @@ describe("AgentRuntime", () => {
         };
       },
 
-      async doGenerate(_options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
+      async doGenerate(
+        _options: LanguageModelV3CallOptions,
+      ): Promise<LanguageModelV3GenerateResult> {
         calls += 1;
         if (calls === 1) {
           firstStarted.resolve();
@@ -1509,10 +1537,9 @@ describe("AgentRuntime", () => {
       home: homeDir,
       languageModel: createStubLanguageModel("hello"),
       fetchImpl: fetch404,
-      mcpManager:
-        mcpManager as unknown as ConstructorParameters<
-          typeof AgentRuntime
-        >[0]["mcpManager"],
+      mcpManager: mcpManager as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
     });
 
     await runtime.turn({
@@ -1560,10 +1587,9 @@ describe("AgentRuntime", () => {
       home: homeDir,
       languageModel: createStubLanguageModel("hello"),
       fetchImpl: fetch404,
-      mcpManager:
-        mcpManager as unknown as ConstructorParameters<
-          typeof AgentRuntime
-        >[0]["mcpManager"],
+      mcpManager: mcpManager as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
     });
 
     await runtime.shutdown();
@@ -1612,7 +1638,9 @@ describe("AgentRuntime", () => {
       home: homeDir,
       languageModel: createStubLanguageModel("hello"),
       fetchImpl: fetch404,
-      policyService: policyService as unknown as ConstructorParameters<typeof AgentRuntime>[0]["policyService"],
+      policyService: policyService as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["policyService"],
     });
 
     const approvalSpy = vi.fn(async () => ({
@@ -1620,8 +1648,9 @@ describe("AgentRuntime", () => {
       status: "approved" as const,
       approvalId: 1,
     }));
-    (runtime as unknown as { awaitApprovalForToolExecution: unknown }).awaitApprovalForToolExecution =
-      approvalSpy;
+    (
+      runtime as unknown as { awaitApprovalForToolExecution: unknown }
+    ).awaitApprovalForToolExecution = approvalSpy;
 
     const toolDesc = {
       id: "tool.exec",
@@ -1657,12 +1686,18 @@ describe("AgentRuntime", () => {
           contextReport: unknown,
         ) => Record<string, { execute: (args: unknown) => Promise<string> }>;
       }
-    ).buildToolSet([toolDesc], toolExecutor, usedTools, {
-      planId: "plan-1",
-      sessionId: "session-1",
-      channel: "test",
-      threadId: "thread-1",
-    }, makeContextReport());
+    ).buildToolSet(
+      [toolDesc],
+      toolExecutor,
+      usedTools,
+      {
+        planId: "plan-1",
+        sessionId: "session-1",
+        channel: "test",
+        threadId: "thread-1",
+      },
+      makeContextReport(),
+    );
 
     const res = await toolSet["tool.exec"]!.execute({ command: "echo hi" });
 
@@ -1691,7 +1726,9 @@ describe("AgentRuntime", () => {
       home: homeDir,
       languageModel: createStubLanguageModel("hello"),
       fetchImpl: fetch404,
-      policyService: policyService as unknown as ConstructorParameters<typeof AgentRuntime>[0]["policyService"],
+      policyService: policyService as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["policyService"],
     });
 
     const approval = await container.approvalDal.create({
@@ -1753,23 +1790,28 @@ describe("AgentRuntime", () => {
           contextReport: unknown,
         ) => Record<string, { execute: (args: unknown, options?: unknown) => Promise<string> }>;
       }
-    ).buildToolSet([toolDesc], toolExecutor, usedTools, {
-      planId: "plan-1",
-      sessionId: "session-1",
-      channel: "test",
-      threadId: "thread-1",
-      execution: {
-        runId: "run-1",
-        stepIndex: 0,
-        stepId: "step-1",
-        stepApprovalId: approval.id,
+    ).buildToolSet(
+      [toolDesc],
+      toolExecutor,
+      usedTools,
+      {
+        planId: "plan-1",
+        sessionId: "session-1",
+        channel: "test",
+        threadId: "thread-1",
+        execution: {
+          runId: "run-1",
+          stepIndex: 0,
+          stepId: "step-1",
+          stepApprovalId: approval.id,
+        },
       },
-    }, makeContextReport());
-
-    const res = await toolSet["tool.exec"]!.execute(
-      { command: "echo hi" },
-      { toolCallId: "tc-expected" } as unknown,
+      makeContextReport(),
     );
+
+    const res = await toolSet["tool.exec"]!.execute({ command: "echo hi" }, {
+      toolCallId: "tc-expected",
+    } as unknown);
 
     expect(res).toContain("tool execution not approved");
     expect(toolExecutor.execute).toHaveBeenCalledTimes(0);
@@ -1784,11 +1826,10 @@ describe("AgentRuntime", () => {
     });
 
     const secretProvider = {
-      resolve: vi.fn(
-        async (handle: { scope: string; created_at: string }) =>
-          handle.scope === "SCOPE" && handle.created_at === "2026-02-23T00:00:00.000Z"
-            ? JSON.stringify({ command: "echo from-secret" })
-            : undefined,
+      resolve: vi.fn(async (handle: { scope: string; created_at: string }) =>
+        handle.scope === "SCOPE" && handle.created_at === "2026-02-23T00:00:00.000Z"
+          ? JSON.stringify({ command: "echo from-secret" })
+          : undefined,
       ),
     };
 
@@ -1806,7 +1847,9 @@ describe("AgentRuntime", () => {
       secretProvider: secretProvider as unknown as ConstructorParameters<
         typeof AgentRuntime
       >[0]["secretProvider"],
-      policyService: policyService as unknown as ConstructorParameters<typeof AgentRuntime>[0]["policyService"],
+      policyService: policyService as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["policyService"],
     });
 
     const approval = await container.approvalDal.create({
@@ -1874,20 +1917,28 @@ describe("AgentRuntime", () => {
           contextReport: unknown,
         ) => Record<string, { execute: (args: unknown, options?: unknown) => Promise<string> }>;
       }
-    ).buildToolSet([toolDesc], toolExecutor, usedTools, {
-      planId: "plan-1",
-      sessionId: "session-1",
-      channel: "test",
-      threadId: "thread-1",
-      execution: {
-        runId: "run-1",
-        stepIndex: 0,
-        stepId: "step-1",
-        stepApprovalId: approval.id,
+    ).buildToolSet(
+      [toolDesc],
+      toolExecutor,
+      usedTools,
+      {
+        planId: "plan-1",
+        sessionId: "session-1",
+        channel: "test",
+        threadId: "thread-1",
+        execution: {
+          runId: "run-1",
+          stepIndex: 0,
+          stepId: "step-1",
+          stepApprovalId: approval.id,
+        },
       },
-    }, makeContextReport());
+      makeContextReport(),
+    );
 
-    await toolSet["tool.exec"]!.execute({ command: "echo hi" }, { toolCallId: "tc-secret" } as unknown);
+    await toolSet["tool.exec"]!.execute({ command: "echo hi" }, {
+      toolCallId: "tc-secret",
+    } as unknown);
 
     expect(toolExecutor.execute).toHaveBeenCalledTimes(1);
     expect(toolExecutor.execute.mock.calls[0]?.[2]).toEqual({ command: "echo from-secret" });
@@ -1902,13 +1953,13 @@ describe("AgentRuntime", () => {
 
     let resolveList:
       | ((
-        value: Array<{
-          handle_id: string;
-          provider: string;
-          scope: string;
-          created_at: string;
-        }>,
-      ) => void)
+          value: Array<{
+            handle_id: string;
+            provider: string;
+            scope: string;
+            created_at: string;
+          }>,
+        ) => void)
       | undefined;
     const listPromise = new Promise<
       Array<{ handle_id: string; provider: string; scope: string; created_at: string }>
@@ -2006,12 +2057,18 @@ describe("AgentRuntime", () => {
           contextReport: unknown,
         ) => Record<string, { execute: (args: unknown) => Promise<string> }>;
       }
-    ).buildToolSet(toolDescs, toolExecutor, usedTools, {
-      planId: "plan-1",
-      sessionId: "session-1",
-      channel: "test",
-      threadId: "thread-1",
-    }, makeContextReport());
+    ).buildToolSet(
+      toolDescs,
+      toolExecutor,
+      usedTools,
+      {
+        planId: "plan-1",
+        sessionId: "session-1",
+        channel: "test",
+        threadId: "thread-1",
+      },
+      makeContextReport(),
+    );
 
     const execPromise = toolSet["tool.exec"]!.execute({ command: "secret:h1" });
     const fetchPromise = toolSet["tool.http.fetch"]!.execute({ url: "https://example.com" });
@@ -2028,7 +2085,10 @@ describe("AgentRuntime", () => {
     await execPromise;
 
     const execCall = policyService.evaluateToolCall.mock.calls
-      .map((call) => call[0] as { toolId?: string; inputProvenance?: { source: string; trusted: boolean } })
+      .map(
+        (call) =>
+          call[0] as { toolId?: string; inputProvenance?: { source: string; trusted: boolean } },
+      )
       .find((call) => call.toolId === "tool.exec");
     expect(execCall?.inputProvenance).toEqual({ source: "user", trusted: true });
   });
@@ -2051,7 +2111,9 @@ describe("AgentRuntime", () => {
       home: homeDir,
       languageModel: createStubLanguageModel("hello"),
       fetchImpl: fetch404,
-      policyService: policyService as unknown as ConstructorParameters<typeof AgentRuntime>[0]["policyService"],
+      policyService: policyService as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["policyService"],
     });
 
     const approvalSpy = vi.fn(async () => ({
@@ -2059,8 +2121,9 @@ describe("AgentRuntime", () => {
       status: "approved" as const,
       approvalId: 1,
     }));
-    (runtime as unknown as { awaitApprovalForToolExecution: unknown }).awaitApprovalForToolExecution =
-      approvalSpy;
+    (
+      runtime as unknown as { awaitApprovalForToolExecution: unknown }
+    ).awaitApprovalForToolExecution = approvalSpy;
 
     const toolDesc = {
       id: "tool.fs.read",
@@ -2096,12 +2159,18 @@ describe("AgentRuntime", () => {
           contextReport: unknown,
         ) => Record<string, { execute: (args: unknown) => Promise<string> }>;
       }
-    ).buildToolSet([toolDesc], toolExecutor, usedTools, {
-      planId: "plan-1",
-      sessionId: "session-1",
-      channel: "test",
-      threadId: "thread-1",
-    }, makeContextReport());
+    ).buildToolSet(
+      [toolDesc],
+      toolExecutor,
+      usedTools,
+      {
+        planId: "plan-1",
+        sessionId: "session-1",
+        channel: "test",
+        threadId: "thread-1",
+      },
+      makeContextReport(),
+    );
 
     const result = await toolSet["tool.fs.read"]!.execute({
       path: " ./docs//architecture/../policy-overrides.md ",
@@ -2151,7 +2220,9 @@ describe("AgentRuntime", () => {
       home: homeDir,
       languageModel: createStubLanguageModel("hello"),
       fetchImpl: fetch404,
-      policyService: policyService as unknown as ConstructorParameters<typeof AgentRuntime>[0]["policyService"],
+      policyService: policyService as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["policyService"],
     });
 
     const approvalSpy = vi.fn(async () => ({
@@ -2159,8 +2230,9 @@ describe("AgentRuntime", () => {
       status: "approved" as const,
       approvalId: 1,
     }));
-    (runtime as unknown as { awaitApprovalForToolExecution: unknown }).awaitApprovalForToolExecution =
-      approvalSpy;
+    (
+      runtime as unknown as { awaitApprovalForToolExecution: unknown }
+    ).awaitApprovalForToolExecution = approvalSpy;
 
     const toolDesc = {
       id: "tool.exec",
@@ -2218,7 +2290,9 @@ describe("AgentRuntime", () => {
       }),
     );
 
-    const policyContext = approvalSpy.mock.calls[0]?.[5] as { suggested_overrides?: unknown } | undefined;
+    const policyContext = approvalSpy.mock.calls[0]?.[5] as
+      | { suggested_overrides?: unknown }
+      | undefined;
     expect(policyContext?.suggested_overrides).toBeUndefined();
   });
 
@@ -2280,20 +2354,28 @@ describe("AgentRuntime", () => {
           contextReport: unknown,
         ) => Record<string, { execute: (args: unknown) => Promise<string> }>;
       }
-    ).buildToolSet([toolDesc], toolExecutor, usedTools, {
-      planId: "plan-1",
-      sessionId: "session-1",
-      channel: "test",
-      threadId: "thread-1",
-    }, makeContextReport());
+    ).buildToolSet(
+      [toolDesc],
+      toolExecutor,
+      usedTools,
+      {
+        planId: "plan-1",
+        sessionId: "session-1",
+        channel: "test",
+        threadId: "thread-1",
+      },
+      makeContextReport(),
+    );
 
     const res = await toolSet["plugin.echo.echo"]!.execute({});
 
     expect(plugins.executeTool).toHaveBeenCalledTimes(1);
     expect(toolExecutor.execute).toHaveBeenCalledTimes(0);
     expect(usedTools.has("plugin.echo.echo")).toBe(true);
-    expect(res).toContain("[SECURITY: This tool output contained potential prompt injection patterns that were neutralized.]");
-    expect(res).toContain("<data source=\"tool\">");
+    expect(res).toContain(
+      "[SECURITY: This tool output contained potential prompt injection patterns that were neutralized.]",
+    );
+    expect(res).toContain('<data source="tool">');
     expect(res).toContain("[blocked-override]");
     expect(res).not.toContain("ignore previous instructions");
   });

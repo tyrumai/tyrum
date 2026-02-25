@@ -113,9 +113,7 @@ describe("Auth middleware", () => {
 
   it("allows /app/auth bootstrap with query token", async () => {
     const app = buildApp();
-    const res = await app.request(
-      `/app/auth?token=${encodeURIComponent(adminToken)}&next=%2Fapp`,
-    );
+    const res = await app.request(`/app/auth?token=${encodeURIComponent(adminToken)}&next=%2Fapp`);
     expect(res.status).toBe(200);
   });
 

@@ -127,8 +127,14 @@ describe("AgentRuntime OAuth refresh", () => {
     });
 
     const secretProvider = new MemorySecretProvider();
-    const oldAccessHandle = await secretProvider.store("oauth:openai:agent-1:access-old", "OLD_ACCESS");
-    const refreshHandle = await secretProvider.store("oauth:openai:agent-1:refresh", "REFRESH_TOKEN");
+    const oldAccessHandle = await secretProvider.store(
+      "oauth:openai:agent-1:access-old",
+      "OLD_ACCESS",
+    );
+    const refreshHandle = await secretProvider.store(
+      "oauth:openai:agent-1:refresh",
+      "REFRESH_TOKEN",
+    );
 
     const authProfileDal = new AuthProfileDal(container.db);
     await authProfileDal.create({
@@ -140,7 +146,7 @@ describe("AgentRuntime OAuth refresh", () => {
         access_token_handle: oldAccessHandle.handle_id,
         refresh_token_handle: refreshHandle.handle_id,
       },
-        expiresAt: new Date(Date.now() + 30_000).toISOString(),
+      expiresAt: new Date(Date.now() + 30_000).toISOString(),
       createdBy: { kind: "test" },
     });
 
@@ -190,9 +196,11 @@ describe("AgentRuntime OAuth refresh", () => {
       fetchImpl,
     });
 
-    const model = await (runtime as unknown as {
-      resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
-    }).resolveSessionModel({
+    const model = await (
+      runtime as unknown as {
+        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
+      }
+    ).resolveSessionModel({
       config: { model: { model: "openai/gpt-4.1", options: {} } },
       sessionId: "session-1",
       fetchImpl,
@@ -236,8 +244,14 @@ describe("AgentRuntime OAuth refresh", () => {
     });
 
     const secretProvider = new MemorySecretProvider();
-    const oldAccessHandle = await secretProvider.store("oauth:openai:agent-1:access-old", "OLD_ACCESS");
-    const refreshHandle = await secretProvider.store("oauth:openai:agent-1:refresh", "REFRESH_TOKEN");
+    const oldAccessHandle = await secretProvider.store(
+      "oauth:openai:agent-1:access-old",
+      "OLD_ACCESS",
+    );
+    const refreshHandle = await secretProvider.store(
+      "oauth:openai:agent-1:refresh",
+      "REFRESH_TOKEN",
+    );
 
     const authProfileDal = new AuthProfileDal(container.db);
     await authProfileDal.create({
@@ -299,9 +313,11 @@ describe("AgentRuntime OAuth refresh", () => {
       fetchImpl,
     });
 
-    const model = await (runtime as unknown as {
-      resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
-    }).resolveSessionModel({
+    const model = await (
+      runtime as unknown as {
+        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
+      }
+    ).resolveSessionModel({
       config: { model: { model: "openai/gpt-4.1", options: {} } },
       sessionId: "session-1",
       fetchImpl,
@@ -350,8 +366,14 @@ describe("AgentRuntime OAuth refresh", () => {
     });
 
     const secretProvider = new MemorySecretProvider();
-    const oldAccessHandle = await secretProvider.store("oauth:openai:agent-1:access-old", "OLD_ACCESS");
-    const refreshHandle = await secretProvider.store("oauth:openai:agent-1:refresh", "REFRESH_TOKEN");
+    const oldAccessHandle = await secretProvider.store(
+      "oauth:openai:agent-1:access-old",
+      "OLD_ACCESS",
+    );
+    const refreshHandle = await secretProvider.store(
+      "oauth:openai:agent-1:refresh",
+      "REFRESH_TOKEN",
+    );
 
     const originalStore = secretProvider.store.bind(secretProvider);
     const storeSpy = vi.spyOn(secretProvider, "store").mockImplementation(async (scope, value) => {
@@ -422,9 +444,11 @@ describe("AgentRuntime OAuth refresh", () => {
         fetchImpl,
       });
 
-      const model = await (runtime as unknown as {
-        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
-      }).resolveSessionModel({
+      const model = await (
+        runtime as unknown as {
+          resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
+        }
+      ).resolveSessionModel({
         config: { model: { model: "openai/gpt-4.1", options: {} } },
         sessionId: "session-1",
         fetchImpl,
@@ -470,8 +494,14 @@ describe("AgentRuntime OAuth refresh", () => {
     });
 
     const secretProvider = new MemorySecretProvider();
-    const oldAccessHandle = await secretProvider.store("oauth:openai:agent-1:access-old", "OLD_ACCESS");
-    const refreshHandle = await secretProvider.store("oauth:openai:agent-1:refresh", "REFRESH_TOKEN");
+    const oldAccessHandle = await secretProvider.store(
+      "oauth:openai:agent-1:access-old",
+      "OLD_ACCESS",
+    );
+    const refreshHandle = await secretProvider.store(
+      "oauth:openai:agent-1:refresh",
+      "REFRESH_TOKEN",
+    );
 
     const authProfileDal = new AuthProfileDal(container.db);
     await authProfileDal.create({
@@ -538,9 +568,11 @@ describe("AgentRuntime OAuth refresh", () => {
         fetchImpl,
       });
 
-      const model = await (runtime as unknown as {
-        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
-      }).resolveSessionModel({
+      const model = await (
+        runtime as unknown as {
+          resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
+        }
+      ).resolveSessionModel({
         config: { model: { model: "openai/gpt-4.1", options: {} } },
         sessionId: "session-1",
         fetchImpl,

@@ -154,10 +154,7 @@ const MIGRATION_LOCK_KEY1 = 1959359839; // "tyru" as int-ish
 const MIGRATION_LOCK_KEY2 = 1836016434; // "migr" as int-ish
 
 async function acquireMigrationLock(client: ClientBase): Promise<void> {
-  await client.query("SELECT pg_advisory_lock($1, $2)", [
-    MIGRATION_LOCK_KEY1,
-    MIGRATION_LOCK_KEY2,
-  ]);
+  await client.query("SELECT pg_advisory_lock($1, $2)", [MIGRATION_LOCK_KEY1, MIGRATION_LOCK_KEY2]);
 }
 
 async function releaseMigrationLock(client: ClientBase): Promise<void> {
@@ -166,4 +163,3 @@ async function releaseMigrationLock(client: ClientBase): Promise<void> {
     MIGRATION_LOCK_KEY2,
   ]);
 }
-

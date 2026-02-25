@@ -24,4 +24,3 @@ export function base32LowerNoPad(bytes: Uint8Array): string {
 export function deviceIdFromSha256Digest(digest: Uint8Array): string {
   return `dev_${base32LowerNoPad(digest)}`;
 }
-

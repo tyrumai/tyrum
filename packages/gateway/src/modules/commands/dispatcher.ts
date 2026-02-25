@@ -62,7 +62,10 @@ export interface CommandDeps {
 
 const DEFAULT_PROVIDER_USAGE_FETCH_KEY = Symbol("default-provider-usage-fetch");
 
-const providerUsagePollers = new WeakMap<SqlDb, WeakMap<AgentRegistry, Map<unknown, ProviderUsagePoller>>>();
+const providerUsagePollers = new WeakMap<
+  SqlDb,
+  WeakMap<AgentRegistry, Map<unknown, ProviderUsagePoller>>
+>();
 
 function getProviderUsagePoller(deps: CommandDeps): ProviderUsagePoller | undefined {
   if (!deps.db || !deps.agents) return undefined;
@@ -119,7 +122,10 @@ type UsageTotals = {
   usd_micros: number;
 };
 
-async function resolveKeyLane(db: SqlDb, ctx: CommandDeps["commandContext"] | undefined): Promise<{ key: string; lane: string } | undefined> {
+async function resolveKeyLane(
+  db: SqlDb,
+  ctx: CommandDeps["commandContext"] | undefined,
+): Promise<{ key: string; lane: string } | undefined> {
   const key = ctx?.key?.trim();
   const lane = ctx?.lane?.trim() || "main";
   if (key) return { key, lane };
@@ -131,7 +137,9 @@ async function resolveKeyLane(db: SqlDb, ctx: CommandDeps["commandContext"] | un
   const agentId = ctx?.agentId?.trim();
   const agentKeyPrefix = agentId ? `agent:${agentId}:` : undefined;
 
-  const sources: Array<{ exact: string; like?: string }> = [{ exact: channel, like: `${channel}:%` }];
+  const sources: Array<{ exact: string; like?: string }> = [
+    { exact: channel, like: `${channel}:%` },
+  ];
   if (channel.includes(":")) {
     try {
       const parsed = parseChannelSourceKey(channel);
@@ -143,8 +151,12 @@ async function resolveKeyLane(db: SqlDb, ctx: CommandDeps["commandContext"] | un
     }
   }
 
-  const sourceClause = sources.map((entry) => (entry.like ? "(source = ? OR source LIKE ?)" : "(source = ?)")).join(" OR ");
-  const sourceArgs = sources.flatMap((entry) => (entry.like ? [entry.exact, entry.like] : [entry.exact]));
+  const sourceClause = sources
+    .map((entry) => (entry.like ? "(source = ? OR source LIKE ?)" : "(source = ?)"))
+    .join(" OR ");
+  const sourceArgs = sources.flatMap((entry) =>
+    entry.like ? [entry.exact, entry.like] : [entry.exact],
+  );
 
   const row = await db.get<{ key: string; lane: string }>(
     `SELECT key, lane
@@ -309,7 +321,10 @@ async function cancelRunsAndClearQueuedInbox(input: {
   return { cancelledRuns, clearedInbox: cleared.changes };
 }
 
-async function resolveChannelThread(db: SqlDb, ctx: CommandDeps["commandContext"] | undefined): Promise<{ channel: string; threadId: string } | undefined> {
+async function resolveChannelThread(
+  db: SqlDb,
+  ctx: CommandDeps["commandContext"] | undefined,
+): Promise<{ channel: string; threadId: string } | undefined> {
   const channelRaw = ctx?.channel?.trim();
   const threadIdRaw = ctx?.threadId?.trim();
   if (channelRaw && threadIdRaw) {
@@ -376,7 +391,10 @@ function newTotals(): UsageTotals {
   };
 }
 
-async function computeUsageTotals(db: SqlDb, runId?: string): Promise<{
+async function computeUsageTotals(
+  db: SqlDb,
+  runId?: string,
+): Promise<{
   attempts_total_with_cost: number;
   attempts_parsed: number;
   attempts_invalid: number;
@@ -464,7 +482,10 @@ function helpText(): string {
   ].join("\n");
 }
 
-export async function executeCommand(raw: string, deps: CommandDeps): Promise<CommandExecuteResult> {
+export async function executeCommand(
+  raw: string,
+  deps: CommandDeps,
+): Promise<CommandExecuteResult> {
   const toks = tokensFromCommand(raw);
   const cmd = toks[0]?.toLowerCase() ?? "help";
 
@@ -523,7 +544,11 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
 
     const sessionDal = new SessionDal(deps.db);
     const session = await sessionDal.getOrCreate(channel, threadId, agentId);
-    const compacted = await sessionDal.compact({ sessionId: session.session_id, agentId, keepLastMessages: 8 });
+    const compacted = await sessionDal.compact({
+      sessionId: session.session_id,
+      agentId,
+      keepLastMessages: 8,
+    });
 
     const payload = {
       agent_id: agentId,
@@ -583,8 +608,7 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
     const session = await sessionDal.getOrCreate(channel, threadId, agentId);
 
     // Best-effort: stop active execution + clear queued followups (if we can resolve key/lane).
-    const keyLane =
-      (await resolveKeyLane(deps.db, ctx)) ??
+    const keyLane = (await resolveKeyLane(deps.db, ctx)) ??
       (await resolveFallbackKeyLane(deps.db, ctx, agentId)) ?? {
         key: buildDefaultCommandKey({ agentId, channel, threadId }),
         lane: "main",
@@ -677,7 +701,10 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
     }
     const status = toks[1]?.toLowerCase();
     const allowed = new Set(["pending", "approved", "denied", "expired", "cancelled"]);
-    const filter = status && allowed.has(status) ? (status as "pending" | "approved" | "denied" | "expired" | "cancelled") : "pending";
+    const filter =
+      status && allowed.has(status)
+        ? (status as "pending" | "approved" | "denied" | "expired" | "cancelled")
+        : "pending";
     const rows = await deps.approvalDal.getByStatus(filter);
     const payload = { approvals: rows };
     return { output: jsonBlock(payload), data: payload };
@@ -689,7 +716,10 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
     }
     const status = toks[1]?.toLowerCase();
     const allowed = new Set(["pending", "approved", "denied", "revoked"]);
-    const filter = status && allowed.has(status) ? (status as "pending" | "approved" | "denied" | "revoked") : undefined;
+    const filter =
+      status && allowed.has(status)
+        ? (status as "pending" | "approved" | "denied" | "revoked")
+        : undefined;
     const rows = await deps.nodePairingDal.list({ status: filter, limit: 100 });
     const payload = { pairings: rows };
     return { output: jsonBlock(payload), data: payload };
@@ -702,14 +732,23 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
         return { output: "PolicyBundle is not available on this gateway instance.", data: null };
       }
       const effective = await deps.policyService.loadEffectiveBundle();
-      const payload = { effective: { sha256: effective.sha256, sources: effective.sources, bundle: effective.bundle } };
+      const payload = {
+        effective: {
+          sha256: effective.sha256,
+          sources: effective.sources,
+          bundle: effective.bundle,
+        },
+      };
       return { output: jsonBlock(payload), data: payload };
     }
 
     if (sub === "overrides") {
       const action = toks[2]?.toLowerCase() ?? "list";
       if (!deps.policyOverrideDal) {
-        return { output: "Policy overrides are not available on this gateway instance.", data: null };
+        return {
+          output: "Policy overrides are not available on this gateway instance.",
+          data: null,
+        };
       }
 
       if (action === "list") {
@@ -729,7 +768,10 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
       if (action === "revoke") {
         const id = toks[3];
         if (!id) {
-          return { output: "Usage: /policy overrides revoke <policy_override_id> [reason...]", data: null };
+          return {
+            output: "Usage: /policy overrides revoke <policy_override_id> [reason...]",
+            data: null,
+          };
         }
         const reason = toks.slice(4).join(" ").trim() || undefined;
         const row = await deps.policyOverrideDal.revoke({
@@ -768,7 +810,10 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
 
     if (sub === "last") {
       if (!deps.contextReportDal) {
-        return { output: "Context reports are not available on this gateway instance.", data: null };
+        return {
+          output: "Context reports are not available on this gateway instance.",
+          data: null,
+        };
       }
       const rows = await deps.contextReportDal.list({ limit: 1 });
       const row = rows[0];
@@ -778,7 +823,10 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
 
     if (sub === "list") {
       if (!deps.contextReportDal) {
-        return { output: "Context reports are not available on this gateway instance.", data: null };
+        return {
+          output: "Context reports are not available on this gateway instance.",
+          data: null,
+        };
       }
       const limitRaw = toks[2];
       const limit = limitRaw ? Number.parseInt(limitRaw, 10) : 20;
@@ -802,7 +850,10 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
         return { output: "Usage: /context detail <context_report_id>", data: null };
       }
       if (!deps.contextReportDal) {
-        return { output: "Context reports are not available on this gateway instance.", data: null };
+        return {
+          output: "Context reports are not available on this gateway instance.",
+          data: null,
+        };
       }
       const row = await deps.contextReportDal.getById(id);
       if (!row) {
@@ -811,7 +862,10 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
       return { output: jsonBlock(row.report), data: row.report };
     }
 
-    return { output: "Usage: /context last | /context list [limit] | /context detail <id>", data: null };
+    return {
+      output: "Usage: /context last | /context list [limit] | /context detail <id>",
+      data: null,
+    };
   }
 
   if (cmd === "usage") {
@@ -819,7 +873,10 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
     if (sub === "provider") {
       const poller = getProviderUsagePoller(deps);
       if (!poller) {
-        return { output: "Provider usage polling is not available on this gateway instance.", data: null };
+        return {
+          output: "Provider usage polling is not available on this gateway instance.",
+          data: null,
+        };
       }
       const provider = await poller.pollLatestPinned();
       return { output: jsonBlock(provider), data: provider };
@@ -846,7 +903,10 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
     const agentId = resolveAgentId(ctx);
     const resolved = await resolveChannelThread(deps.db, ctx);
     if (!resolved) {
-      return { output: "Usage: /model <provider/model> (requires key or channel/thread context)", data: null };
+      return {
+        output: "Usage: /model <provider/model> (requires key or channel/thread context)",
+        data: null,
+      };
     }
     const { channel, threadId } = resolved;
 
@@ -901,10 +961,16 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
         return { output: `Auth profile ${profileIdRaw} not found.`, data: null };
       }
       if (profile.agent_id !== agentId) {
-        return { output: `Auth profile ${profileIdRaw} is not scoped to agent '${agentId}'.`, data: null };
+        return {
+          output: `Auth profile ${profileIdRaw} is not scoped to agent '${agentId}'.`,
+          data: null,
+        };
       }
       if (profile.provider !== providerId) {
-        return { output: `Auth profile ${profileIdRaw} is for provider '${profile.provider}', not '${providerId}'.`, data: null };
+        return {
+          output: `Auth profile ${profileIdRaw} is for provider '${profile.provider}', not '${providerId}'.`,
+          data: null,
+        };
       }
       if (profile.status !== "active") {
         return { output: `Auth profile ${profileIdRaw} is not active.`, data: null };
@@ -957,12 +1023,19 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
 
   if (cmd === "queue") {
     if (!deps.db) {
-      return { output: "Queue mode overrides are not available on this gateway instance.", data: null };
+      return {
+        output: "Queue mode overrides are not available on this gateway instance.",
+        data: null,
+      };
     }
 
     const resolved = await resolveKeyLane(deps.db, deps.commandContext);
     if (!resolved) {
-      return { output: "Usage: /queue <collect|followup|steer|steer_backlog|interrupt> (requires key or channel/thread context)", data: null };
+      return {
+        output:
+          "Usage: /queue <collect|followup|steer|steer_backlog|interrupt> (requires key or channel/thread context)",
+        data: null,
+      };
     }
     const { key, lane } = resolved;
 
@@ -981,7 +1054,10 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
     }
 
     if (!allowed.has(modeArg)) {
-      return { output: "Usage: /queue <collect|followup|steer|steer_backlog|interrupt>", data: null };
+      return {
+        output: "Usage: /queue <collect|followup|steer|steer_backlog|interrupt>",
+        data: null,
+      };
     }
 
     const row = await dal.upsert({ key, lane, queueMode: modeArg });
@@ -991,12 +1067,18 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
 
   if (cmd === "send") {
     if (!deps.db) {
-      return { output: "Send policy overrides are not available on this gateway instance.", data: null };
+      return {
+        output: "Send policy overrides are not available on this gateway instance.",
+        data: null,
+      };
     }
 
     const resolved = await resolveKeyLane(deps.db, deps.commandContext);
     if (!resolved?.key) {
-      return { output: "Usage: /send <on|off|inherit> (requires key or channel/thread context)", data: null };
+      return {
+        output: "Usage: /send <on|off|inherit> (requires key or channel/thread context)",
+        data: null,
+      };
     }
     const { key } = resolved;
 

@@ -26,18 +26,12 @@ export interface TyrumDesktopApi {
   onStatusChange: (cb: (status: unknown) => void) => () => void;
   onLog: (cb: (entry: unknown) => void) => () => void;
   onConsentRequest: (cb: (req: unknown) => void) => () => void;
-  consentRespond: (
-    planId: string,
-    approved: boolean,
-    reason?: string,
-  ) => Promise<void>;
+  consentRespond: (planId: string, approved: boolean, reason?: string) => Promise<void>;
   onboarding: {
     selectMode: (mode: "embedded" | "remote") => Promise<{ mode: "embedded" | "remote" }>;
   };
   checkMacPermissions: () => Promise<unknown>;
-  requestMacPermission: (
-    permission: "accessibility" | "screenRecording",
-  ) => Promise<unknown>;
+  requestMacPermission: (permission: "accessibility" | "screenRecording") => Promise<unknown>;
   openExternal: (url: string) => Promise<void>;
   onUpdateStateChange: (cb: (state: unknown) => void) => () => void;
 }

@@ -60,9 +60,7 @@ export class EventLog {
 
   async append(event: NewPlannerEvent): Promise<AppendOutcome> {
     if (event.stepIndex < 0) {
-      throw new Error(
-        `step_index must be non-negative, got ${String(event.stepIndex)}`,
-      );
+      throw new Error(`step_index must be non-negative, got ${String(event.stepIndex)}`);
     }
 
     const action = this.redactionEngine
@@ -158,25 +156,26 @@ export class EventLog {
     const actionJson = JSON.stringify(action);
 
     return await retryOnUniqueViolation(
-      async () => await this.db.transaction(async (tx) => {
-        const { inserted } = await insertPlannerEventNext<RawPlannerEventRow>(tx, {
-          replayId: event.replayId,
-          planId: event.planId,
-          occurredAt: event.occurredAt,
-          actionJson,
-          returning: "*",
-        });
+      async () =>
+        await this.db.transaction(async (tx) => {
+          const { inserted } = await insertPlannerEventNext<RawPlannerEventRow>(tx, {
+            replayId: event.replayId,
+            planId: event.planId,
+            occurredAt: event.occurredAt,
+            actionJson,
+            returning: "*",
+          });
 
-        const persisted = rowToEvent(inserted);
-        this.logger?.debug("event.appended", {
-          event_id: event.replayId,
-          plan_id: event.planId,
-          step_index: persisted.stepIndex,
-          row_id: persisted.id,
-        });
-        await afterInsert?.(tx, persisted);
-        return persisted;
-      }),
+          const persisted = rowToEvent(inserted);
+          this.logger?.debug("event.appended", {
+            event_id: event.replayId,
+            plan_id: event.planId,
+            step_index: persisted.stepIndex,
+            row_id: persisted.id,
+          });
+          await afterInsert?.(tx, persisted);
+          return persisted;
+        }),
       { failureMessage: "failed to append planner event after retries" },
     );
   }

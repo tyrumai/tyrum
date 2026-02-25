@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildChannelSourceKey, parseChannelSourceKey } from "../../src/modules/channels/interface.js";
+import {
+  buildChannelSourceKey,
+  parseChannelSourceKey,
+} from "../../src/modules/channels/interface.js";
 
 describe("channel interface source identity", () => {
   it("builds and parses connector/account keys", () => {
@@ -25,8 +28,12 @@ describe("channel interface source identity", () => {
   });
 
   it("rejects empty account ids when building source keys", () => {
-    expect(() => buildChannelSourceKey({ connector: "telegram", accountId: "" })).toThrow(/account must be non-empty/);
-    expect(() => buildChannelSourceKey({ connector: "telegram", accountId: "   " })).toThrow(/account must be non-empty/);
+    expect(() => buildChannelSourceKey({ connector: "telegram", accountId: "" })).toThrow(
+      /account must be non-empty/,
+    );
+    expect(() => buildChannelSourceKey({ connector: "telegram", accountId: "   " })).toThrow(
+      /account must be non-empty/,
+    );
   });
 
   it("rejects invalid source key parts", () => {

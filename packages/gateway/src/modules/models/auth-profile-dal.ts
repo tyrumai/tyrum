@@ -44,7 +44,10 @@ function normalizeTime(value: string | Date | null | undefined): string | null {
   return value instanceof Date ? value.toISOString() : value;
 }
 
-function parseJson(value: unknown, fallback: Record<string, unknown> | Record<string, string>): any {
+function parseJson(
+  value: unknown,
+  fallback: Record<string, unknown> | Record<string, string>,
+): any {
   if (value == null) return fallback;
   if (typeof value === "string") {
     try {
@@ -60,14 +63,15 @@ function parseJson(value: unknown, fallback: Record<string, unknown> | Record<st
 }
 
 function toRow(raw: RawAuthProfileRow): AuthProfileRow {
-  const type: AuthProfileType =
-    raw.type === "oauth" || raw.type === "token" ? raw.type : "api_key";
+  const type: AuthProfileType = raw.type === "oauth" || raw.type === "token" ? raw.type : "api_key";
   const status: AuthProfileStatus = raw.status === "disabled" ? "disabled" : "active";
 
   const secretHandles = parseJson(raw.secret_handles_json, {}) as Record<string, string>;
   const labels = parseJson(raw.labels_json, {}) as Record<string, unknown>;
-  const createdBy = raw.created_by_json === null ? null : parseJson(raw.created_by_json, {}) as unknown;
-  const updatedBy = raw.updated_by_json === null ? null : parseJson(raw.updated_by_json, {}) as unknown;
+  const createdBy =
+    raw.created_by_json === null ? null : (parseJson(raw.created_by_json, {}) as unknown);
+  const updatedBy =
+    raw.updated_by_json === null ? null : (parseJson(raw.updated_by_json, {}) as unknown);
 
   return {
     profile_id: raw.profile_id,
@@ -154,7 +158,11 @@ export class AuthProfileDal {
     return rows.map(toRow);
   }
 
-  async listEligibleForProvider(params: { agentId: string; provider: string; nowMs: number }): Promise<AuthProfileRow[]> {
+  async listEligibleForProvider(params: {
+    agentId: string;
+    provider: string;
+    nowMs: number;
+  }): Promise<AuthProfileRow[]> {
     const rows = await this.db.all<RawAuthProfileRow>(
       `SELECT *
        FROM auth_profiles
@@ -167,16 +175,14 @@ export class AuthProfileDal {
     );
 
     const nowIso = new Date(params.nowMs).toISOString();
-    return rows
-      .map(toRow)
-      .filter((r) => {
-        if (r.expires_at == null || r.expires_at > nowIso) return true;
-        if (r.type !== "oauth") return false;
+    return rows.map(toRow).filter((r) => {
+      if (r.expires_at == null || r.expires_at > nowIso) return true;
+      if (r.type !== "oauth") return false;
 
-        // Allow expired OAuth profiles through if they can be refreshed.
-        const refreshHandleId = r.secret_handles?.["refresh_token_handle"];
-        return typeof refreshHandleId === "string" && refreshHandleId.trim().length > 0;
-      });
+      // Allow expired OAuth profiles through if they can be refreshed.
+      const refreshHandleId = r.secret_handles?.["refresh_token_handle"];
+      return typeof refreshHandleId === "string" && refreshHandleId.trim().length > 0;
+    });
   }
 
   async create(input: {
@@ -228,7 +234,10 @@ export class AuthProfileDal {
     return row;
   }
 
-  async updateProfile(profileId: string, input: { labels?: Record<string, unknown>; expiresAt?: string | null; updatedBy?: unknown }): Promise<AuthProfileRow | undefined> {
+  async updateProfile(
+    profileId: string,
+    input: { labels?: Record<string, unknown>; expiresAt?: string | null; updatedBy?: unknown },
+  ): Promise<AuthProfileRow | undefined> {
     const nowIso = new Date().toISOString();
     const row = await this.getById(profileId);
     if (!row) return undefined;
@@ -250,7 +259,14 @@ export class AuthProfileDal {
     return await this.getById(profileId);
   }
 
-  async updateSecretHandles(profileId: string, input: { secretHandles: Record<string, string>; expiresAt?: string | null; updatedBy?: unknown }): Promise<AuthProfileRow | undefined> {
+  async updateSecretHandles(
+    profileId: string,
+    input: {
+      secretHandles: Record<string, string>;
+      expiresAt?: string | null;
+      updatedBy?: unknown;
+    },
+  ): Promise<AuthProfileRow | undefined> {
     const nowIso = new Date().toISOString();
     const row = await this.getById(profileId);
     if (!row) return undefined;
@@ -265,13 +281,22 @@ export class AuthProfileDal {
            updated_by_json = COALESCE(?, updated_by_json),
            updated_at = ?
        WHERE profile_id = ?`,
-      [JSON.stringify(input.secretHandles ?? {}), nextExpiresAt ?? null, updatedByJson, nowIso, profileId],
+      [
+        JSON.stringify(input.secretHandles ?? {}),
+        nextExpiresAt ?? null,
+        updatedByJson,
+        nowIso,
+        profileId,
+      ],
     );
 
     return await this.getById(profileId);
   }
 
-  async disableProfile(profileId: string, input?: { reason?: string; updatedBy?: unknown }): Promise<AuthProfileRow | undefined> {
+  async disableProfile(
+    profileId: string,
+    input?: { reason?: string; updatedBy?: unknown },
+  ): Promise<AuthProfileRow | undefined> {
     const nowIso = new Date().toISOString();
     const updatedByJson = input?.updatedBy ? JSON.stringify(input.updatedBy) : null;
     const res = await this.db.run(
@@ -289,7 +314,10 @@ export class AuthProfileDal {
     return await this.getById(profileId);
   }
 
-  async enableProfile(profileId: string, input?: { updatedBy?: unknown }): Promise<AuthProfileRow | undefined> {
+  async enableProfile(
+    profileId: string,
+    input?: { updatedBy?: unknown },
+  ): Promise<AuthProfileRow | undefined> {
     const nowIso = new Date().toISOString();
     const updatedByJson = input?.updatedBy ? JSON.stringify(input.updatedBy) : null;
     const res = await this.db.run(
@@ -307,7 +335,10 @@ export class AuthProfileDal {
     return await this.getById(profileId);
   }
 
-  async setCooldown(profileId: string, input: { untilMs: number; updatedBy?: unknown }): Promise<void> {
+  async setCooldown(
+    profileId: string,
+    input: { untilMs: number; updatedBy?: unknown },
+  ): Promise<void> {
     const nowIso = new Date().toISOString();
     const updatedByJson = input.updatedBy ? JSON.stringify(input.updatedBy) : null;
     await this.db.run(

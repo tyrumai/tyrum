@@ -3,10 +3,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import {
-  RiskClassifier,
-  defaultRiskConfig,
-} from "../../src/modules/risk/classifier.js";
+import { RiskClassifier, defaultRiskConfig } from "../../src/modules/risk/classifier.js";
 
 describe("RiskClassifier", () => {
   it("defaults to low risk", () => {
@@ -53,9 +50,7 @@ describe("RiskClassifier", () => {
 
     expect(verdict.level).toBe("medium");
     expect(verdict.confidence).toBeGreaterThanOrEqual(0.55);
-    expect(
-      verdict.reasons.some((r) => r.includes("risk:manual_review")),
-    ).toBe(true);
+    expect(verdict.reasons.some((r) => r.includes("risk:manual_review"))).toBe(true);
   });
 
   it("caution-level spend triggers medium risk", () => {
@@ -79,9 +74,7 @@ describe("RiskClassifier", () => {
     });
 
     expect(verdict.level).toBe("medium");
-    expect(
-      verdict.reasons.some((r) => r.includes("caution threshold")),
-    ).toBe(true);
+    expect(verdict.reasons.some((r) => r.includes("caution threshold"))).toBe(true);
   });
 
   it("spend with no threshold for currency uses baseline", () => {
@@ -105,9 +98,7 @@ describe("RiskClassifier", () => {
     });
 
     expect(verdict.level).toBe("low");
-    expect(
-      verdict.reasons.some((r) => r.includes("no spend threshold")),
-    ).toBe(true);
+    expect(verdict.reasons.some((r) => r.includes("no spend threshold"))).toBe(true);
   });
 
   it("merchant with crypto keyword bumps to medium", () => {
@@ -132,9 +123,7 @@ describe("RiskClassifier", () => {
     });
 
     expect(verdict.level).toBe("medium");
-    expect(
-      verdict.reasons.some((r) => r.includes("crypto keyword")),
-    ).toBe(true);
+    expect(verdict.reasons.some((r) => r.includes("crypto keyword"))).toBe(true);
   });
 
   it("normal merchant does not trigger crypto flag", () => {
@@ -159,9 +148,7 @@ describe("RiskClassifier", () => {
     });
 
     expect(verdict.level).toBe("low");
-    expect(
-      verdict.reasons.every((r) => !r.includes("crypto keyword")),
-    ).toBe(true);
+    expect(verdict.reasons.every((r) => !r.includes("crypto keyword"))).toBe(true);
   });
 
   it("tag weights pushing above high threshold", () => {
@@ -236,9 +223,7 @@ describe("RiskClassifier", () => {
     });
 
     expect(verdict.level).toBe("high");
-    expect(
-      verdict.reasons.every((r) => !r.includes("crypto keyword")),
-    ).toBe(true);
+    expect(verdict.reasons.every((r) => !r.includes("crypto keyword"))).toBe(true);
   });
 
   it("medium confidence is clamped between 0.55 and 0.8", () => {

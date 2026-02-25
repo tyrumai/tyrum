@@ -110,9 +110,11 @@ export class PolicyService {
     const agent = await this.loadAgentBundle();
     const playbookBundle = params?.playbookBundle;
 
-    const merged = mergePolicyBundles(
-      [deployment.bundle, agent.bundle ?? undefined, playbookBundle],
-    );
+    const merged = mergePolicyBundles([
+      deployment.bundle,
+      agent.bundle ?? undefined,
+      playbookBundle,
+    ]);
     const canonicalJson = stableJsonStringify(merged);
     const sha256 = sha256HexFromString(canonicalJson);
 
@@ -441,7 +443,11 @@ export class PolicyService {
     };
   }
 
-  private async loadDeploymentBundle(): Promise<{ path: string | null; bundle: PolicyBundleT; sha256: string }> {
+  private async loadDeploymentBundle(): Promise<{
+    path: string | null;
+    bundle: PolicyBundleT;
+    sha256: string;
+  }> {
     const path = process.env["TYRUM_POLICY_BUNDLE_PATH"]?.trim() || null;
     if (this.deploymentBundleCache && this.deploymentBundleCache.path === path) {
       return this.deploymentBundleCache;
@@ -464,7 +470,11 @@ export class PolicyService {
     return this.deploymentBundleCache;
   }
 
-  private async loadAgentBundle(): Promise<{ path: string | null; bundle: PolicyBundleT | null; sha256: string | null }> {
+  private async loadAgentBundle(): Promise<{
+    path: string | null;
+    bundle: PolicyBundleT | null;
+    sha256: string | null;
+  }> {
     const candidates = [
       `${this.opts.home}/policy.yml`,
       `${this.opts.home}/policy.yaml`,
@@ -557,22 +567,34 @@ function mergePolicyBundles(bundles: Array<PolicyBundleT | undefined>): PolicyBu
     normal: retentionBySensitivityValues
       .map((v) => v["normal"])
       .filter((n): n is number => typeof n === "number" && Number.isFinite(n) && n > 0)
-      .reduce<number | undefined>((acc, n) => (acc === undefined ? n : Math.min(acc, n)), undefined),
+      .reduce<number | undefined>(
+        (acc, n) => (acc === undefined ? n : Math.min(acc, n)),
+        undefined,
+      ),
     sensitive: retentionBySensitivityValues
       .map((v) => v["sensitive"])
       .filter((n): n is number => typeof n === "number" && Number.isFinite(n) && n > 0)
-      .reduce<number | undefined>((acc, n) => (acc === undefined ? n : Math.min(acc, n)), undefined),
+      .reduce<number | undefined>(
+        (acc, n) => (acc === undefined ? n : Math.min(acc, n)),
+        undefined,
+      ),
   } as const;
 
   const quotaBySensitivity = {
     normal: quotaBySensitivityValues
       .map((v) => v["normal"])
       .filter((n): n is number => typeof n === "number" && Number.isFinite(n) && n > 0)
-      .reduce<number | undefined>((acc, n) => (acc === undefined ? n : Math.min(acc, n)), undefined),
+      .reduce<number | undefined>(
+        (acc, n) => (acc === undefined ? n : Math.min(acc, n)),
+        undefined,
+      ),
     sensitive: quotaBySensitivityValues
       .map((v) => v["sensitive"])
       .filter((n): n is number => typeof n === "number" && Number.isFinite(n) && n > 0)
-      .reduce<number | undefined>((acc, n) => (acc === undefined ? n : Math.min(acc, n)), undefined),
+      .reduce<number | undefined>(
+        (acc, n) => (acc === undefined ? n : Math.min(acc, n)),
+        undefined,
+      ),
   } as const;
 
   const retentionByLabel: Record<string, number> = {};
@@ -603,8 +625,7 @@ function mergePolicyBundles(bundles: Array<PolicyBundleT | undefined>): PolicyBu
     if (!raw) continue;
     for (const [label, value] of Object.entries(raw)) {
       if (!value || typeof value !== "object") continue;
-      const entry =
-        retentionByLabelSensitivity[label] ?? (retentionByLabelSensitivity[label] = {});
+      const entry = retentionByLabelSensitivity[label] ?? (retentionByLabelSensitivity[label] = {});
 
       const normal = (value as Record<string, unknown>)["normal"];
       if (typeof normal === "number" && Number.isFinite(normal) && normal > 0) {
@@ -613,7 +634,8 @@ function mergePolicyBundles(bundles: Array<PolicyBundleT | undefined>): PolicyBu
 
       const sensitive = (value as Record<string, unknown>)["sensitive"];
       if (typeof sensitive === "number" && Number.isFinite(sensitive) && sensitive > 0) {
-        entry.sensitive = entry.sensitive === undefined ? sensitive : Math.min(entry.sensitive, sensitive);
+        entry.sensitive =
+          entry.sensitive === undefined ? sensitive : Math.min(entry.sensitive, sensitive);
       }
     }
   }
@@ -633,13 +655,16 @@ function mergePolicyBundles(bundles: Array<PolicyBundleT | undefined>): PolicyBu
 
       const sensitive = (value as Record<string, unknown>)["sensitive"];
       if (typeof sensitive === "number" && Number.isFinite(sensitive) && sensitive > 0) {
-        entry.sensitive = entry.sensitive === undefined ? sensitive : Math.min(entry.sensitive, sensitive);
+        entry.sensitive =
+          entry.sensitive === undefined ? sensitive : Math.min(entry.sensitive, sensitive);
       }
     }
   }
 
-  const retentionDefault = retentionDefaultDays.length > 0 ? Math.min(...retentionDefaultDays) : undefined;
-  const maxBytesDefaultValue = maxBytesDefault.length > 0 ? Math.min(...maxBytesDefault) : undefined;
+  const retentionDefault =
+    retentionDefaultDays.length > 0 ? Math.min(...retentionDefaultDays) : undefined;
+  const maxBytesDefaultValue =
+    maxBytesDefault.length > 0 ? Math.min(...maxBytesDefault) : undefined;
 
   const provenanceValues = bundles
     .map((b) => b?.provenance?.untrusted_shell_requires_approval)
@@ -690,7 +715,8 @@ function mergePolicyBundles(bundles: Array<PolicyBundleT | undefined>): PolicyBu
               default_max_bytes: maxBytesDefaultValue,
               by_label: Object.keys(quotaByLabel).length > 0 ? quotaByLabel : undefined,
               by_sensitivity:
-                quotaBySensitivity.normal !== undefined || quotaBySensitivity.sensitive !== undefined
+                quotaBySensitivity.normal !== undefined ||
+                quotaBySensitivity.sensitive !== undefined
                   ? quotaBySensitivity
                   : undefined,
               by_label_sensitivity:

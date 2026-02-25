@@ -62,10 +62,7 @@ const placeholderStyle: React.CSSProperties = {
   color: colors.fgMuted,
 };
 
-export function Gateway({
-  launchOnboarding = false,
-  onOnboardingLaunchHandled,
-}: GatewayProps) {
+export function Gateway({ launchOnboarding = false, onOnboardingLaunchHandled }: GatewayProps) {
   const [config, setConfig] = useState<GatewayConfigShape>({
     mode: "embedded",
     embedded: { port: 8788 },
@@ -91,15 +88,18 @@ export function Gateway({
     }
   }, [launchOnboarding]);
 
-  const refreshGatewayUrls = useCallback(async (options?: { startOnboarding?: boolean }) => {
-    if (!api) return;
-    try {
-      const urls = await api.gateway.getUiUrls(options);
-      setGatewayUrls(urls);
-    } catch (error) {
-      setErrorMessage(toErrorMessage(error));
-    }
-  }, [api]);
+  const refreshGatewayUrls = useCallback(
+    async (options?: { startOnboarding?: boolean }) => {
+      if (!api) return;
+      try {
+        const urls = await api.gateway.getUiUrls(options);
+        setGatewayUrls(urls);
+      } catch (error) {
+        setErrorMessage(toErrorMessage(error));
+      }
+    },
+    [api],
+  );
 
   useEffect(() => {
     if (!api) return;
@@ -119,12 +119,9 @@ export function Gateway({
             ? (cfg["remote"] as Record<string, unknown>)
             : {};
 
-        const embeddedPort =
-          typeof embeddedRaw["port"] === "number" ? embeddedRaw["port"] : 8788;
+        const embeddedPort = typeof embeddedRaw["port"] === "number" ? embeddedRaw["port"] : 8788;
         const remoteWsUrl =
-          typeof remoteRaw["wsUrl"] === "string"
-            ? remoteRaw["wsUrl"]
-            : "ws://127.0.0.1:8788/ws";
+          typeof remoteRaw["wsUrl"] === "string" ? remoteRaw["wsUrl"] : "ws://127.0.0.1:8788/ws";
 
         if (disposed) return;
         setConfig({
@@ -194,9 +191,7 @@ export function Gateway({
   const appUrl = gatewayUrls.embedUrl;
   const appDisplayUrl = gatewayUrls.displayUrl;
   const externalUrl = gatewayUrls.externalUrl ?? appDisplayUrl;
-  const canEmbed =
-    appUrl != null &&
-    (config.mode === "remote" || gatewayStatus === "running");
+  const canEmbed = appUrl != null && (config.mode === "remote" || gatewayStatus === "running");
 
   useEffect(() => {
     if (!launchOnboarding) {
@@ -303,9 +298,7 @@ export function Gateway({
 
       <div style={card}>
         <div style={toolbarStyle}>
-          <span
-            style={statusDot(STATUS_COLORS[gatewayStatus] ?? STATUS_COLORS["stopped"]!)}
-          />
+          <span style={statusDot(STATUS_COLORS[gatewayStatus] ?? STATUS_COLORS["stopped"]!)} />
           <strong style={{ marginRight: 8 }}>
             {gatewayStatus.charAt(0).toUpperCase() + gatewayStatus.slice(1)}
           </strong>
@@ -341,9 +334,7 @@ export function Gateway({
           </button>
         </div>
 
-        <div style={urlStyle}>
-          {appDisplayUrl ?? "No valid Gateway URL available"}
-        </div>
+        <div style={urlStyle}>{appDisplayUrl ?? "No valid Gateway URL available"}</div>
         {errorMessage && (
           <div style={{ color: colors.error, marginTop: 10, fontSize: 13 }}>
             Reason: {errorMessage}

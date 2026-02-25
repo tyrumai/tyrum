@@ -33,9 +33,7 @@ function delay(ms: number): Promise<void> {
 }
 
 /** Start a real HTTP server + WebSocket on a random port. */
-async function startServer(
-  app: Hono,
-): Promise<{
+async function startServer(app: Hono): Promise<{
   server: Server;
   port: number;
   adminToken: string;
@@ -169,13 +167,11 @@ describe("E2E smoke test", () => {
     // We dispatch directly via the connection manager (the /plan route
     // orchestrator does not dispatch over WS in the current TS impl;
     // it returns a PlanResponse).  This exercises the protocol layer.
-    const taskDispatchP = new Promise<{ task_id: string; run_id: string }>(
-      (resolve) => {
-        client!.on("task_execute", (msg) => {
-          resolve({ task_id: msg.request_id, run_id: msg.payload.run_id });
-        });
-      },
-    );
+    const taskDispatchP = new Promise<{ task_id: string; run_id: string }>((resolve) => {
+      client!.on("task_execute", (msg) => {
+        resolve({ task_id: msg.request_id, run_id: msg.payload.run_id });
+      });
+    });
 
     const runId = "550e8400-e29b-41d4-a716-446655440000";
     const taskId = await dispatchTask(

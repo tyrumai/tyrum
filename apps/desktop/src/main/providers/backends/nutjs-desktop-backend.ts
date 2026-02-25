@@ -30,11 +30,7 @@ interface NutJsApi {
       data: Buffer;
       channels: number;
     }>;
-    capture(
-      fileName: string,
-      fileFormat?: any,
-      filePath?: string,
-    ): Promise<string>;
+    capture(fileName: string, fileFormat?: any, filePath?: string): Promise<string>;
   };
   straightTo(target: any): Promise<any[]>;
   Point: new (x: number, y: number) => { x: number; y: number };
@@ -126,9 +122,7 @@ export class NutJsDesktopBackend implements DesktopBackend {
 
       return { width, height, buffer };
     } catch (err) {
-      throw new Error(
-        `Screen capture failed: ${(err as Error).message}`,
-      );
+      throw new Error(`Screen capture failed: ${(err as Error).message}`);
     }
   }
 
@@ -142,17 +136,11 @@ export class NutJsDesktopBackend implements DesktopBackend {
     try {
       await mouse.setPosition(new Point(x, y));
     } catch (err) {
-      throw new Error(
-        `Mouse move to (${x}, ${y}) failed: ${(err as Error).message}`,
-      );
+      throw new Error(`Mouse move to (${x}, ${y}) failed: ${(err as Error).message}`);
     }
   }
 
-  async clickMouse(
-    x: number,
-    y: number,
-    button?: "left" | "right" | "middle",
-  ): Promise<void> {
+  async clickMouse(x: number, y: number, button?: "left" | "right" | "middle"): Promise<void> {
     const { mouse, Point, Button } = await this.load();
 
     const btn =
@@ -166,9 +154,7 @@ export class NutJsDesktopBackend implements DesktopBackend {
       await mouse.setPosition(new Point(x, y));
       await mouse.click(btn);
     } catch (err) {
-      throw new Error(
-        `Mouse click at (${x}, ${y}) failed: ${(err as Error).message}`,
-      );
+      throw new Error(`Mouse click at (${x}, ${y}) failed: ${(err as Error).message}`);
     }
   }
 
@@ -178,9 +164,7 @@ export class NutJsDesktopBackend implements DesktopBackend {
     try {
       await mouse.drag(straightTo(new Point(x, y)));
     } catch (err) {
-      throw new Error(
-        `Mouse drag to (${x}, ${y}) failed: ${(err as Error).message}`,
-      );
+      throw new Error(`Mouse drag to (${x}, ${y}) failed: ${(err as Error).message}`);
     }
   }
 
@@ -194,9 +178,7 @@ export class NutJsDesktopBackend implements DesktopBackend {
     try {
       await keyboard.type(text);
     } catch (err) {
-      throw new Error(
-        `Keyboard type failed: ${(err as Error).message}`,
-      );
+      throw new Error(`Keyboard type failed: ${(err as Error).message}`);
     }
   }
 
@@ -215,9 +197,7 @@ export class NutJsDesktopBackend implements DesktopBackend {
       await keyboard.pressKey(keyEnum);
       await keyboard.releaseKey(keyEnum);
     } catch (err) {
-      throw new Error(
-        `Keyboard press "${key}" failed: ${(err as Error).message}`,
-      );
+      throw new Error(`Keyboard press "${key}" failed: ${(err as Error).message}`);
     }
   }
 }

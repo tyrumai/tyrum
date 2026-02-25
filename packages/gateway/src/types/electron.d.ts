@@ -5,4 +5,3 @@ declare module "electron" {
     decryptString(buf: Buffer): string;
   };
 }
-

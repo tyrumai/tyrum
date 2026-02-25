@@ -134,9 +134,11 @@ describe("NormalizedMessageEnvelope", () => {
 describe("normalizedContainerKindFromThreadKind", () => {
   it("maps ThreadKind to NormalizedContainerKind", async () => {
     const schemas = await import("../src/index.js");
-    const normalizedContainerKindFromThreadKind = (schemas as {
-      normalizedContainerKindFromThreadKind?: (kind: string) => string;
-    }).normalizedContainerKindFromThreadKind;
+    const normalizedContainerKindFromThreadKind = (
+      schemas as {
+        normalizedContainerKindFromThreadKind?: (kind: string) => string;
+      }
+    ).normalizedContainerKindFromThreadKind;
 
     expect(typeof normalizedContainerKindFromThreadKind).toBe("function");
     if (typeof normalizedContainerKindFromThreadKind !== "function") return;

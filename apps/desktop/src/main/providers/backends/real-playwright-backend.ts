@@ -10,8 +10,7 @@ export class RealPlaywrightBackend implements PlaywrightBackend {
   }
 
   async ensureBrowser(): Promise<void> {
-    if (this.browser?.isConnected() && this.page && !this.page.isClosed())
-      return;
+    if (this.browser?.isConnected() && this.page && !this.page.isClosed()) return;
 
     // Clean up stale resources
     if (this.browser) {
@@ -47,8 +46,7 @@ export class RealPlaywrightBackend implements PlaywrightBackend {
   }
 
   async navigate(url: string): Promise<{ title: string; url: string }> {
-    if (!this.page)
-      throw new Error("Browser not initialized. Call ensureBrowser() first.");
+    if (!this.page) throw new Error("Browser not initialized. Call ensureBrowser() first.");
 
     await this.page.goto(url, {
       timeout: 30_000,

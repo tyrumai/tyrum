@@ -23,8 +23,7 @@ contextBridge.exposeInMainWorld("tyrumDesktop", {
     disconnect: () => ipcRenderer.invoke("node:disconnect"),
   },
   onboarding: {
-    selectMode: (mode: "embedded" | "remote") =>
-      ipcRenderer.invoke("onboarding:select-mode", mode),
+    selectMode: (mode: "embedded" | "remote") => ipcRenderer.invoke("onboarding:select-mode", mode),
   },
   onStatusChange: (cb: (status: unknown) => void) => {
     const listener = (_event: unknown, status: unknown) => cb(status);

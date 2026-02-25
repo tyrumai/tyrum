@@ -106,4 +106,3 @@ describe("Execution engine contracts", () => {
     expect(payload.reason).toBe("approval");
   });
 });
-

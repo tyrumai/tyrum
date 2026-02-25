@@ -142,7 +142,9 @@ describe("ExecutionRunner", () => {
     await runner.executePlan("plan-fail-1", steps, mockExecutor);
 
     // Should have been called multiple times (3 retries)
-    expect((mockExecutor.execute as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThanOrEqual(1);
+    expect(
+      (mockExecutor.execute as ReturnType<typeof vi.fn>).mock.calls.length,
+    ).toBeGreaterThanOrEqual(1);
 
     // Verify plan failure event
     expect(failedEvents).toContain("plan-fail-1");

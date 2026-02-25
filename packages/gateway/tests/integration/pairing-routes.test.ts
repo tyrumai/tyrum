@@ -78,7 +78,10 @@ describe("Pairing routes", () => {
     });
 
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { status?: string; pairing?: { status?: string; capability_allowlist?: unknown[] } };
+    const body = (await res.json()) as {
+      status?: string;
+      pairing?: { status?: string; capability_allowlist?: unknown[] };
+    };
     expect(body.status).toBe("ok");
     expect(body.pairing?.status).toBe("approved");
     expect(body.pairing?.capability_allowlist).toEqual([]);

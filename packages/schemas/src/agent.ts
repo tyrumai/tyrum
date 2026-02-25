@@ -168,56 +168,58 @@ const McpServerRemote = McpServerBase.extend({
 export const McpServerSpec = z.union([McpServerStdio, McpServerRemote]);
 export type McpServerSpec = z.infer<typeof McpServerSpec>;
 
-export const AgentTurnRequest = z.object({
-  agent_id: AgentId.optional(),
-  workspace_id: WorkspaceId.optional(),
-  channel: z.string().trim().min(1).optional(),
-  thread_id: z.string().trim().min(1).optional(),
-  container_kind: NormalizedContainerKind.optional(),
-  message: z.string().trim().min(1).optional(),
-  envelope: NormalizedMessageEnvelope.optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
-}).superRefine((value, ctx) => {
-  if (value.envelope) {
-    if (value.channel && value.channel !== value.envelope.delivery.channel) {
+export const AgentTurnRequest = z
+  .object({
+    agent_id: AgentId.optional(),
+    workspace_id: WorkspaceId.optional(),
+    channel: z.string().trim().min(1).optional(),
+    thread_id: z.string().trim().min(1).optional(),
+    container_kind: NormalizedContainerKind.optional(),
+    message: z.string().trim().min(1).optional(),
+    envelope: NormalizedMessageEnvelope.optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.envelope) {
+      if (value.channel && value.channel !== value.envelope.delivery.channel) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["channel"],
+          message: "channel must match envelope.delivery.channel when envelope is provided",
+        });
+      }
+      if (value.thread_id && value.thread_id !== value.envelope.container.id) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["thread_id"],
+          message: "thread_id must match envelope.container.id when envelope is provided",
+        });
+      }
+      return;
+    }
+
+    if (!value.channel) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["channel"],
-        message: "channel must match envelope.delivery.channel when envelope is provided",
+        message: "channel is required when envelope is not provided",
       });
     }
-    if (value.thread_id && value.thread_id !== value.envelope.container.id) {
+    if (!value.thread_id) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["thread_id"],
-        message: "thread_id must match envelope.container.id when envelope is provided",
+        message: "thread_id is required when envelope is not provided",
       });
     }
-    return;
-  }
-
-  if (!value.channel) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["channel"],
-      message: "channel is required when envelope is not provided",
-    });
-  }
-  if (!value.thread_id) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["thread_id"],
-      message: "thread_id is required when envelope is not provided",
-    });
-  }
-  if (!value.message) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["message"],
-      message: "message is required when envelope is not provided",
-    });
-  }
-});
+    if (!value.message) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["message"],
+        message: "message is required when envelope is not provided",
+      });
+    }
+  });
 export type AgentTurnRequest = z.infer<typeof AgentTurnRequest>;
 
 export const AgentTurnResponse = z.object({

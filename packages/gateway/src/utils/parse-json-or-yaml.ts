@@ -11,4 +11,3 @@ export function parseJsonOrYaml(contents: string, hintPath?: string): unknown {
   if (isJson) return JSON.parse(trimmed) as unknown;
   return parseYaml(trimmed) as unknown;
 }
-

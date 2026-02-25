@@ -4,7 +4,11 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION, descriptorIdForClientCapability, type ActionPrimitive } from "@tyrum/schemas";
+import {
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  descriptorIdForClientCapability,
+  type ActionPrimitive,
+} from "@tyrum/schemas";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import {
   handleClientMessage,
@@ -36,10 +40,7 @@ function createMockWs(): MockWebSocket {
   };
 }
 
-function makeDeps(
-  cm: ConnectionManager,
-  overrides?: Partial<ProtocolDeps>,
-): ProtocolDeps {
+function makeDeps(cm: ConnectionManager, overrides?: Partial<ProtocolDeps>): ProtocolDeps {
   return { connectionManager: cm, ...overrides };
 }
 
@@ -109,7 +110,11 @@ describe("handleClientMessage", () => {
 
     const result = await handleClientMessage(
       client,
-      JSON.stringify({ request_id: "r-1", type: "connect", payload: { capabilities: ["playwright"] } }),
+      JSON.stringify({
+        request_id: "r-1",
+        type: "connect",
+        payload: { capabilities: ["playwright"] },
+      }),
       deps,
     );
     expect(result).toBeDefined();
@@ -138,12 +143,7 @@ describe("handleClientMessage", () => {
     );
 
     expect(result).toBeUndefined();
-    expect(onTaskResult).toHaveBeenCalledWith(
-      "t-1",
-      true,
-      { screenshot: "base64..." },
-      undefined,
-    );
+    expect(onTaskResult).toHaveBeenCalledWith("t-1", true, { screenshot: "base64..." }, undefined);
   });
 
   it("fires command.execute lifecycle hooks after executing a command", async () => {
@@ -229,12 +229,7 @@ describe("handleClientMessage", () => {
       deps,
     );
 
-    expect(onTaskResult).toHaveBeenCalledWith(
-      "t-2",
-      false,
-      undefined,
-      "command failed",
-    );
+    expect(onTaskResult).toHaveBeenCalledWith("t-2", false, undefined, "command failed");
   });
 
   it("dispatches task.execute error response evidence from error details", async () => {
@@ -321,86 +316,86 @@ describe("handleClientMessage", () => {
   it("accepts attempt.evidence from nodes and broadcasts an attempt.evidence event", async () => {
     const db = openTestSqliteDb();
     try {
-    const cm = new ConnectionManager();
-    const { id: nodeConnId } = makeClient(cm, ["cli"], {
-      role: "node",
-      deviceId: "dev_test",
-      protocolRev: 2,
-    });
-    const { ws: operatorWs } = makeClient(cm, ["cli"], { protocolRev: 2 });
-    const node = cm.getClient(nodeConnId)!;
+      const cm = new ConnectionManager();
+      const { id: nodeConnId } = makeClient(cm, ["cli"], {
+        role: "node",
+        deviceId: "dev_test",
+        protocolRev: 2,
+      });
+      const { ws: operatorWs } = makeClient(cm, ["cli"], { protocolRev: 2 });
+      const node = cm.getClient(nodeConnId)!;
 
-    await db.run(
-      `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
+      await db.run(
+        `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
        VALUES (?, ?, ?, ?, ?)`,
-      ["job-1", "agent:default", "default", "running", "{}"],
-    );
-    await db.run(
-      `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
+        ["job-1", "agent:default", "default", "running", "{}"],
+      );
+      await db.run(
+        `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      ["550e8400-e29b-41d4-a716-446655440000", "job-1", "agent:default", "default", "running", 1],
-    );
-    await db.run(
-      `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
+        ["550e8400-e29b-41d4-a716-446655440000", "job-1", "agent:default", "default", "running", 1],
+      );
+      await db.run(
+        `INSERT INTO execution_steps (step_id, run_id, step_index, status, action_json)
        VALUES (?, ?, ?, ?, ?)`,
-      [
-        "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-        "550e8400-e29b-41d4-a716-446655440000",
-        0,
-        "running",
-        JSON.stringify({ type: "CLI", args: { command: "echo hi" } }),
-      ],
-    );
-    await db.run(
-      `INSERT INTO execution_attempts (attempt_id, step_id, attempt, status, metadata_json)
+        [
+          "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+          "550e8400-e29b-41d4-a716-446655440000",
+          0,
+          "running",
+          JSON.stringify({ type: "CLI", args: { command: "echo hi" } }),
+        ],
+      );
+      await db.run(
+        `INSERT INTO execution_attempts (attempt_id, step_id, attempt, status, metadata_json)
        VALUES (?, ?, ?, ?, ?)`,
-      [
-        "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
-        "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-        1,
-        "running",
+        [
+          "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+          "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+          1,
+          "running",
+          JSON.stringify({
+            executor: { kind: "node", node_id: "dev_test", connection_id: nodeConnId },
+          }),
+        ],
+      );
+
+      const deps = makeDeps(cm, {
+        db,
+        nodePairingDal: {
+          getByNodeId: async () => ({ status: "approved" }) as never,
+        } as never,
+      });
+
+      const result = await handleClientMessage(
+        node,
         JSON.stringify({
-          executor: { kind: "node", node_id: "dev_test", connection_id: nodeConnId },
+          request_id: "r-attempt-evidence-1",
+          type: "attempt.evidence",
+          payload: {
+            run_id: "550e8400-e29b-41d4-a716-446655440000",
+            step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
+            attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+            evidence: { http: { status: 200 } },
+          },
         }),
-      ],
-    );
+        deps,
+      );
 
-    const deps = makeDeps(cm, {
-      db,
-      nodePairingDal: {
-        getByNodeId: async () => ({ status: "approved" }) as never,
-      } as never,
-    });
+      expect(result).toBeDefined();
+      expect((result as unknown as { ok: boolean }).ok).toBe(true);
+      expect((result as unknown as { type: string }).type).toBe("attempt.evidence");
 
-    const result = await handleClientMessage(
-      node,
-      JSON.stringify({
-        request_id: "r-attempt-evidence-1",
-        type: "attempt.evidence",
-        payload: {
-          run_id: "550e8400-e29b-41d4-a716-446655440000",
-          step_id: "6f9619ff-8b86-4d11-b42d-00c04fc964ff",
-          attempt_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
-          evidence: { http: { status: 200 } },
-        },
-      }),
-      deps,
-    );
-
-    expect(result).toBeDefined();
-    expect((result as unknown as { ok: boolean }).ok).toBe(true);
-    expect((result as unknown as { type: string }).type).toBe("attempt.evidence");
-
-    const frames = operatorWs.send.mock.calls.map((call) => JSON.parse(call[0] as string)) as Array<
-      Record<string, unknown>
-    >;
-    expect(
-      frames.some(
-        (msg) =>
-          msg["type"] === "attempt.evidence" &&
-          (msg["payload"] as { node_id?: string } | undefined)?.node_id === "dev_test",
-      ),
-    ).toBe(true);
+      const frames = operatorWs.send.mock.calls.map((call) =>
+        JSON.parse(call[0] as string),
+      ) as Array<Record<string, unknown>>;
+      expect(
+        frames.some(
+          (msg) =>
+            msg["type"] === "attempt.evidence" &&
+            (msg["payload"] as { node_id?: string } | undefined)?.node_id === "dev_test",
+        ),
+      ).toBe(true);
     } finally {
       await db.close();
     }
@@ -569,10 +564,7 @@ describe("handleClientMessage", () => {
         ],
       );
 
-      cm.recordDispatchedAttemptExecutor(
-        "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
-        "dev_test",
-      );
+      cm.recordDispatchedAttemptExecutor("0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e", "dev_test");
 
       const deps = makeDeps(cm, {
         db,
@@ -600,9 +592,9 @@ describe("handleClientMessage", () => {
       expect((result as unknown as { ok: boolean }).ok).toBe(true);
       expect((result as unknown as { type: string }).type).toBe("attempt.evidence");
 
-      const frames = operatorWs.send.mock.calls.map((call) => JSON.parse(call[0] as string)) as Array<
-        Record<string, unknown>
-      >;
+      const frames = operatorWs.send.mock.calls.map((call) =>
+        JSON.parse(call[0] as string),
+      ) as Array<Record<string, unknown>>;
       expect(
         frames.some(
           (msg) =>
@@ -777,8 +769,7 @@ describe("handleClientMessage", () => {
     expect(onApprovalDecision).not.toHaveBeenCalled();
     expect(result).toBeDefined();
     expect(result!.type).toBe("error");
-    const payload = (result as unknown as { payload: { code: string; message: string } })
-      .payload;
+    const payload = (result as unknown as { payload: { code: string; message: string } }).payload;
     expect(payload.code).toBe("approval_request_failed");
     expect(payload.message).toContain("approval-200");
     expect(payload.message).toContain("payload validation failed");
@@ -871,7 +862,11 @@ describe("handleClientMessage", () => {
 
     expect(result).toBeDefined();
     expect((result as unknown as { ok: boolean }).ok).toBe(true);
-    const res = result as unknown as { result: { approvals: Array<{ approval_id: number; created_at: string; resolution: unknown }> } };
+    const res = result as unknown as {
+      result: {
+        approvals: Array<{ approval_id: number; created_at: string; resolution: unknown }>;
+      };
+    };
     expect(res.result.approvals[0]!.approval_id).toBe(1);
     expect(res.result.approvals[0]!.created_at).toContain("T");
     expect(res.result.approvals[0]!.created_at).toContain("Z");
@@ -944,7 +939,11 @@ describe("handleClientMessage", () => {
 
     expect(result).toBeDefined();
     expect((result as unknown as { ok: boolean }).ok).toBe(true);
-    const res = result as unknown as { result: { approval: { approval_id: number; status: string; resolution: { decision: string } } } };
+    const res = result as unknown as {
+      result: {
+        approval: { approval_id: number; status: string; resolution: { decision: string } };
+      };
+    };
     expect(res.result.approval.approval_id).toBe(2);
     expect(res.result.approval.status).toBe("approved");
     expect(res.result.approval.resolution.decision).toBe("approved");
@@ -1035,7 +1034,9 @@ describe("handleClientMessage", () => {
 
     expect(result).toBeDefined();
     expect((result as unknown as { ok: boolean }).ok).toBe(true);
-    const res = result as unknown as { result: { approval: { status: string }; created_overrides?: unknown[] } };
+    const res = result as unknown as {
+      result: { approval: { status: string }; created_overrides?: unknown[] };
+    };
     expect(res.result.approval.status).toBe("denied");
     expect(res.result.created_overrides).toBeUndefined();
     expect(policyOverrideDal.create).not.toHaveBeenCalled();
@@ -1179,7 +1180,11 @@ describe("handleClientMessage", () => {
 
   it("forbids command.execute when scoped device token lacks operator.admin", async () => {
     const cm = new ConnectionManager();
-    const { id } = makeClient(cm, ["cli"], { role: "client", deviceId: "dev_client_1", protocolRev: 2 });
+    const { id } = makeClient(cm, ["cli"], {
+      role: "client",
+      deviceId: "dev_client_1",
+      protocolRev: 2,
+    });
     const client = cm.getClient(id)! as unknown as { auth_claims?: unknown };
     client.auth_claims = {
       token_kind: "device",
@@ -1278,7 +1283,9 @@ describe("handleClientMessage", () => {
 
     expect(result).toBeDefined();
     expect((result as unknown as { ok: boolean }).ok).toBe(false);
-    expect((result as unknown as { error: { code: string } }).error.code).toBe("unsupported_request");
+    expect((result as unknown as { error: { code: string } }).error.code).toBe(
+      "unsupported_request",
+    );
   });
 });
 
@@ -1309,10 +1316,7 @@ describe("dispatchTask", () => {
     expect(taskId).toMatch(/^task-[0-9a-f-]{36}$/);
 
     expect(ws.send).toHaveBeenCalledOnce();
-    const sent = JSON.parse(ws.send.mock.calls[0]![0] as string) as Record<
-      string,
-      unknown
-    >;
+    const sent = JSON.parse(ws.send.mock.calls[0]![0] as string) as Record<string, unknown>;
     expect(sent).toMatchObject({
       request_id: taskId,
       type: "task.execute",
@@ -1337,15 +1341,16 @@ describe("dispatchTask", () => {
 
     const deps = makeDeps(cm, {
       nodePairingDal: {
-        getByNodeId: async () => ({
-          status: "approved",
-          capability_allowlist: [
-            {
-              id: descriptorIdForClientCapability("cli"),
-              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-            },
-          ],
-        }) as never,
+        getByNodeId: async () =>
+          ({
+            status: "approved",
+            capability_allowlist: [
+              {
+                id: descriptorIdForClientCapability("cli"),
+                version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+              },
+            ],
+          }) as never,
       } as never,
     });
 
@@ -1365,7 +1370,9 @@ describe("dispatchTask", () => {
     );
     expect(taskId).toMatch(/^task-[0-9a-f-]{36}$/);
     expect(nodeWs.send).toHaveBeenCalledOnce();
-    expect(cm.getDispatchedAttemptExecutor("0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e")).toBe("dev_test");
+    expect(cm.getDispatchedAttemptExecutor("0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e")).toBe(
+      "dev_test",
+    );
   });
 
   it("persists execution attempt executor metadata when dispatching to a node", async () => {
@@ -1415,15 +1422,16 @@ describe("dispatchTask", () => {
       const deps = makeDeps(cm, {
         db,
         nodePairingDal: {
-          getByNodeId: async () => ({
-            status: "approved",
-            capability_allowlist: [
-              {
-                id: descriptorIdForClientCapability("cli"),
-                version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-              },
-            ],
-          }) as never,
+          getByNodeId: async () =>
+            ({
+              status: "approved",
+              capability_allowlist: [
+                {
+                  id: descriptorIdForClientCapability("cli"),
+                  version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+                },
+              ],
+            }) as never,
         } as never,
       });
 
@@ -1442,7 +1450,9 @@ describe("dispatchTask", () => {
         ["0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e"],
       );
       expect(row).toBeDefined();
-      const meta = JSON.parse(row!.metadata_json ?? "{}") as { executor?: { kind?: string; node_id?: string; connection_id?: string } };
+      const meta = JSON.parse(row!.metadata_json ?? "{}") as {
+        executor?: { kind?: string; node_id?: string; connection_id?: string };
+      };
       expect(meta.executor?.kind).toBe("node");
       expect(meta.executor?.node_id).toBe("dev_test");
       expect(meta.executor?.connection_id).toBe("node-1");
@@ -1462,15 +1472,16 @@ describe("dispatchTask", () => {
 
     const deps = makeDeps(cm, {
       nodePairingDal: {
-        getByNodeId: async () => ({
-          status: "approved",
-          capability_allowlist: [
-            {
-              id: descriptorIdForClientCapability("cli"),
-              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-            },
-          ],
-        }) as never,
+        getByNodeId: async () =>
+          ({
+            status: "approved",
+            capability_allowlist: [
+              {
+                id: descriptorIdForClientCapability("cli"),
+                version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+              },
+            ],
+          }) as never,
       } as never,
     });
 
@@ -1635,15 +1646,16 @@ describe("dispatchTask", () => {
 
     const deps = makeDeps(cm, {
       nodePairingDal: {
-        getByNodeId: async () => ({
-          status: "approved",
-          capability_allowlist: [
-            {
-              id: descriptorIdForClientCapability("cli"),
-              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-            },
-          ],
-        }) as never,
+        getByNodeId: async () =>
+          ({
+            status: "approved",
+            capability_allowlist: [
+              {
+                id: descriptorIdForClientCapability("cli"),
+                version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+              },
+            ],
+          }) as never,
       } as never,
     });
 
@@ -1698,15 +1710,16 @@ describe("dispatchTask", () => {
 
     const deps = makeDeps(cm, {
       nodePairingDal: {
-        getByNodeId: async () => ({
-          status: "approved",
-          capability_allowlist: [
-            {
-              id: descriptorIdForClientCapability("http"),
-              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-            },
-          ],
-        }) as never,
+        getByNodeId: async () =>
+          ({
+            status: "approved",
+            capability_allowlist: [
+              {
+                id: descriptorIdForClientCapability("http"),
+                version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+              },
+            ],
+          }) as never,
       } as never,
     });
 
@@ -1742,15 +1755,16 @@ describe("dispatchTask", () => {
 
     const deps = makeDeps(cm, {
       nodePairingDal: {
-        getByNodeId: async () => ({
-          status: "approved",
-          capability_allowlist: [
-            {
-              id: descriptorIdForClientCapability("cli"),
-              version: "2.0.0",
-            },
-          ],
-        }) as never,
+        getByNodeId: async () =>
+          ({
+            status: "approved",
+            capability_allowlist: [
+              {
+                id: descriptorIdForClientCapability("cli"),
+                version: "2.0.0",
+              },
+            ],
+          }) as never,
       } as never,
     });
 
@@ -1785,15 +1799,16 @@ describe("dispatchTask", () => {
 
     const deps = makeDeps(cm, {
       nodePairingDal: {
-        getByNodeId: async () => ({
-          status: "approved",
-          capability_allowlist: [
-            {
-              id: descriptorIdForClientCapability("cli"),
-              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-            },
-          ],
-        }) as never,
+        getByNodeId: async () =>
+          ({
+            status: "approved",
+            capability_allowlist: [
+              {
+                id: descriptorIdForClientCapability("cli"),
+                version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+              },
+            ],
+          }) as never,
       } as never,
       policyService: {
         isEnabled: () => true,
@@ -1856,15 +1871,16 @@ describe("dispatchTask", () => {
 
     const deps = makeDeps(cm, {
       nodePairingDal: {
-        getByNodeId: async () => ({
-          status: "approved",
-          capability_allowlist: [
-            {
-              id: descriptorIdForClientCapability("cli"),
-              version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-            },
-          ],
-        }) as never,
+        getByNodeId: async () =>
+          ({
+            status: "approved",
+            capability_allowlist: [
+              {
+                id: descriptorIdForClientCapability("cli"),
+                version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+              },
+            ],
+          }) as never,
       } as never,
       policyService: {
         isEnabled: () => true,
@@ -2050,10 +2066,7 @@ describe("requestApproval", () => {
     );
 
     expect(ws.send).toHaveBeenCalledOnce();
-    const sent = JSON.parse(ws.send.mock.calls[0]![0] as string) as Record<
-      string,
-      unknown
-    >;
+    const sent = JSON.parse(ws.send.mock.calls[0]![0] as string) as Record<string, unknown>;
     expect(sent).toMatchObject({
       request_id: "approval-7",
       type: "approval.request",
@@ -2071,12 +2084,16 @@ describe("requestApproval", () => {
   it("skips node peers when selecting an approval recipient", () => {
     const cm = new ConnectionManager();
     const nodeWs = createMockWs();
-    cm.addClient(nodeWs as never, ["playwright"] as never, {
-      id: "node-1",
-      role: "node",
-      protocolRev: 2,
-      authClaims: { token_kind: "admin", role: "admin", scopes: ["*"] },
-    } as never);
+    cm.addClient(
+      nodeWs as never,
+      ["playwright"] as never,
+      {
+        id: "node-1",
+        role: "node",
+        protocolRev: 2,
+        authClaims: { token_kind: "admin", role: "admin", scopes: ["*"] },
+      } as never,
+    );
 
     const { ws: operatorWs } = makeClient(cm, ["playwright"]);
     const deps = makeDeps(cm);
@@ -2164,10 +2181,7 @@ describe("sendPlanUpdate", () => {
     expect(ws1.send).toHaveBeenCalledOnce();
     expect(ws2.send).toHaveBeenCalledOnce();
 
-    const sent = JSON.parse(ws1.send.mock.calls[0]![0] as string) as Record<
-      string,
-      unknown
-    >;
+    const sent = JSON.parse(ws1.send.mock.calls[0]![0] as string) as Record<string, unknown>;
     expect(sent["type"]).toBe("plan.update");
     expect(typeof sent["event_id"]).toBe("string");
     expect(typeof sent["occurred_at"]).toBe("string");
@@ -2185,10 +2199,7 @@ describe("sendPlanUpdate", () => {
 
     sendPlanUpdate("plan-1", "completed", deps);
 
-    const sent = JSON.parse(ws.send.mock.calls[0]![0] as string) as Record<
-      string,
-      unknown
-    >;
+    const sent = JSON.parse(ws.send.mock.calls[0]![0] as string) as Record<string, unknown>;
     expect(sent["type"]).toBe("plan.update");
     expect((sent["payload"] as Record<string, unknown>)["plan_id"]).toBe("plan-1");
     expect((sent["payload"] as Record<string, unknown>)["status"]).toBe("completed");

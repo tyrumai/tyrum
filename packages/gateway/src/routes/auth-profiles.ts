@@ -125,7 +125,9 @@ export function createAuthProfileRoutes(deps: AuthProfileRouteDeps): Hono {
     const sessionId = c.req.query("session_id")?.trim() || undefined;
     const provider = c.req.query("provider")?.trim() || undefined;
     const pins = await deps.pinDal.list({ agentId, sessionId, provider });
-    return c.json(SessionProviderPinListResponse.parse({ pins: pins.map((p) => SessionProviderPin.parse(p)) }));
+    return c.json(
+      SessionProviderPinListResponse.parse({ pins: pins.map((p) => SessionProviderPin.parse(p)) }),
+    );
   });
 
   app.post("/auth/pins", async (c) => {
@@ -156,4 +158,3 @@ export function createAuthProfileRoutes(deps: AuthProfileRouteDeps): Hono {
 
   return app;
 }
-

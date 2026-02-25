@@ -198,9 +198,7 @@ describe("loadPlaybook", () => {
   });
 
   it("throws for an invalid YAML playbook", () => {
-    expect(() =>
-      loadPlaybook(join(fixturesDir, "invalid-playbook/playbook.yml")),
-    ).toThrow();
+    expect(() => loadPlaybook(join(fixturesDir, "invalid-playbook/playbook.yml"))).toThrow();
   });
 
   it("throws for a nonexistent file", () => {
@@ -229,10 +227,7 @@ describe("loadAllPlaybooks", () => {
 describe("PlaybookRunner", () => {
   const runner = new PlaybookRunner();
 
-  function makePlaybook(
-    id: string,
-    steps: Array<{ id: string; command: string; name?: string }>,
-  ) {
+  function makePlaybook(id: string, steps: Array<{ id: string; command: string; name?: string }>) {
     return {
       manifest: PlaybookManifest.parse({
         id,
@@ -248,8 +243,8 @@ describe("PlaybookRunner", () => {
   it("converts steps to action primitives", () => {
     const pb = makePlaybook("conv-test", [
       { id: "cli", command: "cli echo hello" },
-      { id: "mcp", command: "mcp github.search query=\"hello\"" },
-      { id: "node", command: "node screen capture format=\"png\"" },
+      { id: "mcp", command: 'mcp github.search query="hello"' },
+      { id: "node", command: 'node screen capture format="png"' },
     ]);
 
     const result = runner.run(pb);
@@ -306,9 +301,7 @@ describe("PlaybookRunner", () => {
 
   it("tracks execution stats", () => {
     const runner2 = new PlaybookRunner();
-    const pb = makePlaybook("stats-test", [
-      { id: "step", command: "cli echo x" },
-    ]);
+    const pb = makePlaybook("stats-test", [{ id: "step", command: "cli echo x" }]);
 
     runner2.run(pb);
     runner2.run(pb);

@@ -71,7 +71,10 @@ describe("policy overrides expiry events", () => {
     await outboxPoller.tick();
     expect(ws.send).toHaveBeenCalledTimes(1);
 
-    const evt1 = JSON.parse(String(ws.send.mock.calls[0]?.[0] ?? "{}")) as { type?: string; payload?: unknown };
+    const evt1 = JSON.parse(String(ws.send.mock.calls[0]?.[0] ?? "{}")) as {
+      type?: string;
+      payload?: unknown;
+    };
     expect(evt1.type).toBe("policy_override.expired");
     expect(evt1.payload).toEqual(
       expect.objectContaining({

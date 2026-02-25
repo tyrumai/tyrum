@@ -14,10 +14,7 @@ describe("runShutdownCleanup", () => {
     const workerDone = createDeferred();
     const closeDb = vi.fn(async () => {});
 
-    const cleanup = runShutdownCleanup(
-      [Promise.resolve(), workerDone.promise],
-      closeDb,
-    );
+    const cleanup = runShutdownCleanup([Promise.resolve(), workerDone.promise], closeDb);
 
     await Promise.resolve();
     expect(closeDb).not.toHaveBeenCalled();
@@ -34,10 +31,7 @@ describe("runShutdownCleanup", () => {
     });
 
     await expect(
-      runShutdownCleanup(
-        [Promise.reject(new Error("cleanup failed"))],
-        closeDb,
-      ),
+      runShutdownCleanup([Promise.reject(new Error("cleanup failed"))], closeDb),
     ).resolves.toBeUndefined();
     expect(closeDb).toHaveBeenCalledTimes(1);
   });

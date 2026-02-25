@@ -82,10 +82,9 @@ export class OauthPendingDal {
    */
   async consume(state: string): Promise<OauthPendingRow | undefined> {
     return await this.db.transaction(async (tx) => {
-      const row = await tx.get<RawOauthPendingRow>(
-        "SELECT * FROM oauth_pending WHERE state = ?",
-        [state],
-      );
+      const row = await tx.get<RawOauthPendingRow>("SELECT * FROM oauth_pending WHERE state = ?", [
+        state,
+      ]);
       if (!row) return undefined;
 
       const res = await tx.run("DELETE FROM oauth_pending WHERE state = ?", [state]);

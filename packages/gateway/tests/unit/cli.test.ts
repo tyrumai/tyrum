@@ -10,9 +10,7 @@ const { mkdirSyncMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("node:child_process", async () => {
-  const actual = await vi.importActual<typeof import("node:child_process")>(
-    "node:child_process",
-  );
+  const actual = await vi.importActual<typeof import("node:child_process")>("node:child_process");
   return {
     ...actual,
     spawn: spawnMock,
@@ -162,9 +160,7 @@ describe("gateway split role DB guard", () => {
   });
 
   it("rejects SQLite when running as a split role", () => {
-    expect(() => assertSplitRoleUsesPostgres("edge", "gateway.db")).toThrow(
-      /requires Postgres/i,
-    );
+    expect(() => assertSplitRoleUsesPostgres("edge", "gateway.db")).toThrow(/requires Postgres/i);
   });
 
   it("allows Postgres when running as a split role", () => {

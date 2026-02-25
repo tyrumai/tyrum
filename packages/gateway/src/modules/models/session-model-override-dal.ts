@@ -33,7 +33,10 @@ function toRow(raw: RawSessionModelOverrideRow): SessionModelOverrideRow {
 export class SessionModelOverrideDal {
   constructor(private readonly db: SqlDb) {}
 
-  async get(input: { agentId: string; sessionId: string }): Promise<SessionModelOverrideRow | undefined> {
+  async get(input: {
+    agentId: string;
+    sessionId: string;
+  }): Promise<SessionModelOverrideRow | undefined> {
     const row = await this.db.get<RawSessionModelOverrideRow>(
       `SELECT *
        FROM session_model_overrides
@@ -43,7 +46,11 @@ export class SessionModelOverrideDal {
     return row ? toRow(row) : undefined;
   }
 
-  async upsert(input: { agentId: string; sessionId: string; modelId: string }): Promise<SessionModelOverrideRow> {
+  async upsert(input: {
+    agentId: string;
+    sessionId: string;
+    modelId: string;
+  }): Promise<SessionModelOverrideRow> {
     const nowIso = new Date().toISOString();
 
     await this.db.run(
@@ -71,4 +78,3 @@ export class SessionModelOverrideDal {
     return res.changes === 1;
   }
 }
-

@@ -21,9 +21,7 @@ export function parseFrontmatterDocument(document: string): ParsedFrontmatter {
 
   const parsed = parseYaml(yamlBlock);
   const frontmatter =
-    parsed && typeof parsed === "object"
-      ? (parsed as Record<string, unknown>)
-      : {};
+    parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
 
   return {
     frontmatter,

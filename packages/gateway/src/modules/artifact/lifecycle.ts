@@ -86,7 +86,11 @@ function resolveRetentionDays(
   // - by_label(label)
   // - defaults (retention.default_days, retention_days legacy)
   const byLabelSensitivity = artifacts.retention?.by_label_sensitivity?.[label]?.[sensitivity];
-  if (typeof byLabelSensitivity === "number" && Number.isFinite(byLabelSensitivity) && byLabelSensitivity > 0) {
+  if (
+    typeof byLabelSensitivity === "number" &&
+    Number.isFinite(byLabelSensitivity) &&
+    byLabelSensitivity > 0
+  ) {
     return byLabelSensitivity;
   }
 
@@ -117,7 +121,11 @@ function resolveQuotaMaxBytes(
   // - by_label(label)
   // - defaults (quota.default_max_bytes, max_bytes legacy)
   const byLabelSensitivity = artifacts.quota?.by_label_sensitivity?.[label]?.[sensitivity];
-  if (typeof byLabelSensitivity === "number" && Number.isFinite(byLabelSensitivity) && byLabelSensitivity > 0) {
+  if (
+    typeof byLabelSensitivity === "number" &&
+    Number.isFinite(byLabelSensitivity) &&
+    byLabelSensitivity > 0
+  ) {
     return byLabelSensitivity;
   }
 
@@ -134,7 +142,10 @@ function resolveQuotaMaxBytes(
   return minPositive([artifacts.quota?.default_max_bytes, artifacts.max_bytes]);
 }
 
-function whereNullableEquals(column: string, value: string | null): { clause: string; params: unknown[] } {
+function whereNullableEquals(
+  column: string,
+  value: string | null,
+): { clause: string; params: unknown[] } {
   if (value === null) return { clause: `${column} IS NULL`, params: [] };
   return { clause: `${column} = ?`, params: [value] };
 }
@@ -354,7 +365,9 @@ export class ArtifactLifecycleScheduler {
     return row?.total_bytes ?? 0;
   }
 
-  private async listBucketArtifactsOldestFirst(bucket: BucketKey): Promise<Array<{ artifact_id: string; size_bytes: number | null }>> {
+  private async listBucketArtifactsOldestFirst(
+    bucket: BucketKey,
+  ): Promise<Array<{ artifact_id: string; size_bytes: number | null }>> {
     const agent = whereNullableEquals("agent_id", bucket.agent_id);
     return await this.db.all<{ artifact_id: string; size_bytes: number | null }>(
       `SELECT artifact_id, size_bytes
@@ -369,7 +382,10 @@ export class ArtifactLifecycleScheduler {
     );
   }
 
-  private async pruneArtifactBytes(artifactId: string, reason: "retention" | "quota"): Promise<void> {
+  private async pruneArtifactBytes(
+    artifactId: string,
+    reason: "retention" | "quota",
+  ): Promise<void> {
     const { nowIso } = this.clock();
 
     try {

@@ -121,7 +121,9 @@ describe("AgentRuntime within-turn loop stop reply", () => {
       container,
       home: homeDir,
       languageModel: toolLoopModel,
-      mcpManager: mcpManager as unknown as ConstructorParameters<typeof AgentRuntime>[0]["mcpManager"],
+      mcpManager: mcpManager as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
     });
 
     const res = await runtime.turn({

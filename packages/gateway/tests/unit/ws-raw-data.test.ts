@@ -16,4 +16,3 @@ describe("rawDataToUtf8", () => {
     expect(rawDataToUtf8([Buffer.from("hel", "utf-8"), Buffer.from("lo", "utf-8")])).toBe("hello");
   });
 });
-

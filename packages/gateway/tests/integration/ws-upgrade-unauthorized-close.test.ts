@@ -12,7 +12,10 @@ import { ConnectionManager } from "../../src/ws/connection-manager.js";
 
 function waitForClose(ws: WebSocket, timeoutMs = 1_000): Promise<{ code: number; reason: Buffer }> {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("timeout waiting for WebSocket close")), timeoutMs);
+    const timer = setTimeout(
+      () => reject(new Error("timeout waiting for WebSocket close")),
+      timeoutMs,
+    );
 
     const onClose = (code: number, reason: Buffer) => {
       clearTimeout(timer);
@@ -132,4 +135,3 @@ describe("WS upgrade auth failure handling", () => {
     expect(close.code).toBe(4001);
   });
 });
-

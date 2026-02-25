@@ -81,11 +81,7 @@ describe("Pre-compaction memory flush", () => {
       "utf-8",
     );
 
-    const languageModel = createSequencedTextLanguageModel([
-      "a1",
-      "FLUSH_OK",
-      "a2",
-    ]);
+    const languageModel = createSequencedTextLanguageModel(["a1", "FLUSH_OK", "a2"]);
 
     const mcpManager = {
       listToolDescriptors: vi.fn(async () => []),
@@ -97,7 +93,9 @@ describe("Pre-compaction memory flush", () => {
       container,
       home: homeDir,
       languageModel,
-      mcpManager: mcpManager as unknown as ConstructorParameters<typeof AgentRuntime>[0]["mcpManager"],
+      mcpManager: mcpManager as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
     });
 
     const first = await runtime.turn({
@@ -119,11 +117,11 @@ describe("Pre-compaction memory flush", () => {
     const flushCall = languageModel.doGenerateCalls[1];
     const flushPromptText = flushCall
       ? flushCall.prompt
-        .filter((msg) => msg.role === "user")
-        .flatMap((msg) => (Array.isArray(msg.content) ? msg.content : []))
-        .filter((part) => part.type === "text")
-        .map((part) => part.text)
-        .join("\n")
+          .filter((msg) => msg.role === "user")
+          .flatMap((msg) => (Array.isArray(msg.content) ? msg.content : []))
+          .filter((part) => part.type === "text")
+          .map((part) => part.text)
+          .join("\n")
       : "";
 
     expect(flushPromptText).toContain("pre-compaction");
@@ -167,11 +165,7 @@ describe("Pre-compaction memory flush", () => {
       "utf-8",
     );
 
-    const languageModel = createSequencedTextLanguageModel([
-      "a1",
-      "FLUSH_OK",
-      "a2",
-    ]);
+    const languageModel = createSequencedTextLanguageModel(["a1", "FLUSH_OK", "a2"]);
 
     const mcpManager = {
       listToolDescriptors: vi.fn(async () => []),
@@ -183,7 +177,9 @@ describe("Pre-compaction memory flush", () => {
       container,
       home: homeDir,
       languageModel,
-      mcpManager: mcpManager as unknown as ConstructorParameters<typeof AgentRuntime>[0]["mcpManager"],
+      mcpManager: mcpManager as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
     });
 
     const first = await runtime.turn({
@@ -204,11 +200,11 @@ describe("Pre-compaction memory flush", () => {
     const flushCall = languageModel.doGenerateCalls[1];
     const flushPromptText = flushCall
       ? flushCall.prompt
-        .filter((msg) => msg.role === "user")
-        .flatMap((msg) => (Array.isArray(msg.content) ? msg.content : []))
-        .filter((part) => part.type === "text")
-        .map((part) => part.text)
-        .join("\n")
+          .filter((msg) => msg.role === "user")
+          .flatMap((msg) => (Array.isArray(msg.content) ? msg.content : []))
+          .filter((part) => part.type === "text")
+          .map((part) => part.text)
+          .join("\n")
       : "";
 
     expect(flushPromptText).not.toContain(secret);
@@ -287,7 +283,9 @@ describe("Pre-compaction memory flush", () => {
       container,
       home: homeDir,
       languageModel,
-      mcpManager: mcpManager as unknown as ConstructorParameters<typeof AgentRuntime>[0]["mcpManager"],
+      mcpManager: mcpManager as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
     });
 
     const first = await (runtime as unknown as { turnDirect: Function }).turnDirect(

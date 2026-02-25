@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  evaluatePostcondition,
-  PostconditionError,
-} from "../src/postcondition.js";
+import { evaluatePostcondition, PostconditionError } from "../src/postcondition.js";
 import type { EvaluationContext } from "../src/postcondition.js";
 
 describe("evaluatePostcondition", () => {
@@ -17,9 +14,7 @@ describe("evaluatePostcondition", () => {
     expect(report.assertions).toHaveLength(1);
     expect(report.assertions[0]!.status).toBe("passed");
     if (report.assertions[0]!.status === "passed") {
-      expect((report.assertions[0]!.detail as Record<string, number>)["status"]).toBe(
-        200,
-      );
+      expect((report.assertions[0]!.detail as Record<string, number>)["status"]).toBe(200);
     }
   });
 
@@ -99,9 +94,7 @@ describe("evaluatePostcondition", () => {
     expect(report.metadata).toBeDefined();
     const meta = report.metadata as Record<string, unknown>;
     expect((meta["metadata"] as Record<string, unknown>)["status"]).toBe("completed");
-    expect((meta["metadata"] as Record<string, unknown>)["strategy"]).toBe(
-      "generic-http",
-    );
+    expect((meta["metadata"] as Record<string, unknown>)["strategy"]).toBe("generic-http");
   });
 
   it("unsupported type returns error", () => {
@@ -298,15 +291,11 @@ describe("evaluatePostcondition", () => {
   });
 
   it("throws on assertion missing type field", () => {
-    expect(() => evaluatePostcondition([{ equals: 200 }], {})).toThrow(
-      PostconditionError,
-    );
+    expect(() => evaluatePostcondition([{ equals: 200 }], {})).toThrow(PostconditionError);
   });
 
   it("throws on object without assertions or type", () => {
-    expect(() => evaluatePostcondition({ foo: "bar" }, {})).toThrow(
-      PostconditionError,
-    );
+    expect(() => evaluatePostcondition({ foo: "bar" }, {})).toThrow(PostconditionError);
   });
 
   it("throws on non-object/non-array postcondition", () => {
@@ -314,86 +303,70 @@ describe("evaluatePostcondition", () => {
   });
 
   it("throws on assertions field that is not an array", () => {
-    expect(() =>
-      evaluatePostcondition({ assertions: "not-an-array" }, {}),
-    ).toThrow(PostconditionError);
+    expect(() => evaluatePostcondition({ assertions: "not-an-array" }, {})).toThrow(
+      PostconditionError,
+    );
   });
 
   it("json_path throws on invalid path syntax", () => {
     const spec = { type: "json_path", path: "", equals: 1 };
-    expect(() => evaluatePostcondition(spec, { json: {} })).toThrow(
-      PostconditionError,
-    );
+    expect(() => evaluatePostcondition(spec, { json: {} })).toThrow(PostconditionError);
   });
 
   it("json_path throws on path not starting with $", () => {
     const spec = { type: "json_path", path: "foo", equals: 1 };
-    expect(() => evaluatePostcondition(spec, { json: {} })).toThrow(
-      PostconditionError,
-    );
+    expect(() => evaluatePostcondition(spec, { json: {} })).toThrow(PostconditionError);
   });
 
   it("json_path throws on path ending with dot", () => {
     const spec = { type: "json_path", path: "$.", equals: 1 };
-    expect(() => evaluatePostcondition(spec, { json: {} })).toThrow(
-      PostconditionError,
-    );
+    expect(() => evaluatePostcondition(spec, { json: {} })).toThrow(PostconditionError);
   });
 
   it("json_path throws on missing closing bracket", () => {
     const spec = { type: "json_path", path: "$.items[0", equals: 1 };
-    expect(() => evaluatePostcondition(spec, { json: {} })).toThrow(
-      PostconditionError,
-    );
+    expect(() => evaluatePostcondition(spec, { json: {} })).toThrow(PostconditionError);
   });
 
   it("json_path throws on empty array index", () => {
     const spec = { type: "json_path", path: "$.items[]", equals: 1 };
-    expect(() => evaluatePostcondition(spec, { json: {} })).toThrow(
-      PostconditionError,
-    );
+    expect(() => evaluatePostcondition(spec, { json: {} })).toThrow(PostconditionError);
   });
 
   it("json_path throws on negative array index", () => {
     const spec = { type: "json_path", path: "$.items[-1]", equals: 1 };
-    expect(() => evaluatePostcondition(spec, { json: {} })).toThrow(
-      PostconditionError,
-    );
+    expect(() => evaluatePostcondition(spec, { json: {} })).toThrow(PostconditionError);
   });
 
   it("http_status throws on non-integer equals", () => {
     const spec = { type: "http_status", equals: "200" };
-    expect(() =>
-      evaluatePostcondition(spec, { http: { status: 200 } }),
-    ).toThrow(PostconditionError);
+    expect(() => evaluatePostcondition(spec, { http: { status: 200 } })).toThrow(
+      PostconditionError,
+    );
   });
 
   it("http_status throws on out-of-range equals", () => {
     const spec = { type: "http_status", equals: 70000 };
-    expect(() =>
-      evaluatePostcondition(spec, { http: { status: 200 } }),
-    ).toThrow(PostconditionError);
+    expect(() => evaluatePostcondition(spec, { http: { status: 200 } })).toThrow(
+      PostconditionError,
+    );
   });
 
   it("dom_contains throws on non-string text", () => {
     const spec = { type: "dom_contains", text: 42 };
-    expect(() =>
-      evaluatePostcondition(spec, { dom: { html: "hello" } }),
-    ).toThrow(PostconditionError);
+    expect(() => evaluatePostcondition(spec, { dom: { html: "hello" } })).toThrow(
+      PostconditionError,
+    );
   });
 
   it("json_path throws on missing equals", () => {
     const spec = { type: "json_path", path: "$.x" };
-    expect(() => evaluatePostcondition(spec, { json: {} })).toThrow(
-      PostconditionError,
-    );
+    expect(() => evaluatePostcondition(spec, { json: {} })).toThrow(PostconditionError);
   });
 
   it("json_path throws on missing path field", () => {
     const spec = { type: "json_path", equals: 1 };
-    expect(() => evaluatePostcondition(spec, { json: {} })).toThrow(
-      PostconditionError,
-    );
+    expect(() => evaluatePostcondition(spec, { json: {} })).toThrow(PostconditionError);
   });
 
   it("resolveJsonPath returns undefined when traversing non-object", () => {

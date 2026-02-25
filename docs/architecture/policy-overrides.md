@@ -6,7 +6,7 @@ They are most commonly created when an operator resolves an approval with **appr
 
 ## What a policy override is (and is not)
 
-- **Is:** a durable, auditable rule that can turn a future `require_approval` decision into an `allow` decision for *matching* tool actions.
+- **Is:** a durable, auditable rule that can turn a future `require_approval` decision into an `allow` decision for _matching_ tool actions.
 - **Is not:** prompt text, a “hint”, or an implicit trust signal. Overrides are evaluated by the policy engine and recorded in the audit log.
 
 ## Scope and safety invariants
@@ -31,7 +31,7 @@ Overrides use **tool-specific wildcard patterns** matched against a well-defined
 
 Tools MUST define and document their match targets, and MUST compute them from validated, canonicalized inputs.
 
-Operators should assume policy overrides match the tool’s *normalized* representation of an action (not raw user text).
+Operators should assume policy overrides match the tool’s _normalized_ representation of an action (not raw user text).
 If normalization rules change, it should be treated as a contract change because it can broaden or narrow the effective scope of existing overrides.
 
 Concrete normalization guidance for high-risk tools lives in [Tools](./tools.md).

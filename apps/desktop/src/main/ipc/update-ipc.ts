@@ -90,8 +90,7 @@ async function openReleaseFileFromDisk(): Promise<ManualReleaseFileResult> {
   }
 
   const openResult = await shell.openPath(selectedPath);
-  const openError =
-    typeof openResult === "string" ? openResult : String(openResult ?? "");
+  const openError = typeof openResult === "string" ? openResult : String(openResult ?? "");
   if (openError.trim().length > 0) {
     throw new Error(openError);
   }
@@ -103,10 +102,7 @@ async function openReleaseFileFromDisk(): Promise<ManualReleaseFileResult> {
   };
 }
 
-export function registerUpdateIpc(
-  window: BrowserWindow,
-  options: UpdateIpcOptions = {},
-): void {
+export function registerUpdateIpc(window: BrowserWindow, options: UpdateIpcOptions = {}): void {
   sender.setWindow(window);
   dialogWindow = window;
 

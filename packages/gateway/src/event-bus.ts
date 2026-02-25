@@ -15,9 +15,9 @@ import * as mittNs from "mitt";
 
 // At runtime the namespace may carry the factory as `.default`
 // (ESM wrapper) or be the factory itself (CJS interop).  Handle both.
-const mitt = (
-  typeof mittNs.default === "function" ? mittNs.default : mittNs
-) as unknown as <T extends Record<string, unknown>>() => Emitter<T>;
+const mitt = (typeof mittNs.default === "function" ? mittNs.default : mittNs) as unknown as <
+  T extends Record<string, unknown>,
+>() => Emitter<T>;
 
 export type GatewayEvents = {
   "plan:completed": { planId: string; stepsExecuted: number };

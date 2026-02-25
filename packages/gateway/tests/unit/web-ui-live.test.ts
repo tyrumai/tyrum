@@ -27,4 +27,3 @@ describe("/app/live", () => {
     expect(html).toContain("request_id: msg.request_id");
   });
 });
-

@@ -18,4 +18,3 @@ describe("resolveBundledPluginsDirFrom", () => {
     expect(fromSource).toBe(join(gatewayRoot, "plugins"));
   });
 });
-

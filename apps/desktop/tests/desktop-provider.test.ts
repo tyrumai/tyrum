@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ActionPrimitive } from "@tyrum/schemas";
 import { resolvePermissions } from "../src/main/config/permissions.js";
-import {
-  DesktopProvider,
-  type ConfirmationFn,
-} from "../src/main/providers/desktop-provider.js";
+import { DesktopProvider, type ConfirmationFn } from "../src/main/providers/desktop-provider.js";
 import { MockDesktopBackend } from "../src/main/providers/backends/desktop-backend.js";
 
 // ---------------------------------------------------------------------------
@@ -15,17 +12,10 @@ function makeAction(args: Record<string, unknown>): ActionPrimitive {
   return { type: "Desktop", args };
 }
 
-function makeProvider(
-  profile: "safe" | "balanced" | "poweruser",
-  confirmFn?: ConfirmationFn,
-) {
+function makeProvider(profile: "safe" | "balanced" | "poweruser", confirmFn?: ConfirmationFn) {
   const permissions = resolvePermissions(profile, {});
   const backend = new MockDesktopBackend();
-  return new DesktopProvider(
-    backend,
-    permissions,
-    confirmFn ?? vi.fn<ConfirmationFn>(),
-  );
+  return new DesktopProvider(backend, permissions, confirmFn ?? vi.fn<ConfirmationFn>());
 }
 
 // ---------------------------------------------------------------------------
@@ -55,9 +45,7 @@ describe("DesktopProvider", () => {
 
   it("safe profile allows screenshot", async () => {
     const provider = makeProvider("safe");
-    const result = await provider.execute(
-      makeAction({ op: "screenshot", display: "primary" }),
-    );
+    const result = await provider.execute(makeAction({ op: "screenshot", display: "primary" }));
     expect(result.success).toBe(true);
     expect(result.evidence).toMatchObject({
       type: "screenshot",
@@ -74,9 +62,7 @@ describe("DesktopProvider", () => {
       makeAction({ op: "mouse", action: "click", x: 50, y: 75 }),
     );
     expect(confirmFn).toHaveBeenCalledOnce();
-    expect(confirmFn).toHaveBeenCalledWith(
-      "Allow mouse click at (50, 75)?",
-    );
+    expect(confirmFn).toHaveBeenCalledWith("Allow mouse click at (50, 75)?");
     expect(result.success).toBe(true);
   });
 
@@ -152,18 +138,14 @@ describe("DesktopProvider", () => {
 
   it("invalid args rejected with parse error", async () => {
     const provider = makeProvider("poweruser");
-    const result = await provider.execute(
-      makeAction({ op: "unknown_op" }),
-    );
+    const result = await provider.execute(makeAction({ op: "unknown_op" }));
     expect(result.success).toBe(false);
     expect(result.error).toContain("Invalid desktop args");
   });
 
   it("missing required mouse fields rejected", async () => {
     const provider = makeProvider("poweruser");
-    const result = await provider.execute(
-      makeAction({ op: "mouse", action: "click" }),
-    );
+    const result = await provider.execute(makeAction({ op: "mouse", action: "click" }));
     expect(result.success).toBe(false);
     expect(result.error).toContain("Invalid desktop args");
   });
@@ -205,9 +187,7 @@ describe("DesktopProvider", () => {
 
   it("screenshot evidence includes dimensions and mime type", async () => {
     const provider = makeProvider("poweruser");
-    const result = await provider.execute(
-      makeAction({ op: "screenshot", display: "primary" }),
-    );
+    const result = await provider.execute(makeAction({ op: "screenshot", display: "primary" }));
     expect(result.success).toBe(true);
     const evidence = result.evidence as Record<string, unknown>;
     expect(evidence.type).toBe("screenshot");

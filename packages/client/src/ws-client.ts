@@ -14,9 +14,9 @@ import type { Emitter } from "mitt";
 // namespace and extract the default at runtime.
 import * as mittNs from "mitt";
 
-const mitt = (
-  typeof mittNs.default === "function" ? mittNs.default : mittNs
-) as unknown as <T extends Record<string, unknown>>() => Emitter<T>;
+const mitt = (typeof mittNs.default === "function" ? mittNs.default : mittNs) as unknown as <
+  T extends Record<string, unknown>,
+>() => Emitter<T>;
 
 import type { ClientCapability, WsRequestEnvelope, WsResponseEnvelope } from "@tyrum/schemas";
 import type { WsApprovalListResult as WsApprovalListResultT } from "@tyrum/schemas";
@@ -165,10 +165,7 @@ function toBase64UrlBytes(value: Uint8Array): string {
   for (const b of value) {
     binary += String.fromCharCode(b);
   }
-  return btoa(binary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/g, "");
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
 function fromBase64Url(value: string): Uint8Array {
@@ -226,7 +223,10 @@ function buildConnectProofTranscript(input: {
   return new TextEncoder().encode(text);
 }
 
-async function signEd25519Pkcs8(privateKeyDer: Uint8Array, message: Uint8Array): Promise<Uint8Array> {
+async function signEd25519Pkcs8(
+  privateKeyDer: Uint8Array,
+  message: Uint8Array,
+): Promise<Uint8Array> {
   if (!globalThis.crypto?.subtle) {
     throw new Error("WebCrypto subtle API not available");
   }
@@ -253,10 +253,7 @@ function toBase64UrlUtf8(value: string): string {
   for (const b of bytes) {
     binary += String.fromCharCode(b);
   }
-  return btoa(binary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/g, "");
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
 // ---------------------------------------------------------------------------
@@ -313,11 +310,7 @@ export class TyrumClient {
 
   /** Whether the underlying WebSocket is currently open. */
   get connected(): boolean {
-    return (
-      this.ws?.readyState === WebSocket.OPEN &&
-      this.ready &&
-      this.clientId !== null
-    );
+    return this.ws?.readyState === WebSocket.OPEN && this.ready && this.clientId !== null;
   }
 
   /** Subscribe to a typed event. */
@@ -385,11 +378,7 @@ export class TyrumClient {
   }
 
   /** Respond to an approval.request from the gateway. */
-  respondApprovalRequest(
-    requestId: string,
-    approved: boolean,
-    reason?: string,
-  ): void {
+  respondApprovalRequest(requestId: string, approved: boolean, reason?: string): void {
     const response: WsResponseEnvelope = {
       request_id: requestId,
       type: "approval.request",
@@ -485,7 +474,9 @@ export class TyrumClient {
         const port = Number.parseInt(String(opts.port ?? ""), 10);
         const hostname = String(opts.hostname ?? "");
         const servername =
-          typeof opts.servername === "string" && opts.servername.trim() ? opts.servername : hostname;
+          typeof opts.servername === "string" && opts.servername.trim()
+            ? opts.servername
+            : hostname;
 
         if (!hostname || !Number.isFinite(port)) {
           callback(new Error("Invalid TLS connector options"), null);
@@ -539,7 +530,9 @@ export class TyrumClient {
       },
     });
 
-    const WebSocketCtor = (globalThis as unknown as { WebSocket: new (...args: any[]) => WebSocket }).WebSocket;
+    const WebSocketCtor = (
+      globalThis as unknown as { WebSocket: new (...args: any[]) => WebSocket }
+    ).WebSocket;
     try {
       const ws = new WebSocketCtor(this.opts.url, {
         protocols: this.buildProtocols(),
@@ -608,12 +601,16 @@ export class TyrumClient {
           ? anyEvent.error.message
           : null;
       const eventMessage =
-        typeof anyEvent.message === "string" && anyEvent.message.trim().length > 0 ? anyEvent.message : null;
+        typeof anyEvent.message === "string" && anyEvent.message.trim().length > 0
+          ? anyEvent.message
+          : null;
 
       const message =
         eventErrorMessage ??
         eventMessage ??
-        (this.transportErrorHint && this.transportErrorHint.trim().length > 0 ? this.transportErrorHint : null) ??
+        (this.transportErrorHint && this.transportErrorHint.trim().length > 0
+          ? this.transportErrorHint
+          : null) ??
         "WebSocket transport error";
 
       this.emitter.emit("transport_error", { message });
@@ -808,7 +805,11 @@ export class TyrumClient {
   private request<T>(
     type: string,
     payload: unknown,
-    schema: { safeParse: (input: unknown) => { success: true; data: T } | { success: false; error: { message: string } } },
+    schema: {
+      safeParse: (
+        input: unknown,
+      ) => { success: true; data: T } | { success: false; error: { message: string } };
+    },
     timeoutMs = 30_000,
   ): Promise<T> {
     if (this.ws?.readyState !== WebSocket.OPEN) {
@@ -1033,7 +1034,11 @@ export class TyrumClient {
     return true;
   }
 
-  private cacheInboundRequestResponse(type: string, requestId: string, response: WsResponseEnvelope): void {
+  private cacheInboundRequestResponse(
+    type: string,
+    requestId: string,
+    response: WsResponseEnvelope,
+  ): void {
     const key = this.inboundRequestKey(type, requestId);
     this.inboundRequestInFlight.delete(key);
     // Refresh insertion order so completed responses remain eligible for retries.
@@ -1042,7 +1047,10 @@ export class TyrumClient {
     this.evictInboundRequestResponses();
   }
 
-  private getCachedInboundRequestResponse(type: string, requestId: string): WsResponseEnvelope | undefined {
+  private getCachedInboundRequestResponse(
+    type: string,
+    requestId: string,
+  ): WsResponseEnvelope | undefined {
     const key = this.inboundRequestKey(type, requestId);
     const existing = this.inboundRequestResponses.get(key);
     if (existing !== undefined) {

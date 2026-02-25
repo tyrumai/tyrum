@@ -69,7 +69,12 @@ describe("LifecycleHooksRuntime", () => {
       metadata: { command: "/status" },
     });
 
-    const job = await db.get<{ key: string; lane: string; trigger_json: string; policy_snapshot_id: string | null }>(
+    const job = await db.get<{
+      key: string;
+      lane: string;
+      trigger_json: string;
+      policy_snapshot_id: string | null;
+    }>(
       "SELECT key, lane, trigger_json, policy_snapshot_id FROM execution_jobs ORDER BY created_at ASC LIMIT 1",
     );
 
@@ -77,7 +82,10 @@ describe("LifecycleHooksRuntime", () => {
     expect(job?.lane).toBe("cron");
     expect(job?.policy_snapshot_id).toBeTruthy();
 
-    const trigger = JSON.parse(job!.trigger_json) as { kind: string; metadata?: Record<string, unknown> };
+    const trigger = JSON.parse(job!.trigger_json) as {
+      kind: string;
+      metadata?: Record<string, unknown>;
+    };
     expect(trigger.kind).toBe("hook");
     expect(trigger.metadata?.["hook_event"]).toBe("command.execute");
     expect(trigger.metadata?.["command"]).toBe("/status");

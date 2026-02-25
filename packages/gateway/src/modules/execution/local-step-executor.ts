@@ -272,9 +272,10 @@ class LocalStepExecutor implements StepExecutor {
     const body = typeof args["body"] === "string" ? args["body"] : undefined;
     const timeoutMsRaw = args["timeout_ms"];
     const stepCapMs = Math.max(1, Math.floor(stepTimeoutMs));
-    const timeoutMs = typeof timeoutMsRaw === "number" && Number.isFinite(timeoutMsRaw)
-      ? Math.max(1, Math.min(stepCapMs, Math.min(300_000, Math.floor(timeoutMsRaw))))
-      : Math.min(stepCapMs, DEFAULT_HTTP_TIMEOUT_MS);
+    const timeoutMs =
+      typeof timeoutMsRaw === "number" && Number.isFinite(timeoutMsRaw)
+        ? Math.max(1, Math.min(stepCapMs, Math.min(300_000, Math.floor(timeoutMsRaw))))
+        : Math.min(stepCapMs, DEFAULT_HTTP_TIMEOUT_MS);
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -303,7 +304,12 @@ class LocalStepExecutor implements StepExecutor {
       };
 
       const outputContract = parsePlaybookOutputContract(args);
-      const contract = enforceJsonOutputContract(outputContract, bodyText, "response body", truncated);
+      const contract = enforceJsonOutputContract(
+        outputContract,
+        bodyText,
+        "response body",
+        truncated,
+      );
       if (contract.parsed !== undefined) {
         evidence.json = contract.parsed;
       }
@@ -355,9 +361,10 @@ class LocalStepExecutor implements StepExecutor {
 
     const stepCapMs = Math.max(1, Math.floor(stepTimeoutMs));
     const timeoutMsRaw = args["timeout_ms"];
-    const timeoutMs = typeof timeoutMsRaw === "number" && Number.isFinite(timeoutMsRaw)
-      ? Math.max(1, Math.min(stepCapMs, Math.min(MAX_EXEC_TIMEOUT_MS, Math.floor(timeoutMsRaw))))
-      : Math.min(stepCapMs, DEFAULT_EXEC_TIMEOUT_MS);
+    const timeoutMs =
+      typeof timeoutMsRaw === "number" && Number.isFinite(timeoutMsRaw)
+        ? Math.max(1, Math.min(stepCapMs, Math.min(MAX_EXEC_TIMEOUT_MS, Math.floor(timeoutMsRaw))))
+        : Math.min(stepCapMs, DEFAULT_EXEC_TIMEOUT_MS);
     const maxOutputBytes = resolveMaxOutputBytes(args);
 
     const output = await new Promise<{
@@ -479,13 +486,19 @@ class LocalStepExecutor implements StepExecutor {
       stderr: output.stderr,
     };
     const outputContract = parsePlaybookOutputContract(args);
-    const contract = enforceJsonOutputContract(outputContract, output.stdout, "stdout", output.stdoutTruncated);
+    const contract = enforceJsonOutputContract(
+      outputContract,
+      output.stdout,
+      "stdout",
+      output.stdoutTruncated,
+    );
     const parsedStdout = tryParseJson(output.stdout);
-    const evidenceJson = contract.parsed !== undefined
-      ? contract.parsed
-      : parsedStdout !== undefined
-      ? parsedStdout
-      : fallbackEvidence;
+    const evidenceJson =
+      contract.parsed !== undefined
+        ? contract.parsed
+        : parsedStdout !== undefined
+          ? parsedStdout
+          : fallbackEvidence;
 
     if (exitCode !== 0 || output.signal) {
       const message = output.signal

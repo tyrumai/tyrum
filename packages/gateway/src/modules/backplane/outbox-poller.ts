@@ -38,7 +38,9 @@ function canReceiveAuthAudit(client: ConnectedClient): boolean {
   return scopes.some((scope) => typeof scope === "string" && scope.startsWith("operator."));
 }
 
-function parseDirectPayload(payload: unknown): { connection_id: string; message: WsEnvelope } | undefined {
+function parseDirectPayload(
+  payload: unknown,
+): { connection_id: string; message: WsEnvelope } | undefined {
   if (!isObject(payload)) return undefined;
   const connectionId = payload["connection_id"];
   const message = payload["message"];
@@ -64,7 +66,10 @@ function parseBroadcastAudience(payload: unknown): WsBroadcastAudience | undefin
   let requiredScopes: string[] | undefined;
   if (hasRequiredScopesKey) {
     const requiredScopesRaw = payload["required_scopes"];
-    if (!Array.isArray(requiredScopesRaw) || requiredScopesRaw.some((scope) => typeof scope !== "string")) {
+    if (
+      !Array.isArray(requiredScopesRaw) ||
+      requiredScopesRaw.some((scope) => typeof scope !== "string")
+    ) {
       return null;
     }
     requiredScopes = normalizeScopes(requiredScopesRaw as string[]);
@@ -90,9 +95,14 @@ function extractAttemptId(message: WsEnvelope): string | undefined {
   return typeof attemptId === "string" && attemptId.trim().length > 0 ? attemptId : undefined;
 }
 
-function parseBroadcastPayload(
-  payload: unknown,
-): { message: WsEnvelope; source_edge_id?: string; skip_local?: boolean; audience?: WsBroadcastAudience } | undefined {
+function parseBroadcastPayload(payload: unknown):
+  | {
+      message: WsEnvelope;
+      source_edge_id?: string;
+      skip_local?: boolean;
+      audience?: WsBroadcastAudience;
+    }
+  | undefined {
   if (!isObject(payload)) return undefined;
 
   const maybeMessage = payload["message"];

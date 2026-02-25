@@ -8,7 +8,9 @@
       "import": "./dist/index.mjs"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsdown src/index.ts --format esm --dts && node ./scripts/write-dts-entry.mjs && node ./scripts/write-runtime-entry.mjs && node ./scripts/export-jsonschema.mjs"
   },

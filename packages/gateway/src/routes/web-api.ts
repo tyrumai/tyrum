@@ -112,7 +112,10 @@ export function createWebApiRoutes(): Hono {
       );
     }
 
-    const integration = setIntegrationPreference(slug, Boolean((body as { enabled: boolean }).enabled));
+    const integration = setIntegrationPreference(
+      slug,
+      Boolean((body as { enabled: boolean }).enabled),
+    );
     if (!integration) {
       return c.json(
         {

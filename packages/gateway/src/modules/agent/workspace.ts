@@ -1,12 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { parse as parseYaml } from "yaml";
-import {
-  AgentConfig,
-  IdentityPack,
-  SkillManifest,
-  McpServerSpec,
-} from "@tyrum/schemas";
+import { AgentConfig, IdentityPack, SkillManifest, McpServerSpec } from "@tyrum/schemas";
 import type {
   AgentConfig as AgentConfigT,
   IdentityPack as IdentityPackT,

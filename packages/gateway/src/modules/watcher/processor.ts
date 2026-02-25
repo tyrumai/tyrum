@@ -109,7 +109,10 @@ export class WatcherProcessor {
   // Lifecycle
   // -----------------------------------------------------------------------
 
-  private setWebhookScheduledAtCursorEntry(watcherId: number, entry: { baseMs: number; nextMs: number }): void {
+  private setWebhookScheduledAtCursorEntry(
+    watcherId: number,
+    entry: { baseMs: number; nextMs: number },
+  ): void {
     if (this.webhookScheduledAtCursorMaxEntries <= 0) return;
 
     // Maintain insertion order as an LRU by moving touched keys to the end.
@@ -197,11 +200,7 @@ export class WatcherProcessor {
   // CRUD
   // -----------------------------------------------------------------------
 
-  createWatcher(
-    planId: string,
-    triggerType: string,
-    triggerConfig: unknown,
-  ): Promise<number> {
+  createWatcher(planId: string, triggerType: string, triggerConfig: unknown): Promise<number> {
     const nowIso = new Date().toISOString();
     return this.db.transaction(async (tx) => {
       const row = await tx.get<{ id: number }>(
@@ -234,24 +233,19 @@ export class WatcherProcessor {
 
   async deactivateWatcher(watcherId: number): Promise<void> {
     const nowIso = new Date().toISOString();
-    await this.db.run(
-      "UPDATE watchers SET active = 0, updated_at = ? WHERE id = ?",
-      [nowIso, watcherId],
-    );
+    await this.db.run("UPDATE watchers SET active = 0, updated_at = ? WHERE id = ?", [
+      nowIso,
+      watcherId,
+    ]);
     this.webhookScheduledAtCursor.delete(watcherId);
   }
 
-  async recordWebhookTrigger(
-    watcher: WatcherRow,
-    event: WebhookTriggerEvent,
-  ): Promise<boolean> {
+  async recordWebhookTrigger(watcher: WatcherRow, event: WebhookTriggerEvent): Promise<boolean> {
     if (watcher.trigger_type !== "webhook") {
       return false;
     }
 
-    const replayDigest = createHash("sha256")
-      .update(event.nonce)
-      .digest("hex");
+    const replayDigest = createHash("sha256").update(event.nonce).digest("hex");
     const firingId = `webhook-${String(watcher.id)}-${replayDigest}`;
 
     const inserted = await this.memoryDal.insertEpisodicEventIfAbsent(
@@ -286,7 +280,8 @@ export class WatcherProcessor {
     const baseScheduledAtMs = Math.floor(event.timestampMs);
     const scheduledAtMaxExclusive = baseScheduledAtMs + maxScheduledAtSearch;
     const cursor = this.webhookScheduledAtCursor.get(watcher.id);
-    const startScheduledAtMs = cursor && cursor.baseMs === baseScheduledAtMs ? cursor.nextMs : baseScheduledAtMs;
+    const startScheduledAtMs =
+      cursor && cursor.baseMs === baseScheduledAtMs ? cursor.nextMs : baseScheduledAtMs;
 
     for (let attempt = 0; attempt < maxScheduledAtSearch; attempt += 1) {
       const scheduledAtMs = startScheduledAtMs + attempt;
@@ -331,10 +326,7 @@ export class WatcherProcessor {
     return rows.map(parseRow);
   }
 
-  private evaluateTrigger(
-    watcher: WatcherRow,
-    _event: GatewayEvents["plan:completed"],
-  ): boolean {
+  private evaluateTrigger(watcher: WatcherRow, _event: GatewayEvents["plan:completed"]): boolean {
     switch (watcher.trigger_type) {
       case "plan_complete":
         // plan_complete triggers fire whenever the associated plan completes

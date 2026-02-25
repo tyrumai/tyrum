@@ -31,16 +31,10 @@ function outputKindFromArgs(args: Record<string, unknown>): OutputKind | undefin
 }
 
 function normalizeLines(values: string[]): string[] {
-  return values
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
+  return values.map((value) => value.trim()).filter((value) => value.length > 0);
 }
 
-function isCommandAllowed(
-  allowlist: string[],
-  cmd: string,
-  cmdArgs: string[],
-): boolean {
+function isCommandAllowed(allowlist: string[], cmd: string, cmdArgs: string[]): boolean {
   const normalized = normalizeLines(allowlist);
   if (normalized.includes("*")) return true;
 
@@ -74,8 +68,7 @@ export class CliProvider implements CapabilityProvider {
     const cwd = args["cwd"] as string | undefined;
     const stdin = args["stdin"] as string | undefined;
     const outputKind = outputKindFromArgs(args);
-    const timeoutMs =
-      (args["timeout_ms"] as number | undefined) ?? DEFAULT_TIMEOUT_MS;
+    const timeoutMs = (args["timeout_ms"] as number | undefined) ?? DEFAULT_TIMEOUT_MS;
 
     if (!cmd) {
       return { success: false, error: "Missing 'cmd' in CLI action args" };
@@ -85,9 +78,7 @@ export class CliProvider implements CapabilityProvider {
     if (this.allowlistEnforced && !isCommandAllowed(this.allowedCommands, cmd, cmdArgs)) {
       const normalizedAllowlist = normalizeLines(this.allowedCommands);
       const shownAllowlist =
-        normalizedAllowlist.length > 0
-          ? normalizedAllowlist.join(", ")
-          : "(empty: default deny)";
+        normalizedAllowlist.length > 0 ? normalizedAllowlist.join(", ") : "(empty: default deny)";
       return {
         success: false,
         error:
@@ -199,10 +190,7 @@ export class CliProvider implements CapabilityProvider {
             json: jsonParseError ? undefined : jsonContext,
           };
 
-          const postcondResult = checkPostcondition(
-            action.postcondition,
-            evalContext,
-          );
+          const postcondResult = checkPostcondition(action.postcondition, evalContext);
           if (postcondResult.report) {
             evidence.postcondition = postcondResult.report;
           }

@@ -14,4 +14,3 @@ describe("collectSecretHandleIds", () => {
     expect(ids).toEqual(["h1", "h2"]);
   });
 });
-

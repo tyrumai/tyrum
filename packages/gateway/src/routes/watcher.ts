@@ -170,10 +170,7 @@ export function createWatcherRoutes(
   watcher.patch("/watchers/:id", async (c) => {
     const watcherId = parseInt(c.req.param("id"), 10);
     if (isNaN(watcherId)) {
-      return c.json(
-        { error: "invalid_request", message: "invalid watcher id" },
-        400,
-      );
+      return c.json({ error: "invalid_request", message: "invalid watcher id" }, 400);
     }
 
     const body = (await c.req.json()) as { active?: boolean };
@@ -187,10 +184,7 @@ export function createWatcherRoutes(
   watcher.delete("/watchers/:id", async (c) => {
     const watcherId = parseInt(c.req.param("id"), 10);
     if (isNaN(watcherId)) {
-      return c.json(
-        { error: "invalid_request", message: "invalid watcher id" },
-        400,
-      );
+      return c.json({ error: "invalid_request", message: "invalid watcher id" }, 400);
     }
 
     await processor.deactivateWatcher(watcherId);
@@ -200,18 +194,12 @@ export function createWatcherRoutes(
   watcher.post("/watchers/:id/trigger/webhook", async (c) => {
     const watcherId = parseInt(c.req.param("id"), 10);
     if (isNaN(watcherId)) {
-      return c.json(
-        { error: "invalid_request", message: "invalid watcher id" },
-        400,
-      );
+      return c.json({ error: "invalid_request", message: "invalid watcher id" }, 400);
     }
 
     const watcherRow = await processor.getActiveWatcherById(watcherId);
     if (!watcherRow || watcherRow.trigger_type !== "webhook") {
-      return c.json(
-        { error: "not_found", message: "webhook watcher not found" },
-        404,
-      );
+      return c.json({ error: "not_found", message: "webhook watcher not found" }, 404);
     }
 
     const envelope = parseWebhookEnvelope({

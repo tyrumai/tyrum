@@ -9,11 +9,8 @@ export { DEFAULT_WORKSPACE_ID };
  * - Desktop / single-host: defaults to "default".
  * - Split/HA: typically provided by the ToolRunner launcher (job/pod env/args).
  */
-export function resolveWorkspaceId(
-  env: NodeJS.ProcessEnv = process.env,
-): WorkspaceId {
+export function resolveWorkspaceId(env: NodeJS.ProcessEnv = process.env): WorkspaceId {
   const raw = env["TYRUM_WORKSPACE_ID"]?.trim();
   if (!raw) return WorkspaceId.parse(DEFAULT_WORKSPACE_ID);
   return WorkspaceId.parse(raw);
 }
-

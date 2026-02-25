@@ -20,4 +20,3 @@ describe("PluginLockFile", () => {
     expect(parsed["format"]).toBe("tyrum.plugin.lock.v1");
   });
 });
-

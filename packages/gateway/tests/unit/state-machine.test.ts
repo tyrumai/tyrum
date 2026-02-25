@@ -3,10 +3,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import {
-  PlanStateMachine,
-  PlanTransitionError,
-} from "../../src/modules/planner/state-machine.js";
+import { PlanStateMachine, PlanTransitionError } from "../../src/modules/planner/state-machine.js";
 
 describe("PlanStateMachine", () => {
   it("happy_path_through_execution", () => {

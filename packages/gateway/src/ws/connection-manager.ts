@@ -123,9 +123,7 @@ export class ConnectionManager {
   }
 
   /** Return the first connected client that advertises the given capability. */
-  getClientForCapability(
-    capability: ClientCapability,
-  ): ConnectedClient | undefined {
+  getClientForCapability(capability: ClientCapability): ConnectedClient | undefined {
     for (const client of this.clients.values()) {
       if (client.capabilities.includes(capability)) {
         return client;

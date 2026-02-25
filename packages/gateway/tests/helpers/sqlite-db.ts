@@ -9,4 +9,3 @@ export const SQLITE_MIGRATIONS_DIR = join(__dirname, "../../migrations/sqlite");
 export function openTestSqliteDb(dbPath = ":memory:"): SqliteDb {
   return SqliteDb.open({ dbPath, migrationsDir: SQLITE_MIGRATIONS_DIR });
 }
-

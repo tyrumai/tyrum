@@ -55,7 +55,10 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
   app.get("/pairings", async (c) => {
     const statusRaw = c.req.query("status")?.trim();
     const status =
-      statusRaw === "pending" || statusRaw === "approved" || statusRaw === "denied" || statusRaw === "revoked"
+      statusRaw === "pending" ||
+      statusRaw === "approved" ||
+      statusRaw === "denied" ||
+      statusRaw === "revoked"
         ? statusRaw
         : undefined;
     const rows = await deps.nodePairingDal.list({ status });
@@ -77,7 +80,10 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
     }
     const trustLevelParsed = NodePairingTrustLevel.safeParse(trustLevelRaw);
     if (!trustLevelParsed.success) {
-      return c.json({ error: "invalid_request", message: "trust_level must be 'local' or 'remote'" }, 400);
+      return c.json(
+        { error: "invalid_request", message: "trust_level must be 'local' or 'remote'" },
+        400,
+      );
     }
 
     const allowlistRaw = body["capability_allowlist"];
@@ -87,7 +93,10 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
     const allowlistParsed = CapabilityDescriptor.array().safeParse(allowlistRaw);
     if (!allowlistParsed.success) {
       return c.json(
-        { error: "invalid_request", message: "capability_allowlist must be an array of CapabilityDescriptor" },
+        {
+          error: "invalid_request",
+          message: "capability_allowlist must be an array of CapabilityDescriptor",
+        },
         400,
       );
     }
@@ -113,15 +122,12 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
       emitPairingApprovedEvent(deps.ws, { pairing, nodeId: pairing.node.node_id, scopedToken });
     }
 
-    emitEvent(
-      deps,
-      {
-        event_id: crypto.randomUUID(),
-        type: "pairing.resolved",
-        occurred_at: new Date().toISOString(),
-        payload: { pairing },
-      },
-    );
+    emitEvent(deps, {
+      event_id: crypto.randomUUID(),
+      type: "pairing.resolved",
+      occurred_at: new Date().toISOString(),
+      payload: { pairing },
+    });
 
     return c.json({ status: "ok", pairing });
   });
@@ -148,15 +154,12 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
     }
     const { pairing } = resolved;
 
-    emitEvent(
-      deps,
-      {
-        event_id: crypto.randomUUID(),
-        type: "pairing.resolved",
-        occurred_at: new Date().toISOString(),
-        payload: { pairing },
-      },
-    );
+    emitEvent(deps, {
+      event_id: crypto.randomUUID(),
+      type: "pairing.resolved",
+      occurred_at: new Date().toISOString(),
+      payload: { pairing },
+    });
 
     return c.json({ status: "ok", pairing });
   });
@@ -181,15 +184,12 @@ export function createPairingRoutes(deps: PairingRouteDeps): Hono {
       return c.json({ error: "not_found", message: "pairing not found or not approved" }, 404);
     }
 
-    emitEvent(
-      deps,
-      {
-        event_id: crypto.randomUUID(),
-        type: "pairing.resolved",
-        occurred_at: new Date().toISOString(),
-        payload: { pairing },
-      },
-    );
+    emitEvent(deps, {
+      event_id: crypto.randomUUID(),
+      type: "pairing.resolved",
+      occurred_at: new Date().toISOString(),
+      payload: { pairing },
+    });
 
     return c.json({ status: "ok", pairing });
   });

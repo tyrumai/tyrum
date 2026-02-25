@@ -111,9 +111,8 @@ function extractHostFromMaybeAddress(value: string): string | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
 
-  const withoutQuotes = trimmed.startsWith("\"") && trimmed.endsWith("\"")
-    ? trimmed.slice(1, -1).trim()
-    : trimmed;
+  const withoutQuotes =
+    trimmed.startsWith('"') && trimmed.endsWith('"') ? trimmed.slice(1, -1).trim() : trimmed;
 
   if (withoutQuotes.startsWith("[")) {
     const closingIdx = withoutQuotes.indexOf("]");
@@ -144,7 +143,7 @@ function splitHeader(value: string, delimiter: "," | ";"): string[] {
 
   for (let i = 0; i < value.length; i += 1) {
     const ch = value[i]!;
-    if (ch === "\"") {
+    if (ch === '"') {
       inQuotes = !inQuotes;
       current += ch;
       continue;
@@ -215,14 +214,17 @@ export function resolveClientIp(input: {
   if (!input.trustedProxies?.isTrustedProxy(remoteAddress)) return remoteAddress;
 
   const forwardedIps = input.forwardedHeader ? parseForwardedHeaderIps(input.forwardedHeader) : [];
-  const xForwardedForIps = input.xForwardedForHeader ? parseXForwardedForHeaderIps(input.xForwardedForHeader) : [];
+  const xForwardedForIps = input.xForwardedForHeader
+    ? parseXForwardedForHeaderIps(input.xForwardedForHeader)
+    : [];
   const xRealIpIps = input.xRealIpHeader ? parseXRealIpHeaderIps(input.xRealIpHeader) : [];
 
-  const headerIps = forwardedIps.length > 0
-    ? forwardedIps
-    : xForwardedForIps.length > 0
-      ? xForwardedForIps
-      : xRealIpIps;
+  const headerIps =
+    forwardedIps.length > 0
+      ? forwardedIps
+      : xForwardedForIps.length > 0
+        ? xForwardedForIps
+        : xRealIpIps;
 
   if (headerIps.length === 0) return remoteAddress;
 
@@ -242,9 +244,11 @@ function resolveSocketRemoteAddress(c: Context): string | undefined {
   return normalizeIp(incoming?.socket?.remoteAddress);
 }
 
-export function createClientIpMiddleware(opts: {
-  trustedProxies?: TrustedProxyAllowlist;
-} = {}): (c: Context, next: Next) => Promise<void> {
+export function createClientIpMiddleware(
+  opts: {
+    trustedProxies?: TrustedProxyAllowlist;
+  } = {},
+): (c: Context, next: Next) => Promise<void> {
   return async (c, next) => {
     const clientIp = resolveClientIp({
       remoteAddress: resolveSocketRemoteAddress(c),

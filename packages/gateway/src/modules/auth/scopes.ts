@@ -9,4 +9,3 @@ export function hasAnyRequiredScope(
   if (scopes.includes("*")) return true;
   return requiredScopes.some((scope) => scopes.includes(scope));
 }
-

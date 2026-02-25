@@ -3,51 +3,78 @@ import { resolveHttpRouteRequiredScopes } from "../../src/modules/authz/http-sco
 
 describe("HTTP scope middleware route mapping", () => {
   it("maps read-only operator surfaces to operator.read", () => {
-    expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/status" })).toEqual(["operator.read"]);
-    expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/memory/facts" })).toEqual(["operator.read"]);
+    expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/status" })).toEqual([
+      "operator.read",
+    ]);
+    expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/memory/facts" })).toEqual([
+      "operator.read",
+    ]);
   });
 
   it("maps write operator surfaces to operator.write", () => {
-    expect(resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/memory/facts" })).toEqual(["operator.write"]);
-    expect(resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/workflow/run" })).toEqual(["operator.write"]);
+    expect(resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/memory/facts" })).toEqual([
+      "operator.write",
+    ]);
+    expect(resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/workflow/run" })).toEqual([
+      "operator.write",
+    ]);
   });
 
   it("maps approval surfaces to operator.approvals", () => {
-    expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/approvals" })).toEqual(["operator.approvals"]);
-    expect(resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/approvals/:id/respond" })).toEqual([
+    expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/approvals" })).toEqual([
       "operator.approvals",
     ]);
-    expect(resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/app/actions/approvals/:id" })).toEqual([
-      "operator.approvals",
-    ]);
+    expect(
+      resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/approvals/:id/respond" }),
+    ).toEqual(["operator.approvals"]);
+    expect(
+      resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/app/actions/approvals/:id" }),
+    ).toEqual(["operator.approvals"]);
   });
 
   it("maps pairing surfaces to operator.pairing", () => {
-    expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/pairings" })).toEqual(["operator.pairing"]);
-    expect(resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/pairings/:id/approve" })).toEqual([
+    expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/pairings" })).toEqual([
       "operator.pairing",
     ]);
-    expect(resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/app/actions/linking/:slug" })).toEqual([
-      "operator.pairing",
-    ]);
+    expect(
+      resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/pairings/:id/approve" }),
+    ).toEqual(["operator.pairing"]);
+    expect(
+      resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/app/actions/linking/:slug" }),
+    ).toEqual(["operator.pairing"]);
   });
 
   it("maps tenant admin surfaces to operator.admin", () => {
-    expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/auth/pins" })).toEqual(["operator.admin"]);
-    expect(resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/auth/device-tokens/issue" })).toEqual([
+    expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/auth/pins" })).toEqual([
       "operator.admin",
     ]);
-    expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/secrets" })).toEqual(["operator.admin"]);
-    expect(resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/snapshot/import" })).toEqual(["operator.admin"]);
-    expect(resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/providers/:provider/oauth/authorize" })).toEqual([
+    expect(
+      resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/auth/device-tokens/issue" }),
+    ).toEqual(["operator.admin"]);
+    expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/secrets" })).toEqual([
       "operator.admin",
     ]);
-    expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/routing/config" })).toEqual(["operator.admin"]);
-    expect(resolveHttpRouteRequiredScopes({ method: "PUT", routePath: "/routing/config" })).toEqual(["operator.admin"]);
-    expect(resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/api/account/delete" })).toEqual(["operator.admin"]);
-    expect(resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/app/actions/account/delete" })).toEqual([
-      "operator.admin",
-    ]);
+    expect(
+      resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/snapshot/import" }),
+    ).toEqual(["operator.admin"]);
+    expect(
+      resolveHttpRouteRequiredScopes({
+        method: "POST",
+        routePath: "/providers/:provider/oauth/authorize",
+      }),
+    ).toEqual(["operator.admin"]);
+    expect(resolveHttpRouteRequiredScopes({ method: "GET", routePath: "/routing/config" })).toEqual(
+      ["operator.admin"],
+    );
+    expect(resolveHttpRouteRequiredScopes({ method: "PUT", routePath: "/routing/config" })).toEqual(
+      ["operator.admin"],
+    );
+    expect(
+      resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/api/account/delete" }),
+    ).toEqual(["operator.admin"]);
+    expect(
+      resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/app/actions/account/delete" }),
+    ).toEqual(["operator.admin"]);
   });
 
   it("denies unknown routes by default", () => {

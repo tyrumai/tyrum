@@ -16,17 +16,32 @@ const INJECTION_PATTERNS: ReadonlyArray<[RegExp, string]> = [
   // Role impersonation — attempts to hijack the system/developer/assistant role
   [/\b(system|developer|assistant)\s*:/gi, "[role-ref] $1:"],
   // Instruction override — phrases that try to override prior instructions
-  [/ignore\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?)/gi, "[blocked-override]"],
-  [/disregard\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?)/gi, "[blocked-override]"],
-  [/forget\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?)/gi, "[blocked-override]"],
+  [
+    /ignore\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?)/gi,
+    "[blocked-override]",
+  ],
+  [
+    /disregard\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?)/gi,
+    "[blocked-override]",
+  ],
+  [
+    /forget\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?)/gi,
+    "[blocked-override]",
+  ],
   // "You are now" re-identity attempts
   [/you\s+are\s+now\b/gi, "[blocked-reidentity]"],
   // "New instructions:" / "Updated instructions:" headers
   [/\b(new|updated|revised|override)\s+instructions?\s*:/gi, "[blocked-header]"],
   // "Do not follow" / "Stop following" directives
-  [/(do\s+not|don'?t|stop)\s+follow(ing)?\s+(the\s+)?(system|previous|original)/gi, "[blocked-directive]"],
+  [
+    /(do\s+not|don'?t|stop)\s+follow(ing)?\s+(the\s+)?(system|previous|original)/gi,
+    "[blocked-directive]",
+  ],
   // Attempts to extract system prompt
-  [/\b(show|print|display|output|reveal|repeat)\s+(your|the)\s+(system\s+)?(prompt|instructions?|rules?)\b/gi, "[blocked-extraction]"],
+  [
+    /\b(show|print|display|output|reveal|repeat)\s+(your|the)\s+(system\s+)?(prompt|instructions?|rules?)\b/gi,
+    "[blocked-extraction]",
+  ],
 ];
 
 /**

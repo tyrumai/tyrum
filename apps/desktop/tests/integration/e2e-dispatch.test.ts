@@ -52,9 +52,7 @@ async function waitForCapabilities(
 
   while (Date.now() <= deadline) {
     const stats = connectionManager.getStats();
-    const ready = required.every(
-      (capability) => (stats.capabilityCounts[capability] ?? 0) > 0,
-    );
+    const ready = required.every((capability) => (stats.capabilityCounts[capability] ?? 0) > 0);
     if (ready) {
       return;
     }
@@ -222,7 +220,11 @@ describe("e2e: gateway dispatches task to desktop node", () => {
     );
     expect(client.connected).toBe(true);
 
-    const desktopProvider = new DesktopProvider(new MockDesktopBackend(), permissions, async () => true);
+    const desktopProvider = new DesktopProvider(
+      new MockDesktopBackend(),
+      permissions,
+      async () => true,
+    );
     const cliProvider = new CliProvider(["echo"], ["/tmp"]);
     autoExecute(client, [desktopProvider, cliProvider]);
 
@@ -261,14 +263,13 @@ describe("e2e: gateway dispatches task to desktop node", () => {
     stopHeartbeat = srv.stopHeartbeat;
 
     const permissions = resolvePermissions("poweruser", {});
-    client = await connectClient(
-      srv.port,
-      srv.adminToken,
-      ["desktop"],
-      srv.connectionManager,
-    );
+    client = await connectClient(srv.port, srv.adminToken, ["desktop"], srv.connectionManager);
 
-    const desktopProvider = new DesktopProvider(new MockDesktopBackend(), permissions, async () => true);
+    const desktopProvider = new DesktopProvider(
+      new MockDesktopBackend(),
+      permissions,
+      async () => true,
+    );
     autoExecute(client, [desktopProvider]);
 
     const taskId = await dispatchTask(
@@ -293,12 +294,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
     tokenHome = srv.tokenHome;
     stopHeartbeat = srv.stopHeartbeat;
 
-    client = await connectClient(
-      srv.port,
-      srv.adminToken,
-      ["cli"],
-      srv.connectionManager,
-    );
+    client = await connectClient(srv.port, srv.adminToken, ["cli"], srv.connectionManager);
 
     // Only "echo" is allowed
     const cliProvider = new CliProvider(["echo"], ["/tmp"]);
@@ -327,12 +323,7 @@ describe("e2e: gateway dispatches task to desktop node", () => {
     tokenHome = srv.tokenHome;
     stopHeartbeat = srv.stopHeartbeat;
 
-    client = await connectClient(
-      srv.port,
-      srv.adminToken,
-      ["cli"],
-      srv.connectionManager,
-    );
+    client = await connectClient(srv.port, srv.adminToken, ["cli"], srv.connectionManager);
 
     const cliProvider = new CliProvider(["echo"], ["/tmp"]);
     autoExecute(client, [cliProvider]);

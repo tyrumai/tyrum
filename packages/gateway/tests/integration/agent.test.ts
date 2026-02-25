@@ -188,7 +188,9 @@ describe("agent routes", () => {
     const discord = await container.sessionDal.getById("discord:dm-1");
     expect(discord).toBeTruthy();
 
-    const telegramUserTurns = telegram!.turns.filter((t) => t.role === "user").map((t) => t.content);
+    const telegramUserTurns = telegram!.turns
+      .filter((t) => t.role === "user")
+      .map((t) => t.content);
     const discordUserTurns = discord!.turns.filter((t) => t.role === "user").map((t) => t.content);
 
     expect(discordUserTurns.join("\n").toLowerCase()).not.toContain("prefer tea");

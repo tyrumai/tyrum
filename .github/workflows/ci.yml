@@ -149,6 +149,16 @@ jobs:
 
       - run: pnpm lint
 
+      - name: Prettier format check
+        shell: bash
+        run: |
+          git ls-files -z -- '*.ts' '*.tsx' '*.js' '*.mjs' '*.cjs' '*.json' '*.md' '*.mdx' '*.yml' '*.yaml' \
+            ':!charts/tyrum/templates/**' \
+            ':!charts/tyrum/Chart.yaml' \
+            ':!.worktrees/**' \
+            ':!web/**' \
+          | xargs -0 -n 200 pnpm exec prettier --check
+
       - run: pnpm build
 
       - name: Install Playwright (Chromium)

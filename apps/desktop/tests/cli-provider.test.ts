@@ -12,10 +12,7 @@ function makeAction(args: Record<string, unknown>): ActionPrimitive {
   return { type: "CLI", args };
 }
 
-function makeProvider(
-  allowedCommands = ["echo", "ls", "false"],
-  allowedWorkingDirs = [tmpdir()],
-) {
+function makeProvider(allowedCommands = ["echo", "ls", "false"], allowedWorkingDirs = [tmpdir()]) {
   return new CliProvider(allowedCommands, allowedWorkingDirs);
 }
 
@@ -35,9 +32,7 @@ describe("CliProvider", () => {
 
   it("allowed command succeeds", async () => {
     const provider = makeProvider();
-    const result = await provider.execute(
-      makeAction({ cmd: "echo", args: ["hello"] }),
-    );
+    const result = await provider.execute(makeAction({ cmd: "echo", args: ["hello"] }));
     expect(result.success).toBe(true);
     const evidence = result.evidence as Record<string, unknown>;
     expect((evidence.stdout as string).trim()).toBe("hello");
@@ -56,9 +51,7 @@ describe("CliProvider", () => {
 
   it("disallowed command allowed when enforcement disabled", async () => {
     const provider = new CliProvider([], [], false);
-    const result = await provider.execute(
-      makeAction({ cmd: "echo", args: ["allowlist-off"] }),
-    );
+    const result = await provider.execute(makeAction({ cmd: "echo", args: ["allowlist-off"] }));
     expect(result.success).toBe(true);
     const evidence = result.evidence as Record<string, unknown>;
     expect((evidence.stdout as string).trim()).toBe("allowlist-off");
@@ -66,9 +59,7 @@ describe("CliProvider", () => {
 
   it("wildcard command allowlist entry permits any command", async () => {
     const provider = new CliProvider(["*"], [], true);
-    const result = await provider.execute(
-      makeAction({ cmd: "echo", args: ["wildcard-pass"] }),
-    );
+    const result = await provider.execute(makeAction({ cmd: "echo", args: ["wildcard-pass"] }));
     expect(result.success).toBe(true);
     const evidence = result.evidence as Record<string, unknown>;
     expect((evidence.stdout as string).trim()).toBe("wildcard-pass");
@@ -77,14 +68,10 @@ describe("CliProvider", () => {
   it("supports subcommand allowlist prefixes (allow node --version only)", async () => {
     const provider = new CliProvider(["node --version"], [], true);
 
-    const allowed = await provider.execute(
-      makeAction({ cmd: "node", args: ["--version"] }),
-    );
+    const allowed = await provider.execute(makeAction({ cmd: "node", args: ["--version"] }));
     expect(allowed.success).toBe(true);
 
-    const denied = await provider.execute(
-      makeAction({ cmd: "node", args: ["--help"] }),
-    );
+    const denied = await provider.execute(makeAction({ cmd: "node", args: ["--help"] }));
     expect(denied.success).toBe(false);
     expect(denied.error).toContain("not in the allowlist");
   });
@@ -137,7 +124,9 @@ describe("CliProvider", () => {
       makeAction({ cmd: "echo", args: ["cwd-default-deny"], cwd: tmpdir() }),
     );
     expect(result.success).toBe(false);
-    expect(result.error).toContain("working-directory allowlist is active (default deny) and empty");
+    expect(result.error).toContain(
+      "working-directory allowlist is active (default deny) and empty",
+    );
   });
 
   it("subdirectory of allowed dir passes", async () => {
@@ -192,9 +181,7 @@ describe("CliProvider", () => {
 
   it("evidence includes exit_code, stdout, stderr, duration_ms", async () => {
     const provider = makeProvider();
-    const result = await provider.execute(
-      makeAction({ cmd: "echo", args: ["evidence-check"] }),
-    );
+    const result = await provider.execute(makeAction({ cmd: "echo", args: ["evidence-check"] }));
     expect(result.success).toBe(true);
     const evidence = result.evidence as Record<string, unknown>;
     expect(evidence).toHaveProperty("exit_code");
@@ -202,7 +189,7 @@ describe("CliProvider", () => {
     expect(evidence).toHaveProperty("stderr");
     expect(evidence).toHaveProperty("duration_ms");
     expect(typeof evidence.duration_ms).toBe("number");
-    expect((evidence.duration_ms as number)).toBeGreaterThanOrEqual(0);
+    expect(evidence.duration_ms as number).toBeGreaterThanOrEqual(0);
   });
 
   it("enforces output=json by failing on non-JSON stdout", async () => {

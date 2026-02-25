@@ -16,20 +16,18 @@ describe("planner event append-next helpers", () => {
   });
 
   it("inserts next step_index and maintains a valid hash chain", async () => {
-    const mod:
-      | {
-        insertPlannerEventNext?: <T>(
-          tx: unknown,
-          input: {
-            replayId: string;
-            planId: string;
-            occurredAt: string;
-            actionJson: string;
-            returning: string;
-          },
-        ) => Promise<{ inserted: T; stepIndex: number }>;
-      }
-      | null = await import("../../src/modules/planner/planner-events.js").catch(() => null);
+    const mod: {
+      insertPlannerEventNext?: <T>(
+        tx: unknown,
+        input: {
+          replayId: string;
+          planId: string;
+          occurredAt: string;
+          actionJson: string;
+          returning: string;
+        },
+      ) => Promise<{ inserted: T; stepIndex: number }>;
+    } | null = await import("../../src/modules/planner/planner-events.js").catch(() => null);
 
     expect(mod).not.toBeNull();
     expect(mod?.insertPlannerEventNext).toBeTypeOf("function");
@@ -71,14 +69,12 @@ describe("planner event append-next helpers", () => {
   });
 
   it("retries on unique constraint violations", async () => {
-    const mod:
-      | {
-        retryOnUniqueViolation?: <T>(
-          attemptFn: (attempt: number) => Promise<T>,
-          opts: { maxAttempts?: number; failureMessage: string },
-        ) => Promise<T>;
-      }
-      | null = await import("../../src/modules/planner/planner-events.js").catch(() => null);
+    const mod: {
+      retryOnUniqueViolation?: <T>(
+        attemptFn: (attempt: number) => Promise<T>,
+        opts: { maxAttempts?: number; failureMessage: string },
+      ) => Promise<T>;
+    } | null = await import("../../src/modules/planner/planner-events.js").catch(() => null);
 
     expect(mod).not.toBeNull();
     expect(mod?.retryOnUniqueViolation).toBeTypeOf("function");
@@ -101,4 +97,3 @@ describe("planner event append-next helpers", () => {
     expect(attempts).toBe(2);
   });
 });
-

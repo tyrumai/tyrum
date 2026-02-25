@@ -55,7 +55,10 @@ import { createHttpScopeAuthorizationMiddleware } from "./modules/authz/http-sco
 import { randomUUID } from "node:crypto";
 import { VERSION } from "./version.js";
 import { isAuthProfilesEnabled } from "./modules/models/auth-profiles-enabled.js";
-import { createClientIpMiddleware, createTrustedProxyAllowlistFromEnv } from "./modules/auth/client-ip.js";
+import {
+  createClientIpMiddleware,
+  createTrustedProxyAllowlistFromEnv,
+} from "./modules/auth/client-ip.js";
 import { AuthAudit } from "./modules/auth/audit.js";
 
 export interface AppOptions {
@@ -143,8 +146,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   // Baseline structured request logging with stable request_id.
   app.use("*", async (c, next) => {
     const startedAt = Date.now();
-    const requestId =
-      c.req.header("x-request-id")?.trim() || `req-${randomUUID()}`;
+    const requestId = c.req.header("x-request-id")?.trim() || `req-${randomUUID()}`;
     c.header("x-request-id", requestId);
 
     container.logger.debug("http.request", {
@@ -301,7 +303,10 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   }
   app.route("/", createPlanRoutes(container));
   if (engine) {
-    app.route("/", createWorkflowRoutes({ engine, policyService: container.policyService, agents: opts.agents }));
+    app.route(
+      "/",
+      createWorkflowRoutes({ engine, policyService: container.policyService, agents: opts.agents }),
+    );
   }
   app.route(
     "/",

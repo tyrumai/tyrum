@@ -243,13 +243,7 @@ describe("TelegramChannelProcessor send policy overrides", () => {
          dedupe_key,
          text
        ) VALUES (?, ?, ?, ?, ?)`,
-      [
-        inboxRow!.inbox_id,
-        "telegram",
-        "chat-1",
-        "dedupe-1",
-        "outbox text",
-      ],
+      [inboxRow!.inbox_id, "telegram", "chat-1", "dedupe-1", "outbox text"],
     );
 
     const agents: AgentRegistry = {
@@ -286,4 +280,3 @@ describe("TelegramChannelProcessor send policy overrides", () => {
     expect(outbox?.status).toBe("failed");
   });
 });
-

@@ -66,7 +66,9 @@ function getLeafRoutePath(c: Context): string | undefined {
 
 function isMethodScopedOperatorRoute(routePath: string): boolean {
   if (routePath === "/") return true;
-  return METHOD_SCOPED_OPERATOR_ROUTE_PREFIXES.some((prefix) => matchesPathPrefixSegment(routePath, prefix));
+  return METHOD_SCOPED_OPERATOR_ROUTE_PREFIXES.some((prefix) =>
+    matchesPathPrefixSegment(routePath, prefix),
+  );
 }
 
 export function resolveHttpRouteRequiredScopes(input: {

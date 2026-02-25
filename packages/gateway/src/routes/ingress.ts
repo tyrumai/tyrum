@@ -4,15 +4,15 @@
 
 import { randomUUID } from "node:crypto";
 import { Hono } from "hono";
-import {
-  normalizeUpdate,
-  TelegramNormalizationError,
-} from "../modules/ingress/telegram.js";
+import { normalizeUpdate, TelegramNormalizationError } from "../modules/ingress/telegram.js";
 import { secureStringEqual } from "../utils/secure-string-equal.js";
 import type { TelegramBot } from "../modules/ingress/telegram-bot.js";
 import type { AgentRegistry } from "../modules/agent/registry.js";
 import type { TelegramChannelQueue } from "../modules/channels/telegram.js";
-import { renderMarkdownForTelegram, type TelegramFormattingFallbackEvent } from "../modules/markdown/telegram.js";
+import {
+  renderMarkdownForTelegram,
+  type TelegramFormattingFallbackEvent,
+} from "../modules/markdown/telegram.js";
 import { loadRoutingConfig, resolveTelegramAgentId } from "../modules/channels/routing.js";
 import type { RoutingConfigDal } from "../modules/channels/routing-config-dal.js";
 import type { MemoryDal } from "../modules/memory/dal.js";
@@ -39,8 +39,7 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
         return c.json(
           {
             error: "misconfigured",
-            message:
-              "TELEGRAM_WEBHOOK_SECRET must be set when Telegram ingress is enabled.",
+            message: "TELEGRAM_WEBHOOK_SECRET must be set when Telegram ingress is enabled.",
           },
           503,
         );
@@ -48,20 +47,14 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
 
       const providedSecret = c.req.header(TELEGRAM_SECRET_HEADER);
       if (!providedSecret || !secureStringEqual(providedSecret, expectedSecret)) {
-        return c.json(
-          { error: "unauthorized", message: "invalid telegram webhook secret" },
-          401,
-        );
+        return c.json({ error: "unauthorized", message: "invalid telegram webhook secret" }, 401);
       }
     }
 
     const rawBody = await c.req.text();
 
     if (!rawBody) {
-      return c.json(
-        { error: "invalid_request", message: "request body is empty" },
-        400,
-      );
+      return c.json({ error: "invalid_request", message: "request body is empty" }, 400);
     }
 
     let normalized;
@@ -69,10 +62,7 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
       normalized = normalizeUpdate(rawBody);
     } catch (err) {
       if (err instanceof TelegramNormalizationError) {
-        return c.json(
-          { error: "normalization_error", message: err.message },
-          400,
-        );
+        return c.json({ error: "normalization_error", message: err.message }, 400);
       }
       throw err;
     }
@@ -99,7 +89,8 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
       }
     }
     const routing = durable?.config ?? (home ? await loadRoutingConfig(home) : { v: 1 });
-    const routedAgentId = c.req.query("agent_id")?.trim() || resolveTelegramAgentId(routing, chatId);
+    const routedAgentId =
+      c.req.query("agent_id")?.trim() || resolveTelegramAgentId(routing, chatId);
 
     if (deps.telegramQueue) {
       try {

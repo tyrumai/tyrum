@@ -7,4 +7,3 @@ export function resolveSandboxHardeningProfile(
   if (raw === "hardened") return "hardened";
   return "baseline";
 }
-

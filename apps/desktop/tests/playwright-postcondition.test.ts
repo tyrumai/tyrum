@@ -10,10 +10,7 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeWebAction(
-  args: Record<string, unknown>,
-  postcondition?: unknown,
-): ActionPrimitive {
+function makeWebAction(args: Record<string, unknown>, postcondition?: unknown): ActionPrimitive {
   return { type: "Web", args, postcondition };
 }
 
@@ -77,10 +74,7 @@ describe("Playwright postcondition evaluation", () => {
       backend,
     );
     const result = await provider.execute(
-      makeWebAction(
-        { op: "click", selector: "#btn" },
-        { type: "dom_contains", text: "Clicked" },
-      ),
+      makeWebAction({ op: "click", selector: "#btn" }, { type: "dom_contains", text: "Clicked" }),
     );
     expect(result.success).toBe(true);
     const evidence = result.evidence as Record<string, unknown>;
@@ -128,10 +122,7 @@ describe("Playwright postcondition evaluation", () => {
       backend,
     );
     const result = await provider.execute(
-      makeWebAction(
-        { op: "snapshot" },
-        { type: "dom_contains", text: "anything" },
-      ),
+      makeWebAction({ op: "snapshot" }, { type: "dom_contains", text: "anything" }),
     );
     // Snapshot should succeed and NOT evaluate postcondition
     expect(result.success).toBe(true);

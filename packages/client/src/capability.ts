@@ -41,10 +41,7 @@ export interface CapabilityProvider {
  * Wires {@link CapabilityProvider}s to a {@link TyrumClient} -- automatically
  * executes dispatched tasks using the matching provider and reports results.
  */
-export function autoExecute(
-  client: TyrumClient,
-  providers: CapabilityProvider[],
-): void {
+export function autoExecute(client: TyrumClient, providers: CapabilityProvider[]): void {
   const capMap = new Map<ClientCapability, CapabilityProvider>();
   for (const provider of providers) {
     capMap.set(provider.capability, provider);
@@ -87,7 +84,12 @@ export function autoExecute(
     const provider = required ? capMap.get(required) : undefined;
 
     if (!provider) {
-      respond(false, undefined, undefined, `no provider for capability: ${required ?? action.type}`);
+      respond(
+        false,
+        undefined,
+        undefined,
+        `no provider for capability: ${required ?? action.type}`,
+      );
       return;
     }
 
@@ -95,12 +97,7 @@ export function autoExecute(
       .then(async () => await provider.execute(action, ctx))
       .then(
         (taskResult) => {
-          respond(
-            taskResult.success,
-            taskResult.result,
-            taskResult.evidence,
-            taskResult.error,
-          );
+          respond(taskResult.success, taskResult.result, taskResult.evidence, taskResult.error);
         },
         (err: unknown) => {
           const errorMsg = err instanceof Error ? err.message : String(err);

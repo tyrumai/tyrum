@@ -58,4 +58,3 @@ describe("POST /playbooks/:id/execute (policy bundle)", () => {
     expect(loadEffectiveBundle).toHaveBeenCalledWith({ playbookBundle: sentinelBundle });
   });
 });
-

@@ -76,10 +76,10 @@ describe("Audit hash chain integration", () => {
     });
 
     // Tamper with the action of the second event directly in DB
-    await db.run(
-      "UPDATE planner_events SET action = ? WHERE plan_id = ? AND step_index = 1",
-      ['{"type":"Tampered"}', "plan-1"],
-    );
+    await db.run("UPDATE planner_events SET action = ? WHERE plan_id = ? AND step_index = 1", [
+      '{"type":"Tampered"}',
+      "plan-1",
+    ]);
 
     const events = await log.getEventsForVerification("plan-1");
     const result = verifyChain(events);

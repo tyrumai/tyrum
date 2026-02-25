@@ -46,20 +46,8 @@ describe("SessionDal", () => {
     const dal = createDal();
     const session = await dal.getOrCreate("discord", "thread-42");
 
-    await dal.appendTurn(
-      session.session_id,
-      "u1",
-      "a1",
-      2,
-      "2026-02-17T00:00:00.000Z",
-    );
-    await dal.appendTurn(
-      session.session_id,
-      "u2",
-      "a2",
-      2,
-      "2026-02-17T00:01:00.000Z",
-    );
+    await dal.appendTurn(session.session_id, "u1", "a1", 2, "2026-02-17T00:00:00.000Z");
+    await dal.appendTurn(session.session_id, "u2", "a2", 2, "2026-02-17T00:01:00.000Z");
     const updated = await dal.appendTurn(
       session.session_id,
       "u3",
@@ -174,14 +162,14 @@ describe("SessionDal", () => {
       const stale = await dal.getOrCreate("mattermost", "stale");
       const fresh = await dal.getOrCreate("mattermost", "fresh");
 
-      await db!.run(
-        "UPDATE sessions SET updated_at = ? WHERE session_id = ?",
-        ["2026-01-21 11:59:59", stale.session_id],
-      );
-      await db!.run(
-        "UPDATE sessions SET updated_at = ? WHERE session_id = ?",
-        ["2026-01-21 13:00:00", fresh.session_id],
-      );
+      await db!.run("UPDATE sessions SET updated_at = ? WHERE session_id = ?", [
+        "2026-01-21 11:59:59",
+        stale.session_id,
+      ]);
+      await db!.run("UPDATE sessions SET updated_at = ? WHERE session_id = ?", [
+        "2026-01-21 13:00:00",
+        fresh.session_id,
+      ]);
 
       const removed = await dal.deleteExpired(30);
       const staleRow = await dal.getById(stale.session_id);

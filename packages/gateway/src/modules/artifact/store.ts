@@ -139,10 +139,7 @@ export class FsArtifactStore implements ArtifactStore {
   async get(artifactId: string): Promise<ArtifactGetResult | null> {
     const { dataPath, metaPath } = this.paths(artifactId);
     try {
-      const [body, metaRaw] = await Promise.all([
-        readFile(dataPath),
-        readFile(metaPath, "utf8"),
-      ]);
+      const [body, metaRaw] = await Promise.all([readFile(dataPath), readFile(metaPath, "utf8")]);
       const ref = JSON.parse(metaRaw) as ArtifactRefT;
       return { ref, body };
     } catch (err) {
@@ -196,12 +193,7 @@ function isNoSuchKey(err: unknown): boolean {
     err && typeof err === "object"
       ? ((err as { Code?: string; code?: string }).Code ?? (err as { code?: string }).code)
       : undefined;
-  return (
-    name === "NoSuchKey" ||
-    name === "NotFound" ||
-    code === "NoSuchKey" ||
-    code === "NotFound"
-  );
+  return name === "NoSuchKey" || name === "NotFound" || code === "NoSuchKey" || code === "NotFound";
 }
 
 type PresignGetObjectFn = (input: {
@@ -255,7 +247,8 @@ export class S3ArtifactStore implements ArtifactStore {
 
   private resolveExpiresInSeconds(opts?: { expiresInSeconds?: number }): number {
     const candidate = opts?.expiresInSeconds;
-    if (typeof candidate === "number" && Number.isFinite(candidate) && candidate > 0) return candidate;
+    if (typeof candidate === "number" && Number.isFinite(candidate) && candidate > 0)
+      return candidate;
     return 60;
   }
 

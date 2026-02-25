@@ -27,9 +27,7 @@ const SECRET_HANDLE_PREFIX = "secret:";
 /* ------------------------------------------------------------------ */
 
 const ENV_DENY_PREFIXES: readonly string[] = ["TYRUM_", "GATEWAY_"];
-const ENV_DENY_NAMES: ReadonlySet<string> = new Set([
-  "TELEGRAM_BOT_TOKEN",
-]);
+const ENV_DENY_NAMES: ReadonlySet<string> = new Set(["TELEGRAM_BOT_TOKEN"]);
 
 /**
  * Build a sanitised copy of the process environment by stripping keys that
@@ -60,18 +58,11 @@ export function sanitizeEnv(
 /*  SSRF blocklist helpers                                             */
 /* ------------------------------------------------------------------ */
 
-const BLOCKED_HTTP_HOSTS = new Set([
-  "localhost",
-  "metadata.google.internal",
-]);
+const BLOCKED_HTTP_HOSTS = new Set(["localhost", "metadata.google.internal"]);
 
-type DnsLookupFn = (
-  hostname: string,
-) => Promise<readonly LookupAddress[]>;
+type DnsLookupFn = (hostname: string) => Promise<readonly LookupAddress[]>;
 
-async function defaultDnsLookup(
-  hostname: string,
-): Promise<readonly LookupAddress[]> {
+async function defaultDnsLookup(hostname: string): Promise<readonly LookupAddress[]> {
   return lookup(hostname, {
     all: true,
     verbatim: true,
@@ -85,31 +76,19 @@ async function defaultDnsLookup(
  * Returns a 4-tuple `[a, b, c, d]` or `null` if the hostname is not a
  * numeric IPv4 representation.
  */
-function parseNumericIPv4(
-  hostname: string,
-): [number, number, number, number] | null {
+function parseNumericIPv4(hostname: string): [number, number, number, number] | null {
   // Single decimal integer: "2130706433" → 127.0.0.1
   if (/^\d+$/.test(hostname)) {
     const n = Number(hostname);
     if (!Number.isFinite(n) || n < 0 || n > 0xffffffff) return null;
-    return [
-      (n >>> 24) & 0xff,
-      (n >>> 16) & 0xff,
-      (n >>> 8) & 0xff,
-      n & 0xff,
-    ];
+    return [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff];
   }
 
   // Hex integer: "0x7f000001" → 127.0.0.1
   if (/^0x[0-9a-fA-F]+$/i.test(hostname)) {
     const n = Number(hostname);
     if (!Number.isFinite(n) || n < 0 || n > 0xffffffff) return null;
-    return [
-      (n >>> 24) & 0xff,
-      (n >>> 16) & 0xff,
-      (n >>> 8) & 0xff,
-      n & 0xff,
-    ];
+    return [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff];
   }
 
   // Octal per-octet: "0177.0.0.1" → 127.0.0.1
@@ -163,13 +142,10 @@ function isBlockedIPv6(hostname: string): boolean {
   if (raw === "fc00::" || raw === "fd00::") return true;
 
   // IPv4-mapped — dotted-decimal form ::ffff:x.x.x.x
-  const v4dotted = raw.match(
-    /^::ffff:(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/,
-  );
+  const v4dotted = raw.match(/^::ffff:(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
   if (v4dotted) {
     const [, sa, sb, sc, sd] = v4dotted;
-    if (isPrivateIPv4(Number(sa), Number(sb), Number(sc), Number(sd)))
-      return true;
+    if (isPrivateIPv4(Number(sa), Number(sb), Number(sc), Number(sd))) return true;
   }
 
   // IPv4-mapped — hex-normalised form ::ffff:HHHH:HHHH
@@ -192,16 +168,8 @@ function isBlockedIpLiteral(hostname: string): boolean {
   const version = isIP(hostname);
   if (version === 4) {
     const parts = hostname.split(".");
-    if (
-      parts.length === 4 &&
-      parts.every((p) => /^\d+$/.test(p))
-    ) {
-      const [a, b, c, d] = parts.map(Number) as [
-        number,
-        number,
-        number,
-        number,
-      ];
+    if (parts.length === 4 && parts.every((p) => /^\d+$/.test(p))) {
+      const [a, b, c, d] = parts.map(Number) as [number, number, number, number];
       return isPrivateIPv4(a, b, c, d);
     }
     return false;
@@ -238,10 +206,7 @@ export function isBlockedUrl(raw: string): boolean {
 
     // Standard dotted-quad IPv4
     const dotParts = hostname.split(".");
-    if (
-      dotParts.length === 4 &&
-      dotParts.every((p) => /^\d+$/.test(p))
-    ) {
+    if (dotParts.length === 4 && dotParts.every((p) => /^\d+$/.test(p))) {
       const [a, b, c, d] = dotParts.map(Number) as [number, number, number, number];
       if (isPrivateIPv4(a, b, c, d)) return true;
     }
@@ -434,10 +399,7 @@ export class ToolExecutor {
     return resolvedPath;
   }
 
-  private async executeFsRead(
-    toolCallId: string,
-    args: unknown,
-  ): Promise<ToolResult> {
+  private async executeFsRead(toolCallId: string, args: unknown): Promise<ToolResult> {
     const parsed = args as Record<string, unknown> | null;
     const rawPath = typeof parsed?.["path"] === "string" ? parsed["path"] : undefined;
     if (!rawPath) {
@@ -450,7 +412,11 @@ export class ToolExecutor {
     const limit = typeof limitRaw === "number" ? Math.floor(limitRaw) : undefined;
 
     if (offset !== undefined && (Number.isNaN(offset) || offset < 0)) {
-      return { tool_call_id: toolCallId, output: "", error: "offset must be a non-negative integer" };
+      return {
+        tool_call_id: toolCallId,
+        output: "",
+        error: "offset must be a non-negative integer",
+      };
     }
     if (limit !== undefined && (Number.isNaN(limit) || limit < 1)) {
       return { tool_call_id: toolCallId, output: "", error: "limit must be a positive integer" };
@@ -460,17 +426,18 @@ export class ToolExecutor {
     const content = await readFile(safePath, "utf-8");
     const resolvedHome = resolve(this.home);
     const relativePath = relative(resolvedHome, safePath);
-    const normalizedPath =
-      relativePath.trim().length > 0 ? relativePath : rawPath;
+    const normalizedPath = relativePath.trim().length > 0 ? relativePath : rawPath;
 
-    const selected = offset !== undefined || limit !== undefined
-      ? (() => {
-          const lines = content.split("\n");
-          const start = offset ?? 0;
-          const sliced = limit !== undefined ? lines.slice(start, start + limit) : lines.slice(start);
-          return sliced.join("\n");
-        })()
-      : content;
+    const selected =
+      offset !== undefined || limit !== undefined
+        ? (() => {
+            const lines = content.split("\n");
+            const start = offset ?? 0;
+            const sliced =
+              limit !== undefined ? lines.slice(start, start + limit) : lines.slice(start);
+            return sliced.join("\n");
+          })()
+        : content;
 
     const isTruncated = selected.length > MAX_RESPONSE_BYTES;
     const truncated = isTruncated
@@ -495,10 +462,7 @@ export class ToolExecutor {
     };
   }
 
-  private async executeHttpFetch(
-    toolCallId: string,
-    args: unknown,
-  ): Promise<ToolResult> {
+  private async executeHttpFetch(toolCallId: string, args: unknown): Promise<ToolResult> {
     const parsed = args as Record<string, unknown> | null;
     const url = typeof parsed?.["url"] === "string" ? parsed["url"] : undefined;
     if (!url) {
@@ -545,9 +509,10 @@ export class ToolExecutor {
       });
 
       const text = await response.text();
-      const truncated = text.length > MAX_RESPONSE_BYTES
-        ? `${text.slice(0, MAX_RESPONSE_BYTES)}...(truncated)`
-        : text;
+      const truncated =
+        text.length > MAX_RESPONSE_BYTES
+          ? `${text.slice(0, MAX_RESPONSE_BYTES)}...(truncated)`
+          : text;
 
       const tagged = tagContent(truncated, "web", false);
       return {
@@ -560,10 +525,7 @@ export class ToolExecutor {
     }
   }
 
-  private async executeFsWrite(
-    toolCallId: string,
-    args: unknown,
-  ): Promise<ToolResult> {
+  private async executeFsWrite(toolCallId: string, args: unknown): Promise<ToolResult> {
     const parsed = args as Record<string, unknown> | null;
     const rawPath = typeof parsed?.["path"] === "string" ? parsed["path"] : undefined;
     if (!rawPath) {
@@ -587,10 +549,7 @@ export class ToolExecutor {
     };
   }
 
-  private async executeExec(
-    toolCallId: string,
-    args: unknown,
-  ): Promise<ToolResult> {
+  private async executeExec(toolCallId: string, args: unknown): Promise<ToolResult> {
     const parsed = args as Record<string, unknown> | null;
     const command = typeof parsed?.["command"] === "string" ? parsed["command"] : undefined;
     if (!command) {
@@ -601,9 +560,10 @@ export class ToolExecutor {
     const safeCwd = this.assertSandboxed(cwdRaw);
 
     const timeoutMsRaw = parsed?.["timeout_ms"];
-    const timeoutMs = typeof timeoutMsRaw === "number"
-      ? Math.max(1, Math.min(MAX_EXEC_TIMEOUT_MS, Math.floor(timeoutMsRaw)))
-      : DEFAULT_EXEC_TIMEOUT_MS;
+    const timeoutMs =
+      typeof timeoutMsRaw === "number"
+        ? Math.max(1, Math.min(MAX_EXEC_TIMEOUT_MS, Math.floor(timeoutMsRaw)))
+        : DEFAULT_EXEC_TIMEOUT_MS;
 
     const output = await new Promise<string>((resolvePromise) => {
       const child = spawn("sh", ["-c", command], {
@@ -647,9 +607,10 @@ export class ToolExecutor {
       });
     });
 
-    const truncated = output.length > MAX_RESPONSE_BYTES
-      ? `${output.slice(0, MAX_RESPONSE_BYTES)}...(truncated)`
-      : output;
+    const truncated =
+      output.length > MAX_RESPONSE_BYTES
+        ? `${output.slice(0, MAX_RESPONSE_BYTES)}...(truncated)`
+        : output;
 
     const tagged = tagContent(truncated, "tool");
     return {
@@ -659,11 +620,7 @@ export class ToolExecutor {
     };
   }
 
-  private async executeMcp(
-    toolId: string,
-    toolCallId: string,
-    args: unknown,
-  ): Promise<ToolResult> {
+  private async executeMcp(toolId: string, toolCallId: string, args: unknown): Promise<ToolResult> {
     // toolId format: mcp.<serverId>.<toolName>
     const parts = toolId.split(".");
     if (parts.length < 3) {
@@ -701,16 +658,21 @@ export class ToolExecutor {
 
     const output = result.content
       .map((c) => {
-        if (typeof c === "object" && c !== null && (c as Record<string, unknown>)["type"] === "text") {
+        if (
+          typeof c === "object" &&
+          c !== null &&
+          (c as Record<string, unknown>)["type"] === "text"
+        ) {
           return String((c as Record<string, unknown>)["text"]);
         }
         return typeof c === "string" ? c : JSON.stringify(c);
       })
       .join("\n");
 
-    const truncated = output.length > MAX_RESPONSE_BYTES
-      ? `${output.slice(0, MAX_RESPONSE_BYTES)}...(truncated)`
-      : output;
+    const truncated =
+      output.length > MAX_RESPONSE_BYTES
+        ? `${output.slice(0, MAX_RESPONSE_BYTES)}...(truncated)`
+        : output;
 
     const tagged = tagContent(truncated, "tool", false);
     return {

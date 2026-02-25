@@ -5,16 +5,16 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 
 describe("stableJsonStringify", () => {
   it("sorts object keys recursively", () => {
-    expect(stableJsonStringify({ b: 1, a: 2 })).toBe("{\"a\":2,\"b\":1}");
-    expect(stableJsonStringify({ a: { d: 1, c: 2 } })).toBe("{\"a\":{\"c\":2,\"d\":1}}");
+    expect(stableJsonStringify({ b: 1, a: 2 })).toBe('{"a":2,"b":1}');
+    expect(stableJsonStringify({ a: { d: 1, c: 2 } })).toBe('{"a":{"c":2,"d":1}}');
   });
 
   it("sorts keys deterministically (locale-independent)", () => {
-    expect(stableJsonStringify({ "ä": 2, z: 1 })).toBe("{\"z\":1,\"ä\":2}");
+    expect(stableJsonStringify({ ä: 2, z: 1 })).toBe('{"z":1,"ä":2}');
   });
 
   it("sorts keys inside objects nested in arrays", () => {
-    expect(stableJsonStringify([{ b: 1, a: 2 }])).toBe("[{\"a\":2,\"b\":1}]");
+    expect(stableJsonStringify([{ b: 1, a: 2 }])).toBe('[{"a":2,"b":1}]');
   });
 });
 

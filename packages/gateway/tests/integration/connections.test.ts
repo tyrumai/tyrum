@@ -11,7 +11,10 @@ describe("GET /connections", () => {
   it("returns 200 with empty stats when no clients are connected", async () => {
     const res = await app.request("/connections");
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { totalClients: number; capabilityCounts: Record<string, number> };
+    const body = (await res.json()) as {
+      totalClients: number;
+      capabilityCounts: Record<string, number>;
+    };
     expect(body).toEqual({ totalClients: 0, capabilityCounts: {} });
   });
 });

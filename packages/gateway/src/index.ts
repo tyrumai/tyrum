@@ -19,7 +19,10 @@ import { createApp } from "./app.js";
 import { isAgentEnabled } from "./modules/agent/enabled.js";
 import { TokenStore } from "./modules/auth/token-store.js";
 import { WatcherScheduler } from "./modules/watcher/scheduler.js";
-import { createSecretProviderFromEnv, resolveSecretProviderKind } from "./modules/secret/create-secret-provider.js";
+import {
+  createSecretProviderFromEnv,
+  resolveSecretProviderKind,
+} from "./modules/secret/create-secret-provider.js";
 import { ArtifactLifecycleScheduler } from "./modules/artifact/lifecycle.js";
 import { WsNotifier } from "./modules/approval/notifier.js";
 import { OutboxDal } from "./modules/backplane/outbox-dal.js";
@@ -32,7 +35,10 @@ import type { ProtocolDeps } from "./ws/protocol.js";
 import { createWsHandler } from "./routes/ws.js";
 import { maybeStartOtel } from "./modules/observability/otel.js";
 import { AuthAudit } from "./modules/auth/audit.js";
-import { ExecutionEngine, type StepExecutor as ExecutionStepExecutor } from "./modules/execution/engine.js";
+import {
+  ExecutionEngine,
+  type StepExecutor as ExecutionStepExecutor,
+} from "./modules/execution/engine.js";
 import { startExecutionWorkerLoop } from "./modules/execution/worker-loop.js";
 import { isChannelPipelineEnabled, TelegramChannelProcessor } from "./modules/channels/telegram.js";
 import { createToolRunnerStepExecutor } from "./modules/execution/toolrunner-step-executor.js";
@@ -222,9 +228,7 @@ function parseUpdateChannel(raw: string): UpdateChannel {
   if (raw === "stable" || raw === "beta" || raw === "dev") {
     return raw;
   }
-  throw new Error(
-    `invalid update channel '${raw}' (expected stable, beta, or dev)`,
-  );
+  throw new Error(`invalid update channel '${raw}' (expected stable, beta, or dev)`);
 }
 
 function normalizeVersionSpecifier(raw: string): string {
@@ -233,8 +237,7 @@ function normalizeVersionSpecifier(raw: string): string {
     throw new Error("update --version requires a non-empty value");
   }
 
-  const normalized =
-    trimmed.startsWith("v") && trimmed.length > 1 ? trimmed.slice(1) : trimmed;
+  const normalized = trimmed.startsWith("v") && trimmed.length > 1 ? trimmed.slice(1) : trimmed;
 
   if (!/^[0-9A-Za-z][0-9A-Za-z.-]*$/.test(normalized)) {
     throw new Error(
@@ -355,18 +358,12 @@ function npmExecutableForPlatform(platform: NodeJS.Platform): string {
   return platform === "win32" ? "npm.cmd" : "npm";
 }
 
-export function resolveGatewayUpdateTarget(
-  channel: UpdateChannel,
-  version?: string,
-): string {
+export function resolveGatewayUpdateTarget(channel: UpdateChannel, version?: string): string {
   if (version && version.length > 0) return version;
   return UPDATE_CHANNEL_TAG[channel];
 }
 
-async function runGatewayUpdate(
-  channel: UpdateChannel,
-  version?: string,
-): Promise<number> {
+async function runGatewayUpdate(channel: UpdateChannel, version?: string): Promise<number> {
   const target = resolveGatewayUpdateTarget(channel, version);
   const packageSpec = `@tyrum/gateway@${target}`;
   const npmCmd = npmExecutableForPlatform(process.platform);
@@ -485,7 +482,9 @@ function hostForUrl(host: string): string {
   return host;
 }
 
-async function loadPluginManifestFromDir(dir: string): Promise<
+async function loadPluginManifestFromDir(
+  dir: string,
+): Promise<
   | { kind: "missing" }
   | { kind: "invalid"; error: string }
   | { kind: "ok"; manifest: { id: string; name: string; version: string } }
@@ -586,7 +585,10 @@ async function resolveAdminTokenForCheck(tyrumHome: string): Promise<{
   return { source: "generated", token: undefined };
 }
 
-async function tryFetchJson(url: string, init: RequestInit & { timeoutMs: number }): Promise<{
+async function tryFetchJson(
+  url: string,
+  init: RequestInit & { timeoutMs: number },
+): Promise<{
   ok: boolean;
   status: number;
   json: unknown;
@@ -621,10 +623,8 @@ async function runGatewayCheck(): Promise<number> {
   const defaultMigrationsDir = isPostgresDbUri(dbPath)
     ? join(__dirname, "../migrations/postgres")
     : join(__dirname, "../migrations/sqlite");
-  const migrationsDir =
-    process.env["GATEWAY_MIGRATIONS_DIR"] ?? defaultMigrationsDir;
-  const tyrumHome =
-    process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
+  const migrationsDir = process.env["GATEWAY_MIGRATIONS_DIR"] ?? defaultMigrationsDir;
+  const tyrumHome = process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
 
   let container: Awaited<ReturnType<typeof createContainerAsync>> | undefined;
   try {
@@ -660,9 +660,7 @@ async function runGatewayCheck(): Promise<number> {
 
     const tokenPath = join(tyrumHome, ".admin-token");
     const adminToken = await resolveAdminTokenForCheck(tyrumHome);
-    console.log(
-      `static.auth: admin_token_source=${adminToken.source} token_path=${tokenPath}`,
-    );
+    console.log(`static.auth: admin_token_source=${adminToken.source} token_path=${tokenPath}`);
     const token = adminToken.token;
 
     try {
@@ -704,14 +702,10 @@ async function runGatewayCheck(): Promise<number> {
     try {
       const secretProvider = await createSecretProviderFromEnv(tyrumHome, token);
       const handles = await secretProvider.list();
-      console.log(
-        `static.secrets: provider=${secretProviderKind} handles=${handles.length}`,
-      );
+      console.log(`static.secrets: provider=${secretProviderKind} handles=${handles.length}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.log(
-        `static.secrets: provider=${secretProviderKind} error=${message}`,
-      );
+      console.log(`static.secrets: provider=${secretProviderKind} error=${message}`);
     }
 
     // --- Live HTTP probes (best-effort) ---
@@ -734,14 +728,15 @@ async function runGatewayCheck(): Promise<number> {
       const statusPublic = await tryFetchJson(`${baseUrl}/status`, { timeoutMs: 500 });
 
       const isLoopbackProbeTarget = isLoopbackHost(probeHost);
-      const statusAuth = isLoopbackProbeTarget && token
-        ? await tryFetchJson(`${baseUrl}/status`, {
-            timeoutMs: 500,
-            headers: {
-              authorization: `Bearer ${token}`,
-            },
-          })
-        : null;
+      const statusAuth =
+        isLoopbackProbeTarget && token
+          ? await tryFetchJson(`${baseUrl}/status`, {
+              timeoutMs: 500,
+              headers: {
+                authorization: `Bearer ${token}`,
+              },
+            })
+          : null;
 
       const healthOk =
         health.ok && isRecord(health.json) && (health.json["status"] as unknown) === "ok";
@@ -815,8 +810,7 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
   }
 
   if (command.kind === "plugin_install") {
-    const tyrumHome =
-      command.home ?? process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
+    const tyrumHome = command.home ?? process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
     try {
       const result = await installPluginFromDir({
         home: tyrumHome,
@@ -855,11 +849,9 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   const defaultMigrationsDir = isPostgresDbUri(dbPath)
     ? join(__dirname, "../migrations/postgres")
     : join(__dirname, "../migrations/sqlite");
-  const migrationsDir =
-    process.env["GATEWAY_MIGRATIONS_DIR"] ?? defaultMigrationsDir;
+  const migrationsDir = process.env["GATEWAY_MIGRATIONS_DIR"] ?? defaultMigrationsDir;
 
-  const tyrumHome =
-    process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
+  const tyrumHome = process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
   const isLocalOnly = isLoopbackHost(host);
 
   const instanceId = (() => {
@@ -1043,11 +1035,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
         }
       : undefined,
     hooks: hooksRuntime,
-    onApprovalDecision: (
-      approvalId: number,
-      approved: boolean,
-      reason: string | undefined,
-    ) => {
+    onApprovalDecision: (approvalId: number, approved: boolean, reason: string | undefined) => {
       void container.approvalDal
         .respond(approvalId, approved, reason)
         .then(async (row) => {
@@ -1067,7 +1055,8 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
           }
 
           try {
-            const isAgentToolExecution = isRecord(row.context) && row.context["source"] === "agent-tool-execution";
+            const isAgentToolExecution =
+              isRecord(row.context) && row.context["source"] === "agent-tool-execution";
             const resumeToken = row.resume_token?.trim();
 
             if (row.status === "approved") {
@@ -1185,10 +1174,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   outboxPoller?.start();
 
   const telegramProcessor =
-    shouldRunEdge &&
-    agents &&
-    container.telegramBot &&
-    isChannelPipelineEnabled()
+    shouldRunEdge && agents && container.telegramBot && isChannelPipelineEnabled()
       ? new TelegramChannelProcessor({
           db: container.db,
           agents,
@@ -1203,30 +1189,31 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   telegramProcessor?.start();
 
   // --- HTTP server with WS upgrade support ---
-  const server = shouldRunEdge && app && wsHandler
-    ? (() => {
-        const listener = getRequestListener(app.fetch);
-        const s = createServer(listener);
+  const server =
+    shouldRunEdge && app && wsHandler
+      ? (() => {
+          const listener = getRequestListener(app.fetch);
+          const s = createServer(listener);
 
-        s.on("upgrade", (req, socket, head) => {
-          const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
-          if (pathname === "/ws") {
-            wsHandler.handleUpgrade(req, socket, head);
-          } else {
-            socket.destroy();
-          }
-        });
-
-        s.listen(port, host, () => {
-          logger.info("gateway.listen", {
-            host,
-            port,
-            url: `http://${host}:${port}`,
+          s.on("upgrade", (req, socket, head) => {
+            const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
+            if (pathname === "/ws") {
+              wsHandler.handleUpgrade(req, socket, head);
+            } else {
+              socket.destroy();
+            }
           });
-        });
-        return s;
-      })()
-    : undefined;
+
+          s.listen(port, host, () => {
+            logger.info("gateway.listen", {
+              host,
+              port,
+              url: `http://${host}:${port}`,
+            });
+          });
+          return s;
+        })()
+      : undefined;
 
   if (!shouldRunEdge) {
     console.log(`Tyrum gateway v${VERSION} started in role '${role}'.`);
@@ -1267,7 +1254,9 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
             const image = process.env["TYRUM_TOOLRUNNER_IMAGE"]?.trim();
             const workspacePvcClaim = process.env["TYRUM_TOOLRUNNER_WORKSPACE_CLAIM"]?.trim();
             if (!image) {
-              throw new Error("TYRUM_TOOLRUNNER_IMAGE is required when TYRUM_TOOLRUNNER_LAUNCHER=kubernetes");
+              throw new Error(
+                "TYRUM_TOOLRUNNER_IMAGE is required when TYRUM_TOOLRUNNER_LAUNCHER=kubernetes",
+              );
             }
             if (!workspacePvcClaim) {
               throw new Error(
@@ -1306,20 +1295,23 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   let shuttingDown = false;
   const shutdown = (signal: string): void => {
     if (shuttingDown) return;
-	    shuttingDown = true;
-	    console.log(`Gateway shutting down (${signal})`);
-	    const shutdownStartedAtMs = Date.now();
-	    // Shutdown hooks may need to enqueue and start execution even when the worker
-	    // is busy finishing an in-flight step. Keep a hard cap to avoid hanging, but
-	    // allow enough time for CI and slower environments to drain.
-	    const hardExitTimeoutMs = 15_000;
-	    const hardExitDeadlineMs = shutdownStartedAtMs + hardExitTimeoutMs;
+    shuttingDown = true;
+    console.log(`Gateway shutting down (${signal})`);
+    const shutdownStartedAtMs = Date.now();
+    // Shutdown hooks may need to enqueue and start execution even when the worker
+    // is busy finishing an in-flight step. Keep a hard cap to avoid hanging, but
+    // allow enough time for CI and slower environments to drain.
+    const hardExitTimeoutMs = 15_000;
+    const hardExitDeadlineMs = shutdownStartedAtMs + hardExitTimeoutMs;
 
     const sleep = (ms: number): Promise<void> => {
       return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
     };
 
-    const waitForRunsToStart = async (runIds: readonly string[], timeoutMs: number): Promise<void> => {
+    const waitForRunsToStart = async (
+      runIds: readonly string[],
+      timeoutMs: number,
+    ): Promise<void> => {
       if (runIds.length === 0) return;
       if (timeoutMs <= 0) return;
       const placeholders = runIds.map(() => "?").join(", ");
@@ -1339,10 +1331,10 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
       }
     };
 
-	    const hardExitTimer = setTimeout(() => {
-	      console.warn("Gateway forced shutdown after 15 seconds.");
-	      process.exit(1);
-	    }, hardExitTimeoutMs);
+    const hardExitTimer = setTimeout(() => {
+      console.warn("Gateway forced shutdown after 15 seconds.");
+      process.exit(1);
+    }, hardExitTimeoutMs);
     hardExitTimer.unref();
 
     const closeServer = new Promise<void>((resolve) => {
@@ -1356,18 +1348,19 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
 
     wsHandler?.stopHeartbeat();
 
-    const shutdownHookRuns = hooksRuntime && shouldRunWorker
-      ? hooksRuntime
-          .fire({
-            event: "gateway.shutdown",
-            metadata: { signal, instance_id: instanceId, role },
-          })
-          .catch((err) => {
-            const message = err instanceof Error ? err.message : String(err);
-            logger.warn("hooks.fire_failed", { event: "gateway.shutdown", error: message });
-            return [];
-          })
-      : Promise.resolve([]);
+    const shutdownHookRuns =
+      hooksRuntime && shouldRunWorker
+        ? hooksRuntime
+            .fire({
+              event: "gateway.shutdown",
+              metadata: { signal, instance_id: instanceId, role },
+            })
+            .catch((err) => {
+              const message = err instanceof Error ? err.message : String(err);
+              logger.warn("hooks.fire_failed", { event: "gateway.shutdown", error: message });
+              return [];
+            })
+        : Promise.resolve([]);
 
     const stopWorker = (async () => {
       if (!workerLoop) return;
@@ -1413,11 +1406,10 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
         stopWorker,
       ],
       () => container.db.close(),
-    )
-      .finally(() => {
-        clearTimeout(hardExitTimer);
-        process.exit(0);
-      });
+    ).finally(() => {
+      clearTimeout(hardExitTimer);
+      process.exit(0);
+    });
   };
 
   process.once("SIGINT", () => shutdown("SIGINT"));

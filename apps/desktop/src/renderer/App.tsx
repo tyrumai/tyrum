@@ -8,13 +8,7 @@ import { Diagnostics } from "./pages/Diagnostics.js";
 import { Logs } from "./pages/Logs.js";
 import { ConsentModal } from "./components/ConsentModal.js";
 
-type PageId =
-  | "overview"
-  | "gateway"
-  | "connection"
-  | "permissions"
-  | "diagnostics"
-  | "logs";
+type PageId = "overview" | "gateway" | "connection" | "permissions" | "diagnostics" | "logs";
 
 const VALID_PAGES = new Set<PageId>([
   "overview",
@@ -41,19 +35,17 @@ export function App() {
     const api = window.tyrumDesktop;
     if (!api) return;
 
-    void Promise.all([api.getConfig(), api.getStartupState()]).then(
-      ([cfg, startup]) => {
-        const config = cfg as Record<string, unknown>;
-        const mode = config["mode"] === "remote" ? "remote" : "embedded";
-        const shouldLaunchOnboarding = startup?.launchOnboarding === true;
-        if (mode === "embedded") {
-          setPage("gateway");
-          if (shouldLaunchOnboarding) {
-            setLaunchOnboarding(true);
-          }
+    void Promise.all([api.getConfig(), api.getStartupState()]).then(([cfg, startup]) => {
+      const config = cfg as Record<string, unknown>;
+      const mode = config["mode"] === "remote" ? "remote" : "embedded";
+      const shouldLaunchOnboarding = startup?.launchOnboarding === true;
+      if (mode === "embedded") {
+        setPage("gateway");
+        if (shouldLaunchOnboarding) {
+          setLaunchOnboarding(true);
         }
-      },
-    );
+      }
+    });
 
     const unsubscribe = api.onStatusChange((statusRaw) => {
       const status =

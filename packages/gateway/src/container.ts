@@ -150,9 +150,7 @@ function wireContainer(
   const eventBus = createEventBus();
 
   const telegramToken = process.env["TELEGRAM_BOT_TOKEN"]?.trim();
-  const telegramBot = telegramToken
-    ? new TelegramBotImpl(telegramToken)
-    : undefined;
+  const telegramBot = telegramToken ? new TelegramBotImpl(telegramToken) : undefined;
   const approvalDal = new ApprovalDalImpl(db);
   const presenceDal = new PresenceDalImpl(db);
   const policySnapshotDal = new PolicySnapshotDalImpl(db);
@@ -163,9 +161,7 @@ function wireContainer(
   const jobQueue = new JobQueueImpl(db);
 
   const tyrumHome =
-    config.tyrumHome ??
-    process.env["TYRUM_HOME"]?.trim() ??
-    join(homedir(), ".tyrum");
+    config.tyrumHome ?? process.env["TYRUM_HOME"]?.trim() ?? join(homedir(), ".tyrum");
   const artifactStore = createArtifactStoreFromEnv(tyrumHome, redactionEngine);
   const policyService = new PolicyServiceImpl({
     home: tyrumHome,

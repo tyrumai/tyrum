@@ -94,9 +94,7 @@ type BuildContainerSessionKeyInput = {
   id: string;
 };
 
-export type BuildAgentSessionKeyInput =
-  | BuildDmSessionKeyInput
-  | BuildContainerSessionKeyInput;
+export type BuildAgentSessionKeyInput = BuildDmSessionKeyInput | BuildContainerSessionKeyInput;
 
 function parseRequiredPeer(peerId: string | undefined): PeerId {
   if (!peerId || peerId.trim().length === 0) {
@@ -159,10 +157,7 @@ export type AgentLegacyMainKey = z.infer<typeof AgentLegacyMainKey>;
 // Direct/per-peer: agent:<agentId>:dm:<peerId>
 export const AgentDmPerPeerKey = z
   .string()
-  .regex(
-    /^agent:[^:]+:dm:[^:]+$/,
-    "agent dm per-peer key must be agent:<agentId>:dm:<peerId>",
-  );
+  .regex(/^agent:[^:]+:dm:[^:]+$/, "agent dm per-peer key must be agent:<agentId>:dm:<peerId>");
 export type AgentDmPerPeerKey = z.infer<typeof AgentDmPerPeerKey>;
 
 // Direct/per-channel-peer: agent:<agentId>:<channel>:dm:<peerId>
@@ -181,9 +176,7 @@ export const AgentDmPerAccountChannelPeerKey = z
     /^agent:[^:]+:[^:]+:[^:]+:dm:[^:]+$/,
     "agent dm per-account-channel-peer key must be agent:<agentId>:<channel>:<account>:dm:<peerId>",
   );
-export type AgentDmPerAccountChannelPeerKey = z.infer<
-  typeof AgentDmPerAccountChannelPeerKey
->;
+export type AgentDmPerAccountChannelPeerKey = z.infer<typeof AgentDmPerAccountChannelPeerKey>;
 
 // Canonical group/channel include channel + account + container id.
 export const AgentGroupKey = z
@@ -232,23 +225,17 @@ export const AgentKey = z.union([
 ]);
 export type AgentKey = z.infer<typeof AgentKey>;
 
-export const CronKey = z
-  .string()
-  .regex(/^cron:[^:]+$/, "cron key must be cron:<jobId>");
+export const CronKey = z.string().regex(/^cron:[^:]+$/, "cron key must be cron:<jobId>");
 export type CronKey = z.infer<typeof CronKey>;
 
-export const HookKey = z
-  .string()
-  .refine((value) => {
-    if (!value.startsWith("hook:")) return false;
-    const uuid = value.slice("hook:".length);
-    return UuidSchema.safeParse(uuid).success;
-  }, "hook key must be hook:<uuid>");
+export const HookKey = z.string().refine((value) => {
+  if (!value.startsWith("hook:")) return false;
+  const uuid = value.slice("hook:".length);
+  return UuidSchema.safeParse(uuid).success;
+}, "hook key must be hook:<uuid>");
 export type HookKey = z.infer<typeof HookKey>;
 
-export const NodeKey = z
-  .string()
-  .regex(/^node:[^:]+$/, "node key must be node:<nodeId>");
+export const NodeKey = z.string().regex(/^node:[^:]+$/, "node key must be node:<nodeId>");
 export type NodeKey = z.infer<typeof NodeKey>;
 
 export const TyrumKey = z.union([AgentKey, CronKey, HookKey, NodeKey]);
@@ -397,10 +384,7 @@ export function parseTyrumKey(key: TyrumKey): ParsedTyrumKey {
       }
 
       // agent:<agentId>:<channel>:<account>:group|channel:<id>
-      if (
-        parts.length === 6 &&
-        (parts[4] === "group" || parts[4] === "channel")
-      ) {
+      if (parts.length === 6 && (parts[4] === "group" || parts[4] === "channel")) {
         return {
           kind: "agent",
           agent_id: AgentId.parse(agentId),

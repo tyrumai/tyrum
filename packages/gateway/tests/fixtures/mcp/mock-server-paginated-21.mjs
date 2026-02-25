@@ -108,4 +108,3 @@ process.on("SIGTERM", () => {
 setInterval(() => {
   if (!initialized) return;
 }, 250).unref();
-

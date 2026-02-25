@@ -141,7 +141,7 @@ sessions:
     within_turn:
       enabled: true
       consecutive_repeat_limit: 3 # stop on AAA
-      cycle_repeat_limit: 3       # stop on ABABAB
+      cycle_repeat_limit: 3 # stop on ABABAB
     cross_turn:
       enabled: true
       window_assistant_messages: 3

@@ -37,27 +37,9 @@ describe("MemoryDal", () => {
     });
 
     it("retrieves facts by key", async () => {
-      await dal.insertFact(
-        "name",
-        "Alice",
-        "profile",
-        "2025-01-15T10:00:00Z",
-        1.0,
-      );
-      await dal.insertFact(
-        "email",
-        "alice@example.com",
-        "profile",
-        "2025-01-15T10:01:00Z",
-        1.0,
-      );
-      await dal.insertFact(
-        "name",
-        "Alice Smith",
-        "updated_profile",
-        "2025-01-16T10:00:00Z",
-        0.95,
-      );
+      await dal.insertFact("name", "Alice", "profile", "2025-01-15T10:00:00Z", 1.0);
+      await dal.insertFact("email", "alice@example.com", "profile", "2025-01-15T10:01:00Z", 1.0);
+      await dal.insertFact("name", "Alice Smith", "updated_profile", "2025-01-16T10:00:00Z", 0.95);
 
       const namesFacts = await dal.getFactsByKey("name");
       expect(namesFacts).toHaveLength(2);
@@ -133,53 +115,32 @@ describe("MemoryDal", () => {
 
   describe("capability memories", () => {
     it("inserts a new capability memory", async () => {
-      const result = await dal.upsertCapabilityMemory(
-        "web_login",
-        "example.com",
-        "playwright",
-        {
-          selectors: { username: "#user", password: "#pass" },
-          resultSummary: "Login successful",
-          lastSuccessAt: "2025-01-15T10:00:00Z",
-        },
-      );
+      const result = await dal.upsertCapabilityMemory("web_login", "example.com", "playwright", {
+        selectors: { username: "#user", password: "#pass" },
+        resultSummary: "Login successful",
+        lastSuccessAt: "2025-01-15T10:00:00Z",
+      });
 
       expect(result.inserted).toBe(true);
       expect(result.successCount).toBe(1);
     });
 
     it("updates existing capability memory and increments count", async () => {
-      await dal.upsertCapabilityMemory(
-        "web_login",
-        "example.com",
-        "playwright",
-        { resultSummary: "First success" },
-      );
+      await dal.upsertCapabilityMemory("web_login", "example.com", "playwright", {
+        resultSummary: "First success",
+      });
 
-      const result = await dal.upsertCapabilityMemory(
-        "web_login",
-        "example.com",
-        "playwright",
-        { resultSummary: "Second success" },
-      );
+      const result = await dal.upsertCapabilityMemory("web_login", "example.com", "playwright", {
+        resultSummary: "Second success",
+      });
 
       expect(result.inserted).toBe(false);
       expect(result.successCount).toBe(2);
     });
 
     it("retrieves capability memories filtered by type", async () => {
-      await dal.upsertCapabilityMemory(
-        "web_login",
-        "example.com",
-        "playwright",
-        {},
-      );
-      await dal.upsertCapabilityMemory(
-        "api_call",
-        "weather_api",
-        "http",
-        {},
-      );
+      await dal.upsertCapabilityMemory("web_login", "example.com", "playwright", {});
+      await dal.upsertCapabilityMemory("api_call", "weather_api", "http", {});
 
       const webMemories = await dal.getCapabilityMemories("web_login");
       expect(webMemories).toHaveLength(1);

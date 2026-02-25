@@ -37,4 +37,3 @@ export const PresenceBeacon = z
   })
   .strict();
 export type PresenceBeacon = z.infer<typeof PresenceBeacon>;
-

@@ -41,11 +41,11 @@ mkdirSync(dirname(targetDir), { recursive: true });
 const pnpmCmd = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const deployArgsBase = ["--filter", "@tyrum/gateway", "deploy", "--prod"];
 
-let deploy = spawnSync(
-  pnpmCmd,
-  [...deployArgsBase, targetDir],
-  { stdio: "pipe", cwd: repoRoot, encoding: "utf8" },
-);
+let deploy = spawnSync(pnpmCmd, [...deployArgsBase, targetDir], {
+  stdio: "pipe",
+  cwd: repoRoot,
+  encoding: "utf8",
+});
 
 if (deploy.status !== 0) {
   const stdout = deploy.stdout ?? "";
@@ -56,11 +56,10 @@ if (deploy.status !== 0) {
 
   if (needsLegacy) {
     rmSync(targetDir, { recursive: true, force: true });
-    deploy = spawnSync(
-      pnpmCmd,
-      [...deployArgsBase, "--legacy", targetDir],
-      { stdio: "inherit", cwd: repoRoot },
-    );
+    deploy = spawnSync(pnpmCmd, [...deployArgsBase, "--legacy", targetDir], {
+      stdio: "inherit",
+      cwd: repoRoot,
+    });
   } else {
     process.stdout.write(stdout);
     process.stderr.write(stderr);
@@ -76,10 +75,7 @@ if (deploy.status !== 0) {
 // pnpm deploy may create workspace symlinks that are valid in-repo but broken
 // inside a packaged app bundle. Remove the known problematic link, but only
 // when it is actually a symlink (in some configurations it may be a directory).
-const problematicGatewayRef = join(
-  targetDir,
-  "node_modules/.pnpm/node_modules/@tyrum/gateway",
-);
+const problematicGatewayRef = join(targetDir, "node_modules/.pnpm/node_modules/@tyrum/gateway");
 try {
   if (lstatSync(problematicGatewayRef).isSymbolicLink()) {
     // Use unlink() for symlinks so we never follow the link target.
@@ -117,7 +113,17 @@ const prebuildInstallBin = join(betterSqlite3Dir, "node_modules/.bin/prebuild-in
 // Prefer prebuilt binaries for Electron; fall back to node-gyp rebuild.
 const prebuildInstall = spawnSync(
   process.platform === "win32" ? `${prebuildInstallBin}.cmd` : prebuildInstallBin,
-  ["--runtime", "electron", "--target", electronTarget, "--arch", process.arch, "--platform", process.platform, "--force"],
+  [
+    "--runtime",
+    "electron",
+    "--target",
+    electronTarget,
+    "--arch",
+    process.arch,
+    "--platform",
+    process.platform,
+    "--force",
+  ],
   { cwd: betterSqlite3Dir, stdio: "inherit" },
 );
 if (prebuildInstall.status !== 0) {

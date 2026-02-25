@@ -33,9 +33,7 @@ describe("ensureDatabaseDirectory", () => {
     const previousCwd = process.cwd();
     try {
       process.chdir(root);
-      expect(() =>
-        ensureDatabaseDirectory("postgres://user:pass@localhost:5432/db"),
-      ).not.toThrow();
+      expect(() => ensureDatabaseDirectory("postgres://user:pass@localhost:5432/db")).not.toThrow();
       expect(existsSync(join(root, "postgres:"))).toBe(false);
     } finally {
       process.chdir(previousCwd);

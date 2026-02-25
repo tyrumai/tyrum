@@ -111,12 +111,7 @@ function toDescriptor(spec: McpServerSpecT, tool: McpToolInfo): ToolDescriptor {
     description,
     risk: "medium",
     requires_confirmation: true,
-    keywords: [
-      "mcp",
-      spec.id.toLowerCase(),
-      spec.name.toLowerCase(),
-      tool.name.toLowerCase(),
-    ],
+    keywords: ["mcp", spec.id.toLowerCase(), spec.name.toLowerCase(), tool.name.toLowerCase()],
     inputSchema:
       tool.inputSchema && typeof tool.inputSchema === "object"
         ? (tool.inputSchema as Record<string, unknown>)
@@ -140,22 +135,18 @@ function createTransport(
   return new StdioClientTransport({
     command: stdio.command,
     args: stdio.args,
-    env: stdio.env
-      ? ({ ...process.env, ...stdio.env } as Record<string, string>)
-      : undefined,
+    env: stdio.env ? ({ ...process.env, ...stdio.env } as Record<string, string>) : undefined,
     cwd: stdio.cwd,
     stderr: "pipe",
   });
 }
 
-function createClientAndTransport(
-  spec: McpServerSpecT,
-): { client: Client; transport: StdioClientTransport | StreamableHTTPClientTransport } {
+function createClientAndTransport(spec: McpServerSpecT): {
+  client: Client;
+  transport: StdioClientTransport | StreamableHTTPClientTransport;
+} {
   const transport = createTransport(spec);
-  const client = new Client(
-    { name: "tyrum-gateway", version: "0.1.0" },
-    { capabilities: {} },
-  );
+  const client = new Client({ name: "tyrum-gateway", version: "0.1.0" }, { capabilities: {} });
   return { client, transport };
 }
 
@@ -220,17 +211,14 @@ export class McpManager {
     this.ensureClientOnEntry(entry);
 
     // Invalidate tool cache when server announces dynamic changes.
-    entry.client!.setNotificationHandler(
-      ToolListChangedNotificationSchema,
-      async () => {
-        entry.toolsCache = undefined;
-        entry.descriptorCache = undefined;
-      },
-    );
+    entry.client!.setNotificationHandler(ToolListChangedNotificationSchema, async () => {
+      entry.toolsCache = undefined;
+      entry.descriptorCache = undefined;
+    });
 
     const timeoutMs = entry.spec.timeout_ms ?? 5_000;
-    entry.connectPromise = entry.client!
-      .connect(entry.transport!, { timeout: timeoutMs })
+    entry.connectPromise = entry
+      .client!.connect(entry.transport!, { timeout: timeoutMs })
       .then(() => {
         entry.connected = true;
       })
@@ -316,9 +304,7 @@ export class McpManager {
 
       while (true) {
         if (pages++ >= 1_000) {
-          throw new Error(
-            `MCP tools/list exceeded 1000 pages for server '${entry.spec.id}'.`,
-          );
+          throw new Error(`MCP tools/list exceeded 1000 pages for server '${entry.spec.id}'.`);
         }
         const page = await entry.client!.listTools(cursor ? { cursor } : undefined);
         for (const t of page.tools) {

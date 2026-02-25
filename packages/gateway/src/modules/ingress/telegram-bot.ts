@@ -87,9 +87,7 @@ export class TelegramBot {
 
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(
-        `Telegram Bot API ${method} failed (${String(response.status)}): ${text}`,
-      );
+      throw new Error(`Telegram Bot API ${method} failed (${String(response.status)}): ${text}`);
     }
 
     return response.json() as Promise<unknown>;

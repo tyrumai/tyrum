@@ -45,7 +45,9 @@ function parseCapabilities(raw: string): ClientCapability[] {
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (Array.isArray(parsed)) {
-      return parsed.filter((v): v is ClientCapability => typeof v === "string") as ClientCapability[];
+      return parsed.filter(
+        (v): v is ClientCapability => typeof v === "string",
+      ) as ClientCapability[];
     }
   } catch {
     // ignore
@@ -154,7 +156,10 @@ export class NodePairingDal {
     return row ? toPairing(row) : undefined;
   }
 
-  async list(params?: { status?: NodePairingStatus; limit?: number }): Promise<NodePairingRequestT[]> {
+  async list(params?: {
+    status?: NodePairingStatus;
+    limit?: number;
+  }): Promise<NodePairingRequestT[]> {
     const where: string[] = [];
     const values: unknown[] = [];
     if (params?.status) {
@@ -305,21 +310,25 @@ export class NodePairingDal {
     return updated;
   }
 
-  async resolve(params: {
-    pairingId: number;
-    decision: "approved";
-    reason?: string;
-    resolvedBy?: unknown;
-    trustLevel: NodePairingTrustLevel;
-    capabilityAllowlist: readonly CapabilityDescriptor[];
-    nowIso?: string;
-  } | {
-    pairingId: number;
-    decision: "denied";
-    reason?: string;
-    resolvedBy?: unknown;
-    nowIso?: string;
-  }): Promise<{ pairing: NodePairingRequestT; scopedToken?: string } | undefined> {
+  async resolve(
+    params:
+      | {
+          pairingId: number;
+          decision: "approved";
+          reason?: string;
+          resolvedBy?: unknown;
+          trustLevel: NodePairingTrustLevel;
+          capabilityAllowlist: readonly CapabilityDescriptor[];
+          nowIso?: string;
+        }
+      | {
+          pairingId: number;
+          decision: "denied";
+          reason?: string;
+          resolvedBy?: unknown;
+          nowIso?: string;
+        },
+  ): Promise<{ pairing: NodePairingRequestT; scopedToken?: string } | undefined> {
     const nowIso = params.nowIso ?? new Date().toISOString();
 
     const existing = await this.db.get<RawNodePairingRow>(
@@ -334,7 +343,7 @@ export class NodePairingDal {
     const trustLevel =
       params.decision === "approved"
         ? params.trustLevel
-        : parseTrustLevel(existing.trust_level) ?? "remote";
+        : (parseTrustLevel(existing.trust_level) ?? "remote");
 
     const allowlist =
       params.decision === "approved"

@@ -32,4 +32,3 @@ describe("WS scope authorization matrix", () => {
     expect(resolveWsRequestRequiredScopes("unknown.type")).toBeNull();
   });
 });
-

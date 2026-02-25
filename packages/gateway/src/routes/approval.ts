@@ -67,7 +67,9 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function extractSuggestedOverrides(approvalContext: unknown): Array<{ tool_id: string; pattern: string; workspace_id?: string }> {
+function extractSuggestedOverrides(
+  approvalContext: unknown,
+): Array<{ tool_id: string; pattern: string; workspace_id?: string }> {
   if (!isObject(approvalContext)) return [];
   const policy = approvalContext["policy"];
   if (!isObject(policy)) return [];
@@ -132,18 +134,12 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
   app.get("/approvals/:id", async (c) => {
     const id = parseInt(c.req.param("id"), 10);
     if (isNaN(id)) {
-      return c.json(
-        { error: "invalid_request", message: "id must be a number" },
-        400,
-      );
+      return c.json({ error: "invalid_request", message: "id must be a number" }, 400);
     }
 
     const approval = await deps.approvalDal.getById(id);
     if (!approval) {
-      return c.json(
-        { error: "not_found", message: `approval ${String(id)} not found` },
-        404,
-      );
+      return c.json({ error: "not_found", message: `approval ${String(id)} not found` }, 404);
     }
 
     return c.json({ approval });
@@ -153,10 +149,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
   app.post("/approvals/:id/respond", async (c) => {
     const id = parseInt(c.req.param("id"), 10);
     if (isNaN(id)) {
-      return c.json(
-        { error: "invalid_request", message: "id must be a number" },
-        400,
-      );
+      return c.json({ error: "invalid_request", message: "id must be a number" }, 400);
     }
 
     const body = (await c.req.json()) as {
@@ -177,8 +170,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
       return c.json(
         {
           error: "invalid_request",
-          message:
-            'decision ("approved" or "denied") or approved (boolean) is required',
+          message: 'decision ("approved" or "denied") or approved (boolean) is required',
         },
         400,
       );
@@ -186,10 +178,7 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
 
     const existing = await deps.approvalDal.getById(id);
     if (!existing) {
-      return c.json(
-        { error: "not_found", message: `approval ${String(id)} not found` },
-        404,
-      );
+      return c.json({ error: "not_found", message: `approval ${String(id)} not found` }, 404);
     }
 
     if (existing.status !== "pending") {
@@ -200,7 +189,8 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
     }
 
     const shouldCreateOverrides = isApproved && body.mode === "always";
-    const selectedNormalized: Array<{ tool_id: string; pattern: string; workspace_id?: string }> = [];
+    const selectedNormalized: Array<{ tool_id: string; pattern: string; workspace_id?: string }> =
+      [];
     const overrideDalForRequest = shouldCreateOverrides ? deps.policyOverrideDal : undefined;
 
     if (shouldCreateOverrides) {
@@ -214,10 +204,13 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
       for (const entry of selected) {
         const toolId = typeof entry.tool_id === "string" ? entry.tool_id.trim() : "";
         const pattern = typeof entry.pattern === "string" ? entry.pattern.trim() : "";
-        const workspaceId = typeof entry.workspace_id === "string" ? entry.workspace_id.trim() : undefined;
+        const workspaceId =
+          typeof entry.workspace_id === "string" ? entry.workspace_id.trim() : undefined;
         if (!toolId || !pattern) continue;
         selectedNormalized.push(
-          workspaceId ? { tool_id: toolId, pattern, workspace_id: workspaceId } : { tool_id: toolId, pattern },
+          workspaceId
+            ? { tool_id: toolId, pattern, workspace_id: workspaceId }
+            : { tool_id: toolId, pattern },
         );
       }
 
@@ -231,7 +224,9 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
         );
       }
 
-      const allowed = new Set(suggested.map((s) => `${s.tool_id}::${s.pattern}::${s.workspace_id ?? ""}`));
+      const allowed = new Set(
+        suggested.map((s) => `${s.tool_id}::${s.pattern}::${s.workspace_id ?? ""}`),
+      );
       for (const sel of selectedNormalized) {
         const key = `${sel.tool_id}::${sel.pattern}::${sel.workspace_id ?? ""}`;
         if (!allowed.has(key)) {
@@ -270,13 +265,11 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
     const decisionMatches = updated.status === desiredStatus;
     if (deps.engine && decisionMatches) {
       const ctx = updated.context;
-      const isAgentToolExecution =
-        isObject(ctx) && ctx["source"] === "agent-tool-execution";
+      const isAgentToolExecution = isObject(ctx) && ctx["source"] === "agent-tool-execution";
 
       if (
         updated.resume_token &&
-        (updated.status === "approved" ||
-          (updated.status === "denied" && isAgentToolExecution))
+        (updated.status === "approved" || (updated.status === "denied" && isAgentToolExecution))
       ) {
         await deps.engine.resumeRun(updated.resume_token);
       } else if (updated.status === "denied" && updated.run_id) {
@@ -289,7 +282,12 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
 
     const createdOverrides: unknown[] = [];
 
-    if (decisionMatches && updated.status === "approved" && shouldCreateOverrides && overrideDalForRequest) {
+    if (
+      decisionMatches &&
+      updated.status === "approved" &&
+      shouldCreateOverrides &&
+      overrideDalForRequest
+    ) {
       const createdBy = {
         kind: "http",
         ip: getClientIp(c),
@@ -331,25 +329,22 @@ export function createApprovalRoutes(deps: ApprovalRouteDeps): Hono {
       emitEvent(deps, approvalResolvedEvt);
     }
 
-    return c.json({ approval: updated, created_overrides: createdOverrides.length > 0 ? createdOverrides : undefined });
+    return c.json({
+      approval: updated,
+      created_overrides: createdOverrides.length > 0 ? createdOverrides : undefined,
+    });
   });
 
   /** Preview the context of a pending approval. */
   app.get("/approvals/:id/preview", async (c) => {
     const id = parseInt(c.req.param("id"), 10);
     if (isNaN(id)) {
-      return c.json(
-        { error: "invalid_request", message: "id must be a number" },
-        400,
-      );
+      return c.json({ error: "invalid_request", message: "id must be a number" }, 400);
     }
 
     const approval = await deps.approvalDal.getById(id);
     if (!approval) {
-      return c.json(
-        { error: "not_found", message: `approval ${String(id)} not found` },
-        404,
-      );
+      return c.json({ error: "not_found", message: `approval ${String(id)} not found` }, 404);
     }
 
     return c.json({

@@ -88,12 +88,15 @@ describe("tyrum check", () => {
       },
     } as any);
 
-    vi.stubGlobal("fetch", vi.fn(async () => {
-      return new Response(JSON.stringify({ status: "ok" }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        return new Response(JSON.stringify({ status: "ok" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
 
     const { runCli } = await import("../../src/index.js");
     const code = await runCli(["check"]);
@@ -245,12 +248,15 @@ describe("tyrum check", () => {
         },
       } as any);
 
-      vi.stubGlobal("fetch", vi.fn(async () => {
-        return new Response(JSON.stringify({ status: "ok" }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }));
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => {
+          return new Response(JSON.stringify({ status: "ok" }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }),
+      );
 
       const { runCli } = await import("../../src/index.js");
       const code = await runCli(["check"]);

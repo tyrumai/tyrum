@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { exchangeAuthorizationCode, refreshAccessToken, resolveOAuthEndpoints } from "../../src/modules/oauth/oauth-client.js";
+import {
+  exchangeAuthorizationCode,
+  refreshAccessToken,
+  resolveOAuthEndpoints,
+} from "../../src/modules/oauth/oauth-client.js";
 
 describe("oauth-client", () => {
   it("coerces standard fields for x-www-form-urlencoded responses", async () => {

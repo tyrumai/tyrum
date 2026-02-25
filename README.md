@@ -3,6 +3,7 @@
 Self-hosted autonomous worker agent platform with a single gateway runtime that can host multiple agents (single operator by default). The default profile is local-first and binds to localhost by default, while requiring a gateway access token for HTTP and WebSocket access.
 
 ## Overview
+
 - **Goal:** A chat-first autonomous worker agent that can operate software like a human would, while preferring structured interfaces when available and using web/desktop automation as fallback. It produces audit evidence and asks for approvals when needed. “Personal assistant” is the first role, but the same worker can take on other remote-work roles via configuration.
 - **Deployment profile (default):** user-hosted, single-operator, localhost-only (`127.0.0.1`) with required token auth. One gateway can host multiple agents; run multiple gateways if you want stronger isolation.
 - **Differentiators:**
@@ -15,29 +16,29 @@ Self-hosted autonomous worker agent platform with a single gateway runtime that 
 
 ## Technology Stack
 
-| Layer | Choice |
-| --- | --- |
-| Runtime | Node.js 24.x |
-| Language | TypeScript (strict, ESM) |
-| HTTP framework | Hono |
-| Validation/types | Zod |
-| Database | SQLite (better-sqlite3) + sqlite-vec |
-| Client protocol | WebSocket |
-| Package manager | pnpm |
-| Build | tsdown |
-| Linting | oxlint |
-| Testing | Vitest |
-| Event bus | mitt (typed EventEmitter) |
+| Layer            | Choice                               |
+| ---------------- | ------------------------------------ |
+| Runtime          | Node.js 24.x                         |
+| Language         | TypeScript (strict, ESM)             |
+| HTTP framework   | Hono                                 |
+| Validation/types | Zod                                  |
+| Database         | SQLite (better-sqlite3) + sqlite-vec |
+| Client protocol  | WebSocket                            |
+| Package manager  | pnpm                                 |
+| Build            | tsdown                               |
+| Linting          | oxlint                               |
+| Testing          | Vitest                               |
+| Event bus        | mitt (typed EventEmitter)            |
 
 ## Repository Structure
 
-| Directory | Purpose |
-| --- | --- |
-| `packages/schemas` | Shared Zod types (`@tyrum/schemas`) |
-| `packages/gateway` | Main gateway process — Hono HTTP + WebSocket + SQLite |
-| `packages/client` | Client SDK for connecting to the gateway |
-| `config/` | Runtime configuration (model gateway YAML) |
-| `docs/` | Public user documentation (install, guides, advanced topics) |
+| Directory          | Purpose                                                      |
+| ------------------ | ------------------------------------------------------------ |
+| `packages/schemas` | Shared Zod types (`@tyrum/schemas`)                          |
+| `packages/gateway` | Main gateway process — Hono HTTP + WebSocket + SQLite        |
+| `packages/client`  | Client SDK for connecting to the gateway                     |
+| `config/`          | Runtime configuration (model gateway YAML)                   |
+| `docs/`            | Public user documentation (install, guides, advanced topics) |
 
 Docs are deployed to Cloudflare Pages (`tyrum-docs`) by `.github/workflows/docs-pages.yml`.
 
@@ -96,27 +97,29 @@ See `docs/install.md` for full details, version pinning, and update commands.
 
 ## Development Commands
 
-| Task | Command |
-| --- | --- |
-| Install dependencies | `pnpm install` |
-| Type check | `pnpm typecheck` |
-| Run tests | `pnpm test` |
-| Watch tests | `pnpm test:watch` |
-| Lint | `pnpm lint` |
-| Build all packages | `pnpm build` |
-| Start gateway | `pnpm --filter @tyrum/gateway start` |
+| Task                            | Command                                                    |
+| ------------------------------- | ---------------------------------------------------------- |
+| Install dependencies            | `pnpm install`                                             |
+| Type check                      | `pnpm typecheck`                                           |
+| Run tests                       | `pnpm test`                                                |
+| Watch tests                     | `pnpm test:watch`                                          |
+| Lint                            | `pnpm lint`                                                |
+| Build all packages              | `pnpm build`                                               |
+| Start gateway                   | `pnpm --filter @tyrum/gateway start`                       |
 | Start gateway (agents disabled) | `TYRUM_AGENT_ENABLED=0 pnpm --filter @tyrum/gateway start` |
-| Open integrated app | `http://127.0.0.1:8788/app` |
+| Open integrated app             | `http://127.0.0.1:8788/app`                                |
 
 ## Telegram Bot Setup
 
 Follow these steps to provision the Telegram channel safely across local and staging environments.
 
 ### 1. Create the bot via BotFather
+
 - Chat with [@BotFather](https://t.me/BotFather) and run `/newbot` to name the agent and choose a unique handle.
 - Copy the API token BotFather returns; treat it as a secret and never paste it in chat or commit history.
 
 ### 2. Set the webhook endpoint
+
 - For local development, expose the gateway over TLS using `ngrok`:
   ```bash
   ngrok http http://localhost:3001
@@ -126,6 +129,7 @@ Follow these steps to provision the Telegram channel safely across local and sta
   ```
 
 ### 3. Wire credentials
+
 - Set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_URL`, and `TELEGRAM_WEBHOOK_SECRET` environment variables before starting the gateway.
 
 ## Signed Webhook Watcher Trigger
@@ -146,17 +150,21 @@ Webhook-triggered watchers now accept signed calls at `POST /watchers/:id/trigge
   - Optionally set watcher `trigger_config.agent_id` to choose which agent/workspace secret store resolves the handle (default: `default`).
 
 ## Key Documents
+
 - [Architecture Overview](docs/architecture/index.md)
 - [Install Guide](docs/install.md)
 
 ## Roadmap
+
 See the architecture docs under `docs/architecture/` for current intended design and open gaps.
 
 ## Way of Working
+
 - **Issue Lifecycle:** All work lives in GitHub Issues with acceptance criteria; the Tyrum project board tracks Backlog → Ready → In Progress → Review → Done.
 - **PR Expectations:** One issue per PR, automated checks pass before review.
 - **Continuous Improvement:** Retrospectives update `CONTRIBUTING.md` and `docs/` when needed.
 
 ## Contact & Support
+
 - Discussion and planning live in GitHub Issues and the Tyrum project board.
 - For urgent questions, mention the relevant owner in Issues/PRs; long-term decisions belong in `docs/` and Issues.

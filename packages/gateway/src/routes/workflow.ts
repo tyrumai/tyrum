@@ -67,7 +67,10 @@ export function createWorkflowRoutes(deps: WorkflowRouteDeps): Hono {
     const requestId = parseNonEmptyString(body["request_id"]) ?? `req-${randomUUID()}`;
     const steps = parseSteps(body["steps"]);
     if (!steps) {
-      return c.json({ error: "invalid_request", message: "steps must be a non-empty array of ActionPrimitive" }, 400);
+      return c.json(
+        { error: "invalid_request", message: "steps must be a non-empty array of ActionPrimitive" },
+        400,
+      );
     }
     const budgetsParsed = parseBudgets(body["budgets"]);
     if (budgetsParsed === null) {

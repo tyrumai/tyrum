@@ -36,7 +36,11 @@ function toRow(raw: RawSessionProviderPinRow): SessionProviderPinRow {
 export class SessionProviderPinDal {
   constructor(private readonly db: SqlDb) {}
 
-  async get(input: { agentId: string; sessionId: string; provider: string }): Promise<SessionProviderPinRow | undefined> {
+  async get(input: {
+    agentId: string;
+    sessionId: string;
+    provider: string;
+  }): Promise<SessionProviderPinRow | undefined> {
     const row = await this.db.get<RawSessionProviderPinRow>(
       `SELECT *
        FROM session_provider_pins
@@ -46,7 +50,12 @@ export class SessionProviderPinDal {
     return row ? toRow(row) : undefined;
   }
 
-  async list(input?: { agentId?: string; sessionId?: string; provider?: string; limit?: number }): Promise<SessionProviderPinRow[]> {
+  async list(input?: {
+    agentId?: string;
+    sessionId?: string;
+    provider?: string;
+    limit?: number;
+  }): Promise<SessionProviderPinRow[]> {
     const where: string[] = [];
     const values: unknown[] = [];
 
@@ -72,7 +81,12 @@ export class SessionProviderPinDal {
     return rows.map(toRow);
   }
 
-  async upsert(input: { agentId: string; sessionId: string; provider: string; profileId: string }): Promise<SessionProviderPinRow> {
+  async upsert(input: {
+    agentId: string;
+    sessionId: string;
+    provider: string;
+    profileId: string;
+  }): Promise<SessionProviderPinRow> {
     const nowIso = new Date().toISOString();
     await this.db.run(
       `INSERT INTO session_provider_pins (agent_id, session_id, provider, profile_id, pinned_at, updated_at)
@@ -83,7 +97,11 @@ export class SessionProviderPinDal {
       [input.agentId, input.sessionId, input.provider, input.profileId, nowIso, nowIso],
     );
 
-    const row = await this.get({ agentId: input.agentId, sessionId: input.sessionId, provider: input.provider });
+    const row = await this.get({
+      agentId: input.agentId,
+      sessionId: input.sessionId,
+      provider: input.provider,
+    });
     if (!row) {
       throw new Error("session provider pin upsert failed");
     }
@@ -99,4 +117,3 @@ export class SessionProviderPinDal {
     return res.changes === 1;
   }
 }
-

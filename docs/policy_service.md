@@ -3,12 +3,14 @@
 The policy check service provides the constitutional guardrails enforced outside the model for spend, PII, and legal/channel reviews. See the architecture docs for enforcement layering and approvals: [Sandbox and Policy](./architecture/sandbox-policy.md) and [Approvals](./architecture/approvals.md). The current milestone exposes a stateless HTTP API with static rules to unblock downstream integrations and testing.
 
 ## Endpoints
+
 - `POST /policy/check` – Evaluates a request across spend, PII, and legal guardrails and returns structured rule decisions plus an overall outcome.
 - `GET /healthz` – Returns `{ "status": "ok" }` for container health checks.
 
 In the local-first profile, the policy check runs in-process inside `@tyrum/gateway`: the planner route calls the pure policy engine directly, while the `/policy/check` HTTP endpoint remains available for UI and integration testing.
 
 ## Request Schema
+
 ```jsonc
 {
   "request_id": "optional identifier",
@@ -38,6 +40,7 @@ All sections are optional except fields required by each section's schema (for e
 - `connector.scope` – Optional; connector identifier that requires consent before activation. When omitted, the connector rule is skipped. Known trusted scopes auto-allow, while unknown scopes require approval and explicitly blocked scopes deny.
 
 ## Static Rule Set
+
 - **Spend:**
   - Auto-allow up to `user_limit_minor_units` (defaults to 100.00 in currency minor units).
   - Require approval when the amount exceeds the user limit but remains under the hard ceiling (500.00).
@@ -58,10 +61,12 @@ All sections are optional except fields required by each section's schema (for e
 The overall `decision` is `deny` if any rule denies, `require_approval` if any rule requires approval, and `allow` otherwise.
 
 ## Validation & PII Handling
+
 - Requests are validated structurally against the policy schema; no user identifier is required in the single-operator local-first profile.
 - Tests live in `packages/gateway/tests/integration/policy.test.ts` and `packages/gateway/tests/integration/plan.test.ts`.
 
 ## Sample Interaction
+
 ```json
 // Request
 {

@@ -163,7 +163,11 @@ describe("AgentRuntime embedding pipeline selection", () => {
           api: "https://api.openai.com/v1",
           models: {
             "gpt-4.1": { id: "gpt-4.1", name: "GPT-4.1" },
-            "text-embedding-3-small": { id: "text-embedding-3-small", name: "Embeddings", family: "embedding" },
+            "text-embedding-3-small": {
+              id: "text-embedding-3-small",
+              name: "Embeddings",
+              family: "embedding",
+            },
           },
         },
       }),

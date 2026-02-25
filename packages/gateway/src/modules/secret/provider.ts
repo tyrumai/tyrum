@@ -181,8 +181,8 @@ export class KeychainSecretProvider implements SecretProvider {
 
 interface EncryptedEntry {
   handle: SecretHandleT;
-  iv: string;       // hex-encoded
-  authTag: string;  // hex-encoded
+  iv: string; // hex-encoded
+  authTag: string; // hex-encoded
   ciphertext: string; // hex-encoded
 }
 

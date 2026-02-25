@@ -39,7 +39,11 @@ export class LaneQueueModeOverrideDal {
     };
   }
 
-  async upsert(input: { key: string; lane: string; queueMode: string }): Promise<LaneQueueModeOverrideRow> {
+  async upsert(input: {
+    key: string;
+    lane: string;
+    queueMode: string;
+  }): Promise<LaneQueueModeOverrideRow> {
     const nowMs = Date.now();
     await this.db.run(
       `INSERT INTO lane_queue_mode_overrides (key, lane, queue_mode, updated_at_ms)
@@ -65,4 +69,3 @@ export class LaneQueueModeOverrideDal {
     return res.changes === 1;
   }
 }
-

@@ -157,8 +157,7 @@ describe("registerUpdateIpc handlers", () => {
     expect(result).toEqual({
       opened: true,
       path: selectedPath,
-      message:
-        "Installer opened. Complete installation, then relaunch Tyrum.",
+      message: "Installer opened. Complete installation, then relaunch Tyrum.",
     });
   });
 

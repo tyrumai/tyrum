@@ -17,11 +17,17 @@ export interface SecretRouteDeps {
   logger?: Logger;
 }
 
-function agentIdFromReq(c: { req: { query: (key: string) => string | undefined; header: (key: string) => string | undefined } }): string {
+function agentIdFromReq(c: {
+  req: { query: (key: string) => string | undefined; header: (key: string) => string | undefined };
+}): string {
   return c.req.query("agent_id")?.trim() || c.req.header("x-tyrum-agent-id")?.trim() || "default";
 }
 
-function replacesSecretHandleId(input: Record<string, string>, from: string, to: string): { changed: boolean; next: Record<string, string> } {
+function replacesSecretHandleId(
+  input: Record<string, string>,
+  from: string,
+  to: string,
+): { changed: boolean; next: Record<string, string> } {
   let changed = false;
   const next: Record<string, string> = { ...input };
   for (const [k, v] of Object.entries(next)) {
@@ -239,10 +245,7 @@ export function createSecretRoutes(deps: SecretRouteDeps): Hono {
     }
 
     if (!revoked) {
-      return c.json(
-        { error: "not_found", message: `secret ${handleId} not found` },
-        404,
-      );
+      return c.json({ error: "not_found", message: `secret ${handleId} not found` }, 404);
     }
 
     return c.json({ revoked: true });
@@ -264,17 +267,15 @@ export function createSecretRoutes(deps: SecretRouteDeps): Hono {
     const handles = await secretProvider.list();
     const existing = handles.find((h) => h.handle_id === handleId);
     if (!existing) {
-      return c.json(
-        { error: "not_found", message: `secret ${handleId} not found` },
-        404,
-      );
+      return c.json({ error: "not_found", message: `secret ${handleId} not found` }, 404);
     }
 
     if (secretProvider instanceof EnvSecretProvider) {
       return c.json(
         {
           error: "invalid_request",
-          message: "env secrets cannot be rotated via API; update the backing environment value instead",
+          message:
+            "env secrets cannot be rotated via API; update the backing environment value instead",
         },
         400,
       );

@@ -21,4 +21,3 @@ export function collectSecretHandleIds(args: unknown): string[] {
   walk(args);
   return [...out];
 }
-

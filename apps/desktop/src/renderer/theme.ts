@@ -96,9 +96,7 @@ export function statusDot(color: string): CSSProperties {
   };
 }
 
-export function btn(
-  variant: "primary" | "secondary" | "danger",
-): CSSProperties {
+export function btn(variant: "primary" | "secondary" | "danger"): CSSProperties {
   const palette = {
     primary: { bg: colors.primary, color: "#fff" },
     secondary: { bg: "transparent", color: colors.fg },
@@ -108,10 +106,7 @@ export function btn(
   return {
     padding: "8px 20px",
     borderRadius: 6,
-    border:
-      variant === "secondary"
-        ? `1px solid ${colors.border}`
-        : "1px solid transparent",
+    border: variant === "secondary" ? `1px solid ${colors.border}` : "1px solid transparent",
     fontSize: 14,
     fontWeight: 600,
     cursor: "pointer",

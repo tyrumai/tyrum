@@ -8,7 +8,12 @@
 
 import type { Emitter } from "mitt";
 import type { GatewayEvents } from "../../event-bus.js";
-import type { ActionPrimitive, Lane as LaneT, Playbook, PolicyBundle as PolicyBundleT } from "@tyrum/schemas";
+import type {
+  ActionPrimitive,
+  Lane as LaneT,
+  Playbook,
+  PolicyBundle as PolicyBundleT,
+} from "@tyrum/schemas";
 import { ActionPrimitive as ActionPrimitiveSchema, Lane, PolicyBundle } from "@tyrum/schemas";
 import type { MemoryDal } from "../memory/dal.js";
 import type { SqlDb } from "../../statestore/types.js";
@@ -96,7 +101,10 @@ export class WatcherScheduler {
     this.tickMs = opts.tickMs ?? DEFAULT_TICK_MS;
     this.keepProcessAlive = opts.keepProcessAlive ?? false;
     this.firingLeaseTtlMs = opts.firingLeaseTtlMs ?? DEFAULT_FIRING_LEASE_TTL_MS;
-    this.maxFiringsPerTick = Math.max(1, Math.min(500, opts.maxFiringsPerTick ?? DEFAULT_PROCESS_BATCH));
+    this.maxFiringsPerTick = Math.max(
+      1,
+      Math.min(500, opts.maxFiringsPerTick ?? DEFAULT_PROCESS_BATCH),
+    );
     this.firingDal = new WatcherFiringDal(opts.db);
     this.engine = opts.engine;
     this.policyService = opts.policyService;
@@ -212,7 +220,10 @@ export class WatcherScheduler {
     const steps = (cfg as Record<string, unknown>)["steps"];
     return {
       intervalMs: Math.floor(intervalMs),
-      playbook_id: typeof playbookId === "string" && playbookId.trim().length > 0 ? playbookId.trim() : undefined,
+      playbook_id:
+        typeof playbookId === "string" && playbookId.trim().length > 0
+          ? playbookId.trim()
+          : undefined,
       key: typeof key === "string" && key.trim().length > 0 ? key.trim() : undefined,
       lane: (() => {
         if (typeof lane !== "string") return undefined;
@@ -288,19 +299,13 @@ export class WatcherScheduler {
     const occurredAtIso = new Date(firing.scheduled_at_ms).toISOString();
     const eventId = `scheduler-${firing.firing_id}`;
 
-    await this.memoryDal.insertEpisodicEvent(
-      eventId,
-      occurredAtIso,
-      "watcher",
-      "periodic_fired",
-      {
-        firing_id: firing.firing_id,
-        watcher_id: firing.watcher_id,
-        plan_id: firing.plan_id,
-        trigger_type: firing.trigger_type,
-        scheduled_at_ms: firing.scheduled_at_ms,
-      },
-    );
+    await this.memoryDal.insertEpisodicEvent(eventId, occurredAtIso, "watcher", "periodic_fired", {
+      firing_id: firing.firing_id,
+      watcher_id: firing.watcher_id,
+      plan_id: firing.plan_id,
+      trigger_type: firing.trigger_type,
+      scheduled_at_ms: firing.scheduled_at_ms,
+    });
 
     this.eventBus.emit("watcher:fired", {
       watcherId: firing.watcher_id,
@@ -342,7 +347,9 @@ export class WatcherScheduler {
     const lane = cfg?.lane ?? "cron";
     const playbookId = cfg?.playbook_id ?? firing.plan_id;
 
-    let steps: ActionPrimitive[] | undefined = cfg?.steps ? this.parseInlineSteps(cfg.steps) : undefined;
+    let steps: ActionPrimitive[] | undefined = cfg?.steps
+      ? this.parseInlineSteps(cfg.steps)
+      : undefined;
     let playbook: Playbook | undefined;
 
     if (!steps) {
@@ -417,13 +424,7 @@ export class WatcherScheduler {
                error = NULL,
                updated_at = ?
            WHERE firing_id = ? AND lease_owner = ? AND status = 'processing'`,
-          [
-            enqueued.jobId,
-            enqueued.runId,
-            new Date().toISOString(),
-            firing.firing_id,
-            this.owner,
-          ],
+          [enqueued.jobId, enqueued.runId, new Date().toISOString(), firing.firing_id, this.owner],
         );
         if (updated.changes !== 1) {
           throw new LostFiringLeaseError("lost watcher firing lease while enqueuing");

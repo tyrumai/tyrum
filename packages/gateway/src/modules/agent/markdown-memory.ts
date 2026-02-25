@@ -100,16 +100,8 @@ export class MarkdownMemoryStore {
 
     const beforeLines = lines.slice(0, bounds.startLine);
     const afterLines = lines.slice(bounds.endLine);
-    const rebuilt = [
-      ...beforeLines,
-      heading,
-      "",
-      ...contentLines,
-      "",
-      ...afterLines,
-    ]
-      .join("\n")
-      .trimEnd() + "\n";
+    const rebuilt =
+      [...beforeLines, heading, "", ...contentLines, "", ...afterLines].join("\n").trimEnd() + "\n";
 
     await writeFile(this.corePath, rebuilt, "utf-8");
   }

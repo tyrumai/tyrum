@@ -89,9 +89,11 @@ describe("registerGatewayIpc handlers", () => {
     encryptTokenMock.mockImplementation((token: string) => `enc:${token}`);
     registeredHandlers.clear();
     ipcMainHandleMock.mockReset();
-    ipcMainHandleMock.mockImplementation((channel: string, handler: (...args: unknown[]) => unknown) => {
-      registeredHandlers.set(channel, handler);
-    });
+    ipcMainHandleMock.mockImplementation(
+      (channel: string, handler: (...args: unknown[]) => unknown) => {
+        registeredHandlers.set(channel, handler);
+      },
+    );
   });
 
   it("keeps reporting running status after start when status is requested later", async () => {
@@ -161,7 +163,9 @@ describe("registerGatewayIpc handlers", () => {
 
   it("rotates embedded token when persisted token cannot be decrypted", async () => {
     decryptTokenMock.mockImplementationOnce(() => {
-      throw new Error("Error while decrypting the ciphertext provided to safeStorage.decryptString.");
+      throw new Error(
+        "Error while decrypting the ciphertext provided to safeStorage.decryptString.",
+      );
     });
 
     const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
@@ -214,11 +218,9 @@ describe("registerGatewayIpc handlers", () => {
 
     const urls = await uiUrlsHandler!({} as never, { startOnboarding: true });
     expect(urls).toEqual({
-      embedUrl:
-        "http://127.0.0.1:8788/app/auth?token=token&next=%2Fapp%2Fonboarding%2Fstart",
+      embedUrl: "http://127.0.0.1:8788/app/auth?token=token&next=%2Fapp%2Fonboarding%2Fstart",
       displayUrl: "http://127.0.0.1:8788/app/onboarding/start",
-      externalUrl:
-        "http://127.0.0.1:8788/app/auth?token=token&next=%2Fapp%2Fonboarding%2Fstart",
+      externalUrl: "http://127.0.0.1:8788/app/auth?token=token&next=%2Fapp%2Fonboarding%2Fstart",
     });
   });
 
@@ -244,9 +246,7 @@ describe("registerGatewayIpc handlers", () => {
 
     const result = await modeHandler!({} as never, "remote");
     expect(result).toEqual({ mode: "remote" });
-    expect(saveConfigMock).toHaveBeenCalledWith(
-      expect.objectContaining({ mode: "remote" }),
-    );
+    expect(saveConfigMock).toHaveBeenCalledWith(expect.objectContaining({ mode: "remote" }));
     expect(sentEvents).toContainEqual({
       channel: "status:change",
       payload: {

@@ -91,8 +91,12 @@ describe("tyrum plugin install", () => {
     });
     const listed = registry.list() as unknown as Array<Record<string, unknown>>;
     expect(listed.map((p) => p["id"])).toEqual(["echo"]);
-    expect((listed[0]?.["install"] as Record<string, unknown> | undefined)?.["pinned_version"]).toBe("0.0.1");
-    expect((listed[0]?.["install"] as Record<string, unknown> | undefined)?.["integrity_sha256"]).toBe(expectedIntegrity);
+    expect(
+      (listed[0]?.["install"] as Record<string, unknown> | undefined)?.["pinned_version"],
+    ).toBe("0.0.1");
+    expect(
+      (listed[0]?.["install"] as Record<string, unknown> | undefined)?.["integrity_sha256"],
+    ).toBe(expectedIntegrity);
   });
 
   it("rejects plugin installs when the manifest id is not a safe directory segment", async () => {

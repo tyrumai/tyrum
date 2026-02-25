@@ -55,5 +55,7 @@ await writeFile(join(outDir, "catalog.json"), `${JSON.stringify(catalog, null, 2
 
 if (errors.length > 0) {
   // eslint-disable-next-line no-console
-  console.warn(`[schemas] JSON Schema export skipped ${errors.length} exports (see catalog.json errors)`);
+  console.warn(
+    `[schemas] JSON Schema export skipped ${errors.length} exports (see catalog.json errors)`,
+  );
 }

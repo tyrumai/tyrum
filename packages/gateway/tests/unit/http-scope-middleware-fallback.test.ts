@@ -11,7 +11,8 @@ vi.mock("hono/route", () => {
 describe("HTTP scope middleware route-metadata fallback", () => {
   it("fails closed when matchedRoutes is empty", async () => {
     const { createAuthMiddleware } = await import("../../src/modules/auth/middleware.js");
-    const { createHttpScopeAuthorizationMiddleware } = await import("../../src/modules/authz/http-scope-middleware.js");
+    const { createHttpScopeAuthorizationMiddleware } =
+      await import("../../src/modules/authz/http-scope-middleware.js");
 
     const tokenStore = {
       authenticate: (token: string) => {
@@ -39,4 +40,3 @@ describe("HTTP scope middleware route-metadata fallback", () => {
     expect(body.error).toBe("forbidden");
   });
 });
-

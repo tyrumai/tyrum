@@ -2,11 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import {
-  DesktopNodeConfig,
-  DEFAULT_CONFIG,
-  PermissionProfile,
-} from "../src/main/config/schema.js";
+import { DesktopNodeConfig, DEFAULT_CONFIG, PermissionProfile } from "../src/main/config/schema.js";
 import { loadConfig, saveConfig } from "../src/main/config/store.js";
 import { decryptToken, encryptToken } from "../src/main/config/token-store.js";
 

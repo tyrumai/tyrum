@@ -190,7 +190,8 @@ describe("StateStoreLifecycleScheduler", () => {
 
       async run(sql: string, params?: readonly unknown[]): Promise<{ changes: number }> {
         const hasUnstableOrderBy =
-          /ORDER BY updated_at ASC\s+LIMIT \?/i.test(sql) && !/ORDER BY updated_at ASC,\s*session_id/i.test(sql);
+          /ORDER BY updated_at ASC\s+LIMIT \?/i.test(sql) &&
+          !/ORDER BY updated_at ASC,\s*session_id/i.test(sql);
 
         if (!hasUnstableOrderBy) {
           return await this.base.run(sql, params);

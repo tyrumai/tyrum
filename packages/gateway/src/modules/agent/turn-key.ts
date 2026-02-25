@@ -16,17 +16,8 @@ export type BuildAgentTurnKeyInput = {
   deliveryAccount?: string;
 };
 
-export function buildAgentTurnKey(
-  input: BuildAgentTurnKeyInput,
-): string {
-  const {
-    agentId,
-    workspaceId,
-    channel,
-    containerKind,
-    threadId,
-    deliveryAccount,
-  } = input;
+export function buildAgentTurnKey(input: BuildAgentTurnKeyInput): string {
+  const { agentId, workspaceId, channel, containerKind, threadId, deliveryAccount } = input;
   const safeChannel = encodeTurnKeyPart(channel.trim());
   const safeThread = encodeTurnKeyPart(threadId.trim());
   const rawAccount = deliveryAccount

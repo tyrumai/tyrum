@@ -54,17 +54,7 @@ describe("ConnectionDirectoryDal", () => {
          last_seen_at_ms,
          expires_at_ms
        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        "c-node-1",
-        "edge-a",
-        "node",
-        2,
-        "dev_test",
-        JSON.stringify(["cli"]),
-        now,
-        now,
-        now + 5_000,
-      ],
+      ["c-node-1", "edge-a", "node", 2, "dev_test", JSON.stringify(["cli"]), now, now, now + 5_000],
     );
 
     const rows = await dir.listNonExpired(now);

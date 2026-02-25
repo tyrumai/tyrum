@@ -39,10 +39,7 @@ export function loadPlaybook(filePath: string): Playbook {
  *
  * Invalid playbooks are skipped with a warning logged to stderr.
  */
-export function loadAllPlaybooks(
-  dir: string,
-  options: LoadAllPlaybooksOptions = {},
-): Playbook[] {
+export function loadAllPlaybooks(dir: string, options: LoadAllPlaybooksOptions = {}): Playbook[] {
   const absoluteDir = resolve(dir);
   const playbooks: Playbook[] = [];
   const onInvalidPlaybook =

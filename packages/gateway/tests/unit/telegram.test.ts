@@ -7,10 +7,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { NormalizedThreadMessage as NormalizedThreadMessageSchema } from "@tyrum/schemas";
-import {
-  normalizeUpdate,
-  TelegramNormalizationError,
-} from "../../src/modules/ingress/telegram.js";
+import { normalizeUpdate, TelegramNormalizationError } from "../../src/modules/ingress/telegram.js";
 import { telegramThreadKey } from "../../src/modules/channels/telegram.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -146,9 +143,7 @@ describe("Telegram normalization", () => {
   });
 
   it("normalizes unknown media with caption", () => {
-    const update = normalizeUpdate(
-      loadFixture("unknown_media_caption.json"),
-    );
+    const update = normalizeUpdate(loadFixture("unknown_media_caption.json"));
 
     expect(update.message.content.kind).toBe("media_placeholder");
     if (update.message.content.kind === "media_placeholder") {
@@ -202,9 +197,7 @@ describe("Telegram normalization", () => {
 
 describe("telegramThreadKey", () => {
   it("requires container when thread is passed as a string", () => {
-    expect(() => telegramThreadKey("123" as unknown as never)).toThrow(
-      /container/i,
-    );
+    expect(() => telegramThreadKey("123" as unknown as never)).toThrow(/container/i);
   });
 
   it("builds group keys when container is group", () => {

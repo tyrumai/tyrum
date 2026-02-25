@@ -28,8 +28,7 @@ export function checkMacPermissions(): MacPermissions {
   try {
     // Dynamic require to avoid crashes outside Electron
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { systemPreferences } =
-      require("electron") as typeof import("electron");
+    const { systemPreferences } = require("electron") as typeof import("electron");
 
     // prompt=false checks status without showing the system prompt.
     accessibility = systemPreferences.isTrustedAccessibilityClient(false);
@@ -86,8 +85,7 @@ export async function requestMacPermission(
   try {
     // Dynamic require to avoid crashes outside Electron
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { systemPreferences, shell } =
-      require("electron") as typeof import("electron");
+    const { systemPreferences, shell } = require("electron") as typeof import("electron");
 
     if (permission === "accessibility") {
       const granted = systemPreferences.isTrustedAccessibilityClient(true);
@@ -112,8 +110,7 @@ export async function requestMacPermission(
     );
     return {
       granted: false,
-      instructions:
-        "Opened Screen Recording settings. Enable Tyrum, then restart the app.",
+      instructions: "Opened Screen Recording settings. Enable Tyrum, then restart the app.",
     };
   } catch {
     return {

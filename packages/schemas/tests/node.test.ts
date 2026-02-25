@@ -39,4 +39,3 @@ describe("EventScope", () => {
     expect(scope.kind).toBe("key");
   });
 });
-

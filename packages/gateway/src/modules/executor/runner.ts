@@ -7,10 +7,7 @@
  */
 
 import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/schemas";
-import {
-  checkPostcondition,
-  type EvaluationContext,
-} from "@tyrum/schemas";
+import { checkPostcondition, type EvaluationContext } from "@tyrum/schemas";
 import type { EventBus } from "../../event-bus.js";
 import type { EventLog } from "../planner/event-log.js";
 import { PlanStateMachine } from "../planner/state-machine.js";
@@ -318,10 +315,12 @@ export class ExecutionRunner {
     try {
       const result = await Promise.race([
         stepExecutor.execute(action, planId, stepIndex),
-        sleep(timeoutMs).then((): StepResult => ({
-          success: false,
-          error: `job timed out after ${timeoutMs}ms`,
-        })),
+        sleep(timeoutMs).then(
+          (): StepResult => ({
+            success: false,
+            error: `job timed out after ${timeoutMs}ms`,
+          }),
+        ),
       ]);
       return result;
     } catch (err) {

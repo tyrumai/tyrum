@@ -127,10 +127,10 @@ class InjectingOverflowDb implements SqlDb {
         const result = await tx.run(sql, params);
 
         if (
-          !this.injected
-          && result.changes === 1
-          && sql.includes("UPDATE channel_inbox")
-          && sql.includes("SET status = 'completed'")
+          !this.injected &&
+          result.changes === 1 &&
+          sql.includes("UPDATE channel_inbox") &&
+          sql.includes("SET status = 'completed'")
         ) {
           this.injected = true;
           await tx.run(
@@ -358,7 +358,11 @@ describe("Channel inbox queue overflow policies", () => {
       key,
       lane: "main",
       received_at_ms: 1_000,
-      payload: makeLegacyMediaPlaceholderMessage({ threadId: "chat-1", messageId: "media-1", caption: "first photo" }),
+      payload: makeLegacyMediaPlaceholderMessage({
+        threadId: "chat-1",
+        messageId: "media-1",
+        caption: "first photo",
+      }),
     });
 
     await inbox.enqueue({
@@ -368,7 +372,11 @@ describe("Channel inbox queue overflow policies", () => {
       key,
       lane: "main",
       received_at_ms: 2_000,
-      payload: makeLegacyMediaPlaceholderMessage({ threadId: "chat-1", messageId: "media-2", caption: "second photo" }),
+      payload: makeLegacyMediaPlaceholderMessage({
+        threadId: "chat-1",
+        messageId: "media-2",
+        caption: "second photo",
+      }),
     });
 
     const rows = await db.all<{ message_id: string; status: string; payload_json: string }>(
@@ -378,7 +386,9 @@ describe("Channel inbox queue overflow policies", () => {
     expect(synthetic).toBeTruthy();
     expect(synthetic?.status).toBe("queued");
 
-    const payload = JSON.parse(synthetic!.payload_json) as { message?: { content?: { text?: string } } };
+    const payload = JSON.parse(synthetic!.payload_json) as {
+      message?: { content?: { text?: string } };
+    };
     expect(payload.message?.content?.text ?? "").toContain("attachments=1");
   });
 
@@ -426,11 +436,16 @@ describe("Channel inbox queue overflow policies", () => {
     expect(synthetic).toBeTruthy();
     expect(synthetic?.status).toBe("queued");
 
-    const payload = JSON.parse(synthetic!.payload_json) as { message?: { content?: { text?: string } } };
+    const payload = JSON.parse(synthetic!.payload_json) as {
+      message?: { content?: { text?: string } };
+    };
     expect(payload.message?.content?.text ?? "").toContain("Queue overflow");
     expect(payload.message?.content?.text ?? "").toContain("one");
 
-    const rowStates = rows.map((r) => [r.message_id.startsWith("queue_overflow:") ? "synthetic" : r.message_id, r.status]);
+    const rowStates = rows.map((r) => [
+      r.message_id.startsWith("queue_overflow:") ? "synthetic" : r.message_id,
+      r.status,
+    ]);
     expect(rowStates).toEqual([
       ["msg-1", "completed"],
       ["msg-2", "completed"],
@@ -452,7 +467,12 @@ describe("Channel inbox queue overflow policies", () => {
       key,
       lane: "main",
       received_at_ms: 1_000,
-      payload: makeNormalizedTextMessage({ threadId: "chat-1", messageId: "msg-1", text: "one", accountId: "work" }),
+      payload: makeNormalizedTextMessage({
+        threadId: "chat-1",
+        messageId: "msg-1",
+        text: "one",
+        accountId: "work",
+      }),
     });
 
     await inbox.enqueue({
@@ -462,7 +482,12 @@ describe("Channel inbox queue overflow policies", () => {
       key,
       lane: "main",
       received_at_ms: 2_000,
-      payload: makeNormalizedTextMessage({ threadId: "chat-1", messageId: "msg-2", text: "two", accountId: "work" }),
+      payload: makeNormalizedTextMessage({
+        threadId: "chat-1",
+        messageId: "msg-2",
+        text: "two",
+        accountId: "work",
+      }),
     });
 
     await inbox.enqueue({
@@ -472,7 +497,12 @@ describe("Channel inbox queue overflow policies", () => {
       key,
       lane: "main",
       received_at_ms: 3_000,
-      payload: makeNormalizedTextMessage({ threadId: "chat-1", messageId: "msg-3", text: "three", accountId: "work" }),
+      payload: makeNormalizedTextMessage({
+        threadId: "chat-1",
+        messageId: "msg-3",
+        text: "three",
+        accountId: "work",
+      }),
     });
 
     const rows = await db.all<{ message_id: string; payload_json: string }>(
@@ -481,7 +511,9 @@ describe("Channel inbox queue overflow policies", () => {
     const synthetic = rows.find((row) => row.message_id.startsWith("queue_overflow:"));
     expect(synthetic).toBeTruthy();
 
-    const payload = JSON.parse(synthetic!.payload_json) as { message?: { envelope?: { delivery?: { channel?: string; account?: string } } } };
+    const payload = JSON.parse(synthetic!.payload_json) as {
+      message?: { envelope?: { delivery?: { channel?: string; account?: string } } };
+    };
     expect(payload.message?.envelope?.delivery?.channel).toBe("telegram");
     expect(payload.message?.envelope?.delivery?.account).toBe("work");
   });

@@ -95,9 +95,7 @@ function mapChatType(type: string): ThreadKind {
 function toDatetime(timestamp: number): string {
   const date = new Date(timestamp * 1000);
   if (isNaN(date.getTime())) {
-    throw new TelegramNormalizationError(
-      `encountered invalid unix timestamp: ${timestamp}`,
-    );
+    throw new TelegramNormalizationError(`encountered invalid unix timestamp: ${timestamp}`);
   }
   return date.toISOString();
 }
@@ -170,7 +168,9 @@ function trimNonEmpty(value: string | undefined): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function toEnvelopeContent(content: MessageContent): NormalizedMessageEnvelope["content"] | undefined {
+function toEnvelopeContent(
+  content: MessageContent,
+): NormalizedMessageEnvelope["content"] | undefined {
   if (content.kind === "text") {
     const text = trimNonEmpty(content.text);
     if (!text) return undefined;
@@ -188,15 +188,10 @@ function toEnvelopeContent(content: MessageContent): NormalizedMessageEnvelope["
 // Public API
 // ---------------------------------------------------------------------------
 
-export function normalizeUpdate(
-  payload: string | Uint8Array,
-): NormalizedThreadMessage {
+export function normalizeUpdate(payload: string | Uint8Array): NormalizedThreadMessage {
   let update: TelegramUpdate;
   try {
-    const raw =
-      typeof payload === "string"
-        ? payload
-        : new TextDecoder().decode(payload);
+    const raw = typeof payload === "string" ? payload : new TextDecoder().decode(payload);
     update = JSON.parse(raw) as TelegramUpdate;
   } catch (err) {
     throw new TelegramNormalizationError(
@@ -214,8 +209,7 @@ export function normalizeUpdate(
 
   const thread = toNormalizedThread(message.chat);
   const timestamp = toDatetime(message.date);
-  const editedTimestamp =
-    message.edit_date != null ? toDatetime(message.edit_date) : undefined;
+  const editedTimestamp = message.edit_date != null ? toDatetime(message.edit_date) : undefined;
 
   const content = extractContent(message);
   const messagePii = piiFromContent(content);

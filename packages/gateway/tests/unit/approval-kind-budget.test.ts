@@ -45,4 +45,3 @@ describe("approval kind normalization", () => {
     expect(updated?.status).toBe("cancelled");
   });
 });
-

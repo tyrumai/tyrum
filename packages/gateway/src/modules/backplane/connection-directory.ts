@@ -40,7 +40,9 @@ function toRow(raw: RawConnectionDirectoryRow): ConnectionDirectoryRow {
   try {
     const parsed = JSON.parse(raw.capabilities_json) as unknown;
     if (Array.isArray(parsed)) {
-      capabilities = parsed.filter((v): v is ClientCapability => typeof v === "string") as ClientCapability[];
+      capabilities = parsed.filter(
+        (v): v is ClientCapability => typeof v === "string",
+      ) as ClientCapability[];
     }
   } catch {
     // leave empty
@@ -50,7 +52,9 @@ function toRow(raw: RawConnectionDirectoryRow): ConnectionDirectoryRow {
     try {
       const parsed = JSON.parse(raw.ready_capabilities_json) as unknown;
       if (Array.isArray(parsed)) {
-        readyCapabilities = parsed.filter((v): v is ClientCapability => typeof v === "string") as ClientCapability[];
+        readyCapabilities = parsed.filter(
+          (v): v is ClientCapability => typeof v === "string",
+        ) as ClientCapability[];
       }
     } catch {
       // leave undefined so callers fall back to advertised capabilities
@@ -97,7 +101,7 @@ export class ConnectionDirectoryDal {
     ttlMs: number;
   }): Promise<void> {
     const expiresAtMs = params.nowMs + params.ttlMs;
-    const readyCapabilities = params.readyCapabilities ?? (params.capabilities ?? []);
+    const readyCapabilities = params.readyCapabilities ?? params.capabilities ?? [];
     await this.db.run(
       `INSERT INTO connection_directory (
          connection_id,
@@ -174,17 +178,12 @@ export class ConnectionDirectoryDal {
   }
 
   async removeConnection(connectionId: string): Promise<void> {
-    await this.db.run(
-      "DELETE FROM connection_directory WHERE connection_id = ?",
-      [connectionId],
-    );
+    await this.db.run("DELETE FROM connection_directory WHERE connection_id = ?", [connectionId]);
   }
 
   async cleanupExpired(nowMs: number): Promise<number> {
-    return (await this.db.run(
-      "DELETE FROM connection_directory WHERE expires_at_ms <= ?",
-      [nowMs],
-    )).changes;
+    return (await this.db.run("DELETE FROM connection_directory WHERE expires_at_ms <= ?", [nowMs]))
+      .changes;
   }
 
   async listNonExpired(nowMs: number): Promise<ConnectionDirectoryRow[]> {
@@ -205,9 +204,7 @@ export class ConnectionDirectoryDal {
   ): Promise<ConnectionDirectoryRow[]> {
     const rows = await this.listNonExpired(nowMs);
     return rows.filter(
-      (r) =>
-        r.capabilities.includes(capability) &&
-        (opts?.role ? r.role === opts.role : true),
+      (r) => r.capabilities.includes(capability) && (opts?.role ? r.role === opts.role : true),
     );
   }
 }

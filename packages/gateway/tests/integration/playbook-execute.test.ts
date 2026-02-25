@@ -56,4 +56,3 @@ describe("POST /playbooks/:id/execute", () => {
     await container.db.close();
   });
 });
-

@@ -139,7 +139,9 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     expect(body.status).toBe("error");
     expect(body.error?.code).toBe("invalid_request");
 
-    const runCount = await container.db.get<{ count: number }>("SELECT COUNT(*) as count FROM execution_runs");
+    const runCount = await container.db.get<{ count: number }>(
+      "SELECT COUNT(*) as count FROM execution_runs",
+    );
     expect(runCount?.count ?? 0).toBe(0);
   });
 
@@ -158,7 +160,12 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     const res = await app.request("/playbooks/runtime", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "run", pipeline: INLINE_PLAYBOOK, argsJson: "{not json", timeoutMs: 50 }),
+      body: JSON.stringify({
+        action: "run",
+        pipeline: INLINE_PLAYBOOK,
+        argsJson: "{not json",
+        timeoutMs: 50,
+      }),
     });
 
     expect(res.status).toBe(200);
@@ -167,7 +174,9 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     expect(body.status).toBe("error");
     expect(body.error?.code).toBe("invalid_request");
 
-    const runCount = await container.db.get<{ count: number }>("SELECT COUNT(*) as count FROM execution_runs");
+    const runCount = await container.db.get<{ count: number }>(
+      "SELECT COUNT(*) as count FROM execution_runs",
+    );
     expect(runCount?.count ?? 0).toBe(0);
   });
 
@@ -195,7 +204,9 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     expect(body.status).toBe("error");
     expect(body.error?.code).toBe("invalid_request");
 
-    const runCount = await container.db.get<{ count: number }>("SELECT COUNT(*) as count FROM execution_runs");
+    const runCount = await container.db.get<{ count: number }>(
+      "SELECT COUNT(*) as count FROM execution_runs",
+    );
     expect(runCount?.count ?? 0).toBe(0);
   });
 
@@ -223,7 +234,9 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     expect(body.status).toBe("error");
     expect(body.error?.code).toBe("invalid_request");
 
-    const runCount = await container.db.get<{ count: number }>("SELECT COUNT(*) as count FROM execution_runs");
+    const runCount = await container.db.get<{ count: number }>(
+      "SELECT COUNT(*) as count FROM execution_runs",
+    );
     expect(runCount?.count ?? 0).toBe(0);
   });
 
@@ -245,7 +258,7 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
       body: JSON.stringify({
         action: "run",
         pipeline: INLINE_PLAYBOOK,
-        argsJson: "{\"k\":\"v\"}",
+        argsJson: '{"k":"v"}',
         cwd: "subdir",
         maxOutputBytes: 1234,
         timeoutMs: 2_000,
@@ -257,7 +270,9 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
       "SELECT action_json FROM execution_steps WHERE run_id = ? AND step_index = 0",
       [runId],
     );
-    const action = step?.action_json ? (JSON.parse(step.action_json) as { args?: { cwd?: unknown; max_output_bytes?: unknown } }) : undefined;
+    const action = step?.action_json
+      ? (JSON.parse(step.action_json) as { args?: { cwd?: unknown; max_output_bytes?: unknown } })
+      : undefined;
     expect(action?.args?.cwd).toBe("subdir");
     expect(action?.args?.max_output_bytes).toBe(1234);
 
@@ -316,7 +331,12 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     const resumeRes = await app.request("/playbooks/runtime", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "resume", token: resumeToken, approve: false, timeoutMs: 2_000 }),
+      body: JSON.stringify({
+        action: "resume",
+        token: resumeToken,
+        approve: false,
+        timeoutMs: 2_000,
+      }),
     });
 
     expect(resumeRes.status).toBe(200);
@@ -377,13 +397,22 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     const resumeRes = await app.request("/playbooks/runtime", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "resume", token: resumeToken, approve: false, timeoutMs: 2_000 }),
+      body: JSON.stringify({
+        action: "resume",
+        token: resumeToken,
+        approve: false,
+        timeoutMs: 2_000,
+      }),
     });
 
     respondSpy.mockRestore();
 
     expect(resumeRes.status).toBe(200);
-    const body = (await resumeRes.json()) as { ok: boolean; status: string; error?: { code?: string } };
+    const body = (await resumeRes.json()) as {
+      ok: boolean;
+      status: string;
+      error?: { code?: string };
+    };
     expect(body.ok).toBe(false);
     expect(body.status).toBe("error");
     expect(body.error?.code).toBe("conflict");
@@ -429,7 +458,12 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     const resumePromise = app.request("/playbooks/runtime", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "resume", token: resumeToken, approve: true, timeoutMs: 2_000 }),
+      body: JSON.stringify({
+        action: "resume",
+        token: resumeToken,
+        approve: true,
+        timeoutMs: 2_000,
+      }),
     });
 
     await waitForRunStatus(container, runId, ["queued", "running"]);
@@ -489,15 +523,19 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
       "SELECT step_id FROM execution_steps WHERE run_id = ? LIMIT 1",
       [runId],
     );
-    await container.db.run(
-      "UPDATE execution_steps SET max_attempts = 1 WHERE step_id = ?",
-      [stepRow?.step_id],
-    );
+    await container.db.run("UPDATE execution_steps SET max_attempts = 1 WHERE step_id = ?", [
+      stepRow?.step_id,
+    ]);
 
     const resumePromise = app.request("/playbooks/runtime", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "resume", token: resumeToken, approve: true, timeoutMs: 2_000 }),
+      body: JSON.stringify({
+        action: "resume",
+        token: resumeToken,
+        approve: true,
+        timeoutMs: 2_000,
+      }),
     });
 
     await waitForRunStatus(container, runId, ["queued", "running"]);
@@ -523,7 +561,11 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
 
     const resumeRes = await resumePromise;
     expect(resumeRes.status).toBe(200);
-    const body = (await resumeRes.json()) as { ok: boolean; status: string; error?: { message?: string } };
+    const body = (await resumeRes.json()) as {
+      ok: boolean;
+      status: string;
+      error?: { message?: string };
+    };
     expect(body.ok).toBe(false);
     expect(body.status).toBe("error");
     expect(body.error?.message).toContain("boom");

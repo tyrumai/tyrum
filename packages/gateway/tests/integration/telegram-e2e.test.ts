@@ -59,10 +59,7 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     };
 
     const app = new Hono();
-    app.route(
-      "/",
-      createIngressRoutes({ telegramBot: bot, agents: makeAgents(mockRuntime) }),
-    );
+    app.route("/", createIngressRoutes({ telegramBot: bot, agents: makeAgents(mockRuntime) }));
 
     const res = await app.request("/ingress/telegram", {
       method: "POST",
@@ -112,10 +109,7 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     };
 
     const app = new Hono();
-    app.route(
-      "/",
-      createIngressRoutes({ telegramBot: bot, agents: makeAgents(mockRuntime) }),
-    );
+    app.route("/", createIngressRoutes({ telegramBot: bot, agents: makeAgents(mockRuntime) }));
 
     const res = await app.request("/ingress/telegram", {
       method: "POST",
@@ -133,14 +127,9 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
 
     // Verify error message was sent to user
     expect(fetchFn).toHaveBeenCalledOnce();
-    const [, opts] = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0] as [
-      string,
-      RequestInit,
-    ];
+    const [, opts] = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
     const parsedBody = JSON.parse(opts.body as string) as Record<string, unknown>;
-    expect(parsedBody["text"]).toBe(
-      "Sorry, something went wrong. Please try again later.",
-    );
+    expect(parsedBody["text"]).toBe("Sorry, something went wrong. Please try again later.");
     expect(parsedBody["parse_mode"]).toBe("HTML");
   });
 
@@ -177,10 +166,7 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     };
 
     const app = new Hono();
-    app.route(
-      "/",
-      createIngressRoutes({ telegramBot: bot, agents: makeAgents(mockRuntime) }),
-    );
+    app.route("/", createIngressRoutes({ telegramBot: bot, agents: makeAgents(mockRuntime) }));
 
     const update = {
       update_id: 100,
@@ -230,10 +216,7 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     };
 
     const app = new Hono();
-    app.route(
-      "/",
-      createIngressRoutes({ telegramBot: bot, agents: makeAgents(mockRuntime) }),
-    );
+    app.route("/", createIngressRoutes({ telegramBot: bot, agents: makeAgents(mockRuntime) }));
 
     const res = await app.request("/ingress/telegram", {
       method: "POST",
@@ -254,10 +237,7 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     };
 
     const app = new Hono();
-    app.route(
-      "/",
-      createIngressRoutes({ telegramBot: bot, agents: makeAgents(mockRuntime) }),
-    );
+    app.route("/", createIngressRoutes({ telegramBot: bot, agents: makeAgents(mockRuntime) }));
 
     const res = await app.request("/ingress/telegram", {
       method: "POST",
@@ -283,10 +263,7 @@ describe("Telegram E2E: webhook -> agent -> reply", () => {
     };
 
     const app = new Hono();
-    app.route(
-      "/",
-      createIngressRoutes({ telegramBot: bot, agents: makeAgents(mockRuntime) }),
-    );
+    app.route("/", createIngressRoutes({ telegramBot: bot, agents: makeAgents(mockRuntime) }));
 
     const res = await app.request("/ingress/telegram", {
       method: "POST",

@@ -5,9 +5,7 @@ describe("markdownToIr", () => {
   it("parses plain text into a paragraph block", () => {
     expect(markdownToIr("Hello")).toEqual({
       text: "Hello",
-      spans: [
-        { kind: "block", block: "paragraph", start: 0, end: 5 },
-      ],
+      spans: [{ kind: "block", block: "paragraph", start: 0, end: 5 }],
     });
   });
 
@@ -104,20 +102,14 @@ describe("markdownToIr", () => {
   });
 
   it("captures fenced code blocks as block spans", () => {
-    expect(
-      markdownToIr("```ts\nconst x = 1;\n```"),
-    ).toEqual({
+    expect(markdownToIr("```ts\nconst x = 1;\n```")).toEqual({
       text: "const x = 1;",
-      spans: [
-        { kind: "block", block: "code_block", language: "ts", start: 0, end: 12 },
-      ],
+      spans: [{ kind: "block", block: "code_block", language: "ts", start: 0, end: 12 }],
     });
   });
 
   it("captures fenced code blocks as block spans when mixed with paragraphs", () => {
-    expect(
-      markdownToIr("Hello\n\n```ts\ncode\n```\n\nWorld"),
-    ).toEqual({
+    expect(markdownToIr("Hello\n\n```ts\ncode\n```\n\nWorld")).toEqual({
       text: "Hello\n\ncode\n\nWorld",
       spans: [
         { kind: "block", block: "paragraph", start: 0, end: 5 },
@@ -128,9 +120,7 @@ describe("markdownToIr", () => {
   });
 
   it("does not drop trailing content after a leading fenced code block", () => {
-    expect(
-      markdownToIr("```ts\ncode\n```\n\nafter"),
-    ).toEqual({
+    expect(markdownToIr("```ts\ncode\n```\n\nafter")).toEqual({
       text: "code\n\nafter",
       spans: [
         { kind: "block", block: "code_block", language: "ts", start: 0, end: 4 },
@@ -140,9 +130,7 @@ describe("markdownToIr", () => {
   });
 
   it("parses fenced code blocks with blank lines when mixed with other blocks", () => {
-    expect(
-      markdownToIr("before\n\n```ts\nline1\n\nline3\n```\n\nafter"),
-    ).toEqual({
+    expect(markdownToIr("before\n\n```ts\nline1\n\nline3\n```\n\nafter")).toEqual({
       text: "before\n\nline1\n\nline3\n\nafter",
       spans: [
         { kind: "block", block: "paragraph", start: 0, end: 6 },
@@ -155,18 +143,14 @@ describe("markdownToIr", () => {
   it("captures blockquotes as block spans", () => {
     expect(markdownToIr("> quoted")).toEqual({
       text: "quoted",
-      spans: [
-        { kind: "block", block: "blockquote", start: 0, end: 6 },
-      ],
+      spans: [{ kind: "block", block: "blockquote", start: 0, end: 6 }],
     });
   });
 
   it("captures multiline blockquotes as a single block span", () => {
     expect(markdownToIr("> one\n> two")).toEqual({
       text: "one\ntwo",
-      spans: [
-        { kind: "block", block: "blockquote", start: 0, end: 7 },
-      ],
+      spans: [{ kind: "block", block: "blockquote", start: 0, end: 7 }],
     });
   });
 
@@ -183,9 +167,7 @@ describe("markdownToIr", () => {
   it("does not insert phantom separators for empty list items", () => {
     expect(markdownToIr("- \n- two")).toEqual({
       text: "two",
-      spans: [
-        { kind: "block", block: "list_item", ordered: false, depth: 0, start: 0, end: 3 },
-      ],
+      spans: [{ kind: "block", block: "list_item", ordered: false, depth: 0, start: 0, end: 3 }],
     });
   });
 
@@ -249,6 +231,8 @@ describe("irToPlainText", () => {
   });
 
   it("renders labeled links as label (url) in plain text fallback", () => {
-    expect(irToPlainText(markdownToIr("[label](https://example.com)"))).toBe("label (https://example.com)");
+    expect(irToPlainText(markdownToIr("[label](https://example.com)"))).toBe(
+      "label (https://example.com)",
+    );
   });
 });

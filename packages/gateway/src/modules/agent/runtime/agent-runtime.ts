@@ -61,7 +61,11 @@ import {
 import { looksLikeSecretText, redactSecretLikeText } from "./secrets.js";
 import type { AgentContextReport, AgentRuntimeOptions } from "./types.js";
 import { ensureWorkspaceInitialized, resolveTyrumHome } from "../home.js";
-import { decideCrossTurnLoopWarning, detectWithinTurnToolLoop, LOOP_WARNING_PREFIX } from "../loop-detection.js";
+import {
+  decideCrossTurnLoopWarning,
+  detectWithinTurnToolLoop,
+  LOOP_WARNING_PREFIX,
+} from "../loop-detection.js";
 import { MarkdownMemoryStore } from "../markdown-memory.js";
 import { SessionDal, type SessionMessage, type SessionRow } from "../session-dal.js";
 import { buildAgentTurnKey } from "../turn-key.js";

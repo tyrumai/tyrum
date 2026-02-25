@@ -49,7 +49,9 @@ describe("approval respond policy overrides", () => {
       }),
     });
     expect(res.status).toBe(400);
-    expect(await policyOverrideDal.list({ agentId: "agent-1", toolId: "tool.exec" })).toHaveLength(0);
+    expect(await policyOverrideDal.list({ agentId: "agent-1", toolId: "tool.exec" })).toHaveLength(
+      0,
+    );
   });
 
   it("does not create duplicate overrides when already resolved", async () => {
@@ -92,7 +94,9 @@ describe("approval respond policy overrides", () => {
 
     const firstJson = (await firstRes.json()) as { created_overrides?: unknown[] };
     expect(firstJson.created_overrides).toHaveLength(1);
-    expect(await policyOverrideDal.list({ agentId: "agent-1", toolId: "tool.exec" })).toHaveLength(1);
+    expect(await policyOverrideDal.list({ agentId: "agent-1", toolId: "tool.exec" })).toHaveLength(
+      1,
+    );
 
     const secondRes = await app.request(`/approvals/${String(created.id)}/respond`, {
       method: "POST",
@@ -103,7 +107,9 @@ describe("approval respond policy overrides", () => {
 
     const secondJson = (await secondRes.json()) as { created_overrides?: unknown[] };
     expect(secondJson.created_overrides).toBeUndefined();
-    expect(await policyOverrideDal.list({ agentId: "agent-1", toolId: "tool.exec" })).toHaveLength(1);
+    expect(await policyOverrideDal.list({ agentId: "agent-1", toolId: "tool.exec" })).toHaveLength(
+      1,
+    );
   });
 
   it("does not return an error if policyOverrideDal disappears after approval is persisted", async () => {
@@ -159,9 +165,14 @@ describe("approval respond policy overrides", () => {
     });
 
     expect(res.status).toBe(200);
-    const json = (await res.json()) as { approval: { status: string }; created_overrides?: unknown[] };
+    const json = (await res.json()) as {
+      approval: { status: string };
+      created_overrides?: unknown[];
+    };
     expect(json.approval.status).toBe("approved");
     expect(json.created_overrides).toHaveLength(1);
-    expect(await policyOverrideDal.list({ agentId: "agent-1", toolId: "tool.exec" })).toHaveLength(1);
+    expect(await policyOverrideDal.list({ agentId: "agent-1", toolId: "tool.exec" })).toHaveLength(
+      1,
+    );
   });
 });

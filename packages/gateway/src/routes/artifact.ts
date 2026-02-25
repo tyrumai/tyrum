@@ -5,7 +5,11 @@
 import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
 import { ArtifactId, ArtifactKind, ArtifactRef, DeviceTokenClaims } from "@tyrum/schemas";
-import type { ArtifactRef as ArtifactRefT, DeviceTokenClaims as DeviceTokenClaimsT, WsEventEnvelope } from "@tyrum/schemas";
+import type {
+  ArtifactRef as ArtifactRefT,
+  DeviceTokenClaims as DeviceTokenClaimsT,
+  WsEventEnvelope,
+} from "@tyrum/schemas";
 import type { ArtifactStore } from "../modules/artifact/store.js";
 import type { Logger } from "../modules/observability/logger.js";
 import type { PolicySnapshotDal } from "../modules/policy/snapshot-dal.js";
@@ -95,7 +99,9 @@ function synthArtifactRefFromRow(row: ExecutionArtifactRow): ArtifactRefT {
     mime_type: mimeType,
     size_bytes: sizeBytes,
     sha256,
-    labels: Array.isArray(labels) ? labels.filter((l): l is string => typeof l === "string" && l.trim() !== "") : [],
+    labels: Array.isArray(labels)
+      ? labels.filter((l): l is string => typeof l === "string" && l.trim() !== "")
+      : [],
     metadata,
   };
 
@@ -110,7 +116,10 @@ function synthArtifactRefFromRow(row: ExecutionArtifactRow): ArtifactRefT {
   };
 }
 
-function requestIdForAudit(c: { req: { header(name: string): string | undefined }; res: { headers: Headers } }): string | undefined {
+function requestIdForAudit(c: {
+  req: { header(name: string): string | undefined };
+  res: { headers: Headers };
+}): string | undefined {
   const fromRequest = c.req.header("x-request-id")?.trim();
   if (fromRequest) return fromRequest;
   const fromResponse = c.res.headers.get("x-request-id")?.trim();
@@ -214,8 +223,7 @@ export function createArtifactRoutes(deps: ArtifactRouteDeps): Hono {
     return c.json(
       {
         error: "invalid_request",
-        message:
-          "artifact fetch APIs must be scope-bound; use GET /runs/:runId/artifacts/:id",
+        message: "artifact fetch APIs must be scope-bound; use GET /runs/:runId/artifacts/:id",
       },
       400,
     );

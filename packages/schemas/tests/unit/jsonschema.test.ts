@@ -16,4 +16,3 @@ describe("@tyrum/schemas JSON Schema export", () => {
     }
   });
 });
-

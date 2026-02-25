@@ -9,10 +9,7 @@ import { CliProvider } from "../providers/cli-provider.js";
 import { NutJsDesktopBackend } from "../providers/backends/nutjs-desktop-backend.js";
 import { RealPlaywrightBackend } from "../providers/backends/real-playwright-backend.js";
 import { createWindowSender } from "./window-sender.js";
-import {
-  ensureEmbeddedGatewayToken,
-  startEmbeddedGatewayFromConfig,
-} from "./gateway-ipc.js";
+import { ensureEmbeddedGatewayToken, startEmbeddedGatewayFromConfig } from "./gateway-ipc.js";
 
 const sender = createWindowSender();
 

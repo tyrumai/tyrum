@@ -295,7 +295,12 @@ describe("Watcher routes + scheduler integration", () => {
     expect(first.status).toBe(202);
 
     const timestampHeaderSeconds = String(Math.floor(timestampMs / 1000));
-    const signatureSeconds = computeWebhookSignature(secret, timestampHeaderSeconds, nonce, payload);
+    const signatureSeconds = computeWebhookSignature(
+      secret,
+      timestampHeaderSeconds,
+      nonce,
+      payload,
+    );
     const replay = await app.request(`/watchers/${String(watcherId)}/trigger/webhook`, {
       method: "POST",
       headers: {

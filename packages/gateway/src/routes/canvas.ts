@@ -58,10 +58,7 @@ export function createCanvasRoutes(canvasDal: CanvasDal): Hono {
     const artifact = await canvasDal.getById(id);
 
     if (!artifact) {
-      return c.json(
-        { error: "not_found", message: `artifact ${id} not found` },
-        404,
-      );
+      return c.json({ error: "not_found", message: `artifact ${id} not found` }, 404);
     }
 
     c.header("Content-Security-Policy", CSP_HEADER);
@@ -75,10 +72,7 @@ export function createCanvasRoutes(canvasDal: CanvasDal): Hono {
     const artifact = await canvasDal.getById(id);
 
     if (!artifact) {
-      return c.json(
-        { error: "not_found", message: `artifact ${id} not found` },
-        404,
-      );
+      return c.json({ error: "not_found", message: `artifact ${id} not found` }, 404);
     }
 
     return c.json({
