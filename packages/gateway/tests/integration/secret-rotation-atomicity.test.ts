@@ -30,7 +30,10 @@ describe("secret rotation atomicity (integration)", () => {
 
   it("does not revoke the old handle when auth-profile propagation fails", async () => {
     const container = await createTestContainer();
-    const secretProvider = await FileSecretProvider.create(secretsPath, "test-admin-token-for-testing");
+    const secretProvider = await FileSecretProvider.create(
+      secretsPath,
+      "test-admin-token-for-testing",
+    );
     const authProfileDal = new FailingAuthProfileDal(container.db);
 
     const app = new Hono();
@@ -62,4 +65,3 @@ describe("secret rotation atomicity (integration)", () => {
     expect(stillResolves).toBe("v1");
   });
 });
-

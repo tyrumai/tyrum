@@ -127,19 +127,14 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-export function releaseFileDialogExtensions(
-  platform: NodeJS.Platform,
-): readonly string[] {
+export function releaseFileDialogExtensions(platform: NodeJS.Platform): readonly string[] {
   const suffixes = ALLOWED_RELEASE_FILE_SUFFIXES[platform] ?? [".appimage", ".tar.gz"];
   return suffixes
     .map((suffix) => (suffix.startsWith(".") ? suffix.slice(1) : suffix))
     .filter((suffix) => suffix.length > 0);
 }
 
-export function isAllowedReleaseFilePath(
-  filePath: string,
-  platform: NodeJS.Platform,
-): boolean {
+export function isAllowedReleaseFilePath(filePath: string, platform: NodeJS.Platform): boolean {
   const lower = filePath.trim().toLowerCase();
   if (lower.length === 0) return false;
   const suffixes = ALLOWED_RELEASE_FILE_SUFFIXES[platform] ?? [".appimage", ".tar.gz"];
@@ -185,8 +180,7 @@ export class DesktopUpdaterService {
       const updateInfo = (info ?? {}) as UpdateInfoLike;
       this.setState({
         stage: "available",
-        availableVersion:
-          typeof updateInfo.version === "string" ? updateInfo.version : null,
+        availableVersion: typeof updateInfo.version === "string" ? updateInfo.version : null,
         downloadedVersion: null,
         releaseDate: normalizeReleaseDate(updateInfo.releaseDate),
         releaseNotes: normalizeReleaseNotes(updateInfo.releaseNotes),
@@ -221,9 +215,7 @@ export class DesktopUpdaterService {
     this.appUpdater.on("update-downloaded", (info: unknown) => {
       const updateInfo = (info ?? {}) as UpdateInfoLike;
       const resolvedVersion =
-        typeof updateInfo.version === "string"
-          ? updateInfo.version
-          : this.state.availableVersion;
+        typeof updateInfo.version === "string" ? updateInfo.version : this.state.availableVersion;
       this.setState({
         stage: "downloaded",
         downloadedVersion: resolvedVersion ?? null,

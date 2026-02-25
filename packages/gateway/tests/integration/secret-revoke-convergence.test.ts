@@ -62,4 +62,3 @@ describe("secret revoke convergence (integration)", () => {
     expect(updated?.disabled_reason).toBe("secret_handle_revoked");
   });
 });
-

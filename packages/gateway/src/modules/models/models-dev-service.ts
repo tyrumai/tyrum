@@ -69,8 +69,7 @@ export class ModelsDevService {
       fetchImpl?: typeof fetch;
     },
   ) {
-    this.instanceOwner =
-      process.env["TYRUM_INSTANCE_ID"]?.trim() || `instance-${randomUUID()}`;
+    this.instanceOwner = process.env["TYRUM_INSTANCE_ID"]?.trim() || `instance-${randomUUID()}`;
   }
 
   private buildStatus(input: {
@@ -103,7 +102,10 @@ export class ModelsDevService {
     return ModelsDevCatalog.parse(raw);
   }
 
-  private async recordError(input: { error: string; nowIso: string }): Promise<ModelsDevLoadResult> {
+  private async recordError(input: {
+    error: string;
+    nowIso: string;
+  }): Promise<ModelsDevLoadResult> {
     const cached = await this.opts.cacheDal.get();
 
     if (!cached) {
@@ -251,7 +253,10 @@ export class ModelsDevService {
         const message = err instanceof Error ? err.message : String(err);
         this.opts.logger?.warn("models_dev.cache_parse_failed", { error: message });
         const nowIso = new Date().toISOString();
-        return await this.recordError({ error: `models.dev cache parse failed: ${message}`, nowIso });
+        return await this.recordError({
+          error: `models.dev cache parse failed: ${message}`,
+          nowIso,
+        });
       }
     }
 

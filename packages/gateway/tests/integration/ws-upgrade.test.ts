@@ -157,8 +157,7 @@ describe("WebSocket upgrade", () => {
     expect(cliClient!.capabilities).toContain("cli");
 
     // Should NOT find a "playwright" client
-    const pwClient =
-      srv.connectionManager.getClientForCapability("playwright");
+    const pwClient = srv.connectionManager.getClientForCapability("playwright");
     expect(pwClient).toBeUndefined();
   });
 

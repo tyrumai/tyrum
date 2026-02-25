@@ -9,21 +9,8 @@ import { resolveGatewayBinPath } from "../src/main/gateway-bin-path.js";
 
 describe("resolveGatewayBinPath", () => {
   const moduleDir = join("/repo", "apps", "desktop", "dist", "main");
-  const distGateway = join(
-    "/repo",
-    "apps",
-    "desktop",
-    "dist",
-    "gateway",
-    "index.mjs",
-  );
-  const monorepoGateway = join(
-    "/repo",
-    "packages",
-    "gateway",
-    "dist",
-    "index.mjs",
-  );
+  const distGateway = join("/repo", "apps", "desktop", "dist", "gateway", "index.mjs");
+  const monorepoGateway = join("/repo", "packages", "gateway", "dist", "index.mjs");
   const packagedGateway = join("/app/resources", "gateway", "index.mjs");
 
   it("uses packaged gateway when app is packaged", () => {

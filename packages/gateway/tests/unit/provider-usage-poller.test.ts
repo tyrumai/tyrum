@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { ProviderUsagePoller } from "../../src/modules/observability/provider-usage.js";
 import type { AuthProfileDal, AuthProfileRow } from "../../src/modules/models/auth-profile-dal.js";
-import type { SessionProviderPinDal, SessionProviderPinRow } from "../../src/modules/models/session-pin-dal.js";
+import type {
+  SessionProviderPinDal,
+  SessionProviderPinRow,
+} from "../../src/modules/models/session-pin-dal.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 
 describe("ProviderUsagePoller", () => {
@@ -141,7 +144,10 @@ describe("ProviderUsagePoller", () => {
 
       const fetchMock = vi.fn(async () => {
         await new Promise<void>((resolve) => setTimeout(resolve, 2_000));
-        return new Response("rate limited", { status: 429, headers: { "content-type": "text/plain" } });
+        return new Response("rate limited", {
+          status: 429,
+          headers: { "content-type": "text/plain" },
+        });
       });
 
       const poller = new ProviderUsagePoller({

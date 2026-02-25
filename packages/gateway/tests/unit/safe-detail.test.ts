@@ -12,4 +12,3 @@ describe("safeDetail", () => {
     expect(safeDetail(long)?.length).toBe(512);
   });
 });
-

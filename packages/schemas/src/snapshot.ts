@@ -33,7 +33,9 @@ export const SnapshotArtifactBytesInclusionPolicy = z.discriminatedUnion("includ
     })
     .strict(),
 ]);
-export type SnapshotArtifactBytesInclusionPolicy = z.infer<typeof SnapshotArtifactBytesInclusionPolicy>;
+export type SnapshotArtifactBytesInclusionPolicy = z.infer<
+  typeof SnapshotArtifactBytesInclusionPolicy
+>;
 
 export const SnapshotArtifactRetentionMetadata = z
   .object({

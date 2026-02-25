@@ -99,4 +99,3 @@ export class RedactionEngine {
     return redactUnknown(value, Array.from(this.secrets));
   }
 }
-

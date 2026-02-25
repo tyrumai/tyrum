@@ -113,4 +113,3 @@ describe("AgentRuntime system prompt sandbox section", () => {
     expect(capturedSystem).toContain("Elevated execution available: true");
   });
 });
-

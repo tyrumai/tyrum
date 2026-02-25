@@ -13,9 +13,7 @@ export interface ToolRunnerStepExecutorOptions {
   logger?: Logger;
 }
 
-export function createToolRunnerStepExecutor(
-  opts: ToolRunnerStepExecutorOptions,
-): StepExecutor {
+export function createToolRunnerStepExecutor(opts: ToolRunnerStepExecutorOptions): StepExecutor {
   return new ToolRunnerStepExecutor(opts);
 }
 
@@ -47,14 +45,10 @@ class ToolRunnerStepExecutor implements StepExecutor {
     const startedAt = Date.now();
 
     return await new Promise<StepResult>((resolve) => {
-      const child = spawn(
-        process.execPath,
-        [...process.execArgv, this.entrypoint, "toolrunner"],
-        {
-          env: { ...this.env, TYRUM_TOOLRUNNER_MODE: "1", TYRUM_LOG_LEVEL: "silent" },
-          stdio: ["pipe", "pipe", "pipe"],
-        },
-      );
+      const child = spawn(process.execPath, [...process.execArgv, this.entrypoint, "toolrunner"], {
+        env: { ...this.env, TYRUM_TOOLRUNNER_MODE: "1", TYRUM_LOG_LEVEL: "silent" },
+        stdio: ["pipe", "pipe", "pipe"],
+      });
 
       const stdoutChunks: Buffer[] = [];
       const stderrChunks: Buffer[] = [];
@@ -89,20 +83,23 @@ class ToolRunnerStepExecutor implements StepExecutor {
         stderrTruncated ||= next.truncated;
       });
 
-      const killTimer = setTimeout(() => {
-        try {
-          child.kill("SIGTERM");
-        } catch {
-          // ignore
-        }
-        setTimeout(() => {
+      const killTimer = setTimeout(
+        () => {
           try {
-            child.kill("SIGKILL");
+            child.kill("SIGTERM");
           } catch {
             // ignore
           }
-        }, 5_000).unref();
-      }, Math.max(1, Math.floor(timeoutMs)));
+          setTimeout(() => {
+            try {
+              child.kill("SIGKILL");
+            } catch {
+              // ignore
+            }
+          }, 5_000).unref();
+        },
+        Math.max(1, Math.floor(timeoutMs)),
+      );
       killTimer.unref();
 
       child.once("close", (code, signal) => {

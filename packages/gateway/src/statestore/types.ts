@@ -13,4 +13,3 @@ export interface SqlDb {
   transaction<T>(fn: (tx: SqlDb) => Promise<T>): Promise<T>;
   close(): Promise<void>;
 }
-

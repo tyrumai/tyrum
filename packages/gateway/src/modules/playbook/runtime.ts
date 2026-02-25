@@ -55,10 +55,16 @@ export function resolvePlaybookPolicyBundle(playbook: Playbook) {
   });
 }
 
-async function loadPendingApprovalForRun(db: SqlDb, runId: string): Promise<{
-  prompt: string;
-  resumeToken: string;
-} | undefined> {
+async function loadPendingApprovalForRun(
+  db: SqlDb,
+  runId: string,
+): Promise<
+  | {
+      prompt: string;
+      resumeToken: string;
+    }
+  | undefined
+> {
   const row = await db.get<{ prompt: string; resume_token: string | null }>(
     `SELECT prompt, resume_token
      FROM approvals
@@ -94,15 +100,21 @@ async function waitForRunToSettle(
   const deadline = Date.now() + Math.max(1, timeoutMs);
 
   for (;;) {
-    const row = await db.get<{ status: string; paused_reason: string | null; paused_detail: string | null }>(
-      "SELECT status, paused_reason, paused_detail FROM execution_runs WHERE run_id = ?",
-      [runId],
-    );
+    const row = await db.get<{
+      status: string;
+      paused_reason: string | null;
+      paused_detail: string | null;
+    }>("SELECT status, paused_reason, paused_detail FROM execution_runs WHERE run_id = ?", [runId]);
     if (!row) {
       throw new Error(`execution run '${runId}' not found`);
     }
 
-    if (row.status === "paused" || row.status === "succeeded" || row.status === "failed" || row.status === "cancelled") {
+    if (
+      row.status === "paused" ||
+      row.status === "succeeded" ||
+      row.status === "failed" ||
+      row.status === "cancelled"
+    ) {
       return row;
     }
 
@@ -114,7 +126,11 @@ async function waitForRunToSettle(
   }
 }
 
-async function envelopeForRunStatus(db: SqlDb, runId: string, timeoutMs: number): Promise<PlaybookRuntimeEnvelopeT> {
+async function envelopeForRunStatus(
+  db: SqlDb,
+  runId: string,
+  timeoutMs: number,
+): Promise<PlaybookRuntimeEnvelopeT> {
   let row: { status: string; paused_reason: string | null; paused_detail: string | null };
   try {
     row = await waitForRunToSettle(db, runId, timeoutMs);
@@ -179,7 +195,14 @@ export interface PlaybookRuntimeDeps {
 export async function runPlaybookRuntimeEnvelope(
   deps: PlaybookRuntimeDeps,
   input:
-    | { action: "run"; pipeline: string; argsJson?: string; cwd?: string; maxOutputBytes?: number; timeoutMs?: number }
+    | {
+        action: "run";
+        pipeline: string;
+        argsJson?: string;
+        cwd?: string;
+        maxOutputBytes?: number;
+        timeoutMs?: number;
+      }
     | { action: "resume"; token: string; approve: boolean; reason?: string; timeoutMs?: number },
 ): Promise<PlaybookRuntimeEnvelopeT> {
   const timeoutMs = input.timeoutMs ?? 30_000;
@@ -330,7 +353,8 @@ export async function runPlaybookRuntimeEnvelope(
     return await envelopeForRunStatus(deps.db, runId, timeoutMs);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    const code = isValidationError(err) || message.includes("not loaded") ? "invalid_request" : "internal";
+    const code =
+      isValidationError(err) || message.includes("not loaded") ? "invalid_request" : "internal";
     return {
       ok: false,
       status: "error",

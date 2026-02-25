@@ -32,12 +32,7 @@ describe("ToolExecutor provenance tagging", () => {
     homeDir = await mkdtemp(join(tmpdir(), "provenance-test-"));
     await writeFile(join(homeDir, "test.txt"), "safe content", "utf-8");
 
-    const executor = new ToolExecutor(
-      homeDir,
-      stubMcpManager(),
-      new Map(),
-      fetch,
-    );
+    const executor = new ToolExecutor(homeDir, stubMcpManager(), new Map(), fetch);
 
     const result = await executor.execute("tool.fs.read", "call-1", { path: "test.txt" });
 
@@ -66,11 +61,9 @@ describe("ToolExecutor provenance tagging", () => {
       allowPublicDnsLookup,
     );
 
-    const result = await executor.execute(
-      "tool.http.fetch",
-      "call-2",
-      { url: "https://example.com" },
-    );
+    const result = await executor.execute("tool.http.fetch", "call-2", {
+      url: "https://example.com",
+    });
 
     expect(result.provenance).toBeDefined();
     expect(result.provenance!.source).toBe("web");
@@ -98,11 +91,9 @@ describe("ToolExecutor provenance tagging", () => {
       allowPublicDnsLookup,
     );
 
-    const result = await executor.execute(
-      "tool.http.fetch",
-      "call-3",
-      { url: "https://evil.example.com" },
-    );
+    const result = await executor.execute("tool.http.fetch", "call-3", {
+      url: "https://evil.example.com",
+    });
 
     expect(result.output).toContain("[role-ref]");
     expect(result.output).toContain("[blocked-override]");
@@ -128,18 +119,9 @@ describe("ToolExecutor provenance tagging", () => {
     };
     const specMap = new Map([["test-server", spec]]);
 
-    const executor = new ToolExecutor(
-      homeDir,
-      mcpManager,
-      specMap,
-      fetch,
-    );
+    const executor = new ToolExecutor(homeDir, mcpManager, specMap, fetch);
 
-    const result = await executor.execute(
-      "mcp.test-server.get_data",
-      "call-4",
-      {},
-    );
+    const result = await executor.execute("mcp.test-server.get_data", "call-4", {});
 
     expect(result.provenance).toBeDefined();
     expect(result.provenance!.source).toBe("tool");
@@ -151,12 +133,7 @@ describe("ToolExecutor provenance tagging", () => {
   it("error results do not have provenance", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "provenance-test-"));
 
-    const executor = new ToolExecutor(
-      homeDir,
-      stubMcpManager(),
-      new Map(),
-      fetch,
-    );
+    const executor = new ToolExecutor(homeDir, stubMcpManager(), new Map(), fetch);
 
     const result = await executor.execute("tool.fs.read", "call-5", {});
 

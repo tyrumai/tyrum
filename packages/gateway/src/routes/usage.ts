@@ -13,7 +13,10 @@ import { isAuthProfilesEnabled } from "../modules/models/auth-profiles-enabled.j
 import type { AuthProfileDal } from "../modules/models/auth-profile-dal.js";
 import type { SessionProviderPinDal } from "../modules/models/session-pin-dal.js";
 import type { Logger } from "../modules/observability/logger.js";
-import { ProviderUsagePoller, type ProviderUsageResult } from "../modules/observability/provider-usage.js";
+import {
+  ProviderUsagePoller,
+  type ProviderUsageResult,
+} from "../modules/observability/provider-usage.js";
 import type { SqlDb } from "../statestore/types.js";
 import { safeDetail } from "../utils/safe-detail.js";
 
@@ -61,9 +64,11 @@ export function createUsageRoutes(deps: UsageRouteDeps): Hono {
     const key = c.req.query("key")?.trim() || undefined;
     const agentId = c.req.query("agent_id")?.trim() || undefined;
 
-    const scopeParams = [runId ? "run_id" : null, key ? "key" : null, agentId ? "agent_id" : null].filter(
-      (value): value is string => value !== null,
-    );
+    const scopeParams = [
+      runId ? "run_id" : null,
+      key ? "key" : null,
+      agentId ? "agent_id" : null,
+    ].filter((value): value is string => value !== null);
     if (scopeParams.length > 1) {
       return c.json(
         {

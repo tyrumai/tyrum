@@ -5,13 +5,7 @@ export const MessageSource = z.enum(["telegram"]);
 export type MessageSource = z.infer<typeof MessageSource>;
 
 /** Supported thread classifications. */
-export const ThreadKind = z.enum([
-  "private",
-  "group",
-  "supergroup",
-  "channel",
-  "other",
-]);
+export const ThreadKind = z.enum(["private", "group", "supergroup", "channel", "other"]);
 export type ThreadKind = z.infer<typeof ThreadKind>;
 
 /** High-level media categories for placeholder normalization. */

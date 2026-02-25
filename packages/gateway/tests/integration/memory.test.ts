@@ -131,7 +131,10 @@ describe("Memory CRUD routes", () => {
         body: JSON.stringify({ confirm: "FORGET", event_id: "evt-forget-1" }),
       });
       expect(forgetRes.status).toBe(200);
-      const forgetBody = (await forgetRes.json()) as { status: string; deleted: { episodic_events: number } };
+      const forgetBody = (await forgetRes.json()) as {
+        status: string;
+        deleted: { episodic_events: number };
+      };
       expect(forgetBody.deleted.episodic_events).toBe(1);
     });
   });

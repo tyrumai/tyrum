@@ -78,9 +78,7 @@ describe("Gateway JSON Schema publishing", () => {
   it("serves individual contract JSON Schemas by file name", async () => {
     const { app } = await createTestApp();
 
-    const res = await app.request(
-      "/contracts/jsonschema/WsConnectInitRequest.json",
-    );
+    const res = await app.request("/contracts/jsonschema/WsConnectInitRequest.json");
     expect(res.status).toBe(200);
 
     const json = (await res.json()) as {

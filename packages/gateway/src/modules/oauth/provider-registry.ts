@@ -44,9 +44,7 @@ function parseOAuthProviderSpec(value: unknown): OAuthProviderSpec {
 
   const tokenEndpointBasicAuthRaw = record["token_endpoint_basic_auth"];
   const tokenEndpointBasicAuth =
-    typeof tokenEndpointBasicAuthRaw === "boolean"
-      ? tokenEndpointBasicAuthRaw
-      : false;
+    typeof tokenEndpointBasicAuthRaw === "boolean" ? tokenEndpointBasicAuthRaw : false;
 
   if (tokenEndpointBasicAuth && !clientSecretEnv) {
     throw new Error(
@@ -108,7 +106,9 @@ export class OAuthProviderRegistry {
   private cached: Map<string, OAuthProviderSpec> | undefined;
   private cachedAtMs = 0;
 
-  constructor(private readonly opts?: { ttlMs?: number; configPath?: string; configPaths?: string[] }) {}
+  constructor(
+    private readonly opts?: { ttlMs?: number; configPath?: string; configPaths?: string[] },
+  ) {}
 
   async get(providerId: string): Promise<OAuthProviderSpec | undefined> {
     const specs = await this.load();

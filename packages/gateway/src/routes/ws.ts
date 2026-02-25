@@ -60,9 +60,9 @@ function buildConnectProofTranscript(input: {
   return Buffer.from(text, "utf-8");
 }
 
-function parseCapabilitiesFromInit(
-  payload: { capabilities: CapabilityDescriptor[] },
-): ClientCapability[] {
+function parseCapabilitiesFromInit(payload: {
+  capabilities: CapabilityDescriptor[];
+}): ClientCapability[] {
   return [
     ...new Set(
       payload.capabilities
@@ -79,9 +79,7 @@ function parseRemoteIp(req: IncomingMessage): string | undefined {
   return ip;
 }
 
-function parseProtocolHeader(
-  value: string | string[] | undefined,
-): string[] {
+function parseProtocolHeader(value: string | string[] | undefined): string[] {
   if (Array.isArray(value)) {
     return value.flatMap((entry) =>
       entry
@@ -144,7 +142,9 @@ function toSingleHeaderValue(value: string | string[] | undefined): string | und
   return typeof value === "string" ? value : undefined;
 }
 
-function parseHostHeader(value: string): { hostname: string; port: string | undefined } | undefined {
+function parseHostHeader(
+  value: string,
+): { hostname: string; port: string | undefined } | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
 
@@ -192,7 +192,9 @@ function isSameOriginUpgrade(req: IncomingMessage): boolean {
   if (!host) return false;
   const hostPort = host.port ?? defaultPort;
 
-  return host.hostname.toLowerCase() === originUrl.hostname.toLowerCase() && hostPort === originPort;
+  return (
+    host.hostname.toLowerCase() === originUrl.hostname.toLowerCase() && hostPort === originPort
+  );
 }
 
 function extractWsTokenWithTransport(req: IncomingMessage): {
@@ -282,11 +284,13 @@ export function createWsHandler(opts: WsRouteOptions): {
     if (cluster) {
       const nowMs = Date.now();
       for (const client of connectionManager.allClients()) {
-        void cluster.connectionDirectory.touchConnection({
-          connectionId: client.id,
-          nowMs,
-          ttlMs: connectionTtlMs,
-        }).catch(() => {});
+        void cluster.connectionDirectory
+          .touchConnection({
+            connectionId: client.id,
+            nowMs,
+            ttlMs: connectionTtlMs,
+          })
+          .catch(() => {});
       }
       void cluster.connectionDirectory.cleanupExpired(nowMs).catch(() => {});
     }
@@ -321,16 +325,15 @@ export function createWsHandler(opts: WsRouteOptions): {
             }
 
             if (protocolDeps.cluster) {
-              void protocolDeps.cluster.outboxDal.enqueue(
-                "ws.broadcast",
-                {
+              void protocolDeps.cluster.outboxDal
+                .enqueue("ws.broadcast", {
                   source_edge_id: protocolDeps.cluster.edgeId,
                   skip_local: true,
                   message: evt,
-                },
-              ).catch(() => {
-                // ignore
-              });
+                })
+                .catch(() => {
+                  // ignore
+                });
             }
           }
         })
@@ -366,7 +369,9 @@ export function createWsHandler(opts: WsRouteOptions): {
 
     const earlyMessages: string[] = [];
     let earlyMessageBytes = 0;
-    let authState: AuthState | undefined = upgradeClaims ? { kind: "claims", claims: upgradeClaims } : undefined;
+    let authState: AuthState | undefined = upgradeClaims
+      ? { kind: "claims", claims: upgradeClaims }
+      : undefined;
 
     // Mutable slot: filled once the hello handshake completes.
     let clientId: string | undefined;
@@ -557,20 +562,22 @@ export function createWsHandler(opts: WsRouteOptions): {
 
           if (cluster) {
             const nowMs = Date.now();
-            void cluster.connectionDirectory.upsertConnection({
-              connectionId: clientId,
-              edgeId: cluster.instanceId,
-              role: pendingInit.role,
-              protocolRev: pendingInit.protocolRev,
-              deviceId,
-              pubkey: pendingInit.pubkey,
-              label: pendingInit.label ?? null,
-              version: pendingInit.version ?? null,
-              mode: pendingInit.mode ?? null,
-              capabilities: pendingInit.capabilities,
-              nowMs,
-              ttlMs: connectionTtlMs,
-            }).catch(() => {});
+            void cluster.connectionDirectory
+              .upsertConnection({
+                connectionId: clientId,
+                edgeId: cluster.instanceId,
+                role: pendingInit.role,
+                protocolRev: pendingInit.protocolRev,
+                deviceId,
+                pubkey: pendingInit.pubkey,
+                label: pendingInit.label ?? null,
+                version: pendingInit.version ?? null,
+                mode: pendingInit.mode ?? null,
+                capabilities: pendingInit.capabilities,
+                nowMs,
+                ttlMs: connectionTtlMs,
+              })
+              .catch(() => {});
           }
 
           const remoteIp = parseRemoteIp(req);
@@ -585,7 +592,10 @@ export function createWsHandler(opts: WsRouteOptions): {
                 ip: remoteIp ?? null,
                 version: pendingInit.version ?? null,
                 mode: pendingInit.mode ?? null,
-                metadata: { capabilities: pendingInit.capabilities, edge_id: cluster?.instanceId ?? null },
+                metadata: {
+                  capabilities: pendingInit.capabilities,
+                  edge_id: cluster?.instanceId ?? null,
+                },
                 nowMs,
                 ttlMs: presenceTtlMs,
               })
@@ -619,16 +629,15 @@ export function createWsHandler(opts: WsRouteOptions): {
                 }
                 // Cluster broadcast.
                 if (protocolDeps.cluster) {
-                  void protocolDeps.cluster.outboxDal.enqueue(
-                    "ws.broadcast",
-                    {
+                  void protocolDeps.cluster.outboxDal
+                    .enqueue("ws.broadcast", {
                       source_edge_id: protocolDeps.cluster.edgeId,
                       skip_local: true,
                       message: evt,
-                    },
-                  ).catch(() => {
-                    // ignore
-                  });
+                    })
+                    .catch(() => {
+                      // ignore
+                    });
                 }
               })
               .catch(() => {
@@ -710,9 +719,11 @@ export function createWsHandler(opts: WsRouteOptions): {
               void cluster.connectionDirectory.removeConnection(clientId!).catch(() => {});
             }
             if (presenceDal && deviceId) {
-              void presenceDal.markDisconnected({ instanceId: deviceId, nowMs: Date.now(), ttlMs: presenceTtlMs }).catch(() => {
-                // ignore
-              });
+              void presenceDal
+                .markDisconnected({ instanceId: deviceId, nowMs: Date.now(), ttlMs: presenceTtlMs })
+                .catch(() => {
+                  // ignore
+                });
             }
           });
 
@@ -744,20 +755,22 @@ export function createWsHandler(opts: WsRouteOptions): {
         });
         if (cluster) {
           const nowMs = Date.now();
-          void cluster.connectionDirectory.upsertConnection({
-            connectionId: clientId,
-            edgeId: cluster.instanceId,
-            role: "client",
-            protocolRev: 1,
-            deviceId: null,
-            pubkey: null,
-            label: null,
-            version: null,
-            mode: null,
-            capabilities: legacy.data.payload.capabilities,
-            nowMs,
-            ttlMs: connectionTtlMs,
-          }).catch(() => {});
+          void cluster.connectionDirectory
+            .upsertConnection({
+              connectionId: clientId,
+              edgeId: cluster.instanceId,
+              role: "client",
+              protocolRev: 1,
+              deviceId: null,
+              pubkey: null,
+              label: null,
+              version: null,
+              mode: null,
+              capabilities: legacy.data.payload.capabilities,
+              nowMs,
+              ttlMs: connectionTtlMs,
+            })
+            .catch(() => {});
         }
 
         const connected: WsResponseEnvelope = {
@@ -816,7 +829,10 @@ export function createWsHandler(opts: WsRouteOptions): {
       const raw = rawDataToUtf8(data);
       if (!authState) {
         earlyMessageBytes += Buffer.byteLength(raw, "utf-8");
-        if (earlyMessages.length >= EARLY_MESSAGE_MAX_COUNT || earlyMessageBytes > EARLY_MESSAGE_MAX_BYTES) {
+        if (
+          earlyMessages.length >= EARLY_MESSAGE_MAX_COUNT ||
+          earlyMessageBytes > EARLY_MESSAGE_MAX_BYTES
+        ) {
           ws.close(4003, "handshake overflow");
           return;
         }
@@ -885,11 +901,7 @@ export function createWsHandler(opts: WsRouteOptions): {
       });
   });
 
-  function handleUpgrade(
-    req: IncomingMessage,
-    socket: Duplex,
-    head: Buffer,
-  ): void {
+  function handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void {
     wss.handleUpgrade(req, socket, head, (ws) => {
       wss.emit("connection", ws, req);
     });

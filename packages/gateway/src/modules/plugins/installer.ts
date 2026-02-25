@@ -53,14 +53,16 @@ async function pathExists(path: string): Promise<boolean> {
     await stat(path);
     return true;
   } catch (err) {
-    return Boolean(err && typeof err === "object" && "code" in err && (err as { code?: string }).code !== "ENOENT");
+    return Boolean(
+      err &&
+      typeof err === "object" &&
+      "code" in err &&
+      (err as { code?: string }).code !== "ENOENT",
+    );
   }
 }
 
-export async function installPluginFromDir(opts: {
-  home: string;
-  sourceDir: string;
-}): Promise<{
+export async function installPluginFromDir(opts: { home: string; sourceDir: string }): Promise<{
   plugin_id: string;
   plugin_dir: string;
   install: PluginInstallInfo;

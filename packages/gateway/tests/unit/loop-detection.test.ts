@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { decideCrossTurnLoopWarning, detectWithinTurnToolLoop, signatureForToolStep } from "../../src/modules/agent/loop-detection.js";
+import {
+  decideCrossTurnLoopWarning,
+  detectWithinTurnToolLoop,
+  signatureForToolStep,
+} from "../../src/modules/agent/loop-detection.js";
 
 describe("detectWithinTurnToolLoop", () => {
   it("reports all tool names in an alternating cycle", () => {

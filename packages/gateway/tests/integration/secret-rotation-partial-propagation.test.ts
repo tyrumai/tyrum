@@ -14,7 +14,11 @@ class FailAfterFirstUpdateAuthProfileDal extends AuthProfileDal {
 
   override async updateSecretHandles(
     profileId: string,
-    input: { secretHandles: Record<string, string>; expiresAt?: string | null; updatedBy?: unknown },
+    input: {
+      secretHandles: Record<string, string>;
+      expiresAt?: string | null;
+      updatedBy?: unknown;
+    },
   ): Promise<AuthProfileRow | undefined> {
     this.updateCalls += 1;
     if (this.updateCalls > 1) {
@@ -39,7 +43,10 @@ describe("secret rotation partial propagation (integration)", () => {
 
   it("does not revoke the new handle if propagation fails after updating some profiles", async () => {
     const container = await createTestContainer();
-    const secretProvider = await FileSecretProvider.create(secretsPath, "test-admin-token-for-testing");
+    const secretProvider = await FileSecretProvider.create(
+      secretsPath,
+      "test-admin-token-for-testing",
+    );
     const authProfileDal = new FailAfterFirstUpdateAuthProfileDal(container.db);
 
     const app = new Hono();
@@ -77,7 +84,9 @@ describe("secret rotation partial propagation (integration)", () => {
     expect(rotateRes.status).toBe(500);
 
     const handles = await secretProvider.list();
-    const rotated = handles.find((h) => h.scope === oldHandle.scope && h.handle_id !== oldHandle.handle_id);
+    const rotated = handles.find(
+      (h) => h.scope === oldHandle.scope && h.handle_id !== oldHandle.handle_id,
+    );
     expect(rotated).toBeTruthy();
 
     const newResolved = await secretProvider.resolve(rotated!);

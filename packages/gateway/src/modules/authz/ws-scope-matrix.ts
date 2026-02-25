@@ -33,4 +33,3 @@ export function resolveWsRequestRequiredScopes(type: string): string[] | null {
     }
   }
 }
-

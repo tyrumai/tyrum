@@ -24,4 +24,3 @@ export function createWindowSender(): WindowSender {
 
   return { setWindow, send };
 }
-

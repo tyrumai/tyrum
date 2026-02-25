@@ -29,7 +29,9 @@ describe("Secret routes (integration)", () => {
     });
 
     expect(res.status).toBe(201);
-    const body = (await res.json()) as { handle: { handle_id: string; provider: string; scope: string } };
+    const body = (await res.json()) as {
+      handle: { handle_id: string; provider: string; scope: string };
+    };
     expect(body.handle.handle_id).toBeTruthy();
     expect(body.handle.provider).toBe("env");
     expect(body.handle.scope).toBe("MY_API_KEY");
@@ -182,10 +184,7 @@ describe("Secret routes (integration) — file provider rotation", () => {
   });
 
   async function setupFile() {
-    const provider = await FileSecretProvider.create(
-      secretsPath,
-      "test-admin-token-for-testing",
-    );
+    const provider = await FileSecretProvider.create(secretsPath, "test-admin-token-for-testing");
     const app = new Hono();
     app.route(
       "/",

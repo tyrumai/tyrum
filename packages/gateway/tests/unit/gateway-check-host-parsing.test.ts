@@ -89,4 +89,3 @@ describe("tyrum check host parsing", () => {
     }
   });
 });
-

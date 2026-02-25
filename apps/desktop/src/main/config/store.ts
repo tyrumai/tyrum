@@ -1,10 +1,4 @@
-import {
-  readFileSync,
-  writeFileSync,
-  mkdirSync,
-  existsSync,
-  chmodSync,
-} from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, chmodSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { DesktopNodeConfig, DEFAULT_CONFIG } from "./schema.js";

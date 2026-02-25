@@ -5,11 +5,7 @@
 import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
 import type { EventLog } from "../modules/planner/event-log.js";
-import {
-  verifyChain,
-  exportReceiptBundle,
-  computeEventHash,
-} from "../modules/audit/hash-chain.js";
+import { verifyChain, exportReceiptBundle, computeEventHash } from "../modules/audit/hash-chain.js";
 import type { ChainableEvent } from "../modules/audit/hash-chain.js";
 import type { SqlDb } from "../statestore/types.js";
 import { AuditForgetRequest, type AuditForgetDecision } from "@tyrum/schemas";
@@ -28,10 +24,7 @@ export function createAuditRoutes(deps: AuditRouteDeps): Hono {
     const events = await deps.eventLog.getEventsForVerification(planId);
 
     if (events.length === 0) {
-      return c.json(
-        { error: "not_found", message: `no events found for plan ${planId}` },
-        404,
-      );
+      return c.json({ error: "not_found", message: `no events found for plan ${planId}` }, 404);
     }
 
     const bundle = exportReceiptBundle(planId, events);
@@ -45,10 +38,7 @@ export function createAuditRoutes(deps: AuditRouteDeps): Hono {
     };
 
     if (!body.events || !Array.isArray(body.events)) {
-      return c.json(
-        { error: "invalid_request", message: "events array is required" },
-        400,
-      );
+      return c.json({ error: "invalid_request", message: "events array is required" }, 400);
     }
 
     const result = verifyChain(body.events);

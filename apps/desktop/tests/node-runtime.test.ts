@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { deviceIdFromSha256Digest, type ActionPrimitive, type ClientCapability } from "@tyrum/schemas";
+import {
+  deviceIdFromSha256Digest,
+  type ActionPrimitive,
+  type ClientCapability,
+} from "@tyrum/schemas";
 import type { CapabilityProvider, TaskResult } from "@tyrum/client";
 import { NodeRuntime } from "../src/main/node-runtime.js";
 import { resolvePermissions } from "../src/main/config/permissions.js";
@@ -61,11 +65,7 @@ describe("NodeRuntime capability advertisement", () => {
   });
 
   it("deduplicates capability advertisement by provider capability", () => {
-    const runtime = new NodeRuntime(
-      DEFAULT_CONFIG,
-      resolvePermissions("balanced", {}),
-      callbacks,
-    );
+    const runtime = new NodeRuntime(DEFAULT_CONFIG, resolvePermissions("balanced", {}), callbacks);
 
     runtime.registerProvider(makeProvider("desktop"));
     runtime.registerProvider(makeProvider("desktop"));
@@ -117,7 +117,9 @@ describe("NodeRuntime device identity", () => {
       callbacks,
     );
 
-    const device = (runtime as unknown as { ensureDeviceIdentity: () => NonNullable<unknown> }).ensureDeviceIdentity();
+    const device = (
+      runtime as unknown as { ensureDeviceIdentity: () => NonNullable<unknown> }
+    ).ensureDeviceIdentity();
     expect(device).toBeTruthy();
 
     const { deviceId, publicKey } = device as { deviceId: string; publicKey: string };
@@ -147,7 +149,9 @@ describe("NodeRuntime device identity", () => {
       callbacks,
     );
 
-    const device = (runtime as unknown as { ensureDeviceIdentity: () => NonNullable<unknown> }).ensureDeviceIdentity();
+    const device = (
+      runtime as unknown as { ensureDeviceIdentity: () => NonNullable<unknown> }
+    ).ensureDeviceIdentity();
     expect(device).toBeTruthy();
 
     const { deviceId } = device as { deviceId: string };

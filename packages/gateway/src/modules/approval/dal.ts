@@ -154,19 +154,12 @@ export class ApprovalDal {
   }
 
   /** Respond to a pending approval (approve or deny). */
-  async respond(
-    id: number,
-    approved: boolean,
-    reason?: string,
-  ): Promise<ApprovalRow | undefined> {
+  async respond(id: number, approved: boolean, reason?: string): Promise<ApprovalRow | undefined> {
     const status: ApprovalStatus = approved ? "approved" : "denied";
     const nowIso = new Date().toISOString();
 
     return await this.db.transaction(async (tx) => {
-      const existing = await tx.get<RawApprovalRow>(
-        "SELECT * FROM approvals WHERE id = ?",
-        [id],
-      );
+      const existing = await tx.get<RawApprovalRow>("SELECT * FROM approvals WHERE id = ?", [id]);
       if (!existing) return undefined;
 
       if (existing.status !== "pending") {
@@ -181,27 +174,18 @@ export class ApprovalDal {
       );
 
       if (result.changes === 0) {
-        const current = await tx.get<RawApprovalRow>(
-          "SELECT * FROM approvals WHERE id = ?",
-          [id],
-        );
+        const current = await tx.get<RawApprovalRow>("SELECT * FROM approvals WHERE id = ?", [id]);
         return current ? toApprovalRow(current) : undefined;
       }
 
-      const updated = await tx.get<RawApprovalRow>(
-        "SELECT * FROM approvals WHERE id = ?",
-        [id],
-      );
+      const updated = await tx.get<RawApprovalRow>("SELECT * FROM approvals WHERE id = ?", [id]);
       return updated ? toApprovalRow(updated) : undefined;
     });
   }
 
   /** Get a single approval by id. */
   async getById(id: number): Promise<ApprovalRow | undefined> {
-    const row = await this.db.get<RawApprovalRow>(
-      "SELECT * FROM approvals WHERE id = ?",
-      [id],
-    );
+    const row = await this.db.get<RawApprovalRow>("SELECT * FROM approvals WHERE id = ?", [id]);
 
     return row ? toApprovalRow(row) : undefined;
   }

@@ -4,9 +4,7 @@ import { fileURLToPath } from "node:url";
 import type { McpServerSpec as McpServerSpecT } from "@tyrum/schemas";
 import { McpManager } from "../../src/modules/agent/mcp-manager.js";
 
-const mockServerPath = fileURLToPath(
-  new URL("../fixtures/mcp/mock-server.mjs", import.meta.url),
-);
+const mockServerPath = fileURLToPath(new URL("../fixtures/mcp/mock-server.mjs", import.meta.url));
 
 const paginatedServerPath = fileURLToPath(
   new URL("../fixtures/mcp/mock-server-paginated-21.mjs", import.meta.url),

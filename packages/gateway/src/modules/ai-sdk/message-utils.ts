@@ -13,7 +13,10 @@ export function coerceModelMessages(value: unknown): ModelMessage[] | undefined 
   return out;
 }
 
-export function hasToolApprovalResponse(messages: readonly ModelMessage[], approvalId: string): boolean {
+export function hasToolApprovalResponse(
+  messages: readonly ModelMessage[],
+  approvalId: string,
+): boolean {
   for (const message of messages) {
     if (!message || typeof message !== "object") continue;
     if (message.role !== "tool") continue;
@@ -86,4 +89,3 @@ export function countAssistantMessages(messages: readonly ModelMessage[]): numbe
   }
   return count;
 }
-

@@ -19,11 +19,7 @@ import { coerceRecord, coerceString } from "../modules/util/coerce.js";
 const PENDING_TTL_MS = 10 * 60 * 1000;
 
 function base64Url(input: Buffer): string {
-  return input
-    .toString("base64")
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replaceAll("=", "");
+  return input.toString("base64").replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
 function sha256Base64Url(input: string): string {
@@ -107,7 +103,10 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
 
     const spec = await deps.oauthProviderRegistry.get(providerId);
     if (!spec) {
-      return c.json({ error: "not_found", message: `oauth provider '${providerId}' not configured` }, 404);
+      return c.json(
+        { error: "not_found", message: `oauth provider '${providerId}' not configured` },
+        404,
+      );
     }
 
     try {
@@ -119,7 +118,10 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
 
     const clientIdEnv = coerceString(spec.client_id_env);
     if (!clientIdEnv) {
-      return c.json({ error: "invalid_config", message: "oauth provider missing client_id_env" }, 500);
+      return c.json(
+        { error: "invalid_config", message: "oauth provider missing client_id_env" },
+        500,
+      );
     }
     const clientId = process.env[clientIdEnv]?.trim();
     if (!clientId) {
@@ -128,7 +130,13 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
 
     const { authorizationEndpoint, tokenEndpoint } = await resolveOAuthEndpoints(spec);
     if (!authorizationEndpoint || !tokenEndpoint) {
-      return c.json({ error: "invalid_config", message: "oauth provider missing authorization/token endpoints" }, 500);
+      return c.json(
+        {
+          error: "invalid_config",
+          message: "oauth provider missing authorization/token endpoints",
+        },
+        500,
+      );
     }
 
     const state = randomUUID();
@@ -212,10 +220,7 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
 
     if (!state || !code) {
       return c.html(
-        renderHtml(
-          "Authorization failed",
-          "Missing required query parameters: state and code",
-        ),
+        renderHtml("Authorization failed", "Missing required query parameters: state and code"),
         400,
       );
     }
@@ -244,7 +249,10 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
     const nowIso = new Date(nowMs).toISOString();
     if (pending.expires_at <= nowIso) {
       await deps.oauthPendingDal.delete(state).catch(() => {});
-      return c.html(renderHtml("Authorization failed", "OAuth request expired. Please retry."), 400);
+      return c.html(
+        renderHtml("Authorization failed", "OAuth request expired. Please retry."),
+        400,
+      );
     }
     const consumed = await deps.oauthPendingDal.consume(state);
     if (!consumed) {
@@ -267,7 +275,10 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
 
     const clientIdEnv = coerceString(spec.client_id_env);
     if (!clientIdEnv) {
-      return c.html(renderHtml("Authorization failed", "oauth provider missing client_id_env"), 500);
+      return c.html(
+        renderHtml("Authorization failed", "oauth provider missing client_id_env"),
+        500,
+      );
     }
     const clientId = process.env[clientIdEnv]?.trim();
     if (!clientId) {
@@ -282,9 +293,14 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
     let profileCreated = false;
 
     try {
-      const { tokenEndpoint } = await resolveOAuthEndpoints(spec, { requireAuthorizationEndpoint: false });
+      const { tokenEndpoint } = await resolveOAuthEndpoints(spec, {
+        requireAuthorizationEndpoint: false,
+      });
       if (!tokenEndpoint) {
-        return c.html(renderHtml("Authorization failed", "oauth provider missing token endpoint"), 500);
+        return c.html(
+          renderHtml("Authorization failed", "oauth provider missing token endpoint"),
+          500,
+        );
       }
 
       const token = await exchangeAuthorizationCode({

@@ -142,34 +142,22 @@ export function Logs() {
       </div>
 
       <div style={tabRow}>
-        <button
-          style={tabStyle(tab === "gateway")}
-          onClick={() => setTab("gateway")}
-        >
+        <button style={tabStyle(tab === "gateway")} onClick={() => setTab("gateway")}>
           Gateway
         </button>
-        <button
-          style={tabStyle(tab === "node")}
-          onClick={() => setTab("node")}
-        >
+        <button style={tabStyle(tab === "node")} onClick={() => setTab("node")}>
           Node
         </button>
       </div>
 
-      <div
-        ref={scrollRef}
-        style={logContainerStyle}
-        onScroll={handleScroll}
-      >
+      <div ref={scrollRef} style={logContainerStyle} onScroll={handleScroll}>
         {filtered.length === 0 ? (
           <div style={emptyStyle}>No log entries yet</div>
         ) : (
           filtered.map((entry) => (
             <div key={entry.id} style={entryStyle(entry.level)}>
               <span style={timestampStyle}>{formatTime(entry.timestamp)}</span>
-              <span style={levelStyle(entry.level)}>
-                {entry.level}
-              </span>
+              <span style={levelStyle(entry.level)}>{entry.level}</span>
               {entry.message}
             </div>
           ))

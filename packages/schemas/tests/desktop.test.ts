@@ -54,15 +54,11 @@ describe("DesktopScreenshotArgs", () => {
   });
 
   it("rejects missing display", () => {
-    expect(() =>
-      DesktopScreenshotArgs.parse({ op: "screenshot" }),
-    ).toThrow();
+    expect(() => DesktopScreenshotArgs.parse({ op: "screenshot" })).toThrow();
   });
 
   it("rejects invalid display value", () => {
-    expect(() =>
-      DesktopScreenshotArgs.parse({ op: "screenshot", display: "secondary" }),
-    ).toThrow();
+    expect(() => DesktopScreenshotArgs.parse({ op: "screenshot", display: "secondary" })).toThrow();
   });
 
   it("rejects non-positive max_width", () => {
@@ -160,15 +156,11 @@ describe("DesktopMouseArgs", () => {
   });
 
   it("rejects missing x coordinate", () => {
-    expect(() =>
-      DesktopMouseArgs.parse({ op: "mouse", action: "click", y: 100 }),
-    ).toThrow();
+    expect(() => DesktopMouseArgs.parse({ op: "mouse", action: "click", y: 100 })).toThrow();
   });
 
   it("rejects missing y coordinate", () => {
-    expect(() =>
-      DesktopMouseArgs.parse({ op: "mouse", action: "click", x: 100 }),
-    ).toThrow();
+    expect(() => DesktopMouseArgs.parse({ op: "mouse", action: "click", x: 100 })).toThrow();
   });
 
   it("rejects invalid action", () => {
@@ -317,22 +309,16 @@ describe("DesktopActionArgs (discriminated union)", () => {
   });
 
   it("rejects unknown op", () => {
-    expect(() =>
-      DesktopActionArgs.parse({ op: "network", url: "https://example.com" }),
-    ).toThrow();
+    expect(() => DesktopActionArgs.parse({ op: "network", url: "https://example.com" })).toThrow();
   });
 
   it("rejects missing op", () => {
-    expect(() =>
-      DesktopActionArgs.parse({ action: "click", x: 0, y: 0 }),
-    ).toThrow();
+    expect(() => DesktopActionArgs.parse({ action: "click", x: 0, y: 0 })).toThrow();
   });
 
   it("validates fields for the selected op variant", () => {
     // Mouse op must have x and y, even via the union
-    expect(() =>
-      DesktopActionArgs.parse({ op: "mouse", action: "click" }),
-    ).toThrow();
+    expect(() => DesktopActionArgs.parse({ op: "mouse", action: "click" })).toThrow();
   });
 
   it("narrows type correctly for screenshot", () => {

@@ -1,10 +1,6 @@
 import { z } from "zod";
 
-export const AssertionKind = z.enum([
-  "http_status",
-  "dom_contains",
-  "json_path_equals",
-]);
+export const AssertionKind = z.enum(["http_status", "dom_contains", "json_path_equals"]);
 export type AssertionKind = z.infer<typeof AssertionKind>;
 
 export const AssertionFailureCode = z.enum([
@@ -30,9 +26,11 @@ export const AssertionOutcome = z.discriminatedUnion("status", [
 ]);
 export type AssertionOutcome = z.infer<typeof AssertionOutcome>;
 
-export const AssertionResult = z.object({
-  kind: AssertionKind,
-}).and(AssertionOutcome);
+export const AssertionResult = z
+  .object({
+    kind: AssertionKind,
+  })
+  .and(AssertionOutcome);
 export type AssertionResult = z.infer<typeof AssertionResult>;
 
 export const PostconditionReport = z.object({
@@ -117,10 +115,7 @@ function parseSpec(raw: unknown): ParsedSpec {
     if ("assertions" in obj) {
       const arr = obj["assertions"];
       if (!Array.isArray(arr)) {
-        throw new PostconditionError(
-          "invalid_postcondition",
-          "`assertions` must be an array",
-        );
+        throw new PostconditionError("invalid_postcondition", "`assertions` must be an array");
       }
       const assertions = parseAssertionArray(arr);
       const metadata: Record<string, unknown> = {};
@@ -137,23 +132,14 @@ function parseSpec(raw: unknown): ParsedSpec {
       return { assertions: [parseAssertion(raw)], metadata: undefined };
     }
     const keys = Object.keys(obj).sort().join(",");
-    throw new PostconditionError(
-      "unsupported_postcondition",
-      `object_with_fields:${keys}`,
-    );
+    throw new PostconditionError("unsupported_postcondition", `object_with_fields:${keys}`);
   }
-  throw new PostconditionError(
-    "invalid_postcondition",
-    "postcondition must be an object or array",
-  );
+  throw new PostconditionError("invalid_postcondition", "postcondition must be an object or array");
 }
 
 function parseAssertionArray(items: unknown[]): AssertionSpec[] {
   if (items.length === 0) {
-    throw new PostconditionError(
-      "invalid_postcondition",
-      "assertions array must not be empty",
-    );
+    throw new PostconditionError("invalid_postcondition", "assertions array must not be empty");
   }
   return items.map(parseAssertion);
 }
@@ -199,12 +185,9 @@ function parseAssertion(value: unknown): AssertionSpec {
           "dom_contains assertion requires 'text'",
         );
       }
-      const selector =
-        typeof obj["selector"] === "string" ? obj["selector"] : undefined;
+      const selector = typeof obj["selector"] === "string" ? obj["selector"] : undefined;
       const caseInsensitive =
-        typeof obj["case_insensitive"] === "boolean"
-          ? obj["case_insensitive"]
-          : false;
+        typeof obj["case_insensitive"] === "boolean" ? obj["case_insensitive"] : false;
       return { type: "dom_contains", text, selector, case_insensitive: caseInsensitive };
     }
     case "json_path": {
@@ -225,17 +208,11 @@ function parseAssertion(value: unknown): AssertionSpec {
       return { type: "json_path_equals", path, expected };
     }
     default:
-      throw new PostconditionError(
-        "unsupported_postcondition",
-        typeName,
-      );
+      throw new PostconditionError("unsupported_postcondition", typeName);
   }
 }
 
-function evaluateAssertion(
-  spec: AssertionSpec,
-  context: EvaluationContext,
-): AssertionResult {
+function evaluateAssertion(spec: AssertionSpec, context: EvaluationContext): AssertionResult {
   switch (spec.type) {
     case "http_status": {
       if (context.http == null) {
@@ -354,10 +331,7 @@ function parseJsonPath(path: string): PathToken[] {
     if (rest.startsWith(".")) {
       rest = rest.slice(1);
       if (rest.length === 0) {
-        throw new PostconditionError(
-          "invalid_postcondition",
-          "path cannot end with '.'",
-        );
+        throw new PostconditionError("invalid_postcondition", "path cannot end with '.'");
       }
       const match = rest.match(/^[^.[]+/);
       if (!match || match[0].length === 0) {
@@ -372,17 +346,11 @@ function parseJsonPath(path: string): PathToken[] {
       rest = rest.slice(1);
       const closing = rest.indexOf("]");
       if (closing === -1) {
-        throw new PostconditionError(
-          "invalid_postcondition",
-          "missing closing ']' in index",
-        );
+        throw new PostconditionError("invalid_postcondition", "missing closing ']' in index");
       }
       const indexStr = rest.slice(0, closing);
       if (indexStr.length === 0) {
-        throw new PostconditionError(
-          "invalid_postcondition",
-          "array index cannot be empty",
-        );
+        throw new PostconditionError("invalid_postcondition", "array index cannot be empty");
       }
       const index = Number.parseInt(indexStr, 10);
       if (!Number.isInteger(index) || index < 0) {
@@ -452,7 +420,9 @@ export function checkPostcondition(
     const report = evaluatePostcondition(spec, context);
     if (report.passed) return { passed: true, report };
     const failedAssertions = report.assertions
-      .filter((a): a is AssertionResult & { status: "failed"; message: string } => a.status === "failed")
+      .filter(
+        (a): a is AssertionResult & { status: "failed"; message: string } => a.status === "failed",
+      )
       .map((a) => `${a.kind}: ${a.message}`)
       .join("; ");
     return {
@@ -482,10 +452,7 @@ function deepEqual(a: unknown, b: unknown): boolean {
     const keysB = Object.keys(b as object);
     if (keysA.length !== keysB.length) return false;
     return keysA.every((key) =>
-      deepEqual(
-        (a as Record<string, unknown>)[key],
-        (b as Record<string, unknown>)[key],
-      ),
+      deepEqual((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]),
     );
   }
   return false;

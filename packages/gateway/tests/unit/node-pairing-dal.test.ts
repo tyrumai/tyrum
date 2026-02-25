@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { NodePairingDal } from "../../src/modules/node/pairing-dal.js";
-import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION, descriptorIdForClientCapability } from "@tyrum/schemas";
+import {
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  descriptorIdForClientCapability,
+} from "@tyrum/schemas";
 
 describe("NodePairingDal.upsertOnConnect", () => {
   let db: SqliteDb | undefined;

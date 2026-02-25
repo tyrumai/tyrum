@@ -46,9 +46,7 @@ describe("DesktopUpdaterService", () => {
       isPackaged: false,
     });
 
-    await expect(service.checkForUpdates()).rejects.toThrow(
-      "packaged desktop builds",
-    );
+    await expect(service.checkForUpdates()).rejects.toThrow("packaged desktop builds");
   });
 
   it("updates state from updater events", async () => {

@@ -36,18 +36,9 @@ describe("ToolExecutor", () => {
       homeDir = await mkdtemp(join(tmpdir(), "tool-executor-"));
       await writeFile(join(homeDir, "test.txt"), "hello world", "utf-8");
 
-      const executor = new ToolExecutor(
-        homeDir,
-        stubMcpManager(),
-        new Map(),
-        fetch,
-      );
+      const executor = new ToolExecutor(homeDir, stubMcpManager(), new Map(), fetch);
 
-      const result = await executor.execute(
-        "tool.fs.read",
-        "call-1",
-        { path: "test.txt" },
-      );
+      const result = await executor.execute("tool.fs.read", "call-1", { path: "test.txt" });
 
       expect(result.tool_call_id).toBe("call-1");
       expect(result.output).toContain('<data source="tool">');
@@ -58,12 +49,7 @@ describe("ToolExecutor", () => {
     it("fs.read returns error for missing path argument", async () => {
       homeDir = await mkdtemp(join(tmpdir(), "tool-executor-"));
 
-      const executor = new ToolExecutor(
-        homeDir,
-        stubMcpManager(),
-        new Map(),
-        fetch,
-      );
+      const executor = new ToolExecutor(homeDir, stubMcpManager(), new Map(), fetch);
 
       const result = await executor.execute("tool.fs.read", "call-2", {});
 
@@ -76,9 +62,7 @@ describe("ToolExecutor", () => {
       const mockFetch = vi.fn(async () => ({
         text: async () => "response-body",
       })) as unknown as typeof fetch;
-      const dnsLookup = vi.fn(async () => [
-        { address: "93.184.216.34", family: 4 as const },
-      ]);
+      const dnsLookup = vi.fn(async () => [{ address: "93.184.216.34", family: 4 as const }]);
 
       const executor = new ToolExecutor(
         homeDir,
@@ -89,11 +73,9 @@ describe("ToolExecutor", () => {
         dnsLookup,
       );
 
-      const result = await executor.execute(
-        "tool.http.fetch",
-        "call-3",
-        { url: "https://example.com/api" },
-      );
+      const result = await executor.execute("tool.http.fetch", "call-3", {
+        url: "https://example.com/api",
+      });
 
       expect(result.output).toContain("response-body");
       expect(result.output).toContain('<data source="web">');
@@ -112,18 +94,11 @@ describe("ToolExecutor", () => {
         text: async () => "should-not-fetch",
       })) as unknown as typeof fetch;
 
-      const executor = new ToolExecutor(
-        homeDir,
-        stubMcpManager(),
-        new Map(),
-        mockFetch,
-      );
+      const executor = new ToolExecutor(homeDir, stubMcpManager(), new Map(), mockFetch);
 
-      const result = await executor.execute(
-        "tool.http.fetch",
-        "call-ssrf-1",
-        { url: "http://169.254.169.254/latest/meta-data/" },
-      );
+      const result = await executor.execute("tool.http.fetch", "call-ssrf-1", {
+        url: "http://169.254.169.254/latest/meta-data/",
+      });
 
       expect(result.error).toContain("blocked url");
       expect(mockFetch).not.toHaveBeenCalled();
@@ -135,9 +110,7 @@ describe("ToolExecutor", () => {
       const mockFetch = vi.fn(async () => ({
         text: async () => "should-not-fetch",
       })) as unknown as typeof fetch;
-      const dnsLookup = vi.fn(async () => [
-        { address: "10.0.0.42", family: 4 as const },
-      ]);
+      const dnsLookup = vi.fn(async () => [{ address: "10.0.0.42", family: 4 as const }]);
 
       const executor = new ToolExecutor(
         homeDir,
@@ -148,11 +121,9 @@ describe("ToolExecutor", () => {
         dnsLookup,
       );
 
-      const result = await executor.execute(
-        "tool.http.fetch",
-        "call-ssrf-2",
-        { url: "https://example.com/private" },
-      );
+      const result = await executor.execute("tool.http.fetch", "call-ssrf-2", {
+        url: "https://example.com/private",
+      });
 
       expect(result.error).toContain("blocked url");
       expect(mockFetch).not.toHaveBeenCalled();
@@ -162,12 +133,7 @@ describe("ToolExecutor", () => {
     it("http.fetch returns error for missing url", async () => {
       homeDir = await mkdtemp(join(tmpdir(), "tool-executor-"));
 
-      const executor = new ToolExecutor(
-        homeDir,
-        stubMcpManager(),
-        new Map(),
-        fetch,
-      );
+      const executor = new ToolExecutor(homeDir, stubMcpManager(), new Map(), fetch);
 
       const result = await executor.execute("tool.http.fetch", "call-4", {});
       expect(result.error).toBe("missing required argument: url");
@@ -176,18 +142,12 @@ describe("ToolExecutor", () => {
     it("fs.write writes file content", async () => {
       homeDir = await mkdtemp(join(tmpdir(), "tool-executor-"));
 
-      const executor = new ToolExecutor(
-        homeDir,
-        stubMcpManager(),
-        new Map(),
-        fetch,
-      );
+      const executor = new ToolExecutor(homeDir, stubMcpManager(), new Map(), fetch);
 
-      const result = await executor.execute(
-        "tool.fs.write",
-        "call-5",
-        { path: "test.txt", content: "data" },
-      );
+      const result = await executor.execute("tool.fs.write", "call-5", {
+        path: "test.txt",
+        content: "data",
+      });
 
       expect(result.error).toBeUndefined();
       expect(result.output).toContain('<data source="tool">');
@@ -200,18 +160,9 @@ describe("ToolExecutor", () => {
     it("tool.exec executes commands", async () => {
       homeDir = await mkdtemp(join(tmpdir(), "tool-executor-"));
 
-      const executor = new ToolExecutor(
-        homeDir,
-        stubMcpManager(),
-        new Map(),
-        fetch,
-      );
+      const executor = new ToolExecutor(homeDir, stubMcpManager(), new Map(), fetch);
 
-      const result = await executor.execute(
-        "tool.exec",
-        "call-6",
-        { command: "echo hi" },
-      );
+      const result = await executor.execute("tool.exec", "call-6", { command: "echo hi" });
 
       expect(result.error).toBeUndefined();
       expect(result.output).toContain('<data source="tool">');
@@ -222,18 +173,12 @@ describe("ToolExecutor", () => {
     it("tool.node.dispatch returns not-yet-available", async () => {
       homeDir = await mkdtemp(join(tmpdir(), "tool-executor-"));
 
-      const executor = new ToolExecutor(
-        homeDir,
-        stubMcpManager(),
-        new Map(),
-        fetch,
-      );
+      const executor = new ToolExecutor(homeDir, stubMcpManager(), new Map(), fetch);
 
-      const result = await executor.execute(
-        "tool.node.dispatch",
-        "call-7",
-        { capability: "screen", action: "capture" },
-      );
+      const result = await executor.execute("tool.node.dispatch", "call-7", {
+        capability: "screen",
+        action: "capture",
+      });
 
       expect(result.error).toBe("tool not yet available");
     });
@@ -241,18 +186,9 @@ describe("ToolExecutor", () => {
     it("unknown tool returns error", async () => {
       homeDir = await mkdtemp(join(tmpdir(), "tool-executor-"));
 
-      const executor = new ToolExecutor(
-        homeDir,
-        stubMcpManager(),
-        new Map(),
-        fetch,
-      );
+      const executor = new ToolExecutor(homeDir, stubMcpManager(), new Map(), fetch);
 
-      const result = await executor.execute(
-        "tool.unknown",
-        "call-8",
-        {},
-      );
+      const result = await executor.execute("tool.unknown", "call-8", {});
 
       expect(result.error).toBe("unknown tool: tool.unknown");
     });
@@ -262,18 +198,11 @@ describe("ToolExecutor", () => {
     it("rejects paths outside TYRUM_HOME via ..", async () => {
       homeDir = await mkdtemp(join(tmpdir(), "tool-executor-"));
 
-      const executor = new ToolExecutor(
-        homeDir,
-        stubMcpManager(),
-        new Map(),
-        fetch,
-      );
+      const executor = new ToolExecutor(homeDir, stubMcpManager(), new Map(), fetch);
 
-      const result = await executor.execute(
-        "tool.fs.read",
-        "call-sb-1",
-        { path: "../../../etc/passwd" },
-      );
+      const result = await executor.execute("tool.fs.read", "call-sb-1", {
+        path: "../../../etc/passwd",
+      });
 
       expect(result.error).toContain("path escapes workspace");
     });
@@ -281,18 +210,9 @@ describe("ToolExecutor", () => {
     it("rejects absolute paths outside TYRUM_HOME", async () => {
       homeDir = await mkdtemp(join(tmpdir(), "tool-executor-"));
 
-      const executor = new ToolExecutor(
-        homeDir,
-        stubMcpManager(),
-        new Map(),
-        fetch,
-      );
+      const executor = new ToolExecutor(homeDir, stubMcpManager(), new Map(), fetch);
 
-      const result = await executor.execute(
-        "tool.fs.read",
-        "call-sb-2",
-        { path: "/etc/passwd" },
-      );
+      const result = await executor.execute("tool.fs.read", "call-sb-2", { path: "/etc/passwd" });
 
       expect(result.error).toContain("path escapes workspace");
     });
@@ -302,18 +222,9 @@ describe("ToolExecutor", () => {
       await mkdir(join(homeDir, "sub"), { recursive: true });
       await writeFile(join(homeDir, "sub/data.txt"), "nested content", "utf-8");
 
-      const executor = new ToolExecutor(
-        homeDir,
-        stubMcpManager(),
-        new Map(),
-        fetch,
-      );
+      const executor = new ToolExecutor(homeDir, stubMcpManager(), new Map(), fetch);
 
-      const result = await executor.execute(
-        "tool.fs.read",
-        "call-sb-3",
-        { path: "sub/data.txt" },
-      );
+      const result = await executor.execute("tool.fs.read", "call-sb-3", { path: "sub/data.txt" });
 
       expect(result.output).toContain('<data source="tool">');
       expect(result.output).toContain("nested content");
@@ -341,44 +252,24 @@ describe("ToolExecutor", () => {
 
       const specMap = new Map<string, McpServerSpec>([["calendar", spec]]);
 
-      const executor = new ToolExecutor(
-        homeDir,
-        mcpManager,
-        specMap,
-        fetch,
-      );
+      const executor = new ToolExecutor(homeDir, mcpManager, specMap, fetch);
 
-      const result = await executor.execute(
-        "mcp.calendar.events_list",
-        "call-mcp-1",
-        { date: "2026-02-17" },
-      );
+      const result = await executor.execute("mcp.calendar.events_list", "call-mcp-1", {
+        date: "2026-02-17",
+      });
 
       expect(result.output).toContain("calendar-result");
       expect(result.output).toContain('<data source="tool">');
       expect(result.error).toBeUndefined();
-      expect(callToolMock).toHaveBeenCalledWith(
-        spec,
-        "events_list",
-        { date: "2026-02-17" },
-      );
+      expect(callToolMock).toHaveBeenCalledWith(spec, "events_list", { date: "2026-02-17" });
     });
 
     it("returns error for unknown MCP server", async () => {
       homeDir = await mkdtemp(join(tmpdir(), "tool-executor-"));
 
-      const executor = new ToolExecutor(
-        homeDir,
-        stubMcpManager(),
-        new Map(),
-        fetch,
-      );
+      const executor = new ToolExecutor(homeDir, stubMcpManager(), new Map(), fetch);
 
-      const result = await executor.execute(
-        "mcp.unknown.some_tool",
-        "call-mcp-2",
-        {},
-      );
+      const result = await executor.execute("mcp.unknown.some_tool", "call-mcp-2", {});
 
       expect(result.error).toBe("MCP server not found: unknown");
     });
@@ -386,18 +277,9 @@ describe("ToolExecutor", () => {
     it("returns error for invalid MCP tool ID format", async () => {
       homeDir = await mkdtemp(join(tmpdir(), "tool-executor-"));
 
-      const executor = new ToolExecutor(
-        homeDir,
-        stubMcpManager(),
-        new Map(),
-        fetch,
-      );
+      const executor = new ToolExecutor(homeDir, stubMcpManager(), new Map(), fetch);
 
-      const result = await executor.execute(
-        "mcp.x",
-        "call-mcp-3",
-        {},
-      );
+      const result = await executor.execute("mcp.x", "call-mcp-3", {});
 
       expect(result.error).toContain("invalid MCP tool ID");
     });
@@ -422,18 +304,9 @@ describe("ToolExecutor", () => {
 
       const specMap = new Map<string, McpServerSpec>([["broken", spec]]);
 
-      const executor = new ToolExecutor(
-        homeDir,
-        mcpManager,
-        specMap,
-        fetch,
-      );
+      const executor = new ToolExecutor(homeDir, mcpManager, specMap, fetch);
 
-      const result = await executor.execute(
-        "mcp.broken.do_thing",
-        "call-mcp-4",
-        {},
-      );
+      const result = await executor.execute("mcp.broken.do_thing", "call-mcp-4", {});
 
       expect(result.error).toBeTruthy();
     });
@@ -506,18 +379,9 @@ describe("env sanitization", () => {
     process.env["GATEWAY_TEST_SECRET"] = "should-not-appear-either";
 
     try {
-      const executor = new ToolExecutor(
-        homeDir,
-        stubMcpManager(),
-        new Map(),
-        fetch,
-      );
+      const executor = new ToolExecutor(homeDir, stubMcpManager(), new Map(), fetch);
 
-      const result = await executor.execute(
-        "tool.exec",
-        "call-env-1",
-        { command: "env" },
-      );
+      const result = await executor.execute("tool.exec", "call-env-1", { command: "env" });
 
       expect(result.error).toBeUndefined();
       expect(result.output).not.toContain("TYRUM_TEST_SECRET");
@@ -622,18 +486,16 @@ describe("SSRF protection", () => {
   });
 
   it("blocks when DNS resolves to a private IPv4", async () => {
-    const blocked = await resolvesToBlockedAddress(
-      "https://safe.example/path",
-      async () => [{ address: "192.168.1.10", family: 4 }],
-    );
+    const blocked = await resolvesToBlockedAddress("https://safe.example/path", async () => [
+      { address: "192.168.1.10", family: 4 },
+    ]);
     expect(blocked).toBe(true);
   });
 
   it("allows when DNS resolves to public addresses only", async () => {
-    const blocked = await resolvesToBlockedAddress(
-      "https://safe.example/path",
-      async () => [{ address: "8.8.8.8", family: 4 }],
-    );
+    const blocked = await resolvesToBlockedAddress("https://safe.example/path", async () => [
+      { address: "8.8.8.8", family: 4 },
+    ]);
     expect(blocked).toBe(false);
   });
 });

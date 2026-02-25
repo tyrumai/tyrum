@@ -22,4 +22,3 @@ export const LifecycleHooksConfig = z
   })
   .strict();
 export type LifecycleHooksConfig = z.infer<typeof LifecycleHooksConfig>;
-

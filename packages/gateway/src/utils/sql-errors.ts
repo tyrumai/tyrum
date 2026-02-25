@@ -8,4 +8,3 @@ export function isUniqueViolation(err: unknown): boolean {
   }
   return false;
 }
-

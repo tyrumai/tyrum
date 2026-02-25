@@ -1,9 +1,6 @@
 import Module from "node:module";
 import { describe, it, expect, vi } from "vitest";
-import {
-  checkMacPermissions,
-  requestMacPermission,
-} from "../src/main/platform/permissions.js";
+import { checkMacPermissions, requestMacPermission } from "../src/main/platform/permissions.js";
 
 async function withMockedDarwinElectron<T>(
   electronMock: unknown,

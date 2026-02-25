@@ -26,7 +26,12 @@ function stubSecretProvider(secrets: Map<string, string>): SecretProvider {
   }));
   return {
     resolve: vi.fn(async (handle: SecretHandle) => secrets.get(handle.handle_id) ?? null),
-    store: vi.fn(async () => ({ handle_id: "h1", provider: "env" as const, scope: "test", created_at: "" })),
+    store: vi.fn(async () => ({
+      handle_id: "h1",
+      provider: "env" as const,
+      scope: "test",
+      created_at: "",
+    })),
     revoke: vi.fn(async () => true),
     list: vi.fn(async () => handles),
   };
@@ -65,14 +70,10 @@ describe("ToolExecutor secret resolution", () => {
       allowPublicDnsLookup,
     );
 
-    await executor.execute(
-      "tool.http.fetch",
-      "call-1",
-      {
-        url: "https://api.example.com",
-        headers: { Authorization: "secret:handle-abc" },
-      },
-    );
+    await executor.execute("tool.http.fetch", "call-1", {
+      url: "https://api.example.com",
+      headers: { Authorization: "secret:handle-abc" },
+    });
 
     // The fetch should have been called with the resolved secret value
     expect(mockFetch).toHaveBeenCalledWith(
@@ -180,14 +181,10 @@ describe("ToolExecutor secret resolution", () => {
       allowPublicDnsLookup,
     );
 
-    const result = await executor.execute(
-      "tool.http.fetch",
-      "call-2",
-      {
-        url: "https://api.example.com",
-        headers: { Authorization: "secret:handle-abc" },
-      },
-    );
+    const result = await executor.execute("tool.http.fetch", "call-2", {
+      url: "https://api.example.com",
+      headers: { Authorization: "secret:handle-abc" },
+    });
 
     expect(result.output).not.toContain("my-api-key-value");
     expect(result.output).toContain("[REDACTED]");
@@ -205,11 +202,7 @@ describe("ToolExecutor secret resolution", () => {
       // no secret provider
     );
 
-    const result = await executor.execute(
-      "tool.fs.read",
-      "call-3",
-      { path: "test.txt" },
-    );
+    const result = await executor.execute("tool.fs.read", "call-3", { path: "test.txt" });
 
     expect(result.output).toContain('<data source="tool">');
     expect(result.output).toContain("file content");
@@ -234,14 +227,10 @@ describe("ToolExecutor secret resolution", () => {
       allowPublicDnsLookup,
     );
 
-    await executor.execute(
-      "tool.http.fetch",
-      "call-4",
-      {
-        url: "https://example.com",
-        headers: { "Content-Type": "application/json" },
-      },
-    );
+    await executor.execute("tool.http.fetch", "call-4", {
+      url: "https://example.com",
+      headers: { "Content-Type": "application/json" },
+    });
 
     expect(mockFetch).toHaveBeenCalledWith(
       "https://example.com",
@@ -272,14 +261,10 @@ describe("ToolExecutor secret resolution", () => {
       allowPublicDnsLookup,
     );
 
-    await executor.execute(
-      "tool.http.fetch",
-      "call-5",
-      {
-        url: "https://example.com",
-        headers: { Authorization: "secret:nonexistent" },
-      },
-    );
+    await executor.execute("tool.http.fetch", "call-5", {
+      url: "https://example.com",
+      headers: { Authorization: "secret:nonexistent" },
+    });
 
     // Should pass through the unresolved value
     expect(mockFetch).toHaveBeenCalledWith(
@@ -299,21 +284,14 @@ describe("ToolExecutor secret resolution", () => {
     const secrets = new Map([["handle-xyz", "resolved-value"]]);
     const provider = stubSecretProvider(secrets);
 
-    const executor = new ToolExecutor(
-      homeDir,
-      stubMcpManager(),
-      new Map(),
-      fetch,
-      provider,
-    );
+    const executor = new ToolExecutor(homeDir, stubMcpManager(), new Map(), fetch, provider);
 
     // Use fs.read which has a path arg; also pass an extra arg with nested secrets
     // to verify the walk function handles arrays
-    const result = await executor.execute(
-      "tool.fs.read",
-      "call-6",
-      { path: "test.txt", tags: ["secret:handle-xyz", "plain"] },
-    );
+    const result = await executor.execute("tool.fs.read", "call-6", {
+      path: "test.txt",
+      tags: ["secret:handle-xyz", "plain"],
+    });
 
     // The file read should still work
     expect(result.output).toContain('<data source="tool">');
@@ -342,17 +320,13 @@ describe("ToolExecutor secret resolution", () => {
       allowPublicDnsLookup,
     );
 
-    const result = await executor.execute(
-      "tool.http.fetch",
-      "call-7",
-      {
-        url: "https://example.com",
-        headers: {
-          "X-Key-1": "secret:h1",
-          "X-Key-2": "secret:h2",
-        },
+    const result = await executor.execute("tool.http.fetch", "call-7", {
+      url: "https://example.com",
+      headers: {
+        "X-Key-1": "secret:h1",
+        "X-Key-2": "secret:h2",
       },
-    );
+    });
 
     expect(result.output).not.toContain("secret-AAA");
     expect(result.output).not.toContain("secret-BBB");

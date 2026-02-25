@@ -21,7 +21,10 @@ describe("secret rotation/revocation propagation (integration)", () => {
 
   async function setup() {
     const container = await createTestContainer();
-    const secretProvider = await FileSecretProvider.create(secretsPath, "test-admin-token-for-testing");
+    const secretProvider = await FileSecretProvider.create(
+      secretsPath,
+      "test-admin-token-for-testing",
+    );
     const app = createApp(container, {
       secretProvider,
       isLocalOnly: true,
@@ -44,7 +47,9 @@ describe("secret rotation/revocation propagation (integration)", () => {
       body: JSON.stringify({ scope: "OPENAI_API_KEY", value: "v1" }),
     });
     expect(storeRes.status).toBe(201);
-    const { handle: oldHandle } = (await storeRes.json()) as { handle: { handle_id: string; scope: string } };
+    const { handle: oldHandle } = (await storeRes.json()) as {
+      handle: { handle_id: string; scope: string };
+    };
 
     const createRes = await app.request("/auth/profiles", {
       method: "POST",
@@ -68,7 +73,13 @@ describe("secret rotation/revocation propagation (integration)", () => {
 
     const listRes = await app.request("/auth/profiles");
     expect(listRes.status).toBe(200);
-    const listed = (await listRes.json()) as { profiles: Array<{ profile_id: string; secret_handles: Record<string, string>; status: string }> };
+    const listed = (await listRes.json()) as {
+      profiles: Array<{
+        profile_id: string;
+        secret_handles: Record<string, string>;
+        status: string;
+      }>;
+    };
     const updated = listed.profiles.find((p) => p.profile_id === created.profile.profile_id);
     expect(updated).toBeTruthy();
     expect(updated!.status).toBe("active");
@@ -113,11 +124,12 @@ describe("secret rotation/revocation propagation (integration)", () => {
 
     const listRes = await app.request("/auth/profiles");
     expect(listRes.status).toBe(200);
-    const listed = (await listRes.json()) as { profiles: Array<{ profile_id: string; status: string; disabled_reason?: string | null }> };
+    const listed = (await listRes.json()) as {
+      profiles: Array<{ profile_id: string; status: string; disabled_reason?: string | null }>;
+    };
     const updated = listed.profiles.find((p) => p.profile_id === created.profile.profile_id);
     expect(updated).toBeTruthy();
     expect(updated!.status).toBe("disabled");
     expect(updated!.disabled_reason).toBe("secret_handle_revoked");
   });
 });
-

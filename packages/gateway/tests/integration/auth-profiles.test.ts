@@ -31,8 +31,9 @@ describe("auth profile routes", () => {
       body: JSON.stringify({ reason: "test" }),
     });
     expect(disableRes.status).toBe(200);
-    const disabled = (await disableRes.json()) as { profile: { status: string; disabled_reason?: string | null } };
+    const disabled = (await disableRes.json()) as {
+      profile: { status: string; disabled_reason?: string | null };
+    };
     expect(disabled.profile.status).toBe("disabled");
   });
 });
-

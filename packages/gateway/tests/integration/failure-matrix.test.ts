@@ -27,10 +27,7 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
 function authProtocols(token: string): string[] {
-  return [
-    "tyrum-v1",
-    `tyrum-auth.${Buffer.from(token, "utf-8").toString("base64url")}`,
-  ];
+  return ["tyrum-v1", `tyrum-auth.${Buffer.from(token, "utf-8").toString("base64url")}`];
 }
 
 function delay(ms: number): Promise<void> {
@@ -105,7 +102,9 @@ function buildTranscript(input: {
   return Buffer.from(text, "utf-8");
 }
 
-async function listen(handler: ReturnType<typeof createWsHandler>): Promise<{ server: Server; port: number }> {
+async function listen(
+  handler: ReturnType<typeof createWsHandler>,
+): Promise<{ server: Server; port: number }> {
   const server = createServer();
   server.on("upgrade", (req, socket, head) => {
     handler.handleUpgrade(req, socket, head);
@@ -246,14 +245,22 @@ describe("Failure matrix (scaling-ha)", () => {
     const cmA = new ConnectionManager();
     const cdA = new ConnectionDirectoryDal(dbA);
     const outboxA = new OutboxDal(dbA);
-    const pollerA = new OutboxPoller({ consumerId: "edge-a", outboxDal: outboxA, connectionManager: cmA });
+    const pollerA = new OutboxPoller({
+      consumerId: "edge-a",
+      outboxDal: outboxA,
+      connectionManager: cmA,
+    });
     await outboxA.ensureConsumer("edge-a");
 
     const wsHandlerA = createWsHandler({
       connectionManager: cmA,
       protocolDeps: { connectionManager: cmA },
       tokenStore,
-      cluster: { instanceId: "edge-a", connectionDirectory: cdA, connectionTtlMs: connectionsTtlMs },
+      cluster: {
+        instanceId: "edge-a",
+        connectionDirectory: cdA,
+        connectionTtlMs: connectionsTtlMs,
+      },
     });
     heartbeats.push(wsHandlerA.stopHeartbeat);
 
@@ -263,14 +270,22 @@ describe("Failure matrix (scaling-ha)", () => {
     const cmB = new ConnectionManager();
     const cdB = new ConnectionDirectoryDal(dbB);
     const outboxB = new OutboxDal(dbB);
-    const pollerB = new OutboxPoller({ consumerId: "edge-b", outboxDal: outboxB, connectionManager: cmB });
+    const pollerB = new OutboxPoller({
+      consumerId: "edge-b",
+      outboxDal: outboxB,
+      connectionManager: cmB,
+    });
     await outboxB.ensureConsumer("edge-b");
 
     const wsHandlerB = createWsHandler({
       connectionManager: cmB,
       protocolDeps: { connectionManager: cmB },
       tokenStore,
-      cluster: { instanceId: "edge-b", connectionDirectory: cdB, connectionTtlMs: connectionsTtlMs },
+      cluster: {
+        instanceId: "edge-b",
+        connectionDirectory: cdB,
+        connectionTtlMs: connectionsTtlMs,
+      },
     });
     heartbeats.push(wsHandlerB.stopHeartbeat);
 
@@ -413,7 +428,11 @@ describe("Failure matrix (scaling-ha)", () => {
     };
     await dispatchTask({ type: "CLI", args: {} }, taskScope1, {
       connectionManager: edgeB.connectionManager,
-      cluster: { edgeId: "edge-b", outboxDal: edgeB.outboxDal, connectionDirectory: edgeB.connectionDirectory },
+      cluster: {
+        edgeId: "edge-b",
+        outboxDal: edgeB.outboxDal,
+        connectionDirectory: edgeB.connectionDirectory,
+      },
     } as never);
     await edgeA1.outboxPoller.tick();
 
@@ -433,7 +452,11 @@ describe("Failure matrix (scaling-ha)", () => {
     await expect(
       dispatchTask({ type: "CLI", args: {} }, taskScope1, {
         connectionManager: edgeB.connectionManager,
-        cluster: { edgeId: "edge-b", outboxDal: edgeB.outboxDal, connectionDirectory: edgeB.connectionDirectory },
+        cluster: {
+          edgeId: "edge-b",
+          outboxDal: edgeB.outboxDal,
+          connectionDirectory: edgeB.connectionDirectory,
+        },
       } as never),
     ).rejects.toBeInstanceOf(NoCapableClientError);
 
@@ -462,7 +485,11 @@ describe("Failure matrix (scaling-ha)", () => {
     };
     await dispatchTask({ type: "CLI", args: {} }, taskScope2, {
       connectionManager: edgeB.connectionManager,
-      cluster: { edgeId: "edge-b", outboxDal: edgeB.outboxDal, connectionDirectory: edgeB.connectionDirectory },
+      cluster: {
+        edgeId: "edge-b",
+        outboxDal: edgeB.outboxDal,
+        connectionDirectory: edgeB.connectionDirectory,
+      },
     } as never);
     await edgeA2.outboxPoller.tick();
 
@@ -510,7 +537,9 @@ describe("Failure matrix (scaling-ha)", () => {
     // Simulate an in-flight attempt owned by a dead worker with a short lease.
     const attemptId = "attempt-dead-1";
     const leaseExpiresAt = nowMs + 25;
-    await db2.run("UPDATE execution_steps SET status = 'running' WHERE step_id = ?", [step!.step_id]);
+    await db2.run("UPDATE execution_steps SET status = 'running' WHERE step_id = ?", [
+      step!.step_id,
+    ]);
     await db2.run(
       `INSERT INTO execution_attempts (
          attempt_id, step_id, attempt, status, started_at, artifacts_json, lease_owner, lease_expires_at_ms
@@ -653,14 +682,22 @@ describe("Failure matrix (scaling-ha)", () => {
        VALUES ('plan-1', 'periodic', ?, 1, datetime('now'), datetime('now'))`,
       [JSON.stringify({ intervalMs: 1000 })],
     );
-    const watcher = await db.get<{ id: number }>("SELECT id FROM watchers WHERE plan_id = 'plan-1' LIMIT 1");
+    const watcher = await db.get<{ id: number }>(
+      "SELECT id FROM watchers WHERE plan_id = 'plan-1' LIMIT 1",
+    );
     expect(watcher?.id).toBeTruthy();
 
     const dal = new WatcherFiringDal(db);
     const nowMs = Date.now();
     const slotMs = Math.floor(nowMs / 1000) * 1000;
     const firingId = `firing-${String(watcher!.id)}-${String(slotMs)}`;
-    await dal.createIfAbsent({ firingId, watcherId: watcher!.id, planId: "plan-1", triggerType: "periodic", scheduledAtMs: slotMs });
+    await dal.createIfAbsent({
+      firingId,
+      watcherId: watcher!.id,
+      planId: "plan-1",
+      triggerType: "periodic",
+      scheduledAtMs: slotMs,
+    });
 
     // Scheduler A claims and then "crashes" before marking enqueued.
     const claimedA = await dal.claimNext({ owner: "sched-a", nowMs: slotMs, leaseTtlMs: 25 });

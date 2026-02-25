@@ -5,4 +5,3 @@ export function isAgentEnabled(): boolean {
   if (!raw) return true;
   return !DISABLED_VALUES.has(raw.toLowerCase());
 }
-

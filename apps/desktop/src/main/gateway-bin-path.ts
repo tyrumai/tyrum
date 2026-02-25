@@ -9,9 +9,7 @@ export interface ResolveGatewayBinPathOptions {
   exists?: (path: string) => boolean;
 }
 
-export function resolveGatewayBinPath(
-  options: ResolveGatewayBinPathOptions = {},
-): string {
+export function resolveGatewayBinPath(options: ResolveGatewayBinPathOptions = {}): string {
   const moduleDir = options.moduleDir ?? import.meta.dirname;
   const isPackaged = options.isPackaged ?? app.isPackaged;
   const resourcesPath = options.resourcesPath ?? process.resourcesPath;
@@ -35,7 +33,5 @@ export function resolveGatewayBinPath(
     }
   }
 
-  throw new Error(
-    `Unable to locate embedded gateway bundle. Tried:\n- ${candidates.join("\n- ")}`,
-  );
+  throw new Error(`Unable to locate embedded gateway bundle. Tried:\n- ${candidates.join("\n- ")}`);
 }

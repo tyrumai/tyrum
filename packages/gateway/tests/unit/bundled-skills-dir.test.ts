@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { resolveBundledSkillsDir, resolveBundledSkillsDirFrom } from "../../src/modules/agent/home.js";
+import {
+  resolveBundledSkillsDir,
+  resolveBundledSkillsDirFrom,
+} from "../../src/modules/agent/home.js";
 
 describe("resolveBundledSkillsDir", () => {
   it("resolves the bundled skills directory", async () => {
@@ -17,4 +20,3 @@ describe("resolveBundledSkillsDir", () => {
     expect(fromDist).toBe(skillsDir);
   });
 });
-

@@ -38,9 +38,7 @@ describe("WatcherScheduler", () => {
     expect(events).toHaveLength(1);
     expect(events[0]!.event_type).toBe("periodic_fired");
 
-    const firings = await db.all<{ status: string }>(
-      "SELECT status FROM watcher_firings",
-    );
+    const firings = await db.all<{ status: string }>("SELECT status FROM watcher_firings");
     expect(firings).toHaveLength(1);
     expect(firings[0]!.status).toBe("enqueued");
   });
@@ -57,10 +55,11 @@ describe("WatcherScheduler", () => {
 
   it("skips watchers with invalid config", async () => {
     // Insert a periodic watcher with invalid trigger_config directly
-    await db.run(
-      "INSERT INTO watchers (plan_id, trigger_type, trigger_config) VALUES (?, ?, ?)",
-      ["plan-1", "periodic", "not-json{"],
-    );
+    await db.run("INSERT INTO watchers (plan_id, trigger_type, trigger_config) VALUES (?, ?, ?)", [
+      "plan-1",
+      "periodic",
+      "not-json{",
+    ]);
 
     await scheduler.tick();
 

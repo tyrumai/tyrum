@@ -16,9 +16,7 @@ export const ArtifactKind = z.enum([
 ]);
 export type ArtifactKind = z.infer<typeof ArtifactKind>;
 
-export const Sha256Hex = z
-  .string()
-  .regex(/^[0-9a-f]{64}$/i, "sha256 must be 64 hex chars");
+export const Sha256Hex = z.string().regex(/^[0-9a-f]{64}$/i, "sha256 must be 64 hex chars");
 export type Sha256Hex = z.infer<typeof Sha256Hex>;
 
 /**
@@ -48,4 +46,3 @@ export const ArtifactRef = z
   })
   .strict();
 export type ArtifactRef = z.infer<typeof ArtifactRef>;
-

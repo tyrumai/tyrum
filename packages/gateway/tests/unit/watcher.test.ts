@@ -316,7 +316,8 @@ describe("WatcherProcessor", () => {
     });
     expect(recorded).toBe(true);
 
-    const cursor = (processor as unknown as { webhookScheduledAtCursor: Map<number, unknown> }).webhookScheduledAtCursor;
+    const cursor = (processor as unknown as { webhookScheduledAtCursor: Map<number, unknown> })
+      .webhookScheduledAtCursor;
     expect(cursor.has(id)).toBe(true);
 
     await processor.deactivateWatcher(id);
@@ -354,7 +355,9 @@ describe("WatcherProcessor", () => {
       expect(recorded).toBe(true);
     }
 
-    const cursor = (limitedProcessor as unknown as { webhookScheduledAtCursor: Map<number, unknown> }).webhookScheduledAtCursor;
+    const cursor = (
+      limitedProcessor as unknown as { webhookScheduledAtCursor: Map<number, unknown> }
+    ).webhookScheduledAtCursor;
     expect(cursor.size).toBe(3);
     expect(cursor.has(ids[0]!)).toBe(false);
   });

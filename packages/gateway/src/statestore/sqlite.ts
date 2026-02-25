@@ -75,4 +75,3 @@ export class SqliteDb implements SqlDb {
     this.db.close();
   }
 }
-

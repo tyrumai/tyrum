@@ -269,7 +269,11 @@ describe("Audit routes", () => {
       });
 
       expect(res.status).toBe(200);
-      const body = (await res.json()) as { decision: string; deleted_count: number; proof_event_id: number };
+      const body = (await res.json()) as {
+        decision: string;
+        deleted_count: number;
+        proof_event_id: number;
+      };
       expect(body.decision).toBe("retain");
       expect(body.deleted_count).toBe(0);
       expect(body.proof_event_id).toBeGreaterThan(0);
@@ -302,7 +306,11 @@ describe("Audit routes", () => {
 
       const remaining = await eventLog.getEventsForVerification("nonexistent");
       expect(remaining).toHaveLength(1);
-      const action = JSON.parse(remaining[0]!.action) as { type: string; decision: string; deleted_count: number };
+      const action = JSON.parse(remaining[0]!.action) as {
+        type: string;
+        decision: string;
+        deleted_count: number;
+      };
       expect(action.type).toBe("forget.proof");
       expect(action.decision).toBe("delete");
       expect(action.deleted_count).toBe(0);

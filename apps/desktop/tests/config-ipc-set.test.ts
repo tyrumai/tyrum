@@ -1,17 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_CONFIG } from "../src/main/config/schema.js";
 
-const {
-  ipcMainHandleMock,
-  registeredHandlers,
-  loadConfigMock,
-  saveConfigMock,
-} = vi.hoisted(() => ({
-  ipcMainHandleMock: vi.fn(),
-  registeredHandlers: new Map<string, (...args: unknown[]) => unknown>(),
-  loadConfigMock: vi.fn(),
-  saveConfigMock: vi.fn(),
-}));
+const { ipcMainHandleMock, registeredHandlers, loadConfigMock, saveConfigMock } = vi.hoisted(
+  () => ({
+    ipcMainHandleMock: vi.fn(),
+    registeredHandlers: new Map<string, (...args: unknown[]) => unknown>(),
+    loadConfigMock: vi.fn(),
+    saveConfigMock: vi.fn(),
+  }),
+);
 
 vi.mock("electron", () => ({
   ipcMain: { handle: ipcMainHandleMock },
@@ -60,4 +57,3 @@ describe("config-ipc config:set allowlist", () => {
     );
   });
 });
-

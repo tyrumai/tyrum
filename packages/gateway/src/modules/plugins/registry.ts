@@ -11,7 +11,12 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import type { Hono } from "hono";
 import type { GatewayContainer } from "../../container.js";
 import { isRecord, parseJsonOrYaml } from "../../utils/parse-json-or-yaml.js";
-import { parsePluginLockFile, pluginIntegritySha256Hex, PLUGIN_LOCK_FILENAME, type PluginInstallInfo } from "./lockfile.js";
+import {
+  parsePluginLockFile,
+  pluginIntegritySha256Hex,
+  PLUGIN_LOCK_FILENAME,
+  type PluginInstallInfo,
+} from "./lockfile.js";
 import { missingRequiredManifestFields, resolveSafeChildPath } from "./validation.js";
 import type { Logger } from "../observability/logger.js";
 import type { ToolDescriptor } from "../agent/tools.js";
@@ -118,7 +123,11 @@ function resolveInternalJsonSchemaRef(root: unknown, ref: string): unknown | und
   return current;
 }
 
-function looksLikeJsonSchemaObjectShapeOrRef(value: unknown, root: unknown, seenRefs = new Set<string>()): boolean {
+function looksLikeJsonSchemaObjectShapeOrRef(
+  value: unknown,
+  root: unknown,
+  seenRefs = new Set<string>(),
+): boolean {
   if (looksLikeJsonSchemaObjectShape(value)) return true;
   if (!isRecord(value)) return false;
   const ref = value["$ref"];
@@ -158,8 +167,14 @@ function collectAllOfInternalRefTargets(root: unknown): WeakSet<object> {
         }
       }
     }
-    const additionalPropertiesExplicit = Object.prototype.hasOwnProperty.call(record, "additionalProperties");
-    const unevaluatedPropertiesExplicit = Object.prototype.hasOwnProperty.call(record, "unevaluatedProperties");
+    const additionalPropertiesExplicit = Object.prototype.hasOwnProperty.call(
+      record,
+      "additionalProperties",
+    );
+    const unevaluatedPropertiesExplicit = Object.prototype.hasOwnProperty.call(
+      record,
+      "unevaluatedProperties",
+    );
     const hasProperties =
       Object.prototype.hasOwnProperty.call(record, "properties") ||
       Object.prototype.hasOwnProperty.call(record, "patternProperties");
@@ -218,8 +233,14 @@ function normalizeJsonSchemaAdditionalPropertiesDefaults(
   const skipAdditionalPropertiesDefault =
     (opts?.skipAdditionalPropertiesDefault ?? false) ||
     (opts?.skipAdditionalPropertiesDefaultFor?.has(schema) ?? false);
-  const additionalPropertiesExplicit = Object.prototype.hasOwnProperty.call(record, "additionalProperties");
-  const unevaluatedPropertiesExplicit = Object.prototype.hasOwnProperty.call(record, "unevaluatedProperties");
+  const additionalPropertiesExplicit = Object.prototype.hasOwnProperty.call(
+    record,
+    "additionalProperties",
+  );
+  const unevaluatedPropertiesExplicit = Object.prototype.hasOwnProperty.call(
+    record,
+    "unevaluatedProperties",
+  );
   const allOf = record["allOf"];
   const hasAllOf = Array.isArray(allOf) && allOf.length > 0;
 
@@ -263,7 +284,9 @@ function normalizeJsonSchemaAdditionalPropertiesDefaults(
       case "anyOf":
       case "oneOf": {
         out[key] = Array.isArray(value)
-          ? value.map((entry) => normalizeJsonSchemaAdditionalPropertiesDefaults(entry, seen, childOpts))
+          ? value.map((entry) =>
+              normalizeJsonSchemaAdditionalPropertiesDefaults(entry, seen, childOpts),
+            )
           : value;
         break;
       }
@@ -289,7 +312,11 @@ function normalizeJsonSchemaAdditionalPropertiesDefaults(
         }
         const normalized: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
         for (const [prop, schemaValue] of Object.entries(value)) {
-          normalized[prop] = normalizeJsonSchemaAdditionalPropertiesDefaults(schemaValue, seen, childOpts);
+          normalized[prop] = normalizeJsonSchemaAdditionalPropertiesDefaults(
+            schemaValue,
+            seen,
+            childOpts,
+          );
         }
         out[key] = normalized;
         break;
@@ -379,7 +406,9 @@ async function loadConfigFromDir(dir: string): Promise<{ path?: string; config: 
 function validatePluginConfig(params: {
   schema: unknown;
   config: unknown;
-}): { ok: true; normalizedSchema: Record<string, unknown>; config: unknown } | { ok: false; error: string } {
+}):
+  | { ok: true; normalizedSchema: Record<string, unknown>; config: unknown }
+  | { ok: false; error: string } {
   const skipAdditionalPropertiesDefaultFor = collectAllOfInternalRefTargets(params.schema);
   const normalizedSchema = normalizeJsonSchemaAdditionalPropertiesDefaults(
     params.schema,
@@ -504,7 +533,10 @@ function cloneManifest(manifest: PluginManifestT): PluginManifestT {
   return structuredClone(manifest) as PluginManifestT;
 }
 
-function selectContainerForPlugin(manifest: PluginManifestT, container?: GatewayContainer): GatewayContainer | undefined {
+function selectContainerForPlugin(
+  manifest: PluginManifestT,
+  container?: GatewayContainer,
+): GatewayContainer | undefined {
   if (!container) return undefined;
   if (manifest.permissions?.db) return container;
   return undefined;
@@ -647,13 +679,14 @@ export class PluginRegistry {
     return result;
   }
 
-  async tryExecuteCommand(
-    raw: string,
-  ): Promise<PluginCommandExecuteResult | undefined> {
+  async tryExecuteCommand(raw: string): Promise<PluginCommandExecuteResult | undefined> {
     const trimmed = raw.trim();
     if (trimmed.length === 0) return undefined;
     const normalized = trimmed.startsWith("/") ? trimmed.slice(1) : trimmed;
-    const parts = normalized.trim().split(/\s+/g).filter((p) => p.length > 0);
+    const parts = normalized
+      .trim()
+      .split(/\s+/g)
+      .filter((p) => p.length > 0);
     if (parts.length === 0) return undefined;
 
     const name = parts[0]!;
@@ -848,7 +881,10 @@ export class PluginRegistry {
         try {
           lockRaw = await readFile(join(pluginDir, PLUGIN_LOCK_FILENAME), "utf-8");
         } catch (err) {
-          const code = err && typeof err === "object" && "code" in err ? (err as { code?: string }).code : undefined;
+          const code =
+            err && typeof err === "object" && "code" in err
+              ? (err as { code?: string }).code
+              : undefined;
           if (code !== "ENOENT") {
             const message = err instanceof Error ? err.message : String(err);
             this.opts.logger.warn("plugins.lock_unreadable", {
@@ -1056,7 +1092,8 @@ export class PluginRegistry {
           commands.set(name, cmd);
         }
 
-        const undeclaredRouter = Boolean(registration.router) && (manifest.contributes?.routes?.length ?? 0) === 0;
+        const undeclaredRouter =
+          Boolean(registration.router) && (manifest.contributes?.routes?.length ?? 0) === 0;
         if (undeclaredTools.length > 0 || undeclaredCommands.length > 0 || undeclaredRouter) {
           this.opts.logger.warn("plugins.undeclared_contributions", {
             plugin_id: id,

@@ -8,7 +8,11 @@
  * - Import is gated and defaults to "empty DB only".
  */
 
-import { SnapshotBundle, SnapshotImportRequest, type SnapshotTable as SnapshotTableT } from "@tyrum/schemas";
+import {
+  SnapshotBundle,
+  SnapshotImportRequest,
+  type SnapshotTable as SnapshotTableT,
+} from "@tyrum/schemas";
 import { Hono } from "hono";
 import type { SqlDb } from "../statestore/types.js";
 import { repairPostgresSequences } from "./snapshot-sequence-repair.js";
@@ -145,7 +149,9 @@ async function listColumns(db: SqlDb, table: string): Promise<string[]> {
 
 async function listPrimaryKeyColumns(db: SqlDb, table: string): Promise<string[]> {
   if (db.kind === "sqlite") {
-    const rows = await db.all<{ name: string; pk: number }>(`PRAGMA table_info(${quoteIdent(table)})`);
+    const rows = await db.all<{ name: string; pk: number }>(
+      `PRAGMA table_info(${quoteIdent(table)})`,
+    );
     return rows
       .filter((r) => typeof r.pk === "number" && r.pk > 0)
       .sort((a, b) => a.pk - b.pk)
@@ -287,7 +293,10 @@ export function createSnapshotRoutes(deps: SnapshotRouteDeps): Hono {
   app.post("/snapshot/import", async (c) => {
     if (!isSnapshotImportEnabled()) {
       return c.json(
-        { error: "disabled", message: "snapshot import is disabled (set TYRUM_SNAPSHOT_IMPORT_ENABLED=1)" },
+        {
+          error: "disabled",
+          message: "snapshot import is disabled (set TYRUM_SNAPSHOT_IMPORT_ENABLED=1)",
+        },
         403,
       );
     }

@@ -73,4 +73,3 @@ describe("PolicyBundle.artifacts retention/quota", () => {
     ).toThrow();
   });
 });
-

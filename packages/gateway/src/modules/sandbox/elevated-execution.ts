@@ -1,8 +1,6 @@
 import type { PolicyBundle as PolicyBundleT } from "@tyrum/schemas";
 
-export function deriveElevatedExecutionAvailableFromPolicyBundle(
-  bundle: PolicyBundleT,
-): boolean {
+export function deriveElevatedExecutionAvailableFromPolicyBundle(bundle: PolicyBundleT): boolean {
   const tools = bundle.tools;
   const toolsDefault = tools?.default ?? "deny";
   const allowCount = Array.isArray(tools?.allow) ? tools.allow.length : 0;
@@ -11,4 +9,3 @@ export function deriveElevatedExecutionAvailableFromPolicyBundle(
     : 0;
   return toolsDefault !== "deny" || allowCount > 0 || requireApprovalCount > 0;
 }
-

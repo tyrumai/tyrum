@@ -3,7 +3,10 @@ import { Hono } from "hono";
 import { createIngressRoutes } from "../../src/routes/ingress.js";
 import { createApprovalRoutes } from "../../src/routes/approval.js";
 import { TelegramBot } from "../../src/modules/ingress/telegram-bot.js";
-import { TelegramChannelProcessor, TelegramChannelQueue } from "../../src/modules/channels/telegram.js";
+import {
+  TelegramChannelProcessor,
+  TelegramChannelQueue,
+} from "../../src/modules/channels/telegram.js";
 import { normalizeUpdate } from "../../src/modules/ingress/telegram.js";
 import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
@@ -149,7 +152,11 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
     const app = new Hono();
     app.route(
       "/",
-      createIngressRoutes({ telegramBot: bot, agents: makeAgents(mockRuntime), telegramQueue: queue }),
+      createIngressRoutes({
+        telegramBot: bot,
+        agents: makeAgents(mockRuntime),
+        telegramQueue: queue,
+      }),
     );
 
     const res1 = await app.request("/ingress/telegram", {
@@ -551,7 +558,11 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
     const app = new Hono();
     app.route(
       "/",
-      createIngressRoutes({ telegramBot: bot, agents: makeAgents(mockRuntime), telegramQueue: queue }),
+      createIngressRoutes({
+        telegramBot: bot,
+        agents: makeAgents(mockRuntime),
+        telegramQueue: queue,
+      }),
     );
 
     const res = await app.request("/ingress/telegram", {
@@ -630,7 +641,9 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
     db = openTestSqliteDb();
     const queue = new TelegramChannelQueue(db, { agentId: "agent-c1", channelKey: "work" });
 
-    const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me", 123, { senderId: 777 })));
+    const normalized = normalizeUpdate(
+      JSON.stringify(makeTelegramUpdate("Help me", 123, { senderId: 777 })),
+    );
     const enqueued = await queue.enqueue(normalized);
 
     expect(enqueued.inbox.key).toBe("agent:agent-c1:telegram:work:dm:123");
@@ -650,7 +663,9 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       dmScope: "per_peer",
     });
 
-    const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me", 123, { senderId: 777 })));
+    const normalized = normalizeUpdate(
+      JSON.stringify(makeTelegramUpdate("Help me", 123, { senderId: 777 })),
+    );
     const enqueued = await queue.enqueue(normalized);
 
     expect(enqueued.inbox.key).toBe("agent:agent-c1:dm:canon-1");
@@ -670,7 +685,9 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       dmScope: "per_peer",
     });
 
-    const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me", 123, { senderId: 777 })));
+    const normalized = normalizeUpdate(
+      JSON.stringify(makeTelegramUpdate("Help me", 123, { senderId: 777 })),
+    );
     const enqueued = await queue.enqueue(normalized);
 
     expect(enqueued.inbox.key).toBe("agent:agent-c1:dm:123");
@@ -686,15 +703,19 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       delete process.env["TYRUM_TELEGRAM_CHANNEL_KEY"];
 
       const queue = new TelegramChannelQueue(db, { agentId: "agent-c1" });
-      const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me", 123, { senderId: 777 })));
+      const normalized = normalizeUpdate(
+        JSON.stringify(makeTelegramUpdate("Help me", 123, { senderId: 777 })),
+      );
       const enqueued = await queue.enqueue(normalized);
 
       expect(enqueued.inbox.key).toBe("agent:agent-c1:telegram:default:dm:123");
 
       const inbox = new ChannelInboxDal(db);
       const row = await inbox.getById(enqueued.inbox.inbox_id);
-      expect((row?.payload as { message?: { envelope?: { delivery?: { account?: string } } } })?.message?.envelope?.delivery?.account)
-        .toBe("default");
+      expect(
+        (row?.payload as { message?: { envelope?: { delivery?: { account?: string } } } })?.message
+          ?.envelope?.delivery?.account,
+      ).toBe("default");
     } finally {
       if (originalAccountId === undefined) {
         delete process.env["TYRUM_TELEGRAM_ACCOUNT_ID"];
@@ -756,8 +777,10 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
     const inbox = new ChannelInboxDal(db);
     const row = await inbox.getById(enqueued.inbox.inbox_id);
-    expect((row?.payload as { message?: { envelope?: { delivery?: { account?: string } } } })?.message?.envelope?.delivery?.account)
-      .toBe("work");
+    expect(
+      (row?.payload as { message?: { envelope?: { delivery?: { account?: string } } } })?.message
+        ?.envelope?.delivery?.account,
+    ).toBe("work");
   });
 
   it("dedupes default-account messages against legacy source keys", async () => {
@@ -785,7 +808,9 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
 
   it("derives account-appropriate thread keys when enqueue overrides account id", async () => {
     db = openTestSqliteDb();
-    const normalized = normalizeUpdate(JSON.stringify(makeTelegramUpdate("Help me", 123, { chatType: "group" })));
+    const normalized = normalizeUpdate(
+      JSON.stringify(makeTelegramUpdate("Help me", 123, { chatType: "group" })),
+    );
 
     const defaultQueue = new TelegramChannelQueue(db, { accountId: "default" });
     const workQueue = new TelegramChannelQueue(db, { accountId: "work" });
@@ -920,8 +945,12 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       ],
     });
 
-    const normalizedDefault = normalizeUpdate(JSON.stringify(makeTelegramUpdate("default", 123, { messageId: 1001 })));
-    const normalizedWork = normalizeUpdate(JSON.stringify(makeTelegramUpdate("work", 123, { messageId: 1002 })));
+    const normalizedDefault = normalizeUpdate(
+      JSON.stringify(makeTelegramUpdate("default", 123, { messageId: 1001 })),
+    );
+    const normalizedWork = normalizeUpdate(
+      JSON.stringify(makeTelegramUpdate("work", 123, { messageId: 1002 })),
+    );
 
     await queue.enqueue(normalizedDefault, { accountId: "default" });
     await queue.enqueue(normalizedWork, { accountId: "work" });
@@ -985,7 +1014,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
           "  default: require_approval",
           "  allow: []",
           "  require_approval:",
-          "    - \"telegram:*\"",
+          '    - "telegram:*"',
           "  deny: []",
           "",
         ].join("\n"),
@@ -1158,7 +1187,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
           "  default: require_approval",
           "  allow: []",
           "  require_approval:",
-          "    - \"telegram:*\"",
+          '    - "telegram:*"',
           "  deny: []",
           "",
         ].join("\n"),
@@ -1250,7 +1279,7 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
           "  default: require_approval",
           "  allow: []",
           "  require_approval:",
-          "    - \"telegram:*\"",
+          '    - "telegram:*"',
           "  deny: []",
           "",
         ].join("\n"),
@@ -1307,18 +1336,23 @@ describe("Telegram channel pipeline: enqueue -> process -> reply", () => {
       const approvalsApp = new Hono();
       approvalsApp.route("/", createApprovalRoutes({ approvalDal, policyOverrideDal }));
 
-      const respondRes = await approvalsApp.request(`/approvals/${String(pending[0]!.id)}/respond`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          decision: "approved",
-          mode: "always",
-          overrides: [{ tool_id: "connector.send", pattern: matchTarget }],
-        }),
-      });
+      const respondRes = await approvalsApp.request(
+        `/approvals/${String(pending[0]!.id)}/respond`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            decision: "approved",
+            mode: "always",
+            overrides: [{ tool_id: "connector.send", pattern: matchTarget }],
+          }),
+        },
+      );
       expect(respondRes.status).toBe(200);
 
-      expect(await policyOverrideDal.list({ agentId: "agent-1", toolId: "connector.send" })).toHaveLength(1);
+      expect(
+        await policyOverrideDal.list({ agentId: "agent-1", toolId: "connector.send" }),
+      ).toHaveLength(1);
 
       await processor.tick();
       expect(fetchFn).toHaveBeenCalledOnce();

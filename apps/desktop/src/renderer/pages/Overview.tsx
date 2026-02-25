@@ -1,6 +1,16 @@
 import { useEffect, useState } from "react";
 import { toErrorMessage } from "../lib/errors.js";
-import { colors, heading, card, label, value, badge, btn, statusDot, STATUS_COLORS } from "../theme.js";
+import {
+  colors,
+  heading,
+  card,
+  label,
+  value,
+  badge,
+  btn,
+  statusDot,
+  STATUS_COLORS,
+} from "../theme.js";
 
 interface StatusInfo {
   gatewayMode: string;
@@ -39,8 +49,7 @@ export function Overview() {
       const c = cfg as Record<string, unknown>;
       const mode = (c?.["mode"] as string) ?? "embedded";
       const embedded = c?.["embedded"] as Record<string, unknown> | undefined;
-      const port =
-        typeof embedded?.["port"] === "number" ? (embedded["port"] as number) : 8788;
+      const port = typeof embedded?.["port"] === "number" ? (embedded["port"] as number) : 8788;
       const capabilities: string[] = [];
       const caps = c?.["capabilities"] as Record<string, boolean> | undefined;
       if (caps) {
@@ -69,10 +78,7 @@ export function Overview() {
 
     const unsubscribe = api.onStatusChange((s) => {
       const info = s as Partial<StatusInfo>;
-      if (
-        info.gatewayStatus === "running" ||
-        info.gatewayStatus === "stopped"
-      ) {
+      if (info.gatewayStatus === "running" || info.gatewayStatus === "stopped") {
         setGatewayError(null);
       }
       setStatus((prev) => ({ ...prev, ...info }));
@@ -130,17 +136,24 @@ export function Overview() {
         <div style={label}>Gateway Status</div>
         <div style={value}>
           <span style={statusDot(color)} />
-          {status.gatewayStatus.charAt(0).toUpperCase() +
-            status.gatewayStatus.slice(1)}
+          {status.gatewayStatus.charAt(0).toUpperCase() + status.gatewayStatus.slice(1)}
         </div>
 
         {(status.gatewayStatus === "stopped" || status.gatewayStatus === "error") && (
-          <button style={{ ...btn("primary"), marginBottom: 14 }} onClick={startGateway} disabled={busy}>
+          <button
+            style={{ ...btn("primary"), marginBottom: 14 }}
+            onClick={startGateway}
+            disabled={busy}
+          >
             {busy ? "Starting..." : "Start Gateway"}
           </button>
         )}
         {(status.gatewayStatus === "running" || status.gatewayStatus === "starting") && (
-          <button style={{ ...btn("danger"), marginBottom: 14 }} onClick={stopGateway} disabled={busy}>
+          <button
+            style={{ ...btn("danger"), marginBottom: 14 }}
+            onClick={stopGateway}
+            disabled={busy}
+          >
             {busy ? "Stopping..." : "Stop Gateway"}
           </button>
         )}
@@ -153,9 +166,7 @@ export function Overview() {
 
         <div style={label}>Mode</div>
         <div style={value}>
-          {status.gatewayMode === "embedded"
-            ? "Embedded Gateway"
-            : "Remote Gateway"}
+          {status.gatewayMode === "embedded" ? "Embedded Gateway" : "Remote Gateway"}
         </div>
 
         {status.port > 0 && (
@@ -177,9 +188,7 @@ export function Overview() {
         <div style={label}>Connected Capabilities</div>
         <div style={{ marginTop: 8 }}>
           {status.capabilities.length === 0 ? (
-            <span style={{ color: colors.neutral, fontSize: 14 }}>
-              No capabilities enabled
-            </span>
+            <span style={{ color: colors.neutral, fontSize: 14 }}>No capabilities enabled</span>
           ) : (
             status.capabilities.map((cap) => (
               <span key={cap} style={badge}>

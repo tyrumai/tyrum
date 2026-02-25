@@ -37,10 +37,7 @@ describe("TelegramBot", () => {
 
     await bot.sendMessage("42", "<b>bold</b>", { parse_mode: "HTML" });
 
-    const [, opts] = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0] as [
-      string,
-      RequestInit,
-    ];
+    const [, opts] = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
     const parsedBody = JSON.parse(opts.body as string) as Record<string, unknown>;
     expect(parsedBody["parse_mode"]).toBe("HTML");
   });
@@ -52,10 +49,7 @@ describe("TelegramBot", () => {
     const buttons = [[{ text: "Approve", callback_data: "approve" }]];
     await bot.sendInlineKeyboard("42", "Confirm?", buttons);
 
-    const [, opts] = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0] as [
-      string,
-      RequestInit,
-    ];
+    const [, opts] = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
     const parsedBody = JSON.parse(opts.body as string) as Record<string, unknown>;
     expect(parsedBody["reply_markup"]).toEqual({
       inline_keyboard: buttons,
@@ -92,10 +86,7 @@ describe("TelegramBot", () => {
 
     await bot.sendMessage("42", "reply", { reply_to_message_id: 99 });
 
-    const [, opts] = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0] as [
-      string,
-      RequestInit,
-    ];
+    const [, opts] = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
     const parsedBody = JSON.parse(opts.body as string) as Record<string, unknown>;
     expect(parsedBody["reply_to_message_id"]).toBe(99);
   });

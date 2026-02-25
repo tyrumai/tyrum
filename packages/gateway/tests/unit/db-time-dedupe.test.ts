@@ -28,8 +28,7 @@ describe("db-time normalization", () => {
     const files = await listFilesRecursive(srcRoot);
     const sourceFiles = files.filter((file) => file.endsWith(".ts") || file.endsWith(".tsx"));
 
-    const sqliteNowRegexSnippet =
-      "/^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}$/.test(";
+    const sqliteNowRegexSnippet = "/^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}$/.test(";
 
     let occurrences = 0;
     for (const file of sourceFiles) {
@@ -40,4 +39,3 @@ describe("db-time normalization", () => {
     expect(occurrences).toBe(1);
   });
 });
-

@@ -15,7 +15,10 @@ function getSqliteColumns(db: ReturnType<typeof createDatabase>, table: string):
   return rows.map((r) => r.name);
 }
 
-async function getPostgresColumns(client: { query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }> }, table: string): Promise<string[]> {
+async function getPostgresColumns(
+  client: { query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }> },
+  table: string,
+): Promise<string[]> {
   const res = await client.query(
     `SELECT column_name
      FROM information_schema.columns

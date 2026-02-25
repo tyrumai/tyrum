@@ -6,7 +6,10 @@ import { fileURLToPath } from "node:url";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import { MockLanguageModelV3 } from "ai/test";
-import { LaneQueueSignalDal, LaneQueueInterruptError } from "../../src/modules/lanes/queue-signal-dal.js";
+import {
+  LaneQueueSignalDal,
+  LaneQueueInterruptError,
+} from "../../src/modules/lanes/queue-signal-dal.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -128,7 +131,9 @@ describe("AgentRuntime lane queue modes", () => {
       container,
       home: homeDir,
       languageModel,
-      mcpManager: mcpManager as unknown as ConstructorParameters<typeof AgentRuntime>[0]["mcpManager"],
+      mcpManager: mcpManager as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
       plugins: plugins as unknown as ConstructorParameters<typeof AgentRuntime>[0]["plugins"],
     });
 
@@ -235,7 +240,9 @@ describe("AgentRuntime lane queue modes", () => {
       container,
       home: homeDir,
       languageModel,
-      mcpManager: mcpManager as unknown as ConstructorParameters<typeof AgentRuntime>[0]["mcpManager"],
+      mcpManager: mcpManager as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
       plugins: plugins as unknown as ConstructorParameters<typeof AgentRuntime>[0]["plugins"],
     });
 

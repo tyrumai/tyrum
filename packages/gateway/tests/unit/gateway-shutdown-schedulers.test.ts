@@ -159,4 +159,3 @@ describe("gateway shutdown", () => {
     expect(outboxStop).toHaveBeenCalledTimes(1);
   });
 });
-

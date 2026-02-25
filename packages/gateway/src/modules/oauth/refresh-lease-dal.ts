@@ -3,7 +3,12 @@ import type { SqlDb } from "../../statestore/types.js";
 export class OauthRefreshLeaseDal {
   constructor(private readonly db: SqlDb) {}
 
-  async tryAcquire(input: { profileId: string; owner: string; nowMs: number; leaseTtlMs: number }): Promise<boolean> {
+  async tryAcquire(input: {
+    profileId: string;
+    owner: string;
+    nowMs: number;
+    leaseTtlMs: number;
+  }): Promise<boolean> {
     const leaseExpiresAt = input.nowMs + Math.max(1, input.leaseTtlMs);
     const inserted = await this.db.run(
       `INSERT INTO oauth_refresh_leases (profile_id, lease_owner, lease_expires_at_ms)

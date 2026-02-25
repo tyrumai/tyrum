@@ -3,7 +3,10 @@ import type { ModelsDevService } from "../models/models-dev-service.js";
 import type { PolicyService } from "../policy/service.js";
 import type { AgentRegistry } from "../agent/registry.js";
 import type { SqlDb } from "../../statestore/types.js";
-import { resolveSandboxHardeningProfile, type SandboxHardeningProfile } from "../sandbox/hardening.js";
+import {
+  resolveSandboxHardeningProfile,
+  type SandboxHardeningProfile,
+} from "../sandbox/hardening.js";
 import { deriveElevatedExecutionAvailableFromPolicyBundle } from "../sandbox/elevated-execution.js";
 
 type StatusCountMap = Record<string, number>;
@@ -149,7 +152,12 @@ function parseCatalogCounts(rawJson: string): { providerCount: number; modelCoun
 
 async function countByStatus(
   db: SqlDb,
-  table: "execution_runs" | "execution_jobs" | "channel_inbox" | "channel_outbox" | "watcher_firings",
+  table:
+    | "execution_runs"
+    | "execution_jobs"
+    | "channel_inbox"
+    | "channel_outbox"
+    | "watcher_firings",
   statuses: readonly string[],
 ): Promise<StatusCountMap> {
   const counts = Object.fromEntries(statuses.map((s) => [s, 0])) as StatusCountMap;
@@ -169,7 +177,9 @@ async function countByStatus(
   return counts;
 }
 
-async function loadActiveModel(agents: AgentRegistry | undefined): Promise<ActiveModelStatus | null> {
+async function loadActiveModel(
+  agents: AgentRegistry | undefined,
+): Promise<ActiveModelStatus | null> {
   if (!agents) return null;
 
   try {
@@ -360,14 +370,16 @@ async function loadCatalogFreshness(
 
   if (!db) return fallback;
 
-  let row: {
-    source: string;
-    fetched_at: string | null;
-    updated_at: string;
-    sha256: string;
-    last_error: string | null;
-    json: string;
-  } | undefined;
+  let row:
+    | {
+        source: string;
+        fetched_at: string | null;
+        updated_at: string;
+        sha256: string;
+        last_error: string | null;
+        json: string;
+      }
+    | undefined;
   try {
     row = await db.get<{
       source: string;
@@ -504,9 +516,7 @@ async function loadSessionLanes(db: SqlDb | undefined): Promise<SessionLaneStatu
       lease_owner: lease?.lease_owner ?? null,
       lease_expires_at_ms: lease?.lease_expires_at_ms ?? null,
       lease_active: Boolean(
-        lease &&
-          Number.isFinite(lease.lease_expires_at_ms) &&
-          lease.lease_expires_at_ms > nowMs,
+        lease && Number.isFinite(lease.lease_expires_at_ms) && lease.lease_expires_at_ms > nowMs,
       ),
     });
   }
@@ -629,15 +639,16 @@ async function loadSandboxStatus(
 }
 
 export async function buildStatusDetails(deps: StatusDetailsDeps): Promise<StatusDetails> {
-  const [activeModel, authProfiles, catalog, sessionLanes, queueDepth, sandbox] =
-    await Promise.all([
+  const [activeModel, authProfiles, catalog, sessionLanes, queueDepth, sandbox] = await Promise.all(
+    [
       loadActiveModel(deps.agents),
       loadAuthProfileHealth(deps.db),
       loadCatalogFreshness(deps.db, deps.modelsDev),
       loadSessionLanes(deps.db),
       loadQueueDepth(deps.db),
       loadSandboxStatus(deps.policyService, deps.policyStatus),
-    ]);
+    ],
+  );
 
   return {
     model_auth: {

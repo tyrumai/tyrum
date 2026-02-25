@@ -61,7 +61,9 @@ describe("WatcherFiringDal", () => {
   });
 
   it("throws on unexpected unique constraint violations", async () => {
-    await db.run("CREATE UNIQUE INDEX watcher_firings_plan_id_unique_idx ON watcher_firings (plan_id)");
+    await db.run(
+      "CREATE UNIQUE INDEX watcher_firings_plan_id_unique_idx ON watcher_firings (plan_id)",
+    );
 
     await dal.createIfAbsent({
       firingId: "firing-1",
@@ -141,10 +143,10 @@ describe("WatcherFiringDal", () => {
     expect(claimed?.lease_owner).toBe("a");
 
     // Force expiry.
-    await db.run(
-      "UPDATE watcher_firings SET lease_expires_at_ms = ? WHERE firing_id = ?",
-      [500, "firing-1"],
-    );
+    await db.run("UPDATE watcher_firings SET lease_expires_at_ms = ? WHERE firing_id = ?", [
+      500,
+      "firing-1",
+    ]);
 
     const taken = await dal.claimNext({ owner: "b", nowMs: 1000, leaseTtlMs: 10_000 });
     expect(taken?.firing_id).toBe("firing-1");
@@ -166,7 +168,12 @@ describe("WatcherFiringDal", () => {
     const wrongOwner = await dal.markEnqueued({ firingId: "firing-1", owner: "b" });
     expect(wrongOwner).toBe(false);
 
-    const ok = await dal.markEnqueued({ firingId: "firing-1", owner: "a", jobId: "job-1", runId: "run-1" });
+    const ok = await dal.markEnqueued({
+      firingId: "firing-1",
+      owner: "a",
+      jobId: "job-1",
+      runId: "run-1",
+    });
     expect(ok).toBe(true);
 
     const row = await dal.getById("firing-1");

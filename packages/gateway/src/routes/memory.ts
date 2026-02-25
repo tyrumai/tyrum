@@ -27,7 +27,12 @@ function looksLikeSecret(value: unknown): boolean {
 export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
   const memory = new Hono();
 
-  const agentIdFromReq = (c: { req: { query: (key: string) => string | undefined; header: (key: string) => string | undefined } }): string => {
+  const agentIdFromReq = (c: {
+    req: {
+      query: (key: string) => string | undefined;
+      header: (key: string) => string | undefined;
+    };
+  }): string => {
     return c.req.query("agent_id")?.trim() || c.req.header("x-tyrum-agent-id")?.trim() || "default";
   };
 
@@ -47,8 +52,7 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
       confidence?: number;
     };
 
-    const { fact_key, fact_value, source, observed_at, confidence } =
-      body;
+    const { fact_key, fact_value, source, observed_at, confidence } = body;
 
     if (
       !fact_key ||
@@ -60,8 +64,7 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
       return c.json(
         {
           error: "invalid_request",
-          message:
-            "fact_key, fact_value, source, observed_at, and confidence are required",
+          message: "fact_key, fact_value, source, observed_at, and confidence are required",
         },
         400,
       );
@@ -104,21 +107,13 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
       payload?: unknown;
     };
 
-    const { event_id, occurred_at, channel, event_type, payload } =
-      body;
+    const { event_id, occurred_at, channel, event_type, payload } = body;
 
-    if (
-      !event_id ||
-      !occurred_at ||
-      !channel ||
-      !event_type ||
-      payload === undefined
-    ) {
+    if (!event_id || !occurred_at || !channel || !event_type || payload === undefined) {
       return c.json(
         {
           error: "invalid_request",
-          message:
-            "event_id, occurred_at, channel, event_type, and payload are required",
+          message: "event_id, occurred_at, channel, event_type, and payload are required",
         },
         400,
       );
@@ -169,23 +164,13 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
       };
     };
 
-    const {
-      capability_type,
-      capability_identifier,
-      executor_kind,
-      data,
-    } = body;
+    const { capability_type, capability_identifier, executor_kind, data } = body;
 
-    if (
-      !capability_type ||
-      !capability_identifier ||
-      !executor_kind
-    ) {
+    if (!capability_type || !capability_identifier || !executor_kind) {
       return c.json(
         {
           error: "invalid_request",
-          message:
-            "capability_type, capability_identifier, and executor_kind are required",
+          message: "capability_type, capability_identifier, and executor_kind are required",
         },
         400,
       );
@@ -225,10 +210,7 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
     };
 
     if (body.confirm !== "FORGET") {
-      return c.json(
-        { error: "invalid_request", message: "confirm must be 'FORGET'" },
-        400,
-      );
+      return c.json({ error: "invalid_request", message: "confirm must be 'FORGET'" }, 400);
     }
 
     const deleted: Record<string, number> = {};
@@ -237,26 +219,42 @@ export function createMemoryRoutes(memoryDal: MemoryDal): Hono {
       deleted.facts = await memoryDal.forgetFactsByKey(body.fact_key.trim(), agentIdFromReq(c));
     }
     if (typeof body.event_id === "string" && body.event_id.trim().length > 0) {
-      deleted.episodic_events = await memoryDal.forgetEpisodicEventByEventId(body.event_id.trim(), agentIdFromReq(c));
+      deleted.episodic_events = await memoryDal.forgetEpisodicEventByEventId(
+        body.event_id.trim(),
+        agentIdFromReq(c),
+      );
     }
     if (typeof body.capability_id === "number" && Number.isFinite(body.capability_id)) {
-      deleted.capability_memories = await memoryDal.forgetCapabilityMemoryById(Math.floor(body.capability_id), agentIdFromReq(c));
+      deleted.capability_memories = await memoryDal.forgetCapabilityMemoryById(
+        Math.floor(body.capability_id),
+        agentIdFromReq(c),
+      );
     }
     if (typeof body.embedding_id === "string" && body.embedding_id.trim().length > 0) {
-      deleted.vector_metadata = await memoryDal.forgetVectorMetadataByEmbeddingId(body.embedding_id.trim(), agentIdFromReq(c));
+      deleted.vector_metadata = await memoryDal.forgetVectorMetadataByEmbeddingId(
+        body.embedding_id.trim(),
+        agentIdFromReq(c),
+      );
     }
     if (typeof body.pam_profile_id === "string" && body.pam_profile_id.trim().length > 0) {
-      deleted.pam_profiles = await memoryDal.forgetPamProfile(body.pam_profile_id.trim(), agentIdFromReq(c));
+      deleted.pam_profiles = await memoryDal.forgetPamProfile(
+        body.pam_profile_id.trim(),
+        agentIdFromReq(c),
+      );
     }
     if (typeof body.pvp_profile_id === "string" && body.pvp_profile_id.trim().length > 0) {
-      deleted.pvp_profiles = await memoryDal.forgetPvpProfile(body.pvp_profile_id.trim(), agentIdFromReq(c));
+      deleted.pvp_profiles = await memoryDal.forgetPvpProfile(
+        body.pvp_profile_id.trim(),
+        agentIdFromReq(c),
+      );
     }
 
     if (Object.keys(deleted).length === 0) {
       return c.json(
         {
           error: "invalid_request",
-          message: "provide at least one selector (fact_key, event_id, capability_id, embedding_id, pam_profile_id, pvp_profile_id)",
+          message:
+            "provide at least one selector (fact_key, event_id, capability_id, embedding_id, pam_profile_id, pvp_profile_id)",
         },
         400,
       );

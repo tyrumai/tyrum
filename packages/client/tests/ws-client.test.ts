@@ -82,7 +82,10 @@ function waitForMessage(ws: WsWebSocket): Promise<unknown> {
   });
 }
 
-async function acceptConnect(ws: WsWebSocket, clientId = "client-1"): Promise<{ request_id: string }> {
+async function acceptConnect(
+  ws: WsWebSocket,
+  clientId = "client-1",
+): Promise<{ request_id: string }> {
   const connect = (await waitForMessage(ws)) as Record<string, unknown>;
   expect(connect["type"]).toBe("connect");
   expect(typeof connect["request_id"]).toBe("string");
@@ -308,7 +311,11 @@ describe("TyrumClient", () => {
     expect(calls).toBe(1);
 
     client.respondTaskExecute("task-1", true, undefined, { status: 200 }, undefined);
-    const response1 = await withTimeout(waitForMessage(ws1), 2_000, "task.execute response (first)");
+    const response1 = await withTimeout(
+      waitForMessage(ws1),
+      2_000,
+      "task.execute response (first)",
+    );
     expect(response1).toEqual({
       request_id: "task-1",
       type: "task.execute",
@@ -416,9 +423,7 @@ describe("TyrumClient", () => {
     expect(response["request_id"]).toBe("task-bad-1");
     expect(response["type"]).toBe("task.execute");
     expect(response["ok"]).toBe(false);
-    expect((response["error"] as Record<string, unknown>)["code"]).toBe(
-      "invalid_request",
-    );
+    expect((response["error"] as Record<string, unknown>)["code"]).toBe("invalid_request");
   });
 
   it("emits human_confirmation event", async () => {
@@ -493,7 +498,11 @@ describe("TyrumClient", () => {
     expect(calls).toBe(1);
 
     client.respondApprovalRequest("approval-7", false, "too risky");
-    const response1 = await withTimeout(waitForMessage(ws1), 2_000, "approval.request response (first)");
+    const response1 = await withTimeout(
+      waitForMessage(ws1),
+      2_000,
+      "approval.request response (first)",
+    );
     expect(response1).toEqual({
       request_id: "approval-7",
       type: "approval.request",
@@ -547,9 +556,7 @@ describe("TyrumClient", () => {
     expect(response["request_id"]).toBe("approval-7");
     expect(response["type"]).toBe("approval.request");
     expect(response["ok"]).toBe(false);
-    expect((response["error"] as Record<string, unknown>)["code"]).toBe(
-      "invalid_request",
-    );
+    expect((response["error"] as Record<string, unknown>)["code"]).toBe("invalid_request");
   });
 
   it("emits plan_update event", async () => {
@@ -883,11 +890,9 @@ describe("TyrumClient", () => {
       reconnect: false,
     });
 
-    const disconnectedP = new Promise<{ code: number; reason: string }>(
-      (resolve) => {
-        client!.on("disconnected", resolve);
-      },
-    );
+    const disconnectedP = new Promise<{ code: number; reason: string }>((resolve) => {
+      client!.on("disconnected", resolve);
+    });
 
     client.connect();
     const ws = await server.waitForClient();

@@ -44,11 +44,7 @@ const sidebars: SidebarsConfig = {
         {
           type: "category",
           label: "Runtime Components",
-          items: [
-            "architecture/gateway/index",
-            "architecture/client",
-            "architecture/node",
-          ],
+          items: ["architecture/gateway/index", "architecture/client", "architecture/node"],
         },
         {
           type: "category",

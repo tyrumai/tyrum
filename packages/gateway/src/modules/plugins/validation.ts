@@ -1,9 +1,19 @@
 import { isAbsolute, relative, resolve } from "node:path";
 
-export const REQUIRED_MANIFEST_FIELDS = ["id", "name", "version", "entry", "contributes", "permissions", "config_schema"] as const;
+export const REQUIRED_MANIFEST_FIELDS = [
+  "id",
+  "name",
+  "version",
+  "entry",
+  "contributes",
+  "permissions",
+  "config_schema",
+] as const;
 
 export function missingRequiredManifestFields(value: Record<string, unknown>): string[] {
-  return REQUIRED_MANIFEST_FIELDS.filter((field) => !Object.prototype.hasOwnProperty.call(value, field));
+  return REQUIRED_MANIFEST_FIELDS.filter(
+    (field) => !Object.prototype.hasOwnProperty.call(value, field),
+  );
 }
 
 export function resolveSafeChildPath(parent: string, child: string): string {
@@ -16,4 +26,3 @@ export function resolveSafeChildPath(parent: string, child: string): string {
   if (firstSegment === "..") throw new Error(`path escapes plugin directory: ${child}`);
   return absChild;
 }
-

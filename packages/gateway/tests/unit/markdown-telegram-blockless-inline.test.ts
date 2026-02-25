@@ -7,9 +7,7 @@ describe("renderMarkdownForTelegram", () => {
       return {
         markdownToIr: () => ({
           text: "Hello world",
-          spans: [
-            { kind: "style", style: "bold", start: 0, end: 5 },
-          ],
+          spans: [{ kind: "style", style: "bold", start: 0, end: 5 }],
         }),
         irToPlainText: (ir: any) => {
           return ir.text;
@@ -25,4 +23,3 @@ describe("renderMarkdownForTelegram", () => {
     expect(renderMarkdownForTelegram("ignored")).toEqual(["<b>Hello</b> world"]);
   });
 });
-

@@ -3,7 +3,15 @@ export type MarkdownIrStyle = "bold" | "italic" | "strike" | "inline_code" | "sp
 export type MarkdownIrSpan =
   | { kind: "block"; block: "paragraph"; start: number; end: number }
   | { kind: "block"; block: "blockquote"; start: number; end: number }
-  | { kind: "block"; block: "list_item"; start: number; end: number; ordered: boolean; depth: number; index?: number }
+  | {
+      kind: "block";
+      block: "list_item";
+      start: number;
+      end: number;
+      ordered: boolean;
+      depth: number;
+      index?: number;
+    }
   | { kind: "block"; block: "code_block"; start: number; end: number; language?: string }
   | { kind: "style"; style: MarkdownIrStyle; start: number; end: number }
   | { kind: "link"; start: number; end: number; href: string };
@@ -311,10 +319,10 @@ function scanBlocks(input: string): MarkdownBlockWithSeparator[] {
 
       const paragraphTrimmed = paragraphLine.trimStart();
       if (
-        paragraphTrimmed.startsWith("```")
-        || paragraphTrimmed.startsWith(">")
-        || /^(\s*)[-+*]\s+/.test(paragraphLine)
-        || /^(\s*)(\d+)[.)]\s+/.test(paragraphLine)
+        paragraphTrimmed.startsWith("```") ||
+        paragraphTrimmed.startsWith(">") ||
+        /^(\s*)[-+*]\s+/.test(paragraphLine) ||
+        /^(\s*)(\d+)[.)]\s+/.test(paragraphLine)
       ) {
         break;
       }
@@ -423,7 +431,9 @@ export function irToPlainText(ir: MarkdownIr): string {
   type BlockSpan = Extract<MarkdownIrSpan, { kind: "block" }>;
   type LinkSpan = Extract<MarkdownIrSpan, { kind: "link" }>;
 
-  const blocks = ir.spans.filter((span): span is BlockSpan => span.kind === "block").toSorted((a, b) => a.start - b.start);
+  const blocks = ir.spans
+    .filter((span): span is BlockSpan => span.kind === "block")
+    .toSorted((a, b) => a.start - b.start);
   if (blocks.length === 0) return ir.text;
 
   const links = ir.spans.filter((span): span is LinkSpan => span.kind === "link");

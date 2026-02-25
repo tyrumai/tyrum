@@ -23,10 +23,7 @@ function tryParseJson(raw: string): unknown {
 }
 
 /** Compute SHA-256 hash of event data + previous hash for chain integrity. */
-export function computeEventHash(
-  eventData: HashableEvent,
-  prevHash: string | null,
-): string {
+export function computeEventHash(eventData: HashableEvent, prevHash: string | null): string {
   const canonical = JSON.stringify({
     action: eventData.action,
     occurred_at: eventData.occurred_at,
@@ -38,9 +35,7 @@ export function computeEventHash(
 }
 
 /** Verify integrity of an event chain. */
-export function verifyChain(
-  events: ChainableEvent[],
-): {
+export function verifyChain(events: ChainableEvent[]): {
   valid: boolean;
   checked_count: number;
   broken_at_index: number | null;
@@ -92,10 +87,7 @@ export function verifyChain(
 }
 
 /** Build a ReceiptBundle from chainable events for a given plan. */
-export function exportReceiptBundle(
-  planId: string,
-  events: ChainableEvent[],
-): ReceiptBundle {
+export function exportReceiptBundle(planId: string, events: ChainableEvent[]): ReceiptBundle {
   const verification: ChainVerification = verifyChain(events);
 
   const auditEvents: AuditEvent[] = events.map((e) => ({

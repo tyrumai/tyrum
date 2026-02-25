@@ -113,7 +113,11 @@ export class ContextReportDal {
     return row ? toRow(row) : undefined;
   }
 
-  async list(params?: { sessionId?: string; runId?: string; limit?: number }): Promise<ContextReportRow[]> {
+  async list(params?: {
+    sessionId?: string;
+    runId?: string;
+    limit?: number;
+  }): Promise<ContextReportRow[]> {
     const where: string[] = [];
     const values: unknown[] = [];
 

@@ -49,9 +49,10 @@ describe("TLS certificate pinning dispatcher cleanup", () => {
     const err = await transportError;
     expect(err.message).toContain("ctor boom");
 
-    const undici = (await import("undici")) as unknown as { __agents: Array<{ destroy: ReturnType<typeof vi.fn> }> };
+    const undici = (await import("undici")) as unknown as {
+      __agents: Array<{ destroy: ReturnType<typeof vi.fn> }>;
+    };
     expect(undici.__agents).toHaveLength(1);
     expect(undici.__agents[0].destroy).toHaveBeenCalledTimes(1);
   });
 });
-

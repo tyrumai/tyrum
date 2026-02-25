@@ -78,4 +78,3 @@ describe("AgentRuntime paused approvals", () => {
     expect(cancelRun).not.toHaveBeenCalled();
   });
 });
-

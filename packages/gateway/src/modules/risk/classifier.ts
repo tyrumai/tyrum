@@ -5,13 +5,7 @@
  * Pure risk scoring engine using configurable spend thresholds and tag weights.
  */
 
-import type {
-  RiskConfig,
-  RiskInput,
-  RiskVerdict,
-  RiskLevel,
-  SpendThreshold,
-} from "@tyrum/schemas";
+import type { RiskConfig, RiskInput, RiskVerdict, RiskLevel, SpendThreshold } from "@tyrum/schemas";
 
 // ---------------------------------------------------------------------------
 // Config helpers
@@ -28,14 +22,8 @@ export function defaultRiskConfig(): RiskConfig {
 }
 
 function normalizeThreshold(threshold: SpendThreshold): SpendThreshold {
-  const caution = Math.min(
-    threshold.caution_minor_units,
-    threshold.high_minor_units,
-  );
-  const high = Math.max(
-    threshold.caution_minor_units,
-    threshold.high_minor_units,
-  );
+  const caution = Math.min(threshold.caution_minor_units, threshold.high_minor_units);
+  const high = Math.max(threshold.caution_minor_units, threshold.high_minor_units);
   return { caution_minor_units: caution, high_minor_units: high };
 }
 
@@ -118,16 +106,11 @@ export class RiskClassifier {
           );
         }
       } else {
-        reasons.push(
-          `no spend threshold configured for ${currency}; using baseline`,
-        );
+        reasons.push(`no spend threshold configured for ${currency}; using baseline`);
         score += 0.05;
       }
 
-      if (
-        spend.merchant != null &&
-        spend.merchant.toLowerCase().includes("crypto")
-      ) {
+      if (spend.merchant != null && spend.merchant.toLowerCase().includes("crypto")) {
         level = maxRiskLevel(level, "medium");
         score += 0.2;
         reasons.push("merchant contains crypto keyword");
@@ -139,9 +122,7 @@ export class RiskClassifier {
       const weight = this.config.tag_weights[tag];
       if (weight != null) {
         tagScore += weight;
-        reasons.push(
-          `tag ${tag} contributes ${weight.toFixed(2)} risk weight`,
-        );
+        reasons.push(`tag ${tag} contributes ${weight.toFixed(2)} risk weight`);
       }
     }
 
@@ -153,10 +134,7 @@ export class RiskClassifier {
 
     score += tagScore;
 
-    let confidence = Math.min(
-      Math.max(this.config.baseline_confidence + score, 0.05),
-      0.99,
-    );
+    let confidence = Math.min(Math.max(this.config.baseline_confidence + score, 0.05), 0.99);
     switch (level) {
       case "low":
         confidence = Math.min(confidence, 0.6);

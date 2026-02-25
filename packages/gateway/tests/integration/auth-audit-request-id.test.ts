@@ -85,4 +85,3 @@ describe("Auth audit request_id correlation", () => {
     }
   });
 });
-

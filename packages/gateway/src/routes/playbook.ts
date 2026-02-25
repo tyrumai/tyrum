@@ -7,7 +7,10 @@ import { ExecutionBudgets, PlaybookRuntimeRequest } from "@tyrum/schemas";
 import type { Playbook } from "@tyrum/schemas";
 import type { ExecutionBudgets as ExecutionBudgetsT } from "@tyrum/schemas";
 import { PlaybookRunner } from "../modules/playbook/runner.js";
-import { resolvePlaybookPolicyBundle, runPlaybookRuntimeEnvelope } from "../modules/playbook/runtime.js";
+import {
+  resolvePlaybookPolicyBundle,
+  runPlaybookRuntimeEnvelope,
+} from "../modules/playbook/runtime.js";
 import { randomUUID } from "node:crypto";
 import type { ExecutionEngine } from "../modules/execution/engine.js";
 import type { PolicyService } from "../modules/policy/service.js";
@@ -67,7 +70,10 @@ export function createPlaybookRoutes(deps: PlaybookRouteDeps): Hono {
   app.post("/playbooks/runtime", async (c) => {
     if (!deps.engine || !deps.policyService || !deps.approvalDal || !deps.db) {
       return c.json(
-        { error: "unsupported", message: "playbook runtime is not available (execution engine not configured)" },
+        {
+          error: "unsupported",
+          message: "playbook runtime is not available (execution engine not configured)",
+        },
         400,
       );
     }
@@ -127,8 +133,14 @@ export function createPlaybookRoutes(deps: PlaybookRouteDeps): Hono {
     }
 
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-    const key = typeof body["key"] === "string" && body["key"].trim().length > 0 ? body["key"].trim() : pb.manifest.id;
-    const lane = typeof body["lane"] === "string" && body["lane"].trim().length > 0 ? body["lane"].trim() : "main";
+    const key =
+      typeof body["key"] === "string" && body["key"].trim().length > 0
+        ? body["key"].trim()
+        : pb.manifest.id;
+    const lane =
+      typeof body["lane"] === "string" && body["lane"].trim().length > 0
+        ? body["lane"].trim()
+        : "main";
     const planId =
       typeof body["plan_id"] === "string" && body["plan_id"].trim().length > 0
         ? body["plan_id"].trim()

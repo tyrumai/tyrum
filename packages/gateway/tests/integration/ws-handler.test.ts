@@ -19,10 +19,7 @@ import {
 } from "@tyrum/schemas";
 
 function authProtocols(token: string): string[] {
-  return [
-    "tyrum-v1",
-    `tyrum-auth.${Buffer.from(token, "utf-8").toString("base64url")}`,
-  ];
+  return ["tyrum-v1", `tyrum-auth.${Buffer.from(token, "utf-8").toString("base64url")}`];
 }
 
 function waitForOpen(ws: WebSocket): Promise<void> {
@@ -206,10 +203,7 @@ describe("WS handler integration", () => {
       });
     });
 
-    const ws = new WebSocket(
-      `ws://127.0.0.1:${port}/ws`,
-      authProtocols(adminToken),
-    );
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(adminToken));
     clients.push(ws);
     await waitForOpen(ws);
 
@@ -282,7 +276,9 @@ describe("WS handler integration", () => {
 
     const first = await waitForMessageOrClose(ws, 2_000);
     if (first.kind !== "message") {
-      throw new Error(`Expected connect response; got close ${String(first.code)}: ${first.reason}`);
+      throw new Error(
+        `Expected connect response; got close ${String(first.code)}: ${first.reason}`,
+      );
     }
     expect(first.msg).toMatchObject({ type: "connect", ok: true });
 
@@ -338,7 +334,9 @@ describe("WS handler integration", () => {
 
     const first = await waitForMessageOrClose(ws, 2_000);
     if (first.kind !== "message") {
-      throw new Error(`Expected connect response; got close ${String(first.code)}: ${first.reason}`);
+      throw new Error(
+        `Expected connect response; got close ${String(first.code)}: ${first.reason}`,
+      );
     }
     expect(first.msg).toMatchObject({ type: "connect", ok: true });
 
@@ -394,7 +392,9 @@ describe("WS handler integration", () => {
 
     const first = await waitForMessageOrClose(ws, 2_000);
     if (first.kind !== "message") {
-      throw new Error(`Expected connect response; got close ${String(first.code)}: ${first.reason}`);
+      throw new Error(
+        `Expected connect response; got close ${String(first.code)}: ${first.reason}`,
+      );
     }
     expect(first.msg).toMatchObject({ type: "connect", ok: true });
 
@@ -543,10 +543,7 @@ describe("WS handler integration", () => {
       });
     });
 
-    const ws = new WebSocket(
-      `ws://127.0.0.1:${port}/ws`,
-      authProtocols(adminToken),
-    );
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(adminToken));
     clients.push(ws);
     await waitForOpen(ws);
 
@@ -576,9 +573,7 @@ describe("WS handler integration", () => {
     const warning = await warningP;
     expect(
       ((warning as Record<string, unknown>)["payload"] as Record<string, unknown>)["code"],
-    ).toBe(
-      "deprecated_handshake",
-    );
+    ).toBe("deprecated_handshake");
 
     stopHeartbeat();
   });
@@ -608,10 +603,7 @@ describe("WS handler integration", () => {
     });
 
     // Connect with bad token
-    const ws = new WebSocket(
-      `ws://127.0.0.1:${port}/ws`,
-      authProtocols("bad-token"),
-    );
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols("bad-token"));
     clients.push(ws);
 
     const { code } = await waitForClose(ws);
@@ -1070,7 +1062,9 @@ describe("WS handler integration", () => {
 
     const pairingEvt = await waitForJsonMessageMatching(
       operator,
-      (msg) => msg["type"] === "pairing.requested" && Object.prototype.hasOwnProperty.call(msg, "event_id"),
+      (msg) =>
+        msg["type"] === "pairing.requested" &&
+        Object.prototype.hasOwnProperty.call(msg, "event_id"),
       5_000,
       "pairing.requested",
     );
@@ -1214,7 +1208,9 @@ describe("WS handler integration", () => {
 
     const pairingEvt = await waitForJsonMessageMatching(
       operator,
-      (msg) => msg["type"] === "pairing.requested" && Object.prototype.hasOwnProperty.call(msg, "event_id"),
+      (msg) =>
+        msg["type"] === "pairing.requested" &&
+        Object.prototype.hasOwnProperty.call(msg, "event_id"),
     );
     const pairingPayload = pairingEvt["payload"] as Record<string, unknown>;
     const pairing = pairingPayload["pairing"] as Record<string, unknown>;
@@ -1223,7 +1219,8 @@ describe("WS handler integration", () => {
 
     const approvedEvtP = waitForJsonMessageMatching(
       node,
-      (msg) => msg["type"] === "pairing.approved" && Object.prototype.hasOwnProperty.call(msg, "event_id"),
+      (msg) =>
+        msg["type"] === "pairing.approved" && Object.prototype.hasOwnProperty.call(msg, "event_id"),
       5_000,
       "pairing.approved",
     );
@@ -1263,7 +1260,9 @@ describe("WS handler integration", () => {
 
     // Regression: the node-scoped token lookup can be async (e.g. Postgres),
     // so make sure we don't drop connect.init frames that arrive while auth is resolving.
-    const originalTokenLookup = container.nodePairingDal.getNodeIdForScopedToken.bind(container.nodePairingDal);
+    const originalTokenLookup = container.nodePairingDal.getNodeIdForScopedToken.bind(
+      container.nodePairingDal,
+    );
     container.nodePairingDal.getNodeIdForScopedToken = async (token: string) => {
       await new Promise<void>((resolve) => setTimeout(resolve, 250));
       return await originalTokenLookup(token);
@@ -1434,13 +1433,17 @@ describe("WS handler integration", () => {
 
     const approvedEvtP = waitForJsonMessageMatching(
       node,
-      (msg) => msg["type"] === "pairing.approved" && Object.prototype.hasOwnProperty.call(msg, "event_id"),
+      (msg) =>
+        msg["type"] === "pairing.approved" && Object.prototype.hasOwnProperty.call(msg, "event_id"),
       5_000,
       "pairing.approved",
     );
 
     const app = new Hono();
-    app.route("/", createPairingRoutes({ nodePairingDal: container.nodePairingDal, ws: { connectionManager } }));
+    app.route(
+      "/",
+      createPairingRoutes({ nodePairingDal: container.nodePairingDal, ws: { connectionManager } }),
+    );
 
     const res = await app.request(`/pairings/${String(pairing!.pairing_id)}/approve`, {
       method: "POST",

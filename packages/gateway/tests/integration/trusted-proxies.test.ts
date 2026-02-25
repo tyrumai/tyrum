@@ -37,17 +37,20 @@ describe("Trusted proxies", () => {
     });
     expect(pending.status).toBe("pending");
 
-    const res = await fetch(`http://127.0.0.1:${String(port)}/pairings/${String(pending.pairing_id)}/approve`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-forwarded-for": "203.0.113.9",
+    const res = await fetch(
+      `http://127.0.0.1:${String(port)}/pairings/${String(pending.pairing_id)}/approve`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-forwarded-for": "203.0.113.9",
+        },
+        body: JSON.stringify({
+          trust_level: "remote",
+          capability_allowlist: [],
+        }),
       },
-      body: JSON.stringify({
-        trust_level: "remote",
-        capability_allowlist: [],
-      }),
-    });
+    );
 
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
@@ -77,17 +80,20 @@ describe("Trusted proxies", () => {
     });
     expect(pending.status).toBe("pending");
 
-    const res = await fetch(`http://127.0.0.1:${String(port)}/pairings/${String(pending.pairing_id)}/approve`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-forwarded-for": "203.0.113.9",
+    const res = await fetch(
+      `http://127.0.0.1:${String(port)}/pairings/${String(pending.pairing_id)}/approve`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-forwarded-for": "203.0.113.9",
+        },
+        body: JSON.stringify({
+          trust_level: "remote",
+          capability_allowlist: [],
+        }),
       },
-      body: JSON.stringify({
-        trust_level: "remote",
-        capability_allowlist: [],
-      }),
-    });
+    );
 
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
@@ -117,17 +123,20 @@ describe("Trusted proxies", () => {
     });
     expect(pending.status).toBe("pending");
 
-    const res = await fetch(`http://127.0.0.1:${String(port)}/pairings/${String(pending.pairing_id)}/approve`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-forwarded-for": "not-an-ip",
+    const res = await fetch(
+      `http://127.0.0.1:${String(port)}/pairings/${String(pending.pairing_id)}/approve`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-forwarded-for": "not-an-ip",
+        },
+        body: JSON.stringify({
+          trust_level: "remote",
+          capability_allowlist: [],
+        }),
       },
-      body: JSON.stringify({
-        trust_level: "remote",
-        capability_allowlist: [],
-      }),
-    });
+    );
 
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
@@ -157,17 +166,20 @@ describe("Trusted proxies", () => {
     });
     expect(pending.status).toBe("pending");
 
-    const res = await fetch(`http://127.0.0.1:${String(port)}/pairings/${String(pending.pairing_id)}/approve`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        forwarded: "for=203.0.113.11;proto=https;by=127.0.0.1",
+    const res = await fetch(
+      `http://127.0.0.1:${String(port)}/pairings/${String(pending.pairing_id)}/approve`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          forwarded: "for=203.0.113.11;proto=https;by=127.0.0.1",
+        },
+        body: JSON.stringify({
+          trust_level: "remote",
+          capability_allowlist: [],
+        }),
       },
-      body: JSON.stringify({
-        trust_level: "remote",
-        capability_allowlist: [],
-      }),
-    });
+    );
 
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
@@ -197,17 +209,20 @@ describe("Trusted proxies", () => {
     });
     expect(pending.status).toBe("pending");
 
-    const res = await fetch(`http://127.0.0.1:${String(port)}/pairings/${String(pending.pairing_id)}/approve`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-forwarded-for": "203.0.113.9, 198.51.100.10",
+    const res = await fetch(
+      `http://127.0.0.1:${String(port)}/pairings/${String(pending.pairing_id)}/approve`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-forwarded-for": "203.0.113.9, 198.51.100.10",
+        },
+        body: JSON.stringify({
+          trust_level: "remote",
+          capability_allowlist: [],
+        }),
       },
-      body: JSON.stringify({
-        trust_level: "remote",
-        capability_allowlist: [],
-      }),
-    });
+    );
 
     expect(res.status).toBe(200);
     const body = (await res.json()) as {

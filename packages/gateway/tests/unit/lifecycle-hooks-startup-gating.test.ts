@@ -41,9 +41,7 @@ vi.mock("../../src/modules/auth/token-store.js", () => {
   return {
     normalizeScopes: (scopes: string[] | undefined) => {
       if (!Array.isArray(scopes)) return [];
-      const normalized = scopes
-        .map((scope) => scope.trim())
-        .filter((scope) => scope.length > 0);
+      const normalized = scopes.map((scope) => scope.trim()).filter((scope) => scope.length > 0);
       return [...new Set(normalized)];
     },
     TokenStore: class TokenStore {

@@ -35,10 +35,16 @@ function normalizeFsPath(rawPath: string, workspaceRoot?: string): string {
     const rootIsPosixAbsolute = root.startsWith("/");
 
     if (isPosixAbsolute && rootIsPosixAbsolute) {
-      const rel = pathPosix.relative(pathPosix.normalize(root), pathPosix.normalize(slashNormalized));
+      const rel = pathPosix.relative(
+        pathPosix.normalize(root),
+        pathPosix.normalize(slashNormalized),
+      );
       candidate = rel.length === 0 ? "." : rel;
     } else if (isWindowsAbsolute && rootIsWindowsAbsolute) {
-      const rel = pathWin32.relative(pathWin32.normalize(root), pathWin32.normalize(slashNormalized));
+      const rel = pathWin32.relative(
+        pathWin32.normalize(root),
+        pathWin32.normalize(slashNormalized),
+      );
       const relSlash = rel.replace(/\\/g, "/");
       candidate = relSlash.length === 0 ? "." : relSlash;
     } else {
@@ -84,10 +90,13 @@ function isMessagingToolClass(toolId: string): boolean {
   );
 }
 
-function canonicalizeMessagingTarget(toolId: string, parsed: Record<string, unknown> | null): string {
+function canonicalizeMessagingTarget(
+  toolId: string,
+  parsed: Record<string, unknown> | null,
+): string {
   const action = toolId.endsWith(".send")
     ? "send"
-    : normalizeToken(toolId.split(".").at(-1)) ?? "send";
+    : (normalizeToken(toolId.split(".").at(-1)) ?? "send");
 
   const connector =
     normalizeToken(parsed?.["connector"]) ??

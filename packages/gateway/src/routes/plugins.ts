@@ -33,4 +33,3 @@ export function createPluginRoutes(deps: PluginRouteDeps): Hono {
 
   return app;
 }
-

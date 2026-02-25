@@ -65,4 +65,3 @@ describe("scope normalization", () => {
     expect(onApprovalDecision).toHaveBeenCalledWith(1, true, undefined);
   });
 });
-

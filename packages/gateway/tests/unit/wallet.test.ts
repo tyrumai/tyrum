@@ -3,9 +3,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import {
-  authorizeWithThresholds,
-} from "../../src/modules/wallet/authorization.js";
+import { authorizeWithThresholds } from "../../src/modules/wallet/authorization.js";
 import type { Thresholds, SpendAuthorizeRequest } from "@tyrum/schemas";
 
 describe("Wallet authorization", () => {
@@ -60,8 +58,6 @@ describe("Wallet authorization", () => {
     };
     const response = authorizeWithThresholds(payload, thresholds);
     expect(response.decision).toBe("approve");
-    expect(response.reason).toBe(
-      "Amount EUR 75.00 within auto-approval limit EUR 100.00.",
-    );
+    expect(response.reason).toBe("Amount EUR 75.00 within auto-approval limit EUR 100.00.");
   });
 });

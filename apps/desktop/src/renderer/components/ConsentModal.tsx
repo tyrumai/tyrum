@@ -92,9 +92,11 @@ export function ConsentModal() {
       const requestId = typeof r.request_id === "string" ? r.request_id : null;
       if (!requestId) return;
 
-      const prompt = typeof r.payload?.prompt === "string" ? r.payload.prompt : "Approval requested";
+      const prompt =
+        typeof r.payload?.prompt === "string" ? r.payload.prompt : "Approval requested";
       const planId = typeof r.payload?.plan_id === "string" ? r.payload.plan_id : undefined;
-      const stepIndex = typeof r.payload?.step_index === "number" ? r.payload.step_index : undefined;
+      const stepIndex =
+        typeof r.payload?.step_index === "number" ? r.payload.step_index : undefined;
       const contextValue = r.payload?.context;
       const contextText =
         typeof contextValue === "string"
@@ -123,11 +125,7 @@ export function ConsentModal() {
   const respond = (approved: boolean) => {
     const api = window.tyrumDesktop;
     if (!api) return;
-    void api.consentRespond(
-      request.requestId,
-      approved,
-      reason || undefined,
-    );
+    void api.consentRespond(request.requestId, approved, reason || undefined);
     setRequest(null);
     setReason("");
   };
@@ -147,10 +145,7 @@ export function ConsentModal() {
           <button style={buttonStyle("deny")} onClick={() => respond(false)}>
             Deny
           </button>
-          <button
-            style={buttonStyle("approve")}
-            onClick={() => respond(true)}
-          >
+          <button style={buttonStyle("approve")} onClick={() => respond(true)}>
             Approve
           </button>
         </div>

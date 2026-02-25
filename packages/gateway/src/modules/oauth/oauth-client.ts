@@ -45,9 +45,7 @@ async function fetchJson(
     });
     const text = await res.text();
     if (!res.ok) {
-      throw new Error(
-        `oauth discovery failed (${String(res.status)}): ${text.slice(0, 300)}`,
-      );
+      throw new Error(`oauth discovery failed (${String(res.status)}): ${text.slice(0, 300)}`);
     }
     return JSON.parse(text) as Record<string, unknown>;
   } finally {
@@ -79,9 +77,9 @@ export async function resolveOAuthEndpoints(
 
   const needsDiscovery = Boolean(
     spec.issuer &&
-      ((requireAuthorizationEndpoint && !explicit.authorizationEndpoint) ||
-        (requireTokenEndpoint && !explicit.tokenEndpoint) ||
-        (requireDeviceAuthorizationEndpoint && !explicit.deviceAuthorizationEndpoint)),
+    ((requireAuthorizationEndpoint && !explicit.authorizationEndpoint) ||
+      (requireTokenEndpoint && !explicit.tokenEndpoint) ||
+      (requireDeviceAuthorizationEndpoint && !explicit.deviceAuthorizationEndpoint)),
   );
   if (!needsDiscovery) return explicit;
 
@@ -91,13 +89,17 @@ export async function resolveOAuthEndpoints(
 
   const authorizationEndpoint =
     explicit.authorizationEndpoint ??
-    (typeof json["authorization_endpoint"] === "string" ? String(json["authorization_endpoint"]) : undefined);
+    (typeof json["authorization_endpoint"] === "string"
+      ? String(json["authorization_endpoint"])
+      : undefined);
   const tokenEndpoint =
     explicit.tokenEndpoint ??
     (typeof json["token_endpoint"] === "string" ? String(json["token_endpoint"]) : undefined);
   const deviceAuthorizationEndpoint =
     explicit.deviceAuthorizationEndpoint ??
-    (typeof json["device_authorization_endpoint"] === "string" ? String(json["device_authorization_endpoint"]) : undefined);
+    (typeof json["device_authorization_endpoint"] === "string"
+      ? String(json["device_authorization_endpoint"])
+      : undefined);
 
   return {
     authorizationEndpoint,
@@ -106,7 +108,10 @@ export async function resolveOAuthEndpoints(
   };
 }
 
-function parseTokenResponseBody(input: { text: string; contentType: string | null }): Record<string, unknown> {
+function parseTokenResponseBody(input: {
+  text: string;
+  contentType: string | null;
+}): Record<string, unknown> {
   const trimmed = input.text.trim();
   if (!trimmed) return {};
 
@@ -158,7 +163,9 @@ async function postTokenForm(
     if (!opts.clientSecret) {
       throw new Error("oauth token endpoint requires client_secret for basic auth");
     }
-    const credential = Buffer.from(`${opts.clientId}:${opts.clientSecret}`, "utf-8").toString("base64");
+    const credential = Buffer.from(`${opts.clientId}:${opts.clientSecret}`, "utf-8").toString(
+      "base64",
+    );
     headers["authorization"] = `Basic ${credential}`;
   }
 

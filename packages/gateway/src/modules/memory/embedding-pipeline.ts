@@ -44,20 +44,19 @@ export class EmbeddingPipeline {
   }
 
   /** Embed text and store it in the vector DAL. Returns the embedding_id. */
-  async embedAndStore(
-    text: string,
-    label: string,
-    metadata?: unknown,
-  ): Promise<string> {
+  async embedAndStore(text: string, label: string, metadata?: unknown): Promise<string> {
     const vector = await this.embed(text);
-    return await this.vectorDal.insertEmbedding(label, vector, this.embeddingModelId, metadata, this.agentId);
+    return await this.vectorDal.insertEmbedding(
+      label,
+      vector,
+      this.embeddingModelId,
+      metadata,
+      this.agentId,
+    );
   }
 
   /** Embed a query and search for similar vectors. Returns top K results. */
-  async search(
-    queryText: string,
-    topK: number,
-  ): Promise<VectorSearchResult[]> {
+  async search(queryText: string, topK: number): Promise<VectorSearchResult[]> {
     const queryVector = await this.embed(queryText);
     return await this.vectorDal.searchByCosineSimilarity(queryVector, topK, this.agentId);
   }

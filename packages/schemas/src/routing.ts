@@ -54,4 +54,3 @@ export type RoutingConfigRevertRequest = z.infer<typeof RoutingConfigRevertReque
 
 export const RoutingConfigRevertResponse = RoutingConfigGetResponse;
 export type RoutingConfigRevertResponse = z.infer<typeof RoutingConfigRevertResponse>;
-

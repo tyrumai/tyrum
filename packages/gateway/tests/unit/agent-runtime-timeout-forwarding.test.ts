@@ -69,13 +69,10 @@ describe("AgentRuntime", () => {
     }
 
     engineAny["executeWithTimeout"] = async (...args: unknown[]) => {
-      return await (originalExecuteWithTimeout as (...args: unknown[]) => Promise<unknown>).apply(engine, [
-        args[0],
-        args[1],
-        args[2],
-        args[3],
-        timeoutMs,
-      ]);
+      return await (originalExecuteWithTimeout as (...args: unknown[]) => Promise<unknown>).apply(
+        engine,
+        [args[0], args[1], args[2], args[3], timeoutMs],
+      );
     };
 
     const res = await runtime.turn({

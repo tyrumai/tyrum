@@ -80,7 +80,9 @@ export class WatcherFiringDal {
         existing.plan_id !== input.planId ||
         existing.trigger_type !== input.triggerType
       ) {
-        throw new Error(`watcher firing '${input.firingId}' already exists with different attributes`);
+        throw new Error(
+          `watcher firing '${input.firingId}' already exists with different attributes`,
+        );
       }
       return { row: existing, created: false };
     }
@@ -120,7 +122,9 @@ export class WatcherFiringDal {
           createdRow.plan_id !== input.planId ||
           createdRow.trigger_type !== input.triggerType
         ) {
-          throw new Error(`watcher firing '${input.firingId}' already exists with different attributes`);
+          throw new Error(
+            `watcher firing '${input.firingId}' already exists with different attributes`,
+          );
         }
         return { row: createdRow, created: true };
       }
@@ -141,7 +145,9 @@ export class WatcherFiringDal {
           raced.plan_id !== input.planId ||
           raced.trigger_type !== input.triggerType
         ) {
-          throw new Error(`watcher firing '${input.firingId}' already exists with different attributes`);
+          throw new Error(
+            `watcher firing '${input.firingId}' already exists with different attributes`,
+          );
         }
         return { row: raced, created: false };
       }
@@ -157,7 +163,10 @@ export class WatcherFiringDal {
     return row ? toRow(row) : undefined;
   }
 
-  async getByWatcherAndSlot(watcherId: number, scheduledAtMs: number): Promise<WatcherFiringRow | undefined> {
+  async getByWatcherAndSlot(
+    watcherId: number,
+    scheduledAtMs: number,
+  ): Promise<WatcherFiringRow | undefined> {
     const row = await this.db.get<RawWatcherFiringRow>(
       "SELECT * FROM watcher_firings WHERE watcher_id = ? AND scheduled_at_ms = ?",
       [watcherId, scheduledAtMs],
@@ -165,7 +174,11 @@ export class WatcherFiringDal {
     return row ? toRow(row) : undefined;
   }
 
-  async claimNext(input: { owner: string; nowMs: number; leaseTtlMs: number }): Promise<WatcherFiringRow | undefined> {
+  async claimNext(input: {
+    owner: string;
+    nowMs: number;
+    leaseTtlMs: number;
+  }): Promise<WatcherFiringRow | undefined> {
     const leaseExpiresAt = input.nowMs + Math.max(1, input.leaseTtlMs);
     const nowIso = new Date().toISOString();
 
@@ -205,7 +218,12 @@ export class WatcherFiringDal {
     });
   }
 
-  async markEnqueued(input: { firingId: string; owner: string; jobId?: string | null; runId?: string | null }): Promise<boolean> {
+  async markEnqueued(input: {
+    firingId: string;
+    owner: string;
+    jobId?: string | null;
+    runId?: string | null;
+  }): Promise<boolean> {
     const nowIso = new Date().toISOString();
     const res = await this.db.run(
       `UPDATE watcher_firings

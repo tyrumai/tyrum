@@ -3,13 +3,7 @@ import { DateTimeSchema } from "./common.js";
 import { Lane, TyrumKey } from "./keys.js";
 import { PolicyOverride } from "./policy-bundle.js";
 
-export const ApprovalStatus = z.enum([
-  "pending",
-  "approved",
-  "denied",
-  "expired",
-  "cancelled",
-]);
+export const ApprovalStatus = z.enum(["pending", "approved", "denied", "expired", "cancelled"]);
 export type ApprovalStatus = z.infer<typeof ApprovalStatus>;
 
 export const ApprovalKind = z.enum([

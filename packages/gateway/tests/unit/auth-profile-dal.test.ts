@@ -66,4 +66,3 @@ describe("AuthProfileDal", () => {
     expect(ids).not.toContain("p-expired-token");
   });
 });
-

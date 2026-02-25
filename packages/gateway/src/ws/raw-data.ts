@@ -11,4 +11,3 @@ export function rawDataToUtf8(data: RawData): string {
 
   return Buffer.from(data).toString("utf-8");
 }
-

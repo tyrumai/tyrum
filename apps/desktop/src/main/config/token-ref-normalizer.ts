@@ -8,9 +8,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * Normalizes config partials before persisting:
  * - Encrypts plaintext `remote.tokenRef` and `embedded.tokenRef` values.
  */
-export function normalizeConfigPartialForSave(
-  partial: unknown,
-): Record<string, unknown> {
+export function normalizeConfigPartialForSave(partial: unknown): Record<string, unknown> {
   if (!isRecord(partial)) return {};
 
   const normalized: Record<string, unknown> = { ...partial };

@@ -53,4 +53,3 @@ export function wildcardMatch(pattern: string, input: string): boolean {
 
   return pi === p.length;
 }
-

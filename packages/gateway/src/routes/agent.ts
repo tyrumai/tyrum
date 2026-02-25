@@ -28,10 +28,7 @@ export function createAgentRoutes(agents: AgentRegistry): Hono {
     const body: unknown = await c.req.json();
     const parsed = AgentTurnRequest.safeParse(body);
     if (!parsed.success) {
-      return c.json(
-        { error: "invalid_request", message: parsed.error.message },
-        400,
-      );
+      return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
     }
 
     try {

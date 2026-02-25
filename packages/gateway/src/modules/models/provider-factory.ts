@@ -20,25 +20,41 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import type { Provider } from "ai";
 
 const FACTORIES: Record<string, (options: Record<string, unknown>) => Provider> = {
-  "@ai-sdk/amazon-bedrock": createAmazonBedrock as unknown as (options: Record<string, unknown>) => Provider,
+  "@ai-sdk/amazon-bedrock": createAmazonBedrock as unknown as (
+    options: Record<string, unknown>,
+  ) => Provider,
   "@ai-sdk/anthropic": createAnthropic as unknown as (options: Record<string, unknown>) => Provider,
   "@ai-sdk/azure": createAzure as unknown as (options: Record<string, unknown>) => Provider,
   "@ai-sdk/cerebras": createCerebras as unknown as (options: Record<string, unknown>) => Provider,
   "@ai-sdk/cohere": createCohere as unknown as (options: Record<string, unknown>) => Provider,
   "@ai-sdk/deepinfra": createDeepInfra as unknown as (options: Record<string, unknown>) => Provider,
   "@ai-sdk/gateway": createGateway as unknown as (options: Record<string, unknown>) => Provider,
-  "@ai-sdk/google": createGoogleGenerativeAI as unknown as (options: Record<string, unknown>) => Provider,
-  "@ai-sdk/google-vertex": createVertex as unknown as (options: Record<string, unknown>) => Provider,
-  "@ai-sdk/google-vertex/anthropic": createVertexAnthropic as unknown as (options: Record<string, unknown>) => Provider,
+  "@ai-sdk/google": createGoogleGenerativeAI as unknown as (
+    options: Record<string, unknown>,
+  ) => Provider,
+  "@ai-sdk/google-vertex": createVertex as unknown as (
+    options: Record<string, unknown>,
+  ) => Provider,
+  "@ai-sdk/google-vertex/anthropic": createVertexAnthropic as unknown as (
+    options: Record<string, unknown>,
+  ) => Provider,
   "@ai-sdk/groq": createGroq as unknown as (options: Record<string, unknown>) => Provider,
   "@ai-sdk/mistral": createMistral as unknown as (options: Record<string, unknown>) => Provider,
   "@ai-sdk/openai": createOpenAI as unknown as (options: Record<string, unknown>) => Provider,
-  "@ai-sdk/openai-compatible": createOpenAICompatible as unknown as (options: Record<string, unknown>) => Provider,
-  "@ai-sdk/perplexity": createPerplexity as unknown as (options: Record<string, unknown>) => Provider,
-  "@ai-sdk/togetherai": createTogetherAI as unknown as (options: Record<string, unknown>) => Provider,
+  "@ai-sdk/openai-compatible": createOpenAICompatible as unknown as (
+    options: Record<string, unknown>,
+  ) => Provider,
+  "@ai-sdk/perplexity": createPerplexity as unknown as (
+    options: Record<string, unknown>,
+  ) => Provider,
+  "@ai-sdk/togetherai": createTogetherAI as unknown as (
+    options: Record<string, unknown>,
+  ) => Provider,
   "@ai-sdk/vercel": createVercel as unknown as (options: Record<string, unknown>) => Provider,
   "@ai-sdk/xai": createXai as unknown as (options: Record<string, unknown>) => Provider,
-  "@openrouter/ai-sdk-provider": createOpenRouter as unknown as (options: Record<string, unknown>) => Provider,
+  "@openrouter/ai-sdk-provider": createOpenRouter as unknown as (
+    options: Record<string, unknown>,
+  ) => Provider,
 };
 
 export function createProviderFromNpm(input: {
@@ -58,7 +74,9 @@ export function createProviderFromNpm(input: {
   const mergedHeaders = (() => {
     const fromOptions = input.options?.["headers"];
     const fromOptionsHeaders =
-      fromOptions && typeof fromOptions === "object" ? (fromOptions as Record<string, string>) : undefined;
+      fromOptions && typeof fromOptions === "object"
+        ? (fromOptions as Record<string, string>)
+        : undefined;
     if (!fromOptionsHeaders && !input.headers) return undefined;
     return Object.assign({}, fromOptionsHeaders, input.headers);
   })();

@@ -9,7 +9,11 @@ import { PolicyBundle } from "@tyrum/schemas";
 import type { GatewayContainer } from "../../container.js";
 import { createProviderFromNpm } from "../models/provider-factory.js";
 import type { StepExecutionContext, StepExecutor, StepResult } from "./engine.js";
-import { parsePlaybookOutputContract, resolveMaxOutputBytes, validateJsonAgainstSchema } from "./playbook-output-contract.js";
+import {
+  parsePlaybookOutputContract,
+  resolveMaxOutputBytes,
+  validateJsonAgainstSchema,
+} from "./playbook-output-contract.js";
 import {
   appendToolApprovalResponseMessage,
   coerceModelMessages,
@@ -20,7 +24,12 @@ import { generateText, jsonSchema, stepCountIs, tool as aiTool } from "ai";
 import type { LanguageModel, ModelMessage, Tool, ToolExecutionOptions, ToolSet } from "ai";
 import type { LanguageModelV3 } from "@ai-sdk/provider";
 import { canonicalizeToolMatchTarget } from "../policy/match-target.js";
-import { evaluateDomain, mostRestrictiveDecision, normalizeDomain, normalizeUrlForPolicy } from "../policy/domain.js";
+import {
+  evaluateDomain,
+  mostRestrictiveDecision,
+  normalizeDomain,
+  normalizeUrlForPolicy,
+} from "../policy/domain.js";
 import { collectSecretHandleIds } from "../secret/collect-secret-handle-ids.js";
 import type { SecretProvider } from "../secret/provider.js";
 import { coerceRecord } from "../util/coerce.js";
@@ -197,7 +206,10 @@ async function evaluateToolCallDecision(input: {
   if (input.secretScopes.length > 0) {
     let secretsDecision: DecisionT = "allow";
     for (const scope of input.secretScopes) {
-      secretsDecision = mostRestrictiveDecision(secretsDecision, evaluateDomain(secretsDomain, scope));
+      secretsDecision = mostRestrictiveDecision(
+        secretsDecision,
+        evaluateDomain(secretsDomain, scope),
+      );
     }
     decision = mostRestrictiveDecision(decision, secretsDecision);
   }
@@ -217,7 +229,9 @@ async function resolveLanguageModel(input: {
   }
   const modelEntry = provider.models?.[parsed.modelId];
   if (!modelEntry) {
-    throw new Error(`model not found in models.dev catalog: ${parsed.providerId}/${parsed.modelId}`);
+    throw new Error(
+      `model not found in models.dev catalog: ${parsed.providerId}/${parsed.modelId}`,
+    );
   }
 
   const providerOverride = (modelEntry as { provider?: { npm?: string; api?: string } }).provider;
@@ -236,10 +250,14 @@ async function resolveLanguageModel(input: {
 
   const raw = providerImpl.languageModel(parsed.modelId);
   if (typeof raw === "string") {
-    throw new Error(`provider returned string model id for '${parsed.providerId}/${parsed.modelId}'`);
+    throw new Error(
+      `provider returned string model id for '${parsed.providerId}/${parsed.modelId}'`,
+    );
   }
   if ((raw as Partial<LanguageModelV3>).specificationVersion !== "v3") {
-    throw new Error(`provider model '${parsed.providerId}/${parsed.modelId}' is not specificationVersion v3`);
+    throw new Error(
+      `provider model '${parsed.providerId}/${parsed.modelId}' is not specificationVersion v3`,
+    );
   }
 
   return { model: raw as LanguageModelV3, providerId: parsed.providerId, modelId: parsed.modelId };
@@ -295,10 +313,11 @@ function buildToolSet(input: {
       cachedApproval = null;
       return cachedApproval;
     }
-    const row = await input.container.db.get<{ status: string; context_json: string; response_reason: string | null }>(
-      "SELECT status, context_json, response_reason FROM approvals WHERE id = ?",
-      [approvalId],
-    );
+    const row = await input.container.db.get<{
+      status: string;
+      context_json: string;
+      response_reason: string | null;
+    }>("SELECT status, context_json, response_reason FROM approvals WHERE id = ?", [approvalId]);
     if (!row) {
       cachedApproval = null;
       return cachedApproval;
@@ -576,9 +595,10 @@ async function executeLlmAction(input: {
   const modelIdRaw = typeof args["model"] === "string" ? args["model"].trim() : "";
   const prompt = typeof args["prompt"] === "string" ? args["prompt"] : "";
   const maxToolCallsRaw = args["max_tool_calls"];
-  const maxToolCalls = typeof maxToolCallsRaw === "number" && Number.isFinite(maxToolCallsRaw) && maxToolCallsRaw >= 0
-    ? Math.floor(maxToolCallsRaw)
-    : 0;
+  const maxToolCalls =
+    typeof maxToolCallsRaw === "number" && Number.isFinite(maxToolCallsRaw) && maxToolCallsRaw >= 0
+      ? Math.floor(maxToolCallsRaw)
+      : 0;
 
   const toolsObj = coerceRecord(args["tools"]);
   const rawAllowedToolIds = toolsObj?.["allow"];
@@ -588,7 +608,10 @@ async function executeLlmAction(input: {
 
   const outputContract = parsePlaybookOutputContract(args);
   if (!outputContract || outputContract.kind !== "json") {
-    return { success: false, error: "Output contract violated: llm steps must declare JSON output" };
+    return {
+      success: false,
+      error: "Output contract violated: llm steps must declare JSON output",
+    };
   }
 
   if (!modelIdRaw) {
@@ -640,7 +663,9 @@ async function executeLlmAction(input: {
       status: string;
       context_json: string;
       response_reason: string | null;
-    }>("SELECT status, context_json, response_reason FROM approvals WHERE id = ?", [stepApprovalId]);
+    }>("SELECT status, context_json, response_reason FROM approvals WHERE id = ?", [
+      stepApprovalId,
+    ]);
     if (row && row.status !== "pending") {
       let approvalContext: unknown = {};
       try {
@@ -727,14 +752,19 @@ async function executeLlmAction(input: {
 
     if (res.steps) {
       const lastStep = res.steps.at(-1);
-      const approvalPart = lastStep?.content.find((part) => coerceRecord(part)?.["type"] === "tool-approval-request");
+      const approvalPart = lastStep?.content.find(
+        (part) => coerceRecord(part)?.["type"] === "tool-approval-request",
+      );
       if (approvalPart) {
         const record = coerceRecord(approvalPart);
-        const approvalId = typeof record?.["approvalId"] === "string" ? record["approvalId"].trim() : "";
+        const approvalId =
+          typeof record?.["approvalId"] === "string" ? record["approvalId"].trim() : "";
         const toolCall = coerceRecord(record?.["toolCall"]);
 
-        const toolCallId = typeof toolCall?.["toolCallId"] === "string" ? toolCall["toolCallId"].trim() : "";
-        const toolName = typeof toolCall?.["toolName"] === "string" ? toolCall["toolName"].trim() : "";
+        const toolCallId =
+          typeof toolCall?.["toolCallId"] === "string" ? toolCall["toolCallId"].trim() : "";
+        const toolName =
+          typeof toolCall?.["toolName"] === "string" ? toolCall["toolName"].trim() : "";
         const toolArgs = toolCall ? toolCall["input"] : undefined;
 
         if (!approvalId || !toolCallId || !toolName) {
@@ -819,14 +849,22 @@ async function executeLlmAction(input: {
   const maxOutputBytes = resolveMaxOutputBytes(args);
   const capped = maybeTruncateText(resultText, maxOutputBytes);
   if (capped.truncated) {
-    return { success: false, error: "Output contract violated: model output was truncated", cost: buildCost(usage) };
+    return {
+      success: false,
+      error: "Output contract violated: model output was truncated",
+      cost: buildCost(usage),
+    };
   }
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(resultText) as unknown;
   } catch {
-    return { success: false, error: "Output contract violated: expected JSON model output", cost: buildCost(usage) };
+    return {
+      success: false,
+      error: "Output contract violated: expected JSON model output",
+      cost: buildCost(usage),
+    };
   }
 
   if (outputContract.schema !== undefined) {

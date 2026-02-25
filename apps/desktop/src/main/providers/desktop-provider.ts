@@ -141,11 +141,7 @@ export class DesktopProvider implements CapabilityProvider {
     }
     if (this.permissions.desktopInputRequiresConfirmation) {
       const detail =
-        args.action === "type"
-          ? args.text
-          : args.action === "press"
-            ? args.key
-            : undefined;
+        args.action === "type" ? args.text : args.action === "press" ? args.key : undefined;
       const approved = await this.requestConfirmation(
         `Allow keyboard ${args.action}: "${detail ?? "<missing>"}"?`,
       );

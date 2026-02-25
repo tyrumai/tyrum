@@ -40,9 +40,7 @@ function navItemStyle(active: boolean): React.CSSProperties {
     padding: "10px 16px",
     cursor: "pointer",
     background: active ? colors.primaryDim : "transparent",
-    borderLeft: active
-      ? `3px solid ${colors.primary}`
-      : "3px solid transparent",
+    borderLeft: active ? `3px solid ${colors.primary}` : "3px solid transparent",
     color: active ? "#fff" : colors.fgMuted,
     fontSize: 14,
     fontWeight: active ? 600 : 400,

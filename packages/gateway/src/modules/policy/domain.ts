@@ -65,4 +65,3 @@ export function normalizeUrlForPolicy(raw: string): string {
     return q === -1 ? trimmed : trimmed.slice(0, q);
   }
 }
-

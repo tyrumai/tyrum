@@ -46,7 +46,10 @@ export class ModelsDevCacheDal {
   constructor(private readonly db: SqlDb) {}
 
   async get(): Promise<ModelsDevCacheRow | undefined> {
-    const row = await this.db.get<RawModelsDevCacheRow>("SELECT * FROM models_dev_cache WHERE id = 1", []);
+    const row = await this.db.get<RawModelsDevCacheRow>(
+      "SELECT * FROM models_dev_cache WHERE id = 1",
+      [],
+    );
     return row ? toRow(row) : undefined;
   }
 

@@ -24,9 +24,12 @@ describe("missing slash commands", () => {
       createdBy: { kind: "test" },
     });
 
-    const result = await executeCommand(`/policy overrides describe ${created.policy_override_id}`, {
-      policyOverrideDal,
-    });
+    const result = await executeCommand(
+      `/policy overrides describe ${created.policy_override_id}`,
+      {
+        policyOverrideDal,
+      },
+    );
 
     const payload = result.data as { override: { policy_override_id: string } };
     expect(payload.override.policy_override_id).toBe(created.policy_override_id);

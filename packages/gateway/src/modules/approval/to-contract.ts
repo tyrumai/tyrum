@@ -1,5 +1,8 @@
 import { Approval, ApprovalKind, ApprovalStatus, Lane, TyrumKey } from "@tyrum/schemas";
-import type { Approval as ApprovalT, ApprovalResolution as ApprovalResolutionT } from "@tyrum/schemas";
+import type {
+  Approval as ApprovalT,
+  ApprovalResolution as ApprovalResolutionT,
+} from "@tyrum/schemas";
 import { normalizeDbDateTime } from "../../utils/db-time.js";
 import type { ApprovalRow } from "./dal.js";
 

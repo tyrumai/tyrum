@@ -6,10 +6,7 @@ import { CliProvider } from "../src/main/providers/cli-provider.js";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeCliAction(
-  args: Record<string, unknown>,
-  postcondition?: unknown,
-): ActionPrimitive {
+function makeCliAction(args: Record<string, unknown>, postcondition?: unknown): ActionPrimitive {
   return { type: "CLI", args, postcondition };
 }
 
@@ -76,9 +73,7 @@ describe("CLI postcondition evaluation", () => {
   });
 
   it("succeeds without postcondition (backwards compatible)", async () => {
-    const result = await provider.execute(
-      makeCliAction({ cmd: "echo", args: ["hello"] }),
-    );
+    const result = await provider.execute(makeCliAction({ cmd: "echo", args: ["hello"] }));
     expect(result.success).toBe(true);
     const evidence = result.evidence as Record<string, unknown>;
     expect(evidence.postcondition).toBeUndefined();

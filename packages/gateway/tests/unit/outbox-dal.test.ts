@@ -43,4 +43,3 @@ describe("OutboxDal", () => {
     expect(await outbox.poll("edge-a", 100)).toHaveLength(0);
   });
 });
-

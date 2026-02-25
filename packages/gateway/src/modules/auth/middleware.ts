@@ -70,14 +70,13 @@ export function createAuthMiddleware(
     const bearerToken = extractBearerToken(c.req.header("authorization"));
     const cookieToken = getCookie(c, AUTH_COOKIE_NAME);
     const token = appQueryToken ?? bearerToken ?? cookieToken;
-    const tokenTransport =
-      appQueryToken
-        ? "query"
-        : bearerToken
-          ? "authorization"
-          : cookieToken
-            ? "cookie"
-            : "missing";
+    const tokenTransport = appQueryToken
+      ? "query"
+      : bearerToken
+        ? "authorization"
+        : cookieToken
+          ? "cookie"
+          : "missing";
     if (!token) {
       await opts?.audit?.recordAuthFailed({
         surface: "http",
@@ -89,10 +88,7 @@ export function createAuthMiddleware(
         user_agent: c.req.header("user-agent")?.trim() || undefined,
         request_id: requestIdForAudit(c),
       });
-      return c.json(
-        AUTH_ERROR_BODY,
-        401,
-      );
+      return c.json(AUTH_ERROR_BODY, 401);
     }
 
     const claims: AuthTokenClaims | null = tokenStore.authenticate(token);
@@ -107,10 +103,7 @@ export function createAuthMiddleware(
         user_agent: c.req.header("user-agent")?.trim() || undefined,
         request_id: requestIdForAudit(c),
       });
-      return c.json(
-        AUTH_ERROR_BODY,
-        401,
-      );
+      return c.json(AUTH_ERROR_BODY, 401);
     }
 
     c.set("authClaims", claims);

@@ -6,9 +6,7 @@ const { spawnMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("node:child_process", async () => {
-  const actual = await vi.importActual<typeof import("node:child_process")>(
-    "node:child_process",
-  );
+  const actual = await vi.importActual<typeof import("node:child_process")>("node:child_process");
   return {
     ...actual,
     spawn: spawnMock,
@@ -22,9 +20,7 @@ import {
 } from "../src/main/gateway-manager.js";
 
 /** Minimal mock that satisfies the ChildProcess surface used by GatewayManager. */
-function mockProc(
-  overrides: { exitCode?: number | null; signalCode?: string | null } = {},
-) {
+function mockProc(overrides: { exitCode?: number | null; signalCode?: string | null } = {}) {
   const emitter = new EventEmitter();
   return Object.assign(emitter, {
     exitCode: overrides.exitCode ?? null,
@@ -61,18 +57,11 @@ describe("GatewayManager", () => {
       "Error: listen EADDRINUSE: address already in use 127.0.0.1:8788",
       "at Server.setupListenHandle (node:net:1940:16)",
     ]);
-    expect(reason).toBe(
-      "Error: listen EADDRINUSE: address already in use 127.0.0.1:8788",
-    );
+    expect(reason).toBe("Error: listen EADDRINUSE: address already in use 127.0.0.1:8788");
   });
 
   it("falls back to the last non-empty startup line", () => {
-    const reason = summarizeGatewayStartupFailure([
-      "one",
-      "two",
-      "  ",
-      "final line",
-    ]);
+    const reason = summarizeGatewayStartupFailure(["one", "two", "  ", "final line"]);
     expect(reason).toBe("final line");
   });
 
@@ -86,9 +75,7 @@ describe("GatewayManager", () => {
       "    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)",
       "Node.js v24.9.0",
     ]);
-    expect(reason).toBe(
-      "Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/tmp/missing.mjs'",
-    );
+    expect(reason).toBe("Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/tmp/missing.mjs'");
   });
 
   it("prefers generic error lines over Node.js version footer", () => {

@@ -29,7 +29,8 @@ export class SessionSendPolicyOverrideDal {
       [input.key],
     );
     if (!row) return undefined;
-    const sendPolicy = row.send_policy === "on" ? "on" : row.send_policy === "off" ? "off" : undefined;
+    const sendPolicy =
+      row.send_policy === "on" ? "on" : row.send_policy === "off" ? "off" : undefined;
     if (!sendPolicy) return undefined;
     return {
       key: row.key,
@@ -38,7 +39,10 @@ export class SessionSendPolicyOverrideDal {
     };
   }
 
-  async upsert(input: { key: string; sendPolicy: "on" | "off" }): Promise<SessionSendPolicyOverrideRow> {
+  async upsert(input: {
+    key: string;
+    sendPolicy: "on" | "off";
+  }): Promise<SessionSendPolicyOverrideRow> {
     const nowMs = Date.now();
     await this.db.run(
       `INSERT INTO session_send_policy_overrides (key, send_policy, updated_at_ms)
@@ -57,11 +61,9 @@ export class SessionSendPolicyOverrideDal {
   }
 
   async clear(input: { key: string }): Promise<boolean> {
-    const res = await this.db.run(
-      "DELETE FROM session_send_policy_overrides WHERE key = ?",
-      [input.key],
-    );
+    const res = await this.db.run("DELETE FROM session_send_policy_overrides WHERE key = ?", [
+      input.key,
+    ]);
     return res.changes === 1;
   }
 }
-

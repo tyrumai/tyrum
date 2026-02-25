@@ -63,9 +63,8 @@ describe("KubernetesToolRunnerStepExecutor hardening", () => {
   });
 
   it("applies baseline pod/container security context by default", async () => {
-    const { createKubernetesToolRunnerStepExecutor } = await import(
-      "../../src/modules/execution/kubernetes-toolrunner-step-executor.js"
-    );
+    const { createKubernetesToolRunnerStepExecutor } =
+      await import("../../src/modules/execution/kubernetes-toolrunner-step-executor.js");
 
     const executor = createKubernetesToolRunnerStepExecutor({
       namespace: "default",
@@ -105,9 +104,8 @@ describe("KubernetesToolRunnerStepExecutor hardening", () => {
   it("enables hardened profile with read-only rootfs and /tmp mount", async () => {
     process.env["TYRUM_TOOLRUNNER_HARDENING_PROFILE"] = "hardened";
 
-    const { createKubernetesToolRunnerStepExecutor } = await import(
-      "../../src/modules/execution/kubernetes-toolrunner-step-executor.js"
-    );
+    const { createKubernetesToolRunnerStepExecutor } =
+      await import("../../src/modules/execution/kubernetes-toolrunner-step-executor.js");
 
     const executor = createKubernetesToolRunnerStepExecutor({
       namespace: "default",
@@ -135,15 +133,11 @@ describe("KubernetesToolRunnerStepExecutor hardening", () => {
     });
 
     expect(podSpec.volumes).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: "tmp" }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ name: "tmp" })]),
     );
 
     expect(container.volumeMounts).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: "tmp", mountPath: "/tmp" }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ name: "tmp", mountPath: "/tmp" })]),
     );
   });
 });

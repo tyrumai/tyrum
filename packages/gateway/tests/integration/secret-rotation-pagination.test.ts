@@ -24,7 +24,10 @@ describe("secret rotation pagination (integration)", () => {
 
   it("updates auth profiles beyond the first 500", async () => {
     const container = await createTestContainer();
-    const secretProvider = await FileSecretProvider.create(secretsPath, "test-admin-token-for-testing");
+    const secretProvider = await FileSecretProvider.create(
+      secretsPath,
+      "test-admin-token-for-testing",
+    );
     const authProfileDal = new AuthProfileDal(container.db);
 
     const app = new Hono();
@@ -78,4 +81,3 @@ describe("secret rotation pagination (integration)", () => {
     expect(oldResolved).toBeNull();
   });
 });
-

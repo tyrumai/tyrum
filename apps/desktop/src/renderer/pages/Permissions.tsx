@@ -6,7 +6,20 @@ import {
   type CapFlags,
   type Profile,
 } from "../lib/permission-profile.js";
-import { colors, heading, card, sectionTitle, btn as btnFn, help, warn, toggleRow, toggleLabel, textarea, statusBadge, label as themeLabel } from "../theme.js";
+import {
+  colors,
+  heading,
+  card,
+  sectionTitle,
+  btn as btnFn,
+  help,
+  warn,
+  toggleRow,
+  toggleLabel,
+  textarea,
+  statusBadge,
+  label as themeLabel,
+} from "../theme.js";
 
 const PROFILES: { id: Profile; label: string; description: string }[] = [
   {
@@ -147,7 +160,9 @@ export function Permissions() {
             />
             <div>
               <div style={{ fontWeight: 600, fontSize: 14 }}>{p.label}</div>
-              <div style={{ fontSize: 12, color: colors.fgMuted, lineHeight: 1.4, marginTop: 2 }}>{p.description}</div>
+              <div style={{ fontSize: 12, color: colors.fgMuted, lineHeight: 1.4, marginTop: 2 }}>
+                {p.description}
+              </div>
             </div>
           </label>
         ))}
@@ -156,8 +171,8 @@ export function Permissions() {
       <div style={card}>
         <div style={sectionTitle}>Capabilities</div>
         <div style={help}>
-          Switching profile applies recommended capability defaults for that
-          profile. You can still adjust these before saving.
+          Switching profile applies recommended capability defaults for that profile. You can still
+          adjust these before saving.
         </div>
         {(
           [
@@ -169,11 +184,7 @@ export function Permissions() {
         ).map(([key, label]) => (
           <div key={key} style={toggleRow}>
             <span style={toggleLabel}>{label}</span>
-            <input
-              type="checkbox"
-              checked={capabilities[key]}
-              onChange={() => toggleCap(key)}
-            />
+            <input type="checkbox" checked={capabilities[key]} onChange={() => toggleCap(key)} />
           </div>
         ))}
       </div>
@@ -192,7 +203,9 @@ export function Permissions() {
             {cliAllowlistActive ? "active (default deny)" : "inactive (default allow)"}
           </span>
         </div>
-        <div style={{ ...themeLabel, marginBottom: 4, marginTop: 12 }}>Allowed Commands (one per line)</div>
+        <div style={{ ...themeLabel, marginBottom: 4, marginTop: 12 }}>
+          Allowed Commands (one per line)
+        </div>
         <textarea
           style={textarea}
           value={cli.allowedCommands.join("\n")}
@@ -209,8 +222,8 @@ export function Permissions() {
           <div>- Use one rule per line.</div>
           <div>- `*` allows all commands.</div>
           <div>
-            - Subcommand rules are prefix matches. `git status` allows `git
-            status -sb`, but does not allow `git push`.
+            - Subcommand rules are prefix matches. `git status` allows `git status -sb`, but does
+            not allow `git push`.
           </div>
           <div>- A bare command (for example `git`) allows all its subcommands.</div>
         </div>
@@ -219,7 +232,9 @@ export function Permissions() {
             CLI allowlist is active and empty, so command execution is default deny.
           </div>
         )}
-        <div style={{ ...themeLabel, marginBottom: 4, marginTop: 12 }}>Allowed Working Directories (one per line)</div>
+        <div style={{ ...themeLabel, marginBottom: 4, marginTop: 12 }}>
+          Allowed Working Directories (one per line)
+        </div>
         <textarea
           style={textarea}
           value={cli.allowedWorkingDirs.join("\n")}
@@ -233,9 +248,7 @@ export function Permissions() {
           placeholder="/home/user/projects&#10;*"
         />
         <div style={help}>
-          <div>
-            - `*` allows any working directory when CLI allowlist enforcement is active.
-          </div>
+          <div>- `*` allows any working directory when CLI allowlist enforcement is active.</div>
         </div>
       </div>
 
@@ -253,7 +266,9 @@ export function Permissions() {
             {webAllowlistActive ? "active (default deny)" : "inactive (default allow)"}
           </span>
         </div>
-        <div style={{ ...themeLabel, marginBottom: 4, marginTop: 12 }}>Allowed Domains (one per line)</div>
+        <div style={{ ...themeLabel, marginBottom: 4, marginTop: 12 }}>
+          Allowed Domains (one per line)
+        </div>
         <textarea
           style={textarea}
           value={web.allowedDomains.join("\n")}
@@ -281,9 +296,7 @@ export function Permissions() {
           <input
             type="checkbox"
             checked={web.headless}
-            onChange={() =>
-              setWeb((prev) => ({ ...prev, headless: !prev.headless }))
-            }
+            onChange={() => setWeb((prev) => ({ ...prev, headless: !prev.headless }))}
           />
         </div>
       </div>

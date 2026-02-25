@@ -50,7 +50,11 @@ export class OutboxLifecycleScheduler {
     this.db = opts.db;
     this.logger = opts.logger;
     const tickMs = resolvePositiveInt(opts.tickMs, OUTBOX_TICK_ENV, DEFAULT_TICK_MS);
-    this.retentionMs = resolvePositiveInt(opts.retentionMs, OUTBOX_RETENTION_ENV, DEFAULT_RETENTION_MS);
+    this.retentionMs = resolvePositiveInt(
+      opts.retentionMs,
+      OUTBOX_RETENTION_ENV,
+      DEFAULT_RETENTION_MS,
+    );
     this.batchSize = Math.max(
       1,
       Math.min(1_000_000, resolvePositiveInt(opts.batchSize, OUTBOX_BATCH_ENV, DEFAULT_BATCH_SIZE)),
@@ -88,7 +92,11 @@ export class OutboxLifecycleScheduler {
   private async tickOnce(): Promise<void> {
     await this.db.transaction(async (tx) => {
       if (tx.kind === "postgres") {
-        const acquired = await tryAcquirePostgresXactLock(tx, PG_COMPACTION_LOCK_KEY1, PG_COMPACTION_LOCK_KEY2);
+        const acquired = await tryAcquirePostgresXactLock(
+          tx,
+          PG_COMPACTION_LOCK_KEY1,
+          PG_COMPACTION_LOCK_KEY2,
+        );
         if (!acquired) return;
       }
       await this.runCompaction(tx);
@@ -99,18 +107,18 @@ export class OutboxLifecycleScheduler {
     if (this.clock) {
       const { nowMs } = this.clock();
       const cutoffIso = new Date(nowMs - this.retentionMs).toISOString();
-      await this.pruneInBatches("outbox_consumers", () => this.pruneOutboxConsumers(db, { cutoffIso }));
+      await this.pruneInBatches("outbox_consumers", () =>
+        this.pruneOutboxConsumers(db, { cutoffIso }),
+      );
       await this.pruneInBatches("outbox", () => this.pruneOutboxRows(db, { cutoffIso }));
       return;
     }
 
-    await this.pruneInBatches(
-      "outbox_consumers",
-      () => this.pruneOutboxConsumers(db, { retentionMs: this.retentionMs }),
+    await this.pruneInBatches("outbox_consumers", () =>
+      this.pruneOutboxConsumers(db, { retentionMs: this.retentionMs }),
     );
-    await this.pruneInBatches(
-      "outbox",
-      () => this.pruneOutboxRows(db, { retentionMs: this.retentionMs }),
+    await this.pruneInBatches("outbox", () =>
+      this.pruneOutboxRows(db, { retentionMs: this.retentionMs }),
     );
   }
 
@@ -139,15 +147,17 @@ export class OutboxLifecycleScheduler {
     input: { cutoffIso: string } | { retentionMs: number },
   ): Promise<number> {
     if (db.kind === "sqlite") {
-      const cutoff = "cutoffIso" in input
-        ? { clause: "datetime(updated_at) < datetime(?)", params: [input.cutoffIso] }
-        : {
-            clause: "datetime(updated_at) < datetime('now', '-' || ? || ' seconds')",
-            params: [Math.ceil(Math.max(1, input.retentionMs) / 1000)],
-          };
+      const cutoff =
+        "cutoffIso" in input
+          ? { clause: "datetime(updated_at) < datetime(?)", params: [input.cutoffIso] }
+          : {
+              clause: "datetime(updated_at) < datetime('now', '-' || ? || ' seconds')",
+              params: [Math.ceil(Math.max(1, input.retentionMs) / 1000)],
+            };
 
-      return (await db.run(
-        `DELETE FROM outbox_consumers
+      return (
+        await db.run(
+          `DELETE FROM outbox_consumers
          WHERE consumer_id IN (
            SELECT consumer_id
            FROM outbox_consumers
@@ -155,16 +165,22 @@ export class OutboxLifecycleScheduler {
            ORDER BY datetime(updated_at) ASC
            LIMIT ?
          )`,
-        [...cutoff.params, this.batchSize],
-      )).changes;
+          [...cutoff.params, this.batchSize],
+        )
+      ).changes;
     }
 
-    const clause = "cutoffIso" in input
-      ? { clause: "updated_at < ?", params: [input.cutoffIso] }
-      : { clause: "updated_at < now() - (? * interval '1 millisecond')", params: [input.retentionMs] };
+    const clause =
+      "cutoffIso" in input
+        ? { clause: "updated_at < ?", params: [input.cutoffIso] }
+        : {
+            clause: "updated_at < now() - (? * interval '1 millisecond')",
+            params: [input.retentionMs],
+          };
 
-    return (await db.run(
-      `DELETE FROM outbox_consumers
+    return (
+      await db.run(
+        `DELETE FROM outbox_consumers
        WHERE consumer_id IN (
          SELECT consumer_id
          FROM outbox_consumers
@@ -172,8 +188,9 @@ export class OutboxLifecycleScheduler {
          ORDER BY updated_at ASC
          LIMIT ?
        )`,
-      [...clause.params, this.batchSize],
-    )).changes;
+        [...clause.params, this.batchSize],
+      )
+    ).changes;
   }
 
   private async pruneOutboxRows(
@@ -181,15 +198,17 @@ export class OutboxLifecycleScheduler {
     input: { cutoffIso: string } | { retentionMs: number },
   ): Promise<number> {
     if (db.kind === "sqlite") {
-      const cutoff = "cutoffIso" in input
-        ? { clause: "datetime(created_at) < datetime(?)", params: [input.cutoffIso] }
-        : {
-            clause: "datetime(created_at) < datetime('now', '-' || ? || ' seconds')",
-            params: [Math.ceil(Math.max(1, input.retentionMs) / 1000)],
-          };
+      const cutoff =
+        "cutoffIso" in input
+          ? { clause: "datetime(created_at) < datetime(?)", params: [input.cutoffIso] }
+          : {
+              clause: "datetime(created_at) < datetime('now', '-' || ? || ' seconds')",
+              params: [Math.ceil(Math.max(1, input.retentionMs) / 1000)],
+            };
 
-      return (await db.run(
-        `DELETE FROM outbox
+      return (
+        await db.run(
+          `DELETE FROM outbox
          WHERE id IN (
            SELECT id
            FROM outbox
@@ -197,16 +216,22 @@ export class OutboxLifecycleScheduler {
            ORDER BY id ASC
            LIMIT ?
          )`,
-        [...cutoff.params, this.batchSize],
-      )).changes;
+          [...cutoff.params, this.batchSize],
+        )
+      ).changes;
     }
 
-    const clause = "cutoffIso" in input
-      ? { clause: "created_at < ?", params: [input.cutoffIso] }
-      : { clause: "created_at < now() - (? * interval '1 millisecond')", params: [input.retentionMs] };
+    const clause =
+      "cutoffIso" in input
+        ? { clause: "created_at < ?", params: [input.cutoffIso] }
+        : {
+            clause: "created_at < now() - (? * interval '1 millisecond')",
+            params: [input.retentionMs],
+          };
 
-    return (await db.run(
-      `DELETE FROM outbox
+    return (
+      await db.run(
+        `DELETE FROM outbox
        WHERE id IN (
          SELECT id
          FROM outbox
@@ -214,7 +239,8 @@ export class OutboxLifecycleScheduler {
          ORDER BY id ASC
          LIMIT ?
        )`,
-      [...clause.params, this.batchSize],
-    )).changes;
+        [...clause.params, this.batchSize],
+      )
+    ).changes;
   }
 }

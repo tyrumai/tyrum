@@ -5,12 +5,7 @@ import { tmpdir } from "node:os";
 import { loadEnabledSkills } from "../../src/modules/agent/workspace.js";
 
 function skillDoc(body: string): string {
-  return `---\n` +
-    `id: example\n` +
-    `name: Example\n` +
-    `version: 0.0.1\n` +
-    `---\n` +
-    `${body}\n`;
+  return `---\n` + `id: example\n` + `name: Example\n` + `version: 0.0.1\n` + `---\n` + `${body}\n`;
 }
 
 describe("skills load order", () => {

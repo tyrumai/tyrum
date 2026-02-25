@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Context } from "hono";
-import { createTrustedProxyAllowlistFromEnv, getClientIp, resolveClientIp } from "../../src/modules/auth/client-ip.js";
+import {
+  createTrustedProxyAllowlistFromEnv,
+  getClientIp,
+  resolveClientIp,
+} from "../../src/modules/auth/client-ip.js";
 
 describe("trusted proxy allowlist parsing", () => {
   it("returns undefined when unset", () => {

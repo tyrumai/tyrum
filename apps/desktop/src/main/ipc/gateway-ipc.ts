@@ -101,8 +101,7 @@ async function startEmbeddedGatewayWithConfig(
 
   const tyrumHome = process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
   const accessToken = ensureEmbeddedGatewayToken(config);
-  const dbPath =
-    config.embedded.dbPath || join(tyrumHome, "gateway", "gateway.db");
+  const dbPath = config.embedded.dbPath || join(tyrumHome, "gateway", "gateway.db");
   const gatewayBin = resolveGatewayBinPath();
 
   const starter = mgr.start({
@@ -175,8 +174,7 @@ export function registerGatewayIpc(window: BrowserWindow): GatewayManager {
     ipcMain.handle("gateway:ui-urls", async (_event, rawOptions?: unknown) => {
       let startOnboarding = false;
       if (rawOptions && typeof rawOptions === "object" && !Array.isArray(rawOptions)) {
-        startOnboarding =
-          (rawOptions as { startOnboarding?: unknown }).startOnboarding === true;
+        startOnboarding = (rawOptions as { startOnboarding?: unknown }).startOnboarding === true;
       }
       const config = loadConfig();
       if (config.mode === "embedded") {

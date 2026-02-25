@@ -61,12 +61,12 @@ export async function runToolRunnerFromStdio(): Promise<number> {
   const action: ActionPrimitiveT = actionParse.data;
 
   const timeoutMsRaw = request.timeout_ms;
-  const timeoutMs = typeof timeoutMsRaw === "number" && Number.isFinite(timeoutMsRaw)
-    ? Math.max(1, Math.min(300_000, Math.floor(timeoutMsRaw)))
-    : 60_000;
+  const timeoutMs =
+    typeof timeoutMsRaw === "number" && Number.isFinite(timeoutMsRaw)
+      ? Math.max(1, Math.min(300_000, Math.floor(timeoutMsRaw)))
+      : 60_000;
 
-  const tyrumHome =
-    process.env["TYRUM_HOME"]?.trim() || join(homedir(), ".tyrum");
+  const tyrumHome = process.env["TYRUM_HOME"]?.trim() || join(homedir(), ".tyrum");
 
   try {
     const redactionEngine = new RedactionEngine();

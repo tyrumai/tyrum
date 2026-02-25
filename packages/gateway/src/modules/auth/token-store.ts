@@ -65,9 +65,7 @@ interface ParseDeviceTokenOptions {
 
 export function normalizeScopes(scopes: string[] | undefined): string[] {
   if (!Array.isArray(scopes)) return [];
-  const normalized = scopes
-    .map((scope) => scope.trim())
-    .filter((scope) => scope.length > 0);
+  const normalized = scopes.map((scope) => scope.trim()).filter((scope) => scope.length > 0);
   return [...new Set(normalized)];
 }
 
@@ -102,7 +100,8 @@ function toDeviceTokenPayload(value: unknown): DeviceTokenPayload | undefined {
   if (typeof tokenId !== "string" || tokenId.trim().length === 0) return undefined;
   if (typeof deviceId !== "string" || deviceId.trim().length === 0) return undefined;
   if (!isDeviceTokenRole(role)) return undefined;
-  if (!Array.isArray(scopesRaw) || scopesRaw.some((scope) => typeof scope !== "string")) return undefined;
+  if (!Array.isArray(scopesRaw) || scopesRaw.some((scope) => typeof scope !== "string"))
+    return undefined;
   if (typeof issuedAt !== "number" || !Number.isInteger(issuedAt)) return undefined;
   if (typeof expiresAt !== "number" || !Number.isInteger(expiresAt)) return undefined;
   if (expiresAt <= issuedAt) return undefined;
@@ -230,8 +229,14 @@ export class TokenStore {
     }
 
     const ttlSeconds = input.ttlSeconds ?? DEFAULT_DEVICE_TOKEN_TTL_SECONDS;
-    if (!Number.isInteger(ttlSeconds) || ttlSeconds <= 0 || ttlSeconds > MAX_DEVICE_TOKEN_TTL_SECONDS) {
-      throw new Error(`ttlSeconds must be an integer between 1 and ${String(MAX_DEVICE_TOKEN_TTL_SECONDS)}`);
+    if (
+      !Number.isInteger(ttlSeconds) ||
+      ttlSeconds <= 0 ||
+      ttlSeconds > MAX_DEVICE_TOKEN_TTL_SECONDS
+    ) {
+      throw new Error(
+        `ttlSeconds must be an integer between 1 and ${String(MAX_DEVICE_TOKEN_TTL_SECONDS)}`,
+      );
     }
 
     const nowSeconds = Math.floor(Date.now() / 1000);
@@ -300,7 +305,10 @@ export class TokenStore {
     };
   }
 
-  private parseDeviceToken(token: string, opts?: ParseDeviceTokenOptions): DeviceTokenPayload | undefined {
+  private parseDeviceToken(
+    token: string,
+    opts?: ParseDeviceTokenOptions,
+  ): DeviceTokenPayload | undefined {
     if (!this.token) return undefined;
     const prefix = `${DEVICE_TOKEN_PREFIX}.`;
     if (!token.startsWith(prefix)) return undefined;
@@ -397,7 +405,9 @@ export class TokenStore {
     try {
       parsed = JSON.parse(raw) as unknown;
     } catch (err) {
-      throw new Error(`Failed to parse device token revocations file: ${revocationPath}`, { cause: err });
+      throw new Error(`Failed to parse device token revocations file: ${revocationPath}`, {
+        cause: err,
+      });
     }
 
     if (!Array.isArray(parsed)) {
@@ -411,7 +421,9 @@ export class TokenStore {
     this.revokedDeviceTokenIds = new Set(ids);
   }
 
-  private async persistRevokedDeviceTokenIds(ids: Iterable<string> = this.revokedDeviceTokenIds): Promise<void> {
+  private async persistRevokedDeviceTokenIds(
+    ids: Iterable<string> = this.revokedDeviceTokenIds,
+  ): Promise<void> {
     const revocationPath = this.getRevocationPath();
     await mkdir(this.tyrumHome, { recursive: true });
     const sortedIds = [...ids].sort();

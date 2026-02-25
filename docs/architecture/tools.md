@@ -76,7 +76,7 @@ Tools MUST compute match targets from **validated, normalized** inputs (not from
 Recommended normalization rules for high-risk tool classes:
 
 - **`fs` (workspace filesystem):**
-  - Match target SHOULD include the operation and the *workspace-relative* canonical path: `op:path`.
+  - Match target SHOULD include the operation and the _workspace-relative_ canonical path: `op:path`.
   - Path normalization SHOULD use POSIX separators (`/`), strip leading `./`, reject `..`, collapse repeated separators, and apply workspace boundary checks before computing the match target.
   - If symlinks are allowed, the match target SHOULD be based on the resolved canonical path inside the workspace boundary (so the override cannot be bypassed by alternative spellings).
   - Example match targets: `read:src/app.ts`, `write:docs/architecture/backplane.md`, `delete:tmp/output.log`.

@@ -5,7 +5,9 @@ export const ClientCapability = z.enum(["playwright", "android", "desktop", "cli
 export type ClientCapability = z.infer<typeof ClientCapability>;
 
 const CAPABILITY_ID_SEGMENT = "[a-z][a-z0-9-]*";
-const CAPABILITY_ID_PATTERN = new RegExp(`^${CAPABILITY_ID_SEGMENT}(?:\\.${CAPABILITY_ID_SEGMENT})+$`);
+const CAPABILITY_ID_PATTERN = new RegExp(
+  `^${CAPABILITY_ID_SEGMENT}(?:\\.${CAPABILITY_ID_SEGMENT})+$`,
+);
 const CAPABILITY_VERSION_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
@@ -20,7 +22,10 @@ export const CapabilityDescriptorId = z
 export const CapabilityDescriptorVersion = z
   .string()
   .trim()
-  .regex(CAPABILITY_VERSION_PATTERN, "capability versions must use semantic version format (x.y.z)");
+  .regex(
+    CAPABILITY_VERSION_PATTERN,
+    "capability versions must use semantic version format (x.y.z)",
+  );
 
 const LEGACY_TO_DESCRIPTOR_ID = {
   playwright: "tyrum.playwright",
@@ -33,8 +38,11 @@ const LEGACY_TO_DESCRIPTOR_ID = {
 type LegacyCapabilityDescriptorId = (typeof LEGACY_TO_DESCRIPTOR_ID)[ClientCapability];
 
 const DESCRIPTOR_TO_LEGACY = Object.fromEntries(
-  (Object.entries(LEGACY_TO_DESCRIPTOR_ID) as Array<[ClientCapability, LegacyCapabilityDescriptorId]>)
-    .map(([capability, id]) => [id, capability]),
+  (
+    Object.entries(LEGACY_TO_DESCRIPTOR_ID) as Array<
+      [ClientCapability, LegacyCapabilityDescriptorId]
+    >
+  ).map(([capability, id]) => [id, capability]),
 ) as Record<LegacyCapabilityDescriptorId, ClientCapability>;
 
 /**

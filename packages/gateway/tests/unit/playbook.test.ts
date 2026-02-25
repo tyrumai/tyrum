@@ -67,7 +67,7 @@ describe("PlaybookManifest schema", () => {
           command: "llm",
           llm: {
             model: "openai/gpt-4.1",
-            prompt: "Return JSON: {\"ok\": true}",
+            prompt: 'Return JSON: {"ok": true}',
             max_tool_calls: 2,
             tools: {
               allow: ["tool.http.fetch"],
@@ -198,9 +198,7 @@ describe("loadPlaybook", () => {
   });
 
   it("throws for an invalid YAML playbook", () => {
-    expect(() =>
-      loadPlaybook(join(fixturesDir, "invalid-playbook/playbook.yml")),
-    ).toThrow();
+    expect(() => loadPlaybook(join(fixturesDir, "invalid-playbook/playbook.yml"))).toThrow();
   });
 
   it("throws for a nonexistent file", () => {
@@ -229,10 +227,7 @@ describe("loadAllPlaybooks", () => {
 describe("PlaybookRunner", () => {
   const runner = new PlaybookRunner();
 
-  function makePlaybook(
-    id: string,
-    steps: Array<{ id: string; command: string; name?: string }>,
-  ) {
+  function makePlaybook(id: string, steps: Array<{ id: string; command: string; name?: string }>) {
     return {
       manifest: PlaybookManifest.parse({
         id,
@@ -248,8 +243,8 @@ describe("PlaybookRunner", () => {
   it("converts steps to action primitives", () => {
     const pb = makePlaybook("conv-test", [
       { id: "cli", command: "cli echo hello" },
-      { id: "mcp", command: "mcp github.search query=\"hello\"" },
-      { id: "node", command: "node screen capture format=\"png\"" },
+      { id: "mcp", command: 'mcp github.search query="hello"' },
+      { id: "node", command: 'node screen capture format="png"' },
     ]);
 
     const result = runner.run(pb);
@@ -306,9 +301,7 @@ describe("PlaybookRunner", () => {
 
   it("tracks execution stats", () => {
     const runner2 = new PlaybookRunner();
-    const pb = makePlaybook("stats-test", [
-      { id: "step", command: "cli echo x" },
-    ]);
+    const pb = makePlaybook("stats-test", [{ id: "step", command: "cli echo x" }]);
 
     runner2.run(pb);
     runner2.run(pb);
@@ -327,7 +320,7 @@ describe("PlaybookRunner", () => {
         name: "Namespaces",
         version: "1.0.0",
         steps: [
-          { id: "cli", command: "cli echo \"hello world\"" },
+          { id: "cli", command: 'cli echo "hello world"' },
           { id: "web", command: "web navigate https://example.com" },
           { id: "http", command: "http GET https://example.com" },
           {
@@ -335,7 +328,7 @@ describe("PlaybookRunner", () => {
             command: "llm",
             llm: {
               model: "openai/gpt-4.1",
-              prompt: "Return JSON: {\"ok\": true}",
+              prompt: 'Return JSON: {"ok": true}',
               max_tool_calls: 2,
               tools: { allow: ["tool.http.fetch"] },
             },
@@ -401,7 +394,7 @@ describe("PlaybookRunner", () => {
     expect(result.steps[3]!.type).toBe("Llm");
     expect(result.steps[3]!.args).toEqual({
       model: "openai/gpt-4.1",
-      prompt: "Return JSON: {\"ok\": true}",
+      prompt: 'Return JSON: {"ok": true}',
       max_tool_calls: 2,
       tools: { allow: ["tool.http.fetch"] },
       __playbook: {

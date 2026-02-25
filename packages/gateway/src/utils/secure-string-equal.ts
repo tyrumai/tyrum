@@ -8,4 +8,3 @@ export function secureStringEqual(a: string, b: string): boolean {
   }
   return timingSafeEqual(left, right);
 }
-

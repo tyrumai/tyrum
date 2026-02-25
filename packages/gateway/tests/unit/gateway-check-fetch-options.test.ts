@@ -97,4 +97,3 @@ describe("tyrum check fetch options", () => {
     }
   });
 });
-

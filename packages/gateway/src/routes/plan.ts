@@ -20,10 +20,7 @@ import type {
 } from "@tyrum/schemas";
 import type { GatewayContainer } from "../container.js";
 import { evaluatePolicy } from "../modules/policy/engine.js";
-import {
-  authorizeWithThresholds,
-  defaultThresholds,
-} from "../modules/wallet/authorization.js";
+import { authorizeWithThresholds, defaultThresholds } from "../modules/wallet/authorization.js";
 import type { ExecutionRunner, StepExecutor } from "../modules/executor/runner.js";
 
 // ---------------------------------------------------------------------------
@@ -31,8 +28,7 @@ import type { ExecutionRunner, StepExecutor } from "../modules/executor/runner.j
 // ---------------------------------------------------------------------------
 
 const DECISION_AUDIT_STEP_INDEX = 2147483647; // i32::MAX
-const WALLET_GUARDRAIL_NOTE =
-  "Spend guardrail enforced by wallet authorization.";
+const WALLET_GUARDRAIL_NOTE = "Spend guardrail enforced by wallet authorization.";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -65,9 +61,7 @@ function parseSpendTag(tag: string): SpendDirective | undefined {
   if (isNaN(amountMinorUnits)) return undefined;
 
   const merchantRaw = parts[2];
-  const merchant = merchantRaw
-    ? merchantRaw.replace(/_/g, " ") || undefined
-    : undefined;
+  const merchant = merchantRaw ? merchantRaw.replace(/_/g, " ") || undefined : undefined;
 
   return {
     amountMinorUnits,
@@ -170,9 +164,7 @@ function buildPolicyEscalation(decision: PolicyDecision): PlanEscalation {
     relevantRules = decision.rules;
   }
 
-  const rationaleText = relevantRules
-    .map((r) => `${r.rule}: ${r.detail}`)
-    .join("\n");
+  const rationaleText = relevantRules.map((r) => `${r.rule}: ${r.detail}`).join("\n");
 
   const context = {
     decision: "escalate",
@@ -201,9 +193,7 @@ function buildPolicyFailure(decision: PolicyDecision): PlanError {
   const detail =
     relevantRules.length === 0
       ? undefined
-      : relevantRules
-          .map((r) => `${r.rule}: ${sanitizeDetail(r.detail)}`)
-          .join("\n") || undefined;
+      : relevantRules.map((r) => `${r.rule}: ${sanitizeDetail(r.detail)}`).join("\n") || undefined;
 
   return {
     code: "policy_denied",
@@ -213,10 +203,7 @@ function buildPolicyFailure(decision: PolicyDecision): PlanError {
   };
 }
 
-function buildWalletEscalation(
-  stepIndex: number,
-  sanitizedReason: string,
-): PlanEscalation {
+function buildWalletEscalation(stepIndex: number, sanitizedReason: string): PlanEscalation {
   return {
     step_index: stepIndex,
     action: {
@@ -282,9 +269,7 @@ function spendRequestToContext(req: SpendRequest): RiskSpendContext {
   };
 }
 
-function directiveToSpendContext(
-  directive: SpendDirective,
-): RiskSpendContext {
+function directiveToSpendContext(directive: SpendDirective): RiskSpendContext {
   return {
     amount_minor_units: directive.amountMinorUnits,
     currency: directive.currency,
@@ -301,29 +286,20 @@ export interface PlanRouteOptions {
   stepExecutor?: StepExecutor;
 }
 
-export function createPlanRoutes(
-  container: GatewayContainer,
-  opts?: PlanRouteOptions,
-): Hono {
+export function createPlanRoutes(container: GatewayContainer, opts?: PlanRouteOptions): Hono {
   const plan = new Hono();
 
   plan.post("/plan", async (c) => {
     const body: unknown = await c.req.json();
     const parsed = PlanRequestSchema.safeParse(body);
     if (!parsed.success) {
-      return c.json(
-        { error: "invalid_request", message: parsed.error.message },
-        400,
-      );
+      return c.json({ error: "invalid_request", message: parsed.error.message }, 400);
     }
 
     const request = parsed.data;
 
     if (request.request_id.trim() === "") {
-      return c.json(
-        { error: "invalid_request", message: "request_id must not be empty" },
-        400,
-      );
+      return c.json({ error: "invalid_request", message: "request_id must not be empty" }, 400);
     }
 
     const planId = formatPlanId();
@@ -378,10 +354,7 @@ export function createPlanRoutes(
             currency: spend.currency,
           };
 
-          const walletResponse = authorizeWithThresholds(
-            walletRequest,
-            defaultThresholds(),
-          );
+          const walletResponse = authorizeWithThresholds(walletRequest, defaultThresholds());
           const sanitizedReason = sanitizeDetail(walletResponse.reason);
 
           switch (walletResponse.decision) {
@@ -391,10 +364,7 @@ export function createPlanRoutes(
             case "escalate":
               outcome = {
                 status: "escalate",
-                escalation: buildWalletEscalation(
-                  spend.stepIndex,
-                  sanitizedReason,
-                ),
+                escalation: buildWalletEscalation(spend.stepIndex, sanitizedReason),
               };
               container.eventBus.emit("plan:escalated", {
                 planId,
@@ -441,8 +411,7 @@ export function createPlanRoutes(
 
     // --- Risk classification ---
     const riskSpend =
-      capturedSpend ??
-      (spendDirective ? directiveToSpendContext(spendDirective) : undefined);
+      capturedSpend ?? (spendDirective ? directiveToSpendContext(spendDirective) : undefined);
     const riskVerdict = container.riskClassifier.classify({
       tags: request.tags,
       spend: riskSpend,
@@ -468,11 +437,9 @@ export function createPlanRoutes(
     // --- Hand off to execution runner for async execution ---
     if (outcome.status === "success" && opts?.executionRunner && opts?.stepExecutor) {
       // Fire-and-forget: execution happens asynchronously
-      void opts.executionRunner
-        .executePlan(planId, outcome.steps, opts.stepExecutor)
-        .catch(() => {
-          // Runner handles its own error reporting via event bus
-        });
+      void opts.executionRunner.executePlan(planId, outcome.steps, opts.stepExecutor).catch(() => {
+        // Runner handles its own error reporting via event bus
+      });
     } else if (outcome.status === "success") {
       // No runner configured: emit completion immediately (legacy behavior)
       container.eventBus.emit("plan:completed", {

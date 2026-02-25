@@ -8,9 +8,7 @@ describe("toErrorMessage", () => {
         "Error invoking remote method 'gateway:start': Error: listen EADDRINUSE: address already in use 127.0.0.1:8788",
       ),
     );
-    expect(message).toBe(
-      "listen EADDRINUSE: address already in use 127.0.0.1:8788",
-    );
+    expect(message).toBe("listen EADDRINUSE: address already in use 127.0.0.1:8788");
   });
 
   it("returns a safe fallback for unknown values", () => {

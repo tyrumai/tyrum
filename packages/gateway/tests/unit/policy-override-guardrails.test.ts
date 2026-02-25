@@ -28,4 +28,3 @@ describe("isSafeSuggestedOverridePattern", () => {
     expect(isSafeSuggestedOverridePattern("echo *")).toBe(false);
   });
 });
-

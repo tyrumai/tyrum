@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { ModelMessage } from "ai";
-import { applyDeterministicContextCompactionAndToolPruning, parseNonnegativeInt } from "../../src/modules/agent/runtime.js";
+import {
+  applyDeterministicContextCompactionAndToolPruning,
+  parseNonnegativeInt,
+} from "../../src/modules/agent/runtime.js";
 
 describe("AgentRuntime context pruning", () => {
   const originalContextMaxMessages = process.env["TYRUM_CONTEXT_MAX_MESSAGES"];

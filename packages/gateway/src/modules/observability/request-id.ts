@@ -8,4 +8,3 @@ export function requestIdForAudit(c: {
   if (fromResponse) return fromResponse;
   return undefined;
 }
-

@@ -66,7 +66,10 @@ export class StateStoreLifecycleScheduler {
     const tickMs = resolvePositiveInt(opts.tickMs, RETENTION_TICK_ENV, DEFAULT_TICK_MS);
     this.batchSize = Math.max(
       1,
-      Math.min(1_000_000, resolvePositiveInt(opts.batchSize, RETENTION_BATCH_ENV, DEFAULT_BATCH_SIZE)),
+      Math.min(
+        1_000_000,
+        resolvePositiveInt(opts.batchSize, RETENTION_BATCH_ENV, DEFAULT_BATCH_SIZE),
+      ),
     );
     this.maxBatchesPerTick = Math.max(
       1,
@@ -101,7 +104,11 @@ export class StateStoreLifecycleScheduler {
   private async tickOnce(): Promise<void> {
     await this.db.transaction(async (tx) => {
       if (tx.kind === "postgres") {
-        const acquired = await tryAcquirePostgresXactLock(tx, PG_RETENTION_LOCK_KEY1, PG_RETENTION_LOCK_KEY2);
+        const acquired = await tryAcquirePostgresXactLock(
+          tx,
+          PG_RETENTION_LOCK_KEY1,
+          PG_RETENTION_LOCK_KEY2,
+        );
         if (!acquired) return;
       }
       await this.runOnce(tx);
@@ -113,21 +120,21 @@ export class StateStoreLifecycleScheduler {
     const sessionsTtlDays = resolveSessionsTtlDays();
     const sessionsCutoffIso = new Date(nowMs - sessionsTtlDays * 24 * 60 * 60 * 1000).toISOString();
 
-    const sessionsPruned = await this.pruneInBatches(
-      "sessions",
-      () => this.pruneExpiredSessions(db, { cutoffIso: sessionsCutoffIso }),
+    const sessionsPruned = await this.pruneInBatches("sessions", () =>
+      this.pruneExpiredSessions(db, { cutoffIso: sessionsCutoffIso }),
     );
-    const presencePruned = await this.pruneInBatches(
-      "presence_entries",
-      () => this.pruneExpiredByMsColumn(db, { table: "presence_entries", pk: "instance_id", nowMs }),
+    const presencePruned = await this.pruneInBatches("presence_entries", () =>
+      this.pruneExpiredByMsColumn(db, { table: "presence_entries", pk: "instance_id", nowMs }),
     );
-    const directoryPruned = await this.pruneInBatches(
-      "connection_directory",
-      () => this.pruneExpiredByMsColumn(db, { table: "connection_directory", pk: "connection_id", nowMs }),
+    const directoryPruned = await this.pruneInBatches("connection_directory", () =>
+      this.pruneExpiredByMsColumn(db, {
+        table: "connection_directory",
+        pk: "connection_id",
+        nowMs,
+      }),
     );
-    const dedupePruned = await this.pruneInBatches(
-      "channel_inbound_dedupe",
-      () => this.pruneExpiredInboundDedupe(db, { nowMs }),
+    const dedupePruned = await this.pruneInBatches("channel_inbound_dedupe", () =>
+      this.pruneExpiredInboundDedupe(db, { nowMs }),
     );
 
     if (sessionsPruned + presencePruned + directoryPruned + dedupePruned > 0) {
@@ -141,10 +148,7 @@ export class StateStoreLifecycleScheduler {
     }
   }
 
-  private async pruneInBatches(
-    name: string,
-    pruneOnce: () => Promise<number>,
-  ): Promise<number> {
+  private async pruneInBatches(name: string, pruneOnce: () => Promise<number>): Promise<number> {
     return await pruneInBatches(
       {
         batchSize: this.batchSize,
@@ -206,8 +210,9 @@ export class StateStoreLifecycleScheduler {
       batch,
     );
 
-    return (await db.run(
-      `DELETE FROM sessions
+    return (
+      await db.run(
+        `DELETE FROM sessions
        WHERE session_id IN (
          SELECT session_id
          FROM sessions
@@ -215,8 +220,9 @@ export class StateStoreLifecycleScheduler {
          ORDER BY ${sessionCutoff.order}
          LIMIT ?
        )`,
-      batch,
-    )).changes;
+        batch,
+      )
+    ).changes;
   }
 
   private async pruneExpiredByMsColumn(
@@ -227,8 +233,9 @@ export class StateStoreLifecycleScheduler {
       nowMs: number;
     },
   ): Promise<number> {
-    return (await db.run(
-      `DELETE FROM ${input.table}
+    return (
+      await db.run(
+        `DELETE FROM ${input.table}
        WHERE ${input.pk} IN (
          SELECT ${input.pk}
          FROM ${input.table}
@@ -236,13 +243,15 @@ export class StateStoreLifecycleScheduler {
          ORDER BY expires_at_ms ASC
          LIMIT ?
        )`,
-      [input.nowMs, this.batchSize],
-    )).changes;
+        [input.nowMs, this.batchSize],
+      )
+    ).changes;
   }
 
   private async pruneExpiredInboundDedupe(db: SqlDb, input: { nowMs: number }): Promise<number> {
-    return (await db.run(
-      `DELETE FROM channel_inbound_dedupe
+    return (
+      await db.run(
+        `DELETE FROM channel_inbound_dedupe
        WHERE (channel, account_id, container_id, message_id) IN (
          SELECT channel, account_id, container_id, message_id
          FROM channel_inbound_dedupe
@@ -250,7 +259,8 @@ export class StateStoreLifecycleScheduler {
          ORDER BY expires_at_ms ASC
          LIMIT ?
        )`,
-      [input.nowMs, this.batchSize],
-    )).changes;
+        [input.nowMs, this.batchSize],
+      )
+    ).changes;
   }
 }

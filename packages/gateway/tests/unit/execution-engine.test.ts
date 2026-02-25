@@ -25,7 +25,11 @@ function action(type: ActionPrimitive["type"], args?: Record<string, unknown>): 
   };
 }
 
-async function drain(engine: ExecutionEngine, workerId: string, executor: StepExecutor): Promise<void> {
+async function drain(
+  engine: ExecutionEngine,
+  workerId: string,
+  executor: StepExecutor,
+): Promise<void> {
   for (let i = 0; i < 25; i += 1) {
     const worked = await engine.workerTick({ workerId, executor });
     if (!worked) return;
@@ -177,14 +181,10 @@ describe("ExecutionEngine (normalized)", () => {
 
     await drain(engine, "w1", mockExecutor);
 
-    const run = await db.get<{ status: string }>(
-      "SELECT status FROM execution_runs LIMIT 1",
-    );
+    const run = await db.get<{ status: string }>("SELECT status FROM execution_runs LIMIT 1");
     expect(run!.status).toBe("succeeded");
 
-    const job = await db.get<{ status: string }>(
-      "SELECT status FROM execution_jobs LIMIT 1",
-    );
+    const job = await db.get<{ status: string }>("SELECT status FROM execution_jobs LIMIT 1");
     expect(job!.status).toBe("completed");
   });
 
@@ -217,11 +217,15 @@ describe("ExecutionEngine (normalized)", () => {
 
     // First tick executes step 0 and records cost.
     expect(await engine.workerTick({ workerId: "w1", executor: mockExecutor })).toBe(true);
-    expect((mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(1);
+    expect(
+      (mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length,
+    ).toBe(1);
 
     // Second tick pauses before starting step 1 due to the run budget.
     expect(await engine.workerTick({ workerId: "w1", executor: mockExecutor })).toBe(true);
-    expect((mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(1);
+    expect(
+      (mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length,
+    ).toBe(1);
 
     const outboxPaused = await db.all<{ payload_json: string }>(
       "SELECT payload_json FROM outbox WHERE topic = ?",
@@ -265,9 +269,7 @@ describe("ExecutionEngine (normalized)", () => {
 
     await drain(engine, "w1", mockExecutor);
 
-    const runDone = await db.get<{ status: string }>(
-      "SELECT status FROM execution_runs LIMIT 1",
-    );
+    const runDone = await db.get<{ status: string }>("SELECT status FROM execution_runs LIMIT 1");
     expect(runDone?.status).toBe("succeeded");
   });
 
@@ -300,11 +302,15 @@ describe("ExecutionEngine (normalized)", () => {
 
     // First tick executes step 0 and records cost.
     expect(await engine.workerTick({ workerId: "w1", executor: mockExecutor })).toBe(true);
-    expect((mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(1);
+    expect(
+      (mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length,
+    ).toBe(1);
 
     // Second tick pauses before starting step 1 due to the run budget.
     expect(await engine.workerTick({ workerId: "w1", executor: mockExecutor })).toBe(true);
-    expect((mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(1);
+    expect(
+      (mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length,
+    ).toBe(1);
 
     const approval = await db.get<{ id: number; kind: string; resume_token: string | null }>(
       "SELECT id, kind, resume_token FROM approvals WHERE status = 'pending' ORDER BY id ASC LIMIT 1",
@@ -398,7 +404,9 @@ describe("ExecutionEngine (normalized)", () => {
 
     // First tick pauses before starting step 0 due to policy.
     expect(await engine.workerTick({ workerId: "w1", executor: mockExecutor })).toBe(true);
-    expect((mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(0);
+    expect(
+      (mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length,
+    ).toBe(0);
 
     const runPaused = await db.get<{ status: string; paused_reason: string | null }>(
       "SELECT status, paused_reason FROM execution_runs LIMIT 1",
@@ -417,11 +425,11 @@ describe("ExecutionEngine (normalized)", () => {
 
     await drain(engine, "w1", mockExecutor);
 
-    expect((mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(1);
+    expect(
+      (mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length,
+    ).toBe(1);
 
-    const runDone = await db.get<{ status: string }>(
-      "SELECT status FROM execution_runs LIMIT 1",
-    );
+    const runDone = await db.get<{ status: string }>("SELECT status FROM execution_runs LIMIT 1");
     expect(runDone?.status).toBe("succeeded");
   });
 
@@ -447,7 +455,10 @@ describe("ExecutionEngine (normalized)", () => {
       planId: "plan-policy-deny-1",
       requestId: "req-policy-deny-1",
       policySnapshotId: snapshot.policy_snapshot_id,
-      steps: [action("Http", { url: "https://example.com/" }), action("CLI", { cmd: "echo", args: ["hi"] })],
+      steps: [
+        action("Http", { url: "https://example.com/" }),
+        action("CLI", { cmd: "echo", args: ["hi"] }),
+      ],
     });
 
     const executor: StepExecutor = {
@@ -455,7 +466,9 @@ describe("ExecutionEngine (normalized)", () => {
     };
 
     expect(await engine.workerTick({ workerId: "w1", executor })).toBe(true);
-    expect((executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(0);
+    expect((executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(
+      0,
+    );
 
     const run = await db.get<{ status: string }>("SELECT status FROM execution_runs LIMIT 1");
     expect(run?.status).toBe("failed");
@@ -476,11 +489,15 @@ describe("ExecutionEngine (normalized)", () => {
 
     const laneLeases = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM lane_leases");
     expect(laneLeases?.n).toBe(0);
-    const workspaceLeases = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM workspace_leases");
+    const workspaceLeases = await db.get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM workspace_leases",
+    );
     expect(workspaceLeases?.n).toBe(0);
 
     expect(await engine.workerTick({ workerId: "w1", executor })).toBe(false);
-    expect((executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(0);
+    expect((executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(
+      0,
+    );
   });
 
   it("fails closed when a stored policy snapshot is malformed (override cannot auto-allow)", async () => {
@@ -525,7 +542,9 @@ describe("ExecutionEngine (normalized)", () => {
       };
 
       expect(await engine.workerTick({ workerId: "w1", executor })).toBe(true);
-      expect((executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(0);
+      expect(
+        (executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length,
+      ).toBe(0);
 
       const runPaused = await db.get<{ status: string; paused_reason: string | null }>(
         "SELECT status, paused_reason FROM execution_runs LIMIT 1",
@@ -578,7 +597,9 @@ describe("ExecutionEngine (normalized)", () => {
 
     expect(row!.finished_at).not.toBeNull();
     expect(row!.finished_at).not.toBe(row!.started_at);
-    expect(new Date(row!.finished_at!).getTime()).toBeGreaterThan(new Date(row!.started_at).getTime());
+    expect(new Date(row!.finished_at!).getTime()).toBeGreaterThan(
+      new Date(row!.started_at).getTime(),
+    );
   });
 
   it("persists artifact refs returned by the step executor on attempts", async () => {
@@ -826,7 +847,10 @@ describe("ExecutionEngine (normalized)", () => {
     expect(row?.policy_snapshot_id).toBe(snapshot.policy_snapshot_id);
 
     expect(row?.policy_decision_json).toBeTruthy();
-    const policyDecision = JSON.parse(row!.policy_decision_json!) as { decision?: unknown; rules?: unknown };
+    const policyDecision = JSON.parse(row!.policy_decision_json!) as {
+      decision?: unknown;
+      rules?: unknown;
+    };
     expect(policyDecision.decision).toBe("allow");
     expect(Array.isArray(policyDecision.rules)).toBe(true);
 
@@ -863,7 +887,9 @@ describe("ExecutionEngine (normalized)", () => {
     };
 
     expect(await engine.workerTick({ workerId: "w1", executor })).toBe(true);
-    expect((executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(0);
+    expect((executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(
+      0,
+    );
 
     const paused = await db.get<{ status: string; paused_reason: string | null }>(
       "SELECT status, paused_reason FROM execution_runs LIMIT 1",
@@ -883,7 +909,9 @@ describe("ExecutionEngine (normalized)", () => {
 
     await drain(engine, "w1", executor);
 
-    expect((executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(1);
+    expect((executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(
+      1,
+    );
 
     await rm(home, { recursive: true, force: true });
   });
@@ -963,17 +991,15 @@ describe("ExecutionEngine (normalized)", () => {
 
     await drain(engine, "w1", executor);
 
-    expect((executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(1);
+    expect((executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(
+      1,
+    );
     expect(secretProvider.list).toHaveBeenCalled();
 
-    const approvalCount = await db.get<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM approvals",
-    );
+    const approvalCount = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM approvals");
     expect(approvalCount?.n).toBe(0);
 
-    const run = await db.get<{ status: string }>(
-      "SELECT status FROM execution_runs LIMIT 1",
-    );
+    const run = await db.get<{ status: string }>("SELECT status FROM execution_runs LIMIT 1");
     expect(run?.status).toBe("succeeded");
 
     await rm(home, { recursive: true, force: true });
@@ -1011,7 +1037,9 @@ describe("ExecutionEngine (normalized)", () => {
       };
 
       await drain(engine, "w1", executor);
-      expect((executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(1);
+      expect(
+        (executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length,
+      ).toBe(1);
 
       const row = await db.get<{
         policy_snapshot_id?: string | null;
@@ -1021,7 +1049,10 @@ describe("ExecutionEngine (normalized)", () => {
 
       expect(row?.policy_snapshot_id).toBe(snapshot.policy_snapshot_id);
       expect(row?.policy_decision_json).toBeTruthy();
-      const policyDecision = JSON.parse(row!.policy_decision_json!) as { decision?: unknown; rules?: unknown };
+      const policyDecision = JSON.parse(row!.policy_decision_json!) as {
+        decision?: unknown;
+        rules?: unknown;
+      };
       expect(policyDecision.decision).toBe("allow");
       expect(Array.isArray(policyDecision.rules)).toBe(true);
 
@@ -1095,7 +1126,9 @@ describe("ExecutionEngine (normalized)", () => {
 
     // First tick runs step 0 and fails; engine pauses for a retry approval.
     expect(await engine.workerTick({ workerId: "w1", executor: mockExecutor })).toBe(true);
-    expect((mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(1);
+    expect(
+      (mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length,
+    ).toBe(1);
 
     const approval = await db.get<{ kind: string; resume_token: string | null }>(
       "SELECT kind, resume_token FROM approvals WHERE run_id = ? ORDER BY id DESC LIMIT 1",
@@ -1108,7 +1141,9 @@ describe("ExecutionEngine (normalized)", () => {
 
     await drain(engine, "w1", mockExecutor);
 
-    expect((mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(2);
+    expect(
+      (mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length,
+    ).toBe(2);
 
     const run = await db.get<{ status: string }>(
       "SELECT status FROM execution_runs WHERE run_id = ?",
@@ -1210,9 +1245,10 @@ describe("ExecutionEngine (normalized)", () => {
 
     await drain(engine, "w1", pausingExecutor);
 
-    const token = (
-      await db.get<{ token: string }>("SELECT token FROM resume_tokens WHERE run_id = ?", [runId])
-    )!.token;
+    const token = (await db.get<{ token: string }>(
+      "SELECT token FROM resume_tokens WHERE run_id = ?",
+      [runId],
+    ))!.token;
 
     const resumed = await engine.resumeRun(token);
     expect(resumed).toBe(runId);
@@ -1332,7 +1368,9 @@ describe("ExecutionEngine (normalized)", () => {
     );
 
     // Simulate a prior worker that crashed mid-attempt.
-    await db.run("UPDATE execution_steps SET status = 'running' WHERE step_id = ?", [step!.step_id]);
+    await db.run("UPDATE execution_steps SET status = 'running' WHERE step_id = ?", [
+      step!.step_id,
+    ]);
     await db.run(
       `INSERT INTO execution_attempts (
          attempt_id, step_id, attempt, status, started_at, artifacts_json, lease_owner, lease_expires_at_ms
@@ -1441,5 +1479,5 @@ describe("ExecutionEngine (normalized)", () => {
       await dbB.close();
       await rm(dir, { recursive: true, force: true });
     }
-	  }, 20_000);
+  }, 20_000);
 });

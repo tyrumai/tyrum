@@ -30,8 +30,7 @@ export class Logger {
 
   constructor(opts?: { level?: LogLevel; base?: LogFields }) {
     this.level =
-      opts?.level ??
-      parseLogLevel(process.env["TYRUM_LOG_LEVEL"] ?? process.env["LOG_LEVEL"]);
+      opts?.level ?? parseLogLevel(process.env["TYRUM_LOG_LEVEL"] ?? process.env["LOG_LEVEL"]);
     this.base = opts?.base ?? {};
   }
 

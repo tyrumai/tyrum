@@ -98,25 +98,18 @@ describe("CapabilityMemoryStrategy", () => {
       makeRow({ id: i, capability_identifier: `site${i}.com` }),
     );
     const source = makeSource(rows);
-    const results = await resolveFromCapabilityMemory(
-      makeRequest({ max_results: 3 }),
-      source,
-    );
+    const results = await resolveFromCapabilityMemory(makeRequest({ max_results: 3 }), source);
     expect(results).toHaveLength(3);
   });
 
   it("preserves URL if identifier is already a URL", async () => {
-    const source = makeSource([
-      makeRow({ capability_identifier: "https://api.example.com/v2" }),
-    ]);
+    const source = makeSource([makeRow({ capability_identifier: "https://api.example.com/v2" })]);
     const results = await resolveFromCapabilityMemory(makeRequest(), source);
     expect(results[0].connector_url).toBe("https://api.example.com/v2");
   });
 
   it("includes metadata in results", async () => {
-    const source = makeSource([
-      makeRow({ success_count: 7, result_summary: "Got price data" }),
-    ]);
+    const source = makeSource([makeRow({ success_count: 7, result_summary: "Got price data" })]);
     const results = await resolveFromCapabilityMemory(makeRequest(), source);
     const meta = results[0].metadata as Record<string, unknown>;
     expect(meta.success_count).toBe(7);
@@ -133,7 +126,11 @@ describe("McpToolStrategy", () => {
 
   it("matches tool by id", () => {
     const source = makeToolSource([
-      { id: "mcp.github.search", description: "Search GitHub repos", keywords: ["github", "search"] },
+      {
+        id: "mcp.github.search",
+        description: "Search GitHub repos",
+        keywords: ["github", "search"],
+      },
     ]);
     const results = resolveFromMcpTools(makeRequest({ query: "github" }), source);
     expect(results).toHaveLength(1);
@@ -168,7 +165,11 @@ describe("McpToolStrategy", () => {
   it("ranks by fuzzy score", () => {
     const source = makeToolSource([
       { id: "mcp.a.tool", description: "Does something", keywords: ["alpha"] },
-      { id: "mcp.b.search", description: "Search the web for results", keywords: ["search", "web"] },
+      {
+        id: "mcp.b.search",
+        description: "Search the web for results",
+        keywords: ["search", "web"],
+      },
     ]);
     const results = resolveFromMcpTools(makeRequest({ query: "search" }), source);
     expect(results.length).toBeGreaterThanOrEqual(1);
@@ -182,10 +183,7 @@ describe("McpToolStrategy", () => {
       keywords: ["testing"],
     }));
     const source = makeToolSource(tools);
-    const results = resolveFromMcpTools(
-      makeRequest({ query: "testing", max_results: 2 }),
-      source,
-    );
+    const results = resolveFromMcpTools(makeRequest({ query: "testing", max_results: 2 }), source);
     expect(results).toHaveLength(2);
   });
 });

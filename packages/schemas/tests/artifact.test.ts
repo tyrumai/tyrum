@@ -26,4 +26,3 @@ describe("ArtifactRef", () => {
     expect(ref.uri).toContain("artifact://");
   });
 });
-

@@ -82,4 +82,3 @@ export class PolicySnapshotDal {
     return toRow(row);
   }
 }
-

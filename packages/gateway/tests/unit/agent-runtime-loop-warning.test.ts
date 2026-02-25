@@ -93,4 +93,3 @@ describe("AgentRuntime cross-turn loop warning", () => {
     expect(third.reply).toBe(longReply);
   });
 });
-

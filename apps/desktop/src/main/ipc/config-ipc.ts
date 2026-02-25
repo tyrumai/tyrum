@@ -41,21 +41,13 @@ export function filterMutableKeys(
   for (const key of Object.keys(partial)) {
     const dotPath = prefix ? `${prefix}.${key}` : key;
     const value = partial[key];
-    if (
-      value !== null &&
-      typeof value === "object" &&
-      !Array.isArray(value)
-    ) {
+    if (value !== null && typeof value === "object" && !Array.isArray(value)) {
       // Check if the entire sub-object path is allowed (e.g. "permissions.overrides")
       if (allowed.has(dotPath)) {
         result[key] = value;
       } else {
         // Recurse into nested objects
-        const filtered = filterMutableKeys(
-          value as Record<string, unknown>,
-          allowed,
-          dotPath,
-        );
+        const filtered = filterMutableKeys(value as Record<string, unknown>, allowed, dotPath);
         if (Object.keys(filtered).length > 0) {
           result[key] = filtered;
         }
@@ -89,10 +81,7 @@ function deepMerge(
       typeof tgt === "object" &&
       !Array.isArray(tgt)
     ) {
-      result[key] = deepMerge(
-        tgt as Record<string, unknown>,
-        src as Record<string, unknown>,
-      );
+      result[key] = deepMerge(tgt as Record<string, unknown>, src as Record<string, unknown>);
     } else {
       result[key] = src;
     }
@@ -123,17 +112,11 @@ export function registerConfigIpc(): void {
     if (partial === null || typeof partial !== "object" || Array.isArray(partial)) {
       throw new Error("config:set requires a plain object");
     }
-    const filtered = filterMutableKeys(
-      partial as Record<string, unknown>,
-      RENDERER_MUTABLE_PATHS,
-    );
+    const filtered = filterMutableKeys(partial as Record<string, unknown>, RENDERER_MUTABLE_PATHS);
     const current = loadConfig();
     const normalizedPartial = normalizeConfigPartialForSave(filtered);
     const merged = DesktopNodeConfig.parse(
-      deepMerge(
-        current as unknown as Record<string, unknown>,
-        normalizedPartial,
-      ),
+      deepMerge(current as unknown as Record<string, unknown>, normalizedPartial),
     );
     saveConfig(merged);
     return sanitizeConfigForRenderer(merged);
@@ -145,9 +128,7 @@ export function registerConfigIpc(): void {
 
   ipcMain.handle("permissions:request-mac", (_event, permission: unknown) => {
     if (permission !== "accessibility" && permission !== "screenRecording") {
-      throw new Error(
-        "permissions:request-mac requires 'accessibility' or 'screenRecording'",
-      );
+      throw new Error("permissions:request-mac requires 'accessibility' or 'screenRecording'");
     }
     return requestMacPermission(permission as MacPermissionKind);
   });

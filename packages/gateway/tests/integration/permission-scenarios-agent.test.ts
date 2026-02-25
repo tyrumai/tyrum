@@ -203,7 +203,9 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
       agentId: "agent-test",
       workspaceId: "ws-test",
       languageModel,
-      mcpManager: stubMcpManager() as unknown as ConstructorParameters<typeof AgentRuntime>[0]["mcpManager"],
+      mcpManager: stubMcpManager() as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
       approvalWaitMs: 1_000,
       approvalPollMs: 100,
     });
@@ -297,7 +299,9 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
       agentId: "agent-test",
       workspaceId: "ws-test",
       languageModel,
-      mcpManager: stubMcpManager() as unknown as ConstructorParameters<typeof AgentRuntime>[0]["mcpManager"],
+      mcpManager: stubMcpManager() as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
       approvalWaitMs: 10_000,
       approvalPollMs: 50,
       turnEngineWaitMs: 800,
@@ -386,7 +390,9 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
       container,
       home: homeDir,
       languageModel,
-      mcpManager: stubMcpManager() as unknown as ConstructorParameters<typeof AgentRuntime>[0]["mcpManager"],
+      mcpManager: stubMcpManager() as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
       approvalWaitMs: 5_000,
       approvalPollMs: 20,
     });
@@ -447,7 +453,9 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
       container,
       home: homeDir,
       languageModel,
-      mcpManager: stubMcpManager() as unknown as ConstructorParameters<typeof AgentRuntime>[0]["mcpManager"],
+      mcpManager: stubMcpManager() as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
       approvalWaitMs: 10_000,
       approvalPollMs: 20,
     });
@@ -519,7 +527,7 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
         "  default: allow",
         "  allow: []",
         "  require_approval:",
-        "    - \"env:billing\"",
+        '    - "env:billing"',
         "  deny: []",
         "",
       ].join("\n"),
@@ -539,7 +547,12 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
         if (handle.handle_id !== "handle-abc") return null;
         return "SECRET_VALUE";
       }),
-      store: vi.fn(async () => ({ handle_id: "h1", provider: "env", scope: "billing", created_at: "" })),
+      store: vi.fn(async () => ({
+        handle_id: "h1",
+        provider: "env",
+        scope: "billing",
+        created_at: "",
+      })),
       revoke: vi.fn(async () => true),
       list: vi.fn(async () => handles),
     };
@@ -576,7 +589,9 @@ describe("AgentRuntime approval/permission scenarios (e2e)", () => {
       languageModel,
       fetchImpl: fetchStub,
       secretProvider,
-      mcpManager: stubMcpManager() as unknown as ConstructorParameters<typeof AgentRuntime>[0]["mcpManager"],
+      mcpManager: stubMcpManager() as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["mcpManager"],
       approvalWaitMs: 10_000,
       approvalPollMs: 20,
     });

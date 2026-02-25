@@ -87,9 +87,9 @@ export class AgentRegistry {
     const promise = this.getAdminToken()
       .then((token) => createSecretProviderFromEnv(this.resolveAgentHome(id), token))
       .catch((err) => {
-      this.secretProviderByAgentId.delete(id);
-      throw err;
-    });
+        this.secretProviderByAgentId.delete(id);
+        throw err;
+      });
     this.secretProviderByAgentId.set(id, promise);
     return await promise;
   }

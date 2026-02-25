@@ -45,7 +45,9 @@ describe("EmbeddingPipeline", () => {
 
       const pipeline = new EmbeddingPipeline({ vectorDal, embeddingModel, embeddingModelId });
 
-      await expect(pipeline.embed("test")).rejects.toThrow("Embedding result missing embedding array");
+      await expect(pipeline.embed("test")).rejects.toThrow(
+        "Embedding result missing embedding array",
+      );
     });
 
     it("throws when embedding contains non-numeric values", async () => {
@@ -53,7 +55,9 @@ describe("EmbeddingPipeline", () => {
 
       const pipeline = new EmbeddingPipeline({ vectorDal, embeddingModel, embeddingModelId });
 
-      await expect(pipeline.embed("test")).rejects.toThrow("Embedding result contains non-numeric values");
+      await expect(pipeline.embed("test")).rejects.toThrow(
+        "Embedding result contains non-numeric values",
+      );
     });
   });
 
@@ -116,9 +120,9 @@ describe("EmbeddingPipeline", () => {
   describe("embed -> store -> search cycle", () => {
     it("completes full embedding cycle", async () => {
       const vectors = [
-        [0.8, 0.6, 0.0],  // store call 1
-        [0.1, 0.9, 0.1],  // store call 2
-        [0.7, 0.5, 0.1],  // search query
+        [0.8, 0.6, 0.0], // store call 1
+        [0.1, 0.9, 0.1], // store call 2
+        [0.7, 0.5, 0.1], // search query
       ];
 
       embedMock

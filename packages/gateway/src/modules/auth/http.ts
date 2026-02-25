@@ -12,4 +12,3 @@ export function extractBearerToken(authorizationHeader: string | undefined): str
 
   return parts[1];
 }
-

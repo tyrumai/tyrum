@@ -29,15 +29,11 @@ describe("chunkIr", () => {
     expect(chunkIr(ir, 5)).toEqual([
       {
         text: "one\n\n",
-        spans: [
-          { kind: "block", block: "paragraph", start: 0, end: 3 },
-        ],
+        spans: [{ kind: "block", block: "paragraph", start: 0, end: 3 }],
       },
       {
         text: "two",
-        spans: [
-          { kind: "block", block: "paragraph", start: 0, end: 3 },
-        ],
+        spans: [{ kind: "block", block: "paragraph", start: 0, end: 3 }],
       },
     ]);
   });
@@ -47,9 +43,7 @@ describe("chunkIr", () => {
     expect(chunkIr(ir, 5)).toEqual([
       {
         text: "a ",
-        spans: [
-          { kind: "block", block: "paragraph", start: 0, end: 2 },
-        ],
+        spans: [{ kind: "block", block: "paragraph", start: 0, end: 2 }],
       },
       {
         text: "link ",
@@ -60,9 +54,7 @@ describe("chunkIr", () => {
       },
       {
         text: "b",
-        spans: [
-          { kind: "block", block: "paragraph", start: 0, end: 1 },
-        ],
+        spans: [{ kind: "block", block: "paragraph", start: 0, end: 1 }],
       },
     ]);
   });
@@ -93,22 +85,15 @@ describe("chunkIr", () => {
     expect(chunks).toEqual([
       {
         text: "012345",
-        spans: [
-          { kind: "block", block: "code_block", language: "ts", start: 0, end: 6 },
-        ],
+        spans: [{ kind: "block", block: "code_block", language: "ts", start: 0, end: 6 }],
       },
       {
         text: "6789",
-        spans: [
-          { kind: "block", block: "code_block", language: "ts", start: 0, end: 4 },
-        ],
+        spans: [{ kind: "block", block: "code_block", language: "ts", start: 0, end: 4 }],
       },
     ]);
 
-    expect(chunks.map(irToPlainText)).toEqual([
-      "```ts\n012345\n```",
-      "```ts\n6789\n```",
-    ]);
+    expect(chunks.map(irToPlainText)).toEqual(["```ts\n012345\n```", "```ts\n6789\n```"]);
   });
 
   it("does not loop when protected spans overlap across the chunk cut", () => {

@@ -132,20 +132,14 @@ export class PlanStateMachine {
       }
 
       case "ready": {
-        if (
-          event.kind === "step_dispatched" &&
-          event.stepIndex === s.nextStepIndex
-        ) {
+        if (event.kind === "step_dispatched" && event.stepIndex === s.nextStepIndex) {
           this._status = {
             kind: "awaiting_postcondition",
             stepIndex: event.stepIndex,
           };
           return this._status;
         }
-        if (
-          event.kind === "requires_human_confirmation" &&
-          event.stepIndex === s.nextStepIndex
-        ) {
+        if (event.kind === "requires_human_confirmation" && event.stepIndex === s.nextStepIndex) {
           this._status = {
             kind: "awaiting_human_confirmation",
             stepIndex: event.stepIndex,
@@ -166,18 +160,12 @@ export class PlanStateMachine {
       }
 
       case "awaiting_human_confirmation": {
-        if (
-          event.kind === "human_approved" &&
-          event.stepIndex === s.stepIndex
-        ) {
+        if (event.kind === "human_approved" && event.stepIndex === s.stepIndex) {
           this.executedSteps += 1;
           this.advanceOrComplete();
           return this._status;
         }
-        if (
-          event.kind === "human_rejected" &&
-          event.stepIndex === s.stepIndex
-        ) {
+        if (event.kind === "human_rejected" && event.stepIndex === s.stepIndex) {
           this._status = {
             kind: "failed",
             occurredAt: now,
@@ -201,18 +189,12 @@ export class PlanStateMachine {
       }
 
       case "awaiting_postcondition": {
-        if (
-          event.kind === "postcondition_satisfied" &&
-          event.stepIndex === s.stepIndex
-        ) {
+        if (event.kind === "postcondition_satisfied" && event.stepIndex === s.stepIndex) {
           this.executedSteps += 1;
           this.advanceOrComplete();
           return this._status;
         }
-        if (
-          event.kind === "postcondition_failed" &&
-          event.stepIndex === s.stepIndex
-        ) {
+        if (event.kind === "postcondition_failed" && event.stepIndex === s.stepIndex) {
           this._status = {
             kind: "failed",
             occurredAt: now,
@@ -222,10 +204,7 @@ export class PlanStateMachine {
           };
           return this._status;
         }
-        if (
-          event.kind === "executor_failed" &&
-          event.stepIndex === s.stepIndex
-        ) {
+        if (event.kind === "executor_failed" && event.stepIndex === s.stepIndex) {
           this._status = {
             kind: "failed",
             occurredAt: now,

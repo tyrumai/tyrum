@@ -200,17 +200,21 @@ describe("auth audit events", () => {
       on: vi.fn(() => undefined as never),
       readyState: 1,
     };
-    const clientId = cm.addClient(ws as never, ["playwright"] as never, {
-      role: "client",
-      deviceId: "dev_client_1",
-      protocolRev: 2,
-      authClaims: {
-        token_kind: "device",
+    const clientId = cm.addClient(
+      ws as never,
+      ["playwright"] as never,
+      {
         role: "client",
-        device_id: "dev_client_1",
-        scopes: ["operator.read"],
-      },
-    } as never);
+        deviceId: "dev_client_1",
+        protocolRev: 2,
+        authClaims: {
+          token_kind: "device",
+          role: "client",
+          device_id: "dev_client_1",
+          scopes: ["operator.read"],
+        },
+      } as never,
+    );
     const client = cm.getClient(clientId)!;
 
     const result = await handleClientMessage(
@@ -264,17 +268,21 @@ describe("auth audit events", () => {
       on: vi.fn(() => undefined as never),
       readyState: 1,
     };
-    const clientId = cm.addClient(ws as never, ["playwright"] as never, {
-      role: "client",
-      deviceId: "dev_client_1",
-      protocolRev: 2,
-      authClaims: {
-        token_kind: "device",
+    const clientId = cm.addClient(
+      ws as never,
+      ["playwright"] as never,
+      {
         role: "client",
-        device_id: "dev_client_1",
-        scopes: ["operator.read"],
-      },
-    } as never);
+        deviceId: "dev_client_1",
+        protocolRev: 2,
+        authClaims: {
+          token_kind: "device",
+          role: "client",
+          device_id: "dev_client_1",
+          scopes: ["operator.read"],
+        },
+      } as never,
+    );
     const client = cm.getClient(clientId)!;
 
     const result = await handleClientMessage(
@@ -310,17 +318,21 @@ describe("auth audit events", () => {
       on: vi.fn(() => undefined as never),
       readyState: 1,
     };
-    const clientId = cm.addClient(ws as never, ["playwright"] as never, {
-      role: "client",
-      deviceId: "dev_client_1",
-      protocolRev: 2,
-      authClaims: {
-        token_kind: "device",
+    const clientId = cm.addClient(
+      ws as never,
+      ["playwright"] as never,
+      {
         role: "client",
-        device_id: "dev_client_1",
-        scopes: ["operator.read"],
-      },
-    } as never);
+        deviceId: "dev_client_1",
+        protocolRev: 2,
+        authClaims: {
+          token_kind: "device",
+          role: "client",
+          device_id: "dev_client_1",
+          scopes: ["operator.read"],
+        },
+      } as never,
+    );
     const client = cm.getClient(clientId)!;
 
     let auditCompleted = false;

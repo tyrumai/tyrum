@@ -162,9 +162,11 @@ describe("AgentRuntime auth profile rotation", () => {
       fetchImpl,
     });
 
-    const model = await (runtime as unknown as {
-      resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
-    }).resolveSessionModel({
+    const model = await (
+      runtime as unknown as {
+        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
+      }
+    ).resolveSessionModel({
       config: {
         model: {
           model: "openai/gpt-4.1",
@@ -244,9 +246,11 @@ describe("AgentRuntime auth profile rotation", () => {
       fetchImpl,
     });
 
-    const model = await (runtime as unknown as {
-      resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
-    }).resolveSessionModel({
+    const model = await (
+      runtime as unknown as {
+        resolveSessionModel: (args: unknown) => Promise<LanguageModelV3>;
+      }
+    ).resolveSessionModel({
       config: {
         model: {
           model: "openai/gpt-4.1",

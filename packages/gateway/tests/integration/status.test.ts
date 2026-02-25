@@ -19,9 +19,7 @@ describe("GET /status", () => {
     expect(body["ws"]).toBeNull();
     expect("auth_profiles" in body).toBe(false);
     expect(body["model_auth"]).toBeTypeOf("object");
-    expect(
-      (body["model_auth"] as Record<string, unknown>)["auth_profiles"],
-    ).toBeTypeOf("object");
+    expect((body["model_auth"] as Record<string, unknown>)["auth_profiles"]).toBeTypeOf("object");
     expect(body["catalog_freshness"]).toBeTypeOf("object");
     expect(body["session_lanes"]).toBeInstanceOf(Array);
     expect(body["queue_depth"]).toBeTypeOf("object");

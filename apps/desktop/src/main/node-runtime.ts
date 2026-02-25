@@ -134,7 +134,8 @@ export class NodeRuntime {
     const device = this.ensureDeviceIdentity();
     const tlsCertFingerprint256Raw =
       this.config.mode === "remote" ? this.config.remote.tlsCertFingerprint256.trim() : "";
-    const tlsCertFingerprint256 = tlsCertFingerprint256Raw.length > 0 ? tlsCertFingerprint256Raw : undefined;
+    const tlsCertFingerprint256 =
+      tlsCertFingerprint256Raw.length > 0 ? tlsCertFingerprint256Raw : undefined;
     this.client = new TyrumClient({
       url: wsUrl,
       token,

@@ -10,3 +10,5 @@ apps/desktop/release/**
 **/*.sqlite*
 pnpm-lock.yaml
 web/**
+charts/tyrum/templates/**
+charts/tyrum/Chart.yaml

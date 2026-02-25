@@ -49,9 +49,7 @@ async function readJsonFile(
 
       const code = errorCode(err);
       const isParseError = err instanceof SyntaxError;
-      const isTransient =
-        isParseError ||
-        (opts?.transientNotFound === true && code === "ENOENT");
+      const isTransient = isParseError || (opts?.transientNotFound === true && code === "ENOENT");
 
       if (!isTransient || attempt === TRANSIENT_READ_MAX_ATTEMPTS - 1) {
         throw err;

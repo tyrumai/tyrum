@@ -1,7 +1,15 @@
 import { spawn, spawnSync } from "node:child_process";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { once } from "node:events";
-import { closeSync, mkdirSync, mkdtempSync, openSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -110,25 +118,22 @@ function killProcessGroup(pid: number, signal: NodeJS.Signals): void {
   }
 }
 
-function pnpmCommand(): string {
-  return process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-}
+const isWindows = process.platform === "win32";
 
 function electronCommand(): string {
   return process.platform === "win32" ? ELECTRON_BIN_WINDOWS : ELECTRON_BIN;
 }
 
 function runBuildStep(args: string[], failurePrefix: string): void {
-  const result = spawnSync(pnpmCommand(), args, {
+  const result = spawnSync("pnpm", args, {
     cwd: REPO_ROOT,
     encoding: "utf8",
+    shell: isWindows,
   });
 
   if (result.status === 0) return;
 
-  throw new Error(
-    [failurePrefix, result.stdout, result.stderr].filter(Boolean).join("\n"),
-  );
+  throw new Error([failurePrefix, result.stdout, result.stderr].filter(Boolean).join("\n"));
 }
 
 function findCommandPath(command: string): string | undefined {
@@ -173,10 +178,7 @@ function probeElectronRuntime(): ElectronProbeResult {
   }
 
   if (result.status !== 0) {
-    const reason = [result.stdout, result.stderr]
-      .filter(Boolean)
-      .join("\n")
-      .trim();
+    const reason = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
     return {
       available: false,
       reason: reason || `electron exited with code ${String(result.status)}`,
@@ -318,10 +320,7 @@ async function stopElectronProcess(child: ChildProcessWithoutNullStreams): Promi
     // receive shutdown signals together.
     killProcessGroup(pid, "SIGTERM");
   }
-  const maybeExit = await Promise.race([
-    once(child, "exit"),
-    delay(10_000).then(() => null),
-  ]);
+  const maybeExit = await Promise.race([once(child, "exit"), delay(10_000).then(() => null)]);
 
   if (maybeExit !== null) return;
 
@@ -340,8 +339,7 @@ async function stopElectronProcess(child: ChildProcessWithoutNullStreams): Promi
 
 const electronProbe = probeElectronRuntime();
 const XVFB_RUN_PATH = findCommandPath("xvfb-run");
-const NEEDS_VIRTUAL_DISPLAY =
-  process.platform === "linux" && !process.env["DISPLAY"];
+const NEEDS_VIRTUAL_DISPLAY = process.platform === "linux" && !process.env["DISPLAY"];
 const CAN_LAUNCH_ELECTRON =
   electronProbe.available && (!NEEDS_VIRTUAL_DISPLAY || XVFB_RUN_PATH !== undefined);
 
@@ -367,27 +365,20 @@ describe("desktop full Electron process smoke", () => {
       let stdout = "";
       let stderr = "";
       let gatewayWasHealthy = false;
-      const launch = buildElectronLaunch(
-        DESKTOP_MAIN_ENTRYPOINT,
-        NEEDS_VIRTUAL_DISPLAY,
-      );
+      const launch = buildElectronLaunch(DESKTOP_MAIN_ENTRYPOINT, NEEDS_VIRTUAL_DISPLAY);
 
-      const child = spawn(
-        launch.command,
-        launch.args,
-        {
-          cwd: REPO_ROOT,
-          detached: process.platform !== "win32",
-          env: {
-            ...process.env,
-            TYRUM_HOME: tyrumHome,
-            NODE_ENV: "test",
-            VITE_DEV_SERVER_URL: "about:blank",
-            ELECTRON_DISABLE_SANDBOX: "1",
-          },
-          stdio: ["ignore", "pipe", "pipe"],
+      const child = spawn(launch.command, launch.args, {
+        cwd: REPO_ROOT,
+        detached: process.platform !== "win32",
+        env: {
+          ...process.env,
+          TYRUM_HOME: tyrumHome,
+          NODE_ENV: "test",
+          VITE_DEV_SERVER_URL: "about:blank",
+          ELECTRON_DISABLE_SANDBOX: "1",
         },
-      );
+        stdio: ["ignore", "pipe", "pipe"],
+      });
 
       child.stdout.setEncoding("utf8");
       child.stderr.setEncoding("utf8");
@@ -399,9 +390,7 @@ describe("desktop full Electron process smoke", () => {
       });
 
       const output = () => {
-        const probeReason = electronProbe.reason
-          ? `\nProbe reason: ${electronProbe.reason}`
-          : "";
+        const probeReason = electronProbe.reason ? `\nProbe reason: ${electronProbe.reason}` : "";
         const displayInfo = `\nLaunch: ${launch.command} ${launch.args.join(" ")}`;
         return `--- stdout ---\n${stdout}\n--- stderr ---\n${stderr}${probeReason}${displayInfo}`;
       };

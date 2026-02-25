@@ -2,7 +2,10 @@ import type { ActionPrimitive as ActionPrimitiveT } from "@tyrum/schemas";
 import { BatchV1Api, CoreV1Api, KubeConfig } from "@kubernetes/client-node";
 import { randomUUID } from "node:crypto";
 import type { Logger } from "../observability/logger.js";
-import { resolveSandboxHardeningProfile, type SandboxHardeningProfile } from "../sandbox/hardening.js";
+import {
+  resolveSandboxHardeningProfile,
+  type SandboxHardeningProfile,
+} from "../sandbox/hardening.js";
 import type { StepExecutionContext, StepExecutor, StepResult } from "./engine.js";
 
 function sleep(ms: number): Promise<void> {
@@ -161,31 +164,30 @@ class KubernetesToolRunnerStepExecutor implements StepExecutor {
       mountPath: this.tyrumHome,
     };
 
-    const volumeMounts = hardeningProfile === "hardened"
-      ? [
-          workspaceMount,
-          { name: "tmp", mountPath: "/tmp" },
-        ]
-      : [workspaceMount];
+    const volumeMounts =
+      hardeningProfile === "hardened"
+        ? [workspaceMount, { name: "tmp", mountPath: "/tmp" }]
+        : [workspaceMount];
 
-    const volumes = hardeningProfile === "hardened"
-      ? [
-          {
-            name: "workspace",
-            persistentVolumeClaim: {
-              claimName: this.workspacePvcClaim,
+    const volumes =
+      hardeningProfile === "hardened"
+        ? [
+            {
+              name: "workspace",
+              persistentVolumeClaim: {
+                claimName: this.workspacePvcClaim,
+              },
             },
-          },
-          { name: "tmp", emptyDir: {} },
-        ]
-      : [
-          {
-            name: "workspace",
-            persistentVolumeClaim: {
-              claimName: this.workspacePvcClaim,
+            { name: "tmp", emptyDir: {} },
+          ]
+        : [
+            {
+              name: "workspace",
+              persistentVolumeClaim: {
+                claimName: this.workspacePvcClaim,
+              },
             },
-          },
-        ];
+          ];
 
     const job = {
       apiVersion: "batch/v1",
@@ -297,7 +299,8 @@ class KubernetesToolRunnerStepExecutor implements StepExecutor {
       namespace: this.namespace,
       labelSelector: `job-name=${jobName}`,
     });
-    const pods = unwrapBody<{ items?: Array<{ metadata?: { name?: string } }> }>(podsRes).items ?? [];
+    const pods =
+      unwrapBody<{ items?: Array<{ metadata?: { name?: string } }> }>(podsRes).items ?? [];
     const podName = pods[0]?.metadata?.name;
     if (!podName) {
       return "";

@@ -1,9 +1,16 @@
-import { NormalizedThreadMessage as NormalizedThreadMessageSchema, normalizedContainerKindFromThreadKind } from "@tyrum/schemas";
+import {
+  NormalizedThreadMessage as NormalizedThreadMessageSchema,
+  normalizedContainerKindFromThreadKind,
+} from "@tyrum/schemas";
 import type { NormalizedThreadMessage } from "@tyrum/schemas";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
 import { safeJsonParse } from "../../utils/json.js";
-import { buildChannelSourceKey, DEFAULT_CHANNEL_ACCOUNT_ID, parseChannelSourceKey } from "./interface.js";
+import {
+  buildChannelSourceKey,
+  DEFAULT_CHANNEL_ACCOUNT_ID,
+  parseChannelSourceKey,
+} from "./interface.js";
 
 export type ChannelInboxStatus = "queued" | "processing" | "completed" | "failed";
 
@@ -14,18 +21,8 @@ const INBOUND_QUEUE_CAP_ENV = "TYRUM_CHANNEL_INBOUND_QUEUE_CAP";
 const DEFAULT_INBOUND_QUEUE_OVERFLOW = "drop_oldest";
 const INBOUND_QUEUE_OVERFLOW_ENV = "TYRUM_CHANNEL_INBOUND_QUEUE_OVERFLOW";
 const DEFAULT_QUEUE_MODE = "collect";
-const ALLOWED_QUEUE_MODES = new Set([
-  "collect",
-  "followup",
-  "steer",
-  "steer_backlog",
-  "interrupt",
-]);
-const ALLOWED_OVERFLOW_POLICIES = new Set([
-  "drop_oldest",
-  "drop_newest",
-  "summarize_dropped",
-]);
+const ALLOWED_QUEUE_MODES = new Set(["collect", "followup", "steer", "steer_backlog", "interrupt"]);
+const ALLOWED_OVERFLOW_POLICIES = new Set(["drop_oldest", "drop_newest", "summarize_dropped"]);
 
 export type ChannelInboundQueueOverflowPolicy = "drop_oldest" | "drop_newest" | "summarize_dropped";
 
@@ -34,7 +31,12 @@ export type ChannelInboundQueueOverflowResult = {
   policy: ChannelInboundQueueOverflowPolicy;
   queued_before: number;
   queued_after: number;
-  dropped: Array<{ inbox_id: number; thread_id: string; message_id: string; received_at_ms: number }>;
+  dropped: Array<{
+    inbox_id: number;
+    thread_id: string;
+    message_id: string;
+    received_at_ms: number;
+  }>;
   summary?: { inbox_id: number; message_id: string };
 };
 
@@ -238,16 +240,19 @@ async function countQueued(tx: SqlDb, input: { key: string; lane: string }): Pro
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-async function insertSyntheticInboxRow(tx: SqlDb, input: {
-  source: string;
-  thread_id: string;
-  message_id: string;
-  key: string;
-  lane: string;
-  queue_mode: string;
-  received_at_ms: number;
-  payload_json: string;
-}): Promise<number> {
+async function insertSyntheticInboxRow(
+  tx: SqlDb,
+  input: {
+    source: string;
+    thread_id: string;
+    message_id: string;
+    key: string;
+    lane: string;
+    queue_mode: string;
+    received_at_ms: number;
+    payload_json: string;
+  },
+): Promise<number> {
   let inboxId: number | undefined;
   if (tx.kind === "postgres") {
     const inserted = await tx.get<{ inbox_id: number }>(
@@ -301,9 +306,7 @@ async function insertSyntheticInboxRow(tx: SqlDb, input: {
         input.payload_json,
       ],
     );
-    const inserted = await tx.get<{ inbox_id: number }>(
-      "SELECT last_insert_rowid() AS inbox_id",
-    );
+    const inserted = await tx.get<{ inbox_id: number }>("SELECT last_insert_rowid() AS inbox_id");
     inboxId = inserted?.inbox_id;
   }
 
@@ -314,12 +317,15 @@ async function insertSyntheticInboxRow(tx: SqlDb, input: {
   return inboxId;
 }
 
-async function applyInboundQueueOverflowPolicy(tx: SqlDb, input: {
-  key: string;
-  lane: string;
-  cap: number;
-  policy: ChannelInboundQueueOverflowPolicy;
-}): Promise<ChannelInboundQueueOverflowResult | undefined> {
+async function applyInboundQueueOverflowPolicy(
+  tx: SqlDb,
+  input: {
+    key: string;
+    lane: string;
+    cap: number;
+    policy: ChannelInboundQueueOverflowPolicy;
+  },
+): Promise<ChannelInboundQueueOverflowResult | undefined> {
   const queuedBefore = await countQueued(tx, { key: input.key, lane: input.lane });
   if (queuedBefore <= input.cap) return undefined;
 
@@ -339,7 +345,9 @@ async function applyInboundQueueOverflowPolicy(tx: SqlDb, input: {
 
     if (effectivePolicy === "drop_oldest" || effectivePolicy === "drop_newest") {
       const ordering = effectivePolicy === "drop_oldest" ? "ASC" : "DESC";
-      const rows = await tx.all<Pick<RawQueuedInboxRow, "inbox_id" | "thread_id" | "message_id" | "received_at_ms">>(
+      const rows = await tx.all<
+        Pick<RawQueuedInboxRow, "inbox_id" | "thread_id" | "message_id" | "received_at_ms">
+      >(
         `SELECT inbox_id, thread_id, message_id, received_at_ms
          FROM channel_inbox
          WHERE status = 'queued' AND key = ? AND lane = ?
@@ -349,7 +357,11 @@ async function applyInboundQueueOverflowPolicy(tx: SqlDb, input: {
       );
       if (rows.length === 0) break;
 
-      const completedIds = await completeInboxRows(tx, rows.map((r) => r.inbox_id), nowIso);
+      const completedIds = await completeInboxRows(
+        tx,
+        rows.map((r) => r.inbox_id),
+        nowIso,
+      );
       const completedSet = new Set(completedIds);
       for (const row of rows) {
         if (!completedSet.has(row.inbox_id)) continue;
@@ -377,7 +389,11 @@ async function applyInboundQueueOverflowPolicy(tx: SqlDb, input: {
     );
     if (rows.length === 0) break;
 
-    const completedIds = await completeInboxRows(tx, rows.map((r) => r.inbox_id), nowIso);
+    const completedIds = await completeInboxRows(
+      tx,
+      rows.map((r) => r.inbox_id),
+      nowIso,
+    );
     const completedSet = new Set(completedIds);
     const completedRows = rows.filter((r) => completedSet.has(r.inbox_id));
 
@@ -393,18 +409,22 @@ async function applyInboundQueueOverflowPolicy(tx: SqlDb, input: {
     if (completedRows.length > 0 && !summary) {
       const droppedDescriptions: Array<{ messageText: string; attachments: number }> = [];
       for (const row of completedRows) {
-        const parsed = NormalizedThreadMessageSchema.safeParse(
-          safeJsonParse(row.payload_json, {}),
-        );
+        const parsed = NormalizedThreadMessageSchema.safeParse(safeJsonParse(row.payload_json, {}));
         if (parsed.success) {
           const extracted = extractTextFromNormalizedMessage(parsed.data);
-          droppedDescriptions.push({ messageText: extracted.text, attachments: extracted.attachments });
+          droppedDescriptions.push({
+            messageText: extracted.text,
+            attachments: extracted.attachments,
+          });
         } else {
           droppedDescriptions.push({ messageText: "", attachments: 0 });
         }
       }
 
-      const summaryText = buildQueueOverflowSummaryText({ cap: input.cap, dropped: droppedDescriptions });
+      const summaryText = buildQueueOverflowSummaryText({
+        cap: input.cap,
+        dropped: droppedDescriptions,
+      });
       const syntheticMessageId = `queue_overflow:${randomUUID()}`;
       const basePayload = safeJsonParse(completedRows[0]!.payload_json, {});
       const parsedBase = NormalizedThreadMessageSchema.safeParse(basePayload);
@@ -517,7 +537,11 @@ export class ChannelInboxDal {
     queue_mode?: string;
     received_at_ms: number;
     payload: unknown;
-  }): Promise<{ row: ChannelInboxRow; deduped: boolean; overflow?: ChannelInboundQueueOverflowResult }> {
+  }): Promise<{
+    row: ChannelInboxRow;
+    deduped: boolean;
+    overflow?: ChannelInboundQueueOverflowResult;
+  }> {
     const payloadJson = JSON.stringify(input.payload ?? {});
     const receivedAtMs = input.received_at_ms;
     const ttlMs = inboundDedupeTtlMs();
@@ -535,10 +559,7 @@ export class ChannelInboxDal {
 
     return await this.db.transaction(async (tx) => {
       // Best-effort prune of expired keys to keep the dedupe table bounded.
-      await tx.run(
-        "DELETE FROM channel_inbound_dedupe WHERE expires_at_ms <= ?",
-        [receivedAtMs],
-      );
+      await tx.run("DELETE FROM channel_inbound_dedupe WHERE expires_at_ms <= ?", [receivedAtMs]);
 
       const acquire = await tx.run(
         `INSERT INTO channel_inbound_dedupe (

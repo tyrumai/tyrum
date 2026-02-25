@@ -24,19 +24,13 @@ export async function repairPostgresSequences(db: SqlDb, tables: string[]): Prom
       const max = maxRow?.max;
 
       if (typeof max === "number" && Number.isFinite(max) && max >= 1) {
-        await db.get(
-          `SELECT setval(pg_get_serial_sequence(?, ?), ?, true)`,
-          [table, colName, max],
-        );
+        await db.get(`SELECT setval(pg_get_serial_sequence(?, ?), ?, true)`, [table, colName, max]);
         continue;
       }
 
       // Empty table (MAX(...) is NULL) or invalid max values must not set sequences to 0
       // because Postgres sequences are 1-based by default and reject 0 when is_called=true.
-      await db.get(
-        `SELECT setval(pg_get_serial_sequence(?, ?), ?, false)`,
-        [table, colName, 1],
-      );
+      await db.get(`SELECT setval(pg_get_serial_sequence(?, ?), ?, false)`, [table, colName, 1]);
     }
   }
 }

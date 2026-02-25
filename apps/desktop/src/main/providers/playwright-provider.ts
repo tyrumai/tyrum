@@ -65,9 +65,7 @@ export class PlaywrightProvider implements CapabilityProvider {
       );
       if (!allowed) {
         const shownAllowlist =
-          allowedDomains.length > 0
-            ? allowedDomains.join(", ")
-            : "(empty: default deny)";
+          allowedDomains.length > 0 ? allowedDomains.join(", ") : "(empty: default deny)";
         return {
           success: false,
           error:
@@ -104,19 +102,13 @@ export class PlaywrightProvider implements CapabilityProvider {
       timestamp: new Date().toISOString(),
     };
 
-    const postcondResult = await this.evaluatePostconditionIfPresent(
-      action,
-      evidence,
-    );
+    const postcondResult = await this.evaluatePostconditionIfPresent(action, evidence);
     if (postcondResult) return postcondResult;
 
     return { success: true, evidence };
   }
 
-  private async click(
-    action: ActionPrimitive,
-    args: Record<string, unknown>,
-  ): Promise<TaskResult> {
+  private async click(action: ActionPrimitive, args: Record<string, unknown>): Promise<TaskResult> {
     const selector = args["selector"] as string | undefined;
     if (!selector) return { success: false, error: "Missing 'selector' in click args" };
 
@@ -133,19 +125,13 @@ export class PlaywrightProvider implements CapabilityProvider {
       timestamp: new Date().toISOString(),
     };
 
-    const postcondResult = await this.evaluatePostconditionIfPresent(
-      action,
-      evidence,
-    );
+    const postcondResult = await this.evaluatePostconditionIfPresent(action, evidence);
     if (postcondResult) return postcondResult;
 
     return { success: true, evidence };
   }
 
-  private async fill(
-    action: ActionPrimitive,
-    args: Record<string, unknown>,
-  ): Promise<TaskResult> {
+  private async fill(action: ActionPrimitive, args: Record<string, unknown>): Promise<TaskResult> {
     const selector = args["selector"] as string | undefined;
     const value = args["value"] as string | undefined;
     if (!selector || value === undefined) {
@@ -166,10 +152,7 @@ export class PlaywrightProvider implements CapabilityProvider {
       timestamp: new Date().toISOString(),
     };
 
-    const postcondResult = await this.evaluatePostconditionIfPresent(
-      action,
-      evidence,
-    );
+    const postcondResult = await this.evaluatePostconditionIfPresent(action, evidence);
     if (postcondResult) return postcondResult;
 
     return { success: true, evidence };

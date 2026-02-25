@@ -11,4 +11,3 @@ Templates are intentionally safe-by-default:
 - Split-role examples use `postgres://...` to avoid unsupported split-on-SQLite deployments.
 
 See `docs/advanced/deployment-profiles.md` for usage.
-

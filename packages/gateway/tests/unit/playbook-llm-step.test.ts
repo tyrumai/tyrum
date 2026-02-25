@@ -82,7 +82,7 @@ describe("executePlaybookLlmStep", () => {
   });
 
   it("parses reply when output=json", async () => {
-    const runtime = await makeRuntime("{\"a\":1}");
+    const runtime = await makeRuntime('{"a":1}');
     const res = await executePlaybookLlmStep(runtime, {
       channel: "playbook",
       thread_id: "run-2",

@@ -38,19 +38,13 @@ describe("computeEventHash", () => {
 
   it("varies when occurred_at changes", () => {
     const hash1 = computeEventHash(baseEvent, null);
-    const hash2 = computeEventHash(
-      { ...baseEvent, occurred_at: "2025-01-15T11:00:00Z" },
-      null,
-    );
+    const hash2 = computeEventHash({ ...baseEvent, occurred_at: "2025-01-15T11:00:00Z" }, null);
     expect(hash1).not.toBe(hash2);
   });
 
   it("varies when action changes", () => {
     const hash1 = computeEventHash(baseEvent, null);
-    const hash2 = computeEventHash(
-      { ...baseEvent, action: '{"type":"Decide"}' },
-      null,
-    );
+    const hash2 = computeEventHash({ ...baseEvent, action: '{"type":"Decide"}' }, null);
     expect(hash1).not.toBe(hash2);
   });
 

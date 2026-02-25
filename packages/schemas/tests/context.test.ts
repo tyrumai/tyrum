@@ -88,7 +88,11 @@ describe("ContextReport", () => {
     });
 
     expect((parsed as Record<string, unknown>)["extra_root_field"]).toEqual({ nested: true });
-    expect((parsed.system_prompt as unknown as Record<string, unknown>)["extra_system_field"]).toBe("keep-me");
-    expect((parsed.memory as unknown as Record<string, unknown>)["extra_memory_field"]).toBe("keep-me");
+    expect((parsed.system_prompt as unknown as Record<string, unknown>)["extra_system_field"]).toBe(
+      "keep-me",
+    );
+    expect((parsed.memory as unknown as Record<string, unknown>)["extra_memory_field"]).toBe(
+      "keep-me",
+    );
   });
 });

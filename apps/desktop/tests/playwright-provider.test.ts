@@ -141,9 +141,7 @@ describe("PlaywrightProvider", () => {
 
   it("invalid URL returns error", async () => {
     const provider = makeProvider();
-    const result = await provider.execute(
-      makeAction({ op: "navigate", url: "not-a-url" }),
-    );
+    const result = await provider.execute(makeAction({ op: "navigate", url: "not-a-url" }));
     expect(result.success).toBe(false);
     expect(result.error).toContain("Invalid URL");
   });
@@ -152,12 +150,8 @@ describe("PlaywrightProvider", () => {
 
   it("click with selector succeeds", async () => {
     const provider = makeProvider();
-    await provider.execute(
-      makeAction({ op: "navigate", url: "https://example.com/form" }),
-    );
-    const result = await provider.execute(
-      makeAction({ op: "click", selector: "#submit-btn" }),
-    );
+    await provider.execute(makeAction({ op: "navigate", url: "https://example.com/form" }));
+    const result = await provider.execute(makeAction({ op: "click", selector: "#submit-btn" }));
     expect(result.success).toBe(true);
     expect(result.evidence).toMatchObject({
       type: "click",
@@ -177,9 +171,7 @@ describe("PlaywrightProvider", () => {
 
   it("fill with selector and value succeeds", async () => {
     const provider = makeProvider();
-    await provider.execute(
-      makeAction({ op: "navigate", url: "https://example.com/form" }),
-    );
+    await provider.execute(makeAction({ op: "navigate", url: "https://example.com/form" }));
     const result = await provider.execute(
       makeAction({ op: "fill", selector: "#email", value: "a@b.com" }),
     );
@@ -199,9 +191,7 @@ describe("PlaywrightProvider", () => {
       { allowedDomains: ["example.com", "trusted.org"], headless: true, domainRestricted: true },
       backend,
     );
-    const result = await provider.execute(
-      makeAction({ op: "click", selector: "#submit-btn" }),
-    );
+    const result = await provider.execute(makeAction({ op: "click", selector: "#submit-btn" }));
     expect(result.success).toBe(false);
     expect(result.error).toContain("evil.com");
     expect(result.error).toContain("not in the allowlist");
@@ -224,9 +214,7 @@ describe("PlaywrightProvider", () => {
 
   it("fill with missing value fails", async () => {
     const provider = makeProvider();
-    const result = await provider.execute(
-      makeAction({ op: "fill", selector: "#email" }),
-    );
+    const result = await provider.execute(makeAction({ op: "fill", selector: "#email" }));
     expect(result.success).toBe(false);
     expect(result.error).toContain("Missing 'selector' or 'value'");
   });
@@ -235,9 +223,7 @@ describe("PlaywrightProvider", () => {
 
   it("snapshot returns success", async () => {
     const provider = makeProvider();
-    await provider.execute(
-      makeAction({ op: "navigate", url: "https://example.com/page" }),
-    );
+    await provider.execute(makeAction({ op: "navigate", url: "https://example.com/page" }));
     const result = await provider.execute(makeAction({ op: "snapshot" }));
     expect(result.success).toBe(true);
     expect(result.evidence).toMatchObject({ type: "snapshot" });
@@ -260,9 +246,7 @@ describe("PlaywrightProvider", () => {
 
   it("unknown op returns error", async () => {
     const provider = makeProvider();
-    const result = await provider.execute(
-      makeAction({ op: "hover" }),
-    );
+    const result = await provider.execute(makeAction({ op: "hover" }));
     expect(result.success).toBe(false);
     expect(result.error).toContain("Unknown Web operation: hover");
   });

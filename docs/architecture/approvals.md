@@ -72,7 +72,7 @@ Expired approvals behave like denial unless explicitly configured otherwise.
 Approvals should support three operator outcomes:
 
 - **Approve once:** resolve the pending approval and resume/cancel the waiting run as normal. No standing authorization is created.
-- **Approve always:** resolve the pending approval and also create a **durable policy override** that allows *future* matching actions without prompting. “Always” should be offered only when the approval includes `suggested_overrides` (or when a domain-specific durable authorization exists, such as node pairing).
+- **Approve always:** resolve the pending approval and also create a **durable policy override** that allows _future_ matching actions without prompting. “Always” should be offered only when the approval includes `suggested_overrides` (or when a domain-specific durable authorization exists, such as node pairing).
 - **Reject:** deny the pending approval (or let it expire), and cancel/keep paused according to policy.
 
 “Approve always” is **enforcement**, not convenience: the override is a durable, auditable record with explicit scope and revocation. See [Policy overrides](./policy-overrides.md).
@@ -81,7 +81,7 @@ Approvals should support three operator outcomes:
 
 For tool-policy approvals, the gateway should include `suggested_overrides` so operator clients can offer an “always” option without free-form rule authoring.
 
-Each suggested override is a *tool-specific wildcard pattern* over a well-defined match target (see [Tools](./tools.md)). Suggestions are conservative:
+Each suggested override is a _tool-specific wildcard pattern_ over a well-defined match target (see [Tools](./tools.md)). Suggestions are conservative:
 
 - narrow scope by default (agent and workspace scoped where applicable)
 - prefer prefix patterns over broad wildcards
