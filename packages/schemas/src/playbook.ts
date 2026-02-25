@@ -33,7 +33,7 @@ export type PlaybookOutputSpec = z.infer<typeof PlaybookOutputSpec>;
 export const PlaybookApprovalSpec = z.enum(["required"]);
 export type PlaybookApprovalSpec = z.infer<typeof PlaybookApprovalSpec>;
 
-const PLAYBOOK_COMMAND_NAMESPACES = ["cli", "http", "web", "mcp", "node"] as const;
+const PLAYBOOK_COMMAND_NAMESPACES = ["cli", "http", "web", "mcp", "node", "llm"] as const;
 const PLAYBOOK_COMMAND_NAMESPACE_SET = new Set<string>(PLAYBOOK_COMMAND_NAMESPACES);
 
 function playbookCommandNamespace(command: string): string {
@@ -78,12 +78,63 @@ export const PlaybookStep = z
     approval: PlaybookApprovalSpec.optional(),
     /** Declared output contract for parsing and caps. */
     output: PlaybookOutputSpec.optional(),
+    /** Optional LLM step configuration (required when command namespace is `llm`). */
+    llm: z
+      .object({
+        /** Model identifier in `provider/model` form. */
+        model: z.string().trim().min(1),
+        /** Prompt text supplied to the model. */
+        prompt: z.string().trim().min(1),
+        /** Maximum number of tool calls allowed during this step. */
+        max_tool_calls: z.number().int().nonnegative().optional(),
+        /** Tool allowlist for this step (tool ids). */
+        tools: z
+          .object({
+            allow: z.array(z.string().trim().min(1)).default([]),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .optional(),
     /** Optional postcondition spec evaluated against step evidence. */
     postcondition: z.unknown().optional(),
     /** Operator-facing rollback guidance for reversible steps. */
     rollback_hint: z.string().trim().min(1).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    const ns = playbookCommandNamespace(value.command);
+    const isLlm = ns === "llm";
+
+    if (isLlm && !value.llm) {
+      ctx.addIssue({
+        code: "custom",
+        message: "llm config is required when command namespace is 'llm'",
+        path: ["llm"],
+      });
+    }
+
+    if (!isLlm && value.llm) {
+      ctx.addIssue({
+        code: "custom",
+        message: "llm config is only allowed when command namespace is 'llm'",
+        path: ["llm"],
+      });
+    }
+
+    if (isLlm) {
+      const output = value.output;
+      const kind = typeof output === "string" ? output : output?.type;
+      if (kind !== "json") {
+        ctx.addIssue({
+          code: "custom",
+          message: "llm steps must declare output as JSON (output: json or output.type: json)",
+          path: ["output"],
+        });
+      }
+    }
+  });
 export type PlaybookStep = z.infer<typeof PlaybookStep>;
 
 /** Top-level playbook manifest parsed from YAML. */

@@ -13,6 +13,7 @@ export type ActionPostcondition = z.infer<typeof ActionPostcondition>;
 export const ActionPrimitiveKind = z.enum([
   "Research",
   "Decide",
+  "Llm",
   "Web",
   "Android",
   "Desktop",

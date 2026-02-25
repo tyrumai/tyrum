@@ -111,6 +111,7 @@ Examples:
 - `web …` → browser automation action.
 - `mcp …` → MCP tool invocation.
 - `node …` → node RPC / capability call.
+- `llm` → JSON-only model step (optionally with allowlisted tools + tool-call budgets).
 
 ### Step data passing
 
@@ -153,3 +154,29 @@ Some workflows need a “judgment” step (classify, extract, draft) that uses a
 - outputs should be validated when a schema is provided
 
 This supports advanced workflows while keeping safety enforceable outside prompts.
+
+### LLM step shape
+
+LLM steps use the `llm` command namespace plus an `llm` config block. They must declare a JSON output contract.
+
+```yaml
+- id: extract
+  command: llm
+  llm:
+    model: openai/gpt-4.1
+    prompt: |
+      Extract fields from the input and return JSON.
+    max_tool_calls: 2
+    tools:
+      allow:
+        - tool.http.fetch
+        - tool.exec
+  output:
+    type: json
+    schema:
+      type: object
+      properties:
+        ok: { type: boolean }
+      required: [ok]
+      additionalProperties: false
+```

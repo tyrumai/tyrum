@@ -253,6 +253,30 @@ function stepToPrimitive(
     };
   }
 
+  if (ns === "llm") {
+    if (!step.llm) {
+      throw new PlaybookCompileError("llm command requires an llm config block");
+    }
+
+    const tools = step.llm.tools ?? { allow: [] };
+
+    return {
+      type: "Llm",
+      args: withPlaybookMeta(
+        {
+          model: step.llm.model,
+          prompt: step.llm.prompt,
+          max_tool_calls: step.llm.max_tool_calls ?? 0,
+          tools,
+        },
+        playbookId,
+        step,
+      ),
+      postcondition: step.postcondition,
+      idempotency_key,
+    };
+  }
+
   throw new PlaybookCompileError(`Unsupported playbook command namespace: '${ns}'`);
 }
 

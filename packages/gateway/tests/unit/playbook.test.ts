@@ -56,6 +56,40 @@ describe("PlaybookManifest schema", () => {
     expect(() => PlaybookManifest.parse(raw)).toThrow();
   });
 
+  it("parses a JSON-only llm step with tool-call limits", () => {
+    const raw = {
+      id: "llm-pb",
+      name: "LLM Playbook",
+      version: "1.0.0",
+      steps: [
+        {
+          id: "judge",
+          command: "llm",
+          llm: {
+            model: "openai/gpt-4.1",
+            prompt: "Return JSON: {\"ok\": true}",
+            max_tool_calls: 2,
+            tools: {
+              allow: ["tool.http.fetch"],
+            },
+          },
+          output: {
+            type: "json",
+            schema: {
+              type: "object",
+              properties: { ok: { type: "boolean" } },
+              required: ["ok"],
+              additionalProperties: false,
+            },
+          },
+        },
+      ],
+    };
+
+    const result = PlaybookManifest.parse(raw);
+    expect(result.steps[0]!.command).toBe("llm");
+  });
+
   it("allows optional fields", () => {
     const raw = {
       id: "full",
@@ -287,14 +321,34 @@ describe("PlaybookRunner", () => {
   });
 
   it("compiles cli/web/llm namespaces into executable primitives", () => {
-    const pb = makePlaybook("ns-test", [
-      { id: "cli", command: "cli echo \"hello world\"" },
-      { id: "web", command: "web navigate https://example.com" },
-      { id: "http", command: "http GET https://example.com" },
-    ]);
+    const pb = {
+      manifest: PlaybookManifest.parse({
+        id: "ns-test",
+        name: "Namespaces",
+        version: "1.0.0",
+        steps: [
+          { id: "cli", command: "cli echo \"hello world\"" },
+          { id: "web", command: "web navigate https://example.com" },
+          { id: "http", command: "http GET https://example.com" },
+          {
+            id: "llm",
+            command: "llm",
+            llm: {
+              model: "openai/gpt-4.1",
+              prompt: "Return JSON: {\"ok\": true}",
+              max_tool_calls: 2,
+              tools: { allow: ["tool.http.fetch"] },
+            },
+            output: "json",
+          },
+        ],
+      }),
+      file_path: "/test/ns-test/playbook.yml",
+      loaded_at: new Date().toISOString(),
+    };
 
     const result = runner.run(pb);
-    expect(result.steps).toHaveLength(3);
+    expect(result.steps).toHaveLength(4);
 
     expect(result.steps[0]!.type).toBe("CLI");
     expect(result.steps[0]!.args).toEqual({
@@ -343,6 +397,24 @@ describe("PlaybookRunner", () => {
       },
     });
     expect(result.steps[2]!.idempotency_key).toBe("playbook:ns-test:http");
+
+    expect(result.steps[3]!.type).toBe("Llm");
+    expect(result.steps[3]!.args).toEqual({
+      model: "openai/gpt-4.1",
+      prompt: "Return JSON: {\"ok\": true}",
+      max_tool_calls: 2,
+      tools: { allow: ["tool.http.fetch"] },
+      __playbook: {
+        playbook_id: "ns-test",
+        step_id: "llm",
+        step_name: null,
+        stdin: null,
+        condition: null,
+        approval: null,
+        output: "json",
+      },
+    });
+    expect(result.steps[3]!.idempotency_key).toBe("playbook:ns-test:llm");
   });
 
   it("rejects http namespace without a URL", () => {
