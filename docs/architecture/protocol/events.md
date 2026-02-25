@@ -91,6 +91,7 @@ This is the canonical list of `type` values and payload contracts for the v1 Web
 ## Delivery expectations
 
 - Events are delivered **at-least-once**. Consumers must tolerate duplicates and implement idempotent handling.
+- Consumers should tolerate **unknown `type` values** (forward-compat) and ignore events they don't recognize.
 - Deduplicate using `event_id` (and treat `occurred_at` as informational, not a strict ordering guarantee).
 - Clients should tolerate reconnect and resubscribe without losing safety invariants; durable state in the StateStore remains the source of truth.
 
