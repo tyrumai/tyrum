@@ -23,6 +23,7 @@ const AUTH_ERROR_BODY = {
 
 const AUTH_SESSION_ROUTE_PATH = "/auth/session";
 const AUTH_LOGOUT_ROUTE_PATH = "/auth/logout";
+const APP_AUTH_ROUTE_PATH = "/app/auth";
 const UI_PATH_PREFIX = "/ui";
 const OAUTH_CALLBACK_ROUTE_PATH_SUFFIX = "/providers/:provider/oauth/callback";
 const OAUTH_CALLBACK_REQUEST_PATH_PATTERN = /(?:^|\/)providers\/[^/]+\/oauth\/callback$/;
@@ -59,6 +60,11 @@ export function createAuthMiddleware(
 
     // Cookie bootstrap/logout endpoints must be accessible before authentication.
     if (c.req.path === AUTH_SESSION_ROUTE_PATH || c.req.path === AUTH_LOGOUT_ROUTE_PATH) {
+      return next();
+    }
+
+    // Legacy web UI cookie bootstrap runs before authentication headers/cookies exist.
+    if (c.req.method === "GET" && c.req.path === APP_AUTH_ROUTE_PATH) {
       return next();
     }
 

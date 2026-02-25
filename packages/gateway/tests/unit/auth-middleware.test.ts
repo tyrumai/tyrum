@@ -132,10 +132,10 @@ describe("Auth middleware", () => {
     expect(res.status).toBe(200);
   });
 
-  it("rejects /app/auth bootstrap even when query token is present", async () => {
+  it("allows /app/auth bootstrap when query token is present", async () => {
     const app = buildApp();
     const res = await app.request(`/app/auth?token=${encodeURIComponent(adminToken)}&next=%2Fapp`);
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(200);
   });
 
   it("rejects /app route even when query token is present", async () => {
