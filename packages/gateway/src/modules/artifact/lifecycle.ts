@@ -7,6 +7,7 @@
 import type { PolicyBundle as PolicyBundleT } from "@tyrum/schemas";
 import { PolicyBundle } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
+import { normalizeDbDateTime } from "../../utils/db-time.js";
 import type { Logger } from "../observability/logger.js";
 import type { PolicySnapshotDal } from "../policy/snapshot-dal.js";
 import type { ArtifactStore } from "./store.js";
@@ -57,16 +58,6 @@ type BucketKey = {
 function defaultClock(): ArtifactLifecycleSchedulerClock {
   const now = new Date();
   return { nowMs: now.getTime(), nowIso: now.toISOString() };
-}
-
-function normalizeDbDateTime(value: string | Date | null): string | null {
-  if (value === null) return null;
-  const raw = value instanceof Date ? value.toISOString() : value;
-  // SQLite `datetime('now')` format: "YYYY-MM-DD HH:MM:SS" (UTC).
-  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(raw)) {
-    return `${raw.replace(" ", "T")}Z`;
-  }
-  return raw;
 }
 
 function normalizeSensitivity(value: string | null | undefined): ArtifactSensitivity {

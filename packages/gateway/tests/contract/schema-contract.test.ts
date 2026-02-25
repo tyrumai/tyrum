@@ -62,6 +62,7 @@ describe("StateStore schema contract (sqlite vs postgres)", () => {
         "node_pairings",
         "policy_snapshots",
         "policy_overrides",
+        "routing_configs",
         "auth_profiles",
         "session_provider_pins",
         "context_reports",

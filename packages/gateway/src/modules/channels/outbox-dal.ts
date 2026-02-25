@@ -1,4 +1,5 @@
 import type { SqlDb } from "../../statestore/types.js";
+import { safeJsonParse } from "../../utils/json.js";
 
 export type ChannelOutboxStatus = "queued" | "sending" | "sent" | "failed";
 
@@ -47,15 +48,6 @@ function normalizeTime(value: string | Date | null): string | null {
   return value instanceof Date ? value.toISOString() : value;
 }
 
-function safeJsonParse(raw: string | null, fallback: unknown): unknown {
-  if (!raw) return fallback;
-  try {
-    return JSON.parse(raw) as unknown;
-  } catch {
-    return fallback;
-  }
-}
-
 function toRow(raw: RawChannelOutboxRow): ChannelOutboxRow {
   return {
     outbox_id: raw.outbox_id,
@@ -74,7 +66,7 @@ function toRow(raw: RawChannelOutboxRow): ChannelOutboxRow {
     created_at: normalizeTime(raw.created_at) ?? new Date().toISOString(),
     sent_at: normalizeTime(raw.sent_at),
     error: raw.error,
-    response: safeJsonParse(raw.response_json, null),
+    response: safeJsonParse(raw.response_json, null as unknown),
   };
 }
 

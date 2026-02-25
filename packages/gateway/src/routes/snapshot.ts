@@ -48,6 +48,7 @@ const DEFAULT_TABLES = [
   // Policy + pairing + channels
   "policy_snapshots",
   "policy_overrides",
+  "routing_configs",
   // Models/auth profiles
   "auth_profiles",
   "session_provider_pins",
@@ -74,6 +75,7 @@ const IMPORT_ORDER = [
   "canvas_artifacts",
   "policy_snapshots",
   "policy_overrides",
+  "routing_configs",
   "auth_profiles",
   "session_provider_pins",
   "secret_resolutions",

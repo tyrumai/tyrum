@@ -17,6 +17,30 @@ Inbound events are mapped to an agent via explicit, auditable bindings.
 - The same rule shape can be stored in the StateStore and edited from the control panel.
 - Rule changes emit events and are reversible.
 
+### Durable routing state (implemented)
+
+Routing rules are persisted as versioned config snapshots in the StateStore:
+
+- Table: `routing_configs` (append-only revisions; newest revision is effective)
+- Audit stream: `planner_events.plan_id = "routing.config"` (exportable via `/audit/export/routing.config`; action includes `revision`, `config_sha256`, and optional `reverted_from_revision`)
+- WS event: `routing.config.updated` (payload includes `revision`, optional `config_sha256`, and optional `reverted_from_revision`; clients should `GET /routing/config` to fetch the effective config)
+
+Operator API:
+
+- `GET /routing/config` — fetch the effective config + revision
+- `PUT /routing/config` — write a new revision
+- `POST /routing/config/revert` — create a new revision from an earlier revision
+
+Authentication/authorization:
+
+- Requires a valid gateway token.
+- Scoped device tokens must include `operator.admin` for `/routing/*` routes.
+
+Bootstrap behavior:
+
+- If no durable routing config exists, the gateway falls back to the legacy static file config under `TYRUM_HOME` (for example `routing.yml` / `routing.yaml` / `routing.json`).
+- Once a durable revision exists and validates against the routing config schema, it becomes the source of truth for routing decisions.
+
 ## Key taxonomy
 
 Routing uses the session key conventions described in [Sessions and lanes](./sessions-lanes.md).

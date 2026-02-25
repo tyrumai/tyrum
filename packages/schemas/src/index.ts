@@ -75,6 +75,17 @@ export {
 } from "./policy-bundle.js";
 
 export {
+  TelegramRoutingConfig,
+  RoutingConfig,
+  RoutingConfigRevisionNumber,
+  RoutingConfigGetResponse,
+  RoutingConfigUpdateRequest,
+  RoutingConfigUpdateResponse,
+  RoutingConfigRevertRequest,
+  RoutingConfigRevertResponse,
+} from "./routing.js";
+
+export {
   SnapshotFormat,
   SnapshotTable,
   SnapshotBundle,
@@ -338,6 +349,8 @@ export {
   WsProviderUsagePolledEvent,
   WsContextReportCreatedEventPayload,
   WsContextReportCreatedEvent,
+  WsRoutingConfigUpdatedEventPayload,
+  WsRoutingConfigUpdatedEvent,
   ChannelQueueOverflowPolicy,
   WsChannelQueueOverflowEventPayload,
   WsChannelQueueOverflowEvent,

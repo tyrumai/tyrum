@@ -11,6 +11,8 @@ import type { Logger } from "../modules/observability/logger.js";
 import type { PolicySnapshotDal } from "../modules/policy/snapshot-dal.js";
 import type { PolicyService } from "../modules/policy/service.js";
 import type { SqlDb } from "../statestore/types.js";
+import { normalizeDbDateTime } from "../utils/db-time.js";
+import { safeJsonParse } from "../utils/json.js";
 import { enqueueWsBroadcastMessage } from "../ws/outbox.js";
 
 export interface ArtifactRouteDeps {
@@ -48,25 +50,6 @@ type DurableExecutionScope = {
 
 const ARTIFACT_NOT_FOUND_BODY = { error: "not_found", message: "artifact not found" } as const;
 const DEFAULT_SIGNED_URL_TTL_SECONDS = 60;
-
-function normalizeDbDateTime(value: string | Date | null): string | null {
-  if (value === null) return null;
-  const raw = value instanceof Date ? value.toISOString() : value;
-  // SQLite `datetime('now')` format: "YYYY-MM-DD HH:MM:SS" (UTC).
-  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(raw)) {
-    return `${raw.replace(" ", "T")}Z`;
-  }
-  return raw;
-}
-
-function safeJsonParse<T>(raw: string | null, fallback: T): T {
-  if (!raw) return fallback;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
 
 function rowToArtifactRef(row: ExecutionArtifactRow): ArtifactRefT | undefined {
   const labels = safeJsonParse(row.labels_json, [] as unknown[]);

@@ -241,6 +241,21 @@ describe("WS event catalog", () => {
     expect(parsed.success).toBe(true);
   });
 
+  it("parses routing.config.updated", () => {
+    const parsed = WsEvent.safeParse({
+      event_id: "e-routing-1",
+      type: "routing.config.updated",
+      occurred_at: "2026-02-24T00:00:00Z",
+      scope: { kind: "global" },
+      payload: {
+        revision: 1,
+        reason: "seed",
+        config_sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+      },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
   it("parses auth.failed", () => {
     const parsed = WsEvent.safeParse({
       event_id: "e-15",

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createTestApp } from "./helpers.js";
+import { RoutingConfigDal } from "../../src/modules/channels/routing-config-dal.js";
 
 describe("snapshot routes", () => {
   it("exports and imports a snapshot bundle (empty-db import)", async () => {
@@ -50,6 +51,58 @@ describe("snapshot routes", () => {
       prompt: "next",
     });
     expect(nextApproval.id).toBeGreaterThan(approval.id);
+
+    await container.db.close();
+    await container2.db.close();
+
+    if (originalFlag === undefined) {
+      delete process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
+    } else {
+      process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = originalFlag;
+    }
+  });
+
+  it("includes routing config revisions in snapshot bundles", async () => {
+    const originalFlag = process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"];
+    process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = "1";
+
+    const { app, container } = await createTestApp();
+
+    await new RoutingConfigDal(container.db).set({
+      config: {
+        v: 1,
+        telegram: {
+          default_agent_id: "default",
+          threads: {
+            "123": "agent-b",
+          },
+        },
+      },
+      reason: "snapshot-seed",
+      createdBy: { kind: "test" },
+    });
+
+    const exportRes = await app.request("/snapshot/export");
+    expect(exportRes.status).toBe(200);
+    const bundle = (await exportRes.json()) as Record<string, unknown>;
+
+    const { app: app2, container: container2 } = await createTestApp();
+    const importRes = await app2.request("/snapshot/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ confirm: "IMPORT", bundle }),
+    });
+    expect(importRes.status).toBe(200);
+
+    const imported = await container2.db.get<{ revision: number }>(
+      "SELECT revision FROM routing_configs ORDER BY revision DESC LIMIT 1",
+    );
+    expect(imported?.revision).toBeGreaterThan(0);
+
+    const latest = await new RoutingConfigDal(container2.db).getLatest();
+    expect(latest?.config).toMatchObject({
+      telegram: { threads: { "123": "agent-b" } },
+    });
 
     await container.db.close();
     await container2.db.close();

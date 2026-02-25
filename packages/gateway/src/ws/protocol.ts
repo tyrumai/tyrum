@@ -71,7 +71,7 @@ import type { Logger } from "../modules/observability/logger.js";
 import type { SqlDb, StateStoreKind } from "../statestore/types.js";
 import type { ModelsDevService } from "../modules/models/models-dev-service.js";
 import { executeCommand } from "../modules/commands/dispatcher.js";
-import type { AuthTokenClaims } from "../modules/auth/token-store.js";
+import { hasAnyRequiredScope } from "../modules/auth/scopes.js";
 import { resolveWsRequestRequiredScopes } from "../modules/authz/ws-scope-matrix.js";
 import type { AuthAudit } from "../modules/auth/audit.js";
 
@@ -144,13 +144,6 @@ export class NoCapableClientError extends Error {
     super(`no connected client with capability: ${capability}`);
     this.name = "NoCapableClientError";
   }
-}
-
-function hasAnyRequiredScope(claims: AuthTokenClaims, requiredScopes: string[]): boolean {
-  if (requiredScopes.length === 0) return true;
-  const scopes = Array.isArray(claims.scopes) ? claims.scopes : [];
-  if (scopes.includes("*")) return true;
-  return requiredScopes.some((scope) => scopes.includes(scope));
 }
 
 // ---------------------------------------------------------------------------

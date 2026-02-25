@@ -11,6 +11,7 @@
 import type { Context, Next } from "hono";
 import { matchedRoutes } from "hono/route";
 import type { AuthTokenClaims } from "../auth/token-store.js";
+import { hasAnyRequiredScope } from "../auth/scopes.js";
 import { matchesPathPrefixSegment } from "../../app-path.js";
 import type { AuthAudit } from "../auth/audit.js";
 import { getClientIp } from "../auth/client-ip.js";
@@ -63,13 +64,6 @@ function getLeafRoutePath(c: Context): string | undefined {
   }
 }
 
-function hasAnyRequiredScope(claims: AuthTokenClaims, requiredScopes: string[]): boolean {
-  if (requiredScopes.length === 0) return true;
-  const scopes = Array.isArray(claims.scopes) ? claims.scopes : [];
-  if (scopes.includes("*")) return true;
-  return requiredScopes.some((scope) => scopes.includes(scope));
-}
-
 function isMethodScopedOperatorRoute(routePath: string): boolean {
   if (routePath === "/") return true;
   return METHOD_SCOPED_OPERATOR_ROUTE_PREFIXES.some((prefix) => matchesPathPrefixSegment(routePath, prefix));
@@ -88,6 +82,7 @@ export function resolveHttpRouteRequiredScopes(input: {
     matchesPathPrefixSegment(routePath, "/auth") ||
     matchesPathPrefixSegment(routePath, "/audit") ||
     matchesPathPrefixSegment(routePath, "/policy") ||
+    matchesPathPrefixSegment(routePath, "/routing") ||
     matchesPathPrefixSegment(routePath, "/plugins") ||
     matchesPathPrefixSegment(routePath, "/providers") ||
     matchesPathPrefixSegment(routePath, "/secrets") ||

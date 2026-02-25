@@ -1616,6 +1616,26 @@ export const WsContextReportCreatedEvent = WsEventEnvelope.extend({
 });
 export type WsContextReportCreatedEvent = z.infer<typeof WsContextReportCreatedEvent>;
 
+export const WsRoutingConfigUpdatedEventPayload = z
+  .object({
+    revision: z.number().int().positive(),
+    reason: z.string().trim().min(1).optional(),
+    config_sha256: z
+      .string()
+      .trim()
+      .regex(/^[0-9a-f]{64}$/, "config_sha256 must be a lowercase hex SHA-256")
+      .optional(),
+    reverted_from_revision: z.number().int().positive().optional(),
+  })
+  .strict();
+export type WsRoutingConfigUpdatedEventPayload = z.infer<typeof WsRoutingConfigUpdatedEventPayload>;
+
+export const WsRoutingConfigUpdatedEvent = WsEventEnvelope.extend({
+  type: z.literal("routing.config.updated"),
+  payload: WsRoutingConfigUpdatedEventPayload,
+});
+export type WsRoutingConfigUpdatedEvent = z.infer<typeof WsRoutingConfigUpdatedEvent>;
+
 export const ChannelQueueOverflowPolicy = z.enum([
   "drop_oldest",
   "drop_newest",
@@ -1719,6 +1739,7 @@ export const WsEvent = z.discriminatedUnion("type", [
   WsUsageSnapshotEvent,
   WsProviderUsagePolledEvent,
   WsContextReportCreatedEvent,
+  WsRoutingConfigUpdatedEvent,
   WsErrorEvent,
 ]);
 export type WsEvent = z.infer<typeof WsEvent>;

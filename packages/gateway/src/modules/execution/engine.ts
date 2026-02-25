@@ -26,6 +26,8 @@ import { randomUUID } from "node:crypto";
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { Logger } from "../observability/logger.js";
 import type { SqlDb } from "../../statestore/types.js";
+import { normalizeDbDateTime } from "../../utils/db-time.js";
+import { safeJsonParse } from "../../utils/json.js";
 import type { PolicyService } from "../policy/service.js";
 import { canonicalizeToolMatchTarget } from "../policy/match-target.js";
 import {
@@ -140,25 +142,6 @@ interface StepRow {
 function defaultClock(): ExecutionClock {
   const now = new Date();
   return { nowMs: now.getTime(), nowIso: now.toISOString() };
-}
-
-function normalizeDbDateTime(value: string | Date | null): string | null {
-  if (value === null) return null;
-  const raw = value instanceof Date ? value.toISOString() : value;
-  // SQLite `datetime('now')` format: "YYYY-MM-DD HH:MM:SS" (UTC).
-  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(raw)) {
-    return `${raw.replace(" ", "T")}Z`;
-  }
-  return raw;
-}
-
-function safeJsonParse<T>(raw: string | null, fallback: T): T {
-  if (!raw) return fallback;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
 }
 
 function normalizeNonnegativeInt(value: unknown): number | undefined {

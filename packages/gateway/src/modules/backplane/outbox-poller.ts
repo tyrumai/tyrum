@@ -2,6 +2,12 @@ import type { WsEventEnvelope, WsRequestEnvelope } from "@tyrum/schemas";
 import type { ConnectedClient, ConnectionManager } from "../../ws/connection-manager.js";
 import type { OutboxDal, OutboxRow } from "./outbox-dal.js";
 import type { Logger } from "../observability/logger.js";
+import {
+  normalizeScopes,
+  shouldDeliverToWsAudience,
+  type WsBroadcastAudience,
+  type WsBroadcastRole,
+} from "../../ws/audience.js";
 
 export interface OutboxPollerOptions {
   consumerId: string;
@@ -41,6 +47,41 @@ function parseDirectPayload(payload: unknown): { connection_id: string; message:
   return { connection_id: connectionId, message: message as WsEnvelope };
 }
 
+function parseBroadcastAudience(payload: unknown): WsBroadcastAudience | undefined | null {
+  if (!isObject(payload)) return null;
+
+  const hasRolesKey = Object.prototype.hasOwnProperty.call(payload, "roles");
+  const hasRequiredScopesKey = Object.prototype.hasOwnProperty.call(payload, "required_scopes");
+
+  let roles: WsBroadcastRole[] | undefined;
+  if (hasRolesKey) {
+    const rolesRaw = payload["roles"];
+    if (!Array.isArray(rolesRaw)) return null;
+    if (!rolesRaw.every((role) => role === "client" || role === "node")) return null;
+    roles = rolesRaw as WsBroadcastRole[];
+  }
+
+  let requiredScopes: string[] | undefined;
+  if (hasRequiredScopesKey) {
+    const requiredScopesRaw = payload["required_scopes"];
+    if (!Array.isArray(requiredScopesRaw) || requiredScopesRaw.some((scope) => typeof scope !== "string")) {
+      return null;
+    }
+    requiredScopes = normalizeScopes(requiredScopesRaw as string[]);
+  }
+
+  const rolesConstraints = roles && roles.length > 0 ? roles : undefined;
+  const scopeConstraints = requiredScopes && requiredScopes.length > 0 ? requiredScopes : undefined;
+  if (!rolesConstraints && !scopeConstraints) {
+    return undefined;
+  }
+
+  return {
+    roles: rolesConstraints,
+    required_scopes: scopeConstraints,
+  };
+}
+
 function extractAttemptId(message: WsEnvelope): string | undefined {
   if (message.type !== "task.execute") return undefined;
   const payload = (message as unknown as { payload?: unknown }).payload;
@@ -51,17 +92,22 @@ function extractAttemptId(message: WsEnvelope): string | undefined {
 
 function parseBroadcastPayload(
   payload: unknown,
-): { message: WsEnvelope; source_edge_id?: string; skip_local?: boolean } | undefined {
+): { message: WsEnvelope; source_edge_id?: string; skip_local?: boolean; audience?: WsBroadcastAudience } | undefined {
   if (!isObject(payload)) return undefined;
 
   const maybeMessage = payload["message"];
   if (isObject(maybeMessage)) {
     const sourceEdgeId = payload["source_edge_id"];
     const skipLocal = payload["skip_local"];
+    const hasAudienceKey = Object.prototype.hasOwnProperty.call(payload, "audience");
+    const audience = hasAudienceKey ? parseBroadcastAudience(payload["audience"]) : undefined;
+    // Fail closed: malformed audiences must not bypass the delivery filter.
+    if (audience === null) return undefined;
     return {
       message: maybeMessage as WsEnvelope,
       source_edge_id: typeof sourceEdgeId === "string" ? sourceEdgeId : undefined,
       skip_local: typeof skipLocal === "boolean" ? skipLocal : undefined,
+      audience: audience ?? undefined,
     };
   }
 
@@ -174,6 +220,8 @@ export class OutboxPoller {
       const payload = JSON.stringify(parsed.message);
       for (const client of this.connectionManager.allClients()) {
         if (authAudit && !canReceiveAuthAudit(client)) continue;
+        if (!shouldDeliverToWsAudience(client, parsed.audience)) continue;
+
         try {
           client.ws.send(payload);
         } catch (err) {
