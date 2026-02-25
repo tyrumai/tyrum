@@ -189,17 +189,11 @@ export class StateStoreLifecycleScheduler {
   }
 
   private async pruneExpiredSessions(db: SqlDb, input: { cutoffIso: string }): Promise<number> {
-    const sessionCutoff = db.kind === "sqlite"
-      ? {
-          clause: "datetime(updated_at) < datetime(?)",
-          order: "updated_at ASC, session_id ASC",
-          params: [input.cutoffIso],
-        }
-      : {
-          clause: "updated_at < ?",
-          order: "updated_at ASC, session_id ASC",
-          params: [input.cutoffIso],
-        };
+    const sessionCutoff = {
+      clause: "updated_at < ?",
+      order: "updated_at ASC, session_id ASC",
+      params: [input.cutoffIso],
+    };
 
     const batch = [...sessionCutoff.params, this.batchSize];
 

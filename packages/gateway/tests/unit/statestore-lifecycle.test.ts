@@ -243,4 +243,57 @@ describe("StateStoreLifecycleScheduler", () => {
     );
     expect(orphaned).toEqual([]);
   });
+
+  it("avoids datetime(updated_at) in SQLite session pruning queries (index-friendly)", async () => {
+    process.env["TYRUM_SESSIONS_TTL_DAYS"] = "1";
+    db = openTestSqliteDb();
+
+    const now = new Date("2026-02-24T00:00:00.000Z");
+    const nowMs = now.getTime();
+
+    const runs: string[] = [];
+
+    class RecordingDb implements SqlDb {
+      readonly kind: SqlDb["kind"];
+
+      constructor(private readonly base: SqlDb) {
+        this.kind = base.kind;
+      }
+
+      get<T>(sql: string, params?: readonly unknown[]): Promise<T | undefined> {
+        return this.base.get(sql, params);
+      }
+
+      all<T>(sql: string, params?: readonly unknown[]): Promise<T[]> {
+        return this.base.all(sql, params);
+      }
+
+      async run(sql: string, params?: readonly unknown[]): Promise<{ changes: number }> {
+        runs.push(sql);
+        return await this.base.run(sql, params);
+      }
+
+      exec(sql: string): Promise<void> {
+        return this.base.exec(sql);
+      }
+
+      transaction<T>(fn: (tx: SqlDb) => Promise<T>): Promise<T> {
+        return this.base.transaction(async (tx) => fn(new RecordingDb(tx)));
+      }
+
+      close(): Promise<void> {
+        return this.base.close();
+      }
+    }
+
+    const scheduler = new StateStoreLifecycleScheduler({
+      db: new RecordingDb(db),
+      clock: () => ({ nowIso: now.toISOString(), nowMs }),
+    });
+
+    await scheduler.tick();
+
+    expect(runs.some((sql) => /datetime\s*\(\s*updated_at\s*\)/i.test(sql))).toBe(false);
+    expect(runs.some((sql) => /WHERE\s+updated_at\s*<\s*\?/i.test(sql))).toBe(true);
+  });
 });
