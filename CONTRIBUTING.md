@@ -31,14 +31,16 @@ Thanks for helping build the Tyrum assistant platform.
 | Build all packages   | `pnpm build`                         |
 | Start gateway        | `pnpm --filter @tyrum/gateway start` |
 
-Optional: local commit checks (pre-commit hook)
+Optional: local hooks (pre-commit/pre-push)
 
 ```bash
 git config core.hooksPath .githooks
 ```
 
-This enables a repo-local `pre-commit` hook that runs `pnpm format:check-staged` to catch
-formatting issues on staged files before committing.
+This enables repo-local hooks:
+
+- `pre-commit`: runs `pnpm format:check-staged` for fast staged-file formatting checks.
+- `pre-push`: runs `pnpm lint` and `pnpm typecheck` for stronger validation before pushing.
 
 ## 4. Before Opening a PR
 
