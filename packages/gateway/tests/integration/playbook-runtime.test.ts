@@ -257,6 +257,70 @@ describe("POST /playbooks/runtime (playbook runtime envelope)", () => {
     expect(runRow?.status).toBe("cancelled");
   });
 
+  it("resume does not cancel when the approval was resolved concurrently (TOCTOU)", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });
+    const engine = new ExecutionEngine({
+      db: container.db,
+      redactionEngine: container.redactionEngine,
+      policyService: container.policyService,
+      logger: container.logger,
+    });
+    const playbooks = loadAllPlaybooks(fixturesDir, { onInvalidPlaybook: () => {} });
+    const app = createApp(container, { engine, playbooks });
+
+    const runResPromise = app.request("/playbooks/runtime", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "run", pipeline: INLINE_PLAYBOOK, timeoutMs: 2_000 }),
+    });
+
+    const runId = await waitForRunId(container);
+    const pauseExecutor: StepExecutor = {
+      execute: vi.fn(async () => {
+        throw new Error("step execution should not run before policy approval");
+      }),
+    };
+    await engine.workerTick({ workerId: "w1", executor: pauseExecutor, runId });
+
+    const runRes = await runResPromise;
+    const paused = (await runRes.json()) as { requiresApproval?: { resumeToken?: string } };
+    const resumeToken = paused.requiresApproval?.resumeToken ?? "";
+    expect(resumeToken).toBeTruthy();
+
+    const originalRespond = container.approvalDal.respond.bind(container.approvalDal);
+    const respondSpy = vi
+      .spyOn(container.approvalDal, "respond")
+      .mockImplementation(async (id, approved, reason) => {
+        const nowIso = new Date().toISOString();
+        await container.db.run(
+          "UPDATE approvals SET status = 'approved', responded_at = ?, response_reason = ? WHERE id = ?",
+          [nowIso, "approved concurrently", id],
+        );
+        return await originalRespond(id, approved, reason);
+      });
+
+    const resumeRes = await app.request("/playbooks/runtime", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "resume", token: resumeToken, approve: false, timeoutMs: 2_000 }),
+    });
+
+    respondSpy.mockRestore();
+
+    expect(resumeRes.status).toBe(200);
+    const body = (await resumeRes.json()) as { ok: boolean; status: string; error?: { code?: string } };
+    expect(body.ok).toBe(false);
+    expect(body.status).toBe("error");
+    expect(body.error?.code).toBe("conflict");
+
+    const runRow = await container.db.get<{ status: string }>(
+      "SELECT status FROM execution_runs WHERE run_id = ?",
+      [runId],
+    );
+    expect(runRow?.status).toBe("paused");
+  });
+
   it("resume approve=true returns status=ok when the run completes", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-playbook-runtime-"));
     container = await createContainer({ dbPath: ":memory:", migrationsDir, tyrumHome: homeDir });

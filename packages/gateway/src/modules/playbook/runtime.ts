@@ -294,27 +294,37 @@ export async function runPlaybookRuntimeEnvelope(
       };
     }
 
-    if (approval.status === "pending") {
-      await deps.approvalDal.respond(approval.id, input.approve, input.reason);
-    } else {
-      const matches =
-        (input.approve && approval.status === "approved") ||
-        (!input.approve && approval.status === "denied");
-      if (!matches) {
-        return {
-          ok: false,
-          status: "error",
-          output: [],
-          error: { message: "approval already resolved", code: "conflict" },
-        };
-      }
+    const resolvedApproval =
+      approval.status === "pending"
+        ? await deps.approvalDal.respond(approval.id, input.approve, input.reason)
+        : approval;
+    if (!resolvedApproval) {
+      return {
+        ok: false,
+        status: "error",
+        output: [],
+        error: { message: "resume token not found", code: "not_found" },
+      };
     }
 
-    if (input.approve) {
+    const matches =
+      (input.approve && resolvedApproval.status === "approved") ||
+      (!input.approve && resolvedApproval.status === "denied");
+    if (!matches) {
+      return {
+        ok: false,
+        status: "error",
+        output: [],
+        error: { message: "approval already resolved", code: "conflict" },
+      };
+    }
+
+    if (resolvedApproval.status === "approved") {
       // Best-effort; if already resumed, this may return undefined.
       await deps.engine.resumeRun(input.token);
     } else {
-      await deps.engine.cancelRun(runId, input.reason ?? "approval denied");
+      const reason = resolvedApproval.response_reason ?? input.reason ?? "approval denied";
+      await deps.engine.cancelRun(runId, reason);
     }
 
     return await envelopeForRunStatus(deps.db, runId, timeoutMs);
