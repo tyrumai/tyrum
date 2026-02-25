@@ -18,28 +18,55 @@ const mitt = (typeof mittNs.default === "function" ? mittNs.default : mittNs) as
   T extends Record<string, unknown>,
 >() => Emitter<T>;
 
-import type { ClientCapability, WsRequestEnvelope, WsResponseEnvelope } from "@tyrum/schemas";
-import type { WsApprovalListResult as WsApprovalListResultT } from "@tyrum/schemas";
-import type { WsApprovalResolveResult as WsApprovalResolveResultT } from "@tyrum/schemas";
-import type { WsCommandExecutePayload as WsCommandExecutePayloadT } from "@tyrum/schemas";
-import type { WsCommandExecuteResult as WsCommandExecuteResultT } from "@tyrum/schemas";
-import type { WsPeerRole } from "@tyrum/schemas";
+import type {
+  ClientCapability,
+  WsApprovalListPayload,
+  WsApprovalListResult as WsApprovalListResultT,
+  WsApprovalResolvePayload,
+  WsApprovalResolveResult as WsApprovalResolveResultT,
+  WsAttemptEvidencePayload,
+  WsCapabilityReadyPayload,
+  WsCommandExecutePayload as WsCommandExecutePayloadT,
+  WsCommandExecuteResult as WsCommandExecuteResultT,
+  WsEvent as WsEventT,
+  WsPairingApprovePayload,
+  WsPairingDenyPayload,
+  WsPairingResolveResult as WsPairingResolveResultT,
+  WsPairingRevokePayload,
+  WsPeerRole,
+  WsPlanUpdateEvent,
+  WsPresenceBeaconPayload,
+  WsPresenceBeaconResult as WsPresenceBeaconResultT,
+  WsRequestEnvelope,
+  WsResponseEnvelope,
+  WsSessionSendPayload,
+  WsSessionSendResult as WsSessionSendResultT,
+  WsWorkflowCancelPayload,
+  WsWorkflowCancelResult as WsWorkflowCancelResultT,
+  WsWorkflowResumePayload,
+  WsWorkflowResumeResult as WsWorkflowResumeResultT,
+  WsWorkflowRunPayload,
+  WsWorkflowRunResult as WsWorkflowRunResultT,
+} from "@tyrum/schemas";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
   WsApprovalDecision,
   WsApprovalRequest,
   WsApprovalListResult,
-  type WsApprovalListPayload,
   WsApprovalResolveResult,
-  type WsApprovalResolvePayload,
+  WsEvent,
+  WsPairingResolveResult,
+  WsPresenceBeaconResult,
+  WsSessionSendResult,
+  WsWorkflowCancelResult,
+  WsWorkflowResumeResult,
+  WsWorkflowRunResult,
   WsCommandExecuteResult,
   WsConnectInitResult,
   WsConnectProofResult,
   WsError,
-  WsErrorEvent,
   WsMessageEnvelope,
-  WsPlanUpdateEvent,
   WsTaskExecuteRequest,
   WsTaskExecuteResult,
 } from "@tyrum/schemas";
@@ -56,14 +83,17 @@ import {
 // Event types
 // ---------------------------------------------------------------------------
 
-export type TyrumClientEvents = {
+type TyrumProtocolEvents = {
+  [EventType in WsEventT["type"]]: Extract<WsEventT, { type: EventType }>;
+};
+
+export type TyrumClientEvents = TyrumProtocolEvents & {
   connected: { clientId: string };
   disconnected: { code: number; reason: string };
   transport_error: { message: string };
   task_execute: WsTaskExecuteRequest;
   approval_request: WsApprovalRequest;
   plan_update: WsPlanUpdateEvent;
-  error: WsErrorEvent;
 };
 
 // ---------------------------------------------------------------------------
@@ -146,6 +176,32 @@ const DEFAULT_MAX_SEEN_REQUEST_IDS = 1_000;
 const WS_BASE_PROTOCOL = "tyrum-v1";
 const WS_AUTH_PROTOCOL_PREFIX = "tyrum-auth.";
 const DEFAULT_PROTOCOL_REV = 2;
+const WS_ACK_RESULT = {
+  safeParse: (
+    input: unknown,
+  ):
+    | { success: true; data: void }
+    | {
+        success: false;
+        error: { message: string };
+      } => {
+    if (input === undefined) {
+      return { success: true, data: undefined };
+    }
+    if (
+      typeof input === "object" &&
+      input !== null &&
+      !Array.isArray(input) &&
+      Object.keys(input).length === 0
+    ) {
+      return { success: true, data: undefined };
+    }
+    return {
+      success: false,
+      error: { message: "expected an empty result" },
+    };
+  },
+};
 
 function normalizeFingerprint256(value: string): string | null {
   const trimmed = value.trim();
@@ -331,6 +387,61 @@ export class TyrumClient {
   ): Promise<WsCommandExecuteResultT> {
     const payload = context ? { command, ...context } : { command };
     return this.request("command.execute", payload, WsCommandExecuteResult);
+  }
+
+  /** Send a heartbeat ping request to the gateway. */
+  ping(): Promise<void> {
+    return this.requestVoid("ping", {});
+  }
+
+  /** Send a message into a session and receive assistant output. */
+  sessionSend(payload: WsSessionSendPayload): Promise<WsSessionSendResultT> {
+    return this.request("session.send", payload, WsSessionSendResult);
+  }
+
+  /** Start a workflow run. */
+  workflowRun(payload: WsWorkflowRunPayload): Promise<WsWorkflowRunResultT> {
+    return this.request("workflow.run", payload, WsWorkflowRunResult);
+  }
+
+  /** Resume a paused workflow run. */
+  workflowResume(payload: WsWorkflowResumePayload): Promise<WsWorkflowResumeResultT> {
+    return this.request("workflow.resume", payload, WsWorkflowResumeResult);
+  }
+
+  /** Cancel a workflow run. */
+  workflowCancel(payload: WsWorkflowCancelPayload): Promise<WsWorkflowCancelResultT> {
+    return this.request("workflow.cancel", payload, WsWorkflowCancelResult);
+  }
+
+  /** Approve a pending node pairing request. */
+  pairingApprove(payload: WsPairingApprovePayload): Promise<WsPairingResolveResultT> {
+    return this.request("pairing.approve", payload, WsPairingResolveResult);
+  }
+
+  /** Deny a pending node pairing request. */
+  pairingDeny(payload: WsPairingDenyPayload): Promise<WsPairingResolveResultT> {
+    return this.request("pairing.deny", payload, WsPairingResolveResult);
+  }
+
+  /** Revoke an existing node pairing. */
+  pairingRevoke(payload: WsPairingRevokePayload): Promise<WsPairingResolveResultT> {
+    return this.request("pairing.revoke", payload, WsPairingResolveResult);
+  }
+
+  /** Publish client presence information and receive the normalized entry. */
+  presenceBeacon(payload: WsPresenceBeaconPayload): Promise<WsPresenceBeaconResultT> {
+    return this.request("presence.beacon", payload, WsPresenceBeaconResult);
+  }
+
+  /** Report capability readiness (node flows). */
+  capabilityReady(payload: WsCapabilityReadyPayload): Promise<void> {
+    return this.requestVoid("capability.ready", payload);
+  }
+
+  /** Report attempt evidence (node flows). */
+  attemptEvidence(payload: WsAttemptEvidencePayload): Promise<void> {
+    return this.requestVoid("attempt.evidence", payload);
   }
 
   // -----------------------------------------------------------------------
@@ -747,6 +858,10 @@ export class TyrumClient {
       this.pending.set(requestId, {
         resolve: (msg) => {
           clearTimeout(timer);
+          if (msg.type !== type) {
+            reject(new Error(`${type} failed: mismatched response type ${msg.type}`));
+            return;
+          }
           if (!msg.ok) {
             reject(new Error(`${type} failed: ${msg.error.code}: ${msg.error.message}`));
             return;
@@ -766,6 +881,18 @@ export class TyrumClient {
 
       this.send(request);
     });
+  }
+
+  private requestVoid(type: string, payload: unknown): Promise<void> {
+    return this.request(type, payload, WS_ACK_RESULT);
+  }
+
+  private emitProtocolEvent(event: WsEventT): void {
+    const eventType = event.type;
+    this.emitter.emit(eventType, event);
+    if (eventType === "plan.update") {
+      this.emitter.emit("plan_update", event);
+    }
   }
 
   private handleMessage(raw: string): void {
@@ -798,19 +925,9 @@ export class TyrumClient {
       if (!this.markEventSeen(msg.event_id)) {
         return;
       }
-      if (msg.type === "plan.update") {
-        const evt = WsPlanUpdateEvent.safeParse(msg);
-        if (evt.success) {
-          this.emitter.emit("plan_update", evt.data);
-        }
-        return;
-      }
-      if (msg.type === "error") {
-        const evt = WsErrorEvent.safeParse(msg);
-        if (evt.success) {
-          this.emitter.emit("error", evt.data);
-        }
-        return;
+      const evt = WsEvent.safeParse(msg);
+      if (evt.success) {
+        this.emitProtocolEvent(evt.data);
       }
       return;
     }
