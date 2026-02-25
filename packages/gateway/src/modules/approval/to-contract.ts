@@ -1,18 +1,10 @@
 import { Approval, ApprovalKind, ApprovalStatus, Lane, TyrumKey } from "@tyrum/schemas";
 import type { Approval as ApprovalT, ApprovalResolution as ApprovalResolutionT } from "@tyrum/schemas";
+import { normalizeDbDateTime } from "../../utils/db-time.js";
 import type { ApprovalRow } from "./dal.js";
 
-function normalizeSqliteDateTime(value: string): string {
-  // SQLite `datetime('now')` format: "YYYY-MM-DD HH:MM:SS" (UTC).
-  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) {
-    return `${value.replace(" ", "T")}Z`;
-  }
-  return value;
-}
-
 function toIso(value: string | null): string | null {
-  if (value === null) return null;
-  return normalizeSqliteDateTime(value);
+  return normalizeDbDateTime(value);
 }
 
 function normalizeKind(raw: string): ApprovalT["kind"] {
@@ -69,7 +61,7 @@ function buildScope(row: ApprovalRow): ApprovalT["scope"] | undefined {
 
 export function toApprovalContract(row: ApprovalRow): ApprovalT | undefined {
   const status = normalizeStatus(row.status);
-  const createdAt = normalizeSqliteDateTime(row.created_at);
+  const createdAt = normalizeDbDateTime(row.created_at);
   const respondedAt = toIso(row.responded_at);
   const expiresAt = toIso(row.expires_at);
 
@@ -91,4 +83,3 @@ export function toApprovalContract(row: ApprovalRow): ApprovalT | undefined {
   }
   return parsed.data;
 }
-

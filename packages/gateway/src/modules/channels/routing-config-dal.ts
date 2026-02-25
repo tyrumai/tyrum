@@ -2,6 +2,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { RoutingConfig as RoutingConfigSchema } from "@tyrum/schemas";
 import type { RoutingConfig as RoutingConfigT } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
+import { normalizeDbDateTime } from "../../utils/db-time.js";
+import { safeJsonParse } from "../../utils/json.js";
 import { insertPlannerEventNext, retryOnUniqueViolation } from "../planner/planner-events.js";
 
 export type RoutingConfig = RoutingConfigT;
@@ -23,23 +25,6 @@ interface RawRoutingConfigRow {
   created_by_json: string;
   reason: string | null;
   reverted_from_revision: number | null;
-}
-
-function normalizeTime(value: string | Date): string {
-  const raw = value instanceof Date ? value.toISOString() : value;
-  // SQLite `datetime('now')` format: "YYYY-MM-DD HH:MM:SS" (UTC).
-  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(raw)) {
-    return `${raw.replace(" ", "T")}Z`;
-  }
-  return raw;
-}
-
-function parseJsonOrFallback(raw: string, fallback: unknown): unknown {
-  try {
-    return JSON.parse(raw) as unknown;
-  } catch {
-    return fallback;
-  }
 }
 
 function parseRoutingConfigOrThrow(row: RawRoutingConfigRow): RoutingConfig {
@@ -67,8 +52,8 @@ function rowToRevision(row: RawRoutingConfigRow): RoutingConfigRevision {
     revision: row.revision,
     config,
     configSha256,
-    createdAt: normalizeTime(row.created_at),
-    createdBy: parseJsonOrFallback(row.created_by_json, {}),
+    createdAt: normalizeDbDateTime(row.created_at),
+    createdBy: safeJsonParse(row.created_by_json, {}),
     reason: row.reason ?? undefined,
     revertedFromRevision: row.reverted_from_revision ?? undefined,
   };

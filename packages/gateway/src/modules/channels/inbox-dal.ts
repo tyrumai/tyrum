@@ -2,6 +2,7 @@ import { NormalizedThreadMessage as NormalizedThreadMessageSchema, normalizedCon
 import type { NormalizedThreadMessage } from "@tyrum/schemas";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
+import { safeJsonParse } from "../../utils/json.js";
 import { buildChannelSourceKey, DEFAULT_CHANNEL_ACCOUNT_ID, parseChannelSourceKey } from "./interface.js";
 
 export type ChannelInboxStatus = "queued" | "processing" | "completed" | "failed";
@@ -135,14 +136,6 @@ interface RawChannelInboundDedupeRow {
 function normalizeTime(value: string | Date | null): string | null {
   if (value === null) return null;
   return value instanceof Date ? value.toISOString() : value;
-}
-
-function safeJsonParse(raw: string, fallback: unknown): unknown {
-  try {
-    return JSON.parse(raw) as unknown;
-  } catch {
-    return fallback;
-  }
 }
 
 function extractTextFromNormalizedMessage(normalized: NormalizedThreadMessage): {
