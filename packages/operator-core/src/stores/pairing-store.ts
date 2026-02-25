@@ -14,7 +14,10 @@ export interface PairingState {
 
 export interface PairingStore extends ExternalStore<PairingState> {
   refresh(): Promise<void>;
-  approve(pairingId: number, input: { trust_level: string; capability_allowlist: unknown[]; reason?: string }): Promise<Pairing>;
+  approve(
+    pairingId: number,
+    input: { trust_level: string; capability_allowlist: unknown[]; reason?: string },
+  ): Promise<Pairing>;
   deny(pairingId: number, input?: { reason?: string }): Promise<Pairing>;
   revoke(pairingId: number, input?: { reason?: string }): Promise<Pairing>;
 }
@@ -119,4 +122,3 @@ export function createPairingStore(http: OperatorHttpClient): {
     handlePairingUpsert,
   };
 }
-

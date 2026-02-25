@@ -34,4 +34,3 @@ export function createStore<T>(initial: T): {
     },
   };
 }
-

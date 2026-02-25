@@ -151,4 +151,3 @@ export function createStatusStore(http: OperatorHttpClient): {
     handlePresencePruned,
   };
 }
-

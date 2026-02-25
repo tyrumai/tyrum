@@ -40,4 +40,3 @@ export function httpAuthForAuth(auth: OperatorAuthStrategy): TyrumHttpAuthStrate
       return { type: "bearer", token: auth.token };
   }
 }
-

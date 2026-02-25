@@ -23,7 +23,10 @@ All domain stores implement a minimal “external store” interface compatible 
 ```ts
 import { useSyncExternalStore } from "react";
 
-const connection = useSyncExternalStore(core.connectionStore.subscribe, core.connectionStore.getSnapshot);
+const connection = useSyncExternalStore(
+  core.connectionStore.subscribe,
+  core.connectionStore.getSnapshot,
+);
 ```
 
 ## Auth strategies
@@ -119,4 +122,3 @@ On WS `connected`, operator-core triggers a best-effort re-sync:
 - `statusStore.refreshUsage()`
 
 Live WS events continue to upsert domain state between refreshes.
-

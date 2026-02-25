@@ -18,4 +18,3 @@ export type { ConnectionState, ConnectionStore } from "./stores/connection-store
 export type { Pairing, PairingState, PairingStore } from "./stores/pairing-store.js";
 export type { RunsState, RunsStore } from "./stores/runs-store.js";
 export type { OperatorPresenceEntry, StatusState, StatusStore } from "./stores/status-store.js";
-

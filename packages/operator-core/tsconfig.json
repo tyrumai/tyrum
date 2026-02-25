@@ -7,4 +7,3 @@
   "include": ["src"],
   "references": [{ "path": "../client" }]
 }
-

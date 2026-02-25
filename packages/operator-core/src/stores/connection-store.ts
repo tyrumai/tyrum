@@ -82,4 +82,3 @@ export function createConnectionStore(ws: OperatorWsClient): {
     handleTransportError,
   };
 }
-
