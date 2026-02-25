@@ -20,6 +20,10 @@ import { isAuthProfilesEnabled } from "../models/auth-profiles-enabled.js";
 import { LaneQueueModeOverrideDal } from "../lanes/queue-mode-override-dal.js";
 import { SessionSendPolicyOverrideDal } from "../channels/send-policy-override-dal.js";
 import { parseChannelSourceKey } from "../channels/interface.js";
+import { resolveWorkspaceId } from "../workspace/id.js";
+import { buildAgentTurnKey, encodeTurnKeyPart } from "../agent/turn-key.js";
+import { randomUUID } from "node:crypto";
+import { ExecutionEngine } from "../execution/engine.js";
 
 export type CommandExecuteResult = {
   output: string;
@@ -127,17 +131,32 @@ async function resolveKeyLane(db: SqlDb, ctx: CommandDeps["commandContext"] | un
   const agentId = ctx?.agentId?.trim();
   const agentKeyPrefix = agentId ? `agent:${agentId}:` : undefined;
 
+  const sources: Array<{ exact: string; like?: string }> = [{ exact: channel, like: `${channel}:%` }];
+  if (channel.includes(":")) {
+    try {
+      const parsed = parseChannelSourceKey(channel);
+      if (parsed.accountId === "default") {
+        sources.push({ exact: parsed.connector });
+      }
+    } catch {
+      // ignore parse errors; fall back to matching the provided channel only
+    }
+  }
+
+  const sourceClause = sources.map((entry) => (entry.like ? "(source = ? OR source LIKE ?)" : "(source = ?)")).join(" OR ");
+  const sourceArgs = sources.flatMap((entry) => (entry.like ? [entry.exact, entry.like] : [entry.exact]));
+
   const row = await db.get<{ key: string; lane: string }>(
     `SELECT key, lane
      FROM channel_inbox
      WHERE thread_id = ?
-       AND (source = ? OR source LIKE ?)
+       AND (${sourceClause})
        ${agentKeyPrefix ? "AND substr(key, 1, ?) = ?" : ""}
      ORDER BY received_at_ms DESC, inbox_id DESC
      LIMIT 1`,
     agentKeyPrefix
-      ? [threadId, channel, `${channel}:%`, agentKeyPrefix.length, agentKeyPrefix]
-      : [threadId, channel, `${channel}:%`],
+      ? [threadId, ...sourceArgs, agentKeyPrefix.length, agentKeyPrefix]
+      : [threadId, ...sourceArgs],
   );
   if (!row?.key) return undefined;
   return { key: row.key, lane: row.lane };
@@ -158,6 +177,136 @@ function resolveAgentId(ctx: CommandDeps["commandContext"] | undefined): string 
   }
 
   return "default";
+}
+
+function buildDefaultCommandKey(input: {
+  agentId: string;
+  channel: string;
+  threadId: string;
+}): string {
+  const workspaceId = resolveWorkspaceId();
+  return buildAgentTurnKey({
+    agentId: input.agentId,
+    workspaceId,
+    channel: input.channel.trim(),
+    containerKind: "channel",
+    threadId: input.threadId.trim(),
+  });
+}
+
+function escapeLikePattern(value: string): string {
+  return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
+}
+
+async function resolveStoredKeyLaneByChannelThread(
+  db: SqlDb,
+  input: { agentId: string; channel: string; threadId: string },
+): Promise<{ key: string; lane: string } | undefined> {
+  const safeAgentId = escapeLikePattern(encodeTurnKeyPart(input.agentId.trim()));
+  const safeChannel = escapeLikePattern(encodeTurnKeyPart(input.channel.trim()));
+  const safeThread = escapeLikePattern(encodeTurnKeyPart(input.threadId.trim()));
+  const keyPattern = `agent:${safeAgentId}:${safeChannel}:%:%:${safeThread}`;
+
+  const runRow = await db.get<{ key: string; lane: string }>(
+    `SELECT key, lane
+     FROM execution_runs
+     WHERE key LIKE ? ESCAPE '\\'
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [keyPattern],
+  );
+  if (runRow?.key) return runRow;
+
+  const queueRow = await db.get<{ key: string; lane: string }>(
+    `SELECT key, lane
+     FROM lane_queue_mode_overrides
+     WHERE key LIKE ? ESCAPE '\\'
+     ORDER BY updated_at_ms DESC
+     LIMIT 1`,
+    [keyPattern],
+  );
+  if (queueRow?.key) return queueRow;
+
+  const sendRow = await db.get<{ key: string }>(
+    `SELECT key
+     FROM session_send_policy_overrides
+     WHERE key LIKE ? ESCAPE '\\'
+     ORDER BY updated_at_ms DESC
+     LIMIT 1`,
+    [keyPattern],
+  );
+  if (sendRow?.key) return { key: sendRow.key, lane: "main" };
+
+  return undefined;
+}
+
+async function resolveFallbackKeyLane(
+  db: SqlDb,
+  ctx: CommandDeps["commandContext"] | undefined,
+  agentId: string,
+): Promise<{ key: string; lane: string } | undefined> {
+  const channelThread = await resolveChannelThread(db, ctx);
+  if (!channelThread) return undefined;
+
+  const existing = await resolveStoredKeyLaneByChannelThread(db, {
+    agentId,
+    channel: channelThread.channel,
+    threadId: channelThread.threadId,
+  });
+  if (existing) return existing;
+
+  return {
+    key: buildDefaultCommandKey({
+      agentId,
+      channel: channelThread.channel,
+      threadId: channelThread.threadId,
+    }),
+    lane: "main",
+  };
+}
+
+async function cancelRunsAndClearQueuedInbox(input: {
+  db: SqlDb;
+  policyService: CommandDeps["policyService"];
+  key: string;
+  lane: string;
+  runReason: string;
+  inboxReason: string;
+}): Promise<{ cancelledRuns: number; clearedInbox: number }> {
+  const engine = new ExecutionEngine({
+    db: input.db,
+    policyService: input.policyService,
+    eventsEnabled: true,
+  });
+
+  const activeRuns = await input.db.all<{ run_id: string }>(
+    `SELECT run_id
+     FROM execution_runs
+     WHERE key = ? AND lane = ? AND status IN ('queued', 'running', 'paused')
+     ORDER BY created_at DESC`,
+    [input.key, input.lane],
+  );
+
+  let cancelledRuns = 0;
+  for (const row of activeRuns) {
+    const status = await engine.cancelRun(row.run_id, input.runReason);
+    if (status === "cancelled") cancelledRuns += 1;
+  }
+
+  const nowIso = new Date().toISOString();
+  const cleared = await input.db.run(
+    `UPDATE channel_inbox
+     SET status = 'failed',
+         lease_owner = NULL,
+         lease_expires_at_ms = NULL,
+         processed_at = COALESCE(processed_at, ?),
+         error = COALESCE(error, ?),
+         reply_text = COALESCE(reply_text, '')
+     WHERE status = 'queued' AND key = ? AND lane = ?`,
+    [nowIso, input.inboxReason, input.key, input.lane],
+  );
+
+  return { cancelledRuns, clearedInbox: cleared.changes };
 }
 
 async function resolveChannelThread(db: SqlDb, ctx: CommandDeps["commandContext"] | undefined): Promise<{ channel: string; threadId: string } | undefined> {
@@ -287,6 +436,10 @@ function helpText(): string {
   return [
     "Available commands:",
     "- /help",
+    "- /new",
+    "- /reset",
+    "- /stop",
+    "- /compact",
     "- /status",
     "- /presence",
     "- /approvals [pending|approved|denied|expired]",
@@ -317,6 +470,166 @@ export async function executeCommand(raw: string, deps: CommandDeps): Promise<Co
 
   if (cmd === "help" || cmd === "?") {
     return { output: helpText(), data: { commands: helpText() } };
+  }
+
+  if (cmd === "new") {
+    if (!deps.db) {
+      return { output: "Sessions are not available on this gateway instance.", data: null };
+    }
+
+    const ctx = deps.commandContext;
+    const agentId = resolveAgentId(ctx);
+    const channelRaw = ctx?.channel?.trim();
+    if (!channelRaw) {
+      return { output: "Usage: /new (requires channel context)", data: null };
+    }
+
+    let channel = channelRaw;
+    try {
+      channel = parseChannelSourceKey(channelRaw).connector;
+    } catch {
+      const idx = channel.indexOf(":");
+      if (idx > 0) channel = channel.slice(0, idx);
+    }
+    if (!channel) {
+      return { output: "Usage: /new (requires channel context)", data: null };
+    }
+
+    const threadId = `${channel}-${randomUUID()}`;
+    const sessionDal = new SessionDal(deps.db);
+    const session = await sessionDal.getOrCreate(channel, threadId, agentId);
+
+    const payload = {
+      agent_id: agentId,
+      channel,
+      thread_id: threadId,
+      session_id: session.session_id,
+    };
+    return { output: jsonBlock(payload), data: payload };
+  }
+
+  if (cmd === "compact") {
+    if (!deps.db) {
+      return { output: "Sessions are not available on this gateway instance.", data: null };
+    }
+
+    const ctx = deps.commandContext;
+    const agentId = resolveAgentId(ctx);
+    const resolved = await resolveChannelThread(deps.db, ctx);
+    if (!resolved) {
+      return { output: "Usage: /compact (requires key or channel/thread context)", data: null };
+    }
+    const { channel, threadId } = resolved;
+
+    const sessionDal = new SessionDal(deps.db);
+    const session = await sessionDal.getOrCreate(channel, threadId, agentId);
+    const compacted = await sessionDal.compact({ sessionId: session.session_id, agentId, keepLastMessages: 8 });
+
+    const payload = {
+      agent_id: agentId,
+      session_id: session.session_id,
+      dropped_messages: compacted.droppedMessages,
+      kept_messages: compacted.keptMessages,
+    };
+    return { output: jsonBlock(payload), data: payload };
+  }
+
+  if (cmd === "stop") {
+    if (!deps.db) {
+      return { output: "Stop is not available on this gateway instance.", data: null };
+    }
+
+    const agentId = resolveAgentId(deps.commandContext);
+    const resolved =
+      (await resolveKeyLane(deps.db, deps.commandContext)) ??
+      (await resolveFallbackKeyLane(deps.db, deps.commandContext, agentId));
+    if (!resolved) {
+      return { output: "Usage: /stop (requires key or channel/thread context)", data: null };
+    }
+    const { key, lane } = resolved;
+
+    const stopped = await cancelRunsAndClearQueuedInbox({
+      db: deps.db,
+      policyService: deps.policyService,
+      key,
+      lane,
+      runReason: "stopped by /stop",
+      inboxReason: "cancelled by /stop",
+    });
+
+    const payload = {
+      key,
+      lane,
+      cancelled_runs: stopped.cancelledRuns,
+      cleared_inbox: stopped.clearedInbox,
+    };
+    return { output: jsonBlock(payload), data: payload };
+  }
+
+  if (cmd === "reset") {
+    if (!deps.db) {
+      return { output: "Sessions are not available on this gateway instance.", data: null };
+    }
+
+    const ctx = deps.commandContext;
+    const agentId = resolveAgentId(ctx);
+    const resolved = await resolveChannelThread(deps.db, ctx);
+    if (!resolved) {
+      return { output: "Usage: /reset (requires key or channel/thread context)", data: null };
+    }
+    const { channel, threadId } = resolved;
+
+    const sessionDal = new SessionDal(deps.db);
+    const session = await sessionDal.getOrCreate(channel, threadId, agentId);
+
+    // Best-effort: stop active execution + clear queued followups (if we can resolve key/lane).
+    const keyLane =
+      (await resolveKeyLane(deps.db, ctx)) ??
+      (await resolveFallbackKeyLane(deps.db, ctx, agentId)) ?? {
+        key: buildDefaultCommandKey({ agentId, channel, threadId }),
+        lane: "main",
+      };
+    if (keyLane?.key) {
+      await cancelRunsAndClearQueuedInbox({
+        db: deps.db,
+        policyService: deps.policyService,
+        key: keyLane.key,
+        lane: keyLane.lane,
+        runReason: "reset by /reset",
+        inboxReason: "cancelled by /reset",
+      });
+    }
+
+    await deps.db.transaction(async (tx) => {
+      const sessionDalTx = new SessionDal(tx);
+      const didReset = await sessionDalTx.reset(session.session_id, agentId);
+      if (!didReset) {
+        throw new Error(`Session ${session.session_id} not found`);
+      }
+
+      await tx.run(
+        `DELETE FROM session_model_overrides
+         WHERE agent_id = ? AND session_id = ?`,
+        [agentId, session.session_id],
+      );
+      await tx.run(
+        `DELETE FROM session_provider_pins
+         WHERE agent_id = ? AND session_id = ?`,
+        [agentId, session.session_id],
+      );
+
+      const queueOverrideDal = new LaneQueueModeOverrideDal(tx);
+      await queueOverrideDal.clear({ key: keyLane.key, lane: keyLane.lane });
+
+      const sendOverrideDal = new SessionSendPolicyOverrideDal(tx);
+      await sendOverrideDal.clear({ key: keyLane.key });
+    });
+
+    const payload = {
+      agent_id: agentId,
+      session_id: session.session_id,
+    };
+    return { output: jsonBlock(payload), data: payload };
   }
 
   if (cmd === "status") {

@@ -528,6 +528,38 @@ describe("missing slash commands", () => {
     });
   });
 
+  it("supports /queue using channel:default + thread context (legacy source compat)", async () => {
+    db = openTestSqliteDb();
+
+    const key = "agent:default:telegram:default:dm:chat-1";
+    const lane = "main";
+
+    await db.run(
+      `INSERT INTO channel_inbox (
+         source,
+         thread_id,
+         message_id,
+         key,
+         lane,
+         received_at_ms,
+         payload_json,
+         status
+       ) VALUES (?, ?, ?, ?, ?, ?, '{}', 'completed')`,
+      ["telegram", "chat-1", "msg-1", key, lane, 1_000],
+    );
+
+    const result = await executeCommand("/queue interrupt", {
+      db,
+      commandContext: { channel: "telegram:default", threadId: "chat-1" },
+    });
+
+    expect(result.data).toMatchObject({
+      key,
+      lane,
+      queue_mode: "interrupt",
+    });
+  });
+
   it("supports /queue (show)", async () => {
     db = openTestSqliteDb();
 
@@ -616,6 +648,64 @@ describe("missing slash commands", () => {
     });
 
     expect(result.data).toMatchObject({ key, send_policy: "off" });
+  });
+
+  it("resolves /send with channel:default to legacy/default source only", async () => {
+    db = openTestSqliteDb();
+
+    const defaultKey = "agent:default:telegram:default:dm:chat-1";
+    const workKey = "agent:default:telegram:work:dm:chat-1";
+
+    await db.run(
+      `INSERT INTO channel_inbox (
+         source,
+         thread_id,
+         message_id,
+         key,
+         lane,
+         received_at_ms,
+         payload_json,
+         status
+       ) VALUES (?, ?, ?, ?, 'main', ?, '{}', 'completed')`,
+      ["telegram", "chat-1", "msg-default", defaultKey, 1_000],
+    );
+
+    await db.run(
+      `INSERT INTO channel_inbox (
+         source,
+         thread_id,
+         message_id,
+         key,
+         lane,
+         received_at_ms,
+         payload_json,
+         status
+       ) VALUES (?, ?, ?, ?, 'main', ?, '{}', 'completed')`,
+      ["telegram:work", "chat-1", "msg-work", workKey, 2_000],
+    );
+
+    const result = await executeCommand("/send off", {
+      db,
+      commandContext: { channel: "telegram:default", threadId: "chat-1" },
+    });
+
+    expect(result.data).toMatchObject({ key: defaultKey, send_policy: "off" });
+
+    const storedDefault = await db.get<{ send_policy: string }>(
+      `SELECT send_policy
+       FROM session_send_policy_overrides
+       WHERE key = ?`,
+      [defaultKey],
+    );
+    expect(storedDefault?.send_policy).toBe("off");
+
+    const storedWork = await db.get<{ send_policy: string }>(
+      `SELECT send_policy
+       FROM session_send_policy_overrides
+       WHERE key = ?`,
+      [workKey],
+    );
+    expect(storedWork).toBeUndefined();
   });
 
   it("resolves /send using agent_id + channel/thread context", async () => {
