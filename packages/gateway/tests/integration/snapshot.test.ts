@@ -113,4 +113,35 @@ describe("snapshot routes", () => {
       process.env["TYRUM_SNAPSHOT_IMPORT_ENABLED"] = originalFlag;
     }
   });
+
+  it("declares artifact byte inclusion policy and retention metadata in snapshot bundles", async () => {
+    const { app, container } = await createTestApp();
+
+    const exportRes = await app.request("/snapshot/export");
+    expect(exportRes.status).toBe(200);
+    const bundle = (await exportRes.json()) as Record<string, unknown>;
+
+    expect(bundle).toMatchObject({
+      format: "tyrum.snapshot.v2",
+      artifacts: {
+        bytes: { included: false, included_sensitivity: [] },
+        retention: {
+          execution_artifacts: {
+            included: true,
+            has_retention_expires_at: true,
+            has_bytes_deleted_at: true,
+            has_bytes_deleted_reason: true,
+          },
+        },
+      },
+    });
+
+    const tables = bundle["tables"] as Record<string, { columns?: unknown }> | undefined;
+    const executionArtifacts = tables?.["execution_artifacts"];
+    expect(executionArtifacts?.columns).toEqual(
+      expect.arrayContaining(["retention_expires_at", "bytes_deleted_at", "bytes_deleted_reason"]),
+    );
+
+    await container.db.close();
+  });
 });

@@ -260,11 +260,23 @@ export function createSnapshotRoutes(deps: SnapshotRouteDeps): Hono {
         tablesData[table] = await exportTable(tx, table);
       }
 
+      const executionArtifactsColumns = tablesData["execution_artifacts"]?.columns ?? [];
       return SnapshotBundle.parse({
-        format: "tyrum.snapshot.v1",
+        format: "tyrum.snapshot.v2",
         exported_at: new Date().toISOString(),
         gateway_version: deps.version,
         db_kind: deps.db.kind,
+        artifacts: {
+          bytes: { included: false, included_sensitivity: [] },
+          retention: {
+            execution_artifacts: {
+              included: Boolean(tablesData["execution_artifacts"]),
+              has_retention_expires_at: executionArtifactsColumns.includes("retention_expires_at"),
+              has_bytes_deleted_at: executionArtifactsColumns.includes("bytes_deleted_at"),
+              has_bytes_deleted_reason: executionArtifactsColumns.includes("bytes_deleted_reason"),
+            },
+          },
+        },
         tables: tablesData,
       });
     });
