@@ -40,6 +40,7 @@ import type { SecretProvider } from "../secret/provider.js";
 import { collectSecretHandleIds } from "../secret/collect-secret-handle-ids.js";
 import { releaseLaneLease } from "../lanes/lane-lease.js";
 import { enqueueWsBroadcastMessage } from "../../ws/outbox.js";
+import { normalizePositiveInt } from "./normalize-positive-int.js";
 
 export interface StepResult {
   success: boolean;
@@ -149,13 +150,6 @@ function normalizeNonnegativeInt(value: unknown): number | undefined {
   if (!Number.isFinite(value)) return undefined;
   const n = Math.floor(value);
   if (n < 0) return undefined;
-  return n;
-}
-
-function normalizePositiveInt(value: unknown): number | undefined {
-  const n = normalizeNonnegativeInt(value);
-  if (n === undefined) return undefined;
-  if (n <= 0) return undefined;
   return n;
 }
 

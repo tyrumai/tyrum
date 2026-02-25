@@ -9,6 +9,7 @@ import type { Logger } from "../observability/logger.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import type { SecretProvider } from "../secret/provider.js";
 import type { StepExecutor, StepResult } from "./engine.js";
+import { normalizePositiveInt } from "./normalize-positive-int.js";
 
 const DEFAULT_MAX_OUTPUT_BYTES = 32_768;
 const MAX_OUTPUT_BYTES_HARD_LIMIT = 512_000;
@@ -16,7 +17,10 @@ const DEFAULT_HTTP_TIMEOUT_MS = 30_000;
 const DEFAULT_EXEC_TIMEOUT_MS = 60_000;
 const MAX_EXEC_TIMEOUT_MS = 300_000;
 const SECRET_HANDLE_PREFIX = "secret:";
-const OUTPUT_SCHEMA_VALIDATOR = new Ajv2019({ allErrors: true, strict: false, unevaluated: true });
+
+function createOutputSchemaValidator(): Ajv2019 {
+  return new Ajv2019({ allErrors: true, strict: false, unevaluated: true });
+}
 
 type PlaybookOutputKind = "text" | "json";
 type JsonSchema = boolean | Record<string, unknown>;
@@ -24,13 +28,6 @@ type JsonSchema = boolean | Record<string, unknown>;
 interface PlaybookOutputContract {
   kind: PlaybookOutputKind;
   schema?: JsonSchema;
-}
-
-function normalizePositiveInt(value: unknown): number | undefined {
-  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
-  const normalized = Math.floor(value);
-  if (normalized <= 0) return undefined;
-  return normalized;
 }
 
 function resolveMaxOutputBytes(args: Record<string, unknown>): number {
@@ -64,9 +61,10 @@ function parsePlaybookOutputContract(args: Record<string, unknown>): PlaybookOut
 
 function validateJsonAgainstSchema(value: unknown, schema: JsonSchema): string | undefined {
   try {
-    const validate = OUTPUT_SCHEMA_VALIDATOR.compile(schema);
+    const validator = createOutputSchemaValidator();
+    const validate = validator.compile(schema);
     if (validate(value)) return undefined;
-    return OUTPUT_SCHEMA_VALIDATOR.errorsText(validate.errors, { separator: "; " });
+    return validator.errorsText(validate.errors, { separator: "; " });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return `invalid output schema: ${message}`;
@@ -92,7 +90,10 @@ function enforceJsonOutputContract(
   if (contract.schema !== undefined) {
     const schemaError = validateJsonAgainstSchema(parsed, contract.schema);
     if (schemaError) {
-      return { error: `Output contract violated: ${source} failed schema validation (${schemaError})` };
+      return {
+        parsed,
+        error: `Output contract violated: ${source} failed schema validation (${schemaError})`,
+      };
     }
   }
 
@@ -353,13 +354,14 @@ class LocalStepExecutor implements StepExecutor {
 
       const outputContract = parsePlaybookOutputContract(args);
       const contract = enforceJsonOutputContract(outputContract, bodyText, "response body", truncated);
+      if (contract.parsed !== undefined) {
+        evidence.json = contract.parsed;
+      }
       if (contract.error) {
         return { success: false, error: contract.error, result, evidence };
       }
 
-      if (contract.parsed !== undefined) {
-        evidence.json = contract.parsed;
-      } else {
+      if (contract.parsed === undefined) {
         if (isLikelyJson(contentType, bodyText)) {
           const parsed = tryParseJson(bodyText);
           if (parsed !== undefined) {
