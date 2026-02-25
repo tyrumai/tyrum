@@ -107,3 +107,9 @@ If a deployment supports “forget” or data deletion requests, it MUST define:
 - which durable records are deleted vs anonymized vs retained for audit,
 - how linked artifacts are handled (metadata and bytes), and
 - how the system proves deletion occurred (auditable events).
+
+Implementation note (gateway audit streams):
+
+- The gateway exposes `POST /audit/forget` to process explicit forget requests for audit streams stored in `planner_events`.
+- Requests must include an explicit decision (`delete`, `anonymize`, or `retain`) and a confirmation string.
+- The gateway records a `forget.proof` event with the decision and outcome; for destructive decisions it preserves hash-chain continuity via `prev_hash` linkage without retaining prior content.

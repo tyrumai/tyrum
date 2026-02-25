@@ -116,88 +116,203 @@ describe("Audit routes", () => {
   });
 
   describe("POST /audit/forget", () => {
-    it("deletes events and inserts a deletion event", async () => {
-      await appendEvents("plan-1", 3);
-
+    it("requires an explicit confirm", async () => {
       const res = await app.request("/audit/forget", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           entity_type: "plan",
           entity_id: "plan-1",
+          decision: "delete",
+        }),
+      });
+
+      expect(res.status).toBe(400);
+    });
+
+    it("requires an explicit decision", async () => {
+      const res = await app.request("/audit/forget", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          confirm: "FORGET",
+          entity_type: "plan",
+          entity_id: "plan-1",
+        }),
+      });
+
+      expect(res.status).toBe(400);
+    });
+
+    it("deletes events and inserts a proof event for decision=delete", async () => {
+      await appendEvents("plan-1", 3);
+      const eventsBefore = await eventLog.getEventsForVerification("plan-1");
+      const lastHashBefore = eventsBefore[eventsBefore.length - 1]!.event_hash;
+
+      const res = await app.request("/audit/forget", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          confirm: "FORGET",
+          entity_type: "plan",
+          entity_id: "plan-1",
+          decision: "delete",
         }),
       });
 
       expect(res.status).toBe(200);
       const body = (await res.json()) as {
+        decision: string;
         deleted_count: number;
-        deletion_event_id: number;
+        proof_event_id: number;
       };
+      expect(body.decision).toBe("delete");
       expect(body.deleted_count).toBe(3);
-      expect(body.deletion_event_id).toBeGreaterThan(0);
+      expect(body.proof_event_id).toBeGreaterThan(0);
 
-      // Verify the deletion event exists
+      // Verify the proof event exists
       const remaining = await eventLog.getEventsForVerification("plan-1");
       expect(remaining).toHaveLength(1);
 
-      const deletionEvent = remaining[0]!;
-      const action = JSON.parse(deletionEvent.action) as {
+      const proofEvent = remaining[0]!;
+      const action = JSON.parse(proofEvent.action) as {
         type: string;
+        decision: string;
         entity_type: string;
         entity_id: string;
         deleted_count: number;
       };
-      expect(action.type).toBe("deletion");
+      expect(action.type).toBe("forget.proof");
+      expect(action.decision).toBe("delete");
       expect(action.entity_type).toBe("plan");
       expect(action.entity_id).toBe("plan-1");
       expect(action.deleted_count).toBe(3);
+
+      // The proof event's prev_hash should link to the old chain
+      expect(proofEvent.prev_hash).toBe(lastHashBefore);
+      expect(proofEvent.event_hash).toMatch(/^[0-9a-f]{64}$/);
     });
 
-    it("deletion event has valid hash chain", async () => {
+    it("allows verifying the original chain plus the delete proof event", async () => {
       await appendEvents("plan-1", 2);
-
-      // Get the last event's hash before forget
       const eventsBefore = await eventLog.getEventsForVerification("plan-1");
-      const lastHashBefore = eventsBefore[eventsBefore.length - 1]!.event_hash;
 
-      await app.request("/audit/forget", {
+      const forgetRes = await app.request("/audit/forget", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          confirm: "FORGET",
           entity_type: "plan",
           entity_id: "plan-1",
+          decision: "delete",
         }),
       });
+      expect(forgetRes.status).toBe(200);
 
       const remaining = await eventLog.getEventsForVerification("plan-1");
       expect(remaining).toHaveLength(1);
 
-      // The deletion event's prev_hash should link to the old chain
-      expect(remaining[0]!.prev_hash).toBe(lastHashBefore);
-      // Its own hash should be valid
-      expect(remaining[0]!.event_hash).toMatch(/^[0-9a-f]{64}$/);
+      const verifyRes = await app.request("/audit/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ events: [...eventsBefore, remaining[0]!] }),
+      });
+      expect(verifyRes.status).toBe(200);
+      const body = (await verifyRes.json()) as { valid: boolean; checked_count: number };
+      expect(body.valid).toBe(true);
+      expect(body.checked_count).toBe(3);
     });
 
-    it("returns zero for nonexistent entity", async () => {
+    it("deletes events and inserts a proof event for decision=anonymize", async () => {
+      await appendEvents("plan-1", 2);
+
+      const eventsBefore = await eventLog.getEventsForVerification("plan-1");
+      const lastHashBefore = eventsBefore[eventsBefore.length - 1]!.event_hash;
+
       const res = await app.request("/audit/forget", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          confirm: "FORGET",
           entity_type: "plan",
-          entity_id: "nonexistent",
+          entity_id: "plan-1",
+          decision: "anonymize",
         }),
       });
 
       expect(res.status).toBe(200);
-      const body = (await res.json()) as { deleted_count: number };
+      const remaining = await eventLog.getEventsForVerification("plan-1");
+      expect(remaining).toHaveLength(1);
+
+      expect(remaining[0]!.prev_hash).toBe(lastHashBefore);
+      expect(remaining[0]!.event_hash).toMatch(/^[0-9a-f]{64}$/);
+
+      const action = JSON.parse(remaining[0]!.action) as { type: string; decision: string };
+      expect(action.type).toBe("forget.proof");
+      expect(action.decision).toBe("anonymize");
+    });
+
+    it("appends a proof event and leaves events intact for decision=retain", async () => {
+      await appendEvents("plan-1", 2);
+      const eventsBefore = await eventLog.getEventsForVerification("plan-1");
+      const lastHashBefore = eventsBefore[eventsBefore.length - 1]!.event_hash;
+
+      const res = await app.request("/audit/forget", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          confirm: "FORGET",
+          entity_type: "plan",
+          entity_id: "plan-1",
+          decision: "retain",
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { decision: string; deleted_count: number; proof_event_id: number };
+      expect(body.decision).toBe("retain");
       expect(body.deleted_count).toBe(0);
+      expect(body.proof_event_id).toBeGreaterThan(0);
+
+      const eventsAfter = await eventLog.getEventsForVerification("plan-1");
+      expect(eventsAfter).toHaveLength(3);
+      expect(eventsAfter[2]!.prev_hash).toBe(lastHashBefore);
+      expect(eventsAfter[2]!.event_hash).toMatch(/^[0-9a-f]{64}$/);
+      const action = JSON.parse(eventsAfter[2]!.action) as { type: string; decision: string };
+      expect(action.type).toBe("forget.proof");
+      expect(action.decision).toBe("retain");
+    });
+
+    it("inserts a proof event even when the target has no existing events", async () => {
+      const res = await app.request("/audit/forget", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          confirm: "FORGET",
+          entity_type: "plan",
+          entity_id: "nonexistent",
+          decision: "delete",
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { deleted_count: number; proof_event_id: number };
+      expect(body.deleted_count).toBe(0);
+      expect(body.proof_event_id).toBeGreaterThan(0);
+
+      const remaining = await eventLog.getEventsForVerification("nonexistent");
+      expect(remaining).toHaveLength(1);
+      const action = JSON.parse(remaining[0]!.action) as { type: string; decision: string; deleted_count: number };
+      expect(action.type).toBe("forget.proof");
+      expect(action.decision).toBe("delete");
+      expect(action.deleted_count).toBe(0);
     });
 
     it("returns 400 for missing fields", async () => {
       const res = await app.request("/audit/forget", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ entity_type: "plan" }),
+        body: JSON.stringify({ confirm: "FORGET", entity_type: "plan", decision: "delete" }),
       });
 
       expect(res.status).toBe(400);
@@ -211,8 +326,10 @@ describe("Audit routes", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          confirm: "FORGET",
           entity_type: "plan",
           entity_id: "plan-1",
+          decision: "delete",
         }),
       });
 

@@ -396,6 +396,9 @@ export {
   AuditEvent,
   ChainVerification,
   ReceiptBundle,
+  AuditForgetDecision,
+  AuditForgetRequest,
+  AuditForgetResponse,
 } from "./audit.js";
 
 export {
