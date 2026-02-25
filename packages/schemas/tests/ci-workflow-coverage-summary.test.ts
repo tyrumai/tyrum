@@ -16,4 +16,3 @@ describe("CI coverage summary parser", () => {
     expect(python).not.toContain("\\\\d");
   });
 });
-
