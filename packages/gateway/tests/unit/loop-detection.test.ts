@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectWithinTurnToolLoop } from "../../src/modules/agent/loop-detection.js";
+import { detectWithinTurnToolLoop, signatureForToolStep } from "../../src/modules/agent/loop-detection.js";
 
 describe("detectWithinTurnToolLoop", () => {
   it("reports all tool names in an alternating cycle", () => {
@@ -21,6 +21,19 @@ describe("detectWithinTurnToolLoop", () => {
     expect(result).toEqual({
       kind: "cycle",
       toolNames: ["tool.fs.read", "tool.exec.bash"],
+    });
+  });
+});
+
+describe("signatureForToolStep", () => {
+  it("does not crash when tool call input is missing", () => {
+    const result = signatureForToolStep({
+      toolCalls: [{ toolName: "tool.fs.read" }],
+    });
+
+    expect(result).toEqual({
+      signature: expect.stringMatching(/^tool\.fs\.read:[0-9a-f]{64}$/),
+      toolNames: ["tool.fs.read"],
     });
   });
 });
