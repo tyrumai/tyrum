@@ -188,7 +188,6 @@ describe("WS contract conformance (gateway <-> client <-> schemas)", () => {
       token: server.adminToken,
       capabilities: ["http"],
       reconnect: false,
-      useDeviceProof: true,
       role: "client",
       protocolRev: 2,
       device: {

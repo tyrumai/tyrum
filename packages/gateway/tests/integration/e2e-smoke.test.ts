@@ -133,7 +133,6 @@ describe("E2E smoke test", () => {
       token: srv.adminToken,
       capabilities: ["playwright", "http"],
       reconnect: false,
-      useDeviceProof: true,
       role: "client",
       protocolRev: 2,
       device: {
