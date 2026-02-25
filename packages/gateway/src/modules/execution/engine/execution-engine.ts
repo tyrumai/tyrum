@@ -404,10 +404,14 @@ export class ExecutionEngine {
     await this.enqueueWsEvent(tx, evt);
   }
 
-  private async emitRunQueuedTx(tx: SqlDb, runId: string): Promise<void> {
+  private async emitRunIdEventTx(
+    tx: SqlDb,
+    type: "run.queued" | "run.started" | "run.resumed" | "run.completed" | "run.failed",
+    runId: string,
+  ): Promise<void> {
     const evt: WsEventEnvelopeT = {
       event_id: randomUUID(),
-      type: "run.queued",
+      type,
       occurred_at: this.clock().nowIso,
       scope: { kind: "run", run_id: runId },
       payload: { run_id: runId },
@@ -415,15 +419,12 @@ export class ExecutionEngine {
     await this.enqueueWsEvent(tx, evt);
   }
 
+  private async emitRunQueuedTx(tx: SqlDb, runId: string): Promise<void> {
+    await this.emitRunIdEventTx(tx, "run.queued", runId);
+  }
+
   private async emitRunStartedTx(tx: SqlDb, runId: string): Promise<void> {
-    const evt: WsEventEnvelopeT = {
-      event_id: randomUUID(),
-      type: "run.started",
-      occurred_at: this.clock().nowIso,
-      scope: { kind: "run", run_id: runId },
-      payload: { run_id: runId },
-    };
-    await this.enqueueWsEvent(tx, evt);
+    await this.emitRunIdEventTx(tx, "run.started", runId);
   }
 
   private async emitRunPausedTx(
@@ -451,36 +452,15 @@ export class ExecutionEngine {
   }
 
   private async emitRunResumedTx(tx: SqlDb, runId: string): Promise<void> {
-    const evt: WsEventEnvelopeT = {
-      event_id: randomUUID(),
-      type: "run.resumed",
-      occurred_at: this.clock().nowIso,
-      scope: { kind: "run", run_id: runId },
-      payload: { run_id: runId },
-    };
-    await this.enqueueWsEvent(tx, evt);
+    await this.emitRunIdEventTx(tx, "run.resumed", runId);
   }
 
   private async emitRunCompletedTx(tx: SqlDb, runId: string): Promise<void> {
-    const evt: WsEventEnvelopeT = {
-      event_id: randomUUID(),
-      type: "run.completed",
-      occurred_at: this.clock().nowIso,
-      scope: { kind: "run", run_id: runId },
-      payload: { run_id: runId },
-    };
-    await this.enqueueWsEvent(tx, evt);
+    await this.emitRunIdEventTx(tx, "run.completed", runId);
   }
 
   private async emitRunFailedTx(tx: SqlDb, runId: string): Promise<void> {
-    const evt: WsEventEnvelopeT = {
-      event_id: randomUUID(),
-      type: "run.failed",
-      occurred_at: this.clock().nowIso,
-      scope: { kind: "run", run_id: runId },
-      payload: { run_id: runId },
-    };
-    await this.enqueueWsEvent(tx, evt);
+    await this.emitRunIdEventTx(tx, "run.failed", runId);
   }
 
   private async emitRunCancelledTx(

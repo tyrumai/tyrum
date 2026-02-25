@@ -132,6 +132,48 @@ describe("ExecutionEngine (normalized)", () => {
     expect(types).not.toContain("run.failed");
   });
 
+  it("emits simple run lifecycle events with { run_id } payload", async () => {
+    db = openTestSqliteDb();
+
+    const engine = new ExecutionEngine({ db });
+    const runId = "550e8400-e29b-41d4-a716-446655440000";
+    const typesToEmit = [
+      "run.queued",
+      "run.started",
+      "run.resumed",
+      "run.completed",
+      "run.failed",
+    ] as const;
+
+    await db.transaction(async (tx) => {
+      const engineAny = engine as unknown as { emitRunIdEventTx?: unknown } & {
+        emitRunIdEventTx: (tx: unknown, type: string, runId: string) => Promise<void>;
+      };
+      expect(typeof engineAny.emitRunIdEventTx).toBe("function");
+      for (const type of typesToEmit) {
+        await engineAny.emitRunIdEventTx(tx, type, runId);
+      }
+    });
+
+    const outbox = await db.all<{ payload_json: string }>(
+      "SELECT payload_json FROM outbox WHERE topic = ? ORDER BY id ASC",
+      ["ws.broadcast"],
+    );
+    expect(outbox).toHaveLength(typesToEmit.length);
+
+    const messages = outbox
+      .map((row) => JSON.parse(row.payload_json) as { message?: Record<string, unknown> })
+      .map((row) => row.message)
+      .filter((value): value is Record<string, unknown> => Boolean(value) && typeof value === "object");
+
+    for (let idx = 0; idx < typesToEmit.length; idx += 1) {
+      const msg = messages[idx]!;
+      expect(msg["type"]).toBe(typesToEmit[idx]);
+      expect(msg["scope"]).toEqual({ kind: "run", run_id: runId });
+      expect(msg["payload"]).toEqual({ run_id: runId });
+    }
+  });
+
   it("preserves heartbeat trigger kind when provided", async () => {
     db = openTestSqliteDb();
 
