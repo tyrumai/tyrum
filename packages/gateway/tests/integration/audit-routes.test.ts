@@ -193,6 +193,36 @@ describe("Audit routes", () => {
       expect(proofEvent.event_hash).toMatch(/^[0-9a-f]{64}$/);
     });
 
+    it("allows verifying the original chain plus the delete proof event", async () => {
+      await appendEvents("plan-1", 2);
+      const eventsBefore = await eventLog.getEventsForVerification("plan-1");
+
+      const forgetRes = await app.request("/audit/forget", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          confirm: "FORGET",
+          entity_type: "plan",
+          entity_id: "plan-1",
+          decision: "delete",
+        }),
+      });
+      expect(forgetRes.status).toBe(200);
+
+      const remaining = await eventLog.getEventsForVerification("plan-1");
+      expect(remaining).toHaveLength(1);
+
+      const verifyRes = await app.request("/audit/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ events: [...eventsBefore, remaining[0]!] }),
+      });
+      expect(verifyRes.status).toBe(200);
+      const body = (await verifyRes.json()) as { valid: boolean; checked_count: number };
+      expect(body.valid).toBe(true);
+      expect(body.checked_count).toBe(3);
+    });
+
     it("deletes events and inserts a proof event for decision=anonymize", async () => {
       await appendEvents("plan-1", 2);
 
