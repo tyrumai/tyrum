@@ -2249,6 +2249,19 @@ export class AgentRuntime {
         const context = coerceRecord(approval.context);
         const isAgentToolExecution = context?.["source"] === "agent-tool-execution";
 
+        const resumeToken =
+          approval.resume_token?.trim() ||
+          (typeof context?.["resume_token"] === "string" ? context["resume_token"].trim() : "");
+
+        if (resumeToken && (approval.status === "approved" || isAgentToolExecution)) {
+          await this.executionEngine.resumeRun(resumeToken);
+          return true;
+        }
+
+        if (approval.status === "approved") {
+          return false;
+        }
+
         const resolvedReason =
           approval.response_reason ??
           (approval.status === "expired"
@@ -2256,12 +2269,6 @@ export class AgentRuntime {
             : approval.status === "cancelled"
               ? "approval cancelled"
               : "approval denied");
-
-        const resumeToken = approval.resume_token?.trim();
-        if (resumeToken && (approval.status === "approved" || isAgentToolExecution)) {
-          await this.executionEngine.resumeRun(resumeToken);
-          return true;
-        }
 
         if (approval.run_id) {
           await this.executionEngine.cancelRun(approval.run_id, resolvedReason);
