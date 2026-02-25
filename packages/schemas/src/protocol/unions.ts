@@ -17,7 +17,7 @@ import {
   WsCapabilityReadyRequest,
   WsCapabilityReadyResponseErrEnvelope,
   WsCapabilityReadyResponseOkEnvelope,
-} from "./capability.js";
+} from "./capability-ready.js";
 import {
   WsConnectInitRequest,
   WsConnectInitResponseErrEnvelope,
