@@ -26,9 +26,12 @@ describe("Auth middleware", () => {
     const app = new Hono();
     app.use("*", createAuthMiddleware(tokenStore));
     app.get("/healthz", (c) => c.json({ status: "ok" }));
+    app.post("/auth/session", (c) => c.json({ ok: true }));
+    app.post("/auth/logout", (c) => c.json({ ok: true }));
     app.get("/app", (c) => c.json({ ok: true }));
     app.get("/app/settings", (c) => c.json({ ok: true }));
     app.get("/app/auth", (c) => c.json({ ok: true }));
+    app.get("/ui/index.html", (c) => c.json({ ok: true }));
     app.get("/providers/:provider/oauth/callback", (c) => c.json({ ok: true }));
     // These routes are intentionally *not* part of the /app subtree, but share a prefix.
     // Query-string token auth must not apply to them.
@@ -59,6 +62,24 @@ describe("Auth middleware", () => {
     app.route("/prefix", sub);
 
     const res = await app.request("/prefix/providers/test/oauth/callback?state=s&code=c");
+    expect(res.status).toBe(200);
+  });
+
+  it("allows /auth/session without token", async () => {
+    const app = buildApp();
+    const res = await app.request("/auth/session", { method: "POST" });
+    expect(res.status).toBe(200);
+  });
+
+  it("allows /auth/logout without token", async () => {
+    const app = buildApp();
+    const res = await app.request("/auth/logout", { method: "POST" });
+    expect(res.status).toBe(200);
+  });
+
+  it("allows /ui routes without token", async () => {
+    const app = buildApp();
+    const res = await app.request("/ui/index.html");
     expect(res.status).toBe(200);
   });
 
@@ -111,53 +132,39 @@ describe("Auth middleware", () => {
     expect(res.status).toBe(200);
   });
 
-  it("allows /app/auth bootstrap with query token", async () => {
+  it("rejects /app/auth bootstrap even when query token is present", async () => {
     const app = buildApp();
     const res = await app.request(`/app/auth?token=${encodeURIComponent(adminToken)}&next=%2Fapp`);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
   });
 
-  it("allows /app route with query token", async () => {
+  it("rejects /app route even when query token is present", async () => {
     const app = buildApp();
     const res = await app.request(`/app?token=${encodeURIComponent(adminToken)}`);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
   });
 
-  it("allows /app subtree route with query token", async () => {
+  it("rejects /app subtree route even when query token is present", async () => {
     const app = buildApp();
     const res = await app.request(`/app/settings?token=${encodeURIComponent(adminToken)}`);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
   });
 
-  it("rejects non-app route even when query token is present", async () => {
+  it("rejects non-app route when query token is present", async () => {
     const app = buildApp();
     const res = await app.request(`/api/data?token=${encodeURIComponent(adminToken)}`);
     expect(res.status).toBe(401);
   });
 
-  it("rejects prefix-collision route even when query token is present", async () => {
+  it("rejects prefix-collision route when query token is present", async () => {
     const app = buildApp();
     const res = await app.request(`/application?token=${encodeURIComponent(adminToken)}`);
     expect(res.status).toBe(401);
   });
 
-  it("rejects /appdata route even when query token is present", async () => {
+  it("rejects /appdata route when query token is present", async () => {
     const app = buildApp();
     const res = await app.request(`/appdata?token=${encodeURIComponent(adminToken)}`);
-    expect(res.status).toBe(401);
-  });
-
-  it("rejects /app/auth bootstrap with invalid query token", async () => {
-    const app = buildApp();
-    const res = await app.request("/app/auth?token=invalid-token");
-    expect(res.status).toBe(401);
-  });
-
-  it("prefers /app/auth query token over cookie token", async () => {
-    const app = buildApp();
-    const res = await app.request("/app/auth?token=invalid-token", {
-      headers: { Cookie: `${AUTH_COOKIE_NAME}=${encodeURIComponent(adminToken)}` },
-    });
     expect(res.status).toBe(401);
   });
 

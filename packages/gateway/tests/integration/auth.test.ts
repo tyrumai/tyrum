@@ -185,20 +185,17 @@ describe("Auth integration", () => {
       expect(res.status).toBe(200);
     });
 
-    it("bootstraps web auth cookie via /app/auth and grants /app access", async () => {
-      const bootstrapRes = await app.request(
-        `/app/auth?token=${encodeURIComponent(adminToken)}&next=%2Fapp`,
-      );
-      expect(bootstrapRes.status).toBe(302);
-      const location = bootstrapRes.headers.get("location");
-      expect(location).toBeTruthy();
-      const redirectUrl = new URL(location ?? "/app", "http://localhost");
-      expect(redirectUrl.pathname).toBe("/app");
-      expect(redirectUrl.searchParams.get("token")).toBe(adminToken);
+    it("bootstraps auth cookie via /auth/session, supports logout, and grants /app access", async () => {
+      const loginRes = await app.request("/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: adminToken }),
+      });
+      expect(loginRes.status).toBe(204);
 
-      const setCookie = bootstrapRes.headers.get("set-cookie");
-      expect(setCookie).toBeTruthy();
-      const cookie = setCookie?.split(";")[0] ?? "";
+      const loginSetCookie = loginRes.headers.get("set-cookie");
+      expect(loginSetCookie).toBeTruthy();
+      const cookie = loginSetCookie?.split(";")[0] ?? "";
 
       const appRes = await app.request("/app", {
         headers: { Cookie: cookie },
@@ -206,6 +203,21 @@ describe("Auth integration", () => {
       expect(appRes.status).toBe(200);
       const html = await appRes.text();
       expect(html).toContain("Dashboard");
+
+      const logoutRes = await app.request("/auth/logout", {
+        method: "POST",
+        headers: { Cookie: cookie },
+      });
+      expect(logoutRes.status).toBe(204);
+
+      const logoutSetCookie = logoutRes.headers.get("set-cookie");
+      expect(logoutSetCookie).toBeTruthy();
+      const clearedCookie = logoutSetCookie?.split(";")[0] ?? "";
+
+      const afterLogoutRes = await app.request("/app", {
+        headers: { Cookie: clearedCookie },
+      });
+      expect(afterLogoutRes.status).toBe(401);
     });
   });
 });

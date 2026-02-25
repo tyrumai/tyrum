@@ -1,0 +1,67 @@
+import { Hono } from "hono";
+import { setCookie } from "hono/cookie";
+import type { TokenStore } from "../modules/auth/token-store.js";
+import { AUTH_COOKIE_NAME } from "../modules/auth/http.js";
+
+export interface AuthSessionRouteDeps {
+  tokenStore: TokenStore;
+}
+
+function isHttpsRequest(url: string): boolean {
+  try {
+    return new URL(url).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+export function createAuthSessionRoutes(deps: AuthSessionRouteDeps): Hono {
+  const app = new Hono();
+
+  app.post("/auth/session", async (c) => {
+    let body: unknown;
+    try {
+      body = (await c.req.json()) as unknown;
+    } catch {
+      return c.json({ error: "invalid_request", message: "invalid json" }, 400);
+    }
+
+    const tokenRaw =
+      body && typeof body === "object" && !Array.isArray(body)
+        ? (body as Record<string, unknown>)["token"]
+        : undefined;
+    const token = typeof tokenRaw === "string" ? tokenRaw.trim() : "";
+    if (!token) {
+      return c.json({ error: "invalid_request", message: "token is required" }, 400);
+    }
+
+    const claims = deps.tokenStore.authenticate(token);
+    if (!claims) {
+      return c.json({ error: "unauthorized", message: "invalid token" }, 401);
+    }
+
+    setCookie(c, AUTH_COOKIE_NAME, token, {
+      path: "/",
+      httpOnly: true,
+      sameSite: "Strict",
+      maxAge: 604800,
+      secure: isHttpsRequest(c.req.url),
+    });
+
+    return c.body(null, 204);
+  });
+
+  app.post("/auth/logout", (c) => {
+    setCookie(c, AUTH_COOKIE_NAME, "", {
+      path: "/",
+      httpOnly: true,
+      sameSite: "Strict",
+      maxAge: 0,
+      secure: isHttpsRequest(c.req.url),
+    });
+
+    return c.body(null, 204);
+  });
+
+  return app;
+}

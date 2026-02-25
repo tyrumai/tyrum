@@ -27,6 +27,7 @@ import { createPlaybookRoutes } from "./routes/playbook.js";
 import { createConnectionsRoute } from "./routes/connections.js";
 import { createPairingRoutes } from "./routes/pairing.js";
 import { createAuthProfileRoutes } from "./routes/auth-profiles.js";
+import { createAuthSessionRoutes } from "./routes/auth-session.js";
 import { createDeviceTokenRoutes } from "./routes/device-token.js";
 import { createPluginRoutes } from "./routes/plugins.js";
 import { createModelsDevRoutes } from "./routes/models-dev.js";
@@ -245,6 +246,9 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
         : undefined,
     }),
   );
+  if (opts.tokenStore) {
+    app.route("/", createAuthSessionRoutes({ tokenStore: opts.tokenStore }));
+  }
   app.route("/", createAuthProfileRoutes({ authProfileDal, pinDal }));
   if (opts.tokenStore) {
     app.route("/", createDeviceTokenRoutes({ tokenStore: opts.tokenStore }));
