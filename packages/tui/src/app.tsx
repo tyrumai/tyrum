@@ -1,9 +1,11 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import { Box, Text, useApp, useInput } from "ink";
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ResolvedTuiConfig } from "./config.js";
+import { createInitialTuiUiState, reduceTuiInput, type TuiCommand, type TuiKey } from "./tui-input.js";
+import { getAttemptsForStep, getRunList, getStepsForRun } from "./runs-view.js";
 
-type RouteId = "connect" | "status";
+const MAX_RUNS_VISIBLE = 20;
 
 function useOperatorStore<T>(store: {
   subscribe: (listener: () => void) => () => void;
@@ -12,11 +14,36 @@ function useOperatorStore<T>(store: {
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
 }
 
+function toTuiKey(key: unknown): TuiKey {
+  if (!key || typeof key !== "object" || Array.isArray(key)) return {};
+  const rec = key as Record<string, unknown>;
+  return {
+    ctrl: rec["ctrl"] === true,
+    upArrow: rec["upArrow"] === true,
+    downArrow: rec["downArrow"] === true,
+  };
+}
+
+function clampCursor(cursor: number, total: number): number {
+  if (total <= 0) return 0;
+  if (!Number.isFinite(cursor)) return 0;
+  if (cursor < 0) return 0;
+  if (cursor >= total) return total - 1;
+  return cursor;
+}
+
+function truncateText(text: string, limit: number): string {
+  if (text.length <= limit) return text;
+  return `${text.slice(0, Math.max(0, limit - 1))}…`;
+}
+
 function AppHeader({ title }: { title: string }) {
   return (
     <Box flexDirection="column" paddingBottom={1}>
       <Text bold>{title}</Text>
-      <Text dimColor>Keys: c=connect d=disconnect 1=connect 2=status q=quit</Text>
+      <Text dimColor>
+        Keys: c=connect d=disconnect 1=connect 2=status 3=approvals 4=runs 5=pairing q=quit
+      </Text>
     </Box>
   );
 }
@@ -90,9 +117,230 @@ function StatusScreen({ core }: { core: OperatorCore }) {
   );
 }
 
+function ApprovalsScreen({
+  core,
+  cursor,
+}: {
+  core: OperatorCore;
+  cursor: number;
+}) {
+  const approvals = useOperatorStore(core.approvalsStore);
+  const pendingIds = approvals.pendingIds;
+  const effectiveCursor = clampCursor(cursor, pendingIds.length);
+
+  const selectedId = pendingIds[effectiveCursor];
+  const selected = typeof selectedId === "number" ? approvals.byId[selectedId] : null;
+
+  return (
+    <Box flexDirection="column">
+      <Text dimColor>Keys: ↑/↓ select a=approve x=deny r=refresh</Text>
+      <Text>
+        Pending: <Text bold>{String(pendingIds.length)}</Text>
+        {approvals.loading ? <Text dimColor> (loading)</Text> : null}
+      </Text>
+      {approvals.error ? <Text color="red">Error: {approvals.error}</Text> : null}
+
+      <Box flexDirection="column" paddingTop={1}>
+        {pendingIds.length === 0 ? (
+          <Text dimColor>No pending approvals.</Text>
+        ) : (
+          pendingIds.map((approvalId, index) => {
+            const approval = approvals.byId[approvalId];
+            const label = approval
+              ? `${String(approvalId)} [${approval.kind}] ${truncateText(approval.prompt, 72)}`
+              : String(approvalId);
+            const isSelected = index === effectiveCursor;
+            return (
+              <Text key={approvalId} inverse={isSelected}>
+                {isSelected ? "> " : "  "}
+                {label}
+              </Text>
+            );
+          })
+        )}
+      </Box>
+
+      {selected ? (
+        <Box flexDirection="column" paddingTop={1}>
+          <Text bold>Selected</Text>
+          <Text>
+            #{String(selected.approval_id)} ({selected.status}) kind={selected.kind}
+          </Text>
+          <Text>{selected.prompt}</Text>
+        </Box>
+      ) : null}
+    </Box>
+  );
+}
+
+function getPairingIds(pairing: ReturnType<OperatorCore["pairingStore"]["getSnapshot"]>): number[] {
+  const ids = Object.keys(pairing.byId)
+    .map((value) => Number(value))
+    .filter((value) => Number.isInteger(value));
+  const pending = new Set(pairing.pendingIds);
+  ids.sort((a, b) => {
+    const aPending = pending.has(a);
+    const bPending = pending.has(b);
+    if (aPending !== bPending) return aPending ? -1 : 1;
+    return a - b;
+  });
+  return ids;
+}
+
+function PairingScreen({
+  core,
+  cursor,
+}: {
+  core: OperatorCore;
+  cursor: number;
+}) {
+  const pairing = useOperatorStore(core.pairingStore);
+  const pairingIds = useMemo(() => getPairingIds(pairing), [pairing]);
+  const effectiveCursor = clampCursor(cursor, pairingIds.length);
+  const selectedId = pairingIds[effectiveCursor];
+  const selected = typeof selectedId === "number" ? pairing.byId[selectedId] : null;
+
+  const pendingCount = pairing.pendingIds.length;
+  const totalCount = pairingIds.length;
+
+  return (
+    <Box flexDirection="column">
+      <Text dimColor>Keys: ↑/↓ select a=approve x=deny v=revoke r=refresh</Text>
+      <Text>
+        Pending: <Text bold>{String(pendingCount)}</Text> Total: {String(totalCount)}
+        {pairing.loading ? <Text dimColor> (loading)</Text> : null}
+      </Text>
+      {pairing.error ? <Text color="red">Error: {pairing.error}</Text> : null}
+
+      <Box flexDirection="column" paddingTop={1}>
+        {pairingIds.length === 0 ? (
+          <Text dimColor>No pairing requests.</Text>
+        ) : (
+          pairingIds.map((pairingId, index) => {
+            const req = pairing.byId[pairingId];
+            const label = req
+              ? `${String(pairingId)} [${req.status}] ${req.node.node_id}`
+              : String(pairingId);
+            const isSelected = index === effectiveCursor;
+            return (
+              <Text key={pairingId} inverse={isSelected}>
+                {isSelected ? "> " : "  "}
+                {label}
+              </Text>
+            );
+          })
+        )}
+      </Box>
+
+      {selected ? (
+        <Box flexDirection="column" paddingTop={1}>
+          <Text bold>Selected</Text>
+          <Text>
+            #{String(selected.pairing_id)} ({selected.status})
+            {selected.trust_level ? ` trust=${selected.trust_level}` : ""}
+          </Text>
+          {selected.node.label ? <Text>Label: {selected.node.label}</Text> : null}
+          <Text dimColor>
+            Capabilities: {String(selected.node.capabilities.length)} Allowlist:{" "}
+            {String(selected.capability_allowlist.length)}
+          </Text>
+        </Box>
+      ) : null}
+    </Box>
+  );
+}
+
+function RunsScreen({ core, cursor }: { core: OperatorCore; cursor: number }) {
+  const runsState = useOperatorStore(core.runsStore);
+  const runs = useMemo(
+    () => getRunList(runsState).slice(0, MAX_RUNS_VISIBLE),
+    [runsState],
+  );
+  const effectiveCursor = clampCursor(cursor, runs.length);
+  const selectedRun = runs[effectiveCursor] ?? null;
+  const steps = selectedRun ? getStepsForRun(runsState, selectedRun.run_id) : [];
+
+  return (
+    <Box flexDirection="column">
+      <Text dimColor>Keys: ↑/↓ select (updates stream via WS events)</Text>
+      <Text>
+        Runs: <Text bold>{String(Object.keys(runsState.runsById).length)}</Text> (showing{" "}
+        {String(runs.length)})
+      </Text>
+      {runs.length === 0 ? (
+        <Text dimColor>No runs yet.</Text>
+      ) : (
+        <Box flexDirection="column" paddingTop={1}>
+          {runs.map((run, index) => {
+            const isSelected = index === effectiveCursor;
+            const label = `${run.status} ${run.key}:${run.lane} ${run.run_id.slice(0, 8)}`;
+            return (
+              <Text key={run.run_id} inverse={isSelected}>
+                {isSelected ? "> " : "  "}
+                {label}
+              </Text>
+            );
+          })}
+        </Box>
+      )}
+
+      {selectedRun ? (
+        <Box flexDirection="column" paddingTop={1}>
+          <Text bold>Selected run</Text>
+          <Text>{selectedRun.run_id}</Text>
+          <Text>
+            Status: <Text bold>{selectedRun.status}</Text> attempt {String(selectedRun.attempt)}
+          </Text>
+          {selectedRun.paused_reason ? (
+            <Text color="yellow">
+              Paused: {selectedRun.paused_reason}
+              {selectedRun.paused_detail ? ` — ${truncateText(selectedRun.paused_detail, 80)}` : ""}
+            </Text>
+          ) : null}
+          <Text dimColor>
+            Created: {selectedRun.created_at}
+            {selectedRun.started_at ? ` Started: ${selectedRun.started_at}` : ""}
+            {selectedRun.finished_at ? ` Finished: ${selectedRun.finished_at}` : ""}
+          </Text>
+
+          <Box flexDirection="column" paddingTop={1}>
+            <Text bold>Steps</Text>
+            {steps.length === 0 ? (
+              <Text dimColor>No steps yet.</Text>
+            ) : (
+              steps.map((step) => {
+                const attempts = getAttemptsForStep(runsState, step.step_id);
+                return (
+                  <Box key={step.step_id} flexDirection="column" paddingLeft={2} paddingTop={1}>
+                    <Text>
+                      Step {String(step.step_index)}: {step.action.type} ({step.status})
+                    </Text>
+                    {attempts.length === 0 ? (
+                      <Text dimColor>  No attempts yet.</Text>
+                    ) : (
+                      attempts.map((attempt) => (
+                        <Text key={attempt.attempt_id} dimColor>
+                          {"  "}Attempt {String(attempt.attempt)}: {attempt.status}
+                          {attempt.error ? ` — ${truncateText(attempt.error, 80)}` : ""}
+                        </Text>
+                      ))
+                    )}
+                  </Box>
+                );
+              })
+            )}
+          </Box>
+        </Box>
+      ) : null}
+    </Box>
+  );
+}
+
 export function TuiApp({ core, config }: { core: OperatorCore; config: ResolvedTuiConfig }) {
   const { exit } = useApp();
-  const [route, setRoute] = useState<RouteId>("connect");
+  const [uiState, setUiState] = useState(() => createInitialTuiUiState());
+  const uiStateRef = useRef(uiState);
+  uiStateRef.current = uiState;
 
   useEffect(() => {
     core.connect();
@@ -102,40 +350,92 @@ export function TuiApp({ core, config }: { core: OperatorCore; config: ResolvedT
   }, [core]);
 
   useInput((input, key) => {
-    if (key.ctrl && input === "c") {
-      exit();
-      return;
-    }
+    const approvals = core.approvalsStore.getSnapshot();
+    const pairing = core.pairingStore.getSnapshot();
+    const runs = core.runsStore.getSnapshot();
 
-    switch (input) {
-      case "q":
-        exit();
-        return;
-      case "c":
-        core.connect();
-        return;
-      case "d":
-        core.disconnect();
-        return;
-      case "1":
-        setRoute("connect");
-        return;
-      case "2":
-        setRoute("status");
-        return;
-      default:
-        break;
+    const pairingIds = getPairingIds(pairing);
+    const runIds = getRunList(runs).slice(0, MAX_RUNS_VISIBLE).map((run) => run.run_id);
+
+    const reduced = reduceTuiInput({
+      state: uiStateRef.current,
+      input,
+      key: toTuiKey(key),
+      approvalsPendingIds: approvals.pendingIds,
+      pairingIds,
+      runIds,
+    });
+
+    uiStateRef.current = reduced.state;
+    setUiState(reduced.state);
+
+    const execute = (command: TuiCommand): void => {
+      switch (command.type) {
+        case "exit":
+          exit();
+          return;
+        case "connect":
+          core.connect();
+          return;
+        case "disconnect":
+          core.disconnect();
+          return;
+        case "refreshApprovals":
+          void core.approvalsStore.refreshPending();
+          return;
+        case "resolveApproval":
+          void core.approvalsStore.resolve(command.approvalId, command.decision);
+          return;
+        case "refreshPairing":
+          void core.pairingStore.refresh();
+          return;
+        case "approvePairing": {
+          const req = core.pairingStore.getSnapshot().byId[command.pairingId];
+          if (!req || req.status !== "pending") return;
+          void core.pairingStore.approve(command.pairingId, {
+            trust_level: "local",
+            capability_allowlist: req.capability_allowlist,
+          });
+          return;
+        }
+        case "denyPairing": {
+          const req = core.pairingStore.getSnapshot().byId[command.pairingId];
+          if (!req || req.status !== "pending") return;
+          void core.pairingStore.deny(command.pairingId);
+          return;
+        }
+        case "revokePairing": {
+          const req = core.pairingStore.getSnapshot().byId[command.pairingId];
+          if (!req || req.status !== "approved") return;
+          void core.pairingStore.revoke(command.pairingId);
+          return;
+        }
+        default: {
+          const exhaustive: never = command;
+          return exhaustive;
+        }
+      }
+    };
+
+    for (const command of reduced.commands) {
+      execute(command);
     }
   });
 
   return (
     <Box flexDirection="column" padding={1}>
-      <AppHeader title={`Tyrum TUI (${route})`} />
-      {route === "connect" ? (
+      <AppHeader title={`Tyrum TUI (${uiState.route})`} />
+      {uiState.route === "connect" ? (
         <ConnectScreen core={core} config={config} />
-      ) : (
-        <StatusScreen core={core} />
-      )}
+      ) : null}
+      {uiState.route === "status" ? <StatusScreen core={core} /> : null}
+      {uiState.route === "approvals" ? (
+        <ApprovalsScreen core={core} cursor={uiState.approvalsCursor} />
+      ) : null}
+      {uiState.route === "pairing" ? (
+        <PairingScreen core={core} cursor={uiState.pairingCursor} />
+      ) : null}
+      {uiState.route === "runs" ? <RunsScreen core={core} cursor={uiState.runsCursor} /> : null}
     </Box>
   );
 }
