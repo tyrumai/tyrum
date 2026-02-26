@@ -11,7 +11,7 @@ Deployments range from a single host (replica count = 1) to multi-instance clust
 - Validate inbound/outbound messages against contracts.
 - Route requests to internal modules or to capable nodes.
 - Emit events for lifecycle, actions, and state changes.
-- Persist essential state (sessions, transcripts, memory, audit logs) via the StateStore.
+- Persist essential state (sessions, transcripts, work state, memory, audit logs) via the StateStore.
 - Host the **execution engine** (queue, retries, idempotency, pause/resume, evidence capture). Step execution is performed by workers coordinated via the StateStore (workers may be co-located/in-process or run as separate processes/hosts).
 - Host the **approvals** subsystem and enforce policy at tool boundaries.
 - Integrate with a **secret provider** so raw credentials are never exposed to the model.
@@ -35,6 +35,7 @@ flowchart TB
   PROTO --> CAP["Capability router<br/>(node dispatch)"]
 
   AG --> ENG
+  AG --> WORK["WorkBoard subsystem"]
   ENG --> TOOLS["Tool runtime"]
   TOOLS --> BUILTIN["Built-in tools"]
   TOOLS --> MCP["MCP tools"]
@@ -42,11 +43,13 @@ flowchart TB
 
   ENG --> POLICY["Policy engine"]
   ENG --> APPR["Approvals"]
+  ENG --> WORK
   ENG --> MEM["Memory subsystem"]
   ENG --> AUDIT["Audit/event log"]
   ENG <--> SECRETS["Secret provider"]
 
   DB[("StateStore (SQLite/Postgres)")] <--> MEM
+  DB <--> WORK
   DB <--> AUDIT
   DB <--> AG
   DB <--> ENG

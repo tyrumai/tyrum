@@ -23,6 +23,7 @@ The canonical wire shape lives in `@tyrum/schemas` (`packages/schemas/src/protoc
 - **Evidence:** artifacts captured/attached; postconditions passed/failed.
 - **Agent runtime:** plan/workflow selection and high-level intent updates.
 - **Memory:** items written/accessed/tombstoned, consolidation runs, and budget GC outcomes.
+- **Work and delegated execution:** WorkItems and task lifecycle, WorkBoard drilldown (artifacts/decisions/signals/state KV), and subagent lifecycle.
 - **Messaging UX:** typing indicators, outbound delivery receipts, and formatting fallbacks.
 - **Observability:** context reports, usage snapshots, and provider quota polling status.
 
@@ -53,6 +54,20 @@ This is the canonical list of `type` values and payload contracts for the v1 Web
 - `artifact.created` — `{ artifact: ArtifactRef }`
 - `artifact.attached` — `{ artifact: ArtifactRef, step_id, attempt_id }`
 - `artifact.fetched` — `{ artifact: ArtifactRef, fetched_by }`
+
+### Work and delegated execution
+
+- `work.item.created` / `work.item.updated` / `work.item.blocked` / `work.item.completed` / `work.item.cancelled` — `{ item: WorkItem }`
+- `work.task.leased` — `{ work_item_id, task_id, lease_expires_at_ms }`
+- `work.task.started` — `{ work_item_id, task_id, run_id }`
+- `work.task.paused` — `{ work_item_id, task_id, approval_id }`
+- `work.task.completed` — `{ work_item_id, task_id, result_summary? }`
+- `work.artifact.created` — `{ artifact: WorkArtifact }`
+- `work.decision.created` — `{ decision: DecisionRecord }`
+- `work.signal.created` — `{ signal: WorkSignal }`
+- `work.signal.fired` — `{ signal_id, firing_id, enqueued_job_id? }`
+- `work.state_kv.updated` — `{ scope, key, updated_at }` (`scope` indicates `agent` or `work_item`)
+- `subagent.spawned` / `subagent.updated` / `subagent.closed` — `{ subagent: Subagent }`
 
 ### Pairing and presence
 

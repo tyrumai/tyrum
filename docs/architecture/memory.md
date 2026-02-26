@@ -14,6 +14,7 @@ Memory is Tyrum’s durable, **agent-scoped** knowledge system. It converts tran
 - Memory is **not** a raw transcript store (sessions/transcripts are separate durable surfaces).
 - Memory is **not** a secret manager (secrets stay behind a secret provider and are referenced by handles).
 - Memory is **not** a shared team knowledge base unless explicitly modeled as such (default scope is the agent).
+- Memory is **not** a work tracker (active commitments and status live in the WorkBoard; see [Work board and delegated execution](./workboard.md)).
 
 ## Scope and identity (hard rule)
 
@@ -73,6 +74,7 @@ Memory can be written from multiple sources:
 
 - **Explicit user intent:** “remember this”, “always/never”, preferences, durable decisions.
 - **Workflow outcomes:** successful procedures, failures with lessons learned, approvals and policy outcomes.
+- **WorkBoard outcomes:** completed WorkItems, DecisionRecords, and verification summaries promoted into semantic/procedural memory (see [Work board and delegated execution](./workboard.md)).
 - **Operator annotations:** notes that should persist and apply broadly to the agent.
 
 Write-time safety gates (baseline expectations):
@@ -107,6 +109,7 @@ Key properties:
 
 - Consolidation runs when **budgets are exceeded** (and may also run at task boundaries like “plan completed” or “context compaction happened”).
 - Consolidation prefers **compression over deletion**: summarize episodes into notes, merge duplicate facts, and keep “canonical” items.
+- Consolidation MAY treat WorkBoard drilldown records as inputs at task boundaries (for example promote DecisionRecords into durable procedures and promote verified outcomes into semantic facts).
 - Derived indexes (embeddings) are rebuilt or dropped as needed; they are expendable compared to canonical memory content.
 
 ## Budgets and enforcement (no time-based forgetting)

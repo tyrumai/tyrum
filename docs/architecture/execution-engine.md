@@ -4,7 +4,7 @@ The execution engine is the gateway subsystem responsible for turning a plan or 
 
 ## Why it exists
 
-LLMs are good at planning, but they are a poor place to host the control plane for long-running, side-effecting work. The execution engine moves orchestration into a typed runtime so that:
+LLMs are good at proposing plans, but they are a poor place to host the control plane for long-running, side-effecting work. The execution engine moves orchestration into a typed runtime so that:
 
 - Side effects can be **paused** behind approvals and **resumed** safely without repeating completed work.
 - Runs can be **retried** deterministically without duplicating actions.
@@ -21,6 +21,7 @@ LLMs are good at planning, but they are a poor place to host the control plane f
 - **Budgets and timeouts:** enforce cost/time ceilings per run and per step (including model budgets where applicable).
 - **Concurrency limits:** limit parallelism per agent, per lane, per capability provider, and globally.
 - **Evidence and verification:** capture artifacts and validate postconditions (required for state-changing steps when feasible).
+- **Intent and deviation checks:** validate side-effecting steps against recorded intent (ToolIntent/approvals/WorkItem constraints) and pause for operator clarification when execution drifts outside intent.
 - **Rollback metadata:** store human-readable rollback hints and optional structured compensation actions (always approval-gated).
 - **Auditability:** emit events for run/step lifecycle and persist a run log suitable for troubleshooting and export.
 
@@ -59,7 +60,7 @@ This keeps execution semantics identical while ensuring that long-lived edge/sch
 
 ## Non-responsibilities
 
-- The execution engine does not decide _what_ to do from a user message (planning is in the agent/planner).
+- The execution engine does not decide _what_ to do from a user message (decision/proposal is in the agent loop; durable task tracking is in the WorkBoard).
 - The execution engine does not implement device-specific automation (that lives behind node capabilities).
 - The execution engine does not store raw secrets (that lives behind the secret provider).
 
