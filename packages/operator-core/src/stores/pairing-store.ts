@@ -55,14 +55,28 @@ export function createPairingStore(http: OperatorHttpClient): {
     lastSyncedAt: null,
   });
 
+  let refreshRunId = 0;
+  let activeRefreshRunId: number | null = null;
+  let bufferedPairingUpserts = new Map<number, Pairing>();
+
   function handlePairingUpsert(pairing: Pairing): void {
+    if (activeRefreshRunId !== null) {
+      bufferedPairingUpserts.set(pairing.pairing_id, pairing);
+    }
     setState((prev) => upsertPairing(prev, pairing));
   }
 
   async function refresh(): Promise<void> {
+    const runId = ++refreshRunId;
+    activeRefreshRunId = runId;
+    bufferedPairingUpserts = new Map<number, Pairing>();
+
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
       const result = await http.pairings.list();
+      if (activeRefreshRunId !== runId) return;
+      const buffered = bufferedPairingUpserts;
+
       const byId: Record<number, Pairing> = {};
       const pendingIds: number[] = [];
       for (const pairing of result.pairings) {
@@ -71,19 +85,29 @@ export function createPairingStore(http: OperatorHttpClient): {
           pendingIds.push(pairing.pairing_id);
         }
       }
-      setState((prev) => ({
-        ...prev,
-        byId,
-        pendingIds,
-        loading: false,
-        lastSyncedAt: new Date().toISOString(),
-      }));
+      setState((prev) => {
+        let next: PairingState = { ...prev, byId, pendingIds };
+        for (const pairing of buffered.values()) {
+          next = upsertPairing(next, pairing);
+        }
+        return {
+          ...next,
+          loading: false,
+          lastSyncedAt: new Date().toISOString(),
+        };
+      });
     } catch (error) {
+      if (activeRefreshRunId !== runId) return;
       setState((prev) => ({
         ...prev,
         loading: false,
         error: error instanceof Error ? error.message : String(error),
       }));
+    } finally {
+      if (activeRefreshRunId === runId) {
+        activeRefreshRunId = null;
+        bufferedPairingUpserts = new Map<number, Pairing>();
+      }
     }
   }
 

@@ -44,7 +44,6 @@ export function createConnectionStore(ws: OperatorWsClient): {
       ...prev,
       status: "disconnected",
       clientId: null,
-      lastDisconnect: null,
     }));
   }
 

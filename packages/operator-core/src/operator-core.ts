@@ -216,6 +216,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
   });
 
   const dispose = (): void => {
+    connection.store.disconnect();
     for (const unsub of unsubscribes) {
       unsub();
     }

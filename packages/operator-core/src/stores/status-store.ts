@@ -45,6 +45,11 @@ export function createStatusStore(http: OperatorHttpClient): {
     lastSyncedAt: null,
   });
 
+  let refreshPresenceRunId = 0;
+  let activeRefreshPresenceRunId: number | null = null;
+  let bufferedPresenceUpserts = new Map<string, OperatorPresenceEntry>();
+  let bufferedPresencePrunes = new Set<string>();
+
   async function refreshStatus(): Promise<void> {
     setState((prev) => ({
       ...prev,
@@ -92,6 +97,11 @@ export function createStatusStore(http: OperatorHttpClient): {
   }
 
   async function refreshPresence(): Promise<void> {
+    const runId = ++refreshPresenceRunId;
+    activeRefreshPresenceRunId = runId;
+    bufferedPresenceUpserts = new Map<string, OperatorPresenceEntry>();
+    bufferedPresencePrunes = new Set<string>();
+
     setState((prev) => ({
       ...prev,
       loading: { ...prev.loading, presence: true },
@@ -99,9 +109,22 @@ export function createStatusStore(http: OperatorHttpClient): {
     }));
     try {
       const presence = await http.presence.list();
+      if (activeRefreshPresenceRunId !== runId) return;
+      const upserts = bufferedPresenceUpserts;
+      const prunes = bufferedPresencePrunes;
+
       const presenceByInstanceId: Record<string, OperatorPresenceEntry> = {};
       for (const entry of presence.entries) {
         presenceByInstanceId[entry.instance_id] = entry;
+      }
+      for (const entry of upserts.values()) {
+        presenceByInstanceId[entry.instance_id] = {
+          ...presenceByInstanceId[entry.instance_id],
+          ...entry,
+        };
+      }
+      for (const instanceId of prunes) {
+        delete presenceByInstanceId[instanceId];
       }
       setState((prev) => ({
         ...prev,
@@ -110,15 +133,26 @@ export function createStatusStore(http: OperatorHttpClient): {
         lastSyncedAt: new Date().toISOString(),
       }));
     } catch (error) {
+      if (activeRefreshPresenceRunId !== runId) return;
       setState((prev) => ({
         ...prev,
         loading: { ...prev.loading, presence: false },
         error: { ...prev.error, presence: toErrorMessage(error) },
       }));
+    } finally {
+      if (activeRefreshPresenceRunId === runId) {
+        activeRefreshPresenceRunId = null;
+        bufferedPresenceUpserts = new Map<string, OperatorPresenceEntry>();
+        bufferedPresencePrunes = new Set<string>();
+      }
     }
   }
 
   function handlePresenceUpsert(entry: OperatorPresenceEntry): void {
+    if (activeRefreshPresenceRunId !== null) {
+      bufferedPresencePrunes.delete(entry.instance_id);
+      bufferedPresenceUpserts.set(entry.instance_id, entry);
+    }
     setState((prev) => ({
       ...prev,
       presenceByInstanceId: {
@@ -132,6 +166,10 @@ export function createStatusStore(http: OperatorHttpClient): {
   }
 
   function handlePresencePruned(instanceId: string): void {
+    if (activeRefreshPresenceRunId !== null) {
+      bufferedPresenceUpserts.delete(instanceId);
+      bufferedPresencePrunes.add(instanceId);
+    }
     setState((prev) => {
       if (!(instanceId in prev.presenceByInstanceId)) return prev;
       const next = { ...prev.presenceByInstanceId };

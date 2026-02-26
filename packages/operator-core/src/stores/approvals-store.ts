@@ -44,33 +44,58 @@ export function createApprovalsStore(ws: OperatorWsClient): {
     lastSyncedAt: null,
   });
 
+  let refreshPendingRunId = 0;
+  let activeRefreshPendingRunId: number | null = null;
+  let bufferedApprovalUpserts = new Map<number, Approval>();
+
   function handleApprovalUpsert(approval: Approval): void {
+    if (activeRefreshPendingRunId !== null) {
+      bufferedApprovalUpserts.set(approval.approval_id, approval);
+    }
     setState((prev) => upsertApproval(prev, approval));
   }
 
   async function refreshPending(): Promise<void> {
+    const runId = ++refreshPendingRunId;
+    activeRefreshPendingRunId = runId;
+    bufferedApprovalUpserts = new Map<number, Approval>();
+
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
       const result = await ws.approvalList({ status: "pending", limit: 500 });
+      if (activeRefreshPendingRunId !== runId) return;
+      const buffered = bufferedApprovalUpserts;
+
       setState((prev) => {
         let next = prev;
         for (const approval of result.approvals) {
           next = upsertApproval(next, approval);
         }
-        const pendingIds = result.approvals.map((approval) => approval.approval_id);
+        next = {
+          ...next,
+          pendingIds: result.approvals.map((approval) => approval.approval_id),
+        };
+        for (const approval of buffered.values()) {
+          next = upsertApproval(next, approval);
+        }
         return {
           ...next,
-          pendingIds,
           loading: false,
           lastSyncedAt: new Date().toISOString(),
         };
       });
     } catch (error) {
+      if (activeRefreshPendingRunId !== runId) return;
       setState((prev) => ({
         ...prev,
         loading: false,
         error: error instanceof Error ? error.message : String(error),
       }));
+    } finally {
+      if (activeRefreshPendingRunId === runId) {
+        activeRefreshPendingRunId = null;
+        bufferedApprovalUpserts = new Map<number, Approval>();
+      }
     }
   }
 

@@ -281,6 +281,20 @@ function tick(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (error: unknown) => void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 describe("operator-core wiring", () => {
   it("updates stores from WS events", async () => {
     const ws = new FakeWsClient();
@@ -335,6 +349,126 @@ describe("operator-core wiring", () => {
     expect(Object.keys(runs.runsById)).toEqual(["run-1"]);
     expect(runs.stepIdsByRunId["run-1"]).toEqual(["step-1"]);
     expect(runs.attemptIdsByStepId["step-1"]).toEqual(["attempt-1"]);
+  });
+
+  it("does not drop WS approvals during refreshPending", async () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+
+    const approvalList = deferred<{ approvals: Approval[]; next_cursor?: string }>();
+    ws.approvalList = vi.fn(async () => approvalList.promise);
+
+    const core = createOperatorCore({
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788",
+      auth: createBearerTokenAuth("test-token"),
+      deps: { ws, http },
+    });
+
+    ws.emit("connected", { clientId: "client-123" });
+    ws.emit("approval.requested", { payload: { approval: sampleApprovalPending() } });
+    expect(core.approvalsStore.getSnapshot().pendingIds).toEqual([1]);
+
+    approvalList.resolve({ approvals: [], next_cursor: undefined });
+    await tick();
+
+    expect(core.approvalsStore.getSnapshot().pendingIds).toEqual([1]);
+  });
+
+  it("does not drop WS pairings during refresh", async () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+
+    const pairingsList = deferred<PairingListResponse>();
+    http.pairings.list = vi.fn(async () => pairingsList.promise);
+
+    const core = createOperatorCore({
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788",
+      auth: createBearerTokenAuth("test-token"),
+      deps: { ws, http },
+    });
+
+    ws.emit("connected", { clientId: "client-123" });
+    ws.emit("pairing.requested", { payload: { pairing: samplePairingPending() } });
+    expect(core.pairingStore.getSnapshot().pendingIds).toEqual([10]);
+
+    pairingsList.resolve({ status: "ok", pairings: [] });
+    await tick();
+
+    expect(core.pairingStore.getSnapshot().pendingIds).toEqual([10]);
+  });
+
+  it("does not drop WS presence updates during refreshPresence", async () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+
+    const presenceList = deferred<PresenceResponse>();
+    http.presence.list = vi.fn(async () => presenceList.promise);
+
+    const core = createOperatorCore({
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788",
+      auth: createBearerTokenAuth("test-token"),
+      deps: { ws, http },
+    });
+
+    const entryA = samplePresenceEntry();
+    const entryB = { ...entryA, instance_id: "client-2" };
+
+    ws.emit("connected", { clientId: "client-123" });
+    ws.emit("presence.upserted", { payload: { entry: entryA } });
+    ws.emit("presence.upserted", { payload: { entry: entryB } });
+    ws.emit("presence.pruned", { payload: { instance_id: "client-2" } });
+
+    presenceList.resolve({ ...samplePresenceResponse(), entries: [entryB] });
+    await tick();
+
+    const presenceByInstanceId = core.statusStore.getSnapshot().presenceByInstanceId;
+    expect(presenceByInstanceId["client-1"]).toMatchObject({ instance_id: "client-1" });
+    expect(presenceByInstanceId["client-2"]).toBeUndefined();
+  });
+
+  it("preserves lastDisconnect when disconnect triggers a synchronous close event", async () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+
+    ws.disconnect = vi.fn(() => {
+      ws.emit("disconnected", { code: 1000, reason: "client disconnect" });
+    });
+
+    const core = createOperatorCore({
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788",
+      auth: createBearerTokenAuth("test-token"),
+      deps: { ws, http },
+    });
+
+    ws.emit("connected", { clientId: "client-123" });
+    await tick();
+
+    core.disconnect();
+    expect(core.connectionStore.getSnapshot().lastDisconnect).toEqual({
+      code: 1000,
+      reason: "client disconnect",
+    });
+  });
+
+  it("dispose disconnects the websocket", () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+
+    const core = createOperatorCore({
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788",
+      auth: createBearerTokenAuth("test-token"),
+      deps: { ws, http },
+    });
+
+    core.connect();
+    core.dispose();
+
+    expect(ws.disconnect).toHaveBeenCalledTimes(1);
   });
 
   it("re-syncs on reconnect", async () => {
