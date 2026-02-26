@@ -421,8 +421,14 @@ describe("operator-core wiring", () => {
     const ws = new FakeWsClient();
     const http = createFakeHttpClient();
 
-    const usageA: UsageResponse = { ...sampleUsageResponse(), generated_at: "2026-01-01T00:00:00.000Z" };
-    const usageB: UsageResponse = { ...sampleUsageResponse(), generated_at: "2026-01-02T00:00:00.000Z" };
+    const usageA: UsageResponse = {
+      ...sampleUsageResponse(),
+      generated_at: "2026-01-01T00:00:00.000Z",
+    };
+    const usageB: UsageResponse = {
+      ...sampleUsageResponse(),
+      generated_at: "2026-01-02T00:00:00.000Z",
+    };
 
     const usageGetA = deferred<UsageResponse>();
     const usageGetB = deferred<UsageResponse>();
@@ -452,7 +458,9 @@ describe("operator-core wiring", () => {
     await p2;
 
     expect(core.statusStore.getSnapshot().loading.usage).toBe(false);
-    expect(core.statusStore.getSnapshot().usage).toMatchObject({ generated_at: "2026-01-02T00:00:00.000Z" });
+    expect(core.statusStore.getSnapshot().usage).toMatchObject({
+      generated_at: "2026-01-02T00:00:00.000Z",
+    });
   });
 
   it("does not drop WS approvals during refreshPending", async () => {
