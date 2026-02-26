@@ -24,11 +24,9 @@ const FORBIDDEN_BODY = {
 
 const METHOD_SCOPED_OPERATOR_ROUTE_PREFIXES = [
   "/agent",
-  "/app",
   "/artifacts",
   "/canvas",
   "/connections",
-  "/consent",
   "/context",
   "/contracts",
   "/ingress",
@@ -80,7 +78,6 @@ export function resolveHttpRouteRequiredScopes(input: {
 
   // Tenant administration surfaces.
   if (
-    matchesPathPrefixSegment(routePath, "/api") ||
     matchesPathPrefixSegment(routePath, "/auth") ||
     matchesPathPrefixSegment(routePath, "/audit") ||
     matchesPathPrefixSegment(routePath, "/policy") ||
@@ -89,30 +86,18 @@ export function resolveHttpRouteRequiredScopes(input: {
     matchesPathPrefixSegment(routePath, "/providers") ||
     matchesPathPrefixSegment(routePath, "/secrets") ||
     matchesPathPrefixSegment(routePath, "/snapshot") ||
-    routePath === "/models/refresh" ||
-    matchesPathPrefixSegment(routePath, "/app/settings") ||
-    matchesPathPrefixSegment(routePath, "/app/actions/account") ||
-    matchesPathPrefixSegment(routePath, "/app/actions/settings") ||
-    matchesPathPrefixSegment(routePath, "/app/actions/onboarding")
+    routePath === "/models/refresh"
   ) {
     return ["operator.admin"];
   }
 
   // Dedicated approval surface.
-  if (
-    matchesPathPrefixSegment(routePath, "/approvals") ||
-    matchesPathPrefixSegment(routePath, "/app/approvals") ||
-    matchesPathPrefixSegment(routePath, "/app/actions/approvals")
-  ) {
+  if (matchesPathPrefixSegment(routePath, "/approvals")) {
     return ["operator.approvals"];
   }
 
   // Pairing / device enrollment surface.
-  if (
-    matchesPathPrefixSegment(routePath, "/pairings") ||
-    matchesPathPrefixSegment(routePath, "/app/linking") ||
-    matchesPathPrefixSegment(routePath, "/app/actions/linking")
-  ) {
+  if (matchesPathPrefixSegment(routePath, "/pairings")) {
     return ["operator.pairing"];
   }
 

@@ -28,13 +28,9 @@ describe("Auth middleware", () => {
     app.get("/healthz", (c) => c.json({ status: "ok" }));
     app.post("/auth/session", (c) => c.json({ ok: true }));
     app.post("/auth/logout", (c) => c.json({ ok: true }));
-    app.get("/app", (c) => c.json({ ok: true }));
-    app.get("/app/settings", (c) => c.json({ ok: true }));
     app.get("/app/auth", (c) => c.json({ ok: true }));
     app.get("/ui/index.html", (c) => c.json({ ok: true }));
     app.get("/providers/:provider/oauth/callback", (c) => c.json({ ok: true }));
-    // These routes are intentionally *not* part of the /app subtree, but share a prefix.
-    // Query-string token auth must not apply to them.
     app.get("/application", (c) => c.json({ ok: true }));
     app.get("/appdata", (c) => c.json({ ok: true }));
     app.get("/api/data", (c) => c.json({ data: "secret" }));
@@ -132,21 +128,9 @@ describe("Auth middleware", () => {
     expect(res.status).toBe(200);
   });
 
-  it("allows /app/auth bootstrap when query token is present", async () => {
+  it("rejects legacy /app/auth bootstrap even when query token is present", async () => {
     const app = buildApp();
     const res = await app.request(`/app/auth?token=${encodeURIComponent(adminToken)}&next=%2Fapp`);
-    expect(res.status).toBe(200);
-  });
-
-  it("rejects /app route even when query token is present", async () => {
-    const app = buildApp();
-    const res = await app.request(`/app?token=${encodeURIComponent(adminToken)}`);
-    expect(res.status).toBe(401);
-  });
-
-  it("rejects /app subtree route even when query token is present", async () => {
-    const app = buildApp();
-    const res = await app.request(`/app/settings?token=${encodeURIComponent(adminToken)}`);
     expect(res.status).toBe(401);
   });
 

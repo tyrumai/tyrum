@@ -185,7 +185,7 @@ describe("Auth integration", () => {
       expect(res.status).toBe(200);
     });
 
-    it("bootstraps auth cookie via /auth/session, supports logout, and grants /app access", async () => {
+    it("bootstraps auth cookie via /auth/session and supports logout", async () => {
       const loginRes = await app.request("/auth/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -197,12 +197,10 @@ describe("Auth integration", () => {
       expect(loginSetCookie).toBeTruthy();
       const cookie = loginSetCookie?.split(";")[0] ?? "";
 
-      const appRes = await app.request("/app", {
+      const statusRes = await app.request("/status", {
         headers: { Cookie: cookie },
       });
-      expect(appRes.status).toBe(200);
-      const html = await appRes.text();
-      expect(html).toContain("Dashboard");
+      expect(statusRes.status).toBe(200);
 
       const logoutRes = await app.request("/auth/logout", {
         method: "POST",
@@ -214,7 +212,7 @@ describe("Auth integration", () => {
       expect(logoutSetCookie).toBeTruthy();
       const clearedCookie = logoutSetCookie?.split(";")[0] ?? "";
 
-      const afterLogoutRes = await app.request("/app", {
+      const afterLogoutRes = await app.request("/status", {
         headers: { Cookie: clearedCookie },
       });
       expect(afterLogoutRes.status).toBe(401);

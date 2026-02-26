@@ -34,8 +34,6 @@ import { createModelsDevRoutes } from "./routes/models-dev.js";
 import { createProviderOAuthRoutes } from "./routes/provider-oauth.js";
 import { createContractRoutes } from "./routes/contracts.js";
 import { PlaybookRunner } from "./modules/playbook/runner.js";
-import { createWebApiRoutes } from "./routes/web-api.js";
-import { createWebUiRoutes } from "./routes/web-ui.js";
 import { createOperatorUiRoutes } from "./routes/operator-ui.js";
 import { createPresenceRoutes } from "./routes/presence.js";
 import { loadAllPlaybooks } from "./modules/playbook/loader.js";
@@ -363,9 +361,6 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     }),
   );
 
-  // Gateway-hosted web API compatibility layer for former Next handlers.
-  app.route("/", createWebApiRoutes());
-
   // Operator web UI (static SPA).
   app.route("/", createOperatorUiRoutes());
 
@@ -394,21 +389,6 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       }),
     );
   }
-
-  // Gateway-hosted web UI.
-  app.route(
-    "/",
-    createWebUiRoutes({
-      db: container.db,
-      approvalDal: container.approvalDal,
-      memoryDal: container.memoryDal,
-      watcherProcessor: container.watcherProcessor,
-      canvasDal: container.canvasDal,
-      playbooks,
-      playbookRunner,
-      isLocalOnly,
-    }),
-  );
 
   return app;
 }
