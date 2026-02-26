@@ -61,10 +61,13 @@ describe("Issue #568 docs", () => {
     const docsDir = resolve(repoRoot, "docs");
     const mdFiles = await listMarkdownFiles(docsDir);
 
-    const urlTokenPattern = /(?:https?|wss?):\/\/\S+\?\S*token=/i;
+    const urlTokenPattern = /[?&](?:access_)?token=/i;
     for (const file of mdFiles) {
       const content = await readFile(file, "utf8");
       expect(content).not.toMatch(urlTokenPattern);
     }
+
+    const readme = await readFile(resolve(repoRoot, "README.md"), "utf8");
+    expect(readme).not.toMatch(urlTokenPattern);
   });
 });

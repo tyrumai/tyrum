@@ -59,7 +59,7 @@ When the gateway is running, it serves the operator web UI as a single-page app 
 
 Browser login uses a cookie bootstrap flow:
 
-- The UI sends your admin token to `POST /auth/session` once.
+- The UI sends your admin token to `POST /auth/session` once (`{ "token": "<admin token>" }`).
 - The gateway sets an `HttpOnly` auth cookie for the browser.
 - Subsequent HTTP and WebSocket requests authenticate via that cookie (tokens are never placed in URLs).
 
