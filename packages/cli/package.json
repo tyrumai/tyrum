@@ -1,0 +1,25 @@
+{
+  "name": "@tyrum/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "tyrum-cli": "./bin/tyrum-cli.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "files": [
+    "dist",
+    "bin"
+  ],
+  "scripts": {
+    "build": "tsdown src/index.ts --format esm --dts",
+    "start": "node bin/tyrum-cli.mjs"
+  },
+  "dependencies": {
+    "@tyrum/client": "workspace:*"
+  }
+}
