@@ -1041,6 +1041,34 @@ async function runOperatorWsCommand<T>(
   }
 }
 
+type TyrumHttpClient = ReturnType<typeof createTyrumHttpClient>;
+
+async function runOperatorHttpCommand<T>(
+  home: string,
+  label: string,
+  fn: (http: TyrumHttpClient) => Promise<T>,
+): Promise<number> {
+  try {
+    const config = await requireOperatorConfig(home);
+    const http = createTyrumHttpClient({
+      baseUrl: config.gateway_url,
+      auth: { type: "bearer", token: config.auth_token },
+    });
+    const result = await fn(http);
+    console.log(JSON.stringify(result, null, 2));
+    return 0;
+  } catch (error) {
+    if (error instanceof TyrumHttpClientError) {
+      const status = error.status ? `status=${String(error.status)}` : "status=unknown";
+      console.error(`${label}: failed: ${status} message=${error.message}`);
+      return 1;
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`${label}: failed: ${message}`);
+    return 1;
+  }
+}
+
 export async function runCli(argv: readonly string[] = process.argv.slice(2)): Promise<number> {
   const normalizedArgv = argv[0] === "--" ? argv.slice(1) : argv;
   let command: CliCommand;
@@ -1071,49 +1099,26 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
     command.kind === "policy_overrides_create" ||
     command.kind === "policy_overrides_revoke"
   ) {
-    try {
-      const config = await requireOperatorConfig(tyrumHome);
-      const http = createTyrumHttpClient({
-        baseUrl: config.gateway_url,
-        auth: { type: "bearer", token: config.auth_token },
-      });
-
-      let result: unknown;
+    return await runOperatorHttpCommand(tyrumHome, "policy", async (http) => {
       switch (command.kind) {
         case "policy_bundle":
-          result = await http.policy.getBundle();
-          break;
+          return await http.policy.getBundle();
         case "policy_overrides_list":
-          result = await http.policy.listOverrides();
-          break;
+          return await http.policy.listOverrides();
         case "policy_overrides_create":
-          result = await http.policy.createOverride({
+          return await http.policy.createOverride({
             agent_id: command.agent_id,
             tool_id: command.tool_id,
             pattern: command.pattern,
             workspace_id: command.workspace_id,
           });
-          break;
         case "policy_overrides_revoke":
-          result = await http.policy.revokeOverride({
+          return await http.policy.revokeOverride({
             policy_override_id: command.policy_override_id,
             reason: command.reason,
           });
-          break;
       }
-
-      console.log(JSON.stringify(result, null, 2));
-      return 0;
-    } catch (error) {
-      if (error instanceof TyrumHttpClientError) {
-        const status = error.status ? `status=${String(error.status)}` : "status=unknown";
-        console.error(`policy: failed: ${status} message=${error.message}`);
-        return 1;
-      }
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`policy: failed: ${message}`);
-      return 1;
-    }
+    });
   }
 
   if (
@@ -1122,45 +1127,22 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
     command.kind === "secrets_revoke" ||
     command.kind === "secrets_rotate"
   ) {
-    try {
-      const config = await requireOperatorConfig(tyrumHome);
-      const http = createTyrumHttpClient({
-        baseUrl: config.gateway_url,
-        auth: { type: "bearer", token: config.auth_token },
-      });
-
-      let result: unknown;
+    return await runOperatorHttpCommand(tyrumHome, "secrets", async (http) => {
       switch (command.kind) {
         case "secrets_list":
-          result = await http.secrets.list();
-          break;
+          return await http.secrets.list();
         case "secrets_store":
-          result = await http.secrets.store({
+          return await http.secrets.store({
             scope: command.scope,
             provider: command.provider,
             value: command.value,
           });
-          break;
         case "secrets_revoke":
-          result = await http.secrets.revoke(command.handle_id);
-          break;
+          return await http.secrets.revoke(command.handle_id);
         case "secrets_rotate":
-          result = await http.secrets.rotate(command.handle_id, { value: command.value });
-          break;
+          return await http.secrets.rotate(command.handle_id, { value: command.value });
       }
-
-      console.log(JSON.stringify(result, null, 2));
-      return 0;
-    } catch (error) {
-      if (error instanceof TyrumHttpClientError) {
-        const status = error.status ? `status=${String(error.status)}` : "status=unknown";
-        console.error(`secrets: failed: ${status} message=${error.message}`);
-        return 1;
-      }
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`secrets: failed: ${message}`);
-      return 1;
-    }
+    });
   }
 
   if (
@@ -1168,42 +1150,20 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
     command.kind === "pairing_deny" ||
     command.kind === "pairing_revoke"
   ) {
-    try {
-      const config = await requireOperatorConfig(tyrumHome);
-      const http = createTyrumHttpClient({
-        baseUrl: config.gateway_url,
-        auth: { type: "bearer", token: config.auth_token },
-      });
-
-      let result: unknown;
+    return await runOperatorHttpCommand(tyrumHome, "pairing", async (http) => {
       switch (command.kind) {
         case "pairing_approve":
-          result = await http.pairings.approve(command.pairing_id, {
+          return await http.pairings.approve(command.pairing_id, {
             trust_level: command.trust_level,
             capability_allowlist: command.capability_allowlist,
             reason: command.reason,
           });
-          break;
         case "pairing_deny":
-          result = await http.pairings.deny(command.pairing_id, { reason: command.reason });
-          break;
+          return await http.pairings.deny(command.pairing_id, { reason: command.reason });
         case "pairing_revoke":
-          result = await http.pairings.revoke(command.pairing_id, { reason: command.reason });
-          break;
+          return await http.pairings.revoke(command.pairing_id, { reason: command.reason });
       }
-
-      console.log(JSON.stringify(result, null, 2));
-      return 0;
-    } catch (error) {
-      if (error instanceof TyrumHttpClientError) {
-        const status = error.status ? `status=${String(error.status)}` : "status=unknown";
-        console.error(`pairing: failed: ${status} message=${error.message}`);
-        return 1;
-      }
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`pairing: failed: ${message}`);
-      return 1;
-    }
+    });
   }
 
   if (command.kind === "approvals_list") {
