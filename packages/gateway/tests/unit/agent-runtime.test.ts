@@ -1199,46 +1199,57 @@ describe("AgentRuntime", () => {
       migrationsDir,
     });
 
-    const runtime = new AgentRuntime({
-      container,
-      home: homeDir,
-      languageModel: createStubLanguageModel("ok"),
-      fetchImpl: fetch404,
-      turnEngineWaitMs: 100,
-    } as ConstructorParameters<typeof AgentRuntime>[0]);
+    const turnEngineWaitMs = 2_000;
+    const realNow = Date.now.bind(Date);
+    let timeOffsetMs = 0;
+    const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => realNow() + timeOffsetMs);
 
-    const engine = (runtime as unknown as { executionEngine: ExecutionEngine }).executionEngine;
-    const originalWorkerTick = engine.workerTick.bind(engine);
+    try {
+      const runtime = new AgentRuntime({
+        container,
+        home: homeDir,
+        languageModel: createStubLanguageModel("ok"),
+        fetchImpl: fetch404,
+        turnEngineWaitMs,
+      } as ConstructorParameters<typeof AgentRuntime>[0]);
 
-    engine.workerTick = async (opts) => {
-      const didWork = await originalWorkerTick(opts);
-      if (didWork) {
-        const runId = (opts as { runId?: string }).runId;
-        if (runId) {
-          const run = await container!.db.get<{ status: string }>(
-            "SELECT status FROM execution_runs WHERE run_id = ?",
-            [runId],
-          );
-          if (run?.status === "succeeded") {
-            // Simulate expensive work after the run has already completed,
-            // pushing the caller past its polling deadline.
-            const endAt = Date.now() + 200;
-            while (Date.now() < endAt) {
-              // busy wait
+      const engine = (runtime as unknown as { executionEngine: ExecutionEngine }).executionEngine;
+      const originalWorkerTick = engine.workerTick.bind(engine);
+      let advancedClock = false;
+
+      engine.workerTick = async (opts) => {
+        const didWork = await originalWorkerTick(opts);
+        if (didWork) {
+          const runId = (opts as { runId?: string }).runId;
+          if (runId) {
+            const run = await container!.db.get<{ status: string }>(
+              "SELECT status FROM execution_runs WHERE run_id = ?",
+              [runId],
+            );
+            if (run?.status === "succeeded") {
+              // Simulate expensive work after the run has already completed by
+              // advancing the clock beyond the turn deadline before the caller
+              // can observe the terminal run status in the next polling loop.
+              if (!advancedClock) {
+                timeOffsetMs = turnEngineWaitMs + 500;
+                advancedClock = true;
+              }
             }
           }
         }
-      }
-      return didWork;
-    };
+        return didWork;
+      };
 
-    const res = await runtime.turn({
-      channel: "test",
-      thread_id: "thread-1",
-      message: "hello",
-    });
+      const res = await runtime.turn({
+        channel: "test",
+        thread_id: "thread-1",
+        message: "hello",
+      });
 
-    expect(res.reply).toBe("ok");
+      expect(res.reply).toBe("ok");
+    } finally {
+      nowSpy.mockRestore();
+    }
   });
 
   it("prefers the attempt error for failed runs over stale pause metadata", async () => {
