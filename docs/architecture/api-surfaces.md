@@ -10,10 +10,10 @@ The transport you pick is a **delivery detail**. **Scopes + per-method authoriza
 ## Principle: scopes are the boundary (not transport)
 
 - The same operator can perform both “day-to-day” actions and “admin” actions.
-- Whether an action is *allowed* is decided by **scopes** (and approvals/policy), not by “it was HTTP” or “it was WS”.
+- Whether an action is _allowed_ is decided by **scopes** (and approvals/policy), not by “it was HTTP” or “it was WS”.
 - **Both** HTTP routes and WS request types MUST declare and enforce required scopes (deny-by-default).
 
-If you find yourself describing “operator = WS” and “admin = HTTP”, treat that as a *current implementation shape*, not an architectural rule.
+If you find yourself describing “operator = WS” and “admin = HTTP”, treat that as a _current implementation shape_, not an architectural rule.
 
 ## When to use WebSocket
 
@@ -38,7 +38,7 @@ HTTP endpoints should still publish events (or otherwise update durable state) s
 
 ## Avoid dual-surface drift
 
-Do not implement the *same mutation* twice (once in HTTP, once in WS) unless you have a strong reason.
+Do not implement the _same mutation_ twice (once in HTTP, once in WS) unless you have a strong reason.
 
 If you must duplicate a capability across transports:
 
@@ -99,4 +99,3 @@ When adding a new capability:
 - Add SDK tests/fixtures in `packages/client/tests`.
 
 Docs are part of the contract: if you change a surface, update the relevant `docs/architecture/*` page(s).
-
