@@ -65,6 +65,7 @@
 ## PR / commit expectations
 
 - Branch naming: `<issue-number>-<slug>` (see `CONTRIBUTING.md`).
+- Before commit: `node scripts/format-changed.mjs --write --staged`.
 - Before PR: `pnpm typecheck && pnpm test && pnpm lint`.
 - Keep diffs small; update docs/tests alongside behavior changes; ensure workflows in `.github/workflows/` stay green.
 
