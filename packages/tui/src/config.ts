@@ -93,12 +93,13 @@ export function resolveTuiConfig(input: {
   const tlsCertFingerprint256Raw = (input.tlsCertFingerprint256 ?? "").trim();
   const tlsCertFingerprint256 = (() => {
     if (!tlsCertFingerprint256Raw) return undefined;
-    if (!normalizeFingerprint256(tlsCertFingerprint256Raw)) {
+    const normalized = normalizeFingerprint256(tlsCertFingerprint256Raw);
+    if (!normalized) {
       throw new Error(
         "Invalid tls fingerprint256; expected 64 hex characters (with optional ':').",
       );
     }
-    return tlsCertFingerprint256Raw;
+    return normalized;
   })();
 
   return {

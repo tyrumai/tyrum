@@ -48,4 +48,17 @@ describe("resolveTuiConfig", () => {
       }),
     ).toThrow(/tls fingerprint/i);
   });
+
+  it("normalizes tls fingerprint256", () => {
+    const normalized = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    const fingerprint = normalized.match(/.{2}/g)!.join(":").toUpperCase();
+
+    const cfg = resolveTuiConfig({
+      env: { GATEWAY_TOKEN: "t" },
+      defaults: { gatewayUrl: "https://example.com", tyrumHome: "/h" },
+      tlsCertFingerprint256: `  ${fingerprint}  `,
+    });
+
+    expect(cfg.tlsCertFingerprint256).toBe(normalized);
+  });
 });
