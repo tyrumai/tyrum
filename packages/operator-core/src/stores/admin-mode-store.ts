@@ -84,14 +84,15 @@ export function createAdminModeStore(options?: {
   const syncRemaining = (): void => {
     if (expiresAtMs === null) return;
     const remainingMs = toRemainingMs(expiresAtMs, now());
+    if (remainingMs === 0) {
+      setInactive();
+      return;
+    }
     setState((prev) => {
       if (prev.status !== "active") return prev;
       if (prev.remainingMs === remainingMs) return prev;
       return { ...prev, remainingMs };
     });
-    if (remainingMs === 0) {
-      setInactive();
-    }
   };
 
   const startTimers = (): void => {

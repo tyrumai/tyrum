@@ -7,6 +7,7 @@ import {
   isAdminModeActive,
   requireAdminMode,
   selectAuthForAdminMode,
+  type AdminModeState,
 } from "../src/index.js";
 
 describe("admin mode", () => {
@@ -53,6 +54,53 @@ describe("admin mode", () => {
       expiresAt: null,
     });
     expect(selectAuthForAdminMode({ baseline, adminMode: store.getSnapshot() })).toEqual(baseline);
+  });
+
+  it("does not select elevated auth when admin mode is expired", () => {
+    const baseline = createBearerTokenAuth("baseline-token");
+    const adminMode = {
+      status: "active",
+      elevatedToken: "elevated-token",
+      enteredAt: null,
+      expiresAt: "2026-02-26T00:00:05.000Z",
+      remainingMs: 0,
+    } satisfies AdminModeState;
+
+    expect(isAdminModeActive(adminMode)).toBe(false);
+    expect(selectAuthForAdminMode({ baseline, adminMode })).toEqual(baseline);
+  });
+
+  it("does not emit a transient active state with zero remainingMs", () => {
+    vi.useFakeTimers();
+
+    const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+    try {
+      let nowMs = Date.parse("2026-02-26T00:00:00.000Z");
+      const store = createAdminModeStore({ tickIntervalMs: 1_000, now: () => nowMs });
+
+      const emitted: AdminModeState[] = [];
+      store.subscribe(() => {
+        emitted.push(store.getSnapshot());
+      });
+
+      const expiresAt = new Date(nowMs + 1_000).toISOString();
+      store.enter({ elevatedToken: "elevated-token", expiresAt });
+
+      const intervalCall = setIntervalSpy.mock.calls.find((call) => call[1] === 1_000);
+      if (!intervalCall) throw new Error("Expected createAdminModeStore to schedule a tick timer");
+      const intervalCallback = intervalCall[0] as () => void;
+
+      nowMs += 1_000;
+      intervalCallback();
+
+      expect(emitted.some((state) => state.status === "active" && state.remainingMs === 0)).toBe(
+        false,
+      );
+
+      store.dispose();
+    } finally {
+      setIntervalSpy.mockRestore();
+    }
   });
 
   it("provides gating helpers for dangerous actions", async () => {
