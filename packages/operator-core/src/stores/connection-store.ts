@@ -17,7 +17,7 @@ export interface ConnectionStore extends ExternalStore<ConnectionState> {
 
 export function createConnectionStore(ws: OperatorWsClient): {
   store: ConnectionStore;
-  handleConnected: (clientId: string) => void;
+  handleConnected: (clientId: string | null) => void;
   handleDisconnected: (code: number, reason: string) => void;
   handleTransportError: (message: string) => void;
 } {
@@ -47,7 +47,7 @@ export function createConnectionStore(ws: OperatorWsClient): {
     }));
   }
 
-  function handleConnected(clientId: string): void {
+  function handleConnected(clientId: string | null): void {
     setState((prev) => ({
       ...prev,
       status: "connected",

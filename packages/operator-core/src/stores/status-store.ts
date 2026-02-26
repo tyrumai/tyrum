@@ -45,12 +45,20 @@ export function createStatusStore(http: OperatorHttpClient): {
     lastSyncedAt: null,
   });
 
+  let refreshStatusRunId = 0;
+  let activeRefreshStatusRunId: number | null = null;
+
+  let refreshUsageRunId = 0;
+  let activeRefreshUsageRunId: number | null = null;
+
   let refreshPresenceRunId = 0;
   let activeRefreshPresenceRunId: number | null = null;
   let bufferedPresenceUpserts = new Map<string, OperatorPresenceEntry>();
   let bufferedPresencePrunes = new Set<string>();
 
   async function refreshStatus(): Promise<void> {
+    const runId = ++refreshStatusRunId;
+    activeRefreshStatusRunId = runId;
     setState((prev) => ({
       ...prev,
       loading: { ...prev.loading, status: true },
@@ -58,6 +66,7 @@ export function createStatusStore(http: OperatorHttpClient): {
     }));
     try {
       const status = await http.status.get();
+      if (activeRefreshStatusRunId !== runId) return;
       setState((prev) => ({
         ...prev,
         status,
@@ -65,15 +74,22 @@ export function createStatusStore(http: OperatorHttpClient): {
         lastSyncedAt: new Date().toISOString(),
       }));
     } catch (error) {
+      if (activeRefreshStatusRunId !== runId) return;
       setState((prev) => ({
         ...prev,
         loading: { ...prev.loading, status: false },
         error: { ...prev.error, status: toErrorMessage(error) },
       }));
+    } finally {
+      if (activeRefreshStatusRunId === runId) {
+        activeRefreshStatusRunId = null;
+      }
     }
   }
 
   async function refreshUsage(query?: unknown): Promise<void> {
+    const runId = ++refreshUsageRunId;
+    activeRefreshUsageRunId = runId;
     setState((prev) => ({
       ...prev,
       loading: { ...prev.loading, usage: true },
@@ -81,6 +97,7 @@ export function createStatusStore(http: OperatorHttpClient): {
     }));
     try {
       const usage = await http.usage.get(query);
+      if (activeRefreshUsageRunId !== runId) return;
       setState((prev) => ({
         ...prev,
         usage,
@@ -88,11 +105,16 @@ export function createStatusStore(http: OperatorHttpClient): {
         lastSyncedAt: new Date().toISOString(),
       }));
     } catch (error) {
+      if (activeRefreshUsageRunId !== runId) return;
       setState((prev) => ({
         ...prev,
         loading: { ...prev.loading, usage: false },
         error: { ...prev.error, usage: toErrorMessage(error) },
       }));
+    } finally {
+      if (activeRefreshUsageRunId === runId) {
+        activeRefreshUsageRunId = null;
+      }
     }
   }
 

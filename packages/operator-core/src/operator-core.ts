@@ -47,7 +47,9 @@ export interface OperatorCore {
 function readClientId(data: unknown): string | null {
   if (!data || typeof data !== "object" || Array.isArray(data)) return null;
   const raw = (data as Record<string, unknown>)["clientId"];
-  return typeof raw === "string" ? raw : null;
+  if (typeof raw !== "string") return null;
+  const clientId = raw.trim();
+  return clientId.length > 0 ? clientId : null;
 }
 
 function readDisconnect(data: unknown): { code: number; reason: string } | null {
@@ -115,9 +117,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
 
   on("connected", (data) => {
     const clientId = readClientId(data);
-    if (clientId) {
-      connection.handleConnected(clientId);
-    }
+    connection.handleConnected(clientId);
     void syncOnConnect();
   });
 

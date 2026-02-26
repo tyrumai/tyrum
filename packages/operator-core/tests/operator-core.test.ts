@@ -351,6 +351,110 @@ describe("operator-core wiring", () => {
     expect(runs.attemptIdsByStepId["step-1"]).toEqual(["attempt-1"]);
   });
 
+  it("treats connected without clientId as connected", async () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+
+    const core = createOperatorCore({
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788",
+      auth: createBearerTokenAuth("test-token"),
+      deps: { ws, http },
+    });
+
+    core.connect();
+    expect(core.connectionStore.getSnapshot().status).toBe("connecting");
+
+    ws.emit("connected", { clientId: "" });
+    await tick();
+
+    expect(core.connectionStore.getSnapshot()).toMatchObject({
+      status: "connected",
+      clientId: null,
+    });
+    expect(http.__calls.statusGet).toBe(1);
+    expect(http.__calls.usageGet).toBe(1);
+    expect(http.__calls.presenceList).toBe(1);
+    expect(http.__calls.pairingsList).toBe(1);
+    expect(ws.approvalList).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshStatus ignores stale responses and does not clear loading early", async () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+
+    const statusA: StatusResponse = { ...sampleStatusResponse(), version: "0.1.0-a" };
+    const statusB: StatusResponse = { ...sampleStatusResponse(), version: "0.1.0-b" };
+
+    const statusGetA = deferred<StatusResponse>();
+    const statusGetB = deferred<StatusResponse>();
+    let call = 0;
+    http.status.get = vi.fn(async () => {
+      call++;
+      return call === 1 ? statusGetA.promise : statusGetB.promise;
+    });
+
+    const core = createOperatorCore({
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788",
+      auth: createBearerTokenAuth("test-token"),
+      deps: { ws, http },
+    });
+
+    const p1 = core.statusStore.refreshStatus();
+    const p2 = core.statusStore.refreshStatus();
+
+    statusGetA.resolve(statusA);
+    await p1;
+
+    expect(core.statusStore.getSnapshot().loading.status).toBe(true);
+    expect(core.statusStore.getSnapshot().status).toBe(null);
+
+    statusGetB.resolve(statusB);
+    await p2;
+
+    expect(core.statusStore.getSnapshot().loading.status).toBe(false);
+    expect(core.statusStore.getSnapshot().status).toMatchObject({ version: "0.1.0-b" });
+  });
+
+  it("refreshUsage ignores stale responses and does not clear loading early", async () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+
+    const usageA: UsageResponse = { ...sampleUsageResponse(), generated_at: "2026-01-01T00:00:00.000Z" };
+    const usageB: UsageResponse = { ...sampleUsageResponse(), generated_at: "2026-01-02T00:00:00.000Z" };
+
+    const usageGetA = deferred<UsageResponse>();
+    const usageGetB = deferred<UsageResponse>();
+    let call = 0;
+    http.usage.get = vi.fn(async () => {
+      call++;
+      return call === 1 ? usageGetA.promise : usageGetB.promise;
+    });
+
+    const core = createOperatorCore({
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788",
+      auth: createBearerTokenAuth("test-token"),
+      deps: { ws, http },
+    });
+
+    const p1 = core.statusStore.refreshUsage();
+    const p2 = core.statusStore.refreshUsage();
+
+    usageGetA.resolve(usageA);
+    await p1;
+
+    expect(core.statusStore.getSnapshot().loading.usage).toBe(true);
+    expect(core.statusStore.getSnapshot().usage).toBe(null);
+
+    usageGetB.resolve(usageB);
+    await p2;
+
+    expect(core.statusStore.getSnapshot().loading.usage).toBe(false);
+    expect(core.statusStore.getSnapshot().usage).toMatchObject({ generated_at: "2026-01-02T00:00:00.000Z" });
+  });
+
   it("does not drop WS approvals during refreshPending", async () => {
     const ws = new FakeWsClient();
     const http = createFakeHttpClient();
