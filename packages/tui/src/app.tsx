@@ -264,10 +264,7 @@ function RunsScreen({
   selectedId: string | null;
 }) {
   const runsState = useOperatorStore(core.runsStore);
-  const runs = useMemo(
-    () => getRunList(runsState).slice(0, MAX_RUNS_VISIBLE),
-    [runsState],
-  );
+  const runs = useMemo(() => getRunList(runsState).slice(0, MAX_RUNS_VISIBLE), [runsState]);
   const runIds = useMemo(() => runs.map((run) => run.run_id), [runs]);
   const effectiveCursor = getEffectiveCursor({ ids: runIds, cursor, selectedId });
   const selectedRun = runs[effectiveCursor] ?? null;
@@ -329,7 +326,7 @@ function RunsScreen({
                       Step {String(step.step_index)}: {step.action.type} ({step.status})
                     </Text>
                     {attempts.length === 0 ? (
-                      <Text dimColor>  No attempts yet.</Text>
+                      <Text dimColor> No attempts yet.</Text>
                     ) : (
                       attempts.map((attempt) => (
                         <Text key={attempt.attempt_id} dimColor>
@@ -368,7 +365,9 @@ export function TuiApp({ core, config }: { core: OperatorCore; config: ResolvedT
     const runs = core.runsStore.getSnapshot();
 
     const pairingIds = getPairingIds(pairing);
-    const runIds = getRunList(runs).slice(0, MAX_RUNS_VISIBLE).map((run) => run.run_id);
+    const runIds = getRunList(runs)
+      .slice(0, MAX_RUNS_VISIBLE)
+      .map((run) => run.run_id);
 
     const reduced = reduceTuiInput({
       state: uiStateRef.current,
@@ -438,9 +437,7 @@ export function TuiApp({ core, config }: { core: OperatorCore; config: ResolvedT
   return (
     <Box flexDirection="column" padding={1}>
       <AppHeader title={`Tyrum TUI (${uiState.route})`} />
-      {uiState.route === "connect" ? (
-        <ConnectScreen core={core} config={config} />
-      ) : null}
+      {uiState.route === "connect" ? <ConnectScreen core={core} config={config} /> : null}
       {uiState.route === "status" ? <StatusScreen core={core} /> : null}
       {uiState.route === "approvals" ? (
         <ApprovalsScreen

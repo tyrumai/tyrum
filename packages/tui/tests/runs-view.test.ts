@@ -108,4 +108,3 @@ describe("runs view helpers", () => {
     expect(attempts.map((attempt) => attempt.attempt_id)).toEqual(["att1", "att2"]);
   });
 });
-

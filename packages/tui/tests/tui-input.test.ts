@@ -31,9 +31,9 @@ describe("tui input reducer", () => {
     });
 
     expect(moved.state.approvalsCursor).toBe(1);
-    expect((moved.state as unknown as { approvalsSelectedId?: number | null }).approvalsSelectedId).toBe(
-      11,
-    );
+    expect(
+      (moved.state as unknown as { approvalsSelectedId?: number | null }).approvalsSelectedId,
+    ).toBe(11);
 
     const approved = reduceTuiInput({
       state: moved.state,
@@ -113,9 +113,9 @@ describe("tui input reducer", () => {
       runIds: [],
     });
 
-    expect((moved.state as unknown as { pairingSelectedId?: number | null }).pairingSelectedId).toBe(
-      6,
-    );
+    expect(
+      (moved.state as unknown as { pairingSelectedId?: number | null }).pairingSelectedId,
+    ).toBe(6);
 
     const approved = reduceTuiInput({
       state: moved.state,
