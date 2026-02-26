@@ -1,0 +1,25 @@
+{
+  "name": "@tyrum/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "prebuild": "pnpm --filter @tyrum/schemas build && pnpm --filter @tyrum/client build && pnpm --filter @tyrum/operator-core build && pnpm --filter @tyrum/operator-ui build",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "pnpm exec tsc --noEmit --project tsconfig.json"
+  },
+  "dependencies": {
+    "@tyrum/operator-core": "workspace:*",
+    "@tyrum/operator-ui": "workspace:*",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.1.4",
+    "vite": "^7.3.0"
+  }
+}
