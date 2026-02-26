@@ -5,6 +5,7 @@ import { colors, fonts } from "../theme.js";
 interface LayoutProps {
   currentPage: string;
   onNavigate: (page: string) => void;
+  fullBleed?: boolean;
   children: ReactNode;
 }
 
@@ -22,11 +23,15 @@ const mainStyle: React.CSSProperties = {
   overflowY: "auto",
 };
 
-export function Layout({ currentPage, onNavigate, children }: LayoutProps) {
+export function Layout({ currentPage, onNavigate, fullBleed = false, children }: LayoutProps) {
+  const computedMainStyle: React.CSSProperties = fullBleed
+    ? { ...mainStyle, padding: 0, overflow: "hidden" }
+    : mainStyle;
+
   return (
     <div style={containerStyle}>
       <Sidebar currentPage={currentPage} onNavigate={onNavigate} />
-      <main style={mainStyle}>{children}</main>
+      <main style={computedMainStyle}>{children}</main>
     </div>
   );
 }

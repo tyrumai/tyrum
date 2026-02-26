@@ -54,6 +54,12 @@ importers:
       '@tyrum/client':
         specifier: workspace:*
         version: link:../../packages/client
+      '@tyrum/operator-core':
+        specifier: workspace:*
+        version: link:../../packages/operator-core
+      '@tyrum/operator-ui':
+        specifier: workspace:*
+        version: link:../../packages/operator-ui
       '@tyrum/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas

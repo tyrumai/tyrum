@@ -1,363 +1,129 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { createTyrumHttpClient } from "@tyrum/client";
+import { createBearerTokenAuth, createOperatorCore, type OperatorCore } from "@tyrum/operator-core";
+import { OperatorUiApp } from "@tyrum/operator-ui";
+import { useEffect, useRef, useState } from "react";
 import { toErrorMessage } from "../lib/errors.js";
-import { colors, fonts, heading, card, btn, statusDot, STATUS_COLORS } from "../theme.js";
 
-interface GatewayConfigShape {
+type OperatorConnectionInfo = {
   mode: "embedded" | "remote";
-  embedded: { port: number };
-  remote: { wsUrl: string };
-}
-
-interface GatewayUiUrls {
-  embedUrl: string | null;
-  displayUrl: string | null;
-  externalUrl: string | null;
-}
-
-interface GatewayProps {
-  launchOnboarding?: boolean;
-  onOnboardingLaunchHandled?: () => void;
-}
-
-const toolbarStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  flexWrap: "wrap",
-  marginBottom: 10,
+  wsUrl: string;
+  httpBaseUrl: string;
+  token: string;
+  tlsCertFingerprint256: string;
 };
 
-const urlStyle: React.CSSProperties = {
-  fontFamily: fonts.mono,
-  fontSize: 12,
-  color: colors.fgMuted,
-  background: colors.bgSubtle,
-  borderRadius: 6,
-  padding: "6px 8px",
-  maxWidth: "100%",
-  border: `1px solid ${colors.border}`,
-};
-
-const frameShellStyle: React.CSSProperties = {
-  background: colors.bgCard,
-  borderRadius: 8,
-  border: `1px solid ${colors.border}`,
-  height: "calc(100vh - 215px)",
-  minHeight: 420,
-  overflow: "hidden",
-  display: "flex",
-  flexDirection: "column",
-};
-
-const iframeStyle: React.CSSProperties = {
-  width: "100%",
-  height: "100%",
-  border: "none",
-  background: colors.bgCard,
-};
-
-const placeholderStyle: React.CSSProperties = {
-  padding: 20,
-  fontSize: 14,
-  color: colors.fgMuted,
-};
-
-export function Gateway({ launchOnboarding = false, onOnboardingLaunchHandled }: GatewayProps) {
-  const [config, setConfig] = useState<GatewayConfigShape>({
-    mode: "embedded",
-    embedded: { port: 8788 },
-    remote: { wsUrl: "ws://127.0.0.1:8788/ws" },
+function headersToRecord(headers: HeadersInit | undefined): Record<string, string> | undefined {
+  if (!headers) return undefined;
+  const record: Record<string, string> = {};
+  new Headers(headers).forEach((value, key) => {
+    record[key] = value;
   });
-  const [gatewayStatus, setGatewayStatus] = useState("stopped");
-  const [busy, setBusy] = useState(false);
-  const [openingExternal, setOpeningExternal] = useState(false);
-  const [reloadKey, setReloadKey] = useState(0);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [gatewayUrls, setGatewayUrls] = useState<GatewayUiUrls>({
-    embedUrl: null,
-    displayUrl: null,
-    externalUrl: null,
-  });
+  return record;
+}
 
+export function Gateway() {
   const api = window.tyrumDesktop;
-  const startOnboardingRef = useRef(launchOnboarding);
-
-  useEffect(() => {
-    if (launchOnboarding) {
-      startOnboardingRef.current = true;
-    }
-  }, [launchOnboarding]);
-
-  const refreshGatewayUrls = useCallback(
-    async (options?: { startOnboarding?: boolean }) => {
-      if (!api) return;
-      try {
-        const urls = await api.gateway.getUiUrls(options);
-        setGatewayUrls(urls);
-      } catch (error) {
-        setErrorMessage(toErrorMessage(error));
-      }
-    },
-    [api],
-  );
+  const [core, setCore] = useState<OperatorCore | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const coreRef = useRef<OperatorCore | null>(null);
 
   useEffect(() => {
     if (!api) return;
     let disposed = false;
 
-    void api
-      .getConfig()
-      .then((rawConfig) => {
-        const cfg = rawConfig as Record<string, unknown>;
-        const mode = cfg["mode"] === "remote" ? "remote" : "embedded";
-        const embeddedRaw =
-          cfg["embedded"] && typeof cfg["embedded"] === "object"
-            ? (cfg["embedded"] as Record<string, unknown>)
-            : {};
-        const remoteRaw =
-          cfg["remote"] && typeof cfg["remote"] === "object"
-            ? (cfg["remote"] as Record<string, unknown>)
-            : {};
-
-        const embeddedPort = typeof embeddedRaw["port"] === "number" ? embeddedRaw["port"] : 8788;
-        const remoteWsUrl =
-          typeof remoteRaw["wsUrl"] === "string" ? remoteRaw["wsUrl"] : "ws://127.0.0.1:8788/ws";
-
+    const boot = async (): Promise<void> => {
+      setBusy(true);
+      setErrorMessage(null);
+      try {
+        const connection = (await api.gateway.getOperatorConnection()) as OperatorConnectionInfo;
         if (disposed) return;
-        setConfig({
-          mode,
-          embedded: { port: embeddedPort },
-          remote: { wsUrl: remoteWsUrl },
+
+        const ipcFetch = async (
+          input: RequestInfo | URL,
+          init?: RequestInit,
+        ): Promise<Response> => {
+          const url =
+            typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+          const headers = headersToRecord(init?.headers);
+          const result = await api.gateway.httpFetch({
+            url,
+            init: {
+              method: init?.method,
+              headers,
+              body: typeof init?.body === "string" ? init.body : undefined,
+            },
+          });
+          return new Response(result.bodyText, {
+            status: result.status,
+            headers: result.headers,
+          });
+        };
+
+        const http = createTyrumHttpClient({
+          baseUrl: connection.httpBaseUrl,
+          auth: { type: "bearer", token: connection.token },
+          fetch: ipcFetch,
         });
-      })
-      .catch((error) => {
+
+        const nextCore = createOperatorCore({
+          wsUrl: connection.wsUrl,
+          httpBaseUrl: connection.httpBaseUrl,
+          auth: createBearerTokenAuth(connection.token),
+          deps: { http },
+        });
+
+        nextCore.connect();
+
+        coreRef.current?.dispose();
+        coreRef.current = nextCore;
+        setCore(nextCore);
+      } catch (error) {
+        if (disposed) return;
+        setErrorMessage(toErrorMessage(error));
+        setCore(null);
+      } finally {
         if (!disposed) {
-          setErrorMessage(toErrorMessage(error));
-        }
-      });
-
-    void api.gateway
-      .getStatus()
-      .then((snapshot) => {
-        if (disposed) return;
-        setGatewayStatus(snapshot.status);
-        setConfig((prev) => ({
-          ...prev,
-          embedded: { ...prev.embedded, port: snapshot.port },
-        }));
-        if (snapshot.status === "running" || snapshot.status === "stopped") {
-          setErrorMessage(null);
-        }
-      })
-      .catch(() => {
-        // Ignore snapshot failures; status events and actions still drive this view.
-      });
-    void refreshGatewayUrls({
-      startOnboarding: startOnboardingRef.current,
-    });
-
-    const unsubscribe = api.onStatusChange((statusRaw) => {
-      const status = statusRaw as Record<string, unknown>;
-      let shouldRefreshUrls = false;
-      if (typeof status["gatewayStatus"] === "string") {
-        const next = status["gatewayStatus"] as string;
-        setGatewayStatus(next);
-        shouldRefreshUrls = true;
-        if (next === "running" || next === "stopped") {
-          setErrorMessage(null);
+          setBusy(false);
         }
       }
-      if (typeof status["port"] === "number") {
-        setConfig((prev) => ({
-          ...prev,
-          embedded: { ...prev.embedded, port: status["port"] as number },
-        }));
-        shouldRefreshUrls = true;
-      }
+    };
 
-      if (shouldRefreshUrls) {
-        void refreshGatewayUrls({
-          startOnboarding: startOnboardingRef.current,
-        });
-      }
-    });
+    void boot();
 
     return () => {
       disposed = true;
-      unsubscribe();
+      coreRef.current?.dispose();
+      coreRef.current = null;
     };
-  }, [api, refreshGatewayUrls]);
+  }, [api]);
 
-  const appUrl = gatewayUrls.embedUrl;
-  const appDisplayUrl = gatewayUrls.displayUrl;
-  const externalUrl = gatewayUrls.externalUrl ?? appDisplayUrl;
-  const canEmbed = appUrl != null && (config.mode === "remote" || gatewayStatus === "running");
-
-  useEffect(() => {
-    if (!launchOnboarding) {
-      return;
-    }
-    if (!canEmbed) {
-      return;
-    }
-    if (!gatewayUrls.embedUrl?.includes("next=%2Fapp%2Fonboarding%2Fstart")) {
-      return;
-    }
-    startOnboardingRef.current = false;
-    onOnboardingLaunchHandled?.();
-  }, [canEmbed, gatewayUrls.embedUrl, launchOnboarding, onOnboardingLaunchHandled]);
-
-  useEffect(() => {
-    if (!api || config.mode !== "embedded") {
-      return;
-    }
-    const expectedOrigin = `http://127.0.0.1:${config.embedded.port}`;
-
-    const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== expectedOrigin) {
-        return;
-      }
-      if (!event.data || typeof event.data !== "object" || Array.isArray(event.data)) {
-        return;
-      }
-
-      const payload = event.data as Record<string, unknown>;
-      if (payload["type"] !== "tyrum:onboarding-mode-selected") {
-        return;
-      }
-
-      const mode = payload["mode"];
-      if (mode !== "embedded" && mode !== "remote") {
-        return;
-      }
-
-      void api.onboarding.selectMode(mode).catch((error) => {
-        setErrorMessage(toErrorMessage(error));
-      });
-    };
-
-    window.addEventListener("message", handleMessage);
-    return () => {
-      window.removeEventListener("message", handleMessage);
-    };
-  }, [api, config.mode, config.embedded.port]);
-
-  const startGateway = async () => {
-    if (!api || busy) return;
-    setBusy(true);
-    setErrorMessage(null);
-    try {
-      const port = config.embedded.port;
-      await api.setConfig({ mode: "embedded", embedded: { port } });
-      setConfig((prev) => ({ ...prev, mode: "embedded" }));
-      const result = await api.gateway.start();
-      setGatewayStatus(result.status);
-      setConfig((prev) => ({
-        ...prev,
-        embedded: { ...prev.embedded, port: result.port },
-      }));
-      await refreshGatewayUrls();
-    } catch (error) {
-      setGatewayStatus("error");
-      setErrorMessage(toErrorMessage(error));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const stopGateway = async () => {
-    if (!api || busy) return;
-    setBusy(true);
-    try {
-      const result = await api.gateway.stop();
-      setGatewayStatus(result.status);
-      setErrorMessage(null);
-      await refreshGatewayUrls();
-    } catch (error) {
-      setErrorMessage(toErrorMessage(error));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const openInBrowser = async () => {
-    if (!api || !externalUrl || openingExternal) return;
-    setOpeningExternal(true);
-    try {
-      await api.openExternal(externalUrl);
-    } catch (error) {
-      setErrorMessage(toErrorMessage(error));
-    } finally {
-      setOpeningExternal(false);
-    }
-  };
-
-  return (
-    <div>
-      <h1 style={heading}>Gateway</h1>
-
-      <div style={card}>
-        <div style={toolbarStyle}>
-          <span style={statusDot(STATUS_COLORS[gatewayStatus] ?? STATUS_COLORS["stopped"]!)} />
-          <strong style={{ marginRight: 8 }}>
-            {gatewayStatus.charAt(0).toUpperCase() + gatewayStatus.slice(1)}
-          </strong>
-          {config.mode === "embedded" ? (
-            gatewayStatus === "running" || gatewayStatus === "starting" ? (
-              <button style={btn("danger")} onClick={stopGateway} disabled={busy}>
-                {busy ? "Stopping..." : "Stop Gateway"}
-              </button>
-            ) : (
-              <button style={btn("primary")} onClick={startGateway} disabled={busy}>
-                {busy ? "Starting..." : "Start Gateway"}
-              </button>
-            )
-          ) : (
-            <span style={{ color: colors.fgMuted, fontSize: 13 }}>
-              Remote mode (no local start/stop)
-            </span>
-          )}
-
-          <button
-            style={btn("secondary")}
-            onClick={() => setReloadKey((k) => k + 1)}
-            disabled={!canEmbed}
-          >
-            Reload
-          </button>
-          <button
-            style={btn("secondary")}
-            onClick={openInBrowser}
-            disabled={!externalUrl || openingExternal}
-          >
-            {openingExternal ? "Opening..." : "Open in Browser"}
-          </button>
-        </div>
-
-        <div style={urlStyle}>{appDisplayUrl ?? "No valid Gateway URL available"}</div>
-        {errorMessage && (
-          <div style={{ color: colors.error, marginTop: 10, fontSize: 13 }}>
-            Reason: {errorMessage}
-          </div>
-        )}
+  if (!api) {
+    return (
+      <div style={{ padding: 24 }}>
+        <h1>Gateway</h1>
+        <div>Desktop API not available.</div>
       </div>
+    );
+  }
 
-      <div style={frameShellStyle}>
-        {canEmbed ? (
-          <iframe
-            key={`${appUrl}:${reloadKey}`}
-            style={iframeStyle}
-            src={appUrl ?? undefined}
-            title="Tyrum Gateway"
-          />
-        ) : (
-          <div style={placeholderStyle}>
-            {config.mode === "embedded"
-              ? "Start the embedded gateway to load the integrated web app."
-              : "Set a valid remote gateway URL in Connection to load the integrated web app."}
-          </div>
-        )}
+  if (errorMessage) {
+    return (
+      <div style={{ padding: 24 }}>
+        <h1>Gateway</h1>
+        <div style={{ marginTop: 12, color: "#fecaca" }}>{errorMessage}</div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  if (!core) {
+    return (
+      <div style={{ padding: 24 }}>
+        <h1>Gateway</h1>
+        <div>{busy ? "Loading operator UI..." : "Operator UI not ready."}</div>
+      </div>
+    );
+  }
+
+  return <OperatorUiApp core={core} mode="desktop" />;
 }

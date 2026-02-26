@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, shell } from "electron";
 import { join } from "node:path";
 import { registerGatewayIpc, startEmbeddedGatewayFromConfig } from "./ipc/gateway-ipc.js";
 import { registerNodeIpc, shutdownNodeResources } from "./ipc/node-ipc.js";
@@ -13,20 +13,7 @@ app.setName?.("Tyrum");
 let mainWindow: BrowserWindow | null = null;
 let gatewayManager: GatewayManager | null = null;
 let isQuitting = false;
-let appIpcRegistered = false;
 let isQuittingForUpdate = false;
-const startupState = { launchOnboarding: false };
-
-function registerAppIpc(): void {
-  if (appIpcRegistered) return;
-  appIpcRegistered = true;
-
-  ipcMain.handle("app:get-startup-state", () => {
-    const snapshot = { ...startupState };
-    startupState.launchOnboarding = false;
-    return snapshot;
-  });
-}
 
 async function shutdownAppResources(): Promise<void> {
   try {
@@ -44,7 +31,6 @@ async function shutdownAppResources(): Promise<void> {
 
 export async function maybeAutoStartEmbeddedGatewayOnLaunch(): Promise<void> {
   const hadConfig = configExists();
-  startupState.launchOnboarding = !hadConfig;
   const config = loadConfig();
   const shouldStartEmbedded = !hadConfig || config.mode === "embedded";
   if (!shouldStartEmbedded) {
@@ -58,10 +44,50 @@ export async function maybeAutoStartEmbeddedGatewayOnLaunch(): Promise<void> {
   }
 }
 
+function isSafeExternalUrl(rawUrl: string): boolean {
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function registerNavigationGuardrails(window: BrowserWindow): void {
+  const devServerUrl = process.env["VITE_DEV_SERVER_URL"];
+  const devOrigin = devServerUrl ? new URL(devServerUrl).origin : null;
+
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    if (isSafeExternalUrl(url)) {
+      void shell.openExternal(url);
+    }
+    return { action: "deny" };
+  });
+
+  window.webContents.on("will-navigate", (event, url) => {
+    try {
+      const parsed = new URL(url);
+      const isAllowedDev = devOrigin !== null && parsed.origin === devOrigin;
+      const isAllowedFile = parsed.protocol === "file:";
+      if (isAllowedDev || isAllowedFile) {
+        return;
+      }
+    } catch {
+      // Treat invalid URLs as disallowed navigations.
+    }
+
+    event.preventDefault();
+    if (isSafeExternalUrl(url)) {
+      void shell.openExternal(url);
+    }
+  });
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow(MAIN_WINDOW_OPTIONS);
 
-  registerAppIpc();
+  registerNavigationGuardrails(mainWindow);
+
   registerConfigIpc();
   gatewayManager = registerGatewayIpc(mainWindow);
   registerNodeIpc(mainWindow);
