@@ -43,27 +43,44 @@ function ConnectPage({ core, mode }: { core: OperatorCore; mode: OperatorUiMode 
   };
 
   const readGatewayError = async (res: Response): Promise<string> => {
+    const contentType = res.headers.get("content-type")?.trim().toLowerCase() ?? "";
+    const maybeJson =
+      contentType.includes("application/json") ||
+      contentType.includes("+json") ||
+      contentType.includes("/json");
+
+    let bodyText: string;
     try {
-      const contentType = res.headers.get("content-type");
-      if (contentType && contentType.toLowerCase().includes("application/json")) {
-        const body = (await res.json()) as unknown;
+      bodyText = await res.text();
+    } catch {
+      return `HTTP ${String(res.status)}`;
+    }
+
+    const trimmedText = bodyText.trim();
+    if (!trimmedText) {
+      return `HTTP ${String(res.status)}`;
+    }
+
+    if (maybeJson) {
+      try {
+        const body = JSON.parse(trimmedText) as unknown;
         if (body && typeof body === "object" && !Array.isArray(body)) {
           const message = (body as Record<string, unknown>)["message"];
-          if (typeof message === "string" && message.trim()) return message;
+          if (typeof message === "string" && message.trim()) {
+            return message.trim();
+          }
+
+          const error = (body as Record<string, unknown>)["error"];
+          if (typeof error === "string" && error.trim()) {
+            return error.trim();
+          }
         }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
     }
 
-    try {
-      const text = (await res.text()).trim();
-      if (text) return truncateText(text);
-    } catch {
-      // ignore
-    }
-
-    return `HTTP ${String(res.status)}`;
+    return truncateText(trimmedText);
   };
 
   const login = async (): Promise<void> => {

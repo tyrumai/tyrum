@@ -523,6 +523,58 @@ describe("operator-ui", () => {
     container.remove();
   });
 
+  it("surfaces json error codes when login fails without a message field", async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response(JSON.stringify({ error: "unauthorized" }), {
+        status: 401,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBrowserCookieAuth(),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode: "web" }));
+    });
+
+    const tokenField = container.querySelector<HTMLTextAreaElement>('[data-testid="login-token"]');
+    expect(tokenField).not.toBeNull();
+
+    act(() => {
+      tokenField!.value = "test-token";
+    });
+
+    const loginButton = container.querySelector<HTMLButtonElement>('[data-testid="login-button"]');
+    expect(loginButton).not.toBeNull();
+
+    await act(async () => {
+      loginButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(ws.connect).toHaveBeenCalledTimes(0);
+    expect(container.textContent).toContain("unauthorized");
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
   it("surfaces text errors when login fails with non-json response", async () => {
     const fetchMock = vi.fn(async () => {
       return new Response("gateway exploded", {
