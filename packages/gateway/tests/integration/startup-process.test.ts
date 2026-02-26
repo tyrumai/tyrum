@@ -16,11 +16,10 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 import Database from "better-sqlite3";
-import { deviceIdFromSha256Digest } from "@tyrum/schemas";
+import { completeHandshake } from "./ws-handshake.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = resolve(__dirname, "../..");
@@ -53,111 +52,6 @@ function waitForOpen(ws: WebSocket, timeoutMs = 5_000): Promise<void> {
       reject(err);
     });
   });
-}
-
-function waitForJsonMessageMatching(
-  ws: WebSocket,
-  predicate: (msg: Record<string, unknown>) => boolean,
-  timeoutMs = 5_000,
-  label = "unknown",
-): Promise<Record<string, unknown>> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      ws.off("message", onMessage);
-      reject(new Error(`message timeout (${label})`));
-    }, timeoutMs);
-
-    const onMessage = (data: unknown) => {
-      try {
-        const msg = JSON.parse(String(data)) as Record<string, unknown>;
-        if (!predicate(msg)) return;
-        clearTimeout(timer);
-        ws.off("message", onMessage);
-        resolve(msg);
-      } catch {
-        // ignore malformed frames
-      }
-    };
-
-    ws.on("message", onMessage);
-  });
-}
-
-function computeDeviceId(pubkeyDer: Buffer): string {
-  const digest = createHash("sha256").update(pubkeyDer).digest();
-  return deviceIdFromSha256Digest(digest);
-}
-
-function buildTranscript(input: {
-  protocolRev: number;
-  role: "client" | "node";
-  deviceId: string;
-  connectionId: string;
-  challenge: string;
-}): Buffer {
-  const text =
-    `tyrum-connect-proof\n` +
-    `protocol_rev=${String(input.protocolRev)}\n` +
-    `role=${input.role}\n` +
-    `device_id=${input.deviceId}\n` +
-    `connection_id=${input.connectionId}\n` +
-    `challenge=${input.challenge}\n`;
-  return Buffer.from(text, "utf-8");
-}
-
-async function completeHandshake(ws: WebSocket, requestIdPrefix: string): Promise<void> {
-  const { publicKey, privateKey } = generateKeyPairSync("ed25519");
-  const pubkeyDer = publicKey.export({ format: "der", type: "spki" }) as Buffer;
-  const pubkeyB64Url = pubkeyDer.toString("base64url");
-  const deviceId = computeDeviceId(pubkeyDer);
-
-  ws.send(
-    JSON.stringify({
-      request_id: `${requestIdPrefix}-init`,
-      type: "connect.init",
-      payload: {
-        protocol_rev: 2,
-        role: "client",
-        device: { device_id: deviceId, pubkey: pubkeyB64Url, label: "test" },
-        capabilities: [],
-      },
-    }),
-  );
-
-  const initRes = await waitForJsonMessageMatching(
-    ws,
-    (msg) => msg["type"] === "connect.init" && Object.prototype.hasOwnProperty.call(msg, "ok"),
-    5_000,
-    "connect.init",
-  );
-  expect(initRes["ok"], JSON.stringify(initRes)).toBe(true);
-  const initResult = initRes["result"] as Record<string, unknown>;
-  const connectionId = String(initResult["connection_id"]);
-  const challenge = String(initResult["challenge"]);
-
-  const transcript = buildTranscript({
-    protocolRev: 2,
-    role: "client",
-    deviceId,
-    connectionId,
-    challenge,
-  });
-  const signature = sign(null, transcript, privateKey);
-
-  ws.send(
-    JSON.stringify({
-      request_id: `${requestIdPrefix}-proof`,
-      type: "connect.proof",
-      payload: { connection_id: connectionId, proof: signature.toString("base64url") },
-    }),
-  );
-  const proofRes = await waitForJsonMessageMatching(
-    ws,
-    (msg) => msg["type"] === "connect.proof" && Object.prototype.hasOwnProperty.call(msg, "ok"),
-    5_000,
-    "connect.proof",
-  );
-  expect(proofRes["ok"], JSON.stringify(proofRes)).toBe(true);
 }
 
 const isWindows = process.platform === "win32";
@@ -514,7 +408,11 @@ describe("gateway startup process", () => {
             const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(gatewayToken));
             try {
               await waitForOpen(ws);
-              await completeHandshake(ws, "r");
+              await completeHandshake(ws, {
+                requestIdPrefix: "r",
+                role: "client",
+                capabilities: [],
+              });
 
               ws.send(
                 JSON.stringify({
@@ -648,7 +546,11 @@ describe("gateway startup process", () => {
             const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(gatewayToken));
             try {
               await waitForOpen(ws);
-              await completeHandshake(ws, "r");
+              await completeHandshake(ws, {
+                requestIdPrefix: "r",
+                role: "client",
+                capabilities: [],
+              });
 
               ws.send(
                 JSON.stringify({

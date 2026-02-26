@@ -4,7 +4,6 @@ import { WebSocket } from "ws";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { createWsHandler } from "../../src/routes/ws.js";
 import { TokenStore } from "../../src/modules/auth/token-store.js";
@@ -14,7 +13,7 @@ import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import { createStubLanguageModel } from "../unit/stub-language-model.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 import type { PolicyService } from "../../src/modules/policy/service.js";
-import { deviceIdFromSha256Digest } from "@tyrum/schemas";
+import { completeHandshake } from "./ws-handshake.js";
 
 function authProtocols(token: string): string[] {
   return ["tyrum-v1", `tyrum-auth.${Buffer.from(token, "utf-8").toString("base64url")}`];
@@ -64,83 +63,6 @@ function waitForJsonMessageMatching(
 
     ws.on("message", onMessage);
   });
-}
-
-function computeDeviceId(pubkeyDer: Buffer): string {
-  const digest = createHash("sha256").update(pubkeyDer).digest();
-  return deviceIdFromSha256Digest(digest);
-}
-
-function buildTranscript(input: {
-  protocolRev: number;
-  role: "client" | "node";
-  deviceId: string;
-  connectionId: string;
-  challenge: string;
-}): Buffer {
-  const text =
-    `tyrum-connect-proof\n` +
-    `protocol_rev=${String(input.protocolRev)}\n` +
-    `role=${input.role}\n` +
-    `device_id=${input.deviceId}\n` +
-    `connection_id=${input.connectionId}\n` +
-    `challenge=${input.challenge}\n`;
-  return Buffer.from(text, "utf-8");
-}
-
-async function completeHandshake(ws: WebSocket, requestIdPrefix: string): Promise<void> {
-  const { publicKey, privateKey } = generateKeyPairSync("ed25519");
-  const pubkeyDer = publicKey.export({ format: "der", type: "spki" }) as Buffer;
-  const pubkeyB64Url = pubkeyDer.toString("base64url");
-  const deviceId = computeDeviceId(pubkeyDer);
-
-  ws.send(
-    JSON.stringify({
-      request_id: `${requestIdPrefix}-init`,
-      type: "connect.init",
-      payload: {
-        protocol_rev: 2,
-        role: "client",
-        device: { device_id: deviceId, pubkey: pubkeyB64Url, label: "test" },
-        capabilities: [],
-      },
-    }),
-  );
-
-  const initRes = await waitForJsonMessageMatching(
-    ws,
-    (msg) => msg["type"] === "connect.init" && Object.prototype.hasOwnProperty.call(msg, "ok"),
-    5_000,
-    "connect.init",
-  );
-  expect(initRes["ok"], JSON.stringify(initRes)).toBe(true);
-  const initResult = initRes["result"] as Record<string, unknown>;
-  const connectionId = String(initResult["connection_id"]);
-  const challenge = String(initResult["challenge"]);
-
-  const transcript = buildTranscript({
-    protocolRev: 2,
-    role: "client",
-    deviceId,
-    connectionId,
-    challenge,
-  });
-  const signature = sign(null, transcript, privateKey);
-
-  ws.send(
-    JSON.stringify({
-      request_id: `${requestIdPrefix}-proof`,
-      type: "connect.proof",
-      payload: { connection_id: connectionId, proof: signature.toString("base64url") },
-    }),
-  );
-  const proofRes = await waitForJsonMessageMatching(
-    ws,
-    (msg) => msg["type"] === "connect.proof" && Object.prototype.hasOwnProperty.call(msg, "ok"),
-    5_000,
-    "connect.proof",
-  );
-  expect(proofRes["ok"], JSON.stringify(proofRes)).toBe(true);
 }
 
 function makeAgents(runtime: AgentRuntime, policyService: PolicyService): AgentRegistry {
@@ -238,7 +160,7 @@ describe("WS control-plane requests", () => {
     ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(adminToken));
     await waitForOpen(ws);
 
-    await completeHandshake(ws, "r");
+    await completeHandshake(ws, { requestIdPrefix: "r", role: "client", capabilities: [] });
 
     ws.send(
       JSON.stringify({

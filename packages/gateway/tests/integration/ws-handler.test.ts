@@ -11,12 +11,12 @@ import { createPairingRoutes } from "../../src/routes/pairing.js";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createHash, generateKeyPairSync, sign } from "node:crypto";
+import { generateKeyPairSync, sign } from "node:crypto";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
-  deviceIdFromSha256Digest,
 } from "@tyrum/schemas";
+import { buildTranscript, completeHandshake, computeDeviceId } from "./ws-handshake.js";
 
 function authProtocols(token: string): string[] {
   return ["tyrum-v1", `tyrum-auth.${Buffer.from(token, "utf-8").toString("base64url")}`];
@@ -129,96 +129,6 @@ function waitForJsonMessageMatching(
 
     ws.on("message", onMessage);
   });
-}
-
-function computeDeviceId(pubkeyDer: Buffer): string {
-  const digest = createHash("sha256").update(pubkeyDer).digest();
-  return deviceIdFromSha256Digest(digest);
-}
-
-function buildTranscript(input: {
-  protocolRev: number;
-  role: "client" | "node";
-  deviceId: string;
-  connectionId: string;
-  challenge: string;
-}): Buffer {
-  const text =
-    `tyrum-connect-proof\n` +
-    `protocol_rev=${String(input.protocolRev)}\n` +
-    `role=${input.role}\n` +
-    `device_id=${input.deviceId}\n` +
-    `connection_id=${input.connectionId}\n` +
-    `challenge=${input.challenge}\n`;
-  return Buffer.from(text, "utf-8");
-}
-
-async function completeHandshake(
-  ws: WebSocket,
-  input: {
-    requestIdPrefix: string;
-    role: "client" | "node";
-    capabilities: Parameters<typeof descriptorIdForClientCapability>[0][];
-    label?: string;
-  },
-): Promise<{ clientId: string; deviceId: string }> {
-  const { publicKey, privateKey } = generateKeyPairSync("ed25519");
-  const pubkeyDer = publicKey.export({ format: "der", type: "spki" }) as Buffer;
-  const pubkeyB64Url = pubkeyDer.toString("base64url");
-  const deviceId = computeDeviceId(pubkeyDer);
-
-  ws.send(
-    JSON.stringify({
-      request_id: `${input.requestIdPrefix}-init`,
-      type: "connect.init",
-      payload: {
-        protocol_rev: 2,
-        role: input.role,
-        device: { device_id: deviceId, pubkey: pubkeyB64Url, label: input.label ?? "test" },
-        capabilities: input.capabilities.map((capability) => ({
-          id: descriptorIdForClientCapability(capability),
-          version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
-        })),
-      },
-    }),
-  );
-
-  const initRes = await waitForJsonMessage(ws);
-  expect(initRes).toMatchObject({
-    request_id: `${input.requestIdPrefix}-init`,
-    type: "connect.init",
-    ok: true,
-  });
-
-  const initResult = initRes["result"] as Record<string, unknown>;
-  const connectionId = String(initResult["connection_id"]);
-  const challenge = String(initResult["challenge"]);
-
-  const transcript = buildTranscript({
-    protocolRev: 2,
-    role: input.role,
-    deviceId,
-    connectionId,
-    challenge,
-  });
-  const signature = sign(null, transcript, privateKey);
-
-  ws.send(
-    JSON.stringify({
-      request_id: `${input.requestIdPrefix}-proof`,
-      type: "connect.proof",
-      payload: { connection_id: connectionId, proof: signature.toString("base64url") },
-    }),
-  );
-
-  const proofRes = await waitForJsonMessage(ws);
-  expect(proofRes).toMatchObject({
-    request_id: `${input.requestIdPrefix}-proof`,
-    type: "connect.proof",
-    ok: true,
-  });
-
-  return { clientId: connectionId, deviceId };
 }
 
 describe("WS handler integration", () => {
