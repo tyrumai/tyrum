@@ -296,6 +296,24 @@ function deferred<T>(): {
 }
 
 describe("operator-core wiring", () => {
+  it("exposes adminModeStore as a single source of truth", () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+
+    const core = createOperatorCore({
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788",
+      auth: createBearerTokenAuth("test-token"),
+      deps: { ws, http },
+    });
+
+    expect(core.adminModeStore.getSnapshot()).toMatchObject({
+      status: "inactive",
+      elevatedToken: null,
+      expiresAt: null,
+    });
+  });
+
   it("updates stores from WS events", async () => {
     const ws = new FakeWsClient();
     const http = createFakeHttpClient();

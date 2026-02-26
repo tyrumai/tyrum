@@ -1,4 +1,5 @@
 import type { TyrumHttpAuthStrategy } from "@tyrum/client";
+import type { AdminModeState } from "./stores/admin-mode-store.js";
 
 export type OperatorAuthStrategy =
   | {
@@ -21,6 +22,16 @@ export function createBrowserCookieAuth(options?: {
 
 export function createBearerTokenAuth(token: string): OperatorAuthStrategy {
   return { type: "bearer-token", token };
+}
+
+export function selectAuthForAdminMode(options: {
+  baseline: OperatorAuthStrategy;
+  adminMode: AdminModeState;
+}): OperatorAuthStrategy {
+  const elevatedToken =
+    options.adminMode.status === "active" ? options.adminMode.elevatedToken : null;
+  if (!elevatedToken) return options.baseline;
+  return { type: "bearer-token", token: elevatedToken };
 }
 
 export function wsTokenForAuth(auth: OperatorAuthStrategy): string {
