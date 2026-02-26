@@ -37,6 +37,11 @@ function ConnectPage({ core, mode }: { core: OperatorCore; mode: OperatorUiMode 
   const title = mode === "web" ? "Login" : "Connect";
   const isWeb = mode === "web";
 
+  const truncateText = (text: string, limit = 300): string => {
+    if (text.length <= limit) return text;
+    return `${text.slice(0, limit)}…`;
+  };
+
   const readGatewayError = async (res: Response): Promise<string> => {
     try {
       const contentType = res.headers.get("content-type");
@@ -50,6 +55,14 @@ function ConnectPage({ core, mode }: { core: OperatorCore; mode: OperatorUiMode 
     } catch {
       // ignore
     }
+
+    try {
+      const text = (await res.text()).trim();
+      if (text) return truncateText(text);
+    } catch {
+      // ignore
+    }
+
     return `HTTP ${String(res.status)}`;
   };
 
@@ -94,7 +107,14 @@ function ConnectPage({ core, mode }: { core: OperatorCore; mode: OperatorUiMode 
             <div>
               <label>
                 Token
-                <textarea data-testid="login-token" rows={3} ref={tokenRef} />
+                <textarea
+                  data-testid="login-token"
+                  rows={3}
+                  ref={tokenRef}
+                  spellCheck={false}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                />
               </label>
             </div>
             <button

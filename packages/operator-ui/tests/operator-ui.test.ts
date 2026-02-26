@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import {
@@ -234,6 +234,11 @@ function createFakeHttpClient(): {
 }
 
 describe("operator-ui", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
   it("renders the operator shell navigation", () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();
@@ -350,6 +355,37 @@ describe("operator-ui", () => {
     container.remove();
   });
 
+  it("disables browser assistance on the login token field", () => {
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBrowserCookieAuth(),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode: "web" }));
+    });
+
+    const tokenField = container.querySelector<HTMLTextAreaElement>('[data-testid="login-token"]');
+    expect(tokenField).not.toBeNull();
+    expect(tokenField!.getAttribute("spellcheck")).toBe("false");
+    expect(tokenField!.getAttribute("autocapitalize")).toBe("none");
+    expect(tokenField!.getAttribute("autocorrect")).toBe("off");
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
   it("logs in via /auth/session in web mode", async () => {
     const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
@@ -377,7 +413,6 @@ describe("operator-ui", () => {
 
     act(() => {
       tokenField!.value = "  test-token  ";
-      tokenField!.dispatchEvent(new Event("change", { bubbles: true }));
     });
 
     const loginButton = container.querySelector<HTMLButtonElement>('[data-testid="login-button"]');
@@ -395,9 +430,6 @@ describe("operator-ui", () => {
       root?.unmount();
     });
     container.remove();
-
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
   });
 
   it("rejects blank tokens on the login page", async () => {
@@ -437,9 +469,6 @@ describe("operator-ui", () => {
       root?.unmount();
     });
     container.remove();
-
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
   });
 
   it("surfaces gateway errors when login fails", async () => {
@@ -474,7 +503,6 @@ describe("operator-ui", () => {
 
     act(() => {
       tokenField!.value = "test-token";
-      tokenField!.dispatchEvent(new Event("change", { bubbles: true }));
     });
 
     const loginButton = container.querySelector<HTMLButtonElement>('[data-testid="login-button"]');
@@ -493,9 +521,58 @@ describe("operator-ui", () => {
       root?.unmount();
     });
     container.remove();
+  });
 
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
+  it("surfaces text errors when login fails with non-json response", async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response("gateway exploded", {
+        status: 500,
+        headers: { "content-type": "text/plain" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBrowserCookieAuth(),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode: "web" }));
+    });
+
+    const tokenField = container.querySelector<HTMLTextAreaElement>('[data-testid="login-token"]');
+    expect(tokenField).not.toBeNull();
+
+    act(() => {
+      tokenField!.value = "test-token";
+    });
+
+    const loginButton = container.querySelector<HTMLButtonElement>('[data-testid="login-button"]');
+    expect(loginButton).not.toBeNull();
+
+    await act(async () => {
+      loginButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(ws.connect).toHaveBeenCalledTimes(0);
+    expect(container.textContent).toContain("gateway exploded");
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
   });
 
   it("surfaces transport and disconnect details on the connect page", () => {
