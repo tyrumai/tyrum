@@ -10,6 +10,9 @@ const KeyPart = z
 export const AgentId = KeyPart;
 export type AgentId = z.infer<typeof AgentId>;
 
+export const TenantId = KeyPart;
+export type TenantId = z.infer<typeof TenantId>;
+
 /** Channel type (for example `telegram`, `discord`). */
 export const ChannelKey = KeyPart;
 export type ChannelKey = z.infer<typeof ChannelKey>;
