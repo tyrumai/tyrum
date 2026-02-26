@@ -56,7 +56,8 @@ function ConnectScreen({
         ) : null}
         {connection.lastDisconnect ? (
           <Text color="red">
-            Last disconnect: {String(connection.lastDisconnect.code)} {connection.lastDisconnect.reason}
+            Last disconnect: {String(connection.lastDisconnect.code)}{" "}
+            {connection.lastDisconnect.reason}
           </Text>
         ) : null}
       </Box>

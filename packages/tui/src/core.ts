@@ -3,11 +3,7 @@ import {
   createNodeFileDeviceIdentityStorage,
   loadOrCreateDeviceIdentity,
 } from "@tyrum/client";
-import {
-  createBearerTokenAuth,
-  createOperatorCore,
-  type OperatorCore,
-} from "@tyrum/operator-core";
+import { createBearerTokenAuth, createOperatorCore, type OperatorCore } from "@tyrum/operator-core";
 
 export type TuiCoreOptions = {
   wsUrl: string;
@@ -46,4 +42,3 @@ export async function createTuiCore(options: TuiCoreOptions): Promise<OperatorCo
     deps: { ws },
   });
 }
-

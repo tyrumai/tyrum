@@ -11,16 +11,14 @@ describe("tui cli args", () => {
   });
 
   it("parses --gateway/--token", () => {
-    expect(parseTuiCliArgs(["--gateway", "http://127.0.0.1:8788", "--token", "t"]))
-      .toMatchObject({
-        kind: "start",
-        gatewayUrl: "http://127.0.0.1:8788",
-        token: "t",
-      });
+    expect(parseTuiCliArgs(["--gateway", "http://127.0.0.1:8788", "--token", "t"])).toMatchObject({
+      kind: "start",
+      gatewayUrl: "http://127.0.0.1:8788",
+      token: "t",
+    });
   });
 
   it("rejects missing --gateway value", () => {
     expect(() => parseTuiCliArgs(["--gateway"])).toThrow(/--gateway requires a value/i);
   });
 });
-

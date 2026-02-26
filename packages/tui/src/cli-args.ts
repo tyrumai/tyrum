@@ -100,4 +100,3 @@ export function parseTuiCliArgs(argv: readonly string[]): TuiCliCommand {
 
   return command;
 }
-

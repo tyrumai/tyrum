@@ -17,10 +17,14 @@ function printCliHelp(): void {
   console.log("  tyrum-tui --version");
   console.log("");
   console.log("Options:");
-  console.log("  --gateway <url>            Gateway base URL (http(s)://...) or WS URL (ws(s)://...)");
+  console.log(
+    "  --gateway <url>            Gateway base URL (http(s)://...) or WS URL (ws(s)://...)",
+  );
   console.log("  --token <token>            Gateway token (or env GATEWAY_TOKEN)");
   console.log("  --home, --tyrum-home <dir> Override TYRUM_HOME (default: ~/.tyrum)");
-  console.log("  --device-identity <path>   Device identity JSON path (default: $TYRUM_HOME/tui/device-identity.json)");
+  console.log(
+    "  --device-identity <path>   Device identity JSON path (default: $TYRUM_HOME/tui/device-identity.json)",
+  );
   console.log("  --tls-fingerprint256 <hex> TLS certificate SHA-256 pin for wss:// connections");
   console.log("  --reconnect                Enable auto-reconnect (default)");
   console.log("  --no-reconnect             Disable auto-reconnect");
