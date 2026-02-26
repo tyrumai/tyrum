@@ -429,13 +429,11 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
     if (!api?.checkMacPermissions) return;
     setErrorMessage(null);
     try {
-      const snapshot = (await api.checkMacPermissions()) as
-        | {
-            accessibility: boolean | null;
-            screenRecording: boolean | null;
-            instructions?: string;
-          }
-        | null;
+      const snapshot = (await api.checkMacPermissions()) as {
+        accessibility: boolean | null;
+        screenRecording: boolean | null;
+        instructions?: string;
+      } | null;
       if (!snapshot) {
         setMacPermissionSummary("Not macOS (skipped).");
       } else {
@@ -464,12 +462,12 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
     setErrorMessage(null);
     try {
       await api.requestMacPermission(permission);
+      void checkMacPermissions();
     } catch (error) {
       setErrorMessage(toErrorMessage(error));
     } finally {
       setRequestingPermission(null);
     }
-    void checkMacPermissions();
   };
 
   if (!api) {
