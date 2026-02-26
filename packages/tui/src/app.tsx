@@ -2,7 +2,13 @@ import type { OperatorCore } from "@tyrum/operator-core";
 import { Box, Text, useApp, useInput } from "ink";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ResolvedTuiConfig } from "./config.js";
-import { createInitialTuiUiState, reduceTuiInput, type TuiCommand, type TuiKey } from "./tui-input.js";
+import {
+  createInitialTuiUiState,
+  getEffectiveCursor,
+  reduceTuiInput,
+  type TuiCommand,
+  type TuiKey,
+} from "./tui-input.js";
 import { getAttemptsForStep, getRunList, getStepsForRun } from "./runs-view.js";
 
 const MAX_RUNS_VISIBLE = 20;
@@ -22,14 +28,6 @@ function toTuiKey(key: unknown): TuiKey {
     upArrow: rec["upArrow"] === true,
     downArrow: rec["downArrow"] === true,
   };
-}
-
-function clampCursor(cursor: number, total: number): number {
-  if (total <= 0) return 0;
-  if (!Number.isFinite(cursor)) return 0;
-  if (cursor < 0) return 0;
-  if (cursor >= total) return total - 1;
-  return cursor;
 }
 
 function truncateText(text: string, limit: number): string {
@@ -120,16 +118,19 @@ function StatusScreen({ core }: { core: OperatorCore }) {
 function ApprovalsScreen({
   core,
   cursor,
+  selectedId,
 }: {
   core: OperatorCore;
   cursor: number;
+  selectedId: number | null;
 }) {
   const approvals = useOperatorStore(core.approvalsStore);
   const pendingIds = approvals.pendingIds;
-  const effectiveCursor = clampCursor(cursor, pendingIds.length);
+  const effectiveCursor = getEffectiveCursor({ ids: pendingIds, cursor, selectedId });
 
-  const selectedId = pendingIds[effectiveCursor];
-  const selected = typeof selectedId === "number" ? approvals.byId[selectedId] : null;
+  const selectedIdFromCursor = pendingIds[effectiveCursor];
+  const selected =
+    typeof selectedIdFromCursor === "number" ? approvals.byId[selectedIdFromCursor] : null;
 
   return (
     <Box flexDirection="column">
@@ -190,15 +191,18 @@ function getPairingIds(pairing: ReturnType<OperatorCore["pairingStore"]["getSnap
 function PairingScreen({
   core,
   cursor,
+  selectedId,
 }: {
   core: OperatorCore;
   cursor: number;
+  selectedId: number | null;
 }) {
   const pairing = useOperatorStore(core.pairingStore);
   const pairingIds = useMemo(() => getPairingIds(pairing), [pairing]);
-  const effectiveCursor = clampCursor(cursor, pairingIds.length);
-  const selectedId = pairingIds[effectiveCursor];
-  const selected = typeof selectedId === "number" ? pairing.byId[selectedId] : null;
+  const effectiveCursor = getEffectiveCursor({ ids: pairingIds, cursor, selectedId });
+  const selectedIdFromCursor = pairingIds[effectiveCursor];
+  const selected =
+    typeof selectedIdFromCursor === "number" ? pairing.byId[selectedIdFromCursor] : null;
 
   const pendingCount = pairing.pendingIds.length;
   const totalCount = pairingIds.length;
@@ -250,19 +254,28 @@ function PairingScreen({
   );
 }
 
-function RunsScreen({ core, cursor }: { core: OperatorCore; cursor: number }) {
+function RunsScreen({
+  core,
+  cursor,
+  selectedId,
+}: {
+  core: OperatorCore;
+  cursor: number;
+  selectedId: string | null;
+}) {
   const runsState = useOperatorStore(core.runsStore);
   const runs = useMemo(
     () => getRunList(runsState).slice(0, MAX_RUNS_VISIBLE),
     [runsState],
   );
-  const effectiveCursor = clampCursor(cursor, runs.length);
+  const runIds = useMemo(() => runs.map((run) => run.run_id), [runs]);
+  const effectiveCursor = getEffectiveCursor({ ids: runIds, cursor, selectedId });
   const selectedRun = runs[effectiveCursor] ?? null;
   const steps = selectedRun ? getStepsForRun(runsState, selectedRun.run_id) : [];
 
   return (
     <Box flexDirection="column">
-      <Text dimColor>Keys: ↑/↓ select (updates stream via WS events)</Text>
+      <Text dimColor>Keys: ↑/↓ select (runs/steps update via WS events)</Text>
       <Text>
         Runs: <Text bold>{String(Object.keys(runsState.runsById).length)}</Text> (showing{" "}
         {String(runs.length)})
@@ -430,12 +443,22 @@ export function TuiApp({ core, config }: { core: OperatorCore; config: ResolvedT
       ) : null}
       {uiState.route === "status" ? <StatusScreen core={core} /> : null}
       {uiState.route === "approvals" ? (
-        <ApprovalsScreen core={core} cursor={uiState.approvalsCursor} />
+        <ApprovalsScreen
+          core={core}
+          cursor={uiState.approvalsCursor}
+          selectedId={uiState.approvalsSelectedId}
+        />
       ) : null}
       {uiState.route === "pairing" ? (
-        <PairingScreen core={core} cursor={uiState.pairingCursor} />
+        <PairingScreen
+          core={core}
+          cursor={uiState.pairingCursor}
+          selectedId={uiState.pairingSelectedId}
+        />
       ) : null}
-      {uiState.route === "runs" ? <RunsScreen core={core} cursor={uiState.runsCursor} /> : null}
+      {uiState.route === "runs" ? (
+        <RunsScreen core={core} cursor={uiState.runsCursor} selectedId={uiState.runsSelectedId} />
+      ) : null}
     </Box>
   );
 }

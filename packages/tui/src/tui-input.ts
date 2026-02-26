@@ -9,8 +9,11 @@ export type TuiKey = {
 export type TuiUiState = {
   route: TuiRouteId;
   approvalsCursor: number;
+  approvalsSelectedId: number | null;
   pairingCursor: number;
+  pairingSelectedId: number | null;
   runsCursor: number;
+  runsSelectedId: string | null;
 };
 
 export type TuiCommand =
@@ -28,9 +31,33 @@ export function createInitialTuiUiState(): TuiUiState {
   return {
     route: "connect",
     approvalsCursor: 0,
+    approvalsSelectedId: null,
     pairingCursor: 0,
+    pairingSelectedId: null,
     runsCursor: 0,
+    runsSelectedId: null,
   };
+}
+
+function clampCursor(cursor: number, total: number): number {
+  if (total <= 0) return 0;
+  if (!Number.isFinite(cursor)) return 0;
+  if (cursor < 0) return 0;
+  if (cursor >= total) return total - 1;
+  return cursor;
+}
+
+export function getEffectiveCursor<T>(params: {
+  ids: readonly T[];
+  selectedId: T | null;
+  cursor: number;
+}): number {
+  if (params.ids.length === 0) return 0;
+  if (params.selectedId !== null) {
+    const index = params.ids.indexOf(params.selectedId);
+    if (index >= 0) return index;
+  }
+  return clampCursor(params.cursor, params.ids.length);
 }
 
 export function reduceTuiInput(_params: {
@@ -59,8 +86,11 @@ export function reduceTuiInput(_params: {
     ..._params.state,
     route,
     approvalsCursor: 0,
+    approvalsSelectedId: null,
     pairingCursor: 0,
+    pairingSelectedId: null,
     runsCursor: 0,
+    runsSelectedId: null,
   });
 
   switch (input) {
@@ -85,14 +115,34 @@ export function reduceTuiInput(_params: {
   }
 
   if (_params.state.route === "approvals") {
+    const cursor = getEffectiveCursor({
+      ids: _params.approvalsPendingIds,
+      selectedId: _params.state.approvalsSelectedId,
+      cursor: _params.state.approvalsCursor,
+    });
     const max = Math.max(0, _params.approvalsPendingIds.length - 1);
-    const cursor = Math.max(0, Math.min(_params.state.approvalsCursor, max));
 
     if (key.downArrow) {
-      return { state: { ..._params.state, approvalsCursor: Math.min(cursor + 1, max) }, commands };
+      const nextCursor = Math.min(cursor + 1, max);
+      return {
+        state: {
+          ..._params.state,
+          approvalsCursor: nextCursor,
+          approvalsSelectedId: _params.approvalsPendingIds[nextCursor] ?? null,
+        },
+        commands,
+      };
     }
     if (key.upArrow) {
-      return { state: { ..._params.state, approvalsCursor: Math.max(cursor - 1, 0) }, commands };
+      const nextCursor = Math.max(cursor - 1, 0);
+      return {
+        state: {
+          ..._params.state,
+          approvalsCursor: nextCursor,
+          approvalsSelectedId: _params.approvalsPendingIds[nextCursor] ?? null,
+        },
+        commands,
+      };
     }
 
     if (input === "r") {
@@ -109,19 +159,46 @@ export function reduceTuiInput(_params: {
           decision: input === "a" ? "approved" : "denied",
         });
       }
-      return { state: { ..._params.state, approvalsCursor: cursor }, commands };
+      return {
+        state: {
+          ..._params.state,
+          approvalsCursor: cursor,
+          approvalsSelectedId: typeof approvalId === "number" ? approvalId : null,
+        },
+        commands,
+      };
     }
   }
 
   if (_params.state.route === "pairing") {
+    const cursor = getEffectiveCursor({
+      ids: _params.pairingIds,
+      selectedId: _params.state.pairingSelectedId,
+      cursor: _params.state.pairingCursor,
+    });
     const max = Math.max(0, _params.pairingIds.length - 1);
-    const cursor = Math.max(0, Math.min(_params.state.pairingCursor, max));
 
     if (key.downArrow) {
-      return { state: { ..._params.state, pairingCursor: Math.min(cursor + 1, max) }, commands };
+      const nextCursor = Math.min(cursor + 1, max);
+      return {
+        state: {
+          ..._params.state,
+          pairingCursor: nextCursor,
+          pairingSelectedId: _params.pairingIds[nextCursor] ?? null,
+        },
+        commands,
+      };
     }
     if (key.upArrow) {
-      return { state: { ..._params.state, pairingCursor: Math.max(cursor - 1, 0) }, commands };
+      const nextCursor = Math.max(cursor - 1, 0);
+      return {
+        state: {
+          ..._params.state,
+          pairingCursor: nextCursor,
+          pairingSelectedId: _params.pairingIds[nextCursor] ?? null,
+        },
+        commands,
+      };
     }
 
     if (input === "r") {
@@ -133,27 +210,56 @@ export function reduceTuiInput(_params: {
     if (typeof pairingId === "number") {
       if (input === "a") {
         commands.push({ type: "approvePairing", pairingId });
-        return { state: { ..._params.state, pairingCursor: cursor }, commands };
+        return {
+          state: { ..._params.state, pairingCursor: cursor, pairingSelectedId: pairingId },
+          commands,
+        };
       }
       if (input === "x") {
         commands.push({ type: "denyPairing", pairingId });
-        return { state: { ..._params.state, pairingCursor: cursor }, commands };
+        return {
+          state: { ..._params.state, pairingCursor: cursor, pairingSelectedId: pairingId },
+          commands,
+        };
       }
       if (input === "v") {
         commands.push({ type: "revokePairing", pairingId });
-        return { state: { ..._params.state, pairingCursor: cursor }, commands };
+        return {
+          state: { ..._params.state, pairingCursor: cursor, pairingSelectedId: pairingId },
+          commands,
+        };
       }
     }
   }
 
   if (_params.state.route === "runs") {
+    const cursor = getEffectiveCursor({
+      ids: _params.runIds,
+      selectedId: _params.state.runsSelectedId,
+      cursor: _params.state.runsCursor,
+    });
     const max = Math.max(0, _params.runIds.length - 1);
-    const cursor = Math.max(0, Math.min(_params.state.runsCursor, max));
     if (key.downArrow) {
-      return { state: { ..._params.state, runsCursor: Math.min(cursor + 1, max) }, commands };
+      const nextCursor = Math.min(cursor + 1, max);
+      return {
+        state: {
+          ..._params.state,
+          runsCursor: nextCursor,
+          runsSelectedId: _params.runIds[nextCursor] ?? null,
+        },
+        commands,
+      };
     }
     if (key.upArrow) {
-      return { state: { ..._params.state, runsCursor: Math.max(cursor - 1, 0) }, commands };
+      const nextCursor = Math.max(cursor - 1, 0);
+      return {
+        state: {
+          ..._params.state,
+          runsCursor: nextCursor,
+          runsSelectedId: _params.runIds[nextCursor] ?? null,
+        },
+        commands,
+      };
     }
     return { state: { ..._params.state, runsCursor: cursor }, commands };
   }

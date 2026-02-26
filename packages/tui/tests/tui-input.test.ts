@@ -31,12 +31,41 @@ describe("tui input reducer", () => {
     });
 
     expect(moved.state.approvalsCursor).toBe(1);
+    expect((moved.state as unknown as { approvalsSelectedId?: number | null }).approvalsSelectedId).toBe(
+      11,
+    );
 
     const approved = reduceTuiInput({
       state: moved.state,
       input: "a",
       key: {},
       approvalsPendingIds: [10, 11],
+      pairingIds: [],
+      runIds: [],
+    });
+
+    expect(approved.commands).toEqual([
+      { type: "resolveApproval", approvalId: 11, decision: "approved" },
+    ]);
+  });
+
+  it("resolves the selected approval even when list order changes", () => {
+    const initial = { ...createInitialTuiUiState(), route: "approvals" as const };
+
+    const moved = reduceTuiInput({
+      state: initial,
+      input: "",
+      key: { downArrow: true },
+      approvalsPendingIds: [10, 11],
+      pairingIds: [],
+      runIds: [],
+    });
+
+    const approved = reduceTuiInput({
+      state: moved.state,
+      input: "a",
+      key: {},
+      approvalsPendingIds: [11, 10],
       pairingIds: [],
       runIds: [],
     });
@@ -72,6 +101,34 @@ describe("tui input reducer", () => {
     expect(revoked.commands).toEqual([{ type: "revokePairing", pairingId: 5 }]);
   });
 
+  it("approves the selected pairing even when list order changes", () => {
+    const initial = { ...createInitialTuiUiState(), route: "pairing" as const };
+
+    const moved = reduceTuiInput({
+      state: initial,
+      input: "",
+      key: { downArrow: true },
+      approvalsPendingIds: [],
+      pairingIds: [5, 6],
+      runIds: [],
+    });
+
+    expect((moved.state as unknown as { pairingSelectedId?: number | null }).pairingSelectedId).toBe(
+      6,
+    );
+
+    const approved = reduceTuiInput({
+      state: moved.state,
+      input: "a",
+      key: {},
+      approvalsPendingIds: [],
+      pairingIds: [6, 5],
+      runIds: [],
+    });
+
+    expect(approved.commands).toEqual([{ type: "approvePairing", pairingId: 6 }]);
+  });
+
   it("exits on ctrl+c", () => {
     const initial = createInitialTuiUiState();
 
@@ -87,4 +144,3 @@ describe("tui input reducer", () => {
     expect(next.commands).toEqual([{ type: "exit" }]);
   });
 });
-
