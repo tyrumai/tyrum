@@ -27,9 +27,6 @@ describe("HTTP scope middleware route mapping", () => {
     expect(
       resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/approvals/:id/respond" }),
     ).toEqual(["operator.approvals"]);
-    expect(
-      resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/app/actions/approvals/:id" }),
-    ).toEqual(["operator.approvals"]);
   });
 
   it("maps pairing surfaces to operator.pairing", () => {
@@ -38,9 +35,6 @@ describe("HTTP scope middleware route mapping", () => {
     ]);
     expect(
       resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/pairings/:id/approve" }),
-    ).toEqual(["operator.pairing"]);
-    expect(
-      resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/app/actions/linking/:slug" }),
     ).toEqual(["operator.pairing"]);
   });
 
@@ -69,12 +63,19 @@ describe("HTTP scope middleware route mapping", () => {
     expect(resolveHttpRouteRequiredScopes({ method: "PUT", routePath: "/routing/config" })).toEqual(
       ["operator.admin"],
     );
+  });
+
+  it("does not map removed /app and /api compatibility routes", () => {
     expect(
-      resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/api/account/delete" }),
-    ).toEqual(["operator.admin"]);
+      resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/app/actions/approvals/:id" }),
+    ).toBeNull();
+    expect(
+      resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/app/actions/linking/:slug" }),
+    ).toBeNull();
     expect(
       resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/app/actions/account/delete" }),
-    ).toEqual(["operator.admin"]);
+    ).toBeNull();
+    expect(resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/api/account/delete" })).toBeNull();
   });
 
   it("denies unknown routes by default", () => {

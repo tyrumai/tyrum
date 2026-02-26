@@ -43,9 +43,9 @@ describe("auth audit events", () => {
       await next();
     });
     app.use("*", createAuthMiddleware(tokenStore, { audit }));
-    app.get("/app", (c) => c.json({ ok: true }));
+    app.get("/api/data", (c) => c.json({ ok: true }));
 
-    const res = await app.request(`/app?token=${encodeURIComponent(secret)}`);
+    const res = await app.request(`/api/data?token=${encodeURIComponent(secret)}`);
     expect(res.status).toBe(401);
 
     const rows = await db.all<{ action: string }>(
