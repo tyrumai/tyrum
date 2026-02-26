@@ -95,10 +95,9 @@ export function createAdminModeStore(options?: {
     });
   };
 
-  const startTimers = (): void => {
+  const startTimers = (remainingMs: number): void => {
     if (expiresAtMs === null) return;
 
-    const remainingMs = toRemainingMs(expiresAtMs, now());
     if (remainingMs === 0) {
       setInactive();
       return;
@@ -130,9 +129,10 @@ export function createAdminModeStore(options?: {
       throw new Error("expiresAt is required");
     }
 
+    const nowMs = now();
     const nextExpiresAtMs = parseExpiresAtMs(expiresAt);
-    const enteredAt = new Date(now()).toISOString();
-    const remainingMs = toRemainingMs(nextExpiresAtMs, now());
+    const enteredAt = new Date(nowMs).toISOString();
+    const remainingMs = toRemainingMs(nextExpiresAtMs, nowMs);
 
     if (remainingMs === 0) {
       setInactive();
@@ -140,6 +140,8 @@ export function createAdminModeStore(options?: {
     }
 
     expiresAtMs = nextExpiresAtMs;
+
+    startTimers(remainingMs);
 
     setState((prev) => ({
       ...prev,
@@ -149,8 +151,6 @@ export function createAdminModeStore(options?: {
       expiresAt,
       remainingMs,
     }));
-
-    startTimers();
   };
 
   const exit = (): void => {

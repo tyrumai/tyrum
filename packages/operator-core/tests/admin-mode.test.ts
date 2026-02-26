@@ -103,6 +103,35 @@ describe("admin mode", () => {
     }
   });
 
+  it("uses a consistent now() for enteredAt, remainingMs, and expiry timer", () => {
+    vi.useFakeTimers();
+
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
+    try {
+      let nowCalls = 0;
+      const now = vi.fn(() => nowCalls++ * 1_000);
+      const store = createAdminModeStore({ tickIntervalMs: 0, now });
+
+      const expiresAtMs = 10_000;
+      store.enter({
+        elevatedToken: "elevated-token",
+        expiresAt: new Date(expiresAtMs).toISOString(),
+      });
+
+      const snapshot = store.getSnapshot();
+
+      expect(now).toHaveBeenCalledTimes(1);
+      expect(Date.parse(snapshot.enteredAt!)).toBe(0);
+      expect(snapshot.remainingMs).toBe(expiresAtMs);
+      expect(Date.parse(snapshot.enteredAt!) + snapshot.remainingMs!).toBe(
+        Date.parse(snapshot.expiresAt!),
+      );
+      expect(setTimeoutSpy.mock.calls.some((call) => call[1] === snapshot.remainingMs)).toBe(true);
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
+  });
+
   it("provides gating helpers for dangerous actions", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-02-26T00:00:00.000Z"));
