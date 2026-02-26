@@ -11,12 +11,12 @@ import { createPairingRoutes } from "../../src/routes/pairing.js";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createHash, generateKeyPairSync, sign } from "node:crypto";
+import { generateKeyPairSync, sign } from "node:crypto";
 import {
   CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
   descriptorIdForClientCapability,
-  deviceIdFromSha256Digest,
 } from "@tyrum/schemas";
+import { buildTranscript, completeHandshake, computeDeviceId } from "./ws-handshake.js";
 
 function authProtocols(token: string): string[] {
   return ["tyrum-v1", `tyrum-auth.${Buffer.from(token, "utf-8").toString("base64url")}`];
@@ -131,28 +131,6 @@ function waitForJsonMessageMatching(
   });
 }
 
-function computeDeviceId(pubkeyDer: Buffer): string {
-  const digest = createHash("sha256").update(pubkeyDer).digest();
-  return deviceIdFromSha256Digest(digest);
-}
-
-function buildTranscript(input: {
-  protocolRev: number;
-  role: "client" | "node";
-  deviceId: string;
-  connectionId: string;
-  challenge: string;
-}): Buffer {
-  const text =
-    `tyrum-connect-proof\n` +
-    `protocol_rev=${String(input.protocolRev)}\n` +
-    `role=${input.role}\n` +
-    `device_id=${input.deviceId}\n` +
-    `connection_id=${input.connectionId}\n` +
-    `challenge=${input.challenge}\n`;
-  return Buffer.from(text, "utf-8");
-}
-
 describe("WS handler integration", () => {
   let server: Server | undefined;
   let homeDir: string | undefined;
@@ -179,7 +157,7 @@ describe("WS handler integration", () => {
     }
   });
 
-  it("accepts connection, completes connect handshake, and registers client", async () => {
+  it("accepts connection, completes connect.init/connect.proof handshake, and registers client", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
     const tokenStore = new TokenStore(homeDir);
     const adminToken = await tokenStore.initialize();
@@ -210,17 +188,11 @@ describe("WS handler integration", () => {
     // Before connect, no clients should be registered
     expect(connectionManager.getStats().totalClients).toBe(0);
 
-    // Send connect handshake
-    ws.send(
-      JSON.stringify({
-        request_id: "r-1",
-        type: "connect",
-        payload: { capabilities: ["playwright"] },
-      }),
-    );
-
-    // Wait briefly for the server to process the connect
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await completeHandshake(ws, {
+      requestIdPrefix: "r",
+      role: "client",
+      capabilities: ["playwright"],
+    });
 
     // After connect, client should be registered with the right capability
     const stats = connectionManager.getStats();
@@ -230,6 +202,50 @@ describe("WS handler integration", () => {
     // Verify we can find a client for the playwright capability
     const client = connectionManager.getClientForCapability("playwright");
     expect(client).toBeDefined();
+
+    stopHeartbeat();
+  });
+
+  it("rejects legacy connect handshake requests", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
+    const tokenStore = new TokenStore(homeDir);
+    const adminToken = await tokenStore.initialize();
+
+    const connectionManager = new ConnectionManager();
+    const { handleUpgrade, stopHeartbeat } = createWsHandler({
+      connectionManager,
+      protocolDeps: { connectionManager },
+      tokenStore,
+    });
+
+    server = createServer();
+    server.on("upgrade", (req, socket, head) => {
+      handleUpgrade(req, socket, head);
+    });
+
+    const port = await new Promise<number>((resolve) => {
+      server!.listen(0, "127.0.0.1", () => {
+        const addr = server!.address();
+        resolve(typeof addr === "object" && addr ? addr.port : 0);
+      });
+    });
+
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(adminToken));
+    clients.push(ws);
+    await waitForOpen(ws);
+
+    ws.send(
+      JSON.stringify({
+        request_id: "r-1",
+        type: "connect",
+        payload: { capabilities: ["playwright"] },
+      }),
+    );
+
+    const { code, reason } = await waitForClose(ws, 2_000);
+    expect(code).toBe(4003);
+    expect(reason).toBe("legacy connect is deprecated; use connect.init/connect.proof");
+    expect(connectionManager.getStats().totalClients).toBe(0);
 
     stopHeartbeat();
   });
@@ -266,21 +282,11 @@ describe("WS handler integration", () => {
 
     expect(connectionManager.getStats().totalClients).toBe(0);
 
-    ws.send(
-      JSON.stringify({
-        request_id: "r-1",
-        type: "connect",
-        payload: { capabilities: ["playwright"] },
-      }),
-    );
-
-    const first = await waitForMessageOrClose(ws, 2_000);
-    if (first.kind !== "message") {
-      throw new Error(
-        `Expected connect response; got close ${String(first.code)}: ${first.reason}`,
-      );
-    }
-    expect(first.msg).toMatchObject({ type: "connect", ok: true });
+    await completeHandshake(ws, {
+      requestIdPrefix: "r",
+      role: "client",
+      capabilities: ["playwright"],
+    });
 
     const stats = connectionManager.getStats();
     expect(stats.totalClients).toBe(1);
@@ -324,21 +330,11 @@ describe("WS handler integration", () => {
 
     expect(connectionManager.getStats().totalClients).toBe(0);
 
-    ws.send(
-      JSON.stringify({
-        request_id: "r-1",
-        type: "connect",
-        payload: { capabilities: ["playwright"] },
-      }),
-    );
-
-    const first = await waitForMessageOrClose(ws, 2_000);
-    if (first.kind !== "message") {
-      throw new Error(
-        `Expected connect response; got close ${String(first.code)}: ${first.reason}`,
-      );
-    }
-    expect(first.msg).toMatchObject({ type: "connect", ok: true });
+    await completeHandshake(ws, {
+      requestIdPrefix: "r",
+      role: "client",
+      capabilities: ["playwright"],
+    });
 
     const stats = connectionManager.getStats();
     expect(stats.totalClients).toBe(1);
@@ -382,21 +378,11 @@ describe("WS handler integration", () => {
     clients.push(ws);
     await waitForOpen(ws);
 
-    ws.send(
-      JSON.stringify({
-        request_id: "r-1",
-        type: "connect",
-        payload: { capabilities: ["playwright"] },
-      }),
-    );
-
-    const first = await waitForMessageOrClose(ws, 2_000);
-    if (first.kind !== "message") {
-      throw new Error(
-        `Expected connect response; got close ${String(first.code)}: ${first.reason}`,
-      );
-    }
-    expect(first.msg).toMatchObject({ type: "connect", ok: true });
+    await completeHandshake(ws, {
+      requestIdPrefix: "r",
+      role: "client",
+      capabilities: ["playwright"],
+    });
 
     const stats = connectionManager.getStats();
     expect(stats.totalClients).toBe(1);
@@ -515,65 +501,6 @@ describe("WS handler integration", () => {
 
     const { code } = await waitForClose(ws, 2_000);
     expect(code).toBe(4001);
-
-    stopHeartbeat();
-  });
-
-  it("emits a deprecation warning event after legacy connect", async () => {
-    homeDir = await mkdtemp(join(tmpdir(), "tyrum-ws-"));
-    const tokenStore = new TokenStore(homeDir);
-    const adminToken = await tokenStore.initialize();
-
-    const connectionManager = new ConnectionManager();
-    const { handleUpgrade, stopHeartbeat } = createWsHandler({
-      connectionManager,
-      protocolDeps: { connectionManager },
-      tokenStore,
-    });
-
-    server = createServer();
-    server.on("upgrade", (req, socket, head) => {
-      handleUpgrade(req, socket, head);
-    });
-
-    const port = await new Promise<number>((resolve) => {
-      server!.listen(0, "127.0.0.1", () => {
-        const addr = server!.address();
-        resolve(typeof addr === "object" && addr ? addr.port : 0);
-      });
-    });
-
-    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(adminToken));
-    clients.push(ws);
-    await waitForOpen(ws);
-
-    const connectResP = waitForJsonMessageMatching(
-      ws,
-      (msg) => msg["type"] === "connect" && Object.prototype.hasOwnProperty.call(msg, "ok"),
-    );
-    const warningP = waitForJsonMessageMatching(
-      ws,
-      (msg) =>
-        msg["type"] === "error" &&
-        Object.prototype.hasOwnProperty.call(msg, "event_id") &&
-        typeof msg["payload"] === "object" &&
-        msg["payload"] !== null &&
-        (msg["payload"] as Record<string, unknown>)["code"] === "deprecated_handshake",
-    );
-
-    ws.send(
-      JSON.stringify({
-        request_id: "r-1",
-        type: "connect",
-        payload: { capabilities: [] },
-      }),
-    );
-
-    await connectResP;
-    const warning = await warningP;
-    expect(
-      ((warning as Record<string, unknown>)["payload"] as Record<string, unknown>)["code"],
-    ).toBe("deprecated_handshake");
 
     stopHeartbeat();
   });
@@ -813,7 +740,8 @@ describe("WS handler integration", () => {
     const first = await firstPromise;
     expect(first.kind).toBe("close");
     if (first.kind === "close") {
-      expect(first.code).toBe(4001);
+      expect(first.code).toBe(4003);
+      expect(first.reason).toBe("legacy connect is deprecated; use connect.init/connect.proof");
     }
 
     expect(connectionManager.getStats().totalClients).toBe(0);
@@ -990,19 +918,7 @@ describe("WS handler integration", () => {
     const operator = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(adminToken));
     clients.push(operator);
     await waitForOpen(operator);
-    operator.send(
-      JSON.stringify({
-        request_id: "r-op-connect",
-        type: "connect",
-        payload: { capabilities: [] },
-      }),
-    );
-    await waitForJsonMessageMatching(
-      operator,
-      (msg) => msg["type"] === "connect" && Object.prototype.hasOwnProperty.call(msg, "ok"),
-      5_000,
-      "operator.connect",
-    );
+    await completeHandshake(operator, { requestIdPrefix: "op", role: "client", capabilities: [] });
 
     const node = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(adminToken));
     clients.push(node);
@@ -1140,17 +1056,7 @@ describe("WS handler integration", () => {
     const operator = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(adminToken));
     clients.push(operator);
     await waitForOpen(operator);
-    operator.send(
-      JSON.stringify({
-        request_id: "r-op-connect",
-        type: "connect",
-        payload: { capabilities: [] },
-      }),
-    );
-    await waitForJsonMessageMatching(
-      operator,
-      (msg) => msg["type"] === "connect" && Object.prototype.hasOwnProperty.call(msg, "ok"),
-    );
+    await completeHandshake(operator, { requestIdPrefix: "op", role: "client", capabilities: [] });
 
     const node = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(adminToken));
     clients.push(node);

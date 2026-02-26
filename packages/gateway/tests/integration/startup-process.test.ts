@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 import Database from "better-sqlite3";
+import { completeHandshake } from "./ws-handshake.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = resolve(__dirname, "../..");
@@ -407,14 +408,11 @@ describe("gateway startup process", () => {
             const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(gatewayToken));
             try {
               await waitForOpen(ws);
-              ws.send(
-                JSON.stringify({
-                  request_id: "r-1",
-                  type: "connect",
-                  payload: { capabilities: ["playwright"] },
-                }),
-              );
-              await delay(100);
+              await completeHandshake(ws, {
+                requestIdPrefix: "r",
+                role: "client",
+                capabilities: [],
+              });
 
               ws.send(
                 JSON.stringify({
@@ -548,14 +546,11 @@ describe("gateway startup process", () => {
             const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(gatewayToken));
             try {
               await waitForOpen(ws);
-              ws.send(
-                JSON.stringify({
-                  request_id: "r-1",
-                  type: "connect",
-                  payload: { capabilities: ["playwright"] },
-                }),
-              );
-              await delay(100);
+              await completeHandshake(ws, {
+                requestIdPrefix: "r",
+                role: "client",
+                capabilities: [],
+              });
 
               ws.send(
                 JSON.stringify({

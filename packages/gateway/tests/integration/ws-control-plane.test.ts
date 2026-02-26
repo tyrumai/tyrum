@@ -13,6 +13,7 @@ import { AgentRuntime } from "../../src/modules/agent/runtime.js";
 import { createStubLanguageModel } from "../unit/stub-language-model.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 import type { PolicyService } from "../../src/modules/policy/service.js";
+import { completeHandshake } from "./ws-handshake.js";
 
 function authProtocols(token: string): string[] {
   return ["tyrum-v1", `tyrum-auth.${Buffer.from(token, "utf-8").toString("base64url")}`];
@@ -159,20 +160,7 @@ describe("WS control-plane requests", () => {
     ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, authProtocols(adminToken));
     await waitForOpen(ws);
 
-    // Legacy connect handshake is sufficient for control-plane requests.
-    ws.send(
-      JSON.stringify({
-        request_id: "r-connect",
-        type: "connect",
-        payload: { capabilities: [] },
-      }),
-    );
-    await waitForJsonMessageMatching(
-      ws,
-      (msg) => msg["type"] === "connect" && Object.prototype.hasOwnProperty.call(msg, "ok"),
-      5_000,
-      "connect",
-    );
+    await completeHandshake(ws, { requestIdPrefix: "r", role: "client", capabilities: [] });
 
     ws.send(
       JSON.stringify({
