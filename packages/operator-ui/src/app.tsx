@@ -234,6 +234,7 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
   const [nodeStatus, setNodeStatus] = useState("disconnected");
   const [busy, setBusy] = useState<"gateway" | "node" | "config" | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const saveResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [capabilities, setCapabilities] = useState<{
     desktop: boolean;
@@ -255,6 +256,15 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
     if (error instanceof Error) return error.message;
     return String(error);
   };
+
+  useEffect(() => {
+    return () => {
+      if (saveResetTimer.current) {
+        clearTimeout(saveResetTimer.current);
+        saveResetTimer.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!api) return;
@@ -322,7 +332,7 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
     setBusy("gateway");
     setErrorMessage(null);
     try {
-      await api.setConfig({ mode: "embedded", embedded: { port } });
+      await api.setConfig({ mode: "embedded" });
       const result = await api.gateway.start();
       setGatewayStatus(result.status);
       setPort(result.port);
@@ -378,6 +388,11 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
   };
 
   const toggleCapability = (key: keyof typeof capabilities): void => {
+    if (saveResetTimer.current) {
+      clearTimeout(saveResetTimer.current);
+      saveResetTimer.current = null;
+    }
+    setConfigSaved(false);
     setCapabilities((prev) => ({ ...prev, [key]: !prev[key] }));
     setConfigDirty(true);
   };
@@ -388,10 +403,16 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
     setErrorMessage(null);
     setConfigSaved(false);
     try {
-      await api.setConfig({ embedded: { port }, capabilities });
+      await api.setConfig({ capabilities });
       setConfigDirty(false);
       setConfigSaved(true);
-      setTimeout(() => setConfigSaved(false), 1500);
+      if (saveResetTimer.current) {
+        clearTimeout(saveResetTimer.current);
+      }
+      saveResetTimer.current = setTimeout(() => {
+        setConfigSaved(false);
+        saveResetTimer.current = null;
+      }, 1500);
     } catch (error) {
       setErrorMessage(toErrorMessage(error));
     } finally {
@@ -465,22 +486,7 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
           <div>
             Embedded gateway: <span>{gatewayStatus}</span>
           </div>
-          <div>
-            <label>
-              Port
-              <textarea
-                rows={1}
-                value={String(port)}
-                onChange={(event) => {
-                  const next = Number(event.target.value);
-                  if (Number.isFinite(next) && next > 0) {
-                    setPort(next);
-                    setConfigDirty(true);
-                  }
-                }}
-              />
-            </label>
-          </div>
+          <div style={{ fontSize: 12, color: "var(--muted)" }}>Port: {port}</div>
           <div>
             {gatewayStatus === "running" ? (
               <button
@@ -513,7 +519,7 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
             Local node runtime: <span>{nodeStatus}</span>
           </div>
           <div>
-            {nodeStatus === "connected" ? (
+            {nodeStatus === "connected" || nodeStatus === "connecting" ? (
               <button
                 type="button"
                 data-testid="desktop-disconnect-node"
@@ -522,7 +528,11 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
                   void disconnectNode();
                 }}
               >
-                {busy === "node" ? "Disconnecting..." : "Disconnect node"}
+                {busy === "node"
+                  ? "Disconnecting..."
+                  : nodeStatus === "connecting"
+                    ? "Cancel connect"
+                    : "Disconnect node"}
               </button>
             ) : (
               <button
@@ -561,6 +571,12 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
               <span>{label}</span>
             </label>
           ))}
+          {capabilities.cli || capabilities.http ? (
+            <div className="alert" role="note">
+              CLI/HTTP capabilities can execute commands or make network requests from this machine.
+              Keep them disabled unless you explicitly need them.
+            </div>
+          ) : null}
           <div>
             <button
               type="button"
@@ -570,7 +586,7 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
                 void saveConfig();
               }}
             >
-              {busy === "config" ? "Saving..." : configSaved ? "Saved" : "Save capabilities"}
+              {busy === "config" ? "Saving..." : configSaved ? "Saved" : "Save settings"}
             </button>
           </div>
         </div>

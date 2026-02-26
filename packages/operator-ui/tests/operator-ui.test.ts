@@ -429,6 +429,9 @@ describe("operator-ui", () => {
     });
 
     expect(desktopApi.node.connect).toHaveBeenCalledTimes(1);
+    expect(
+      container.querySelector<HTMLButtonElement>('[data-testid="desktop-disconnect-node"]'),
+    ).not.toBeNull();
 
     act(() => {
       root?.unmount();
