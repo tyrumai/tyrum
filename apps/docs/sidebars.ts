@@ -66,6 +66,7 @@ const sidebars: SidebarsConfig = {
           type: "category",
           label: "Protocol & Contracts",
           items: [
+            "architecture/api-surfaces",
             "architecture/protocol/index",
             "architecture/protocol/handshake",
             "architecture/protocol/requests-responses",
