@@ -32,6 +32,7 @@ export function createConnectionStore(ws: OperatorWsClient): {
     setState((prev) => ({
       ...prev,
       status: "connecting",
+      clientId: null,
       lastDisconnect: null,
       transportError: null,
     }));

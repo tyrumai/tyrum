@@ -379,6 +379,34 @@ describe("operator-core wiring", () => {
     expect(ws.approvalList).toHaveBeenCalledTimes(1);
   });
 
+  it("clears clientId when reconnecting", async () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+
+    const core = createOperatorCore({
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788",
+      auth: createBearerTokenAuth("test-token"),
+      deps: { ws, http },
+    });
+
+    core.connect();
+    ws.emit("connected", { clientId: "client-123" });
+    await tick();
+
+    expect(core.connectionStore.getSnapshot()).toMatchObject({
+      status: "connected",
+      clientId: "client-123",
+    });
+
+    core.connect();
+
+    expect(core.connectionStore.getSnapshot()).toMatchObject({
+      status: "connecting",
+      clientId: null,
+    });
+  });
+
   it("refreshStatus ignores stale responses and does not clear loading early", async () => {
     const ws = new FakeWsClient();
     const http = createFakeHttpClient();
