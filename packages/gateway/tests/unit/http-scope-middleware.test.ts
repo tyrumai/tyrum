@@ -75,7 +75,9 @@ describe("HTTP scope middleware route mapping", () => {
     expect(
       resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/app/actions/account/delete" }),
     ).toBeNull();
-    expect(resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/api/account/delete" })).toBeNull();
+    expect(
+      resolveHttpRouteRequiredScopes({ method: "POST", routePath: "/api/account/delete" }),
+    ).toBeNull();
   });
 
   it("denies unknown routes by default", () => {
