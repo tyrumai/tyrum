@@ -236,6 +236,30 @@ describe("registerGatewayIpc handlers", () => {
     });
   });
 
+  it("rejects non-websocket remote wsUrl values", async () => {
+    testState.mode = "remote";
+    testState.remoteWsUrl = "https://remote.example/ws";
+
+    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
+
+    const windowStub = {
+      isDestroyed: () => false,
+      webContents: {
+        isDestroyed: () => false,
+        send: vi.fn(),
+      },
+    } as unknown as BrowserWindow;
+
+    registerGatewayIpc(windowStub);
+
+    const operatorConnectionHandler = registeredHandlers.get("gateway:operator-connection");
+    expect(operatorConnectionHandler).toBeDefined();
+
+    await expect(operatorConnectionHandler!({} as never)).rejects.toThrow(
+      "expected ws:// or wss://",
+    );
+  });
+
   it("proxies HTTP requests to the configured gateway base URL", async () => {
     const fetchMock = vi.fn(async () => {
       return new Response(JSON.stringify({ status: "ok" }), {
@@ -262,12 +286,17 @@ describe("registerGatewayIpc handlers", () => {
 
     const result = await httpFetchHandler!({} as never, {
       url: "http://127.0.0.1:8788/status",
-      init: { method: "GET", headers: { authorization: "Bearer token" } },
+      init: {
+        method: "GET",
+        headers: { authorization: "Bearer token" },
+        redirect: "follow",
+      },
     });
 
     expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:8788/status", {
       method: "GET",
       headers: { authorization: "Bearer token" },
+      redirect: "manual",
     });
 
     expect(result).toEqual({
@@ -275,6 +304,30 @@ describe("registerGatewayIpc handlers", () => {
       headers: { "content-type": "application/json" },
       bodyText: JSON.stringify({ status: "ok" }),
     });
+  });
+
+  it("rejects HTTP proxy requests that include cookies", async () => {
+    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
+
+    const windowStub = {
+      isDestroyed: () => false,
+      webContents: {
+        isDestroyed: () => false,
+        send: vi.fn(),
+      },
+    } as unknown as BrowserWindow;
+
+    registerGatewayIpc(windowStub);
+
+    const httpFetchHandler = registeredHandlers.get("gateway:http-fetch");
+    expect(httpFetchHandler).toBeDefined();
+
+    await expect(
+      httpFetchHandler!({} as never, {
+        url: "http://127.0.0.1:8788/status",
+        init: { method: "GET", headers: { cookie: "tyrum_admin_token=secret" } },
+      }),
+    ).rejects.toThrow("Cookie header is not allowed");
   });
 
   it("rejects HTTP proxy requests to other origins", async () => {

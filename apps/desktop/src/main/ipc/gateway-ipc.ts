@@ -52,7 +52,7 @@ function toHttpBaseUrlFromWsUrl(rawUrl: string): string | null {
       url.protocol = "http:";
     } else if (url.protocol === "wss:") {
       url.protocol = "https:";
-    } else if (url.protocol !== "http:" && url.protocol !== "https:") {
+    } else {
       return null;
     }
     url.pathname = "/";
@@ -79,7 +79,7 @@ function resolveOperatorConnection(config: DesktopNodeConfig): OperatorConnectio
 
   const httpBaseUrl = toHttpBaseUrlFromWsUrl(config.remote.wsUrl);
   if (!httpBaseUrl) {
-    throw new Error("Remote gateway WS URL is invalid; expected a ws:// or wss:// URL.");
+    throw new Error("Remote gateway wsUrl is invalid; expected ws:// or wss://.");
   }
 
   const token = config.remote.tokenRef ? decryptToken(config.remote.tokenRef) : "";
@@ -217,22 +217,55 @@ export function registerGatewayIpc(window: BrowserWindow): GatewayManager {
         throw new Error("Only http/https URLs are allowed");
       }
 
-      const init: RequestInit =
+      const rawInit =
         input.init && typeof input.init === "object" && !Array.isArray(input.init)
-          ? (input.init as RequestInit)
-          : {};
+          ? (input.init as Record<string, unknown>)
+          : undefined;
+
+      const method = typeof rawInit?.["method"] === "string" ? rawInit["method"] : undefined;
+      const rawHeaders =
+        rawInit?.["headers"] &&
+        typeof rawInit["headers"] === "object" &&
+        !Array.isArray(rawInit["headers"])
+          ? (rawInit["headers"] as Record<string, unknown>)
+          : undefined;
+      const body = typeof rawInit?.["body"] === "string" ? rawInit["body"] : undefined;
+
+      const requestHeaders: Record<string, string> | undefined = rawHeaders
+        ? Object.fromEntries(
+            Object.entries(rawHeaders).flatMap(([key, value]) => {
+              if (typeof value !== "string") return [];
+              return [[key, value]];
+            }),
+          )
+        : undefined;
+
+      if (requestHeaders) {
+        for (const headerName of Object.keys(requestHeaders)) {
+          if (headerName.trim().toLowerCase() === "cookie") {
+            throw new Error("Cookie header is not allowed");
+          }
+        }
+      }
+
+      const init: RequestInit = {
+        method,
+        headers: requestHeaders,
+        body,
+        redirect: "manual",
+      };
 
       // The renderer always provides serializable primitives; ensure we pass plain objects through.
       const res = await fetch(requestUrl.toString(), init);
       const bodyText = await res.text();
-      const headers: Record<string, string> = {};
+      const responseHeaders: Record<string, string> = {};
       res.headers.forEach((value, key) => {
-        headers[key.toLowerCase()] = value;
+        responseHeaders[key.toLowerCase()] = value;
       });
 
       return {
         status: res.status,
-        headers,
+        headers: responseHeaders,
         bodyText,
       };
     });
