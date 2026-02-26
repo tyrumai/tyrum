@@ -10,7 +10,7 @@ const REPO_ROOT = resolve(APP_ROOT, "../..");
 
 const WORKSPACE_MARKER = resolve(REPO_ROOT, "pnpm-workspace.yaml");
 const DIST_INDEX = resolve(APP_ROOT, "dist/index.html");
-const BUILD_LOCK_PATH = resolve(REPO_ROOT, ".tyrum-web-build.lock");
+const WORKSPACE_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
 
 const isWindows = process.platform === "win32";
 
@@ -22,7 +22,7 @@ async function acquireBuildLock(timeoutMs = 120_000): Promise<() => void> {
   const startedAt = Date.now();
   for (;;) {
     try {
-      const fd = openSync(BUILD_LOCK_PATH, "wx");
+      const fd = openSync(WORKSPACE_BUILD_LOCK, "wx");
       return () => {
         try {
           closeSync(fd);
@@ -30,7 +30,7 @@ async function acquireBuildLock(timeoutMs = 120_000): Promise<() => void> {
           // ignore
         }
         try {
-          unlinkSync(BUILD_LOCK_PATH);
+          unlinkSync(WORKSPACE_BUILD_LOCK);
         } catch {
           // ignore
         }
@@ -43,7 +43,7 @@ async function acquireBuildLock(timeoutMs = 120_000): Promise<() => void> {
 
       if (Date.now() - startedAt > timeoutMs) {
         throw new Error(
-          `Timed out waiting for web build lock (${timeoutMs}ms): ${BUILD_LOCK_PATH}`,
+          `Timed out waiting for workspace build lock (${timeoutMs}ms): ${WORKSPACE_BUILD_LOCK}`,
         );
       }
 

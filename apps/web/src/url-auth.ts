@@ -25,4 +25,3 @@ export function stripAuthTokenFromUrl(url: string): string {
   const query = parsed.searchParams.toString();
   return `${parsed.pathname}${query ? `?${query}` : ""}${parsed.hash}`;
 }
-

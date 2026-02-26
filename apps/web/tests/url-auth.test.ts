@@ -29,4 +29,3 @@ describe("apps/web url-auth", () => {
     });
   });
 });
-

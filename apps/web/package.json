@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "pnpm --filter @tyrum/schemas build && pnpm --filter @tyrum/client build && pnpm --filter @tyrum/operator-core build && pnpm --filter @tyrum/operator-ui build",
+    "prebuild": "node ./scripts/ensure-deps-built.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "pnpm exec tsc --noEmit --project tsconfig.json"
