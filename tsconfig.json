@@ -3,6 +3,7 @@
   "references": [
     { "path": "packages/schemas" },
     { "path": "packages/gateway" },
-    { "path": "packages/client" }
+    { "path": "packages/client" },
+    { "path": "packages/operator-core" }
   ]
 }

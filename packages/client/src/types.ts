@@ -5,6 +5,7 @@
 
 export type {
   ClientCapability,
+  Approval,
   WsError,
   WsRequestEnvelope,
   WsResponseEnvelope,
@@ -26,4 +27,9 @@ export type {
   ActionPrimitiveKind,
   PlanRequest,
   PlanResponse,
+  ExecutionRun,
+  ExecutionStep,
+  ExecutionAttempt,
+  NodePairingRequest,
+  PresenceEntry,
 } from "@tyrum/schemas";

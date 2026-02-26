@@ -18,6 +18,14 @@ export {
   type TyrumRequestOptions,
 } from "./http/index.js";
 
+export type {
+  StatusResponse,
+  UsageResponse,
+  PresenceResponse,
+  PairingListResponse,
+  PairingMutateResponse,
+} from "./http/index.js";
+
 export {
   buildConnectProofTranscript,
   computeDeviceIdFromPublicKeyDer,
@@ -32,7 +40,13 @@ export {
 export type { DeviceIdentity, DeviceIdentityStorage } from "./device-identity.js";
 
 export type {
+  Approval,
   ClientCapability,
+  ExecutionAttempt,
+  ExecutionRun,
+  ExecutionStep,
+  NodePairingRequest,
+  PresenceEntry,
   WsError,
   WsRequestEnvelope,
   WsResponseEnvelope,

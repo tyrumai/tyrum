@@ -5,7 +5,7 @@
     "node": "24.x"
   },
   "scripts": {
-    "pretypecheck": "pnpm --filter @tyrum/schemas build && node -e \"require('node:fs').rmSync('packages/schemas/tsconfig.tsbuildinfo',{force:true})\"",
+    "pretypecheck": "pnpm --filter @tyrum/schemas build && pnpm --filter @tyrum/client build && node -e \"require('node:fs').rmSync('packages/schemas/tsconfig.tsbuildinfo',{force:true})\"",
     "build": "pnpm -r run build",
     "pretest": "pnpm --filter @tyrum/schemas build && pnpm --filter @tyrum/client build",
     "test": "vitest run",
@@ -26,6 +26,7 @@
       "file-loader>schema-utils": "4.3.3",
       "minimatch": "10.2.1",
       "null-loader>schema-utils": "4.3.3",
+      "rollup": "4.59.0",
       "tmp": ">=0.2.4",
       "url-loader>schema-utils": "4.3.3"
     },
