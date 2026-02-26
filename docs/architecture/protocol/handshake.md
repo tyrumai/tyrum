@@ -23,7 +23,9 @@ Older peers may use a legacy request/response handshake:
 - `connect` (request) `{ capabilities }`
 - `connect` (response) `{ client_id }`
 
-This legacy path does **not** include device identity proof or `protocol_rev` negotiation and is deprecated. Gateways may continue to accept it for backwards compatibility, but they SHOULD emit a warning (for example an `error` event with code `deprecated_handshake`) and it may be removed in a future protocol revision.
+This legacy path does **not** include device identity proof or `protocol_rev` negotiation and is deprecated. The gateway rejects legacy `connect` handshake requests; peers MUST use `connect.init/connect.proof` instead.
+
+When a peer attempts the legacy handshake, the gateway closes the connection with close code `4003` and reason: `legacy connect is deprecated; use connect.init/connect.proof`.
 
 ## Connect payload
 

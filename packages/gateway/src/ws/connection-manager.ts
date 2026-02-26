@@ -46,7 +46,7 @@ export class ConnectionManager {
   private readonly dispatchedAttemptExecutors = new Map<string, string>();
 
   /**
-   * Register a new client after a successful `connect` handshake.
+   * Register a new peer after a successful WebSocket handshake.
    *
    * @returns the generated client id (UUID v4).
    */

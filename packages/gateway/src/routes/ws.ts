@@ -12,7 +12,6 @@ import type { Duplex } from "node:stream";
 import {
   WsConnectInitRequest,
   WsConnectProofRequest,
-  WsConnectRequest,
   clientCapabilityFromDescriptorId,
   deviceIdFromSha256Digest,
   type CapabilityDescriptor,
@@ -730,79 +729,17 @@ export function createWsHandler(opts: WsRouteOptions): {
           return;
         }
 
-        // Legacy handshake: connect
-        if (auth.kind === "scoped_node") {
-          ws.close(4001, "unauthorized");
+        if (
+          typeof json === "object" &&
+          json !== null &&
+          "type" in json &&
+          (json as { type?: unknown }).type === "connect"
+        ) {
+          ws.close(4003, "legacy connect is deprecated; use connect.init/connect.proof");
           return;
         }
 
-        const legacy = WsConnectRequest.safeParse(json);
-        if (!legacy.success) {
-          ws.close(4003, "expected connect request");
-          return;
-        }
-
-        if (claims?.token_kind === "device") {
-          ws.close(4001, "unauthorized");
-          return;
-        }
-
-        clearHandshakeTimeout();
-        clientId = connectionManager.addClient(ws, legacy.data.payload.capabilities, {
-          role: "client",
-          protocolRev: 1,
-          authClaims: upgradeClaims ?? undefined,
-        });
-        if (cluster) {
-          const nowMs = Date.now();
-          void cluster.connectionDirectory
-            .upsertConnection({
-              connectionId: clientId,
-              edgeId: cluster.instanceId,
-              role: "client",
-              protocolRev: 1,
-              deviceId: null,
-              pubkey: null,
-              label: null,
-              version: null,
-              mode: null,
-              capabilities: legacy.data.payload.capabilities,
-              nowMs,
-              ttlMs: connectionTtlMs,
-            })
-            .catch(() => {});
-        }
-
-        const connected: WsResponseEnvelope = {
-          request_id: legacy.data.request_id,
-          type: "connect",
-          ok: true,
-          result: { client_id: clientId },
-        };
-        ws.send(JSON.stringify(connected));
-        try {
-          ws.send(
-            JSON.stringify({
-              event_id: crypto.randomUUID(),
-              type: "error",
-              occurred_at: new Date().toISOString(),
-              payload: {
-                code: "deprecated_handshake",
-                message: "legacy connect is deprecated; use connect.init/connect.proof",
-              },
-            }),
-          );
-        } catch {
-          // ignore
-        }
-
-        ws.on("close", () => {
-          connectionManager.removeClient(clientId!);
-          if (cluster) {
-            void cluster.connectionDirectory.removeConnection(clientId!).catch(() => {});
-          }
-        });
-
+        ws.close(4003, "expected connect.init/connect.proof");
         return;
       }
 
