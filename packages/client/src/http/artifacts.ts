@@ -60,7 +60,11 @@ export interface ArtifactsApi {
     artifactId: string,
     options?: TyrumRequestOptions,
   ): Promise<ArtifactMetadataResponse>;
-  getBytes(runId: string, artifactId: string, options?: TyrumRequestOptions): Promise<ArtifactBytesResult>;
+  getBytes(
+    runId: string,
+    artifactId: string,
+    options?: TyrumRequestOptions,
+  ): Promise<ArtifactBytesResult>;
 }
 
 export function createArtifactsApi(transport: HttpTransport): ArtifactsApi {

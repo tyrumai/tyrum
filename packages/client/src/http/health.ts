@@ -26,4 +26,3 @@ export function createHealthApi(transport: HttpTransport): HealthApi {
     },
   };
 }
-

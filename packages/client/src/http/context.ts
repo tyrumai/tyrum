@@ -7,7 +7,12 @@ import {
   WorkspaceId,
 } from "@tyrum/schemas";
 import { z } from "zod";
-import { HttpTransport, NonEmptyString, validateOrThrow, type TyrumRequestOptions } from "./shared.js";
+import {
+  HttpTransport,
+  NonEmptyString,
+  validateOrThrow,
+  type TyrumRequestOptions,
+} from "./shared.js";
 
 const ContextGetQuery = z
   .object({

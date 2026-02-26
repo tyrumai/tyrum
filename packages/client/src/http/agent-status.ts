@@ -31,4 +31,3 @@ export function createAgentStatusApi(transport: HttpTransport): AgentStatusApi {
     },
   };
 }
-

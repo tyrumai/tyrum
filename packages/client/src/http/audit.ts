@@ -7,7 +7,12 @@ import {
   Sha256Hex,
 } from "@tyrum/schemas";
 import { z } from "zod";
-import { HttpTransport, NonEmptyString, validateOrThrow, type TyrumRequestOptions } from "./shared.js";
+import {
+  HttpTransport,
+  NonEmptyString,
+  validateOrThrow,
+  type TyrumRequestOptions,
+} from "./shared.js";
 
 const ChainableEvent = z
   .object({
