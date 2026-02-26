@@ -118,6 +118,7 @@ flowchart LR
 - [Gateway](./gateway/index.md)
 - [Tenancy](./tenancy.md)
 - [Gateway authN/authZ](./gateway-authz.md)
+- [API surfaces (WebSocket vs HTTP)](./api-surfaces.md)
 - [Identity](./identity.md)
 - [Execution engine](./execution-engine.md)
 - [Work board and delegated execution](./workboard.md)

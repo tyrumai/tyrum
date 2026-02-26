@@ -21,6 +21,12 @@ A client is an operator interface that connects to the gateway and participates 
 - Provide onboarding and diagnostics surfaces so hardened configuration is easy to reach (see [Operations and onboarding](./operations.md)).
 - Support **Admin Mode** (time-bounded step-up) for tenant administration actions.
 
+## Transports and API surfaces
+
+Clients are **WebSocket-first** (interactive control plane) but will often also use HTTP endpoints for resource and bootstrap flows (auth/session, artifacts, callbacks).
+
+See: [API surfaces (WebSocket vs HTTP)](./api-surfaces.md).
+
 ## Operator UI expectations
 
 Operator clients provide oversight and administration. At minimum they should expose:
