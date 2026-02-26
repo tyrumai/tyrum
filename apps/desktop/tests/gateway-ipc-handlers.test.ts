@@ -150,14 +150,16 @@ describe("registerGatewayIpc handlers", () => {
 
     registerGatewayIpc(windowStub);
 
-    const uiUrlsHandler = registeredHandlers.get("gateway:ui-urls");
-    expect(uiUrlsHandler).toBeDefined();
+    const operatorConnectionHandler = registeredHandlers.get("gateway:operator-connection");
+    expect(operatorConnectionHandler).toBeDefined();
 
-    const urls = await uiUrlsHandler!({} as never);
-    expect(urls).toEqual({
-      embedUrl: "http://127.0.0.1:8788/app/auth?token=token&next=%2Fapp",
-      displayUrl: "http://127.0.0.1:8788/app",
-      externalUrl: "http://127.0.0.1:8788/app/auth?token=token&next=%2Fapp",
+    const connection = await operatorConnectionHandler!({} as never);
+    expect(connection).toEqual({
+      mode: "embedded",
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788/",
+      token: "token",
+      tlsCertFingerprint256: "",
     });
   });
 
@@ -180,14 +182,16 @@ describe("registerGatewayIpc handlers", () => {
 
     registerGatewayIpc(windowStub);
 
-    const uiUrlsHandler = registeredHandlers.get("gateway:ui-urls");
-    expect(uiUrlsHandler).toBeDefined();
+    const operatorConnectionHandler = registeredHandlers.get("gateway:operator-connection");
+    expect(operatorConnectionHandler).toBeDefined();
 
-    const urls = await uiUrlsHandler!({} as never);
-    expect(urls).toEqual({
-      embedUrl: "http://127.0.0.1:8788/app/auth?token=generated-token&next=%2Fapp",
-      displayUrl: "http://127.0.0.1:8788/app",
-      externalUrl: "http://127.0.0.1:8788/app/auth?token=generated-token&next=%2Fapp",
+    const connection = await operatorConnectionHandler!({} as never);
+    expect(connection).toEqual({
+      mode: "embedded",
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788/",
+      token: "generated-token",
+      tlsCertFingerprint256: "",
     });
     expect(generateTokenMock).toHaveBeenCalledTimes(1);
     expect(encryptTokenMock).toHaveBeenCalledWith("generated-token");
@@ -200,65 +204,12 @@ describe("registerGatewayIpc handlers", () => {
     );
   });
 
-  it("returns onboarding URL targets when requested", async () => {
-    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
-
-    const windowStub = {
-      isDestroyed: () => false,
-      webContents: {
-        isDestroyed: () => false,
-        send: vi.fn(),
-      },
-    } as unknown as BrowserWindow;
-
-    registerGatewayIpc(windowStub);
-
-    const uiUrlsHandler = registeredHandlers.get("gateway:ui-urls");
-    expect(uiUrlsHandler).toBeDefined();
-
-    const urls = await uiUrlsHandler!({} as never, { startOnboarding: true });
-    expect(urls).toEqual({
-      embedUrl: "http://127.0.0.1:8788/app/auth?token=token&next=%2Fapp%2Fonboarding%2Fstart",
-      displayUrl: "http://127.0.0.1:8788/app/onboarding/start",
-      externalUrl: "http://127.0.0.1:8788/app/auth?token=token&next=%2Fapp%2Fonboarding%2Fstart",
-    });
-  });
-
-  it("switches to remote mode, stops gateway, and emits navigation update", async () => {
-    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
-
-    const sentEvents: Array<{ channel: string; payload: unknown }> = [];
-    const windowStub = {
-      isDestroyed: () => false,
-      webContents: {
-        isDestroyed: () => false,
-        send: (channel: string, payload: unknown) => {
-          sentEvents.push({ channel, payload });
-        },
-      },
-    } as unknown as BrowserWindow;
-
-    const manager = registerGatewayIpc(windowStub);
-    await manager.start();
-
-    const modeHandler = registeredHandlers.get("onboarding:select-mode");
-    expect(modeHandler).toBeDefined();
-
-    const result = await modeHandler!({} as never, "remote");
-    expect(result).toEqual({ mode: "remote" });
-    expect(saveConfigMock).toHaveBeenCalledWith(expect.objectContaining({ mode: "remote" }));
-    expect(sentEvents).toContainEqual({
-      channel: "status:change",
-      payload: {
-        gatewayStatus: "stopped",
-        navigateTo: { page: "connection", tab: "remote" },
-      },
-    });
-  });
-
-  it("converts remote websocket URL to HTTPS app URL", async () => {
+  it("converts remote websocket URL to HTTPS base URL", async () => {
     testState.mode = "remote";
     testState.remoteWsUrl = "wss://remote.example/ws";
+    decryptTokenMock.mockImplementation((tokenRef: string) =>
+      tokenRef === "enc:remote-token" ? "remote-token" : "token",
+    );
 
     const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
 
@@ -272,14 +223,81 @@ describe("registerGatewayIpc handlers", () => {
 
     registerGatewayIpc(windowStub);
 
-    const uiUrlsHandler = registeredHandlers.get("gateway:ui-urls");
-    expect(uiUrlsHandler).toBeDefined();
+    const operatorConnectionHandler = registeredHandlers.get("gateway:operator-connection");
+    expect(operatorConnectionHandler).toBeDefined();
 
-    const urls = await uiUrlsHandler!({} as never);
-    expect(urls).toEqual({
-      embedUrl: "https://remote.example/app",
-      displayUrl: "https://remote.example/app",
-      externalUrl: "https://remote.example/app",
+    const connection = await operatorConnectionHandler!({} as never);
+    expect(connection).toEqual({
+      mode: "remote",
+      wsUrl: "wss://remote.example/ws",
+      httpBaseUrl: "https://remote.example/",
+      token: "remote-token",
+      tlsCertFingerprint256: "",
     });
+  });
+
+  it("proxies HTTP requests to the configured gateway base URL", async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response(JSON.stringify({ status: "ok" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
+
+    const windowStub = {
+      isDestroyed: () => false,
+      webContents: {
+        isDestroyed: () => false,
+        send: vi.fn(),
+      },
+    } as unknown as BrowserWindow;
+
+    registerGatewayIpc(windowStub);
+
+    const httpFetchHandler = registeredHandlers.get("gateway:http-fetch");
+    expect(httpFetchHandler).toBeDefined();
+
+    const result = await httpFetchHandler!({} as never, {
+      url: "http://127.0.0.1:8788/status",
+      init: { method: "GET", headers: { authorization: "Bearer token" } },
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:8788/status", {
+      method: "GET",
+      headers: { authorization: "Bearer token" },
+    });
+
+    expect(result).toEqual({
+      status: 200,
+      headers: { "content-type": "application/json" },
+      bodyText: JSON.stringify({ status: "ok" }),
+    });
+  });
+
+  it("rejects HTTP proxy requests to other origins", async () => {
+    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
+
+    const windowStub = {
+      isDestroyed: () => false,
+      webContents: {
+        isDestroyed: () => false,
+        send: vi.fn(),
+      },
+    } as unknown as BrowserWindow;
+
+    registerGatewayIpc(windowStub);
+
+    const httpFetchHandler = registeredHandlers.get("gateway:http-fetch");
+    expect(httpFetchHandler).toBeDefined();
+
+    await expect(
+      httpFetchHandler!({} as never, {
+        url: "https://evil.example/status",
+        init: { method: "GET" },
+      }),
+    ).rejects.toThrow("Only the configured gateway origin is allowed");
   });
 });

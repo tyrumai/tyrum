@@ -14,14 +14,12 @@ const sender = createWindowSender();
 let manager: GatewayManager | null = null;
 let ipcRegistered = false;
 
-interface GatewayUiUrls {
-  embedUrl: string | null;
-  displayUrl: string | null;
-  externalUrl: string | null;
-}
-
-interface EmbeddedGatewayUiUrlOptions {
-  startOnboarding?: boolean;
+interface OperatorConnectionInfo {
+  mode: "embedded" | "remote";
+  wsUrl: string;
+  httpBaseUrl: string;
+  token: string;
+  tlsCertFingerprint256: string;
 }
 
 let startPromise: Promise<void> | null = null;
@@ -47,7 +45,7 @@ export function ensureEmbeddedGatewayToken(config: DesktopNodeConfig): string {
   return createAndStoreEmbeddedGatewayToken(config);
 }
 
-function toHttpAppUrlFromWsUrl(rawUrl: string): string | null {
+function toHttpBaseUrlFromWsUrl(rawUrl: string): string | null {
   try {
     const url = new URL(rawUrl);
     if (url.protocol === "ws:") {
@@ -57,7 +55,7 @@ function toHttpAppUrlFromWsUrl(rawUrl: string): string | null {
     } else if (url.protocol !== "http:" && url.protocol !== "https:") {
       return null;
     }
-    url.pathname = "/app";
+    url.pathname = "/";
     url.search = "";
     url.hash = "";
     return url.toString();
@@ -66,24 +64,35 @@ function toHttpAppUrlFromWsUrl(rawUrl: string): string | null {
   }
 }
 
-function buildEmbeddedGatewayUiUrls(
-  port: number,
-  token: string,
-  options: EmbeddedGatewayUiUrlOptions = {},
-): GatewayUiUrls {
-  const baseUrl = `http://127.0.0.1:${port}`;
-  const nextPath = options.startOnboarding ? "/app/onboarding/start" : "/app";
-  const displayUrl = `${baseUrl}${nextPath}`;
-  const search = new URLSearchParams({
-    token,
-    next: nextPath,
-  });
-  const authUrl = `${baseUrl}/app/auth?${search.toString()}`;
+function resolveOperatorConnection(config: DesktopNodeConfig): OperatorConnectionInfo {
+  if (config.mode === "embedded") {
+    const token = ensureEmbeddedGatewayToken(config);
+    const port = config.embedded.port;
+    return {
+      mode: "embedded",
+      wsUrl: `ws://127.0.0.1:${port}/ws`,
+      httpBaseUrl: `http://127.0.0.1:${port}/`,
+      token,
+      tlsCertFingerprint256: "",
+    };
+  }
 
+  const httpBaseUrl = toHttpBaseUrlFromWsUrl(config.remote.wsUrl);
+  if (!httpBaseUrl) {
+    throw new Error("Remote gateway WS URL is invalid; expected a ws:// or wss:// URL.");
+  }
+
+  const token = config.remote.tokenRef ? decryptToken(config.remote.tokenRef) : "";
+  const tlsCertFingerprint256 =
+    typeof config.remote.tlsCertFingerprint256 === "string"
+      ? config.remote.tlsCertFingerprint256
+      : "";
   return {
-    embedUrl: authUrl,
-    displayUrl,
-    externalUrl: authUrl,
+    mode: "remote",
+    wsUrl: config.remote.wsUrl,
+    httpBaseUrl,
+    token,
+    tlsCertFingerprint256,
   };
 }
 
@@ -171,55 +180,61 @@ export function registerGatewayIpc(window: BrowserWindow): GatewayManager {
       return getGatewayStatusSnapshot(mgr?.status, config.embedded.port);
     });
 
-    ipcMain.handle("gateway:ui-urls", async (_event, rawOptions?: unknown) => {
-      let startOnboarding = false;
-      if (rawOptions && typeof rawOptions === "object" && !Array.isArray(rawOptions)) {
-        startOnboarding = (rawOptions as { startOnboarding?: unknown }).startOnboarding === true;
-      }
+    ipcMain.handle("gateway:operator-connection", async () => {
       const config = loadConfig();
-      if (config.mode === "embedded") {
-        const token = ensureEmbeddedGatewayToken(config);
-        return buildEmbeddedGatewayUiUrls(config.embedded.port, token, {
-          startOnboarding,
-        });
-      }
-
-      const displayUrl = toHttpAppUrlFromWsUrl(config.remote.wsUrl);
-      return {
-        embedUrl: displayUrl,
-        displayUrl,
-        externalUrl: displayUrl,
-      } satisfies GatewayUiUrls;
+      return resolveOperatorConnection(config);
     });
 
-    ipcMain.handle("onboarding:select-mode", async (_event, modeRaw: unknown) => {
-      if (modeRaw !== "embedded" && modeRaw !== "remote") {
-        throw new Error("onboarding:select-mode requires 'embedded' or 'remote'");
+    ipcMain.handle("gateway:http-fetch", async (_event, rawInput: unknown) => {
+      if (!rawInput || typeof rawInput !== "object" || Array.isArray(rawInput)) {
+        throw new Error("gateway:http-fetch requires a plain object");
+      }
+
+      const input = rawInput as {
+        url?: unknown;
+        init?: unknown;
+      };
+
+      if (typeof input.url !== "string") {
+        throw new Error("gateway:http-fetch requires url:string");
       }
 
       const config = loadConfig();
-      if (modeRaw === "embedded") {
-        if (config.mode !== "embedded") {
-          config.mode = "embedded";
-          saveConfig(config);
-        }
-        return { mode: "embedded" as const };
+      const { httpBaseUrl } = resolveOperatorConnection(config);
+      const allowedOrigin = new URL(httpBaseUrl).origin;
+
+      let requestUrl: URL;
+      try {
+        requestUrl = new URL(input.url);
+      } catch {
+        throw new Error("gateway:http-fetch requires an absolute URL");
       }
 
-      config.mode = "remote";
-      saveConfig(config);
-
-      const mgr = manager;
-      if (mgr && (mgr.status === "running" || mgr.status === "starting")) {
-        await mgr.stop();
+      if (requestUrl.origin !== allowedOrigin) {
+        throw new Error("Only the configured gateway origin is allowed");
+      }
+      if (requestUrl.protocol !== "http:" && requestUrl.protocol !== "https:") {
+        throw new Error("Only http/https URLs are allowed");
       }
 
-      sender.send("status:change", {
-        gatewayStatus: "stopped",
-        navigateTo: { page: "connection", tab: "remote" },
+      const init: RequestInit =
+        input.init && typeof input.init === "object" && !Array.isArray(input.init)
+          ? (input.init as RequestInit)
+          : {};
+
+      // The renderer always provides serializable primitives; ensure we pass plain objects through.
+      const res = await fetch(requestUrl.toString(), init);
+      const bodyText = await res.text();
+      const headers: Record<string, string> = {};
+      res.headers.forEach((value, key) => {
+        headers[key.toLowerCase()] = value;
       });
 
-      return { mode: "remote" as const };
+      return {
+        status: res.status,
+        headers,
+        bodyText,
+      };
     });
   }
 

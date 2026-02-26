@@ -1,7 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("tyrumDesktop", {
-  getStartupState: () => ipcRenderer.invoke("app:get-startup-state"),
   getConfig: () => ipcRenderer.invoke("config:get"),
   setConfig: (partial: unknown) => ipcRenderer.invoke("config:set", partial),
   updates: {
@@ -15,15 +14,15 @@ contextBridge.exposeInMainWorld("tyrumDesktop", {
     start: () => ipcRenderer.invoke("gateway:start"),
     stop: () => ipcRenderer.invoke("gateway:stop"),
     getStatus: () => ipcRenderer.invoke("gateway:status"),
-    getUiUrls: (options?: { startOnboarding?: boolean }) =>
-      ipcRenderer.invoke("gateway:ui-urls", options),
+    getOperatorConnection: () => ipcRenderer.invoke("gateway:operator-connection"),
+    httpFetch: (input: {
+      url: string;
+      init?: { method?: string; headers?: Record<string, string>; body?: string };
+    }) => ipcRenderer.invoke("gateway:http-fetch", input),
   },
   node: {
     connect: () => ipcRenderer.invoke("node:connect"),
     disconnect: () => ipcRenderer.invoke("node:disconnect"),
-  },
-  onboarding: {
-    selectMode: (mode: "embedded" | "remote") => ipcRenderer.invoke("onboarding:select-mode", mode),
   },
   onStatusChange: (cb: (status: unknown) => void) => {
     const listener = (_event: unknown, status: unknown) => cb(status);

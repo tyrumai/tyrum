@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow } from "electron";
 import { join } from "node:path";
 import { registerGatewayIpc, startEmbeddedGatewayFromConfig } from "./ipc/gateway-ipc.js";
 import { registerNodeIpc, shutdownNodeResources } from "./ipc/node-ipc.js";
@@ -13,20 +13,7 @@ app.setName?.("Tyrum");
 let mainWindow: BrowserWindow | null = null;
 let gatewayManager: GatewayManager | null = null;
 let isQuitting = false;
-let appIpcRegistered = false;
 let isQuittingForUpdate = false;
-const startupState = { launchOnboarding: false };
-
-function registerAppIpc(): void {
-  if (appIpcRegistered) return;
-  appIpcRegistered = true;
-
-  ipcMain.handle("app:get-startup-state", () => {
-    const snapshot = { ...startupState };
-    startupState.launchOnboarding = false;
-    return snapshot;
-  });
-}
 
 async function shutdownAppResources(): Promise<void> {
   try {
@@ -44,7 +31,6 @@ async function shutdownAppResources(): Promise<void> {
 
 export async function maybeAutoStartEmbeddedGatewayOnLaunch(): Promise<void> {
   const hadConfig = configExists();
-  startupState.launchOnboarding = !hadConfig;
   const config = loadConfig();
   const shouldStartEmbedded = !hadConfig || config.mode === "embedded";
   if (!shouldStartEmbedded) {
@@ -61,7 +47,6 @@ export async function maybeAutoStartEmbeddedGatewayOnLaunch(): Promise<void> {
 function createWindow(): void {
   mainWindow = new BrowserWindow(MAIN_WINDOW_OPTIONS);
 
-  registerAppIpc();
   registerConfigIpc();
   gatewayManager = registerGatewayIpc(mainWindow);
   registerNodeIpc(mainWindow);

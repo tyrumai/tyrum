@@ -16,6 +16,8 @@
   "dependencies": {
     "@nut-tree-fork/nut-js": "^4.2.6",
     "@tyrum/client": "workspace:*",
+    "@tyrum/operator-core": "workspace:*",
+    "@tyrum/operator-ui": "workspace:*",
     "@tyrum/schemas": "workspace:*",
     "electron-updater": "^6.6.2",
     "playwright": "^1.58.2",
