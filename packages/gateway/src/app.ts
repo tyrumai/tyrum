@@ -36,6 +36,7 @@ import { createContractRoutes } from "./routes/contracts.js";
 import { PlaybookRunner } from "./modules/playbook/runner.js";
 import { createWebApiRoutes } from "./routes/web-api.js";
 import { createWebUiRoutes } from "./routes/web-ui.js";
+import { createOperatorUiRoutes } from "./routes/operator-ui.js";
 import { createPresenceRoutes } from "./routes/presence.js";
 import { loadAllPlaybooks } from "./modules/playbook/loader.js";
 import { ExecutionEngine } from "./modules/execution/engine.js";
@@ -364,6 +365,9 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
 
   // Gateway-hosted web API compatibility layer for former Next handlers.
   app.route("/", createWebApiRoutes());
+
+  // Operator web UI (static SPA).
+  app.route("/", createOperatorUiRoutes());
 
   if (secretProviderForAgent) {
     app.route(

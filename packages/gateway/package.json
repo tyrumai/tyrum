@@ -16,7 +16,7 @@
     "bin"
   ],
   "scripts": {
-    "build": "tsdown src/index.ts --format esm --dts",
+    "build": "tsdown src/index.ts --format esm --dts && node ./scripts/copy-operator-ui.mjs",
     "start": "node bin/tyrum.mjs"
   },
   "dependencies": {
