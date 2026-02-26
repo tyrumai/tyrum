@@ -9,10 +9,10 @@ flowchart TB
   IN["Inbound message<br/>(channel / client)"] --> NORM["Normalize + tag provenance<br/>(container, sender, ids, timestamps)"]
   NORM --> ROUTE["Route to agent_id + session key"]
   ROUTE --> Q["Queue policy<br/>(collect/followup/steer/steer_backlog/interrupt)"]
-  Q --> LOOP["Agent loop<br/>(context assembly + planning)"]
+  Q --> LOOP["Agent loop<br/>(context assembly + decision/synthesis)"]
   LOOP --> ENG["Execution engine<br/>(durable run/steps + approvals + evidence)"]
   ENG --> OUT["Outbound delivery<br/>(channel send + client streams)"]
-  OUT --> PERSIST["Persist<br/>(transcript + run log + events + artifacts)"]
+  OUT --> PERSIST["Persist<br/>(transcript + run log + work state + events + artifacts)"]
 ```
 
 Key invariants:
