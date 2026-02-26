@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import {
   createNodeFileDeviceIdentityStorage,
@@ -63,7 +63,19 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
   if (first === "--version") return { kind: "version" };
 
   if (first === "config") {
-    if (!second || second === "show") return { kind: "config_show" };
+    if (second === "-h" || second === "--help") return { kind: "help" };
+    if (!second || second === "show") {
+      for (let i = 2; i < argv.length; i += 1) {
+        const arg = argv[i];
+        if (!arg) continue;
+        if (arg === "-h" || arg === "--help") return { kind: "help" };
+        if (arg.startsWith("-")) {
+          throw new Error(`unsupported config.show argument '${arg}'`);
+        }
+        throw new Error(`unexpected config.show argument '${arg}'`);
+      }
+      return { kind: "config_show" };
+    }
     if (second !== "set") {
       throw new Error(`unknown config subcommand '${second}'`);
     }
@@ -108,8 +120,31 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
   }
 
   if (first === "identity") {
-    if (!second || second === "show") return { kind: "identity_show" };
-    if (second === "init") return { kind: "identity_init" };
+    if (second === "-h" || second === "--help") return { kind: "help" };
+    if (!second || second === "show") {
+      for (let i = 2; i < argv.length; i += 1) {
+        const arg = argv[i];
+        if (!arg) continue;
+        if (arg === "-h" || arg === "--help") return { kind: "help" };
+        if (arg.startsWith("-")) {
+          throw new Error(`unsupported identity.show argument '${arg}'`);
+        }
+        throw new Error(`unexpected identity.show argument '${arg}'`);
+      }
+      return { kind: "identity_show" };
+    }
+    if (second === "init") {
+      for (let i = 2; i < argv.length; i += 1) {
+        const arg = argv[i];
+        if (!arg) continue;
+        if (arg === "-h" || arg === "--help") return { kind: "help" };
+        if (arg.startsWith("-")) {
+          throw new Error(`unsupported identity.init argument '${arg}'`);
+        }
+        throw new Error(`unexpected identity.init argument '${arg}'`);
+      }
+      return { kind: "identity_init" };
+    }
     throw new Error(`unknown identity subcommand '${second}'`);
   }
 
@@ -143,8 +178,7 @@ async function saveOperatorConfig(
   path: string,
   config: { gateway_url: string; auth_token: string },
 ): Promise<void> {
-  const dir = resolveOperatorDir(resolveTyrumHome());
-  await mkdir(dir, { recursive: true, mode: 0o700 });
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   await writeFile(path, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
 }
 
@@ -173,31 +207,60 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
   const tyrumHome = resolveTyrumHome();
 
   if (command.kind === "config_show") {
-    const configPath = resolveOperatorConfigPath(tyrumHome);
-    const config = await loadOperatorConfig(configPath);
-    const maskedToken = config.auth_token ? "[set]" : "[unset]";
-    console.log(
-      [
-        "operator config",
-        `home=${tyrumHome}`,
-        `gateway_url=${config.gateway_url ?? "[unset]"}`,
-        `auth_token=${maskedToken}`,
-      ].join(" "),
-    );
-    return 0;
+    try {
+      const configPath = resolveOperatorConfigPath(tyrumHome);
+      const config = await loadOperatorConfig(configPath);
+      const maskedToken = config.auth_token ? "[set]" : "[unset]";
+      console.log(
+        [
+          "operator config",
+          `home=${tyrumHome}`,
+          `gateway_url=${config.gateway_url ?? "[unset]"}`,
+          `auth_token=${maskedToken}`,
+        ].join(" "),
+      );
+      return 0;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`config.show: failed: ${message}`);
+      return 1;
+    }
   }
 
   if (command.kind === "config_set") {
-    const configPath = resolveOperatorConfigPath(tyrumHome);
-    await saveOperatorConfig(configPath, {
-      gateway_url: command.gateway_url,
-      auth_token: command.auth_token,
-    });
-    console.log(`config.set: ok path=${configPath}`);
-    return 0;
+    try {
+      const configPath = resolveOperatorConfigPath(tyrumHome);
+      await saveOperatorConfig(configPath, {
+        gateway_url: command.gateway_url,
+        auth_token: command.auth_token,
+      });
+      console.log(`config.set: ok path=${configPath}`);
+      return 0;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`config.set: failed: ${message}`);
+      return 1;
+    }
   }
 
-  if (command.kind === "identity_show" || command.kind === "identity_init") {
+  if (command.kind === "identity_show") {
+    const identityPath = resolveOperatorDeviceIdentityPath(tyrumHome);
+    const storage = createNodeFileDeviceIdentityStorage(identityPath);
+    try {
+      const identity = await storage.load();
+      if (!identity) {
+        console.error(`identity: not found: run 'tyrum-cli identity init' path=${identityPath}`);
+        return 1;
+      }
+      console.log(`identity: ok device_id=${identity.deviceId} path=${identityPath}`);
+      return 0;
+    } catch (error) {
+      console.error(`identity: failed: ${formatDeviceIdentityError(error)}`);
+      return 1;
+    }
+  }
+
+  if (command.kind === "identity_init") {
     const identityPath = resolveOperatorDeviceIdentityPath(tyrumHome);
     const storage = createNodeFileDeviceIdentityStorage(identityPath);
     try {

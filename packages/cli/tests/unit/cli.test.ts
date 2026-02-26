@@ -43,6 +43,20 @@ describe("@tyrum/cli config storage", () => {
     else process.env["TYRUM_HOME"] = prevHome;
   });
 
+  it("prints help for `config show --help`", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const code = await runCli(["config", "show", "--help"]);
+
+    expect(code).toBe(0);
+    expect(errSpy).not.toHaveBeenCalled();
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Usage:"));
+
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+  });
+
   it("persists gateway URL + auth token under TYRUM_HOME", async () => {
     const home = await mkdtemp(join(tmpdir(), "tyrum-cli-"));
     process.env["TYRUM_HOME"] = home;
@@ -80,6 +94,27 @@ describe("@tyrum/cli device identity storage", () => {
   afterEach(() => {
     if (prevHome === undefined) delete process.env["TYRUM_HOME"];
     else process.env["TYRUM_HOME"] = prevHome;
+  });
+
+  it("does not create a device identity for `identity show` when missing", async () => {
+    const home = await mkdtemp(join(tmpdir(), "tyrum-cli-"));
+    process.env["TYRUM_HOME"] = home;
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      const code = await runCli(["identity", "show"]);
+      expect(code).toBe(1);
+      expect(errSpy).toHaveBeenCalled();
+      await expect(
+        readFile(join(home, "operator", "device-identity.json"), "utf8"),
+      ).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      logSpy.mockRestore();
+      errSpy.mockRestore();
+      await rm(home, { recursive: true, force: true });
+    }
   });
 
   it("creates a device identity file under TYRUM_HOME", async () => {
