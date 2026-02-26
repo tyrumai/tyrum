@@ -132,6 +132,41 @@ describe("admin mode", () => {
     }
   });
 
+  it("chunks expiry timers to avoid setTimeout overflow for large TTLs", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("1970-01-01T00:00:00.000Z"));
+
+    const MAX_SET_TIMEOUT_MS = 2_147_483_647;
+
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
+    try {
+      const store = createAdminModeStore({ tickIntervalMs: 0 });
+
+      const expiresAt = new Date(Date.now() + MAX_SET_TIMEOUT_MS + 10_000).toISOString();
+      store.enter({ elevatedToken: "elevated-token", expiresAt });
+
+      expect(store.getSnapshot().status).toBe("active");
+
+      const lastTimeoutCall = setTimeoutSpy.mock.calls.at(-1);
+      if (!lastTimeoutCall)
+        throw new Error("Expected createAdminModeStore to schedule an expiry timer");
+
+      const delayMs = lastTimeoutCall[1] as number;
+      expect(delayMs).toBeLessThanOrEqual(MAX_SET_TIMEOUT_MS);
+
+      vi.advanceTimersByTime(MAX_SET_TIMEOUT_MS);
+      expect(store.getSnapshot().status).toBe("active");
+      expect(setTimeoutSpy.mock.calls.some((call) => call[1] === 10_000)).toBe(true);
+
+      vi.advanceTimersByTime(10_000);
+      expect(store.getSnapshot().status).toBe("inactive");
+
+      store.dispose();
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
+  });
+
   it("provides gating helpers for dangerous actions", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-02-26T00:00:00.000Z"));

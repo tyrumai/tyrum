@@ -28,6 +28,8 @@ function toRemainingMs(expiresAtMs: number, nowMs: number): number {
   return Math.max(0, expiresAtMs - nowMs);
 }
 
+const MAX_SET_TIMEOUT_MS = 2_147_483_647;
+
 export function createAdminModeStore(options?: {
   tickIntervalMs?: number;
   now?: () => number;
@@ -105,9 +107,14 @@ export function createAdminModeStore(options?: {
 
     clearTimers();
 
-    expireTimer = setTimeout(() => {
-      setInactive();
-    }, remainingMs);
+    expireTimer = setTimeout(
+      () => {
+        if (expiresAtMs === null) return;
+        const nextRemainingMs = toRemainingMs(expiresAtMs, now());
+        startTimers(nextRemainingMs);
+      },
+      Math.min(remainingMs, MAX_SET_TIMEOUT_MS),
+    );
     (expireTimer as unknown as { unref?: () => void }).unref?.();
 
     if (tickIntervalMs > 0) {
