@@ -966,40 +966,38 @@ async function withWsClient<T>(
 ): Promise<T> {
   const client = new TyrumClient(opts);
 
-  const connected = await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      cleanup();
-      reject(new Error("WebSocket connect timed out"));
-    }, 10_000);
-
-    const cleanup = (): void => {
-      clearTimeout(timer);
-      client.off("connected", onConnected);
-      client.off("transport_error", onTransportError);
-      client.off("disconnected", onDisconnected);
-    };
-
-    const onConnected = (): void => {
-      cleanup();
-      resolve();
-    };
-    const onTransportError = (evt: { message: string }): void => {
-      cleanup();
-      reject(new Error(evt.message));
-    };
-    const onDisconnected = (evt: { code: number; reason: string }): void => {
-      cleanup();
-      reject(new Error(`WebSocket disconnected (${String(evt.code)}): ${evt.reason}`));
-    };
-
-    client.on("connected", onConnected);
-    client.on("transport_error", onTransportError);
-    client.on("disconnected", onDisconnected);
-    client.connect();
-  });
-  void connected;
-
   try {
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error("WebSocket connect timed out"));
+      }, 10_000);
+
+      const cleanup = (): void => {
+        clearTimeout(timer);
+        client.off("connected", onConnected);
+        client.off("transport_error", onTransportError);
+        client.off("disconnected", onDisconnected);
+      };
+
+      const onConnected = (): void => {
+        cleanup();
+        resolve();
+      };
+      const onTransportError = (evt: { message: string }): void => {
+        cleanup();
+        reject(new Error(evt.message));
+      };
+      const onDisconnected = (evt: { code: number; reason: string }): void => {
+        cleanup();
+        reject(new Error(`WebSocket disconnected (${String(evt.code)}): ${evt.reason}`));
+      };
+
+      client.on("connected", onConnected);
+      client.on("transport_error", onTransportError);
+      client.on("disconnected", onDisconnected);
+      client.connect();
+    });
     return await fn(client);
   } finally {
     client.disconnect();

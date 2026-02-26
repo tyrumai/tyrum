@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const {
   wsCtorSpy,
+  wsConnectMode,
+  wsDisconnectSpy,
   wsApprovalListSpy,
   wsApprovalResolveSpy,
   wsWorkflowRunSpy,
@@ -24,6 +26,8 @@ const {
   httpPolicyRevokeOverrideSpy,
 } = vi.hoisted(() => ({
   wsCtorSpy: vi.fn(),
+  wsConnectMode: { value: "success" as "success" | "transport_error" | "disconnected" },
+  wsDisconnectSpy: vi.fn(),
   wsApprovalListSpy: vi.fn(),
   wsApprovalResolveSpy: vi.fn(),
   wsWorkflowRunSpy: vi.fn(),
@@ -70,10 +74,24 @@ vi.mock("@tyrum/client", async () => {
     }
 
     connect(): void {
-      queueMicrotask(() => this.emit("connected", { clientId: "test" }));
+      switch (wsConnectMode.value) {
+        case "success":
+          queueMicrotask(() => this.emit("connected", { clientId: "test" }));
+          return;
+        case "transport_error":
+          queueMicrotask(() => this.emit("transport_error", { message: "mock transport error" }));
+          return;
+        case "disconnected":
+          queueMicrotask(() =>
+            this.emit("disconnected", { code: 1006, reason: "mock disconnect" }),
+          );
+          return;
+      }
     }
 
-    disconnect(): void {}
+    disconnect(): void {
+      wsDisconnectSpy();
+    }
 
     approvalList(payload?: unknown): Promise<unknown> {
       return wsApprovalListSpy(payload);
@@ -129,6 +147,8 @@ describe("@tyrum/cli operator commands", () => {
 
   afterEach(() => {
     wsCtorSpy.mockReset();
+    wsConnectMode.value = "success";
+    wsDisconnectSpy.mockReset();
     wsApprovalListSpy.mockReset();
     wsApprovalResolveSpy.mockReset();
     wsWorkflowRunSpy.mockReset();
@@ -196,6 +216,46 @@ describe("@tyrum/cli operator commands", () => {
       );
       expect(wsApprovalListSpy).toHaveBeenCalledWith({ limit: 10 });
       expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+      errSpy.mockRestore();
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+
+  it("disconnects the WS client when connect fails", async () => {
+    const home = await mkdtemp(join(tmpdir(), "tyrum-cli-"));
+    process.env["TYRUM_HOME"] = home;
+
+    const operatorDir = join(home, "operator");
+    await mkdir(operatorDir, { recursive: true, mode: 0o700 });
+    await writeFile(
+      join(operatorDir, "config.json"),
+      JSON.stringify({ gateway_url: "http://127.0.0.1:8788", auth_token: "tkn" }, null, 2),
+      { mode: 0o600 },
+    );
+    await writeFile(
+      join(operatorDir, "device-identity.json"),
+      JSON.stringify({ deviceId: "dev", publicKey: "pub", privateKey: "priv" }, null, 2),
+      { mode: 0o600 },
+    );
+
+    wsConnectMode.value = "transport_error";
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      vi.resetModules();
+      const { runCli } = await import("../../src/index.js");
+
+      const code = await runCli(["approvals", "list", "--limit", "10"]);
+
+      expect(code).toBe(1);
+      expect(errSpy).toHaveBeenCalled();
+      expect(wsApprovalListSpy).not.toHaveBeenCalled();
+      expect(wsDisconnectSpy).toHaveBeenCalled();
+      expect(logSpy).not.toHaveBeenCalled();
     } finally {
       logSpy.mockRestore();
       errSpy.mockRestore();
