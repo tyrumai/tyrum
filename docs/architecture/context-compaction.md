@@ -39,8 +39,14 @@ Session compaction is a **prompt-level** optimization; it is not a long-term mem
 
 - The compaction summary exists to keep ongoing work safe and coherent within a bounded context window.
 - Long-term memory lives in the StateStore (agent-scoped) and is retrieved as a budgeted digest for each turn (see [Memory](./memory.md)).
+- Active work state lives in the StateStore via the WorkBoard (workspace-scoped) and is retrieved as a budgeted Work focus digest for each turn (see [Work board and delegated execution](./workboard.md)).
 
 At compaction boundaries, the system MAY trigger consolidation workflows that promote durable lessons (facts/preferences/procedures) out of ephemeral context into long-term memory. These workflows are budget-driven and auditable, and must not silently “remember” sensitive content.
+
+To reduce reliance on prompt history, important "current truth" should be externalized to durable state:
+
+- Key decisions belong in WorkBoard DecisionRecords.
+- Current plan variables and pinned constraints belong in canonical state KV (agent/work item).
 
 ## Pruning (tool-result trimming)
 

@@ -13,6 +13,7 @@ For each agent run, Tyrum assembles a custom system prompt. The purpose is to pr
 - Documentation: where local docs live and when to read them
 - Injected workspace files: bootstrap context included without explicit reads
 - Memory digest: budgeted long-term memory recall (from the StateStore), scoped to the agent
+- Work focus digest: budgeted "what matters now" slice of the WorkBoard (active WorkItems, blockers/approvals, next tasks, current state KV, and latest decisions)
 - Sandbox: runtime constraints (including hardening profile) and whether elevated execution is available
 - Date and time: user-local time and formatting
 - Reply tags: optional provider-specific reply tags
@@ -52,4 +53,4 @@ These files (or equivalents) can be injected as "project context" so the model h
 - `HEARTBEAT.md`
 - `BOOTSTRAP.md` (only for brand-new workspaces)
 
-Long-term memory is not represented as a workspace file. It lives in the StateStore and is injected as a **budgeted memory digest** (agent-scoped recall) during context assembly.
+Long-term memory and work state are not represented as workspace files. They live in the StateStore and are injected as **budgeted digests** (agent-scoped memory recall and workspace-scoped WorkBoard focus) during context assembly.

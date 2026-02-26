@@ -81,11 +81,43 @@ A step execution process that claims work (leases) and performs tool/capability 
 
 ## WorkBoard
 
-A workspace-scoped backlog and work-tracking system (Kanban) used to keep interactive sessions responsive while background work runs. The WorkBoard is a representation over durable work state in the StateStore.
+A workspace-scoped work-tracking surface (Kanban) used to keep interactive sessions responsive while background work runs. The WorkBoard also provides an operator-visible drilldown "global workspace" (artifacts, decisions, and signals) and is the source of the per-run Work focus digest.
 
 ## WorkItem
 
 An operator-facing unit of work with a clear outcome and acceptance criteria. WorkItems are sized to avoid "one mega task"; large requests are represented as Initiatives that decompose into smaller Action WorkItems.
+
+## WorkArtifact
+
+A typed, durable record attached to a WorkItem (or workspace) that captures intermediate planning/execution state (candidate plans, hypotheses, tool intent, verification reports) and links to evidence.
+
+## DecisionRecord
+
+A durable record of a discrete choice made during planning/execution (question, chosen option, alternatives, rationale, and inputs). DecisionRecords power auditability and WorkBoard drilldown.
+
+## WorkSignal
+
+A durable time- or event-based trigger attached to a WorkItem or workspace that enqueues follow-up work (and optionally policy-gated notifications).
+
+## Work focus digest
+
+A budgeted per-run summary derived from the WorkBoard (active items, blockers/approvals, next tasks, current KV state, and latest decisions) injected during context assembly.
+
+## WorkItem state KV
+
+An authoritative key/value store of current plan variables for a WorkItem, rendered in a stable form to prevent drift under prompt interference.
+
+## Agent state KV
+
+An authoritative key/value store of pinned agent preferences/constraints, rendered in a stable form to prevent oscillation and drift.
+
+## ToolIntent
+
+A record describing why a tool call should happen (goal, expected value/cost, risk class, and expected evidence/postconditions), typically stored as a WorkArtifact.
+
+## IntentGraph
+
+A derived representation of a WorkItem’s accepted intent and constraints (acceptance criteria, approvals, state KV, and decisions) used to detect and pause on execution drift outside intent.
 
 ## User
 

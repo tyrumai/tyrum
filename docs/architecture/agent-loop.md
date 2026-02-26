@@ -6,15 +6,19 @@ An agent loop is the end-to-end path from an inbound message to a final reply an
 
 ```mermaid
 flowchart TB
-  IN["Inbound message"] --> ASM["Assemble context<br/>(system + history + tools + injected files)"]
-  ASM --> INF["Model inference<br/>(planning)"]
-  INF --> WF["Workflow/plan selection<br/>(playbook or ad-hoc workflow)"]
+  IN["Inbound message"] --> ASM["Assemble context<br/>(system + history + tools + injected files + digests)"]
+  ASM --> INF["Model inference<br/>(interpret + propose next actions)"]
+  INF --> WF["Workflow selection<br/>(playbook or ad-hoc workflow)"]
   WF --> ENG["Execution engine<br/>(steps + retries + pause/resume)"]
   ENG --> OUT["Stream progress + evidence"]
-  OUT --> PERSIST["Persist state<br/>(transcripts, events, memory)"]
+  OUT --> PERSIST["Persist state<br/>(transcripts, events, work state, memory)"]
 ```
 
-Workflow/plan selection may create or update WorkItems in the WorkBoard when the agent delegates long-running work while keeping the interactive session responsive (see [Work board and delegated execution](./workboard.md)).
+Planning is not a single “planner module.” Tyrum treats it as an iterative control loop: the model proposes next actions, the WorkBoard records durable commitments and status, and the execution engine gates side effects behind approvals, idempotency, and evidence.
+
+Context assembly includes budgeted digests from durable state (for example memory recall and WorkBoard focus) so work remains coherent under interruptions and session compaction.
+
+Workflow selection may create or update WorkItems in the WorkBoard when the agent delegates long-running work while keeping the interactive session responsive (see [Work board and delegated execution](./workboard.md)).
 
 ## Serialization guarantee
 

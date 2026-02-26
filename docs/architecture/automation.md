@@ -8,11 +8,13 @@ Automation lets Tyrum act on schedules and triggers while keeping behavior obser
 - **Webhooks:** an HTTP endpoint for external triggers (scoped and authenticated).
 - **Cron jobs:** scheduled tasks with their own lane/session context.
 - **Heartbeat:** a periodic run in the main session (lane `heartbeat`) that batches multiple checks and follow-ups.
+- **WorkSignals:** durable time- or event-based triggers attached to a WorkItem/workspace that enqueue explicit follow-up work (see [Work board and delegated execution](./workboard.md)).
 
 ## When to use heartbeat vs cron
 
 - Use **heartbeat** when the agent should be context-aware and prioritize across multiple signals inside the main session.
 - Use **cron** for independent, narrow tasks that should run on a fixed schedule.
+- WorkSignals can be implemented as heartbeat-driven checks (context-aware) or as cron/watchers (narrow); the key invariant is that firings are durable, deduped, and policy-gated.
 
 ## Safety expectations
 

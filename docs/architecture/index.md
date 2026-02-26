@@ -35,7 +35,9 @@ flowchart LR
     AS[("Artifact store<br/>(FS/S3-compatible)")]
     EV["Event backplane"]
     ENG["Execution engine"]
+    WB["WorkBoard<br/>(work state + drilldown)"]
     APPR["Approvals"]
+    SCH["Scheduler"]
     PB["Playbook runtime"]
     SEC["Secret provider"]
   end
@@ -54,9 +56,14 @@ flowchart LR
   N <--> |"WebSocket<br/>capability RPC + events"| G
   G <--> DB
   ENG <--> AS
+  WB <--> DB
   G --> EV
   EV --> C
   G --> ENG
+  G --> WB
+  ENG --> WB
+  SCH <--> DB
+  SCH --> ENG
   ENG --> APPR
   ENG --> PB
   G <--> SEC
@@ -72,7 +79,7 @@ flowchart LR
 - **StateStore:** durable state and logs (SQLite local; Postgres for HA/scale). See [Scaling and high availability](./scaling-ha.md).
 - **Event backplane:** cross-instance delivery via a durable outbox (in-process for replica count = 1; shared for clusters). See [Backplane](./backplane.md), [Scaling and high availability](./scaling-ha.md), and [Events](./protocol/events.md).
 - **Execution engine:** the durable orchestration runtime (retries, idempotency, pause/resume, evidence). See [Execution engine](./execution-engine.md).
-- **WorkBoard:** workspace-scoped work tracking (Kanban) that keeps interactive sessions responsive by delegating long-running work. See [Work board and delegated execution](./workboard.md).
+- **WorkBoard:** workspace-scoped work tracking (Kanban) plus a drilldown "global workspace" for artifacts/decisions/signals that keeps interactive sessions responsive by delegating long-running work. See [Work board and delegated execution](./workboard.md).
 - **Workers:** step executors that claim work (leases), perform side effects, and publish results/events. See [Execution engine](./execution-engine.md).
 - **ToolRunner:** a workspace-mounted execution context that runs filesystem/CLI tools. In single-host deployments it can be a local subprocess; in clusters it is typically a sandboxed job/pod. See [Scaling and high availability](./scaling-ha.md).
 - **Scheduler:** cron/watchers/heartbeat enqueuers coordinated by DB-leases. See [Automation](./automation.md).
