@@ -305,6 +305,103 @@ describe("@tyrum/cli operator commands", () => {
     }
   });
 
+  it("rejects `workflow run` with an invalid --lane", async () => {
+    const home = await mkdtemp(join(tmpdir(), "tyrum-cli-"));
+    process.env["TYRUM_HOME"] = home;
+
+    const operatorDir = join(home, "operator");
+    await mkdir(operatorDir, { recursive: true, mode: 0o700 });
+    await writeFile(
+      join(operatorDir, "config.json"),
+      JSON.stringify({ gateway_url: "http://127.0.0.1:8788", auth_token: "tkn" }, null, 2),
+      { mode: 0o600 },
+    );
+    await writeFile(
+      join(operatorDir, "device-identity.json"),
+      JSON.stringify({ deviceId: "dev", publicKey: "pub", privateKey: "priv" }, null, 2),
+      { mode: 0o600 },
+    );
+
+    wsWorkflowRunSpy.mockResolvedValue({ run_id: "run-1" });
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      vi.resetModules();
+      const { runCli } = await import("../../src/index.js");
+
+      const code = await runCli([
+        "workflow",
+        "run",
+        "--key",
+        "agent:default:main",
+        "--lane",
+        "nope",
+        "--steps",
+        '[{"type":"Message","args":{"text":"hi"}}]',
+      ]);
+
+      expect(code).toBe(1);
+      expect(wsWorkflowRunSpy).not.toHaveBeenCalled();
+      expect(errSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+      errSpy.mockRestore();
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+
+  it("defaults `workflow run` steps args to {}", async () => {
+    const home = await mkdtemp(join(tmpdir(), "tyrum-cli-"));
+    process.env["TYRUM_HOME"] = home;
+
+    const operatorDir = join(home, "operator");
+    await mkdir(operatorDir, { recursive: true, mode: 0o700 });
+    await writeFile(
+      join(operatorDir, "config.json"),
+      JSON.stringify({ gateway_url: "http://127.0.0.1:8788", auth_token: "tkn" }, null, 2),
+      { mode: 0o600 },
+    );
+    await writeFile(
+      join(operatorDir, "device-identity.json"),
+      JSON.stringify({ deviceId: "dev", publicKey: "pub", privateKey: "priv" }, null, 2),
+      { mode: 0o600 },
+    );
+
+    wsWorkflowRunSpy.mockResolvedValue({ run_id: "run-1" });
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      vi.resetModules();
+      const { runCli } = await import("../../src/index.js");
+
+      const code = await runCli([
+        "workflow",
+        "run",
+        "--key",
+        "agent:default:main",
+        "--steps",
+        '[{"type":"Message"}]',
+      ]);
+
+      expect(code).toBe(0);
+      expect(errSpy).not.toHaveBeenCalled();
+      expect(wsWorkflowRunSpy).toHaveBeenCalledWith({
+        key: "agent:default:main",
+        lane: "main",
+        steps: [{ type: "Message", args: {} }],
+      });
+      expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+      errSpy.mockRestore();
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+
   it("runs `workflow resume` via @tyrum/client WS", async () => {
     const home = await mkdtemp(join(tmpdir(), "tyrum-cli-"));
     process.env["TYRUM_HOME"] = home;

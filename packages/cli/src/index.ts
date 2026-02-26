@@ -9,9 +9,17 @@ import {
   createNodeFileDeviceIdentityStorage,
   formatDeviceIdentityError,
   loadOrCreateDeviceIdentity,
+  type ActionPrimitive,
 } from "@tyrum/client";
 
 export const VERSION = "0.1.0";
+
+const WORKFLOW_LANES = ["main", "cron", "heartbeat", "subagent"] as const;
+type WorkflowLane = (typeof WORKFLOW_LANES)[number];
+
+function isWorkflowLane(value: string): value is WorkflowLane {
+  return (WORKFLOW_LANES as readonly string[]).includes(value);
+}
 
 type CliCommand =
   | { kind: "help" }
@@ -27,7 +35,7 @@ type CliCommand =
       decision: "approved" | "denied";
       reason?: string;
     }
-  | { kind: "workflow_run"; key: string; lane: string; steps: unknown[] }
+  | { kind: "workflow_run"; key: string; lane: WorkflowLane; steps: ActionPrimitive[] }
   | { kind: "workflow_resume"; token: string }
   | { kind: "workflow_cancel"; run_id: string; reason?: string }
   | {
@@ -529,7 +537,7 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
 
     if (second === "run") {
       let key: string | undefined;
-      let lane = "main";
+      let lane: WorkflowLane = "main";
       let stepsRaw: string | undefined;
 
       for (let i = 2; i < argv.length; i += 1) {
@@ -551,6 +559,9 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
           if (!raw) throw new Error("--lane requires a value");
           const trimmed = raw.trim();
           if (!trimmed) throw new Error("--lane requires a non-empty value");
+          if (!isWorkflowLane(trimmed)) {
+            throw new Error(`--lane must be one of ${WORKFLOW_LANES.join(", ")}`);
+          }
           lane = trimmed;
           i += 1;
           continue;
@@ -585,7 +596,56 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
         throw new Error("--steps must be a JSON array");
       }
 
-      return { kind: "workflow_run", key, lane, steps: parsedSteps };
+      const normalizedSteps: ActionPrimitive[] = parsedSteps.map((rawStep, idx) => {
+        if (typeof rawStep !== "object" || rawStep === null || Array.isArray(rawStep)) {
+          throw new Error(`--steps[${String(idx)}] must be an object`);
+        }
+        const record = rawStep as Record<string, unknown>;
+        const rawType = record["type"];
+        if (typeof rawType !== "string") {
+          throw new Error(`--steps[${String(idx)}].type must be a string`);
+        }
+        const type = rawType.trim();
+        if (!type) {
+          throw new Error(`--steps[${String(idx)}].type must be a non-empty string`);
+        }
+
+        let args: Record<string, unknown> = {};
+        const rawArgs = record["args"];
+        if (rawArgs !== undefined) {
+          if (typeof rawArgs !== "object" || rawArgs === null || Array.isArray(rawArgs)) {
+            throw new Error(`--steps[${String(idx)}].args must be an object`);
+          }
+          args = rawArgs as Record<string, unknown>;
+        }
+
+        const rawKey = record["idempotency_key"];
+        let idempotencyKey: string | undefined;
+        if (rawKey !== undefined) {
+          if (typeof rawKey !== "string") {
+            throw new Error(`--steps[${String(idx)}].idempotency_key must be a string`);
+          }
+          const trimmed = rawKey.trim();
+          if (!trimmed) {
+            throw new Error(`--steps[${String(idx)}].idempotency_key must be a non-empty string`);
+          }
+          idempotencyKey = trimmed;
+        }
+
+        const step: ActionPrimitive = {
+          type: type as ActionPrimitive["type"],
+          args,
+          ...(record["postcondition"] !== undefined ? { postcondition: record["postcondition"] } : {}),
+          ...(idempotencyKey !== undefined ? { idempotency_key: idempotencyKey } : {}),
+        };
+        return step;
+      });
+
+      if (normalizedSteps.length === 0) {
+        throw new Error("--steps must be a non-empty JSON array");
+      }
+
+      return { kind: "workflow_run", key, lane, steps: normalizedSteps };
     }
 
     if (second === "resume") {
