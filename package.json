@@ -26,6 +26,7 @@
       "file-loader>schema-utils": "4.3.3",
       "minimatch": "10.2.1",
       "null-loader>schema-utils": "4.3.3",
+      "rollup": "4.59.0",
       "tmp": ">=0.2.4",
       "url-loader>schema-utils": "4.3.3"
     },
