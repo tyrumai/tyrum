@@ -38,5 +38,14 @@ describe("resolveTuiConfig", () => {
     expect(cfg.deviceIdentityPath).toBe("/home/test/.tyrum/tui/device-identity.json");
     expect(cfg.reconnect).toBe(true);
   });
-});
 
+  it("rejects invalid tls fingerprint256", () => {
+    expect(() =>
+      resolveTuiConfig({
+        env: { GATEWAY_TOKEN: "t" },
+        defaults: { gatewayUrl: "http://127.0.0.1:8788", tyrumHome: "/h" },
+        tlsCertFingerprint256: "not-a-fingerprint",
+      }),
+    ).toThrow(/tls fingerprint/i);
+  });
+});

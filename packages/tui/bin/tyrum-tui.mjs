@@ -12,6 +12,8 @@ const repoRoot = resolve(packageRoot, "../..");
 const workspaceMarker = resolve(repoRoot, "pnpm-workspace.yaml");
 const distEntrypoint = resolve(packageRoot, "dist/index.mjs");
 const srcRoot = resolve(packageRoot, "src");
+const schemasDistEntrypoint = resolve(repoRoot, "packages/schemas/dist/index.mjs");
+const clientDistEntrypoint = resolve(repoRoot, "packages/client/dist/index.mjs");
 const operatorCoreDistEntrypoint = resolve(repoRoot, "packages/operator-core/dist/index.mjs");
 
 function pnpmCommand() {
@@ -43,6 +45,14 @@ function tuiBuildIsStale() {
     const srcMtime = maxMtimeMsInDir(srcRoot);
     if (distMtime < srcMtime) return true;
   }
+
+  if (!existsSync(schemasDistEntrypoint)) return true;
+  const schemasMtime = statSync(schemasDistEntrypoint).mtimeMs;
+  if (distMtime < schemasMtime) return true;
+
+  if (!existsSync(clientDistEntrypoint)) return true;
+  const clientMtime = statSync(clientDistEntrypoint).mtimeMs;
+  if (distMtime < clientMtime) return true;
 
   if (!existsSync(operatorCoreDistEntrypoint)) return true;
   const operatorCoreMtime = statSync(operatorCoreDistEntrypoint).mtimeMs;
@@ -102,4 +112,3 @@ try {
   console.error(`error: ${message}`);
   process.exit(1);
 }
-

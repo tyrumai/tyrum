@@ -16,6 +16,19 @@ function hasScheme(raw: string): boolean {
   return /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(raw);
 }
 
+function normalizeFingerprint256(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const colonMatch = trimmed.match(/[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){31}/);
+  if (colonMatch) return colonMatch[0].replace(/:/g, "").toLowerCase();
+
+  const hexMatch = trimmed.match(/[0-9A-Fa-f]{64}/);
+  if (hexMatch) return hexMatch[0].toLowerCase();
+
+  return null;
+}
+
 export function resolveGatewayUrls(rawGatewayUrl: string): GatewayUrls {
   const trimmed = rawGatewayUrl.trim();
   if (!trimmed) {
@@ -78,7 +91,13 @@ export function resolveTuiConfig(input: {
     (input.deviceIdentityPath ?? "").trim() || join(tyrumHome, "tui", "device-identity.json");
 
   const tlsCertFingerprint256Raw = (input.tlsCertFingerprint256 ?? "").trim();
-  const tlsCertFingerprint256 = tlsCertFingerprint256Raw ? tlsCertFingerprint256Raw : undefined;
+  const tlsCertFingerprint256 = (() => {
+    if (!tlsCertFingerprint256Raw) return undefined;
+    if (!normalizeFingerprint256(tlsCertFingerprint256Raw)) {
+      throw new Error("Invalid tls fingerprint256; expected 64 hex characters (with optional ':').");
+    }
+    return tlsCertFingerprint256Raw;
+  })();
 
   return {
     ...urls,

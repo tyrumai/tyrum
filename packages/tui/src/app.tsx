@@ -96,7 +96,7 @@ export function TuiApp({ core, config }: { core: OperatorCore; config: ResolvedT
   useEffect(() => {
     core.connect();
     return () => {
-      core.dispose();
+      core.disconnect();
     };
   }, [core]);
 
@@ -138,4 +138,3 @@ export function TuiApp({ core, config }: { core: OperatorCore; config: ResolvedT
     </Box>
   );
 }
-
