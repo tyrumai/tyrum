@@ -635,7 +635,9 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
         const step: ActionPrimitive = {
           type: type as ActionPrimitive["type"],
           args,
-          ...(record["postcondition"] !== undefined ? { postcondition: record["postcondition"] } : {}),
+          ...(record["postcondition"] !== undefined
+            ? { postcondition: record["postcondition"] }
+            : {}),
           ...(idempotencyKey !== undefined ? { idempotency_key: idempotencyKey } : {}),
         };
         return step;
@@ -929,7 +931,9 @@ async function saveOperatorConfig(
   await writeFile(path, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
 }
 
-async function requireOperatorConfig(home: string): Promise<{ gateway_url: string; auth_token: string }> {
+async function requireOperatorConfig(
+  home: string,
+): Promise<{ gateway_url: string; auth_token: string }> {
   const configPath = resolveOperatorConfigPath(home);
   const config = await loadOperatorConfig(configPath);
   const gatewayUrl = config.gateway_url?.trim();

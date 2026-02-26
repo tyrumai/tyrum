@@ -467,14 +467,7 @@ describe("@tyrum/cli operator commands", () => {
       vi.resetModules();
       const { runCli } = await import("../../src/index.js");
 
-      const code = await runCli([
-        "workflow",
-        "cancel",
-        "--run-id",
-        "run-1",
-        "--reason",
-        "oops",
-      ]);
+      const code = await runCli(["workflow", "cancel", "--run-id", "run-1", "--reason", "oops"]);
 
       expect(code).toBe(0);
       expect(errSpy).not.toHaveBeenCalled();
