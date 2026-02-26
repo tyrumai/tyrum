@@ -975,6 +975,36 @@ describe("createTyrumHttpClient", () => {
     expect(result.contentType).toBe("application/octet-stream");
   });
 
+  it("artifacts.getBytes returns gateway URL for opaque redirects (browser-safe)", async () => {
+    const runId = "550e8400-e29b-41d4-a716-446655440001";
+    const artifactId = "550e8400-e29b-41d4-a716-446655440000";
+
+    const fetch = makeFetchMock(async (input, init) => {
+      expect(init?.method).toBe("GET");
+      expect(init?.redirect).toBe("manual");
+      expect(String(input)).toBe(`https://gateway.example/runs/${runId}/artifacts/${artifactId}`);
+
+      const response = new Response(null, { status: 302 });
+      Object.defineProperty(response, "type", { value: "opaqueredirect" });
+      return response;
+    });
+
+    const client = createTyrumHttpClient({
+      baseUrl: "https://gateway.example",
+      auth: { type: "bearer", token: "root-token" },
+      fetch,
+    });
+
+    const admin = client as unknown as Record<string, any>;
+    expect(typeof admin.artifacts?.getBytes).toBe("function");
+
+    const result = await admin.artifacts.getBytes(runId, artifactId);
+    expect(result).toEqual({
+      kind: "redirect",
+      url: `https://gateway.example/runs/${runId}/artifacts/${artifactId}`,
+    });
+  });
+
   it("audit.verify rejects non-string action entries before network call", async () => {
     const fetch = makeFetchMock(async () => jsonResponse({ valid: true }));
     const client = createTyrumHttpClient({

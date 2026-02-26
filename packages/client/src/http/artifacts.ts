@@ -44,6 +44,13 @@ export type ArtifactBytesResult =
     }
   | {
       kind: "redirect";
+      /**
+       * Signed URL when available (for example Node fetch + manual redirects).
+       *
+       * Browser fetch implementations return an opaque redirect response for
+       * `redirect: "manual"`; in that case this falls back to the gateway
+       * artifact URL, which is still usable for navigation/download flows.
+       */
       url: string;
     };
 
