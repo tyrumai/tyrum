@@ -440,6 +440,196 @@ describe("operator-ui", () => {
     delete (window as unknown as Record<string, unknown>)["tyrumDesktop"];
   });
 
+  it("disables desktop capability toggles while settings are saving", async () => {
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    let resolveSetConfig: (() => void) | null = null;
+    const setConfigPromise = new Promise<void>((resolve) => {
+      resolveSetConfig = resolve;
+    });
+
+    const desktopApi = {
+      getConfig: vi.fn(async () => ({
+        mode: "embedded",
+        embedded: { port: 8788 },
+        capabilities: { desktop: true, playwright: false, cli: false, http: false },
+      })),
+      setConfig: vi.fn(async () => {
+        await setConfigPromise;
+      }),
+      gateway: {
+        getStatus: vi.fn(async () => ({ status: "stopped", port: 8788 })),
+        start: vi.fn(async () => ({ status: "running", port: 8788 })),
+        stop: vi.fn(async () => ({ status: "stopped" })),
+      },
+      node: {
+        connect: vi.fn(async () => ({ status: "connecting" })),
+        disconnect: vi.fn(async () => ({ status: "disconnected" })),
+      },
+      onStatusChange: vi.fn((_cb: (status: unknown) => void) => () => {}),
+      checkMacPermissions: vi.fn(async () => null),
+      requestMacPermission: vi.fn(async () => ({ granted: true })),
+    };
+
+    (window as unknown as Record<string, unknown>)["tyrumDesktop"] = desktopApi;
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+    });
+
+    const desktopLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-desktop"]');
+    expect(desktopLink).not.toBeNull();
+
+    await act(async () => {
+      desktopLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const capabilityCheckboxes = Array.from(
+      container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
+    );
+    expect(capabilityCheckboxes.length).toBeGreaterThanOrEqual(4);
+
+    await act(async () => {
+      capabilityCheckboxes[0]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const saveButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="desktop-save-capabilities"]',
+    );
+    expect(saveButton).not.toBeNull();
+    expect(saveButton!.disabled).toBe(false);
+
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const updatedCheckboxes = Array.from(
+      container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
+    );
+    expect(updatedCheckboxes.length).toBeGreaterThanOrEqual(4);
+    for (const checkbox of updatedCheckboxes) {
+      expect(checkbox.disabled).toBe(true);
+    }
+
+    resolveSetConfig?.();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+    delete (window as unknown as Record<string, unknown>)["tyrumDesktop"];
+  });
+
+  it("does not show Saving status while requesting mac permissions", async () => {
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    let resolvePermission: (() => void) | null = null;
+    const permissionPromise = new Promise<void>((resolve) => {
+      resolvePermission = resolve;
+    });
+
+    const desktopApi = {
+      getConfig: vi.fn(async () => ({
+        mode: "embedded",
+        embedded: { port: 8788 },
+        capabilities: { desktop: true, playwright: false, cli: false, http: false },
+      })),
+      setConfig: vi.fn(async () => {}),
+      gateway: {
+        getStatus: vi.fn(async () => ({ status: "stopped", port: 8788 })),
+        start: vi.fn(async () => ({ status: "running", port: 8788 })),
+        stop: vi.fn(async () => ({ status: "stopped" })),
+      },
+      node: {
+        connect: vi.fn(async () => ({ status: "connecting" })),
+        disconnect: vi.fn(async () => ({ status: "disconnected" })),
+      },
+      onStatusChange: vi.fn((_cb: (status: unknown) => void) => () => {}),
+      checkMacPermissions: vi.fn(async () => null),
+      requestMacPermission: vi.fn(async () => {
+        await permissionPromise;
+        return { granted: true };
+      }),
+    };
+
+    (window as unknown as Record<string, unknown>)["tyrumDesktop"] = desktopApi;
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+    });
+
+    const desktopLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-desktop"]');
+    expect(desktopLink).not.toBeNull();
+
+    await act(async () => {
+      desktopLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const saveButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="desktop-save-capabilities"]',
+    );
+    expect(saveButton).not.toBeNull();
+    expect(saveButton!.textContent).toContain("Save settings");
+
+    const requestAccessibilityButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="desktop-request-accessibility"]',
+    );
+    expect(requestAccessibilityButton).not.toBeNull();
+
+    await act(async () => {
+      requestAccessibilityButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const updatedSaveButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="desktop-save-capabilities"]',
+    );
+    expect(updatedSaveButton).not.toBeNull();
+    expect(updatedSaveButton!.textContent).not.toContain("Saving...");
+
+    resolvePermission?.();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+    delete (window as unknown as Record<string, unknown>)["tyrumDesktop"];
+  });
+
   it("disables browser assistance on the login token field", () => {
     const ws = new FakeWsClient();
     const { http } = createFakeHttpClient();

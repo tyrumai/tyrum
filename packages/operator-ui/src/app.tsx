@@ -233,6 +233,9 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
   const [gatewayStatus, setGatewayStatus] = useState("unknown");
   const [nodeStatus, setNodeStatus] = useState("disconnected");
   const [busy, setBusy] = useState<"gateway" | "node" | "config" | null>(null);
+  const [requestingPermission, setRequestingPermission] = useState<
+    "accessibility" | "screenRecording" | null
+  >(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const saveResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -454,15 +457,15 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
   };
 
   const requestMacPermission = async (permission: "accessibility" | "screenRecording") => {
-    if (!api?.requestMacPermission || busy) return;
-    setBusy("config");
+    if (!api?.requestMacPermission || busy || requestingPermission) return;
+    setRequestingPermission(permission);
     setErrorMessage(null);
     try {
       await api.requestMacPermission(permission);
     } catch (error) {
       setErrorMessage(toErrorMessage(error));
     } finally {
-      setBusy(null);
+      setRequestingPermission(null);
     }
     void checkMacPermissions();
   };
@@ -566,6 +569,7 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
               <input
                 type="checkbox"
                 checked={capabilities[key]}
+                disabled={busy === "config"}
                 onChange={() => toggleCapability(key)}
               />
               <span>{label}</span>
@@ -600,7 +604,7 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
             <button
               type="button"
               data-testid="desktop-check-mac-permissions"
-              disabled={!api.checkMacPermissions || busy !== null}
+              disabled={!api.checkMacPermissions || requestingPermission !== null || busy !== null}
               onClick={() => {
                 void checkMacPermissions();
               }}
@@ -613,23 +617,25 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
             <button
               type="button"
               data-testid="desktop-request-accessibility"
-              disabled={!api.requestMacPermission || busy !== null}
+              disabled={!api.requestMacPermission || requestingPermission !== null || busy !== null}
               onClick={() => {
                 void requestMacPermission("accessibility");
               }}
             >
-              Request Accessibility
+              {requestingPermission === "accessibility" ? "Requesting..." : "Request Accessibility"}
             </button>
             <button
               type="button"
               data-testid="desktop-request-screen-recording"
-              disabled={!api.requestMacPermission || busy !== null}
+              disabled={!api.requestMacPermission || requestingPermission !== null || busy !== null}
               onClick={() => {
                 void requestMacPermission("screenRecording");
               }}
               style={{ marginLeft: 8 }}
             >
-              Request Screen Recording
+              {requestingPermission === "screenRecording"
+                ? "Opening..."
+                : "Request Screen Recording"}
             </button>
           </div>
         </div>
