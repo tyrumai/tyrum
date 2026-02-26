@@ -79,7 +79,8 @@ See `docs/install.md` for full details, version pinning, and update commands.
 5. **Run checks:** `pnpm typecheck && pnpm test && pnpm lint`
 6. **Start the gateway:** `pnpm --filter @tyrum/gateway start`
    - Singleton agent routes (`/agent/status`, `/agent/turn`) are enabled by default. Set `TYRUM_AGENT_ENABLED=0` to disable.
-7. **Open the integrated web app:** `http://127.0.0.1:8788/app`
+7. **Open the operator UI:** `http://127.0.0.1:8788/ui`
+   - The first visit prompts for your admin token and bootstraps a browser auth cookie via `POST /auth/session`.
 
 ### Localhost Safety Defaults
 
@@ -93,7 +94,8 @@ See `docs/install.md` for full details, version pinning, and update commands.
 - Device-bound tokens can be issued/revoked with authenticated HTTP routes:
   - `POST /auth/device-tokens/issue` with `{ device_id, role, scopes[], ttl_seconds? }`
   - `POST /auth/device-tokens/revoke` with `{ token }`
-- The gateway serves the web UI directly at `/app` and supports WebSocket upgrades on `/ws`.
+- The gateway serves the operator web UI at `/ui` and supports WebSocket upgrades on `/ws`.
+- Browser-based clients bootstrap an auth cookie via `POST /auth/session` and then authenticate HTTP + WebSocket requests via that cookie.
 
 ## Development Commands
 
@@ -107,7 +109,7 @@ See `docs/install.md` for full details, version pinning, and update commands.
 | Build all packages              | `pnpm build`                                               |
 | Start gateway                   | `pnpm --filter @tyrum/gateway start`                       |
 | Start gateway (agents disabled) | `TYRUM_AGENT_ENABLED=0 pnpm --filter @tyrum/gateway start` |
-| Open integrated app             | `http://127.0.0.1:8788/app`                                |
+| Open operator UI                | `http://127.0.0.1:8788/ui`                                 |
 
 ## Telegram Bot Setup
 

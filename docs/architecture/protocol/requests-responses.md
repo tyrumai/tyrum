@@ -16,7 +16,6 @@ The canonical wire shapes live in `@tyrum/schemas` (`packages/schemas/src/protoc
 The gateway, clients, and nodes support these request types:
 
 - `connect.init` / `connect.proof` — handshake and device proof (see [Handshake](./handshake.md)).
-- `connect` — legacy handshake (deprecated; does not negotiate `protocol_rev` or prove device identity).
 - `ping` — gateway heartbeat request (peer replies with `ok: true`).
 - `session.send` — send a message into a session (chat input).
 - `workflow.run` — start a deterministic workflow run (playbook file or inline pipeline).

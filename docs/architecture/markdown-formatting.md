@@ -56,7 +56,7 @@ If parsing or rendering fails for a chunk:
 - fall back to plain text for that chunk
 - emit an event indicating a formatting fallback occurred
 
-Current implementation emits a durable episodic event (`event_type=channel_formatting_fallback`) so operators can inspect fallbacks via `/app/activity`.
+Current implementation emits a durable episodic event (`event_type=channel_formatting_fallback`) so operators can inspect fallbacks in the operator UI.
 
 This keeps delivery robust under channel-specific formatting quirks without losing the underlying content.
 
