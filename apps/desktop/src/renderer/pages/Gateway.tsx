@@ -43,7 +43,8 @@ export function Gateway() {
           input: RequestInfo | URL,
           init?: RequestInit,
         ): Promise<Response> => {
-          const url = typeof input === "string" ? input : input.toString();
+          const url =
+            typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
           const headers = headersToRecord(init?.headers);
           const result = await api.gateway.httpFetch({
             url,

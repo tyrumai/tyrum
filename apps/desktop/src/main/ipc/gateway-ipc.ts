@@ -64,6 +64,19 @@ function toHttpBaseUrlFromWsUrl(rawUrl: string): string | null {
   }
 }
 
+function resolveOperatorHttpBaseUrl(config: DesktopNodeConfig): string {
+  if (config.mode === "embedded") {
+    return `http://127.0.0.1:${config.embedded.port}/`;
+  }
+
+  const httpBaseUrl = toHttpBaseUrlFromWsUrl(config.remote.wsUrl);
+  if (!httpBaseUrl) {
+    throw new Error("Remote gateway wsUrl is invalid; expected ws:// or wss://.");
+  }
+
+  return httpBaseUrl;
+}
+
 function resolveOperatorConnection(config: DesktopNodeConfig): OperatorConnectionInfo {
   if (config.mode === "embedded") {
     const token = ensureEmbeddedGatewayToken(config);
@@ -71,15 +84,10 @@ function resolveOperatorConnection(config: DesktopNodeConfig): OperatorConnectio
     return {
       mode: "embedded",
       wsUrl: `ws://127.0.0.1:${port}/ws`,
-      httpBaseUrl: `http://127.0.0.1:${port}/`,
+      httpBaseUrl: resolveOperatorHttpBaseUrl(config),
       token,
       tlsCertFingerprint256: "",
     };
-  }
-
-  const httpBaseUrl = toHttpBaseUrlFromWsUrl(config.remote.wsUrl);
-  if (!httpBaseUrl) {
-    throw new Error("Remote gateway wsUrl is invalid; expected ws:// or wss://.");
   }
 
   const token = config.remote.tokenRef ? decryptToken(config.remote.tokenRef) : "";
@@ -90,7 +98,7 @@ function resolveOperatorConnection(config: DesktopNodeConfig): OperatorConnectio
   return {
     mode: "remote",
     wsUrl: config.remote.wsUrl,
-    httpBaseUrl,
+    httpBaseUrl: resolveOperatorHttpBaseUrl(config),
     token,
     tlsCertFingerprint256,
   };
@@ -200,7 +208,7 @@ export function registerGatewayIpc(window: BrowserWindow): GatewayManager {
       }
 
       const config = loadConfig();
-      const { httpBaseUrl } = resolveOperatorConnection(config);
+      const httpBaseUrl = resolveOperatorHttpBaseUrl(config);
       const allowedOrigin = new URL(httpBaseUrl).origin;
 
       let requestUrl: URL;

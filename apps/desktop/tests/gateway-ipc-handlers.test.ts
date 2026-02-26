@@ -306,6 +306,52 @@ describe("registerGatewayIpc handlers", () => {
     });
   });
 
+  it("does not rotate embedded tokens during HTTP proxy requests", async () => {
+    decryptTokenMock.mockImplementation(() => {
+      throw new Error(
+        "Error while decrypting the ciphertext provided to safeStorage.decryptString.",
+      );
+    });
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(JSON.stringify({ status: "ok" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
+
+    const windowStub = {
+      isDestroyed: () => false,
+      webContents: {
+        isDestroyed: () => false,
+        send: vi.fn(),
+      },
+    } as unknown as BrowserWindow;
+
+    registerGatewayIpc(windowStub);
+
+    const httpFetchHandler = registeredHandlers.get("gateway:http-fetch");
+    expect(httpFetchHandler).toBeDefined();
+
+    const result = await httpFetchHandler!({} as never, {
+      url: "http://127.0.0.1:8788/status",
+      init: {
+        method: "GET",
+        headers: { authorization: "Bearer token" },
+        redirect: "follow",
+      },
+    });
+
+    expect(result.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(decryptTokenMock).not.toHaveBeenCalled();
+    expect(generateTokenMock).not.toHaveBeenCalled();
+    expect(saveConfigMock).not.toHaveBeenCalled();
+  });
+
   it("rejects HTTP proxy requests that include cookies", async () => {
     const { registerGatewayIpc } = await import("../src/main/ipc/gateway-ipc.js");
 
