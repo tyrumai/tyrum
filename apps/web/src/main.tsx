@@ -6,11 +6,20 @@ import {
   createOperatorCore,
 } from "@tyrum/operator-core";
 import { OperatorUiApp } from "@tyrum/operator-ui";
+import { readAuthTokenFromUrl, stripAuthTokenFromUrl } from "./url-auth.js";
+
+function scrubAuthTokenFromUrl(): void {
+  const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  const stripped = stripAuthTokenFromUrl(window.location.href);
+  if (stripped === current) return;
+  window.history.replaceState(window.history.state, "", stripped);
+}
 
 function resolveAuthFromLocation(): ReturnType<
   typeof createBearerTokenAuth | typeof createBrowserCookieAuth
 > {
-  const token = new URLSearchParams(window.location.search).get("token")?.trim();
+  const token = readAuthTokenFromUrl(window.location.href);
+  scrubAuthTokenFromUrl();
   if (token) return createBearerTokenAuth(token);
   return createBrowserCookieAuth();
 }
