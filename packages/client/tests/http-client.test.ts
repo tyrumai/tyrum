@@ -63,6 +63,7 @@ describe("createTyrumHttpClient", () => {
       auth: { type: "bearer", token: "test-token" },
       fetch: makeFetchMock(async () => jsonResponse({ status: "ok" })),
     });
+    const admin = client as unknown as Record<string, any>;
 
     expect(typeof client.deviceTokens.issue).toBe("function");
     expect(typeof client.deviceTokens.revoke).toBe("function");
@@ -97,6 +98,20 @@ describe("createTyrumHttpClient", () => {
     expect(typeof client.pairings.approve).toBe("function");
     expect(typeof client.pairings.deny).toBe("function");
     expect(typeof client.pairings.revoke).toBe("function");
+
+    expect(typeof admin.agentStatus?.get).toBe("function");
+    expect(typeof admin.routingConfig?.get).toBe("function");
+    expect(typeof admin.routingConfig?.update).toBe("function");
+    expect(typeof admin.routingConfig?.revert).toBe("function");
+    expect(typeof admin.audit?.exportReceiptBundle).toBe("function");
+    expect(typeof admin.audit?.verify).toBe("function");
+    expect(typeof admin.audit?.forget).toBe("function");
+    expect(typeof admin.context?.get).toBe("function");
+    expect(typeof admin.context?.list).toBe("function");
+    expect(typeof admin.context?.detail).toBe("function");
+    expect(typeof admin.artifacts?.getMetadata).toBe("function");
+    expect(typeof admin.artifacts?.getBytes).toBe("function");
+    expect(typeof admin.health?.get).toBe("function");
   });
 
   it("sends bearer auth, normalizes baseUrl, and validates issue token responses", async () => {
@@ -879,6 +894,147 @@ describe("createTyrumHttpClient", () => {
     expect(url).toBe("https://gateway.example/pairings/7/deny");
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body as string)).toEqual({ reason: "not trusted" });
+  });
+
+  // --- Operator/admin surfaces ---
+
+  it("health.get sends GET /healthz and validates response", async () => {
+    const fetch = makeFetchMock(async () => jsonResponse({ status: "ok", is_exposed: false }));
+    const client = createTyrumHttpClient({
+      baseUrl: "https://gateway.example",
+      auth: { type: "bearer", token: "root-token" },
+      fetch,
+    });
+
+    const admin = client as unknown as Record<string, any>;
+    expect(typeof admin.health?.get).toBe("function");
+
+    const result = await admin.health.get();
+    expect(result.status).toBe("ok");
+
+    const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe("https://gateway.example/healthz");
+    expect(init.method).toBe("GET");
+  });
+
+  it("artifacts.getBytes returns redirect for 302 responses", async () => {
+    const fetch = makeFetchMock(async (_input, init) => {
+      expect(init?.method).toBe("GET");
+      expect(init?.redirect).toBe("manual");
+      return new Response(null, {
+        status: 302,
+        headers: { location: "https://signed.example/artifact.bin" },
+      });
+    });
+
+    const client = createTyrumHttpClient({
+      baseUrl: "https://gateway.example",
+      auth: { type: "bearer", token: "root-token" },
+      fetch,
+    });
+
+    const admin = client as unknown as Record<string, any>;
+    expect(typeof admin.artifacts?.getBytes).toBe("function");
+
+    const result = await admin.artifacts.getBytes(
+      "550e8400-e29b-41d4-a716-446655440001",
+      "550e8400-e29b-41d4-a716-446655440000",
+    );
+    expect(result).toEqual({ kind: "redirect", url: "https://signed.example/artifact.bin" });
+  });
+
+  it("artifacts.getBytes returns bytes for 200 responses", async () => {
+    const fetch = makeFetchMock(async (_input, init) => {
+      expect(init?.method).toBe("GET");
+      expect(init?.redirect).toBe("manual");
+      return new Response(new Uint8Array([1, 2, 3]), {
+        status: 200,
+        headers: { "content-type": "application/octet-stream" },
+      });
+    });
+
+    const client = createTyrumHttpClient({
+      baseUrl: "https://gateway.example",
+      auth: { type: "bearer", token: "root-token" },
+      fetch,
+    });
+
+    const admin = client as unknown as Record<string, any>;
+    expect(typeof admin.artifacts?.getBytes).toBe("function");
+
+    const result = await admin.artifacts.getBytes(
+      "550e8400-e29b-41d4-a716-446655440001",
+      "550e8400-e29b-41d4-a716-446655440000",
+    );
+
+    expect(result.kind).toBe("bytes");
+    expect(Array.from(result.bytes)).toEqual([1, 2, 3]);
+    expect(result.contentType).toBe("application/octet-stream");
+  });
+
+  it("artifacts.getBytes returns gateway URL for opaque redirects (browser-safe)", async () => {
+    const runId = "550e8400-e29b-41d4-a716-446655440001";
+    const artifactId = "550e8400-e29b-41d4-a716-446655440000";
+
+    const fetch = makeFetchMock(async (input, init) => {
+      expect(init?.method).toBe("GET");
+      expect(init?.redirect).toBe("manual");
+      expect(String(input)).toBe(`https://gateway.example/runs/${runId}/artifacts/${artifactId}`);
+
+      const response = new Response(null, { status: 302 });
+      Object.defineProperty(response, "type", { value: "opaqueredirect" });
+      return response;
+    });
+
+    const client = createTyrumHttpClient({
+      baseUrl: "https://gateway.example",
+      auth: { type: "bearer", token: "root-token" },
+      fetch,
+    });
+
+    const admin = client as unknown as Record<string, any>;
+    expect(typeof admin.artifacts?.getBytes).toBe("function");
+
+    const result = await admin.artifacts.getBytes(runId, artifactId);
+    expect(result).toEqual({
+      kind: "redirect",
+      url: `https://gateway.example/runs/${runId}/artifacts/${artifactId}`,
+    });
+  });
+
+  it("audit.verify rejects non-string action entries before network call", async () => {
+    const fetch = makeFetchMock(async () => jsonResponse({ valid: true }));
+    const client = createTyrumHttpClient({
+      baseUrl: "https://gateway.example",
+      auth: { type: "bearer", token: "root-token" },
+      fetch,
+    });
+
+    const admin = client as unknown as Record<string, any>;
+    expect(typeof admin.audit?.verify).toBe("function");
+
+    await expect(
+      admin.audit.verify({
+        events: [
+          {
+            id: 1,
+            plan_id: "plan-1",
+            step_index: 0,
+            occurred_at: "2026-02-25T00:00:00.000Z",
+            action: { type: "not-a-string" },
+            prev_hash: null,
+            event_hash: null,
+          },
+        ],
+      }),
+    ).rejects.toMatchObject<TyrumHttpClientError>({
+      code: "request_invalid",
+    });
+
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   // --- Edge cases ---
