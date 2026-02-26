@@ -1,4 +1,11 @@
-import { AgentId, ContextReport, DateTimeSchema, UuidSchema } from "@tyrum/schemas";
+import {
+  AgentId,
+  ContextReport,
+  DateTimeSchema,
+  ExecutionRunId,
+  UuidSchema,
+  WorkspaceId,
+} from "@tyrum/schemas";
 import { z } from "zod";
 import { HttpTransport, NonEmptyString, validateOrThrow, type TyrumRequestOptions } from "./shared.js";
 
@@ -11,7 +18,7 @@ const ContextGetQuery = z
 const ContextListQuery = z
   .object({
     session_id: NonEmptyString.optional(),
-    run_id: NonEmptyString.optional(),
+    run_id: ExecutionRunId.optional(),
     limit: z.number().int().positive().optional(),
   })
   .strict();
@@ -23,8 +30,8 @@ const ContextReportRow = z
     channel: NonEmptyString,
     thread_id: NonEmptyString,
     agent_id: AgentId,
-    workspace_id: NonEmptyString,
-    run_id: NonEmptyString.nullable(),
+    workspace_id: WorkspaceId,
+    run_id: ExecutionRunId.nullable(),
     report: z.unknown().nullable(),
     created_at: DateTimeSchema,
   })
@@ -92,7 +99,7 @@ export function createContextApi(transport: HttpTransport): ContextApi {
     },
 
     async detail(id, options) {
-      const parsedId = validateOrThrow(NonEmptyString, id, "context report id");
+      const parsedId = validateOrThrow(UuidSchema, id, "context report id");
       return await transport.request({
         method: "GET",
         path: `/context/detail/${encodeURIComponent(parsedId)}`,
@@ -102,4 +109,3 @@ export function createContextApi(transport: HttpTransport): ContextApi {
     },
   };
 }
-

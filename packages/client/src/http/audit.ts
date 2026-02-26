@@ -1,16 +1,29 @@
 import {
-  AuditEvent,
   AuditForgetRequest,
   AuditForgetResponse,
   ChainVerification,
+  DateTimeSchema,
   ReceiptBundle,
+  Sha256Hex,
 } from "@tyrum/schemas";
 import { z } from "zod";
 import { HttpTransport, NonEmptyString, validateOrThrow, type TyrumRequestOptions } from "./shared.js";
 
+const ChainableEvent = z
+  .object({
+    id: z.number().int().nonnegative(),
+    plan_id: NonEmptyString,
+    step_index: z.number().int().nonnegative(),
+    occurred_at: DateTimeSchema,
+    action: NonEmptyString,
+    prev_hash: Sha256Hex.nullable(),
+    event_hash: Sha256Hex.nullable(),
+  })
+  .strict();
+
 const AuditVerifyRequest = z
   .object({
-    events: z.array(AuditEvent),
+    events: z.array(ChainableEvent),
   })
   .strict();
 
@@ -61,4 +74,3 @@ export function createAuditApi(transport: HttpTransport): AuditApi {
     },
   };
 }
-

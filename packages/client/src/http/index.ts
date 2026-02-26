@@ -1,5 +1,5 @@
 export { createTyrumHttpClient } from "./client.js";
-export type { TyrumHttpClient, TyrumHttpClientOptions } from "./client.js";
+export type { TyrumHttpClient, TyrumHttpClientOperator, TyrumHttpClientOptions } from "./client.js";
 
 export {
   TyrumHttpClientError,

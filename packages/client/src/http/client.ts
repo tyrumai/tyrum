@@ -41,15 +41,30 @@ export interface TyrumHttpClient {
   usage: UsageApi;
   presence: PresenceApi;
   pairings: PairingsApi;
+  /**
+   * Operator/admin surfaces.
+   *
+   * These are optional to preserve compatibility for consumers that mock or
+   * dependency-inject a partial HTTP client.
+   */
+  agentStatus?: AgentStatusApi;
+  routingConfig?: RoutingConfigApi;
+  audit?: AuditApi;
+  context?: ContextApi;
+  artifacts?: ArtifactsApi;
+  health?: HealthApi;
+}
+
+export type TyrumHttpClientOperator = TyrumHttpClient & {
   agentStatus: AgentStatusApi;
   routingConfig: RoutingConfigApi;
   audit: AuditApi;
   context: ContextApi;
   artifacts: ArtifactsApi;
   health: HealthApi;
-}
+};
 
-export function createTyrumHttpClient(options: TyrumHttpClientOptions): TyrumHttpClient {
+export function createTyrumHttpClient(options: TyrumHttpClientOptions): TyrumHttpClientOperator {
   const transport = new HttpTransport(options);
 
   return {

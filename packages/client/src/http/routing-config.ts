@@ -5,8 +5,8 @@ import {
   RoutingConfigUpdateRequest,
   RoutingConfigUpdateResponse,
 } from "@tyrum/schemas";
+import type { z } from "zod";
 import { HttpTransport, validateOrThrow, type TyrumRequestOptions } from "./shared.js";
-import { z } from "zod";
 
 export type RoutingConfigGetResult = z.output<typeof RoutingConfigGetResponse>;
 export type RoutingConfigUpdateInput = z.input<typeof RoutingConfigUpdateRequest>;
@@ -70,4 +70,3 @@ export function createRoutingConfigApi(transport: HttpTransport): RoutingConfigA
     },
   };
 }
-

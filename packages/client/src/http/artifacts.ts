@@ -1,4 +1,13 @@
-import { ArtifactId, ArtifactRef } from "@tyrum/schemas";
+import {
+  AgentId,
+  ArtifactId,
+  ArtifactRef,
+  ExecutionAttemptId,
+  ExecutionRunId,
+  ExecutionStepId,
+  PolicySnapshotId,
+  WorkspaceId,
+} from "@tyrum/schemas";
 import { z } from "zod";
 import {
   HttpTransport,
@@ -13,13 +22,13 @@ const ArtifactMetadataResponse = z
     artifact: ArtifactRef,
     scope: z
       .object({
-        workspace_id: NonEmptyString,
-        agent_id: NonEmptyString.nullable(),
-        run_id: NonEmptyString,
-        step_id: NonEmptyString.nullable(),
-        attempt_id: NonEmptyString.nullable(),
+        workspace_id: WorkspaceId,
+        agent_id: AgentId.nullable(),
+        run_id: ExecutionRunId,
+        step_id: ExecutionStepId.nullable(),
+        attempt_id: ExecutionAttemptId.nullable(),
         sensitivity: NonEmptyString,
-        policy_snapshot_id: NonEmptyString.nullable(),
+        policy_snapshot_id: PolicySnapshotId.nullable(),
       })
       .strict(),
   })
@@ -50,7 +59,7 @@ export interface ArtifactsApi {
 export function createArtifactsApi(transport: HttpTransport): ArtifactsApi {
   return {
     async getMetadata(runId, artifactId, options) {
-      const parsedRunId = validateOrThrow(NonEmptyString, runId, "run id");
+      const parsedRunId = validateOrThrow(ExecutionRunId, runId, "run id");
       const parsedArtifactId = validateOrThrow(ArtifactId, artifactId, "artifact id");
 
       return await transport.request({
@@ -62,16 +71,21 @@ export function createArtifactsApi(transport: HttpTransport): ArtifactsApi {
     },
 
     async getBytes(runId, artifactId, options) {
-      const parsedRunId = validateOrThrow(NonEmptyString, runId, "run id");
+      const parsedRunId = validateOrThrow(ExecutionRunId, runId, "run id");
       const parsedArtifactId = validateOrThrow(ArtifactId, artifactId, "artifact id");
+      const path = `/runs/${encodeURIComponent(parsedRunId)}/artifacts/${encodeURIComponent(parsedArtifactId)}`;
 
       const response = await transport.requestRaw({
         method: "GET",
-        path: `/runs/${encodeURIComponent(parsedRunId)}/artifacts/${encodeURIComponent(parsedArtifactId)}`,
+        path,
         expectedStatus: [200, 302],
         redirect: "manual",
         signal: options?.signal,
       });
+
+      if ((response as { type?: string }).type === "opaqueredirect") {
+        return { kind: "redirect", url: transport.urlFor(path) };
+      }
 
       if (response.status === 302) {
         const location = response.headers.get("location")?.trim();
@@ -93,4 +107,3 @@ export function createArtifactsApi(transport: HttpTransport): ArtifactsApi {
     },
   };
 }
-

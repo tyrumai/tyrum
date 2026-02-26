@@ -199,6 +199,12 @@ export class HttpTransport {
     this.defaultSignal = options.signal;
   }
 
+  urlFor(path: string, query?: QueryParams): string {
+    const normalizedPath = normalizePath(path);
+    const queryString = toQueryString(query);
+    return new URL(`${normalizedPath}${queryString}`, this.baseUrl).toString();
+  }
+
   async request<TResponse>(options: RequestOptions<TResponse>): Promise<TResponse> {
     const path = normalizePath(options.path);
     const query = toQueryString(options.query);
@@ -313,6 +319,15 @@ export class HttpTransport {
       response = await this.fetchImpl(url, init);
     } catch (error) {
       throw new TyrumHttpClientError("network_error", "HTTP request failed", { cause: error });
+    }
+
+    if ((response as { type?: string }).type === "opaqueredirect") {
+      const expected = options.expectedStatus;
+      const expectsRedirect =
+        expected === 302 || (Array.isArray(expected) && expected.includes(302));
+      if (expectsRedirect) {
+        return response;
+      }
     }
 
     if (!statusIsExpected(response.status, options.expectedStatus)) {

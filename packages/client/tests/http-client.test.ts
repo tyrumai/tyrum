@@ -940,7 +940,7 @@ describe("createTyrumHttpClient", () => {
     expect(typeof admin.artifacts?.getBytes).toBe("function");
 
     const result = await admin.artifacts.getBytes(
-      "run-1",
+      "550e8400-e29b-41d4-a716-446655440001",
       "550e8400-e29b-41d4-a716-446655440000",
     );
     expect(result).toEqual({ kind: "redirect", url: "https://signed.example/artifact.bin" });
@@ -966,13 +966,45 @@ describe("createTyrumHttpClient", () => {
     expect(typeof admin.artifacts?.getBytes).toBe("function");
 
     const result = await admin.artifacts.getBytes(
-      "run-1",
+      "550e8400-e29b-41d4-a716-446655440001",
       "550e8400-e29b-41d4-a716-446655440000",
     );
 
     expect(result.kind).toBe("bytes");
     expect(Array.from(result.bytes)).toEqual([1, 2, 3]);
     expect(result.contentType).toBe("application/octet-stream");
+  });
+
+  it("audit.verify rejects non-string action entries before network call", async () => {
+    const fetch = makeFetchMock(async () => jsonResponse({ valid: true }));
+    const client = createTyrumHttpClient({
+      baseUrl: "https://gateway.example",
+      auth: { type: "bearer", token: "root-token" },
+      fetch,
+    });
+
+    const admin = client as unknown as Record<string, any>;
+    expect(typeof admin.audit?.verify).toBe("function");
+
+    await expect(
+      admin.audit.verify({
+        events: [
+          {
+            id: 1,
+            plan_id: "plan-1",
+            step_index: 0,
+            occurred_at: "2026-02-25T00:00:00.000Z",
+            action: { type: "not-a-string" },
+            prev_hash: null,
+            event_hash: null,
+          },
+        ],
+      }),
+    ).rejects.toMatchObject<TyrumHttpClientError>({
+      code: "request_invalid",
+    });
+
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   // --- Edge cases ---

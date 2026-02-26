@@ -12,6 +12,7 @@ export {
   TyrumHttpClientError,
   type TyrumHttpAuthStrategy,
   type TyrumHttpClient,
+  type TyrumHttpClientOperator,
   type TyrumHttpClientOptions,
   type TyrumHttpErrorCode,
   type TyrumHttpFetch,
