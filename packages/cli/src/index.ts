@@ -353,6 +353,11 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
         }
 
         if (arg === "--value") {
+          if (second === "revoke") {
+            throw new Error(
+              "secrets revoke does not accept --value (did you mean 'tyrum-cli secrets rotate'?)",
+            );
+          }
           const raw = argv[i + 1];
           if (!raw) throw new Error("--value requires a value");
           value = raw;
@@ -1004,6 +1009,38 @@ async function withWsClient<T>(
   }
 }
 
+async function runOperatorWsCommand<T>(
+  home: string,
+  label: string,
+  fn: (client: TyrumClient) => Promise<T>,
+): Promise<number> {
+  try {
+    const config = await requireOperatorConfig(home);
+    const identity = await requireOperatorDeviceIdentity(home);
+    const wsUrl = resolveGatewayWsUrl(config.gateway_url);
+    const result = await withWsClient(
+      {
+        url: wsUrl,
+        token: config.auth_token,
+        reconnect: false,
+        capabilities: ["cli"],
+        device: {
+          deviceId: identity.deviceId,
+          publicKey: identity.publicKey,
+          privateKey: identity.privateKey,
+        },
+      },
+      fn,
+    );
+    console.log(JSON.stringify(result, null, 2));
+    return 0;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`${label}: failed: ${message}`);
+    return 1;
+  }
+}
+
 export async function runCli(argv: readonly string[] = process.argv.slice(2)): Promise<number> {
   const normalizedArgv = argv[0] === "--" ? argv.slice(1) : argv;
   let command: CliCommand;
@@ -1170,161 +1207,41 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
   }
 
   if (command.kind === "approvals_list") {
-    try {
-      const config = await requireOperatorConfig(tyrumHome);
-      const identity = await requireOperatorDeviceIdentity(tyrumHome);
-      const wsUrl = resolveGatewayWsUrl(config.gateway_url);
-      const result = await withWsClient(
-        {
-          url: wsUrl,
-          token: config.auth_token,
-          reconnect: false,
-          capabilities: ["cli"],
-          device: {
-            deviceId: identity.deviceId,
-            publicKey: identity.publicKey,
-            privateKey: identity.privateKey,
-          },
-        },
-        async (client) => {
-          return await client.approvalList({ limit: command.limit });
-        },
-      );
-      console.log(JSON.stringify(result, null, 2));
-      return 0;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`approvals.list: failed: ${message}`);
-      return 1;
-    }
+    return await runOperatorWsCommand(tyrumHome, "approvals.list", async (client) => {
+      return await client.approvalList({ limit: command.limit });
+    });
   }
 
   if (command.kind === "approvals_resolve") {
-    try {
-      const config = await requireOperatorConfig(tyrumHome);
-      const identity = await requireOperatorDeviceIdentity(tyrumHome);
-      const wsUrl = resolveGatewayWsUrl(config.gateway_url);
-      const result = await withWsClient(
-        {
-          url: wsUrl,
-          token: config.auth_token,
-          reconnect: false,
-          capabilities: ["cli"],
-          device: {
-            deviceId: identity.deviceId,
-            publicKey: identity.publicKey,
-            privateKey: identity.privateKey,
-          },
-        },
-        async (client) => {
-          return await client.approvalResolve({
-            approval_id: command.approval_id,
-            decision: command.decision,
-            reason: command.reason,
-          });
-        },
-      );
-      console.log(JSON.stringify(result, null, 2));
-      return 0;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`approvals.resolve: failed: ${message}`);
-      return 1;
-    }
+    return await runOperatorWsCommand(tyrumHome, "approvals.resolve", async (client) => {
+      return await client.approvalResolve({
+        approval_id: command.approval_id,
+        decision: command.decision,
+        reason: command.reason,
+      });
+    });
   }
 
   if (command.kind === "workflow_run") {
-    try {
-      const config = await requireOperatorConfig(tyrumHome);
-      const identity = await requireOperatorDeviceIdentity(tyrumHome);
-      const wsUrl = resolveGatewayWsUrl(config.gateway_url);
-      const result = await withWsClient(
-        {
-          url: wsUrl,
-          token: config.auth_token,
-          reconnect: false,
-          capabilities: ["cli"],
-          device: {
-            deviceId: identity.deviceId,
-            publicKey: identity.publicKey,
-            privateKey: identity.privateKey,
-          },
-        },
-        async (client) => {
-          return await client.workflowRun({
-            key: command.key,
-            lane: command.lane,
-            steps: command.steps,
-          });
-        },
-      );
-      console.log(JSON.stringify(result, null, 2));
-      return 0;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`workflow.run: failed: ${message}`);
-      return 1;
-    }
+    return await runOperatorWsCommand(tyrumHome, "workflow.run", async (client) => {
+      return await client.workflowRun({
+        key: command.key,
+        lane: command.lane,
+        steps: command.steps,
+      });
+    });
   }
 
   if (command.kind === "workflow_resume") {
-    try {
-      const config = await requireOperatorConfig(tyrumHome);
-      const identity = await requireOperatorDeviceIdentity(tyrumHome);
-      const wsUrl = resolveGatewayWsUrl(config.gateway_url);
-      const result = await withWsClient(
-        {
-          url: wsUrl,
-          token: config.auth_token,
-          reconnect: false,
-          capabilities: ["cli"],
-          device: {
-            deviceId: identity.deviceId,
-            publicKey: identity.publicKey,
-            privateKey: identity.privateKey,
-          },
-        },
-        async (client) => {
-          return await client.workflowResume({ token: command.token });
-        },
-      );
-      console.log(JSON.stringify(result, null, 2));
-      return 0;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`workflow.resume: failed: ${message}`);
-      return 1;
-    }
+    return await runOperatorWsCommand(tyrumHome, "workflow.resume", async (client) => {
+      return await client.workflowResume({ token: command.token });
+    });
   }
 
   if (command.kind === "workflow_cancel") {
-    try {
-      const config = await requireOperatorConfig(tyrumHome);
-      const identity = await requireOperatorDeviceIdentity(tyrumHome);
-      const wsUrl = resolveGatewayWsUrl(config.gateway_url);
-      const result = await withWsClient(
-        {
-          url: wsUrl,
-          token: config.auth_token,
-          reconnect: false,
-          capabilities: ["cli"],
-          device: {
-            deviceId: identity.deviceId,
-            publicKey: identity.publicKey,
-            privateKey: identity.privateKey,
-          },
-        },
-        async (client) => {
-          return await client.workflowCancel({ run_id: command.run_id, reason: command.reason });
-        },
-      );
-      console.log(JSON.stringify(result, null, 2));
-      return 0;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`workflow.cancel: failed: ${message}`);
-      return 1;
-    }
+    return await runOperatorWsCommand(tyrumHome, "workflow.cancel", async (client) => {
+      return await client.workflowCancel({ run_id: command.run_id, reason: command.reason });
+    });
   }
 
   if (command.kind === "config_show") {

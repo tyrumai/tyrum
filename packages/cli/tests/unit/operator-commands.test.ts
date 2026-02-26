@@ -778,6 +778,46 @@ describe("@tyrum/cli operator commands", () => {
     }
   });
 
+  it("rejects `secrets revoke` when --value is provided", async () => {
+    const home = await mkdtemp(join(tmpdir(), "tyrum-cli-"));
+    process.env["TYRUM_HOME"] = home;
+
+    const operatorDir = join(home, "operator");
+    await mkdir(operatorDir, { recursive: true, mode: 0o700 });
+    await writeFile(
+      join(operatorDir, "config.json"),
+      JSON.stringify({ gateway_url: "http://127.0.0.1:8788", auth_token: "tkn" }, null, 2),
+      { mode: 0o600 },
+    );
+
+    httpSecretsRevokeSpy.mockResolvedValue({ revoked: true });
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      vi.resetModules();
+      const { runCli } = await import("../../src/index.js");
+
+      const code = await runCli([
+        "secrets",
+        "revoke",
+        "--handle-id",
+        "h1",
+        "--value",
+        "new-secret",
+      ]);
+
+      expect(code).toBe(1);
+      expect(httpSecretsRevokeSpy).not.toHaveBeenCalled();
+      expect(errSpy).toHaveBeenCalledWith(expect.stringContaining("--value"));
+    } finally {
+      logSpy.mockRestore();
+      errSpy.mockRestore();
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+
   it("runs `secrets rotate` via @tyrum/client HTTP", async () => {
     const home = await mkdtemp(join(tmpdir(), "tyrum-cli-"));
     process.env["TYRUM_HOME"] = home;
