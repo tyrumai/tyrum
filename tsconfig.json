@@ -5,6 +5,7 @@
     { "path": "packages/gateway" },
     { "path": "packages/client" },
     { "path": "packages/operator-core" },
-    { "path": "packages/operator-ui" }
+    { "path": "packages/operator-ui" },
+    { "path": "packages/tui" }
   ]
 }
