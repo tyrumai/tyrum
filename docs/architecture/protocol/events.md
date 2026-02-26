@@ -55,20 +55,6 @@ This is the canonical list of `type` values and payload contracts for the v1 Web
 - `artifact.attached` — `{ artifact: ArtifactRef, step_id, attempt_id }`
 - `artifact.fetched` — `{ artifact: ArtifactRef, fetched_by }`
 
-### Work and delegated execution
-
-- `work.item.created` / `work.item.updated` / `work.item.blocked` / `work.item.completed` / `work.item.cancelled` — `{ item: WorkItem }`
-- `work.task.leased` — `{ work_item_id, task_id, lease_expires_at_ms }`
-- `work.task.started` — `{ work_item_id, task_id, run_id }`
-- `work.task.paused` — `{ work_item_id, task_id, approval_id }`
-- `work.task.completed` — `{ work_item_id, task_id, result_summary? }`
-- `work.artifact.created` — `{ artifact: WorkArtifact }`
-- `work.decision.created` — `{ decision: DecisionRecord }`
-- `work.signal.created` — `{ signal: WorkSignal }`
-- `work.signal.fired` — `{ signal_id, firing_id, enqueued_job_id? }`
-- `work.state_kv.updated` — `{ scope, key, updated_at }` (`scope` indicates `agent` or `work_item`)
-- `subagent.spawned` / `subagent.updated` / `subagent.closed` — `{ subagent: Subagent }`
-
 ### Pairing and presence
 
 - `pairing.requested` — `{ pairing: NodePairingRequest }`
@@ -97,6 +83,24 @@ This is the canonical list of `type` values and payload contracts for the v1 Web
 
 - `plan.update` — `{ plan_id, status, detail? }`
 - `error` — `{ code, message }`
+
+## Proposed events (draft)
+
+The following `type` values and payload contracts are design targets. They are **not** part of the canonical v1 `WsEvent` union in `@tyrum/schemas` yet, so clients/SDKs must treat them as draft and tolerate breaking changes until they are formally versioned.
+
+### Work and delegated execution
+
+- `work.item.created` / `work.item.updated` / `work.item.blocked` / `work.item.completed` / `work.item.cancelled` — `{ item: WorkItem }`
+- `work.task.leased` — `{ work_item_id, task_id, lease_expires_at_ms }`
+- `work.task.started` — `{ work_item_id, task_id, run_id }`
+- `work.task.paused` — `{ work_item_id, task_id, approval_id }`
+- `work.task.completed` — `{ work_item_id, task_id, result_summary? }`
+- `work.artifact.created` — `{ artifact: WorkArtifact }`
+- `work.decision.created` — `{ decision: DecisionRecord }`
+- `work.signal.created` — `{ signal: WorkSignal }`
+- `work.signal.fired` — `{ signal_id, firing_id, enqueued_job_id? }`
+- `work.state_kv.updated` — `{ scope, key, updated_at }` (`scope` indicates `agent` or `work_item`)
+- `subagent.spawned` / `subagent.updated` / `subagent.closed` — `{ subagent: Subagent }`
 
 ## Notes
 
