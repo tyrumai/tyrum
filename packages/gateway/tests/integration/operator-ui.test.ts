@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -36,6 +37,15 @@ describe("operator UI static hosting (/ui)", () => {
     expect(html).toContain("Operator UI Fixture");
   });
 
+  it("serves /ui/index.html with conservative cache headers", async () => {
+    const res = await app.request("/ui/index.html");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/html");
+    expect(res.headers.get("cache-control")).toBe("no-cache");
+    const html = await res.text();
+    expect(html).toContain("Operator UI Fixture");
+  });
+
   it("serves static assets with correct content-type and long cache headers", async () => {
     const res = await app.request("/ui/assets/app.js");
     expect(res.status).toBe(200);
@@ -45,11 +55,44 @@ describe("operator UI static hosting (/ui)", () => {
     expect(js).toContain("operator-ui fixture loaded");
   });
 
+  it("returns 404 for missing /ui/assets files instead of serving index.html", async () => {
+    const res = await app.request("/ui/assets/app");
+    expect(res.status).toBe(404);
+  });
+
   it("falls back to index.html for client-side routed paths", async () => {
     const res = await app.request("/ui/approvals");
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("Operator UI Fixture");
+  });
+
+  it("rejects symlink-based path escapes from the operator UI asset directory", async () => {
+    if (process.platform === "win32") {
+      return;
+    }
+
+    const tempRoot = await mkdtemp(join(tmpdir(), "tyrum-ui-symlink-test-"));
+    const assetsDir = join(tempRoot, "ui");
+    const leakRoot = join(tempRoot, "leak");
+    const leakFile = join(leakRoot, "secret.txt");
+
+    try {
+      await mkdir(join(assetsDir, "assets"), { recursive: true });
+      await mkdir(leakRoot, { recursive: true });
+      await writeFile(join(assetsDir, "index.html"), "<!doctype html><div>symlink test</div>\n");
+      await writeFile(leakFile, "SECRET\n");
+
+      await symlink(leakRoot, join(assetsDir, "assets", "leak"));
+
+      process.env[OPERATOR_UI_DIR_ENV] = assetsDir;
+      const symlinkedApp = (await createTestApp()).app;
+
+      const res = await symlinkedApp.request("/ui/assets/leak/secret.txt");
+      expect(res.status).toBe(404);
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
   });
 
   it("is publicly fetchable even when auth middleware is enabled", async () => {

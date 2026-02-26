@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { readFile } from "node:fs/promises";
-import { statSync } from "node:fs";
+import { realpathSync, statSync } from "node:fs";
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -72,10 +72,25 @@ function resolveAssetPath(assetsDir: string, pathTail: string): string | undefin
 
 function isSpaRoute(tail: string): boolean {
   if (!tail) return true;
+  if (tail === "index.html") return true;
+  if (tail.startsWith("assets/")) return false;
   if (tail.endsWith("/")) return true;
 
   const ext = extname(tail);
   return ext.length === 0;
+}
+
+function safeRealpathSync(path: string): string | undefined {
+  try {
+    return realpathSync(path);
+  } catch {
+    return undefined;
+  }
+}
+
+function containsResolvedPath(rootRealPath: string, candidateRealPath: string): boolean {
+  const rel = relative(rootRealPath, candidateRealPath);
+  return rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
 }
 
 function contentTypeForPath(path: string): string {
@@ -123,6 +138,7 @@ async function serveIndexHtml(assetsDir: string | undefined): Promise<string> {
 export function createOperatorUiRoutes(): Hono {
   const app = new Hono();
   const assetsDir = resolveOperatorUiAssetsDirFrom(dirname(fileURLToPath(import.meta.url)));
+  const assetsDirReal = assetsDir ? safeRealpathSync(assetsDir) : undefined;
 
   app.get(OPERATOR_UI_PATH_PREFIX, async (c) => {
     const html = await serveIndexHtml(assetsDir);
@@ -156,7 +172,16 @@ export function createOperatorUiRoutes(): Hono {
       return c.text("not_found", 404);
     }
 
-    const body = await readFile(assetPath);
+    if (!assetsDirReal) {
+      return c.text("not_found", 404);
+    }
+
+    const resolvedAssetPath = safeRealpathSync(assetPath);
+    if (!resolvedAssetPath || !containsResolvedPath(assetsDirReal, resolvedAssetPath)) {
+      return c.text("not_found", 404);
+    }
+
+    const body = await readFile(resolvedAssetPath);
     c.header("content-type", contentTypeForPath(assetPath));
     c.header("x-content-type-options", "nosniff");
 
