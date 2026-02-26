@@ -163,6 +163,10 @@ jobs:
         if: matrix.os != 'ubuntu-latest'
         run: pnpm --filter @tyrum/schemas build && pnpm --filter @tyrum/client build && pnpm --filter @tyrum/operator-core build && pnpm --filter @tyrum/operator-ui build
 
+      - name: Build desktop app
+        if: matrix.os != 'ubuntu-latest'
+        run: pnpm --filter tyrum-desktop build
+
       - name: Install Playwright (Chromium)
         shell: bash
         run: |
