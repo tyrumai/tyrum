@@ -18,7 +18,7 @@ sequenceDiagram
 
 ## Legacy handshake (deprecated)
 
-Older peers may use a legacy request/response handshake:
+Older peers may attempt a legacy request/response handshake:
 
 - `connect` (request) `{ capabilities }`
 - `connect` (response) `{ client_id }`
