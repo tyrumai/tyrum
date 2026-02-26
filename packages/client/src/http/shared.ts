@@ -63,7 +63,7 @@ export class TyrumHttpClientError extends Error {
   }
 }
 
-type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
+type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 type QueryValue = string | number | boolean | null | undefined;
 type QueryParams = Record<string, QueryValue | QueryValue[]>;
@@ -76,6 +76,17 @@ type RequestOptions<TResponse> = {
   response: ZodType<TResponse>;
   expectedStatus?: number | readonly number[];
   signal?: AbortSignal;
+};
+
+type RawRequestOptions = {
+  path: string;
+  method: HttpMethod;
+  query?: QueryParams;
+  body?: unknown;
+  expectedStatus?: number | readonly number[];
+  signal?: AbortSignal;
+  redirect?: RequestRedirect;
+  headers?: HeadersInit;
 };
 
 function normalizeBaseUrl(rawBaseUrl: string): string {
@@ -253,5 +264,72 @@ export class HttpTransport {
     }
 
     return parsed.data;
+  }
+
+  async requestRaw(options: RawRequestOptions): Promise<Response> {
+    const path = normalizePath(options.path);
+    const query = toQueryString(options.query);
+    const url = new URL(`${path}${query}`, this.baseUrl).toString();
+
+    const headers = new Headers(this.defaultHeaders);
+    if (options.headers) {
+      const extra = new Headers(options.headers);
+      for (const [key, value] of extra.entries()) {
+        headers.set(key, value);
+      }
+    }
+
+    const init: RequestInit = {
+      method: options.method,
+      headers,
+    };
+
+    if (options.redirect) {
+      init.redirect = options.redirect;
+    }
+
+    if (options.body !== undefined) {
+      if (!headers.has("content-type")) {
+        headers.set("content-type", "application/json");
+      }
+      init.body = JSON.stringify(options.body);
+    }
+
+    init.signal = options.signal ?? this.defaultSignal;
+
+    switch (this.auth.type) {
+      case "bearer":
+        headers.set("authorization", `Bearer ${this.auth.token}`);
+        break;
+      case "cookie":
+        init.credentials = this.auth.credentials ?? "include";
+        break;
+      case "none":
+        break;
+    }
+
+    let response: Response;
+    try {
+      response = await this.fetchImpl(url, init);
+    } catch (error) {
+      throw new TyrumHttpClientError("network_error", "HTTP request failed", { cause: error });
+    }
+
+    if (!statusIsExpected(response.status, options.expectedStatus)) {
+      const parsedBody = await readJsonBody(response);
+
+      const parsedError = ErrorBodySchema.safeParse(parsedBody);
+      const errorCode = parsedError.success ? parsedError.data.error : undefined;
+      const errorMessage = parsedError.success
+        ? (parsedError.data.message ?? `HTTP ${String(response.status)}`)
+        : `HTTP ${String(response.status)}`;
+
+      throw new TyrumHttpClientError("http_error", errorMessage, {
+        status: response.status,
+        error: errorCode,
+      });
+    }
+
+    return response;
   }
 }

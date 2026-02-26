@@ -26,3 +26,22 @@ export type { SecretStoreResponse } from "./secrets.js";
 export type { AuthPinSetResult } from "./auth.js";
 export type { ContractCatalog, ContractJsonSchema } from "./contracts.js";
 export type { PolicyBundleResponse } from "./policy.js";
+
+export type { AgentStatusResult } from "./agent-status.js";
+export type {
+  RoutingConfigGetResult,
+  RoutingConfigUpdateInput,
+  RoutingConfigUpdateResult,
+  RoutingConfigRevertInput,
+  RoutingConfigRevertResult,
+} from "./routing-config.js";
+export type {
+  AuditExportResult,
+  AuditVerifyInput,
+  AuditVerifyResult,
+  AuditForgetInput,
+  AuditForgetResult,
+} from "./audit.js";
+export type { ContextGetResponse, ContextListResponse, ContextDetailResponse } from "./context.js";
+export type { ArtifactMetadataResponse, ArtifactBytesResult } from "./artifacts.js";
+export type { HealthResponse } from "./health.js";

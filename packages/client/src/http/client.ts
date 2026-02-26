@@ -4,8 +4,13 @@ import {
   type AuthPinsApi,
   type AuthProfilesApi,
 } from "./auth.js";
+import { createAgentStatusApi, type AgentStatusApi } from "./agent-status.js";
+import { createArtifactsApi, type ArtifactsApi } from "./artifacts.js";
+import { createAuditApi, type AuditApi } from "./audit.js";
 import { createContractsApi, type ContractsApi } from "./contracts.js";
+import { createContextApi, type ContextApi } from "./context.js";
 import { createDeviceTokensApi, type DeviceTokensApi } from "./device-tokens.js";
+import { createHealthApi, type HealthApi } from "./health.js";
 import { createModelsApi, type ModelsApi } from "./models.js";
 import {
   createPairingsApi,
@@ -19,6 +24,7 @@ import {
 } from "./observability.js";
 import { createPluginsApi, type PluginsApi } from "./plugins.js";
 import { createPolicyApi, type PolicyApi } from "./policy.js";
+import { createRoutingConfigApi, type RoutingConfigApi } from "./routing-config.js";
 import { createSecretsApi, type SecretsApi } from "./secrets.js";
 import { HttpTransport, type TyrumHttpClientOptions } from "./shared.js";
 
@@ -35,6 +41,12 @@ export interface TyrumHttpClient {
   usage: UsageApi;
   presence: PresenceApi;
   pairings: PairingsApi;
+  agentStatus: AgentStatusApi;
+  routingConfig: RoutingConfigApi;
+  audit: AuditApi;
+  context: ContextApi;
+  artifacts: ArtifactsApi;
+  health: HealthApi;
 }
 
 export function createTyrumHttpClient(options: TyrumHttpClientOptions): TyrumHttpClient {
@@ -53,6 +65,12 @@ export function createTyrumHttpClient(options: TyrumHttpClientOptions): TyrumHtt
     usage: createUsageApi(transport),
     presence: createPresenceApi(transport),
     pairings: createPairingsApi(transport),
+    agentStatus: createAgentStatusApi(transport),
+    routingConfig: createRoutingConfigApi(transport),
+    audit: createAuditApi(transport),
+    context: createContextApi(transport),
+    artifacts: createArtifactsApi(transport),
+    health: createHealthApi(transport),
   };
 }
 

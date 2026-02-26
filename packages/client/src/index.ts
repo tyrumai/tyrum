@@ -24,6 +24,23 @@ export type {
   PresenceResponse,
   PairingListResponse,
   PairingMutateResponse,
+  AgentStatusResult,
+  RoutingConfigGetResult,
+  RoutingConfigUpdateInput,
+  RoutingConfigUpdateResult,
+  RoutingConfigRevertInput,
+  RoutingConfigRevertResult,
+  AuditExportResult,
+  AuditVerifyInput,
+  AuditVerifyResult,
+  AuditForgetInput,
+  AuditForgetResult,
+  ContextGetResponse,
+  ContextListResponse,
+  ContextDetailResponse,
+  ArtifactMetadataResponse,
+  ArtifactBytesResult,
+  HealthResponse,
 } from "./http/index.js";
 
 export {
