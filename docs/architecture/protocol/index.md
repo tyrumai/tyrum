@@ -19,6 +19,7 @@ The protocol is the primary interface for:
 
 - Primary transport is WebSocket for low-latency, long-lived connectivity.
 - Heartbeats detect dead connections and enable safe eviction/reconnect.
+- The gateway also exposes an HTTP API for bootstrap/resource surfaces (auth/session, artifacts, callbacks). See: [API surfaces (WebSocket vs HTTP)](../api-surfaces.md).
 
 ## Deployment notes (reconnect + dedupe)
 

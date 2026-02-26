@@ -86,6 +86,8 @@ Example operator scopes:
 
 **Per-method authorization:** every HTTP route and WS request type declares the scopes required to call it. Deny-by-default is the baseline.
 
+Transport is not a security boundary. The same scope model applies to **both** HTTP and WS surfaces; the choice of transport is driven by UX and payload semantics. See: [API surfaces (WebSocket vs HTTP)](./api-surfaces.md).
+
 **HTTP scope enforcement:** HTTP requests authenticated with **device tokens** are authorized per-route based on required scopes (for example `operator.read`, `operator.write`). Requests missing the required scope are rejected with `403 forbidden`. The **admin bootstrap token** is break-glass and is treated as wildcard scope for HTTP (intentionally not scope-limited).
 
 **WebSocket scope enforcement:** WebSocket requests authenticated with **device tokens** are authorized per-request based on required scopes. WS requests missing the required scope are rejected with a `forbidden` error response. Deny-by-default applies: if a request type has no scope mapping, scoped tokens are forbidden. The **admin bootstrap token** is break-glass and is treated as wildcard scope for WS.
