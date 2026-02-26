@@ -230,6 +230,7 @@ function ConnectPage({ core, mode }: { core: OperatorCore; mode: OperatorUiMode 
 function DesktopSetupPage({ core }: { core: OperatorCore }) {
   const api = getDesktopApi();
   const [port, setPort] = useState(8788);
+  const [mode, setMode] = useState<"embedded" | "remote">("embedded");
   const [gatewayStatus, setGatewayStatus] = useState("unknown");
   const [nodeStatus, setNodeStatus] = useState("disconnected");
   const [busy, setBusy] = useState<"gateway" | "node" | "config" | null>(null);
@@ -278,6 +279,9 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
       .then((cfg) => {
         if (disposed) return;
         const c = cfg as Record<string, unknown>;
+        if (c["mode"] === "embedded" || c["mode"] === "remote") {
+          setMode(c["mode"] as "embedded" | "remote");
+        }
         const embedded = c["embedded"] as Record<string, unknown> | undefined;
         if (embedded && typeof embedded["port"] === "number") {
           setPort(embedded["port"] as number);
@@ -335,7 +339,6 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
     setBusy("gateway");
     setErrorMessage(null);
     try {
-      await api.setConfig({ mode: "embedded" });
       const result = await api.gateway.start();
       setGatewayStatus(result.status);
       setPort(result.port);
@@ -366,7 +369,6 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
     setBusy("node");
     setErrorMessage(null);
     try {
-      await api.setConfig({ mode: "embedded" });
       const result = await api.node.connect();
       setNodeStatus(result.status);
     } catch (error) {
@@ -488,6 +490,9 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
         <div className="card stack">
           <div>
             Embedded gateway: <span>{gatewayStatus}</span>
+          </div>
+          <div style={{ fontSize: 12, color: "var(--muted)" }}>
+            Operator mode: {mode === "embedded" ? "embedded (local)" : "remote"}
           </div>
           <div style={{ fontSize: 12, color: "var(--muted)" }}>Port: {port}</div>
           <div>

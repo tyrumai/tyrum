@@ -415,8 +415,8 @@ describe("operator-ui", () => {
       await Promise.resolve();
     });
 
-    expect(desktopApi.setConfig).toHaveBeenCalledTimes(1);
     expect(desktopApi.gateway.start).toHaveBeenCalledTimes(1);
+    expect(desktopApi.setConfig).toHaveBeenCalledTimes(0);
 
     const connectNodeButton = container.querySelector<HTMLButtonElement>(
       '[data-testid="desktop-connect-node"]',
