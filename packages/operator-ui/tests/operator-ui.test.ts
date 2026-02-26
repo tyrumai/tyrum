@@ -168,10 +168,18 @@ function createFakeHttpClient(): {
   const statusGet = vi.fn(async () => sampleStatusResponse());
   const usageGet = vi.fn(async () => sampleUsageResponse());
   const presenceList = vi.fn(async () => samplePresenceResponse());
-  const pairingsList = vi.fn(async () => ({ status: "ok", pairings: [samplePairingRequestPending()] }) as const);
-  const pairingsApprove = vi.fn(async () => ({ status: "ok", pairing: samplePairingRequestPending() }) as const);
-  const pairingsDeny = vi.fn(async () => ({ status: "ok", pairing: samplePairingRequestPending() }) as const);
-  const pairingsRevoke = vi.fn(async () => ({ status: "ok", pairing: samplePairingRequestPending() }) as const);
+  const pairingsList = vi.fn(
+    async () => ({ status: "ok", pairings: [samplePairingRequestPending()] }) as const,
+  );
+  const pairingsApprove = vi.fn(
+    async () => ({ status: "ok", pairing: samplePairingRequestPending() }) as const,
+  );
+  const pairingsDeny = vi.fn(
+    async () => ({ status: "ok", pairing: samplePairingRequestPending() }) as const,
+  );
+  const pairingsRevoke = vi.fn(
+    async () => ({ status: "ok", pairing: samplePairingRequestPending() }) as const,
+  );
 
   const http: OperatorHttpClient = {
     status: { get: statusGet },
@@ -246,7 +254,9 @@ describe("operator-ui", () => {
 
     expect(container.textContent).toContain("Connect");
 
-    const approvalsLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-approvals"]');
+    const approvalsLink = container.querySelector<HTMLButtonElement>(
+      '[data-testid="nav-approvals"]',
+    );
     expect(approvalsLink).not.toBeNull();
 
     act(() => {
@@ -282,7 +292,9 @@ describe("operator-ui", () => {
 
     expect(container.textContent).toContain("disconnected");
 
-    const connectButton = container.querySelector<HTMLButtonElement>('[data-testid="connect-button"]');
+    const connectButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="connect-button"]',
+    );
     expect(connectButton).not.toBeNull();
 
     act(() => {
@@ -292,8 +304,9 @@ describe("operator-ui", () => {
     expect(ws.connect).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain("connecting");
 
-    const disconnectButton =
-      container.querySelector<HTMLButtonElement>('[data-testid="disconnect-button"]');
+    const disconnectButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="disconnect-button"]',
+    );
     expect(disconnectButton).not.toBeNull();
 
     act(() => {
@@ -328,16 +341,18 @@ describe("operator-ui", () => {
       root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
     });
 
-    const dashboardLink =
-      container.querySelector<HTMLButtonElement>('[data-testid="nav-dashboard"]');
+    const dashboardLink = container.querySelector<HTMLButtonElement>(
+      '[data-testid="nav-dashboard"]',
+    );
     expect(dashboardLink).not.toBeNull();
 
     act(() => {
       dashboardLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const refreshButton =
-      container.querySelector<HTMLButtonElement>('[data-testid="dashboard-refresh-status"]');
+    const refreshButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="dashboard-refresh-status"]',
+    );
     expect(refreshButton).not.toBeNull();
 
     await act(async () => {
@@ -379,16 +394,18 @@ describe("operator-ui", () => {
       root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
     });
 
-    const approvalsLink =
-      container.querySelector<HTMLButtonElement>('[data-testid="nav-approvals"]');
+    const approvalsLink = container.querySelector<HTMLButtonElement>(
+      '[data-testid="nav-approvals"]',
+    );
     expect(approvalsLink).not.toBeNull();
 
     act(() => {
       approvalsLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const refreshButton =
-      container.querySelector<HTMLButtonElement>('[data-testid="approvals-refresh"]');
+    const refreshButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="approvals-refresh"]',
+    );
     expect(refreshButton).not.toBeNull();
 
     await act(async () => {
@@ -399,8 +416,9 @@ describe("operator-ui", () => {
     expect(ws.approvalList).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain("Allow the tool call?");
 
-    const approveButton =
-      container.querySelector<HTMLButtonElement>('[data-testid="approval-approve-1"]');
+    const approveButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="approval-approve-1"]',
+    );
     expect(approveButton).not.toBeNull();
 
     await act(async () => {
@@ -442,16 +460,16 @@ describe("operator-ui", () => {
       root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
     });
 
-    const pairingLink =
-      container.querySelector<HTMLButtonElement>('[data-testid="nav-pairing"]');
+    const pairingLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-pairing"]');
     expect(pairingLink).not.toBeNull();
 
     act(() => {
       pairingLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const refreshButton =
-      container.querySelector<HTMLButtonElement>('[data-testid="pairing-refresh"]');
+    const refreshButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="pairing-refresh"]',
+    );
     expect(refreshButton).not.toBeNull();
 
     await act(async () => {
@@ -462,8 +480,9 @@ describe("operator-ui", () => {
     expect(pairingsList).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain("node-1");
 
-    const approveButton =
-      container.querySelector<HTMLButtonElement>('[data-testid="pairing-approve-1"]');
+    const approveButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="pairing-approve-1"]',
+    );
     expect(approveButton).not.toBeNull();
 
     await act(async () => {
@@ -539,16 +558,16 @@ describe("operator-ui", () => {
       root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
     });
 
-    const settingsLink =
-      container.querySelector<HTMLButtonElement>('[data-testid="nav-settings"]');
+    const settingsLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-settings"]');
     expect(settingsLink).not.toBeNull();
 
     act(() => {
       settingsLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const refreshButton =
-      container.querySelector<HTMLButtonElement>('[data-testid="settings-refresh-usage"]');
+    const refreshButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="settings-refresh-usage"]',
+    );
     expect(refreshButton).not.toBeNull();
 
     await act(async () => {

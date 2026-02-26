@@ -88,4 +88,3 @@ export const OPERATOR_UI_CSS = `
 
 .tyrum-operator-ui button:hover { filter: brightness(0.95); }
 `;
-
