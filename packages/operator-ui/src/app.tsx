@@ -1,5 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-core";
-import { useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { OPERATOR_UI_CSS } from "./style.js";
 
 export type OperatorUiMode = "web" | "desktop";
@@ -9,7 +9,14 @@ export interface OperatorUiAppProps {
   mode: OperatorUiMode;
 }
 
-type OperatorUiRouteId = "connect" | "dashboard" | "approvals" | "runs" | "pairing" | "settings";
+type OperatorUiRouteId =
+  | "connect"
+  | "dashboard"
+  | "approvals"
+  | "runs"
+  | "pairing"
+  | "settings"
+  | "desktop";
 
 const NAV_ITEMS: Array<{ id: OperatorUiRouteId; label: string }> = [
   { id: "connect", label: "Connect" },
@@ -20,6 +27,10 @@ const NAV_ITEMS: Array<{ id: OperatorUiRouteId; label: string }> = [
   { id: "settings", label: "Settings" },
 ];
 
+const DESKTOP_NAV_ITEMS: Array<{ id: OperatorUiRouteId; label: string }> = [
+  { id: "desktop", label: "Desktop" },
+];
+
 interface ExternalStore<T> {
   subscribe: (listener: () => void) => () => void;
   getSnapshot: () => T;
@@ -27,6 +38,31 @@ interface ExternalStore<T> {
 
 function useOperatorStore<T>(store: ExternalStore<T>): T {
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
+}
+
+type DesktopApi = {
+  getConfig: () => Promise<unknown>;
+  setConfig: (partial: unknown) => Promise<unknown>;
+  gateway: {
+    getStatus: () => Promise<{ status: string; port: number }>;
+    start: () => Promise<{ status: string; port: number }>;
+    stop: () => Promise<{ status: string }>;
+  };
+  node: {
+    connect: () => Promise<{ status: string }>;
+    disconnect: () => Promise<{ status: string }>;
+  };
+  onStatusChange: (cb: (status: unknown) => void) => () => void;
+  checkMacPermissions?: () => Promise<unknown>;
+  requestMacPermission?: (permission: "accessibility" | "screenRecording") => Promise<unknown>;
+};
+
+function getDesktopApi(): DesktopApi | null {
+  const api = (globalThis as unknown as { window?: unknown }).window as
+    | { tyrumDesktop?: unknown }
+    | undefined;
+  if (!api?.tyrumDesktop) return null;
+  return api.tyrumDesktop as DesktopApi;
 }
 
 function ConnectPage({ core, mode }: { core: OperatorCore; mode: OperatorUiMode }) {
@@ -186,6 +222,407 @@ function ConnectPage({ core, mode }: { core: OperatorCore; mode: OperatorUiMode 
             </button>
           </div>
         </div>
+      </div>
+    </>
+  );
+}
+
+function DesktopSetupPage({ core }: { core: OperatorCore }) {
+  const api = getDesktopApi();
+  const [port, setPort] = useState(8788);
+  const [gatewayStatus, setGatewayStatus] = useState("unknown");
+  const [nodeStatus, setNodeStatus] = useState("disconnected");
+  const [busy, setBusy] = useState<"gateway" | "node" | "config" | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const [capabilities, setCapabilities] = useState<{
+    desktop: boolean;
+    playwright: boolean;
+    cli: boolean;
+    http: boolean;
+  }>({
+    desktop: true,
+    playwright: false,
+    cli: false,
+    http: false,
+  });
+  const [configDirty, setConfigDirty] = useState(false);
+  const [configSaved, setConfigSaved] = useState(false);
+
+  const [macPermissionSummary, setMacPermissionSummary] = useState<string | null>(null);
+
+  const toErrorMessage = (error: unknown): string => {
+    if (error instanceof Error) return error.message;
+    return String(error);
+  };
+
+  useEffect(() => {
+    if (!api) return;
+    let disposed = false;
+
+    void api
+      .getConfig()
+      .then((cfg) => {
+        if (disposed) return;
+        const c = cfg as Record<string, unknown>;
+        const embedded = c["embedded"] as Record<string, unknown> | undefined;
+        if (embedded && typeof embedded["port"] === "number") {
+          setPort(embedded["port"] as number);
+        }
+        const caps = c["capabilities"] as Record<string, unknown> | undefined;
+        if (caps) {
+          setCapabilities({
+            desktop: caps["desktop"] !== false,
+            playwright: caps["playwright"] === true,
+            cli: caps["cli"] === true,
+            http: caps["http"] === true,
+          });
+        }
+      })
+      .catch(() => {
+        // ignore; desktop page actions still work without config snapshot
+      });
+
+    void api.gateway
+      .getStatus()
+      .then((snapshot) => {
+        if (disposed) return;
+        setGatewayStatus(snapshot.status);
+        if (typeof snapshot.port === "number" && snapshot.port > 0) {
+          setPort(snapshot.port);
+        }
+      })
+      .catch(() => {
+        // ignore; live status events and user actions still update UI
+      });
+
+    const unsubscribe = api.onStatusChange((status) => {
+      if (disposed) return;
+      if (!status || typeof status !== "object" || Array.isArray(status)) return;
+      const s = status as Record<string, unknown>;
+      if (typeof s["gatewayStatus"] === "string") {
+        setGatewayStatus(s["gatewayStatus"] as string);
+      }
+      if (typeof s["nodeStatus"] === "string") {
+        setNodeStatus(s["nodeStatus"] as string);
+      }
+      if (typeof s["port"] === "number") {
+        setPort(s["port"] as number);
+      }
+    });
+
+    return () => {
+      disposed = true;
+      unsubscribe();
+    };
+  }, [api]);
+
+  const startGateway = async (): Promise<void> => {
+    if (!api || busy) return;
+    setBusy("gateway");
+    setErrorMessage(null);
+    try {
+      await api.setConfig({ mode: "embedded", embedded: { port } });
+      const result = await api.gateway.start();
+      setGatewayStatus(result.status);
+      setPort(result.port);
+      core.connect();
+    } catch (error) {
+      setErrorMessage(toErrorMessage(error));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const stopGateway = async (): Promise<void> => {
+    if (!api || busy) return;
+    setBusy("gateway");
+    setErrorMessage(null);
+    try {
+      const result = await api.gateway.stop();
+      setGatewayStatus(result.status);
+    } catch (error) {
+      setErrorMessage(toErrorMessage(error));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const connectNode = async (): Promise<void> => {
+    if (!api || busy) return;
+    setBusy("node");
+    setErrorMessage(null);
+    try {
+      await api.setConfig({ mode: "embedded" });
+      const result = await api.node.connect();
+      setNodeStatus(result.status);
+    } catch (error) {
+      setErrorMessage(toErrorMessage(error));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const disconnectNode = async (): Promise<void> => {
+    if (!api || busy) return;
+    setBusy("node");
+    setErrorMessage(null);
+    try {
+      const result = await api.node.disconnect();
+      setNodeStatus(result.status);
+    } catch (error) {
+      setErrorMessage(toErrorMessage(error));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const toggleCapability = (key: keyof typeof capabilities): void => {
+    setCapabilities((prev) => ({ ...prev, [key]: !prev[key] }));
+    setConfigDirty(true);
+  };
+
+  const saveConfig = async (): Promise<void> => {
+    if (!api || busy) return;
+    setBusy("config");
+    setErrorMessage(null);
+    setConfigSaved(false);
+    try {
+      await api.setConfig({ embedded: { port }, capabilities });
+      setConfigDirty(false);
+      setConfigSaved(true);
+      setTimeout(() => setConfigSaved(false), 1500);
+    } catch (error) {
+      setErrorMessage(toErrorMessage(error));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const checkMacPermissions = async (): Promise<void> => {
+    if (!api?.checkMacPermissions) return;
+    setErrorMessage(null);
+    try {
+      const snapshot = (await api.checkMacPermissions()) as
+        | {
+            accessibility: boolean | null;
+            screenRecording: boolean | null;
+            instructions?: string;
+          }
+        | null;
+      if (!snapshot) {
+        setMacPermissionSummary("Not macOS (skipped).");
+      } else {
+        const missing = [
+          snapshot.accessibility === true ? null : "Accessibility",
+          snapshot.screenRecording === true ? null : "Screen Recording",
+        ].filter(Boolean);
+        if (missing.length === 0) {
+          setMacPermissionSummary("All macOS permissions granted.");
+        } else {
+          const instructions =
+            typeof snapshot.instructions === "string" && snapshot.instructions.trim()
+              ? ` ${snapshot.instructions.trim()}`
+              : "";
+          setMacPermissionSummary(`Missing: ${missing.join(", ")}.${instructions}`);
+        }
+      }
+    } catch (error) {
+      setErrorMessage(toErrorMessage(error));
+    }
+  };
+
+  const requestMacPermission = async (permission: "accessibility" | "screenRecording") => {
+    if (!api?.requestMacPermission || busy) return;
+    setBusy("config");
+    setErrorMessage(null);
+    try {
+      await api.requestMacPermission(permission);
+    } catch (error) {
+      setErrorMessage(toErrorMessage(error));
+    } finally {
+      setBusy(null);
+    }
+    void checkMacPermissions();
+  };
+
+  if (!api) {
+    return (
+      <>
+        <h1>Desktop Setup</h1>
+        <div className="alert error" role="alert">
+          Desktop API not available.
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <h1>Desktop Setup</h1>
+      <div className="stack">
+        <div className="card stack">
+          <div>
+            Embedded gateway: <span>{gatewayStatus}</span>
+          </div>
+          <div>
+            <label>
+              Port
+              <textarea
+                rows={1}
+                value={String(port)}
+                onChange={(event) => {
+                  const next = Number(event.target.value);
+                  if (Number.isFinite(next) && next > 0) {
+                    setPort(next);
+                    setConfigDirty(true);
+                  }
+                }}
+              />
+            </label>
+          </div>
+          <div>
+            {gatewayStatus === "running" ? (
+              <button
+                type="button"
+                data-testid="desktop-stop-gateway"
+                disabled={busy !== null}
+                onClick={() => {
+                  void stopGateway();
+                }}
+              >
+                {busy === "gateway" ? "Stopping..." : "Stop gateway"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                data-testid="desktop-start-gateway"
+                disabled={busy !== null}
+                onClick={() => {
+                  void startGateway();
+                }}
+              >
+                {busy === "gateway" ? "Starting..." : "Start gateway"}
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="card stack">
+          <div>
+            Local node runtime: <span>{nodeStatus}</span>
+          </div>
+          <div>
+            {nodeStatus === "connected" ? (
+              <button
+                type="button"
+                data-testid="desktop-disconnect-node"
+                disabled={busy !== null}
+                onClick={() => {
+                  void disconnectNode();
+                }}
+              >
+                {busy === "node" ? "Disconnecting..." : "Disconnect node"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                data-testid="desktop-connect-node"
+                disabled={busy !== null}
+                onClick={() => {
+                  void connectNode();
+                }}
+              >
+                {busy === "node" ? "Connecting..." : "Connect node"}
+              </button>
+            )}
+          </div>
+          <div style={{ fontSize: 12, color: "var(--muted)" }}>
+            Reconnect the node runtime after changing capabilities.
+          </div>
+        </div>
+
+        <div className="card stack">
+          <div style={{ fontSize: 14, fontWeight: 700 }}>Capabilities</div>
+          {(
+            [
+              ["desktop", "Desktop (screenshot & input)"],
+              ["playwright", "Playwright (web automation)"],
+              ["cli", "CLI (command execution)"],
+              ["http", "HTTP (network requests)"],
+            ] as const
+          ).map(([key, label]) => (
+            <label key={key} style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <input
+                type="checkbox"
+                checked={capabilities[key]}
+                onChange={() => toggleCapability(key)}
+              />
+              <span>{label}</span>
+            </label>
+          ))}
+          <div>
+            <button
+              type="button"
+              data-testid="desktop-save-capabilities"
+              disabled={!configDirty || busy !== null}
+              onClick={() => {
+                void saveConfig();
+              }}
+            >
+              {busy === "config" ? "Saving..." : configSaved ? "Saved" : "Save capabilities"}
+            </button>
+          </div>
+        </div>
+
+        <div className="card stack">
+          <div style={{ fontSize: 14, fontWeight: 700 }}>macOS permissions</div>
+          <div style={{ fontSize: 12, color: "var(--muted)" }}>
+            Desktop automation may require Accessibility and Screen Recording permissions on macOS.
+          </div>
+          <div>
+            <button
+              type="button"
+              data-testid="desktop-check-mac-permissions"
+              disabled={!api.checkMacPermissions || busy !== null}
+              onClick={() => {
+                void checkMacPermissions();
+              }}
+            >
+              Check permissions
+            </button>
+          </div>
+          {macPermissionSummary ? <div>{macPermissionSummary}</div> : null}
+          <div>
+            <button
+              type="button"
+              data-testid="desktop-request-accessibility"
+              disabled={!api.requestMacPermission || busy !== null}
+              onClick={() => {
+                void requestMacPermission("accessibility");
+              }}
+            >
+              Request Accessibility
+            </button>
+            <button
+              type="button"
+              data-testid="desktop-request-screen-recording"
+              disabled={!api.requestMacPermission || busy !== null}
+              onClick={() => {
+                void requestMacPermission("screenRecording");
+              }}
+              style={{ marginLeft: 8 }}
+            >
+              Request Screen Recording
+            </button>
+          </div>
+        </div>
+
+        {errorMessage ? (
+          <div className="alert error" role="alert">
+            {errorMessage}
+          </div>
+        ) : null}
       </div>
     </>
   );
@@ -389,10 +826,11 @@ function SettingsPage({ core, mode }: { core: OperatorCore; mode: OperatorUiMode
 
 export function OperatorUiApp({ core, mode }: OperatorUiAppProps) {
   const [route, setRoute] = useState<OperatorUiRouteId>("connect");
-  const navItems =
-    mode === "web"
-      ? NAV_ITEMS.map((item) => (item.id === "connect" ? { ...item, label: "Login" } : item))
-      : NAV_ITEMS;
+  const navItems = NAV_ITEMS.map((item) => {
+    if (mode === "web" && item.id === "connect") return { ...item, label: "Login" };
+    return item;
+  });
+  const desktopNavItems = mode === "desktop" ? DESKTOP_NAV_ITEMS : [];
   return (
     <div className="tyrum-operator-ui">
       <style>{OPERATOR_UI_CSS}</style>
@@ -413,6 +851,34 @@ export function OperatorUiApp({ core, mode }: OperatorUiAppProps) {
                 {item.label}
               </button>
             ))}
+            {desktopNavItems.length > 0 ? (
+              <>
+                <div
+                  style={{
+                    margin: "10px 16px 6px",
+                    fontSize: 12,
+                    letterSpacing: 0.8,
+                    textTransform: "uppercase",
+                    color: "var(--muted)",
+                  }}
+                >
+                  Desktop
+                </div>
+                {desktopNavItems.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    data-testid={`nav-${item.id}`}
+                    className={route === item.id ? "active" : undefined}
+                    onClick={() => {
+                      setRoute(item.id);
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </>
+            ) : null}
           </nav>
         </aside>
         <main className="main">
@@ -422,6 +888,7 @@ export function OperatorUiApp({ core, mode }: OperatorUiAppProps) {
           {route === "runs" && <RunsPage core={core} />}
           {route === "pairing" && <PairingPage core={core} />}
           {route === "settings" && <SettingsPage core={core} mode={mode} />}
+          {route === "desktop" && mode === "desktop" && <DesktopSetupPage core={core} />}
         </main>
       </div>
     </div>
