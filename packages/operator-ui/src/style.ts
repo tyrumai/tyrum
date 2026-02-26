@@ -87,4 +87,39 @@ export const OPERATOR_UI_CSS = `
 }
 
 .tyrum-operator-ui button:hover { filter: brightness(0.95); }
+.tyrum-operator-ui button:disabled { opacity: 0.6; cursor: not-allowed; }
+.tyrum-operator-ui textarea {
+  width: 100%;
+  max-width: 520px;
+  display: block;
+  margin-top: 6px;
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  resize: vertical;
+  line-height: 1.35;
+}
+.tyrum-operator-ui label { display: block; color: var(--muted); font-size: 13px; }
+.tyrum-operator-ui .stack > * + * { margin-top: 12px; }
+.tyrum-operator-ui .alert {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+}
+.tyrum-operator-ui .alert.error {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.08);
+  color: #fecaca;
+}
+.tyrum-operator-ui .card {
+  padding: 14px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+  max-width: 680px;
+}
 `;

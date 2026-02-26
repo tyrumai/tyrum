@@ -1,5 +1,5 @@
 import type { OperatorCore } from "@tyrum/operator-core";
-import { useState, useSyncExternalStore } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import { OPERATOR_UI_CSS } from "./style.js";
 
 export type OperatorUiMode = "web" | "desktop";
@@ -31,33 +31,160 @@ function useOperatorStore<T>(store: ExternalStore<T>): T {
 
 function ConnectPage({ core, mode }: { core: OperatorCore; mode: OperatorUiMode }) {
   const connection = useOperatorStore(core.connectionStore);
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const tokenRef = useRef<HTMLTextAreaElement | null>(null);
   const title = mode === "web" ? "Login" : "Connect";
+  const isWeb = mode === "web";
+
+  const truncateText = (text: string, limit = 300): string => {
+    if (text.length <= limit) return text;
+    return `${text.slice(0, limit)}…`;
+  };
+
+  const readGatewayError = async (res: Response): Promise<string> => {
+    const contentType = res.headers.get("content-type")?.trim().toLowerCase() ?? "";
+    const maybeJson =
+      contentType.includes("application/json") ||
+      contentType.includes("+json") ||
+      contentType.includes("/json");
+
+    let bodyText: string;
+    try {
+      bodyText = await res.text();
+    } catch {
+      return `HTTP ${String(res.status)}`;
+    }
+
+    const trimmedText = bodyText.trim();
+    if (!trimmedText) {
+      return `HTTP ${String(res.status)}`;
+    }
+
+    if (maybeJson) {
+      try {
+        const body = JSON.parse(trimmedText) as unknown;
+        if (body && typeof body === "object" && !Array.isArray(body)) {
+          const message = (body as Record<string, unknown>)["message"];
+          if (typeof message === "string" && message.trim()) {
+            return message.trim();
+          }
+
+          const error = (body as Record<string, unknown>)["error"];
+          if (typeof error === "string" && error.trim()) {
+            return error.trim();
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    return truncateText(trimmedText);
+  };
+
+  const login = async (): Promise<void> => {
+    if (!isWeb) return;
+    const trimmed = tokenRef.current?.value.trim() ?? "";
+    if (!trimmed) {
+      setLoginError("Token is required");
+      return;
+    }
+    setLoginBusy(true);
+    setLoginError(null);
+    try {
+      const res = await fetch("/auth/session", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ token: trimmed }),
+      });
+      if (!res.ok) {
+        setLoginError(await readGatewayError(res));
+        return;
+      }
+      if (tokenRef.current) {
+        tokenRef.current.value = "";
+      }
+      core.connect();
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLoginBusy(false);
+    }
+  };
   return (
     <>
       <h1>{title}</h1>
-      <div>
-        <div>
-          Status: <span>{connection.status}</span>
-        </div>
-        <div>
-          <button
-            type="button"
-            data-testid="connect-button"
-            onClick={() => {
-              core.connect();
-            }}
-          >
-            Connect
-          </button>
-          <button
-            type="button"
-            data-testid="disconnect-button"
-            onClick={() => {
-              core.disconnect();
-            }}
-          >
-            Disconnect
-          </button>
+      <div className="stack">
+        {isWeb ? (
+          <div className="card stack">
+            <div>
+              <label>
+                Token
+                <textarea
+                  data-testid="login-token"
+                  rows={3}
+                  ref={tokenRef}
+                  spellCheck={false}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                />
+              </label>
+            </div>
+            <button
+              type="button"
+              data-testid="login-button"
+              disabled={loginBusy}
+              onClick={() => {
+                void login();
+              }}
+            >
+              {loginBusy ? "Logging in..." : "Login"}
+            </button>
+            {loginError ? (
+              <div className="alert error" role="alert">
+                {loginError}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        <div className="card stack">
+          <div>
+            Status: <span>{connection.status}</span>
+          </div>
+          {connection.transportError ? (
+            <div className="alert error" role="alert">
+              Transport error: {connection.transportError}
+            </div>
+          ) : null}
+          {connection.lastDisconnect ? (
+            <div className="alert error" role="alert">
+              Last disconnect: {connection.lastDisconnect.code} {connection.lastDisconnect.reason}
+            </div>
+          ) : null}
+          <div>
+            <button
+              type="button"
+              data-testid="connect-button"
+              onClick={() => {
+                core.connect();
+              }}
+            >
+              Connect
+            </button>
+            <button
+              type="button"
+              data-testid="disconnect-button"
+              onClick={() => {
+                core.disconnect();
+              }}
+            >
+              Disconnect
+            </button>
+          </div>
         </div>
       </div>
     </>
@@ -200,7 +327,37 @@ function RunsPage({ core }: { core: OperatorCore }) {
         <ul>
           {runs.map((run) => (
             <li key={run.run_id}>
-              {run.run_id} ({run.status})
+              <div>
+                {run.run_id} ({run.status})
+              </div>
+              <ul>
+                {(runsState.stepIdsByRunId[run.run_id] ?? [])
+                  .map((stepId) => runsState.stepsById[stepId])
+                  .filter((step) => step !== undefined)
+                  .sort((a, b) => a.step_index - b.step_index)
+                  .map((step) => (
+                    <li key={step.step_id}>
+                      <div>
+                        Step {step.step_index}: {step.action.type} ({step.status})
+                      </div>
+                      <div>{step.step_id}</div>
+                      <ul>
+                        {(runsState.attemptIdsByStepId[step.step_id] ?? [])
+                          .map((attemptId) => runsState.attemptsById[attemptId])
+                          .filter((attempt) => attempt !== undefined)
+                          .sort((a, b) => a.attempt - b.attempt)
+                          .map((attempt) => (
+                            <li key={attempt.attempt_id}>
+                              <div>
+                                Attempt {attempt.attempt}: {attempt.status}
+                              </div>
+                              <div>{attempt.attempt_id}</div>
+                            </li>
+                          ))}
+                      </ul>
+                    </li>
+                  ))}
+              </ul>
             </li>
           ))}
         </ul>
@@ -232,6 +389,10 @@ function SettingsPage({ core, mode }: { core: OperatorCore; mode: OperatorUiMode
 
 export function OperatorUiApp({ core, mode }: OperatorUiAppProps) {
   const [route, setRoute] = useState<OperatorUiRouteId>("connect");
+  const navItems =
+    mode === "web"
+      ? NAV_ITEMS.map((item) => (item.id === "connect" ? { ...item, label: "Login" } : item))
+      : NAV_ITEMS;
   return (
     <div className="tyrum-operator-ui">
       <style>{OPERATOR_UI_CSS}</style>
@@ -239,7 +400,7 @@ export function OperatorUiApp({ core, mode }: OperatorUiAppProps) {
         <aside className="sidebar">
           <div className="brand">Tyrum</div>
           <nav className="nav">
-            {NAV_ITEMS.map((item) => (
+            {navItems.map((item) => (
               <button
                 key={item.id}
                 type="button"
