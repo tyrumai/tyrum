@@ -84,6 +84,24 @@ describe("Subagent WS protocol", () => {
       });
       expect(parsed.success, entry.type).toBe(true);
     }
+
+    const errorResponses: Array<{ type: string }> = [
+      { type: "subagent.spawn" },
+      { type: "subagent.list" },
+      { type: "subagent.get" },
+      { type: "subagent.send" },
+      { type: "subagent.close" },
+    ];
+
+    for (const entry of errorResponses) {
+      const parsed = WsResponse.safeParse({
+        request_id: `r-err-${entry.type}`,
+        type: entry.type,
+        ok: false,
+        error: { code: "bad_request", message: "boom" },
+      });
+      expect(parsed.success, entry.type).toBe(true);
+    }
   });
 
   it("parses subagent.* events via WsEvent union", () => {
