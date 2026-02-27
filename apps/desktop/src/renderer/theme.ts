@@ -16,8 +16,8 @@ export const colors = {
 } as const;
 
 export const fonts = {
-  sans: "'Inter', system-ui, -apple-system, sans-serif",
-  mono: "'JetBrains Mono', 'SF Mono', monospace",
+  sans: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif',
+  mono: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
 } as const;
 
 export const STATUS_COLORS: Record<string, string> = {
