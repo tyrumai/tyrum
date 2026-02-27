@@ -1,5 +1,9 @@
 # Tyrum Desktop
 
+## QA
+
+Manual QA checklist for native-feel behaviors: `apps/desktop/QA.md`.
+
 ## Packaging assets (icons)
 
 Electron-builder consumes icons from `apps/desktop/build/`:
