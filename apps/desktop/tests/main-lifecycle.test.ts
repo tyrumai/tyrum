@@ -71,6 +71,10 @@ vi.mock("electron", () => ({
     getPath: vi.fn(() => "/tmp/tyrum-desktop-tests"),
   },
   BrowserWindow: browserWindowMock,
+  Menu: {
+    buildFromTemplate: vi.fn(() => ({ popup: vi.fn() }) as never),
+    setApplicationMenu: vi.fn(),
+  },
   screen: {
     getAllDisplays: vi.fn(() => []),
     getPrimaryDisplay: vi.fn(() => ({
