@@ -52,6 +52,7 @@ describe("buildMemoryV1ItemQueryParts", () => {
       "fact",
       "note",
       "favorite_color",
+      "agent-a",
       "prefs",
       "project",
       "user",
@@ -86,5 +87,53 @@ describe("buildMemoryV1ItemQueryParts", () => {
     expect(parts.limit).toBe(1);
     expect(parts.where).toEqual(["i.agent_id = ?"]);
     expect(parts.values).toEqual(["agent-a"]);
+  });
+
+  it("normalizes filter arrays to avoid duplicate/blank SQL params", () => {
+    const parts = buildMemoryV1ItemQueryParts({
+      agent: "agent-a",
+      filter: {
+        kinds: ["note", "note", "fact"],
+        keys: [" favorite_color ", "", "favorite_color"],
+        tags: [" project", "project", ""],
+        provenance: {
+          source_kinds: ["user", "user"],
+          channels: [" telegram ", "telegram", ""],
+          thread_ids: [" 123 ", "123"],
+          session_ids: [" agent:default:main ", "agent:default:main"],
+        },
+      },
+    });
+
+    expect(parts.where).toContain("i.kind IN (?, ?)");
+    expect(parts.where).toContain("i.key IN (?)");
+    expect(parts.where).toContain("p.source_kind IN (?)");
+    expect(parts.where).toContain("p.channel IN (?)");
+    expect(parts.where).toContain("p.thread_id IN (?)");
+    expect(parts.where).toContain("p.session_id IN (?)");
+
+    expect(parts.values).toEqual([
+      "agent-a",
+      "note",
+      "fact",
+      "favorite_color",
+      "agent-a",
+      "project",
+      "user",
+      "telegram",
+      "123",
+      "agent:default:main",
+    ]);
+  });
+
+  it("can force provenance join for callers that always select provenance", () => {
+    const parts = (buildMemoryV1ItemQueryParts as unknown as (params: unknown) => {
+      from: string;
+    })({
+      agent: "agent-a",
+      alwaysJoinProvenance: true,
+    });
+
+    expect(parts.from).toContain("JOIN memory_item_provenance p");
   });
 });
