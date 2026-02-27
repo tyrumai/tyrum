@@ -29,6 +29,6 @@ Build the desktop artifacts on each target OS and check the icons on the generat
 Release builds are produced by `.github/workflows/release.yml`.
 
 - macOS: signing + notarization are handled when the required Apple and `CSC_*` secrets are configured.
-- Windows: the workflow will sign builds if a code-signing certificate is configured (see `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD` in `release.yml`, falling back to `CSC_LINK` / `CSC_KEY_PASSWORD`). If not set, Windows artifacts are published unsigned.
+- Windows: the workflow will sign builds if a code-signing certificate is configured (see `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD` in `release.yml`). If not set, Windows artifacts are published unsigned.
 
 If/when Windows signing is enabled, consider setting `win.publisherName` in `electron-builder.yml` to the signing certificate subject so `electron-updater` can enforce signature verification for downloaded updates.
