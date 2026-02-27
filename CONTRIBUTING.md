@@ -30,6 +30,8 @@ Thanks for helping build the Tyrum assistant platform.
 | Run tests            | `pnpm test`                          |
 | Watch tests          | `pnpm test:watch`                    |
 | Lint                 | `pnpm lint`                          |
+| Format check         | `pnpm format:check`                  |
+| Format (write)       | `pnpm format`                        |
 | Build all packages   | `pnpm build`                         |
 | Start gateway        | `pnpm --filter @tyrum/gateway start` |
 
@@ -52,6 +54,7 @@ Run these commands and verify all pass:
 pnpm typecheck
 pnpm test
 pnpm lint
+pnpm format:check
 ```
 
 ### Coverage (optional locally, enforced in CI)
