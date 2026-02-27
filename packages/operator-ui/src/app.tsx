@@ -1,6 +1,7 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import { useEffect, useRef, useState } from "react";
 import { AdminModeGate, AdminModeProvider } from "./admin-mode.js";
+import { MemoryInspector } from "./components/memory/memory-inspector.js";
 import { getDesktopApi } from "./desktop-api.js";
 import { OPERATOR_UI_CSS } from "./style.js";
 import { useOperatorStore } from "./use-operator-store.js";
@@ -15,6 +16,7 @@ export interface OperatorUiAppProps {
 type OperatorUiRouteId =
   | "connect"
   | "dashboard"
+  | "memory"
   | "approvals"
   | "runs"
   | "pairing"
@@ -24,6 +26,7 @@ type OperatorUiRouteId =
 const NAV_ITEMS: Array<{ id: OperatorUiRouteId; label: string }> = [
   { id: "connect", label: "Connect" },
   { id: "dashboard", label: "Dashboard" },
+  { id: "memory", label: "Memory" },
   { id: "approvals", label: "Approvals" },
   { id: "runs", label: "Runs" },
   { id: "pairing", label: "Pairing" },
@@ -930,6 +933,7 @@ export function OperatorUiApp({ core, mode }: OperatorUiAppProps) {
           <AdminModeProvider core={core} mode={mode}>
             {route === "connect" && <ConnectPage core={core} mode={mode} />}
             {route === "dashboard" && <DashboardPage core={core} />}
+            {route === "memory" && <MemoryInspector core={core} />}
             {route === "approvals" && <ApprovalsPage core={core} />}
             {route === "runs" && <RunsPage core={core} />}
             {route === "pairing" && <PairingPage core={core} />}
