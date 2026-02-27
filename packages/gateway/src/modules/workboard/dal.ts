@@ -66,7 +66,7 @@ function hashScopeLockSeed(input: string): number {
     hash ^= input.charCodeAt(i);
     hash = Math.imul(hash, 0x01000193);
   }
-  return hash >>> 0;
+  return hash | 0;
 }
 
 function normalizeCount(value: unknown): number {

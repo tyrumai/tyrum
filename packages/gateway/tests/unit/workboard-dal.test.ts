@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
@@ -238,6 +238,90 @@ describe("WorkboardDal", () => {
       code: "wip_limit_exceeded",
       details: { limit: 2 },
     });
+  });
+
+  it("normalizes advisory lock seeds to signed 32-bit integers", async () => {
+    const lockSeeds: number[] = [];
+
+    const tx = {
+      kind: "postgres" as const,
+      get: vi.fn(async (sql: string, _params: unknown[] = []) => {
+        if (sql.includes("SELECT *")) {
+          return {
+            work_item_id: "item-1",
+            tenant_id: "default",
+            agent_id: "default",
+            workspace_id: "default",
+            kind: "action",
+            title: "Seed test",
+            status: "ready",
+            priority: 0,
+            acceptance_json: null,
+            fingerprint_json: null,
+            budgets_json: null,
+            created_from_session_key: "agent:default:main",
+            created_at: "2026-02-27T00:00:00.000Z",
+            updated_at: "2026-02-27T00:00:00.000Z",
+            last_active_at: null,
+            parent_work_item_id: null,
+          };
+        }
+
+        if (sql.includes("pg_advisory_xact_lock")) {
+          if (_params.length >= 2) {
+            const [tenantSeed, workspaceSeed] = _params as [number, number];
+            lockSeeds.push(tenantSeed, workspaceSeed);
+          }
+          return { lock: true };
+        }
+
+        if (sql.includes("SELECT COUNT(*) AS count")) {
+          return { count: 0 };
+        }
+
+        if (sql.includes("UPDATE work_items")) {
+          return {
+            work_item_id: "item-1",
+            tenant_id: "default",
+            agent_id: "default",
+            workspace_id: "default",
+            kind: "action",
+            title: "Seed test",
+            status: "doing",
+            priority: 0,
+            acceptance_json: null,
+            fingerprint_json: null,
+            budgets_json: null,
+            created_from_session_key: "agent:default:main",
+            created_at: "2026-02-27T00:00:00.000Z",
+            updated_at: "2026-02-27T00:00:00.000Z",
+            last_active_at: null,
+            parent_work_item_id: null,
+          };
+        }
+
+        return undefined;
+      }),
+      run: vi.fn(async () => ({ changes: 1 })),
+      all: vi.fn(async () => []),
+      exec: vi.fn(async () => {}),
+      transaction: vi.fn(async (fn: (value: unknown) => Promise<unknown>) => fn(tx)),
+      close: vi.fn(async () => {}),
+    };
+
+    const dal = new WorkboardDal(tx);
+    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+
+    await dal.transitionItem({
+      scope,
+      work_item_id: "item-1",
+      status: "doing",
+      occurredAtIso: "2026-02-27T00:00:00.000Z",
+    });
+
+    expect(lockSeeds).toHaveLength(2);
+    expect(lockSeeds[0]).toBe(-673531093);
+    expect(lockSeeds[1]).toBe(-1824826402);
   });
 
   it("updates a work item", async () => {
