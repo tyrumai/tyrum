@@ -84,6 +84,68 @@ describe("WorkSignalScheduler", () => {
     }
   });
 
+  it("pauses a signal when its firing permanently fails", async () => {
+    const cm = new ConnectionManager();
+    const db = openTestSqliteDb();
+    try {
+      const dal = new WorkboardDal(db);
+      const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+
+      const item = await dal.createItem({
+        scope,
+        item: { kind: "action", title: "Hello" },
+        createdFromSessionKey: "agent:default:main",
+      });
+
+      const signal = await dal.createSignal({
+        scope,
+        signal: {
+          work_item_id: item.work_item_id,
+          trigger_kind: "event",
+          trigger_spec_json: { kind: "work_item.status.transition", to: ["blocked"] },
+        },
+      });
+
+      await dal.transitionItem({ scope, work_item_id: item.work_item_id, status: "ready" });
+      await dal.transitionItem({ scope, work_item_id: item.work_item_id, status: "doing" });
+      await dal.transitionItem({ scope, work_item_id: item.work_item_id, status: "blocked" });
+
+      const originalGet = db.get.bind(db);
+      db.get = (async <T>(sql: string, params: readonly unknown[] = []) => {
+        if (typeof sql === "string" && sql.includes("UPDATE work_signals")) {
+          throw new Error("boom");
+        }
+        return await originalGet<T>(sql, params);
+      }) as typeof db.get;
+
+      const scheduler = new WorkSignalScheduler({
+        db,
+        connectionManager: cm,
+        owner: "test",
+        maxAttempts: 1,
+      });
+      await scheduler.tick();
+
+      const firings = await db.all<{ status: string }>(
+        "SELECT status FROM work_signal_firings WHERE signal_id = ?",
+        [signal.signal_id],
+      );
+      expect(firings).toHaveLength(1);
+      expect(firings[0]?.status).toBe("failed");
+
+      const updated = await dal.getSignal({ scope, signal_id: signal.signal_id });
+      expect(updated?.status).toBe("paused");
+
+      const tasks = await db.all<{ task_id: string }>(
+        "SELECT task_id FROM work_item_tasks WHERE work_item_id = ?",
+        [item.work_item_id],
+      );
+      expect(tasks).toHaveLength(0);
+    } finally {
+      await db.close();
+    }
+  });
+
   it("fires event-based WorkSignals on work item status transitions (deduped across restarts)", async () => {
     const cm = new ConnectionManager();
     const ws = createMockWs();

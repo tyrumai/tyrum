@@ -430,6 +430,24 @@ export class WorkSignalScheduler {
         maxAttempts: this.maxAttempts,
         error: message,
       });
+      try {
+        const current = await this.firingDal.getById(firing.firing_id);
+        if (current?.status === "failed") {
+          await this.db.run(
+            `UPDATE work_signals
+             SET status = 'paused'
+             WHERE signal_id = ? AND status = 'active'`,
+            [firing.signal_id],
+          );
+        }
+      } catch (pauseErr) {
+        const pauseMessage = pauseErr instanceof Error ? pauseErr.message : String(pauseErr);
+        this.logger?.warn("work_signal.signal_pause_failed", {
+          signal_id: firing.signal_id,
+          firing_id: firing.firing_id,
+          error: pauseMessage,
+        });
+      }
       this.logger?.warn("work_signal.firing_process_failed", {
         firing_id: firing.firing_id,
         signal_id: firing.signal_id,
