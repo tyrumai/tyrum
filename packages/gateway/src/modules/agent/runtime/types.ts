@@ -82,6 +82,8 @@ export interface AgentContextReport {
   memory: {
     keyword_hits: number;
     semantic_hits: number;
+    structured_hits?: number;
+    included_items?: number;
   };
   tool_calls: AgentContextToolCallReport[];
   injected_files: AgentContextInjectedFileReport[];
