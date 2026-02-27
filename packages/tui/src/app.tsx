@@ -513,6 +513,7 @@ function MemoryScreen({
   const headerLabel =
     memory.browse.request?.kind === "search" ? `Search: ${memory.browse.request.query}` : "List";
   const browseErrorLabel = memory.browse.error ? memory.browse.error.message : null;
+  const forgetErrorLabel = memory.tombstones.error ? memory.tombstones.error.message : null;
   const exportArtifactId = memory.export.artifactId;
 
   return (
@@ -523,6 +524,7 @@ function MemoryScreen({
         {memory.browse.loading ? <Text dimColor> (loading)</Text> : null}
       </Text>
       {browseErrorLabel ? <Text color="red">Error: {browseErrorLabel}</Text> : null}
+      {forgetErrorLabel ? <Text color="red">Forget error: {forgetErrorLabel}</Text> : null}
       {memory.export.error ? (
         <Text color="red">Export error: {memory.export.error.message}</Text>
       ) : null}
@@ -785,6 +787,13 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
       await coreRef.current.memoryStore.forget([
         { kind: "id", memory_item_id: snapshot.memoryItemId },
       ]);
+
+      const storeError = coreRef.current.memoryStore.getSnapshot().tombstones.error;
+      if (storeError) {
+        setMemoryForgetDialog((prev) => ({ ...prev, busy: false, error: storeError.message }));
+        return;
+      }
+
       setMemoryForgetDialog({
         open: false,
         memoryItemId: null,
