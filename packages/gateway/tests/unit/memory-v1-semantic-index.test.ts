@@ -121,7 +121,15 @@ async function openSqliteDb(): Promise<OpenDbResult> {
   };
 }
 
-const EMBED_FEATURES = ["pizza", "pasta", "hiking", "mountains", "ssn"] as const;
+const EMBED_FEATURES = [
+  "pizza",
+  "pasta",
+  "hiking",
+  "mountains",
+  "ssn",
+  "procedure",
+  "episode",
+] as const;
 
 function embedDeterministic(text: string): number[] {
   const haystack = text.toLowerCase();
@@ -171,6 +179,30 @@ for (const fixture of fixtures) {
           "agent-a",
         );
 
+        const procedure = await dal.create(
+          {
+            kind: "procedure",
+            title: "Pasta procedure",
+            body_md: "Procedure: boil water, cook pasta, and drain.",
+            tags: ["food"],
+            sensitivity: "private",
+            provenance: { source_kind: "operator", refs: [] },
+          },
+          "agent-a",
+        );
+
+        const episode = await dal.create(
+          {
+            kind: "episode",
+            occurred_at: "2026-02-20T00:00:00Z",
+            summary_md: "Episode: cooked pasta successfully.",
+            tags: ["food"],
+            sensitivity: "private",
+            provenance: { source_kind: "system", refs: [] },
+          },
+          "agent-a",
+        );
+
         const sensitive = await dal.create(
           {
             kind: "note",
@@ -191,6 +223,16 @@ for (const fixture of fixtures) {
         expect(hits[0]?.kind).toBe("note");
         expect(hits[0]?.score).toBeGreaterThan(0);
         expect(hits.some((h) => h.memory_item_id === sensitive.memory_item_id)).toBe(false);
+
+        expect(await index.search("ssn", 5)).toEqual([]);
+
+        const procedureHits = await index.search("procedure", 5);
+        expect(procedureHits[0]?.memory_item_id).toBe(procedure.memory_item_id);
+        expect(procedureHits[0]?.kind).toBe("procedure");
+
+        const episodeHits = await index.search("episode", 5);
+        expect(episodeHits[0]?.memory_item_id).toBe(episode.memory_item_id);
+        expect(episodeHits[0]?.kind).toBe("episode");
 
         await index.drop();
 

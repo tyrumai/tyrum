@@ -74,9 +74,9 @@ function normalizeSnippet(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
-function buildIndexText(row: Pick<MemoryEmbeddingCandidateRow, "kind" | "title" | "body_md" | "summary_md">):
-  | string
-  | undefined {
+function buildIndexText(
+  row: Pick<MemoryEmbeddingCandidateRow, "kind" | "title" | "body_md" | "summary_md">,
+): string | undefined {
   const parts: string[] = [];
   if (row.kind === "note" || row.kind === "procedure") {
     if (row.title) parts.push(row.title);
@@ -140,12 +140,8 @@ export class MemoryV1SemanticIndex {
       await this.db.run(
         `DELETE FROM vector_metadata
          WHERE agent_id = ?
-           AND embedding_id IN (
-             SELECT embedding_id
-             FROM memory_item_embeddings
-             WHERE agent_id = ?
-           )`,
-        [this.agentId, this.agentId],
+           AND label LIKE ?`,
+        [this.agentId, "memory_item:%"],
       )
     ).changes;
 
@@ -227,6 +223,8 @@ export class MemoryV1SemanticIndex {
        JOIN vector_metadata v
          ON v.agent_id = e.agent_id AND v.embedding_id = e.embedding_id
        WHERE e.agent_id = ?
+         AND m.sensitivity <> 'sensitive'
+         AND m.kind IN ('note', 'procedure', 'episode')
          AND v.vector_data IS NOT NULL`,
       [this.agentId],
     );
