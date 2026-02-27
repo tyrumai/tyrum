@@ -2,8 +2,26 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { Icns } from "@fiahfy/icns";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+function parsePngDimensions(buffer: Buffer): { width: number; height: number } {
+  const signature = buffer.subarray(0, 8);
+  const expected = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  if (!signature.equals(expected)) {
+    throw new Error("Expected PNG signature");
+  }
+
+  const chunkType = buffer.subarray(12, 16).toString("ascii");
+  if (chunkType !== "IHDR") {
+    throw new Error(`Expected IHDR chunk but saw ${chunkType}`);
+  }
+
+  const width = buffer.readUInt32BE(16);
+  const height = buffer.readUInt32BE(20);
+  return { width, height };
+}
 
 describe("desktop packaging configuration", () => {
   it("includes per-OS icon + installer metadata in electron-builder config", () => {
@@ -42,6 +60,26 @@ describe("desktop packaging configuration", () => {
 
     const icnsHeader = readFileSync(icnsPath).subarray(0, 4).toString("ascii");
     expect(icnsHeader).toBe("icns");
+
+    const icns = Icns.from(readFileSync(icnsPath));
+    const icnsSizesByOsType = new Map(
+      icns.images.map((image) => {
+        const { width, height } = parsePngDimensions(image.image);
+        return [image.osType, `${width}x${height}`] as const;
+      }),
+    );
+
+    expect(icnsSizesByOsType.get("icp4")).toBe("16x16");
+    expect(icnsSizesByOsType.get("icp5")).toBe("32x32");
+    expect(icnsSizesByOsType.get("ic11")).toBe("32x32");
+    expect(icnsSizesByOsType.get("icp6")).toBe("64x64");
+    expect(icnsSizesByOsType.get("ic12")).toBe("64x64");
+    expect(icnsSizesByOsType.get("ic07")).toBe("128x128");
+    expect(icnsSizesByOsType.get("ic08")).toBe("256x256");
+    expect(icnsSizesByOsType.get("ic13")).toBe("256x256");
+    expect(icnsSizesByOsType.get("ic09")).toBe("512x512");
+    expect(icnsSizesByOsType.get("ic14")).toBe("512x512");
+    expect(icnsSizesByOsType.get("ic10")).toBe("1024x1024");
 
     const icoHeader = readFileSync(icoPath).subarray(0, 4);
     expect(Array.from(icoHeader)).toEqual([0x00, 0x00, 0x01, 0x00]);

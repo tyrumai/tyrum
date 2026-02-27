@@ -59,18 +59,24 @@ for (const size of [16, 32, 48, 64, 128, 256]) {
 const icoPath = join(buildDir, "icon.ico");
 writeFileSync(icoPath, ico.data);
 
-const osTypeBySize = new Map([
+// ICNS PNG icon types (10.7+) plus retina variants (10.8+).
+// See `@fiahfy/icns` README for the supported OSType table.
+const icnsImages = [
   [16, "icp4"],
   [32, "icp5"],
+  [32, "ic11"],
   [64, "icp6"],
+  [64, "ic12"],
   [128, "ic07"],
   [256, "ic08"],
+  [256, "ic13"],
   [512, "ic09"],
+  [512, "ic14"],
   [1024, "ic10"],
-]);
+];
 
 const icns = new Icns();
-for (const [size, osType] of osTypeBySize.entries()) {
+for (const [size, osType] of icnsImages) {
   icns.append(IcnsImage.fromPNG(readFileSync(join(iconsDir, `${size}x${size}.png`)), osType));
 }
 const icnsPath = join(buildDir, "icon.icns");
