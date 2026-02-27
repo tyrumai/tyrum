@@ -527,6 +527,160 @@ for (const fixture of fixtures) {
       }
     });
 
+    it("returns empty for blank queries and enforces query/filter guardrails", async () => {
+      const { dal, close } = await fixture.open();
+      try {
+        const blank = await dal.search({ v: 1, query: "   ", limit: 10 }, "agent-a");
+        expect(blank.hits).toEqual([]);
+        expect(blank.next_cursor).toBeUndefined();
+
+        await expect(
+          dal.search({ v: 1, query: "a".repeat(1025), limit: 10 }, "agent-a"),
+        ).rejects.toThrow(/query too long/i);
+
+        await expect(
+          dal.search({ v: 1, query: "a".repeat(65), limit: 10 }, "agent-a"),
+        ).rejects.toThrow(/query term too long/i);
+
+        const tooManyKeys = Array.from({ length: 51 }, (_, i) => `key-${i}`);
+        await expect(
+          dal.search({ v: 1, query: "*", filter: { keys: tooManyKeys }, limit: 10 }, "agent-a"),
+        ).rejects.toThrow(/too many filter\.keys/i);
+
+        const tooManySessionIds = Array.from({ length: 21 }, (_, i) => `session-${i}`);
+        await expect(
+          dal.search(
+            {
+              v: 1,
+              query: "*",
+              filter: { provenance: { session_ids: tooManySessionIds } },
+              limit: 10,
+            },
+            "agent-a",
+          ),
+        ).rejects.toThrow(/too many filter\.provenance\.session_ids/i);
+      } finally {
+        await close();
+      }
+    });
+
+    it("filters by provenance source kinds, channels, and thread ids", async () => {
+      const { dal, close } = await fixture.open();
+      try {
+        const operatorSlack = await dal.create(
+          {
+            kind: "note",
+            title: "Op note",
+            body_md: "x",
+            tags: [],
+            sensitivity: "private",
+            provenance: { source_kind: "operator", channel: "slack", thread_id: "t-op", refs: [] },
+          },
+          "agent-a",
+        );
+
+        const userTelegram = await dal.create(
+          {
+            kind: "note",
+            title: "User note",
+            body_md: "y",
+            tags: [],
+            sensitivity: "private",
+            provenance: { source_kind: "user", channel: "telegram", thread_id: "t-user", refs: [] },
+          },
+          "agent-a",
+        );
+
+        const bySourceKind = await dal.search(
+          { v: 1, query: "*", filter: { provenance: { source_kinds: ["operator"] } }, limit: 10 },
+          "agent-a",
+        );
+        const bySourceKindIds = bySourceKind.hits.map((h) => h.memory_item_id);
+        expect(bySourceKindIds).toContain(operatorSlack.memory_item_id);
+        expect(bySourceKindIds).not.toContain(userTelegram.memory_item_id);
+
+        const byChannel = await dal.search(
+          { v: 1, query: "*", filter: { provenance: { channels: ["slack"] } }, limit: 10 },
+          "agent-a",
+        );
+        const byChannelIds = byChannel.hits.map((h) => h.memory_item_id);
+        expect(byChannelIds).toContain(operatorSlack.memory_item_id);
+        expect(byChannelIds).not.toContain(userTelegram.memory_item_id);
+
+        const byThreadId = await dal.search(
+          { v: 1, query: "*", filter: { provenance: { thread_ids: ["t-user"] } }, limit: 10 },
+          "agent-a",
+        );
+        const byThreadIdIds = byThreadId.hits.map((h) => h.memory_item_id);
+        expect(byThreadIdIds).toContain(userTelegram.memory_item_id);
+        expect(byThreadIdIds).not.toContain(operatorSlack.memory_item_id);
+      } finally {
+        await close();
+      }
+    });
+
+    it("builds focused snippets for long content and uses summary matches", async () => {
+      const { dal, close } = await fixture.open();
+      try {
+        const longBody = `${"a".repeat(120)} needle ${"b".repeat(400)}`;
+        const longNote = await dal.create(
+          {
+            kind: "note",
+            body_md: longBody,
+            tags: [],
+            sensitivity: "private",
+            provenance: { source_kind: "operator", refs: [] },
+          },
+          "agent-a",
+        );
+
+        const structured = await dal.search(
+          { v: 1, query: "*", filter: { kinds: ["note"] }, limit: 10 },
+          "agent-a",
+        );
+        const structuredHit = structured.hits.find(
+          (h) => h.memory_item_id === longNote.memory_item_id,
+        );
+        expect(structuredHit?.snippet).toBeTruthy();
+        expect(structuredHit?.snippet?.length ?? 0).toBeLessThanOrEqual(240);
+        expect(structuredHit?.snippet?.endsWith("…")).toBe(true);
+
+        const keyword = await dal.search(
+          { v: 1, query: "needle", filter: { kinds: ["note"] }, limit: 10 },
+          "agent-a",
+        );
+        const keywordHit = keyword.hits.find((h) => h.memory_item_id === longNote.memory_item_id);
+        expect(keywordHit?.snippet).toBeTruthy();
+        expect(keywordHit?.snippet).toContain("needle");
+        expect(keywordHit?.snippet?.startsWith("…")).toBe(true);
+        expect(keywordHit?.snippet?.endsWith("…")).toBe(true);
+
+        const episode = await dal.create(
+          {
+            kind: "episode",
+            occurred_at: "2026-02-19T12:00:00Z",
+            summary_md: `Weekly retro: ${"x".repeat(100)} retrospective_term ${"y".repeat(100)}`,
+            tags: [],
+            sensitivity: "private",
+            provenance: { source_kind: "operator", refs: [] },
+          },
+          "agent-a",
+        );
+
+        const summaryResults = await dal.search(
+          { v: 1, query: "retrospective_term", filter: { kinds: ["episode"] }, limit: 10 },
+          "agent-a",
+        );
+        const summaryHit = summaryResults.hits.find(
+          (h) => h.memory_item_id === episode.memory_item_id,
+        );
+        expect(summaryHit?.snippet).toBeTruthy();
+        expect(summaryHit?.snippet).toContain("retrospective_term");
+      } finally {
+        await close();
+      }
+    });
+
     it("matches any keyword term and ranks higher matches", async () => {
       const { dal, close } = await fixture.open();
       try {
