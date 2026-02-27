@@ -1,6 +1,6 @@
 import type { MemoryItemKind, MemorySensitivity } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
-import { VectorDal } from "./vector-dal.js";
+import { VectorDal, cosineSimilarity } from "./vector-dal.js";
 
 export interface MemoryV1Embedder {
   modelId: string;
@@ -44,24 +44,6 @@ function assertFiniteVector(value: unknown): asserts value is number[] {
   if (!value.every((v) => typeof v === "number" && Number.isFinite(v))) {
     throw new Error("embedding vector contains non-numeric values");
   }
-}
-
-function cosineSimilarity(a: number[], b: number[]): number {
-  if (a.length !== b.length || a.length === 0) return 0;
-
-  let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
-
-  for (let i = 0; i < a.length; i += 1) {
-    dotProduct += a[i]! * b[i]!;
-    normA += a[i]! * a[i]!;
-    normB += b[i]! * b[i]!;
-  }
-
-  const denominator = Math.sqrt(normA) * Math.sqrt(normB);
-  if (denominator === 0) return 0;
-  return dotProduct / denominator;
 }
 
 function trimForEmbedding(value: string, maxChars: number): string {
