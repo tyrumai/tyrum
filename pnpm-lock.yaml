@@ -345,6 +345,9 @@ importers:
 
   packages/operator-ui:
     dependencies:
+      '@tyrum/client':
+        specifier: workspace:*
+        version: link:../client
       '@tyrum/operator-core':
         specifier: workspace:*
         version: link:../operator-core

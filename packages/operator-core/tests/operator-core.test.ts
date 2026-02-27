@@ -296,6 +296,21 @@ function deferred<T>(): {
 }
 
 describe("operator-core wiring", () => {
+  it("exposes wsUrl + httpBaseUrl on the core", () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+
+    const core = createOperatorCore({
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788",
+      auth: createBearerTokenAuth("test-token"),
+      deps: { ws, http },
+    });
+
+    expect(core.wsUrl).toBe("ws://127.0.0.1:8788/ws");
+    expect(core.httpBaseUrl).toBe("http://127.0.0.1:8788");
+  });
+
   it("exposes adminModeStore as a single source of truth", () => {
     const ws = new FakeWsClient();
     const http = createFakeHttpClient();

@@ -9,7 +9,8 @@ import {
   createOperatorCore,
 } from "../../operator-core/src/index.js";
 import type { OperatorWsClient, OperatorHttpClient } from "../../operator-core/src/deps.js";
-import { OperatorUiApp } from "../src/index.js";
+import { AdminModeGate, AdminModeProvider, OperatorUiApp } from "../src/index.js";
+import * as operatorUi from "../src/index.js";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -235,8 +236,13 @@ function createFakeHttpClient(): {
 
 describe("operator-ui", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it("does not export AdminModeBanner from the public API", () => {
+    expect("AdminModeBanner" in operatorUi).toBe(false);
   });
 
   it("renders the operator shell navigation", () => {
@@ -1280,6 +1286,258 @@ describe("operator-ui", () => {
 
     expect(usageGet).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain("Total tokens: 0");
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
+  it("shows an Admin Mode banner with TTL and allows exit", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-02-27T00:00:00.000Z"));
+
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+    });
+
+    expect(container.querySelector('[data-testid="admin-mode-banner"]')).toBeNull();
+
+    act(() => {
+      const expiresAt = new Date(Date.now() + 5_000).toISOString();
+      core.adminModeStore.enter({ elevatedToken: "elevated-token", expiresAt });
+    });
+
+    const banner = container.querySelector('[data-testid="admin-mode-banner"]');
+    expect(banner).not.toBeNull();
+    expect(banner?.textContent).toContain("Admin Mode");
+    expect(banner?.textContent).toMatch(/\d+:\d{2}/);
+
+    const exitButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-mode-exit"]',
+    );
+    expect(exitButton).not.toBeNull();
+
+    act(() => {
+      exitButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.querySelector('[data-testid="admin-mode-banner"]')).toBeNull();
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
+  it("gates admin-only actions behind a shared Admin Mode flow", async () => {
+    const issuedAt = "2026-02-27T00:00:00.000Z";
+    const expiresAt = "2026-02-27T00:10:00.000Z";
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(issuedAt));
+
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      expect(init?.method).toBe("POST");
+      expect(headers.get("authorization")).toBe("Bearer admin-token");
+
+      return new Response(
+        JSON.stringify({
+          token_kind: "device",
+          token: "elevated-device-token",
+          token_id: "token-1",
+          device_id: "operator-ui",
+          role: "client",
+          scopes: ["operator.admin"],
+          issued_at: issuedAt,
+          expires_at: expiresAt,
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("baseline"),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(
+        React.createElement(AdminModeProvider, {
+          core,
+          mode: "web",
+          children: React.createElement(
+            AdminModeGate,
+            null,
+            React.createElement(
+              "button",
+              { type: "button", "data-testid": "danger-action" },
+              "Danger action",
+            ),
+          ),
+        }),
+      );
+    });
+
+    expect(container.querySelector('[data-testid="danger-action"]')).toBeNull();
+    expect(container.textContent).toContain("Enter Admin Mode to continue");
+
+    const enterButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-mode-enter"]',
+    );
+    expect(enterButton).not.toBeNull();
+
+    act(() => {
+      enterButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const dialog = container.querySelector('[data-testid="admin-mode-dialog"]');
+    expect(dialog).not.toBeNull();
+
+    const tokenField = container.querySelector<HTMLInputElement>(
+      '[data-testid="admin-mode-token"]',
+    );
+    expect(tokenField).not.toBeNull();
+    expect(tokenField!.type).toBe("password");
+    expect(tokenField!.getAttribute("autocomplete")).toBe("off");
+
+    const toggleTokenButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-mode-token-toggle"]',
+    );
+    expect(toggleTokenButton).not.toBeNull();
+    act(() => {
+      toggleTokenButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(tokenField!.type).toBe("text");
+    act(() => {
+      toggleTokenButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(tokenField!.type).toBe("password");
+
+    act(() => {
+      tokenField!.value = "  admin-token  ";
+    });
+
+    const confirmCheckbox = container.querySelector<HTMLInputElement>(
+      '[data-testid="admin-mode-confirm"]',
+    );
+    expect(confirmCheckbox).not.toBeNull();
+    act(() => {
+      confirmCheckbox!.checked = true;
+      confirmCheckbox!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const submitButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-mode-submit"]',
+    );
+    expect(submitButton).not.toBeNull();
+
+    await act(async () => {
+      submitButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(core.adminModeStore.getSnapshot()).toMatchObject({
+      status: "active",
+      elevatedToken: "elevated-device-token",
+      expiresAt,
+    });
+
+    expect(container.querySelector('[data-testid="admin-mode-banner"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="danger-action"]')).not.toBeNull();
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
+  it("renders an accessible Admin Mode dialog and closes on Escape", () => {
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("baseline"),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(
+        React.createElement(AdminModeProvider, {
+          core,
+          mode: "web",
+          children: React.createElement(
+            AdminModeGate,
+            null,
+            React.createElement(
+              "button",
+              { type: "button", "data-testid": "danger-action" },
+              "Danger action",
+            ),
+          ),
+        }),
+      );
+    });
+
+    const enterButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-mode-enter"]',
+    );
+    expect(enterButton).not.toBeNull();
+
+    act(() => {
+      enterButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const dialog = container.querySelector('[data-testid="admin-mode-dialog"]');
+    expect(dialog).not.toBeNull();
+
+    const dialogRole = dialog?.querySelector('[role="dialog"]');
+    expect(dialogRole).not.toBeNull();
+    expect(dialogRole?.getAttribute("aria-modal")).toBe("true");
+    expect(dialogRole?.getAttribute("aria-labelledby")).toBeTruthy();
+
+    const tokenField = container.querySelector<HTMLInputElement>(
+      '[data-testid="admin-mode-token"]',
+    );
+    expect(tokenField).not.toBeNull();
+    expect(tokenField!.type).toBe("password");
+
+    act(() => {
+      tokenField?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+
+    expect(container.querySelector('[data-testid="admin-mode-dialog"]')).toBeNull();
 
     act(() => {
       root?.unmount();
