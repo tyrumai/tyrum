@@ -164,6 +164,10 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
       setSummaryMdDraft("");
       setTagsDraft("");
       setSensitivityDraft("private");
+      setForgetOpen(false);
+      setForgetTargetId(null);
+      setForgetConfirm("");
+      setForgetError(null);
       return;
     }
     setTagsDraft(item.tags.join(", "));

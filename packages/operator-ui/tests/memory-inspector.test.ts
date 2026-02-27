@@ -14,6 +14,13 @@ class FakeWsClient implements OperatorWsClient {
   connected = true;
   connect = vi.fn(() => {});
   disconnect = vi.fn(() => {});
+  emit(event: string, data: unknown): void {
+    const handlers = this.handlers.get(event);
+    if (!handlers) return;
+    for (const handler of handlers) {
+      handler(data);
+    }
+  }
   on(event: string, handler: Handler): void {
     const existing = this.handlers.get(event);
     if (existing) {
@@ -744,6 +751,82 @@ describe("MemoryInspector", () => {
 
     expect(testRoot.container.querySelector('[data-testid="memory-forget-dialog"]')).toBeNull();
     expect(ws.memoryForget).not.toHaveBeenCalled();
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("clears forget dialog state when inspected item is forgotten externally", async () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+    const itemA = sampleNote("123e4567-e89b-12d3-a456-426614174503", "First");
+    const itemB = sampleNote("123e4567-e89b-12d3-a456-426614174504", "Second");
+
+    ws.memoryList = vi.fn(
+      async () => ({ v: 1, items: [itemA, itemB], next_cursor: undefined }) as unknown,
+    );
+    ws.memoryGet = vi.fn(async (payload) => {
+      const memoryItemId = (payload as { memory_item_id?: string }).memory_item_id;
+      const item = memoryItemId === itemB.memory_item_id ? itemB : itemA;
+      return { v: 1, item } as unknown;
+    });
+
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const testRoot = renderIntoDocument(React.createElement(MemoryInspector, { core }));
+    await act(async () => {});
+
+    const itemAButton = testRoot.container.querySelector<HTMLButtonElement>(
+      `[data-testid="memory-item-${itemA.memory_item_id}"]`,
+    );
+    expect(itemAButton).not.toBeNull();
+
+    await act(async () => {
+      itemAButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const forgetButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="memory-forget"]',
+    );
+    expect(forgetButton).not.toBeNull();
+
+    await act(async () => {
+      forgetButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(testRoot.container.querySelector('[data-testid="memory-forget-dialog"]')).not.toBeNull();
+
+    await act(async () => {
+      ws.emit("memory.item.forgotten", {
+        payload: {
+          tombstone: {
+            v: 1,
+            memory_item_id: itemA.memory_item_id,
+            agent_id: itemA.agent_id,
+            deleted_at: "2026-02-19T12:00:02Z",
+            deleted_by: "operator",
+            reason: "external",
+          },
+        },
+      });
+    });
+    await act(async () => {});
+
+    const itemBButton = testRoot.container.querySelector<HTMLButtonElement>(
+      `[data-testid="memory-item-${itemB.memory_item_id}"]`,
+    );
+    expect(itemBButton).not.toBeNull();
+
+    await act(async () => {
+      itemBButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await act(async () => {});
+
+    expect(testRoot.container.querySelector('[data-testid="memory-forget-dialog"]')).toBeNull();
 
     cleanupTestRoot(testRoot);
   });
