@@ -177,4 +177,108 @@ describe("createOperatorCoreManager", () => {
     expect(createCore).toHaveBeenCalledTimes(1);
     adminModeStore.dispose();
   });
+
+  it("notifies subscribers when core is recreated (and unsubscribe stops notifications)", () => {
+    const adminModeStore = createAdminModeStore({ tickIntervalMs: 0 });
+    const baselineAuth = createBearerTokenAuth("baseline");
+
+    const createCore = vi.fn(() => createFakeCore({ status: "disconnected" }).core as any);
+
+    const manager = createOperatorCoreManager({
+      wsUrl: "ws://example",
+      httpBaseUrl: "http://example",
+      baselineAuth,
+      adminModeStore,
+      createCore: createCore as any,
+    });
+
+    const listener = vi.fn(() => {});
+    const unsubscribe = manager.subscribe(listener);
+
+    adminModeStore.enter({
+      elevatedToken: "elevated",
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    unsubscribe();
+
+    adminModeStore.exit();
+
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    manager.dispose();
+    adminModeStore.dispose();
+  });
+
+  it("notifies all subscribers and rethrows the first subscriber error", () => {
+    const adminModeStore = createAdminModeStore({ tickIntervalMs: 0 });
+    const baselineAuth = createBearerTokenAuth("baseline");
+
+    const createCore = vi.fn(() => createFakeCore({ status: "disconnected" }).core as any);
+
+    const manager = createOperatorCoreManager({
+      wsUrl: "ws://example",
+      httpBaseUrl: "http://example",
+      baselineAuth,
+      adminModeStore,
+      createCore: createCore as any,
+    });
+
+    const boom = new Error("boom");
+    const throwingListener = vi.fn(() => {
+      throw boom;
+    });
+    const okListener = vi.fn(() => {});
+
+    manager.subscribe(throwingListener);
+    manager.subscribe(okListener);
+
+    expect(() =>
+      adminModeStore.enter({
+        elevatedToken: "elevated",
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      }),
+    ).toThrow(boom);
+
+    expect(throwingListener).toHaveBeenCalledTimes(1);
+    expect(okListener).toHaveBeenCalledTimes(1);
+
+    manager.dispose();
+    adminModeStore.dispose();
+  });
+
+  it("supports browser-cookie baseline auth", () => {
+    const adminModeStore = createAdminModeStore({ tickIntervalMs: 0 });
+    const baselineAuth: OperatorAuthStrategy = { type: "browser-cookie", credentials: "include" };
+
+    const createdAuth: OperatorAuthStrategy[] = [];
+    const createCore = vi.fn((input: { auth: OperatorAuthStrategy }) => {
+      createdAuth.push(input.auth);
+      return createFakeCore({ status: "disconnected" }).core as any;
+    });
+
+    const manager = createOperatorCoreManager({
+      wsUrl: "ws://example",
+      httpBaseUrl: "http://example",
+      baselineAuth,
+      adminModeStore,
+      createCore: createCore as any,
+    });
+
+    expect(createCore).toHaveBeenCalledTimes(1);
+    expect(createdAuth[0]).toEqual(baselineAuth);
+
+    adminModeStore.enter({
+      elevatedToken: "elevated",
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+
+    expect(createCore).toHaveBeenCalledTimes(2);
+    expect(createdAuth[1]).toEqual({ type: "bearer-token", token: "elevated" });
+
+    manager.dispose();
+    adminModeStore.dispose();
+  });
 });
