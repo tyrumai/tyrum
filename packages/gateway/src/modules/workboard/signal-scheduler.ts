@@ -430,21 +430,21 @@ export class WorkSignalScheduler {
           },
         },
         WORKBOARD_WS_AUDIENCE,
-	      );
-	    } catch (err) {
-	      if (err instanceof LostFiringLeaseError) {
-	        // Another scheduler likely took over; we rolled back any partial writes.
-	        this.logger?.debug("work_signal.firing_lost_lease", {
-	          firing_id: firing.firing_id,
-	          signal_id: firing.signal_id,
-	          error: err.message,
-	        });
-	        return;
-	      }
-	      const message = err instanceof Error ? err.message : String(err);
-	      await this.firingDal.markRetryableFailure({
-	        firingId: firing.firing_id,
-	        owner: this.owner,
+      );
+    } catch (err) {
+      if (err instanceof LostFiringLeaseError) {
+        // Another scheduler likely took over; we rolled back any partial writes.
+        this.logger?.debug("work_signal.firing_lost_lease", {
+          firing_id: firing.firing_id,
+          signal_id: firing.signal_id,
+          error: err.message,
+        });
+        return;
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      await this.firingDal.markRetryableFailure({
+        firingId: firing.firing_id,
+        owner: this.owner,
         nowMs,
         maxAttempts: this.maxAttempts,
         error: message,

@@ -11,7 +11,10 @@ describe("WorkSignalFiringDal", () => {
       const workboardDal = new WorkboardDal(db);
       const signal = await workboardDal.createSignal({
         scope,
-        signal: { trigger_kind: "event", trigger_spec_json: { kind: "work_item.status.transition" } },
+        signal: {
+          trigger_kind: "event",
+          trigger_spec_json: { kind: "work_item.status.transition" },
+        },
       });
 
       const dal = new WorkSignalFiringDal(db);
@@ -51,11 +54,18 @@ describe("WorkSignalFiringDal", () => {
       const workboardDal = new WorkboardDal(db);
       const signal = await workboardDal.createSignal({
         scope,
-        signal: { trigger_kind: "event", trigger_spec_json: { kind: "work_item.status.transition" } },
+        signal: {
+          trigger_kind: "event",
+          trigger_spec_json: { kind: "work_item.status.transition" },
+        },
       });
 
       const dal = new WorkSignalFiringDal(db);
-      await dal.createIfAbsent({ firingId: "firing-1", signalId: signal.signal_id, dedupeKey: "k1" });
+      await dal.createIfAbsent({
+        firingId: "firing-1",
+        signalId: signal.signal_id,
+        dedupeKey: "k1",
+      });
 
       const claimedA = await dal.claimNext({ owner: "a", nowMs: 1_000, leaseTtlMs: 10 });
       expect(claimedA?.status).toBe("processing");
@@ -83,11 +93,18 @@ describe("WorkSignalFiringDal", () => {
       const workboardDal = new WorkboardDal(db);
       const signal = await workboardDal.createSignal({
         scope,
-        signal: { trigger_kind: "event", trigger_spec_json: { kind: "work_item.status.transition" } },
+        signal: {
+          trigger_kind: "event",
+          trigger_spec_json: { kind: "work_item.status.transition" },
+        },
       });
 
       const dal = new WorkSignalFiringDal(db);
-      await dal.createIfAbsent({ firingId: "firing-1", signalId: signal.signal_id, dedupeKey: "k1" });
+      await dal.createIfAbsent({
+        firingId: "firing-1",
+        signalId: signal.signal_id,
+        dedupeKey: "k1",
+      });
 
       await dal.claimNext({ owner: "a", nowMs: 1_000, leaseTtlMs: 10 });
       await dal.markRetryableFailure({
@@ -122,4 +139,3 @@ describe("WorkSignalFiringDal", () => {
     }
   });
 });
-
