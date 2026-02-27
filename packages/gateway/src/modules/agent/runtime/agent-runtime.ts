@@ -32,7 +32,6 @@ import {
   AgentTurnRequest,
   AgentTurnResponse,
   ContextReport as ContextReportSchema,
-  Lane,
   SubagentSessionKey,
   WorkspaceId,
 } from "@tyrum/schemas";
@@ -1413,10 +1412,11 @@ export class AgentRuntime {
     const laneQueueScope = resolveLaneQueueScope(resolvedInput.metadata);
     const canOverride =
       laneQueueScope &&
-      Lane.safeParse(laneQueueScope.lane).success &&
+      laneQueueScope.lane === "subagent" &&
+      laneQueueScope.key.startsWith(`agent:${this.agentId}:subagent:`) &&
       SubagentSessionKey.safeParse(laneQueueScope.key).success;
     const key = canOverride ? laneQueueScope.key : defaultKey;
-    const lane = canOverride ? laneQueueScope.lane : "main";
+    const lane = canOverride ? "subagent" : "main";
     const planId = `agent-turn-${this.agentId}-${randomUUID()}`;
     const requestId = resolveTurnRequestId(input);
 

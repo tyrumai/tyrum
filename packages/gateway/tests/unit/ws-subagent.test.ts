@@ -238,6 +238,92 @@ describe("handleClientMessage (subagent.*)", () => {
     }
   });
 
+  it("marks subagent failed and emits subagent.updated when runtime.turn throws", async () => {
+    const cm = new ConnectionManager();
+    const { id, ws } = makeClient(cm);
+    const client = cm.getClient(id)!;
+
+    const runtimeTurn = vi.fn(async () => {
+      throw new Error("boom");
+    });
+    const agents = {
+      getRuntime: vi.fn(async () => ({ turn: runtimeTurn })),
+    };
+
+    const db = openTestSqliteDb();
+    try {
+      const deps = makeDeps(cm, { db, agents: agents as any });
+
+      const spawnRes = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-1",
+          type: "subagent.spawn",
+          payload: {
+            tenant_id: "default",
+            agent_id: "default",
+            workspace_id: "default",
+            execution_profile: "executor",
+          },
+        }),
+        deps,
+      );
+      const subagentId = (spawnRes as any).result.subagent.subagent_id as string;
+
+      ws.send.mockClear();
+
+      const sendRes = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-2",
+          type: "subagent.send",
+          payload: {
+            tenant_id: "default",
+            agent_id: "default",
+            workspace_id: "default",
+            subagent_id: subagentId,
+            content: "hello",
+          },
+        }),
+        deps,
+      );
+
+      expect((sendRes as any).ok).toBe(true);
+      expect((sendRes as any).type).toBe("subagent.send");
+      expect((sendRes as any).result.accepted).toBe(true);
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(runtimeTurn).toHaveBeenCalledTimes(1);
+
+      expect(ws.send).toHaveBeenCalled();
+      const payloads = ws.send.mock.calls.map((call) => JSON.parse(call[0] ?? "{}"));
+      const updated = payloads.find((p) => p.type === "subagent.updated");
+      expect(updated).toBeDefined();
+      expect(updated.payload?.subagent?.subagent_id).toBe(subagentId);
+      expect(updated.payload?.subagent?.status).toBe("failed");
+
+      const getRes = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-3",
+          type: "subagent.get",
+          payload: {
+            tenant_id: "default",
+            agent_id: "default",
+            workspace_id: "default",
+            subagent_id: subagentId,
+          },
+        }),
+        deps,
+      );
+      expect((getRes as any).ok).toBe(true);
+      expect((getRes as any).result.subagent.status).toBe("failed");
+    } finally {
+      await db.close();
+    }
+  });
+
   it("handles subagent.close and broadcasts subagent.closed", async () => {
     const cm = new ConnectionManager();
     const { id, ws } = makeClient(cm);
@@ -287,6 +373,10 @@ describe("handleClientMessage (subagent.*)", () => {
 
       expect(ws.send).toHaveBeenCalled();
       const payloads = ws.send.mock.calls.map((call) => JSON.parse(call[0] ?? "{}"));
+      const updated = payloads.find((p) => p.type === "subagent.updated");
+      expect(updated).toBeDefined();
+      expect(updated.payload?.subagent?.subagent_id).toBe(subagentId);
+      expect(updated.payload?.subagent?.status).toBe("closing");
       const closed = payloads.find((p) => p.type === "subagent.closed");
       expect(closed).toBeDefined();
       expect(closed.payload?.subagent?.subagent_id).toBe(subagentId);
