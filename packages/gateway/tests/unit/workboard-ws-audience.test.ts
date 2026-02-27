@@ -9,4 +9,3 @@ describe("WORKBOARD_WS_AUDIENCE", () => {
     });
   });
 });
-
