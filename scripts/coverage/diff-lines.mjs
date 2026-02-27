@@ -3,6 +3,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 
 function normalizePath(p) {
   return p.replaceAll("\\", "/");
@@ -68,7 +69,7 @@ function isInScopeSourceFile(filePath) {
   const p = normalizePath(filePath);
   if (!/^(packages|apps)\/[^/]+\/src\//.test(p)) return false;
   if (!/\.(ts|tsx|js|jsx)$/.test(p)) return false;
-  if (/\.d\.ts$/.test(p)) return false;
+  if (p.endsWith(".d.ts")) return false;
   return true;
 }
 
@@ -157,6 +158,76 @@ function buildLineCoverageMap(entry) {
   return lineCounts;
 }
 
+function hasDeclareModifier(node) {
+  if (!ts.canHaveModifiers(node)) return false;
+  const modifiers = ts.getModifiers(node) ?? [];
+  return modifiers.some((m) => m.kind === ts.SyntaxKind.DeclareKeyword);
+}
+
+function isCoverableStatement(node) {
+  if (ts.isBlock(node)) return false;
+  if (ts.isEmptyStatement(node)) return false;
+  if (ts.isNotEmittedStatement(node)) return false;
+  if (ts.isImportDeclaration(node)) return false;
+  if (ts.isImportEqualsDeclaration(node)) return false;
+  if (ts.isInterfaceDeclaration(node)) return false;
+  if (ts.isTypeAliasDeclaration(node)) return false;
+  if (ts.isNamespaceExportDeclaration(node)) return false;
+
+  if (ts.isExportDeclaration(node)) {
+    if (node.isTypeOnly) return false;
+    if (
+      node.moduleSpecifier === undefined &&
+      node.exportClause !== undefined &&
+      ts.isNamedExports(node.exportClause) &&
+      node.exportClause.elements.length === 0
+    ) {
+      return false;
+    }
+  }
+
+  if (hasDeclareModifier(node)) return false;
+  if (ts.isFunctionDeclaration(node) && node.body === undefined) return false;
+
+  return true;
+}
+
+function scriptKindFromPath(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === ".ts") return ts.ScriptKind.TS;
+  if (ext === ".tsx") return ts.ScriptKind.TSX;
+  if (ext === ".js") return ts.ScriptKind.JS;
+  if (ext === ".jsx") return ts.ScriptKind.JSX;
+  return ts.ScriptKind.Unknown;
+}
+
+function buildCoverableStatementLineSet(filePath, fileText) {
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    fileText,
+    ts.ScriptTarget.Latest,
+    true,
+    scriptKindFromPath(filePath),
+  );
+
+  const coverableLines = new Set();
+  const addLineForNode = (node) => {
+    const start = node.getStart(sourceFile);
+    const { line } = ts.getLineAndCharacterOfPosition(sourceFile, start);
+    coverableLines.add(line + 1);
+  };
+
+  const visit = (node) => {
+    if (ts.isStatement(node) && isCoverableStatement(node)) {
+      addLineForNode(node);
+    }
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return coverableLines;
+}
+
 function pct(covered, total) {
   if (!total) return 100;
   return (covered / total) * 100;
@@ -215,11 +286,18 @@ function main() {
     const fileLines = fileText.split("\n");
 
     if (!entry) {
+      const coverableLines = buildCoverableStatementLineSet(filePath, fileText);
       for (const lineNo of changedLines) {
         const text = fileLines[lineNo - 1] ?? "";
         if (shouldIgnoreChangedLine(text)) continue;
+        if (!coverableLines.has(lineNo)) continue;
         total++;
-        uncovered.push({ file: filePath, line: lineNo, text: text.trimEnd(), reason: "no_coverage" });
+        uncovered.push({
+          file: filePath,
+          line: lineNo,
+          text: text.trimEnd(),
+          reason: "no_coverage",
+        });
       }
       continue;
     }
