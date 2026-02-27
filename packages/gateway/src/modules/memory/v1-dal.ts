@@ -84,6 +84,12 @@ function parseJson<T>(raw: string): T {
   return JSON.parse(raw) as T;
 }
 
+function invalidRequestError(message: string): Error & { code: "invalid_request" } {
+  const err = new Error(message) as Error & { code: "invalid_request" };
+  err.code = "invalid_request";
+  return err;
+}
+
 type Cursor = { sort: string; id: string };
 
 function encodeCursor(cursor: Cursor): string {
@@ -1000,7 +1006,7 @@ export class MemoryV1Dal {
     const MAX_SQL_PARAMS = 900;
 
     if (query !== "*" && query.length > MAX_QUERY_CHARS) {
-      throw new Error(`query too long (max=${MAX_QUERY_CHARS})`);
+      throw invalidRequestError(`query too long (max=${MAX_QUERY_CHARS})`);
     }
 
     const rawTerms =
@@ -1011,13 +1017,13 @@ export class MemoryV1Dal {
             .map((term) => term.trim())
             .filter(Boolean);
     if (rawTerms.some((term) => term.length > MAX_TERM_CHARS)) {
-      throw new Error(`query term too long (max=${MAX_TERM_CHARS})`);
+      throw invalidRequestError(`query term too long (max=${MAX_TERM_CHARS})`);
     }
 
     const terms = uniqSortedStrings(rawTerms.map((term) => term.toLowerCase()));
 
     if (terms.length > MAX_TERMS) {
-      throw new Error(`too many query terms (max=${MAX_TERMS})`);
+      throw invalidRequestError(`too many query terms (max=${MAX_TERMS})`);
     }
 
     const limit = Math.max(1, Math.min(500, input.limit ?? 20));
@@ -1035,7 +1041,7 @@ export class MemoryV1Dal {
       if (filter.keys && filter.keys.length > 0) {
         const keys = uniqSortedStrings(filter.keys);
         if (keys.length > MAX_FILTER_KEYS) {
-          throw new Error(`too many filter.keys (max=${MAX_FILTER_KEYS})`);
+          throw invalidRequestError(`too many filter.keys (max=${MAX_FILTER_KEYS})`);
         }
         if (keys.length > 0) next.keys = keys;
       }
@@ -1043,7 +1049,7 @@ export class MemoryV1Dal {
       if (filter.tags && filter.tags.length > 0) {
         const tags = uniqSortedStrings(filter.tags);
         if (tags.length > MAX_FILTER_TAGS) {
-          throw new Error(`too many filter.tags (max=${MAX_FILTER_TAGS})`);
+          throw invalidRequestError(`too many filter.tags (max=${MAX_FILTER_TAGS})`);
         }
         if (tags.length > 0) next.tags = tags;
       }
@@ -1056,7 +1062,7 @@ export class MemoryV1Dal {
         if (filter.provenance.channels && filter.provenance.channels.length > 0) {
           const channels = uniqSortedStrings(filter.provenance.channels);
           if (channels.length > MAX_FILTER_PROVENANCE_VALUES) {
-            throw new Error(
+            throw invalidRequestError(
               `too many filter.provenance.channels (max=${MAX_FILTER_PROVENANCE_VALUES})`,
             );
           }
@@ -1065,7 +1071,7 @@ export class MemoryV1Dal {
         if (filter.provenance.thread_ids && filter.provenance.thread_ids.length > 0) {
           const threadIds = uniqSortedStrings(filter.provenance.thread_ids);
           if (threadIds.length > MAX_FILTER_PROVENANCE_VALUES) {
-            throw new Error(
+            throw invalidRequestError(
               `too many filter.provenance.thread_ids (max=${MAX_FILTER_PROVENANCE_VALUES})`,
             );
           }
@@ -1074,7 +1080,7 @@ export class MemoryV1Dal {
         if (filter.provenance.session_ids && filter.provenance.session_ids.length > 0) {
           const sessionIds = uniqSortedStrings(filter.provenance.session_ids);
           if (sessionIds.length > MAX_FILTER_PROVENANCE_VALUES) {
-            throw new Error(
+            throw invalidRequestError(
               `too many filter.provenance.session_ids (max=${MAX_FILTER_PROVENANCE_VALUES})`,
             );
           }
@@ -1117,7 +1123,7 @@ export class MemoryV1Dal {
 
     const totalParams = params.length + 1; // include LIMIT
     if (totalParams > MAX_SQL_PARAMS) {
-      throw new Error(`search too complex (params=${totalParams}, max=${MAX_SQL_PARAMS})`);
+      throw invalidRequestError(`search too complex (params=${totalParams}, max=${MAX_SQL_PARAMS})`);
     }
 
     const rows = await this.db.all<RawSearchRow>(

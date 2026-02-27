@@ -2120,6 +2120,13 @@ export async function handleClientMessage(
       return { request_id: msg.request_id, type: msg.type, ok: true, result };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      const errorCode =
+        err &&
+        typeof err === "object" &&
+        "code" in err &&
+        typeof (err as { code?: unknown }).code === "string"
+          ? (err as { code: string }).code
+          : undefined;
       if (message === "memory item not found") {
         return errorResponse(msg.request_id, msg.type, "not_found", "memory item not found");
       }
@@ -2127,6 +2134,9 @@ export async function handleClientMessage(
         return errorResponse(msg.request_id, msg.type, "invalid_request", "invalid cursor");
       }
       if (message.startsWith("incompatible patch fields for kind=")) {
+        return errorResponse(msg.request_id, msg.type, "invalid_request", message);
+      }
+      if (errorCode === "invalid_request") {
         return errorResponse(msg.request_id, msg.type, "invalid_request", message);
       }
       return errorResponse(msg.request_id, msg.type, "internal_error", message);
