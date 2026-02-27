@@ -384,6 +384,27 @@ describe("operator-core wiring", () => {
     expect(runs.attemptIdsByStepId["step-1"]).toEqual(["attempt-1"]);
   });
 
+  it("records transport_error messages from the WS client", async () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+
+    const core = createOperatorCore({
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788",
+      auth: createBearerTokenAuth("test-token"),
+      deps: { ws, http },
+    });
+
+    core.connect();
+    ws.emit("connected", { clientId: "client-123" });
+    await tick();
+
+    expect(core.connectionStore.getSnapshot().transportError).toBe(null);
+
+    ws.emit("transport_error", { message: "oh no" });
+    expect(core.connectionStore.getSnapshot().transportError).toBe("oh no");
+  });
+
   it("treats connected without clientId as connected", async () => {
     const ws = new FakeWsClient();
     const http = createFakeHttpClient();

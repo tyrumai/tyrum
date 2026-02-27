@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -28,6 +28,9 @@ type CliCommand =
   | { kind: "config_show" }
   | { kind: "identity_init" }
   | { kind: "identity_show" }
+  | { kind: "admin_mode_enter"; admin_token: string; ttl_seconds?: number }
+  | { kind: "admin_mode_status" }
+  | { kind: "admin_mode_exit" }
   | { kind: "approvals_list"; limit: number }
   | {
       kind: "approvals_resolve";
@@ -47,20 +50,32 @@ type CliCommand =
     }
   | { kind: "pairing_deny"; pairing_id: number; reason?: string }
   | { kind: "pairing_revoke"; pairing_id: number; reason?: string }
-  | { kind: "secrets_list" }
-  | { kind: "secrets_store"; scope: string; provider: "env" | "file" | "keychain"; value: string }
-  | { kind: "secrets_revoke"; handle_id: string }
-  | { kind: "secrets_rotate"; handle_id: string; value: string }
-  | { kind: "policy_bundle" }
-  | { kind: "policy_overrides_list" }
+  | { kind: "secrets_list"; admin_token?: string }
+  | {
+      kind: "secrets_store";
+      admin_token?: string;
+      scope: string;
+      provider: "env" | "file" | "keychain";
+      value: string;
+    }
+  | { kind: "secrets_revoke"; admin_token?: string; handle_id: string }
+  | { kind: "secrets_rotate"; admin_token?: string; handle_id: string; value: string }
+  | { kind: "policy_bundle"; admin_token?: string }
+  | { kind: "policy_overrides_list"; admin_token?: string }
   | {
       kind: "policy_overrides_create";
+      admin_token?: string;
       agent_id: string;
       tool_id: string;
       pattern: string;
       workspace_id?: string;
     }
-  | { kind: "policy_overrides_revoke"; policy_override_id: string; reason?: string };
+  | {
+      kind: "policy_overrides_revoke";
+      admin_token?: string;
+      policy_override_id: string;
+      reason?: string;
+    };
 
 function resolveTyrumHome(): string {
   const fromEnv = process.env["TYRUM_HOME"]?.trim();
@@ -78,6 +93,10 @@ function resolveOperatorConfigPath(home = resolveTyrumHome()): string {
 
 function resolveOperatorDeviceIdentityPath(home = resolveTyrumHome()): string {
   return join(resolveOperatorDir(home), "device-identity.json");
+}
+
+function resolveOperatorAdminModePath(home = resolveTyrumHome()): string {
+  return join(resolveOperatorDir(home), "admin-mode.json");
 }
 
 function resolveGatewayWsUrl(gatewayUrl: string): string {
@@ -112,6 +131,9 @@ function printCliHelp(): void {
       "  tyrum-cli config set --gateway-url <url> --token <token>",
       "  tyrum-cli identity show",
       "  tyrum-cli identity init",
+      "  tyrum-cli admin-mode enter --admin-token <token> [--ttl-seconds <n>]",
+      "  tyrum-cli admin-mode status",
+      "  tyrum-cli admin-mode exit",
       "  tyrum-cli approvals list [--limit <n>]",
       "  tyrum-cli approvals resolve --approval-id <id> --decision <approved|denied> [--reason <text>]",
       "  tyrum-cli workflow run --key <key> --steps <json> [--lane <lane>]",
@@ -129,6 +151,9 @@ function printCliHelp(): void {
       "  tyrum-cli policy overrides create --agent-id <agent-id> --tool-id <tool-id> --pattern <glob> [--workspace-id <workspace-id>]",
       "  tyrum-cli policy overrides revoke --policy-override-id <id> [--reason <text>]",
       "",
+      "Notes:",
+      "  - policy/* and secrets/* are admin-only surfaces and require Admin Mode (see `tyrum-cli admin-mode enter`) or an explicit `--admin-token <token>`.",
+      "",
       "Environment:",
       "  TYRUM_HOME  Defaults to ~/.tyrum",
     ].join("\n"),
@@ -141,6 +166,13 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
   const [first, second] = argv;
   if (first === "-h" || first === "--help") return { kind: "help" };
   if (first === "--version") return { kind: "version" };
+
+  const parseAdminToken = (raw: string | undefined): string => {
+    if (!raw) throw new Error("--admin-token requires a value");
+    const trimmed = raw.trim();
+    if (!trimmed) throw new Error("--admin-token requires a non-empty value");
+    return trimmed;
+  };
 
   if (first === "pairing") {
     if (second === "-h" || second === "--help") return { kind: "help" };
@@ -275,17 +307,26 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
     if (!second) throw new Error("secrets requires a subcommand (store|list|revoke|rotate)");
 
     if (second === "list") {
+      let adminToken: string | undefined;
       for (let i = 2; i < argv.length; i += 1) {
         const arg = argv[i];
         if (!arg) continue;
+
+        if (arg === "--admin-token") {
+          adminToken = parseAdminToken(argv[i + 1]);
+          i += 1;
+          continue;
+        }
+
         if (arg === "-h" || arg === "--help") return { kind: "help" };
         if (arg.startsWith("-")) throw new Error(`unsupported secrets.list argument '${arg}'`);
         throw new Error(`unexpected secrets.list argument '${arg}'`);
       }
-      return { kind: "secrets_list" };
+      return { kind: "secrets_list", admin_token: adminToken };
     }
 
     if (second === "store") {
+      let adminToken: string | undefined;
       let scope: string | undefined;
       let provider: "env" | "file" | "keychain" = "env";
       let value: string | undefined;
@@ -293,6 +334,12 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
       for (let i = 2; i < argv.length; i += 1) {
         const arg = argv[i];
         if (!arg) continue;
+
+        if (arg === "--admin-token") {
+          adminToken = parseAdminToken(argv[i + 1]);
+          i += 1;
+          continue;
+        }
 
         if (arg === "--scope") {
           const raw = argv[i + 1];
@@ -331,16 +378,23 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
 
       if (!scope) throw new Error("secrets store requires --scope <scope>");
       if (!value) throw new Error("secrets store requires --value <value>");
-      return { kind: "secrets_store", scope, provider, value };
+      return { kind: "secrets_store", admin_token: adminToken, scope, provider, value };
     }
 
     if (second === "revoke" || second === "rotate") {
+      let adminToken: string | undefined;
       let handleId: string | undefined;
       let value: string | undefined;
 
       for (let i = 2; i < argv.length; i += 1) {
         const arg = argv[i];
         if (!arg) continue;
+
+        if (arg === "--admin-token") {
+          adminToken = parseAdminToken(argv[i + 1]);
+          i += 1;
+          continue;
+        }
 
         if (arg === "--handle-id") {
           const raw = argv[i + 1];
@@ -374,11 +428,11 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
       if (!handleId) throw new Error(`secrets ${second} requires --handle-id <handle-id>`);
 
       if (second === "revoke") {
-        return { kind: "secrets_revoke", handle_id: handleId };
+        return { kind: "secrets_revoke", admin_token: adminToken, handle_id: handleId };
       }
 
       if (!value) throw new Error("secrets rotate requires --value <value>");
-      return { kind: "secrets_rotate", handle_id: handleId, value };
+      return { kind: "secrets_rotate", admin_token: adminToken, handle_id: handleId, value };
     }
 
     throw new Error(`unknown secrets subcommand '${second}'`);
@@ -389,14 +443,22 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
     if (!second) throw new Error("policy requires a subcommand (bundle|overrides)");
 
     if (second === "bundle") {
+      let adminToken: string | undefined;
       for (let i = 2; i < argv.length; i += 1) {
         const arg = argv[i];
         if (!arg) continue;
+
+        if (arg === "--admin-token") {
+          adminToken = parseAdminToken(argv[i + 1]);
+          i += 1;
+          continue;
+        }
+
         if (arg === "-h" || arg === "--help") return { kind: "help" };
         if (arg.startsWith("-")) throw new Error(`unsupported policy.bundle argument '${arg}'`);
         throw new Error(`unexpected policy.bundle argument '${arg}'`);
       }
-      return { kind: "policy_bundle" };
+      return { kind: "policy_bundle", admin_token: adminToken };
     }
 
     if (second === "overrides") {
@@ -405,19 +467,28 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
       if (!third) throw new Error("policy overrides requires a subcommand (list|create|revoke)");
 
       if (third === "list") {
+        let adminToken: string | undefined;
         for (let i = 3; i < argv.length; i += 1) {
           const arg = argv[i];
           if (!arg) continue;
+
+          if (arg === "--admin-token") {
+            adminToken = parseAdminToken(argv[i + 1]);
+            i += 1;
+            continue;
+          }
+
           if (arg === "-h" || arg === "--help") return { kind: "help" };
           if (arg.startsWith("-")) {
             throw new Error(`unsupported policy.overrides.list argument '${arg}'`);
           }
           throw new Error(`unexpected policy.overrides.list argument '${arg}'`);
         }
-        return { kind: "policy_overrides_list" };
+        return { kind: "policy_overrides_list", admin_token: adminToken };
       }
 
       if (third === "create") {
+        let adminToken: string | undefined;
         let agentId: string | undefined;
         let toolId: string | undefined;
         let pattern: string | undefined;
@@ -426,6 +497,12 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
         for (let i = 3; i < argv.length; i += 1) {
           const arg = argv[i];
           if (!arg) continue;
+
+          if (arg === "--admin-token") {
+            adminToken = parseAdminToken(argv[i + 1]);
+            i += 1;
+            continue;
+          }
 
           if (arg === "--agent-id") {
             const raw = argv[i + 1];
@@ -481,6 +558,7 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
 
         return {
           kind: "policy_overrides_create",
+          admin_token: adminToken,
           agent_id: agentId,
           tool_id: toolId,
           pattern,
@@ -489,12 +567,19 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
       }
 
       if (third === "revoke") {
+        let adminToken: string | undefined;
         let id: string | undefined;
         let reason: string | undefined;
 
         for (let i = 3; i < argv.length; i += 1) {
           const arg = argv[i];
           if (!arg) continue;
+
+          if (arg === "--admin-token") {
+            adminToken = parseAdminToken(argv[i + 1]);
+            i += 1;
+            continue;
+          }
 
           if (arg === "--policy-override-id") {
             const raw = argv[i + 1];
@@ -525,7 +610,12 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
         }
 
         if (!id) throw new Error("policy overrides revoke requires --policy-override-id <id>");
-        return { kind: "policy_overrides_revoke", policy_override_id: id, reason };
+        return {
+          kind: "policy_overrides_revoke",
+          admin_token: adminToken,
+          policy_override_id: id,
+          reason,
+        };
       }
 
       throw new Error(`unknown policy overrides subcommand '${third}'`);
@@ -902,6 +992,78 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
     throw new Error(`unknown identity subcommand '${second}'`);
   }
 
+  if (first === "admin-mode") {
+    if (second === "-h" || second === "--help") return { kind: "help" };
+    if (!second) throw new Error("admin-mode requires a subcommand (enter|status|exit)");
+
+    if (second === "status") {
+      for (let i = 2; i < argv.length; i += 1) {
+        const arg = argv[i];
+        if (!arg) continue;
+        if (arg === "-h" || arg === "--help") return { kind: "help" };
+        if (arg.startsWith("-")) {
+          throw new Error(`unsupported admin-mode.status argument '${arg}'`);
+        }
+        throw new Error(`unexpected admin-mode.status argument '${arg}'`);
+      }
+      return { kind: "admin_mode_status" };
+    }
+
+    if (second === "exit") {
+      for (let i = 2; i < argv.length; i += 1) {
+        const arg = argv[i];
+        if (!arg) continue;
+        if (arg === "-h" || arg === "--help") return { kind: "help" };
+        if (arg.startsWith("-")) {
+          throw new Error(`unsupported admin-mode.exit argument '${arg}'`);
+        }
+        throw new Error(`unexpected admin-mode.exit argument '${arg}'`);
+      }
+      return { kind: "admin_mode_exit" };
+    }
+
+    if (second === "enter") {
+      let adminToken: string | undefined;
+      let ttlSeconds: number | undefined;
+
+      for (let i = 2; i < argv.length; i += 1) {
+        const arg = argv[i];
+        if (!arg) continue;
+
+        if (arg === "--admin-token") {
+          adminToken = parseAdminToken(argv[i + 1]);
+          i += 1;
+          continue;
+        }
+
+        if (arg === "--ttl-seconds") {
+          const raw = argv[i + 1];
+          if (!raw) throw new Error("--ttl-seconds requires a value");
+          const parsed = Number.parseInt(raw, 10);
+          if (!Number.isFinite(parsed) || parsed <= 0) {
+            throw new Error("--ttl-seconds must be a positive integer");
+          }
+          ttlSeconds = parsed;
+          i += 1;
+          continue;
+        }
+
+        if (arg === "-h" || arg === "--help") return { kind: "help" };
+
+        if (arg.startsWith("-")) {
+          throw new Error(`unsupported admin-mode.enter argument '${arg}'`);
+        }
+        throw new Error(`unexpected admin-mode.enter argument '${arg}'`);
+      }
+
+      if (!adminToken) throw new Error("admin-mode enter requires --admin-token <token>");
+
+      return { kind: "admin_mode_enter", admin_token: adminToken, ttl_seconds: ttlSeconds };
+    }
+
+    throw new Error(`unknown admin-mode subcommand '${second}'`);
+  }
+
   throw new Error(`unknown command '${first}'`);
 }
 
@@ -934,6 +1096,89 @@ async function saveOperatorConfig(
 ): Promise<void> {
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   await writeFile(path, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+}
+
+type PersistedAdminModeState = {
+  elevatedToken: string;
+  expiresAt: string;
+};
+
+function requireIsoDateTimeMs(raw: string, label: string): number {
+  const ms = Date.parse(raw);
+  if (!Number.isFinite(ms)) {
+    throw new Error(`${label} must be a valid ISO datetime string`);
+  }
+  return ms;
+}
+
+function formatRemainingMs(remainingMs: number): string {
+  const totalSeconds = Math.ceil(Math.max(0, remainingMs) / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes)}:${String(seconds).padStart(2, "0")}`;
+}
+
+async function loadOperatorAdminModeState(path: string): Promise<PersistedAdminModeState | null> {
+  let raw: string;
+  try {
+    raw = await readFile(path, "utf8");
+  } catch (error) {
+    const asErr = error as NodeJS.ErrnoException;
+    if (asErr?.code === "ENOENT") return null;
+    throw error;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch (error) {
+    throw new Error(`admin mode state must be valid JSON: path=${path}`, { cause: error });
+  }
+
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(`admin mode state must be a JSON object: path=${path}`);
+  }
+
+  const record = parsed as Record<string, unknown>;
+  const elevatedToken = typeof record.elevatedToken === "string" ? record.elevatedToken.trim() : "";
+  const expiresAt = typeof record.expiresAt === "string" ? record.expiresAt.trim() : "";
+  if (!elevatedToken || !expiresAt) {
+    throw new Error(`admin mode state missing elevatedToken/expiresAt: path=${path}`);
+  }
+
+  const expiresAtMs = requireIsoDateTimeMs(expiresAt, "admin mode expiresAt");
+  if (expiresAtMs <= Date.now()) {
+    await rm(path, { force: true });
+    return null;
+  }
+
+  return { elevatedToken, expiresAt };
+}
+
+async function saveOperatorAdminModeState(
+  path: string,
+  state: PersistedAdminModeState,
+): Promise<void> {
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+  await writeFile(path, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
+}
+
+async function clearOperatorAdminModeState(path: string): Promise<void> {
+  await rm(path, { force: true });
+}
+
+async function requireAdminModeToken(home: string, override: string | undefined): Promise<string> {
+  const explicit = override?.trim();
+  if (explicit) return explicit;
+
+  const statePath = resolveOperatorAdminModePath(home);
+  const state = await loadOperatorAdminModeState(statePath);
+  if (state) return state.elevatedToken;
+
+  throw new Error(
+    "Admin Mode required: run 'tyrum-cli admin-mode enter --admin-token <token>' " +
+      "or pass --admin-token <token> explicitly for this command.",
+  );
 }
 
 async function requireOperatorConfig(
@@ -1047,12 +1292,14 @@ async function runOperatorHttpCommand<T>(
   home: string,
   label: string,
   fn: (http: TyrumHttpClient) => Promise<T>,
+  opts?: { token?: string },
 ): Promise<number> {
   try {
     const config = await requireOperatorConfig(home);
+    const token = (opts?.token ?? config.auth_token).trim();
     const http = createTyrumHttpClient({
       baseUrl: config.gateway_url,
-      auth: { type: "bearer", token: config.auth_token },
+      auth: { type: "bearer", token },
     });
     const result = await fn(http);
     console.log(JSON.stringify(result, null, 2));
@@ -1093,32 +1340,115 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
 
   const tyrumHome = resolveTyrumHome();
 
+  if (command.kind === "admin_mode_status") {
+    try {
+      const statePath = resolveOperatorAdminModePath(tyrumHome);
+      const state = await loadOperatorAdminModeState(statePath);
+      if (!state) {
+        console.log("admin-mode: inactive");
+        return 0;
+      }
+      const expiresAtMs = requireIsoDateTimeMs(state.expiresAt, "admin mode expiresAt");
+      const remainingMs = Math.max(0, expiresAtMs - Date.now());
+      console.log(
+        `admin-mode: active remaining=${formatRemainingMs(remainingMs)} expires_at=${state.expiresAt}`,
+      );
+      return 0;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`admin-mode.status: failed: ${message}`);
+      return 1;
+    }
+  }
+
+  if (command.kind === "admin_mode_exit") {
+    try {
+      const statePath = resolveOperatorAdminModePath(tyrumHome);
+      await clearOperatorAdminModeState(statePath);
+      console.log("admin-mode.exit: ok");
+      return 0;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`admin-mode.exit: failed: ${message}`);
+      return 1;
+    }
+  }
+
+  if (command.kind === "admin_mode_enter") {
+    try {
+      const config = await requireOperatorConfig(tyrumHome);
+      const http = createTyrumHttpClient({
+        baseUrl: config.gateway_url,
+        auth: { type: "bearer", token: command.admin_token },
+      });
+
+      const issued = await http.deviceTokens.issue({
+        device_id: "operator-cli",
+        role: "client",
+        scopes: ["operator.admin"],
+        ttl_seconds: command.ttl_seconds ?? 60 * 10,
+      });
+
+      const statePath = resolveOperatorAdminModePath(tyrumHome);
+      await saveOperatorAdminModeState(statePath, {
+        elevatedToken: issued.token,
+        expiresAt: issued.expires_at,
+      });
+
+      console.log(`admin-mode.enter: ok expires_at=${issued.expires_at}`);
+      return 0;
+    } catch (error) {
+      if (error instanceof TyrumHttpClientError) {
+        const status = error.status ? `status=${String(error.status)}` : "status=unknown";
+        console.error(`admin-mode.enter: failed: ${status} message=${error.message}`);
+        return 1;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`admin-mode.enter: failed: ${message}`);
+      return 1;
+    }
+  }
+
   if (
     command.kind === "policy_bundle" ||
     command.kind === "policy_overrides_list" ||
     command.kind === "policy_overrides_create" ||
     command.kind === "policy_overrides_revoke"
   ) {
-    return await runOperatorHttpCommand(tyrumHome, "policy", async (http) => {
-      switch (command.kind) {
-        case "policy_bundle":
-          return await http.policy.getBundle();
-        case "policy_overrides_list":
-          return await http.policy.listOverrides();
-        case "policy_overrides_create":
-          return await http.policy.createOverride({
-            agent_id: command.agent_id,
-            tool_id: command.tool_id,
-            pattern: command.pattern,
-            workspace_id: command.workspace_id,
-          });
-        case "policy_overrides_revoke":
-          return await http.policy.revokeOverride({
-            policy_override_id: command.policy_override_id,
-            reason: command.reason,
-          });
-      }
-    });
+    let token: string;
+    try {
+      token = await requireAdminModeToken(tyrumHome, command.admin_token);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`policy: failed: ${message}`);
+      return 1;
+    }
+
+    return await runOperatorHttpCommand(
+      tyrumHome,
+      "policy",
+      async (http) => {
+        switch (command.kind) {
+          case "policy_bundle":
+            return await http.policy.getBundle();
+          case "policy_overrides_list":
+            return await http.policy.listOverrides();
+          case "policy_overrides_create":
+            return await http.policy.createOverride({
+              agent_id: command.agent_id,
+              tool_id: command.tool_id,
+              pattern: command.pattern,
+              workspace_id: command.workspace_id,
+            });
+          case "policy_overrides_revoke":
+            return await http.policy.revokeOverride({
+              policy_override_id: command.policy_override_id,
+              reason: command.reason,
+            });
+        }
+      },
+      { token },
+    );
   }
 
   if (
@@ -1127,22 +1457,36 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
     command.kind === "secrets_revoke" ||
     command.kind === "secrets_rotate"
   ) {
-    return await runOperatorHttpCommand(tyrumHome, "secrets", async (http) => {
-      switch (command.kind) {
-        case "secrets_list":
-          return await http.secrets.list();
-        case "secrets_store":
-          return await http.secrets.store({
-            scope: command.scope,
-            provider: command.provider,
-            value: command.value,
-          });
-        case "secrets_revoke":
-          return await http.secrets.revoke(command.handle_id);
-        case "secrets_rotate":
-          return await http.secrets.rotate(command.handle_id, { value: command.value });
-      }
-    });
+    let token: string;
+    try {
+      token = await requireAdminModeToken(tyrumHome, command.admin_token);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`secrets: failed: ${message}`);
+      return 1;
+    }
+
+    return await runOperatorHttpCommand(
+      tyrumHome,
+      "secrets",
+      async (http) => {
+        switch (command.kind) {
+          case "secrets_list":
+            return await http.secrets.list();
+          case "secrets_store":
+            return await http.secrets.store({
+              scope: command.scope,
+              provider: command.provider,
+              value: command.value,
+            });
+          case "secrets_revoke":
+            return await http.secrets.revoke(command.handle_id);
+          case "secrets_rotate":
+            return await http.secrets.rotate(command.handle_id, { value: command.value });
+        }
+      },
+      { token },
+    );
   }
 
   if (
