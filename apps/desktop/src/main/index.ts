@@ -175,13 +175,13 @@ if (didAcquireSingleInstanceLock) {
           isDev: !app.isPackaged,
           onShowAbout: () => {
             const parentWindow = BrowserWindow.getFocusedWindow() ?? mainWindow;
-            const options = {
+            const options: Electron.MessageBoxOptions = {
               type: "info",
               title: `About ${app.name}`,
               message: app.name,
               detail: `Version ${app.getVersion()}`,
               buttons: ["OK"],
-            } as const;
+            };
 
             if (parentWindow && !parentWindow.isDestroyed()) {
               void dialog.showMessageBox(parentWindow, options);
