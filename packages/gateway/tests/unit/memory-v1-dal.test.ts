@@ -681,6 +681,36 @@ for (const fixture of fixtures) {
       }
     });
 
+    it("expands snippet window when the term is near the end of the text", async () => {
+      const { dal, close } = await fixture.open();
+      try {
+        const longBody = `${"a".repeat(450)} needle ${"b".repeat(40)}`;
+        await dal.create(
+          {
+            kind: "note",
+            body_md: longBody,
+            tags: [],
+            sensitivity: "private",
+            provenance: { source_kind: "operator", refs: [] },
+          },
+          "agent-a",
+        );
+
+        const results = await dal.search(
+          { v: 1, query: "needle", filter: { kinds: ["note"] }, limit: 10 },
+          "agent-a",
+        );
+
+        expect(results.hits).toHaveLength(1);
+        const snippet = results.hits[0]?.snippet ?? "";
+        expect(snippet).toContain("needle");
+        expect(snippet.length).toBeGreaterThan(200);
+        expect(snippet.length).toBeLessThanOrEqual(240);
+      } finally {
+        await close();
+      }
+    });
+
     it("dedupes keyword terms case-insensitively for scoring", async () => {
       const { dal, close } = await fixture.open();
       try {

@@ -279,8 +279,11 @@ function buildSnippet(
   }
 
   const focus = bestIdx >= 0 ? bestIdx : 0;
-  const start = Math.max(0, focus - Math.floor(max / 3));
+  let start = Math.max(0, focus - Math.floor(max / 3));
   const end = Math.min(cleaned.length, start + max);
+  if (end === cleaned.length) {
+    start = Math.max(0, end - max);
+  }
 
   let snippet = cleaned.slice(start, end);
   if (start > 0) snippet = `…${snippet}`;
