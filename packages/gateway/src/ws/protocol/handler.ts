@@ -1243,9 +1243,9 @@ export async function handleClientMessage(
             ? "work.item.completed"
             : payload.status === "failed"
               ? "work.item.failed"
-            : payload.status === "cancelled"
-              ? "work.item.cancelled"
-              : "work.item.updated";
+              : payload.status === "cancelled"
+                ? "work.item.cancelled"
+                : "work.item.updated";
 
       broadcastEvent(
         {
@@ -1259,7 +1259,11 @@ export async function handleClientMessage(
         WORKBOARD_WS_AUDIENCE,
       );
 
-      if (payload.status === "done" || payload.status === "blocked" || payload.status === "failed") {
+      if (
+        payload.status === "done" ||
+        payload.status === "blocked" ||
+        payload.status === "failed"
+      ) {
         try {
           await enqueueWorkItemStateChangeNotification({
             db: deps.db,

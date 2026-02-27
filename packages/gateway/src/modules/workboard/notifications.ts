@@ -41,7 +41,9 @@ export async function enqueueWorkItemStateChangeNotification(input: {
   const activity = await workboard.getScopeActivity({ scope: input.scope });
   const targetSessionKey = activity?.last_active_session_key ?? input.item.created_from_session_key;
 
-  const sendOverride = await new SessionSendPolicyOverrideDal(input.db).get({ key: targetSessionKey });
+  const sendOverride = await new SessionSendPolicyOverrideDal(input.db).get({
+    key: targetSessionKey,
+  });
   if (sendOverride?.send_policy === "off") {
     return { enqueued: false, skipped_reason: "send_policy_off" };
   }

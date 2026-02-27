@@ -533,7 +533,9 @@ describe("handleClientMessage (work.*)", () => {
       expect((failRes as unknown as { ok: boolean }).ok).toBe(true);
       expect(ws.send).toHaveBeenCalledTimes(3);
 
-      const failedEvt = JSON.parse(ws.send.mock.calls[ws.send.mock.calls.length - 1]?.[0] ?? "{}") as {
+      const failedEvt = JSON.parse(
+        ws.send.mock.calls[ws.send.mock.calls.length - 1]?.[0] ?? "{}",
+      ) as {
         type?: string;
         payload?: any;
       };

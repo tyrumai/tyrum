@@ -37,4 +37,3 @@ describe("ChannelInboxDal work_scope_activity updates", () => {
     });
   });
 });
-

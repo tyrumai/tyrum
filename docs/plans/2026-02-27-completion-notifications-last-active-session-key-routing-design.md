@@ -43,4 +43,3 @@ When a WorkItem transitions to `done|blocked|failed`:
 
 - Continue emitting existing WorkBoard WS events for `blocked` and `done`.
 - Add explicit `work.item.failed` WS event and emit it when a WorkItem transitions to `failed`.
-

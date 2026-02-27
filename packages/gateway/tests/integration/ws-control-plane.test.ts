@@ -202,7 +202,9 @@ describe("WS control-plane requests", () => {
        FROM work_scope_activity
        WHERE tenant_id = 'default' AND agent_id = 'default' AND workspace_id = 'default'`,
     );
-    expect(scopeActivity?.last_active_session_key).toBe("agent:default:ui:default:channel:thread-1");
+    expect(scopeActivity?.last_active_session_key).toBe(
+      "agent:default:ui:default:channel:thread-1",
+    );
 
     ws.send(
       JSON.stringify({
