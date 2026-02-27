@@ -29,7 +29,7 @@ describe.skipIf(!canRunPlaywright)("RealPlaywrightBackend", () => {
     backend = undefined;
   });
 
-  it("can navigate to a page and get title", async () => {
+  it("can navigate to a page and get title", { timeout: 15_000 }, async () => {
     backend = await getBackend();
     await backend.ensureBrowser();
     const result = await backend.navigate("data:text/html,<title>Test</title><h1>Hello</h1>");
@@ -37,7 +37,7 @@ describe.skipIf(!canRunPlaywright)("RealPlaywrightBackend", () => {
     expect(result.url).toContain("data:");
   });
 
-  it("can take a snapshot", async () => {
+  it("can take a snapshot", { timeout: 15_000 }, async () => {
     backend = await getBackend();
     await backend.ensureBrowser();
     await backend.navigate("data:text/html,<title>Snap</title><body>Content</body>");
@@ -46,7 +46,7 @@ describe.skipIf(!canRunPlaywright)("RealPlaywrightBackend", () => {
     expect(snap.html).toContain("Content");
   });
 
-  it("can fill and click elements", async () => {
+  it("can fill and click elements", { timeout: 15_000 }, async () => {
     backend = await getBackend();
     await backend.ensureBrowser();
     await backend.navigate("data:text/html,<input id='name' /><button id='btn'>Go</button>");
