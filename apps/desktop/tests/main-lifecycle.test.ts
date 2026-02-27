@@ -68,8 +68,19 @@ vi.mock("electron", () => ({
     quit: appQuitMock,
     requestSingleInstanceLock: appRequestSingleInstanceLockMock,
     setAppUserModelId: appSetAppUserModelIdMock,
+    getPath: vi.fn(() => "/tmp/tyrum-desktop-tests"),
   },
   BrowserWindow: browserWindowMock,
+  screen: {
+    getAllDisplays: vi.fn(() => []),
+    getPrimaryDisplay: vi.fn(() => ({
+      id: 1,
+      workArea: { x: 0, y: 0, width: 1920, height: 1080 },
+    })),
+  },
+  shell: {
+    openExternal: vi.fn(async () => {}),
+  },
 }));
 
 vi.mock("../src/main/ipc/gateway-ipc.js", () => ({
