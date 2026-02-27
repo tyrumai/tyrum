@@ -395,6 +395,7 @@ export function WorkBoard() {
         wsClient.on("work.item.updated", onWorkItemEvent);
         wsClient.on("work.item.blocked", onWorkItemEvent);
         wsClient.on("work.item.completed", onWorkItemEvent);
+        wsClient.on("work.item.failed", onWorkItemEvent);
         wsClient.on("work.item.cancelled", onWorkItemEvent);
 
         wsClient.on("work.task.leased", onWorkTaskEvent);
@@ -430,6 +431,7 @@ export function WorkBoard() {
         wsClient.off("work.item.updated", onWorkItemEvent);
         wsClient.off("work.item.blocked", onWorkItemEvent);
         wsClient.off("work.item.completed", onWorkItemEvent);
+        wsClient.off("work.item.failed", onWorkItemEvent);
         wsClient.off("work.item.cancelled", onWorkItemEvent);
       }
 
@@ -553,6 +555,7 @@ export function WorkBoard() {
     ? "TLS fingerprint pinning is configured, but pin verification is not enforced in the Desktop renderer."
     : null;
 
+  const canMarkReadySelected = selectedItem?.status === "backlog";
   const canResumeSelected = selectedItem?.status === "blocked";
   const canCancelSelected =
     selectedItem?.status === "ready" ||
@@ -669,8 +672,17 @@ export function WorkBoard() {
                 <span>kind {selectedItem.kind}</span>
                 <span>priority {selectedItem.priority}</span>
               </div>
-              {(canResumeSelected || canCancelSelected) && (
+              {(canMarkReadySelected || canResumeSelected || canCancelSelected) && (
                 <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+                  {canMarkReadySelected && (
+                    <button
+                      style={btn("secondary")}
+                      onClick={() => void transitionSelected("ready", "operator triaged")}
+                      disabled={transitionTarget !== null}
+                    >
+                      {transitionTarget === "ready" ? "Triaging…" : "Mark Ready"}
+                    </button>
+                  )}
                   {canResumeSelected && (
                     <button
                       style={btn("primary")}
