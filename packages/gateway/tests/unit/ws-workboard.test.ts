@@ -775,4 +775,85 @@ describe("handleClientMessage (work.*)", () => {
       await db.close();
     }
   });
+
+  it("denies work.create for scoped tokens without operator.write", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, {
+      authClaims: {
+        token_kind: "device",
+        role: "client",
+        device_id: "device-1",
+        token_id: "token-1",
+        scopes: ["operator.read"],
+      },
+    });
+    const client = cm.getClient(id)!;
+
+    const db = openTestSqliteDb();
+    try {
+      const deps = makeDeps(cm, { db });
+      const res = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-1",
+          type: "work.create",
+          payload: {
+            tenant_id: "default",
+            agent_id: "default",
+            workspace_id: "default",
+            item: { kind: "action", title: "Hello" },
+          },
+        }),
+        deps,
+      );
+
+      expect(res).toBeDefined();
+      expect((res as unknown as { ok: boolean }).ok).toBe(false);
+      const err = (res as unknown as { error: { code: string; message: string } }).error;
+      expect(err.code).toBe("forbidden");
+      expect(err.message).toBe("insufficient scope");
+    } finally {
+      await db.close();
+    }
+  });
+
+  it("sanitizes SQL-level failures for work.* requests", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm);
+    const client = cm.getClient(id)!;
+
+    const sqlErr = Object.assign(
+      new Error("SQLITE_CONSTRAINT: UNIQUE constraint failed: work_items.work_item_id"),
+      { code: "SQLITE_CONSTRAINT" as const },
+    );
+
+    const deps = makeDeps(cm, {
+      db: {
+        get: async () => {
+          throw sqlErr;
+        },
+      } as never,
+    });
+
+    const res = await handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "r-1",
+        type: "work.create",
+        payload: {
+          tenant_id: "default",
+          agent_id: "default",
+          workspace_id: "default",
+          item: { kind: "action", title: "Hello" },
+        },
+      }),
+      deps,
+    );
+
+    expect(res).toBeDefined();
+    expect((res as unknown as { ok: boolean }).ok).toBe(false);
+    const err = (res as unknown as { error: { code: string; message: string } }).error;
+    expect(err.code).toBe("internal_error");
+    expect(err.message).toBe("internal error");
+  });
 });

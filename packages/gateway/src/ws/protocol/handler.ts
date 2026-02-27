@@ -1012,8 +1012,7 @@ export async function handleClientMessage(
       const result = WsWorkCreateResult.parse({ item });
       return { request_id: msg.request_id, type: msg.type, ok: true, result };
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return errorResponse(msg.request_id, msg.type, "invalid_request", message);
+      return workboardErrorResponse(msg.request_id, msg.type, err, deps);
     }
   }
 
@@ -1055,8 +1054,7 @@ export async function handleClientMessage(
       const result = WsWorkListResult.parse({ items, next_cursor });
       return { request_id: msg.request_id, type: msg.type, ok: true, result };
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return errorResponse(msg.request_id, msg.type, "invalid_request", message);
+      return workboardErrorResponse(msg.request_id, msg.type, err, deps);
     }
   }
 
@@ -1095,8 +1093,7 @@ export async function handleClientMessage(
       const result = WsWorkGetResult.parse({ item });
       return { request_id: msg.request_id, type: msg.type, ok: true, result };
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return errorResponse(msg.request_id, msg.type, "invalid_request", message);
+      return workboardErrorResponse(msg.request_id, msg.type, err, deps);
     }
   }
 
@@ -1152,8 +1149,7 @@ export async function handleClientMessage(
       const result = WsWorkUpdateResult.parse({ item });
       return { request_id: msg.request_id, type: msg.type, ok: true, result };
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return errorResponse(msg.request_id, msg.type, "invalid_request", message);
+      return workboardErrorResponse(msg.request_id, msg.type, err, deps);
     }
   }
 
@@ -1219,8 +1215,7 @@ export async function handleClientMessage(
       const result = WsWorkTransitionResult.parse({ item });
       return { request_id: msg.request_id, type: msg.type, ok: true, result };
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return errorResponse(msg.request_id, msg.type, "invalid_request", message);
+      return workboardErrorResponse(msg.request_id, msg.type, err, deps);
     }
   }
 
@@ -1267,8 +1262,7 @@ export async function handleClientMessage(
         const result = WsWorkArtifactListResult.parse({ artifacts, next_cursor });
         return { request_id: msg.request_id, type: msg.type, ok: true, result };
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return errorResponse(msg.request_id, msg.type, "invalid_request", message);
+        return workboardErrorResponse(msg.request_id, msg.type, err, deps);
       }
     }
 
@@ -1292,8 +1286,7 @@ export async function handleClientMessage(
         const result = WsWorkArtifactGetResult.parse({ artifact });
         return { request_id: msg.request_id, type: msg.type, ok: true, result };
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return errorResponse(msg.request_id, msg.type, "invalid_request", message);
+        return workboardErrorResponse(msg.request_id, msg.type, err, deps);
       }
     }
 
@@ -1323,8 +1316,7 @@ export async function handleClientMessage(
       const result = WsWorkArtifactCreateResult.parse({ artifact });
       return { request_id: msg.request_id, type: msg.type, ok: true, result };
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return errorResponse(msg.request_id, msg.type, "invalid_request", message);
+      return workboardErrorResponse(msg.request_id, msg.type, err, deps);
     }
   }
 
@@ -1371,8 +1363,7 @@ export async function handleClientMessage(
         const result = WsWorkDecisionListResult.parse({ decisions, next_cursor });
         return { request_id: msg.request_id, type: msg.type, ok: true, result };
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return errorResponse(msg.request_id, msg.type, "invalid_request", message);
+        return workboardErrorResponse(msg.request_id, msg.type, err, deps);
       }
     }
 
@@ -1396,8 +1387,7 @@ export async function handleClientMessage(
         const result = WsWorkDecisionGetResult.parse({ decision });
         return { request_id: msg.request_id, type: msg.type, ok: true, result };
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return errorResponse(msg.request_id, msg.type, "invalid_request", message);
+        return workboardErrorResponse(msg.request_id, msg.type, err, deps);
       }
     }
 
@@ -1427,8 +1417,7 @@ export async function handleClientMessage(
       const result = WsWorkDecisionCreateResult.parse({ decision });
       return { request_id: msg.request_id, type: msg.type, ok: true, result };
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return errorResponse(msg.request_id, msg.type, "invalid_request", message);
+      return workboardErrorResponse(msg.request_id, msg.type, err, deps);
     }
   }
 
@@ -1477,8 +1466,7 @@ export async function handleClientMessage(
         const result = WsWorkSignalListResult.parse({ signals, next_cursor });
         return { request_id: msg.request_id, type: msg.type, ok: true, result };
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return errorResponse(msg.request_id, msg.type, "invalid_request", message);
+        return workboardErrorResponse(msg.request_id, msg.type, err, deps);
       }
     }
 
@@ -1499,8 +1487,7 @@ export async function handleClientMessage(
         const result = WsWorkSignalGetResult.parse({ signal });
         return { request_id: msg.request_id, type: msg.type, ok: true, result };
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return errorResponse(msg.request_id, msg.type, "invalid_request", message);
+        return workboardErrorResponse(msg.request_id, msg.type, err, deps);
       }
     }
 
@@ -1531,8 +1518,7 @@ export async function handleClientMessage(
         const result = WsWorkSignalCreateResult.parse({ signal });
         return { request_id: msg.request_id, type: msg.type, ok: true, result };
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return errorResponse(msg.request_id, msg.type, "invalid_request", message);
+        return workboardErrorResponse(msg.request_id, msg.type, err, deps);
       }
     }
 
@@ -1556,8 +1542,7 @@ export async function handleClientMessage(
       const result = WsWorkSignalUpdateResult.parse({ signal });
       return { request_id: msg.request_id, type: msg.type, ok: true, result };
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return errorResponse(msg.request_id, msg.type, "invalid_request", message);
+      return workboardErrorResponse(msg.request_id, msg.type, err, deps);
     }
   }
 
@@ -1599,8 +1584,7 @@ export async function handleClientMessage(
         const result = WsWorkStateKvGetResult.parse({ entry });
         return { request_id: msg.request_id, type: msg.type, ok: true, result };
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return errorResponse(msg.request_id, msg.type, "invalid_request", message);
+        return workboardErrorResponse(msg.request_id, msg.type, err, deps);
       }
     }
 
@@ -1618,8 +1602,7 @@ export async function handleClientMessage(
         const result = WsWorkStateKvListResult.parse({ entries });
         return { request_id: msg.request_id, type: msg.type, ok: true, result };
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return errorResponse(msg.request_id, msg.type, "invalid_request", message);
+        return workboardErrorResponse(msg.request_id, msg.type, err, deps);
       }
     }
 
@@ -1654,8 +1637,7 @@ export async function handleClientMessage(
       const result = WsWorkStateKvSetResult.parse({ entry });
       return { request_id: msg.request_id, type: msg.type, ok: true, result };
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return errorResponse(msg.request_id, msg.type, "invalid_request", message);
+      return workboardErrorResponse(msg.request_id, msg.type, err, deps);
     }
   }
 
@@ -1892,6 +1874,34 @@ function errorResponse(
 ): WsResponseErrEnvelope {
   const error = WsError.parse({ code, message, details });
   return { request_id: requestId, type, ok: false, error };
+}
+
+function workboardErrorResponse(
+  requestId: string,
+  type: string,
+  err: unknown,
+  deps: ProtocolDeps,
+): WsResponseErrEnvelope {
+  const message = err instanceof Error ? err.message : String(err);
+  const errorCode =
+    err &&
+    typeof err === "object" &&
+    "code" in err &&
+    typeof (err as { code?: unknown }).code === "string"
+      ? (err as { code: string }).code
+      : undefined;
+
+  const looksLikeSqlError = Boolean(errorCode) || message.includes("SQLITE_");
+  if (looksLikeSqlError) {
+    deps.logger?.warn("ws.workboard_request_failed", {
+      request_id: requestId,
+      request_type: type,
+      error: message,
+      error_code: errorCode,
+    });
+    return errorResponse(requestId, type, "internal_error", "internal error");
+  }
+  return errorResponse(requestId, type, "invalid_request", message);
 }
 
 function parseApprovalId(requestId: string): number | undefined {
