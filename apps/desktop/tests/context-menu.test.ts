@@ -23,6 +23,28 @@ describe("context menus", () => {
       expect(onOpenLinkInBrowser).not.toHaveBeenCalled();
     });
 
+    it("prioritizes editable actions over link actions when both apply", () => {
+      const onOpenLinkInBrowser = vi.fn();
+
+      const template = buildContextMenuTemplate(
+        {
+          isEditable: true,
+          linkURL: "https://example.com/docs",
+          editFlags: { canCut: true, canCopy: true, canPaste: true, canSelectAll: true },
+        },
+        { onOpenLinkInBrowser },
+      );
+
+      expect(template).toEqual([
+        { role: "cut", enabled: true },
+        { role: "copy", enabled: true },
+        { role: "paste", enabled: true },
+        { role: "selectAll", enabled: true },
+      ]);
+      expect(onOpenLinkInBrowser).not.toHaveBeenCalled();
+      expect(template.some((item) => item.label === "Open Link in Browser")).toBe(false);
+    });
+
     it("shows “Open Link in Browser” for safe link URLs", () => {
       const onOpenLinkInBrowser = vi.fn();
 
