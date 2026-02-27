@@ -279,15 +279,30 @@ function buildSnippet(
   }
 
   const focus = bestIdx >= 0 ? bestIdx : 0;
-  let start = Math.max(0, focus - Math.floor(max / 3));
-  const end = Math.min(cleaned.length, start + max);
-  if (end === cleaned.length) {
-    start = Math.max(0, end - max);
+  let window = max;
+  let start = 0;
+  let end = 0;
+  let needsLeading = false;
+  let needsTrailing = false;
+  for (let i = 0; i < 3; i += 1) {
+    start = Math.max(0, focus - Math.floor(window / 3));
+    end = Math.min(cleaned.length, start + window);
+    if (end === cleaned.length) {
+      start = Math.max(0, end - window);
+    }
+
+    needsLeading = start > 0;
+    needsTrailing = end < cleaned.length;
+
+    const ellipses = (needsLeading ? 1 : 0) + (needsTrailing ? 1 : 0);
+    const nextWindow = Math.max(1, max - ellipses);
+    if (nextWindow === window) break;
+    window = nextWindow;
   }
 
   let snippet = cleaned.slice(start, end);
-  if (start > 0) snippet = `…${snippet}`;
-  if (end < cleaned.length) snippet = `${snippet}…`;
+  if (needsLeading) snippet = `…${snippet}`;
+  if (needsTrailing) snippet = `${snippet}…`;
   return clampSnippet(sanitizeSnippet(snippet), max);
 }
 

@@ -780,6 +780,9 @@ for (const fixture of fixtures) {
         expect(snippet).toContain("needle");
         expect(snippet.length).toBeGreaterThan(200);
         expect(snippet.length).toBeLessThanOrEqual(240);
+        expect(snippet.startsWith("…")).toBe(true);
+        expect(snippet.endsWith("…")).toBe(false);
+        expect(snippet.endsWith("b")).toBe(true);
       } finally {
         await close();
       }
