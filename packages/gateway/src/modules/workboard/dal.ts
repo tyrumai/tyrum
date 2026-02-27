@@ -1,0 +1,1663 @@
+import { randomUUID } from "node:crypto";
+import type {
+  AgentStateKVEntry,
+  DecisionRecord,
+  ExecutionBudgets,
+  WorkArtifact,
+  WorkArtifactKind,
+  WorkItem,
+  WorkItemKind,
+  WorkItemState,
+  WorkItemTask,
+  WorkItemTaskState,
+  WorkItemStateKVEntry,
+  WorkScope,
+  WorkSignal,
+  WorkSignalStatus,
+  WorkSignalTriggerKind,
+  WorkStateKVKey,
+  WorkStateKVScope,
+  SubagentDescriptor,
+  SubagentStatus,
+  Lane,
+} from "@tyrum/schemas";
+import type { SqlDb } from "../../statestore/types.js";
+
+type RawTime = string | Date;
+
+function normalizeTime(value: RawTime): string {
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+function normalizeMaybeTime(value: RawTime | null): string | null {
+  if (value === null) return null;
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+function parseJsonOr(raw: string | null, fallback: unknown): unknown {
+  if (raw === null) return fallback;
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    return fallback;
+  }
+}
+
+function parseJsonMaybe(raw: string | null): unknown | undefined {
+  if (raw === null) return undefined;
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
+interface RawWorkItemRow {
+  work_item_id: string;
+  tenant_id: string;
+  agent_id: string;
+  workspace_id: string;
+  kind: string;
+  title: string;
+  status: string;
+  priority: number;
+  acceptance_json: string | null;
+  fingerprint_json: string | null;
+  budgets_json: string | null;
+  created_from_session_key: string;
+  created_at: RawTime;
+  updated_at: RawTime;
+  last_active_at: RawTime | null;
+  parent_work_item_id: string | null;
+}
+
+function toWorkItem(raw: RawWorkItemRow): WorkItem {
+  const budgets =
+    raw.budgets_json === null ? null : (parseJsonOr(raw.budgets_json, null) as ExecutionBudgets);
+  return {
+    work_item_id: raw.work_item_id,
+    tenant_id: raw.tenant_id,
+    agent_id: raw.agent_id,
+    workspace_id: raw.workspace_id,
+    kind: raw.kind as WorkItemKind,
+    title: raw.title,
+    status: raw.status as WorkItemState,
+    priority: raw.priority,
+    created_at: normalizeTime(raw.created_at),
+    created_from_session_key: raw.created_from_session_key,
+    last_active_at: normalizeMaybeTime(raw.last_active_at),
+    acceptance: parseJsonMaybe(raw.acceptance_json),
+    fingerprint: parseJsonMaybe(raw.fingerprint_json),
+    budgets,
+    parent_work_item_id: raw.parent_work_item_id ?? undefined,
+    updated_at: normalizeTime(raw.updated_at),
+  };
+}
+
+type CreateItemInput = {
+  kind: WorkItemKind;
+  title: string;
+  priority?: number;
+  acceptance?: unknown;
+  fingerprint?: unknown;
+  budgets?: ExecutionBudgets;
+  parent_work_item_id?: string;
+  created_from_session_key?: string;
+};
+
+type UpdateItemPatch = {
+  title?: string;
+  priority?: number;
+  acceptance?: unknown;
+  fingerprint?: unknown;
+  budgets?: ExecutionBudgets | null;
+  last_active_at?: string | null;
+};
+
+interface RawKvRow {
+  tenant_id: string;
+  agent_id: string;
+  workspace_id: string;
+  work_item_id?: string;
+  key: string;
+  value_json: string;
+  updated_at: RawTime;
+  updated_by_run_id: string | null;
+  provenance_json: string | null;
+}
+
+function toKvEntry(raw: RawKvRow): AgentStateKVEntry | WorkItemStateKVEntry {
+  const base = {
+    tenant_id: raw.tenant_id,
+    agent_id: raw.agent_id,
+    workspace_id: raw.workspace_id,
+    key: raw.key,
+    value_json: parseJsonOr(raw.value_json, null),
+    updated_at: normalizeTime(raw.updated_at),
+    updated_by_run_id: raw.updated_by_run_id ?? undefined,
+    provenance_json: parseJsonMaybe(raw.provenance_json),
+  };
+  if (raw.work_item_id) {
+    return { ...base, work_item_id: raw.work_item_id };
+  }
+  return base;
+}
+
+interface RawWorkArtifactRow {
+  artifact_id: string;
+  tenant_id: string;
+  agent_id: string;
+  workspace_id: string;
+  work_item_id: string | null;
+  kind: string;
+  title: string;
+  body_md: string | null;
+  refs_json: string;
+  confidence: number | null;
+  created_at: RawTime;
+  created_by_run_id: string | null;
+  created_by_subagent_id: string | null;
+  provenance_json: string | null;
+}
+
+function toWorkArtifact(raw: RawWorkArtifactRow): WorkArtifact {
+  return {
+    artifact_id: raw.artifact_id,
+    tenant_id: raw.tenant_id,
+    agent_id: raw.agent_id,
+    workspace_id: raw.workspace_id,
+    work_item_id: raw.work_item_id ?? undefined,
+    kind: raw.kind as WorkArtifactKind,
+    title: raw.title,
+    body_md: raw.body_md ?? undefined,
+    refs: parseJsonOr(raw.refs_json, []) as string[],
+    confidence: raw.confidence ?? undefined,
+    created_at: normalizeTime(raw.created_at),
+    created_by_run_id: raw.created_by_run_id ?? undefined,
+    created_by_subagent_id: raw.created_by_subagent_id ?? undefined,
+    provenance_json: parseJsonMaybe(raw.provenance_json),
+  };
+}
+
+interface RawDecisionRow {
+  decision_id: string;
+  tenant_id: string;
+  agent_id: string;
+  workspace_id: string;
+  work_item_id: string | null;
+  question: string;
+  chosen: string;
+  alternatives_json: string;
+  rationale_md: string;
+  input_artifact_ids_json: string;
+  created_at: RawTime;
+  created_by_run_id: string | null;
+  created_by_subagent_id: string | null;
+}
+
+function toDecisionRecord(raw: RawDecisionRow): DecisionRecord {
+  return {
+    decision_id: raw.decision_id,
+    tenant_id: raw.tenant_id,
+    agent_id: raw.agent_id,
+    workspace_id: raw.workspace_id,
+    work_item_id: raw.work_item_id ?? undefined,
+    question: raw.question,
+    chosen: raw.chosen,
+    alternatives: parseJsonOr(raw.alternatives_json, []) as string[],
+    rationale_md: raw.rationale_md,
+    input_artifact_ids: parseJsonOr(raw.input_artifact_ids_json, []) as string[],
+    created_at: normalizeTime(raw.created_at),
+    created_by_run_id: raw.created_by_run_id ?? undefined,
+    created_by_subagent_id: raw.created_by_subagent_id ?? undefined,
+  };
+}
+
+interface RawWorkSignalRow {
+  signal_id: string;
+  tenant_id: string;
+  agent_id: string;
+  workspace_id: string;
+  work_item_id: string | null;
+  trigger_kind: string;
+  trigger_spec_json: string;
+  payload_json: string | null;
+  status: string;
+  created_at: RawTime;
+  last_fired_at: RawTime | null;
+}
+
+function toWorkSignal(raw: RawWorkSignalRow): WorkSignal {
+  return {
+    signal_id: raw.signal_id,
+    tenant_id: raw.tenant_id,
+    agent_id: raw.agent_id,
+    workspace_id: raw.workspace_id,
+    work_item_id: raw.work_item_id ?? undefined,
+    trigger_kind: raw.trigger_kind as WorkSignalTriggerKind,
+    trigger_spec_json: parseJsonOr(raw.trigger_spec_json, null),
+    payload_json: parseJsonMaybe(raw.payload_json),
+    status: raw.status as WorkSignalStatus,
+    created_at: normalizeTime(raw.created_at),
+    last_fired_at: normalizeMaybeTime(raw.last_fired_at) ?? undefined,
+  };
+}
+
+interface RawWorkItemTaskRow {
+  task_id: string;
+  work_item_id: string;
+  status: string;
+  depends_on_json: string;
+  execution_profile: string;
+  side_effect_class: string;
+  run_id: string | null;
+  approval_id: number | null;
+  artifacts_json: string;
+  started_at: RawTime | null;
+  finished_at: RawTime | null;
+  result_summary: string | null;
+  created_at: RawTime;
+  updated_at: RawTime;
+}
+
+function toWorkItemTask(raw: RawWorkItemTaskRow): WorkItemTask {
+  return {
+    task_id: raw.task_id,
+    work_item_id: raw.work_item_id,
+    status: raw.status as WorkItemTaskState,
+    depends_on: parseJsonOr(raw.depends_on_json, []) as string[],
+    execution_profile: raw.execution_profile,
+    side_effect_class: raw.side_effect_class,
+    run_id: raw.run_id ?? undefined,
+    approval_id: raw.approval_id ?? undefined,
+    artifacts: parseJsonOr(raw.artifacts_json, []) as unknown[],
+    started_at: normalizeMaybeTime(raw.started_at),
+    finished_at: normalizeMaybeTime(raw.finished_at),
+    result_summary: raw.result_summary ?? undefined,
+  } as WorkItemTask;
+}
+
+interface RawWorkItemLinkRow {
+  work_item_id: string;
+  linked_work_item_id: string;
+  kind: string;
+  meta_json: string;
+  created_at: RawTime;
+}
+
+export interface WorkItemLinkRow {
+  work_item_id: string;
+  linked_work_item_id: string;
+  kind: string;
+  meta_json: unknown;
+  created_at: string;
+}
+
+function toWorkItemLink(raw: RawWorkItemLinkRow): WorkItemLinkRow {
+  return {
+    work_item_id: raw.work_item_id,
+    linked_work_item_id: raw.linked_work_item_id,
+    kind: raw.kind,
+    meta_json: parseJsonOr(raw.meta_json, {}),
+    created_at: normalizeTime(raw.created_at),
+  };
+}
+
+interface RawScopeActivityRow {
+  tenant_id: string;
+  agent_id: string;
+  workspace_id: string;
+  last_active_session_key: string;
+  updated_at_ms: number;
+}
+
+export type WorkScopeActivityRow = RawScopeActivityRow;
+
+interface RawSubagentRow {
+  subagent_id: string;
+  tenant_id: string;
+  agent_id: string;
+  workspace_id: string;
+  work_item_id: string | null;
+  work_item_task_id: string | null;
+  execution_profile: string;
+  session_key: string;
+  lane: string;
+  status: string;
+  created_at: RawTime;
+  updated_at: RawTime;
+  last_heartbeat_at: RawTime | null;
+  closed_at: RawTime | null;
+}
+
+function toSubagent(raw: RawSubagentRow): SubagentDescriptor {
+  return {
+    subagent_id: raw.subagent_id,
+    tenant_id: raw.tenant_id,
+    agent_id: raw.agent_id,
+    workspace_id: raw.workspace_id,
+    work_item_id: raw.work_item_id ?? undefined,
+    work_item_task_id: raw.work_item_task_id ?? undefined,
+    execution_profile: raw.execution_profile,
+    session_key: raw.session_key,
+    lane: raw.lane as Lane,
+    status: raw.status as SubagentStatus,
+    created_at: normalizeTime(raw.created_at),
+    updated_at: normalizeTime(raw.updated_at),
+    last_heartbeat_at: normalizeMaybeTime(raw.last_heartbeat_at) ?? undefined,
+    closed_at: normalizeMaybeTime(raw.closed_at) ?? undefined,
+  };
+}
+
+interface RawWorkItemEventRow {
+  event_id: string;
+  work_item_id: string;
+  created_at: RawTime;
+  kind: string;
+  payload_json: string;
+}
+
+export interface WorkItemEventRow {
+  event_id: string;
+  work_item_id: string;
+  created_at: string;
+  kind: string;
+  payload: unknown;
+}
+
+function toWorkItemEvent(raw: RawWorkItemEventRow): WorkItemEventRow {
+  return {
+    event_id: raw.event_id,
+    work_item_id: raw.work_item_id,
+    created_at: normalizeTime(raw.created_at),
+    kind: raw.kind,
+    payload: parseJsonOr(raw.payload_json, {}),
+  };
+}
+
+export class WorkboardDal {
+  constructor(private readonly db: SqlDb) {}
+
+  async createItem(params: {
+    scope: WorkScope;
+    item: CreateItemInput;
+    workItemId?: string;
+    createdAtIso?: string;
+    createdFromSessionKey?: string;
+  }): Promise<WorkItem> {
+    const nowIso = params.createdAtIso ?? new Date().toISOString();
+    const workItemId = params.workItemId?.trim() || randomUUID();
+    const priority = params.item.priority ?? 0;
+    const createdFromSessionKey =
+      params.item.created_from_session_key?.trim() || params.createdFromSessionKey?.trim();
+    if (!createdFromSessionKey) {
+      throw new Error("created_from_session_key is required");
+    }
+
+    const row = await this.db.get<RawWorkItemRow>(
+      `INSERT INTO work_items (
+         work_item_id,
+         tenant_id,
+         agent_id,
+         workspace_id,
+         kind,
+         title,
+         status,
+         priority,
+         acceptance_json,
+         fingerprint_json,
+         budgets_json,
+         created_from_session_key,
+         created_at,
+         updated_at,
+         last_active_at,
+         parent_work_item_id
+       )
+       VALUES (?, ?, ?, ?, ?, ?, 'backlog', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       RETURNING *`,
+      [
+        workItemId,
+        params.scope.tenant_id,
+        params.scope.agent_id,
+        params.scope.workspace_id,
+        params.item.kind,
+        params.item.title,
+        priority,
+        params.item.acceptance === undefined ? null : JSON.stringify(params.item.acceptance),
+        params.item.fingerprint === undefined ? null : JSON.stringify(params.item.fingerprint),
+        params.item.budgets === undefined ? null : JSON.stringify(params.item.budgets),
+        createdFromSessionKey,
+        nowIso,
+        nowIso,
+        null,
+        params.item.parent_work_item_id ?? null,
+      ],
+    );
+    if (!row) {
+      throw new Error("work item insert failed");
+    }
+    return toWorkItem(row);
+  }
+
+  async getItem(params: { scope: WorkScope; work_item_id: string }): Promise<WorkItem | undefined> {
+    const row = await this.db.get<RawWorkItemRow>(
+      `SELECT *
+       FROM work_items
+       WHERE tenant_id = ?
+         AND agent_id = ?
+         AND workspace_id = ?
+         AND work_item_id = ?`,
+      [
+        params.scope.tenant_id,
+        params.scope.agent_id,
+        params.scope.workspace_id,
+        params.work_item_id,
+      ],
+    );
+    return row ? toWorkItem(row) : undefined;
+  }
+
+  async listItems(params: {
+    scope: WorkScope;
+    statuses?: WorkItemState[];
+    kinds?: WorkItemKind[];
+    limit?: number;
+    cursor?: string;
+  }): Promise<{ items: WorkItem[]; next_cursor?: string }> {
+    const where: string[] = ["tenant_id = ?", "agent_id = ?", "workspace_id = ?"];
+    const values: unknown[] = [
+      params.scope.tenant_id,
+      params.scope.agent_id,
+      params.scope.workspace_id,
+    ];
+
+    if (params.statuses && params.statuses.length > 0) {
+      where.push(`status IN (${params.statuses.map(() => "?").join(", ")})`);
+      values.push(...params.statuses);
+    }
+
+    if (params.kinds && params.kinds.length > 0) {
+      where.push(`kind IN (${params.kinds.map(() => "?").join(", ")})`);
+      values.push(...params.kinds);
+    }
+
+    const limit = Math.max(1, Math.min(200, params.limit ?? 50));
+
+    const sql =
+      `SELECT * FROM work_items` +
+      ` WHERE ${where.join(" AND ")}` +
+      ` ORDER BY created_at DESC, work_item_id DESC LIMIT ?`;
+    values.push(limit);
+
+    const rows = await this.db.all<RawWorkItemRow>(sql, values);
+    const items = rows.map(toWorkItem);
+    const last = items.at(-1);
+    const next_cursor =
+      items.length === limit && last
+        ? Buffer.from(
+            JSON.stringify({ created_at: last.created_at, work_item_id: last.work_item_id }),
+            "utf8",
+          ).toString("base64")
+        : undefined;
+
+    return { items, next_cursor };
+  }
+
+  async updateItem(params: {
+    scope: WorkScope;
+    work_item_id: string;
+    patch: UpdateItemPatch;
+    updatedAtIso?: string;
+  }): Promise<WorkItem | undefined> {
+    const set: string[] = [];
+    const values: unknown[] = [];
+
+    if (params.patch.title !== undefined) {
+      set.push("title = ?");
+      values.push(params.patch.title);
+    }
+    if (params.patch.priority !== undefined) {
+      set.push("priority = ?");
+      values.push(params.patch.priority);
+    }
+    if (params.patch.acceptance !== undefined) {
+      set.push("acceptance_json = ?");
+      values.push(JSON.stringify(params.patch.acceptance));
+    }
+    if (params.patch.fingerprint !== undefined) {
+      set.push("fingerprint_json = ?");
+      values.push(JSON.stringify(params.patch.fingerprint));
+    }
+    if (params.patch.budgets !== undefined) {
+      set.push("budgets_json = ?");
+      values.push(params.patch.budgets === null ? null : JSON.stringify(params.patch.budgets));
+    }
+    if (params.patch.last_active_at !== undefined) {
+      set.push("last_active_at = ?");
+      values.push(params.patch.last_active_at);
+    }
+
+    if (set.length === 0) {
+      return await this.getItem({ scope: params.scope, work_item_id: params.work_item_id });
+    }
+
+    const updatedAtIso = params.updatedAtIso ?? new Date().toISOString();
+    set.push("updated_at = ?");
+    values.push(updatedAtIso);
+
+    const row = await this.db.get<RawWorkItemRow>(
+      `UPDATE work_items
+       SET ${set.join(", ")}
+       WHERE tenant_id = ?
+         AND agent_id = ?
+         AND workspace_id = ?
+         AND work_item_id = ?
+       RETURNING *`,
+      [
+        ...values,
+        params.scope.tenant_id,
+        params.scope.agent_id,
+        params.scope.workspace_id,
+        params.work_item_id,
+      ],
+    );
+    return row ? toWorkItem(row) : undefined;
+  }
+
+  async transitionItem(params: {
+    scope: WorkScope;
+    work_item_id: string;
+    status: WorkItemState;
+    reason?: string;
+    occurredAtIso?: string;
+  }): Promise<WorkItem | undefined> {
+    const occurredAtIso = params.occurredAtIso ?? new Date().toISOString();
+
+    return await this.db.transaction(async (tx) => {
+      const existing = await tx.get<RawWorkItemRow>(
+        `SELECT *
+         FROM work_items
+         WHERE tenant_id = ?
+           AND agent_id = ?
+           AND workspace_id = ?
+           AND work_item_id = ?`,
+        [
+          params.scope.tenant_id,
+          params.scope.agent_id,
+          params.scope.workspace_id,
+          params.work_item_id,
+        ],
+      );
+      if (!existing) return undefined;
+
+      const updated = await tx.get<RawWorkItemRow>(
+        `UPDATE work_items
+         SET status = ?, updated_at = ?
+         WHERE tenant_id = ?
+           AND agent_id = ?
+           AND workspace_id = ?
+           AND work_item_id = ?
+         RETURNING *`,
+        [
+          params.status,
+          occurredAtIso,
+          params.scope.tenant_id,
+          params.scope.agent_id,
+          params.scope.workspace_id,
+          params.work_item_id,
+        ],
+      );
+      if (!updated) return undefined;
+
+      await tx.run(
+        `INSERT INTO work_item_events (event_id, work_item_id, created_at, kind, payload_json)
+         VALUES (?, ?, ?, ?, ?)`,
+        [
+          randomUUID(),
+          params.work_item_id,
+          occurredAtIso,
+          "status.transition",
+          JSON.stringify({
+            from: existing.status,
+            to: params.status,
+            reason: params.reason ?? null,
+          }),
+        ],
+      );
+
+      return toWorkItem(updated);
+    });
+  }
+
+  async appendEvent(params: {
+    scope: WorkScope;
+    work_item_id: string;
+    kind: string;
+    payload_json?: unknown;
+    eventId?: string;
+    createdAtIso?: string;
+  }): Promise<WorkItemEventRow> {
+    const eventId = params.eventId?.trim() || randomUUID();
+    const createdAtIso = params.createdAtIso ?? new Date().toISOString();
+
+    const item = await this.getItem({ scope: params.scope, work_item_id: params.work_item_id });
+    if (!item) {
+      throw new Error("work item not found for event");
+    }
+
+    const row = await this.db.get<RawWorkItemEventRow>(
+      `INSERT INTO work_item_events (event_id, work_item_id, created_at, kind, payload_json)
+       VALUES (?, ?, ?, ?, ?)
+       RETURNING *`,
+      [
+        eventId,
+        params.work_item_id,
+        createdAtIso,
+        params.kind,
+        JSON.stringify(params.payload_json ?? {}),
+      ],
+    );
+    if (!row) {
+      throw new Error("work item event insert failed");
+    }
+    return toWorkItemEvent(row);
+  }
+
+  async listEvents(params: {
+    scope: WorkScope;
+    work_item_id: string;
+    limit?: number;
+  }): Promise<{ events: WorkItemEventRow[]; next_cursor?: string }> {
+    const limit = Math.max(1, Math.min(200, params.limit ?? 50));
+
+    const rows = await this.db.all<RawWorkItemEventRow>(
+      `SELECT e.*
+       FROM work_item_events e
+       JOIN work_items i ON i.work_item_id = e.work_item_id
+       WHERE i.tenant_id = ?
+         AND i.agent_id = ?
+         AND i.workspace_id = ?
+         AND e.work_item_id = ?
+       ORDER BY e.created_at DESC, e.event_id DESC
+       LIMIT ?`,
+      [
+        params.scope.tenant_id,
+        params.scope.agent_id,
+        params.scope.workspace_id,
+        params.work_item_id,
+        limit,
+      ],
+    );
+
+    return { events: rows.map(toWorkItemEvent) };
+  }
+
+  async getStateKv(params: {
+    scope: WorkStateKVScope;
+    key: WorkStateKVKey;
+  }): Promise<(AgentStateKVEntry | WorkItemStateKVEntry) | undefined> {
+    if (params.scope.kind === "agent") {
+      const row = await this.db.get<RawKvRow>(
+        `SELECT *
+         FROM agent_state_kv
+         WHERE tenant_id = ?
+           AND agent_id = ?
+           AND workspace_id = ?
+           AND key = ?`,
+        [params.scope.tenant_id, params.scope.agent_id, params.scope.workspace_id, params.key],
+      );
+      return row ? (toKvEntry(row) as AgentStateKVEntry) : undefined;
+    }
+
+    const row = await this.db.get<RawKvRow>(
+      `SELECT *
+       FROM work_item_state_kv
+       WHERE tenant_id = ?
+         AND agent_id = ?
+         AND workspace_id = ?
+         AND work_item_id = ?
+         AND key = ?`,
+      [
+        params.scope.tenant_id,
+        params.scope.agent_id,
+        params.scope.workspace_id,
+        params.scope.work_item_id,
+        params.key,
+      ],
+    );
+    return row
+      ? (toKvEntry({ ...row, work_item_id: params.scope.work_item_id }) as WorkItemStateKVEntry)
+      : undefined;
+  }
+
+  async listStateKv(params: {
+    scope: WorkStateKVScope;
+    prefix?: string;
+  }): Promise<{ entries: (AgentStateKVEntry | WorkItemStateKVEntry)[] }> {
+    const where: string[] = ["tenant_id = ?", "agent_id = ?", "workspace_id = ?"];
+    const values: unknown[] = [
+      params.scope.tenant_id,
+      params.scope.agent_id,
+      params.scope.workspace_id,
+    ];
+
+    if (params.scope.kind === "work_item") {
+      where.push("work_item_id = ?");
+      values.push(params.scope.work_item_id);
+    }
+
+    if (params.prefix) {
+      where.push("key LIKE ?");
+      values.push(`${params.prefix}%`);
+    }
+
+    const table = params.scope.kind === "agent" ? "agent_state_kv" : "work_item_state_kv";
+    const sql = `SELECT * FROM ${table}` + ` WHERE ${where.join(" AND ")}` + ` ORDER BY key ASC`;
+
+    const rows = await this.db.all<RawKvRow>(sql, values);
+    const entries = rows.map((r) =>
+      toKvEntry(
+        params.scope.kind === "work_item" ? { ...r, work_item_id: params.scope.work_item_id } : r,
+      ),
+    );
+    return { entries };
+  }
+
+  async setStateKv(params: {
+    scope: WorkStateKVScope;
+    key: WorkStateKVKey;
+    value_json: unknown;
+    provenance_json?: unknown;
+    updatedByRunId?: string;
+    updatedAtIso?: string;
+  }): Promise<AgentStateKVEntry | WorkItemStateKVEntry> {
+    const updatedAtIso = params.updatedAtIso ?? new Date().toISOString();
+    const valueJson = JSON.stringify(params.value_json ?? null);
+    const provenanceJson =
+      params.provenance_json === undefined ? null : JSON.stringify(params.provenance_json);
+    const updatedByRunId = params.updatedByRunId ?? null;
+
+    if (params.scope.kind === "agent") {
+      const row = await this.db.get<RawKvRow>(
+        `INSERT INTO agent_state_kv (
+           tenant_id,
+           agent_id,
+           workspace_id,
+           key,
+           value_json,
+           updated_at,
+           updated_by_run_id,
+           provenance_json
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (tenant_id, agent_id, workspace_id, key)
+         DO UPDATE SET
+           value_json = excluded.value_json,
+           updated_at = excluded.updated_at,
+           updated_by_run_id = excluded.updated_by_run_id,
+           provenance_json = excluded.provenance_json
+         RETURNING *`,
+        [
+          params.scope.tenant_id,
+          params.scope.agent_id,
+          params.scope.workspace_id,
+          params.key,
+          valueJson,
+          updatedAtIso,
+          updatedByRunId,
+          provenanceJson,
+        ],
+      );
+      if (!row) {
+        throw new Error("agent state kv upsert failed");
+      }
+      return toKvEntry(row) as AgentStateKVEntry;
+    }
+
+    const row = await this.db.get<RawKvRow>(
+      `INSERT INTO work_item_state_kv (
+         tenant_id,
+         agent_id,
+         workspace_id,
+         work_item_id,
+         key,
+         value_json,
+         updated_at,
+         updated_by_run_id,
+         provenance_json
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (tenant_id, agent_id, workspace_id, work_item_id, key)
+       DO UPDATE SET
+         value_json = excluded.value_json,
+         updated_at = excluded.updated_at,
+         updated_by_run_id = excluded.updated_by_run_id,
+         provenance_json = excluded.provenance_json
+       RETURNING *`,
+      [
+        params.scope.tenant_id,
+        params.scope.agent_id,
+        params.scope.workspace_id,
+        params.scope.work_item_id,
+        params.key,
+        valueJson,
+        updatedAtIso,
+        updatedByRunId,
+        provenanceJson,
+      ],
+    );
+    if (!row) {
+      throw new Error("work item state kv upsert failed");
+    }
+    return toKvEntry({ ...row, work_item_id: params.scope.work_item_id }) as WorkItemStateKVEntry;
+  }
+
+  async createArtifact(params: {
+    scope: WorkScope;
+    artifact: {
+      work_item_id?: string;
+      kind: WorkArtifactKind;
+      title: string;
+      body_md?: string;
+      refs?: string[];
+      confidence?: number;
+      created_by_run_id?: string;
+      created_by_subagent_id?: string;
+      provenance_json?: unknown;
+    };
+    artifactId?: string;
+    createdAtIso?: string;
+  }): Promise<WorkArtifact> {
+    const artifactId = params.artifactId?.trim() || randomUUID();
+    const createdAtIso = params.createdAtIso ?? new Date().toISOString();
+
+    const row = await this.db.get<RawWorkArtifactRow>(
+      `INSERT INTO work_artifacts (
+         artifact_id,
+         tenant_id,
+         agent_id,
+         workspace_id,
+         work_item_id,
+         kind,
+         title,
+         body_md,
+         refs_json,
+         confidence,
+         created_at,
+         created_by_run_id,
+         created_by_subagent_id,
+         provenance_json
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       RETURNING *`,
+      [
+        artifactId,
+        params.scope.tenant_id,
+        params.scope.agent_id,
+        params.scope.workspace_id,
+        params.artifact.work_item_id ?? null,
+        params.artifact.kind,
+        params.artifact.title,
+        params.artifact.body_md ?? null,
+        JSON.stringify(params.artifact.refs ?? []),
+        params.artifact.confidence ?? null,
+        createdAtIso,
+        params.artifact.created_by_run_id ?? null,
+        params.artifact.created_by_subagent_id ?? null,
+        params.artifact.provenance_json === undefined
+          ? null
+          : JSON.stringify(params.artifact.provenance_json),
+      ],
+    );
+    if (!row) {
+      throw new Error("work artifact insert failed");
+    }
+    return toWorkArtifact(row);
+  }
+
+  async listArtifacts(params: {
+    scope: WorkScope;
+    work_item_id?: string;
+    limit?: number;
+  }): Promise<{ artifacts: WorkArtifact[]; next_cursor?: string }> {
+    const where: string[] = ["tenant_id = ?", "agent_id = ?", "workspace_id = ?"];
+    const values: unknown[] = [
+      params.scope.tenant_id,
+      params.scope.agent_id,
+      params.scope.workspace_id,
+    ];
+
+    if (params.work_item_id) {
+      where.push("work_item_id = ?");
+      values.push(params.work_item_id);
+    }
+
+    const limit = Math.max(1, Math.min(200, params.limit ?? 50));
+    values.push(limit);
+
+    const rows = await this.db.all<RawWorkArtifactRow>(
+      `SELECT *
+       FROM work_artifacts
+       WHERE ${where.join(" AND ")}
+       ORDER BY created_at DESC, artifact_id DESC
+       LIMIT ?`,
+      values,
+    );
+
+    const artifacts = rows.map(toWorkArtifact);
+    return { artifacts };
+  }
+
+  async getArtifact(params: {
+    scope: WorkScope;
+    artifact_id: string;
+  }): Promise<WorkArtifact | undefined> {
+    const row = await this.db.get<RawWorkArtifactRow>(
+      `SELECT *
+       FROM work_artifacts
+       WHERE tenant_id = ?
+         AND agent_id = ?
+         AND workspace_id = ?
+         AND artifact_id = ?`,
+      [
+        params.scope.tenant_id,
+        params.scope.agent_id,
+        params.scope.workspace_id,
+        params.artifact_id,
+      ],
+    );
+    return row ? toWorkArtifact(row) : undefined;
+  }
+
+  async createDecision(params: {
+    scope: WorkScope;
+    decision: {
+      work_item_id?: string;
+      question: string;
+      chosen: string;
+      alternatives?: string[];
+      rationale_md: string;
+      input_artifact_ids?: string[];
+      created_by_run_id?: string;
+      created_by_subagent_id?: string;
+    };
+    decisionId?: string;
+    createdAtIso?: string;
+  }): Promise<DecisionRecord> {
+    const decisionId = params.decisionId?.trim() || randomUUID();
+    const createdAtIso = params.createdAtIso ?? new Date().toISOString();
+
+    const row = await this.db.get<RawDecisionRow>(
+      `INSERT INTO work_decisions (
+         decision_id,
+         tenant_id,
+         agent_id,
+         workspace_id,
+         work_item_id,
+         question,
+         chosen,
+         alternatives_json,
+         rationale_md,
+         input_artifact_ids_json,
+         created_at,
+         created_by_run_id,
+         created_by_subagent_id
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       RETURNING *`,
+      [
+        decisionId,
+        params.scope.tenant_id,
+        params.scope.agent_id,
+        params.scope.workspace_id,
+        params.decision.work_item_id ?? null,
+        params.decision.question,
+        params.decision.chosen,
+        JSON.stringify(params.decision.alternatives ?? []),
+        params.decision.rationale_md,
+        JSON.stringify(params.decision.input_artifact_ids ?? []),
+        createdAtIso,
+        params.decision.created_by_run_id ?? null,
+        params.decision.created_by_subagent_id ?? null,
+      ],
+    );
+    if (!row) {
+      throw new Error("work decision insert failed");
+    }
+    return toDecisionRecord(row);
+  }
+
+  async getDecision(params: {
+    scope: WorkScope;
+    decision_id: string;
+  }): Promise<DecisionRecord | undefined> {
+    const row = await this.db.get<RawDecisionRow>(
+      `SELECT *
+       FROM work_decisions
+       WHERE tenant_id = ?
+         AND agent_id = ?
+         AND workspace_id = ?
+         AND decision_id = ?`,
+      [
+        params.scope.tenant_id,
+        params.scope.agent_id,
+        params.scope.workspace_id,
+        params.decision_id,
+      ],
+    );
+    return row ? toDecisionRecord(row) : undefined;
+  }
+
+  async listDecisions(params: {
+    scope: WorkScope;
+    work_item_id?: string;
+    limit?: number;
+  }): Promise<{ decisions: DecisionRecord[]; next_cursor?: string }> {
+    const where: string[] = ["tenant_id = ?", "agent_id = ?", "workspace_id = ?"];
+    const values: unknown[] = [
+      params.scope.tenant_id,
+      params.scope.agent_id,
+      params.scope.workspace_id,
+    ];
+
+    if (params.work_item_id) {
+      where.push("work_item_id = ?");
+      values.push(params.work_item_id);
+    }
+
+    const limit = Math.max(1, Math.min(200, params.limit ?? 50));
+    values.push(limit);
+
+    const rows = await this.db.all<RawDecisionRow>(
+      `SELECT *
+       FROM work_decisions
+       WHERE ${where.join(" AND ")}
+       ORDER BY created_at DESC, decision_id DESC
+       LIMIT ?`,
+      values,
+    );
+    return { decisions: rows.map(toDecisionRecord) };
+  }
+
+  async createSignal(params: {
+    scope: WorkScope;
+    signal: {
+      work_item_id?: string;
+      trigger_kind: WorkSignalTriggerKind;
+      trigger_spec_json: unknown;
+      payload_json?: unknown;
+      status?: WorkSignalStatus;
+    };
+    signalId?: string;
+    createdAtIso?: string;
+  }): Promise<WorkSignal> {
+    const signalId = params.signalId?.trim() || randomUUID();
+    const createdAtIso = params.createdAtIso ?? new Date().toISOString();
+    const status: WorkSignalStatus = params.signal.status ?? "active";
+
+    const row = await this.db.get<RawWorkSignalRow>(
+      `INSERT INTO work_signals (
+         signal_id,
+         tenant_id,
+         agent_id,
+         workspace_id,
+         work_item_id,
+         trigger_kind,
+         trigger_spec_json,
+         payload_json,
+         status,
+         created_at,
+         last_fired_at
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       RETURNING *`,
+      [
+        signalId,
+        params.scope.tenant_id,
+        params.scope.agent_id,
+        params.scope.workspace_id,
+        params.signal.work_item_id ?? null,
+        params.signal.trigger_kind,
+        JSON.stringify(params.signal.trigger_spec_json ?? null),
+        params.signal.payload_json === undefined
+          ? null
+          : JSON.stringify(params.signal.payload_json),
+        status,
+        createdAtIso,
+        null,
+      ],
+    );
+    if (!row) {
+      throw new Error("work signal insert failed");
+    }
+    return toWorkSignal(row);
+  }
+
+  async updateSignal(params: {
+    scope: WorkScope;
+    signal_id: string;
+    patch: {
+      trigger_spec_json?: unknown;
+      payload_json?: unknown;
+      status?: WorkSignalStatus;
+    };
+  }): Promise<WorkSignal | undefined> {
+    const set: string[] = [];
+    const values: unknown[] = [];
+
+    if (params.patch.trigger_spec_json !== undefined) {
+      set.push("trigger_spec_json = ?");
+      values.push(JSON.stringify(params.patch.trigger_spec_json));
+    }
+    if (params.patch.payload_json !== undefined) {
+      set.push("payload_json = ?");
+      values.push(JSON.stringify(params.patch.payload_json));
+    }
+    if (params.patch.status !== undefined) {
+      set.push("status = ?");
+      values.push(params.patch.status);
+    }
+
+    if (set.length === 0) {
+      const existing = await this.db.get<RawWorkSignalRow>(
+        `SELECT *
+         FROM work_signals
+         WHERE tenant_id = ?
+           AND agent_id = ?
+           AND workspace_id = ?
+           AND signal_id = ?`,
+        [
+          params.scope.tenant_id,
+          params.scope.agent_id,
+          params.scope.workspace_id,
+          params.signal_id,
+        ],
+      );
+      return existing ? toWorkSignal(existing) : undefined;
+    }
+
+    const row = await this.db.get<RawWorkSignalRow>(
+      `UPDATE work_signals
+       SET ${set.join(", ")}
+       WHERE tenant_id = ?
+         AND agent_id = ?
+         AND workspace_id = ?
+         AND signal_id = ?
+       RETURNING *`,
+      [
+        ...values,
+        params.scope.tenant_id,
+        params.scope.agent_id,
+        params.scope.workspace_id,
+        params.signal_id,
+      ],
+    );
+    return row ? toWorkSignal(row) : undefined;
+  }
+
+  async getSignal(params: {
+    scope: WorkScope;
+    signal_id: string;
+  }): Promise<WorkSignal | undefined> {
+    const row = await this.db.get<RawWorkSignalRow>(
+      `SELECT *
+       FROM work_signals
+       WHERE tenant_id = ?
+         AND agent_id = ?
+         AND workspace_id = ?
+         AND signal_id = ?`,
+      [params.scope.tenant_id, params.scope.agent_id, params.scope.workspace_id, params.signal_id],
+    );
+    return row ? toWorkSignal(row) : undefined;
+  }
+
+  async listSignals(params: {
+    scope: WorkScope;
+    work_item_id?: string;
+    status?: WorkSignalStatus;
+    limit?: number;
+  }): Promise<{ signals: WorkSignal[]; next_cursor?: string }> {
+    const where: string[] = ["tenant_id = ?", "agent_id = ?", "workspace_id = ?"];
+    const values: unknown[] = [
+      params.scope.tenant_id,
+      params.scope.agent_id,
+      params.scope.workspace_id,
+    ];
+
+    if (params.work_item_id) {
+      where.push("work_item_id = ?");
+      values.push(params.work_item_id);
+    }
+
+    if (params.status) {
+      where.push("status = ?");
+      values.push(params.status);
+    }
+
+    const limit = Math.max(1, Math.min(200, params.limit ?? 50));
+    values.push(limit);
+
+    const rows = await this.db.all<RawWorkSignalRow>(
+      `SELECT *
+       FROM work_signals
+       WHERE ${where.join(" AND ")}
+       ORDER BY created_at DESC, signal_id DESC
+       LIMIT ?`,
+      values,
+    );
+
+    return { signals: rows.map(toWorkSignal) };
+  }
+
+  async upsertScopeActivity(params: {
+    scope: WorkScope;
+    last_active_session_key: string;
+    updated_at_ms?: number;
+  }): Promise<WorkScopeActivityRow> {
+    const updatedAtMs = params.updated_at_ms ?? Date.now();
+    const row = await this.db.get<RawScopeActivityRow>(
+      `INSERT INTO work_scope_activity (
+         tenant_id,
+         agent_id,
+         workspace_id,
+         last_active_session_key,
+         updated_at_ms
+       )
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (tenant_id, agent_id, workspace_id)
+       DO UPDATE SET
+         last_active_session_key = excluded.last_active_session_key,
+         updated_at_ms = excluded.updated_at_ms
+       RETURNING *`,
+      [
+        params.scope.tenant_id,
+        params.scope.agent_id,
+        params.scope.workspace_id,
+        params.last_active_session_key,
+        updatedAtMs,
+      ],
+    );
+    if (!row) {
+      throw new Error("work scope activity upsert failed");
+    }
+    return row;
+  }
+
+  async getScopeActivity(params: { scope: WorkScope }): Promise<WorkScopeActivityRow | undefined> {
+    return await this.db.get<RawScopeActivityRow>(
+      `SELECT *
+       FROM work_scope_activity
+       WHERE tenant_id = ?
+         AND agent_id = ?
+         AND workspace_id = ?`,
+      [params.scope.tenant_id, params.scope.agent_id, params.scope.workspace_id],
+    );
+  }
+
+  async createLink(params: {
+    scope: WorkScope;
+    work_item_id: string;
+    linked_work_item_id: string;
+    kind: string;
+    meta_json?: unknown;
+    createdAtIso?: string;
+  }): Promise<WorkItemLinkRow> {
+    const createdAtIso = params.createdAtIso ?? new Date().toISOString();
+
+    return await this.db.transaction(async (tx) => {
+      const owner = await tx.get<{ work_item_id: string }>(
+        `SELECT work_item_id
+         FROM work_items
+         WHERE tenant_id = ?
+           AND agent_id = ?
+           AND workspace_id = ?
+           AND work_item_id = ?`,
+        [
+          params.scope.tenant_id,
+          params.scope.agent_id,
+          params.scope.workspace_id,
+          params.work_item_id,
+        ],
+      );
+      if (!owner) {
+        throw new Error("work item not found for link");
+      }
+
+      const target = await tx.get<{ work_item_id: string }>(
+        `SELECT work_item_id
+         FROM work_items
+         WHERE tenant_id = ?
+           AND agent_id = ?
+           AND workspace_id = ?
+           AND work_item_id = ?`,
+        [
+          params.scope.tenant_id,
+          params.scope.agent_id,
+          params.scope.workspace_id,
+          params.linked_work_item_id,
+        ],
+      );
+      if (!target) {
+        throw new Error("linked work item not found for link");
+      }
+
+      const row = await tx.get<RawWorkItemLinkRow>(
+        `INSERT INTO work_item_links (
+           work_item_id,
+           linked_work_item_id,
+           kind,
+           meta_json,
+           created_at
+         )
+         VALUES (?, ?, ?, ?, ?)
+         RETURNING *`,
+        [
+          params.work_item_id,
+          params.linked_work_item_id,
+          params.kind,
+          JSON.stringify(params.meta_json ?? {}),
+          createdAtIso,
+        ],
+      );
+      if (!row) {
+        throw new Error("work item link insert failed");
+      }
+      return toWorkItemLink(row);
+    });
+  }
+
+  async listLinks(params: {
+    scope: WorkScope;
+    work_item_id: string;
+    limit?: number;
+  }): Promise<{ links: WorkItemLinkRow[] }> {
+    const limit = Math.max(1, Math.min(200, params.limit ?? 50));
+    const rows = await this.db.all<RawWorkItemLinkRow>(
+      `SELECT l.*
+       FROM work_item_links l
+       JOIN work_items i ON i.work_item_id = l.work_item_id
+       WHERE i.tenant_id = ?
+         AND i.agent_id = ?
+         AND i.workspace_id = ?
+         AND l.work_item_id = ?
+       ORDER BY l.created_at DESC, l.linked_work_item_id DESC
+       LIMIT ?`,
+      [
+        params.scope.tenant_id,
+        params.scope.agent_id,
+        params.scope.workspace_id,
+        params.work_item_id,
+        limit,
+      ],
+    );
+    return { links: rows.map(toWorkItemLink) };
+  }
+
+  async createTask(params: {
+    scope: WorkScope;
+    task: {
+      work_item_id: string;
+      status?: WorkItemTaskState;
+      depends_on?: string[];
+      execution_profile: string;
+      side_effect_class: string;
+      run_id?: string;
+      approval_id?: number;
+      artifacts?: unknown[];
+      started_at?: string | null;
+      finished_at?: string | null;
+      result_summary?: string;
+    };
+    taskId?: string;
+    createdAtIso?: string;
+  }): Promise<WorkItemTask> {
+    const taskId = params.taskId?.trim() || randomUUID();
+    const createdAtIso = params.createdAtIso ?? new Date().toISOString();
+    const status: WorkItemTaskState = params.task.status ?? "queued";
+
+    const item = await this.getItem({
+      scope: params.scope,
+      work_item_id: params.task.work_item_id,
+    });
+    if (!item) {
+      throw new Error("work item not found for task");
+    }
+
+    const row = await this.db.get<RawWorkItemTaskRow>(
+      `INSERT INTO work_item_tasks (
+         task_id,
+         work_item_id,
+         status,
+         depends_on_json,
+         execution_profile,
+         side_effect_class,
+         run_id,
+         approval_id,
+         artifacts_json,
+         started_at,
+         finished_at,
+         result_summary,
+         created_at,
+         updated_at
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       RETURNING *`,
+      [
+        taskId,
+        params.task.work_item_id,
+        status,
+        JSON.stringify(params.task.depends_on ?? []),
+        params.task.execution_profile,
+        params.task.side_effect_class,
+        params.task.run_id ?? null,
+        params.task.approval_id ?? null,
+        JSON.stringify(params.task.artifacts ?? []),
+        params.task.started_at ?? null,
+        params.task.finished_at ?? null,
+        params.task.result_summary ?? null,
+        createdAtIso,
+        createdAtIso,
+      ],
+    );
+    if (!row) {
+      throw new Error("work item task insert failed");
+    }
+    return toWorkItemTask(row);
+  }
+
+  async listTasks(params: { scope: WorkScope; work_item_id: string }): Promise<WorkItemTask[]> {
+    const rows = await this.db.all<RawWorkItemTaskRow>(
+      `SELECT t.*
+       FROM work_item_tasks t
+       JOIN work_items i ON i.work_item_id = t.work_item_id
+       WHERE i.tenant_id = ?
+         AND i.agent_id = ?
+         AND i.workspace_id = ?
+         AND t.work_item_id = ?
+       ORDER BY t.created_at ASC, t.task_id ASC`,
+      [
+        params.scope.tenant_id,
+        params.scope.agent_id,
+        params.scope.workspace_id,
+        params.work_item_id,
+      ],
+    );
+    return rows.map(toWorkItemTask);
+  }
+
+  async updateTask(params: {
+    scope: WorkScope;
+    task_id: string;
+    patch: {
+      status?: WorkItemTaskState;
+      depends_on?: string[];
+      execution_profile?: string;
+      side_effect_class?: string;
+      run_id?: string | null;
+      approval_id?: number | null;
+      artifacts?: unknown[];
+      started_at?: string | null;
+      finished_at?: string | null;
+      result_summary?: string | null;
+    };
+    updatedAtIso?: string;
+  }): Promise<WorkItemTask | undefined> {
+    const updatedAtIso = params.updatedAtIso ?? new Date().toISOString();
+
+    const existing = await this.db.get<RawWorkItemTaskRow>(
+      `SELECT t.*
+       FROM work_item_tasks t
+       JOIN work_items i ON i.work_item_id = t.work_item_id
+       WHERE i.tenant_id = ?
+         AND i.agent_id = ?
+         AND i.workspace_id = ?
+         AND t.task_id = ?`,
+      [params.scope.tenant_id, params.scope.agent_id, params.scope.workspace_id, params.task_id],
+    );
+    if (!existing) return undefined;
+
+    const set: string[] = [];
+    const values: unknown[] = [];
+
+    if (params.patch.status !== undefined) {
+      set.push("status = ?");
+      values.push(params.patch.status);
+    }
+    if (params.patch.depends_on !== undefined) {
+      set.push("depends_on_json = ?");
+      values.push(JSON.stringify(params.patch.depends_on));
+    }
+    if (params.patch.execution_profile !== undefined) {
+      set.push("execution_profile = ?");
+      values.push(params.patch.execution_profile);
+    }
+    if (params.patch.side_effect_class !== undefined) {
+      set.push("side_effect_class = ?");
+      values.push(params.patch.side_effect_class);
+    }
+    if (params.patch.run_id !== undefined) {
+      set.push("run_id = ?");
+      values.push(params.patch.run_id);
+    }
+    if (params.patch.approval_id !== undefined) {
+      set.push("approval_id = ?");
+      values.push(params.patch.approval_id);
+    }
+    if (params.patch.artifacts !== undefined) {
+      set.push("artifacts_json = ?");
+      values.push(JSON.stringify(params.patch.artifacts));
+    }
+    if (params.patch.started_at !== undefined) {
+      set.push("started_at = ?");
+      values.push(params.patch.started_at);
+    }
+    if (params.patch.finished_at !== undefined) {
+      set.push("finished_at = ?");
+      values.push(params.patch.finished_at);
+    }
+    if (params.patch.result_summary !== undefined) {
+      set.push("result_summary = ?");
+      values.push(params.patch.result_summary);
+    }
+
+    if (set.length === 0) return toWorkItemTask(existing);
+
+    set.push("updated_at = ?");
+    values.push(updatedAtIso);
+
+    const row = await this.db.get<RawWorkItemTaskRow>(
+      `UPDATE work_item_tasks
+       SET ${set.join(", ")}
+       WHERE task_id = ?
+       RETURNING *`,
+      [...values, params.task_id],
+    );
+    return row ? toWorkItemTask(row) : undefined;
+  }
+
+  async createSubagent(params: {
+    scope: WorkScope;
+    subagent: {
+      work_item_id?: string;
+      work_item_task_id?: string;
+      execution_profile: string;
+      session_key: string;
+      lane?: Lane;
+      status?: SubagentStatus;
+    };
+    subagentId?: string;
+    createdAtIso?: string;
+  }): Promise<SubagentDescriptor> {
+    const subagentId = params.subagentId?.trim() || randomUUID();
+    const createdAtIso = params.createdAtIso ?? new Date().toISOString();
+    const lane: Lane = params.subagent.lane ?? "subagent";
+    const status: SubagentStatus = params.subagent.status ?? "running";
+
+    const row = await this.db.get<RawSubagentRow>(
+      `INSERT INTO subagents (
+         subagent_id,
+         tenant_id,
+         agent_id,
+         workspace_id,
+         work_item_id,
+         work_item_task_id,
+         execution_profile,
+         session_key,
+         lane,
+         status,
+         created_at,
+         updated_at,
+         last_heartbeat_at,
+         closed_at
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       RETURNING *`,
+      [
+        subagentId,
+        params.scope.tenant_id,
+        params.scope.agent_id,
+        params.scope.workspace_id,
+        params.subagent.work_item_id ?? null,
+        params.subagent.work_item_task_id ?? null,
+        params.subagent.execution_profile,
+        params.subagent.session_key,
+        lane,
+        status,
+        createdAtIso,
+        createdAtIso,
+        null,
+        null,
+      ],
+    );
+    if (!row) {
+      throw new Error("subagent insert failed");
+    }
+    return toSubagent(row);
+  }
+
+  async heartbeatSubagent(params: {
+    scope: WorkScope;
+    subagent_id: string;
+    heartbeatAtIso?: string;
+  }): Promise<SubagentDescriptor | undefined> {
+    const heartbeatAtIso = params.heartbeatAtIso ?? new Date().toISOString();
+    const row = await this.db.get<RawSubagentRow>(
+      `UPDATE subagents
+       SET last_heartbeat_at = ?, updated_at = ?
+       WHERE tenant_id = ?
+         AND agent_id = ?
+         AND workspace_id = ?
+         AND subagent_id = ?
+       RETURNING *`,
+      [
+        heartbeatAtIso,
+        heartbeatAtIso,
+        params.scope.tenant_id,
+        params.scope.agent_id,
+        params.scope.workspace_id,
+        params.subagent_id,
+      ],
+    );
+    return row ? toSubagent(row) : undefined;
+  }
+}
