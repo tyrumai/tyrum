@@ -198,7 +198,11 @@ jobs:
           if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
             git fetch --no-tags --prune --unshallow
           fi
-          node scripts/coverage/diff-lines.mjs --base "${{ github.event.pull_request.base.sha }}" --min 80
+          base="${{ github.event.pull_request.base.sha }}"
+          if git rev-parse --verify HEAD^2 >/dev/null 2>&1; then
+            base="$(git rev-parse HEAD^1)"
+          fi
+          node scripts/coverage/diff-lines.mjs --base "$base" --min 80
 
       - name: Test desktop suite
         if: matrix.os != 'ubuntu-latest'
