@@ -29,6 +29,22 @@ import type {
   WsCommandExecutePayload as WsCommandExecutePayloadT,
   WsCommandExecuteResult as WsCommandExecuteResultT,
   WsEvent as WsEventT,
+  WsMemoryCreatePayload,
+  WsMemoryCreateResult as WsMemoryCreateResultT,
+  WsMemoryDeletePayload,
+  WsMemoryDeleteResult as WsMemoryDeleteResultT,
+  WsMemoryExportPayload,
+  WsMemoryExportResult as WsMemoryExportResultT,
+  WsMemoryForgetPayload,
+  WsMemoryForgetResult as WsMemoryForgetResultT,
+  WsMemoryGetPayload,
+  WsMemoryGetResult as WsMemoryGetResultT,
+  WsMemoryListPayload,
+  WsMemoryListResult as WsMemoryListResultT,
+  WsMemorySearchPayload,
+  WsMemorySearchResult as WsMemorySearchResultT,
+  WsMemoryUpdatePayload,
+  WsMemoryUpdateResult as WsMemoryUpdateResultT,
   WsPairingApprovePayload,
   WsPairingDenyPayload,
   WsPairingResolveResult as WsPairingResolveResultT,
@@ -118,6 +134,14 @@ import {
   WsWorkflowCancelResult,
   WsWorkflowResumeResult,
   WsWorkflowRunResult,
+  WsMemoryCreateResult,
+  WsMemoryDeleteResult,
+  WsMemoryExportResult,
+  WsMemoryForgetResult,
+  WsMemoryGetResult,
+  WsMemoryListResult,
+  WsMemorySearchResult,
+  WsMemoryUpdateResult,
   WsWorkArtifactCreateResult,
   WsWorkArtifactGetResult,
   WsWorkArtifactListResult,
@@ -592,6 +616,42 @@ export class TyrumClient {
 
   workStateKvSet(payload: WsWorkStateKvSetPayload): Promise<WsWorkStateKvSetResultT> {
     return this.request("work.state_kv.set", payload, WsWorkStateKvSetResult);
+  }
+
+  // -----------------------------------------------------------------------
+  // Memory helpers
+  // -----------------------------------------------------------------------
+
+  memorySearch(payload: WsMemorySearchPayload): Promise<WsMemorySearchResultT> {
+    return this.request("memory.search", payload, WsMemorySearchResult);
+  }
+
+  memoryList(payload: WsMemoryListPayload): Promise<WsMemoryListResultT> {
+    return this.request("memory.list", payload, WsMemoryListResult);
+  }
+
+  memoryGet(payload: WsMemoryGetPayload): Promise<WsMemoryGetResultT> {
+    return this.request("memory.get", payload, WsMemoryGetResult);
+  }
+
+  memoryCreate(payload: WsMemoryCreatePayload): Promise<WsMemoryCreateResultT> {
+    return this.request("memory.create", payload, WsMemoryCreateResult);
+  }
+
+  memoryUpdate(payload: WsMemoryUpdatePayload): Promise<WsMemoryUpdateResultT> {
+    return this.request("memory.update", payload, WsMemoryUpdateResult);
+  }
+
+  memoryDelete(payload: WsMemoryDeletePayload): Promise<WsMemoryDeleteResultT> {
+    return this.request("memory.delete", payload, WsMemoryDeleteResult);
+  }
+
+  memoryForget(payload: WsMemoryForgetPayload): Promise<WsMemoryForgetResultT> {
+    return this.request("memory.forget", payload, WsMemoryForgetResult);
+  }
+
+  memoryExport(payload: WsMemoryExportPayload): Promise<WsMemoryExportResultT> {
+    return this.request("memory.export", payload, WsMemoryExportResult);
   }
 
   // -----------------------------------------------------------------------

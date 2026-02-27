@@ -783,6 +783,22 @@ describe("TyrumClient", () => {
           revision: 2,
         },
       },
+      {
+        type: "memory.item.created",
+        payload: {
+          item: {
+            v: 1,
+            memory_item_id: "123e4567-e89b-12d3-a456-426614174000",
+            agent_id: "agent-1",
+            kind: "note",
+            tags: ["demo"],
+            sensitivity: "private",
+            provenance: { source_kind: "operator", refs: [] },
+            created_at: "2026-02-19T12:00:00Z",
+            body_md: "Remember this.",
+          },
+        },
+      },
     ] as const;
 
     for (let i = 0; i < cases.length; i++) {
@@ -1455,6 +1471,173 @@ describe("TyrumClient", () => {
       { entry: stateKvEntry },
     );
     expect(kvSetRes.entry.key).toBe("branch");
+  });
+
+  it("sends typed memory.* requests and returns validated results", async () => {
+    server = createTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: [],
+      reconnect: false,
+    });
+
+    const connectedP = new Promise<void>((resolve) => {
+      client!.on("connected", () => resolve());
+    });
+
+    client.connect();
+    const ws = await server.waitForClient();
+    await acceptConnect(ws);
+    await connectedP;
+
+    const noteItem = {
+      v: 1,
+      memory_item_id: "123e4567-e89b-12d3-a456-426614174000",
+      agent_id: "agent-1",
+      kind: "note",
+      tags: ["demo"],
+      sensitivity: "private",
+      provenance: { source_kind: "operator", refs: [] },
+      created_at: "2026-02-19T12:00:00Z",
+      body_md: "Remember this.",
+    };
+
+    const tombstone = {
+      v: 1,
+      memory_item_id: noteItem.memory_item_id,
+      agent_id: noteItem.agent_id,
+      deleted_at: "2026-02-19T12:00:01Z",
+      deleted_by: "operator",
+      reason: "cleanup",
+    };
+
+    async function expectMemoryRequest<T>(
+      call: () => Promise<T>,
+      expectedType: string,
+      payload: unknown,
+      result: unknown,
+    ): Promise<T> {
+      const pending = call();
+      const req = (await waitForMessage(ws)) as Record<string, unknown>;
+      expect(req["type"]).toBe(expectedType);
+      expect(req["payload"]).toEqual(payload);
+
+      ws.send(
+        JSON.stringify({
+          request_id: req["request_id"],
+          type: expectedType,
+          ok: true,
+          result,
+        }),
+      );
+
+      return await pending;
+    }
+
+    const searchPayload = { v: 1, query: "remember", limit: 1 };
+    const searchRes = await expectMemoryRequest(
+      () => client!.memorySearch(searchPayload),
+      "memory.search",
+      searchPayload,
+      { v: 1, hits: [{ memory_item_id: noteItem.memory_item_id, kind: noteItem.kind, score: 1 }] },
+    );
+    expect(searchRes.v).toBe(1);
+    expect(searchRes.hits[0].memory_item_id).toBe(noteItem.memory_item_id);
+
+    const listPayload = { v: 1, limit: 1 };
+    const listRes = await expectMemoryRequest(
+      () => client!.memoryList(listPayload),
+      "memory.list",
+      listPayload,
+      { v: 1, items: [noteItem] },
+    );
+    expect(listRes.items[0].memory_item_id).toBe(noteItem.memory_item_id);
+
+    const getPayload = { v: 1, memory_item_id: noteItem.memory_item_id };
+    const getRes = await expectMemoryRequest(
+      () => client!.memoryGet(getPayload),
+      "memory.get",
+      getPayload,
+      { v: 1, item: noteItem },
+    );
+    expect(getRes.item.memory_item_id).toBe(noteItem.memory_item_id);
+
+    const createPayload = {
+      v: 1,
+      item: {
+        kind: "note",
+        tags: ["demo"],
+        sensitivity: "private",
+        provenance: { source_kind: "operator", refs: [] },
+        body_md: noteItem.body_md,
+      },
+    };
+    const createRes = await expectMemoryRequest(
+      () => client!.memoryCreate(createPayload),
+      "memory.create",
+      createPayload,
+      { v: 1, item: noteItem },
+    );
+    expect(createRes.item.memory_item_id).toBe(noteItem.memory_item_id);
+
+    const updatePayload = {
+      v: 1,
+      memory_item_id: noteItem.memory_item_id,
+      patch: { body_md: "Updated memory." },
+    };
+    const updateRes = await expectMemoryRequest(
+      () => client!.memoryUpdate(updatePayload),
+      "memory.update",
+      updatePayload,
+      { v: 1, item: { ...noteItem, body_md: "Updated memory.", updated_at: "2026-02-19T12:00:02Z" } },
+    );
+    expect(updateRes.item.body_md).toBe("Updated memory.");
+
+    const deletePayload = { v: 1, memory_item_id: noteItem.memory_item_id, reason: "cleanup" };
+    const deleteRes = await expectMemoryRequest(
+      () => client!.memoryDelete(deletePayload),
+      "memory.delete",
+      deletePayload,
+      { v: 1, tombstone },
+    );
+    expect(deleteRes.tombstone.memory_item_id).toBe(noteItem.memory_item_id);
+
+    const forgetPayload = {
+      v: 1,
+      confirm: "FORGET",
+      selectors: [{ kind: "id", memory_item_id: noteItem.memory_item_id }],
+    };
+    const forgetRes = await expectMemoryRequest(
+      () => client!.memoryForget(forgetPayload),
+      "memory.forget",
+      forgetPayload,
+      { v: 1, deleted_count: 1, tombstones: [tombstone] },
+    );
+    expect(forgetRes.deleted_count).toBe(1);
+
+    const exportPayload = { v: 1, include_tombstones: false };
+    const exportRes = await expectMemoryRequest(
+      () => client!.memoryExport(exportPayload),
+      "memory.export",
+      exportPayload,
+      { v: 1, artifact_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e" },
+    );
+    expect(exportRes.artifact_id).toBe("0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e");
+
+    const getErrP = client!.memoryGet(getPayload);
+    const getErrReq = (await waitForMessage(ws)) as Record<string, unknown>;
+    expect(getErrReq["type"]).toBe("memory.get");
+
+    ws.send(
+      JSON.stringify({
+        request_id: getErrReq["request_id"],
+        type: "memory.get",
+        ok: false,
+        error: { code: "not_found", message: "nope" },
+      }),
+    );
+    await expect(getErrP).rejects.toThrow(/not_found/i);
   });
 
   it("sends typed subagent.* requests and returns validated results", async () => {
