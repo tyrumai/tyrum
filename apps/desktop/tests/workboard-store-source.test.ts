@@ -9,8 +9,6 @@ describe("workboard-store source", () => {
       "utf-8",
     );
 
-    expect(store).toContain(
-      "return upsertByStringKey(items, next, (item) => item.work_item_id);",
-    );
+    expect(store).toContain("return upsertByStringKey(items, next, (item) => item.work_item_id);");
   });
 });
