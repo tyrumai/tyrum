@@ -20,6 +20,8 @@ export type TuiCommand =
   | { type: "exit" }
   | { type: "connect" }
   | { type: "disconnect" }
+  | { type: "openAdminMode" }
+  | { type: "exitAdminMode" }
   | { type: "refreshApprovals" }
   | { type: "resolveApproval"; approvalId: number; decision: "approved" | "denied" }
   | { type: "refreshPairing" }
@@ -64,6 +66,7 @@ export function reduceTuiInput(_params: {
   state: TuiUiState;
   input: string;
   key: TuiKey;
+  adminModeActive: boolean;
   approvalsPendingIds: number[];
   pairingIds: number[];
   runIds: string[];
@@ -110,6 +113,12 @@ export function reduceTuiInput(_params: {
     case "d":
       commands.push({ type: "disconnect" });
       return { state: _params.state, commands };
+    case "m":
+      commands.push({ type: "openAdminMode" });
+      return { state: _params.state, commands };
+    case "e":
+      commands.push({ type: "exitAdminMode" });
+      return { state: _params.state, commands };
     default:
       break;
   }
@@ -153,11 +162,15 @@ export function reduceTuiInput(_params: {
     if (input === "a" || input === "x") {
       const approvalId = _params.approvalsPendingIds[cursor];
       if (typeof approvalId === "number") {
-        commands.push({
-          type: "resolveApproval",
-          approvalId,
-          decision: input === "a" ? "approved" : "denied",
-        });
+        if (!_params.adminModeActive) {
+          commands.push({ type: "openAdminMode" });
+        } else {
+          commands.push({
+            type: "resolveApproval",
+            approvalId,
+            decision: input === "a" ? "approved" : "denied",
+          });
+        }
       }
       return {
         state: {
@@ -209,21 +222,33 @@ export function reduceTuiInput(_params: {
     const pairingId = _params.pairingIds[cursor];
     if (typeof pairingId === "number") {
       if (input === "a") {
-        commands.push({ type: "approvePairing", pairingId });
+        if (!_params.adminModeActive) {
+          commands.push({ type: "openAdminMode" });
+        } else {
+          commands.push({ type: "approvePairing", pairingId });
+        }
         return {
           state: { ..._params.state, pairingCursor: cursor, pairingSelectedId: pairingId },
           commands,
         };
       }
       if (input === "x") {
-        commands.push({ type: "denyPairing", pairingId });
+        if (!_params.adminModeActive) {
+          commands.push({ type: "openAdminMode" });
+        } else {
+          commands.push({ type: "denyPairing", pairingId });
+        }
         return {
           state: { ..._params.state, pairingCursor: cursor, pairingSelectedId: pairingId },
           commands,
         };
       }
       if (input === "v") {
-        commands.push({ type: "revokePairing", pairingId });
+        if (!_params.adminModeActive) {
+          commands.push({ type: "openAdminMode" });
+        } else {
+          commands.push({ type: "revokePairing", pairingId });
+        }
         return {
           state: { ..._params.state, pairingCursor: cursor, pairingSelectedId: pairingId },
           commands,

@@ -38,10 +38,10 @@ describe("tui core", () => {
     const harness = await startGateway();
     const home = await mkdtemp(join(tmpdir(), "tyrum-tui-"));
     const identityPath = join(home, "tui", "device-identity.json");
-    let core: Awaited<ReturnType<typeof createTuiCore>> | null = null;
+    let runtime: Awaited<ReturnType<typeof createTuiCore>> | null = null;
 
     try {
-      core = await createTuiCore({
+      runtime = await createTuiCore({
         wsUrl: harness.wsUrl,
         httpBaseUrl: harness.baseUrl,
         token: harness.adminToken,
@@ -49,6 +49,7 @@ describe("tui core", () => {
         reconnect: false,
       });
 
+      const core = runtime.manager.getCore();
       core.connect();
 
       await withTimeout(
@@ -60,8 +61,8 @@ describe("tui core", () => {
       expect(core.connectionStore.getSnapshot().status).toBe("connected");
       await expect(stat(identityPath)).resolves.toBeTruthy();
     } finally {
-      if (core) {
-        core.dispose();
+      if (runtime) {
+        runtime.dispose();
         try {
           await withTimeout(waitForGatewayClientCount(harness, 0), 5_000, "tui disconnect");
         } catch {

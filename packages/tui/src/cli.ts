@@ -73,7 +73,7 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
 
   try {
     core = await createTuiCore(config);
-    instance = render(React.createElement(TuiApp, { core, config }));
+    instance = render(React.createElement(TuiApp, { runtime: core, config }));
     const result = await instance.waitUntilExit();
     return typeof result === "number" ? result : 0;
   } catch (error) {

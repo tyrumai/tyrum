@@ -1,7 +1,14 @@
-import type { OperatorCore } from "@tyrum/operator-core";
+import {
+  formatAdminModeRemaining,
+  isAdminModeActive,
+  type AdminModeState,
+  type OperatorCore,
+  type OperatorCoreManager,
+} from "@tyrum/operator-core";
 import { Box, Text, useApp, useInput } from "ink";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ResolvedTuiConfig } from "./config.js";
+import type { TuiRuntime } from "./core.js";
 import {
   createInitialTuiUiState,
   getEffectiveCursor,
@@ -20,6 +27,14 @@ function useOperatorStore<T>(store: {
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
 }
 
+function useOperatorCoreManager(manager: OperatorCoreManager): OperatorCore {
+  return useSyncExternalStore(
+    (listener) => manager.subscribe(listener),
+    () => manager.getCore(),
+    () => manager.getCore(),
+  );
+}
+
 function toTuiKey(key: unknown): TuiKey {
   if (!key || typeof key !== "object" || Array.isArray(key)) return {};
   const rec = key as Record<string, unknown>;
@@ -35,13 +50,19 @@ function truncateText(text: string, limit: number): string {
   return `${text.slice(0, Math.max(0, limit - 1))}…`;
 }
 
-function AppHeader({ title }: { title: string }) {
+function AppHeader({ title, adminMode }: { title: string; adminMode: AdminModeState }) {
+  const adminModeActive = isAdminModeActive(adminMode);
   return (
     <Box flexDirection="column" paddingBottom={1}>
       <Text bold>{title}</Text>
       <Text dimColor>
-        Keys: c=connect d=disconnect 1=connect 2=status 3=approvals 4=runs 5=pairing q=quit
+        Keys: c=connect d=disconnect 1=connect 2=status 3=approvals 4=runs 5=pairing m=admin q=quit
       </Text>
+      {adminModeActive ? (
+        <Text color="yellow">
+          Admin Mode active · {formatAdminModeRemaining(adminMode)} remaining (e=exit)
+        </Text>
+      ) : null}
     </Box>
   );
 }
@@ -346,20 +367,118 @@ function RunsScreen({
   );
 }
 
-export function TuiApp({ core, config }: { core: OperatorCore; config: ResolvedTuiConfig }) {
+function toErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+function maskToken(token: string): string {
+  if (!token) return "";
+  const max = 24;
+  if (token.length <= max) return "•".repeat(token.length);
+  return `${"•".repeat(max)}…`;
+}
+
+function AdminModeDialog(props: { token: string; busy: boolean; error: string | null }) {
+  return (
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor="yellow"
+      padding={1}
+      marginBottom={1}
+    >
+      <Text bold>Enter Admin Mode</Text>
+      <Text dimColor>Paste admin token and press Enter. Esc cancels.</Text>
+      <Text>
+        Admin token: <Text color="yellow">{maskToken(props.token)}</Text>
+      </Text>
+      {props.busy ? <Text dimColor>Entering...</Text> : null}
+      {props.error ? <Text color="red">Error: {props.error}</Text> : null}
+    </Box>
+  );
+}
+
+export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: ResolvedTuiConfig }) {
   const { exit } = useApp();
+  const core = useOperatorCoreManager(runtime.manager);
+  const coreRef = useRef(core);
+  coreRef.current = core;
+  const adminMode = useOperatorStore(core.adminModeStore);
   const [uiState, setUiState] = useState(() => createInitialTuiUiState());
   const uiStateRef = useRef(uiState);
   uiStateRef.current = uiState;
 
   useEffect(() => {
-    core.connect();
+    runtime.manager.getCore().connect();
     return () => {
-      core.disconnect();
+      runtime.manager.getCore().disconnect();
     };
-  }, [core]);
+  }, [runtime.manager]);
+
+  const [adminDialog, setAdminDialog] = useState<{
+    open: boolean;
+    token: string;
+    busy: boolean;
+    error: string | null;
+  }>({ open: false, token: "", busy: false, error: null });
+  const adminDialogRef = useRef(adminDialog);
+  adminDialogRef.current = adminDialog;
+
+  const openAdminDialog = (): void => {
+    setAdminDialog({ open: true, token: "", busy: false, error: null });
+  };
+
+  const closeAdminDialog = (): void => {
+    if (adminDialogRef.current.busy) return;
+    setAdminDialog({ open: false, token: "", busy: false, error: null });
+  };
+
+  const submitAdminDialog = async (): Promise<void> => {
+    const snapshot = adminDialogRef.current;
+    if (!snapshot.open || snapshot.busy) return;
+
+    setAdminDialog((prev) => ({ ...prev, busy: true, error: null }));
+    try {
+      await runtime.enterAdminMode(snapshot.token);
+      setAdminDialog({ open: false, token: "", busy: false, error: null });
+    } catch (error) {
+      setAdminDialog((prev) => ({ ...prev, busy: false, error: toErrorMessage(error) }));
+    }
+  };
 
   useInput((input, key) => {
+    const rawKey = key as unknown as Record<string, unknown>;
+
+    if (rawKey["ctrl"] === true && input === "c") {
+      exit();
+      return;
+    }
+
+    if (adminDialogRef.current.open) {
+      if (rawKey["escape"] === true) {
+        closeAdminDialog();
+        return;
+      }
+      if (rawKey["return"] === true || rawKey["enter"] === true) {
+        void submitAdminDialog();
+        return;
+      }
+      if (rawKey["backspace"] === true || rawKey["delete"] === true) {
+        setAdminDialog((prev) => ({
+          ...prev,
+          token: prev.token.length > 0 ? prev.token.slice(0, -1) : prev.token,
+          error: null,
+        }));
+        return;
+      }
+      if (input) {
+        setAdminDialog((prev) => ({ ...prev, token: prev.token + input, error: null }));
+      }
+      return;
+    }
+
+    const core = coreRef.current;
     const approvals = core.approvalsStore.getSnapshot();
     const pairing = core.pairingStore.getSnapshot();
     const runs = core.runsStore.getSnapshot();
@@ -373,6 +492,7 @@ export function TuiApp({ core, config }: { core: OperatorCore; config: ResolvedT
       state: uiStateRef.current,
       input,
       key: toTuiKey(key),
+      adminModeActive: isAdminModeActive(core.adminModeStore.getSnapshot()),
       approvalsPendingIds: approvals.pendingIds,
       pairingIds,
       runIds,
@@ -391,6 +511,12 @@ export function TuiApp({ core, config }: { core: OperatorCore; config: ResolvedT
           return;
         case "disconnect":
           core.disconnect();
+          return;
+        case "openAdminMode":
+          openAdminDialog();
+          return;
+        case "exitAdminMode":
+          runtime.exitAdminMode();
           return;
         case "refreshApprovals":
           void core.approvalsStore.refreshPending();
@@ -436,7 +562,14 @@ export function TuiApp({ core, config }: { core: OperatorCore; config: ResolvedT
 
   return (
     <Box flexDirection="column" padding={1}>
-      <AppHeader title={`Tyrum TUI (${uiState.route})`} />
+      <AppHeader title={`Tyrum TUI (${uiState.route})`} adminMode={adminMode} />
+      {adminDialog.open ? (
+        <AdminModeDialog
+          token={adminDialog.token}
+          busy={adminDialog.busy}
+          error={adminDialog.error}
+        />
+      ) : null}
       {uiState.route === "connect" ? <ConnectScreen core={core} config={config} /> : null}
       {uiState.route === "status" ? <StatusScreen core={core} /> : null}
       {uiState.route === "approvals" ? (
