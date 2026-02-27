@@ -885,6 +885,83 @@ describe("handleClientMessage (work.*)", () => {
     }
   });
 
+  it("broadcasts work.item.cancelled when cancelling a ready work item", async () => {
+    const cm = new ConnectionManager();
+    const { id, ws } = makeClient(cm);
+    const client = cm.getClient(id)!;
+
+    const db = openTestSqliteDb();
+    try {
+      const deps = makeDeps(cm, { db });
+
+      const createRes = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-create",
+          type: "work.create",
+          payload: {
+            tenant_id: "default",
+            agent_id: "default",
+            workspace_id: "default",
+            item: { kind: "action", title: "Item 1" },
+          },
+        }),
+        deps,
+      );
+      expect((createRes as unknown as { ok: boolean }).ok).toBe(true);
+      const createdId = (createRes as unknown as { result: { item: { work_item_id: string } } })
+        .result.item.work_item_id;
+      ws.send.mockClear();
+
+      await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-ready",
+          type: "work.transition",
+          payload: {
+            tenant_id: "default",
+            agent_id: "default",
+            workspace_id: "default",
+            work_item_id: createdId,
+            status: "ready",
+          },
+        }),
+        deps,
+      );
+
+      const cancelRes = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-cancel",
+          type: "work.transition",
+          payload: {
+            tenant_id: "default",
+            agent_id: "default",
+            workspace_id: "default",
+            work_item_id: createdId,
+            status: "cancelled",
+            reason: "operator cancelled",
+          },
+        }),
+        deps,
+      );
+
+      expect((cancelRes as unknown as { ok: boolean }).ok).toBe(true);
+      expect(ws.send).toHaveBeenCalledTimes(2);
+
+      const cancelledEvt = JSON.parse(
+        ws.send.mock.calls[ws.send.mock.calls.length - 1]?.[0] ?? "{}",
+      ) as {
+        type?: string;
+        payload?: any;
+      };
+      expect(cancelledEvt.type).toBe("work.item.cancelled");
+      expect(cancelledEvt.payload?.item?.work_item_id).toBe(createdId);
+    } finally {
+      await db.close();
+    }
+  });
+
   it("enqueues a channel completion notification when last_active_session_key is a channel session", async () => {
     const cm = new ConnectionManager();
     const { id } = makeClient(cm);

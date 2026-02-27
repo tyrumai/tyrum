@@ -144,6 +144,188 @@ describe("WorkboardDal", () => {
     });
   });
 
+  it("allows cancelling work items from ready and blocked", async () => {
+    const dal = createDal();
+    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+
+    const readyItem = await dal.createItem({
+      scope,
+      item: {
+        kind: "action",
+        title: "Cancel from ready",
+        created_from_session_key: "agent:default:main",
+      },
+      createdAtIso: "2026-02-27T00:00:00.000Z",
+    });
+
+    await dal.transitionItem({
+      scope,
+      work_item_id: readyItem.work_item_id,
+      status: "ready",
+      occurredAtIso: "2026-02-27T00:00:01.000Z",
+    });
+
+    const cancelledFromReady = await dal.transitionItem({
+      scope,
+      work_item_id: readyItem.work_item_id,
+      status: "cancelled",
+      occurredAtIso: "2026-02-27T00:00:02.000Z",
+      reason: "operator cancelled",
+    });
+    expect(cancelledFromReady).toBeDefined();
+    expect(cancelledFromReady!.status).toBe("cancelled");
+
+    const blockedItem = await dal.createItem({
+      scope,
+      item: {
+        kind: "action",
+        title: "Cancel from blocked",
+        created_from_session_key: "agent:default:main",
+      },
+      createdAtIso: "2026-02-27T00:01:00.000Z",
+    });
+
+    await dal.transitionItem({
+      scope,
+      work_item_id: blockedItem.work_item_id,
+      status: "ready",
+      occurredAtIso: "2026-02-27T00:01:01.000Z",
+    });
+    await dal.transitionItem({
+      scope,
+      work_item_id: blockedItem.work_item_id,
+      status: "doing",
+      occurredAtIso: "2026-02-27T00:01:02.000Z",
+    });
+    await dal.transitionItem({
+      scope,
+      work_item_id: blockedItem.work_item_id,
+      status: "blocked",
+      occurredAtIso: "2026-02-27T00:01:03.000Z",
+      reason: "waiting on approval",
+    });
+
+    const cancelledFromBlocked = await dal.transitionItem({
+      scope,
+      work_item_id: blockedItem.work_item_id,
+      status: "cancelled",
+      occurredAtIso: "2026-02-27T00:01:04.000Z",
+    });
+    expect(cancelledFromBlocked).toBeDefined();
+    expect(cancelledFromBlocked!.status).toBe("cancelled");
+  });
+
+  it("cancels open tasks + closes subagents when work item is cancelled", async () => {
+    const dal = createDal();
+    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+
+    const item = await dal.createItem({
+      scope,
+      item: {
+        kind: "action",
+        title: "Cancel cleanup",
+        created_from_session_key: "agent:default:main",
+      },
+      createdAtIso: "2026-02-27T00:00:00.000Z",
+    });
+
+    await dal.transitionItem({
+      scope,
+      work_item_id: item.work_item_id,
+      status: "ready",
+      occurredAtIso: "2026-02-27T00:00:01.000Z",
+    });
+
+    const task = await dal.createTask({
+      scope,
+      task: {
+        work_item_id: item.work_item_id,
+        execution_profile: "executor",
+        side_effect_class: "none",
+      },
+      taskId: "00000000-0000-0000-0000-000000000001",
+      createdAtIso: "2026-02-27T00:00:02.000Z",
+    });
+
+    const leaseOwner = "test-owner";
+    const nowMs = Date.parse("2026-02-27T00:00:03.000Z");
+    await dal.leaseRunnableTasks({
+      scope,
+      work_item_id: item.work_item_id,
+      lease_owner: leaseOwner,
+      nowMs,
+      leaseTtlMs: 60_000,
+      limit: 10,
+    });
+
+    const leasedRow = await db!.get<{ status: string; lease_owner: string | null }>(
+      `SELECT status, lease_owner
+       FROM work_item_tasks
+       WHERE task_id = ?`,
+      [task.task_id],
+    );
+    expect(leasedRow).toBeDefined();
+    expect(leasedRow!.status).toBe("leased");
+    expect(leasedRow!.lease_owner).toBe(leaseOwner);
+
+    const subagentId = "00000000-0000-0000-0000-000000000abc";
+    const subagent = await dal.createSubagent({
+      scope,
+      subagent: {
+        execution_profile: "executor",
+        session_key: `agent:default:subagent:${subagentId}`,
+        work_item_id: item.work_item_id,
+      },
+      subagentId,
+      createdAtIso: "2026-02-27T00:00:04.000Z",
+    });
+    expect(subagent.status).toBe("running");
+
+    await dal.transitionItem({
+      scope,
+      work_item_id: item.work_item_id,
+      status: "cancelled",
+      reason: "operator cancelled",
+      occurredAtIso: "2026-02-27T00:00:05.000Z",
+    });
+
+    const cancelledTask = await db!.get<{
+      status: string;
+      lease_owner: string | null;
+      lease_expires_at_ms: number | null;
+      finished_at: string | null;
+    }>(
+      `SELECT status, lease_owner, lease_expires_at_ms, finished_at
+       FROM work_item_tasks
+       WHERE task_id = ?`,
+      [task.task_id],
+    );
+    expect(cancelledTask).toBeDefined();
+    expect(cancelledTask!.status).toBe("cancelled");
+    expect(cancelledTask!.lease_owner).toBe(null);
+    expect(cancelledTask!.lease_expires_at_ms).toBe(null);
+    expect(cancelledTask!.finished_at).toBe("2026-02-27T00:00:05.000Z");
+
+    const cancelledSubagent = await db!.get<{ status: string; closed_at: string | null }>(
+      `SELECT status, closed_at
+       FROM subagents
+       WHERE subagent_id = ?`,
+      [subagent.subagent_id],
+    );
+    expect(cancelledSubagent).toBeDefined();
+    expect(cancelledSubagent!.status).toBe("closed");
+    expect(cancelledSubagent!.closed_at).toBe("2026-02-27T00:00:05.000Z");
+
+    const interrupt = await db!.get<{ kind: string }>(
+      `SELECT kind
+       FROM lane_queue_signals
+       WHERE key = ? AND lane = ?`,
+      [subagent.session_key, subagent.lane],
+    );
+    expect(interrupt).toBeDefined();
+    expect(interrupt!.kind).toBe("interrupt");
+  });
+
   it("paginates work item lists with cursor", async () => {
     const dal = createDal();
     const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;

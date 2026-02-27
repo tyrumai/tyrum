@@ -27,6 +27,7 @@ import type {
 import type { SqlDb } from "../../statestore/types.js";
 import type { WsBroadcastAudience } from "../../ws/audience.js";
 import type { RedactionEngine } from "../redaction/engine.js";
+import { LaneQueueSignalDal } from "../lanes/queue-signal-dal.js";
 
 type RawTime = string | Date;
 
@@ -39,9 +40,9 @@ const WORKBOARD_WS_AUDIENCE = {
 
 const WORK_ITEM_TRANSITIONS: Record<WorkItemState, WorkItemState[]> = {
   backlog: ["ready"],
-  ready: ["doing"],
+  ready: ["doing", "cancelled"],
   doing: ["blocked", "done", "failed", "cancelled"],
-  blocked: ["doing"],
+  blocked: ["doing", "cancelled"],
   done: [],
   failed: [],
   cancelled: [],
@@ -836,6 +837,75 @@ export class WorkboardDal {
           }),
         ],
       );
+
+      if (params.status === "done" || params.status === "failed" || params.status === "cancelled") {
+        const reasonText = params.reason?.trim() || `work item ${params.status}`;
+        const parsedOccurredAtMs = Date.parse(occurredAtIso);
+        const occurredAtMs = Number.isFinite(parsedOccurredAtMs) ? parsedOccurredAtMs : Date.now();
+
+        await tx.run(
+          `UPDATE work_item_tasks
+           SET status = 'cancelled',
+               lease_owner = NULL,
+               lease_expires_at_ms = NULL,
+               updated_at = ?,
+               finished_at = COALESCE(finished_at, ?)
+           WHERE work_item_id = ?
+             AND status IN ('queued', 'leased', 'running', 'paused')`,
+          [occurredAtIso, occurredAtIso, params.work_item_id],
+        );
+
+        const signals = new LaneQueueSignalDal(tx);
+        const runningSubagents = await tx.all<{ session_key: string; lane: string }>(
+          `SELECT session_key, lane
+           FROM subagents
+           WHERE tenant_id = ?
+             AND agent_id = ?
+             AND workspace_id = ?
+             AND work_item_id = ?
+             AND status = 'running'`,
+          [
+            params.scope.tenant_id,
+            params.scope.agent_id,
+            params.scope.workspace_id,
+            params.work_item_id,
+          ],
+        );
+
+        for (const subagent of runningSubagents) {
+          await signals.setSignal({
+            key: subagent.session_key,
+            lane: subagent.lane,
+            kind: "interrupt",
+            inbox_id: null,
+            queue_mode: "interrupt",
+            message_text: reasonText,
+            created_at_ms: occurredAtMs,
+          });
+        }
+
+        await tx.run(
+          `UPDATE subagents
+           SET status = 'closed',
+               updated_at = ?,
+               closed_at = COALESCE(closed_at, ?),
+               close_reason = COALESCE(close_reason, ?)
+           WHERE tenant_id = ?
+             AND agent_id = ?
+             AND workspace_id = ?
+             AND work_item_id = ?
+             AND status NOT IN ('closed', 'failed')`,
+          [
+            occurredAtIso,
+            occurredAtIso,
+            reasonText,
+            params.scope.tenant_id,
+            params.scope.agent_id,
+            params.scope.workspace_id,
+            params.work_item_id,
+          ],
+        );
+      }
 
       return toWorkItem(updated);
     });
