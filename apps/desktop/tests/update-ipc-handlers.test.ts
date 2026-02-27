@@ -6,10 +6,12 @@ const {
   showOpenDialogMock,
   openPathMock,
   appGetVersionMock,
+  notificationShowMock,
   autoUpdaterMock,
   checkForUpdatesMock,
   downloadUpdateMock,
   quitAndInstallMock,
+  NotificationMock,
   listeners,
 } = vi.hoisted(() => {
   const ipcMainHandleMock = vi.fn();
@@ -17,10 +19,19 @@ const {
   const showOpenDialogMock = vi.fn();
   const openPathMock = vi.fn();
   const appGetVersionMock = vi.fn(() => "1.0.0");
+  const notificationShowMock = vi.fn();
   const checkForUpdatesMock = vi.fn(async () => undefined);
   const downloadUpdateMock = vi.fn(async () => undefined);
   const quitAndInstallMock = vi.fn();
   const listeners = new Map<string, Array<(...args: unknown[]) => void>>();
+
+  class NotificationMock {
+    static isSupported = vi.fn(() => true);
+
+    constructor(_options: { title: string; body?: string }) {}
+
+    show = notificationShowMock;
+  }
 
   const autoUpdaterMock = {
     autoDownload: true,
@@ -48,10 +59,12 @@ const {
     showOpenDialogMock,
     openPathMock,
     appGetVersionMock,
+    notificationShowMock,
     autoUpdaterMock,
     checkForUpdatesMock,
     downloadUpdateMock,
     quitAndInstallMock,
+    NotificationMock,
     listeners,
   };
 });
@@ -70,6 +83,7 @@ vi.mock("electron", () => ({
   shell: {
     openPath: openPathMock,
   },
+  Notification: NotificationMock,
 }));
 
 vi.mock("electron-updater", () => ({
@@ -88,6 +102,9 @@ describe("registerUpdateIpc handlers", () => {
     checkForUpdatesMock.mockReset();
     downloadUpdateMock.mockReset();
     quitAndInstallMock.mockReset();
+    notificationShowMock.mockReset();
+    NotificationMock.isSupported.mockReset();
+    NotificationMock.isSupported.mockReturnValue(true);
     listeners.clear();
     ipcMainHandleMock.mockImplementation(
       (channel: string, handler: (...args: unknown[]) => unknown) => {
