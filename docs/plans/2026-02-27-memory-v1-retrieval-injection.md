@@ -107,4 +107,3 @@ Expected: FAIL (digest not injected / markdown still injected).
 
 Run: `pnpm test packages/gateway/tests/unit/agent-runtime-memory-v1-injection.test.ts`
 Expected: PASS.
-

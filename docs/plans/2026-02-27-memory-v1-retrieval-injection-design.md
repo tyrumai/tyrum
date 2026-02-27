@@ -69,4 +69,3 @@ In `AgentRuntime` context assembly:
 - Runtime integration:
   - Model prompt includes `Memory digest:` and selected memory item IDs/snippets for an interactive turn.
   - Delegated (execution-engine) turns also include the digest (same prompt path).
-
