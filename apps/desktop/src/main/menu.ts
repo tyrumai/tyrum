@@ -57,20 +57,6 @@ export function buildApplicationMenuTemplate(
     submenu: viewSubmenu,
   };
 
-  const helpSubmenu: MenuItemConstructorOptions[] = isMac
-    ? []
-    : [
-        {
-          label: `About ${options.appName}`,
-          click: options.onShowAbout,
-        },
-      ];
-
-  const helpMenu: MenuItemConstructorOptions = {
-    label: "Help",
-    submenu: helpSubmenu,
-  };
-
   if (isMac) {
     const appMenu: MenuItemConstructorOptions = {
       label: options.appName,
@@ -103,8 +89,18 @@ export function buildApplicationMenuTemplate(
       submenu: [{ role: "minimize" }, { role: "zoom" }, { type: "separator" }, { role: "front" }],
     };
 
-    return [appMenu, fileMenu, editMenu, viewMenu, windowMenu, helpMenu];
+    return [appMenu, fileMenu, editMenu, viewMenu, windowMenu];
   }
+
+  const helpMenu: MenuItemConstructorOptions = {
+    label: "Help",
+    submenu: [
+      {
+        label: `About ${options.appName}`,
+        click: options.onShowAbout,
+      },
+    ],
+  };
 
   const fileMenu: MenuItemConstructorOptions = {
     label: "File",

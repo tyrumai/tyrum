@@ -28,6 +28,9 @@ describe("buildApplicationMenuTemplate", () => {
 
     const windowMenu = template.find((item) => item.label === "Window");
     expect(windowMenu).toBeDefined();
+
+    const helpMenu = template.find((item) => item.label === "Help");
+    expect(helpMenu).toBeUndefined();
   });
 
   it("builds File/Edit/View/Help on Windows and includes dev tools only in dev", () => {
