@@ -15,12 +15,38 @@ let mainWindow: BrowserWindow | null = null;
 let gatewayManager: GatewayManager | null = null;
 let isQuitting = false;
 let isQuittingForUpdate = false;
+let mainWindowReadyToShow = false;
+let mainWindowPendingFocus = false;
 
 setWindowsAppUserModelId(app);
 
 const didAcquireSingleInstanceLock = setupSingleInstance({
   app,
-  getMainWindow: () => mainWindow,
+  getMainWindow: () => {
+    if (!mainWindow) {
+      return null;
+    }
+
+    const window = mainWindow;
+    return {
+      isMinimized: () => window.isMinimized(),
+      restore: () => window.restore(),
+      show: () => {
+        if (!mainWindowReadyToShow) {
+          mainWindowPendingFocus = true;
+          return;
+        }
+        window.show();
+      },
+      focus: () => {
+        if (!mainWindowReadyToShow) {
+          mainWindowPendingFocus = true;
+          return;
+        }
+        window.focus();
+      },
+    };
+  },
 });
 
 async function shutdownAppResources(): Promise<void> {
@@ -94,9 +120,16 @@ function registerNavigationGuardrails(window: BrowserWindow): void {
 function createWindow(): void {
   const window = new BrowserWindow(MAIN_WINDOW_OPTIONS);
   mainWindow = window;
+  mainWindowReadyToShow = false;
+  mainWindowPendingFocus = false;
 
   window.once("ready-to-show", () => {
+    mainWindowReadyToShow = true;
     window.show();
+    if (mainWindowPendingFocus) {
+      mainWindowPendingFocus = false;
+      window.focus();
+    }
   });
 
   registerNavigationGuardrails(window);
