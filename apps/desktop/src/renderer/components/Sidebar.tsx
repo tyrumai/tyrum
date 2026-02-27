@@ -32,7 +32,7 @@ const titleStyle: React.CSSProperties = {
   padding: "0 16px 16px",
   borderBottom: `1px solid ${colors.border}`,
   marginBottom: 8,
-  color: "#fff",
+  color: colors.fg,
 };
 
 function navItemStyle(active: boolean): React.CSSProperties {
@@ -41,7 +41,7 @@ function navItemStyle(active: boolean): React.CSSProperties {
     cursor: "pointer",
     background: active ? colors.primaryDim : "transparent",
     borderLeft: active ? `3px solid ${colors.primary}` : "3px solid transparent",
-    color: active ? "#fff" : colors.fgMuted,
+    color: active ? colors.fg : colors.fgMuted,
     fontSize: 14,
     fontWeight: active ? 600 : 400,
     transition: "background 0.15s, color 0.15s",

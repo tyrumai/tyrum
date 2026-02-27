@@ -1,9 +1,6 @@
-export interface DesktopThemeState {
-  colorScheme: "light" | "dark";
-  highContrast: boolean;
-  inverted: boolean;
-  source: "system" | "light" | "dark";
-}
+import type { DesktopThemeState } from "../shared/theme.js";
+
+export type { DesktopThemeState };
 
 export interface TyrumDesktopApi {
   getConfig: () => Promise<unknown>;

@@ -1,26 +1,13 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { createRootMock, renderMock, startDesktopThemeSyncMock, resolveThemeSyncMock } = vi.hoisted(
-  () => {
-    const renderMock = vi.fn();
-    const createRootMock = vi.fn(() => ({ render: renderMock }));
+const { createRootMock, renderMock, startDesktopThemeSyncMock } = vi.hoisted(() => {
+  const renderMock = vi.fn();
+  const createRootMock = vi.fn(() => ({ render: renderMock }));
+  const startDesktopThemeSyncMock = vi.fn(() => new Promise<() => void>(() => {}));
 
-    const themeSyncResolver: { resolve?: (stop: () => void) => void } = {};
-    const startDesktopThemeSyncMock = vi.fn(
-      () =>
-        new Promise<() => void>((resolve) => {
-          themeSyncResolver.resolve = resolve;
-        }),
-    );
-
-    const resolveThemeSyncMock = (stop: () => void) => {
-      themeSyncResolver.resolve?.(stop);
-    };
-
-    return { createRootMock, renderMock, startDesktopThemeSyncMock, resolveThemeSyncMock };
-  },
-);
+  return { createRootMock, renderMock, startDesktopThemeSyncMock };
+});
 
 vi.mock("react-dom/client", () => ({
   createRoot: createRootMock,
@@ -51,17 +38,12 @@ describe("renderer bootstrap theme sync", () => {
     };
   });
 
-  it("starts desktop theme sync before rendering", async () => {
+  it("renders even when desktop theme sync is still pending", async () => {
     await import("../src/renderer/main.tsx");
 
     await Promise.resolve();
 
     expect(startDesktopThemeSyncMock).toHaveBeenCalledTimes(1);
-    expect(renderMock).not.toHaveBeenCalled();
-
-    resolveThemeSyncMock(() => {});
-    await Promise.resolve();
-
     expect(renderMock).toHaveBeenCalledTimes(1);
   });
 });

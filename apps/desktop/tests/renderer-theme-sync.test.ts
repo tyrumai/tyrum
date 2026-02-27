@@ -46,4 +46,46 @@ describe("renderer theme sync", () => {
 
     expect(document.documentElement.dataset.theme).toBe("dark");
   });
+
+  it("subscribes before awaiting the initial theme state so updates are not lost", async () => {
+    const theme = await import("../src/renderer/theme.ts");
+
+    expect(theme.startDesktopThemeSync).toBeTypeOf("function");
+    if (typeof theme.startDesktopThemeSync !== "function") return;
+
+    let resolveState: ((state: unknown) => void) | undefined;
+    const getStatePromise = new Promise<unknown>((resolve) => {
+      resolveState = resolve;
+    });
+    const getState = vi.fn(() => getStatePromise);
+
+    let onChangeCallback: ((state: unknown) => void) | undefined;
+    const unsubscribe = vi.fn();
+    const onChange = vi.fn((cb: (state: unknown) => void) => {
+      onChangeCallback = cb;
+      return unsubscribe;
+    });
+
+    const startPromise = theme.startDesktopThemeSync({ getState, onChange });
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    onChangeCallback?.({
+      colorScheme: "dark",
+      highContrast: false,
+      inverted: false,
+      source: "system",
+    });
+    expect(document.documentElement.dataset.theme).toBe("dark");
+
+    resolveState?.({
+      colorScheme: "light",
+      highContrast: false,
+      inverted: false,
+      source: "system",
+    });
+
+    const stop = await startPromise;
+    expect(stop).toBe(unsubscribe);
+    expect(document.documentElement.dataset.theme).toBe("dark");
+  });
 });

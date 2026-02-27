@@ -1,14 +1,10 @@
 import { ipcMain, nativeTheme, type BrowserWindow } from "electron";
 import { createWindowSender } from "./window-sender.js";
+import type { DesktopThemeState } from "../../shared/theme.js";
 
 const sender = createWindowSender();
 
-export interface DesktopThemeState {
-  colorScheme: "light" | "dark";
-  highContrast: boolean;
-  inverted: boolean;
-  source: "system" | "light" | "dark";
-}
+export type { DesktopThemeState };
 
 let ipcRegistered = false;
 

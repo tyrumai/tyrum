@@ -15,13 +15,20 @@ const {
   registerGatewayIpcMock,
   registerNodeIpcMock,
   registerUpdateIpcMock,
+  webContentsSendMock,
+  getNativeThemeUpdatedCallback,
   configExistsMock,
   loadConfigMock,
   startEmbeddedGatewayFromConfigMock,
 } = vi.hoisted(() => {
   const ipcMainHandleMock = vi.fn();
 
-  const nativeThemeOnMock = vi.fn();
+  let nativeThemeUpdatedCallback: (() => void) | undefined;
+  const nativeThemeOnMock = vi.fn((event: string, cb: () => void) => {
+    if (event === "updated") {
+      nativeThemeUpdatedCallback = cb;
+    }
+  });
 
   const menuBuildFromTemplateMock = vi.fn(() => ({}) as never);
   const menuSetApplicationMenuMock = vi.fn();
@@ -81,6 +88,8 @@ const {
     registerGatewayIpcMock,
     registerNodeIpcMock,
     registerUpdateIpcMock,
+    webContentsSendMock,
+    getNativeThemeUpdatedCallback: () => nativeThemeUpdatedCallback,
     configExistsMock,
     loadConfigMock,
     startEmbeddedGatewayFromConfigMock,
@@ -155,5 +164,15 @@ describe("main theme IPC", () => {
 
     expect(ipcMainHandleMock).toHaveBeenCalledWith("theme:get-state", expect.any(Function));
     expect(nativeThemeOnMock).toHaveBeenCalledWith("updated", expect.any(Function));
+
+    const updated = getNativeThemeUpdatedCallback();
+    updated?.();
+
+    expect(webContentsSendMock).toHaveBeenCalledWith("theme:state", {
+      colorScheme: "light",
+      highContrast: false,
+      inverted: false,
+      source: "system",
+    });
   });
 });

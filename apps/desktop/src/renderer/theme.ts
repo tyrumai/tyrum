@@ -1,11 +1,7 @@
 import type { CSSProperties } from "react";
+import type { DesktopThemeState } from "../shared/theme.js";
 
-export interface DesktopThemeState {
-  colorScheme: "light" | "dark";
-  highContrast: boolean;
-  inverted: boolean;
-  source: "system" | "light" | "dark";
-}
+export type { DesktopThemeState };
 
 export const desktopThemeTokens = {
   light: {
@@ -84,10 +80,17 @@ export interface DesktopThemeBridge {
 }
 
 export async function startDesktopThemeSync(bridge: DesktopThemeBridge): Promise<() => void> {
-  applyDesktopThemeState(await bridge.getState());
-  return bridge.onChange((state) => {
+  let receivedUpdate = false;
+  const unsubscribe = bridge.onChange((state) => {
+    receivedUpdate = true;
     applyDesktopThemeState(state);
   });
+
+  const initialState = await bridge.getState();
+  if (!receivedUpdate) {
+    applyDesktopThemeState(initialState);
+  }
+  return unsubscribe;
 }
 
 export const colors = {
