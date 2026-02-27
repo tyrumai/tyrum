@@ -79,6 +79,51 @@ async function waitFor(
   throw new Error("Timed out waiting for condition");
 }
 
+function createMemorySnapshot(
+  overrides: Partial<{
+    browse: unknown;
+    inspect: unknown;
+    tombstones: unknown;
+    export: unknown;
+  }> = {},
+): {
+  browse: unknown;
+  inspect: unknown;
+  tombstones: unknown;
+  export: unknown;
+} {
+  return {
+    browse: {
+      request: { kind: "list", filter: undefined, limit: undefined },
+      results: { kind: "list", items: [], nextCursor: null },
+      loading: false,
+      error: null,
+      lastSyncedAt: null,
+      ...(overrides.browse as Record<string, unknown> | undefined),
+    },
+    inspect: {
+      memoryItemId: null,
+      item: null,
+      loading: false,
+      error: null,
+      ...(overrides.inspect as Record<string, unknown> | undefined),
+    },
+    tombstones: {
+      tombstones: [],
+      loading: false,
+      error: null,
+      ...(overrides.tombstones as Record<string, unknown> | undefined),
+    },
+    export: {
+      running: false,
+      artifactId: null,
+      error: null,
+      lastExportedAt: null,
+      ...(overrides.export as Record<string, unknown> | undefined),
+    },
+  };
+}
+
 const DEFAULT_CONFIG = {
   httpBaseUrl: "http://127.0.0.1:8788",
   wsUrl: "ws://127.0.0.1:8788/ws",
@@ -133,30 +178,13 @@ describe("TuiApp", () => {
         lastDisconnect: { code: 1006, reason: "closed" },
       }),
       memoryStore: {
-        ...createStore({
-          mode: "list",
-          query: null,
-          itemIds: [],
-          hitsById: {},
-          itemsById: {},
-          loading: false,
-          error: null,
-          lastSyncedAt: null,
-          lastExportArtifactId: null,
-          lastForgetDeletedCount: null,
-        }),
+        ...createStore(createMemorySnapshot()),
         list: vi.fn(async () => {}),
         search: vi.fn(async () => {}),
-        refresh: vi.fn(async () => {}),
-        get: vi.fn(async () => {
-          throw new Error("not implemented");
-        }),
-        forgetById: vi.fn(async () => {
-          throw new Error("not implemented");
-        }),
-        exportAll: vi.fn(async () => {
-          throw new Error("not implemented");
-        }),
+        loadMore: vi.fn(async () => {}),
+        inspect: vi.fn(async () => {}),
+        forget: vi.fn(async () => {}),
+        export: vi.fn(async () => {}),
       },
       approvalsStore: {
         ...createStore({
@@ -297,24 +325,20 @@ describe("TuiApp", () => {
     } as const;
 
     const memoryStore = {
-      ...createStore({
-        mode: "list",
-        query: null,
-        itemIds: ["mem-1"],
-        hitsById: {},
-        itemsById: { "mem-1": item },
-        loading: false,
-        error: null,
-        lastSyncedAt: null,
-        lastExportArtifactId: null,
-        lastForgetDeletedCount: null,
-      }),
+      ...createStore(
+        createMemorySnapshot({
+          browse: {
+            request: { kind: "list", filter: undefined, limit: undefined },
+            results: { kind: "list", items: [item], nextCursor: null },
+          },
+        }),
+      ),
       list: vi.fn(async () => {}),
-      search: vi.fn(async (_query: string) => {}),
-      refresh: vi.fn(async () => {}),
-      get: vi.fn(async () => item),
-      forgetById: vi.fn(async (_id: string) => ({ v: 1, deleted_count: 1, tombstones: [] })),
-      exportAll: vi.fn(() => exportCatchTracker),
+      search: vi.fn(async (_input: { query: string }) => {}),
+      loadMore: vi.fn(async () => {}),
+      inspect: vi.fn(async (_memoryItemId: string) => {}),
+      forget: vi.fn(async (_selectors: unknown[]) => {}),
+      export: vi.fn(() => exportCatchTracker),
     };
 
     const core = {
@@ -389,10 +413,12 @@ describe("TuiApp", () => {
       await waitFor(() => connect.mock.calls.length === 1);
 
       io.stdin.write("6");
-      await sleep(25);
+      await waitFor(() => memoryStore.list.mock.calls.length === 1);
+      memoryStore.list.mockClear();
 
       io.stdin.write("r");
-      await waitFor(() => memoryStore.refresh.mock.calls.length === 1);
+      await waitFor(() => memoryStore.list.mock.calls.length === 1);
+      memoryStore.list.mockClear();
 
       io.stdin.write("/");
       await sleep(25);
@@ -400,18 +426,18 @@ describe("TuiApp", () => {
       await sleep(25);
       io.stdin.write("\r");
       await waitFor(() => memoryStore.search.mock.calls.length === 1);
-      expect(memoryStore.search).toHaveBeenCalledWith("abc");
+      expect(memoryStore.search).toHaveBeenCalledWith({ query: "abc" });
 
       io.stdin.write("f");
       await sleep(25);
       io.stdin.write("FORGET");
       await sleep(25);
       io.stdin.write("\r");
-      await waitFor(() => memoryStore.forgetById.mock.calls.length === 1);
-      expect(memoryStore.forgetById).toHaveBeenCalledWith("mem-1");
+      await waitFor(() => memoryStore.forget.mock.calls.length === 1);
+      expect(memoryStore.forget).toHaveBeenCalledWith([{ kind: "id", memory_item_id: "mem-1" }]);
 
       io.stdin.write("p");
-      await waitFor(() => memoryStore.exportAll.mock.calls.length === 1);
+      await waitFor(() => memoryStore.export.mock.calls.length === 1);
       expect(exportCatchAttached).toBe(true);
     } finally {
       instance.unmount();
@@ -424,26 +450,13 @@ describe("TuiApp", () => {
     const disconnect = vi.fn();
 
     const memoryStore = {
-      ...createStore({
-        mode: "list",
-        query: null,
-        itemIds: [],
-        hitsById: {},
-        itemsById: {},
-        loading: false,
-        error: null,
-        lastSyncedAt: null,
-        lastExportArtifactId: null,
-        lastForgetDeletedCount: null,
-      }),
+      ...createStore(createMemorySnapshot()),
       list: vi.fn(async () => {}),
-      search: vi.fn(async (_query: string) => {}),
-      refresh: vi.fn(async () => {}),
-      get: vi.fn(async () => {
-        throw new Error("not implemented");
-      }),
-      forgetById: vi.fn(async (_id: string) => ({ v: 1, deleted_count: 0, tombstones: [] })),
-      exportAll: vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" })),
+      search: vi.fn(async (_input: { query: string }) => {}),
+      loadMore: vi.fn(async () => {}),
+      inspect: vi.fn(async () => {}),
+      forget: vi.fn(async (_selectors: unknown[]) => {}),
+      export: vi.fn(async () => {}),
     };
 
     const core = {

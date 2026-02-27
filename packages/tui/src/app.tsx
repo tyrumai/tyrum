@@ -410,6 +410,42 @@ function formatMemoryItemSummary(item: MemoryItem): string {
   }
 }
 
+function MemoryItemDetails({ item }: { item: MemoryItem }) {
+  return (
+    <>
+      <Text dimColor>
+        kind={item.kind} agent={item.agent_id} sensitivity={item.sensitivity}
+      </Text>
+      {item.tags.length > 0 ? <Text dimColor>tags: {item.tags.join(", ")}</Text> : null}
+      <Text dimColor>
+        created: {item.created_at}
+        {item.updated_at ? ` updated: ${item.updated_at}` : ""}
+      </Text>
+      <Text dimColor>provenance: {item.provenance.source_kind}</Text>
+      <Box flexDirection="column" paddingTop={1}>
+        {item.kind === "fact" ? (
+          <>
+            <Text>
+              <Text bold>{item.key}</Text>
+            </Text>
+            <Text dimColor>confidence: {String(item.confidence)}</Text>
+            <Text dimColor>observed_at: {item.observed_at}</Text>
+            <Text>{truncateText(JSON.stringify(item.value), 120)}</Text>
+          </>
+        ) : null}
+        {item.kind === "note" ? <Text>{item.body_md}</Text> : null}
+        {item.kind === "procedure" ? <Text>{item.body_md}</Text> : null}
+        {item.kind === "episode" ? (
+          <>
+            <Text dimColor>occurred_at: {item.occurred_at}</Text>
+            <Text>{item.summary_md}</Text>
+          </>
+        ) : null}
+      </Box>
+    </>
+  );
+}
+
 function MemoryScreen({
   core,
   cursor,
@@ -422,20 +458,50 @@ function MemoryScreen({
   const connection = useOperatorStore(core.connectionStore);
   const memory = useOperatorStore(core.memoryStore);
   const initialListStoreRef = useRef<OperatorCore["memoryStore"] | null>(null);
-  const ids = memory.itemIds;
+  const browseResults = memory.browse.results;
+  const ids = useMemo((): string[] => {
+    if (!browseResults) return [];
+    if (browseResults.kind === "list") {
+      return browseResults.items.map((item) => item.memory_item_id);
+    }
+    return browseResults.hits.map((hit) => hit.memory_item_id);
+  }, [browseResults]);
   const effectiveCursor = getEffectiveCursor({ ids, cursor, selectedId });
   const selectedIdFromCursor = ids[effectiveCursor];
-  const selected =
-    typeof selectedIdFromCursor === "string" ? memory.itemsById[selectedIdFromCursor] : null;
   const selectedHit =
-    typeof selectedIdFromCursor === "string" ? memory.hitsById[selectedIdFromCursor] : null;
+    browseResults?.kind === "search" && typeof selectedIdFromCursor === "string"
+      ? (browseResults.hits.find((hit) => hit.memory_item_id === selectedIdFromCursor) ?? null)
+      : null;
+  const selectedFromList =
+    browseResults?.kind === "list" && typeof selectedIdFromCursor === "string"
+      ? (browseResults.items.find((item) => item.memory_item_id === selectedIdFromCursor) ?? null)
+      : null;
+  const selectedInspect =
+    typeof selectedIdFromCursor === "string" && memory.inspect.memoryItemId === selectedIdFromCursor
+      ? memory.inspect.item
+      : null;
+  const selectedInspectError =
+    typeof selectedIdFromCursor === "string" && memory.inspect.memoryItemId === selectedIdFromCursor
+      ? memory.inspect.error
+      : null;
+  const selectedInspectLoading =
+    typeof selectedIdFromCursor === "string" && memory.inspect.memoryItemId === selectedIdFromCursor
+      ? memory.inspect.loading
+      : false;
 
   useEffect(() => {
     if (connection.status !== "connected") return;
     if (!selectedIdFromCursor) return;
-    if (memory.itemsById[selectedIdFromCursor]) return;
-    void core.memoryStore.get(selectedIdFromCursor).catch(() => {});
-  }, [connection.status, core.memoryStore, memory.itemsById, selectedIdFromCursor]);
+    if (!browseResults || browseResults.kind !== "search") return;
+    if (memory.inspect.memoryItemId === selectedIdFromCursor) return;
+    void core.memoryStore.inspect(selectedIdFromCursor).catch(() => {});
+  }, [
+    browseResults,
+    connection.status,
+    core.memoryStore,
+    memory.inspect.memoryItemId,
+    selectedIdFromCursor,
+  ]);
 
   useEffect(() => {
     if (connection.status !== "connected") return;
@@ -444,37 +510,54 @@ function MemoryScreen({
     void core.memoryStore.list().catch(() => {});
   }, [connection.status, core.memoryStore]);
 
-  const headerLabel = memory.mode === "search" ? `Search: ${memory.query ?? ""}` : "List";
+  const headerLabel =
+    memory.browse.request?.kind === "search" ? `Search: ${memory.browse.request.query}` : "List";
+  const browseErrorLabel = memory.browse.error ? memory.browse.error.message : null;
+  const exportArtifactId = memory.export.artifactId;
 
   return (
     <Box flexDirection="column">
       <Text dimColor>Keys: ↑/↓ select /=search r=refresh f=forget p=export</Text>
       <Text>
         Mode: <Text bold>{headerLabel}</Text>
-        {memory.loading ? <Text dimColor> (loading)</Text> : null}
+        {memory.browse.loading ? <Text dimColor> (loading)</Text> : null}
       </Text>
-      {memory.error ? <Text color="red">Error: {memory.error}</Text> : null}
-      {memory.lastExportArtifactId ? (
-        <Text>
-          Last export artifact: <Text bold>{memory.lastExportArtifactId}</Text>
-        </Text>
+      {browseErrorLabel ? <Text color="red">Error: {browseErrorLabel}</Text> : null}
+      {memory.export.error ? (
+        <Text color="red">Export error: {memory.export.error.message}</Text>
       ) : null}
-      {memory.lastForgetDeletedCount !== null ? (
-        <Text dimColor>Last forget deleted: {String(memory.lastForgetDeletedCount)}</Text>
+      {exportArtifactId ? (
+        <Text>
+          Last export artifact: <Text bold>{exportArtifactId}</Text>
+        </Text>
       ) : null}
 
       <Box flexDirection="column" paddingTop={1}>
         {ids.length === 0 ? (
           <Text dimColor>No memory items.</Text>
-        ) : (
-          ids.map((id, index) => {
-            const hit = memory.hitsById[id];
-            const item = memory.itemsById[id];
+        ) : browseResults?.kind === "list" ? (
+          browseResults.items.map((item, index) => {
+            const id = item.memory_item_id;
             const isSelected = index === effectiveCursor;
             const prefix = isSelected ? "> " : "  ";
-            const kind = hit?.kind ?? item?.kind ?? "?";
-            const summary = hit?.snippet ?? (item ? formatMemoryItemSummary(item) : "");
-            const score = hit ? ` score=${hit.score.toFixed(2)}` : "";
+            const kind = item.kind;
+            const summary = formatMemoryItemSummary(item);
+            const label = `${id.slice(0, 8)} [${kind}] ${summary}`.trim();
+            return (
+              <Text key={id} inverse={isSelected}>
+                {prefix}
+                {truncateText(label, 78)}
+              </Text>
+            );
+          })
+        ) : browseResults?.kind === "search" ? (
+          browseResults.hits.map((hit, index) => {
+            const id = hit.memory_item_id;
+            const isSelected = index === effectiveCursor;
+            const prefix = isSelected ? "> " : "  ";
+            const kind = hit.kind;
+            const summary = hit.snippet ?? "";
+            const score = ` score=${hit.score.toFixed(2)}`;
             const label = `${id.slice(0, 8)} [${kind}]${score} ${summary}`.trim();
             return (
               <Text key={id} inverse={isSelected}>
@@ -483,52 +566,24 @@ function MemoryScreen({
               </Text>
             );
           })
-        )}
+        ) : null}
       </Box>
 
       {selectedIdFromCursor ? (
         <Box flexDirection="column" paddingTop={1}>
           <Text bold>Selected</Text>
           <Text>{selectedIdFromCursor}</Text>
-          {selected ? (
-            <>
-              <Text dimColor>
-                kind={selected.kind} agent={selected.agent_id} sensitivity={selected.sensitivity}
-              </Text>
-              {selected.tags.length > 0 ? (
-                <Text dimColor>tags: {selected.tags.join(", ")}</Text>
-              ) : null}
-              <Text dimColor>
-                created: {selected.created_at}
-                {selected.updated_at ? ` updated: ${selected.updated_at}` : ""}
-              </Text>
-              <Text dimColor>provenance: {selected.provenance.source_kind}</Text>
-              <Box flexDirection="column" paddingTop={1}>
-                {selected.kind === "fact" ? (
-                  <>
-                    <Text>
-                      <Text bold>{selected.key}</Text>
-                    </Text>
-                    <Text dimColor>confidence: {String(selected.confidence)}</Text>
-                    <Text dimColor>observed_at: {selected.observed_at}</Text>
-                    <Text>{truncateText(JSON.stringify(selected.value), 120)}</Text>
-                  </>
-                ) : null}
-                {selected.kind === "note" ? <Text>{selected.body_md}</Text> : null}
-                {selected.kind === "procedure" ? <Text>{selected.body_md}</Text> : null}
-                {selected.kind === "episode" ? (
-                  <>
-                    <Text dimColor>occurred_at: {selected.occurred_at}</Text>
-                    <Text>{selected.summary_md}</Text>
-                  </>
-                ) : null}
-              </Box>
-            </>
+          {selectedInspectError ? (
+            <Text color="red">Error loading item: {selectedInspectError.message}</Text>
+          ) : selectedInspectLoading ? (
+            <Text dimColor>Loading item details…</Text>
+          ) : selectedInspect ? (
+            <MemoryItemDetails item={selectedInspect} />
+          ) : selectedFromList ? (
+            <MemoryItemDetails item={selectedFromList} />
           ) : selectedHit ? (
             <Text dimColor>Loading item details…</Text>
-          ) : (
-            <Text dimColor>Loading…</Text>
-          )}
+          ) : null}
         </Box>
       ) : null}
     </Box>
@@ -652,7 +707,10 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
     const snapshot = coreRef.current.memoryStore.getSnapshot();
     setMemorySearchDialog({
       open: true,
-      query: snapshot.mode === "search" && snapshot.query ? snapshot.query : "",
+      query:
+        snapshot.browse.request?.kind === "search" && snapshot.browse.request.query
+          ? snapshot.browse.request.query
+          : "",
       busy: false,
       error: null,
     });
@@ -673,7 +731,7 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
       if (!query) {
         await coreRef.current.memoryStore.list();
       } else {
-        await coreRef.current.memoryStore.search(query);
+        await coreRef.current.memoryStore.search({ query });
       }
       setMemorySearchDialog({ open: false, query: "", busy: false, error: null });
     } catch (error) {
@@ -724,8 +782,9 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
 
     setMemoryForgetDialog((prev) => ({ ...prev, busy: true, error: null }));
     try {
-      await coreRef.current.memoryStore.forgetById(snapshot.memoryItemId);
-      void coreRef.current.memoryStore.refresh();
+      await coreRef.current.memoryStore.forget([
+        { kind: "id", memory_item_id: snapshot.memoryItemId },
+      ]);
       setMemoryForgetDialog({
         open: false,
         memoryItemId: null,
@@ -831,6 +890,12 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
       .slice(0, MAX_RUNS_VISIBLE)
       .map((run) => run.run_id);
 
+    const memoryItemIds = memory.browse.results
+      ? memory.browse.results.kind === "list"
+        ? memory.browse.results.items.map((item) => item.memory_item_id)
+        : memory.browse.results.hits.map((hit) => hit.memory_item_id)
+      : [];
+
     const reduced = reduceTuiInput({
       state: uiStateRef.current,
       input,
@@ -839,7 +904,7 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
       approvalsPendingIds: approvals.pendingIds,
       pairingIds,
       runIds,
-      memoryItemIds: memory.itemIds,
+      memoryItemIds,
     });
 
     uiStateRef.current = reduced.state;
@@ -863,7 +928,18 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
           runtime.exitAdminMode();
           return;
         case "refreshMemory":
-          void core.memoryStore.refresh();
+          if (memory.browse.request?.kind === "search") {
+            void core.memoryStore.search({
+              query: memory.browse.request.query,
+              filter: memory.browse.request.filter,
+              limit: memory.browse.request.limit,
+            });
+            return;
+          }
+          void core.memoryStore.list({
+            filter: memory.browse.request?.filter,
+            limit: memory.browse.request?.limit,
+          });
           return;
         case "openMemorySearch":
           openMemorySearchDialog();
@@ -872,7 +948,7 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
           openMemoryForgetDialog(command.memoryItemId);
           return;
         case "exportMemory":
-          void core.memoryStore.exportAll().catch(() => {});
+          void core.memoryStore.export().catch(() => {});
           return;
         case "refreshApprovals":
           void core.approvalsStore.refreshPending();
