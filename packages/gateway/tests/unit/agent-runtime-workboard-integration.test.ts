@@ -162,7 +162,7 @@ describe("AgentRuntime (WorkBoard integration)", () => {
     expect(stitched).toContain("Focus digest work item");
   });
 
-  it("keeps Doing WorkItems in the Work focus digest even when backlog is large", async () => {
+  it("keeps Doing WorkItems in the Work focus digest even when Ready is large", async () => {
     generateTextMock.mockResolvedValueOnce({ text: "ok", steps: [] });
 
     const { createContainer } = await import("../../src/container.js");
@@ -186,12 +186,13 @@ describe("AgentRuntime (WorkBoard integration)", () => {
     await dal.transitionItem({ scope, work_item_id: doingId, status: "doing" });
 
     for (let i = 0; i < 60; i += 1) {
-      await dal.createItem({
+      const item = await dal.createItem({
         scope,
         createdAtIso: "2026-02-28T00:00:00.000Z",
         createdFromSessionKey: "agent:default:test:default:channel:thread-1",
-        item: { kind: "action", title: `Backlog item ${String(i)}` },
+        item: { kind: "action", title: `Ready item ${String(i)}` },
       });
+      await dal.transitionItem({ scope, work_item_id: item.work_item_id, status: "ready" });
     }
 
     const runtime = new AgentRuntime({

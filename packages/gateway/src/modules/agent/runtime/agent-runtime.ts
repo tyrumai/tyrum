@@ -449,15 +449,11 @@ export class AgentRuntime {
         this.opts.container.db,
         this.opts.container.redactionEngine,
       );
-      const { items } = await workboard.listItems({
-        scope,
-        statuses: ["doing", "blocked", "ready"],
-        limit: 50,
-      });
-
-      const doing = items.filter((item) => item.status === "doing").slice(0, 3);
-      const blocked = items.filter((item) => item.status === "blocked").slice(0, 3);
-      const ready = items.filter((item) => item.status === "ready").slice(0, 3);
+      const [{ items: doing }, { items: blocked }, { items: ready }] = await Promise.all([
+        workboard.listItems({ scope, statuses: ["doing"], limit: 3 }),
+        workboard.listItems({ scope, statuses: ["blocked"], limit: 3 }),
+        workboard.listItems({ scope, statuses: ["ready"], limit: 3 }),
+      ]);
 
       if (doing.length === 0 && blocked.length === 0 && ready.length === 0) {
         return "No active WorkItems.";
