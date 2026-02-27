@@ -864,4 +864,97 @@ describe("handleClientMessage (work.*)", () => {
     expect(err.code).toBe("internal_error");
     expect(err.message).toBe("internal error");
   });
+
+  it("denies work.create for non-client WS roles", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, { role: "node" });
+    const client = cm.getClient(id)!;
+
+    const db = openTestSqliteDb();
+    try {
+      const deps = makeDeps(cm, { db });
+      const res = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-1",
+          type: "work.create",
+          payload: {
+            tenant_id: "default",
+            agent_id: "default",
+            workspace_id: "default",
+            item: { kind: "action", title: "Hello" },
+          },
+        }),
+        deps,
+      );
+
+      expect((res as unknown as { ok: boolean }).ok).toBe(false);
+      const err = (res as unknown as { error: { code: string; message: string } }).error;
+      expect(err.code).toBe("unauthorized");
+      expect(err.message).toBe("only operator clients may create work items");
+    } finally {
+      await db.close();
+    }
+  });
+
+  it("returns unsupported_request for work.create when DB is not configured", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm);
+    const client = cm.getClient(id)!;
+
+    const deps = makeDeps(cm);
+    const res = await handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "r-1",
+        type: "work.create",
+        payload: {
+          tenant_id: "default",
+          agent_id: "default",
+          workspace_id: "default",
+          item: { kind: "action", title: "Hello" },
+        },
+      }),
+      deps,
+    );
+
+    expect((res as unknown as { ok: boolean }).ok).toBe(false);
+    const err = (res as unknown as { error: { code: string; message: string } }).error;
+    expect(err.code).toBe("unsupported_request");
+    expect(err.message).toBe("work.create not supported");
+  });
+
+  it("returns invalid_request for malformed work.create payloads", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm);
+    const client = cm.getClient(id)!;
+
+    const db = openTestSqliteDb();
+    try {
+      const deps = makeDeps(cm, { db });
+      const res = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-1",
+          type: "work.create",
+          payload: {
+            tenant_id: "default",
+            agent_id: "default",
+            workspace_id: "default",
+            item: { kind: "action" },
+          },
+        }),
+        deps,
+      );
+
+      expect((res as unknown as { ok: boolean }).ok).toBe(false);
+      const err = (res as unknown as { error: { code: string; message: string; details?: any } })
+        .error;
+      expect(err.code).toBe("invalid_request");
+      expect(typeof err.message).toBe("string");
+      expect(err.details?.issues).toBeDefined();
+    } finally {
+      await db.close();
+    }
+  });
 });
