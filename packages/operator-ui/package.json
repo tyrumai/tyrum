@@ -17,9 +17,12 @@
     "build": "tsdown src/index.ts --format esm --dts"
   },
   "dependencies": {
+    "@radix-ui/react-separator": "^1.1.8",
+    "@radix-ui/react-slot": "^1.2.4",
     "@tyrum/client": "workspace:*",
     "@tyrum/operator-core": "workspace:*",
     "clsx": "^2.1.1",
+    "lucide-react": "^0.575.0",
     "tailwind-merge": "^3.5.0"
   },
   "peerDependencies": {
