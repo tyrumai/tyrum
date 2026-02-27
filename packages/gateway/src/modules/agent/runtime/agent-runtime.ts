@@ -32,6 +32,8 @@ import {
   AgentTurnRequest,
   AgentTurnResponse,
   ContextReport as ContextReportSchema,
+  Lane,
+  SubagentSessionKey,
   WorkspaceId,
 } from "@tyrum/schemas";
 import type { Decision } from "@tyrum/schemas";
@@ -1400,7 +1402,7 @@ export class AgentRuntime {
     const resolvedInput = resolveAgentTurnInput(input);
     const containerKind: NormalizedContainerKind =
       input.container_kind ?? resolvedInput.envelope?.container.kind ?? "channel";
-    const key = buildAgentTurnKey({
+    const defaultKey = buildAgentTurnKey({
       agentId: this.agentId,
       workspaceId: this.workspaceId,
       channel: resolvedInput.channel,
@@ -1408,7 +1410,13 @@ export class AgentRuntime {
       threadId: resolvedInput.thread_id,
       deliveryAccount: resolvedInput.envelope?.delivery.account,
     });
-    const lane = "main";
+    const laneQueueScope = resolveLaneQueueScope(resolvedInput.metadata);
+    const canOverride =
+      laneQueueScope &&
+      Lane.safeParse(laneQueueScope.lane).success &&
+      SubagentSessionKey.safeParse(laneQueueScope.key).success;
+    const key = canOverride ? laneQueueScope.key : defaultKey;
+    const lane = canOverride ? laneQueueScope.lane : "main";
     const planId = `agent-turn-${this.agentId}-${randomUUID()}`;
     const requestId = resolveTurnRequestId(input);
 

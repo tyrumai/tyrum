@@ -2102,4 +2102,112 @@ export class WorkboardDal {
       return row ? toSubagent(row) : undefined;
     });
   }
+
+  async markSubagentClosed(params: {
+    scope: WorkScope;
+    subagent_id: string;
+    closedAtIso?: string;
+  }): Promise<SubagentDescriptor | undefined> {
+    const nowIso = params.closedAtIso ?? new Date().toISOString();
+
+    return await this.db.transaction(async (tx) => {
+      const existing = await tx.get<RawSubagentRow>(
+        `SELECT *
+         FROM subagents
+         WHERE tenant_id = ?
+           AND agent_id = ?
+           AND workspace_id = ?
+           AND subagent_id = ?`,
+        [
+          params.scope.tenant_id,
+          params.scope.agent_id,
+          params.scope.workspace_id,
+          params.subagent_id,
+        ],
+      );
+      if (!existing) return undefined;
+
+      if (existing.status === "closed" || existing.status === "failed") {
+        return toSubagent(existing);
+      }
+
+      const row = await tx.get<RawSubagentRow>(
+        `UPDATE subagents
+         SET status = ?,
+             updated_at = ?,
+             closed_at = COALESCE(closed_at, ?)
+         WHERE tenant_id = ?
+           AND agent_id = ?
+           AND workspace_id = ?
+           AND subagent_id = ?
+         RETURNING *`,
+        [
+          "closed",
+          nowIso,
+          nowIso,
+          params.scope.tenant_id,
+          params.scope.agent_id,
+          params.scope.workspace_id,
+          params.subagent_id,
+        ],
+      );
+      return row ? toSubagent(row) : undefined;
+    });
+  }
+
+  async markSubagentFailed(params: {
+    scope: WorkScope;
+    subagent_id: string;
+    reason?: string;
+    failedAtIso?: string;
+  }): Promise<SubagentDescriptor | undefined> {
+    const nowIso = params.failedAtIso ?? new Date().toISOString();
+    const closeReason = params.reason?.trim() || null;
+
+    return await this.db.transaction(async (tx) => {
+      const existing = await tx.get<RawSubagentRow>(
+        `SELECT *
+         FROM subagents
+         WHERE tenant_id = ?
+           AND agent_id = ?
+           AND workspace_id = ?
+           AND subagent_id = ?`,
+        [
+          params.scope.tenant_id,
+          params.scope.agent_id,
+          params.scope.workspace_id,
+          params.subagent_id,
+        ],
+      );
+      if (!existing) return undefined;
+
+      if (existing.status === "closed" || existing.status === "failed") {
+        return toSubagent(existing);
+      }
+
+      const row = await tx.get<RawSubagentRow>(
+        `UPDATE subagents
+         SET status = ?,
+             updated_at = ?,
+             closed_at = COALESCE(closed_at, ?),
+             close_reason = COALESCE(close_reason, ?)
+         WHERE tenant_id = ?
+           AND agent_id = ?
+           AND workspace_id = ?
+           AND subagent_id = ?
+         RETURNING *`,
+        [
+          "failed",
+          nowIso,
+          nowIso,
+          closeReason,
+          params.scope.tenant_id,
+          params.scope.agent_id,
+          params.scope.workspace_id,
+          params.subagent_id,
+        ],
+      );
+      return row ? toSubagent(row) : undefined;
+    });
+  }
 }
