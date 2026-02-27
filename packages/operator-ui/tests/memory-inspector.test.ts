@@ -365,6 +365,146 @@ describe("MemoryInspector", () => {
     cleanupTestRoot(testRoot);
   });
 
+  it("updates tags when stored item contains duplicate tags", async () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+    const item = {
+      ...sampleNote("123e4567-e89b-12d3-a456-426614174230", "Body"),
+      tags: ["x", "x"],
+    };
+    const updated: MemoryItem = { ...item, tags: ["x", "y"], updated_at: "2026-02-19T12:00:01Z" };
+
+    ws.memoryList = vi.fn(async () => ({ v: 1, items: [item], next_cursor: undefined }) as unknown);
+    ws.memoryGet = vi.fn(async () => ({ v: 1, item }) as unknown);
+    ws.memoryUpdate = vi.fn(async () => ({ v: 1, item: updated }) as unknown);
+
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const testRoot = renderIntoDocument(React.createElement(MemoryInspector, { core }));
+    await act(async () => {});
+
+    const itemButton = testRoot.container.querySelector<HTMLButtonElement>(
+      `[data-testid="memory-item-${item.memory_item_id}"]`,
+    );
+    expect(itemButton).not.toBeNull();
+
+    await act(async () => {
+      itemButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const tagsField = testRoot.container.querySelector<HTMLInputElement>(
+      '[data-testid="memory-edit-tags"]',
+    );
+    expect(tagsField).not.toBeNull();
+
+    await act(async () => {
+      tagsField!.value = "x, y";
+      tagsField!.dispatchEvent(new Event("input", { bubbles: true }));
+      tagsField!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const saveButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="memory-save"]',
+    );
+    expect(saveButton).not.toBeNull();
+
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(ws.memoryUpdate).toHaveBeenCalledWith({
+      v: 1,
+      memory_item_id: item.memory_item_id,
+      patch: { tags: ["x", "y"] },
+    });
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("clears save errors when switching inspected items", async () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+    const itemA = sampleNote("123e4567-e89b-12d3-a456-426614174231", "First body");
+    const itemB = sampleNote("123e4567-e89b-12d3-a456-426614174232", "Second body");
+
+    ws.memoryList = vi.fn(
+      async () => ({ v: 1, items: [itemA, itemB], next_cursor: undefined }) as unknown,
+    );
+    ws.memoryGet = vi.fn(async (payload) => {
+      const memoryItemId = (payload as { memory_item_id?: string }).memory_item_id;
+      const item = memoryItemId === itemB.memory_item_id ? itemB : itemA;
+      return { v: 1, item } as unknown;
+    });
+    ws.memoryUpdate = vi.fn(async () => {
+      throw new Error("save failed");
+    });
+
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const testRoot = renderIntoDocument(React.createElement(MemoryInspector, { core }));
+    await act(async () => {});
+
+    const itemAButton = testRoot.container.querySelector<HTMLButtonElement>(
+      `[data-testid="memory-item-${itemA.memory_item_id}"]`,
+    );
+    expect(itemAButton).not.toBeNull();
+
+    await act(async () => {
+      itemAButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const bodyField = testRoot.container.querySelector<HTMLTextAreaElement>(
+      '[data-testid="memory-edit-body"]',
+    );
+    expect(bodyField).not.toBeNull();
+
+    await act(async () => {
+      bodyField!.value = "Changed body";
+      bodyField!.dispatchEvent(new Event("input", { bubbles: true }));
+      bodyField!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const saveButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="memory-save"]',
+    );
+    expect(saveButton).not.toBeNull();
+
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await act(async () => {});
+
+    const saveError = testRoot.container.querySelector<HTMLDivElement>(
+      '[data-testid="memory-save-error"]',
+    );
+    expect(saveError).not.toBeNull();
+    expect(saveError?.textContent).toContain("save failed");
+
+    const itemBButton = testRoot.container.querySelector<HTMLButtonElement>(
+      `[data-testid="memory-item-${itemB.memory_item_id}"]`,
+    );
+    expect(itemBButton).not.toBeNull();
+
+    await act(async () => {
+      itemBButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await act(async () => {});
+
+    expect(testRoot.container.querySelector('[data-testid="memory-save-error"]')).toBeNull();
+
+    cleanupTestRoot(testRoot);
+  });
+
   it("forgets a memory item with explicit confirmation and shows tombstone", async () => {
     const ws = new FakeWsClient();
     const http = createFakeHttpClient();
@@ -731,6 +871,83 @@ describe("MemoryInspector", () => {
       (window as unknown as { tyrumDesktop?: unknown }).tyrumDesktop = previousDesktop;
       (URL as unknown as { createObjectURL?: unknown }).createObjectURL = previousCreateObjectUrl;
       (URL as unknown as { revokeObjectURL?: unknown }).revokeObjectURL = previousRevokeObjectUrl;
+    }
+  });
+
+  it("clears stale download errors when starting a new export", async () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+
+    ws.memoryList = vi.fn(async () => ({ v: 1, items: [], next_cursor: undefined }) as unknown);
+    ws.memoryExport = vi.fn(async () => ({ v: 1, artifact_id: "artifact-999" }) as unknown);
+
+    const httpFetch = vi.fn(async () => ({
+      status: 200,
+      headers: { "content-type": "application/json", "content-disposition": "" },
+      bodyText: "{}",
+    }));
+    const getOperatorConnection = vi.fn(async () => ({
+      mode: "embedded",
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test/",
+      token: "",
+      tlsCertFingerprint256: "",
+    }));
+
+    const previousDesktop = (window as unknown as { tyrumDesktop?: unknown }).tyrumDesktop;
+    (window as unknown as { tyrumDesktop?: unknown }).tyrumDesktop = {
+      gateway: { httpFetch, getOperatorConnection },
+    } as unknown;
+
+    try {
+      const core = createOperatorCore({
+        wsUrl: "ws://example.test/ws",
+        httpBaseUrl: "http://example.test",
+        auth: createBearerTokenAuth("test"),
+        deps: { ws, http },
+      });
+
+      const testRoot = renderIntoDocument(React.createElement(MemoryInspector, { core }));
+      await act(async () => {});
+
+      const exportButton = testRoot.container.querySelector<HTMLButtonElement>(
+        '[data-testid="memory-export"]',
+      );
+      expect(exportButton).not.toBeNull();
+
+      await act(async () => {
+        exportButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+      await act(async () => {});
+
+      const downloadButton = testRoot.container.querySelector<HTMLButtonElement>(
+        '[data-testid="memory-export-download"]',
+      );
+      expect(downloadButton).not.toBeNull();
+
+      await act(async () => {
+        downloadButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+      await act(async () => {});
+
+      const downloadError = testRoot.container.querySelector<HTMLDivElement>(
+        '[data-testid="memory-export-download-error"]',
+      );
+      expect(downloadError).not.toBeNull();
+      expect(downloadError?.textContent).toContain("Missing gateway token");
+
+      await act(async () => {
+        exportButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+      await act(async () => {});
+
+      expect(
+        testRoot.container.querySelector('[data-testid="memory-export-download-error"]'),
+      ).toBeNull();
+
+      cleanupTestRoot(testRoot);
+    } finally {
+      (window as unknown as { tyrumDesktop?: unknown }).tyrumDesktop = previousDesktop;
     }
   });
 

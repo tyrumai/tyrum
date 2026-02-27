@@ -112,6 +112,8 @@ function equalStringSet(a: string[], b: string[]): boolean {
   if (a.length !== b.length) return false;
   const setA = new Set(a);
   if (setA.size !== a.length) return false;
+  const setB = new Set(b);
+  if (setB.size !== b.length) return false;
   for (const value of b) {
     if (!setA.has(value)) return false;
   }
@@ -147,12 +149,15 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
   const [provenanceSessionIds, setProvenanceSessionIds] = useState("");
   const [downloadBusy, setDownloadBusy] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     void core.memoryStore.list({ limit: 50 });
   }, [core]);
 
   useEffect(() => {
+    setSaveError(null);
     const item = memory.inspect.item;
     if (!item) {
       setBodyMdDraft("");
@@ -174,9 +179,6 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
       setSummaryMdDraft("");
     }
   }, [memory.inspect.item]);
-
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
 
   const save = async (): Promise<void> => {
     const item = memory.inspect.item;
@@ -496,6 +498,7 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
           data-testid="memory-export"
           disabled={memory.export.running}
           onClick={() => {
+            setDownloadError(null);
             void core.memoryStore.export({ includeTombstones, filter });
           }}
         >
