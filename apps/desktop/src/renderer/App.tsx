@@ -6,13 +6,22 @@ import { Connection } from "./pages/Connection.js";
 import { Permissions } from "./pages/Permissions.js";
 import { Diagnostics } from "./pages/Diagnostics.js";
 import { Logs } from "./pages/Logs.js";
+import { WorkBoard } from "./pages/WorkBoard.js";
 import { ConsentModal } from "./components/ConsentModal.js";
 import { getPageIdForDeepLink } from "./deep-links.js";
 
-type PageId = "overview" | "gateway" | "connection" | "permissions" | "diagnostics" | "logs";
+type PageId =
+  | "overview"
+  | "work"
+  | "gateway"
+  | "connection"
+  | "permissions"
+  | "diagnostics"
+  | "logs";
 
 const VALID_PAGES = new Set<PageId>([
   "overview",
+  "work",
   "gateway",
   "connection",
   "permissions",
@@ -84,6 +93,7 @@ export function App() {
   return (
     <Layout currentPage={page} onNavigate={handleNavigate} fullBleed={page === "gateway"}>
       {page === "overview" && <Overview />}
+      {page === "work" && <WorkBoard />}
       {page === "gateway" && <Gateway />}
       {page === "connection" && <Connection />}
       {page === "permissions" && <Permissions />}
