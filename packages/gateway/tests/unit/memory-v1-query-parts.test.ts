@@ -65,6 +65,16 @@ describe("buildMemoryV1ItemQueryParts", () => {
     ]);
   });
 
+  it("applies sensitivities filter when provided", () => {
+    const parts = buildMemoryV1ItemQueryParts({
+      agent: "agent-a",
+      filter: { sensitivities: ["private", "sensitive"] },
+    });
+
+    expect(parts.where).toContain("i.sensitivity IN (?, ?)");
+    expect(parts.values).toEqual(["agent-a", "private", "sensitive"]);
+  });
+
   it("avoids provenance join when provenance filter is empty", () => {
     const parts = buildMemoryV1ItemQueryParts({
       agent: "agent-a",

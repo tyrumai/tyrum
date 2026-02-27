@@ -132,6 +132,12 @@ export function buildMemoryV1ItemQueryParts(params: {
     values.push(...filter.kinds);
   }
 
+  if (filter?.sensitivities && filter.sensitivities.length > 0) {
+    const sensitivities = [...new Set(filter.sensitivities)];
+    where.push(`i.sensitivity IN (${sensitivities.map(() => "?").join(", ")})`);
+    values.push(...sensitivities);
+  }
+
   if (filter?.keys && filter.keys.length > 0) {
     where.push(`i.key IN (${filter.keys.map(() => "?").join(", ")})`);
     values.push(...filter.keys);
