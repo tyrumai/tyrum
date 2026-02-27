@@ -94,7 +94,7 @@ ON memory_item_tags (agent_id, memory_item_id);
 CREATE TABLE IF NOT EXISTS memory_tombstones (
   memory_item_id TEXT PRIMARY KEY,
   agent_id TEXT NOT NULL DEFAULT 'default',
-  deleted_at TEXT NOT NULL,
+  deleted_at TIMESTAMPTZ NOT NULL,
   deleted_by TEXT NOT NULL CHECK (deleted_by IN ('user', 'operator', 'system', 'budget', 'consolidation')),
   reason TEXT
 );
