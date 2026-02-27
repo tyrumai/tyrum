@@ -65,4 +65,25 @@ describe("Button", () => {
 
     cleanupTestRoot({ container, root });
   });
+
+  it("supports variant, size, and disabled props", () => {
+    const Button = (operatorUi as Record<string, unknown>)["Button"];
+    expect(Button).toBeDefined();
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(
+        Button as React.ComponentType,
+        { variant: "outline", size: "lg", disabled: true, className: "test-button" },
+        "Disabled",
+      ),
+    );
+
+    const el = container.querySelector("button.test-button") as HTMLButtonElement | null;
+    expect(el).not.toBeNull();
+    expect(el?.disabled).toBe(true);
+    expect(el?.className).toContain("border-border");
+    expect(el?.className).toContain("h-10");
+
+    cleanupTestRoot({ container, root });
+  });
 });

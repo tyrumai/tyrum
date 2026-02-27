@@ -25,6 +25,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
         <textarea
           ref={ref}
           id={id}
+          required={required}
           aria-invalid={error ? "true" : undefined}
           aria-describedby={describedById}
           className={cn(

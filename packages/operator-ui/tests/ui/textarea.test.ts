@@ -24,4 +24,23 @@ describe("Textarea", () => {
 
     cleanupTestRoot({ container, root });
   });
+
+  it("supports error state", () => {
+    const Textarea = (operatorUi as Record<string, unknown>)["Textarea"];
+    expect(Textarea).toBeDefined();
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(Textarea as React.ComponentType, {
+        id: "notes",
+        label: "Notes",
+        error: "Notes are required",
+      }),
+    );
+
+    const textarea = container.querySelector("textarea#notes");
+    expect(textarea?.getAttribute("aria-invalid")).toBe("true");
+    expect(container.textContent).toContain("Notes are required");
+
+    cleanupTestRoot({ container, root });
+  });
 });
