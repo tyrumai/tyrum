@@ -26,6 +26,11 @@ class FakeWsClient {
   disconnect = vi.fn(() => {});
   approvalList = vi.fn(async () => ({ approvals: [], next_cursor: undefined }));
   approvalResolve = vi.fn(async () => ({ approval: sampleApprovalApproved() }));
+  memorySearch = vi.fn(async () => ({ v: 1, hits: [], next_cursor: undefined }) as unknown);
+  memoryList = vi.fn(async () => ({ v: 1, items: [], next_cursor: undefined }) as unknown);
+  memoryGet = vi.fn(async () => ({ v: 1, item: {} }) as unknown);
+  memoryForget = vi.fn(async () => ({ v: 1, deleted_count: 0, tombstones: [] }) as unknown);
+  memoryExport = vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" }) as unknown);
 
   on(event: string, handler: Handler): void {
     const existing = this.handlers.get(event);

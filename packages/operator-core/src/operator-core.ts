@@ -6,6 +6,9 @@ import {
   type ExecutionAttempt,
   type ExecutionRun,
   type ExecutionStep,
+  type MemoryItemId,
+  type MemoryItem,
+  type MemoryTombstone,
 } from "@tyrum/client";
 import { httpAuthForAuth, wsTokenForAuth, type OperatorAuthStrategy } from "./auth.js";
 import type { OperatorHttpClient, OperatorWsClient } from "./deps.js";
@@ -20,6 +23,7 @@ import {
   type OperatorPresenceEntry,
   type StatusStore,
 } from "./stores/status-store.js";
+import { createMemoryStore, type MemoryStore } from "./stores/memory-store.js";
 
 export interface OperatorCoreOptions {
   wsUrl: string;
@@ -44,6 +48,7 @@ export interface OperatorCore {
   runsStore: RunsStore;
   pairingStore: PairingStore;
   statusStore: StatusStore;
+  memoryStore: MemoryStore;
   connect(): void;
   disconnect(): void;
   dispose(): void;
@@ -104,6 +109,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
   const pairing = createPairingStore(http);
   const status = createStatusStore(http);
   const runs = createRunsStore();
+  const memory = createMemoryStore(ws);
 
   const unsubscribes: Unsubscribe[] = [];
   const on = (event: string, handler: (data: unknown) => void): void => {
@@ -199,6 +205,59 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     }
   });
 
+  on("memory.item.created", (data) => {
+    const payload = readPayload(data);
+    const item = payload?.["item"];
+    if (item) {
+      memory.handleMemoryItemUpsert(item as MemoryItem);
+    }
+  });
+
+  on("memory.item.updated", (data) => {
+    const payload = readPayload(data);
+    const item = payload?.["item"];
+    if (item) {
+      memory.handleMemoryItemUpsert(item as MemoryItem);
+    }
+  });
+
+  on("memory.item.consolidated", (data) => {
+    const payload = readPayload(data);
+    const fromIds = payload?.["from_memory_item_ids"];
+    const item = payload?.["item"];
+    if (item && Array.isArray(fromIds) && fromIds.every((id) => typeof id === "string")) {
+      memory.handleMemoryConsolidated(fromIds as MemoryItemId[], item as MemoryItem);
+      return;
+    }
+    if (item) {
+      memory.handleMemoryItemUpsert(item as MemoryItem);
+    }
+  });
+
+  on("memory.item.deleted", (data) => {
+    const payload = readPayload(data);
+    const tombstone = payload?.["tombstone"];
+    if (tombstone) {
+      memory.handleMemoryTombstone(tombstone as MemoryTombstone);
+    }
+  });
+
+  on("memory.item.forgotten", (data) => {
+    const payload = readPayload(data);
+    const tombstone = payload?.["tombstone"];
+    if (tombstone) {
+      memory.handleMemoryTombstone(tombstone as MemoryTombstone);
+    }
+  });
+
+  on("memory.export.completed", (data) => {
+    const payload = readPayload(data);
+    const artifactId = payload?.["artifact_id"];
+    if (typeof artifactId === "string") {
+      memory.handleMemoryExportCompleted(artifactId);
+    }
+  });
+
   on("run.updated", (data) => {
     const payload = readPayload(data);
     const run = payload?.["run"];
@@ -245,6 +304,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     pairingStore: pairing.store,
     statusStore: status.store,
     runsStore: runs.store,
+    memoryStore: memory.store,
     connect() {
       connection.store.connect();
     },

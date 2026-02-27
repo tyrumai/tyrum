@@ -5,6 +5,16 @@ import type {
   PresenceResponse,
   StatusResponse,
   UsageResponse,
+  WsMemoryExportPayload,
+  WsMemoryExportResult,
+  WsMemoryForgetPayload,
+  WsMemoryForgetResult,
+  WsMemoryGetPayload,
+  WsMemoryGetResult,
+  WsMemoryListPayload,
+  WsMemoryListResult,
+  WsMemorySearchPayload,
+  WsMemorySearchResult,
 } from "@tyrum/client";
 
 export interface OperatorWsClient {
@@ -15,6 +25,11 @@ export interface OperatorWsClient {
   off(event: string, handler: (data: unknown) => void): void;
   approvalList(payload?: unknown): Promise<{ approvals: Approval[]; next_cursor?: string }>;
   approvalResolve(payload: unknown): Promise<{ approval: Approval }>;
+  memorySearch(payload: WsMemorySearchPayload): Promise<WsMemorySearchResult>;
+  memoryList(payload: WsMemoryListPayload): Promise<WsMemoryListResult>;
+  memoryGet(payload: WsMemoryGetPayload): Promise<WsMemoryGetResult>;
+  memoryForget(payload: WsMemoryForgetPayload): Promise<WsMemoryForgetResult>;
+  memoryExport(payload: WsMemoryExportPayload): Promise<WsMemoryExportResult>;
   commandExecute?(command: string, context?: unknown): Promise<unknown>;
 }
 
