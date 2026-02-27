@@ -45,6 +45,7 @@ export { EmptyState } from "./components/ui/empty-state.js";
 export type { SkeletonProps } from "./components/ui/skeleton.js";
 export { Skeleton } from "./components/ui/skeleton.js";
 
+export type { DialogFooterProps, DialogHeaderProps } from "./components/ui/dialog.js";
 export {
   Dialog,
   DialogClose,
