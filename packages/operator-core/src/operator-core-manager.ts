@@ -1,27 +1,23 @@
-import {
-  createOperatorCore,
-  selectAuthForAdminMode,
-  type AdminModeStore,
-  type OperatorAuthStrategy,
-  type OperatorCore,
-} from "@tyrum/operator-core";
+import { selectAuthForAdminMode, type OperatorAuthStrategy } from "./auth.js";
+import { createOperatorCore, type OperatorCore } from "./operator-core.js";
+import type { AdminModeStore } from "./stores/admin-mode-store.js";
 
-export type WebOperatorCoreFactory = (options: {
+export type OperatorCoreFactory = (options: {
   wsUrl: string;
   httpBaseUrl: string;
   auth: OperatorAuthStrategy;
   adminModeStore: AdminModeStore;
 }) => OperatorCore;
 
-export type WebOperatorCoreManagerOptions = {
+export type OperatorCoreManagerOptions = {
   wsUrl: string;
   httpBaseUrl: string;
   baselineAuth: OperatorAuthStrategy;
   adminModeStore: AdminModeStore;
-  createCore?: WebOperatorCoreFactory;
+  createCore?: OperatorCoreFactory;
 };
 
-export type WebOperatorCoreManager = {
+export type OperatorCoreManager = {
   getCore(): OperatorCore;
   subscribe(listener: () => void): () => void;
   dispose(): void;
@@ -43,10 +39,10 @@ function shouldReconnectCore(core: OperatorCore): boolean {
   return status === "connecting" || status === "connected";
 }
 
-export function createWebOperatorCoreManager(
-  options: WebOperatorCoreManagerOptions,
-): WebOperatorCoreManager {
-  const createCore: WebOperatorCoreFactory =
+export function createOperatorCoreManager(
+  options: OperatorCoreManagerOptions,
+): OperatorCoreManager {
+  const createCore: OperatorCoreFactory =
     options.createCore ??
     ((coreOptions) =>
       createOperatorCore({

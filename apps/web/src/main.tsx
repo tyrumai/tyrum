@@ -4,9 +4,9 @@ import {
   createAdminModeStore,
   createBearerTokenAuth,
   createBrowserCookieAuth,
+  createOperatorCoreManager,
 } from "@tyrum/operator-core";
 import { OperatorUiApp } from "@tyrum/operator-ui";
-import { createWebOperatorCoreManager } from "./operator-core-manager.js";
 import { readAuthTokenFromUrl, stripAuthTokenFromUrl } from "./url-auth.js";
 
 function scrubAuthTokenFromUrl(): void {
@@ -45,7 +45,7 @@ if (!container) {
 }
 
 const adminModeStore = createAdminModeStore();
-const manager = createWebOperatorCoreManager({
+const manager = createOperatorCoreManager({
   wsUrl: resolveGatewayWsUrl(),
   httpBaseUrl: resolveGatewayHttpBaseUrl(),
   baselineAuth: resolveAuthFromLocation(),

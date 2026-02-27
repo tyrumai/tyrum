@@ -17,6 +17,13 @@ export {
 export { createOperatorCore } from "./operator-core.js";
 export type { OperatorCore, OperatorCoreOptions } from "./operator-core.js";
 
+export {
+  createOperatorCoreManager,
+  type OperatorCoreFactory,
+  type OperatorCoreManager,
+  type OperatorCoreManagerOptions,
+} from "./operator-core-manager.js";
+
 export type { OperatorHttpClient, OperatorWsClient } from "./deps.js";
 
 export type { ExternalStore, Unsubscribe } from "./store.js";
