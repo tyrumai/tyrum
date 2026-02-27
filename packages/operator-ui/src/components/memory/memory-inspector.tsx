@@ -7,6 +7,7 @@ import type {
   MemorySearchHit,
 } from "@tyrum/client";
 import { useEffect, useState } from "react";
+import { getDesktopApi } from "../../desktop-api.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 
 const MEMORY_KINDS = ["fact", "note", "procedure", "episode"] as const;
@@ -123,10 +124,12 @@ export interface MemoryInspectorProps {
 
 export function MemoryInspector({ core }: MemoryInspectorProps) {
   const memory = useOperatorStore(core.memoryStore);
-  const [noteBodyDraft, setNoteBodyDraft] = useState("");
+  const [bodyMdDraft, setBodyMdDraft] = useState("");
+  const [summaryMdDraft, setSummaryMdDraft] = useState("");
   const [tagsDraft, setTagsDraft] = useState("");
   const [sensitivityDraft, setSensitivityDraft] = useState<MemorySensitivity>("private");
   const [forgetOpen, setForgetOpen] = useState(false);
+  const [forgetTargetId, setForgetTargetId] = useState<string | null>(null);
   const [forgetConfirm, setForgetConfirm] = useState("");
   const [forgetBusy, setForgetBusy] = useState(false);
   const [forgetError, setForgetError] = useState<string | null>(null);
@@ -142,6 +145,8 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
   const [provenanceChannels, setProvenanceChannels] = useState("");
   const [provenanceThreadIds, setProvenanceThreadIds] = useState("");
   const [provenanceSessionIds, setProvenanceSessionIds] = useState("");
+  const [downloadBusy, setDownloadBusy] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   useEffect(() => {
     void core.memoryStore.list({ limit: 50 });
@@ -150,17 +155,23 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
   useEffect(() => {
     const item = memory.inspect.item;
     if (!item) {
-      setNoteBodyDraft("");
+      setBodyMdDraft("");
+      setSummaryMdDraft("");
       setTagsDraft("");
       setSensitivityDraft("private");
       return;
     }
     setTagsDraft(item.tags.join(", "));
     setSensitivityDraft(item.sensitivity);
-    if (item.kind === "note") {
-      setNoteBodyDraft(item.body_md);
+    if (item.kind === "note" || item.kind === "procedure") {
+      setBodyMdDraft(item.body_md);
     } else {
-      setNoteBodyDraft("");
+      setBodyMdDraft("");
+    }
+    if (item.kind === "episode") {
+      setSummaryMdDraft(item.summary_md);
+    } else {
+      setSummaryMdDraft("");
     }
   }, [memory.inspect.item]);
 
@@ -180,8 +191,11 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
     if (sensitivityDraft !== item.sensitivity) {
       patch.sensitivity = sensitivityDraft;
     }
-    if (item.kind === "note" && noteBodyDraft !== item.body_md) {
-      patch.body_md = noteBodyDraft;
+    if ((item.kind === "note" || item.kind === "procedure") && bodyMdDraft !== item.body_md) {
+      patch.body_md = bodyMdDraft;
+    }
+    if (item.kind === "episode" && summaryMdDraft !== item.summary_md) {
+      patch.summary_md = summaryMdDraft;
     }
     if (Object.keys(patch).length === 0) return;
 
@@ -197,16 +211,16 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
   };
 
   const forget = async (): Promise<void> => {
-    const item = memory.inspect.item;
-    if (!item) return;
+    if (!forgetTargetId) return;
     if (forgetBusy) return;
     if (forgetConfirm !== "FORGET") return;
 
     setForgetBusy(true);
     setForgetError(null);
     try {
-      await core.memoryStore.forget([{ kind: "id", memory_item_id: item.memory_item_id }]);
+      await core.memoryStore.forget([{ kind: "id", memory_item_id: forgetTargetId }]);
       setForgetOpen(false);
+      setForgetTargetId(null);
       setForgetConfirm("");
     } catch (error) {
       setForgetError(error instanceof Error ? error.message : String(error));
@@ -233,6 +247,51 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
       return;
     }
     void core.memoryStore.list({ filter, limit: 50 });
+  };
+
+  const downloadExport = async (artifactId: string): Promise<void> => {
+    if (downloadBusy) return;
+    const api = getDesktopApi();
+    const httpFetch = api?.gateway.httpFetch;
+    const getOperatorConnection = api?.gateway.getOperatorConnection;
+    if (!httpFetch || !getOperatorConnection) return;
+
+    setDownloadBusy(true);
+    setDownloadError(null);
+    try {
+      const connection = await getOperatorConnection();
+      const token = connection.token.trim();
+      if (!token) {
+        throw new Error("Missing gateway token");
+      }
+
+      const url = `${core.httpBaseUrl.replace(/\/$/, "")}/memory/exports/${artifactId}`;
+      const result = await httpFetch({
+        url,
+        init: { method: "GET", headers: { authorization: `Bearer ${token}` } },
+      });
+      if (result.status < 200 || result.status >= 300) {
+        throw new Error(result.bodyText.trim() ? result.bodyText : `HTTP ${String(result.status)}`);
+      }
+
+      const contentType = result.headers["content-type"] ?? "application/octet-stream";
+      const contentDisposition = result.headers["content-disposition"] ?? "";
+      const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+      const filename = filenameMatch?.[1] ?? `tyrum-memory-export-${artifactId}.json`;
+
+      const objectUrl = URL.createObjectURL(new Blob([result.bodyText], { type: contentType }));
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setDownloadBusy(false);
+    }
   };
 
   type BrowseRow = { memoryItemId: string; snippet: string; provenance: string };
@@ -442,13 +501,44 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
         >
           Export
         </button>
-        {memory.export.artifactId ? (
-          <a
-            data-testid="memory-export-download"
-            href={`${core.httpBaseUrl.replace(/\/$/, "")}/memory/exports/${memory.export.artifactId}`}
-          >
-            Download {memory.export.artifactId}
-          </a>
+        {memory.export.artifactId
+          ? (() => {
+              const api = getDesktopApi();
+              const canDownloadDesktop =
+                Boolean(api?.gateway.httpFetch) && Boolean(api?.gateway.getOperatorConnection);
+              const url = `${core.httpBaseUrl.replace(/\/$/, "")}/memory/exports/${memory.export.artifactId}`;
+
+              if (canDownloadDesktop) {
+                return (
+                  <button
+                    type="button"
+                    data-testid="memory-export-download"
+                    disabled={downloadBusy}
+                    onClick={() => {
+                      void downloadExport(memory.export.artifactId!);
+                    }}
+                  >
+                    Download {memory.export.artifactId}
+                  </button>
+                );
+              }
+
+              return (
+                <a data-testid="memory-export-download" href={url}>
+                  Download {memory.export.artifactId}
+                </a>
+              );
+            })()
+          : null}
+        {downloadError ? (
+          <div role="alert" data-testid="memory-export-download-error">
+            {downloadError}
+          </div>
+        ) : null}
+        {memory.export.error ? (
+          <div role="alert" data-testid="memory-export-error">
+            {memory.export.error.message}
+          </div>
         ) : null}
       </div>
       <div>
@@ -478,6 +568,14 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
           <>
             <div>{memory.inspect.item.kind}</div>
             <div>{memory.inspect.item.memory_item_id}</div>
+            {memory.inspect.item.kind === "fact" ? (
+              <>
+                <div data-testid="memory-detail-fact-key">{memory.inspect.item.key}</div>
+                <pre data-testid="memory-detail-fact-value">
+                  {stringifyJson(memory.inspect.item.value)}
+                </pre>
+              </>
+            ) : null}
             <input
               data-testid="memory-edit-tags"
               value={tagsDraft}
@@ -498,12 +596,21 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
                 </option>
               ))}
             </select>
-            {memory.inspect.item.kind === "note" ? (
+            {memory.inspect.item.kind === "note" || memory.inspect.item.kind === "procedure" ? (
               <textarea
                 data-testid="memory-edit-body"
-                value={noteBodyDraft}
+                value={bodyMdDraft}
                 onInput={(event) => {
-                  setNoteBodyDraft(event.currentTarget.value);
+                  setBodyMdDraft(event.currentTarget.value);
+                }}
+              />
+            ) : null}
+            {memory.inspect.item.kind === "episode" ? (
+              <textarea
+                data-testid="memory-edit-summary"
+                value={summaryMdDraft}
+                onInput={(event) => {
+                  setSummaryMdDraft(event.currentTarget.value);
                 }}
               />
             ) : null}
@@ -526,14 +633,19 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
               type="button"
               data-testid="memory-forget"
               onClick={() => {
+                const item = memory.inspect.item;
+                if (!item) return;
                 setForgetOpen(true);
                 setForgetError(null);
+                setForgetConfirm("");
+                setForgetTargetId(item.memory_item_id);
               }}
             >
               Forget
             </button>
             {forgetOpen ? (
               <div data-testid="memory-forget-dialog">
+                <div data-testid="memory-forget-target">{forgetTargetId}</div>
                 <div>Type FORGET to confirm</div>
                 <input
                   data-testid="memory-forget-confirm"
@@ -551,6 +663,19 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
                   }}
                 >
                   Confirm forget
+                </button>
+                <button
+                  type="button"
+                  data-testid="memory-forget-cancel"
+                  disabled={forgetBusy}
+                  onClick={() => {
+                    setForgetOpen(false);
+                    setForgetTargetId(null);
+                    setForgetConfirm("");
+                    setForgetError(null);
+                  }}
+                >
+                  Cancel
                 </button>
                 {forgetError ? <div role="alert">{forgetError}</div> : null}
               </div>
