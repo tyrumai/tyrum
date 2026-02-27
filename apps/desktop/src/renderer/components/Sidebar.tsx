@@ -7,6 +7,7 @@ interface SidebarProps {
 
 const NAV_ITEMS = [
   { id: "overview", label: "Overview" },
+  { id: "work", label: "Work" },
   { id: "gateway", label: "Gateway" },
   { id: "connection", label: "Connection" },
   { id: "permissions", label: "Permissions" },
