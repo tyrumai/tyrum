@@ -33,7 +33,6 @@ nsis:
   shortcutName: Tyrum
   installerIcon: build/icon.ico
   uninstallerIcon: build/icon.ico
-  installerHeaderIcon: build/icon.ico
 linux:
   icon: build/icons
   target: [AppImage, tar.gz]

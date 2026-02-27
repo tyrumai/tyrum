@@ -18,6 +18,7 @@ describe("desktop packaging configuration", () => {
 
     expect(config).toMatch(/^\s*nsis:\s*$/m);
     expect(config).toMatch(/^\s*oneClick:\s*false\s*$/m);
+    expect(config).not.toMatch(/^\s*installerHeaderIcon:\s*/m);
     expect(config).toMatch(/^\s*allowToChangeInstallationDirectory:\s*true\s*$/m);
     expect(config).toMatch(/^\s*createDesktopShortcut:\s*true\s*$/m);
     expect(config).toMatch(/^\s*createStartMenuShortcut:\s*true\s*$/m);
