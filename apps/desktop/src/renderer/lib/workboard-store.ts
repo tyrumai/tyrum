@@ -1,4 +1,11 @@
-import type { WorkItem } from "@tyrum/schemas";
+import type {
+  AgentStateKVEntry,
+  DecisionRecord,
+  WorkArtifact,
+  WorkItem,
+  WorkItemStateKVEntry,
+  WorkSignal,
+} from "@tyrum/schemas";
 
 export const WORK_ITEM_STATUSES = [
   "backlog",
@@ -38,6 +45,36 @@ export function groupWorkItemsByStatus(items: WorkItem[]): WorkItemsByStatus {
   }
 
   return grouped;
+}
+
+function upsertByStringKey<T>(items: T[], next: T, key: (item: T) => string): T[] {
+  const nextKey = key(next);
+  const existingIndex = items.findIndex((item) => key(item) === nextKey);
+  if (existingIndex === -1) {
+    return [next, ...items];
+  }
+
+  const updated = items.slice();
+  updated[existingIndex] = next;
+  return updated;
+}
+
+export function upsertWorkArtifact(artifacts: WorkArtifact[], next: WorkArtifact): WorkArtifact[] {
+  return upsertByStringKey(artifacts, next, (artifact) => artifact.artifact_id);
+}
+
+export function upsertWorkDecision(decisions: DecisionRecord[], next: DecisionRecord): DecisionRecord[] {
+  return upsertByStringKey(decisions, next, (decision) => decision.decision_id);
+}
+
+export function upsertWorkSignal(signals: WorkSignal[], next: WorkSignal): WorkSignal[] {
+  return upsertByStringKey(signals, next, (signal) => signal.signal_id);
+}
+
+export type WorkStateKvEntry = AgentStateKVEntry | WorkItemStateKVEntry;
+
+export function upsertWorkStateKvEntry(entries: WorkStateKvEntry[], next: WorkStateKvEntry): WorkStateKvEntry[] {
+  return upsertByStringKey(entries, next, (entry) => entry.key);
 }
 
 export type WorkTaskStatus = "leased" | "running" | "paused" | "completed";
@@ -124,4 +161,3 @@ export function applyWorkTaskEvent(
     },
   };
 }
-

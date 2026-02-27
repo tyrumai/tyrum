@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
-import type { WorkItem } from "@tyrum/schemas";
+import type { AgentStateKVEntry, DecisionRecord, WorkArtifact, WorkItem, WorkSignal } from "@tyrum/schemas";
 import {
   WORK_ITEM_STATUSES,
   applyWorkTaskEvent,
   groupWorkItemsByStatus,
   upsertWorkItem,
+  upsertWorkArtifact,
+  upsertWorkDecision,
+  upsertWorkSignal,
+  upsertWorkStateKvEntry,
   type WorkTasksByWorkItemId,
 } from "../src/renderer/lib/workboard-store.js";
 
@@ -117,5 +121,99 @@ describe("workboard-store", () => {
     expect(completed["w-1"]?.["t-1"]?.status).toBe("completed");
     expect(completed["w-1"]?.["t-1"]?.result_summary).toBe("ok");
   });
-});
 
+  it("upserts drilldown entities, prepending new ones", () => {
+    const artifact1: WorkArtifact = {
+      artifact_id: "a-1",
+      ...scope,
+      work_item_id: "w-1",
+      kind: "candidate_plan",
+      title: "Plan v1",
+      refs: [],
+      created_at: "2026-02-27T00:00:00Z",
+    };
+    const artifact2: WorkArtifact = {
+      artifact_id: "a-2",
+      ...scope,
+      work_item_id: "w-1",
+      kind: "verification_report",
+      title: "Verify v1",
+      refs: [],
+      created_at: "2026-02-27T00:00:01Z",
+    };
+
+    const artifactsInserted = upsertWorkArtifact([artifact1], artifact2);
+    expect(artifactsInserted.map((a) => a.artifact_id)).toEqual(["a-2", "a-1"]);
+
+    const artifact1Updated: WorkArtifact = { ...artifact1, title: "Plan v2" };
+    const artifactsUpdated = upsertWorkArtifact(artifactsInserted, artifact1Updated);
+    expect(artifactsUpdated.map((a) => a.title)).toEqual(["Verify v1", "Plan v2"]);
+
+    const decision1: DecisionRecord = {
+      decision_id: "d-1",
+      ...scope,
+      work_item_id: "w-1",
+      question: "Q?",
+      chosen: "A",
+      alternatives: [],
+      rationale_md: "Because",
+      input_artifact_ids: [],
+      created_at: "2026-02-27T00:00:00Z",
+    };
+    const decision2: DecisionRecord = {
+      decision_id: "d-2",
+      ...scope,
+      work_item_id: "w-1",
+      question: "Q2?",
+      chosen: "B",
+      alternatives: [],
+      rationale_md: "Because2",
+      input_artifact_ids: [],
+      created_at: "2026-02-27T00:00:01Z",
+    };
+
+    const decisionsInserted = upsertWorkDecision([decision1], decision2);
+    expect(decisionsInserted.map((d) => d.decision_id)).toEqual(["d-2", "d-1"]);
+
+    const signal1: WorkSignal = {
+      signal_id: "s-1",
+      ...scope,
+      work_item_id: "w-1",
+      trigger_kind: "time",
+      trigger_spec_json: { at: "tomorrow" },
+      status: "active",
+      created_at: "2026-02-27T00:00:00Z",
+      last_fired_at: null,
+    };
+    const signal2: WorkSignal = {
+      signal_id: "s-2",
+      ...scope,
+      work_item_id: "w-1",
+      trigger_kind: "event",
+      trigger_spec_json: { when: "approval_resolved" },
+      status: "active",
+      created_at: "2026-02-27T00:00:01Z",
+      last_fired_at: null,
+    };
+
+    const signalsInserted = upsertWorkSignal([signal1], signal2);
+    expect(signalsInserted.map((s) => s.signal_id)).toEqual(["s-2", "s-1"]);
+
+    const kv1: AgentStateKVEntry = {
+      ...scope,
+      key: "prefs.timezone",
+      value_json: "UTC",
+      updated_at: "2026-02-27T00:00:00Z",
+    };
+    const kv2: AgentStateKVEntry = {
+      ...scope,
+      key: "prefs.timezone",
+      value_json: "America/Los_Angeles",
+      updated_at: "2026-02-27T00:00:01Z",
+    };
+
+    const kvUpdated = upsertWorkStateKvEntry([kv1], kv2);
+    expect(kvUpdated).toHaveLength(1);
+    expect(kvUpdated[0]?.value_json).toBe("America/Los_Angeles");
+  });
+});
