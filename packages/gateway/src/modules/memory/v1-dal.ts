@@ -8,7 +8,6 @@ import type {
   MemoryItemKind,
   MemoryItemPatch,
   MemoryProvenance,
-  MemorySearchHit,
   MemorySensitivity,
   MemorySearchRequest,
   MemorySearchResponse,
@@ -83,10 +82,6 @@ function normalizeTime(value: string | Date): string {
 
 function parseJson<T>(raw: string): T {
   return JSON.parse(raw) as T;
-}
-
-function escapeLikePattern(value: string): string {
-  return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
 }
 
 type Cursor = { sort: string; id: string };
@@ -455,59 +450,6 @@ export class MemoryV1Dal {
         : undefined;
 
     return { items, next_cursor };
-  }
-
-  async search(params: {
-    query: string;
-    filter?: MemoryItemFilter;
-    limit?: number;
-    cursor?: string;
-    agentId?: string;
-  }): Promise<{ hits: MemorySearchHit[]; next_cursor?: string }> {
-    const agent = this.normalizeAgentId(params.agentId);
-
-    const needle = params.query.trim().toLowerCase();
-    const pattern = `%${escapeLikePattern(needle)}%`;
-    const { from, where, values, limit } = buildMemoryV1ItemQueryParts({
-      agent,
-      filter: params.filter,
-      limit: params.limit,
-      cursor: params.cursor,
-      extraWhere: [
-        `(LOWER(COALESCE(i.key, '')) LIKE ? ESCAPE '\\'
-          OR LOWER(COALESCE(i.title, '')) LIKE ? ESCAPE '\\'
-          OR LOWER(COALESCE(i.body_md, '')) LIKE ? ESCAPE '\\'
-          OR LOWER(COALESCE(i.summary_md, '')) LIKE ? ESCAPE '\\')`,
-      ],
-      extraValues: [pattern, pattern, pattern, pattern],
-    });
-
-    const rows = await this.db.all<{
-      memory_item_id: string;
-      kind: MemoryItemKind;
-      created_at: string | Date;
-    }>(
-      `SELECT i.memory_item_id AS memory_item_id, i.kind AS kind, i.created_at AS created_at
-       FROM ${from}
-       WHERE ${where.join(" AND ")}
-       ORDER BY i.created_at DESC, i.memory_item_id DESC
-       LIMIT ?`,
-      [...values, limit],
-    );
-
-    const hits: MemorySearchHit[] = rows.map((r) => ({
-      memory_item_id: r.memory_item_id,
-      kind: r.kind,
-      score: 1,
-    }));
-
-    const last = rows.at(-1);
-    const next_cursor =
-      rows.length === limit && last
-        ? encodeCursor({ sort: normalizeTime(last.created_at), id: last.memory_item_id })
-        : undefined;
-
-    return { hits, next_cursor };
   }
 
   async forget(params: {

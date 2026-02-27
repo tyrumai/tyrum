@@ -1852,17 +1852,8 @@ export async function handleClientMessage(
 
         const payload = parsedReq.data.payload;
         const limit = Math.max(1, Math.min(500, payload.limit ?? 50));
-        const res = await deps.memoryV1Dal.search({
-          query: payload.query,
-          filter: payload.filter,
-          limit,
-          cursor: payload.cursor,
-        });
-        const result = WsMemorySearchResult.parse({
-          v: 1,
-          hits: res.hits,
-          ...(res.next_cursor ? { next_cursor: res.next_cursor } : {}),
-        });
+        const res = await deps.memoryV1Dal.search({ ...payload, limit });
+        const result = WsMemorySearchResult.parse(res);
         return { request_id: msg.request_id, type: msg.type, ok: true, result };
       }
 
