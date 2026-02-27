@@ -10,6 +10,8 @@ const {
   browserWindowMock,
   browserWindowOnceMock,
   browserWindowShowMock,
+  menuBuildFromTemplateMock,
+  menuSetApplicationMenuMock,
   readyToShowHandlers,
   webContentsOnMock,
   setWindowOpenHandlerMock,
@@ -56,6 +58,9 @@ const {
   const appRequestSingleInstanceLockMock = vi.fn(() => true);
   const appSetAppUserModelIdMock = vi.fn();
 
+  const menuBuildFromTemplateMock = vi.fn(() => ({}));
+  const menuSetApplicationMenuMock = vi.fn();
+
   const registerConfigIpcMock = vi.fn();
   const registerGatewayIpcMock = vi.fn(() => ({ stop: vi.fn() }));
   const registerNodeIpcMock = vi.fn();
@@ -78,6 +83,8 @@ const {
     browserWindowMock,
     browserWindowOnceMock,
     browserWindowShowMock,
+    menuBuildFromTemplateMock,
+    menuSetApplicationMenuMock,
     readyToShowHandlers,
     webContentsOnMock,
     setWindowOpenHandlerMock,
@@ -100,6 +107,10 @@ vi.mock("electron", () => ({
     setAppUserModelId: appSetAppUserModelIdMock,
   },
   BrowserWindow: browserWindowMock,
+  Menu: {
+    buildFromTemplate: menuBuildFromTemplateMock,
+    setApplicationMenu: menuSetApplicationMenuMock,
+  },
   shell: {
     openExternal: vi.fn(async () => {}),
   },
@@ -139,6 +150,8 @@ describe("main window ready-to-show", () => {
     browserWindowMock.mockClear();
     browserWindowOnceMock.mockClear();
     browserWindowShowMock.mockClear();
+    menuBuildFromTemplateMock.mockClear();
+    menuSetApplicationMenuMock.mockClear();
     webContentsOnMock.mockReset();
     setWindowOpenHandlerMock.mockReset();
   });
