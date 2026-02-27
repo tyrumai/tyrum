@@ -12,6 +12,7 @@ import {
   CONFORMANCE_TIMEOUT_MS,
   createConnectedClient,
   waitForEvent,
+  waitForEventMatching,
 } from "./ws-test-utils.js";
 import { WorkSignalScheduler } from "../../../gateway/src/modules/workboard/signal-scheduler.js";
 import { ChannelInboxDal } from "../../../gateway/src/modules/channels/inbox-dal.js";
@@ -81,19 +82,39 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
     const item2 = await client.workCreate({ ...scope, item: { kind: "action", title: "Item 2" } });
     const item3 = await client.workCreate({ ...scope, item: { kind: "action", title: "Item 3" } });
 
-    await client.workTransition({ ...scope, work_item_id: item1.item.work_item_id, status: "ready" });
-    await client.workTransition({ ...scope, work_item_id: item2.item.work_item_id, status: "ready" });
-    await client.workTransition({ ...scope, work_item_id: item3.item.work_item_id, status: "ready" });
+    await client.workTransition({
+      ...scope,
+      work_item_id: item1.item.work_item_id,
+      status: "ready",
+    });
+    await client.workTransition({
+      ...scope,
+      work_item_id: item2.item.work_item_id,
+      status: "ready",
+    });
+    await client.workTransition({
+      ...scope,
+      work_item_id: item3.item.work_item_id,
+      status: "ready",
+    });
 
-    await client.workTransition({ ...scope, work_item_id: item1.item.work_item_id, status: "doing" });
-    await client.workTransition({ ...scope, work_item_id: item2.item.work_item_id, status: "doing" });
+    await client.workTransition({
+      ...scope,
+      work_item_id: item1.item.work_item_id,
+      status: "doing",
+    });
+    await client.workTransition({
+      ...scope,
+      work_item_id: item2.item.work_item_id,
+      status: "doing",
+    });
 
     await expect(
       client.workTransition({ ...scope, work_item_id: item3.item.work_item_id, status: "doing" }),
     ).rejects.toThrow(/wip_limit_exceeded/);
   });
 
-  it("supports drilldown artifact + decision CRUD and broadcasts create events", async () => {
+  it("supports drilldown artifacts + decisions create/list/get and broadcasts create events", async () => {
     gw = await startGateway();
     const result = createConnectedClient(gw);
     client = result.client;
@@ -172,7 +193,7 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
     expect(decision.decision.decision_id).toBe(createdDecision.decision.decision_id);
   });
 
-  it("supports WorkSignals CRUD and fires an event-based trigger end-to-end", async () => {
+  it("supports WorkSignals create/update/list/get and fires an event-based trigger end-to-end", async () => {
     gw = await startGateway();
     const result = createConnectedClient(gw);
     client = result.client;
@@ -228,8 +249,16 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
     const got = await client.workSignalGet({ ...scope, signal_id: created.signal.signal_id });
     expect(got.signal.signal_id).toBe(created.signal.signal_id);
 
-    await client.workTransition({ ...scope, work_item_id: item.item.work_item_id, status: "ready" });
-    await client.workTransition({ ...scope, work_item_id: item.item.work_item_id, status: "doing" });
+    await client.workTransition({
+      ...scope,
+      work_item_id: item.item.work_item_id,
+      status: "ready",
+    });
+    await client.workTransition({
+      ...scope,
+      work_item_id: item.item.work_item_id,
+      status: "doing",
+    });
     await client.workTransition({
       ...scope,
       work_item_id: item.item.work_item_id,
@@ -273,6 +302,8 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
   });
 
   it("routes terminal-state notifications to last_active_session_key with created_from fallback", async () => {
+    const nowMs = 1_700_000_000_000;
+
     gw = await startGateway();
     const result = createConnectedClient(gw);
     client = result.client;
@@ -291,7 +322,7 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
       message_id: "m-created-1",
       key: createdFromKey,
       lane: "main",
-      received_at_ms: Date.now(),
+      received_at_ms: nowMs,
       payload: { kind: "text", text: "hi" },
     });
 
@@ -301,7 +332,7 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
       message_id: "m-active-1",
       key: activeKey,
       lane: "main",
-      received_at_ms: Date.now() + 1,
+      received_at_ms: nowMs + 1,
       payload: { kind: "text", text: "hi" },
     });
 
@@ -321,9 +352,33 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
       },
     });
 
-    await client.workTransition({ ...scope, work_item_id: item1.item.work_item_id, status: "ready" });
-    await client.workTransition({ ...scope, work_item_id: item1.item.work_item_id, status: "doing" });
-    await client.workTransition({ ...scope, work_item_id: item1.item.work_item_id, status: "done" });
+    const completed1P = waitForEventMatching<{
+      payload: { item: { work_item_id: string; status: string } };
+    }>(
+      client,
+      "work.item.completed",
+      (evt) => evt.payload.item.work_item_id === item1.item.work_item_id,
+    );
+
+    await client.workTransition({
+      ...scope,
+      work_item_id: item1.item.work_item_id,
+      status: "ready",
+    });
+    await client.workTransition({
+      ...scope,
+      work_item_id: item1.item.work_item_id,
+      status: "doing",
+    });
+    await client.workTransition({
+      ...scope,
+      work_item_id: item1.item.work_item_id,
+      status: "done",
+    });
+
+    const completedEvt1 = await withTimeout(completed1P, TIMEOUT, "work.item.completed (item1)");
+    expect(completedEvt1.payload.item.work_item_id).toBe(item1.item.work_item_id);
+    expect(completedEvt1.payload.item.status).toBe("done");
 
     const createdOutbox1 = await outbox.listForInbox(createdRoute.row.inbox_id);
     const activeOutbox1 = await outbox.listForInbox(activeRoute.row.inbox_id);
@@ -333,7 +388,7 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
     await new WorkboardDal(gw.protocolDeps.db!).upsertScopeActivity({
       scope,
       last_active_session_key: activeKey,
-      updated_at_ms: Date.now() + 2,
+      updated_at_ms: nowMs + 2,
     });
 
     const item2 = await client.workCreate({
@@ -348,9 +403,33 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
     const createdBefore = await outbox.listForInbox(createdRoute.row.inbox_id);
     const activeBefore = await outbox.listForInbox(activeRoute.row.inbox_id);
 
-    await client.workTransition({ ...scope, work_item_id: item2.item.work_item_id, status: "ready" });
-    await client.workTransition({ ...scope, work_item_id: item2.item.work_item_id, status: "doing" });
-    await client.workTransition({ ...scope, work_item_id: item2.item.work_item_id, status: "done" });
+    const completed2P = waitForEventMatching<{
+      payload: { item: { work_item_id: string; status: string } };
+    }>(
+      client,
+      "work.item.completed",
+      (evt) => evt.payload.item.work_item_id === item2.item.work_item_id,
+    );
+
+    await client.workTransition({
+      ...scope,
+      work_item_id: item2.item.work_item_id,
+      status: "ready",
+    });
+    await client.workTransition({
+      ...scope,
+      work_item_id: item2.item.work_item_id,
+      status: "doing",
+    });
+    await client.workTransition({
+      ...scope,
+      work_item_id: item2.item.work_item_id,
+      status: "done",
+    });
+
+    const completedEvt2 = await withTimeout(completed2P, TIMEOUT, "work.item.completed (item2)");
+    expect(completedEvt2.payload.item.work_item_id).toBe(item2.item.work_item_id);
+    expect(completedEvt2.payload.item.status).toBe("done");
 
     const createdAfter = await outbox.listForInbox(createdRoute.row.inbox_id);
     const activeAfter = await outbox.listForInbox(activeRoute.row.inbox_id);
@@ -391,10 +470,9 @@ describe("WS WorkBoard conformance (client <-> gateway)", () => {
     const spawnedEvt = await withTimeout(spawnedP, TIMEOUT, "subagent.spawned");
     expect(spawnedEvt.payload.subagent.subagent_id).toBe(spawned.subagent.subagent_id);
 
-    const outputP = waitForEvent<{ payload: { subagent_id: string; kind: string; content: string } }>(
-      client,
-      "subagent.output",
-    );
+    const outputP = waitForEvent<{
+      payload: { subagent_id: string; kind: string; content: string };
+    }>(client, "subagent.output");
     await client.subagentSend({
       ...scope,
       subagent_id: spawned.subagent.subagent_id,

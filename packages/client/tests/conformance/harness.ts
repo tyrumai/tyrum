@@ -9,6 +9,7 @@
 import { createServer } from "node:http";
 import type { Server } from "node:http";
 import { mkdtemp, rm } from "node:fs/promises";
+import type { Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { generateKeyPairSync } from "node:crypto";
@@ -94,6 +95,12 @@ export async function startGateway(
 
   const requestListener = getRequestListener(app.fetch);
   const server = createServer(requestListener);
+  const sockets = new Set<Socket>();
+
+  server.on("connection", (socket) => {
+    sockets.add(socket);
+    socket.on("close", () => sockets.delete(socket));
+  });
 
   server.on("upgrade", (req, socket, head) => {
     if (req.url?.startsWith("/ws")) {
@@ -120,7 +127,7 @@ export async function startGateway(
     dispatchTask,
     stop: async () => {
       stopHeartbeat();
-      await closeServer(server);
+      await closeServer(server, sockets);
       await agents?.shutdown().catch(() => {});
       await container.db.close().catch(() => {});
       await rm(tokenHome, { recursive: true, force: true });
@@ -128,7 +135,8 @@ export async function startGateway(
   };
 }
 
-function closeServer(server: Server): Promise<void> {
+function closeServer(server: Server, sockets: Set<Socket>): Promise<void> {
+  for (const socket of sockets) socket.destroy();
   return new Promise((resolve) => {
     server.close(() => resolve());
   });
