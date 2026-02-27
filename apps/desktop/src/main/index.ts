@@ -210,7 +210,7 @@ function createWindow(): void {
       isQuitting = false;
     },
   });
-  registerThemeIpc(mainWindow);
+  registerThemeIpc(window);
 
   if (process.env["VITE_DEV_SERVER_URL"]) {
     window.loadURL(process.env["VITE_DEV_SERVER_URL"]);
