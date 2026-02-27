@@ -1,4 +1,5 @@
 import {
+  formatAdminModeRemaining,
   isAdminModeActive,
   type AdminModeState,
   type OperatorCore,
@@ -8,7 +9,6 @@ import { Box, Text, useApp, useInput } from "ink";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ResolvedTuiConfig } from "./config.js";
 import type { TuiRuntime } from "./core.js";
-import { formatAdminModeRemaining } from "./admin-mode-ui.js";
 import {
   createInitialTuiUiState,
   getEffectiveCursor,
