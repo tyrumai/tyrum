@@ -304,6 +304,7 @@ describe("WorkBoard WS protocol", () => {
       { type: "work.artifact.created", payload: { artifact: workArtifact } },
       { type: "work.decision.created", payload: { decision } },
       { type: "work.signal.created", payload: { signal } },
+      { type: "work.signal.updated", payload: { signal } },
       {
         type: "work.signal.fired",
         payload: { ...scope, signal_id: signal.signal_id, firing_id: "f-1" },

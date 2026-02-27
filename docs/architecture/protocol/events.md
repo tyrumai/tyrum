@@ -65,6 +65,7 @@ This is the canonical list of `type` values and payload contracts for the v1 Web
 - `work.artifact.created` — `{ artifact: WorkArtifact }`
 - `work.decision.created` — `{ decision: DecisionRecord }`
 - `work.signal.created` — `{ signal: WorkSignal }`
+- `work.signal.updated` — `{ signal: WorkSignal }`
 - `work.signal.fired` — `{ signal_id, firing_id, enqueued_job_id? }`
 - `work.state_kv.updated` — `{ scope, key, updated_at }` (`scope` indicates `agent` or `work_item`)
 - `subagent.spawned` / `subagent.updated` / `subagent.closed` — `{ subagent: Subagent }`

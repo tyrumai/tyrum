@@ -584,6 +584,8 @@ export {
   WsWorkDecisionCreatedEvent,
   WsWorkSignalCreatedEventPayload,
   WsWorkSignalCreatedEvent,
+  WsWorkSignalUpdatedEventPayload,
+  WsWorkSignalUpdatedEvent,
   WsWorkSignalFiredEventPayload,
   WsWorkSignalFiredEvent,
   WsWorkStateKvUpdatedEventPayload,

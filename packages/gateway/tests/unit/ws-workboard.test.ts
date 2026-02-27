@@ -523,7 +523,7 @@ describe("handleClientMessage (work.*)", () => {
     }
   });
 
-  it("handles work.signal.create/list/get/update and broadcasts work.signal.created", async () => {
+  it("handles work.signal.create/list/get/update and broadcasts work.signal.* events", async () => {
     const cm = new ConnectionManager();
     const { id, ws } = makeClient(cm);
     const client = cm.getClient(id)!;
@@ -625,7 +625,15 @@ describe("handleClientMessage (work.*)", () => {
       const updatedStatus = (updateRes as unknown as { result: { signal: { status: string } } })
         .result.signal.status;
       expect(updatedStatus).toBe("paused");
-      expect(ws.send).not.toHaveBeenCalled();
+
+      expect(ws.send).toHaveBeenCalledTimes(1);
+      const updatedEvt = JSON.parse(ws.send.mock.calls[0]?.[0] ?? "{}") as {
+        type?: string;
+        payload?: any;
+      };
+      expect(updatedEvt.type).toBe("work.signal.updated");
+      expect(updatedEvt.payload?.signal?.signal_id).toBe(signal.signal_id);
+      expect(updatedEvt.payload?.signal?.status).toBe("paused");
     } finally {
       await db.close();
     }

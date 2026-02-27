@@ -1539,6 +1539,19 @@ export async function handleClientMessage(
       if (!signal) {
         return errorResponse(msg.request_id, msg.type, "not_found", "signal not found");
       }
+
+      broadcastEvent(
+        {
+          event_id: crypto.randomUUID(),
+          type: "work.signal.updated",
+          occurred_at: new Date().toISOString(),
+          scope: { kind: "agent", agent_id: signal.agent_id },
+          payload: { signal },
+        },
+        deps,
+        WORKBOARD_WS_AUDIENCE,
+      );
+
       const result = WsWorkSignalUpdateResult.parse({ signal });
       return { request_id: msg.request_id, type: msg.type, ok: true, result };
     } catch (err) {
