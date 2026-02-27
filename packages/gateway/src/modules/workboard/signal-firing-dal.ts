@@ -222,20 +222,6 @@ export class WorkSignalFiringDal {
     });
   }
 
-  async markEnqueued(input: { firingId: string; owner: string }): Promise<void> {
-    const nowIso = new Date().toISOString();
-    await this.db.run(
-      `UPDATE work_signal_firings
-       SET status = 'enqueued',
-           lease_owner = NULL,
-           lease_expires_at_ms = NULL,
-           error = NULL,
-           updated_at = ?
-       WHERE firing_id = ? AND lease_owner = ? AND status = 'processing'`,
-      [nowIso, input.firingId, input.owner],
-    );
-  }
-
   async markFailed(input: { firingId: string; owner: string; error: string }): Promise<void> {
     const nowIso = new Date().toISOString();
     await this.db.run(

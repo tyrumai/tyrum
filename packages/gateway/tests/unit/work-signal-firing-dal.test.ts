@@ -4,6 +4,16 @@ import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import { WorkSignalFiringDal } from "../../src/modules/workboard/signal-firing-dal.js";
 
 describe("WorkSignalFiringDal", () => {
+  it("does not expose a standalone markEnqueued helper (scheduler updates inline for atomicity)", () => {
+    const db = openTestSqliteDb();
+    try {
+      const dal = new WorkSignalFiringDal(db);
+      expect("markEnqueued" in dal).toBe(false);
+    } finally {
+      void db.close();
+    }
+  });
+
   it("creates firings idempotently (deduped per signal + key)", async () => {
     const db = openTestSqliteDb();
     try {
