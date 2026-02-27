@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { WorkItemFingerprint } from "@tyrum/schemas";
 import type {
   AgentStateKVEntry,
   ArtifactRef,
@@ -153,6 +154,14 @@ interface RawWorkItemRow {
 function toWorkItem(raw: RawWorkItemRow): WorkItem {
   const budgets =
     raw.budgets_json === null ? null : (parseJsonOr(raw.budgets_json, null) as ExecutionBudgets);
+  const fingerprintRaw = parseJsonMaybe(raw.fingerprint_json);
+  const fingerprint =
+    fingerprintRaw === undefined
+      ? undefined
+      : (() => {
+          const parsed = WorkItemFingerprint.safeParse(fingerprintRaw);
+          return parsed.success ? parsed.data : undefined;
+        })();
   return {
     work_item_id: raw.work_item_id,
     tenant_id: raw.tenant_id,
@@ -166,7 +175,7 @@ function toWorkItem(raw: RawWorkItemRow): WorkItem {
     created_from_session_key: raw.created_from_session_key,
     last_active_at: normalizeMaybeTime(raw.last_active_at),
     acceptance: parseJsonMaybe(raw.acceptance_json),
-    fingerprint: parseJsonMaybe(raw.fingerprint_json),
+    fingerprint,
     budgets,
     parent_work_item_id: raw.parent_work_item_id ?? undefined,
     updated_at: normalizeTime(raw.updated_at),

@@ -61,6 +61,10 @@ import {
   WsWorkUpdateResult,
   WsWorkTransitionRequest,
   WsWorkTransitionResult,
+  WsWorkLinkCreateRequest,
+  WsWorkLinkCreateResult,
+  WsWorkLinkListRequest,
+  WsWorkLinkListResult,
   WsWorkArtifactListRequest,
   WsWorkArtifactListResult,
   WsWorkArtifactGetRequest,
@@ -1030,6 +1034,8 @@ export async function handleClientMessage(
         WORKBOARD_WS_AUDIENCE,
       );
 
+      await maybeEmitWorkItemOverlapWarningArtifact({ dal, scope, item, deps });
+
       const result = WsWorkCreateResult.parse({ item });
       return { request_id: msg.request_id, type: msg.type, ok: true, result };
     } catch (err) {
@@ -1167,6 +1173,15 @@ export async function handleClientMessage(
         WORKBOARD_WS_AUDIENCE,
       );
 
+      const fingerprintTouched = parsedReq.data.payload.patch.fingerprint !== undefined;
+      await maybeEmitWorkItemOverlapWarningArtifact({
+        dal,
+        scope: payload,
+        item,
+        deps,
+        fingerprintTouched,
+      });
+
       const result = WsWorkUpdateResult.parse({ item });
       return { request_id: msg.request_id, type: msg.type, ok: true, result };
     } catch (err) {
@@ -1234,6 +1249,98 @@ export async function handleClientMessage(
       );
 
       const result = WsWorkTransitionResult.parse({ item });
+      return { request_id: msg.request_id, type: msg.type, ok: true, result };
+    } catch (err) {
+      return workboardErrorResponse(msg.request_id, msg.type, err, deps);
+    }
+  }
+
+  if (msg.type === "work.link.create" || msg.type === "work.link.list") {
+    if (client.role !== "client") {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unauthorized",
+        "only operator clients may manage work item links",
+      );
+    }
+    if (!deps.db) {
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unsupported_request",
+        `${msg.type} not supported`,
+      );
+    }
+
+    const dal = new WorkboardDal(deps.db);
+
+    if (msg.type === "work.link.create") {
+      const parsedReq = WsWorkLinkCreateRequest.safeParse(msg);
+      if (!parsedReq.success) {
+        return errorResponse(msg.request_id, msg.type, "invalid_request", parsedReq.error.message, {
+          issues: parsedReq.error.issues,
+        });
+      }
+
+      try {
+        const payload = parsedReq.data.payload;
+        if (payload.work_item_id === payload.linked_work_item_id) {
+          return errorResponse(
+            msg.request_id,
+            msg.type,
+            "invalid_request",
+            "work item cannot link to itself",
+          );
+        }
+
+        const link = await dal.createLink({
+          scope: payload,
+          work_item_id: payload.work_item_id,
+          linked_work_item_id: payload.linked_work_item_id,
+          kind: payload.kind,
+          meta_json: payload.meta_json,
+        });
+
+        broadcastEvent(
+          {
+            event_id: crypto.randomUUID(),
+            type: "work.link.created",
+            occurred_at: new Date().toISOString(),
+            scope: { kind: "agent", agent_id: payload.agent_id },
+            payload: {
+              tenant_id: payload.tenant_id,
+              agent_id: payload.agent_id,
+              workspace_id: payload.workspace_id,
+              link,
+            },
+          },
+          deps,
+          WORKBOARD_WS_AUDIENCE,
+        );
+
+        const result = WsWorkLinkCreateResult.parse({ link });
+        return { request_id: msg.request_id, type: msg.type, ok: true, result };
+      } catch (err) {
+        return workboardErrorResponse(msg.request_id, msg.type, err, deps);
+      }
+    }
+
+    const parsedReq = WsWorkLinkListRequest.safeParse(msg);
+    if (!parsedReq.success) {
+      return errorResponse(msg.request_id, msg.type, "invalid_request", parsedReq.error.message, {
+        issues: parsedReq.error.issues,
+      });
+    }
+
+    try {
+      const payload = parsedReq.data.payload;
+      const { links } = await dal.listLinks({
+        scope: payload,
+        work_item_id: payload.work_item_id,
+        limit: payload.limit,
+      });
+      const result = WsWorkLinkListResult.parse({ links });
       return { request_id: msg.request_id, type: msg.type, ok: true, result };
     } catch (err) {
       return workboardErrorResponse(msg.request_id, msg.type, err, deps);
@@ -2315,6 +2422,77 @@ function broadcastEvent(
       .catch(() => {
         // ignore
       });
+  }
+}
+
+async function maybeEmitWorkItemOverlapWarningArtifact(params: {
+  dal: WorkboardDal;
+  scope: Parameters<WorkboardDal["listItems"]>[0]["scope"];
+  item: { work_item_id: string; title: string; fingerprint?: { resources: string[] } };
+  deps: ProtocolDeps;
+  fingerprintTouched?: boolean;
+}): Promise<void> {
+  try {
+    if (params.fingerprintTouched === false) return;
+
+    const fingerprint = params.item.fingerprint;
+    if (!fingerprint || fingerprint.resources.length === 0) return;
+
+    const { items: active } = await params.dal.listItems({
+      scope: params.scope,
+      statuses: ["doing", "blocked"],
+      limit: 200,
+    });
+
+    const resourceSet = new Set(fingerprint.resources);
+    const overlaps = active
+      .filter((other) => other.work_item_id !== params.item.work_item_id)
+      .map((other) => {
+        const otherResources = other.fingerprint?.resources ?? [];
+        const shared = otherResources.filter((r) => resourceSet.has(r));
+        return shared.length > 0 ? { other, shared } : null;
+      })
+      .filter(
+        (entry): entry is { other: (typeof active)[number]; shared: string[] } => entry !== null,
+      );
+
+    if (overlaps.length === 0) return;
+
+    const body_md = [
+      `Detected overlap with active WorkItems (no auto-merge):`,
+      ``,
+      ...overlaps.map(
+        ({ other, shared }) =>
+          `- \`${other.work_item_id}\` — ${other.title} (shared: ${shared.join(", ")})`,
+      ),
+      ``,
+      `Suggested next steps: queue this WorkItem, link it as a dependency, or explicitly merge.`,
+    ].join("\n");
+
+    const artifact = await params.dal.createArtifact({
+      scope: params.scope,
+      artifact: {
+        work_item_id: params.item.work_item_id,
+        kind: "risk",
+        title: "WorkItem overlap detected",
+        body_md,
+      },
+    });
+
+    broadcastEvent(
+      {
+        event_id: crypto.randomUUID(),
+        type: "work.artifact.created",
+        occurred_at: new Date().toISOString(),
+        scope: { kind: "agent", agent_id: artifact.agent_id },
+        payload: { artifact },
+      },
+      params.deps,
+      WORKBOARD_WS_AUDIENCE,
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    params.deps.logger?.warn("work.item.overlap_warning_failed", { error: message });
   }
 }
 

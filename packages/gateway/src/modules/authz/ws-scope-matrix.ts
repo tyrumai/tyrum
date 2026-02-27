@@ -29,6 +29,7 @@ export function resolveWsRequestRequiredScopes(type: string): string[] | null {
     case "work.get":
     case "work.artifact.list":
     case "work.artifact.get":
+    case "work.link.list":
     case "work.decision.list":
     case "work.decision.get":
     case "work.signal.list":
@@ -40,6 +41,7 @@ export function resolveWsRequestRequiredScopes(type: string): string[] | null {
     case "work.create":
     case "work.update":
     case "work.transition":
+    case "work.link.create":
     case "work.artifact.create":
     case "work.decision.create":
     case "work.signal.create":

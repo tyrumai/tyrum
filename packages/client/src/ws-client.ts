@@ -83,6 +83,10 @@ import type {
   WsWorkDecisionListResult as WsWorkDecisionListResultT,
   WsWorkGetPayload,
   WsWorkGetResult as WsWorkGetResultT,
+  WsWorkLinkCreatePayload,
+  WsWorkLinkCreateResult as WsWorkLinkCreateResultT,
+  WsWorkLinkListPayload,
+  WsWorkLinkListResult as WsWorkLinkListResultT,
   WsWorkListPayload,
   WsWorkListResult as WsWorkListResultT,
   WsWorkSignalCreatePayload,
@@ -157,6 +161,8 @@ import {
   WsWorkDecisionGetResult,
   WsWorkDecisionListResult,
   WsWorkGetResult,
+  WsWorkLinkCreateResult,
+  WsWorkLinkListResult,
   WsWorkListResult,
   WsWorkSignalCreateResult,
   WsWorkSignalGetResult,
@@ -564,6 +570,14 @@ export class TyrumClient {
 
   workTransition(payload: WsWorkTransitionPayload): Promise<WsWorkTransitionResultT> {
     return this.request("work.transition", payload, WsWorkTransitionResult);
+  }
+
+  workLinkCreate(payload: WsWorkLinkCreatePayload): Promise<WsWorkLinkCreateResultT> {
+    return this.request("work.link.create", payload, WsWorkLinkCreateResult);
+  }
+
+  workLinkList(payload: WsWorkLinkListPayload): Promise<WsWorkLinkListResultT> {
+    return this.request("work.link.list", payload, WsWorkLinkListResult);
   }
 
   workArtifactList(payload: WsWorkArtifactListPayload): Promise<WsWorkArtifactListResultT> {

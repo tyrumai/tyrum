@@ -19,8 +19,11 @@ import {
 import {
   WorkScope,
   WorkItem,
+  WorkItemFingerprint,
   WorkItemId,
   WorkItemKind,
+  WorkItemLink,
+  WorkItemLinkKind,
   WorkItemState,
   WorkItemTaskId,
 } from "../workboard.js";
@@ -68,7 +71,7 @@ export const WsWorkCreateItemInput = z
     title: z.string().trim().min(1),
     priority: z.number().int().nonnegative().optional(),
     acceptance: z.unknown().optional(),
-    fingerprint: z.unknown().optional(),
+    fingerprint: WorkItemFingerprint.optional(),
     budgets: ExecutionBudgets.optional(),
     parent_work_item_id: WorkItemId.optional(),
     created_from_session_key: TyrumKey.optional(),
@@ -92,7 +95,7 @@ export const WsWorkUpdatePatch = z
     title: z.string().trim().min(1).optional(),
     priority: z.number().int().nonnegative().optional(),
     acceptance: z.unknown().optional(),
-    fingerprint: z.unknown().optional(),
+    fingerprint: WorkItemFingerprint.optional(),
     budgets: ExecutionBudgets.nullable().optional(),
     last_active_at: DateTimeSchema.nullable().optional(),
   })
@@ -123,6 +126,32 @@ export const WsWorkTransitionRequest = WsRequestEnvelope.extend({
   payload: WsWorkTransitionPayload,
 });
 export type WsWorkTransitionRequest = z.infer<typeof WsWorkTransitionRequest>;
+
+export const WsWorkLinkCreatePayload = WorkScope.extend({
+  work_item_id: WorkItemId,
+  linked_work_item_id: WorkItemId,
+  kind: WorkItemLinkKind,
+  meta_json: z.unknown().optional(),
+}).strict();
+export type WsWorkLinkCreatePayload = z.infer<typeof WsWorkLinkCreatePayload>;
+
+export const WsWorkLinkCreateRequest = WsRequestEnvelope.extend({
+  type: z.literal("work.link.create"),
+  payload: WsWorkLinkCreatePayload,
+});
+export type WsWorkLinkCreateRequest = z.infer<typeof WsWorkLinkCreateRequest>;
+
+export const WsWorkLinkListPayload = WorkScope.extend({
+  work_item_id: WorkItemId,
+  limit: z.number().int().positive().optional(),
+}).strict();
+export type WsWorkLinkListPayload = z.infer<typeof WsWorkLinkListPayload>;
+
+export const WsWorkLinkListRequest = WsRequestEnvelope.extend({
+  type: z.literal("work.link.list"),
+  payload: WsWorkLinkListPayload,
+});
+export type WsWorkLinkListRequest = z.infer<typeof WsWorkLinkListRequest>;
 
 // ---------------------------------------------------------------------------
 // Drilldown operations (typed) — artifacts
@@ -432,6 +461,36 @@ export type WsWorkTransitionResponseErrEnvelope = z.infer<
   typeof WsWorkTransitionResponseErrEnvelope
 >;
 
+export const WsWorkLinkCreateResult = z.object({ link: WorkItemLink }).strict();
+export type WsWorkLinkCreateResult = z.infer<typeof WsWorkLinkCreateResult>;
+
+export const WsWorkLinkCreateResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("work.link.create"),
+  result: WsWorkLinkCreateResult,
+});
+export type WsWorkLinkCreateResponseOkEnvelope = z.infer<typeof WsWorkLinkCreateResponseOkEnvelope>;
+
+export const WsWorkLinkCreateResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("work.link.create"),
+});
+export type WsWorkLinkCreateResponseErrEnvelope = z.infer<
+  typeof WsWorkLinkCreateResponseErrEnvelope
+>;
+
+export const WsWorkLinkListResult = z.object({ links: z.array(WorkItemLink) }).strict();
+export type WsWorkLinkListResult = z.infer<typeof WsWorkLinkListResult>;
+
+export const WsWorkLinkListResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("work.link.list"),
+  result: WsWorkLinkListResult,
+});
+export type WsWorkLinkListResponseOkEnvelope = z.infer<typeof WsWorkLinkListResponseOkEnvelope>;
+
+export const WsWorkLinkListResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("work.link.list"),
+});
+export type WsWorkLinkListResponseErrEnvelope = z.infer<typeof WsWorkLinkListResponseErrEnvelope>;
+
 // ---------------------------------------------------------------------------
 // Operation responses (typed) — drilldown
 // ---------------------------------------------------------------------------
@@ -719,6 +778,17 @@ export const WsWorkItemCancelledEvent = WsEventEnvelope.extend({
   payload: WsWorkItemEventPayload,
 });
 export type WsWorkItemCancelledEvent = z.infer<typeof WsWorkItemCancelledEvent>;
+
+export const WsWorkLinkCreatedEventPayload = WorkScope.extend({
+  link: WorkItemLink,
+}).strict();
+export type WsWorkLinkCreatedEventPayload = z.infer<typeof WsWorkLinkCreatedEventPayload>;
+
+export const WsWorkLinkCreatedEvent = WsEventEnvelope.extend({
+  type: z.literal("work.link.created"),
+  payload: WsWorkLinkCreatedEventPayload,
+});
+export type WsWorkLinkCreatedEvent = z.infer<typeof WsWorkLinkCreatedEvent>;
 
 export const WsWorkTaskLeasedEventPayload = WorkScope.extend({
   work_item_id: WorkItemId,
