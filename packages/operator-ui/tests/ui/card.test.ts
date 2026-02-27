@@ -21,9 +21,21 @@ describe("Card", () => {
       React.createElement(
         Card as React.ComponentType,
         { className: "test-card" },
-        React.createElement(CardHeader as React.ComponentType, { className: "test-header" }, "Header"),
-        React.createElement(CardContent as React.ComponentType, { className: "test-content" }, "Content"),
-        React.createElement(CardFooter as React.ComponentType, { className: "test-footer" }, "Footer"),
+        React.createElement(
+          CardHeader as React.ComponentType,
+          { className: "test-header" },
+          "Header",
+        ),
+        React.createElement(
+          CardContent as React.ComponentType,
+          { className: "test-content" },
+          "Content",
+        ),
+        React.createElement(
+          CardFooter as React.ComponentType,
+          { className: "test-footer" },
+          "Footer",
+        ),
       ),
     );
 

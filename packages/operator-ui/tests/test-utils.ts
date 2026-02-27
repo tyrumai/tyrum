@@ -31,4 +31,3 @@ export function cleanupTestRoot(testRoot: TestRoot): void {
   });
   testRoot.container.remove();
 }
-

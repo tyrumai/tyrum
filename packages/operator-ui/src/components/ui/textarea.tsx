@@ -37,10 +37,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
           {...props}
         />
         {message ? (
-          <p
-            id={describedById}
-            className={cn("text-sm", error ? "text-error" : "text-fg-muted")}
-          >
+          <p id={describedById} className={cn("text-sm", error ? "text-error" : "text-fg-muted")}>
             {message}
           </p>
         ) : null}
@@ -49,4 +46,3 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
   },
 );
 Textarea.displayName = "Textarea";
-

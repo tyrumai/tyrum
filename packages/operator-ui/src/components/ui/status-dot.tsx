@@ -33,4 +33,3 @@ export const StatusDot = React.forwardRef<HTMLSpanElement, StatusDotProps>(
   },
 );
 StatusDot.displayName = "StatusDot";
-

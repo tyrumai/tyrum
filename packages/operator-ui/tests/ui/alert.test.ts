@@ -11,7 +11,10 @@ describe("Alert", () => {
     expect(Alert).toBeDefined();
 
     const { container, root } = renderIntoDocument(
-      React.createElement(Alert as React.ComponentType, { title: "Saved", description: "All good" }),
+      React.createElement(Alert as React.ComponentType, {
+        title: "Saved",
+        description: "All good",
+      }),
     );
 
     const el = container.querySelector('[role="alert"]');
