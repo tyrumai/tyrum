@@ -8,7 +8,7 @@ import { Diagnostics } from "./pages/Diagnostics.js";
 import { Logs } from "./pages/Logs.js";
 import { WorkBoard } from "./pages/WorkBoard.js";
 import { ConsentModal } from "./components/ConsentModal.js";
-import { getPageIdForDeepLink } from "./deep-links.js";
+import { getDeepLinkRoute } from "./deep-links.js";
 
 type PageId =
   | "overview"
@@ -31,6 +31,7 @@ const VALID_PAGES = new Set<PageId>([
 
 export function App() {
   const [page, setPage] = useState<PageId>("overview");
+  const [workItemToOpen, setWorkItemToOpen] = useState<string | null>(null);
   const handleNavigate = useCallback((nextPage: string): void => {
     if (VALID_PAGES.has(nextPage as PageId)) {
       setPage(nextPage as PageId);
@@ -73,7 +74,11 @@ export function App() {
     if (!api?.consumeDeepLink || !api.onDeepLinkOpen) return;
 
     const handleDeepLink = (url: string): void => {
-      handleNavigate(getPageIdForDeepLink(url));
+      const route = getDeepLinkRoute(url);
+      handleNavigate(route.pageId);
+      if (route.pageId === "work" && route.workItemId) {
+        setWorkItemToOpen(route.workItemId);
+      }
     };
 
     void api.consumeDeepLink().then((url) => {
@@ -93,7 +98,12 @@ export function App() {
   return (
     <Layout currentPage={page} onNavigate={handleNavigate} fullBleed={page === "gateway"}>
       {page === "overview" && <Overview />}
-      {page === "work" && <WorkBoard />}
+      {page === "work" && (
+        <WorkBoard
+          deepLinkWorkItemId={workItemToOpen}
+          onDeepLinkHandled={() => setWorkItemToOpen(null)}
+        />
+      )}
       {page === "gateway" && <Gateway />}
       {page === "connection" && <Connection />}
       {page === "permissions" && <Permissions />}

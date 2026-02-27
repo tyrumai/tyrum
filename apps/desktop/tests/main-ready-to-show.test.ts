@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import "./work-item-notifications.mock.js";
+
 const {
   appRequestSingleInstanceLockMock,
   appGetPathMock,

@@ -17,6 +17,7 @@ describe("WorkBoard navigation wiring", () => {
     const app = readFileSync(join(import.meta.dirname, "../src/renderer/App.tsx"), "utf-8");
 
     expect(app).toContain('page === "work"');
-    expect(app).toContain("<WorkBoard />");
+    expect(app).toContain("<WorkBoard");
+    expect(app).toContain("deepLinkWorkItemId");
   });
 });

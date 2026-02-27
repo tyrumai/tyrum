@@ -42,6 +42,11 @@ type OperatorConnectionInfo = {
   tlsCertFingerprint256: string;
 };
 
+export type WorkBoardProps = {
+  deepLinkWorkItemId?: string | null;
+  onDeepLinkHandled?: () => void;
+};
+
 const containerStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
@@ -147,7 +152,7 @@ function makeWorkItemScope(workItemId: string): WorkStateKVScope {
   return { kind: "work_item", ...DEFAULT_SCOPE, work_item_id: workItemId };
 }
 
-export function WorkBoard() {
+export function WorkBoard({ deepLinkWorkItemId, onDeepLinkHandled }: WorkBoardProps) {
   const api = window.tyrumDesktop;
   const clientRef = useRef<TyrumClient | null>(null);
   const selectedIdRef = useRef<string | null>(null);
@@ -176,6 +181,12 @@ export function WorkBoard() {
   useEffect(() => {
     selectedIdRef.current = selectedWorkItemId;
   }, [selectedWorkItemId]);
+
+  useEffect(() => {
+    if (!deepLinkWorkItemId) return;
+    setSelectedWorkItemId(deepLinkWorkItemId);
+    onDeepLinkHandled?.();
+  }, [deepLinkWorkItemId, onDeepLinkHandled]);
 
   const grouped = useMemo(() => groupWorkItemsByStatus(items), [items]);
 
