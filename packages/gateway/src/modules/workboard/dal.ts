@@ -26,6 +26,54 @@ import type { SqlDb } from "../../statestore/types.js";
 
 type RawTime = string | Date;
 
+const DEFAULT_WORK_ITEM_WIP_LIMIT = 2;
+
+const WORK_ITEM_TRANSITIONS: Record<WorkItemState, WorkItemState[]> = {
+  backlog: ["ready"],
+  ready: ["doing"],
+  doing: ["blocked", "done", "failed", "cancelled"],
+  blocked: ["doing"],
+  done: [],
+  failed: [],
+  cancelled: [],
+};
+
+type WorkboardTransitionErrorCode = "invalid_transition" | "wip_limit_exceeded";
+
+export interface WorkboardTransitionErrorDetails {
+  code: WorkboardTransitionErrorCode;
+  from: WorkItemState;
+  to: WorkItemState;
+  allowed?: WorkItemState[];
+  limit?: number;
+  current?: number;
+}
+
+export class WorkboardTransitionError extends Error {
+  constructor(
+    public readonly code: WorkboardTransitionErrorCode,
+    public readonly details: WorkboardTransitionErrorDetails,
+    message: string,
+  ) {
+    super(message);
+    this.name = "WorkboardTransitionError";
+  }
+}
+
+function hashScopeLockSeed(input: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash | 0;
+}
+
+function normalizeCount(value: unknown): number {
+  const n = typeof value === "string" ? Number.parseInt(value, 10) : Number(value);
+  return Number.isNaN(n) ? 0 : n;
+}
+
 function normalizeTime(value: RawTime): string {
   return value instanceof Date ? value.toISOString() : value;
 }
@@ -634,6 +682,54 @@ export class WorkboardDal {
         ],
       );
       if (!existing) return undefined;
+
+      const from = existing.status as WorkItemState;
+      const allowed = WORK_ITEM_TRANSITIONS[from];
+      if (!allowed.includes(params.status)) {
+        throw new WorkboardTransitionError(
+          "invalid_transition",
+          {
+            code: "invalid_transition",
+            from,
+            to: params.status,
+            allowed,
+          },
+          `invalid transition from ${from} to ${params.status}`,
+        );
+      }
+
+      if (params.status === "doing") {
+        if (tx.kind === "postgres") {
+          await tx.get("SELECT pg_advisory_xact_lock($1, $2)", [
+            hashScopeLockSeed(`${params.scope.tenant_id}|${params.scope.agent_id}`),
+            hashScopeLockSeed(params.scope.workspace_id),
+          ]);
+        }
+
+        const doingCount = await tx.get<{ count: number }>(
+          `SELECT COUNT(*) AS count
+           FROM work_items
+           WHERE tenant_id = ?
+             AND agent_id = ?
+             AND workspace_id = ?
+             AND status = 'doing'`,
+          [params.scope.tenant_id, params.scope.agent_id, params.scope.workspace_id],
+        );
+        const currentDoing = normalizeCount(doingCount?.count);
+        if (currentDoing >= DEFAULT_WORK_ITEM_WIP_LIMIT) {
+          throw new WorkboardTransitionError(
+            "wip_limit_exceeded",
+            {
+              code: "wip_limit_exceeded",
+              from,
+              to: "doing",
+              limit: DEFAULT_WORK_ITEM_WIP_LIMIT,
+              current: currentDoing,
+            },
+            `WIP limit ${DEFAULT_WORK_ITEM_WIP_LIMIT} reached for doing items`,
+          );
+        }
+      }
 
       const updated = await tx.get<RawWorkItemRow>(
         `UPDATE work_items
