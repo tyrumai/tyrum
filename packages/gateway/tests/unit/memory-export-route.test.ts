@@ -98,6 +98,36 @@ describe("Memory export routes", () => {
     await expect(res.json()).resolves.toMatchObject({ error: "not_found" });
   });
 
+  it("returns 404 when the export artifact does not exist", async () => {
+    const app = buildApp();
+
+    const res = await app.request("/memory/exports/00000000-0000-0000-0000-000000000000", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${operatorReadToken}` },
+    });
+
+    expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toMatchObject({ error: "not_found" });
+  });
+
+  it("defaults content-type when mime_type is missing", async () => {
+    const app = buildApp();
+
+    const ref = await artifactStore.put({
+      kind: "file",
+      labels: ["memory", "memory_v1", "export"],
+      body: Buffer.from(JSON.stringify({ v: 1, hello: "world" }), "utf8"),
+    });
+
+    const res = await app.request(`/memory/exports/${ref.artifact_id}`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${operatorReadToken}` },
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("application/octet-stream");
+  });
+
   it("returns 400 for invalid artifact ids", async () => {
     const app = buildApp();
 

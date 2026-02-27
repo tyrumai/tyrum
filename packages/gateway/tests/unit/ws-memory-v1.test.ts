@@ -448,4 +448,118 @@ describe("WS memory v1 handlers", () => {
       ),
     ).toBe(false);
   });
+
+  it("returns not_found when memory.get refers to a missing item", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm);
+    const client = cm.getClient(id)!;
+
+    const deps = makeDeps(cm, { db } as unknown as Partial<ProtocolDeps>);
+    (deps as unknown as { memoryV1Dal: MemoryV1Dal }).memoryV1Dal = memoryV1Dal;
+
+    const res = await handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "r-get-1",
+        type: "memory.get",
+        payload: { v: 1, memory_item_id: "00000000-0000-0000-0000-000000000000" },
+      }),
+      deps,
+    );
+
+    expect(res).toBeDefined();
+    expect((res as unknown as { ok: boolean }).ok).toBe(false);
+    expect((res as unknown as { error: { code: string } }).error.code).toBe("not_found");
+  });
+
+  it("returns invalid_request when cursors are malformed", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm);
+    const client = cm.getClient(id)!;
+
+    const deps = makeDeps(cm, { db } as unknown as Partial<ProtocolDeps>);
+    (deps as unknown as { memoryV1Dal: MemoryV1Dal }).memoryV1Dal = memoryV1Dal;
+
+    const res = await handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "r-list-1",
+        type: "memory.list",
+        payload: { v: 1, cursor: "not-a-cursor" },
+      }),
+      deps,
+    );
+
+    expect(res).toBeDefined();
+    expect((res as unknown as { ok: boolean }).ok).toBe(false);
+    expect((res as unknown as { error: { code: string } }).error.code).toBe("invalid_request");
+  });
+
+  it("returns unsupported_request when memory.export is called without an ArtifactStore", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm);
+    const client = cm.getClient(id)!;
+
+    const deps = makeDeps(cm, { db } as unknown as Partial<ProtocolDeps>);
+    (deps as unknown as { memoryV1Dal: MemoryV1Dal }).memoryV1Dal = memoryV1Dal;
+
+    const res = await handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "r-export-1",
+        type: "memory.export",
+        payload: { v: 1 },
+      }),
+      deps,
+    );
+
+    expect(res).toBeDefined();
+    expect((res as unknown as { ok: boolean }).ok).toBe(false);
+    expect((res as unknown as { error: { code: string } }).error.code).toBe("unsupported_request");
+  });
+
+  it("rejects memory APIs from node-role WS clients", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm, { role: "node" });
+    const client = cm.getClient(id)!;
+
+    const deps = makeDeps(cm, { db } as unknown as Partial<ProtocolDeps>);
+    (deps as unknown as { memoryV1Dal: MemoryV1Dal }).memoryV1Dal = memoryV1Dal;
+
+    const res = await handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "r-list-1",
+        type: "memory.list",
+        payload: { v: 1, limit: 10 },
+      }),
+      deps,
+    );
+
+    expect(res).toBeDefined();
+    expect((res as unknown as { ok: boolean }).ok).toBe(false);
+    expect((res as unknown as { error: { code: string } }).error.code).toBe("unauthorized");
+  });
+
+  it("returns unsupported_request when memory v1 DAL is not configured", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm);
+    const client = cm.getClient(id)!;
+
+    const deps = makeDeps(cm, { db } as unknown as Partial<ProtocolDeps>);
+
+    const res = await handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "r-list-1",
+        type: "memory.list",
+        payload: { v: 1, limit: 10 },
+      }),
+      deps,
+    );
+
+    expect(res).toBeDefined();
+    expect((res as unknown as { ok: boolean }).ok).toBe(false);
+    expect((res as unknown as { error: { code: string } }).error.code).toBe("unsupported_request");
+  });
 });
