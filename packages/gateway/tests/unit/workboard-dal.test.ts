@@ -94,8 +94,16 @@ describe("WorkboardDal", () => {
     await dal.transitionItem({
       scope,
       work_item_id: b.work_item_id,
-      status: "doing",
+      status: "ready",
       occurredAtIso: "2026-02-27T00:00:02.000Z",
+      reason: "triage",
+    });
+
+    await dal.transitionItem({
+      scope,
+      work_item_id: b.work_item_id,
+      status: "doing",
+      occurredAtIso: "2026-02-27T00:00:03.000Z",
       reason: "start",
     });
 
@@ -107,6 +115,33 @@ describe("WorkboardDal", () => {
 
     const doing = await dal.listItems({ scope, statuses: ["doing"] });
     expect(doing.items.map((it) => it.work_item_id)).toEqual([b.work_item_id]);
+  });
+
+  it("rejects invalid work item transitions", async () => {
+    const dal = createDal();
+    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+
+    const item = await dal.createItem({
+      scope,
+      item: {
+        kind: "action",
+        title: "Bad transition",
+        created_from_session_key: "agent:default:main",
+      },
+      createdAtIso: "2026-02-27T00:00:00.000Z",
+    });
+
+    await expect(
+      dal.transitionItem({
+        scope,
+        work_item_id: item.work_item_id,
+        status: "doing",
+        occurredAtIso: "2026-02-27T00:00:01.000Z",
+      }),
+    ).rejects.toMatchObject({
+      code: "invalid_transition",
+      details: { from: "backlog", to: "doing" },
+    });
   });
 
   it("paginates work item lists with cursor", async () => {
@@ -136,6 +171,73 @@ describe("WorkboardDal", () => {
     const page2 = await dal.listItems({ scope, limit: 2, cursor: page1.next_cursor });
     expect(page2.items.map((i) => i.work_item_id)).toEqual([one.work_item_id]);
     expect(page2.next_cursor).toBeUndefined();
+  });
+
+  it("enforces WIP limit when claiming work items", async () => {
+    const dal = createDal();
+    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+
+    const [first, second, third] = await Promise.all([
+      dal.createItem({
+        scope,
+        item: { kind: "action", title: "Item 1", created_from_session_key: "agent:default:main" },
+        createdAtIso: "2026-02-27T00:00:00.000Z",
+      }),
+      dal.createItem({
+        scope,
+        item: { kind: "action", title: "Item 2", created_from_session_key: "agent:default:main" },
+        createdAtIso: "2026-02-27T00:00:01.000Z",
+      }),
+      dal.createItem({
+        scope,
+        item: { kind: "action", title: "Item 3", created_from_session_key: "agent:default:main" },
+        createdAtIso: "2026-02-27T00:00:02.000Z",
+      }),
+    ]);
+
+    await dal.transitionItem({
+      scope,
+      work_item_id: first.work_item_id,
+      status: "ready",
+      occurredAtIso: "2026-02-27T00:00:03.000Z",
+    });
+    await dal.transitionItem({
+      scope,
+      work_item_id: second.work_item_id,
+      status: "ready",
+      occurredAtIso: "2026-02-27T00:00:03.000Z",
+    });
+    await dal.transitionItem({
+      scope,
+      work_item_id: third.work_item_id,
+      status: "ready",
+      occurredAtIso: "2026-02-27T00:00:03.000Z",
+    });
+
+    await dal.transitionItem({
+      scope,
+      work_item_id: first.work_item_id,
+      status: "doing",
+      occurredAtIso: "2026-02-27T00:00:04.000Z",
+    });
+    await dal.transitionItem({
+      scope,
+      work_item_id: second.work_item_id,
+      status: "doing",
+      occurredAtIso: "2026-02-27T00:00:04.001Z",
+    });
+
+    await expect(
+      dal.transitionItem({
+        scope,
+        work_item_id: third.work_item_id,
+        status: "doing",
+        occurredAtIso: "2026-02-27T00:00:04.002Z",
+      }),
+    ).rejects.toMatchObject({
+      code: "wip_limit_exceeded",
+      details: { limit: 2 },
+    });
   });
 
   it("updates a work item", async () => {

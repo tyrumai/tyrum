@@ -1903,6 +1903,14 @@ function workboardErrorResponse(
     typeof (err as { code?: unknown }).code === "string"
       ? (err as { code: string }).code
       : undefined;
+  const details =
+    err && typeof err === "object" && "details" in err
+      ? (err as { details?: unknown }).details
+      : undefined;
+
+  if (errorCode === "invalid_transition" || errorCode === "wip_limit_exceeded") {
+    return errorResponse(requestId, type, errorCode, message, details);
+  }
 
   const looksLikeSqlError = Boolean(errorCode) || message.includes("SQLITE_");
   if (looksLikeSqlError) {
