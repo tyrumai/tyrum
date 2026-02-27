@@ -4,6 +4,8 @@ const {
   appHandlers,
   appOnMock,
   appQuitMock,
+  appRequestSingleInstanceLockMock,
+  appSetAppUserModelIdMock,
   appWhenReadyMock,
   browserWindowMock,
   registerConfigIpcMock,
@@ -17,6 +19,8 @@ const {
 } = vi.hoisted(() => {
   const appHandlers = new Map<string, (...args: unknown[]) => void>();
   const appQuitMock = vi.fn();
+  const appRequestSingleInstanceLockMock = vi.fn(() => true);
+  const appSetAppUserModelIdMock = vi.fn();
   const appOnMock = vi.fn((event: string, handler: (...args: unknown[]) => void) => {
     appHandlers.set(event, handler);
   });
@@ -42,6 +46,8 @@ const {
     appHandlers,
     appOnMock,
     appQuitMock,
+    appRequestSingleInstanceLockMock,
+    appSetAppUserModelIdMock,
     appWhenReadyMock,
     browserWindowMock,
     registerConfigIpcMock,
@@ -60,6 +66,8 @@ vi.mock("electron", () => ({
     whenReady: appWhenReadyMock,
     on: appOnMock,
     quit: appQuitMock,
+    requestSingleInstanceLock: appRequestSingleInstanceLockMock,
+    setAppUserModelId: appSetAppUserModelIdMock,
   },
   BrowserWindow: browserWindowMock,
 }));
@@ -87,9 +95,19 @@ vi.mock("../src/main/ipc/update-ipc.js", () => ({
   registerUpdateIpc: registerUpdateIpcMock,
 }));
 
-const mainModule = await import("../src/main/index.js");
+async function importMainModule(): Promise<typeof import("../src/main/index.js")> {
+  vi.resetModules();
+  appHandlers.clear();
+  appOnMock.mockClear();
+  appQuitMock.mockClear();
+  appWhenReadyMock.mockClear();
+  appRequestSingleInstanceLockMock.mockReset();
+  appRequestSingleInstanceLockMock.mockReturnValue(true);
+  appSetAppUserModelIdMock.mockClear();
+  return import("../src/main/index.js");
+}
 
-function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
+async function withPlatform<T>(platform: NodeJS.Platform, run: () => T | Promise<T>): Promise<T> {
   const originalPlatform = process.platform;
   Object.defineProperty(process, "platform", {
     value: platform,
@@ -97,7 +115,7 @@ function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
   });
 
   try {
-    return run();
+    return await run();
   } finally {
     Object.defineProperty(process, "platform", {
       value: originalPlatform,
@@ -121,29 +139,58 @@ describe("main process lifecycle", () => {
     loadConfigMock.mockReturnValue({ mode: "embedded" });
   });
 
-  it("registers app lifecycle handlers", () => {
+  it("registers app lifecycle handlers", async () => {
+    await importMainModule();
+
+    expect(appRequestSingleInstanceLockMock).toHaveBeenCalledTimes(1);
     expect(appWhenReadyMock).toHaveBeenCalledTimes(1);
     expect(appHandlers.has("window-all-closed")).toBe(true);
     expect(appHandlers.has("activate")).toBe(true);
     expect(appHandlers.has("before-quit")).toBe(true);
   });
 
-  it("quits when all windows are closed on non-macOS", () => {
+  it("quits immediately when the single-instance lock is not acquired", async () => {
+    vi.resetModules();
+    appHandlers.clear();
+    appQuitMock.mockClear();
+    appWhenReadyMock.mockClear();
+    appRequestSingleInstanceLockMock.mockReset();
+    appRequestSingleInstanceLockMock.mockReturnValue(false);
+
+    await import("../src/main/index.js");
+
+    expect(appQuitMock).toHaveBeenCalledTimes(1);
+    expect(appWhenReadyMock).not.toHaveBeenCalled();
+    expect(appHandlers.size).toBe(0);
+  });
+
+  it("sets the Windows AppUserModelId before creating windows", async () => {
+    await withPlatform("win32", () => importMainModule());
+
+    expect(appSetAppUserModelIdMock).toHaveBeenCalledTimes(1);
+    expect(appSetAppUserModelIdMock).toHaveBeenCalledWith("net.tyrum.desktop");
+  });
+
+  it("quits when all windows are closed on non-macOS", async () => {
+    await importMainModule();
+
     const onWindowAllClosed = getHandler("window-all-closed");
     appQuitMock.mockClear();
 
-    withPlatform("linux", () => {
+    await withPlatform("linux", () => {
       onWindowAllClosed();
     });
 
     expect(appQuitMock).toHaveBeenCalledTimes(1);
   });
 
-  it("does not quit when all windows are closed on macOS", () => {
+  it("does not quit when all windows are closed on macOS", async () => {
+    await importMainModule();
+
     const onWindowAllClosed = getHandler("window-all-closed");
     appQuitMock.mockClear();
 
-    withPlatform("darwin", () => {
+    await withPlatform("darwin", () => {
       onWindowAllClosed();
     });
 
@@ -151,6 +198,7 @@ describe("main process lifecycle", () => {
   });
 
   it("auto-starts embedded gateway when configured mode is embedded", async () => {
+    const mainModule = await importMainModule();
     configExistsMock.mockReturnValue(true);
     loadConfigMock.mockReturnValue({ mode: "embedded" });
 
@@ -160,6 +208,7 @@ describe("main process lifecycle", () => {
   });
 
   it("auto-starts embedded gateway on first launch regardless of saved mode", async () => {
+    const mainModule = await importMainModule();
     configExistsMock.mockReturnValue(false);
     loadConfigMock.mockReturnValue({ mode: "remote" });
 
@@ -169,6 +218,7 @@ describe("main process lifecycle", () => {
   });
 
   it("does not auto-start embedded gateway when config exists and mode is remote", async () => {
+    const mainModule = await importMainModule();
     configExistsMock.mockReturnValue(true);
     loadConfigMock.mockReturnValue({ mode: "remote" });
 

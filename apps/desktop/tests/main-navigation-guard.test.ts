@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
+  appRequestSingleInstanceLockMock,
+  appSetAppUserModelIdMock,
   appWhenReadyMock,
   appOnMock,
   appQuitMock,
@@ -32,6 +34,8 @@ const {
   const appWhenReadyMock = vi.fn(() => Promise.resolve());
   const appOnMock = vi.fn();
   const appQuitMock = vi.fn();
+  const appRequestSingleInstanceLockMock = vi.fn(() => true);
+  const appSetAppUserModelIdMock = vi.fn();
   const shellOpenExternalMock = vi.fn(async () => {});
 
   const registerConfigIpcMock = vi.fn();
@@ -47,6 +51,8 @@ const {
   }));
 
   return {
+    appRequestSingleInstanceLockMock,
+    appSetAppUserModelIdMock,
     appWhenReadyMock,
     appOnMock,
     appQuitMock,
@@ -69,6 +75,8 @@ vi.mock("electron", () => ({
     whenReady: appWhenReadyMock,
     on: appOnMock,
     quit: appQuitMock,
+    requestSingleInstanceLock: appRequestSingleInstanceLockMock,
+    setAppUserModelId: appSetAppUserModelIdMock,
   },
   BrowserWindow: browserWindowMock,
   shell: {
