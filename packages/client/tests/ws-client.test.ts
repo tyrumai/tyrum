@@ -799,6 +799,12 @@ describe("TyrumClient", () => {
           },
         },
       },
+      {
+        type: "memory.export.completed",
+        payload: {
+          artifact_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+        },
+      },
     ] as const;
 
     for (let i = 0; i < cases.length; i++) {
@@ -1638,6 +1644,42 @@ describe("TyrumClient", () => {
       }),
     );
     await expect(getErrP).rejects.toThrow(/not_found/i);
+  });
+
+  it("rejects memory.* helper responses with invalid result payloads", async () => {
+    server = createTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: [],
+      reconnect: false,
+    });
+
+    const connectedP = new Promise<void>((resolve) => {
+      client!.on("connected", () => resolve());
+    });
+
+    client.connect();
+    const ws = await server.waitForClient();
+    await acceptConnect(ws);
+    await connectedP;
+
+    const payload = { v: 1, memory_item_id: "123e4567-e89b-12d3-a456-426614174000" };
+    const pending = client!.memoryGet(payload);
+    const req = (await waitForMessage(ws)) as Record<string, unknown>;
+    expect(req["type"]).toBe("memory.get");
+    expect(req["payload"]).toEqual(payload);
+
+    ws.send(
+      JSON.stringify({
+        request_id: req["request_id"],
+        type: "memory.get",
+        ok: true,
+        result: { v: 1 },
+      }),
+    );
+
+    await expect(pending).rejects.toThrow(/returned invalid result/i);
   });
 
   it("sends typed subagent.* requests and returns validated results", async () => {
