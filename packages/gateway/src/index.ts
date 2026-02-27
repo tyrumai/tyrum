@@ -19,6 +19,7 @@ import { createApp } from "./app.js";
 import { isAgentEnabled } from "./modules/agent/enabled.js";
 import { TokenStore } from "./modules/auth/token-store.js";
 import { WatcherScheduler } from "./modules/watcher/scheduler.js";
+import { WorkSignalScheduler } from "./modules/workboard/signal-scheduler.js";
 import {
   createSecretProviderFromEnv,
   resolveSecretProviderKind,
@@ -980,6 +981,18 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   const connectionManager = new ConnectionManager();
   const outboxDal = new OutboxDal(container.db, container.redactionEngine);
   const connectionDirectory = new ConnectionDirectoryDal(container.db);
+  const workSignalScheduler =
+    role === "all" || role === "scheduler"
+      ? new WorkSignalScheduler({
+          db: container.db,
+          connectionManager,
+          owner: instanceId,
+          logger,
+          cluster: { edgeId: instanceId, outboxDal },
+          keepProcessAlive: role === "scheduler",
+        })
+      : undefined;
+  workSignalScheduler?.start();
   const edgeEngine =
     shouldRunEdge && engineApiEnabled
       ? new ExecutionEngine({
