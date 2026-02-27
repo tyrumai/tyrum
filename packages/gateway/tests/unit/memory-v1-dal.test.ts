@@ -3,7 +3,7 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
 import type { SqlDb } from "../../src/statestore/types.js";
 import { migratePostgres } from "../../src/migrate-postgres.js";
-import { newDb } from "pg-mem";
+import { DataType, newDb } from "pg-mem";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -57,6 +57,15 @@ function translatePlaceholders(sql: string): { sql: string; count: number } {
 
 async function openPgMemDal(): Promise<OpenDalResult> {
   const mem = newDb();
+  mem.public.registerFunction({
+    name: "strpos",
+    args: [DataType.text, DataType.text],
+    returns: DataType.integer,
+    implementation: (haystack: string, needle: string) => {
+      const idx = haystack.indexOf(needle);
+      return idx >= 0 ? idx + 1 : 0;
+    },
+  });
   const { Client } = mem.adapters.createPg();
   const pg = new Client();
   await pg.connect();
@@ -558,6 +567,67 @@ for (const fixture of fixtures) {
         expect(results.hits.map((h) => h.memory_item_id)).toContain(bothTerms.memory_item_id);
         expect(results.hits.map((h) => h.memory_item_id)).toContain(oneTerm.memory_item_id);
         expect(results.hits[0]?.memory_item_id).toBe(bothTerms.memory_item_id);
+      } finally {
+        await close();
+      }
+    });
+
+    it("escapes LIKE wildcards in keyword terms", async () => {
+      const { dal, close } = await fixture.open();
+      try {
+        const percentNote = await dal.create(
+          {
+            kind: "note",
+            title: "Percent note",
+            body_md: "100% uptime",
+            tags: [],
+            sensitivity: "private",
+            provenance: { source_kind: "operator", refs: [] },
+          },
+          "agent-a",
+        );
+
+        const underscoreNote = await dal.create(
+          {
+            kind: "note",
+            title: "Underscore note",
+            body_md: "foo_bar",
+            tags: [],
+            sensitivity: "private",
+            provenance: { source_kind: "operator", refs: [] },
+          },
+          "agent-a",
+        );
+
+        const otherNote = await dal.create(
+          {
+            kind: "note",
+            title: "Other note",
+            body_md: "restart gateway",
+            tags: [],
+            sensitivity: "private",
+            provenance: { source_kind: "operator", refs: [] },
+          },
+          "agent-a",
+        );
+
+        const percentResults = await dal.search(
+          { v: 1, query: "%", filter: { kinds: ["note"], sensitivities: ["private"] }, limit: 10 },
+          "agent-a",
+        );
+        const percentIds = percentResults.hits.map((h) => h.memory_item_id);
+        expect(percentIds).toContain(percentNote.memory_item_id);
+        expect(percentIds).not.toContain(otherNote.memory_item_id);
+        expect(percentIds).not.toContain(underscoreNote.memory_item_id);
+
+        const underscoreResults = await dal.search(
+          { v: 1, query: "_", filter: { kinds: ["note"], sensitivities: ["private"] }, limit: 10 },
+          "agent-a",
+        );
+        const underscoreIds = underscoreResults.hits.map((h) => h.memory_item_id);
+        expect(underscoreIds).toContain(underscoreNote.memory_item_id);
+        expect(underscoreIds).not.toContain(otherNote.memory_item_id);
+        expect(underscoreIds).not.toContain(percentNote.memory_item_id);
       } finally {
         await close();
       }

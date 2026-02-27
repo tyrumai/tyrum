@@ -1115,18 +1115,22 @@ export class MemoryV1Dal {
     }
 
     if (terms.length > 0) {
+      const contains =
+        this.db.kind === "sqlite"
+          ? (haystack: string): string => `instr(${haystack}, ?) > 0`
+          : (haystack: string): string => `strpos(${haystack}, ?) > 0`;
       const termClauses: string[] = [];
       for (const term of terms) {
-        const like = `%${term.toLowerCase()}%`;
+        const needle = term.toLowerCase();
         termClauses.push(
           `(
-            (mi.title IS NOT NULL AND LOWER(mi.title) LIKE ?)
-            OR (mi.body_md IS NOT NULL AND LOWER(mi.body_md) LIKE ?)
-            OR (mi.summary_md IS NOT NULL AND LOWER(mi.summary_md) LIKE ?)
-            OR (mi.key IS NOT NULL AND LOWER(mi.key) LIKE ?)
+            (mi.title IS NOT NULL AND ${contains("LOWER(mi.title)")})
+            OR (mi.body_md IS NOT NULL AND ${contains("LOWER(mi.body_md)")})
+            OR (mi.summary_md IS NOT NULL AND ${contains("LOWER(mi.summary_md)")})
+            OR (mi.key IS NOT NULL AND ${contains("LOWER(mi.key)")})
           )`,
         );
-        params.push(like, like, like, like);
+        params.push(needle, needle, needle, needle);
       }
 
       clauses.push(`(${termClauses.join("\n            OR ")})`);
