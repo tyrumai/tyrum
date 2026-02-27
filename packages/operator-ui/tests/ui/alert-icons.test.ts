@@ -15,4 +15,3 @@ describe("Alert icons", () => {
     expect(source).not.toMatch(/\bXCircle\b/u);
   });
 });
-
