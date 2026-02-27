@@ -957,4 +957,58 @@ describe("handleClientMessage (work.*)", () => {
       await db.close();
     }
   });
+
+  it("returns unsupported_request for work.list when DB is not configured", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm);
+    const client = cm.getClient(id)!;
+
+    const deps = makeDeps(cm);
+    const res = await handleClientMessage(
+      client,
+      JSON.stringify({
+        request_id: "r-1",
+        type: "work.list",
+        payload: { tenant_id: "default", agent_id: "default", workspace_id: "default" },
+      }),
+      deps,
+    );
+
+    expect((res as unknown as { ok: boolean }).ok).toBe(false);
+    const err = (res as unknown as { error: { code: string; message: string } }).error;
+    expect(err.code).toBe("unsupported_request");
+    expect(err.message).toBe("work.list not supported");
+  });
+
+  it("returns not_found for work.get when the work item does not exist", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm);
+    const client = cm.getClient(id)!;
+
+    const db = openTestSqliteDb();
+    try {
+      const deps = makeDeps(cm, { db });
+      const res = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-1",
+          type: "work.get",
+          payload: {
+            tenant_id: "default",
+            agent_id: "default",
+            workspace_id: "default",
+            work_item_id: "550e8400-e29b-41d4-a716-446655440000",
+          },
+        }),
+        deps,
+      );
+
+      expect((res as unknown as { ok: boolean }).ok).toBe(false);
+      const err = (res as unknown as { error: { code: string; message: string } }).error;
+      expect(err.code).toBe("not_found");
+      expect(err.message).toBe("work item not found");
+    } finally {
+      await db.close();
+    }
+  });
 });
