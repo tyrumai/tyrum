@@ -811,6 +811,19 @@ export const WsWorkSignalCreatedEvent = WsEventEnvelope.extend({
 });
 export type WsWorkSignalCreatedEvent = z.infer<typeof WsWorkSignalCreatedEvent>;
 
+export const WsWorkSignalUpdatedEventPayload = z
+  .object({
+    signal: WorkSignal,
+  })
+  .strict();
+export type WsWorkSignalUpdatedEventPayload = z.infer<typeof WsWorkSignalUpdatedEventPayload>;
+
+export const WsWorkSignalUpdatedEvent = WsEventEnvelope.extend({
+  type: z.literal("work.signal.updated"),
+  payload: WsWorkSignalUpdatedEventPayload,
+});
+export type WsWorkSignalUpdatedEvent = z.infer<typeof WsWorkSignalUpdatedEvent>;
+
 export const WsWorkSignalFiredEventPayload = WorkScope.extend({
   signal_id: WorkSignalId,
   firing_id: z.string().trim().min(1),

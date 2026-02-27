@@ -3,6 +3,7 @@ import {
   createBearerTokenAuth,
   createBrowserCookieAuth,
   httpAuthForAuth,
+  selectAuthForAdminMode,
   wsTokenForAuth,
 } from "../src/index.js";
 
@@ -21,5 +22,34 @@ describe("@tyrum/operator-core auth", () => {
       type: "bearer",
       token: "test-token",
     });
+  });
+
+  it("selects elevated auth only when Admin Mode is active", () => {
+    const baseline = createBearerTokenAuth("baseline-token");
+    expect(
+      selectAuthForAdminMode({
+        baseline,
+        adminMode: {
+          status: "inactive",
+          elevatedToken: null,
+          enteredAt: null,
+          expiresAt: null,
+          remainingMs: null,
+        },
+      }),
+    ).toBe(baseline);
+
+    expect(
+      selectAuthForAdminMode({
+        baseline,
+        adminMode: {
+          status: "active",
+          elevatedToken: "elevated-token",
+          enteredAt: "2026-02-27T00:00:00.000Z",
+          expiresAt: "2026-02-27T00:01:00.000Z",
+          remainingMs: 60_000,
+        },
+      }),
+    ).toEqual({ type: "bearer-token", token: "elevated-token" });
   });
 });

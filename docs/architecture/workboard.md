@@ -351,7 +351,7 @@ WorkBoard and subagents should emit events so operator clients can render a time
 
 - Work: `work.item.created`, `work.item.updated`, `work.item.blocked`, `work.item.completed`, `work.item.cancelled`
 - Tasks: `work.task.leased`, `work.task.started`, `work.task.paused` (approval), `work.task.completed`
-- Blackboard: `work.artifact.created`, `work.decision.created`, `work.signal.created`, `work.signal.fired`, `work.state_kv.updated`
+- Blackboard: `work.artifact.created`, `work.decision.created`, `work.signal.created`, `work.signal.updated`, `work.signal.fired`, `work.state_kv.updated`
 - Subagents: `subagent.spawned`, `subagent.updated`, `subagent.closed`
 
 Each event should link back to durable identifiers (`work_item_id`, `task_id`, `run_id`, `approval_id`, artifact refs) so clients can rehydrate after reconnect.
