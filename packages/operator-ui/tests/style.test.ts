@@ -10,4 +10,3 @@ describe("OPERATOR_UI_CSS", () => {
     expect(OPERATOR_UI_CSS).not.toContain(".tyrum-operator-ui .main");
   });
 });
-
