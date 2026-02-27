@@ -783,4 +783,300 @@ describe("WorkboardDal", () => {
     expect(raw!.closed_at).toBe(closedAtIso);
     expect(raw!.close_reason).toBe("requested by operator");
   });
+
+  it("rejects cross-work-item task dependencies", async () => {
+    const dal = createDal();
+    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+
+    const a = await dal.createItem({
+      scope,
+      item: { kind: "action", title: "A", created_from_session_key: "agent:default:main" },
+      createdAtIso: "2026-02-27T00:00:00.000Z",
+    });
+    const b = await dal.createItem({
+      scope,
+      item: { kind: "action", title: "B", created_from_session_key: "agent:default:main" },
+      createdAtIso: "2026-02-27T00:00:01.000Z",
+    });
+
+    const taskB = await dal.createTask({
+      scope,
+      task: {
+        work_item_id: b.work_item_id,
+        execution_profile: "planner",
+        side_effect_class: "none",
+      },
+      createdAtIso: "2026-02-27T00:00:02.000Z",
+    });
+
+    await expect(
+      dal.createTask({
+        scope,
+        task: {
+          work_item_id: a.work_item_id,
+          depends_on: [taskB.task_id],
+          execution_profile: "planner",
+          side_effect_class: "none",
+        },
+        createdAtIso: "2026-02-27T00:00:03.000Z",
+      }),
+    ).rejects.toThrow(/depends_on|work item|scope/i);
+  });
+
+  it("rejects task dependency cycles", async () => {
+    const dal = createDal();
+    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+
+    const item = await dal.createItem({
+      scope,
+      item: { kind: "action", title: "Cycle", created_from_session_key: "agent:default:main" },
+      createdAtIso: "2026-02-27T00:00:00.000Z",
+    });
+
+    const a = await dal.createTask({
+      scope,
+      task: {
+        work_item_id: item.work_item_id,
+        execution_profile: "planner",
+        side_effect_class: "none",
+      },
+      createdAtIso: "2026-02-27T00:00:01.000Z",
+    });
+    const b = await dal.createTask({
+      scope,
+      task: {
+        work_item_id: item.work_item_id,
+        execution_profile: "planner",
+        side_effect_class: "none",
+      },
+      createdAtIso: "2026-02-27T00:00:02.000Z",
+    });
+
+    await dal.updateTask({
+      scope,
+      task_id: a.task_id,
+      patch: { depends_on: [b.task_id] },
+      updatedAtIso: "2026-02-27T00:00:03.000Z",
+    });
+
+    await expect(
+      dal.updateTask({
+        scope,
+        task_id: b.task_id,
+        patch: { depends_on: [a.task_id] },
+        updatedAtIso: "2026-02-27T00:00:04.000Z",
+      }),
+    ).rejects.toThrow(/cycle/i);
+  });
+
+  it("leases runnable tasks respecting fan-out/fan-in dependencies", async () => {
+    const dal = createDal();
+    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+
+    const item = await dal.createItem({
+      scope,
+      item: { kind: "action", title: "DAG", created_from_session_key: "agent:default:main" },
+      createdAtIso: "2026-02-27T00:00:00.000Z",
+    });
+
+    const root = await dal.createTask({
+      scope,
+      task: {
+        work_item_id: item.work_item_id,
+        execution_profile: "planner",
+        side_effect_class: "none",
+      },
+      taskId: "00000000-0000-0000-0000-000000000001",
+      createdAtIso: "2026-02-27T00:00:01.000Z",
+    });
+    const b = await dal.createTask({
+      scope,
+      task: {
+        work_item_id: item.work_item_id,
+        depends_on: [root.task_id],
+        execution_profile: "planner",
+        side_effect_class: "none",
+      },
+      taskId: "00000000-0000-0000-0000-000000000002",
+      createdAtIso: "2026-02-27T00:00:02.000Z",
+    });
+    const c = await dal.createTask({
+      scope,
+      task: {
+        work_item_id: item.work_item_id,
+        depends_on: [root.task_id],
+        execution_profile: "planner",
+        side_effect_class: "none",
+      },
+      taskId: "00000000-0000-0000-0000-000000000003",
+      createdAtIso: "2026-02-27T00:00:03.000Z",
+    });
+    const join = await dal.createTask({
+      scope,
+      task: {
+        work_item_id: item.work_item_id,
+        depends_on: [b.task_id, c.task_id],
+        execution_profile: "planner",
+        side_effect_class: "none",
+      },
+      taskId: "00000000-0000-0000-0000-000000000004",
+      createdAtIso: "2026-02-27T00:00:04.000Z",
+    });
+
+    const leaseOwner = "test-owner";
+    const nowMs = 1_709_000_000_000;
+    const ttlMs = 60_000;
+
+    const first = await dal.leaseRunnableTasks({
+      scope,
+      work_item_id: item.work_item_id,
+      lease_owner: leaseOwner,
+      nowMs,
+      leaseTtlMs: ttlMs,
+      limit: 10,
+    });
+    expect(first.leased.map((x) => x.task.task_id)).toEqual([root.task_id]);
+    expect(first.leased[0]!.task.status).toBe("leased");
+    expect(first.leased[0]!.lease_expires_at_ms).toBe(nowMs + ttlMs);
+
+    await dal.updateTask({
+      scope,
+      task_id: root.task_id,
+      patch: { status: "completed", finished_at: "2026-02-27T00:00:05.000Z" },
+      updatedAtIso: "2026-02-27T00:00:05.000Z",
+    });
+
+    const second = await dal.leaseRunnableTasks({
+      scope,
+      work_item_id: item.work_item_id,
+      lease_owner: leaseOwner,
+      nowMs: nowMs + 1,
+      leaseTtlMs: ttlMs,
+      limit: 10,
+    });
+    expect(second.leased.map((x) => x.task.task_id)).toEqual([b.task_id, c.task_id]);
+
+    await dal.updateTask({
+      scope,
+      task_id: b.task_id,
+      patch: { status: "completed", finished_at: "2026-02-27T00:00:06.000Z" },
+      updatedAtIso: "2026-02-27T00:00:06.000Z",
+    });
+    await dal.updateTask({
+      scope,
+      task_id: c.task_id,
+      patch: { status: "completed", finished_at: "2026-02-27T00:00:06.001Z" },
+      updatedAtIso: "2026-02-27T00:00:06.001Z",
+    });
+
+    const third = await dal.leaseRunnableTasks({
+      scope,
+      work_item_id: item.work_item_id,
+      lease_owner: leaseOwner,
+      nowMs: nowMs + 2,
+      leaseTtlMs: ttlMs,
+      limit: 10,
+    });
+    expect(third.leased.map((x) => x.task.task_id)).toEqual([join.task_id]);
+  });
+
+  it("emits work.task.* WS events for task lifecycle", async () => {
+    const dal = createDal();
+    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+
+    const item = await dal.createItem({
+      scope,
+      item: { kind: "action", title: "Events", created_from_session_key: "agent:default:main" },
+      createdAtIso: "2026-02-27T00:00:00.000Z",
+    });
+
+    const task = await dal.createTask({
+      scope,
+      task: {
+        work_item_id: item.work_item_id,
+        execution_profile: "executor",
+        side_effect_class: "none",
+      },
+      taskId: "00000000-0000-0000-0000-000000000001",
+      createdAtIso: "2026-02-27T00:00:01.000Z",
+    });
+
+    const leaseOwner = "test-owner";
+    const nowMs = 1_709_000_000_000;
+    const ttlMs = 60_000;
+
+    await dal.leaseRunnableTasks({
+      scope,
+      work_item_id: item.work_item_id,
+      lease_owner: leaseOwner,
+      nowMs,
+      leaseTtlMs: ttlMs,
+      limit: 10,
+    });
+
+    const jobId = "00000000-0000-0000-0000-000000000100";
+    const runId = "00000000-0000-0000-0000-000000000101";
+    await db!.run(
+      `INSERT INTO execution_jobs (job_id, key, lane, status, trigger_json)
+       VALUES (?, ?, ?, ?, ?)`,
+      [jobId, "agent:default:main", "main", "queued", JSON.stringify({ kind: "manual" })],
+    );
+    await db!.run(
+      `INSERT INTO execution_runs (run_id, job_id, key, lane, status, attempt)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [runId, jobId, "agent:default:main", "main", "queued", 1],
+    );
+
+    await dal.updateTask({
+      scope,
+      task_id: task.task_id,
+      patch: { status: "running", run_id: runId, started_at: "2026-02-27T00:00:02.000Z" },
+      updatedAtIso: "2026-02-27T00:00:02.000Z",
+    });
+
+    const approval = await db!.get<{ id: number }>(
+      `INSERT INTO approvals (plan_id, step_index, prompt)
+       VALUES (?, ?, ?)
+       RETURNING id`,
+      ["plan-test", 0, "approve?"],
+    );
+    expect(approval).toBeDefined();
+
+    await dal.updateTask({
+      scope,
+      task_id: task.task_id,
+      patch: { status: "paused", approval_id: approval!.id },
+      updatedAtIso: "2026-02-27T00:00:03.000Z",
+    });
+
+    await dal.updateTask({
+      scope,
+      task_id: task.task_id,
+      patch: { status: "completed", finished_at: "2026-02-27T00:00:04.000Z", result_summary: "ok" },
+      updatedAtIso: "2026-02-27T00:00:04.000Z",
+    });
+
+    const outbox = await db!.all<{ topic: string; payload_json: string }>(
+      "SELECT topic, payload_json FROM outbox ORDER BY id ASC",
+    );
+    const workTaskEvents = outbox
+      .filter((row) => row.topic === "ws.broadcast")
+      .map((row) => JSON.parse(row.payload_json) as { message?: any })
+      .map((row) => row.message)
+      .filter((msg) => msg?.type?.startsWith("work.task."));
+
+    expect(workTaskEvents.map((evt) => evt.type)).toEqual([
+      "work.task.leased",
+      "work.task.started",
+      "work.task.paused",
+      "work.task.completed",
+    ]);
+
+    expect(workTaskEvents[0]?.payload?.work_item_id).toBe(item.work_item_id);
+    expect(workTaskEvents[0]?.payload?.task_id).toBe(task.task_id);
+    expect(workTaskEvents[0]?.payload?.lease_expires_at_ms).toBe(nowMs + ttlMs);
+    expect(workTaskEvents[1]?.payload?.run_id).toBe(runId);
+    expect(workTaskEvents[2]?.payload?.approval_id).toBe(approval!.id);
+    expect(workTaskEvents[3]?.payload?.result_summary).toBe("ok");
+  });
 });

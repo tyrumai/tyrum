@@ -14,6 +14,7 @@ import type {
   WorkItemTaskState,
   WorkItemStateKVEntry,
   WorkScope,
+  WsEventEnvelope,
   WorkSignal,
   WorkSignalStatus,
   WorkSignalTriggerKind,
@@ -28,6 +29,11 @@ import type { SqlDb } from "../../statestore/types.js";
 type RawTime = string | Date;
 
 const DEFAULT_WORK_ITEM_WIP_LIMIT = 2;
+
+const WORKBOARD_WS_AUDIENCE = {
+  roles: ["client"],
+  required_scopes: ["operator.read", "operator.write"],
+} as const;
 
 const WORK_ITEM_TRANSITIONS: Record<WorkItemState, WorkItemState[]> = {
   backlog: ["ready"],
@@ -365,6 +371,43 @@ function toWorkItemTask(raw: RawWorkItemTaskRow): WorkItemTask {
   } as WorkItemTask;
 }
 
+function normalizeTaskDeps(input: readonly string[] | undefined): string[] {
+  if (!input || input.length === 0) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of input) {
+    const id = raw.trim();
+    if (!id) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
+function hasTaskDependencyCycle(adj: Map<string, string[]>): boolean {
+  const state = new Map<string, 0 | 1 | 2>(); // 0=unvisited,1=visiting,2=done
+
+  const dfs = (node: string): boolean => {
+    const s = state.get(node) ?? 0;
+    if (s === 1) return true;
+    if (s === 2) return false;
+    state.set(node, 1);
+    const deps = adj.get(node) ?? [];
+    for (const dep of deps) {
+      if (dfs(dep)) return true;
+    }
+    state.set(node, 2);
+    return false;
+  };
+
+  for (const node of adj.keys()) {
+    if ((state.get(node) ?? 0) !== 0) continue;
+    if (dfs(node)) return true;
+  }
+  return false;
+}
+
 interface RawWorkItemLinkRow {
   work_item_id: string;
   linked_work_item_id: string;
@@ -466,6 +509,14 @@ function toWorkItemEvent(raw: RawWorkItemEventRow): WorkItemEventRow {
 
 export class WorkboardDal {
   constructor(private readonly db: SqlDb) {}
+
+  private async enqueueWsEventTx(tx: SqlDb, evt: WsEventEnvelope): Promise<void> {
+    await tx.run(
+      `INSERT INTO outbox (topic, target_edge_id, payload_json)
+       VALUES (?, ?, ?)`,
+      ["ws.broadcast", null, JSON.stringify({ message: evt, audience: WORKBOARD_WS_AUDIENCE })],
+    );
+  }
 
   async createItem(params: {
     scope: WorkScope;
@@ -1692,6 +1743,11 @@ export class WorkboardDal {
     const taskId = params.taskId?.trim() || randomUUID();
     const createdAtIso = params.createdAtIso ?? new Date().toISOString();
     const status: WorkItemTaskState = params.task.status ?? "queued";
+    const dependsOn = normalizeTaskDeps(params.task.depends_on);
+
+    if (dependsOn.includes(taskId)) {
+      throw new Error("work item task depends_on cannot include itself");
+    }
 
     const item = await this.getItem({
       scope: params.scope,
@@ -1699,6 +1755,30 @@ export class WorkboardDal {
     });
     if (!item) {
       throw new Error("work item not found for task");
+    }
+
+    if (dependsOn.length > 0) {
+      const placeholders = dependsOn.map(() => "?").join(", ");
+      const rows = await this.db.all<{ task_id: string; work_item_id: string }>(
+        `SELECT t.task_id, t.work_item_id
+         FROM work_item_tasks t
+         JOIN work_items i ON i.work_item_id = t.work_item_id
+         WHERE i.tenant_id = ?
+           AND i.agent_id = ?
+           AND i.workspace_id = ?
+           AND t.task_id IN (${placeholders})`,
+        [params.scope.tenant_id, params.scope.agent_id, params.scope.workspace_id, ...dependsOn],
+      );
+      const byId = new Map(rows.map((r) => [r.task_id, r]));
+      for (const depId of dependsOn) {
+        const dep = byId.get(depId);
+        if (!dep) {
+          throw new Error(`depends_on task not found: ${depId}`);
+        }
+        if (dep.work_item_id !== params.task.work_item_id) {
+          throw new Error("depends_on task is outside work_item_id");
+        }
+      }
     }
 
     const row = await this.db.get<RawWorkItemTaskRow>(
@@ -1724,7 +1804,7 @@ export class WorkboardDal {
         taskId,
         params.task.work_item_id,
         status,
-        JSON.stringify(params.task.depends_on ?? []),
+        JSON.stringify(dependsOn),
         params.task.execution_profile,
         params.task.side_effect_class,
         params.task.run_id ?? null,
@@ -1782,75 +1862,303 @@ export class WorkboardDal {
   }): Promise<WorkItemTask | undefined> {
     const updatedAtIso = params.updatedAtIso ?? new Date().toISOString();
 
-    const existing = await this.db.get<RawWorkItemTaskRow>(
-      `SELECT t.*
-       FROM work_item_tasks t
-       JOIN work_items i ON i.work_item_id = t.work_item_id
-       WHERE i.tenant_id = ?
-         AND i.agent_id = ?
-         AND i.workspace_id = ?
-         AND t.task_id = ?`,
-      [params.scope.tenant_id, params.scope.agent_id, params.scope.workspace_id, params.task_id],
-    );
-    if (!existing) return undefined;
+    return await this.db.transaction(async (tx) => {
+      const existing = await tx.get<RawWorkItemTaskRow>(
+        `SELECT t.*
+         FROM work_item_tasks t
+         JOIN work_items i ON i.work_item_id = t.work_item_id
+         WHERE i.tenant_id = ?
+           AND i.agent_id = ?
+           AND i.workspace_id = ?
+           AND t.task_id = ?`,
+        [params.scope.tenant_id, params.scope.agent_id, params.scope.workspace_id, params.task_id],
+      );
+      if (!existing) return undefined;
 
-    const set: string[] = [];
-    const values: unknown[] = [];
+      const normalizedDependsOn =
+        params.patch.depends_on !== undefined
+          ? normalizeTaskDeps(params.patch.depends_on)
+          : undefined;
 
-    if (params.patch.status !== undefined) {
-      set.push("status = ?");
-      values.push(params.patch.status);
-    }
-    if (params.patch.depends_on !== undefined) {
-      set.push("depends_on_json = ?");
-      values.push(JSON.stringify(params.patch.depends_on));
-    }
-    if (params.patch.execution_profile !== undefined) {
-      set.push("execution_profile = ?");
-      values.push(params.patch.execution_profile);
-    }
-    if (params.patch.side_effect_class !== undefined) {
-      set.push("side_effect_class = ?");
-      values.push(params.patch.side_effect_class);
-    }
-    if (params.patch.run_id !== undefined) {
-      set.push("run_id = ?");
-      values.push(params.patch.run_id);
-    }
-    if (params.patch.approval_id !== undefined) {
-      set.push("approval_id = ?");
-      values.push(params.patch.approval_id);
-    }
-    if (params.patch.artifacts !== undefined) {
-      set.push("artifacts_json = ?");
-      values.push(JSON.stringify(params.patch.artifacts));
-    }
-    if (params.patch.started_at !== undefined) {
-      set.push("started_at = ?");
-      values.push(params.patch.started_at);
-    }
-    if (params.patch.finished_at !== undefined) {
-      set.push("finished_at = ?");
-      values.push(params.patch.finished_at);
-    }
-    if (params.patch.result_summary !== undefined) {
-      set.push("result_summary = ?");
-      values.push(params.patch.result_summary);
+      if (normalizedDependsOn && normalizedDependsOn.includes(params.task_id)) {
+        throw new Error("work item task depends_on cannot include itself");
+      }
+
+      if (normalizedDependsOn !== undefined) {
+        if (normalizedDependsOn.length > 0) {
+          const placeholders = normalizedDependsOn.map(() => "?").join(", ");
+          const rows = await tx.all<{ task_id: string; work_item_id: string }>(
+            `SELECT t.task_id, t.work_item_id
+             FROM work_item_tasks t
+             JOIN work_items i ON i.work_item_id = t.work_item_id
+             WHERE i.tenant_id = ?
+               AND i.agent_id = ?
+               AND i.workspace_id = ?
+               AND t.task_id IN (${placeholders})`,
+            [
+              params.scope.tenant_id,
+              params.scope.agent_id,
+              params.scope.workspace_id,
+              ...normalizedDependsOn,
+            ],
+          );
+          const byId = new Map(rows.map((r) => [r.task_id, r]));
+          for (const depId of normalizedDependsOn) {
+            const dep = byId.get(depId);
+            if (!dep) {
+              throw new Error(`depends_on task not found: ${depId}`);
+            }
+            if (dep.work_item_id !== existing.work_item_id) {
+              throw new Error("depends_on task is outside work_item_id");
+            }
+          }
+        }
+
+        const allTasks = await tx.all<{ task_id: string; depends_on_json: string }>(
+          `SELECT t.task_id, t.depends_on_json
+           FROM work_item_tasks t
+           JOIN work_items i ON i.work_item_id = t.work_item_id
+           WHERE i.tenant_id = ?
+             AND i.agent_id = ?
+             AND i.workspace_id = ?
+             AND t.work_item_id = ?`,
+          [
+            params.scope.tenant_id,
+            params.scope.agent_id,
+            params.scope.workspace_id,
+            existing.work_item_id,
+          ],
+        );
+
+        const adj = new Map<string, string[]>();
+        for (const row of allTasks) {
+          const deps = parseJsonOr(row.depends_on_json, []) as string[];
+          adj.set(row.task_id, normalizeTaskDeps(deps));
+        }
+        adj.set(params.task_id, normalizedDependsOn);
+
+        if (hasTaskDependencyCycle(adj)) {
+          throw new Error("task dependency cycle detected");
+        }
+      }
+
+      const set: string[] = [];
+      const values: unknown[] = [];
+
+      if (params.patch.status !== undefined) {
+        set.push("status = ?");
+        values.push(params.patch.status);
+      }
+      if (normalizedDependsOn !== undefined) {
+        set.push("depends_on_json = ?");
+        values.push(JSON.stringify(normalizedDependsOn));
+      }
+      if (params.patch.execution_profile !== undefined) {
+        set.push("execution_profile = ?");
+        values.push(params.patch.execution_profile);
+      }
+      if (params.patch.side_effect_class !== undefined) {
+        set.push("side_effect_class = ?");
+        values.push(params.patch.side_effect_class);
+      }
+      if (params.patch.run_id !== undefined) {
+        set.push("run_id = ?");
+        values.push(params.patch.run_id);
+      }
+      if (params.patch.approval_id !== undefined) {
+        set.push("approval_id = ?");
+        values.push(params.patch.approval_id);
+      }
+      if (params.patch.artifacts !== undefined) {
+        set.push("artifacts_json = ?");
+        values.push(JSON.stringify(params.patch.artifacts));
+      }
+      if (params.patch.started_at !== undefined) {
+        set.push("started_at = ?");
+        values.push(params.patch.started_at);
+      }
+      if (params.patch.finished_at !== undefined) {
+        set.push("finished_at = ?");
+        values.push(params.patch.finished_at);
+      }
+      if (params.patch.result_summary !== undefined) {
+        set.push("result_summary = ?");
+        values.push(params.patch.result_summary);
+      }
+
+      if (set.length === 0) return toWorkItemTask(existing);
+
+      set.push("updated_at = ?");
+      values.push(updatedAtIso);
+
+      const row = await tx.get<RawWorkItemTaskRow>(
+        `UPDATE work_item_tasks
+         SET ${set.join(", ")}
+         WHERE task_id = ?
+         RETURNING *`,
+        [...values, params.task_id],
+      );
+      if (!row) return undefined;
+
+      const updated = toWorkItemTask(row);
+      const previousStatus = existing.status as WorkItemTaskState;
+
+      if (updated.status !== previousStatus) {
+        if (updated.status === "running") {
+          if (updated.run_id) {
+            await this.enqueueWsEventTx(tx, {
+              event_id: randomUUID(),
+              type: "work.task.started",
+              occurred_at: updatedAtIso,
+              scope: { kind: "agent", agent_id: params.scope.agent_id },
+              payload: {
+                ...params.scope,
+                work_item_id: updated.work_item_id,
+                task_id: updated.task_id,
+                run_id: updated.run_id,
+              },
+            });
+          }
+        } else if (updated.status === "paused") {
+          if (updated.approval_id) {
+            await this.enqueueWsEventTx(tx, {
+              event_id: randomUUID(),
+              type: "work.task.paused",
+              occurred_at: updatedAtIso,
+              scope: { kind: "agent", agent_id: params.scope.agent_id },
+              payload: {
+                ...params.scope,
+                work_item_id: updated.work_item_id,
+                task_id: updated.task_id,
+                approval_id: updated.approval_id,
+              },
+            });
+          }
+        } else if (updated.status === "completed") {
+          await this.enqueueWsEventTx(tx, {
+            event_id: randomUUID(),
+            type: "work.task.completed",
+            occurred_at: updatedAtIso,
+            scope: { kind: "agent", agent_id: params.scope.agent_id },
+            payload: {
+              ...params.scope,
+              work_item_id: updated.work_item_id,
+              task_id: updated.task_id,
+              ...(updated.result_summary ? { result_summary: updated.result_summary } : {}),
+            },
+          });
+        }
+      }
+
+      return updated;
+    });
+  }
+
+  async leaseRunnableTasks(params: {
+    scope: WorkScope;
+    work_item_id: string;
+    lease_owner: string;
+    nowMs?: number;
+    leaseTtlMs?: number;
+    limit?: number;
+    updatedAtIso?: string;
+  }): Promise<{ leased: Array<{ task: WorkItemTask; lease_expires_at_ms: number }> }> {
+    const nowMs = params.nowMs ?? Date.now();
+    const leaseTtlMs = Math.max(1_000, Math.floor(params.leaseTtlMs ?? 60_000));
+    const leaseExpiresAtMs = nowMs + leaseTtlMs;
+    const updatedAtIso = params.updatedAtIso ?? new Date(nowMs).toISOString();
+    const limit = Math.max(1, Math.min(200, params.limit ?? 25));
+
+    const item = await this.getItem({ scope: params.scope, work_item_id: params.work_item_id });
+    if (!item) {
+      throw new Error("work item not found for lease");
     }
 
-    if (set.length === 0) return toWorkItemTask(existing);
+    return await this.db.transaction(async (tx) => {
+      const rows = await tx.all<RawWorkItemTaskRow>(
+        `SELECT t.*
+         FROM work_item_tasks t
+         JOIN work_items i ON i.work_item_id = t.work_item_id
+         WHERE i.tenant_id = ?
+           AND i.agent_id = ?
+           AND i.workspace_id = ?
+           AND t.work_item_id = ?
+         ORDER BY t.created_at ASC, t.task_id ASC`,
+        [
+          params.scope.tenant_id,
+          params.scope.agent_id,
+          params.scope.workspace_id,
+          params.work_item_id,
+        ],
+      );
 
-    set.push("updated_at = ?");
-    values.push(updatedAtIso);
+      const statusById = new Map<string, WorkItemTaskState>();
+      const depsById = new Map<string, string[]>();
+      for (const row of rows) {
+        statusById.set(row.task_id, row.status as WorkItemTaskState);
+        depsById.set(
+          row.task_id,
+          normalizeTaskDeps(parseJsonOr(row.depends_on_json, []) as string[]),
+        );
+      }
 
-    const row = await this.db.get<RawWorkItemTaskRow>(
-      `UPDATE work_item_tasks
-       SET ${set.join(", ")}
-       WHERE task_id = ?
-       RETURNING *`,
-      [...values, params.task_id],
-    );
-    return row ? toWorkItemTask(row) : undefined;
+      const isTerminal = (s: WorkItemTaskState | undefined): boolean => {
+        return s === "completed" || s === "skipped" || s === "cancelled";
+      };
+
+      const runnable: string[] = [];
+      for (const row of rows) {
+        const status = row.status as WorkItemTaskState;
+        if (status !== "queued") continue;
+        const deps = depsById.get(row.task_id) ?? [];
+        if (deps.length === 0) {
+          runnable.push(row.task_id);
+          continue;
+        }
+        let ok = true;
+        for (const depId of deps) {
+          const depStatus = statusById.get(depId);
+          if (!isTerminal(depStatus)) {
+            ok = false;
+            break;
+          }
+        }
+        if (ok) runnable.push(row.task_id);
+      }
+
+      const leased: Array<{ task: WorkItemTask; lease_expires_at_ms: number }> = [];
+      for (const taskId of runnable.slice(0, limit)) {
+        const updated = await tx.get<RawWorkItemTaskRow>(
+          `UPDATE work_item_tasks
+           SET status = 'leased',
+               lease_owner = ?,
+               lease_expires_at_ms = ?,
+               updated_at = ?
+           WHERE task_id = ? AND status = 'queued'
+           RETURNING *`,
+          [params.lease_owner, leaseExpiresAtMs, updatedAtIso, taskId],
+        );
+        if (!updated) continue;
+        leased.push({ task: toWorkItemTask(updated), lease_expires_at_ms: leaseExpiresAtMs });
+      }
+
+      for (const entry of leased) {
+        await this.enqueueWsEventTx(tx, {
+          event_id: randomUUID(),
+          type: "work.task.leased",
+          occurred_at: updatedAtIso,
+          scope: { kind: "agent", agent_id: params.scope.agent_id },
+          payload: {
+            ...params.scope,
+            work_item_id: params.work_item_id,
+            task_id: entry.task.task_id,
+            lease_expires_at_ms: entry.lease_expires_at_ms,
+          },
+        });
+      }
+
+      return { leased };
+    });
   }
 
   async createSubagent(params: {
