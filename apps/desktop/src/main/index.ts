@@ -15,12 +15,38 @@ let mainWindow: BrowserWindow | null = null;
 let gatewayManager: GatewayManager | null = null;
 let isQuitting = false;
 let isQuittingForUpdate = false;
+let mainWindowReadyToShow = false;
+let mainWindowPendingFocus = false;
 
 setWindowsAppUserModelId(app);
 
 const didAcquireSingleInstanceLock = setupSingleInstance({
   app,
-  getMainWindow: () => mainWindow,
+  getMainWindow: () => {
+    if (!mainWindow) {
+      return null;
+    }
+
+    const window = mainWindow;
+    return {
+      isMinimized: () => window.isMinimized(),
+      restore: () => window.restore(),
+      show: () => {
+        if (!mainWindowReadyToShow) {
+          mainWindowPendingFocus = true;
+          return;
+        }
+        window.show();
+      },
+      focus: () => {
+        if (!mainWindowReadyToShow) {
+          mainWindowPendingFocus = true;
+          return;
+        }
+        window.focus();
+      },
+    };
+  },
 });
 
 async function shutdownAppResources(): Promise<void> {
@@ -92,14 +118,26 @@ function registerNavigationGuardrails(window: BrowserWindow): void {
 }
 
 function createWindow(): void {
-  mainWindow = new BrowserWindow(MAIN_WINDOW_OPTIONS);
+  const window = new BrowserWindow(MAIN_WINDOW_OPTIONS);
+  mainWindow = window;
+  mainWindowReadyToShow = false;
+  mainWindowPendingFocus = false;
 
-  registerNavigationGuardrails(mainWindow);
+  window.once("ready-to-show", () => {
+    mainWindowReadyToShow = true;
+    window.show();
+    if (mainWindowPendingFocus) {
+      mainWindowPendingFocus = false;
+      window.focus();
+    }
+  });
+
+  registerNavigationGuardrails(window);
 
   registerConfigIpc();
-  gatewayManager = registerGatewayIpc(mainWindow);
-  registerNodeIpc(mainWindow);
-  registerUpdateIpc(mainWindow, {
+  gatewayManager = registerGatewayIpc(window);
+  registerNodeIpc(window);
+  registerUpdateIpc(window, {
     beforeInstall: shutdownAppResources,
     allowQuitForUpdate: () => {
       isQuittingForUpdate = true;
@@ -112,14 +150,14 @@ function createWindow(): void {
   });
 
   if (process.env["VITE_DEV_SERVER_URL"]) {
-    mainWindow.loadURL(process.env["VITE_DEV_SERVER_URL"]);
+    window.loadURL(process.env["VITE_DEV_SERVER_URL"]);
   } else {
-    mainWindow.loadFile(join(import.meta.dirname, "../renderer/index.html"));
+    window.loadFile(join(import.meta.dirname, "../renderer/index.html"));
   }
 
   void maybeAutoStartEmbeddedGatewayOnLaunch();
 
-  mainWindow.on("closed", () => {
+  window.on("closed", () => {
     mainWindow = null;
   });
 }
