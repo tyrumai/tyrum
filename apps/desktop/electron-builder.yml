@@ -18,11 +18,28 @@ extraResources:
   - from: dist/gateway/node_modules
     to: gateway/node_modules
 mac:
+  icon: build/icon.icns
   target: [dmg, zip]
   category: public.app-category.productivity
   hardenedRuntime: true
 win:
+  icon: build/icon.ico
   target: [nsis, portable]
+  publisherName: Tyrum
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Tyrum
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
 linux:
+  icon: build/icons
   target: [AppImage, tar.gz]
   category: Utility
+  desktop:
+    Name: Tyrum
+    Comment: Tyrum desktop app
+    StartupWMClass: Tyrum
