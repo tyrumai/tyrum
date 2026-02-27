@@ -1,5 +1,9 @@
 appId: net.tyrum.desktop
 productName: Tyrum
+protocols:
+  name: Tyrum
+  schemes:
+    - tyrum
 directories:
   output: release
 publish:

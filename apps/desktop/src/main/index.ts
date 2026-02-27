@@ -4,6 +4,7 @@ import { registerGatewayIpc, startEmbeddedGatewayFromConfig } from "./ipc/gatewa
 import { registerNodeIpc, shutdownNodeResources } from "./ipc/node-ipc.js";
 import { registerConfigIpc } from "./ipc/config-ipc.js";
 import { registerUpdateIpc } from "./ipc/update-ipc.js";
+import { registerDeepLinkIpc, setPendingDeepLinkUrl } from "./ipc/deep-link-ipc.js";
 import { registerThemeIpc } from "./ipc/theme-ipc.js";
 import type { GatewayManager } from "./gateway-manager.js";
 import { MAIN_WINDOW_OPTIONS } from "./window-options.js";
@@ -13,6 +14,7 @@ import { configureMacAboutPanel } from "./platform/os-integrations.js";
 import { buildApplicationMenuTemplate } from "./menu.js";
 import { registerContextMenus } from "./context-menu.js";
 import { isSafeExternalUrl } from "./safe-external-url.js";
+import { extractDeepLinkUrlFromArgv, isDeepLinkUrl } from "./deep-links.js";
 import {
   captureWindowState,
   ensureVisibleBounds,
@@ -28,6 +30,46 @@ let isQuitting = false;
 let isQuittingForUpdate = false;
 let mainWindowReadyToShow = false;
 let mainWindowPendingFocus = false;
+let shouldFocusWindowOnCreate = false;
+
+function requestMainWindowFocus(): void {
+  const win = mainWindow;
+  if (!win) {
+    shouldFocusWindowOnCreate = true;
+    return;
+  }
+  if (win.isDestroyed()) return;
+
+  if (win.isMinimized()) {
+    win.restore();
+  }
+
+  if (!mainWindowReadyToShow) {
+    mainWindowPendingFocus = true;
+    return;
+  }
+
+  win.show();
+  win.focus();
+}
+
+function handleDeepLink(rawUrl: string): void {
+  if (!isDeepLinkUrl(rawUrl)) {
+    return;
+  }
+
+  setPendingDeepLinkUrl(rawUrl);
+  requestMainWindowFocus();
+
+  if (mainWindow === null && app.isReady?.()) {
+    createWindow();
+  }
+
+  const win = mainWindow;
+  if (!win) return;
+  if (win.isDestroyed() || win.webContents.isDestroyed()) return;
+  win.webContents.send("deeplink:open", rawUrl);
+}
 
 setWindowsAppUserModelId(app);
 
@@ -57,6 +99,12 @@ const didAcquireSingleInstanceLock = setupSingleInstance({
         window.focus();
       },
     };
+  },
+  onSecondInstance: (argv) => {
+    const deepLinkUrl = extractDeepLinkUrlFromArgv(argv);
+    if (deepLinkUrl) {
+      handleDeepLink(deepLinkUrl);
+    }
   },
 });
 
@@ -143,6 +191,10 @@ function createWindow(): void {
   mainWindow = window;
   mainWindowReadyToShow = false;
   mainWindowPendingFocus = false;
+  if (shouldFocusWindowOnCreate) {
+    shouldFocusWindowOnCreate = false;
+    mainWindowPendingFocus = true;
+  }
 
   let lastKnownIsMaximized = persistedState?.isMaximized ?? false;
   if (lastKnownIsMaximized) {
@@ -196,6 +248,7 @@ function createWindow(): void {
 
   registerNavigationGuardrails(window);
 
+  registerDeepLinkIpc();
   registerConfigIpc();
   gatewayManager = registerGatewayIpc(window);
   registerNodeIpc(window);
@@ -231,6 +284,17 @@ function createWindow(): void {
 
 if (didAcquireSingleInstanceLock) {
   registerContextMenus({ app, BrowserWindow, Menu, shell });
+
+  const startupDeepLinkUrl = extractDeepLinkUrlFromArgv(process.argv);
+  if (startupDeepLinkUrl) {
+    handleDeepLink(startupDeepLinkUrl);
+  }
+
+  app.on("open-url", (event, url) => {
+    event.preventDefault();
+    handleDeepLink(url);
+  });
+
   app.whenReady().then(() => {
     configureMacAboutPanel(app, process.platform);
     Menu.setApplicationMenu(

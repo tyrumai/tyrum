@@ -28,6 +28,10 @@ describe("desktop packaging configuration", () => {
     const configPath = join(__dirname, "..", "electron-builder.yml");
     const config = readFileSync(configPath, "utf8");
 
+    expect(config).toMatch(/^\s*protocols:\s*$/m);
+    expect(config).toMatch(/^\s*schemes:\s*$/m);
+    expect(config).toMatch(/^\s*-\s*tyrum\s*$/m);
+
     expect(config).toMatch(/^\s*mac:\s*$/m);
     expect(config).toMatch(/^\s*icon:\s*build\/icon\.icns\s*$/m);
 

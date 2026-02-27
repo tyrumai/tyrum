@@ -79,6 +79,7 @@ describe("desktop main single-instance helpers", () => {
       quit: vi.fn(),
     };
 
+    const onSecondInstance = vi.fn();
     const mainWindow = {
       isMinimized: vi.fn(() => true),
       restore: vi.fn(),
@@ -89,6 +90,7 @@ describe("desktop main single-instance helpers", () => {
     const didAcquireLock = setupSingleInstance({
       app,
       getMainWindow: () => mainWindow,
+      onSecondInstance,
     });
 
     expect(didAcquireLock).toBe(true);
@@ -102,6 +104,8 @@ describe("desktop main single-instance helpers", () => {
     handler?.({}, argv, "/tmp");
 
     expect(getLastSecondInstanceArgv()).toEqual(argv);
+    expect(onSecondInstance).toHaveBeenCalledTimes(1);
+    expect(onSecondInstance).toHaveBeenCalledWith(argv, "/tmp");
     expect(mainWindow.restore).toHaveBeenCalledTimes(1);
     expect(mainWindow.show).toHaveBeenCalledTimes(1);
     expect(mainWindow.focus).toHaveBeenCalledTimes(1);
