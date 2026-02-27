@@ -7,6 +7,7 @@ import { registerUpdateIpc } from "./ipc/update-ipc.js";
 import type { GatewayManager } from "./gateway-manager.js";
 import { MAIN_WINDOW_OPTIONS } from "./window-options.js";
 import { configExists, loadConfig } from "./config/store.js";
+import { setWindowsAppUserModelId, setupSingleInstance } from "./single-instance.js";
 
 app.setName?.("Tyrum");
 
@@ -14,6 +15,13 @@ let mainWindow: BrowserWindow | null = null;
 let gatewayManager: GatewayManager | null = null;
 let isQuitting = false;
 let isQuittingForUpdate = false;
+
+setWindowsAppUserModelId(app);
+
+const didAcquireSingleInstanceLock = setupSingleInstance({
+  app,
+  getMainWindow: () => mainWindow,
+});
 
 async function shutdownAppResources(): Promise<void> {
   try {
@@ -116,23 +124,25 @@ function createWindow(): void {
   });
 }
 
-app.whenReady().then(createWindow);
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
-});
-app.on("activate", () => {
-  if (mainWindow === null) createWindow();
-});
-app.on("before-quit", (event) => {
-  if (isQuittingForUpdate) return;
-  if (isQuitting) return;
-  isQuitting = true;
-  event.preventDefault();
-  void (async () => {
-    try {
-      await shutdownAppResources();
-    } finally {
-      app.quit();
-    }
-  })();
-});
+if (didAcquireSingleInstanceLock) {
+  app.whenReady().then(createWindow);
+  app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") app.quit();
+  });
+  app.on("activate", () => {
+    if (mainWindow === null) createWindow();
+  });
+  app.on("before-quit", (event) => {
+    if (isQuittingForUpdate) return;
+    if (isQuitting) return;
+    isQuitting = true;
+    event.preventDefault();
+    void (async () => {
+      try {
+        await shutdownAppResources();
+      } finally {
+        app.quit();
+      }
+    })();
+  });
+}
