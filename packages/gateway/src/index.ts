@@ -33,6 +33,7 @@ import { OutboxPoller } from "./modules/backplane/outbox-poller.js";
 import { StateStoreLifecycleScheduler } from "./modules/statestore/lifecycle.js";
 import { ConnectionManager } from "./ws/connection-manager.js";
 import type { ProtocolDeps } from "./ws/protocol.js";
+import { TaskResultRegistry, type TaskResult } from "./ws/protocol/task-result-registry.js";
 import { createWsHandler } from "./routes/ws.js";
 import { maybeStartOtel } from "./modules/observability/otel.js";
 import { AuthAudit } from "./modules/auth/audit.js";
@@ -1020,6 +1021,22 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
           hooks: lifecycleHooks,
         })
       : undefined;
+
+  const taskResults = new TaskResultRegistry();
+  const toTaskResult = (
+    success: boolean,
+    evidence: unknown,
+    error: string | undefined,
+  ): TaskResult => {
+    if (success) {
+      return evidence === undefined ? { ok: true } : { ok: true, evidence };
+    }
+    const result: TaskResult = { ok: false, error: error ?? "task failed" };
+    if (evidence !== undefined) {
+      result.evidence = evidence;
+    }
+    return result;
+  };
   const protocolDeps: ProtocolDeps = {
     connectionManager,
     logger,
@@ -1052,6 +1069,12 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
         }
       : undefined,
     hooks: hooksRuntime,
+    onTaskResult: (taskId, success, evidence, error) => {
+      taskResults.resolve(taskId, toTaskResult(success, evidence, error));
+    },
+    onConnectionClosed: (connectionId) => {
+      taskResults.rejectAllForConnection(connectionId);
+    },
     onApprovalDecision: (approvalId: number, approved: boolean, reason: string | undefined) => {
       void container.approvalDal
         .respond(approvalId, approved, reason)
