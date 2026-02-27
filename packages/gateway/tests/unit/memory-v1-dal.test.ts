@@ -473,7 +473,7 @@ for (const fixture of fixtures) {
         );
 
         const scopedTags = await dal.search(
-          { v: 1, query: "restart", filter: { tags: ["ops", "project"] }, limit: 10 },
+          { v: 1, query: "restart", filter: { tags: ["project"] }, limit: 10 },
           "agent-a",
         );
         expect(scopedTags.hits.map((h) => h.memory_item_id)).toContain(
@@ -505,6 +505,53 @@ for (const fixture of fixtures) {
         );
         expect(expandedHit?.snippet).toContain("[role-ref]");
         expect(expandedHit?.snippet?.length ?? 0).toBeLessThanOrEqual(240);
+      } finally {
+        await close();
+      }
+    });
+
+    it("treats filter.tags as OR semantics (matches any requested tag)", async () => {
+      const { dal, close } = await fixture.open();
+      try {
+        const noteTagA = await dal.create(
+          {
+            kind: "note",
+            body_md: "tag filter test",
+            tags: ["tag-a"],
+            sensitivity: "private",
+            provenance: { source_kind: "operator", refs: [] },
+          },
+          "agent-a",
+        );
+        const noteTagB = await dal.create(
+          {
+            kind: "note",
+            body_md: "tag filter test",
+            tags: ["tag-b"],
+            sensitivity: "private",
+            provenance: { source_kind: "operator", refs: [] },
+          },
+          "agent-a",
+        );
+        const noteOther = await dal.create(
+          {
+            kind: "note",
+            body_md: "tag filter test",
+            tags: ["tag-c"],
+            sensitivity: "private",
+            provenance: { source_kind: "operator", refs: [] },
+          },
+          "agent-a",
+        );
+
+        const res = await dal.search(
+          { v: 1, query: "*", filter: { tags: ["tag-a", "tag-b"] }, limit: 10 },
+          "agent-a",
+        );
+        const ids = res.hits.map((h) => h.memory_item_id);
+        expect(ids).toContain(noteTagA.memory_item_id);
+        expect(ids).toContain(noteTagB.memory_item_id);
+        expect(ids).not.toContain(noteOther.memory_item_id);
       } finally {
         await close();
       }

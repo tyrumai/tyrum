@@ -1014,17 +1014,15 @@ export class MemoryV1Dal {
       if (tags.length > MAX_FILTER_TAGS) {
         throw new Error(`too many filter.tags (max=${MAX_FILTER_TAGS})`);
       }
-      for (const tag of tags) {
-        clauses.push(
-          `mi.memory_item_id IN (
-             SELECT mt.memory_item_id
-             FROM memory_item_tags mt
-             WHERE mt.agent_id = ?
-               AND mt.tag = ?
-           )`,
-        );
-        params.push(agent, tag);
-      }
+      clauses.push(
+        `mi.memory_item_id IN (
+           SELECT mt.memory_item_id
+           FROM memory_item_tags mt
+           WHERE mt.agent_id = ?
+             AND mt.tag IN (${tags.map(() => "?").join(", ")})
+         )`,
+      );
+      params.push(agent, ...tags);
     }
 
     if (filter?.provenance) {
