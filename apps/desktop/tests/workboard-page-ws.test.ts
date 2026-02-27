@@ -51,4 +51,15 @@ describe("WorkBoard page (WS integration)", () => {
 
     expect(page).toContain("shouldProcessWorkStateKvUpdate(scope, selectedIdRef.current)");
   });
+
+  it("dedupes the Blockers filter predicate", () => {
+    const page = readFileSync(
+      join(import.meta.dirname, "../src/renderer/pages/WorkBoard.tsx"),
+      "utf-8",
+    );
+
+    expect(page).toContain("const approvalBlockers");
+    expect(page).toContain("approvalBlockers.length === 0");
+    expect(page).toContain("approvalBlockers.map");
+  });
 });

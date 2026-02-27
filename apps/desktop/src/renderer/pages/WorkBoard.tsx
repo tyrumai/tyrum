@@ -501,6 +501,12 @@ export function WorkBoard() {
     return counts;
   }, [taskList]);
 
+  const approvalBlockers = useMemo(
+    () =>
+      taskList.filter((task) => task.status === "paused" && typeof task.approval_id === "number"),
+    [taskList],
+  );
+
   const connectionDotColor =
     connectionStatus === "connected"
       ? colors.success
@@ -697,32 +703,26 @@ export function WorkBoard() {
 
             <div>
               <div style={label}>Blockers</div>
-              {taskList.filter(
-                (task) => task.status === "paused" && typeof task.approval_id === "number",
-              ).length === 0 ? (
+              {approvalBlockers.length === 0 ? (
                 <div style={{ fontSize: 13, color: colors.fgMuted }}>No approval blockers.</div>
               ) : (
                 <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
-                  {taskList
-                    .filter(
-                      (task) => task.status === "paused" && typeof task.approval_id === "number",
-                    )
-                    .map((task) => (
-                      <div
-                        key={task.task_id}
-                        style={{
-                          border: `1px solid ${colors.border}`,
-                          borderRadius: 8,
-                          padding: 10,
-                          background: colors.bgSubtle,
-                        }}
-                      >
-                        <div style={{ ...cardMetaStyle, marginTop: 0 }}>
-                          <span>approval {task.approval_id}</span>
-                          <span style={{ fontFamily: fonts.mono }}>{task.task_id}</span>
-                        </div>
+                  {approvalBlockers.map((task) => (
+                    <div
+                      key={task.task_id}
+                      style={{
+                        border: `1px solid ${colors.border}`,
+                        borderRadius: 8,
+                        padding: 10,
+                        background: colors.bgSubtle,
+                      }}
+                    >
+                      <div style={{ ...cardMetaStyle, marginTop: 0 }}>
+                        <span>approval {task.approval_id}</span>
+                        <span style={{ fontFamily: fonts.mono }}>{task.task_id}</span>
                       </div>
-                    ))}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
