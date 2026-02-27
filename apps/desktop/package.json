@@ -6,6 +6,7 @@
   "main": "dist/main/index.mjs",
   "scripts": {
     "dev": "electron dist/main/index.mjs",
+    "test": "pnpm -w vitest run apps/desktop/tests",
     "build:main": "tsdown src/main/index.ts --format esm --outDir dist/main --external electron",
     "build:preload": "tsdown src/preload/index.ts --format cjs --outDir dist/preload --external electron",
     "build:renderer": "vite build",

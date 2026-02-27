@@ -58,4 +58,11 @@ contextBridge.exposeInMainWorld("tyrumDesktop", {
       ipcRenderer.removeListener("update:state", listener);
     };
   },
+  onNavigationRequest: (cb: (req: unknown) => void) => {
+    const listener = (_event: unknown, req: unknown) => cb(req);
+    ipcRenderer.on("navigation:request", listener);
+    return () => {
+      ipcRenderer.removeListener("navigation:request", listener);
+    };
+  },
 });
