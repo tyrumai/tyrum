@@ -6,26 +6,33 @@
     ".": {
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
-    }
+    },
+    "./globals.css": "./src/globals.css"
   },
   "files": [
-    "dist"
+    "dist",
+    "src/*.css"
   ],
   "scripts": {
     "build": "tsdown src/index.ts --format esm --dts"
   },
   "dependencies": {
+    "@radix-ui/react-slot": "^1.2.4",
     "@tyrum/client": "workspace:*",
-    "@tyrum/operator-core": "workspace:*"
+    "@tyrum/operator-core": "workspace:*",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.5.0"
   },
   "peerDependencies": {
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.2.1",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react-dom": "^19.2.4",
+    "tailwindcss": "^4.2.1"
   }
 }

@@ -12,6 +12,7 @@ const { ipcMainHandleMock, registeredHandlers, loadConfigMock, saveConfigMock } 
 
 vi.mock("electron", () => ({
   ipcMain: { handle: ipcMainHandleMock },
+  nativeTheme: { themeSource: "system" },
   shell: { openExternal: vi.fn() },
 }));
 

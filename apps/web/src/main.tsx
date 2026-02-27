@@ -6,7 +6,8 @@ import {
   createBrowserCookieAuth,
   createOperatorCoreManager,
 } from "@tyrum/operator-core";
-import { OperatorUiApp } from "@tyrum/operator-ui";
+import { OperatorUiApp, ThemeProvider } from "@tyrum/operator-ui";
+import "@tyrum/operator-ui/globals.css";
 import { readAuthTokenFromUrl, stripAuthTokenFromUrl } from "./url-auth.js";
 
 function scrubAuthTokenFromUrl(): void {
@@ -56,7 +57,9 @@ const root = createRoot(container);
 const render = (): void => {
   root.render(
     <React.StrictMode>
-      <OperatorUiApp core={manager.getCore()} mode="web" />
+      <ThemeProvider>
+        <OperatorUiApp core={manager.getCore()} mode="web" />
+      </ThemeProvider>
     </React.StrictMode>,
   );
 };
