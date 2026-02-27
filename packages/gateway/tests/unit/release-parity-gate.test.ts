@@ -70,7 +70,8 @@ describe("release workflow parity gate", () => {
 
     expect(env).not.toHaveProperty("CSC_LINK");
     expect(env?.["WIN_CSC_LINK"]).toBe("${{ secrets.WIN_CSC_LINK }}");
-    expect(env?.["CSC_KEY_PASSWORD"]).toBe("${{ secrets.WIN_CSC_KEY_PASSWORD }}");
+    expect(env).not.toHaveProperty("CSC_KEY_PASSWORD");
+    expect(env?.["WIN_CSC_KEY_PASSWORD"]).toBe("${{ secrets.WIN_CSC_KEY_PASSWORD }}");
 
     const envText = JSON.stringify(env ?? {});
     expect(envText).not.toContain("secrets.CSC_LINK");

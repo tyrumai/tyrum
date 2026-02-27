@@ -406,7 +406,7 @@ jobs:
         if: ${{ matrix.os == 'windows-latest' }}
         env:
           WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
         run: pnpm --filter tyrum-desktop dist
 
       - name: Stage desktop artifacts
