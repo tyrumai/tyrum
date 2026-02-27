@@ -14,4 +14,3 @@ describe("@tyrum/cli --admin-token parsing dedup", () => {
     expect(emptyValueCount).toBe(1);
   });
 });
-
