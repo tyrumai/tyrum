@@ -121,7 +121,10 @@ export function ensureVisibleBounds(
     return bounds;
   }
 
-  const primaryWorkArea = displayWorkAreas[0];
+  const primaryWorkArea = displayWorkAreas.at(0);
+  if (!primaryWorkArea) {
+    return bounds;
+  }
   const effectiveWidth = Math.min(bounds.width, primaryWorkArea.width);
   const effectiveHeight = Math.min(bounds.height, primaryWorkArea.height);
   const maxX = primaryWorkArea.x + primaryWorkArea.width - effectiveWidth;
