@@ -41,6 +41,16 @@ import type {
   WsResponseEnvelope,
   WsSessionSendPayload,
   WsSessionSendResult as WsSessionSendResultT,
+  WsSubagentClosePayload,
+  WsSubagentCloseResult as WsSubagentCloseResultT,
+  WsSubagentGetPayload,
+  WsSubagentGetResult as WsSubagentGetResultT,
+  WsSubagentListPayload,
+  WsSubagentListResult as WsSubagentListResultT,
+  WsSubagentSendPayload,
+  WsSubagentSendResult as WsSubagentSendResultT,
+  WsSubagentSpawnPayload,
+  WsSubagentSpawnResult as WsSubagentSpawnResultT,
   WsWorkArtifactCreatePayload,
   WsWorkArtifactCreateResult as WsWorkArtifactCreateResultT,
   WsWorkArtifactGetPayload,
@@ -95,6 +105,16 @@ import {
   WsPairingResolveResult,
   WsPresenceBeaconResult,
   WsSessionSendResult,
+  WsSubagentClosePayload as WsSubagentClosePayloadSchema,
+  WsSubagentCloseResult,
+  WsSubagentGetPayload as WsSubagentGetPayloadSchema,
+  WsSubagentGetResult,
+  WsSubagentListPayload as WsSubagentListPayloadSchema,
+  WsSubagentListResult,
+  WsSubagentSendPayload as WsSubagentSendPayloadSchema,
+  WsSubagentSendResult,
+  WsSubagentSpawnPayload as WsSubagentSpawnPayloadSchema,
+  WsSubagentSpawnResult,
   WsWorkflowCancelResult,
   WsWorkflowResumeResult,
   WsWorkflowRunResult,
@@ -575,8 +595,53 @@ export class TyrumClient {
   }
 
   // -----------------------------------------------------------------------
+  // Subagent helpers
+  // -----------------------------------------------------------------------
+
+  async subagentSpawn(payload: WsSubagentSpawnPayload): Promise<WsSubagentSpawnResultT> {
+    const parsed = this.parsePayload("subagent.spawn", payload, WsSubagentSpawnPayloadSchema);
+    return this.request("subagent.spawn", parsed, WsSubagentSpawnResult);
+  }
+
+  async subagentList(payload: WsSubagentListPayload): Promise<WsSubagentListResultT> {
+    const parsed = this.parsePayload("subagent.list", payload, WsSubagentListPayloadSchema);
+    return this.request("subagent.list", parsed, WsSubagentListResult);
+  }
+
+  async subagentGet(payload: WsSubagentGetPayload): Promise<WsSubagentGetResultT> {
+    const parsed = this.parsePayload("subagent.get", payload, WsSubagentGetPayloadSchema);
+    return this.request("subagent.get", parsed, WsSubagentGetResult);
+  }
+
+  async subagentSend(payload: WsSubagentSendPayload): Promise<WsSubagentSendResultT> {
+    const parsed = this.parsePayload("subagent.send", payload, WsSubagentSendPayloadSchema);
+    return this.request("subagent.send", parsed, WsSubagentSendResult);
+  }
+
+  async subagentClose(payload: WsSubagentClosePayload): Promise<WsSubagentCloseResultT> {
+    const parsed = this.parsePayload("subagent.close", payload, WsSubagentClosePayloadSchema);
+    return this.request("subagent.close", parsed, WsSubagentCloseResult);
+  }
+
+  // -----------------------------------------------------------------------
   // Internal
   // -----------------------------------------------------------------------
+
+  private parsePayload<T>(
+    type: string,
+    payload: unknown,
+    schema: {
+      safeParse: (
+        input: unknown,
+      ) => { success: true; data: T } | { success: false; error: { message: string } };
+    },
+  ): T {
+    const parsed = schema.safeParse(payload);
+    if (!parsed.success) {
+      throw new Error(`${type} invalid payload: ${parsed.error.message}`);
+    }
+    return parsed.data;
+  }
 
   private buildProtocols(): string[] {
     const token = toBase64UrlUtf8(this.opts.token);
