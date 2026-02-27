@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { MemoryItem, MemorySearchHit, MemoryTombstone } from "@tyrum/schemas";
 import type { TyrumHttpClient } from "@tyrum/client";
 import { createBearerTokenAuth, createOperatorCore } from "../src/index.js";
+import { completeBrowseSuccess, type MemoryBrowseState } from "../src/stores/memory-store.js";
 
 type Handler = (data: unknown) => void;
 
@@ -108,6 +109,30 @@ function deferred<T>(): {
 }
 
 describe("memoryStore", () => {
+  it("clears browse errors when completing a successful browse request", () => {
+    const prev: MemoryBrowseState = {
+      request: null,
+      results: null,
+      loading: true,
+      error: { kind: "ws", operation: "memory.list", code: "unauthorized", message: "nope" },
+      lastSyncedAt: null,
+    };
+
+    const next = completeBrowseSuccess(prev, {
+      request: { kind: "list" },
+      results: { kind: "list", items: [], nextCursor: null },
+      now: "2026-02-27T12:00:00Z",
+    });
+
+    expect(next).toEqual({
+      request: { kind: "list" },
+      results: { kind: "list", items: [], nextCursor: null },
+      loading: false,
+      error: null,
+      lastSyncedAt: "2026-02-27T12:00:00Z",
+    });
+  });
+
   it("lists memory items and paginates", async () => {
     const ws = new FakeWsClient();
     const http = createFakeHttpClient();

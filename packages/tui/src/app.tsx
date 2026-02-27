@@ -5,6 +5,7 @@ import {
   type OperatorCore,
   type OperatorCoreManager,
 } from "@tyrum/operator-core";
+import type { MemoryItem } from "@tyrum/client";
 import { Box, Text, useApp, useInput } from "ink";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ResolvedTuiConfig } from "./config.js";
@@ -56,7 +57,8 @@ function AppHeader({ title, adminMode }: { title: string; adminMode: AdminModeSt
     <Box flexDirection="column" paddingBottom={1}>
       <Text bold>{title}</Text>
       <Text dimColor>
-        Keys: c=connect d=disconnect 1=connect 2=status 3=approvals 4=runs 5=pairing m=admin q=quit
+        Keys: c=connect d=disconnect 1=connect 2=status 3=approvals 4=runs 5=pairing 6=memory
+        m=admin q=quit
       </Text>
       {adminModeActive ? (
         <Text color="yellow">
@@ -379,6 +381,217 @@ function maskToken(token: string): string {
   return `${"•".repeat(max)}…`;
 }
 
+function formatMemoryItemSummary(item: MemoryItem): string {
+  switch (item.kind) {
+    case "fact": {
+      const value =
+        item.value === null || item.value === undefined
+          ? String(item.value)
+          : typeof item.value === "string"
+            ? item.value
+            : JSON.stringify(item.value);
+      return truncateText(`${item.key}=${value}`, 60);
+    }
+    case "note": {
+      const title = item.title ? `${item.title}: ` : "";
+      return truncateText(`${title}${item.body_md}`, 60);
+    }
+    case "procedure": {
+      const title = item.title ? `${item.title}: ` : "";
+      return truncateText(`${title}${item.body_md}`, 60);
+    }
+    case "episode": {
+      return truncateText(item.summary_md, 60);
+    }
+    default: {
+      const exhaustive: never = item;
+      return exhaustive;
+    }
+  }
+}
+
+function MemoryItemDetails({ item }: { item: MemoryItem }) {
+  return (
+    <>
+      <Text dimColor>
+        kind={item.kind} agent={item.agent_id} sensitivity={item.sensitivity}
+      </Text>
+      {item.tags.length > 0 ? <Text dimColor>tags: {item.tags.join(", ")}</Text> : null}
+      <Text dimColor>
+        created: {item.created_at}
+        {item.updated_at ? ` updated: ${item.updated_at}` : ""}
+      </Text>
+      <Text dimColor>provenance: {item.provenance.source_kind}</Text>
+      <Box flexDirection="column" paddingTop={1}>
+        {item.kind === "fact" ? (
+          <>
+            <Text>
+              <Text bold>{item.key}</Text>
+            </Text>
+            <Text dimColor>confidence: {String(item.confidence)}</Text>
+            <Text dimColor>observed_at: {item.observed_at}</Text>
+            <Text>{truncateText(JSON.stringify(item.value), 120)}</Text>
+          </>
+        ) : null}
+        {item.kind === "note" ? <Text>{item.body_md}</Text> : null}
+        {item.kind === "procedure" ? <Text>{item.body_md}</Text> : null}
+        {item.kind === "episode" ? (
+          <>
+            <Text dimColor>occurred_at: {item.occurred_at}</Text>
+            <Text>{item.summary_md}</Text>
+          </>
+        ) : null}
+      </Box>
+    </>
+  );
+}
+
+function MemoryScreen({
+  core,
+  cursor,
+  selectedId,
+}: {
+  core: OperatorCore;
+  cursor: number;
+  selectedId: string | null;
+}) {
+  const connection = useOperatorStore(core.connectionStore);
+  const memory = useOperatorStore(core.memoryStore);
+  const initialListStoreRef = useRef<OperatorCore["memoryStore"] | null>(null);
+  const browseResults = memory.browse.results;
+  const ids = useMemo((): string[] => {
+    if (!browseResults) return [];
+    if (browseResults.kind === "list") {
+      return browseResults.items.map((item) => item.memory_item_id);
+    }
+    return browseResults.hits.map((hit) => hit.memory_item_id);
+  }, [browseResults]);
+  const effectiveCursor = getEffectiveCursor({ ids, cursor, selectedId });
+  const selectedIdFromCursor = ids[effectiveCursor];
+  const selectedHit =
+    browseResults?.kind === "search" && typeof selectedIdFromCursor === "string"
+      ? (browseResults.hits.find((hit) => hit.memory_item_id === selectedIdFromCursor) ?? null)
+      : null;
+  const selectedFromList =
+    browseResults?.kind === "list" && typeof selectedIdFromCursor === "string"
+      ? (browseResults.items.find((item) => item.memory_item_id === selectedIdFromCursor) ?? null)
+      : null;
+  const selectedInspect =
+    typeof selectedIdFromCursor === "string" && memory.inspect.memoryItemId === selectedIdFromCursor
+      ? memory.inspect.item
+      : null;
+  const selectedInspectError =
+    typeof selectedIdFromCursor === "string" && memory.inspect.memoryItemId === selectedIdFromCursor
+      ? memory.inspect.error
+      : null;
+  const selectedInspectLoading =
+    typeof selectedIdFromCursor === "string" && memory.inspect.memoryItemId === selectedIdFromCursor
+      ? memory.inspect.loading
+      : false;
+
+  useEffect(() => {
+    if (connection.status !== "connected") return;
+    if (!selectedIdFromCursor) return;
+    if (!browseResults || browseResults.kind !== "search") return;
+    if (memory.inspect.memoryItemId === selectedIdFromCursor) return;
+    void core.memoryStore.inspect(selectedIdFromCursor).catch(() => {});
+  }, [
+    browseResults,
+    connection.status,
+    core.memoryStore,
+    memory.inspect.memoryItemId,
+    selectedIdFromCursor,
+  ]);
+
+  useEffect(() => {
+    if (connection.status !== "connected") return;
+    if (initialListStoreRef.current === core.memoryStore) return;
+    initialListStoreRef.current = core.memoryStore;
+    void core.memoryStore.list().catch(() => {});
+  }, [connection.status, core.memoryStore]);
+
+  const headerLabel =
+    memory.browse.request?.kind === "search" ? `Search: ${memory.browse.request.query}` : "List";
+  const browseErrorLabel = memory.browse.error ? memory.browse.error.message : null;
+  const forgetErrorLabel = memory.tombstones.error ? memory.tombstones.error.message : null;
+  const exportArtifactId = memory.export.artifactId;
+
+  return (
+    <Box flexDirection="column">
+      <Text dimColor>Keys: ↑/↓ select /=search r=refresh f=forget p=export</Text>
+      <Text>
+        Mode: <Text bold>{headerLabel}</Text>
+        {memory.browse.loading ? <Text dimColor> (loading)</Text> : null}
+      </Text>
+      {browseErrorLabel ? <Text color="red">Error: {browseErrorLabel}</Text> : null}
+      {forgetErrorLabel ? <Text color="red">Forget error: {forgetErrorLabel}</Text> : null}
+      {memory.export.error ? (
+        <Text color="red">Export error: {memory.export.error.message}</Text>
+      ) : null}
+      {exportArtifactId ? (
+        <Text>
+          Last export artifact: <Text bold>{exportArtifactId}</Text>
+        </Text>
+      ) : null}
+
+      <Box flexDirection="column" paddingTop={1}>
+        {ids.length === 0 ? (
+          <Text dimColor>No memory items.</Text>
+        ) : browseResults?.kind === "list" ? (
+          browseResults.items.map((item, index) => {
+            const id = item.memory_item_id;
+            const isSelected = index === effectiveCursor;
+            const prefix = isSelected ? "> " : "  ";
+            const kind = item.kind;
+            const summary = formatMemoryItemSummary(item);
+            const label = `${id.slice(0, 8)} [${kind}] ${summary}`.trim();
+            return (
+              <Text key={id} inverse={isSelected}>
+                {prefix}
+                {truncateText(label, 78)}
+              </Text>
+            );
+          })
+        ) : browseResults?.kind === "search" ? (
+          browseResults.hits.map((hit, index) => {
+            const id = hit.memory_item_id;
+            const isSelected = index === effectiveCursor;
+            const prefix = isSelected ? "> " : "  ";
+            const kind = hit.kind;
+            const summary = hit.snippet ?? "";
+            const score = ` score=${hit.score.toFixed(2)}`;
+            const label = `${id.slice(0, 8)} [${kind}]${score} ${summary}`.trim();
+            return (
+              <Text key={id} inverse={isSelected}>
+                {prefix}
+                {truncateText(label, 78)}
+              </Text>
+            );
+          })
+        ) : null}
+      </Box>
+
+      {selectedIdFromCursor ? (
+        <Box flexDirection="column" paddingTop={1}>
+          <Text bold>Selected</Text>
+          <Text>{selectedIdFromCursor}</Text>
+          {selectedInspectError ? (
+            <Text color="red">Error loading item: {selectedInspectError.message}</Text>
+          ) : selectedInspectLoading ? (
+            <Text dimColor>Loading item details…</Text>
+          ) : selectedInspect ? (
+            <MemoryItemDetails item={selectedInspect} />
+          ) : selectedFromList ? (
+            <MemoryItemDetails item={selectedFromList} />
+          ) : selectedHit ? (
+            <Text dimColor>Loading item details…</Text>
+          ) : null}
+        </Box>
+      ) : null}
+    </Box>
+  );
+}
+
 function AdminModeDialog(props: { token: string; busy: boolean; error: string | null }) {
   return (
     <Box
@@ -394,6 +607,42 @@ function AdminModeDialog(props: { token: string; busy: boolean; error: string | 
         Admin token: <Text color="yellow">{maskToken(props.token)}</Text>
       </Text>
       {props.busy ? <Text dimColor>Entering...</Text> : null}
+      {props.error ? <Text color="red">Error: {props.error}</Text> : null}
+    </Box>
+  );
+}
+
+function MemorySearchDialog(props: { query: string; busy: boolean; error: string | null }) {
+  return (
+    <Box flexDirection="column" borderStyle="round" borderColor="cyan" padding={1} marginBottom={1}>
+      <Text bold>Search memory</Text>
+      <Text dimColor>Type a query and press Enter. Esc cancels.</Text>
+      <Text>
+        Query: <Text color="cyan">{props.query}</Text>
+      </Text>
+      {props.busy ? <Text dimColor>Searching...</Text> : null}
+      {props.error ? <Text color="red">Error: {props.error}</Text> : null}
+    </Box>
+  );
+}
+
+function MemoryForgetDialog(props: {
+  memoryItemId: string;
+  confirmText: string;
+  busy: boolean;
+  error: string | null;
+}) {
+  return (
+    <Box flexDirection="column" borderStyle="round" borderColor="red" padding={1} marginBottom={1}>
+      <Text bold>Forget memory item</Text>
+      <Text dimColor>Type FORGET and press Enter. Esc cancels.</Text>
+      <Text>
+        ID: <Text bold>{props.memoryItemId}</Text>
+      </Text>
+      <Text>
+        Confirm: <Text color="red">{props.confirmText}</Text>
+      </Text>
+      {props.busy ? <Text dimColor>Forgetting...</Text> : null}
       {props.error ? <Text color="red">Error: {props.error}</Text> : null}
     </Box>
   );
@@ -447,6 +696,116 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
     }
   };
 
+  const [memorySearchDialog, setMemorySearchDialog] = useState<{
+    open: boolean;
+    query: string;
+    busy: boolean;
+    error: string | null;
+  }>({ open: false, query: "", busy: false, error: null });
+  const memorySearchDialogRef = useRef(memorySearchDialog);
+  memorySearchDialogRef.current = memorySearchDialog;
+
+  const openMemorySearchDialog = (): void => {
+    const snapshot = coreRef.current.memoryStore.getSnapshot();
+    setMemorySearchDialog({
+      open: true,
+      query:
+        snapshot.browse.request?.kind === "search" && snapshot.browse.request.query
+          ? snapshot.browse.request.query
+          : "",
+      busy: false,
+      error: null,
+    });
+  };
+
+  const closeMemorySearchDialog = (): void => {
+    if (memorySearchDialogRef.current.busy) return;
+    setMemorySearchDialog({ open: false, query: "", busy: false, error: null });
+  };
+
+  const submitMemorySearchDialog = async (): Promise<void> => {
+    const snapshot = memorySearchDialogRef.current;
+    if (!snapshot.open || snapshot.busy) return;
+
+    const query = snapshot.query.trim();
+    setMemorySearchDialog((prev) => ({ ...prev, busy: true, error: null }));
+    try {
+      if (!query) {
+        await coreRef.current.memoryStore.list();
+      } else {
+        await coreRef.current.memoryStore.search({ query });
+      }
+      setMemorySearchDialog({ open: false, query: "", busy: false, error: null });
+    } catch (error) {
+      setMemorySearchDialog((prev) => ({ ...prev, busy: false, error: toErrorMessage(error) }));
+    }
+  };
+
+  const [memoryForgetDialog, setMemoryForgetDialog] = useState<{
+    open: boolean;
+    memoryItemId: string | null;
+    confirmText: string;
+    busy: boolean;
+    error: string | null;
+  }>({ open: false, memoryItemId: null, confirmText: "", busy: false, error: null });
+  const memoryForgetDialogRef = useRef(memoryForgetDialog);
+  memoryForgetDialogRef.current = memoryForgetDialog;
+
+  const openMemoryForgetDialog = (memoryItemId: string): void => {
+    setMemoryForgetDialog({
+      open: true,
+      memoryItemId,
+      confirmText: "",
+      busy: false,
+      error: null,
+    });
+  };
+
+  const closeMemoryForgetDialog = (): void => {
+    if (memoryForgetDialogRef.current.busy) return;
+    setMemoryForgetDialog({
+      open: false,
+      memoryItemId: null,
+      confirmText: "",
+      busy: false,
+      error: null,
+    });
+  };
+
+  const submitMemoryForgetDialog = async (): Promise<void> => {
+    const snapshot = memoryForgetDialogRef.current;
+    if (!snapshot.open || snapshot.busy) return;
+    if (!snapshot.memoryItemId) return;
+
+    if (snapshot.confirmText !== "FORGET") {
+      setMemoryForgetDialog((prev) => ({ ...prev, error: "Type FORGET to confirm" }));
+      return;
+    }
+
+    setMemoryForgetDialog((prev) => ({ ...prev, busy: true, error: null }));
+    try {
+      await coreRef.current.memoryStore.forget([
+        { kind: "id", memory_item_id: snapshot.memoryItemId },
+      ]);
+
+      const storeError = coreRef.current.memoryStore.getSnapshot().tombstones.error;
+      if (storeError) {
+        setMemoryForgetDialog((prev) => ({ ...prev, busy: false, error: storeError.message }));
+        return;
+      }
+
+      setMemoryForgetDialog({
+        open: false,
+        memoryItemId: null,
+        confirmText: "",
+        busy: false,
+        error: null,
+      });
+    } catch (error) {
+      setMemoryForgetDialog((prev) => ({ ...prev, busy: false, error: toErrorMessage(error) }));
+    }
+  };
+
   useInput((input, key) => {
     const rawKey = key as unknown as Record<string, unknown>;
 
@@ -478,15 +837,73 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
       return;
     }
 
+    if (memorySearchDialogRef.current.open) {
+      if (rawKey["escape"] === true) {
+        closeMemorySearchDialog();
+        return;
+      }
+      if (rawKey["return"] === true || rawKey["enter"] === true) {
+        void submitMemorySearchDialog();
+        return;
+      }
+      if (rawKey["backspace"] === true || rawKey["delete"] === true) {
+        setMemorySearchDialog((prev) => ({
+          ...prev,
+          query: prev.query.length > 0 ? prev.query.slice(0, -1) : prev.query,
+          error: null,
+        }));
+        return;
+      }
+      if (input) {
+        setMemorySearchDialog((prev) => ({ ...prev, query: prev.query + input, error: null }));
+      }
+      return;
+    }
+
+    if (memoryForgetDialogRef.current.open) {
+      if (rawKey["escape"] === true) {
+        closeMemoryForgetDialog();
+        return;
+      }
+      if (rawKey["return"] === true || rawKey["enter"] === true) {
+        void submitMemoryForgetDialog();
+        return;
+      }
+      if (rawKey["backspace"] === true || rawKey["delete"] === true) {
+        setMemoryForgetDialog((prev) => ({
+          ...prev,
+          confirmText:
+            prev.confirmText.length > 0 ? prev.confirmText.slice(0, -1) : prev.confirmText,
+          error: null,
+        }));
+        return;
+      }
+      if (input) {
+        setMemoryForgetDialog((prev) => ({
+          ...prev,
+          confirmText: prev.confirmText + input,
+          error: null,
+        }));
+      }
+      return;
+    }
+
     const core = coreRef.current;
     const approvals = core.approvalsStore.getSnapshot();
     const pairing = core.pairingStore.getSnapshot();
     const runs = core.runsStore.getSnapshot();
+    const memory = core.memoryStore.getSnapshot();
 
     const pairingIds = getPairingIds(pairing);
     const runIds = getRunList(runs)
       .slice(0, MAX_RUNS_VISIBLE)
       .map((run) => run.run_id);
+
+    const memoryItemIds = memory.browse.results
+      ? memory.browse.results.kind === "list"
+        ? memory.browse.results.items.map((item) => item.memory_item_id)
+        : memory.browse.results.hits.map((hit) => hit.memory_item_id)
+      : [];
 
     const reduced = reduceTuiInput({
       state: uiStateRef.current,
@@ -496,6 +913,7 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
       approvalsPendingIds: approvals.pendingIds,
       pairingIds,
       runIds,
+      memoryItemIds,
     });
 
     uiStateRef.current = reduced.state;
@@ -517,6 +935,29 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
           return;
         case "exitAdminMode":
           runtime.exitAdminMode();
+          return;
+        case "refreshMemory":
+          if (memory.browse.request?.kind === "search") {
+            void core.memoryStore.search({
+              query: memory.browse.request.query,
+              filter: memory.browse.request.filter,
+              limit: memory.browse.request.limit,
+            });
+            return;
+          }
+          void core.memoryStore.list({
+            filter: memory.browse.request?.filter,
+            limit: memory.browse.request?.limit,
+          });
+          return;
+        case "openMemorySearch":
+          openMemorySearchDialog();
+          return;
+        case "openMemoryForget":
+          openMemoryForgetDialog(command.memoryItemId);
+          return;
+        case "exportMemory":
+          void core.memoryStore.export().catch(() => {});
           return;
         case "refreshApprovals":
           void core.approvalsStore.refreshPending();
@@ -570,6 +1011,21 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
           error={adminDialog.error}
         />
       ) : null}
+      {memorySearchDialog.open ? (
+        <MemorySearchDialog
+          query={memorySearchDialog.query}
+          busy={memorySearchDialog.busy}
+          error={memorySearchDialog.error}
+        />
+      ) : null}
+      {memoryForgetDialog.open && memoryForgetDialog.memoryItemId ? (
+        <MemoryForgetDialog
+          memoryItemId={memoryForgetDialog.memoryItemId}
+          confirmText={memoryForgetDialog.confirmText}
+          busy={memoryForgetDialog.busy}
+          error={memoryForgetDialog.error}
+        />
+      ) : null}
       {uiState.route === "connect" ? <ConnectScreen core={core} config={config} /> : null}
       {uiState.route === "status" ? <StatusScreen core={core} /> : null}
       {uiState.route === "approvals" ? (
@@ -588,6 +1044,13 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
       ) : null}
       {uiState.route === "runs" ? (
         <RunsScreen core={core} cursor={uiState.runsCursor} selectedId={uiState.runsSelectedId} />
+      ) : null}
+      {uiState.route === "memory" ? (
+        <MemoryScreen
+          core={core}
+          cursor={uiState.memoryCursor}
+          selectedId={uiState.memorySelectedId}
+        />
       ) : null}
     </Box>
   );

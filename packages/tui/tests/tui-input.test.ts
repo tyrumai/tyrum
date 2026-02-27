@@ -13,10 +13,85 @@ describe("tui input reducer", () => {
       approvalsPendingIds: [],
       pairingIds: [],
       runIds: [],
+      memoryItemIds: [],
     });
 
     expect(next.state.route).toBe("approvals");
     expect(next.commands).toEqual([]);
+  });
+
+  it("switches to memory route with '6'", () => {
+    const initial = createInitialTuiUiState();
+
+    const next = reduceTuiInput({
+      state: initial,
+      input: "6",
+      key: {},
+      adminModeActive: false,
+      approvalsPendingIds: [],
+      pairingIds: [],
+      runIds: [],
+      memoryItemIds: [],
+    });
+
+    expect(next.state.route).toBe("memory");
+    expect(next.commands).toEqual([]);
+  });
+
+  it("emits memory commands in memory route", () => {
+    const initial = { ...createInitialTuiUiState(), route: "memory" as const };
+
+    const refreshed = reduceTuiInput({
+      state: initial,
+      input: "r",
+      key: {},
+      adminModeActive: false,
+      approvalsPendingIds: [],
+      pairingIds: [],
+      runIds: [],
+      memoryItemIds: [],
+    });
+
+    expect(refreshed.commands).toEqual([{ type: "refreshMemory" }]);
+
+    const openSearch = reduceTuiInput({
+      state: initial,
+      input: "/",
+      key: {},
+      adminModeActive: false,
+      approvalsPendingIds: [],
+      pairingIds: [],
+      runIds: [],
+      memoryItemIds: [],
+    });
+
+    expect(openSearch.commands).toEqual([{ type: "openMemorySearch" }]);
+
+    const forget = reduceTuiInput({
+      state: initial,
+      input: "f",
+      key: {},
+      adminModeActive: true,
+      approvalsPendingIds: [],
+      pairingIds: [],
+      runIds: [],
+      memoryItemIds: ["mem-1"],
+    });
+
+    expect(forget.commands).toEqual([{ type: "openMemoryForget", memoryItemId: "mem-1" }]);
+
+    const exportAll = reduceTuiInput({
+      state: initial,
+      input: "p",
+      key: {},
+      adminModeActive: true,
+      approvalsPendingIds: [],
+      pairingIds: [],
+      runIds: [],
+      memoryItemIds: [],
+    });
+
+    expect(exportAll.commands).toEqual([{ type: "exportMemory" }]);
   });
 
   it("moves approvals cursor and emits resolve command", () => {
@@ -30,6 +105,7 @@ describe("tui input reducer", () => {
       approvalsPendingIds: [10, 11],
       pairingIds: [],
       runIds: [],
+      memoryItemIds: [],
     });
 
     expect(moved.state.approvalsCursor).toBe(1);
@@ -45,6 +121,7 @@ describe("tui input reducer", () => {
       approvalsPendingIds: [10, 11],
       pairingIds: [],
       runIds: [],
+      memoryItemIds: [],
     });
 
     expect(approved.commands).toEqual([
@@ -63,6 +140,7 @@ describe("tui input reducer", () => {
       approvalsPendingIds: [10, 11],
       pairingIds: [],
       runIds: [],
+      memoryItemIds: [],
     });
 
     const approved = reduceTuiInput({
@@ -73,6 +151,7 @@ describe("tui input reducer", () => {
       approvalsPendingIds: [11, 10],
       pairingIds: [],
       runIds: [],
+      memoryItemIds: [],
     });
 
     expect(approved.commands).toEqual([
@@ -91,6 +170,7 @@ describe("tui input reducer", () => {
       approvalsPendingIds: [10],
       pairingIds: [],
       runIds: [],
+      memoryItemIds: [],
     });
 
     expect(approved.commands).toEqual([{ type: "openAdminMode" }]);
@@ -107,6 +187,7 @@ describe("tui input reducer", () => {
       approvalsPendingIds: [],
       pairingIds: [5],
       runIds: [],
+      memoryItemIds: [],
     });
 
     expect(approved.commands).toEqual([{ type: "approvePairing", pairingId: 5 }]);
@@ -119,6 +200,7 @@ describe("tui input reducer", () => {
       approvalsPendingIds: [],
       pairingIds: [5],
       runIds: [],
+      memoryItemIds: [],
     });
 
     expect(revoked.commands).toEqual([{ type: "revokePairing", pairingId: 5 }]);
@@ -135,6 +217,7 @@ describe("tui input reducer", () => {
       approvalsPendingIds: [],
       pairingIds: [5, 6],
       runIds: [],
+      memoryItemIds: [],
     });
 
     expect(
@@ -149,6 +232,7 @@ describe("tui input reducer", () => {
       approvalsPendingIds: [],
       pairingIds: [6, 5],
       runIds: [],
+      memoryItemIds: [],
     });
 
     expect(approved.commands).toEqual([{ type: "approvePairing", pairingId: 6 }]);
@@ -165,6 +249,7 @@ describe("tui input reducer", () => {
       approvalsPendingIds: [],
       pairingIds: [],
       runIds: [],
+      memoryItemIds: [],
     });
 
     expect(enter.commands).toEqual([{ type: "openAdminMode" }]);
@@ -177,6 +262,7 @@ describe("tui input reducer", () => {
       approvalsPendingIds: [],
       pairingIds: [],
       runIds: [],
+      memoryItemIds: [],
     });
 
     expect(exit.commands).toEqual([{ type: "exitAdminMode" }]);
@@ -193,6 +279,7 @@ describe("tui input reducer", () => {
       approvalsPendingIds: [],
       pairingIds: [],
       runIds: [],
+      memoryItemIds: [],
     });
 
     expect(next.commands).toEqual([{ type: "exit" }]);

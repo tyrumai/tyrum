@@ -43,6 +43,20 @@ export interface MemoryBrowseState {
   lastSyncedAt: string | null;
 }
 
+export function completeBrowseSuccess(
+  prev: MemoryBrowseState,
+  input: { request: MemoryBrowseRequest; results: MemoryBrowseResults; now: string },
+): MemoryBrowseState {
+  return {
+    ...prev,
+    request: input.request,
+    results: input.results,
+    loading: false,
+    error: null,
+    lastSyncedAt: input.now,
+  };
+}
+
 export interface MemoryInspectState {
   memoryItemId: MemoryItemId | null;
   item: MemoryItem | null;
@@ -287,17 +301,15 @@ export function createMemoryStore(ws: OperatorWsClient): {
 
         return {
           ...prev,
-          browse: {
-            ...prev.browse,
+          browse: completeBrowseSuccess(prev.browse, {
             request,
             results: {
               kind: "list",
               items,
               nextCursor: toCursor(result.next_cursor),
             },
-            loading: false,
-            lastSyncedAt: new Date().toISOString(),
-          },
+            now: new Date().toISOString(),
+          }),
         };
       });
     } catch (error) {
@@ -364,17 +376,15 @@ export function createMemoryStore(ws: OperatorWsClient): {
         }
         return {
           ...prev,
-          browse: {
-            ...prev.browse,
+          browse: completeBrowseSuccess(prev.browse, {
             request,
             results: {
               kind: "search",
               hits,
               nextCursor: toCursor(result.next_cursor),
             },
-            loading: false,
-            lastSyncedAt: new Date().toISOString(),
-          },
+            now: new Date().toISOString(),
+          }),
         };
       });
     } catch (error) {
@@ -464,16 +474,15 @@ export function createMemoryStore(ws: OperatorWsClient): {
           items = applyItemUpserts(items, upserts);
           return {
             ...prev,
-            browse: {
-              ...prev.browse,
+            browse: completeBrowseSuccess(prev.browse, {
+              request,
               results: {
                 kind: "list",
                 items,
                 nextCursor: toCursor(next.next_cursor),
               },
-              loading: false,
-              lastSyncedAt: new Date().toISOString(),
-            },
+              now: new Date().toISOString(),
+            }),
           };
         });
         return;
@@ -500,16 +509,15 @@ export function createMemoryStore(ws: OperatorWsClient): {
         }
         return {
           ...prev,
-          browse: {
-            ...prev.browse,
+          browse: completeBrowseSuccess(prev.browse, {
+            request,
             results: {
               kind: "search",
               hits,
               nextCursor: toCursor(next.next_cursor),
             },
-            loading: false,
-            lastSyncedAt: new Date().toISOString(),
-          },
+            now: new Date().toISOString(),
+          }),
         };
       });
     } catch (error) {
