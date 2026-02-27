@@ -16,6 +16,7 @@ const {
   webContentsSendMock,
   menuBuildFromTemplateMock,
   menuSetApplicationMenuMock,
+  nativeThemeOnMock,
   registerConfigIpcMock,
   registerGatewayIpcMock,
   registerNodeIpcMock,
@@ -73,6 +74,7 @@ const {
 
   const menuBuildFromTemplateMock = vi.fn(() => ({}));
   const menuSetApplicationMenuMock = vi.fn();
+  const nativeThemeOnMock = vi.fn();
 
   const registerConfigIpcMock = vi.fn();
   const registerGatewayIpcMock = vi.fn(() => ({ stop: vi.fn() }));
@@ -103,6 +105,7 @@ const {
     webContentsSendMock,
     menuBuildFromTemplateMock,
     menuSetApplicationMenuMock,
+    nativeThemeOnMock,
     registerConfigIpcMock,
     registerGatewayIpcMock,
     registerNodeIpcMock,
@@ -132,6 +135,13 @@ vi.mock("electron", () => ({
   },
   ipcMain: {
     handle: ipcMainHandleMock,
+  },
+  nativeTheme: {
+    themeSource: "system",
+    shouldUseDarkColors: false,
+    shouldUseHighContrastColors: false,
+    shouldUseInvertedColorScheme: false,
+    on: nativeThemeOnMock,
   },
   screen: {
     getAllDisplays: vi.fn(() => []),
@@ -214,6 +224,7 @@ describe("main process deep links", () => {
     ipcMainHandleMock.mockClear();
     menuBuildFromTemplateMock.mockClear();
     menuSetApplicationMenuMock.mockClear();
+    nativeThemeOnMock.mockReset();
     registerConfigIpcMock.mockClear();
     registerGatewayIpcMock.mockClear();
     registerNodeIpcMock.mockClear();
