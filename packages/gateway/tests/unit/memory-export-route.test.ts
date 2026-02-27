@@ -76,7 +76,7 @@ describe("Memory export routes", () => {
     expect(res.headers.get("content-type")).toBe("application/json");
     expect(res.headers.get("cache-control")).toBe("no-store");
     expect(res.headers.get("content-disposition")).toContain("attachment");
-    expect(await res.text()).toContain("\"hello\":\"world\"");
+    expect(await res.text()).toContain('"hello":"world"');
   });
 
   it("returns 404 for artifacts that are not memory exports", async () => {
@@ -122,4 +122,3 @@ describe("Memory export routes", () => {
     await expect(res.json()).resolves.toMatchObject({ error: "forbidden" });
   });
 });
-

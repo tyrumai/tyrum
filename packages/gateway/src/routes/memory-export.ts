@@ -55,4 +55,3 @@ export function createMemoryExportRoutes(deps: { artifactStore: ArtifactStore })
 
   return app;
 }
-
