@@ -33,6 +33,7 @@ import {
 import { collectSecretHandleIds } from "../secret/collect-secret-handle-ids.js";
 import type { SecretProvider } from "../secret/provider.js";
 import { coerceRecord } from "../util/coerce.js";
+import { acquireWorkspaceLease, releaseWorkspaceLease } from "../workspace/lease.js";
 const DEFAULT_TOOL_APPROVAL_WAIT_MS = 120_000;
 
 const SUPPORTED_LLM_TOOL_IDS = new Set<string>(["tool.exec", "tool.http.fetch"]);
@@ -383,19 +384,54 @@ function buildToolSet(input: {
     return state;
   };
 
-  const runTool = async (action: ActionPrimitiveT): Promise<unknown> => {
-    const remainingMs = Math.max(1, input.timeoutMs);
-    const res = await input.toolExecutor.execute(
-      action,
-      input.planId,
-      input.stepIndex,
-      remainingMs,
-      input.executionContext,
-    );
-    if (!res.success) {
-      throw new Error(res.error || "tool execution failed");
+  const runTool = async (action: ActionPrimitiveT, toolCallId: string): Promise<unknown> => {
+    const startedAtMs = Date.now();
+    const totalBudgetMs = Math.max(1, input.timeoutMs);
+    const needsWorkspaceLease = action.type === "CLI";
+    const workspaceLeaseOwner = `llm-step:${input.executionContext.attemptId}:${toolCallId}`;
+
+    if (needsWorkspaceLease) {
+      const acquired = await acquireWorkspaceLease(input.container.db, {
+        workspaceId: input.executionContext.workspaceId,
+        owner: workspaceLeaseOwner,
+        ttlMs: Math.max(30_000, totalBudgetMs + 10_000),
+        waitMs: totalBudgetMs,
+      });
+      if (!acquired) {
+        throw new Error("workspace is busy");
+      }
     }
-    return res.result ?? res.evidence ?? null;
+
+    const waitedMs = Math.max(0, Date.now() - startedAtMs);
+    const remainingMs = Math.max(1, totalBudgetMs - waitedMs);
+
+    try {
+      const res = await input.toolExecutor.execute(
+        action,
+        input.planId,
+        input.stepIndex,
+        remainingMs,
+        input.executionContext,
+      );
+      if (!res.success) {
+        throw new Error(res.error || "tool execution failed");
+      }
+      return res.result ?? res.evidence ?? null;
+    } finally {
+      if (needsWorkspaceLease) {
+        await releaseWorkspaceLease(input.container.db, {
+          workspaceId: input.executionContext.workspaceId,
+          owner: workspaceLeaseOwner,
+        }).catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          input.container.logger.warn("execution.workspace_lease_release_failed", {
+            workspace_id: input.executionContext.workspaceId,
+            owner: workspaceLeaseOwner,
+            error: message,
+          });
+        });
+      }
+    }
   };
 
   const matchesApprovedToolContext = (input2: {
@@ -492,7 +528,7 @@ function buildToolSet(input: {
         }
 
         const record = coerceRecord(args) ?? {};
-        return await runTool(input2.toAction(record));
+        return await runTool(input2.toAction(record), toolCallId);
       },
     });
 

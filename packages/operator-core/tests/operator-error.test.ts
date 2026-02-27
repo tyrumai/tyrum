@@ -2,37 +2,38 @@ import { describe, expect, it } from "vitest";
 import { toOperatorCoreError } from "../src/operator-error.js";
 
 describe("toOperatorCoreError", () => {
-  it("parses ws-style '<op> failed: <code>: <message>' errors", () => {
-    expect(
-      toOperatorCoreError(
-        "ws",
-        "memory.list",
-        new Error("memory.search failed: unsupported_request: no db"),
-      ),
-    ).toEqual({
+  it("parses ws-style 'op failed: CODE: msg' errors", () => {
+    const error = new Error("connect failed: ECONNREFUSED: connection refused");
+
+    const result = toOperatorCoreError("ws", "ignored", error);
+
+    expect(result).toEqual({
       kind: "ws",
-      operation: "memory.search",
-      code: "unsupported_request",
-      message: "no db",
+      operation: "connect",
+      code: "ECONNREFUSED",
+      message: "connection refused",
     });
   });
 
-  it("maps '<operation> timed out' errors to code=timeout", () => {
-    expect(toOperatorCoreError("http", "runs.list", new Error("runs.list timed out"))).toEqual({
+  it("maps '<operation> timed out' to a timeout code", () => {
+    const result = toOperatorCoreError("http", "fetch", new Error("fetch timed out"));
+
+    expect(result).toEqual({
       kind: "http",
-      operation: "runs.list",
+      operation: "fetch",
       code: "timeout",
       message: "timed out",
     });
   });
 
-  it("falls back to stringifying unknown errors", () => {
-    expect(toOperatorCoreError("unknown", "runs.list", "boom")).toEqual({
+  it("stringifies non-Error inputs when falling back", () => {
+    const result = toOperatorCoreError("unknown", "op", 123);
+
+    expect(result).toEqual({
       kind: "unknown",
-      operation: "runs.list",
+      operation: "op",
       code: null,
-      message: "boom",
+      message: "123",
     });
   });
 });
-

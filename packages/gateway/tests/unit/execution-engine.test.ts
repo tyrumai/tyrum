@@ -329,6 +329,81 @@ describe("ExecutionEngine (normalized)", () => {
     expect(types.filter((type) => type === "run.failed")).toHaveLength(0);
   });
 
+  it("allows lane=main model-only steps to run while a workspace lease is held", async () => {
+    db = openTestSqliteDb();
+
+    const nowIso = new Date(0).toISOString();
+    const engine = new ExecutionEngine({
+      db,
+      clock: () => ({ nowMs: 0, nowIso }),
+    });
+
+    await db.run(
+      `INSERT INTO workspace_leases (workspace_id, lease_owner, lease_expires_at_ms)
+       VALUES (?, ?, ?)`,
+      ["default", "other-worker", 60_000],
+    );
+
+    await engine.enqueuePlan({
+      key: "agent:default:test",
+      lane: "main",
+      planId: "plan-workspace-lease-main-1",
+      requestId: "req-workspace-lease-main-1",
+      steps: [action("Decide", { ok: true })],
+    });
+
+    const executor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => ({ success: true, result: { ok: true } })),
+    };
+
+    await drain(engine, "w-main", executor);
+
+    expect((executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(
+      1,
+    );
+
+    const run = await db.get<{ status: string }>("SELECT status FROM execution_runs LIMIT 1");
+    expect(run?.status).toBe("succeeded");
+  });
+
+  it("blocks workspace-mutating tool steps while a workspace lease is held", async () => {
+    db = openTestSqliteDb();
+
+    const nowIso = new Date(0).toISOString();
+    const engine = new ExecutionEngine({
+      db,
+      clock: () => ({ nowMs: 0, nowIso }),
+    });
+
+    await db.run(
+      `INSERT INTO workspace_leases (workspace_id, lease_owner, lease_expires_at_ms)
+       VALUES (?, ?, ?)`,
+      ["default", "other-worker", 60_000],
+    );
+
+    await engine.enqueuePlan({
+      key: "agent:default:test",
+      lane: "subagent",
+      planId: "plan-workspace-lease-cli-1",
+      requestId: "req-workspace-lease-cli-1",
+      steps: [action("CLI", { cmd: "echo", args: ["hi"] })],
+    });
+
+    const executor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => ({ success: true, result: { ok: true } })),
+    };
+
+    expect(await engine.workerTick({ workerId: "w-subagent", executor })).toBe(false);
+    expect((executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(
+      0,
+    );
+
+    const step = await db.get<{ status: string }>(
+      "SELECT status FROM execution_steps ORDER BY step_index ASC LIMIT 1",
+    );
+    expect(step?.status).toBe("queued");
+  });
+
   it("emits run.failed when a run exhausts retry attempts", async () => {
     db = openTestSqliteDb();
 

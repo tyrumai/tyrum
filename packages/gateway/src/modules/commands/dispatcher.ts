@@ -18,6 +18,7 @@ import { SessionDal } from "../agent/session-dal.js";
 import { SessionModelOverrideDal } from "../models/session-model-override-dal.js";
 import { isAuthProfilesEnabled } from "../models/auth-profiles-enabled.js";
 import { LaneQueueModeOverrideDal } from "../lanes/queue-mode-override-dal.js";
+import { IntakeModeOverrideDal } from "../agent/intake-mode-override-dal.js";
 import { SessionSendPolicyOverrideDal } from "../channels/send-policy-override-dal.js";
 import { parseChannelSourceKey } from "../channels/interface.js";
 import { resolveWorkspaceId } from "../workspace/id.js";
@@ -463,6 +464,7 @@ function helpText(): string {
     "- /approvals [pending|approved|denied|expired]",
     "- /pairings [pending|approved|denied|revoked]",
     "- /model [provider/model[@profile]]",
+    "- /intake [auto|inline|delegate_execute|delegate_plan]",
     "- /queue [collect|followup|steer|steer_backlog|interrupt]",
     "- /send [on|off|inherit]",
     "- /policy bundle",
@@ -1018,6 +1020,60 @@ export async function executeCommand(
       session_id: row.session_id,
       model_id: row.model_id,
     };
+    return { output: jsonBlock(payload), data: payload };
+  }
+
+  if (cmd === "intake") {
+    if (!deps.db) {
+      return {
+        output: "Intake mode overrides are not available on this gateway instance.",
+        data: null,
+      };
+    }
+
+    const agentId = resolveAgentId(deps.commandContext);
+    const resolved =
+      (await resolveKeyLane(deps.db, deps.commandContext)) ??
+      (await resolveFallbackKeyLane(deps.db, deps.commandContext, agentId));
+    if (!resolved) {
+      return {
+        output:
+          "Usage: /intake <auto|inline|delegate_execute|delegate_plan> (requires key or channel/thread context)",
+        data: null,
+      };
+    }
+    const { key } = resolved;
+    const lane = "main";
+
+    const dal = new IntakeModeOverrideDal(deps.db);
+    const modeArg = toks[1]?.trim().toLowerCase();
+    const allowed = new Set(["auto", "inline", "delegate_execute", "delegate_plan"]);
+
+    if (!modeArg) {
+      const existing = await dal.get({ key, lane });
+      const payload = {
+        key,
+        lane,
+        intake_mode: existing?.intake_mode ?? "auto",
+      };
+      return { output: jsonBlock(payload), data: payload };
+    }
+
+    if (!allowed.has(modeArg)) {
+      return {
+        output: "Usage: /intake <auto|inline|delegate_execute|delegate_plan>",
+        data: null,
+      };
+    }
+
+    if (modeArg === "auto") {
+      await dal.clear({ key, lane });
+      const payload = { key, lane, intake_mode: "auto" };
+      return { output: jsonBlock(payload), data: payload };
+    }
+
+    const row = await dal.upsert({ key, lane, intakeMode: modeArg });
+    const payload = { key: row.key, lane: row.lane, intake_mode: row.intake_mode };
     return { output: jsonBlock(payload), data: payload };
   }
 

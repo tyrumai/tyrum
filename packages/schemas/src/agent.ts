@@ -177,6 +177,7 @@ export const AgentTurnRequest = z
     container_kind: NormalizedContainerKind.optional(),
     message: z.string().trim().min(1).optional(),
     envelope: NormalizedMessageEnvelope.optional(),
+    intake_mode: z.enum(["inline", "delegate_execute", "delegate_plan"]).optional(),
     metadata: z.record(z.string(), z.unknown()).optional(),
   })
   .superRefine((value, ctx) => {

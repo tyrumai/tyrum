@@ -170,6 +170,7 @@ export function WorkBoard({ deepLinkWorkItemId, onDeepLinkHandled }: WorkBoardPr
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
   const [drilldownBusy, setDrilldownBusy] = useState(false);
   const [drilldownError, setDrilldownError] = useState<string | null>(null);
+  const [transitionTarget, setTransitionTarget] = useState<WorkItem["status"] | null>(null);
   const [selectedItem, setSelectedItem] = useState<WorkItem | null>(null);
   const [artifacts, setArtifacts] = useState<WorkArtifact[]>([]);
   const [decisions, setDecisions] = useState<DecisionRecord[]>([]);
@@ -211,6 +212,37 @@ export function WorkBoard({ deepLinkWorkItemId, onDeepLinkHandled }: WorkBoardPr
     }
   }, []);
 
+  const transitionSelected = useCallback(
+    async (status: WorkItem["status"], reason: string): Promise<void> => {
+      if (connectionStatus !== "connected") return;
+      const client = clientRef.current;
+      if (!client) return;
+      if (!selectedWorkItemId) return;
+
+      setTransitionTarget(status);
+      setDrilldownError(null);
+      try {
+        const res = await client.workTransition({
+          ...DEFAULT_SCOPE,
+          work_item_id: selectedWorkItemId,
+          status,
+          reason,
+        });
+
+        setItems((prev) => upsertWorkItem(prev, res.item));
+        setSelectedItem((prev) => {
+          if (selectedIdRef.current !== res.item.work_item_id) return prev;
+          return res.item;
+        });
+      } catch (error) {
+        setDrilldownError(toErrorMessage(error));
+      } finally {
+        setTransitionTarget(null);
+      }
+    },
+    [connectionStatus, selectedWorkItemId],
+  );
+
   useEffect(() => {
     if (!api) {
       setConnectionError("Desktop API not available.");
@@ -233,6 +265,7 @@ export function WorkBoard({ deepLinkWorkItemId, onDeepLinkHandled }: WorkBoardPr
     setWorkItemKvEntries([]);
     setDrilldownBusy(false);
     setDrilldownError(null);
+    setTransitionTarget(null);
 
     let wsClient: TyrumClient | null = null;
 
@@ -533,6 +566,13 @@ export function WorkBoard({ deepLinkWorkItemId, onDeepLinkHandled }: WorkBoardPr
     ? "TLS fingerprint pinning is configured, but pin verification is not enforced in the Desktop renderer."
     : null;
 
+  const canMarkReadySelected = selectedItem?.status === "backlog";
+  const canResumeSelected = selectedItem?.status === "blocked";
+  const canCancelSelected =
+    selectedItem?.status === "ready" ||
+    selectedItem?.status === "doing" ||
+    selectedItem?.status === "blocked";
+
   return (
     <div style={containerStyle}>
       <div style={headerRowStyle}>
@@ -643,6 +683,40 @@ export function WorkBoard({ deepLinkWorkItemId, onDeepLinkHandled }: WorkBoardPr
                 <span>kind {selectedItem.kind}</span>
                 <span>priority {selectedItem.priority}</span>
               </div>
+              {(canMarkReadySelected || canResumeSelected || canCancelSelected) && (
+                <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+                  {canMarkReadySelected && (
+                    <button
+                      style={btn("secondary")}
+                      onClick={() => void transitionSelected("ready", "operator triaged")}
+                      disabled={transitionTarget !== null}
+                    >
+                      {transitionTarget === "ready" ? "Triaging…" : "Mark Ready"}
+                    </button>
+                  )}
+                  {canResumeSelected && (
+                    <button
+                      style={btn("primary")}
+                      onClick={() => void transitionSelected("doing", "operator resumed")}
+                      disabled={transitionTarget !== null}
+                    >
+                      {transitionTarget === "doing" ? "Resuming…" : "Resume"}
+                    </button>
+                  )}
+                  {canCancelSelected && (
+                    <button
+                      style={btn("danger")}
+                      onClick={() => {
+                        if (!window.confirm("Cancel this WorkItem?")) return;
+                        void transitionSelected("cancelled", "operator cancelled");
+                      }}
+                      disabled={transitionTarget !== null}
+                    >
+                      {transitionTarget === "cancelled" ? "Cancelling…" : "Cancel"}
+                    </button>
+                  )}
+                </div>
+              )}
               <div style={{ ...cardMetaStyle, marginTop: 6 }}>
                 <span style={{ fontFamily: fonts.mono }}>{selectedItem.work_item_id}</span>
               </div>

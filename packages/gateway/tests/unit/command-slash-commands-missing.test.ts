@@ -499,6 +499,86 @@ describe("missing slash commands", () => {
     expect(row?.queue_mode).toBe("interrupt");
   });
 
+  it("supports /intake <auto|inline|delegate_execute|delegate_plan>", async () => {
+    db = openTestSqliteDb();
+
+    const key = "agent:default:telegram:default:dm:chat-1";
+    const lane = "main";
+
+    const set = await executeCommand("/intake delegate_execute", {
+      db,
+      commandContext: { key, lane },
+    });
+
+    expect(set.data).toMatchObject({
+      key,
+      lane,
+      intake_mode: "delegate_execute",
+    });
+
+    const stored = await db.get<{ intake_mode: string }>(
+      `SELECT intake_mode
+       FROM intake_mode_overrides
+       WHERE key = ? AND lane = ?`,
+      [key, lane],
+    );
+    expect(stored?.intake_mode).toBe("delegate_execute");
+
+    const shown = await executeCommand("/intake", {
+      db,
+      commandContext: { key, lane },
+    });
+    expect(shown.data).toMatchObject({ key, lane, intake_mode: "delegate_execute" });
+
+    const cleared = await executeCommand("/intake auto", {
+      db,
+      commandContext: { key, lane },
+    });
+    expect(cleared.data).toMatchObject({ key, lane, intake_mode: "auto" });
+
+    const afterClear = await db.get<{ intake_mode: string }>(
+      `SELECT intake_mode
+       FROM intake_mode_overrides
+       WHERE key = ? AND lane = ?`,
+      [key, lane],
+    );
+    expect(afterClear).toBeUndefined();
+  });
+
+  it("stores /intake overrides in lane=main even when invoked from subagent context", async () => {
+    db = openTestSqliteDb();
+
+    const key = "agent:default:telegram:default:dm:chat-1";
+    const lane = "subagent";
+
+    const set = await executeCommand("/intake delegate_execute", {
+      db,
+      commandContext: { key, lane },
+    });
+
+    expect(set.data).toMatchObject({
+      key,
+      lane: "main",
+      intake_mode: "delegate_execute",
+    });
+
+    const storedMain = await db.get<{ intake_mode: string }>(
+      `SELECT intake_mode
+       FROM intake_mode_overrides
+       WHERE key = ? AND lane = ?`,
+      [key, "main"],
+    );
+    expect(storedMain?.intake_mode).toBe("delegate_execute");
+
+    const storedSubagent = await db.get<{ intake_mode: string }>(
+      `SELECT intake_mode
+       FROM intake_mode_overrides
+       WHERE key = ? AND lane = ?`,
+      [key, "subagent"],
+    );
+    expect(storedSubagent).toBeUndefined();
+  });
+
   it("supports /queue using channel/thread context (resolves key + lane)", async () => {
     db = openTestSqliteDb();
 

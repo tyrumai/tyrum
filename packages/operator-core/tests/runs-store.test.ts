@@ -1,28 +1,37 @@
 import { describe, expect, it } from "vitest";
+import type { ExecutionAttempt, ExecutionRun, ExecutionStep } from "@tyrum/client";
 import { createRunsStore } from "../src/stores/runs-store.js";
 
 describe("createRunsStore", () => {
-  it("indexes runs, steps, and attempts (and dedupes ids)", () => {
-    const { store, handleAttemptUpdated, handleRunUpdated, handleStepUpdated } = createRunsStore();
+  it("indexes runs/steps/attempts and keeps id lists unique", () => {
+    const { store, handleRunUpdated, handleStepUpdated, handleAttemptUpdated } = createRunsStore();
 
-    handleRunUpdated({ run_id: "r-1" } as any);
+    const run = { run_id: "run-1" } as unknown as ExecutionRun;
+    handleRunUpdated(run);
+    expect(store.getSnapshot().runsById["run-1"]).toBe(run);
 
-    handleStepUpdated({ run_id: "r-1", step_id: "s-1" } as any);
-    handleStepUpdated({ run_id: "r-1", step_id: "s-1" } as any);
-    handleStepUpdated({ run_id: "r-1", step_id: "s-2" } as any);
+    const stepA = { step_id: "step-1", run_id: "run-1" } as unknown as ExecutionStep;
+    handleStepUpdated(stepA);
+    expect(store.getSnapshot().stepsById["step-1"]).toBe(stepA);
+    expect(store.getSnapshot().stepIdsByRunId["run-1"]).toEqual(["step-1"]);
 
-    handleAttemptUpdated({ step_id: "s-1", attempt_id: "a-1" } as any);
-    handleAttemptUpdated({ step_id: "s-1", attempt_id: "a-1" } as any);
-    handleAttemptUpdated({ step_id: "s-1", attempt_id: "a-2" } as any);
+    handleStepUpdated(stepA);
+    expect(store.getSnapshot().stepIdsByRunId["run-1"]).toEqual(["step-1"]);
 
-    const snapshot = store.getSnapshot();
-    expect(snapshot.runsById["r-1"]).toEqual(expect.objectContaining({ run_id: "r-1" }));
-    expect(snapshot.stepsById["s-1"]).toEqual(expect.objectContaining({ step_id: "s-1" }));
-    expect(snapshot.stepsById["s-2"]).toEqual(expect.objectContaining({ step_id: "s-2" }));
-    expect(snapshot.attemptsById["a-1"]).toEqual(expect.objectContaining({ attempt_id: "a-1" }));
-    expect(snapshot.attemptsById["a-2"]).toEqual(expect.objectContaining({ attempt_id: "a-2" }));
-    expect(snapshot.stepIdsByRunId["r-1"]).toEqual(["s-1", "s-2"]);
-    expect(snapshot.attemptIdsByStepId["s-1"]).toEqual(["a-1", "a-2"]);
+    const stepB = { step_id: "step-2", run_id: "run-1" } as unknown as ExecutionStep;
+    handleStepUpdated(stepB);
+    expect(store.getSnapshot().stepIdsByRunId["run-1"]).toEqual(["step-1", "step-2"]);
+
+    const attemptA = { attempt_id: "attempt-1", step_id: "step-1" } as unknown as ExecutionAttempt;
+    handleAttemptUpdated(attemptA);
+    expect(store.getSnapshot().attemptsById["attempt-1"]).toBe(attemptA);
+    expect(store.getSnapshot().attemptIdsByStepId["step-1"]).toEqual(["attempt-1"]);
+
+    handleAttemptUpdated(attemptA);
+    expect(store.getSnapshot().attemptIdsByStepId["step-1"]).toEqual(["attempt-1"]);
+
+    const attemptB = { attempt_id: "attempt-2", step_id: "step-1" } as unknown as ExecutionAttempt;
+    handleAttemptUpdated(attemptB);
+    expect(store.getSnapshot().attemptIdsByStepId["step-1"]).toEqual(["attempt-1", "attempt-2"]);
   });
 });
-
