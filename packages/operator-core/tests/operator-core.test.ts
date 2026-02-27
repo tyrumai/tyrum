@@ -316,6 +316,22 @@ describe("operator-core wiring", () => {
     expect(core.httpBaseUrl).toBe("http://127.0.0.1:8788");
   });
 
+  it("exposes memoryStore on the core", () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+
+    const core = createOperatorCore({
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788",
+      auth: createBearerTokenAuth("test-token"),
+      deps: { ws, http },
+    });
+
+    expect(
+      (core as unknown as { memoryStore?: { getSnapshot: () => unknown } }).memoryStore,
+    ).toBeDefined();
+  });
+
   it("exposes adminModeStore as a single source of truth", () => {
     const ws = new FakeWsClient();
     const http = createFakeHttpClient();

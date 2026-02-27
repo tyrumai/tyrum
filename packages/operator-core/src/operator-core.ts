@@ -18,6 +18,7 @@ import { createConnectionStore, type ConnectionStore } from "./stores/connection
 import { createPairingStore, type Pairing, type PairingStore } from "./stores/pairing-store.js";
 import { createRunsStore, type RunsStore } from "./stores/runs-store.js";
 import { createAdminModeStore, type AdminModeStore } from "./stores/admin-mode-store.js";
+import { createMemoryStore, type MemoryStore } from "./stores/memory-store.js";
 import {
   createStatusStore,
   type OperatorPresenceEntry,
@@ -45,6 +46,7 @@ export interface OperatorCore {
   adminModeStore: AdminModeStore;
   connectionStore: ConnectionStore;
   approvalsStore: ApprovalsStore;
+  memoryStore: MemoryStore;
   runsStore: RunsStore;
   pairingStore: PairingStore;
   statusStore: StatusStore;
@@ -301,6 +303,7 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
     adminModeStore,
     connectionStore: connection.store,
     approvalsStore: approvals.store,
+    memoryStore: memory.store,
     pairingStore: pairing.store,
     statusStore: status.store,
     runsStore: runs.store,

@@ -1,4 +1,4 @@
-export type TuiRouteId = "connect" | "status" | "approvals" | "runs" | "pairing";
+export type TuiRouteId = "connect" | "status" | "approvals" | "runs" | "pairing" | "memory";
 
 export type TuiKey = {
   ctrl?: boolean;
@@ -14,6 +14,8 @@ export type TuiUiState = {
   pairingSelectedId: number | null;
   runsCursor: number;
   runsSelectedId: string | null;
+  memoryCursor: number;
+  memorySelectedId: string | null;
 };
 
 export type TuiCommand =
@@ -38,6 +40,8 @@ export function createInitialTuiUiState(): TuiUiState {
     pairingSelectedId: null,
     runsCursor: 0,
     runsSelectedId: null,
+    memoryCursor: 0,
+    memorySelectedId: null,
   };
 }
 
@@ -94,6 +98,8 @@ export function reduceTuiInput(_params: {
     pairingSelectedId: null,
     runsCursor: 0,
     runsSelectedId: null,
+    memoryCursor: 0,
+    memorySelectedId: null,
   });
 
   switch (input) {
@@ -107,6 +113,8 @@ export function reduceTuiInput(_params: {
       return { state: setRoute("runs"), commands };
     case "5":
       return { state: setRoute("pairing"), commands };
+    case "6":
+      return { state: setRoute("memory"), commands };
     case "c":
       commands.push({ type: "connect" });
       return { state: _params.state, commands };

@@ -113,3 +113,17 @@ export type {
   PlanRequest,
   PlanResponse,
 } from "./types.js";
+
+export type {
+  MemoryExportResponse,
+  MemoryForgetResponse,
+  MemoryGetResponse,
+  MemoryItem,
+  MemoryItemId,
+  MemoryItemKind,
+  MemoryListResponse,
+  MemorySearchHit,
+  MemorySearchResponse,
+  MemorySensitivity,
+  MemoryTombstone,
+} from "@tyrum/schemas";

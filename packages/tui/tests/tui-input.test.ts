@@ -19,6 +19,23 @@ describe("tui input reducer", () => {
     expect(next.commands).toEqual([]);
   });
 
+  it("switches to memory route with '6'", () => {
+    const initial = createInitialTuiUiState();
+
+    const next = reduceTuiInput({
+      state: initial,
+      input: "6",
+      key: {},
+      adminModeActive: false,
+      approvalsPendingIds: [],
+      pairingIds: [],
+      runIds: [],
+    });
+
+    expect(next.state.route).toBe("memory");
+    expect(next.commands).toEqual([]);
+  });
+
   it("moves approvals cursor and emits resolve command", () => {
     const initial = { ...createInitialTuiUiState(), route: "approvals" as const };
 

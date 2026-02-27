@@ -32,6 +32,7 @@ Memory v1 APIs exist over WebSocket (`memory.search/list/get/forget/export`). Th
 ### Detail view
 
 When an item is selected, the screen shows:
+
 - Common fields: `memory_item_id`, `kind`, `agent_id`, `tags`, `sensitivity`, timestamps, provenance summary.
 - Kind-specific payload (fact key/value; note/procedure body_md; episode summary_md + occurred_at).
 
@@ -78,4 +79,3 @@ When an item is selected, the screen shows:
   - `tui-input` reducer: route switching and cursor behavior for the memory screen.
   - `TuiApp` integration: rendering the Memory route and triggering search/forget/export flows against stubbed stores.
 - (Optional follow-up) E2E: harness-based test with a real gateway (not required for initial scope).
-
