@@ -355,7 +355,12 @@ export type WsWorkStateKvSetRequest = z.infer<typeof WsWorkStateKvSetRequest>;
 // Operation responses (typed) — workboard
 // ---------------------------------------------------------------------------
 
-export const WsWorkListResult = z.object({ items: z.array(WorkItem) }).strict();
+export const WsWorkListResult = z
+  .object({
+    items: z.array(WorkItem),
+    next_cursor: z.string().trim().min(1).optional(),
+  })
+  .strict();
 export type WsWorkListResult = z.infer<typeof WsWorkListResult>;
 
 export const WsWorkListResponseOkEnvelope = WsResponseOkEnvelope.extend({
@@ -431,7 +436,12 @@ export type WsWorkTransitionResponseErrEnvelope = z.infer<
 // Operation responses (typed) — drilldown
 // ---------------------------------------------------------------------------
 
-export const WsWorkArtifactListResult = z.object({ artifacts: z.array(WorkArtifact) }).strict();
+export const WsWorkArtifactListResult = z
+  .object({
+    artifacts: z.array(WorkArtifact),
+    next_cursor: z.string().trim().min(1).optional(),
+  })
+  .strict();
 export type WsWorkArtifactListResult = z.infer<typeof WsWorkArtifactListResult>;
 
 export const WsWorkArtifactListResponseOkEnvelope = WsResponseOkEnvelope.extend({
@@ -485,7 +495,12 @@ export type WsWorkArtifactCreateResponseErrEnvelope = z.infer<
   typeof WsWorkArtifactCreateResponseErrEnvelope
 >;
 
-export const WsWorkDecisionListResult = z.object({ decisions: z.array(DecisionRecord) }).strict();
+export const WsWorkDecisionListResult = z
+  .object({
+    decisions: z.array(DecisionRecord),
+    next_cursor: z.string().trim().min(1).optional(),
+  })
+  .strict();
 export type WsWorkDecisionListResult = z.infer<typeof WsWorkDecisionListResult>;
 
 export const WsWorkDecisionListResponseOkEnvelope = WsResponseOkEnvelope.extend({
@@ -539,7 +554,12 @@ export type WsWorkDecisionCreateResponseErrEnvelope = z.infer<
   typeof WsWorkDecisionCreateResponseErrEnvelope
 >;
 
-export const WsWorkSignalListResult = z.object({ signals: z.array(WorkSignal) }).strict();
+export const WsWorkSignalListResult = z
+  .object({
+    signals: z.array(WorkSignal),
+    next_cursor: z.string().trim().min(1).optional(),
+  })
+  .strict();
 export type WsWorkSignalListResult = z.infer<typeof WsWorkSignalListResult>;
 
 export const WsWorkSignalListResponseOkEnvelope = WsResponseOkEnvelope.extend({

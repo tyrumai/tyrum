@@ -149,21 +149,30 @@ describe("WorkBoard WS protocol", () => {
     };
 
     const responses: Array<{ type: string; result?: unknown }> = [
-      { type: "work.list", result: { items: [workItem] } },
+      { type: "work.list", result: { items: [workItem], next_cursor: "cursor-1" } },
       { type: "work.get", result: { item: workItem } },
       { type: "work.create", result: { item: workItem } },
       { type: "work.update", result: { item: workItem } },
       { type: "work.transition", result: { item: workItem } },
 
-      { type: "work.artifact.list", result: { artifacts: [workArtifact] } },
+      {
+        type: "work.artifact.list",
+        result: { artifacts: [workArtifact], next_cursor: "cursor-2" },
+      },
       { type: "work.artifact.get", result: { artifact: workArtifact } },
       { type: "work.artifact.create", result: { artifact: workArtifact } },
 
-      { type: "work.decision.list", result: { decisions: [decision] } },
+      {
+        type: "work.decision.list",
+        result: { decisions: [decision], next_cursor: "cursor-3" },
+      },
       { type: "work.decision.get", result: { decision } },
       { type: "work.decision.create", result: { decision } },
 
-      { type: "work.signal.list", result: { signals: [signal] } },
+      {
+        type: "work.signal.list",
+        result: { signals: [signal], next_cursor: "cursor-4" },
+      },
       { type: "work.signal.get", result: { signal } },
       { type: "work.signal.create", result: { signal } },
       { type: "work.signal.update", result: { signal } },
