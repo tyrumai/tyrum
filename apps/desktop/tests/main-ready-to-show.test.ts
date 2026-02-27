@@ -163,9 +163,6 @@ vi.mock("electron", () => ({
     buildFromTemplate: menuBuildFromTemplateMock,
     setApplicationMenu: menuSetApplicationMenuMock,
   },
-  ipcMain: {
-    handle: vi.fn(),
-  },
   screen: {
     getAllDisplays: screenGetAllDisplaysMock,
     getPrimaryDisplay: screenGetPrimaryDisplayMock,
