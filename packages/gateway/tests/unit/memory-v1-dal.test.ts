@@ -510,6 +510,33 @@ for (const fixture of fixtures) {
       }
     });
 
+    it("respects requested search limits up to the handler cap", async () => {
+      const { dal, close } = await fixture.open();
+      try {
+        const total = 201;
+        for (let i = 0; i < total; i += 1) {
+          await dal.create(
+            {
+              kind: "note",
+              body_md: `search limit test ${i}`,
+              tags: [],
+              sensitivity: "private",
+              provenance: { source_kind: "operator", refs: [] },
+            },
+            "agent-a",
+          );
+        }
+
+        const res = await dal.search(
+          { v: 1, query: "*", filter: { kinds: ["note"] }, limit: total },
+          "agent-a",
+        );
+        expect(res.hits).toHaveLength(total);
+      } finally {
+        await close();
+      }
+    });
+
     it("rejects overly complex search requests", async () => {
       const { dal, close } = await fixture.open();
       try {

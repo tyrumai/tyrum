@@ -980,7 +980,7 @@ export class MemoryV1Dal {
       throw new Error(`too many query terms (max=${MAX_TERMS})`);
     }
 
-    const limit = Math.max(1, Math.min(200, input.limit ?? 20));
+    const limit = Math.max(1, Math.min(500, input.limit ?? 20));
     const candidateLimit = Math.min(Math.max(limit * 20, 200), MAX_CANDIDATE_LIMIT);
 
     const clauses: string[] = ["mi.agent_id = ?"];
