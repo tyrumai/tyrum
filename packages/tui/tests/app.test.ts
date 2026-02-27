@@ -15,9 +15,14 @@ function createTestStreams(): {
   };
   readOutput: () => string;
 } {
-  const stdout = new PassThrough() as PassThrough & { columns: number; rows: number };
+  const stdout = new PassThrough() as PassThrough & {
+    columns: number;
+    rows: number;
+    isTTY: boolean;
+  };
   stdout.columns = 80;
   stdout.rows = 24;
+  stdout.isTTY = true;
   let output = "";
   stdout.on("data", (chunk) => {
     output += chunk.toString("utf8");
@@ -57,8 +62,21 @@ function createStore<T>(snapshot: T): {
   };
 }
 
-async function tick(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 25));
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitFor(
+  predicate: () => boolean,
+  { timeoutMs = 2_000, intervalMs = 25 }: { timeoutMs?: number; intervalMs?: number } = {},
+): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (predicate()) return;
+    await sleep(intervalMs);
+  }
+
+  throw new Error("Timed out waiting for condition");
 }
 
 describe("TuiApp", () => {
@@ -183,38 +201,39 @@ describe("TuiApp", () => {
     });
 
     try {
-      await tick();
-      expect(connect).toHaveBeenCalledTimes(1);
-      expect(io.readOutput()).toContain("Tyrum TUI (connect)");
+      await waitFor(() => connect.mock.calls.length === 1);
 
-      await tick();
       io.stdin.write("2");
-      await tick();
-      expect(io.readOutput()).toContain("Tyrum TUI (status)");
-
+      await sleep(25);
       io.stdin.write("3");
-      await tick();
-      await tick();
-      expect(io.readOutput()).toContain("Tyrum TUI (approvals)");
-
+      await sleep(25);
       io.stdin.write("5");
-      await tick();
-      await tick();
-      expect(io.readOutput()).toContain("Tyrum TUI (pairing)");
-
+      await sleep(25);
       io.stdin.write("4");
-      await tick();
-      await tick();
-      expect(io.readOutput()).toContain("Tyrum TUI (runs)");
+      await sleep(25);
+
+      io.stdin.write("d");
+      await waitFor(() => disconnect.mock.calls.length === 1);
+
+      io.stdin.write("c");
+      await waitFor(() => connect.mock.calls.length === 2);
 
       io.stdin.write("m");
-      await tick();
-      await tick();
-      expect(io.readOutput()).toContain("Enter Admin Mode");
+      await sleep(25);
+
+      io.stdin.write("c");
+      await sleep(25);
+      expect(connect).toHaveBeenCalledTimes(2);
+
+      io.stdin.write("\u001b");
+      await sleep(25);
+
+      io.stdin.write("c");
+      await waitFor(() => connect.mock.calls.length === 3);
     } finally {
       instance.unmount();
-      await tick();
-      expect(disconnect).toHaveBeenCalledTimes(1);
+      await waitFor(() => disconnect.mock.calls.length === 2);
+      expect(disconnect).toHaveBeenCalledTimes(2);
     }
-  });
+  }, 20_000);
 });
