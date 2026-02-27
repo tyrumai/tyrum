@@ -7,7 +7,7 @@ import { newDb } from "pg-mem";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-type OpenDalResult = { dal: MemoryV1Dal; close: () => Promise<void> };
+type OpenDalResult = { dal: MemoryV1Dal; db: SqlDb; close: () => Promise<void> };
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const postgresMigrationsDir = join(__dirname, "../../migrations/postgres");
@@ -102,6 +102,7 @@ async function openPgMemDal(): Promise<OpenDalResult> {
 
   return {
     dal: new MemoryV1Dal(db),
+    db,
     close: async () => {
       await pg.end();
     },
@@ -112,6 +113,7 @@ async function openSqliteDal(): Promise<OpenDalResult> {
   const db = openTestSqliteDb();
   return {
     dal: new MemoryV1Dal(db),
+    db,
     close: async () => {
       await db.close();
     },
@@ -245,6 +247,66 @@ for (const fixture of fixtures) {
         await expect(
           dal.update(created.memory_item_id, { body_md: "should fail" }, "agent-a"),
         ).rejects.toThrow(/incompatible patch/i);
+      } finally {
+        await close();
+      }
+    });
+
+    it("self-heals when a tombstone exists but the item still exists", async () => {
+      const { dal, db, close } = await fixture.open();
+      try {
+        const title = "On-call notes";
+        const bodyMd = "Remember to check dashboards.";
+
+        const created = await dal.create(
+          {
+            kind: "note",
+            title,
+            body_md: bodyMd,
+            tags: [],
+            sensitivity: "private",
+            provenance: { source_kind: "operator", refs: [] },
+          },
+          "agent-a",
+        );
+
+        const tombstone = await dal.delete(
+          created.memory_item_id,
+          { deleted_by: "operator" },
+          "agent-a",
+        );
+        expect(await dal.getById(created.memory_item_id, "agent-a")).toBeUndefined();
+
+        // Simulate inconsistent state: tombstone exists but the canonical row comes back.
+        await db.run(
+          `INSERT INTO memory_items (
+             memory_item_id, agent_id, kind, sensitivity,
+             title, body_md,
+             created_at, updated_at
+           )
+          VALUES (?, ?, 'note', 'private', ?, ?, ?, NULL)`,
+          [created.memory_item_id, "agent-a", title, bodyMd, "2026-02-19T12:00:00Z"],
+        );
+        await db.run(
+          `INSERT INTO memory_item_provenance (
+             memory_item_id,
+             agent_id,
+             source_kind,
+             refs_json
+           )
+           VALUES (?, ?, ?, ?)`,
+          [created.memory_item_id, "agent-a", "operator", "[]"],
+        );
+
+        expect(await dal.getById(created.memory_item_id, "agent-a")).toBeDefined();
+
+        const second = await dal.delete(
+          created.memory_item_id,
+          { deleted_by: "operator" },
+          "agent-a",
+        );
+        expect(second).toEqual(tombstone);
+        expect(await dal.getById(created.memory_item_id, "agent-a")).toBeUndefined();
       } finally {
         await close();
       }
