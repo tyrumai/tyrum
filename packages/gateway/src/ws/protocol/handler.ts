@@ -1318,6 +1318,12 @@ export async function handleClientMessage(
         return errorResponse(msg.request_id, msg.type, "not_found", "subagent not found");
       }
 
+      // Failed/closed subagents are terminal; treat close as idempotent no-op (no lifecycle events).
+      if (closing.status === "failed" || closing.status === "closed") {
+        const result = WsSubagentCloseResult.parse({ subagent: closing });
+        return { request_id: msg.request_id, type: msg.type, ok: true, result };
+      }
+
       broadcastEvent(
         {
           event_id: crypto.randomUUID(),
@@ -1336,17 +1342,31 @@ export async function handleClientMessage(
       });
       const finalized = closed ?? closing;
 
-      broadcastEvent(
-        {
-          event_id: crypto.randomUUID(),
-          type: "subagent.closed",
-          occurred_at: new Date().toISOString(),
-          scope: { kind: "agent", agent_id: finalized.agent_id },
-          payload: { subagent: finalized },
-        },
-        deps,
-        WORKBOARD_WS_AUDIENCE,
-      );
+      if (finalized.status === "closed") {
+        broadcastEvent(
+          {
+            event_id: crypto.randomUUID(),
+            type: "subagent.closed",
+            occurred_at: new Date().toISOString(),
+            scope: { kind: "agent", agent_id: finalized.agent_id },
+            payload: { subagent: finalized },
+          },
+          deps,
+          WORKBOARD_WS_AUDIENCE,
+        );
+      } else if (finalized.status !== closing.status) {
+        broadcastEvent(
+          {
+            event_id: crypto.randomUUID(),
+            type: "subagent.updated",
+            occurred_at: new Date().toISOString(),
+            scope: { kind: "agent", agent_id: finalized.agent_id },
+            payload: { subagent: finalized },
+          },
+          deps,
+          WORKBOARD_WS_AUDIENCE,
+        );
+      }
 
       const result = WsSubagentCloseResult.parse({ subagent: finalized });
       return { request_id: msg.request_id, type: msg.type, ok: true, result };
