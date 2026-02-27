@@ -110,6 +110,7 @@ describe("AgentRuntime (Memory v1 digest injection)", () => {
     const stitched = content.map((part) => part.text).join("\n\n");
 
     expect(stitched).toContain("Memory digest:");
+    expect(stitched).toContain('<data source="memory">');
     expect(stitched).toContain(item.memory_item_id);
     expect(stitched).not.toContain("Long-term memory matches:");
   });

@@ -2415,16 +2415,33 @@ export class AgentRuntime {
             semantic_hit_count: 0,
             structured_item_count: 0,
           })
-        : buildMemoryV1Digest({
-            dal: new MemoryV1Dal(this.opts.container.db),
-            agentId,
-            query: resolved.message,
-            config: ctx.config.memory.v1,
-            semanticSearch: ctx.config.memory.v1.semantic.enabled
-              ? (query, limit) =>
-                  this.semanticSearch(query, limit, ctx.config.model.model, session.session_id)
-              : undefined,
-          });
+        : (async () => {
+            try {
+              return await buildMemoryV1Digest({
+                dal: new MemoryV1Dal(this.opts.container.db),
+                agentId,
+                query: resolved.message,
+                config: ctx.config.memory.v1,
+                semanticSearch: ctx.config.memory.v1.semantic.enabled
+                  ? (query, limit) =>
+                      this.semanticSearch(query, limit, ctx.config.model.model, session.session_id)
+                  : undefined,
+              });
+            } catch (error) {
+              this.opts.container.logger.warn("memory.v1.digest_failed", {
+                session_id: session.session_id,
+                agent_id: agentId,
+                error: error instanceof Error ? error.message : String(error),
+              });
+              return {
+                digest: "Memory digest unavailable.",
+                included_item_ids: [],
+                keyword_hit_count: 0,
+                semantic_hit_count: 0,
+                structured_item_count: 0,
+              };
+            }
+          })();
 
     const [memoryDigestResult, mcpTools] = await Promise.all([
       memoryDigestPromise,
@@ -2495,7 +2512,8 @@ export class AgentRuntime {
     const toolsText = `Available tools:\n${formatToolPrompt(filteredTools)}`;
     const sessionText = `Session context:\n${sessionCtx}`;
     const workFocusText = `Work focus digest:\n${workFocusDigest}`;
-    const memoryText = `Memory digest:\n${memoryDigestResult.digest}`;
+    const memoryTagged = tagContent(memoryDigestResult.digest, "memory", false);
+    const memoryText = `Memory digest:\n${sanitizeForModel(memoryTagged)}`;
 
     const toolSchemaParts = filteredTools.map((t) => {
       const schema = t.inputSchema ?? { type: "object", additionalProperties: true };

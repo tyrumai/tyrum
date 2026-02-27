@@ -248,25 +248,38 @@ export async function buildMemoryV1Digest(params: {
     maxItems: Math.max(1, Math.min(200, maxTotalItems * 2)),
   });
 
-  const keywordHits =
-    config.keyword.enabled && params.query.trim().length > 0
-      ? await params.dal.search(
-          {
-            v: 1,
-            query: params.query,
-            limit: config.keyword.limit,
-            filter: {
-              sensitivities: [...allowSensitivities],
-            },
-          },
-          params.agentId,
-        )
-      : { v: 1 as const, hits: [], next_cursor: undefined };
+  const query = params.query.trim();
+  const keywordHits = await (async () => {
+    if (!config.keyword.enabled || query.length === 0) {
+      return { v: 1 as const, hits: [], next_cursor: undefined };
+    }
 
-  const semanticHits =
-    config.semantic.enabled && params.semanticSearch && params.query.trim().length > 0
-      ? await params.semanticSearch(params.query, config.semantic.limit)
-      : [];
+    try {
+      return await params.dal.search(
+        {
+          v: 1,
+          query,
+          limit: config.keyword.limit,
+          filter: {
+            sensitivities: [...allowSensitivities],
+          },
+        },
+        params.agentId,
+      );
+    } catch {
+      return { v: 1 as const, hits: [], next_cursor: undefined };
+    }
+  })();
+
+  const semanticHits = await (async () => {
+    if (!config.semantic.enabled || !params.semanticSearch || query.length === 0) return [];
+
+    try {
+      return await params.semanticSearch(query, config.semantic.limit);
+    } catch {
+      return [];
+    }
+  })();
 
   const candidates: DigestCandidate[] = [];
 
@@ -335,8 +348,9 @@ export async function buildMemoryV1Digest(params: {
     if (!item) continue;
     if (!sensitivityAllowed(item.sensitivity, allowSensitivities)) continue;
 
-    const remainingTotalChars = maxTotalChars - usedTotalChars;
-    const remainingKindChars = kindBudget.max_chars - kindUsage.chars;
+    const separatorChars = lines.length > 0 ? 1 : 0;
+    const remainingTotalChars = maxTotalChars - usedTotalChars - separatorChars;
+    const remainingKindChars = kindBudget.max_chars - kindUsage.chars - separatorChars;
     const remainingChars = Math.max(0, Math.min(remainingTotalChars, remainingKindChars));
     if (remainingChars === 0) continue;
 
@@ -361,17 +375,17 @@ export async function buildMemoryV1Digest(params: {
         continue;
       }
       lines.push(tightened);
-      kindUsage.chars += tightened.length;
+      kindUsage.chars += separatorChars + tightened.length;
       kindUsage.tokens += tightenedTokens;
       kindUsage.items += 1;
-      usedTotalChars += tightened.length;
+      usedTotalChars += separatorChars + tightened.length;
       usedTotalTokens += tightenedTokens;
     } else {
       lines.push(line);
-      kindUsage.chars += line.length;
+      kindUsage.chars += separatorChars + line.length;
       kindUsage.tokens += tokens;
       kindUsage.items += 1;
-      usedTotalChars += line.length;
+      usedTotalChars += separatorChars + line.length;
       usedTotalTokens += tokens;
     }
 

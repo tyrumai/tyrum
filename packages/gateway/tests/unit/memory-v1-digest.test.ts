@@ -193,4 +193,51 @@ describe("buildMemoryV1Digest", () => {
       await db.close();
     }
   });
+
+  it("is best-effort when keyword search rejects the query", async () => {
+    const db = openTestSqliteDb();
+    try {
+      const dal = new MemoryV1Dal(db);
+      const base = AgentConfig.parse({ model: { model: "openai/gpt-4.1" } }).memory.v1;
+      const config = {
+        ...base,
+        structured: {
+          ...base.structured,
+          fact_keys: ["favorite_color"],
+        },
+      } satisfies typeof base;
+
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-02-27T00:00:00.000Z"));
+      const fact = await dal.create(
+        {
+          kind: "fact",
+          key: "favorite_color",
+          value: "blue",
+          observed_at: "2026-02-27T00:00:00.000Z",
+          confidence: 0.9,
+          tags: [],
+          sensitivity: "private",
+          provenance: { source_kind: "user", refs: [] },
+        },
+        "agent-a",
+      );
+
+      const longQuery = "pizza ".repeat(300);
+      expect(longQuery.length).toBeGreaterThan(1024);
+
+      const res = await buildMemoryV1Digest({
+        dal,
+        agentId: "agent-a",
+        query: longQuery,
+        config,
+      });
+
+      expect(res.digest).toContain(fact.memory_item_id);
+      expect(res.structured_item_count).toBe(1);
+      expect(res.keyword_hit_count).toBe(0);
+    } finally {
+      await db.close();
+    }
+  });
 });
