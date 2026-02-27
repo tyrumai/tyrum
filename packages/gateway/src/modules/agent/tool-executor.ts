@@ -12,6 +12,8 @@ import { sanitizeForModel } from "./sanitizer.js";
 import type { SecretProvider } from "../secret/provider.js";
 import type { SecretResolutionAuditDal } from "../secret/resolution-audit-dal.js";
 import type { RedactionEngine } from "../redaction/engine.js";
+import type { SqlDb } from "../../statestore/types.js";
+import { acquireWorkspaceLease, releaseWorkspaceLease } from "../workspace/lease.js";
 
 const MAX_RESPONSE_BYTES = 32_768;
 const TRUNCATION_MARKER = "...(truncated)";
@@ -282,6 +284,12 @@ export type ToolResultMeta = {
   truncation_marker?: string;
 };
 
+type WorkspaceLeaseConfig = {
+  db: SqlDb;
+  workspaceId: string;
+  ownerPrefix?: string;
+};
+
 export class ToolExecutor {
   constructor(
     private readonly home: string,
@@ -292,7 +300,41 @@ export class ToolExecutor {
     private readonly dnsLookup: DnsLookupFn = defaultDnsLookup,
     private readonly redactionEngine?: RedactionEngine,
     private readonly secretResolutionAuditDal?: SecretResolutionAuditDal,
+    private readonly workspaceLease?: WorkspaceLeaseConfig,
   ) {}
+
+  private workspaceLeaseOwner(toolCallId: string): string {
+    const prefix = this.workspaceLease?.ownerPrefix?.trim() ?? "tool-executor";
+    return `${prefix}:${toolCallId}`;
+  }
+
+  private async withWorkspaceLease<T>(
+    toolCallId: string,
+    opts: { ttlMs: number; waitMs: number },
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const lease = this.workspaceLease;
+    if (!lease) return await fn();
+
+    const owner = this.workspaceLeaseOwner(toolCallId);
+    const acquired = await acquireWorkspaceLease(lease.db, {
+      workspaceId: lease.workspaceId,
+      owner,
+      ttlMs: Math.max(1, Math.floor(opts.ttlMs)),
+      waitMs: Math.max(0, Math.floor(opts.waitMs)),
+    });
+    if (!acquired) {
+      throw new Error("workspace is busy");
+    }
+
+    try {
+      return await fn();
+    } finally {
+      await releaseWorkspaceLease(lease.db, { workspaceId: lease.workspaceId, owner }).catch(() => {
+        // Best-effort: leases expire and can be taken over.
+      });
+    }
+  }
 
   async execute(
     toolId: string,
@@ -423,43 +465,49 @@ export class ToolExecutor {
     }
 
     const safePath = this.assertSandboxed(rawPath);
-    const content = await readFile(safePath, "utf-8");
-    const resolvedHome = resolve(this.home);
-    const relativePath = relative(resolvedHome, safePath);
-    const normalizedPath = relativePath.trim().length > 0 ? relativePath : rawPath;
+    return await this.withWorkspaceLease(
+      toolCallId,
+      { ttlMs: 30_000, waitMs: 30_000 },
+      async () => {
+        const content = await readFile(safePath, "utf-8");
+        const resolvedHome = resolve(this.home);
+        const relativePath = relative(resolvedHome, safePath);
+        const normalizedPath = relativePath.trim().length > 0 ? relativePath : rawPath;
 
-    const selected =
-      offset !== undefined || limit !== undefined
-        ? (() => {
-            const lines = content.split("\n");
-            const start = offset ?? 0;
-            const sliced =
-              limit !== undefined ? lines.slice(start, start + limit) : lines.slice(start);
-            return sliced.join("\n");
-          })()
-        : content;
+        const selected =
+          offset !== undefined || limit !== undefined
+            ? (() => {
+                const lines = content.split("\n");
+                const start = offset ?? 0;
+                const sliced =
+                  limit !== undefined ? lines.slice(start, start + limit) : lines.slice(start);
+                return sliced.join("\n");
+              })()
+            : content;
 
-    const isTruncated = selected.length > MAX_RESPONSE_BYTES;
-    const truncated = isTruncated
-      ? `${selected.slice(0, MAX_RESPONSE_BYTES)}${TRUNCATION_MARKER}`
-      : selected;
+        const isTruncated = selected.length > MAX_RESPONSE_BYTES;
+        const truncated = isTruncated
+          ? `${selected.slice(0, MAX_RESPONSE_BYTES)}${TRUNCATION_MARKER}`
+          : selected;
 
-    const tagged = tagContent(truncated, "tool");
-    return {
-      tool_call_id: toolCallId,
-      output: sanitizeForModel(tagged),
-      provenance: tagged,
-      meta: {
-        kind: "fs.read",
-        path: normalizedPath,
-        offset,
-        limit,
-        raw_chars: content.length,
-        selected_chars: selected.length,
-        truncated: isTruncated,
-        truncation_marker: isTruncated ? TRUNCATION_MARKER : undefined,
+        const tagged = tagContent(truncated, "tool");
+        return {
+          tool_call_id: toolCallId,
+          output: sanitizeForModel(tagged),
+          provenance: tagged,
+          meta: {
+            kind: "fs.read",
+            path: normalizedPath,
+            offset,
+            limit,
+            raw_chars: content.length,
+            selected_chars: selected.length,
+            truncated: isTruncated,
+            truncation_marker: isTruncated ? TRUNCATION_MARKER : undefined,
+          },
+        };
       },
-    };
+    );
   }
 
   private async executeHttpFetch(toolCallId: string, args: unknown): Promise<ToolResult> {
@@ -537,16 +585,22 @@ export class ToolExecutor {
     }
 
     const safePath = this.assertSandboxed(rawPath);
-    await mkdir(dirname(safePath), { recursive: true });
-    await writeFile(safePath, content, "utf-8");
+    return await this.withWorkspaceLease(
+      toolCallId,
+      { ttlMs: 30_000, waitMs: 30_000 },
+      async () => {
+        await mkdir(dirname(safePath), { recursive: true });
+        await writeFile(safePath, content, "utf-8");
 
-    const output = `Wrote ${content.length} bytes to ${safePath}`;
-    const tagged = tagContent(output, "tool");
-    return {
-      tool_call_id: toolCallId,
-      output: sanitizeForModel(tagged),
-      provenance: tagged,
-    };
+        const output = `Wrote ${content.length} bytes to ${safePath}`;
+        const tagged = tagContent(output, "tool");
+        return {
+          tool_call_id: toolCallId,
+          output: sanitizeForModel(tagged),
+          provenance: tagged,
+        };
+      },
+    );
   }
 
   private async executeExec(toolCallId: string, args: unknown): Promise<ToolResult> {
@@ -565,47 +619,55 @@ export class ToolExecutor {
         ? Math.max(1, Math.min(MAX_EXEC_TIMEOUT_MS, Math.floor(timeoutMsRaw)))
         : DEFAULT_EXEC_TIMEOUT_MS;
 
-    const output = await new Promise<string>((resolvePromise) => {
-      const child = spawn("sh", ["-c", command], {
-        cwd: safeCwd,
-        env: sanitizeEnv(),
-        stdio: ["ignore", "pipe", "pipe"],
-      });
+    const output = await this.withWorkspaceLease(
+      toolCallId,
+      {
+        ttlMs: Math.max(30_000, timeoutMs + 10_000),
+        waitMs: timeoutMs,
+      },
+      async () =>
+        await new Promise<string>((resolvePromise) => {
+          const child = spawn("sh", ["-c", command], {
+            cwd: safeCwd,
+            env: sanitizeEnv(),
+            stdio: ["ignore", "pipe", "pipe"],
+          });
 
-      const chunks: Buffer[] = [];
-      let size = 0;
+          const chunks: Buffer[] = [];
+          let size = 0;
 
-      const pushChunk = (data: Buffer) => {
-        if (size >= MAX_RESPONSE_BYTES) return;
-        const remaining = MAX_RESPONSE_BYTES - size;
-        if (data.length <= remaining) {
-          chunks.push(data);
-          size += data.length;
-        } else {
-          chunks.push(data.subarray(0, remaining));
-          size += remaining;
-        }
-      };
+          const pushChunk = (data: Buffer) => {
+            if (size >= MAX_RESPONSE_BYTES) return;
+            const remaining = MAX_RESPONSE_BYTES - size;
+            if (data.length <= remaining) {
+              chunks.push(data);
+              size += data.length;
+            } else {
+              chunks.push(data.subarray(0, remaining));
+              size += remaining;
+            }
+          };
 
-      child.stdout.on("data", (data: Buffer) => pushChunk(data));
-      child.stderr.on("data", (data: Buffer) => pushChunk(data));
+          child.stdout.on("data", (data: Buffer) => pushChunk(data));
+          child.stderr.on("data", (data: Buffer) => pushChunk(data));
 
-      const timer = setTimeout(() => {
-        child.kill("SIGTERM");
-      }, timeoutMs);
+          const timer = setTimeout(() => {
+            child.kill("SIGTERM");
+          }, timeoutMs);
 
-      child.on("close", (code) => {
-        clearTimeout(timer);
-        const combined = Buffer.concat(chunks).toString("utf-8");
-        const exitLine = `\n[exit code: ${code ?? "unknown"}]`;
-        resolvePromise(combined + exitLine);
-      });
+          child.on("close", (code) => {
+            clearTimeout(timer);
+            const combined = Buffer.concat(chunks).toString("utf-8");
+            const exitLine = `\n[exit code: ${code ?? "unknown"}]`;
+            resolvePromise(combined + exitLine);
+          });
 
-      child.on("error", (err) => {
-        clearTimeout(timer);
-        resolvePromise(`Error spawning command: ${err.message}`);
-      });
-    });
+          child.on("error", (err) => {
+            clearTimeout(timer);
+            resolvePromise(`Error spawning command: ${err.message}`);
+          });
+        }),
+    );
 
     const truncated =
       output.length > MAX_RESPONSE_BYTES
