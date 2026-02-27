@@ -2008,17 +2008,8 @@ export async function handleClientMessage(
 
         const payload = parsedReq.data.payload;
         const limit = Math.max(1, Math.min(500, payload.limit ?? 50));
-        const res = await deps.memoryV1Dal.search({
-          query: payload.query,
-          filter: payload.filter,
-          limit,
-          cursor: payload.cursor,
-        });
-        const result = WsMemorySearchResult.parse({
-          v: 1,
-          hits: res.hits,
-          ...(res.next_cursor ? { next_cursor: res.next_cursor } : {}),
-        });
+        const res = await deps.memoryV1Dal.search({ ...payload, limit });
+        const result = WsMemorySearchResult.parse(res);
         return { request_id: msg.request_id, type: msg.type, ok: true, result };
       }
 
@@ -2285,6 +2276,13 @@ export async function handleClientMessage(
       return { request_id: msg.request_id, type: msg.type, ok: true, result };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      const errorCode =
+        err &&
+        typeof err === "object" &&
+        "code" in err &&
+        typeof (err as { code?: unknown }).code === "string"
+          ? (err as { code: string }).code
+          : undefined;
       if (message === "memory item not found") {
         return errorResponse(msg.request_id, msg.type, "not_found", "memory item not found");
       }
@@ -2292,6 +2290,9 @@ export async function handleClientMessage(
         return errorResponse(msg.request_id, msg.type, "invalid_request", "invalid cursor");
       }
       if (message.startsWith("incompatible patch fields for kind=")) {
+        return errorResponse(msg.request_id, msg.type, "invalid_request", message);
+      }
+      if (errorCode === "invalid_request") {
         return errorResponse(msg.request_id, msg.type, "invalid_request", message);
       }
       return errorResponse(msg.request_id, msg.type, "internal_error", message);

@@ -619,4 +619,34 @@ describe("WS memory v1 handlers", () => {
       (updateRes as unknown as { error: { code: string; message: string } }).error.message,
     ).toContain("incompatible patch fields");
   });
+
+  it("classifies memory.search guardrail failures as invalid_request", async () => {
+    const cm = new ConnectionManager();
+    const { id: requesterId } = makeClient(cm, { role: "client" });
+
+    const deps = makeDeps(cm, { db } as unknown as Partial<ProtocolDeps>);
+    (deps as unknown as { memoryV1Dal: MemoryV1Dal }).memoryV1Dal = memoryV1Dal;
+
+    const requester = cm.getClient(requesterId)!;
+    const tooLongQuery = "x".repeat(1025);
+
+    const res = await handleClientMessage(
+      requester,
+      JSON.stringify({
+        request_id: "r-search-guardrail-1",
+        type: "memory.search",
+        payload: { v: 1, query: tooLongQuery, limit: 20 },
+      }),
+      deps,
+    );
+
+    expect(res).toBeDefined();
+    expect((res as unknown as { ok: boolean }).ok).toBe(false);
+    expect((res as unknown as { error: { code: string; message: string } }).error.code).toBe(
+      "invalid_request",
+    );
+    expect(
+      (res as unknown as { error: { code: string; message: string } }).error.message,
+    ).toContain("query too long");
+  });
 });

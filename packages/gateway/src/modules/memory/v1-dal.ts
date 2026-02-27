@@ -8,11 +8,13 @@ import type {
   MemoryItemKind,
   MemoryItemPatch,
   MemoryProvenance,
-  MemorySearchHit,
   MemorySensitivity,
+  MemorySearchRequest,
+  MemorySearchResponse,
   MemoryTombstone,
 } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
+import { irToPlainText, markdownToIr } from "../markdown/ir.js";
 
 interface RawMemoryItemRow {
   memory_item_id: string;
@@ -56,6 +58,24 @@ interface RawTombstoneRow {
   reason: string | null;
 }
 
+interface RawSearchRow {
+  memory_item_id: string;
+  kind: MemoryItemKind;
+  key: string | null;
+  title: string | null;
+  body_md: string | null;
+  summary_md: string | null;
+  created_at: string | Date;
+  source_kind: MemoryProvenance["source_kind"];
+  channel: string | null;
+  thread_id: string | null;
+  session_id: string | null;
+  message_id: string | null;
+  tool_call_id: string | null;
+  refs_json: string;
+  metadata_json: string | null;
+}
+
 function normalizeTime(value: string | Date): string {
   return value instanceof Date ? value.toISOString() : value;
 }
@@ -64,8 +84,10 @@ function parseJson<T>(raw: string): T {
   return JSON.parse(raw) as T;
 }
 
-function escapeLikePattern(value: string): string {
-  return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
+function invalidRequestError(message: string): Error & { code: "invalid_request" } {
+  const err = new Error(message) as Error & { code: "invalid_request" };
+  err.code = "invalid_request";
+  return err;
 }
 
 type Cursor = { sort: string; id: string };
@@ -105,6 +127,7 @@ export function buildMemoryV1ItemQueryParts(params: {
   cursor?: string;
   extraWhere?: string[];
   extraValues?: readonly unknown[];
+  alwaysJoinProvenance?: boolean;
 }): { from: string; where: string[]; values: unknown[]; limit: number } {
   const where: string[] = ["i.agent_id = ?"];
   const values: unknown[] = [params.agent];
@@ -112,53 +135,83 @@ export function buildMemoryV1ItemQueryParts(params: {
   const filter = params.filter;
 
   if (filter?.kinds && filter.kinds.length > 0) {
-    where.push(`i.kind IN (${filter.kinds.map(() => "?").join(", ")})`);
-    values.push(...filter.kinds);
+    const kinds = [...new Set(filter.kinds)];
+    where.push(`i.kind IN (${kinds.map(() => "?").join(", ")})`);
+    values.push(...kinds);
+  }
+
+  if (filter?.sensitivities && filter.sensitivities.length > 0) {
+    const sensitivities = [...new Set(filter.sensitivities)];
+    where.push(`i.sensitivity IN (${sensitivities.map(() => "?").join(", ")})`);
+    values.push(...sensitivities);
   }
 
   if (filter?.keys && filter.keys.length > 0) {
-    where.push(`i.key IN (${filter.keys.map(() => "?").join(", ")})`);
-    values.push(...filter.keys);
+    const keys = uniqSortedStrings(filter.keys);
+    if (keys.length > 0) {
+      where.push(`i.key IN (${keys.map(() => "?").join(", ")})`);
+      values.push(...keys);
+    }
   }
 
   if (filter?.tags && filter.tags.length > 0) {
-    where.push(
-      `EXISTS (
-         SELECT 1
-         FROM memory_item_tags t
-         WHERE t.agent_id = i.agent_id
-           AND t.memory_item_id = i.memory_item_id
-           AND t.tag IN (${filter.tags.map(() => "?").join(", ")})
-       )`,
-    );
-    values.push(...filter.tags);
+    const tags = uniqSortedStrings(filter.tags);
+    if (tags.length > 0) {
+      where.push(
+        `i.memory_item_id IN (
+           SELECT t.memory_item_id
+           FROM memory_item_tags t
+           WHERE t.agent_id = ?
+             AND t.tag IN (${tags.map(() => "?").join(", ")})
+         )`,
+      );
+      values.push(params.agent, ...tags);
+    }
   }
 
   const provenanceFilter = filter?.provenance;
-  const joinProvenance = Boolean(
-    provenanceFilter &&
-    ((provenanceFilter.source_kinds && provenanceFilter.source_kinds.length > 0) ||
-      (provenanceFilter.channels && provenanceFilter.channels.length > 0) ||
-      (provenanceFilter.thread_ids && provenanceFilter.thread_ids.length > 0) ||
-      (provenanceFilter.session_ids && provenanceFilter.session_ids.length > 0)),
-  );
+  const provenanceSourceKinds =
+    provenanceFilter?.source_kinds && provenanceFilter.source_kinds.length > 0
+      ? [...new Set(provenanceFilter.source_kinds)]
+      : [];
+  const provenanceChannels =
+    provenanceFilter?.channels && provenanceFilter.channels.length > 0
+      ? uniqSortedStrings(provenanceFilter.channels)
+      : [];
+  const provenanceThreadIds =
+    provenanceFilter?.thread_ids && provenanceFilter.thread_ids.length > 0
+      ? uniqSortedStrings(provenanceFilter.thread_ids)
+      : [];
+  const provenanceSessionIds =
+    provenanceFilter?.session_ids && provenanceFilter.session_ids.length > 0
+      ? uniqSortedStrings(provenanceFilter.session_ids)
+      : [];
+  const joinProvenance =
+    params.alwaysJoinProvenance === true ||
+    Boolean(
+      provenanceFilter &&
+      (provenanceSourceKinds.length > 0 ||
+        provenanceChannels.length > 0 ||
+        provenanceThreadIds.length > 0 ||
+        provenanceSessionIds.length > 0),
+    );
 
   if (joinProvenance) {
-    if (provenanceFilter?.source_kinds && provenanceFilter.source_kinds.length > 0) {
-      where.push(`p.source_kind IN (${provenanceFilter.source_kinds.map(() => "?").join(", ")})`);
-      values.push(...provenanceFilter.source_kinds);
+    if (provenanceSourceKinds.length > 0) {
+      where.push(`p.source_kind IN (${provenanceSourceKinds.map(() => "?").join(", ")})`);
+      values.push(...provenanceSourceKinds);
     }
-    if (provenanceFilter?.channels && provenanceFilter.channels.length > 0) {
-      where.push(`p.channel IN (${provenanceFilter.channels.map(() => "?").join(", ")})`);
-      values.push(...provenanceFilter.channels);
+    if (provenanceChannels.length > 0) {
+      where.push(`p.channel IN (${provenanceChannels.map(() => "?").join(", ")})`);
+      values.push(...provenanceChannels);
     }
-    if (provenanceFilter?.thread_ids && provenanceFilter.thread_ids.length > 0) {
-      where.push(`p.thread_id IN (${provenanceFilter.thread_ids.map(() => "?").join(", ")})`);
-      values.push(...provenanceFilter.thread_ids);
+    if (provenanceThreadIds.length > 0) {
+      where.push(`p.thread_id IN (${provenanceThreadIds.map(() => "?").join(", ")})`);
+      values.push(...provenanceThreadIds);
     }
-    if (provenanceFilter?.session_ids && provenanceFilter.session_ids.length > 0) {
-      where.push(`p.session_id IN (${provenanceFilter.session_ids.map(() => "?").join(", ")})`);
-      values.push(...provenanceFilter.session_ids);
+    if (provenanceSessionIds.length > 0) {
+      where.push(`p.session_id IN (${provenanceSessionIds.map(() => "?").join(", ")})`);
+      values.push(...provenanceSessionIds);
     }
   }
 
@@ -184,6 +237,112 @@ export function buildMemoryV1ItemQueryParts(params: {
     : "memory_items i";
 
   return { from, where, values, limit };
+}
+
+function collapseWhitespace(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function sanitizeSnippet(value: string): string {
+  let sanitized = value;
+
+  sanitized = sanitized.replace(/\b(system|developer|assistant)\s*:/gi, "[role-ref] $1:");
+  sanitized = sanitized.replace(
+    /ignore\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?)/gi,
+    "[blocked-override]",
+  );
+  sanitized = sanitized.replace(
+    /disregard\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?)/gi,
+    "[blocked-override]",
+  );
+  sanitized = sanitized.replace(
+    /forget\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?)/gi,
+    "[blocked-override]",
+  );
+  sanitized = sanitized.replace(/you\s+are\s+now\b/gi, "[blocked-reidentity]");
+  sanitized = sanitized.replace(
+    /\b(new|updated|revised|override)\s+instructions?\s*:/gi,
+    "[blocked-header]",
+  );
+  sanitized = sanitized.replace(
+    /(do\s+not|don'?t|stop)\s+follow(ing)?\s+(the\s+)?(system|previous|original)/gi,
+    "[blocked-directive]",
+  );
+  sanitized = sanitized.replace(
+    /\b(show|print|display|output|reveal|repeat)\s+(your|the)\s+(system\s+)?(prompt|instructions?|rules?)\b/gi,
+    "[blocked-extraction]",
+  );
+
+  return sanitized;
+}
+
+function clampSnippet(value: string, maxChars: number): string {
+  const max = Math.max(1, Math.floor(maxChars));
+  if (value.length <= max) return value;
+  if (max === 1) return "…";
+  return `${value.slice(0, max - 1)}…`;
+}
+
+function buildSnippet(
+  text: string,
+  terms: readonly string[],
+  maxChars: number,
+): string | undefined {
+  const cleaned = collapseWhitespace(text);
+  if (cleaned.length === 0) return undefined;
+
+  const max = Math.max(1, Math.floor(maxChars));
+  if (cleaned.length <= max) {
+    return clampSnippet(sanitizeSnippet(cleaned), max);
+  }
+
+  if (terms.length === 0) {
+    return clampSnippet(sanitizeSnippet(`${cleaned.slice(0, max - 1)}…`), max);
+  }
+
+  const lower = cleaned.toLowerCase();
+  let bestIdx = -1;
+  for (const term of terms) {
+    const idx = lower.indexOf(term.toLowerCase());
+    if (idx >= 0 && (bestIdx < 0 || idx < bestIdx)) {
+      bestIdx = idx;
+    }
+  }
+
+  const focus = bestIdx >= 0 ? bestIdx : 0;
+  let window = max;
+  let start = 0;
+  let end = 0;
+  let needsLeading = false;
+  let needsTrailing = false;
+  for (let i = 0; i < 3; i += 1) {
+    start = Math.max(0, focus - Math.floor(window / 3));
+    end = Math.min(cleaned.length, start + window);
+    if (end === cleaned.length) {
+      start = Math.max(0, end - window);
+    }
+
+    needsLeading = start > 0;
+    needsTrailing = end < cleaned.length;
+
+    const ellipses = (needsLeading ? 1 : 0) + (needsTrailing ? 1 : 0);
+    const nextWindow = Math.max(1, max - ellipses);
+    if (nextWindow === window) break;
+    window = nextWindow;
+  }
+
+  let snippet = cleaned.slice(start, end);
+  if (needsLeading) snippet = `…${snippet}`;
+  if (needsTrailing) snippet = `${snippet}…`;
+  return clampSnippet(sanitizeSnippet(snippet), max);
+}
+
+function markdownToPlainText(value: string): string {
+  try {
+    return irToPlainText(markdownToIr(value));
+  } catch {
+    return value;
+  }
 }
 
 function assertPatchCompatible(kind: MemoryItemKind, patch: MemoryItemPatch): void {
@@ -346,59 +505,6 @@ export class MemoryV1Dal {
         : undefined;
 
     return { items, next_cursor };
-  }
-
-  async search(params: {
-    query: string;
-    filter?: MemoryItemFilter;
-    limit?: number;
-    cursor?: string;
-    agentId?: string;
-  }): Promise<{ hits: MemorySearchHit[]; next_cursor?: string }> {
-    const agent = this.normalizeAgentId(params.agentId);
-
-    const needle = params.query.trim().toLowerCase();
-    const pattern = `%${escapeLikePattern(needle)}%`;
-    const { from, where, values, limit } = buildMemoryV1ItemQueryParts({
-      agent,
-      filter: params.filter,
-      limit: params.limit,
-      cursor: params.cursor,
-      extraWhere: [
-        `(LOWER(COALESCE(i.key, '')) LIKE ? ESCAPE '\\'
-          OR LOWER(COALESCE(i.title, '')) LIKE ? ESCAPE '\\'
-          OR LOWER(COALESCE(i.body_md, '')) LIKE ? ESCAPE '\\'
-          OR LOWER(COALESCE(i.summary_md, '')) LIKE ? ESCAPE '\\')`,
-      ],
-      extraValues: [pattern, pattern, pattern, pattern],
-    });
-
-    const rows = await this.db.all<{
-      memory_item_id: string;
-      kind: MemoryItemKind;
-      created_at: string | Date;
-    }>(
-      `SELECT i.memory_item_id AS memory_item_id, i.kind AS kind, i.created_at AS created_at
-       FROM ${from}
-       WHERE ${where.join(" AND ")}
-       ORDER BY i.created_at DESC, i.memory_item_id DESC
-       LIMIT ?`,
-      [...values, limit],
-    );
-
-    const hits: MemorySearchHit[] = rows.map((r) => ({
-      memory_item_id: r.memory_item_id,
-      kind: r.kind,
-      score: 1,
-    }));
-
-    const last = rows.at(-1);
-    const next_cursor =
-      rows.length === limit && last
-        ? encodeCursor({ sort: normalizeTime(last.created_at), id: last.memory_item_id })
-        : undefined;
-
-    return { hits, next_cursor };
   }
 
   async forget(params: {
@@ -880,6 +986,238 @@ export class MemoryV1Dal {
     const updated = await this.getById(memoryItemId, agent);
     if (!updated) throw new Error("failed to read updated memory item");
     return updated;
+  }
+
+  async search(input: MemorySearchRequest, agentId?: string): Promise<MemorySearchResponse> {
+    const agent = this.normalizeAgentId(agentId);
+
+    const query = input.query.trim();
+    if (query.length === 0) {
+      return { v: 1, hits: [], next_cursor: undefined };
+    }
+
+    const MAX_QUERY_CHARS = 1024;
+    const MAX_TERMS = 12;
+    const MAX_TERM_CHARS = 64;
+    const MAX_FILTER_KEYS = 50;
+    const MAX_FILTER_TAGS = 20;
+    const MAX_FILTER_PROVENANCE_VALUES = 20;
+    const MAX_CANDIDATE_LIMIT = 1000;
+    const MAX_SQL_PARAMS = 900;
+
+    if (query !== "*" && query.length > MAX_QUERY_CHARS) {
+      throw invalidRequestError(`query too long (max=${MAX_QUERY_CHARS})`);
+    }
+
+    const rawTerms =
+      query === "*"
+        ? []
+        : query
+            .split(/\s+/g)
+            .map((term) => term.trim())
+            .filter(Boolean);
+    if (rawTerms.some((term) => term.length > MAX_TERM_CHARS)) {
+      throw invalidRequestError(`query term too long (max=${MAX_TERM_CHARS})`);
+    }
+
+    const terms = uniqSortedStrings(rawTerms.map((term) => term.toLowerCase()));
+
+    if (terms.length > MAX_TERMS) {
+      throw invalidRequestError(`too many query terms (max=${MAX_TERMS})`);
+    }
+
+    const limit = Math.max(1, Math.min(500, input.limit ?? 20));
+    const candidateLimit = Math.min(Math.max(limit * 20, 200), MAX_CANDIDATE_LIMIT);
+
+    const filter = input.filter;
+    let normalizedFilter: MemoryItemFilter | undefined;
+    if (filter) {
+      const next: MemoryItemFilter = {};
+      if (filter.kinds && filter.kinds.length > 0) next.kinds = [...new Set(filter.kinds)];
+      if (filter.sensitivities && filter.sensitivities.length > 0) {
+        next.sensitivities = [...new Set(filter.sensitivities)];
+      }
+
+      if (filter.keys && filter.keys.length > 0) {
+        const keys = uniqSortedStrings(filter.keys);
+        if (keys.length > MAX_FILTER_KEYS) {
+          throw invalidRequestError(`too many filter.keys (max=${MAX_FILTER_KEYS})`);
+        }
+        if (keys.length > 0) next.keys = keys;
+      }
+
+      if (filter.tags && filter.tags.length > 0) {
+        const tags = uniqSortedStrings(filter.tags);
+        if (tags.length > MAX_FILTER_TAGS) {
+          throw invalidRequestError(`too many filter.tags (max=${MAX_FILTER_TAGS})`);
+        }
+        if (tags.length > 0) next.tags = tags;
+      }
+
+      if (filter.provenance) {
+        const provenance: NonNullable<MemoryItemFilter["provenance"]> = {};
+        if (filter.provenance.source_kinds && filter.provenance.source_kinds.length > 0) {
+          provenance.source_kinds = [...new Set(filter.provenance.source_kinds)];
+        }
+        if (filter.provenance.channels && filter.provenance.channels.length > 0) {
+          const channels = uniqSortedStrings(filter.provenance.channels);
+          if (channels.length > MAX_FILTER_PROVENANCE_VALUES) {
+            throw invalidRequestError(
+              `too many filter.provenance.channels (max=${MAX_FILTER_PROVENANCE_VALUES})`,
+            );
+          }
+          if (channels.length > 0) provenance.channels = channels;
+        }
+        if (filter.provenance.thread_ids && filter.provenance.thread_ids.length > 0) {
+          const threadIds = uniqSortedStrings(filter.provenance.thread_ids);
+          if (threadIds.length > MAX_FILTER_PROVENANCE_VALUES) {
+            throw invalidRequestError(
+              `too many filter.provenance.thread_ids (max=${MAX_FILTER_PROVENANCE_VALUES})`,
+            );
+          }
+          if (threadIds.length > 0) provenance.thread_ids = threadIds;
+        }
+        if (filter.provenance.session_ids && filter.provenance.session_ids.length > 0) {
+          const sessionIds = uniqSortedStrings(filter.provenance.session_ids);
+          if (sessionIds.length > MAX_FILTER_PROVENANCE_VALUES) {
+            throw invalidRequestError(
+              `too many filter.provenance.session_ids (max=${MAX_FILTER_PROVENANCE_VALUES})`,
+            );
+          }
+          if (sessionIds.length > 0) provenance.session_ids = sessionIds;
+        }
+        if (Object.keys(provenance).length > 0) next.provenance = provenance;
+      }
+
+      if (Object.keys(next).length > 0) normalizedFilter = next;
+    }
+
+    const queryParts = buildMemoryV1ItemQueryParts({
+      agent,
+      filter: normalizedFilter,
+      alwaysJoinProvenance: true,
+    });
+    const clauses: string[] = [...queryParts.where];
+    const params: unknown[] = [...queryParts.values];
+
+    if (terms.length > 0) {
+      const contains =
+        this.db.kind === "sqlite"
+          ? (haystack: string): string => `instr(${haystack}, ?) > 0`
+          : (haystack: string): string => `strpos(${haystack}, ?) > 0`;
+      const termClauses: string[] = [];
+      for (const term of terms) {
+        termClauses.push(
+          `(
+            (i.title IS NOT NULL AND ${contains("LOWER(i.title)")})
+            OR (i.body_md IS NOT NULL AND ${contains("LOWER(i.body_md)")})
+            OR (i.summary_md IS NOT NULL AND ${contains("LOWER(i.summary_md)")})
+            OR (i.key IS NOT NULL AND ${contains("LOWER(i.key)")})
+          )`,
+        );
+        params.push(term, term, term, term);
+      }
+
+      clauses.push(`(${termClauses.join("\n            OR ")})`);
+    }
+
+    const totalParams = params.length + 1; // include LIMIT
+    if (totalParams > MAX_SQL_PARAMS) {
+      throw invalidRequestError(
+        `search too complex (params=${totalParams}, max=${MAX_SQL_PARAMS})`,
+      );
+    }
+
+    const rows = await this.db.all<RawSearchRow>(
+      `SELECT
+         i.memory_item_id,
+         i.kind,
+         i.key,
+         i.title,
+         i.body_md,
+         i.summary_md,
+         i.created_at,
+         p.source_kind,
+         p.channel,
+         p.thread_id,
+         p.session_id,
+         p.message_id,
+         p.tool_call_id,
+         p.refs_json,
+         p.metadata_json
+       FROM ${queryParts.from}
+       WHERE ${clauses.join("\n         AND ")}
+       ORDER BY i.created_at DESC
+       LIMIT ?`,
+      [...params, candidateLimit],
+    );
+
+    const scored = rows.map((row) => {
+      const provenance: MemoryProvenance = {
+        source_kind: row.source_kind,
+        ...(row.channel ? { channel: row.channel } : {}),
+        ...(row.thread_id ? { thread_id: row.thread_id } : {}),
+        ...(row.session_id ? { session_id: row.session_id } : {}),
+        ...(row.message_id ? { message_id: row.message_id } : {}),
+        ...(row.tool_call_id ? { tool_call_id: row.tool_call_id } : {}),
+        refs: parseJson<string[]>(row.refs_json),
+        ...(row.metadata_json ? { metadata: parseJson<unknown>(row.metadata_json) } : {}),
+      };
+
+      const title = row.title ?? "";
+      const key = row.key ?? "";
+      const body = row.body_md ? markdownToPlainText(row.body_md) : "";
+      const summary = row.summary_md ? markdownToPlainText(row.summary_md) : "";
+
+      const titleLower = title.toLowerCase();
+      const keyLower = key.toLowerCase();
+      const bodyLower = body.toLowerCase();
+      const summaryLower = summary.toLowerCase();
+
+      let score = 0;
+      for (const term of terms) {
+        if (titleLower.includes(term)) score += 3;
+        if (keyLower.includes(term)) score += 2;
+        if (summaryLower.includes(term)) score += 2;
+        if (bodyLower.includes(term)) score += 1;
+      }
+
+      const snippetSource =
+        terms.length > 0 && titleLower && terms.some((t) => titleLower.includes(t))
+          ? title
+          : terms.length > 0 && bodyLower && terms.some((t) => bodyLower.includes(t))
+            ? body
+            : terms.length > 0 && summaryLower && terms.some((t) => summaryLower.includes(t))
+              ? summary
+              : key.length > 0
+                ? key
+                : title.length > 0
+                  ? title
+                  : body.length > 0
+                    ? body
+                    : summary;
+
+      const snippet =
+        snippetSource.length > 0 ? buildSnippet(snippetSource, terms, 240) : undefined;
+
+      return {
+        memory_item_id: row.memory_item_id,
+        kind: row.kind,
+        score: Math.max(0, score),
+        ...(snippet ? { snippet } : {}),
+        provenance,
+        _created_at: normalizeTime(row.created_at),
+      };
+    });
+
+    scored.sort((a, b) => {
+      if (a.score !== b.score) return b.score - a.score;
+      if (a._created_at !== b._created_at) return b._created_at.localeCompare(a._created_at);
+      return a.memory_item_id.localeCompare(b.memory_item_id);
+    });
+
+    const hits = scored.slice(0, limit).map(({ _created_at, ...hit }) => hit);
+    return { v: 1, hits, next_cursor: undefined };
   }
 
   async delete(
