@@ -150,7 +150,8 @@ function createWindow(): void {
   mainWindowReadyToShow = false;
   mainWindowPendingFocus = false;
 
-  if (persistedState?.isMaximized) {
+  let lastKnownIsMaximized = persistedState?.isMaximized ?? false;
+  if (lastKnownIsMaximized) {
     window.maximize();
   }
 
@@ -162,20 +163,32 @@ function createWindow(): void {
 
     windowStateSaveTimer = setTimeout(() => {
       windowStateSaveTimer = null;
-      saveWindowState(userDataPath, captureWindowState(window));
+      saveWindowState(
+        userDataPath,
+        captureWindowState(window, { isMaximized: lastKnownIsMaximized }),
+      );
     }, 500);
   };
 
   window.on("move", scheduleWindowStateSave);
   window.on("resize", scheduleWindowStateSave);
-  window.on("maximize", scheduleWindowStateSave);
-  window.on("unmaximize", scheduleWindowStateSave);
+  window.on("maximize", () => {
+    lastKnownIsMaximized = true;
+    scheduleWindowStateSave();
+  });
+  window.on("unmaximize", () => {
+    lastKnownIsMaximized = false;
+    scheduleWindowStateSave();
+  });
   window.on("close", () => {
     if (windowStateSaveTimer) {
       clearTimeout(windowStateSaveTimer);
       windowStateSaveTimer = null;
     }
-    saveWindowState(userDataPath, captureWindowState(window));
+    saveWindowState(
+      userDataPath,
+      captureWindowState(window, { isMaximized: lastKnownIsMaximized }),
+    );
   });
 
   window.once("ready-to-show", () => {

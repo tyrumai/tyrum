@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { ensureVisibleBounds } from "../src/main/window-state.js";
+import { describe, expect, it, vi } from "vitest";
+import { captureWindowState, ensureVisibleBounds } from "../src/main/window-state.js";
 
 describe("window state visibility", () => {
   const primaryDisplay = { x: 0, y: 0, width: 1920, height: 1080 };
@@ -32,5 +32,25 @@ describe("window state visibility", () => {
     const bounds = { x: -2500, y: -100, width: 800, height: 600 };
 
     expect(ensureVisibleBounds(bounds, [primaryDisplay])).toEqual({ ...bounds, x: 0, y: 0 });
+  });
+});
+
+describe("window state capture", () => {
+  it("captures normal bounds when a window is minimized", () => {
+    const getBounds = vi.fn(() => ({ x: -32000, y: -32000, width: 800, height: 600 }));
+    const getNormalBounds = vi.fn(() => ({ x: 100, y: 120, width: 900, height: 700 }));
+
+    const window = {
+      isMaximized: vi.fn(() => false),
+      getBounds,
+      getNormalBounds,
+    };
+
+    expect(captureWindowState(window as never)).toEqual({
+      bounds: { x: 100, y: 120, width: 900, height: 700 },
+      isMaximized: false,
+    });
+    expect(getNormalBounds).toHaveBeenCalledTimes(1);
+    expect(getBounds).not.toHaveBeenCalled();
   });
 });

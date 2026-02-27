@@ -91,9 +91,12 @@ export function saveWindowState(userDataPath: string, state: WindowState): void 
   }
 }
 
-export function captureWindowState(window: BrowserWindow): WindowState {
-  const isMaximized = window.isMaximized();
-  const bounds = isMaximized ? window.getNormalBounds() : window.getBounds();
+export function captureWindowState(
+  window: BrowserWindow,
+  options?: { isMaximized?: boolean },
+): WindowState {
+  const isMaximized = options?.isMaximized ?? window.isMaximized();
+  const bounds = window.getNormalBounds();
   return {
     bounds: { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height },
     isMaximized,
