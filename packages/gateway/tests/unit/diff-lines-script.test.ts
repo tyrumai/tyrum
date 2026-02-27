@@ -66,3 +66,70 @@ test("diff-lines skips non-coverable changed lines when file has no coverage ent
     rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+test("diff-lines does not treat generator method declarations as comment lines", () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), "tyrum-diff-lines-"));
+  try {
+    runGit(tmp, ["init"]);
+    runGit(tmp, ["config", "user.email", "test@example.com"]);
+    runGit(tmp, ["config", "user.name", "Test User"]);
+
+    mkdirSync(path.join(tmp, "packages/foo/src"), { recursive: true });
+    writeFileSync(
+      path.join(tmp, "packages/foo/src/gen.ts"),
+      ["export class Foo {", "}", ""].join("\n"),
+      "utf8",
+    );
+    runGit(tmp, ["add", "."]);
+    runGit(tmp, ["commit", "-m", "base"]);
+    const base = runGit(tmp, ["rev-parse", "HEAD"]);
+
+    writeFileSync(
+      path.join(tmp, "packages/foo/src/gen.ts"),
+      ["export class Foo {", "  *gen() { return 1; }", "}", ""].join("\n"),
+      "utf8",
+    );
+    runGit(tmp, ["add", "."]);
+    runGit(tmp, ["commit", "-m", "add generator"]);
+
+    const absPath = path.resolve(tmp, "packages/foo/src/gen.ts").replaceAll("\\", "/");
+    mkdirSync(path.join(tmp, "coverage"), { recursive: true });
+    writeFileSync(
+      path.join(tmp, "coverage/coverage-final.json"),
+      JSON.stringify(
+        {
+          [absPath]: {
+            statementMap: {
+              "0": { start: { line: 2, column: 0 }, end: { line: 2, column: 1 } },
+            },
+            s: { "0": 0 },
+          },
+        },
+        null,
+        2,
+      ) + "\n",
+      "utf8",
+    );
+
+    const scriptPath = fileURLToPath(
+      new URL("../../../../scripts/coverage/diff-lines.mjs", import.meta.url),
+    );
+
+    const out = runNode(tmp, [
+      scriptPath,
+      "--base",
+      base,
+      "--min",
+      "0",
+      "--coverage",
+      "coverage/coverage-final.json",
+    ]);
+
+    const match = out.match(/\((\d+)\/(\d+)\)/);
+    expect(match).not.toBeNull();
+    const total = Number.parseInt(match?.[2] ?? "NaN", 10);
+    expect(total).toBe(1);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});

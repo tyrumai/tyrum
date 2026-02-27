@@ -138,8 +138,9 @@ function shouldIgnoreChangedLine(text) {
   if (t.length === 0) return true;
   if (t.startsWith("//")) return true;
   if (t.startsWith("/*")) return true;
-  if (t.startsWith("*")) return true;
   if (t.startsWith("*/")) return true;
+  if (t === "*") return true;
+  if (t.startsWith("* ") || t.startsWith("*\t")) return true;
   return false;
 }
 
