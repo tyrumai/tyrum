@@ -24,6 +24,7 @@ class FakeWsClient implements OperatorWsClient {
   approvalResolve = vi.fn(async () => {
     throw new Error("not implemented");
   });
+  commandExecute = vi.fn(async () => ({}));
 
   private readonly handlers = new Map<string, Set<Handler>>();
 
@@ -1337,6 +1338,114 @@ describe("operator-ui", () => {
     });
 
     expect(container.querySelector('[data-testid="admin-mode-banner"]')).toBeNull();
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
+  it("gates an admin-only Settings action behind Admin Mode", async () => {
+    const issuedAt = "2026-02-27T00:00:00.000Z";
+    const expiresAt = "2026-02-27T00:10:00.000Z";
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(issuedAt));
+
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      expect(init?.method).toBe("POST");
+      expect(headers.get("authorization")).toBe("Bearer admin-token");
+
+      return new Response(
+        JSON.stringify({
+          token_kind: "device",
+          token: "elevated-device-token",
+          token_id: "token-1",
+          device_id: "operator-ui",
+          role: "client",
+          scopes: ["operator.admin"],
+          issued_at: issuedAt,
+          expires_at: expiresAt,
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("baseline"),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode: "web" }));
+    });
+
+    const settingsLink = container.querySelector<HTMLButtonElement>('[data-testid="nav-settings"]');
+    expect(settingsLink).not.toBeNull();
+
+    act(() => {
+      settingsLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.querySelector('[data-testid="settings-admin-command-execute"]')).toBeNull();
+    expect(container.textContent).toContain("Enter Admin Mode to continue");
+
+    const enterButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-mode-enter"]',
+    );
+    expect(enterButton).not.toBeNull();
+
+    act(() => {
+      enterButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const tokenField = container.querySelector<HTMLInputElement>(
+      '[data-testid="admin-mode-token"]',
+    );
+    expect(tokenField).not.toBeNull();
+    act(() => {
+      tokenField!.value = "admin-token";
+    });
+
+    const confirmCheckbox = container.querySelector<HTMLInputElement>(
+      '[data-testid="admin-mode-confirm"]',
+    );
+    expect(confirmCheckbox).not.toBeNull();
+    act(() => {
+      confirmCheckbox!.checked = true;
+      confirmCheckbox!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const submitButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-mode-submit"]',
+    );
+    expect(submitButton).not.toBeNull();
+
+    await act(async () => {
+      submitButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(core.adminModeStore.getSnapshot()).toMatchObject({
+      status: "active",
+      elevatedToken: "elevated-device-token",
+      expiresAt,
+    });
+    expect(container.querySelector('[data-testid="admin-mode-banner"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-testid="settings-admin-command-execute"]'),
+    ).not.toBeNull();
 
     act(() => {
       root?.unmount();

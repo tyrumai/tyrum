@@ -14,7 +14,7 @@ import type {
   TyrumHttpClient,
   UsageResponse,
 } from "@tyrum/client";
-import { createBearerTokenAuth, createOperatorCore } from "../src/index.js";
+import { createAdminModeStore, createBearerTokenAuth, createOperatorCore } from "../src/index.js";
 
 type Handler = (data: unknown) => void;
 
@@ -642,6 +642,39 @@ describe("operator-core wiring", () => {
     core.dispose();
 
     expect(ws.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not dispose an injected adminModeStore", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-02-27T00:00:00.000Z"));
+
+    try {
+      const ws = new FakeWsClient();
+      const http = createFakeHttpClient();
+      const adminModeStore = createAdminModeStore({ tickIntervalMs: 0 });
+
+      adminModeStore.enter({
+        elevatedToken: "elevated-token",
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      });
+
+      const core = createOperatorCore({
+        wsUrl: "ws://127.0.0.1:8788/ws",
+        httpBaseUrl: "http://127.0.0.1:8788",
+        auth: createBearerTokenAuth("baseline-token"),
+        deps: { ws, http },
+        adminModeStore,
+      });
+
+      expect(core.adminModeStore).toBe(adminModeStore);
+
+      core.dispose();
+
+      expect(adminModeStore.getSnapshot().status).toBe("active");
+      adminModeStore.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("re-syncs on reconnect", async () => {

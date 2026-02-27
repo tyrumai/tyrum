@@ -26,6 +26,7 @@ export interface OperatorCoreOptions {
   httpBaseUrl: string;
   auth: OperatorAuthStrategy;
   capabilities?: ClientCapability[];
+  adminModeStore?: AdminModeStore;
   deps?: {
     ws?: OperatorWsClient;
     http?: OperatorHttpClient;
@@ -80,7 +81,8 @@ function readPayload(data: unknown): Record<string, unknown> | null {
 }
 
 export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
-  const adminModeStore = createAdminModeStore();
+  const adminModeStore = options.adminModeStore ?? createAdminModeStore();
+  const adminModeStoreOwned = options.adminModeStore === undefined;
 
   const ws: OperatorWsClient =
     options.deps?.ws ??
@@ -223,7 +225,9 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
 
   const dispose = (): void => {
     connection.store.disconnect();
-    adminModeStore.dispose();
+    if (adminModeStoreOwned) {
+      adminModeStore.dispose();
+    }
     for (const unsub of unsubscribes) {
       unsub();
     }

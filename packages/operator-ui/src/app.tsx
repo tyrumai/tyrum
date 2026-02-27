@@ -1,6 +1,6 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import { useEffect, useRef, useState } from "react";
-import { AdminModeProvider } from "./admin-mode.js";
+import { AdminModeGate, AdminModeProvider } from "./admin-mode.js";
 import { getDesktopApi } from "./desktop-api.js";
 import { OPERATOR_UI_CSS } from "./style.js";
 import { useOperatorStore } from "./use-operator-store.js";
@@ -800,6 +800,33 @@ function RunsPage({ core }: { core: OperatorCore }) {
 function SettingsPage({ core, mode }: { core: OperatorCore; mode: OperatorUiMode }) {
   const statusState = useOperatorStore(core.statusStore);
   const totalTokens = statusState.usage?.local.totals.total_tokens;
+  const [adminCommandBusy, setAdminCommandBusy] = useState(false);
+  const [adminCommandError, setAdminCommandError] = useState<string | null>(null);
+
+  const toErrorMessage = (error: unknown): string => {
+    if (error instanceof Error) return error.message;
+    return String(error);
+  };
+
+  const runAdminCommand = async (): Promise<void> => {
+    if (adminCommandBusy) return;
+
+    setAdminCommandBusy(true);
+    setAdminCommandError(null);
+
+    try {
+      if (!core.ws.commandExecute) {
+        setAdminCommandError("Admin commands are not supported by this client.");
+        return;
+      }
+      await core.ws.commandExecute("/help");
+    } catch (error) {
+      setAdminCommandError(toErrorMessage(error));
+    } finally {
+      setAdminCommandBusy(false);
+    }
+  };
+
   return (
     <>
       <h1>Settings</h1>
@@ -814,6 +841,30 @@ function SettingsPage({ core, mode }: { core: OperatorCore; mode: OperatorUiMode
         Refresh usage
       </button>
       <div>Total tokens: {totalTokens ?? "-"}</div>
+
+      <h2 style={{ marginTop: 24 }}>Admin</h2>
+      <AdminModeGate>
+        <div className="card stack">
+          <div style={{ fontSize: 13, color: "var(--muted)" }}>
+            Admin Mode is required for privileged operator actions.
+          </div>
+          <button
+            type="button"
+            data-testid="settings-admin-command-execute"
+            disabled={adminCommandBusy}
+            onClick={() => {
+              void runAdminCommand();
+            }}
+          >
+            {adminCommandBusy ? "Running..." : "Run admin command"}
+          </button>
+          {adminCommandError ? (
+            <div className="alert error" role="alert">
+              {adminCommandError}
+            </div>
+          ) : null}
+        </div>
+      </AdminModeGate>
     </>
   );
 }

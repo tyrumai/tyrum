@@ -1,11 +1,12 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import {
+  createAdminModeStore,
   createBearerTokenAuth,
   createBrowserCookieAuth,
-  createOperatorCore,
 } from "@tyrum/operator-core";
 import { OperatorUiApp } from "@tyrum/operator-ui";
+import { createWebOperatorCoreManager } from "./operator-core-manager.js";
 import { readAuthTokenFromUrl, stripAuthTokenFromUrl } from "./url-auth.js";
 
 function scrubAuthTokenFromUrl(): void {
@@ -43,18 +44,31 @@ if (!container) {
   throw new Error("Missing root element (#root).");
 }
 
-const core = createOperatorCore({
+const adminModeStore = createAdminModeStore();
+const manager = createWebOperatorCoreManager({
   wsUrl: resolveGatewayWsUrl(),
   httpBaseUrl: resolveGatewayHttpBaseUrl(),
-  auth: resolveAuthFromLocation(),
+  baselineAuth: resolveAuthFromLocation(),
+  adminModeStore,
+});
+
+const root = createRoot(container);
+const render = (): void => {
+  root.render(
+    <React.StrictMode>
+      <OperatorUiApp core={manager.getCore()} mode="web" />
+    </React.StrictMode>,
+  );
+};
+
+const unsubscribe = manager.subscribe(() => {
+  render();
 });
 
 window.addEventListener("beforeunload", () => {
-  core.dispose();
+  unsubscribe();
+  manager.dispose();
+  adminModeStore.dispose();
 });
 
-createRoot(container).render(
-  <React.StrictMode>
-    <OperatorUiApp core={core} mode="web" />
-  </React.StrictMode>,
-);
+render();
