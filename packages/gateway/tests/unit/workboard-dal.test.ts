@@ -986,6 +986,76 @@ describe("WorkboardDal", () => {
     expect(third.leased.map((x) => x.task.task_id)).toEqual([join.task_id]);
   });
 
+  it("leases tasks when dependencies are 'failed'", async () => {
+    const dal = createDal();
+    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+
+    const item = await dal.createItem({
+      scope,
+      item: {
+        kind: "action",
+        title: "Failed deps",
+        created_from_session_key: "agent:default:main",
+      },
+      createdAtIso: "2026-02-27T00:00:00.000Z",
+    });
+
+    const root = await dal.createTask({
+      scope,
+      task: {
+        work_item_id: item.work_item_id,
+        execution_profile: "planner",
+        side_effect_class: "none",
+      },
+      taskId: "00000000-0000-0000-0000-000000000001",
+      createdAtIso: "2026-02-27T00:00:01.000Z",
+    });
+    const child = await dal.createTask({
+      scope,
+      task: {
+        work_item_id: item.work_item_id,
+        depends_on: [root.task_id],
+        execution_profile: "planner",
+        side_effect_class: "none",
+      },
+      taskId: "00000000-0000-0000-0000-000000000002",
+      createdAtIso: "2026-02-27T00:00:02.000Z",
+    });
+
+    const leaseOwner = "test-owner";
+    const nowMs = Date.parse("2026-02-27T00:00:00.000Z");
+    const ttlMs = 60_000;
+
+    const first = await dal.leaseRunnableTasks({
+      scope,
+      work_item_id: item.work_item_id,
+      lease_owner: leaseOwner,
+      nowMs,
+      leaseTtlMs: ttlMs,
+      limit: 10,
+    });
+    expect(first.leased.map((x) => x.task.task_id)).toEqual([root.task_id]);
+
+    await dal.updateTask({
+      scope,
+      task_id: root.task_id,
+      lease_owner: leaseOwner,
+      nowMs: nowMs + 1,
+      patch: { status: "failed", finished_at: "2026-02-27T00:00:03.000Z" },
+      updatedAtIso: "2026-02-27T00:00:03.000Z",
+    });
+
+    const second = await dal.leaseRunnableTasks({
+      scope,
+      work_item_id: item.work_item_id,
+      lease_owner: leaseOwner,
+      nowMs: nowMs + 2,
+      leaseTtlMs: ttlMs,
+      limit: 10,
+    });
+    expect(second.leased.map((x) => x.task.task_id)).toEqual([child.task_id]);
+  });
+
   it("reclaims expired task leases", async () => {
     const dal = createDal();
     const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;

@@ -2141,7 +2141,7 @@ export class WorkboardDal {
       }
 
       const isTerminal = (s: WorkItemTaskState | undefined): boolean => {
-        return s === "completed" || s === "skipped" || s === "cancelled";
+        return s === "completed" || s === "skipped" || s === "cancelled" || s === "failed";
       };
 
       const runnable: string[] = [];
