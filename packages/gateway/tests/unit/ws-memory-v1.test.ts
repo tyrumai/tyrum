@@ -48,7 +48,9 @@ function makeDeps(cm: ConnectionManager, overrides?: Partial<ProtocolDeps>): Pro
 function parseSentJson(ws: MockWebSocket): unknown[] {
   return ws.send.mock.calls
     .map((c) => c[0])
-    .map((raw) => (typeof raw === "string" ? raw : raw instanceof Buffer ? raw.toString("utf8") : ""))
+    .map((raw) =>
+      typeof raw === "string" ? raw : raw instanceof Buffer ? raw.toString("utf8") : "",
+    )
     .filter((raw) => raw.length > 0)
     .map((raw) => JSON.parse(raw) as unknown);
 }
@@ -139,9 +141,19 @@ describe("WS memory v1 handlers", () => {
     };
     expect(createdEvent.payload.item.memory_item_id).toBe(createdItem.memory_item_id);
 
-    expect(parseSentJson(otherOperatorWs).some((m) => (m as { type?: unknown }).type === "memory.item.created")).toBe(true);
-    expect(parseSentJson(pairingOnlyWs).some((m) => (m as { type?: unknown }).type === "memory.item.created")).toBe(false);
-    expect(parseSentJson(nodeWs).some((m) => (m as { type?: unknown }).type === "memory.item.created")).toBe(false);
+    expect(
+      parseSentJson(otherOperatorWs).some(
+        (m) => (m as { type?: unknown }).type === "memory.item.created",
+      ),
+    ).toBe(true);
+    expect(
+      parseSentJson(pairingOnlyWs).some(
+        (m) => (m as { type?: unknown }).type === "memory.item.created",
+      ),
+    ).toBe(false);
+    expect(
+      parseSentJson(nodeWs).some((m) => (m as { type?: unknown }).type === "memory.item.created"),
+    ).toBe(false);
 
     vi.setSystemTime(new Date("2026-02-19T12:00:01.000Z"));
     const updateRes = await handleClientMessage(
@@ -149,11 +161,33 @@ describe("WS memory v1 handlers", () => {
       JSON.stringify({
         request_id: "r-update-1",
         type: "memory.update",
-        payload: { v: 1, memory_item_id: createdItem.memory_item_id, patch: { body_md: "Updated." } },
+        payload: {
+          v: 1,
+          memory_item_id: createdItem.memory_item_id,
+          patch: { body_md: "Updated." },
+        },
       }),
       deps,
     );
     expect((updateRes as unknown as { ok: boolean }).ok).toBe(true);
+
+    const updateEvents = parseSentJson(requesterWs).filter(
+      (m) => (m as { type?: unknown }).type === "memory.item.updated",
+    );
+    expect(updateEvents.length).toBe(1);
+    expect(
+      parseSentJson(otherOperatorWs).some(
+        (m) => (m as { type?: unknown }).type === "memory.item.updated",
+      ),
+    ).toBe(true);
+    expect(
+      parseSentJson(pairingOnlyWs).some(
+        (m) => (m as { type?: unknown }).type === "memory.item.updated",
+      ),
+    ).toBe(false);
+    expect(
+      parseSentJson(nodeWs).some((m) => (m as { type?: unknown }).type === "memory.item.updated"),
+    ).toBe(false);
 
     const getRes = await handleClientMessage(
       requester,
@@ -203,6 +237,19 @@ describe("WS memory v1 handlers", () => {
       (m) => (m as { type?: unknown }).type === "memory.item.deleted",
     );
     expect(deleteEvents.length).toBe(1);
+    expect(
+      parseSentJson(otherOperatorWs).some(
+        (m) => (m as { type?: unknown }).type === "memory.item.deleted",
+      ),
+    ).toBe(true);
+    expect(
+      parseSentJson(pairingOnlyWs).some(
+        (m) => (m as { type?: unknown }).type === "memory.item.deleted",
+      ),
+    ).toBe(false);
+    expect(
+      parseSentJson(nodeWs).some((m) => (m as { type?: unknown }).type === "memory.item.deleted"),
+    ).toBe(false);
   });
 
   it("forbids write memory operations for scoped tokens without operator.write", async () => {
@@ -303,14 +350,41 @@ describe("WS memory v1 handlers", () => {
       (m) => (m as { type?: unknown }).type === "memory.item.forgotten",
     );
     expect(forgotEvents.length).toBe(1);
-    expect(parseSentJson(otherOperatorWs).some((m) => (m as { type?: unknown }).type === "memory.item.forgotten")).toBe(true);
-    expect(parseSentJson(pairingOnlyWs).some((m) => (m as { type?: unknown }).type === "memory.item.forgotten")).toBe(false);
-    expect(parseSentJson(nodeWs).some((m) => (m as { type?: unknown }).type === "memory.item.forgotten")).toBe(false);
+    expect(
+      parseSentJson(otherOperatorWs).some(
+        (m) => (m as { type?: unknown }).type === "memory.item.forgotten",
+      ),
+    ).toBe(true);
+    expect(
+      parseSentJson(pairingOnlyWs).some(
+        (m) => (m as { type?: unknown }).type === "memory.item.forgotten",
+      ),
+    ).toBe(false);
+    expect(
+      parseSentJson(nodeWs).some((m) => (m as { type?: unknown }).type === "memory.item.forgotten"),
+    ).toBe(false);
   });
 
   it("stores a memory export artifact and emits memory.export.completed", async () => {
     const cm = new ConnectionManager();
     const { id: requesterId, ws: requesterWs } = makeClient(cm);
+    const { ws: otherOperatorWs } = makeClient(cm, {
+      authClaims: {
+        token_kind: "device",
+        role: "client",
+        device_id: "dev_client_1",
+        scopes: ["operator.read"],
+      },
+    });
+    const { ws: pairingOnlyWs } = makeClient(cm, {
+      authClaims: {
+        token_kind: "device",
+        role: "client",
+        device_id: "dev_client_2",
+        scopes: ["operator.pairing"],
+      },
+    });
+    const { ws: nodeWs } = makeClient(cm, { role: "node" });
     const deps = makeDeps(cm, { db } as unknown as Partial<ProtocolDeps>);
     (deps as unknown as { memoryV1Dal: MemoryV1Dal }).memoryV1Dal = memoryV1Dal;
     (deps as unknown as { artifactStore: FsArtifactStore }).artifactStore = artifactStore;
@@ -346,7 +420,8 @@ describe("WS memory v1 handlers", () => {
 
     expect(exportRes).toBeDefined();
     expect((exportRes as unknown as { ok: boolean }).ok).toBe(true);
-    const artifactId = (exportRes as unknown as { result: { artifact_id: string } }).result.artifact_id;
+    const artifactId = (exportRes as unknown as { result: { artifact_id: string } }).result
+      .artifact_id;
     expect(artifactId).toMatch(/^[0-9a-f-]{36}$/i);
 
     const got = await artifactStore.get(artifactId);
@@ -357,5 +432,20 @@ describe("WS memory v1 handlers", () => {
       (m) => (m as { type?: unknown }).type === "memory.export.completed",
     );
     expect(exportEvents.length).toBe(1);
+    expect(
+      parseSentJson(otherOperatorWs).some(
+        (m) => (m as { type?: unknown }).type === "memory.export.completed",
+      ),
+    ).toBe(true);
+    expect(
+      parseSentJson(pairingOnlyWs).some(
+        (m) => (m as { type?: unknown }).type === "memory.export.completed",
+      ),
+    ).toBe(false);
+    expect(
+      parseSentJson(nodeWs).some(
+        (m) => (m as { type?: unknown }).type === "memory.export.completed",
+      ),
+    ).toBe(false);
   });
 });

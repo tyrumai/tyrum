@@ -260,10 +260,10 @@ export class MemoryV1Dal {
     const provenanceFilter = filter?.provenance;
     const joinProvenance = Boolean(
       provenanceFilter &&
-        ((provenanceFilter.source_kinds && provenanceFilter.source_kinds.length > 0) ||
-          (provenanceFilter.channels && provenanceFilter.channels.length > 0) ||
-          (provenanceFilter.thread_ids && provenanceFilter.thread_ids.length > 0) ||
-          (provenanceFilter.session_ids && provenanceFilter.session_ids.length > 0)),
+      ((provenanceFilter.source_kinds && provenanceFilter.source_kinds.length > 0) ||
+        (provenanceFilter.channels && provenanceFilter.channels.length > 0) ||
+        (provenanceFilter.thread_ids && provenanceFilter.thread_ids.length > 0) ||
+        (provenanceFilter.session_ids && provenanceFilter.session_ids.length > 0)),
     );
 
     if (joinProvenance) {
@@ -363,10 +363,10 @@ export class MemoryV1Dal {
     const provenanceFilter = filter?.provenance;
     const joinProvenance = Boolean(
       provenanceFilter &&
-        ((provenanceFilter.source_kinds && provenanceFilter.source_kinds.length > 0) ||
-          (provenanceFilter.channels && provenanceFilter.channels.length > 0) ||
-          (provenanceFilter.thread_ids && provenanceFilter.thread_ids.length > 0) ||
-          (provenanceFilter.session_ids && provenanceFilter.session_ids.length > 0)),
+      ((provenanceFilter.source_kinds && provenanceFilter.source_kinds.length > 0) ||
+        (provenanceFilter.channels && provenanceFilter.channels.length > 0) ||
+        (provenanceFilter.thread_ids && provenanceFilter.thread_ids.length > 0) ||
+        (provenanceFilter.session_ids && provenanceFilter.session_ids.length > 0)),
     );
 
     if (joinProvenance) {

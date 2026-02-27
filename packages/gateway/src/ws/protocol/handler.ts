@@ -1827,16 +1827,27 @@ export async function handleClientMessage(
     }
 
     if (!deps.memoryV1Dal) {
-      return errorResponse(msg.request_id, msg.type, "unsupported_request", "memory v1 not supported");
+      return errorResponse(
+        msg.request_id,
+        msg.type,
+        "unsupported_request",
+        "memory v1 not supported",
+      );
     }
 
     try {
       if (msg.type === "memory.search") {
         const parsedReq = WsMemorySearchRequest.safeParse(msg);
         if (!parsedReq.success) {
-          return errorResponse(msg.request_id, msg.type, "invalid_request", parsedReq.error.message, {
-            issues: parsedReq.error.issues,
-          });
+          return errorResponse(
+            msg.request_id,
+            msg.type,
+            "invalid_request",
+            parsedReq.error.message,
+            {
+              issues: parsedReq.error.issues,
+            },
+          );
         }
 
         const payload = parsedReq.data.payload;
@@ -1858,9 +1869,15 @@ export async function handleClientMessage(
       if (msg.type === "memory.list") {
         const parsedReq = WsMemoryListRequest.safeParse(msg);
         if (!parsedReq.success) {
-          return errorResponse(msg.request_id, msg.type, "invalid_request", parsedReq.error.message, {
-            issues: parsedReq.error.issues,
-          });
+          return errorResponse(
+            msg.request_id,
+            msg.type,
+            "invalid_request",
+            parsedReq.error.message,
+            {
+              issues: parsedReq.error.issues,
+            },
+          );
         }
 
         const payload = parsedReq.data.payload;
@@ -1881,9 +1898,15 @@ export async function handleClientMessage(
       if (msg.type === "memory.get") {
         const parsedReq = WsMemoryGetRequest.safeParse(msg);
         if (!parsedReq.success) {
-          return errorResponse(msg.request_id, msg.type, "invalid_request", parsedReq.error.message, {
-            issues: parsedReq.error.issues,
-          });
+          return errorResponse(
+            msg.request_id,
+            msg.type,
+            "invalid_request",
+            parsedReq.error.message,
+            {
+              issues: parsedReq.error.issues,
+            },
+          );
         }
 
         const item = await deps.memoryV1Dal.getById(parsedReq.data.payload.memory_item_id);
@@ -1898,9 +1921,15 @@ export async function handleClientMessage(
       if (msg.type === "memory.create") {
         const parsedReq = WsMemoryCreateRequest.safeParse(msg);
         if (!parsedReq.success) {
-          return errorResponse(msg.request_id, msg.type, "invalid_request", parsedReq.error.message, {
-            issues: parsedReq.error.issues,
-          });
+          return errorResponse(
+            msg.request_id,
+            msg.type,
+            "invalid_request",
+            parsedReq.error.message,
+            {
+              issues: parsedReq.error.issues,
+            },
+          );
         }
 
         const item = await deps.memoryV1Dal.create(parsedReq.data.payload.item);
@@ -1923,9 +1952,15 @@ export async function handleClientMessage(
       if (msg.type === "memory.update") {
         const parsedReq = WsMemoryUpdateRequest.safeParse(msg);
         if (!parsedReq.success) {
-          return errorResponse(msg.request_id, msg.type, "invalid_request", parsedReq.error.message, {
-            issues: parsedReq.error.issues,
-          });
+          return errorResponse(
+            msg.request_id,
+            msg.type,
+            "invalid_request",
+            parsedReq.error.message,
+            {
+              issues: parsedReq.error.issues,
+            },
+          );
         }
 
         const payload = parsedReq.data.payload;
@@ -1949,9 +1984,15 @@ export async function handleClientMessage(
       if (msg.type === "memory.delete") {
         const parsedReq = WsMemoryDeleteRequest.safeParse(msg);
         if (!parsedReq.success) {
-          return errorResponse(msg.request_id, msg.type, "invalid_request", parsedReq.error.message, {
-            issues: parsedReq.error.issues,
-          });
+          return errorResponse(
+            msg.request_id,
+            msg.type,
+            "invalid_request",
+            parsedReq.error.message,
+            {
+              issues: parsedReq.error.issues,
+            },
+          );
         }
 
         const payload = parsedReq.data.payload;
@@ -1979,9 +2020,15 @@ export async function handleClientMessage(
       if (msg.type === "memory.forget") {
         const parsedReq = WsMemoryForgetRequest.safeParse(msg);
         if (!parsedReq.success) {
-          return errorResponse(msg.request_id, msg.type, "invalid_request", parsedReq.error.message, {
-            issues: parsedReq.error.issues,
-          });
+          return errorResponse(
+            msg.request_id,
+            msg.type,
+            "invalid_request",
+            parsedReq.error.message,
+            {
+              issues: parsedReq.error.issues,
+            },
+          );
         }
 
         const payload = parsedReq.data.payload;

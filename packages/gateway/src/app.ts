@@ -10,6 +10,7 @@ import { createUsageRoutes } from "./routes/usage.js";
 import { policy } from "./routes/policy.js";
 import { createPolicyBundleRoutes } from "./routes/policy-bundle.js";
 import { createMemoryRoutes } from "./routes/memory.js";
+import { createMemoryExportRoutes } from "./routes/memory-export.js";
 import { createIngressRoutes } from "./routes/ingress.js";
 import { createRoutingConfigRoutes } from "./routes/routing-config.js";
 import { createPlanRoutes } from "./routes/plan.js";
@@ -269,6 +270,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
     app.route("/", createPluginRoutes({ plugins: opts.plugins }));
   }
   app.route("/", createMemoryRoutes(container.memoryDal));
+  app.route("/", createMemoryExportRoutes({ artifactStore: container.artifactStore }));
   app.route(
     "/",
     createIngressRoutes({
