@@ -11,6 +11,7 @@ import {
   WsConnectProofResponseEnvelope,
   WsTaskExecuteRequest,
   WsTaskExecuteResponseEnvelope,
+  WsWorkSignalFiredEvent,
 } from "@tyrum/schemas";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { TokenStore } from "../../src/modules/auth/token-store.js";
@@ -18,6 +19,8 @@ import { createWsHandler } from "../../src/routes/ws.js";
 import { dispatchTask } from "../../src/ws/protocol.js";
 import type { ProtocolDeps } from "../../src/ws/protocol.js";
 import { TyrumClient } from "../../../client/src/ws-client.js";
+import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import { WorkSignalScheduler } from "../../src/modules/workboard/signal-scheduler.js";
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -139,6 +142,7 @@ async function startInstrumentedGateway(
     await new Promise<void>((resolve) => wss.close(() => resolve()));
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await rm(tokenHome, { recursive: true, force: true });
+    await protocolDeps.db?.close();
   }
 
   return { port, adminToken, stop, clientToGateway, gatewayToClient, protocolDeps };
@@ -315,5 +319,64 @@ describe("WS contract conformance (gateway <-> client <-> schemas)", () => {
     WsConnectInitResponseEnvelope.parse(initRes);
     WsConnectProofRequest.parse(proofReq);
     WsConnectProofResponseEnvelope.parse(proofRes);
+  });
+
+  it("work.signal.fired conforms to @tyrum/schemas contracts (event-based WorkSignals)", async () => {
+    server = await startInstrumentedGateway((connectionManager) => ({
+      connectionManager,
+      db: openTestSqliteDb(),
+    }));
+
+    client = new TyrumClient({
+      url: `ws://127.0.0.1:${server.port}/ws`,
+      token: server.adminToken,
+      capabilities: ["http"],
+      reconnect: false,
+    });
+
+    const connectedP = new Promise<void>((resolve) => {
+      client!.on("connected", () => resolve());
+    });
+    client.connect();
+    await withTimeout(connectedP, 5_000, "connected");
+
+    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+
+    const created = await client.workCreate({
+      ...scope,
+      item: { kind: "action", title: "Hello" },
+    });
+    const itemId = created.item.work_item_id;
+
+    const createdSignal = await client.workSignalCreate({
+      ...scope,
+      signal: {
+        work_item_id: itemId,
+        trigger_kind: "event",
+        trigger_spec_json: { kind: "work_item.status.transition", to: ["blocked"] },
+      },
+    });
+
+    await client.workTransition({ ...scope, work_item_id: itemId, status: "ready" });
+    await client.workTransition({ ...scope, work_item_id: itemId, status: "doing" });
+    await client.workTransition({ ...scope, work_item_id: itemId, status: "blocked" });
+
+    const scheduler = new WorkSignalScheduler({
+      db: server.protocolDeps.db!,
+      connectionManager: server.protocolDeps.connectionManager,
+      owner: "contract-test",
+    });
+    await scheduler.tick();
+
+    const firedEvt = mustFind(
+      server.gatewayToClient,
+      (m) => isRecord(m) && m["type"] === "work.signal.fired",
+      "work.signal.fired event",
+    );
+
+    const parsed = WsWorkSignalFiredEvent.parse(firedEvt);
+    expect(parsed.payload.signal_id).toBe(createdSignal.signal.signal_id);
+    expect(typeof parsed.payload.firing_id).toBe("string");
+    expect(parsed.payload.firing_id.length).toBeGreaterThan(0);
   });
 });
