@@ -681,6 +681,39 @@ for (const fixture of fixtures) {
       }
     });
 
+    it("dedupes keyword terms case-insensitively for scoring", async () => {
+      const { dal, close } = await fixture.open();
+      try {
+        const created = await dal.create(
+          {
+            kind: "note",
+            title: "Restart gateway",
+            body_md: "x",
+            tags: [],
+            sensitivity: "private",
+            provenance: { source_kind: "operator", refs: [] },
+          },
+          "agent-a",
+        );
+
+        const results = await dal.search(
+          {
+            v: 1,
+            query: "Restart restart",
+            filter: { kinds: ["note"], sensitivities: ["private"] },
+            limit: 10,
+          },
+          "agent-a",
+        );
+
+        const hit = results.hits.find((h) => h.memory_item_id === created.memory_item_id);
+        expect(hit).toBeDefined();
+        expect(hit?.score).toBe(3);
+      } finally {
+        await close();
+      }
+    });
+
     it("matches any keyword term and ranks higher matches", async () => {
       const { dal, close } = await fixture.open();
       try {

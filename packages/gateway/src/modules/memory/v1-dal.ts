@@ -1019,11 +1019,11 @@ export class MemoryV1Dal {
             .split(/\s+/g)
             .map((term) => term.trim())
             .filter(Boolean);
-    const terms = uniqSortedStrings(rawTerms);
-
-    if (terms.some((term) => term.length > MAX_TERM_CHARS)) {
+    if (rawTerms.some((term) => term.length > MAX_TERM_CHARS)) {
       throw new Error(`query term too long (max=${MAX_TERM_CHARS})`);
     }
+
+    const terms = uniqSortedStrings(rawTerms.map((term) => term.toLowerCase()));
 
     if (terms.length > MAX_TERMS) {
       throw new Error(`too many query terms (max=${MAX_TERMS})`);
@@ -1121,7 +1121,6 @@ export class MemoryV1Dal {
           : (haystack: string): string => `strpos(${haystack}, ?) > 0`;
       const termClauses: string[] = [];
       for (const term of terms) {
-        const needle = term.toLowerCase();
         termClauses.push(
           `(
             (mi.title IS NOT NULL AND ${contains("LOWER(mi.title)")})
@@ -1130,7 +1129,7 @@ export class MemoryV1Dal {
             OR (mi.key IS NOT NULL AND ${contains("LOWER(mi.key)")})
           )`,
         );
-        params.push(needle, needle, needle, needle);
+        params.push(term, term, term, term);
       }
 
       clauses.push(`(${termClauses.join("\n            OR ")})`);
@@ -1191,21 +1190,18 @@ export class MemoryV1Dal {
 
       let score = 0;
       for (const term of terms) {
-        const t = term.toLowerCase();
-        if (titleLower.includes(t)) score += 3;
-        if (keyLower.includes(t)) score += 2;
-        if (summaryLower.includes(t)) score += 2;
-        if (bodyLower.includes(t)) score += 1;
+        if (titleLower.includes(term)) score += 3;
+        if (keyLower.includes(term)) score += 2;
+        if (summaryLower.includes(term)) score += 2;
+        if (bodyLower.includes(term)) score += 1;
       }
 
       const snippetSource =
-        terms.length > 0 && titleLower && terms.some((t) => titleLower.includes(t.toLowerCase()))
+        terms.length > 0 && titleLower && terms.some((t) => titleLower.includes(t))
           ? title
-          : terms.length > 0 && bodyLower && terms.some((t) => bodyLower.includes(t.toLowerCase()))
+          : terms.length > 0 && bodyLower && terms.some((t) => bodyLower.includes(t))
             ? body
-            : terms.length > 0 &&
-                summaryLower &&
-                terms.some((t) => summaryLower.includes(t.toLowerCase()))
+            : terms.length > 0 && summaryLower && terms.some((t) => summaryLower.includes(t))
               ? summary
               : key.length > 0
                 ? key
