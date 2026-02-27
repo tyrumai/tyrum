@@ -9,6 +9,7 @@ export interface BuildApplicationMenuTemplateOptions {
   platform: NodeJS.Platform;
   isDev: boolean;
   onRequestNavigate: (request: NavigationRequest) => void;
+  onShowAbout: () => void;
 }
 
 export function buildApplicationMenuTemplate(
@@ -56,9 +57,18 @@ export function buildApplicationMenuTemplate(
     submenu: viewSubmenu,
   };
 
+  const helpSubmenu: MenuItemConstructorOptions[] = isMac
+    ? []
+    : [
+        {
+          label: `About ${options.appName}`,
+          click: options.onShowAbout,
+        },
+      ];
+
   const helpMenu: MenuItemConstructorOptions = {
     label: "Help",
-    submenu: [],
+    submenu: helpSubmenu,
   };
 
   if (isMac) {

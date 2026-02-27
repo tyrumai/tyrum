@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, shell } from "electron";
+import { app, BrowserWindow, dialog, Menu, shell } from "electron";
 import { join } from "node:path";
 import { registerGatewayIpc, startEmbeddedGatewayFromConfig } from "./ipc/gateway-ipc.js";
 import { registerNodeIpc, shutdownNodeResources } from "./ipc/node-ipc.js";
@@ -173,6 +173,15 @@ if (didAcquireSingleInstanceLock) {
           appName: app.name,
           platform: process.platform,
           isDev: !app.isPackaged,
+          onShowAbout: () => {
+            void dialog.showMessageBox({
+              type: "info",
+              title: `About ${app.name}`,
+              message: app.name,
+              detail: `Version ${app.getVersion()}`,
+              buttons: ["OK"],
+            });
+          },
           onRequestNavigate: (request) => {
             const win = mainWindow;
             if (!win) return;

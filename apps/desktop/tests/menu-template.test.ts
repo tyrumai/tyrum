@@ -30,12 +30,14 @@ describe("buildApplicationMenuTemplate", () => {
 
   it("builds File/Edit/View/Help on Windows and includes dev tools only in dev", () => {
     const onRequestNavigate = vi.fn();
+    const onShowAbout = vi.fn();
 
     const devTemplate = buildApplicationMenuTemplate({
       appName: "Tyrum",
       platform: "win32",
       isDev: true,
       onRequestNavigate,
+      onShowAbout,
     });
 
     expect(devTemplate.map((item) => item.label)).toEqual(
@@ -52,6 +54,7 @@ describe("buildApplicationMenuTemplate", () => {
       platform: "win32",
       isDev: false,
       onRequestNavigate,
+      onShowAbout,
     });
 
     const prodViewMenu = prodTemplate.find((item) => item.label === "View");
@@ -69,5 +72,13 @@ describe("buildApplicationMenuTemplate", () => {
 
     settingsItem?.click?.({} as never, null, {} as never);
     expect(onRequestNavigate).toHaveBeenCalledWith({ pageId: "connection" });
+
+    const helpMenu = prodTemplate.find((item) => item.label === "Help");
+    expect(helpMenu).toBeDefined();
+
+    const aboutItem = (helpMenu?.submenu ?? []).find((item) => item?.label === "About Tyrum");
+    expect(aboutItem).toBeDefined();
+    aboutItem?.click?.({} as never, null, {} as never);
+    expect(onShowAbout).toHaveBeenCalledTimes(1);
   });
 });
