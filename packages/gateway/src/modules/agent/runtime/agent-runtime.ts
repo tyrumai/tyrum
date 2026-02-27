@@ -383,16 +383,23 @@ function stripDirectivePrefix(message: string, prefix: string): string {
   return rest.trim();
 }
 
+function isDirectiveInvocation(message: string, prefix: string): boolean {
+  if (!message.startsWith(prefix)) return false;
+  if (message.length === prefix.length) return true;
+  const next = message[prefix.length];
+  return next === ":" || next === " " || next === "\t" || next === "\n" || next === "\r";
+}
+
 function parseIntakeModeDecision(message: string): IntakeModeDecision | undefined {
   const trimmed = message.trim();
-  if (trimmed.startsWith("/delegate_execute")) {
+  if (isDirectiveInvocation(trimmed, "/delegate_execute")) {
     return {
       mode: "delegate_execute",
       reason_code: "explicit_delegate_execute",
       body: stripDirectivePrefix(trimmed, "/delegate_execute"),
     };
   }
-  if (trimmed.startsWith("/delegate_plan")) {
+  if (isDirectiveInvocation(trimmed, "/delegate_plan")) {
     return {
       mode: "delegate_plan",
       reason_code: "explicit_delegate_plan",
@@ -444,7 +451,7 @@ export class AgentRuntime {
       );
       const { items } = await workboard.listItems({
         scope,
-        statuses: ["doing", "blocked", "ready", "backlog"],
+        statuses: ["doing", "blocked", "ready"],
         limit: 50,
       });
 
@@ -2273,7 +2280,10 @@ export class AgentRuntime {
       formatMemoryPrompt(memoryHits),
       formatSemanticMemoryPrompt(semanticHits),
     );
-    const workFocusDigest = await this.buildWorkFocusDigest();
+    const workFocusDigest =
+      isStatusQuery(resolved.message) || parseIntakeModeDecision(resolved.message)
+        ? "Skipped for command turns."
+        : await this.buildWorkFocusDigest();
 
     const identityPrompt = formatIdentityPrompt(ctx.identity);
     const safetyPrompt = DATA_TAG_SAFETY_PROMPT;

@@ -79,7 +79,11 @@ describe("AgentRuntime (WorkBoard integration)", () => {
       fetchImpl: fetch404,
     } as ConstructorParameters<typeof AgentRuntime>[0]);
 
-    const result = await runtime.turn({ channel: "test", thread_id: "thread-1", message: "status?" });
+    const result = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      message: "status?",
+    });
 
     expect(result.reply).toContain(workItemId);
     expect(result.reply).toContain("Test work item");
@@ -156,6 +160,59 @@ describe("AgentRuntime (WorkBoard integration)", () => {
     expect(stitched).toContain("Work focus digest:");
     expect(stitched).toContain(workItemId);
     expect(stitched).toContain("Focus digest work item");
+  });
+
+  it("keeps Doing WorkItems in the Work focus digest even when backlog is large", async () => {
+    generateTextMock.mockResolvedValueOnce({ text: "ok", steps: [] });
+
+    const { createContainer } = await import("../../src/container.js");
+    const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
+
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
+
+    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const doingId = "123e4567-e89b-12d3-a456-426614174020";
+
+    const dal = new WorkboardDal(container.db);
+    await dal.createItem({
+      scope,
+      workItemId: doingId,
+      createdAtIso: "2026-02-27T00:00:00.000Z",
+      createdFromSessionKey: "agent:default:test:default:channel:thread-1",
+      item: { kind: "action", title: "Old doing item" },
+    });
+    await dal.transitionItem({ scope, work_item_id: doingId, status: "ready" });
+    await dal.transitionItem({ scope, work_item_id: doingId, status: "doing" });
+
+    for (let i = 0; i < 60; i += 1) {
+      await dal.createItem({
+        scope,
+        createdAtIso: "2026-02-28T00:00:00.000Z",
+        createdFromSessionKey: "agent:default:test:default:channel:thread-1",
+        item: { kind: "action", title: `Backlog item ${String(i)}` },
+      });
+    }
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("unused"),
+      fetchImpl: fetch404,
+    } as ConstructorParameters<typeof AgentRuntime>[0]);
+
+    const res = await runtime.turn({ channel: "test", thread_id: "thread-1", message: "hello" });
+    expect(res.reply).toBe("ok");
+
+    const call = generateTextMock.mock.calls[0]?.[0] as
+      | { messages?: Array<{ role: string; content: Array<{ type: string; text: string }> }> }
+      | undefined;
+
+    const content = call?.messages?.[0]?.content ?? [];
+    const stitched = content.map((part) => part.text).join("\n\n");
+
+    expect(stitched).toContain(doingId);
+    expect(stitched).toContain("Old doing item");
   });
 
   it("delegates /delegate_execute to a WorkItem and returns its id immediately", async () => {
@@ -250,5 +307,38 @@ describe("AgentRuntime (WorkBoard integration)", () => {
       [item?.work_item_id ?? ""],
     );
     expect(task?.execution_profile).toBe("planner");
+  });
+
+  it("does not treat /delegate_executeX as a delegation directive", async () => {
+    generateTextMock.mockResolvedValueOnce({ text: "ok", steps: [] });
+
+    const { createContainer } = await import("../../src/container.js");
+    const { AgentRuntime } = await import("../../src/modules/agent/runtime.js");
+
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({ dbPath: ":memory:", migrationsDir });
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("unused"),
+      fetchImpl: fetch404,
+    } as ConstructorParameters<typeof AgentRuntime>[0]);
+
+    const result = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      message: "/delegate_executeX not a real directive",
+    });
+
+    expect(result.reply).toBe("ok");
+    expect(generateTextMock).toHaveBeenCalled();
+
+    const count = await container.db.get<{ count: number }>(
+      `SELECT COUNT(*) AS count
+       FROM work_items
+       WHERE tenant_id = 'default' AND agent_id = 'default' AND workspace_id = 'default'`,
+    );
+    expect(count?.count ?? 0).toBe(0);
   });
 });
