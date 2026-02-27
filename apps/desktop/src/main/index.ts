@@ -11,6 +11,7 @@ import { setWindowsAppUserModelId, setupSingleInstance } from "./single-instance
 import { configureMacAboutPanel } from "./platform/os-integrations.js";
 import { buildApplicationMenuTemplate } from "./menu.js";
 import { registerContextMenus } from "./context-menu.js";
+import { isSafeExternalUrl } from "./safe-external-url.js";
 import {
   captureWindowState,
   ensureVisibleBounds,
@@ -84,15 +85,6 @@ export async function maybeAutoStartEmbeddedGatewayOnLaunch(): Promise<void> {
     await startEmbeddedGatewayFromConfig();
   } catch (err) {
     console.error("Failed to auto-start embedded gateway on launch", err);
-  }
-}
-
-function isSafeExternalUrl(rawUrl: string): boolean {
-  try {
-    const parsed = new URL(rawUrl);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
-  } catch {
-    return false;
   }
 }
 

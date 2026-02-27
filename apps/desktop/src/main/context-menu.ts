@@ -1,4 +1,5 @@
 import type { MenuItemConstructorOptions } from "electron";
+import { isSafeExternalUrl } from "./safe-external-url.js";
 
 export type ContextMenuEditFlags = {
   canCut?: boolean;
@@ -18,15 +19,6 @@ export type ContextMenuParamsLike = {
 export type ContextMenuBuilderDeps = {
   onOpenLinkInBrowser: (url: string) => void;
 };
-
-function isSafeExternalUrl(rawUrl: string): boolean {
-  try {
-    const parsed = new URL(rawUrl);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
 
 export function buildContextMenuTemplate(
   params: ContextMenuParamsLike,
