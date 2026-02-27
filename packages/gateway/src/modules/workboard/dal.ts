@@ -25,6 +25,8 @@ import type {
   Lane,
 } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
+import type { WsBroadcastAudience } from "../../ws/audience.js";
+import type { RedactionEngine } from "../redaction/engine.js";
 
 type RawTime = string | Date;
 
@@ -33,7 +35,7 @@ const DEFAULT_WORK_ITEM_WIP_LIMIT = 2;
 const WORKBOARD_WS_AUDIENCE = {
   roles: ["client"],
   required_scopes: ["operator.read", "operator.write"],
-} as const;
+} as const satisfies WsBroadcastAudience;
 
 const WORK_ITEM_TRANSITIONS: Record<WorkItemState, WorkItemState[]> = {
   backlog: ["ready"],
@@ -341,6 +343,8 @@ interface RawWorkItemTaskRow {
   task_id: string;
   work_item_id: string;
   status: string;
+  lease_owner?: string | null;
+  lease_expires_at_ms?: number | null;
   depends_on_json: string;
   execution_profile: string;
   side_effect_class: string;
@@ -508,13 +512,20 @@ function toWorkItemEvent(raw: RawWorkItemEventRow): WorkItemEventRow {
 }
 
 export class WorkboardDal {
-  constructor(private readonly db: SqlDb) {}
+  constructor(
+    private readonly db: SqlDb,
+    private readonly redactionEngine?: RedactionEngine,
+  ) {}
 
   private async enqueueWsEventTx(tx: SqlDb, evt: WsEventEnvelope): Promise<void> {
+    const payload = { message: evt, audience: WORKBOARD_WS_AUDIENCE };
+    const redactedPayload = this.redactionEngine
+      ? this.redactionEngine.redactUnknown(payload).redacted
+      : payload;
     await tx.run(
       `INSERT INTO outbox (topic, target_edge_id, payload_json)
        VALUES (?, ?, ?)`,
-      ["ws.broadcast", null, JSON.stringify({ message: evt, audience: WORKBOARD_WS_AUDIENCE })],
+      ["ws.broadcast", null, JSON.stringify(redactedPayload)],
     );
   }
 
@@ -1846,6 +1857,8 @@ export class WorkboardDal {
   async updateTask(params: {
     scope: WorkScope;
     task_id: string;
+    lease_owner?: string;
+    nowMs?: number;
     patch: {
       status?: WorkItemTaskState;
       depends_on?: string[];
@@ -1874,6 +1887,27 @@ export class WorkboardDal {
         [params.scope.tenant_id, params.scope.agent_id, params.scope.workspace_id, params.task_id],
       );
       if (!existing) return undefined;
+
+      const nowMs = params.nowMs ?? Date.now();
+      const existingStatus = existing.status as WorkItemTaskState;
+      const leavingLease =
+        existingStatus === "leased" &&
+        params.patch.status !== undefined &&
+        params.patch.status !== "leased";
+
+      if (leavingLease) {
+        const leaseOwner = params.lease_owner?.trim();
+        if (!leaseOwner) {
+          throw new Error("lease_owner is required to update leased tasks");
+        }
+        if ((existing.lease_owner ?? null) !== leaseOwner) {
+          throw new Error("lease_owner mismatch");
+        }
+        const expiresAt = existing.lease_expires_at_ms ?? null;
+        if (expiresAt === null || expiresAt <= nowMs) {
+          throw new Error("task lease expired");
+        }
+      }
 
       const normalizedDependsOn =
         params.patch.depends_on !== undefined
@@ -1948,6 +1982,10 @@ export class WorkboardDal {
       if (params.patch.status !== undefined) {
         set.push("status = ?");
         values.push(params.patch.status);
+      }
+      if (leavingLease) {
+        set.push("lease_owner = NULL");
+        set.push("lease_expires_at_ms = NULL");
       }
       if (normalizedDependsOn !== undefined) {
         set.push("depends_on_json = ?");
@@ -2109,7 +2147,12 @@ export class WorkboardDal {
       const runnable: string[] = [];
       for (const row of rows) {
         const status = row.status as WorkItemTaskState;
-        if (status !== "queued") continue;
+        const expiredLease =
+          status === "leased" &&
+          (row.lease_expires_at_ms === null ||
+            row.lease_expires_at_ms === undefined ||
+            row.lease_expires_at_ms <= nowMs);
+        if (status !== "queued" && !expiredLease) continue;
         const deps = depsById.get(row.task_id) ?? [];
         if (deps.length === 0) {
           runnable.push(row.task_id);
@@ -2134,9 +2177,13 @@ export class WorkboardDal {
                lease_owner = ?,
                lease_expires_at_ms = ?,
                updated_at = ?
-           WHERE task_id = ? AND status = 'queued'
+           WHERE task_id = ?
+             AND (
+               status = 'queued'
+               OR (status = 'leased' AND (lease_expires_at_ms IS NULL OR lease_expires_at_ms <= ?))
+             )
            RETURNING *`,
-          [params.lease_owner, leaseExpiresAtMs, updatedAtIso, taskId],
+          [params.lease_owner, leaseExpiresAtMs, updatedAtIso, taskId, nowMs],
         );
         if (!updated) continue;
         leased.push({ task: toWorkItemTask(updated), lease_expires_at_ms: leaseExpiresAtMs });

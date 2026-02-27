@@ -942,6 +942,8 @@ describe("WorkboardDal", () => {
     await dal.updateTask({
       scope,
       task_id: root.task_id,
+      lease_owner: leaseOwner,
+      nowMs: nowMs + 5_000,
       patch: { status: "completed", finished_at: "2026-02-27T00:00:05.000Z" },
       updatedAtIso: "2026-02-27T00:00:05.000Z",
     });
@@ -959,12 +961,16 @@ describe("WorkboardDal", () => {
     await dal.updateTask({
       scope,
       task_id: b.task_id,
+      lease_owner: leaseOwner,
+      nowMs: nowMs + 6_000,
       patch: { status: "completed", finished_at: "2026-02-27T00:00:06.000Z" },
       updatedAtIso: "2026-02-27T00:00:06.000Z",
     });
     await dal.updateTask({
       scope,
       task_id: c.task_id,
+      lease_owner: leaseOwner,
+      nowMs: nowMs + 6_000,
       patch: { status: "completed", finished_at: "2026-02-27T00:00:06.001Z" },
       updatedAtIso: "2026-02-27T00:00:06.001Z",
     });
@@ -978,6 +984,210 @@ describe("WorkboardDal", () => {
       limit: 10,
     });
     expect(third.leased.map((x) => x.task.task_id)).toEqual([join.task_id]);
+  });
+
+  it("reclaims expired task leases", async () => {
+    const dal = createDal();
+    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+
+    const item = await dal.createItem({
+      scope,
+      item: {
+        kind: "action",
+        title: "Lease expiry",
+        created_from_session_key: "agent:default:main",
+      },
+      createdAtIso: "2026-02-27T00:00:00.000Z",
+    });
+
+    const task = await dal.createTask({
+      scope,
+      task: {
+        work_item_id: item.work_item_id,
+        execution_profile: "planner",
+        side_effect_class: "none",
+      },
+      taskId: "00000000-0000-0000-0000-000000000001",
+      createdAtIso: "2026-02-27T00:00:01.000Z",
+    });
+
+    const ownerA = "owner-a";
+    const ownerB = "owner-b";
+    const nowMs = Date.parse("2026-02-27T00:00:00.000Z");
+    const ttlMs = 1_000;
+
+    const first = await dal.leaseRunnableTasks({
+      scope,
+      work_item_id: item.work_item_id,
+      lease_owner: ownerA,
+      nowMs,
+      leaseTtlMs: ttlMs,
+      limit: 10,
+    });
+    expect(first.leased.map((x) => x.task.task_id)).toEqual([task.task_id]);
+    expect(first.leased[0]!.lease_expires_at_ms).toBe(nowMs + ttlMs);
+
+    const beforeExpiry = await dal.leaseRunnableTasks({
+      scope,
+      work_item_id: item.work_item_id,
+      lease_owner: ownerB,
+      nowMs: nowMs + ttlMs - 1,
+      leaseTtlMs: ttlMs,
+      limit: 10,
+    });
+    expect(beforeExpiry.leased).toEqual([]);
+
+    const afterExpiry = await dal.leaseRunnableTasks({
+      scope,
+      work_item_id: item.work_item_id,
+      lease_owner: ownerB,
+      nowMs: nowMs + ttlMs,
+      leaseTtlMs: ttlMs,
+      limit: 10,
+    });
+    expect(afterExpiry.leased.map((x) => x.task.task_id)).toEqual([task.task_id]);
+    expect(afterExpiry.leased[0]!.lease_expires_at_ms).toBe(nowMs + ttlMs + ttlMs);
+
+    const raw = await db!.get<{ lease_owner: string | null; lease_expires_at_ms: number | null }>(
+      `SELECT lease_owner, lease_expires_at_ms
+       FROM work_item_tasks
+       WHERE task_id = ?`,
+      [task.task_id],
+    );
+    expect(raw).toBeDefined();
+    expect(raw!.lease_owner).toBe(ownerB);
+    expect(raw!.lease_expires_at_ms).toBe(nowMs + ttlMs + ttlMs);
+  });
+
+  it("rejects updating leased tasks without a valid lease owner", async () => {
+    const dal = createDal();
+    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+
+    const item = await dal.createItem({
+      scope,
+      item: {
+        kind: "action",
+        title: "Lease owner enforcement",
+        created_from_session_key: "agent:default:main",
+      },
+      createdAtIso: "2026-02-27T00:00:00.000Z",
+    });
+
+    const task = await dal.createTask({
+      scope,
+      task: {
+        work_item_id: item.work_item_id,
+        execution_profile: "executor",
+        side_effect_class: "none",
+      },
+      taskId: "00000000-0000-0000-0000-000000000001",
+      createdAtIso: "2026-02-27T00:00:01.000Z",
+    });
+
+    const leaseOwner = "owner-a";
+    const nowMs = Date.parse("2026-02-27T00:00:00.000Z");
+    const ttlMs = 60_000;
+
+    await dal.leaseRunnableTasks({
+      scope,
+      work_item_id: item.work_item_id,
+      lease_owner: leaseOwner,
+      nowMs,
+      leaseTtlMs: ttlMs,
+      limit: 10,
+    });
+
+    await expect(
+      dal.updateTask({
+        scope,
+        task_id: task.task_id,
+        patch: { status: "completed", finished_at: "2026-02-27T00:00:02.000Z" },
+        updatedAtIso: "2026-02-27T00:00:02.000Z",
+      }),
+    ).rejects.toThrow(/lease/i);
+  });
+
+  it("enforces lease owner + expiry when leaving 'leased'", async () => {
+    const dal = createDal();
+    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+
+    const item = await dal.createItem({
+      scope,
+      item: {
+        kind: "action",
+        title: "Lease expiry enforcement",
+        created_from_session_key: "agent:default:main",
+      },
+      createdAtIso: "2026-02-27T00:00:00.000Z",
+    });
+
+    const task = await dal.createTask({
+      scope,
+      task: {
+        work_item_id: item.work_item_id,
+        execution_profile: "executor",
+        side_effect_class: "none",
+      },
+      taskId: "00000000-0000-0000-0000-000000000001",
+      createdAtIso: "2026-02-27T00:00:01.000Z",
+    });
+
+    const ownerA = "owner-a";
+    const ownerB = "owner-b";
+    const nowMs = Date.parse("2026-02-27T00:00:00.000Z");
+    const ttlMs = 1_000;
+
+    await dal.leaseRunnableTasks({
+      scope,
+      work_item_id: item.work_item_id,
+      lease_owner: ownerA,
+      nowMs,
+      leaseTtlMs: ttlMs,
+      limit: 10,
+    });
+
+    await expect(
+      dal.updateTask({
+        scope,
+        task_id: task.task_id,
+        lease_owner: ownerB,
+        nowMs: nowMs + 1,
+        patch: { status: "completed", finished_at: "2026-02-27T00:00:02.000Z" },
+        updatedAtIso: "2026-02-27T00:00:02.000Z",
+      }),
+    ).rejects.toThrow(/mismatch/i);
+
+    await expect(
+      dal.updateTask({
+        scope,
+        task_id: task.task_id,
+        lease_owner: ownerA,
+        nowMs: nowMs + ttlMs,
+        patch: { status: "completed", finished_at: "2026-02-27T00:00:02.000Z" },
+        updatedAtIso: "2026-02-27T00:00:02.000Z",
+      }),
+    ).rejects.toThrow(/expired/i);
+
+    const completed = await dal.updateTask({
+      scope,
+      task_id: task.task_id,
+      lease_owner: ownerA,
+      nowMs: nowMs + ttlMs - 1,
+      patch: { status: "completed", finished_at: "2026-02-27T00:00:02.000Z" },
+      updatedAtIso: "2026-02-27T00:00:02.000Z",
+    });
+    expect(completed).toBeDefined();
+    expect(completed!.status).toBe("completed");
+
+    const raw = await db!.get<{ lease_owner: string | null; lease_expires_at_ms: number | null }>(
+      `SELECT lease_owner, lease_expires_at_ms
+       FROM work_item_tasks
+       WHERE task_id = ?`,
+      [task.task_id],
+    );
+    expect(raw).toBeDefined();
+    expect(raw!.lease_owner).toBe(null);
+    expect(raw!.lease_expires_at_ms).toBe(null);
   });
 
   it("emits work.task.* WS events for task lifecycle", async () => {
@@ -1030,6 +1240,8 @@ describe("WorkboardDal", () => {
     await dal.updateTask({
       scope,
       task_id: task.task_id,
+      lease_owner: leaseOwner,
+      nowMs: nowMs + 1_000,
       patch: { status: "running", run_id: runId, started_at: "2026-02-27T00:00:02.000Z" },
       updatedAtIso: "2026-02-27T00:00:02.000Z",
     });
@@ -1059,11 +1271,20 @@ describe("WorkboardDal", () => {
     const outbox = await db!.all<{ topic: string; payload_json: string }>(
       "SELECT topic, payload_json FROM outbox ORDER BY id ASC",
     );
-    const workTaskEvents = outbox
+    const broadcasts = outbox
       .filter((row) => row.topic === "ws.broadcast")
-      .map((row) => JSON.parse(row.payload_json) as { message?: any })
-      .map((row) => row.message)
-      .filter((msg) => msg?.type?.startsWith("work.task."));
+      .map((row) => JSON.parse(row.payload_json) as { message?: any; audience?: any });
+    const workTaskBroadcasts = broadcasts.filter((row) =>
+      row.message?.type?.startsWith("work.task."),
+    );
+    const workTaskEvents = workTaskBroadcasts.map((row) => row.message);
+
+    for (const row of workTaskBroadcasts) {
+      expect(row.audience).toMatchObject({
+        roles: ["client"],
+        required_scopes: ["operator.read", "operator.write"],
+      });
+    }
 
     expect(workTaskEvents.map((evt) => evt.type)).toEqual([
       "work.task.leased",

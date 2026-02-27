@@ -1013,7 +1013,7 @@ export async function handleClientMessage(
       });
     }
 
-    const dal = new WorkboardDal(deps.db);
+    const dal = new WorkboardDal(deps.db, deps.redactionEngine);
     try {
       const scope = parsedReq.data.payload;
       const item = await dal.createItem({
@@ -1068,7 +1068,7 @@ export async function handleClientMessage(
       });
     }
 
-    const dal = new WorkboardDal(deps.db);
+    const dal = new WorkboardDal(deps.db, deps.redactionEngine);
     try {
       const payload = parsedReq.data.payload;
       const { items, next_cursor } = await dal.listItems({
@@ -1110,7 +1110,7 @@ export async function handleClientMessage(
       });
     }
 
-    const dal = new WorkboardDal(deps.db);
+    const dal = new WorkboardDal(deps.db, deps.redactionEngine);
     try {
       const payload = parsedReq.data.payload;
       const item = await dal.getItem({ scope: payload, work_item_id: payload.work_item_id });
@@ -1149,7 +1149,7 @@ export async function handleClientMessage(
       });
     }
 
-    const dal = new WorkboardDal(deps.db);
+    const dal = new WorkboardDal(deps.db, deps.redactionEngine);
     try {
       const payload = parsedReq.data.payload;
       const item = await dal.updateItem({
@@ -1214,7 +1214,7 @@ export async function handleClientMessage(
       });
     }
 
-    const dal = new WorkboardDal(deps.db);
+    const dal = new WorkboardDal(deps.db, deps.redactionEngine);
     try {
       const payload = parsedReq.data.payload;
       const item = await dal.transitionItem({
@@ -1273,7 +1273,7 @@ export async function handleClientMessage(
       );
     }
 
-    const dal = new WorkboardDal(deps.db);
+    const dal = new WorkboardDal(deps.db, deps.redactionEngine);
 
     if (msg.type === "work.link.create") {
       const parsedReq = WsWorkLinkCreateRequest.safeParse(msg);
@@ -1369,7 +1369,7 @@ export async function handleClientMessage(
       );
     }
 
-    const dal = new WorkboardDal(deps.db);
+    const dal = new WorkboardDal(deps.db, deps.redactionEngine);
 
     if (msg.type === "work.artifact.list") {
       const parsedReq = WsWorkArtifactListRequest.safeParse(msg);
@@ -1470,7 +1470,7 @@ export async function handleClientMessage(
       );
     }
 
-    const dal = new WorkboardDal(deps.db);
+    const dal = new WorkboardDal(deps.db, deps.redactionEngine);
 
     if (msg.type === "work.decision.list") {
       const parsedReq = WsWorkDecisionListRequest.safeParse(msg);
@@ -1572,7 +1572,7 @@ export async function handleClientMessage(
       );
     }
 
-    const dal = new WorkboardDal(deps.db);
+    const dal = new WorkboardDal(deps.db, deps.redactionEngine);
 
     if (msg.type === "work.signal.list") {
       const parsedReq = WsWorkSignalListRequest.safeParse(msg);
@@ -1709,7 +1709,7 @@ export async function handleClientMessage(
       );
     }
 
-    const dal = new WorkboardDal(deps.db);
+    const dal = new WorkboardDal(deps.db, deps.redactionEngine);
 
     if (msg.type === "work.state_kv.get") {
       const parsedReq = WsWorkStateKvGetRequest.safeParse(msg);

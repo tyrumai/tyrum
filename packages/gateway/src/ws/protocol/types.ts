@@ -17,6 +17,7 @@ import type { ModelsDevService } from "../../modules/models/models-dev-service.j
 import type { AuthAudit } from "../../modules/auth/audit.js";
 import type { MemoryV1Dal } from "../../modules/memory/v1-dal.js";
 import type { ArtifactStore } from "../../modules/artifact/store.js";
+import type { RedactionEngine } from "../../modules/redaction/engine.js";
 
 // ---------------------------------------------------------------------------
 // Dependency injection
@@ -31,6 +32,7 @@ export interface ProtocolDeps {
   logger?: Logger;
   authAudit?: AuthAudit;
   db?: SqlDb;
+  redactionEngine?: RedactionEngine;
   memoryV1Dal?: MemoryV1Dal;
   artifactStore?: ArtifactStore;
   contextReportDal?: ContextReportDal;
