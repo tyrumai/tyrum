@@ -3,6 +3,23 @@ import type { DesktopThemeState } from "../shared/theme.js";
 
 export type { DesktopThemeState };
 
+type ThemeTokens = {
+  bg: string;
+  bgSubtle: string;
+  bgCard: string;
+  fg: string;
+  fgMuted: string;
+  border: string;
+  primary: string;
+  primaryDim: string;
+  success: string;
+  warning: string;
+  error: string;
+  neutral: string;
+  focusRing: string;
+  selection: string;
+};
+
 export const desktopThemeTokens = {
   light: {
     bg: "#ffffff",
@@ -36,9 +53,7 @@ export const desktopThemeTokens = {
     focusRing: "#a5b4fc",
     selection: "rgba(99, 102, 241, 0.30)",
   },
-} as const;
-
-type ThemeTokens = (typeof desktopThemeTokens)["light"];
+} as const satisfies Record<DesktopThemeState["colorScheme"], ThemeTokens>;
 
 function resolveThemeTokens(state: DesktopThemeState): ThemeTokens {
   const base = desktopThemeTokens[state.colorScheme];
