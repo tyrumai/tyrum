@@ -45,6 +45,8 @@ export function resolveWsRequestRequiredScopes(type: string): string[] | null {
     case "work.signal.create":
     case "work.signal.update":
     case "work.state_kv.set": {
+      return ["operator.write"];
+    }
     case "memory.search":
     case "memory.list":
     case "memory.get": {
