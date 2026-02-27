@@ -24,6 +24,11 @@ class FakeWsClient implements OperatorWsClient {
   approvalResolve = vi.fn(async () => {
     throw new Error("not implemented");
   });
+  memorySearch = vi.fn(async () => ({ v: 1, hits: [], next_cursor: undefined }) as unknown);
+  memoryList = vi.fn(async () => ({ v: 1, items: [], next_cursor: undefined }) as unknown);
+  memoryGet = vi.fn(async () => ({ v: 1, item: {} }) as unknown);
+  memoryForget = vi.fn(async () => ({ v: 1, deleted_count: 0, tombstones: [] }) as unknown);
+  memoryExport = vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" }) as unknown);
   commandExecute = vi.fn(async () => ({}));
 
   private readonly handlers = new Map<string, Set<Handler>>();

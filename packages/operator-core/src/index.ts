@@ -29,6 +29,8 @@ export type { OperatorHttpClient, OperatorWsClient } from "./deps.js";
 
 export type { ExternalStore, Unsubscribe } from "./store.js";
 
+export type { OperatorCoreError, OperatorCoreErrorKind } from "./operator-error.js";
+
 export {
   createAdminModeStore,
   type AdminModeState,
@@ -41,3 +43,13 @@ export type { ConnectionState, ConnectionStore } from "./stores/connection-store
 export type { Pairing, PairingState, PairingStore } from "./stores/pairing-store.js";
 export type { RunsState, RunsStore } from "./stores/runs-store.js";
 export type { OperatorPresenceEntry, StatusState, StatusStore } from "./stores/status-store.js";
+export type {
+  MemoryBrowseRequest,
+  MemoryBrowseResults,
+  MemoryBrowseState,
+  MemoryExportState,
+  MemoryInspectState,
+  MemoryState,
+  MemoryStore,
+  MemoryTombstonesState,
+} from "./stores/memory-store.js";
