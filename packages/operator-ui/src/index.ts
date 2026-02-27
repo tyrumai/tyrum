@@ -45,6 +45,44 @@ export { EmptyState } from "./components/ui/empty-state.js";
 export type { SkeletonProps } from "./components/ui/skeleton.js";
 export { Skeleton } from "./components/ui/skeleton.js";
 
+export {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogOverlay,
+  DialogPortal,
+  DialogTitle,
+  DialogTrigger,
+} from "./components/ui/dialog.js";
+
+export { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs.js";
+
+export { Checkbox } from "./components/ui/checkbox.js";
+
+export { Switch } from "./components/ui/switch.js";
+
+export { RadioGroup, RadioGroupItem } from "./components/ui/radio-group.js";
+
+export {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "./components/ui/tooltip.js";
+
+export { ScrollArea, ScrollBar } from "./components/ui/scroll-area.js";
+
+export {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "./components/ui/dropdown-menu.js";
+
 export type { ErrorFallbackProps } from "./components/error/error-fallback.js";
 export { ErrorFallback } from "./components/error/error-fallback.js";
 

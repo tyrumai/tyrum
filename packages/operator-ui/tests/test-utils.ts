@@ -5,6 +5,32 @@ import { createRoot, type Root } from "react-dom/client";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
+if (typeof globalThis.ResizeObserver === "undefined") {
+  globalThis.ResizeObserver = class ResizeObserver {
+    readonly #callback: ResizeObserverCallback;
+
+    constructor(callback: ResizeObserverCallback) {
+      this.#callback = callback;
+    }
+
+    observe(target: Element): void {
+      this.#callback(
+        [
+          {
+            target,
+            contentRect: target.getBoundingClientRect(),
+          } as ResizeObserverEntry,
+        ],
+        this,
+      );
+    }
+
+    unobserve(_target: Element): void {}
+
+    disconnect(): void {}
+  };
+}
+
 export interface TestRoot {
   container: HTMLDivElement;
   root: Root;

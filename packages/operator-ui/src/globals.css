@@ -6,3 +6,65 @@
 @import "./themes.css" layer(base);
 
 @import "tailwindcss/utilities.css" layer(utilities);
+
+@layer utilities {
+  @keyframes tyrum-fade-in {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes tyrum-fade-out {
+    from {
+      opacity: 1;
+    }
+
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes tyrum-dialog-in {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.95);
+    }
+
+    to {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+  }
+
+  @keyframes tyrum-dialog-out {
+    from {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    to {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.95);
+    }
+  }
+
+  .tyrum-animate-fade-in {
+    animation: tyrum-fade-in 200ms ease-out;
+  }
+
+  .tyrum-animate-fade-out {
+    animation: tyrum-fade-out 200ms ease-in;
+  }
+
+  .tyrum-animate-dialog-in {
+    animation: tyrum-dialog-in 200ms ease-out;
+  }
+
+  .tyrum-animate-dialog-out {
+    animation: tyrum-dialog-out 200ms ease-in;
+  }
+}
