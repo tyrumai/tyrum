@@ -315,6 +315,82 @@ describe("memoryStore", () => {
     });
   });
 
+  it("applies consolidation events received during a list load at the correct position", async () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+
+    const consolidated = sampleNote("123e4567-e89b-12d3-a456-426614174310", "old");
+    const itemA = sampleNote("123e4567-e89b-12d3-a456-426614174311", "A");
+    const itemB = sampleNote("123e4567-e89b-12d3-a456-426614174312", "B");
+    const itemAfter = sampleNote("123e4567-e89b-12d3-a456-426614174313", "after");
+    const consolidatedUpdated: MemoryItem = {
+      ...consolidated,
+      body_md: "new",
+      updated_at: "2026-02-19T12:00:02Z",
+    };
+
+    const page = deferred<{ v: 1; items: MemoryItem[]; next_cursor?: string }>();
+    ws.memoryList = vi.fn(async () => await page.promise);
+
+    const core = createOperatorCore({
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788",
+      auth: createBearerTokenAuth("test-token"),
+      deps: { ws, http },
+    });
+
+    const listP = core.memoryStore.list();
+    expect(core.memoryStore.getSnapshot().browse.loading).toBe(true);
+
+    ws.emit("memory.item.consolidated", {
+      payload: {
+        from_memory_item_ids: [itemA.memory_item_id, itemB.memory_item_id],
+        item: consolidatedUpdated,
+      },
+    });
+
+    page.resolve({ v: 1, items: [consolidated, itemA, itemB, itemAfter] });
+    await listP;
+
+    expect(core.memoryStore.getSnapshot().browse.results).toEqual({
+      kind: "list",
+      items: [consolidatedUpdated, itemAfter],
+      nextCursor: null,
+    });
+  });
+
+  it("does not notify subscribers when an upsert arrives for an item not in the list results", async () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+
+    const itemA = sampleNote("123e4567-e89b-12d3-a456-426614174320", "A");
+    ws.memoryList = vi.fn(async () => ({ v: 1, items: [itemA] }));
+
+    const core = createOperatorCore({
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788",
+      auth: createBearerTokenAuth("test-token"),
+      deps: { ws, http },
+    });
+
+    await core.memoryStore.list();
+
+    const before = core.memoryStore.getSnapshot();
+
+    let notifications = 0;
+    const unsubscribe = core.memoryStore.subscribe(() => {
+      notifications++;
+    });
+
+    const offPage = sampleNote("123e4567-e89b-12d3-a456-426614174321", "off-page");
+    ws.emit("memory.item.updated", { payload: { item: offPage } });
+
+    unsubscribe();
+
+    expect(notifications).toBe(0);
+    expect(core.memoryStore.getSnapshot()).toBe(before);
+  });
+
   it("removes consolidated-from items from list results and inserts the consolidated item", async () => {
     const ws = new FakeWsClient();
     const http = createFakeHttpClient();
@@ -377,6 +453,46 @@ describe("memoryStore", () => {
     expect(core.memoryStore.getSnapshot().browse.results).toEqual({
       kind: "list",
       items: [consolidated],
+      nextCursor: null,
+    });
+  });
+
+  it("inserts the consolidated item at the first from-id position when it already exists earlier", async () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+
+    const consolidated = sampleNote("123e4567-e89b-12d3-a456-426614174699", "old");
+    const consolidatedUpdated: MemoryItem = {
+      ...consolidated,
+      body_md: "new",
+      updated_at: "2026-02-19T12:00:02Z",
+    };
+
+    const itemA = sampleNote("123e4567-e89b-12d3-a456-426614174700", "A");
+    const itemB = sampleNote("123e4567-e89b-12d3-a456-426614174701", "B");
+    const itemAfter = sampleNote("123e4567-e89b-12d3-a456-426614174702", "after");
+
+    ws.memoryList = vi.fn(async () => ({ v: 1, items: [consolidated, itemA, itemB, itemAfter] }));
+
+    const core = createOperatorCore({
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788",
+      auth: createBearerTokenAuth("test-token"),
+      deps: { ws, http },
+    });
+
+    await core.memoryStore.list();
+
+    ws.emit("memory.item.consolidated", {
+      payload: {
+        from_memory_item_ids: [itemA.memory_item_id, itemB.memory_item_id],
+        item: consolidatedUpdated,
+      },
+    });
+
+    expect(core.memoryStore.getSnapshot().browse.results).toEqual({
+      kind: "list",
+      items: [consolidatedUpdated, itemAfter],
       nextCursor: null,
     });
   });

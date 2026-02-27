@@ -133,6 +133,21 @@ function applyItemUpserts(items: MemoryItem[], upserts: Map<string, MemoryItem>)
 
 type MemoryConsolidation = { fromIds: Set<string>; item: MemoryItem };
 
+function countItemsBeforeConsolidationAnchor(
+  items: { memory_item_id: string }[],
+  anchorIndex: number,
+  fromIds: Set<string>,
+  consolidatedItemId: string,
+): number {
+  let index = 0;
+  for (const entry of items.slice(0, anchorIndex)) {
+    if (!fromIds.has(entry.memory_item_id) && entry.memory_item_id !== consolidatedItemId) {
+      index++;
+    }
+  }
+  return index;
+}
+
 function applyConsolidationsToListItems(
   items: MemoryItem[],
   consolidations: MemoryConsolidation[],
@@ -140,14 +155,20 @@ function applyConsolidationsToListItems(
   if (consolidations.length === 0) return items;
   let next = items;
   for (const consolidation of consolidations) {
-    const index = next.findIndex((entry) => consolidation.fromIds.has(entry.memory_item_id));
-    if (index === -1) continue;
+    const anchorIndex = next.findIndex((entry) => consolidation.fromIds.has(entry.memory_item_id));
+    if (anchorIndex === -1) continue;
     const filtered = next.filter(
       (entry) =>
         !consolidation.fromIds.has(entry.memory_item_id) &&
         entry.memory_item_id !== consolidation.item.memory_item_id,
     );
-    filtered.splice(index, 0, consolidation.item);
+    const insertIndex = countItemsBeforeConsolidationAnchor(
+      next,
+      anchorIndex,
+      consolidation.fromIds,
+      consolidation.item.memory_item_id,
+    );
+    filtered.splice(insertIndex, 0, consolidation.item);
     next = filtered;
   }
   return next;
@@ -648,15 +669,17 @@ export function createMemoryStore(ws: OperatorWsClient): {
     }
     setState((prev) => {
       const browseResults = prev.browse.results;
-      const nextBrowseResults =
-        browseResults?.kind === "list"
-          ? {
-              ...browseResults,
-              items: browseResults.items.map((entry) =>
-                entry.memory_item_id === item.memory_item_id ? item : entry,
-              ),
-            }
-          : browseResults;
+      let nextBrowseResults = browseResults;
+      if (browseResults?.kind === "list") {
+        const index = browseResults.items.findIndex(
+          (entry) => entry.memory_item_id === item.memory_item_id,
+        );
+        if (index !== -1) {
+          const items = [...browseResults.items];
+          items[index] = item;
+          nextBrowseResults = { ...browseResults, items };
+        }
+      }
 
       const nextInspect =
         prev.inspect.memoryItemId === item.memory_item_id
@@ -712,15 +735,21 @@ export function createMemoryStore(ws: OperatorWsClient): {
       let nextBrowseResults = prev.browse.results;
 
       if (nextBrowseResults?.kind === "list") {
-        const index = nextBrowseResults.items.findIndex((entry) =>
+        const anchorIndex = nextBrowseResults.items.findIndex((entry) =>
           fromIds.has(entry.memory_item_id),
         );
-        if (index !== -1) {
+        if (anchorIndex !== -1) {
           const filtered = nextBrowseResults.items.filter(
             (entry) =>
               !fromIds.has(entry.memory_item_id) && entry.memory_item_id !== item.memory_item_id,
           );
-          filtered.splice(index, 0, item);
+          const insertIndex = countItemsBeforeConsolidationAnchor(
+            nextBrowseResults.items,
+            anchorIndex,
+            fromIds,
+            item.memory_item_id,
+          );
+          filtered.splice(insertIndex, 0, item);
           nextBrowseResults = { ...nextBrowseResults, items: filtered };
         }
       } else if (nextBrowseResults?.kind === "search") {
