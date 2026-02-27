@@ -125,6 +125,7 @@ export const MemoryItemFilter = z
     kinds: z.array(MemoryItemKind).optional(),
     keys: z.array(z.string().trim().min(1)).optional(),
     tags: z.array(z.string().trim().min(1)).optional(),
+    sensitivities: z.array(MemorySensitivity).optional(),
     provenance: MemoryProvenanceFilter.optional(),
   })
   .strict();
@@ -147,6 +148,7 @@ export const MemorySearchHit = z
     kind: MemoryItemKind,
     score: z.number().min(0),
     snippet: z.string().trim().min(1).optional(),
+    provenance: MemoryProvenance.optional(),
   })
   .strict();
 export type MemorySearchHit = z.infer<typeof MemorySearchHit>;
