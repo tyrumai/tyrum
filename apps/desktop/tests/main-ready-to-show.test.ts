@@ -52,8 +52,11 @@ const {
       once: browserWindowOnceMock,
       show: browserWindowShowMock,
       focus: vi.fn(),
+      isDestroyed: vi.fn(() => false),
       webContents: {
         on: webContentsOnMock,
+        isDestroyed: vi.fn(() => false),
+        send: vi.fn(),
         setWindowOpenHandler: setWindowOpenHandlerMock,
       },
     };
@@ -159,6 +162,9 @@ vi.mock("electron", () => ({
   Menu: {
     buildFromTemplate: menuBuildFromTemplateMock,
     setApplicationMenu: menuSetApplicationMenuMock,
+  },
+  ipcMain: {
+    handle: vi.fn(),
   },
   screen: {
     getAllDisplays: screenGetAllDisplaysMock,

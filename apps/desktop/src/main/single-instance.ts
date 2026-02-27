@@ -54,6 +54,7 @@ function focusMainWindow(window: FocusableWindow | null): void {
 export function setupSingleInstance(deps: {
   app: ElectronApp;
   getMainWindow: () => FocusableWindow | null;
+  onSecondInstance?: (argv: string[], workingDirectory: string) => void;
 }): boolean {
   const didAcquireLock = deps.app.requestSingleInstanceLock();
   if (!didAcquireLock) {
@@ -61,9 +62,10 @@ export function setupSingleInstance(deps: {
     return false;
   }
 
-  deps.app.on("second-instance", (_event, argv) => {
+  deps.app.on("second-instance", (_event, argv, workingDirectory) => {
     lastSecondInstanceArgv = argv;
     focusMainWindow(deps.getMainWindow());
+    deps.onSecondInstance?.(argv, workingDirectory);
   });
 
   return true;

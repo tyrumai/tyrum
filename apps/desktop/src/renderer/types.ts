@@ -53,6 +53,8 @@ export interface TyrumDesktopApi {
   openExternal: (url: string) => Promise<void>;
   onUpdateStateChange: (cb: (state: unknown) => void) => () => void;
   onNavigationRequest: (cb: (req: unknown) => void) => () => void;
+  consumeDeepLink: () => Promise<string | null>;
+  onDeepLinkOpen: (cb: (url: string) => void) => () => void;
 }
 
 declare global {

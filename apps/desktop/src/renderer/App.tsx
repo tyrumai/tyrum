@@ -7,6 +7,7 @@ import { Permissions } from "./pages/Permissions.js";
 import { Diagnostics } from "./pages/Diagnostics.js";
 import { Logs } from "./pages/Logs.js";
 import { ConsentModal } from "./components/ConsentModal.js";
+import { getPageIdForDeepLink } from "./deep-links.js";
 
 type PageId = "overview" | "gateway" | "connection" | "permissions" | "diagnostics" | "logs";
 
@@ -35,7 +36,7 @@ export function App() {
       const config = cfg as Record<string, unknown>;
       const mode = config["mode"] === "remote" ? "remote" : "embedded";
       if (mode === "embedded") {
-        setPage("gateway");
+        setPage((current) => (current === "overview" ? "gateway" : current));
       }
     });
   }, []);
@@ -53,6 +54,27 @@ export function App() {
         return;
       }
       handleNavigate(pageId);
+    });
+
+    return unsubscribe;
+  }, [handleNavigate]);
+
+  useEffect(() => {
+    const api = window.tyrumDesktop;
+    if (!api?.consumeDeepLink || !api.onDeepLinkOpen) return;
+
+    const handleDeepLink = (url: string): void => {
+      handleNavigate(getPageIdForDeepLink(url));
+    };
+
+    void api.consumeDeepLink().then((url) => {
+      if (typeof url === "string") {
+        handleDeepLink(url);
+      }
+    });
+
+    const unsubscribe = api.onDeepLinkOpen((url) => {
+      handleDeepLink(url);
     });
 
     return unsubscribe;

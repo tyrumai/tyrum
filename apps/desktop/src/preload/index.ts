@@ -75,4 +75,17 @@ contextBridge.exposeInMainWorld("tyrumDesktop", {
       ipcRenderer.removeListener("navigation:request", listener);
     };
   },
+  consumeDeepLink: () => ipcRenderer.invoke("deeplink:consume"),
+  onDeepLinkOpen: (cb: (url: string) => void) => {
+    const listener = (_event: unknown, url: unknown) => {
+      if (typeof url !== "string") {
+        return;
+      }
+      cb(url);
+    };
+    ipcRenderer.on("deeplink:open", listener);
+    return () => {
+      ipcRenderer.removeListener("deeplink:open", listener);
+    };
+  },
 });
