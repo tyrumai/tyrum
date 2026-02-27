@@ -1,6 +1,14 @@
 import { createTyrumHttpClient, type TyrumHttpFetch } from "@tyrum/client";
 import { isAdminModeActive, type AdminModeState, type OperatorCore } from "@tyrum/operator-core";
-import { createContext, useEffect, useContext, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useEffect,
+  useContext,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import type { OperatorUiMode } from "./app.js";
 import { getDesktopApi } from "./desktop-api.js";
 import { useOperatorStore } from "./use-operator-store.js";
@@ -155,12 +163,16 @@ export function AdminModeGate({ children }: { children: ReactNode }) {
 function AdminModeEnterDialog() {
   const { core, mode, closeEnter } = useAdminModeUiContext();
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [revealToken, setRevealToken] = useState(false);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
   const confirmRef = useRef<HTMLInputElement | null>(null);
   const tokenRef = useRef<HTMLInputElement | null>(null);
-  const titleId = "admin-mode-title";
-  const descriptionId = "admin-mode-description";
+  const dialogId = useId();
+  const titleId = `${dialogId}-title`;
+  const descriptionId = `${dialogId}-description`;
 
   const issueDeviceToken = async (adminToken: string): Promise<void> => {
     const http = createTyrumHttpClient({
@@ -183,7 +195,7 @@ function AdminModeEnterDialog() {
   };
 
   const submit = async (): Promise<void> => {
-    if (busy) return;
+    if (busyRef.current) return;
 
     const confirmed = confirmRef.current?.checked ?? false;
     if (!confirmed) {
@@ -217,7 +229,7 @@ function AdminModeEnterDialog() {
   };
 
   const closeDialog = (): void => {
-    if (busy) return;
+    if (busyRef.current) return;
     setErrorMessage(null);
     setRevealToken(false);
     if (tokenRef.current) {
@@ -230,20 +242,25 @@ function AdminModeEnterDialog() {
   };
 
   useEffect(() => {
+    previousFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     tokenRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeDialog();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      previousFocusRef.current?.focus();
+      previousFocusRef.current = null;
+    };
   }, []);
 
   return (
-    <div
-      className="admin-dialog-backdrop"
-      data-testid="admin-mode-dialog"
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          closeDialog();
-        }
-      }}
-    >
+    <div className="admin-dialog-backdrop" data-testid="admin-mode-dialog">
       <div
         className="admin-dialog card stack"
         role="dialog"

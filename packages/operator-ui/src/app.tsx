@@ -1,7 +1,7 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import { useEffect, useRef, useState } from "react";
 import { AdminModeProvider } from "./admin-mode.js";
-import { getDesktopApi, type DesktopApi } from "./desktop-api.js";
+import { getDesktopApi } from "./desktop-api.js";
 import { OPERATOR_UI_CSS } from "./style.js";
 import { useOperatorStore } from "./use-operator-store.js";
 
