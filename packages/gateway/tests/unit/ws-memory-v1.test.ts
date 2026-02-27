@@ -562,4 +562,61 @@ describe("WS memory v1 handlers", () => {
     expect((res as unknown as { ok: boolean }).ok).toBe(false);
     expect((res as unknown as { error: { code: string } }).error.code).toBe("unsupported_request");
   });
+
+  it("returns invalid_request for kind-incompatible memory.update patches", async () => {
+    const cm = new ConnectionManager();
+    const { id: requesterId } = makeClient(cm);
+
+    const deps = makeDeps(cm, { db } as unknown as Partial<ProtocolDeps>);
+    (deps as unknown as { memoryV1Dal: MemoryV1Dal }).memoryV1Dal = memoryV1Dal;
+    (deps as unknown as { artifactStore: FsArtifactStore }).artifactStore = artifactStore;
+
+    const requester = cm.getClient(requesterId)!;
+
+    const createRes = await handleClientMessage(
+      requester,
+      JSON.stringify({
+        request_id: "r-create-1",
+        type: "memory.create",
+        payload: {
+          v: 1,
+          item: {
+            kind: "note",
+            body_md: "Remember to check dashboards.",
+            tags: ["project"],
+            sensitivity: "private",
+            provenance: { source_kind: "operator" },
+          },
+        },
+      }),
+      deps,
+    );
+
+    expect((createRes as unknown as { ok: boolean }).ok).toBe(true);
+    const createdItem = (createRes as unknown as { result: { item: { memory_item_id: string } } })
+      .result.item;
+
+    const updateRes = await handleClientMessage(
+      requester,
+      JSON.stringify({
+        request_id: "r-update-1",
+        type: "memory.update",
+        payload: {
+          v: 1,
+          memory_item_id: createdItem.memory_item_id,
+          patch: { occurred_at: "2026-02-19T12:00:01.000Z" },
+        },
+      }),
+      deps,
+    );
+
+    expect(updateRes).toBeDefined();
+    expect((updateRes as unknown as { ok: boolean }).ok).toBe(false);
+    expect((updateRes as unknown as { error: { code: string; message: string } }).error.code).toBe(
+      "invalid_request",
+    );
+    expect(
+      (updateRes as unknown as { error: { code: string; message: string } }).error.message,
+    ).toContain("incompatible patch fields");
+  });
 });

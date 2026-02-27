@@ -2135,6 +2135,9 @@ export async function handleClientMessage(
       if (message === "invalid cursor") {
         return errorResponse(msg.request_id, msg.type, "invalid_request", "invalid cursor");
       }
+      if (message.startsWith("incompatible patch fields for kind=")) {
+        return errorResponse(msg.request_id, msg.type, "invalid_request", message);
+      }
       return errorResponse(msg.request_id, msg.type, "internal_error", message);
     }
   }
