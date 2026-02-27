@@ -15,4 +15,3 @@ describe("WorkBoard drilldown fields", () => {
     expect(page).toContain("task.last_event_at");
   });
 });
-

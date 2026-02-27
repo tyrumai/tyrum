@@ -63,7 +63,10 @@ export function upsertWorkArtifact(artifacts: WorkArtifact[], next: WorkArtifact
   return upsertByStringKey(artifacts, next, (artifact) => artifact.artifact_id);
 }
 
-export function upsertWorkDecision(decisions: DecisionRecord[], next: DecisionRecord): DecisionRecord[] {
+export function upsertWorkDecision(
+  decisions: DecisionRecord[],
+  next: DecisionRecord,
+): DecisionRecord[] {
   return upsertByStringKey(decisions, next, (decision) => decision.decision_id);
 }
 
@@ -73,7 +76,10 @@ export function upsertWorkSignal(signals: WorkSignal[], next: WorkSignal): WorkS
 
 export type WorkStateKvEntry = AgentStateKVEntry | WorkItemStateKVEntry;
 
-export function upsertWorkStateKvEntry(entries: WorkStateKvEntry[], next: WorkStateKvEntry): WorkStateKvEntry[] {
+export function upsertWorkStateKvEntry(
+  entries: WorkStateKvEntry[],
+  next: WorkStateKvEntry,
+): WorkStateKvEntry[] {
   return upsertByStringKey(entries, next, (entry) => entry.key);
 }
 

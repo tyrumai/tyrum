@@ -20,7 +20,17 @@ import {
   type WorkStateKvEntry,
   type WorkTasksByWorkItemId,
 } from "../lib/workboard-store.js";
-import { badge, btn, card, colors, fonts, heading, label, sectionTitle, statusDot } from "../theme.js";
+import {
+  badge,
+  btn,
+  card,
+  colors,
+  fonts,
+  heading,
+  label,
+  sectionTitle,
+  statusDot,
+} from "../theme.js";
 
 type OperatorConnectionInfo = {
   mode: "embedded" | "remote";
@@ -121,7 +131,11 @@ const STATUS_LABELS: Record<(typeof WORK_ITEM_STATUSES)[number], string> = {
   cancelled: "Cancelled",
 };
 
-const DEFAULT_SCOPE = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+const DEFAULT_SCOPE = {
+  tenant_id: "default",
+  agent_id: "default",
+  workspace_id: "default",
+} as const;
 
 function makeAgentScope(): WorkStateKVScope {
   return { kind: "agent", ...DEFAULT_SCOPE };
@@ -214,8 +228,10 @@ export function WorkBoard() {
     let onTransportError: ((event: { message: string }) => void) | null = null;
     let onWorkItemEvent: ((event: { payload: { item: WorkItem } }) => void) | null = null;
     let onWorkTaskEvent: ((event: Parameters<typeof applyWorkTaskEvent>[1]) => void) | null = null;
-    let onWorkArtifactCreated: ((event: { payload: { artifact: WorkArtifact } }) => void) | null = null;
-    let onWorkDecisionCreated: ((event: { payload: { decision: DecisionRecord } }) => void) | null = null;
+    let onWorkArtifactCreated: ((event: { payload: { artifact: WorkArtifact } }) => void) | null =
+      null;
+    let onWorkDecisionCreated: ((event: { payload: { decision: DecisionRecord } }) => void) | null =
+      null;
     let onWorkSignalUpsert: ((event: { payload: { signal: WorkSignal } }) => void) | null = null;
     let onWorkSignalFired:
       | ((event: { payload: { signal_id: string }; occurred_at: string }) => void)
@@ -260,7 +276,9 @@ export function WorkBoard() {
           setItems((prev) => upsertWorkItem(prev, event.payload.item));
           setSelectedItem((prev) => {
             if (!prev) return prev;
-            return prev.work_item_id === event.payload.item.work_item_id ? event.payload.item : prev;
+            return prev.work_item_id === event.payload.item.work_item_id
+              ? event.payload.item
+              : prev;
           });
         };
 
@@ -424,21 +442,27 @@ export function WorkBoard() {
 
     const load = async (): Promise<void> => {
       try {
-        const [
-          workItemRes,
-          artifactsRes,
-          decisionsRes,
-          signalsRes,
-          agentKvRes,
-          workItemKvRes,
-        ] = await Promise.all([
-          client.workGet({ ...DEFAULT_SCOPE, work_item_id: selectedWorkItemId }),
-          client.workArtifactList({ ...DEFAULT_SCOPE, work_item_id: selectedWorkItemId, limit: 200 }),
-          client.workDecisionList({ ...DEFAULT_SCOPE, work_item_id: selectedWorkItemId, limit: 200 }),
-          client.workSignalList({ ...DEFAULT_SCOPE, work_item_id: selectedWorkItemId, limit: 200 }),
-          client.workStateKvList({ scope: makeAgentScope() }),
-          client.workStateKvList({ scope: makeWorkItemScope(selectedWorkItemId) }),
-        ]);
+        const [workItemRes, artifactsRes, decisionsRes, signalsRes, agentKvRes, workItemKvRes] =
+          await Promise.all([
+            client.workGet({ ...DEFAULT_SCOPE, work_item_id: selectedWorkItemId }),
+            client.workArtifactList({
+              ...DEFAULT_SCOPE,
+              work_item_id: selectedWorkItemId,
+              limit: 200,
+            }),
+            client.workDecisionList({
+              ...DEFAULT_SCOPE,
+              work_item_id: selectedWorkItemId,
+              limit: 200,
+            }),
+            client.workSignalList({
+              ...DEFAULT_SCOPE,
+              work_item_id: selectedWorkItemId,
+              limit: 200,
+            }),
+            client.workStateKvList({ scope: makeAgentScope() }),
+            client.workStateKvList({ scope: makeWorkItemScope(selectedWorkItemId) }),
+          ]);
 
         if (cancelled) return;
         setSelectedItem(workItemRes.item);
@@ -464,7 +488,7 @@ export function WorkBoard() {
     };
   }, [connectionStatus, selectedWorkItemId]);
 
-  const tasksForSelected = selectedWorkItemId ? tasksByWorkItemId[selectedWorkItemId] ?? {} : {};
+  const tasksForSelected = selectedWorkItemId ? (tasksByWorkItemId[selectedWorkItemId] ?? {}) : {};
   const taskList = useMemo(() => Object.values(tasksForSelected), [tasksForSelected]);
 
   const taskCounts = useMemo(() => {
@@ -484,10 +508,9 @@ export function WorkBoard() {
           ? colors.neutral
           : colors.neutral;
 
-  const tlsPinWarning =
-    connectionInfo?.tlsCertFingerprint256?.trim().length
-      ? "TLS fingerprint pinning is configured, but pin verification is not enforced in the Desktop renderer."
-      : null;
+  const tlsPinWarning = connectionInfo?.tlsCertFingerprint256?.trim().length
+    ? "TLS fingerprint pinning is configured, but pin verification is not enforced in the Desktop renderer."
+    : null;
 
   return (
     <div style={containerStyle}>
@@ -498,7 +521,11 @@ export function WorkBoard() {
             <span style={statusDot(connectionDotColor)} />
             {connectionStatus}
           </div>
-          <button style={btn("secondary")} onClick={refresh} disabled={connectionStatus !== "connected"}>
+          <button
+            style={btn("secondary")}
+            onClick={refresh}
+            disabled={connectionStatus !== "connected"}
+          >
             Refresh
           </button>
           <button style={btn("secondary")} onClick={reconnect}>
@@ -541,7 +568,8 @@ export function WorkBoard() {
                     tabIndex={0}
                     onClick={() => setSelectedWorkItemId(item.work_item_id)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") setSelectedWorkItemId(item.work_item_id);
+                      if (e.key === "Enter" || e.key === " ")
+                        setSelectedWorkItemId(item.work_item_id);
                     }}
                   >
                     <div style={cardTitleStyle}>{item.title}</div>
@@ -556,7 +584,9 @@ export function WorkBoard() {
                           {item.work_item_id.slice(0, 8)}
                         </span>
                       </span>
-                      {item.last_active_at && <span>active {new Date(item.last_active_at).toLocaleString()}</span>}
+                      {item.last_active_at && (
+                        <span>active {new Date(item.last_active_at).toLocaleString()}</span>
+                      )}
                     </div>
                   </div>
                 ))
@@ -569,7 +599,9 @@ export function WorkBoard() {
       <div style={card}>
         <div style={sectionTitle}>Drilldown</div>
         {!selectedWorkItemId ? (
-          <div style={{ fontSize: 13, color: colors.fgMuted }}>Select a WorkItem to inspect details.</div>
+          <div style={{ fontSize: 13, color: colors.fgMuted }}>
+            Select a WorkItem to inspect details.
+          </div>
         ) : drilldownBusy ? (
           <div style={{ fontSize: 13, color: colors.fgMuted }}>Loading…</div>
         ) : drilldownError ? (
@@ -580,7 +612,9 @@ export function WorkBoard() {
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div>
               <div style={label}>WorkItem</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: colors.fg }}>{selectedItem.title}</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: colors.fg }}>
+                {selectedItem.title}
+              </div>
               <div style={{ ...cardMetaStyle, marginTop: 6 }}>
                 <span>
                   status <strong style={{ color: colors.fg }}>{selectedItem.status}</strong>
@@ -589,9 +623,7 @@ export function WorkBoard() {
                 <span>priority {selectedItem.priority}</span>
               </div>
               <div style={{ ...cardMetaStyle, marginTop: 6 }}>
-                <span style={{ fontFamily: fonts.mono }}>
-                  {selectedItem.work_item_id}
-                </span>
+                <span style={{ fontFamily: fonts.mono }}>{selectedItem.work_item_id}</span>
               </div>
             </div>
 
@@ -599,7 +631,9 @@ export function WorkBoard() {
               <div style={label}>Timestamps</div>
               <div style={{ ...cardMetaStyle, marginTop: 6 }}>
                 <span>created {new Date(selectedItem.created_at).toLocaleString()}</span>
-                {selectedItem.updated_at && <span>updated {new Date(selectedItem.updated_at).toLocaleString()}</span>}
+                {selectedItem.updated_at && (
+                  <span>updated {new Date(selectedItem.updated_at).toLocaleString()}</span>
+                )}
                 {selectedItem.last_active_at && (
                   <span>last active {new Date(selectedItem.last_active_at).toLocaleString()}</span>
                 )}
@@ -645,7 +679,9 @@ export function WorkBoard() {
                       {(task.run_id || task.approval_id || task.result_summary) && (
                         <div style={{ ...cardMetaStyle, marginTop: 6 }}>
                           {task.run_id && <span>run {task.run_id}</span>}
-                          {typeof task.approval_id === "number" && <span>approval {task.approval_id}</span>}
+                          {typeof task.approval_id === "number" && (
+                            <span>approval {task.approval_id}</span>
+                          )}
                           {task.result_summary && <span>result {task.result_summary}</span>}
                         </div>
                       )}
@@ -657,13 +693,16 @@ export function WorkBoard() {
 
             <div>
               <div style={label}>Blockers</div>
-              {taskList.filter((task) => task.status === "paused" && typeof task.approval_id === "number")
-                .length === 0 ? (
+              {taskList.filter(
+                (task) => task.status === "paused" && typeof task.approval_id === "number",
+              ).length === 0 ? (
                 <div style={{ fontSize: 13, color: colors.fgMuted }}>No approval blockers.</div>
               ) : (
                 <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
                   {taskList
-                    .filter((task) => task.status === "paused" && typeof task.approval_id === "number")
+                    .filter(
+                      (task) => task.status === "paused" && typeof task.approval_id === "number",
+                    )
                     .map((task) => (
                       <div
                         key={task.task_id}
@@ -766,7 +805,9 @@ export function WorkBoard() {
                       }}
                     >
                       <div style={{ ...cardMetaStyle, marginTop: 0 }}>
-                        <span style={{ fontWeight: 700, color: colors.fg }}>{signal.trigger_kind}</span>
+                        <span style={{ fontWeight: 700, color: colors.fg }}>
+                          {signal.trigger_kind}
+                        </span>
                         <span>
                           status <strong style={{ color: colors.fg }}>{signal.status}</strong>
                         </span>
@@ -775,7 +816,9 @@ export function WorkBoard() {
                           <span>last fired {new Date(signal.last_fired_at).toLocaleString()}</span>
                         ) : null}
                       </div>
-                      <pre style={monospaceStyle}>{JSON.stringify(signal.trigger_spec_json, null, 2)}</pre>
+                      <pre style={monospaceStyle}>
+                        {JSON.stringify(signal.trigger_spec_json, null, 2)}
+                      </pre>
                       <div style={{ ...cardMetaStyle, marginTop: 8 }}>
                         <span style={{ fontFamily: fonts.mono }}>{signal.signal_id}</span>
                       </div>
