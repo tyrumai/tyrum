@@ -48,6 +48,12 @@ describe("StateStore schema contract (sqlite vs postgres)", () => {
         "facts",
         "episodic_events",
         "vector_metadata",
+        // Memory v1 canonical persistence (issue #652)
+        "memory_items",
+        "memory_item_provenance",
+        "memory_item_tags",
+        "memory_tombstones",
+        "memory_item_embeddings",
         "capability_memories",
         "pam_profiles",
         "pvp_profiles",
