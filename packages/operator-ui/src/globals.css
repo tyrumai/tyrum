@@ -1,0 +1,8 @@
+@layer theme, base, components, utilities;
+
+/* Tailwind 4 (CSS-first). Keep preflight disabled for now to avoid global visual changes. */
+@import "tailwindcss/theme.css" layer(theme);
+@import "./tokens.css" layer(theme);
+@import "./themes.css" layer(base);
+
+@import "tailwindcss/utilities.css" layer(utilities);

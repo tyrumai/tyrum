@@ -11,6 +11,7 @@ vi.mock("@tyrum/operator-core", () => ({
 
 vi.mock("@tyrum/operator-ui", () => ({
   OperatorUiApp: () => null,
+  ThemeProvider: ({ children }: { children: unknown }) => children ?? null,
 }));
 
 vi.mock("react-dom/client", () => ({

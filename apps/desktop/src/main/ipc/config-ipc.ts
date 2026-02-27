@@ -1,4 +1,4 @@
-import { ipcMain, shell } from "electron";
+import { ipcMain, nativeTheme, shell } from "electron";
 import { loadConfig, saveConfig } from "../config/store.js";
 import { DesktopNodeConfig } from "../config/schema.js";
 import {
@@ -10,6 +10,7 @@ import { normalizeConfigPartialForSave } from "../config/token-ref-normalizer.js
 
 const RENDERER_MUTABLE_PATHS = new Set([
   "mode",
+  "theme.source",
   "remote.wsUrl",
   "remote.tokenRef",
   "remote.tlsCertFingerprint256",
@@ -119,6 +120,7 @@ export function registerConfigIpc(): void {
       deepMerge(current as unknown as Record<string, unknown>, normalizedPartial),
     );
     saveConfig(merged);
+    nativeTheme.themeSource = merged.theme.source;
     return sanitizeConfigForRenderer(merged);
   });
 

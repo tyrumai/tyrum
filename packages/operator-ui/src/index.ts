@@ -5,3 +5,8 @@ export { OperatorUiApp } from "./app.js";
 
 export type { AdminModeProviderProps } from "./admin-mode.js";
 export { AdminModeGate, AdminModeProvider } from "./admin-mode.js";
+
+export { cn } from "./lib/cn.js";
+
+export type { ThemeMode } from "./hooks/use-theme.js";
+export { ThemeProvider, useTheme } from "./hooks/use-theme.js";

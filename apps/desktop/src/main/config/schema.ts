@@ -10,6 +10,11 @@ export type PermissionProfile = z.infer<typeof PermissionProfile>;
 export const DesktopNodeConfig = z.object({
   version: z.literal(1).default(1),
   mode: z.enum(["embedded", "remote"]).default("embedded"),
+  theme: z
+    .object({
+      source: z.enum(["system", "light", "dark"]).default("system"),
+    })
+    .default({ source: "system" }),
   remote: z
     .object({
       wsUrl: z.string().default("ws://127.0.0.1:8788/ws"),
