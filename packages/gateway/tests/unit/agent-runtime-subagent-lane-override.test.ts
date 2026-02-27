@@ -124,9 +124,10 @@ describe("AgentRuntime (subagent lane override)", () => {
     });
 
     expect(enqueueSpy).toHaveBeenCalled();
-    const enqueueInput = enqueueSpy.mock.calls[0]?.[0] as { key?: string; lane?: string } | undefined;
+    const enqueueInput = enqueueSpy.mock.calls[0]?.[0] as
+      | { key?: string; lane?: string }
+      | undefined;
     expect(enqueueInput?.key).toBe(metadataKey);
     expect(enqueueInput?.lane).toBe("subagent");
   });
 });
-
