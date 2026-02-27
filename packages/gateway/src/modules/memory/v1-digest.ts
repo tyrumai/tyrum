@@ -45,7 +45,9 @@ function formatProvenance(item: MemoryItem): string {
   const refs = prov.refs ?? [];
   if (refs.length > 0) {
     const sample = refs.slice(0, 2).join(", ");
-    parts.push(`refs=${String(refs.length)}${sample ? `(${sample}${refs.length > 2 ? ", ..." : ""})` : ""}`);
+    parts.push(
+      `refs=${String(refs.length)}${sample ? `(${sample}${refs.length > 2 ? ", ..." : ""})` : ""}`,
+    );
   }
   return parts.join(" ");
 }
@@ -220,11 +222,17 @@ export async function buildMemoryV1Digest(params: {
       ? Math.max(0, Math.floor(budgets.max_total_tokens))
       : undefined;
 
-  if (maxTotalItems === 0 || maxTotalChars === 0 || (maxTotalTokens !== undefined && maxTotalTokens === 0)) {
+  if (
+    maxTotalItems === 0 ||
+    maxTotalChars === 0 ||
+    (maxTotalTokens !== undefined && maxTotalTokens === 0)
+  ) {
     // NOTE: tokens budget is optional in config schema but we treat explicit 0 as "nothing".
     const tokensDisabled = maxTotalTokens !== undefined && maxTotalTokens === 0;
     return {
-      digest: tokensDisabled ? "Memory digest skipped (max_total_tokens=0)." : "Memory digest empty.",
+      digest: tokensDisabled
+        ? "Memory digest skipped (max_total_tokens=0)."
+        : "Memory digest empty.",
       included_item_ids: [],
       keyword_hit_count: 0,
       semantic_hit_count: 0,
@@ -283,7 +291,9 @@ export async function buildMemoryV1Digest(params: {
 
   const semanticSorted = semanticHits
     .slice()
-    .sort((a, b) => (b.score !== a.score ? b.score - a.score : a.memory_item_id.localeCompare(b.memory_item_id)));
+    .sort((a, b) =>
+      b.score !== a.score ? b.score - a.score : a.memory_item_id.localeCompare(b.memory_item_id),
+    );
   for (const hit of semanticSorted) {
     candidates.push({
       memory_item_id: hit.memory_item_id,
@@ -320,7 +330,8 @@ export async function buildMemoryV1Digest(params: {
     if (kindUsage.chars >= kindBudget.max_chars) continue;
     if (kindBudget.max_tokens !== undefined && kindUsage.tokens >= kindBudget.max_tokens) continue;
 
-    const item = candidate.item ?? (await params.dal.getById(candidate.memory_item_id, params.agentId));
+    const item =
+      candidate.item ?? (await params.dal.getById(candidate.memory_item_id, params.agentId));
     if (!item) continue;
     if (!sensitivityAllowed(item.sensitivity, allowSensitivities)) continue;
 
@@ -344,7 +355,8 @@ export async function buildMemoryV1Digest(params: {
       const tightenedTokens = estimateTokens(tightened);
       if (
         (maxTotalTokens !== undefined && usedTotalTokens + tightenedTokens > maxTotalTokens) ||
-        (kindBudget.max_tokens !== undefined && kindUsage.tokens + tightenedTokens > kindBudget.max_tokens)
+        (kindBudget.max_tokens !== undefined &&
+          kindUsage.tokens + tightenedTokens > kindBudget.max_tokens)
       ) {
         continue;
       }

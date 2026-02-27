@@ -194,4 +194,3 @@ describe("buildMemoryV1Digest", () => {
     }
   });
 });
-
