@@ -126,6 +126,18 @@ vi.mock("../src/main/ipc/update-ipc.js", () => ({
   registerUpdateIpc: registerUpdateIpcMock,
 }));
 
+vi.mock("../src/main/work-item-notifications.js", () => ({
+  WorkItemNotificationService: class WorkItemNotificationService {
+    constructor(_openDeepLink: unknown) {}
+
+    start(): Promise<void> {
+      return Promise.resolve();
+    }
+
+    stop(): void {}
+  },
+}));
+
 async function importMainModule(): Promise<typeof import("../src/main/index.js")> {
   vi.resetModules();
   appHandlers.clear();

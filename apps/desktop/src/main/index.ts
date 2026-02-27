@@ -15,6 +15,7 @@ import { buildApplicationMenuTemplate } from "./menu.js";
 import { registerContextMenus } from "./context-menu.js";
 import { isSafeExternalUrl } from "./safe-external-url.js";
 import { extractDeepLinkUrlFromArgv, isDeepLinkUrl } from "./deep-links.js";
+import { WorkItemNotificationService } from "./work-item-notifications.js";
 import {
   captureWindowState,
   ensureVisibleBounds,
@@ -26,6 +27,7 @@ app.setName?.("Tyrum");
 
 let mainWindow: BrowserWindow | null = null;
 let gatewayManager: GatewayManager | null = null;
+let workItemNotificationService: WorkItemNotificationService | null = null;
 let isQuitting = false;
 let isQuittingForUpdate = false;
 let mainWindowReadyToShow = false;
@@ -109,6 +111,12 @@ const didAcquireSingleInstanceLock = setupSingleInstance({
 });
 
 async function shutdownAppResources(): Promise<void> {
+  try {
+    workItemNotificationService?.stop();
+  } catch (err) {
+    console.error("Failed to stop work item notifications", err);
+  }
+
   try {
     await shutdownNodeResources();
   } catch (err) {
@@ -272,6 +280,11 @@ function createWindow(): void {
   }
 
   void maybeAutoStartEmbeddedGatewayOnLaunch();
+
+  if (!workItemNotificationService) {
+    workItemNotificationService = new WorkItemNotificationService(handleDeepLink);
+    void workItemNotificationService.start();
+  }
 
   window.on("closed", () => {
     if (windowStateSaveTimer) {

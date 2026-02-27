@@ -14,7 +14,7 @@ const sender = createWindowSender();
 let manager: GatewayManager | null = null;
 let ipcRegistered = false;
 
-interface OperatorConnectionInfo {
+export interface OperatorConnectionInfo {
   mode: "embedded" | "remote";
   wsUrl: string;
   httpBaseUrl: string;
@@ -77,7 +77,7 @@ function resolveOperatorHttpBaseUrl(config: DesktopNodeConfig): string {
   return httpBaseUrl;
 }
 
-function resolveOperatorConnection(config: DesktopNodeConfig): OperatorConnectionInfo {
+export function resolveOperatorConnection(config: DesktopNodeConfig): OperatorConnectionInfo {
   if (config.mode === "embedded") {
     const token = ensureEmbeddedGatewayToken(config);
     const port = config.embedded.port;

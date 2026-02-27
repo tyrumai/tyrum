@@ -183,6 +183,18 @@ vi.mock("../src/main/ipc/update-ipc.js", () => ({
   registerUpdateIpc: registerUpdateIpcMock,
 }));
 
+vi.mock("../src/main/work-item-notifications.js", () => ({
+  WorkItemNotificationService: class WorkItemNotificationService {
+    constructor(_openDeepLink: unknown) {}
+
+    start(): Promise<void> {
+      return Promise.resolve();
+    }
+
+    stop(): void {}
+  },
+}));
+
 vi.mock("../src/main/config/store.js", () => ({
   configExists: configExistsMock,
   loadConfig: loadConfigMock,
