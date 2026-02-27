@@ -1,8 +1,19 @@
 import { createTyrumHttpClient } from "@tyrum/client";
-import { createBearerTokenAuth, createOperatorCore, type OperatorCore } from "@tyrum/operator-core";
+import {
+  createAdminModeStore,
+  createBearerTokenAuth,
+  createOperatorCore,
+  httpAuthForAuth,
+  type AdminModeStore,
+  type OperatorCore,
+} from "@tyrum/operator-core";
 import { OperatorUiApp } from "@tyrum/operator-ui";
 import { useEffect, useRef, useState } from "react";
 import { toErrorMessage } from "../lib/errors.js";
+import {
+  createDesktopOperatorCoreManager,
+  type DesktopOperatorCoreManager,
+} from "../lib/operator-core-manager.js";
 
 type OperatorConnectionInfo = {
   mode: "embedded" | "remote";
@@ -26,7 +37,9 @@ export function Gateway() {
   const [core, setCore] = useState<OperatorCore | null>(null);
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const coreRef = useRef<OperatorCore | null>(null);
+  const managerRef = useRef<DesktopOperatorCoreManager | null>(null);
+  const unsubManagerRef = useRef<(() => void) | null>(null);
+  const adminModeStoreRef = useRef<AdminModeStore | null>(null);
 
   useEffect(() => {
     if (!api) return;
@@ -60,24 +73,43 @@ export function Gateway() {
           });
         };
 
-        const http = createTyrumHttpClient({
-          baseUrl: connection.httpBaseUrl,
-          auth: { type: "bearer", token: connection.token },
-          fetch: ipcFetch,
-        });
+        const adminModeStore = createAdminModeStore();
+        const baselineAuth = createBearerTokenAuth(connection.token);
 
-        const nextCore = createOperatorCore({
+        const manager = createDesktopOperatorCoreManager({
           wsUrl: connection.wsUrl,
           httpBaseUrl: connection.httpBaseUrl,
-          auth: createBearerTokenAuth(connection.token),
-          deps: { http },
+          baselineAuth,
+          adminModeStore,
+          createCore(coreOptions) {
+            const http = createTyrumHttpClient({
+              baseUrl: coreOptions.httpBaseUrl,
+              auth: httpAuthForAuth(coreOptions.auth),
+              fetch: ipcFetch,
+            });
+            return createOperatorCore({
+              wsUrl: coreOptions.wsUrl,
+              httpBaseUrl: coreOptions.httpBaseUrl,
+              auth: coreOptions.auth,
+              adminModeStore: coreOptions.adminModeStore,
+              deps: { http },
+            });
+          },
         });
 
-        nextCore.connect();
+        unsubManagerRef.current?.();
+        managerRef.current?.dispose();
+        adminModeStoreRef.current?.dispose();
+        managerRef.current = manager;
+        adminModeStoreRef.current = adminModeStore;
+        setCore(manager.getCore());
 
-        coreRef.current?.dispose();
-        coreRef.current = nextCore;
-        setCore(nextCore);
+        unsubManagerRef.current = manager.subscribe(() => {
+          if (disposed) return;
+          setCore(manager.getCore());
+        });
+
+        manager.getCore().connect();
       } catch (error) {
         if (disposed) return;
         setErrorMessage(toErrorMessage(error));
@@ -93,8 +125,12 @@ export function Gateway() {
 
     return () => {
       disposed = true;
-      coreRef.current?.dispose();
-      coreRef.current = null;
+      unsubManagerRef.current?.();
+      unsubManagerRef.current = null;
+      managerRef.current?.dispose();
+      managerRef.current = null;
+      adminModeStoreRef.current?.dispose();
+      adminModeStoreRef.current = null;
     };
   }, [api]);
 
