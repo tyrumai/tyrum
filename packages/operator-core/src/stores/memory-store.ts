@@ -432,8 +432,32 @@ export function createMemoryStore(ws: OperatorWsClient): {
         setState((prev) => {
           const prevResults = prev.browse.results;
           if (!prevResults || prevResults.kind !== "list") return prev;
-          let items = [...prevResults.items, ...next.items];
-          items = applyConsolidationsToListItems(items, consolidations);
+          const prevItems = prevResults.items;
+          let nextItems = next.items;
+
+          const pendingConsolidations: MemoryConsolidation[] = [];
+          for (const consolidation of consolidations) {
+            const hasConsolidatedItem = prevItems.some(
+              (entry) => entry.memory_item_id === consolidation.item.memory_item_id,
+            );
+            const hasFromIdInPrev = prevItems.some((entry) =>
+              consolidation.fromIds.has(entry.memory_item_id),
+            );
+
+            if (hasConsolidatedItem && !hasFromIdInPrev) {
+              nextItems = nextItems.filter(
+                (entry) =>
+                  !consolidation.fromIds.has(entry.memory_item_id) &&
+                  entry.memory_item_id !== consolidation.item.memory_item_id,
+              );
+              continue;
+            }
+
+            pendingConsolidations.push(consolidation);
+          }
+
+          let items = [...prevItems, ...nextItems];
+          items = applyConsolidationsToListItems(items, pendingConsolidations);
           if (deletes.size > 0) {
             items = items.filter((item) => !deletes.has(item.memory_item_id));
           }

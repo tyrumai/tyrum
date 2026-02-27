@@ -162,6 +162,54 @@ describe("memoryStore", () => {
     });
   });
 
+  it("does not reorder a consolidated item when consolidation arrives during loadMore", async () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+
+    const itemA = sampleNote("123e4567-e89b-12d3-a456-426614174030", "A");
+    const itemB = sampleNote("123e4567-e89b-12d3-a456-426614174031", "B");
+    const itemAfter = sampleNote("123e4567-e89b-12d3-a456-426614174032", "after");
+    const consolidated = sampleNote("123e4567-e89b-12d3-a456-426614174039", "C");
+    const itemC = sampleNote("123e4567-e89b-12d3-a456-426614174033", "C2");
+
+    const page1 = deferred<{ v: 1; items: MemoryItem[]; next_cursor?: string }>();
+    const page2 = deferred<{ v: 1; items: MemoryItem[]; next_cursor?: string }>();
+    ws.memoryList = vi.fn(async (payload: unknown) => {
+      const cursor = (payload as { cursor?: string }).cursor;
+      return cursor ? await page2.promise : await page1.promise;
+    });
+
+    const core = createOperatorCore({
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788",
+      auth: createBearerTokenAuth("test-token"),
+      deps: { ws, http },
+    });
+
+    const listP = core.memoryStore.list();
+    page1.resolve({ v: 1, items: [itemA, itemB, itemAfter], next_cursor: "c1" });
+    await listP;
+
+    const moreP = core.memoryStore.loadMore();
+    expect(core.memoryStore.getSnapshot().browse.loading).toBe(true);
+
+    ws.emit("memory.item.consolidated", {
+      payload: {
+        from_memory_item_ids: [itemA.memory_item_id, itemB.memory_item_id],
+        item: consolidated,
+      },
+    });
+
+    page2.resolve({ v: 1, items: [itemB, itemC] });
+    await moreP;
+
+    expect(core.memoryStore.getSnapshot().browse.results).toEqual({
+      kind: "list",
+      items: [consolidated, itemAfter, itemC],
+      nextCursor: null,
+    });
+  });
+
   it("searches memory and paginates hits", async () => {
     const ws = new FakeWsClient();
     const http = createFakeHttpClient();
