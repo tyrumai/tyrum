@@ -253,7 +253,7 @@ export class GatewayManager extends EventEmitter<GatewayManagerEvents> {
     port: number,
     host: string,
     startupLogLines: string[],
-    maxAttempts = process.platform === "win32" ? 150 : 30,
+    maxAttempts = process.platform === "win32" || process.platform === "darwin" ? 150 : 30,
   ): Promise<void> {
     for (let i = 0; i < maxAttempts; i++) {
       if (this.process !== proc || proc.exitCode !== null || proc.signalCode !== null) {
