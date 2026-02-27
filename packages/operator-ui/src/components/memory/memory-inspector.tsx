@@ -6,7 +6,7 @@ import type {
   MemoryProvenance,
   MemorySearchHit,
 } from "@tyrum/client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getDesktopApi } from "../../desktop-api.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 
@@ -151,15 +151,22 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const lastSyncedDraftRef = useRef<{
+    memoryItemId: string;
+    bodyMdDraft: string;
+    summaryMdDraft: string;
+    tagsDraft: string;
+    sensitivityDraft: MemorySensitivity;
+  } | null>(null);
 
   useEffect(() => {
     void core.memoryStore.list({ limit: 50 });
   }, [core]);
 
   useEffect(() => {
-    setSaveError(null);
     const item = memory.inspect.item;
     if (!item) {
+      setSaveError(null);
       setBodyMdDraft("");
       setSummaryMdDraft("");
       setTagsDraft("");
@@ -168,20 +175,37 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
       setForgetTargetId(null);
       setForgetConfirm("");
       setForgetError(null);
+      lastSyncedDraftRef.current = null;
       return;
     }
-    setTagsDraft(item.tags.join(", "));
-    setSensitivityDraft(item.sensitivity);
-    if (item.kind === "note" || item.kind === "procedure") {
-      setBodyMdDraft(item.body_md);
-    } else {
-      setBodyMdDraft("");
+    const nextDraft = {
+      memoryItemId: item.memory_item_id,
+      tagsDraft: item.tags.join(", "),
+      sensitivityDraft: item.sensitivity,
+      bodyMdDraft: item.kind === "note" || item.kind === "procedure" ? item.body_md : "",
+      summaryMdDraft: item.kind === "episode" ? item.summary_md : "",
+    };
+
+    const prevDraft = lastSyncedDraftRef.current;
+    if (!prevDraft || prevDraft.memoryItemId !== nextDraft.memoryItemId) {
+      setSaveError(null);
+      setBodyMdDraft(nextDraft.bodyMdDraft);
+      setSummaryMdDraft(nextDraft.summaryMdDraft);
+      setTagsDraft(nextDraft.tagsDraft);
+      setSensitivityDraft(nextDraft.sensitivityDraft);
+      lastSyncedDraftRef.current = nextDraft;
+      return;
     }
-    if (item.kind === "episode") {
-      setSummaryMdDraft(item.summary_md);
-    } else {
-      setSummaryMdDraft("");
-    }
+
+    setBodyMdDraft((prev) => (prev === prevDraft.bodyMdDraft ? nextDraft.bodyMdDraft : prev));
+    setSummaryMdDraft((prev) =>
+      prev === prevDraft.summaryMdDraft ? nextDraft.summaryMdDraft : prev,
+    );
+    setTagsDraft((prev) => (prev === prevDraft.tagsDraft ? nextDraft.tagsDraft : prev));
+    setSensitivityDraft((prev) =>
+      prev === prevDraft.sensitivityDraft ? nextDraft.sensitivityDraft : prev,
+    );
+    lastSyncedDraftRef.current = nextDraft;
   }, [memory.inspect.item]);
 
   const save = async (): Promise<void> => {
@@ -607,6 +631,7 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
               <textarea
                 data-testid="memory-edit-body"
                 value={bodyMdDraft}
+                disabled={saving}
                 onInput={(event) => {
                   setBodyMdDraft(event.currentTarget.value);
                 }}
@@ -616,6 +641,7 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
               <textarea
                 data-testid="memory-edit-summary"
                 value={summaryMdDraft}
+                disabled={saving}
                 onInput={(event) => {
                   setSummaryMdDraft(event.currentTarget.value);
                 }}

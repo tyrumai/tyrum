@@ -372,6 +372,131 @@ describe("MemoryInspector", () => {
     cleanupTestRoot(testRoot);
   });
 
+  it("disables body edits while a save is in-flight", async () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+    const item = sampleNote("123e4567-e89b-12d3-a456-426614174233", "Before");
+    const updated: MemoryItem = { ...item, body_md: "After", updated_at: "2026-02-19T12:00:01Z" };
+
+    ws.memoryList = vi.fn(async () => ({ v: 1, items: [item], next_cursor: undefined }) as unknown);
+    ws.memoryGet = vi.fn(async () => ({ v: 1, item }) as unknown);
+
+    let resolveUpdate: ((value: unknown) => void) | undefined;
+    ws.memoryUpdate = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveUpdate = resolve;
+        }) as unknown,
+    );
+
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const testRoot = renderIntoDocument(React.createElement(MemoryInspector, { core }));
+    await act(async () => {});
+
+    const itemButton = testRoot.container.querySelector<HTMLButtonElement>(
+      `[data-testid="memory-item-${item.memory_item_id}"]`,
+    );
+    expect(itemButton).not.toBeNull();
+
+    await act(async () => {
+      itemButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const bodyField = testRoot.container.querySelector<HTMLTextAreaElement>(
+      '[data-testid="memory-edit-body"]',
+    );
+    expect(bodyField).not.toBeNull();
+
+    await act(async () => {
+      bodyField!.value = "After";
+      bodyField!.dispatchEvent(new Event("input", { bubbles: true }));
+      bodyField!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const saveButton = testRoot.container.querySelector<HTMLButtonElement>(
+      '[data-testid="memory-save"]',
+    );
+    expect(saveButton).not.toBeNull();
+
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const disabledBodyField = testRoot.container.querySelector<HTMLTextAreaElement>(
+      '[data-testid="memory-edit-body"]',
+    );
+    expect(disabledBodyField).not.toBeNull();
+    expect(disabledBodyField?.disabled).toBe(true);
+
+    resolveUpdate?.({ v: 1, item: updated } as unknown);
+    await act(async () => {});
+
+    cleanupTestRoot(testRoot);
+  });
+
+  it("preserves draft body edits when the inspected item is upserted externally", async () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+    const item = sampleNote("123e4567-e89b-12d3-a456-426614174234", "Before");
+    const upserted: MemoryItem = {
+      ...item,
+      body_md: "Server update",
+      updated_at: "2026-02-19T12:00:01Z",
+    };
+
+    ws.memoryList = vi.fn(async () => ({ v: 1, items: [item], next_cursor: undefined }) as unknown);
+    ws.memoryGet = vi.fn(async () => ({ v: 1, item }) as unknown);
+
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const testRoot = renderIntoDocument(React.createElement(MemoryInspector, { core }));
+    await act(async () => {});
+
+    const itemButton = testRoot.container.querySelector<HTMLButtonElement>(
+      `[data-testid="memory-item-${item.memory_item_id}"]`,
+    );
+    expect(itemButton).not.toBeNull();
+
+    await act(async () => {
+      itemButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const bodyField = testRoot.container.querySelector<HTMLTextAreaElement>(
+      '[data-testid="memory-edit-body"]',
+    );
+    expect(bodyField).not.toBeNull();
+
+    await act(async () => {
+      bodyField!.value = "User draft";
+      bodyField!.dispatchEvent(new Event("input", { bubbles: true }));
+      bodyField!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await act(async () => {
+      ws.emit("memory.item.updated", { payload: { item: upserted } });
+    });
+    await act(async () => {});
+
+    const updatedBodyField = testRoot.container.querySelector<HTMLTextAreaElement>(
+      '[data-testid="memory-edit-body"]',
+    );
+    expect(updatedBodyField).not.toBeNull();
+    expect(updatedBodyField?.value).toBe("User draft");
+
+    cleanupTestRoot(testRoot);
+  });
+
   it("updates tags when stored item contains duplicate tags", async () => {
     const ws = new FakeWsClient();
     const http = createFakeHttpClient();
