@@ -15,6 +15,7 @@ export interface OperatorWsClient {
   off(event: string, handler: (data: unknown) => void): void;
   approvalList(payload?: unknown): Promise<{ approvals: Approval[]; next_cursor?: string }>;
   approvalResolve(payload: unknown): Promise<{ approval: Approval }>;
+  commandExecute?(command: string, context?: unknown): Promise<unknown>;
 }
 
 export interface OperatorHttpClient {
