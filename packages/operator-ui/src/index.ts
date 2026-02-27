@@ -11,6 +11,24 @@ export { cn } from "./lib/cn.js";
 export type { ThemeMode } from "./hooks/use-theme.js";
 export { ThemeProvider, useTheme } from "./hooks/use-theme.js";
 
+export { useMediaQuery } from "./hooks/use-media-query.js";
+
+export type { AppShellMode, AppShellProps } from "./components/layout/app-shell.js";
+export { AppShell } from "./components/layout/app-shell.js";
+
+export type {
+  SidebarConnectionStatus,
+  SidebarNavItem,
+  SidebarProps,
+} from "./components/layout/sidebar.js";
+export { Sidebar } from "./components/layout/sidebar.js";
+
+export type { MobileNavItem, MobileNavProps } from "./components/layout/mobile-nav.js";
+export { MobileNav } from "./components/layout/mobile-nav.js";
+
+export type { PageHeaderProps } from "./components/layout/page-header.js";
+export { PageHeader } from "./components/layout/page-header.js";
+
 export type { ButtonProps, ButtonSize, ButtonVariant } from "./components/ui/button.js";
 export { Button } from "./components/ui/button.js";
 

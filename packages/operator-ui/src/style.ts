@@ -87,17 +87,17 @@ export const OPERATOR_UI_CSS = `
   color: #fecaca;
 }
 
-.tyrum-operator-ui .admin-banner button {
+.tyrum-operator-ui .tyrum-legacy .admin-banner button {
   background: rgba(239, 68, 68, 0.2);
   border-color: rgba(239, 68, 68, 0.4);
   color: #fff;
 }
 
-.tyrum-operator-ui .admin-gate {
+.tyrum-operator-ui .tyrum-legacy .admin-gate {
   max-width: 680px;
 }
 
-.tyrum-operator-ui .admin-dialog-backdrop {
+.tyrum-operator-ui .tyrum-legacy .admin-dialog-backdrop {
   position: fixed;
   inset: 0;
   padding: 24px;
@@ -109,13 +109,13 @@ export const OPERATOR_UI_CSS = `
   z-index: 50;
 }
 
-.tyrum-operator-ui .admin-dialog {
+.tyrum-operator-ui .tyrum-legacy .admin-dialog {
   width: 100%;
   max-width: 640px;
 }
 
-.tyrum-operator-ui h1 { margin: 0 0 18px; font-size: 22px; line-height: 1.15; font-weight: 700; }
-.tyrum-operator-ui button {
+.tyrum-operator-ui .tyrum-legacy h1 { margin: 0 0 18px; font-size: 22px; line-height: 1.15; font-weight: 700; }
+.tyrum-operator-ui .tyrum-legacy button {
   border: 1px solid transparent;
   background: var(--primary);
   color: #fff;
@@ -126,9 +126,9 @@ export const OPERATOR_UI_CSS = `
   font-weight: 600;
 }
 
-.tyrum-operator-ui button:hover { filter: brightness(0.95); }
-.tyrum-operator-ui button:disabled { opacity: 0.6; cursor: not-allowed; }
-.tyrum-operator-ui textarea {
+.tyrum-operator-ui .tyrum-legacy button:hover { filter: brightness(0.95); }
+.tyrum-operator-ui .tyrum-legacy button:disabled { opacity: 0.6; cursor: not-allowed; }
+.tyrum-operator-ui .tyrum-legacy textarea {
   width: 100%;
   max-width: 520px;
   display: block;
@@ -141,8 +141,8 @@ export const OPERATOR_UI_CSS = `
   resize: vertical;
   line-height: 1.35;
 }
-.tyrum-operator-ui input[type="text"],
-.tyrum-operator-ui input[type="password"] {
+.tyrum-operator-ui .tyrum-legacy input[type="text"],
+.tyrum-operator-ui .tyrum-legacy input[type="password"] {
   width: 100%;
   max-width: 520px;
   display: block;
@@ -154,21 +154,21 @@ export const OPERATOR_UI_CSS = `
   padding: 10px;
   line-height: 1.35;
 }
-.tyrum-operator-ui label { display: block; color: var(--muted); font-size: 13px; }
-.tyrum-operator-ui .stack > * + * { margin-top: 12px; }
-.tyrum-operator-ui .alert {
+.tyrum-operator-ui .tyrum-legacy label { display: block; color: var(--muted); font-size: 13px; }
+.tyrum-operator-ui .tyrum-legacy .stack > * + * { margin-top: 12px; }
+.tyrum-operator-ui .tyrum-legacy .alert {
   margin-top: 10px;
   padding: 10px 12px;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.03);
 }
-.tyrum-operator-ui .alert.error {
+.tyrum-operator-ui .tyrum-legacy .alert.error {
   border-color: rgba(239, 68, 68, 0.4);
   background: rgba(239, 68, 68, 0.08);
   color: #fecaca;
 }
-.tyrum-operator-ui .card {
+.tyrum-operator-ui .tyrum-legacy .card {
   padding: 14px 14px;
   border-radius: 10px;
   border: 1px solid var(--border);

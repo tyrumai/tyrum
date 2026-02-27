@@ -11,6 +11,7 @@ import {
 import type { OperatorWsClient, OperatorHttpClient } from "../../operator-core/src/deps.js";
 import { AdminModeGate, AdminModeProvider, OperatorUiApp } from "../src/index.js";
 import * as operatorUi from "../src/index.js";
+import { stubMatchMedia } from "./test-utils.js";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -277,6 +278,37 @@ describe("operator-ui", () => {
       root?.unmount();
     });
     container.remove();
+  });
+
+  it("renders a bottom tab bar on web below md breakpoint", () => {
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const matchMedia = stubMatchMedia("(min-width: 768px)", false);
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode: "web" }));
+    });
+
+    expect(container.querySelector("aside")).toBeNull();
+    expect(container.querySelector("[data-testid='nav-more']")).not.toBeNull();
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+    matchMedia.cleanup();
   });
 
   it("switches pages from the sidebar", () => {

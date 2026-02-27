@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
@@ -56,4 +57,57 @@ export function cleanupTestRoot(testRoot: TestRoot): void {
     testRoot.root.unmount();
   });
   testRoot.container.remove();
+}
+
+export function stubMatchMedia(
+  query: string,
+  initialMatches: boolean,
+): {
+  matchMedia: ReturnType<typeof vi.fn>;
+  setMatches: (nextMatches: boolean) => void;
+  cleanup: () => void;
+} {
+  const original = (globalThis as unknown as { matchMedia?: unknown }).matchMedia;
+
+  let matches = initialMatches;
+  const listeners = new Set<(event: MediaQueryListEvent) => void>();
+
+  const mediaQueryList = {
+    get matches() {
+      return matches;
+    },
+    media: query,
+    addEventListener: (_event: string, listener: (event: MediaQueryListEvent) => void) => {
+      listeners.add(listener);
+    },
+    removeEventListener: (_event: string, listener: (event: MediaQueryListEvent) => void) => {
+      listeners.delete(listener);
+    },
+  } as unknown as MediaQueryList;
+
+  const matchMedia = vi.fn((requestedQuery: string) => {
+    if (requestedQuery !== query) {
+      throw new Error(`Unexpected matchMedia query: ${requestedQuery}`);
+    }
+    return mediaQueryList;
+  });
+
+  (globalThis as unknown as { matchMedia?: unknown }).matchMedia = matchMedia;
+
+  return {
+    matchMedia,
+    setMatches(nextMatches: boolean) {
+      matches = nextMatches;
+      for (const listener of listeners) {
+        listener({ matches: nextMatches, media: query } as MediaQueryListEvent);
+      }
+    },
+    cleanup() {
+      if (typeof original === "undefined") {
+        delete (globalThis as unknown as { matchMedia?: unknown }).matchMedia;
+        return;
+      }
+      (globalThis as unknown as { matchMedia?: unknown }).matchMedia = original;
+    },
+  };
 }
