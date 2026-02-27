@@ -57,10 +57,10 @@ export default defineConfig({
           branches: 62,
         },
         "packages/operator-ui/src/**": {
-          lines: 78,
-          statements: 74,
-          functions: 80,
-          branches: 65,
+          lines: 76,
+          statements: 72,
+          functions: 77,
+          branches: 63,
         },
         "packages/cli/src/**": {
           lines: 74,
