@@ -67,6 +67,14 @@ async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+const ANSI_ESCAPE_PATTERN =
+  // eslint-disable-next-line no-control-regex
+  /[\u001B\u009B][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g;
+
+function normalizeTuiOutput(value: string): string {
+  return value.replace(ANSI_ESCAPE_PATTERN, "").replace(/\r/g, "");
+}
+
 async function waitFor(
   predicate: () => boolean,
   { timeoutMs = 2_000, intervalMs = 25 }: { timeoutMs?: number; intervalMs?: number } = {},
@@ -449,6 +457,7 @@ describe("TuiApp", () => {
   it("keeps Memory forget dialog open when the store reports an error", async () => {
     const connect = vi.fn();
     const disconnect = vi.fn();
+    let finalOutput = "";
 
     const item = {
       v: 1,
@@ -578,7 +587,6 @@ describe("TuiApp", () => {
       io.stdin.write("\r");
 
       await waitFor(() => memoryStore.forget.mock.calls.length === 1);
-      await waitFor(() => io.readOutput().includes("Error: nope"));
 
       io.stdin.write("p");
       await sleep(50);
@@ -586,7 +594,10 @@ describe("TuiApp", () => {
     } finally {
       instance.unmount();
       await waitFor(() => disconnect.mock.calls.length === 1);
+      finalOutput = normalizeTuiOutput(io.readOutput());
     }
+
+    expect(finalOutput).toContain("Forget error: nope");
   }, 20_000);
 
   it("treats an empty Memory search query as list", async () => {
