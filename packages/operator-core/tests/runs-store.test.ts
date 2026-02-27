@@ -35,4 +35,3 @@ describe("createRunsStore", () => {
     expect(store.getSnapshot().attemptIdsByStepId["step-1"]).toEqual(["attempt-1", "attempt-2"]);
   });
 });
-
