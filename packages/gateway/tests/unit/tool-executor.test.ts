@@ -9,6 +9,8 @@ import {
   isBlockedUrl,
   resolvesToBlockedAddress,
 } from "../../src/modules/agent/tool-executor.js";
+import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import { acquireWorkspaceLease, releaseWorkspaceLease } from "../../src/modules/workspace/lease.js";
 import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
 import type { McpServerSpec } from "@tyrum/schemas";
 
@@ -168,6 +170,64 @@ describe("ToolExecutor", () => {
       expect(result.output).toContain('<data source="tool">');
       expect(result.output).toContain("hi");
       expect(result.output).toContain("[exit code:");
+    });
+
+    it("tool.exec timeout includes workspace lease wait", async () => {
+      homeDir = await mkdtemp(join(tmpdir(), "tool-executor-"));
+      const db = openTestSqliteDb();
+
+      try {
+        const workspaceId = "default";
+        const timeoutMs = 250;
+        const releaseAfterMs = 160;
+
+        await acquireWorkspaceLease(db, {
+          workspaceId,
+          owner: "other-owner",
+          ttlMs: 60_000,
+        });
+
+        const releaseDone = new Promise<void>((resolve) => {
+          setTimeout(() => {
+            void releaseWorkspaceLease(db, {
+              workspaceId,
+              owner: "other-owner",
+            })
+              .then(resolve)
+              .catch(() => resolve());
+          }, releaseAfterMs);
+        });
+
+        const executor = new ToolExecutor(
+          homeDir,
+          stubMcpManager(),
+          new Map(),
+          fetch,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          {
+            db,
+            workspaceId,
+            ownerPrefix: "test-tool",
+          },
+        );
+
+        const startedAtMs = Date.now();
+        const result = await executor.execute("tool.exec", "call-lease-timeout-1", {
+          command: "sleep 1",
+          timeout_ms: timeoutMs,
+        });
+        const durationMs = Date.now() - startedAtMs;
+
+        await releaseDone;
+
+        expect(result.error).toBeUndefined();
+        expect(durationMs).toBeLessThan(timeoutMs + 120);
+      } finally {
+        await db.close();
+      }
     });
 
     it("tool.node.dispatch returns not-yet-available", async () => {

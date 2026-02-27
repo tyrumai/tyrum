@@ -311,24 +311,26 @@ export class ToolExecutor {
   private async withWorkspaceLease<T>(
     toolCallId: string,
     opts: { ttlMs: number; waitMs: number },
-    fn: () => Promise<T>,
+    fn: (ctx: { waitedMs: number }) => Promise<T>,
   ): Promise<T> {
     const lease = this.workspaceLease;
-    if (!lease) return await fn();
+    if (!lease) return await fn({ waitedMs: 0 });
 
     const owner = this.workspaceLeaseOwner(toolCallId);
+    const startedAtMs = Date.now();
     const acquired = await acquireWorkspaceLease(lease.db, {
       workspaceId: lease.workspaceId,
       owner,
       ttlMs: Math.max(1, Math.floor(opts.ttlMs)),
       waitMs: Math.max(0, Math.floor(opts.waitMs)),
     });
+    const waitedMs = Math.max(0, Date.now() - startedAtMs);
     if (!acquired) {
       throw new Error("workspace is busy");
     }
 
     try {
-      return await fn();
+      return await fn({ waitedMs });
     } finally {
       await releaseWorkspaceLease(lease.db, { workspaceId: lease.workspaceId, owner }).catch(() => {
         // Best-effort: leases expire and can be taken over.
@@ -625,8 +627,9 @@ export class ToolExecutor {
         ttlMs: Math.max(30_000, timeoutMs + 10_000),
         waitMs: timeoutMs,
       },
-      async () =>
+      async ({ waitedMs }) =>
         await new Promise<string>((resolvePromise) => {
+          const effectiveTimeoutMs = Math.max(1, timeoutMs - waitedMs);
           const child = spawn("sh", ["-c", command], {
             cwd: safeCwd,
             env: sanitizeEnv(),
@@ -653,7 +656,7 @@ export class ToolExecutor {
 
           const timer = setTimeout(() => {
             child.kill("SIGTERM");
-          }, timeoutMs);
+          }, effectiveTimeoutMs);
 
           child.on("close", (code) => {
             clearTimeout(timer);
