@@ -629,10 +629,32 @@ export {
 
 export {
   DesktopDisplayTarget,
+  DesktopElementRef,
+  DesktopWindowRef,
+  DesktopBackendMode,
+  DesktopBackendPermissions,
+  DesktopUiRect,
+  DesktopUiNode,
+  DesktopUiNodeSummary,
+  DesktopUiTree,
+  DesktopWindow,
+  DesktopSelector,
   DesktopScreenshotArgs,
   DesktopMouseArgs,
   DesktopKeyboardArgs,
+  DesktopSnapshotArgs,
+  DesktopQueryArgs,
+  DesktopActAction,
+  DesktopActArgs,
+  DesktopWaitForState,
+  DesktopWaitForArgs,
   DesktopActionArgs,
+  DesktopSnapshotResult,
+  DesktopQueryMatch,
+  DesktopQueryResult,
+  DesktopActResult,
+  DesktopWaitForResult,
+  DesktopAutomationResult,
 } from "./desktop.js";
 
 export {
