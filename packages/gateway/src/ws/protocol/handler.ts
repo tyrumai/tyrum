@@ -1913,7 +1913,11 @@ function parseApprovalId(requestId: string): number | undefined {
   return n;
 }
 
-function broadcastEvent(evt: WsEventEnvelope, deps: ProtocolDeps, audience?: WsBroadcastAudience): void {
+function broadcastEvent(
+  evt: WsEventEnvelope,
+  deps: ProtocolDeps,
+  audience?: WsBroadcastAudience,
+): void {
   const payload = JSON.stringify(evt);
   for (const peer of deps.connectionManager.allClients()) {
     if (!shouldDeliverToWsAudience(peer, audience)) continue;
