@@ -1,5 +1,5 @@
 import * as React from "react";
-import { AlertTriangle, CheckCircle2, Info, XCircle } from "lucide-react";
+import { CircleCheck, CircleX, Info, TriangleAlert } from "lucide-react";
 import { cn } from "../../lib/cn.js";
 
 export type AlertVariant = "info" | "success" | "warning" | "error";
@@ -22,17 +22,17 @@ const VARIANT_STYLES: Record<
   success: {
     container: "border-success/30 bg-success/10",
     icon: "text-success",
-    Icon: CheckCircle2,
+    Icon: CircleCheck,
   },
   warning: {
     container: "border-warning/30 bg-warning/10",
     icon: "text-warning",
-    Icon: AlertTriangle,
+    Icon: TriangleAlert,
   },
   error: {
     container: "border-error/30 bg-error/10",
     icon: "text-error",
-    Icon: XCircle,
+    Icon: CircleX,
   },
 };
 
