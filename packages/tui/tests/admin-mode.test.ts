@@ -2,9 +2,47 @@ import { describe, expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { startGateway } from "../../client/tests/conformance/harness.js";
+import { delay, startGateway, withTimeout } from "../../client/tests/conformance/harness.js";
 import { createTuiCore } from "../src/core.js";
 import { isAdminModeActive } from "@tyrum/operator-core";
+
+function waitForConnectionStatus(
+  store: {
+    subscribe: (listener: () => void) => () => void;
+    getSnapshot: () => { status: string };
+  },
+  expected: string,
+): Promise<void> {
+  if (store.getSnapshot().status === expected) return Promise.resolve();
+
+  return new Promise((resolve) => {
+    const unsub = store.subscribe(() => {
+      if (store.getSnapshot().status === expected) {
+        unsub();
+        resolve();
+      }
+    });
+  });
+}
+
+async function waitForCoreSwap(
+  input: { getCore: () => unknown },
+  previous: unknown,
+): Promise<void> {
+  while (input.getCore() === previous) {
+    await delay(10);
+  }
+}
+
+async function waitForStatusSettled(store: {
+  getSnapshot: () => { loading: { status: boolean; presence: boolean; usage: boolean } };
+}): Promise<void> {
+  while (true) {
+    const loading = store.getSnapshot().loading;
+    if (!loading.status && !loading.presence && !loading.usage) return;
+    await delay(10);
+  }
+}
 
 describe("tui admin mode", () => {
   it("mints an elevated device token and toggles admin mode state", async () => {
@@ -24,13 +62,44 @@ describe("tui admin mode", () => {
 
       expect(isAdminModeActive(runtime.manager.getCore().adminModeStore.getSnapshot())).toBe(false);
 
+      const baselineCore = runtime.manager.getCore();
+      baselineCore.connect();
+      await withTimeout(
+        waitForConnectionStatus(baselineCore.connectionStore, "connected"),
+        2_000,
+        "tui admin mode baseline connect",
+      );
+
       await runtime.enterAdminMode(harness.adminToken, { ttlSeconds: 60 });
+
+      await withTimeout(
+        waitForCoreSwap(runtime.manager, baselineCore),
+        2_000,
+        "tui admin mode core swap",
+      );
+
+      const elevatedCore = runtime.manager.getCore();
+      await withTimeout(
+        waitForConnectionStatus(elevatedCore.connectionStore, "connected"),
+        2_000,
+        "tui admin mode elevated connect",
+      );
+      await withTimeout(
+        waitForStatusSettled(elevatedCore.statusStore),
+        2_000,
+        "tui admin mode status sync",
+      );
 
       const entered = runtime.manager.getCore().adminModeStore.getSnapshot();
       expect(isAdminModeActive(entered)).toBe(true);
       expect(entered.elevatedToken).toBeTruthy();
       expect(entered.expiresAt).toBeTruthy();
       expect(entered.remainingMs).not.toBeNull();
+
+      const statusErrors = elevatedCore.statusStore.getSnapshot().error;
+      expect(statusErrors.status).toBeNull();
+      expect(statusErrors.usage).toBeNull();
+      expect(statusErrors.presence).toBeNull();
 
       runtime.exitAdminMode();
 
