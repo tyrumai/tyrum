@@ -1596,7 +1596,10 @@ describe("TyrumClient", () => {
       () => client!.memoryUpdate(updatePayload),
       "memory.update",
       updatePayload,
-      { v: 1, item: { ...noteItem, body_md: "Updated memory.", updated_at: "2026-02-19T12:00:02Z" } },
+      {
+        v: 1,
+        item: { ...noteItem, body_md: "Updated memory.", updated_at: "2026-02-19T12:00:02Z" },
+      },
     );
     expect(updateRes.item.body_md).toBe("Updated memory.");
 
