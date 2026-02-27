@@ -403,7 +403,7 @@ for (const fixture of fixtures) {
           "agent-a",
         );
 
-        await dal.create(
+        const otherAgent = await dal.create(
           {
             kind: "note",
             title: "Other agent",
@@ -437,6 +437,7 @@ for (const fixture of fixtures) {
         expect(ranked.hits.some((h) => h.memory_item_id === noteSensitive.memory_item_id)).toBe(
           true,
         );
+        expect(ranked.hits.map((h) => h.memory_item_id)).not.toContain(otherAgent.memory_item_id);
         expect(ranked.hits[0]?.snippet).toBeTruthy();
         expect((ranked.hits[0]?.provenance as { channel?: string } | undefined)?.channel).toBe(
           "slack",
@@ -512,6 +513,51 @@ for (const fixture of fixtures) {
         await expect(
           dal.search({ v: 1, query: "*", filter: { tags: tooManyTags }, limit: 10 }, "agent-a"),
         ).rejects.toThrow(/too many filter\.tags/i);
+      } finally {
+        await close();
+      }
+    });
+
+    it("matches any keyword term and ranks higher matches", async () => {
+      const { dal, close } = await fixture.open();
+      try {
+        const bothTerms = await dal.create(
+          {
+            kind: "note",
+            title: "Restart gateway",
+            body_md: "x",
+            tags: [],
+            sensitivity: "private",
+            provenance: { source_kind: "operator", refs: [] },
+          },
+          "agent-a",
+        );
+
+        const oneTerm = await dal.create(
+          {
+            kind: "note",
+            title: "Playbook",
+            body_md: "restart process",
+            tags: [],
+            sensitivity: "private",
+            provenance: { source_kind: "operator", refs: [] },
+          },
+          "agent-a",
+        );
+
+        const results = await dal.search(
+          {
+            v: 1,
+            query: "restart gateway",
+            filter: { kinds: ["note"], sensitivities: ["private"] },
+            limit: 10,
+          },
+          "agent-a",
+        );
+
+        expect(results.hits.map((h) => h.memory_item_id)).toContain(bothTerms.memory_item_id);
+        expect(results.hits.map((h) => h.memory_item_id)).toContain(oneTerm.memory_item_id);
+        expect(results.hits[0]?.memory_item_id).toBe(bothTerms.memory_item_id);
       } finally {
         await close();
       }

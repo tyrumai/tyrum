@@ -1115,9 +1115,10 @@ export class MemoryV1Dal {
     }
 
     if (terms.length > 0) {
+      const termClauses: string[] = [];
       for (const term of terms) {
         const like = `%${term.toLowerCase()}%`;
-        clauses.push(
+        termClauses.push(
           `(
             (mi.title IS NOT NULL AND LOWER(mi.title) LIKE ?)
             OR (mi.body_md IS NOT NULL AND LOWER(mi.body_md) LIKE ?)
@@ -1127,10 +1128,13 @@ export class MemoryV1Dal {
         );
         params.push(like, like, like, like);
       }
+
+      clauses.push(`(${termClauses.join("\n            OR ")})`);
     }
 
-    if (params.length > MAX_SQL_PARAMS) {
-      throw new Error(`search too complex (params=${params.length}, max=${MAX_SQL_PARAMS})`);
+    const totalParams = params.length + 1; // include LIMIT
+    if (totalParams > MAX_SQL_PARAMS) {
+      throw new Error(`search too complex (params=${totalParams}, max=${MAX_SQL_PARAMS})`);
     }
 
     const rows = await this.db.all<RawSearchRow>(
