@@ -116,4 +116,11 @@ describe("WorkItemNotificationService", () => {
       consoleErrorSpy.mockRestore();
     }
   });
+
+  it("does not re-export registerWorkItemNotificationHandlers", async () => {
+    vi.resetModules();
+
+    const module = await import("../src/main/work-item-notifications.js");
+    expect("registerWorkItemNotificationHandlers" in module).toBe(false);
+  });
 });

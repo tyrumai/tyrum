@@ -31,7 +31,3 @@ export function getDeepLinkRoute(rawUrl: string): DeepLinkRoute {
 
   return { pageId: "connection" };
 }
-
-export function getPageIdForDeepLink(rawUrl: string): string {
-  return getDeepLinkRoute(rawUrl).pageId;
-}

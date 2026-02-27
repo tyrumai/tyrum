@@ -7,8 +7,6 @@ import {
   type WorkItemNotification,
 } from "./work-item-notification-handlers.js";
 
-export { registerWorkItemNotificationHandlers } from "./work-item-notification-handlers.js";
-
 function showElectronNotification(notification: WorkItemNotification): void {
   try {
     if (!Notification.isSupported()) return;
