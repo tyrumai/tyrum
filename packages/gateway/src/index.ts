@@ -35,6 +35,7 @@ import type { ProtocolDeps } from "./ws/protocol.js";
 import { createWsHandler } from "./routes/ws.js";
 import { maybeStartOtel } from "./modules/observability/otel.js";
 import { AuthAudit } from "./modules/auth/audit.js";
+import { MemoryV1Dal } from "./modules/memory/v1-dal.js";
 import {
   ExecutionEngine,
   type StepExecutor as ExecutionStepExecutor,
@@ -1010,6 +1011,8 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     connectionManager,
     logger,
     db: container.db,
+    memoryV1Dal: new MemoryV1Dal(container.db),
+    artifactStore: container.artifactStore,
     authAudit: new AuthAudit({ eventLog: container.eventLog, logger }),
     contextReportDal: container.contextReportDal,
     runtime: {

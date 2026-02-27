@@ -15,6 +15,8 @@ import type { Logger } from "../../modules/observability/logger.js";
 import type { SqlDb, StateStoreKind } from "../../statestore/types.js";
 import type { ModelsDevService } from "../../modules/models/models-dev-service.js";
 import type { AuthAudit } from "../../modules/auth/audit.js";
+import type { MemoryV1Dal } from "../../modules/memory/v1-dal.js";
+import type { ArtifactStore } from "../../modules/artifact/store.js";
 
 // ---------------------------------------------------------------------------
 // Dependency injection
@@ -29,6 +31,8 @@ export interface ProtocolDeps {
   logger?: Logger;
   authAudit?: AuthAudit;
   db?: SqlDb;
+  memoryV1Dal?: MemoryV1Dal;
+  artifactStore?: ArtifactStore;
   contextReportDal?: ContextReportDal;
   runtime?: {
     version: string;

@@ -24,6 +24,17 @@ describe("WS scope authorization matrix", () => {
     expect(resolveWsRequestRequiredScopes("workflow.cancel")).toEqual(["operator.write"]);
   });
 
+  it("maps memory v1 operations to operator.read/operator.write", () => {
+    expect(resolveWsRequestRequiredScopes("memory.search")).toEqual(["operator.read"]);
+    expect(resolveWsRequestRequiredScopes("memory.list")).toEqual(["operator.read"]);
+    expect(resolveWsRequestRequiredScopes("memory.get")).toEqual(["operator.read"]);
+    expect(resolveWsRequestRequiredScopes("memory.create")).toEqual(["operator.write"]);
+    expect(resolveWsRequestRequiredScopes("memory.update")).toEqual(["operator.write"]);
+    expect(resolveWsRequestRequiredScopes("memory.delete")).toEqual(["operator.write"]);
+    expect(resolveWsRequestRequiredScopes("memory.forget")).toEqual(["operator.write"]);
+    expect(resolveWsRequestRequiredScopes("memory.export")).toEqual(["operator.write"]);
+  });
+
   it("allows presence.beacon without additional scopes", () => {
     expect(resolveWsRequestRequiredScopes("presence.beacon")).toEqual([]);
   });
