@@ -42,7 +42,6 @@ describe("context menus", () => {
         { role: "selectAll", enabled: true },
       ]);
       expect(onOpenLinkInBrowser).not.toHaveBeenCalled();
-      expect(template.some((item) => item.label === "Open Link in Browser")).toBe(false);
     });
 
     it("shows “Open Link in Browser” for safe link URLs", () => {

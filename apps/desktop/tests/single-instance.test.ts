@@ -122,11 +122,12 @@ describe("desktop main single-instance helpers", () => {
     };
 
     const onSecondInstance = vi.fn();
-    setupSingleInstance({
+    const didAcquireLock = setupSingleInstance({
       app,
       getMainWindow: () => null,
       onSecondInstance,
     });
+    expect(didAcquireLock).toBe(true);
 
     const handler = onHandlers.get("second-instance");
     expect(handler).toBeTypeOf("function");
