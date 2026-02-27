@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
-import { ThemeProvider, useTheme } from "../src/hooks/use-theme.js";
+import { ThemeProvider, useTheme, useThemeOptional } from "../src/hooks/use-theme.js";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -208,6 +208,27 @@ describe("ThemeProvider/useTheme", () => {
     });
 
     expect(setConfig).toHaveBeenCalledWith({ theme: { source: "light" } });
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it("returns null from useThemeOptional when ThemeProvider is missing", () => {
+    const { container, root } = createTestRoot();
+
+    let value: ReturnType<typeof useThemeOptional> | null = null;
+    const Probe = () => {
+      value = useThemeOptional();
+      return null;
+    };
+
+    act(() => {
+      root.render(React.createElement(Probe, null));
+    });
+
+    expect(value).toBeNull();
 
     act(() => {
       root.unmount();

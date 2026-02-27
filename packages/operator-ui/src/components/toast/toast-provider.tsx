@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Toaster } from "sonner";
-import { useTheme, type ThemeMode } from "../../hooks/use-theme.js";
+import { useThemeOptional, type ThemeMode } from "../../hooks/use-theme.js";
 
 export interface ToastProviderProps {
   children: React.ReactNode;
@@ -18,12 +18,8 @@ function resolveThemeFromDocument(): ThemeMode {
 }
 
 export function ToastProvider({ children }: ToastProviderProps) {
-  let mode: ThemeMode = "system";
-  try {
-    mode = useTheme().mode;
-  } catch {
-    mode = resolveThemeFromDocument();
-  }
+  const theme = useThemeOptional();
+  const mode = theme?.mode ?? resolveThemeFromDocument();
 
   return (
     <>

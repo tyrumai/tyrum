@@ -14,18 +14,19 @@ export interface ErrorBoundaryProps {
 }
 
 interface ErrorBoundaryState {
+  hasError: boolean;
   error: unknown | null;
 }
 
 export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = { error: null };
+  state: ErrorBoundaryState = { hasError: false, error: null };
 
   static getDerivedStateFromError(error: unknown): ErrorBoundaryState {
-    return { error };
+    return { hasError: true, error };
   }
 
   resetErrorBoundary = (): void => {
-    this.setState({ error: null });
+    this.setState({ hasError: false, error: null });
   };
 
   reloadPage = (): void => {
@@ -47,8 +48,8 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   render(): React.ReactNode {
-    const { error } = this.state;
-    if (!error) {
+    const { hasError, error } = this.state;
+    if (!hasError) {
       return this.props.children;
     }
 

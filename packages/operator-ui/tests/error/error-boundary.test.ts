@@ -51,4 +51,38 @@ describe("ErrorBoundary", () => {
       consoleSpy.mockRestore();
     }
   });
+
+  it("renders fallback when the thrown value is falsy", () => {
+    const ErrorBoundary = (operatorUi as Record<string, unknown>)["ErrorBoundary"];
+    expect(ErrorBoundary).toBeDefined();
+
+    function FalsyThrower() {
+      throw 0;
+    }
+
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(
+        ErrorBoundary as React.ComponentType<{ children: React.ReactNode }>,
+        null,
+        React.createElement(FalsyThrower),
+      ),
+    );
+
+    try {
+      expect(container.textContent).toContain("Something went wrong");
+      expect(container.textContent).toContain("0");
+
+      const reloadButton = Array.from(container.querySelectorAll("button")).find((button) =>
+        (button.textContent ?? "").includes("Reload Page"),
+      );
+      expect(reloadButton).toBeDefined();
+
+      expect(container.querySelector('[data-testid="ok"]')).toBeNull();
+    } finally {
+      cleanupTestRoot({ container, root });
+      consoleSpy.mockRestore();
+    }
+  });
 });
