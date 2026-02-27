@@ -1279,9 +1279,14 @@ describe("TyrumClient", () => {
     expect(listRes.items[0].work_item_id).toBe(workItem.work_item_id);
 
     const getPayload = { ...scope, work_item_id: workItem.work_item_id };
-    const getRes = await expectWorkRequest(() => client!.workGet(getPayload), "work.get", getPayload, {
-      item: workItem,
-    });
+    const getRes = await expectWorkRequest(
+      () => client!.workGet(getPayload),
+      "work.get",
+      getPayload,
+      {
+        item: workItem,
+      },
+    );
     expect(getRes.item.work_item_id).toBe(workItem.work_item_id);
 
     const createPayload = { ...scope, item: { kind: "action", title: "Test item" } };
@@ -1645,10 +1650,7 @@ describe("TyrumClient", () => {
 
     await withTimeout(firstReceivedP, 2_000, "first work.item.updated");
     await expect(
-      Promise.race([
-        secondReceivedP.then(() => "second"),
-        delay(50).then(() => "timeout"),
-      ]),
+      Promise.race([secondReceivedP.then(() => "second"), delay(50).then(() => "timeout")]),
     ).resolves.toBe("timeout");
     expect(calls).toBe(1);
   });
