@@ -17,6 +17,17 @@ describe("window state visibility", () => {
     expect(ensureVisibleBounds(bounds, [primaryDisplay])).toEqual({ ...bounds, x: 1120, y: 100 });
   });
 
+  it("clamps window dimensions to the primary display when relocating", () => {
+    const bounds = { x: 3000, y: 100, width: 3000, height: 2000 };
+
+    expect(ensureVisibleBounds(bounds, [primaryDisplay])).toEqual({
+      x: 0,
+      y: 0,
+      width: 1920,
+      height: 1080,
+    });
+  });
+
   it("clamps negative coordinates onto the primary display", () => {
     const bounds = { x: -2500, y: -100, width: 800, height: 600 };
 

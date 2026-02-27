@@ -132,6 +132,8 @@ export function ensureVisibleBounds(
 
   return {
     ...bounds,
+    width: effectiveWidth,
+    height: effectiveHeight,
     x: clamp(bounds.x, primaryWorkArea.x, maxX),
     y: clamp(bounds.y, primaryWorkArea.y, maxY),
   };
