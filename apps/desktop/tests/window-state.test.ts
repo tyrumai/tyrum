@@ -5,6 +5,12 @@ describe("window state visibility", () => {
   const primaryDisplay = { x: 0, y: 0, width: 1920, height: 1080 };
   const secondaryDisplay = { x: 1920, y: 0, width: 1920, height: 1080 };
 
+  it("returns bounds unchanged when no display work areas are provided", () => {
+    const bounds = { x: 2000, y: 100, width: 800, height: 600 };
+
+    expect(ensureVisibleBounds(bounds, [])).toEqual(bounds);
+  });
+
   it("keeps bounds that intersect a visible display", () => {
     const bounds = { x: 2000, y: 100, width: 800, height: 600 };
 
@@ -32,6 +38,13 @@ describe("window state visibility", () => {
     const bounds = { x: -2500, y: -100, width: 800, height: 600 };
 
     expect(ensureVisibleBounds(bounds, [primaryDisplay])).toEqual({ ...bounds, x: 0, y: 0 });
+  });
+
+  it("clamps bounds onto a primary display with a non-zero origin", () => {
+    const bounds = { x: 2000, y: 100, width: 800, height: 600 };
+    const primary = { x: -1920, y: 0, width: 1920, height: 1080 };
+
+    expect(ensureVisibleBounds(bounds, [primary])).toEqual({ ...bounds, x: -800, y: 100 });
   });
 });
 

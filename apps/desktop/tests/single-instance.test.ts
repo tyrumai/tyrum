@@ -110,4 +110,32 @@ describe("desktop main single-instance helpers", () => {
     expect(mainWindow.show).toHaveBeenCalledTimes(1);
     expect(mainWindow.focus).toHaveBeenCalledTimes(1);
   });
+
+  it("still captures argv and invokes the callback when no main window exists", () => {
+    const onHandlers = new Map<string, (...args: any[]) => void>();
+    const app = {
+      requestSingleInstanceLock: vi.fn(() => true),
+      on: vi.fn((event: string, handler: (...args: any[]) => void) => {
+        onHandlers.set(event, handler);
+      }),
+      quit: vi.fn(),
+    };
+
+    const onSecondInstance = vi.fn();
+    const didAcquireLock = setupSingleInstance({
+      app,
+      getMainWindow: () => null,
+      onSecondInstance,
+    });
+    expect(didAcquireLock).toBe(true);
+
+    const handler = onHandlers.get("second-instance");
+    expect(handler).toBeTypeOf("function");
+
+    const argv = ["electron", "tyrum://open?x=1"];
+    handler?.({}, argv, "/tmp");
+
+    expect(getLastSecondInstanceArgv()).toEqual(argv);
+    expect(onSecondInstance).toHaveBeenCalledWith(argv, "/tmp");
+  });
 });
