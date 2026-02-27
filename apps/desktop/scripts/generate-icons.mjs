@@ -43,6 +43,11 @@ for (const size of sizes) {
     sourceSvg,
     "-resize",
     `${size}x${size}`,
+    "-strip",
+    "-define",
+    "png:exclude-chunk=date,time",
+    "-define",
+    "png:compression-level=9",
     outputPath,
   ]);
 }
