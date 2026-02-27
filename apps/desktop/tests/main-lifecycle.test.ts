@@ -8,6 +8,8 @@ const {
   appSetAppUserModelIdMock,
   appWhenReadyMock,
   browserWindowMock,
+  ipcMainHandleMock,
+  nativeThemeOnMock,
   registerConfigIpcMock,
   registerGatewayIpcMock,
   startEmbeddedGatewayFromConfigMock,
@@ -18,6 +20,8 @@ const {
   shutdownNodeResourcesMock,
 } = vi.hoisted(() => {
   const appHandlers = new Map<string, (...args: unknown[]) => void>();
+  const ipcMainHandleMock = vi.fn();
+  const nativeThemeOnMock = vi.fn();
   const appQuitMock = vi.fn();
   const appRequestSingleInstanceLockMock = vi.fn(() => true);
   const appSetAppUserModelIdMock = vi.fn();
@@ -50,6 +54,8 @@ const {
     appSetAppUserModelIdMock,
     appWhenReadyMock,
     browserWindowMock,
+    ipcMainHandleMock,
+    nativeThemeOnMock,
     registerConfigIpcMock,
     registerGatewayIpcMock,
     startEmbeddedGatewayFromConfigMock,
@@ -74,6 +80,16 @@ vi.mock("electron", () => ({
   Menu: {
     buildFromTemplate: vi.fn(() => ({ popup: vi.fn() }) as never),
     setApplicationMenu: vi.fn(),
+  },
+  ipcMain: {
+    handle: ipcMainHandleMock,
+  },
+  nativeTheme: {
+    themeSource: "system",
+    shouldUseDarkColors: false,
+    shouldUseHighContrastColors: false,
+    shouldUseInvertedColorScheme: false,
+    on: nativeThemeOnMock,
   },
   screen: {
     getAllDisplays: vi.fn(() => []),

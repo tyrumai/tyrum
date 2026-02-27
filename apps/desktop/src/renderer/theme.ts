@@ -1,18 +1,108 @@
 import type { CSSProperties } from "react";
 
+export interface DesktopThemeState {
+  colorScheme: "light" | "dark";
+  highContrast: boolean;
+  inverted: boolean;
+  source: "system" | "light" | "dark";
+}
+
+export const desktopThemeTokens = {
+  light: {
+    bg: "#ffffff",
+    bgSubtle: "#f3f4f6",
+    bgCard: "#ffffff",
+    fg: "#111827",
+    fgMuted: "#6b7280",
+    border: "#e5e7eb",
+    primary: "#4f46e5",
+    primaryDim: "rgba(79, 70, 229, 0.12)",
+    success: "#16a34a",
+    warning: "#ca8a04",
+    error: "#dc2626",
+    neutral: "#6b7280",
+    focusRing: "#4f46e5",
+    selection: "rgba(79, 70, 229, 0.20)",
+  },
+  dark: {
+    bg: "#000000",
+    bgSubtle: "#0a0a0a",
+    bgCard: "#111111",
+    fg: "#ededed",
+    fgMuted: "#a1a1aa",
+    border: "#262626",
+    primary: "#6366f1",
+    primaryDim: "rgba(99, 102, 241, 0.12)",
+    success: "#22c55e",
+    warning: "#eab308",
+    error: "#ef4444",
+    neutral: "#9ca3af",
+    focusRing: "#a5b4fc",
+    selection: "rgba(99, 102, 241, 0.30)",
+  },
+} as const;
+
+type ThemeTokens = (typeof desktopThemeTokens)["light"];
+
+function resolveThemeTokens(state: DesktopThemeState): ThemeTokens {
+  const base = desktopThemeTokens[state.colorScheme];
+  if (!state.highContrast) {
+    return base;
+  }
+
+  return {
+    ...base,
+    fgMuted: base.fg,
+    border: base.fg,
+  };
+}
+
+export function applyDesktopThemeState(state: DesktopThemeState): void {
+  const root = document.documentElement;
+  root.dataset.theme = state.colorScheme;
+  const tokens = resolveThemeTokens(state);
+
+  root.style.setProperty("--tyrum-color-bg", tokens.bg);
+  root.style.setProperty("--tyrum-color-bg-subtle", tokens.bgSubtle);
+  root.style.setProperty("--tyrum-color-bg-card", tokens.bgCard);
+  root.style.setProperty("--tyrum-color-fg", tokens.fg);
+  root.style.setProperty("--tyrum-color-fg-muted", tokens.fgMuted);
+  root.style.setProperty("--tyrum-color-border", tokens.border);
+  root.style.setProperty("--tyrum-color-primary", tokens.primary);
+  root.style.setProperty("--tyrum-color-primary-dim", tokens.primaryDim);
+  root.style.setProperty("--tyrum-color-success", tokens.success);
+  root.style.setProperty("--tyrum-color-warning", tokens.warning);
+  root.style.setProperty("--tyrum-color-error", tokens.error);
+  root.style.setProperty("--tyrum-color-neutral", tokens.neutral);
+  root.style.setProperty("--tyrum-color-focus-ring", tokens.focusRing);
+  root.style.setProperty("--tyrum-color-selection", tokens.selection);
+}
+
+export interface DesktopThemeBridge {
+  getState: () => Promise<DesktopThemeState>;
+  onChange: (cb: (state: DesktopThemeState) => void) => () => void;
+}
+
+export async function startDesktopThemeSync(bridge: DesktopThemeBridge): Promise<() => void> {
+  applyDesktopThemeState(await bridge.getState());
+  return bridge.onChange((state) => {
+    applyDesktopThemeState(state);
+  });
+}
+
 export const colors = {
-  bg: "#000",
-  bgSubtle: "#0a0a0a",
-  bgCard: "#111",
-  fg: "#ededed",
-  fgMuted: "#888",
-  border: "#1a1a1a",
-  primary: "#6366f1",
-  primaryDim: "rgba(99, 102, 241, 0.12)",
-  success: "#22c55e",
-  warning: "#eab308",
-  error: "#ef4444",
-  neutral: "#9ca3af",
+  bg: "var(--tyrum-color-bg)",
+  bgSubtle: "var(--tyrum-color-bg-subtle)",
+  bgCard: "var(--tyrum-color-bg-card)",
+  fg: "var(--tyrum-color-fg)",
+  fgMuted: "var(--tyrum-color-fg-muted)",
+  border: "var(--tyrum-color-border)",
+  primary: "var(--tyrum-color-primary)",
+  primaryDim: "var(--tyrum-color-primary-dim)",
+  success: "var(--tyrum-color-success)",
+  warning: "var(--tyrum-color-warning)",
+  error: "var(--tyrum-color-error)",
+  neutral: "var(--tyrum-color-neutral)",
 } as const;
 
 export const fonts = {

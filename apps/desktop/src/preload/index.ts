@@ -3,6 +3,16 @@ import { contextBridge, ipcRenderer } from "electron";
 contextBridge.exposeInMainWorld("tyrumDesktop", {
   getConfig: () => ipcRenderer.invoke("config:get"),
   setConfig: (partial: unknown) => ipcRenderer.invoke("config:set", partial),
+  theme: {
+    getState: () => ipcRenderer.invoke("theme:get-state"),
+    onChange: (cb: (state: unknown) => void) => {
+      const listener = (_event: unknown, state: unknown) => cb(state);
+      ipcRenderer.on("theme:state", listener);
+      return () => {
+        ipcRenderer.removeListener("theme:state", listener);
+      };
+    },
+  },
   updates: {
     getState: () => ipcRenderer.invoke("updates:state"),
     check: () => ipcRenderer.invoke("updates:check"),

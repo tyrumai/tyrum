@@ -56,6 +56,37 @@ describe("renderer shell document", () => {
     expect(indexHtml).toMatch(/color-scheme\s*:\s*light\s+dark/);
   });
 
+  it("applies theme CSS variables for page background and selection colors", () => {
+    const indexHtml = readFileSync(
+      join(import.meta.dirname, "../src/renderer/index.html"),
+      "utf-8",
+    );
+
+    expect(indexHtml).toContain("var(--tyrum-color-bg");
+    expect(indexHtml).toContain("var(--tyrum-color-fg");
+    expect(indexHtml).toContain("var(--tyrum-color-selection");
+  });
+
+  it("adds focus-visible styles so keyboard navigation has a visible focus ring", () => {
+    const indexHtml = readFileSync(
+      join(import.meta.dirname, "../src/renderer/index.html"),
+      "utf-8",
+    );
+
+    expect(indexHtml).toContain(":focus-visible");
+    expect(indexHtml).toContain("outline");
+    expect(indexHtml).toContain("var(--tyrum-color-focus-ring");
+  });
+
+  it("respects prefers-reduced-motion to avoid unexpected animations", () => {
+    const indexHtml = readFileSync(
+      join(import.meta.dirname, "../src/renderer/index.html"),
+      "utf-8",
+    );
+
+    expect(indexHtml).toContain("prefers-reduced-motion");
+  });
+
   it("does not include web-only font or scrollbar overrides anywhere in renderer sources", () => {
     const rendererDir = join(import.meta.dirname, "../src/renderer");
     const rendererFiles = listFilesRecursive(rendererDir);

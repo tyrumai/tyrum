@@ -1,6 +1,17 @@
+export interface DesktopThemeState {
+  colorScheme: "light" | "dark";
+  highContrast: boolean;
+  inverted: boolean;
+  source: "system" | "light" | "dark";
+}
+
 export interface TyrumDesktopApi {
   getConfig: () => Promise<unknown>;
   setConfig: (partial: unknown) => Promise<void>;
+  theme: {
+    getState: () => Promise<DesktopThemeState>;
+    onChange: (cb: (state: DesktopThemeState) => void) => () => void;
+  };
   updates: {
     getState: () => Promise<unknown>;
     check: () => Promise<unknown>;

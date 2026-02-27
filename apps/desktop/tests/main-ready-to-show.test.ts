@@ -11,8 +11,10 @@ const {
   browserWindowMock,
   browserWindowOnceMock,
   browserWindowShowMock,
+  ipcMainHandleMock,
   menuBuildFromTemplateMock,
   menuSetApplicationMenuMock,
+  nativeThemeOnMock,
   readyToShowHandlers,
   webContentsOnMock,
   setWindowOpenHandlerMock,
@@ -77,6 +79,9 @@ const {
     },
   ]);
 
+  const ipcMainHandleMock = vi.fn();
+  const nativeThemeOnMock = vi.fn();
+
   const menuBuildFromTemplateMock = vi.fn(() => ({}));
   const menuSetApplicationMenuMock = vi.fn();
 
@@ -108,8 +113,10 @@ const {
     browserWindowMock,
     browserWindowOnceMock,
     browserWindowShowMock,
+    ipcMainHandleMock,
     menuBuildFromTemplateMock,
     menuSetApplicationMenuMock,
+    nativeThemeOnMock,
     readyToShowHandlers,
     webContentsOnMock,
     setWindowOpenHandlerMock,
@@ -139,6 +146,16 @@ vi.mock("electron", () => ({
     getPath: appGetPathMock,
   },
   BrowserWindow: browserWindowMock,
+  ipcMain: {
+    handle: ipcMainHandleMock,
+  },
+  nativeTheme: {
+    themeSource: "system",
+    shouldUseDarkColors: false,
+    shouldUseHighContrastColors: false,
+    shouldUseInvertedColorScheme: false,
+    on: nativeThemeOnMock,
+  },
   Menu: {
     buildFromTemplate: menuBuildFromTemplateMock,
     setApplicationMenu: menuSetApplicationMenuMock,
@@ -194,8 +211,10 @@ describe("main window ready-to-show", () => {
     browserWindowMock.mockClear();
     browserWindowOnceMock.mockClear();
     browserWindowShowMock.mockClear();
+    ipcMainHandleMock.mockReset();
     menuBuildFromTemplateMock.mockClear();
     menuSetApplicationMenuMock.mockClear();
+    nativeThemeOnMock.mockReset();
     webContentsOnMock.mockReset();
     setWindowOpenHandlerMock.mockReset();
     screenGetAllDisplaysMock.mockClear();
