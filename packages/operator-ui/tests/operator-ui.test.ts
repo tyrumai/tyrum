@@ -10,6 +10,7 @@ import {
 } from "../../operator-core/src/index.js";
 import type { OperatorWsClient, OperatorHttpClient } from "../../operator-core/src/deps.js";
 import { AdminModeGate, AdminModeProvider, OperatorUiApp } from "../src/index.js";
+import * as operatorUi from "../src/index.js";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -238,6 +239,10 @@ describe("operator-ui", () => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it("does not export AdminModeBanner from the public API", () => {
+    expect("AdminModeBanner" in operatorUi).toBe(false);
   });
 
   it("renders the operator shell navigation", () => {
