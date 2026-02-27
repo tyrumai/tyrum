@@ -8,13 +8,12 @@ describe("desktop deep link argv parsing", () => {
   });
 
   it("returns the first tyrum:// URL in argv", () => {
-    expect(
-      extractDeepLinkUrlFromArgv(["electron", "tyrum://open?x=1", "tyrum://second?y=2"]),
-    ).toBe("tyrum://open?x=1");
+    expect(extractDeepLinkUrlFromArgv(["electron", "tyrum://open?x=1", "tyrum://second?y=2"])).toBe(
+      "tyrum://open?x=1",
+    );
   });
 
   it("ignores malformed tyrum:// URL values", () => {
     expect(extractDeepLinkUrlFromArgv(["electron", "tyrum://bad url"])).toBeNull();
   });
 });
-

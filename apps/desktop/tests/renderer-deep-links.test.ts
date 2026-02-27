@@ -11,4 +11,3 @@ describe("desktop renderer deep link routing", () => {
     expect(getPageIdForDeepLink("not-a-url")).toBe("connection");
   });
 });
-

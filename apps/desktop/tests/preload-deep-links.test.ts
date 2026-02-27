@@ -36,4 +36,3 @@ describe("desktop preload deep links", () => {
     );
   });
 });
-

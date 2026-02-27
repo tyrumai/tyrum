@@ -21,4 +21,3 @@ export function registerDeepLinkIpc(): void {
     return consumePendingDeepLinkUrl();
   });
 }
-

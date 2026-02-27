@@ -17,4 +17,3 @@ export function extractDeepLinkUrlFromArgv(argv: readonly string[]): string | nu
   }
   return null;
 }
-
