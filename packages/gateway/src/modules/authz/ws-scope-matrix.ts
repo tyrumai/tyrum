@@ -47,6 +47,18 @@ export function resolveWsRequestRequiredScopes(type: string): string[] | null {
     case "work.state_kv.set": {
       return ["operator.write"];
     }
+    case "memory.search":
+    case "memory.list":
+    case "memory.get": {
+      return ["operator.read"];
+    }
+    case "memory.create":
+    case "memory.update":
+    case "memory.delete":
+    case "memory.forget":
+    case "memory.export": {
+      return ["operator.write"];
+    }
     case "presence.beacon": {
       return [];
     }

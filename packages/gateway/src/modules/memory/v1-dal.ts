@@ -1,11 +1,14 @@
 import { randomUUID } from "node:crypto";
 import type {
   MemoryDeletedBy,
+  MemoryForgetSelector,
+  MemoryItemFilter,
   MemoryItem,
   MemoryItemCreateInput,
   MemoryItemKind,
   MemoryItemPatch,
   MemoryProvenance,
+  MemorySearchHit,
   MemorySensitivity,
   MemoryTombstone,
 } from "@tyrum/schemas";
@@ -61,8 +64,126 @@ function parseJson<T>(raw: string): T {
   return JSON.parse(raw) as T;
 }
 
+function escapeLikePattern(value: string): string {
+  return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
+}
+
+type Cursor = { sort: string; id: string };
+
+function encodeCursor(cursor: Cursor): string {
+  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64");
+}
+
+function decodeCursor(raw: string): Cursor {
+  try {
+    const json = Buffer.from(raw, "base64").toString("utf8");
+    const parsed = JSON.parse(json) as unknown;
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      "sort" in parsed &&
+      "id" in parsed &&
+      typeof (parsed as { sort: unknown }).sort === "string" &&
+      typeof (parsed as { id: unknown }).id === "string"
+    ) {
+      return { sort: (parsed as { sort: string }).sort, id: (parsed as { id: string }).id };
+    }
+  } catch {
+    // fall through
+  }
+  throw new Error("invalid cursor");
+}
+
 function uniqSortedStrings(values: readonly string[]): string[] {
   return [...new Set(values.map((v) => v.trim()).filter((v) => v.length > 0))].sort();
+}
+
+export function buildMemoryV1ItemQueryParts(params: {
+  agent: string;
+  filter?: MemoryItemFilter;
+  limit?: number;
+  cursor?: string;
+  extraWhere?: string[];
+  extraValues?: readonly unknown[];
+}): { from: string; where: string[]; values: unknown[]; limit: number } {
+  const where: string[] = ["i.agent_id = ?"];
+  const values: unknown[] = [params.agent];
+
+  const filter = params.filter;
+
+  if (filter?.kinds && filter.kinds.length > 0) {
+    where.push(`i.kind IN (${filter.kinds.map(() => "?").join(", ")})`);
+    values.push(...filter.kinds);
+  }
+
+  if (filter?.keys && filter.keys.length > 0) {
+    where.push(`i.key IN (${filter.keys.map(() => "?").join(", ")})`);
+    values.push(...filter.keys);
+  }
+
+  if (filter?.tags && filter.tags.length > 0) {
+    where.push(
+      `EXISTS (
+         SELECT 1
+         FROM memory_item_tags t
+         WHERE t.agent_id = i.agent_id
+           AND t.memory_item_id = i.memory_item_id
+           AND t.tag IN (${filter.tags.map(() => "?").join(", ")})
+       )`,
+    );
+    values.push(...filter.tags);
+  }
+
+  const provenanceFilter = filter?.provenance;
+  const joinProvenance = Boolean(
+    provenanceFilter &&
+    ((provenanceFilter.source_kinds && provenanceFilter.source_kinds.length > 0) ||
+      (provenanceFilter.channels && provenanceFilter.channels.length > 0) ||
+      (provenanceFilter.thread_ids && provenanceFilter.thread_ids.length > 0) ||
+      (provenanceFilter.session_ids && provenanceFilter.session_ids.length > 0)),
+  );
+
+  if (joinProvenance) {
+    if (provenanceFilter?.source_kinds && provenanceFilter.source_kinds.length > 0) {
+      where.push(`p.source_kind IN (${provenanceFilter.source_kinds.map(() => "?").join(", ")})`);
+      values.push(...provenanceFilter.source_kinds);
+    }
+    if (provenanceFilter?.channels && provenanceFilter.channels.length > 0) {
+      where.push(`p.channel IN (${provenanceFilter.channels.map(() => "?").join(", ")})`);
+      values.push(...provenanceFilter.channels);
+    }
+    if (provenanceFilter?.thread_ids && provenanceFilter.thread_ids.length > 0) {
+      where.push(`p.thread_id IN (${provenanceFilter.thread_ids.map(() => "?").join(", ")})`);
+      values.push(...provenanceFilter.thread_ids);
+    }
+    if (provenanceFilter?.session_ids && provenanceFilter.session_ids.length > 0) {
+      where.push(`p.session_id IN (${provenanceFilter.session_ids.map(() => "?").join(", ")})`);
+      values.push(...provenanceFilter.session_ids);
+    }
+  }
+
+  if (params.extraWhere && params.extraWhere.length > 0) {
+    where.push(...params.extraWhere);
+    if (params.extraValues && params.extraValues.length > 0) {
+      values.push(...params.extraValues);
+    }
+  }
+
+  if (params.cursor) {
+    const cursor = decodeCursor(params.cursor);
+    where.push("(i.created_at < ? OR (i.created_at = ? AND i.memory_item_id < ?))");
+    values.push(cursor.sort, cursor.sort, cursor.id);
+  }
+
+  const limit = Math.max(1, Math.min(500, params.limit ?? 50));
+
+  const from = joinProvenance
+    ? `memory_items i
+       JOIN memory_item_provenance p
+         ON p.agent_id = i.agent_id AND p.memory_item_id = i.memory_item_id`
+    : "memory_items i";
+
+  return { from, where, values, limit };
 }
 
 function assertPatchCompatible(kind: MemoryItemKind, patch: MemoryItemPatch): void {
@@ -112,6 +233,251 @@ export class MemoryV1Dal {
   private normalizeAgentId(agentId?: string): string {
     const trimmed = agentId?.trim();
     return trimmed && trimmed.length > 0 ? trimmed : "default";
+  }
+
+  private async resolveSelectorIds(
+    selector: MemoryForgetSelector,
+    agentId: string,
+  ): Promise<string[]> {
+    if (selector.kind === "id") {
+      return [selector.memory_item_id];
+    }
+
+    if (selector.kind === "key") {
+      const where: string[] = ["agent_id = ?", "key = ?"];
+      const values: unknown[] = [agentId, selector.key];
+
+      if (selector.item_kind) {
+        where.push("kind = ?");
+        values.push(selector.item_kind);
+      }
+
+      const rows = await this.db.all<{ memory_item_id: string }>(
+        `SELECT memory_item_id
+         FROM memory_items
+         WHERE ${where.join(" AND ")}`,
+        values,
+      );
+      return rows.map((r) => r.memory_item_id);
+    }
+
+    if (selector.kind === "tag") {
+      const rows = await this.db.all<{ memory_item_id: string }>(
+        `SELECT DISTINCT memory_item_id
+         FROM memory_item_tags
+         WHERE agent_id = ? AND tag = ?`,
+        [agentId, selector.tag],
+      );
+      return rows.map((r) => r.memory_item_id);
+    }
+
+    const provenance = selector.provenance;
+    const where: string[] = ["agent_id = ?"];
+    const values: unknown[] = [agentId];
+
+    if (provenance.source_kind !== undefined) {
+      where.push("source_kind = ?");
+      values.push(provenance.source_kind);
+    }
+    if (provenance.channel !== undefined) {
+      where.push("channel = ?");
+      values.push(provenance.channel);
+    }
+    if (provenance.thread_id !== undefined) {
+      where.push("thread_id = ?");
+      values.push(provenance.thread_id);
+    }
+    if (provenance.session_id !== undefined) {
+      where.push("session_id = ?");
+      values.push(provenance.session_id);
+    }
+    if (provenance.message_id !== undefined) {
+      where.push("message_id = ?");
+      values.push(provenance.message_id);
+    }
+    if (provenance.tool_call_id !== undefined) {
+      where.push("tool_call_id = ?");
+      values.push(provenance.tool_call_id);
+    }
+
+    const rows = await this.db.all<{ memory_item_id: string }>(
+      `SELECT memory_item_id
+       FROM memory_item_provenance
+       WHERE ${where.join(" AND ")}`,
+      values,
+    );
+    return rows.map((r) => r.memory_item_id);
+  }
+
+  async list(params: {
+    filter?: MemoryItemFilter;
+    limit?: number;
+    cursor?: string;
+    agentId?: string;
+  }): Promise<{ items: MemoryItem[]; next_cursor?: string }> {
+    const agent = this.normalizeAgentId(params.agentId);
+
+    const { from, where, values, limit } = buildMemoryV1ItemQueryParts({
+      agent,
+      filter: params.filter,
+      limit: params.limit,
+      cursor: params.cursor,
+    });
+
+    const rows = await this.db.all<{ memory_item_id: string; created_at: string | Date }>(
+      `SELECT i.memory_item_id AS memory_item_id, i.created_at AS created_at
+       FROM ${from}
+       WHERE ${where.join(" AND ")}
+       ORDER BY i.created_at DESC, i.memory_item_id DESC
+       LIMIT ?`,
+      [...values, limit],
+    );
+
+    const items: MemoryItem[] = [];
+    for (const row of rows) {
+      const item = await this.getById(row.memory_item_id, agent);
+      if (item) items.push(item);
+    }
+
+    const last = rows.at(-1);
+    const next_cursor =
+      rows.length === limit && last
+        ? encodeCursor({ sort: normalizeTime(last.created_at), id: last.memory_item_id })
+        : undefined;
+
+    return { items, next_cursor };
+  }
+
+  async search(params: {
+    query: string;
+    filter?: MemoryItemFilter;
+    limit?: number;
+    cursor?: string;
+    agentId?: string;
+  }): Promise<{ hits: MemorySearchHit[]; next_cursor?: string }> {
+    const agent = this.normalizeAgentId(params.agentId);
+
+    const needle = params.query.trim().toLowerCase();
+    const pattern = `%${escapeLikePattern(needle)}%`;
+    const { from, where, values, limit } = buildMemoryV1ItemQueryParts({
+      agent,
+      filter: params.filter,
+      limit: params.limit,
+      cursor: params.cursor,
+      extraWhere: [
+        `(LOWER(COALESCE(i.key, '')) LIKE ? ESCAPE '\\'
+          OR LOWER(COALESCE(i.title, '')) LIKE ? ESCAPE '\\'
+          OR LOWER(COALESCE(i.body_md, '')) LIKE ? ESCAPE '\\'
+          OR LOWER(COALESCE(i.summary_md, '')) LIKE ? ESCAPE '\\')`,
+      ],
+      extraValues: [pattern, pattern, pattern, pattern],
+    });
+
+    const rows = await this.db.all<{
+      memory_item_id: string;
+      kind: MemoryItemKind;
+      created_at: string | Date;
+    }>(
+      `SELECT i.memory_item_id AS memory_item_id, i.kind AS kind, i.created_at AS created_at
+       FROM ${from}
+       WHERE ${where.join(" AND ")}
+       ORDER BY i.created_at DESC, i.memory_item_id DESC
+       LIMIT ?`,
+      [...values, limit],
+    );
+
+    const hits: MemorySearchHit[] = rows.map((r) => ({
+      memory_item_id: r.memory_item_id,
+      kind: r.kind,
+      score: 1,
+    }));
+
+    const last = rows.at(-1);
+    const next_cursor =
+      rows.length === limit && last
+        ? encodeCursor({ sort: normalizeTime(last.created_at), id: last.memory_item_id })
+        : undefined;
+
+    return { hits, next_cursor };
+  }
+
+  async forget(params: {
+    selectors: MemoryForgetSelector[];
+    deleted_by: MemoryDeletedBy;
+    reason?: string;
+    agentId?: string;
+  }): Promise<{ deleted_count: number; tombstones: MemoryTombstone[] }> {
+    const agent = this.normalizeAgentId(params.agentId);
+
+    const ids = new Set<string>();
+    for (const selector of params.selectors) {
+      const matched = await this.resolveSelectorIds(selector, agent);
+      for (const id of matched) ids.add(id);
+    }
+
+    const tombstones: MemoryTombstone[] = [];
+    for (const id of ids) {
+      try {
+        const tombstone = await this.delete(
+          id,
+          { deleted_by: params.deleted_by, reason: params.reason },
+          agent,
+        );
+        tombstones.push(tombstone);
+      } catch (err) {
+        if (err instanceof Error && err.message === "memory item not found") {
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    return { deleted_count: tombstones.length, tombstones };
+  }
+
+  async listTombstones(params: {
+    limit?: number;
+    cursor?: string;
+    agentId?: string;
+  }): Promise<{ tombstones: MemoryTombstone[]; next_cursor?: string }> {
+    const agent = this.normalizeAgentId(params.agentId);
+
+    const where: string[] = ["agent_id = ?"];
+    const values: unknown[] = [agent];
+
+    if (params.cursor) {
+      const cursor = decodeCursor(params.cursor);
+      where.push("(deleted_at < ? OR (deleted_at = ? AND memory_item_id < ?))");
+      values.push(cursor.sort, cursor.sort, cursor.id);
+    }
+
+    const limit = Math.max(1, Math.min(500, params.limit ?? 50));
+
+    const rows = await this.db.all<RawTombstoneRow>(
+      `SELECT *
+       FROM memory_tombstones
+       WHERE ${where.join(" AND ")}
+       ORDER BY deleted_at DESC, memory_item_id DESC
+       LIMIT ?`,
+      [...values, limit],
+    );
+
+    const tombstones: MemoryTombstone[] = rows.map((r) => ({
+      v: 1,
+      memory_item_id: r.memory_item_id,
+      agent_id: r.agent_id,
+      deleted_at: normalizeTime(r.deleted_at),
+      deleted_by: r.deleted_by,
+      ...(r.reason ? { reason: r.reason } : {}),
+    }));
+
+    const last = rows.at(-1);
+    const next_cursor =
+      rows.length === limit && last
+        ? encodeCursor({ sort: normalizeTime(last.deleted_at), id: last.memory_item_id })
+        : undefined;
+
+    return { tombstones, next_cursor };
   }
 
   async create(input: MemoryItemCreateInput, agentId?: string): Promise<MemoryItem> {
