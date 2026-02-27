@@ -86,6 +86,10 @@ describe("Memory v1 contracts", () => {
   it("parses search + CRUD request/response payloads", () => {
     const MemorySearchRequest = schema("MemorySearchRequest");
     const MemorySearchResponse = schema("MemorySearchResponse");
+    const MemoryGetRequest = schema("MemoryGetRequest");
+    const MemoryGetResponse = schema("MemoryGetResponse");
+    const MemoryListRequest = schema("MemoryListRequest");
+    const MemoryListResponse = schema("MemoryListResponse");
     const MemoryCreateRequest = schema("MemoryCreateRequest");
     const MemoryCreateResponse = schema("MemoryCreateResponse");
     const MemoryUpdateRequest = schema("MemoryUpdateRequest");
@@ -99,6 +103,10 @@ describe("Memory v1 contracts", () => {
 
     expect(MemorySearchRequest).toBeDefined();
     expect(MemorySearchResponse).toBeDefined();
+    expect(MemoryGetRequest).toBeDefined();
+    expect(MemoryGetResponse).toBeDefined();
+    expect(MemoryListRequest).toBeDefined();
+    expect(MemoryListResponse).toBeDefined();
     expect(MemoryCreateRequest).toBeDefined();
     expect(MemoryCreateResponse).toBeDefined();
     expect(MemoryUpdateRequest).toBeDefined();
@@ -111,6 +119,8 @@ describe("Memory v1 contracts", () => {
     expect(MemoryExportResponse).toBeDefined();
 
     if (!MemorySearchRequest || !MemorySearchResponse) return;
+    if (!MemoryGetRequest || !MemoryGetResponse) return;
+    if (!MemoryListRequest || !MemoryListResponse) return;
     if (!MemoryCreateRequest || !MemoryCreateResponse) return;
     if (!MemoryUpdateRequest || !MemoryUpdateResponse) return;
     if (!MemoryDeleteRequest || !MemoryDeleteResponse) return;
@@ -131,6 +141,49 @@ describe("Memory v1 contracts", () => {
           kind: "procedure",
           score: 0.42,
           snippet: "Restart gateway",
+        },
+      ],
+    });
+
+    MemoryGetRequest.parse({
+      v: 1,
+      memory_item_id: "550e8400-e29b-41d4-a716-446655440000",
+    });
+    MemoryGetResponse.parse({
+      v: 1,
+      item: {
+        v: 1,
+        memory_item_id: "550e8400-e29b-41d4-a716-446655440000",
+        agent_id: "default",
+        kind: "note",
+        title: "Ops",
+        body_md: "foo",
+        tags: ["project"],
+        sensitivity: "private",
+        provenance: { source_kind: "operator" },
+        created_at: "2026-02-19T12:00:00Z",
+      },
+    });
+
+    MemoryListRequest.parse({
+      v: 1,
+      filter: { kinds: ["note"] },
+      limit: 10,
+    });
+    MemoryListResponse.parse({
+      v: 1,
+      items: [
+        {
+          v: 1,
+          memory_item_id: "550e8400-e29b-41d4-a716-446655440000",
+          agent_id: "default",
+          kind: "note",
+          title: "Ops",
+          body_md: "foo",
+          tags: ["project"],
+          sensitivity: "private",
+          provenance: { source_kind: "operator" },
+          created_at: "2026-02-19T12:00:00Z",
         },
       ],
     });
@@ -208,6 +261,28 @@ describe("Memory v1 contracts", () => {
       confirm: "FORGET",
       selectors: [{ kind: "id", memory_item_id: "550e8400-e29b-41d4-a716-446655440000" }],
     });
+    MemoryForgetRequest.parse({
+      v: 1,
+      confirm: "FORGET",
+      selectors: [{ kind: "key", key: "favorite_color", item_kind: "fact" }],
+    });
+    MemoryForgetRequest.parse({
+      v: 1,
+      confirm: "FORGET",
+      selectors: [{ kind: "tag", tag: "project" }],
+    });
+    MemoryForgetRequest.parse({
+      v: 1,
+      confirm: "FORGET",
+      selectors: [{ kind: "provenance", provenance: { session_id: "agent:default:main" } }],
+    });
+    expect(() =>
+      MemoryForgetRequest.parse({
+        v: 1,
+        confirm: "FORGET",
+        selectors: [{ kind: "provenance", provenance: {} }],
+      }),
+    ).toThrow();
     MemoryForgetResponse.parse({
       v: 1,
       deleted_count: 1,
@@ -238,24 +313,66 @@ describe("Memory v1 contracts", () => {
     expect(MemoryChangeEvent).toBeDefined();
     if (!MemoryChangeEvent) return;
 
+    const item = {
+      v: 1,
+      memory_item_id: "550e8400-e29b-41d4-a716-446655440000",
+      agent_id: "default",
+      kind: "note",
+      title: "Ops",
+      body_md: "foo",
+      tags: ["project"],
+      sensitivity: "private",
+      provenance: { source_kind: "operator" },
+      created_at: "2026-02-19T12:00:00Z",
+    } as const;
+
+    const tombstone = {
+      v: 1,
+      memory_item_id: "550e8400-e29b-41d4-a716-446655440000",
+      agent_id: "default",
+      deleted_at: "2026-02-19T12:00:00Z",
+      deleted_by: "operator",
+    } as const;
+
     MemoryChangeEvent.parse({
       v: 1,
       type: "memory.item.created",
       occurred_at: "2026-02-19T12:00:00Z",
       agent_id: "default",
+      payload: { item },
+    });
+    MemoryChangeEvent.parse({
+      v: 1,
+      type: "memory.item.updated",
+      occurred_at: "2026-02-19T12:05:00Z",
+      agent_id: "default",
+      payload: { item },
+    });
+    MemoryChangeEvent.parse({
+      v: 1,
+      type: "memory.item.deleted",
+      occurred_at: "2026-02-19T12:10:00Z",
+      agent_id: "default",
+      payload: { tombstone },
+    });
+    MemoryChangeEvent.parse({
+      v: 1,
+      type: "memory.item.forgotten",
+      occurred_at: "2026-02-19T12:15:00Z",
+      agent_id: "default",
+      payload: { tombstone },
+    });
+    MemoryChangeEvent.parse({
+      v: 1,
+      type: "memory.item.consolidated",
+      occurred_at: "2026-02-19T12:20:00Z",
+      agent_id: "default",
       payload: {
-        item: {
-          v: 1,
-          memory_item_id: "550e8400-e29b-41d4-a716-446655440000",
-          agent_id: "default",
-          kind: "note",
-          title: "Ops",
-          body_md: "foo",
-          tags: ["project"],
-          sensitivity: "private",
-          provenance: { source_kind: "operator" },
-          created_at: "2026-02-19T12:00:00Z",
-        },
+        from_memory_item_ids: [
+          "550e8400-e29b-41d4-a716-446655440000",
+          "550e8400-e29b-41d4-a716-446655440001",
+        ],
+        item,
       },
     });
   });

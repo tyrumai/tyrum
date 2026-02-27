@@ -164,6 +164,41 @@ export type MemorySearchResponse = z.infer<typeof MemorySearchResponse>;
 // CRUD requests/responses
 // ---------------------------------------------------------------------------
 
+export const MemoryGetRequest = z
+  .object({
+    v: z.literal(1),
+    memory_item_id: MemoryItemId,
+  })
+  .strict();
+export type MemoryGetRequest = z.infer<typeof MemoryGetRequest>;
+
+export const MemoryGetResponse = z
+  .object({
+    v: z.literal(1),
+    item: MemoryItem,
+  })
+  .strict();
+export type MemoryGetResponse = z.infer<typeof MemoryGetResponse>;
+
+export const MemoryListRequest = z
+  .object({
+    v: z.literal(1),
+    filter: MemoryItemFilter.optional(),
+    limit: z.number().int().positive().optional(),
+    cursor: z.string().trim().min(1).optional(),
+  })
+  .strict();
+export type MemoryListRequest = z.infer<typeof MemoryListRequest>;
+
+export const MemoryListResponse = z
+  .object({
+    v: z.literal(1),
+    items: z.array(MemoryItem).default([]),
+    next_cursor: z.string().trim().min(1).optional(),
+  })
+  .strict();
+export type MemoryListResponse = z.infer<typeof MemoryListResponse>;
+
 export const MemoryItemCreateBase = z
   .object({
     kind: MemoryItemKind,
@@ -293,7 +328,10 @@ export const MemoryProvenanceSelector = z
     message_id: z.string().trim().min(1).optional(),
     tool_call_id: z.string().trim().min(1).optional(),
   })
-  .strict();
+  .strict()
+  .refine((selector) => Object.values(selector).some((value) => value !== undefined), {
+    message: "provenance selector must include at least one field",
+  });
 export type MemoryProvenanceSelector = z.infer<typeof MemoryProvenanceSelector>;
 
 export const MemoryForgetSelector = z.discriminatedUnion("kind", [
