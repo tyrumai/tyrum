@@ -10,14 +10,14 @@ describe("tagContent", () => {
     expect(tagged.trusted).toBe(true);
   });
 
-  it("tags memory content as trusted by default", () => {
+  it("tags memory content as untrusted by default", () => {
     const tagged = tagContent("remembered fact", "memory");
-    expect(tagged.trusted).toBe(true);
+    expect(tagged.trusted).toBe(false);
   });
 
-  it("tags semantic-memory content as trusted by default", () => {
+  it("tags semantic-memory content as untrusted by default", () => {
     const tagged = tagContent("vector search result", "semantic-memory");
-    expect(tagged.trusted).toBe(true);
+    expect(tagged.trusted).toBe(false);
   });
 
   it("tags web content as untrusted by default", () => {
