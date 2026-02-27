@@ -92,14 +92,19 @@ function registerNavigationGuardrails(window: BrowserWindow): void {
 }
 
 function createWindow(): void {
-  mainWindow = new BrowserWindow(MAIN_WINDOW_OPTIONS);
+  const window = new BrowserWindow(MAIN_WINDOW_OPTIONS);
+  mainWindow = window;
 
-  registerNavigationGuardrails(mainWindow);
+  window.once("ready-to-show", () => {
+    window.show();
+  });
+
+  registerNavigationGuardrails(window);
 
   registerConfigIpc();
-  gatewayManager = registerGatewayIpc(mainWindow);
-  registerNodeIpc(mainWindow);
-  registerUpdateIpc(mainWindow, {
+  gatewayManager = registerGatewayIpc(window);
+  registerNodeIpc(window);
+  registerUpdateIpc(window, {
     beforeInstall: shutdownAppResources,
     allowQuitForUpdate: () => {
       isQuittingForUpdate = true;
@@ -112,14 +117,14 @@ function createWindow(): void {
   });
 
   if (process.env["VITE_DEV_SERVER_URL"]) {
-    mainWindow.loadURL(process.env["VITE_DEV_SERVER_URL"]);
+    window.loadURL(process.env["VITE_DEV_SERVER_URL"]);
   } else {
-    mainWindow.loadFile(join(import.meta.dirname, "../renderer/index.html"));
+    window.loadFile(join(import.meta.dirname, "../renderer/index.html"));
   }
 
   void maybeAutoStartEmbeddedGatewayOnLaunch();
 
-  mainWindow.on("closed", () => {
+  window.on("closed", () => {
     mainWindow = null;
   });
 }

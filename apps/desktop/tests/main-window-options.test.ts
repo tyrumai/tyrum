@@ -8,4 +8,12 @@ describe("main window defaults", () => {
     expect(MAIN_WINDOW_OPTIONS.minWidth).toBe(1100);
     expect(MAIN_WINDOW_OPTIONS.minHeight).toBe(760);
   });
+
+  it("starts hidden to avoid startup flashes", () => {
+    expect(MAIN_WINDOW_OPTIONS.show).toBe(false);
+  });
+
+  it("uses a background color that matches the initial renderer theme", () => {
+    expect(MAIN_WINDOW_OPTIONS.backgroundColor).toBe("#000000");
+  });
 });

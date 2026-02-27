@@ -7,7 +7,9 @@ const {
   appOnMock,
   appQuitMock,
   browserWindowMock,
-  shellOpenExternalMock,
+  browserWindowOnceMock,
+  browserWindowShowMock,
+  readyToShowHandlers,
   webContentsOnMock,
   setWindowOpenHandlerMock,
   registerConfigIpcMock,
@@ -18,6 +20,13 @@ const {
   loadConfigMock,
   startEmbeddedGatewayFromConfigMock,
 } = vi.hoisted(() => {
+  const readyToShowHandlers: Array<() => void> = [];
+  const browserWindowShowMock = vi.fn();
+  const browserWindowOnceMock = vi.fn((event: string, handler: () => void) => {
+    if (event === "ready-to-show") {
+      readyToShowHandlers.push(handler);
+    }
+  });
   const webContentsOnMock = vi.fn();
   const setWindowOpenHandlerMock = vi.fn();
   const browserWindowMock = vi.fn(function MockBrowserWindow() {
@@ -25,20 +34,20 @@ const {
       loadURL: vi.fn(),
       loadFile: vi.fn(),
       on: vi.fn(),
-      once: vi.fn(),
-      show: vi.fn(),
+      once: browserWindowOnceMock,
+      show: browserWindowShowMock,
       webContents: {
         on: webContentsOnMock,
         setWindowOpenHandler: setWindowOpenHandlerMock,
       },
     };
   });
+
   const appWhenReadyMock = vi.fn(() => Promise.resolve());
   const appOnMock = vi.fn();
   const appQuitMock = vi.fn();
   const appRequestSingleInstanceLockMock = vi.fn(() => true);
   const appSetAppUserModelIdMock = vi.fn();
-  const shellOpenExternalMock = vi.fn(async () => {});
 
   const registerConfigIpcMock = vi.fn();
   const registerGatewayIpcMock = vi.fn(() => ({ stop: vi.fn() }));
@@ -59,7 +68,9 @@ const {
     appOnMock,
     appQuitMock,
     browserWindowMock,
-    shellOpenExternalMock,
+    browserWindowOnceMock,
+    browserWindowShowMock,
+    readyToShowHandlers,
     webContentsOnMock,
     setWindowOpenHandlerMock,
     registerConfigIpcMock,
@@ -82,7 +93,7 @@ vi.mock("electron", () => ({
   },
   BrowserWindow: browserWindowMock,
   shell: {
-    openExternal: shellOpenExternalMock,
+    openExternal: vi.fn(async () => {}),
   },
 }));
 
@@ -109,40 +120,31 @@ vi.mock("../src/main/config/store.js", () => ({
   loadConfig: loadConfigMock,
 }));
 
-describe("main window navigation guardrails", () => {
+describe("main window ready-to-show", () => {
   beforeEach(() => {
     vi.resetModules();
+    readyToShowHandlers.length = 0;
+    browserWindowMock.mockClear();
+    browserWindowOnceMock.mockClear();
+    browserWindowShowMock.mockClear();
     webContentsOnMock.mockReset();
     setWindowOpenHandlerMock.mockReset();
-    shellOpenExternalMock.mockReset();
-    browserWindowMock.mockClear();
   });
 
-  it("blocks top-level navigations and opens external links in the system browser", async () => {
+  it("shows the window only after ready-to-show", async () => {
     await import("../src/main/index.js");
 
     // Flush the `app.whenReady().then(createWindow)` microtask.
     await Promise.resolve();
 
     expect(browserWindowMock).toHaveBeenCalledTimes(1);
-    expect(setWindowOpenHandlerMock).toHaveBeenCalledTimes(1);
-    expect(webContentsOnMock).toHaveBeenCalledWith("will-navigate", expect.any(Function));
+    expect(browserWindowOnceMock).toHaveBeenCalledWith("ready-to-show", expect.any(Function));
+    expect(browserWindowShowMock).not.toHaveBeenCalled();
 
-    const windowOpenHandler = setWindowOpenHandlerMock.mock.calls[0]?.[0] as
-      | ((details: { url: string }) => { action: "deny" | "allow" })
-      | undefined;
-    expect(windowOpenHandler).toBeTypeOf("function");
-    const openResult = windowOpenHandler?.({ url: "https://example.com" });
-    expect(openResult).toEqual({ action: "deny" });
-    expect(shellOpenExternalMock).toHaveBeenCalledWith("https://example.com");
+    const readyToShowHandler = readyToShowHandlers[0];
+    expect(readyToShowHandler).toBeTypeOf("function");
+    readyToShowHandler?.();
 
-    const willNavigateHandler = webContentsOnMock.mock.calls.find(
-      (call) => call[0] === "will-navigate",
-    )?.[1] as ((event: { preventDefault: () => void }, url: string) => void) | undefined;
-    expect(willNavigateHandler).toBeTypeOf("function");
-    const event = { preventDefault: vi.fn() };
-    willNavigateHandler?.(event, "https://example.com/docs");
-    expect(event.preventDefault).toHaveBeenCalledTimes(1);
-    expect(shellOpenExternalMock).toHaveBeenCalledWith("https://example.com/docs");
+    expect(browserWindowShowMock).toHaveBeenCalledTimes(1);
   });
 });
