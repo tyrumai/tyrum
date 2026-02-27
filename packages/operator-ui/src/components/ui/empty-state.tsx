@@ -10,7 +10,7 @@ export interface EmptyStateAction {
   size?: ButtonSize;
 }
 
-export interface EmptyStateProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface EmptyStateProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {
   icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
   title: React.ReactNode;
   description?: React.ReactNode;
@@ -30,7 +30,7 @@ export function EmptyState({
       className={cn("flex flex-col items-center justify-center px-6 py-12 text-center", className)}
       {...props}
     >
-      <Icon aria-hidden="true" className="h-12 w-12 text-fg-muted" />
+      <Icon aria-hidden={true} className="h-12 w-12 text-fg-muted" />
       <div className="mt-4 text-lg font-medium text-fg">{title}</div>
       {description ? (
         <div className="mt-2 max-w-prose text-sm text-fg-muted">{description}</div>
