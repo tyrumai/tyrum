@@ -31,4 +31,24 @@ describe("WorkBoard page (WS integration)", () => {
 
     expect(page).toContain("shouldProcessWorkStateKvUpdate");
   });
+
+  it("renders task metadata when approval_id is 0", () => {
+    const page = readFileSync(
+      join(import.meta.dirname, "../src/renderer/pages/WorkBoard.tsx"),
+      "utf-8",
+    );
+
+    expect(page).toMatch(
+      /task\.run_id\s*\|\|\s*typeof task\.approval_id === "number"\s*\|\|\s*task\.result_summary/,
+    );
+  });
+
+  it("rechecks selection after KV async fetch resolves", () => {
+    const page = readFileSync(
+      join(import.meta.dirname, "../src/renderer/pages/WorkBoard.tsx"),
+      "utf-8",
+    );
+
+    expect(page).toContain("shouldProcessWorkStateKvUpdate(scope, selectedIdRef.current)");
+  });
 });

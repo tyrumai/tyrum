@@ -342,6 +342,7 @@ export function WorkBoard() {
             .workStateKvGet({ scope, key: event.payload.key })
             .then((res) => {
               if (disposed) return;
+              if (!shouldProcessWorkStateKvUpdate(scope, selectedIdRef.current)) return;
               const entry = res.entry;
               if (!entry) return;
               if (scope.kind === "agent") {
@@ -677,7 +678,9 @@ export function WorkBoard() {
                         <span style={{ fontFamily: fonts.mono }}>{task.task_id}</span>
                         <span>{new Date(task.last_event_at).toLocaleString()}</span>
                       </div>
-                      {(task.run_id || task.approval_id || task.result_summary) && (
+                      {(task.run_id ||
+                        typeof task.approval_id === "number" ||
+                        task.result_summary) && (
                         <div style={{ ...cardMetaStyle, marginTop: 6 }}>
                           {task.run_id && <span>run {task.run_id}</span>}
                           {typeof task.approval_id === "number" && (

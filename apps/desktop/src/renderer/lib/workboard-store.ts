@@ -23,14 +23,7 @@ export type WorkItemStatus = (typeof WORK_ITEM_STATUSES)[number];
 export type WorkItemsByStatus = Record<WorkItemStatus, WorkItem[]>;
 
 export function upsertWorkItem(items: WorkItem[], next: WorkItem): WorkItem[] {
-  const existingIndex = items.findIndex((item) => item.work_item_id === next.work_item_id);
-  if (existingIndex === -1) {
-    return [next, ...items];
-  }
-
-  const updated = items.slice();
-  updated[existingIndex] = next;
-  return updated;
+  return upsertByStringKey(items, next, (item) => item.work_item_id);
 }
 
 export function groupWorkItemsByStatus(items: WorkItem[]): WorkItemsByStatus {
