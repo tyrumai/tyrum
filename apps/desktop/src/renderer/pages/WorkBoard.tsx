@@ -20,7 +20,7 @@ import {
   type WorkStateKvEntry,
   type WorkTasksByWorkItemId,
 } from "../lib/workboard-store.js";
-import { badge, btn, card, colors, heading, label, sectionTitle, statusDot } from "../theme.js";
+import { badge, btn, card, colors, fonts, heading, label, sectionTitle, statusDot } from "../theme.js";
 
 type OperatorConnectionInfo = {
   mode: "embedded" | "remote";
@@ -104,7 +104,7 @@ const cardMetaStyle: React.CSSProperties = {
 };
 
 const monospaceStyle: React.CSSProperties = {
-  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+  fontFamily: fonts.mono,
   fontSize: 12,
   color: colors.fg,
   overflowX: "auto",
@@ -174,7 +174,13 @@ export function WorkBoard() {
       const res = await client.workList({ ...DEFAULT_SCOPE, limit: 200 });
       setItems(res.items);
     } catch (error) {
-      setConnectionError(toErrorMessage(error));
+      const message = toErrorMessage(error);
+      if (message.includes("work.list failed: unsupported_request")) {
+        setConnectionError("WorkBoard is not supported by this gateway (database not configured).");
+        setItems([]);
+        return;
+      }
+      setConnectionError(message);
     }
   }, []);
 
@@ -192,6 +198,14 @@ export function WorkBoard() {
     setConnectionError(null);
     setItems([]);
     setTasksByWorkItemId({});
+    setSelectedItem(null);
+    setArtifacts([]);
+    setDecisions([]);
+    setSignals([]);
+    setAgentKvEntries([]);
+    setWorkItemKvEntries([]);
+    setDrilldownBusy(false);
+    setDrilldownError(null);
 
     let wsClient: TyrumClient | null = null;
 
@@ -392,7 +406,7 @@ export function WorkBoard() {
 
   useEffect(() => {
     const client = clientRef.current;
-    if (!client || !selectedWorkItemId) {
+    if (connectionStatus !== "connected" || !client || !selectedWorkItemId) {
       setSelectedItem(null);
       setArtifacts([]);
       setDecisions([]);
@@ -448,7 +462,7 @@ export function WorkBoard() {
     return () => {
       cancelled = true;
     };
-  }, [selectedWorkItemId]);
+  }, [connectionStatus, selectedWorkItemId]);
 
   const tasksForSelected = selectedWorkItemId ? tasksByWorkItemId[selectedWorkItemId] ?? {} : {};
   const taskList = useMemo(() => Object.values(tasksForSelected), [tasksForSelected]);
@@ -538,7 +552,7 @@ export function WorkBoard() {
                     <div style={{ ...cardMetaStyle, marginTop: 6 }}>
                       <span style={{ fontFamily: "inherit" }}>
                         <span style={{ color: colors.fgMuted }}>id</span>{" "}
-                        <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace' }}>
+                        <span style={{ fontFamily: fonts.mono }}>
                           {item.work_item_id.slice(0, 8)}
                         </span>
                       </span>
@@ -575,7 +589,7 @@ export function WorkBoard() {
                 <span>priority {selectedItem.priority}</span>
               </div>
               <div style={{ ...cardMetaStyle, marginTop: 6 }}>
-                <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace' }}>
+                <span style={{ fontFamily: fonts.mono }}>
                   {selectedItem.work_item_id}
                 </span>
               </div>
@@ -625,9 +639,8 @@ export function WorkBoard() {
                         <span>
                           <strong style={{ color: colors.fg }}>{task.status}</strong>
                         </span>
-                        <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace' }}>
-                          {task.task_id}
-                        </span>
+                        <span style={{ fontFamily: fonts.mono }}>{task.task_id}</span>
+                        <span>{new Date(task.last_event_at).toLocaleString()}</span>
                       </div>
                       {(task.run_id || task.approval_id || task.result_summary) && (
                         <div style={{ ...cardMetaStyle, marginTop: 6 }}>
@@ -638,6 +651,35 @@ export function WorkBoard() {
                       )}
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <div style={label}>Blockers</div>
+              {taskList.filter((task) => task.status === "paused" && typeof task.approval_id === "number")
+                .length === 0 ? (
+                <div style={{ fontSize: 13, color: colors.fgMuted }}>No approval blockers.</div>
+              ) : (
+                <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+                  {taskList
+                    .filter((task) => task.status === "paused" && typeof task.approval_id === "number")
+                    .map((task) => (
+                      <div
+                        key={task.task_id}
+                        style={{
+                          border: `1px solid ${colors.border}`,
+                          borderRadius: 8,
+                          padding: 10,
+                          background: colors.bgSubtle,
+                        }}
+                      >
+                        <div style={{ ...cardMetaStyle, marginTop: 0 }}>
+                          <span>approval {task.approval_id}</span>
+                          <span style={{ fontFamily: fonts.mono }}>{task.task_id}</span>
+                        </div>
+                      </div>
+                    ))}
                 </div>
               )}
             </div>
@@ -692,10 +734,14 @@ export function WorkBoard() {
                       </div>
                       <div style={{ ...cardTitleStyle, marginTop: 6 }}>{artifact.title}</div>
                       {artifact.body_md && <pre style={monospaceStyle}>{artifact.body_md}</pre>}
+                      {artifact.refs.length > 0 && (
+                        <div style={{ ...cardMetaStyle, marginTop: 8 }}>
+                          <span style={{ color: colors.fgMuted }}>refs</span>
+                          <span style={{ fontFamily: fonts.mono }}>{artifact.refs.join(", ")}</span>
+                        </div>
+                      )}
                       <div style={{ ...cardMetaStyle, marginTop: 8 }}>
-                        <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace' }}>
-                          {artifact.artifact_id}
-                        </span>
+                        <span style={{ fontFamily: fonts.mono }}>{artifact.artifact_id}</span>
                       </div>
                     </div>
                   ))}
@@ -725,12 +771,13 @@ export function WorkBoard() {
                           status <strong style={{ color: colors.fg }}>{signal.status}</strong>
                         </span>
                         <span>{new Date(signal.created_at).toLocaleString()}</span>
+                        {signal.last_fired_at ? (
+                          <span>last fired {new Date(signal.last_fired_at).toLocaleString()}</span>
+                        ) : null}
                       </div>
                       <pre style={monospaceStyle}>{JSON.stringify(signal.trigger_spec_json, null, 2)}</pre>
                       <div style={{ ...cardMetaStyle, marginTop: 8 }}>
-                        <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace' }}>
-                          {signal.signal_id}
-                        </span>
+                        <span style={{ fontFamily: fonts.mono }}>{signal.signal_id}</span>
                       </div>
                     </div>
                   ))}
