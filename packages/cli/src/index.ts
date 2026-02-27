@@ -167,6 +167,13 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
   if (first === "-h" || first === "--help") return { kind: "help" };
   if (first === "--version") return { kind: "version" };
 
+  const parseAdminToken = (raw: string | undefined): string => {
+    if (!raw) throw new Error("--admin-token requires a value");
+    const trimmed = raw.trim();
+    if (!trimmed) throw new Error("--admin-token requires a non-empty value");
+    return trimmed;
+  };
+
   if (first === "pairing") {
     if (second === "-h" || second === "--help") return { kind: "help" };
     if (!second) throw new Error("pairing requires a subcommand (approve|deny|revoke)");
@@ -306,11 +313,7 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
         if (!arg) continue;
 
         if (arg === "--admin-token") {
-          const raw = argv[i + 1];
-          if (!raw) throw new Error("--admin-token requires a value");
-          const trimmed = raw.trim();
-          if (!trimmed) throw new Error("--admin-token requires a non-empty value");
-          adminToken = trimmed;
+          adminToken = parseAdminToken(argv[i + 1]);
           i += 1;
           continue;
         }
@@ -333,11 +336,7 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
         if (!arg) continue;
 
         if (arg === "--admin-token") {
-          const raw = argv[i + 1];
-          if (!raw) throw new Error("--admin-token requires a value");
-          const trimmed = raw.trim();
-          if (!trimmed) throw new Error("--admin-token requires a non-empty value");
-          adminToken = trimmed;
+          adminToken = parseAdminToken(argv[i + 1]);
           i += 1;
           continue;
         }
@@ -392,11 +391,7 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
         if (!arg) continue;
 
         if (arg === "--admin-token") {
-          const raw = argv[i + 1];
-          if (!raw) throw new Error("--admin-token requires a value");
-          const trimmed = raw.trim();
-          if (!trimmed) throw new Error("--admin-token requires a non-empty value");
-          adminToken = trimmed;
+          adminToken = parseAdminToken(argv[i + 1]);
           i += 1;
           continue;
         }
@@ -454,11 +449,7 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
         if (!arg) continue;
 
         if (arg === "--admin-token") {
-          const raw = argv[i + 1];
-          if (!raw) throw new Error("--admin-token requires a value");
-          const trimmed = raw.trim();
-          if (!trimmed) throw new Error("--admin-token requires a non-empty value");
-          adminToken = trimmed;
+          adminToken = parseAdminToken(argv[i + 1]);
           i += 1;
           continue;
         }
@@ -482,11 +473,7 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
           if (!arg) continue;
 
           if (arg === "--admin-token") {
-            const raw = argv[i + 1];
-            if (!raw) throw new Error("--admin-token requires a value");
-            const trimmed = raw.trim();
-            if (!trimmed) throw new Error("--admin-token requires a non-empty value");
-            adminToken = trimmed;
+            adminToken = parseAdminToken(argv[i + 1]);
             i += 1;
             continue;
           }
@@ -512,11 +499,7 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
           if (!arg) continue;
 
           if (arg === "--admin-token") {
-            const raw = argv[i + 1];
-            if (!raw) throw new Error("--admin-token requires a value");
-            const trimmed = raw.trim();
-            if (!trimmed) throw new Error("--admin-token requires a non-empty value");
-            adminToken = trimmed;
+            adminToken = parseAdminToken(argv[i + 1]);
             i += 1;
             continue;
           }
@@ -593,11 +576,7 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
           if (!arg) continue;
 
           if (arg === "--admin-token") {
-            const raw = argv[i + 1];
-            if (!raw) throw new Error("--admin-token requires a value");
-            const trimmed = raw.trim();
-            if (!trimmed) throw new Error("--admin-token requires a non-empty value");
-            adminToken = trimmed;
+            adminToken = parseAdminToken(argv[i + 1]);
             i += 1;
             continue;
           }
@@ -1052,11 +1031,7 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
         if (!arg) continue;
 
         if (arg === "--admin-token") {
-          const raw = argv[i + 1];
-          if (!raw) throw new Error("--admin-token requires a value");
-          const trimmed = raw.trim();
-          if (!trimmed) throw new Error("--admin-token requires a non-empty value");
-          adminToken = trimmed;
+          adminToken = parseAdminToken(argv[i + 1]);
           i += 1;
           continue;
         }
