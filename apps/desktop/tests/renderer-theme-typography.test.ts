@@ -13,4 +13,3 @@ describe("renderer theme typography", () => {
     expect(fonts.mono).not.toContain("JetBrains");
   });
 });
-
