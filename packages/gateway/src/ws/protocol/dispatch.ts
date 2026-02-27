@@ -277,6 +277,7 @@ export function dispatchTask(
     }
 
     const requestId = `task-${crypto.randomUUID()}`;
+    deps.taskResults?.associate(requestId, selected.id);
     const message: WsRequestEnvelope = {
       request_id: requestId,
       type: "task.execute",

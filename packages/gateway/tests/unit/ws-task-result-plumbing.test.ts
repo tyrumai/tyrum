@@ -3,7 +3,10 @@ import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { dispatchTask, handleClientMessage } from "../../src/ws/protocol.js";
 import type { ProtocolDeps } from "../../src/ws/protocol.js";
 import { TaskResultRegistry } from "../../src/ws/protocol/task-result-registry.js";
-import { CAPABILITY_DESCRIPTOR_DEFAULT_VERSION, descriptorIdForClientCapability } from "@tyrum/schemas";
+import {
+  CAPABILITY_DESCRIPTOR_DEFAULT_VERSION,
+  descriptorIdForClientCapability,
+} from "@tyrum/schemas";
 
 interface MockWebSocket {
   send: ReturnType<typeof vi.fn>;
@@ -38,6 +41,7 @@ describe("WS task.execute result plumbing", () => {
 
     const deps: ProtocolDeps = {
       connectionManager: cm,
+      taskResults: registry,
       nodePairingDal: {
         getByNodeId: async () => {
           return {
@@ -58,6 +62,9 @@ describe("WS task.execute result plumbing", () => {
             : { ok: false, error: error ?? "task failed", evidence },
         );
       },
+      onConnectionClosed: (connectionId) => {
+        registry.rejectAllForConnection(connectionId);
+      },
     };
 
     const taskId = await dispatchTask(
@@ -68,11 +75,14 @@ describe("WS task.execute result plumbing", () => {
 
     expect(connectionId).toBe("conn-1");
     expect(nodeWs.send).toHaveBeenCalledOnce();
-    const dispatched = JSON.parse(nodeWs.send.mock.calls[0]![0] as string) as Record<string, unknown>;
+    const dispatched = JSON.parse(nodeWs.send.mock.calls[0]![0] as string) as Record<
+      string,
+      unknown
+    >;
     expect(dispatched["type"]).toBe("task.execute");
     expect(dispatched["request_id"]).toBe(taskId);
 
-    const awaiting = registry.wait(taskId, { timeoutMs: 5_000, connectionId });
+    const awaiting = registry.wait(taskId, { timeoutMs: 5_000 });
 
     const nodeClient = cm.getClient(connectionId)!;
     await handleClientMessage(
@@ -103,5 +113,61 @@ describe("WS task.execute result plumbing", () => {
     expect(resolveSpy.mock.results[0]?.value).toBe(true);
     expect(resolveSpy.mock.results[1]?.value).toBe(false);
   });
-});
 
+  it("rejects awaiting tasks when the dispatched connection closes", async () => {
+    const cm = new ConnectionManager();
+    const nodeWs = createMockWs();
+    const connectionId = cm.addClient(nodeWs as never, ["desktop"], {
+      id: "conn-1",
+      role: "node",
+      deviceId: "node-1",
+      protocolRev: 2,
+    });
+
+    const desktopDescriptorId = descriptorIdForClientCapability("desktop");
+    expect(desktopDescriptorId).toBeDefined();
+
+    const registry = new TaskResultRegistry();
+
+    const deps: ProtocolDeps = {
+      connectionManager: cm,
+      taskResults: registry,
+      nodePairingDal: {
+        getByNodeId: async () => {
+          return {
+            status: "approved",
+            capability_allowlist: [
+              { id: desktopDescriptorId, version: CAPABILITY_DESCRIPTOR_DEFAULT_VERSION },
+            ],
+          };
+        },
+      } as never,
+      onTaskResult: (taskId, success, evidence, error) => {
+        registry.resolve(
+          taskId,
+          success
+            ? evidence === undefined
+              ? { ok: true }
+              : { ok: true, evidence }
+            : { ok: false, error: error ?? "task failed", evidence },
+        );
+      },
+      onConnectionClosed: (connectionId) => {
+        registry.rejectAllForConnection(connectionId);
+      },
+    };
+
+    const taskId = await dispatchTask(
+      { type: "Desktop", args: {} },
+      { runId: "run-1", stepId: "step-1", attemptId: "attempt-1" },
+      deps,
+    );
+
+    const awaiting = registry.wait(taskId, { timeoutMs: 5_000 });
+    const rejection = expect(awaiting).rejects.toThrow(/disconnected/i);
+
+    deps.onConnectionClosed?.(connectionId);
+
+    await rejection;
+  });
+});

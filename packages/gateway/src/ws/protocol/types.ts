@@ -18,6 +18,7 @@ import type { AuthAudit } from "../../modules/auth/audit.js";
 import type { MemoryV1Dal } from "../../modules/memory/v1-dal.js";
 import type { ArtifactStore } from "../../modules/artifact/store.js";
 import type { RedactionEngine } from "../../modules/redaction/engine.js";
+import type { TaskResultRegistry } from "./task-result-registry.js";
 
 // ---------------------------------------------------------------------------
 // Dependency injection
@@ -65,6 +66,8 @@ export interface ProtocolDeps {
     outboxDal: OutboxDal;
     connectionDirectory: ConnectionDirectoryDal;
   };
+
+  taskResults?: TaskResultRegistry;
 
   /** Called when a task.execute response is received from a client. */
   onTaskResult?: (

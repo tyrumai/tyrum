@@ -713,7 +713,15 @@ export function createWsHandler(opts: WsRouteOptions): {
           ws.send(JSON.stringify(response));
 
           ws.on("close", () => {
-            protocolDeps.onConnectionClosed?.(clientId!);
+            try {
+              protocolDeps.onConnectionClosed?.(clientId!);
+            } catch (err) {
+              const message = err instanceof Error ? err.message : String(err);
+              protocolDeps.logger?.warn("ws.connection_close_hook_failed", {
+                connection_id: clientId!,
+                error: message,
+              });
+            }
             connectionManager.removeClient(clientId!);
             if (cluster) {
               void cluster.connectionDirectory.removeConnection(clientId!).catch(() => {});

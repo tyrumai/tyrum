@@ -45,7 +45,8 @@ describe("TaskResultRegistry", () => {
 
   it("rejects pending waits for a disconnected connection", async () => {
     const registry = new TaskResultRegistry();
-    const pending = registry.wait("task-1", { timeoutMs: 5_000, connectionId: "conn-1" });
+    registry.associate("task-1", "conn-1");
+    const pending = registry.wait("task-1", { timeoutMs: 5_000 });
 
     expect(registry.rejectAllForConnection("conn-1")).toBe(1);
 

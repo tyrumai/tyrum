@@ -1068,6 +1068,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
           connectionDirectory,
         }
       : undefined,
+    taskResults,
     hooks: hooksRuntime,
     onTaskResult: (taskId, success, evidence, error) => {
       taskResults.resolve(taskId, toTaskResult(success, evidence, error));
