@@ -52,9 +52,7 @@ describe("Desktop automation contract v1 (schemas)", () => {
   });
 
   it("DesktopActionArgs accepts new ops in the discriminated union", () => {
-    expect(
-      DesktopActionArgs.parse({ op: "snapshot" }),
-    ).toMatchObject({ op: "snapshot" });
+    expect(DesktopActionArgs.parse({ op: "snapshot" })).toMatchObject({ op: "snapshot" });
 
     expect(
       DesktopActionArgs.parse({
