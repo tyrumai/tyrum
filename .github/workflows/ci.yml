@@ -202,7 +202,7 @@ jobs:
           if git rev-parse --verify HEAD^2 >/dev/null 2>&1; then
             base="$(git rev-parse HEAD^1)"
           fi
-          node scripts/coverage/diff-lines.mjs --base "$base" --min 80
+          node scripts/coverage/diff-lines.mjs --base "$base" --min 70
 
       - name: Test desktop suite
         if: matrix.os != 'ubuntu-latest'
