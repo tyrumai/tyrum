@@ -9,6 +9,7 @@
 import { createServer } from "node:http";
 import type { Server } from "node:http";
 import { mkdtemp, rm } from "node:fs/promises";
+import type { Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { generateKeyPairSync } from "node:crypto";
@@ -54,11 +55,37 @@ export async function startGateway(
   const tokenStore = new TokenStore(tokenHome);
   const adminToken = await tokenStore.initialize();
 
-  const baseDeps: ProtocolDeps = { connectionManager };
+  const { app, container, agents } = await createTestApp({
+    tokenStore,
+    isLocalOnly: false,
+    tyrumHome: tokenHome,
+  });
+
+  const baseDeps: ProtocolDeps = {
+    connectionManager,
+    logger: container.logger,
+    db: container.db,
+    redactionEngine: container.redactionEngine,
+    artifactStore: container.artifactStore,
+    contextReportDal: container.contextReportDal,
+    approvalDal: container.approvalDal,
+    presenceDal: container.presenceDal,
+    policyOverrideDal: container.policyOverrideDal,
+    nodePairingDal: container.nodePairingDal,
+    policyService: container.policyService,
+    modelsDev: container.modelsDev,
+    agents,
+    runtime: {
+      version: "test",
+      instanceId: "test-instance",
+      role: "all",
+      dbKind: container.db.kind,
+      isExposed: true,
+      otelEnabled: false,
+    },
+  };
   const extraDeps = protocolDepsFactory?.(connectionManager) ?? {};
   const protocolDeps: ProtocolDeps = { ...baseDeps, ...extraDeps };
-
-  const { app } = await createTestApp({ tokenStore, isLocalOnly: false });
 
   const { handleUpgrade, stopHeartbeat } = createWsHandler({
     connectionManager,
@@ -68,6 +95,12 @@ export async function startGateway(
 
   const requestListener = getRequestListener(app.fetch);
   const server = createServer(requestListener);
+  const sockets = new Set<Socket>();
+
+  server.on("connection", (socket) => {
+    sockets.add(socket);
+    socket.on("close", () => sockets.delete(socket));
+  });
 
   server.on("upgrade", (req, socket, head) => {
     if (req.url?.startsWith("/ws")) {
@@ -94,13 +127,16 @@ export async function startGateway(
     dispatchTask,
     stop: async () => {
       stopHeartbeat();
-      await closeServer(server);
+      await closeServer(server, sockets);
+      await agents?.shutdown().catch(() => {});
+      await container.db.close().catch(() => {});
       await rm(tokenHome, { recursive: true, force: true });
     },
   };
 }
 
-function closeServer(server: Server): Promise<void> {
+function closeServer(server: Server, sockets: Set<Socket>): Promise<void> {
+  for (const socket of sockets) socket.destroy();
   return new Promise((resolve) => {
     server.close(() => resolve());
   });
