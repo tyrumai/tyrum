@@ -35,6 +35,8 @@ import { enqueueWsBroadcastMessage } from "../../../ws/outbox.js";
 import type { SqlDb } from "../../../statestore/types.js";
 import { normalizeDbDateTime } from "../../../utils/db-time.js";
 import { safeJsonParse } from "../../../utils/json.js";
+import { WorkboardDal } from "../../workboard/dal.js";
+import { sha256HexFromString, stableJsonStringify } from "../../policy/canonical-json.js";
 import { defaultClock } from "./clock.js";
 import { normalizePositiveInt } from "../normalize-positive-int.js";
 import { parseConcurrencyLimitsFromEnv } from "./concurrency.js";
@@ -89,6 +91,17 @@ function normalizeNonnegativeInt(value: unknown): number | undefined {
   const n = Math.floor(value);
   if (n < 0) return undefined;
   return n;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseTriggerMetadata(triggerJson: string): Record<string, unknown> | undefined {
+  const trigger = safeJsonParse(triggerJson, undefined as unknown);
+  if (!isRecord(trigger)) return undefined;
+  const metadata = trigger["metadata"];
+  return isRecord(metadata) ? metadata : undefined;
 }
 
 export class ExecutionEngine {
@@ -1540,6 +1553,22 @@ export class ExecutionEngine {
         // ignore malformed action_json
       }
 
+      const toolIntentPause = await this.maybePauseForToolIntentGuardrailTx(tx, {
+        run,
+        step: next,
+        actionType,
+        action: parsedAction,
+        clock,
+        workerId: input.workerId,
+      });
+      if (toolIntentPause) {
+        return {
+          kind: "paused" as const,
+          reason: "approval" as const,
+          approvalId: toolIntentPause.approvalId,
+        };
+      }
+
       const policy = this.policyService;
       if (
         policy &&
@@ -2729,6 +2758,249 @@ export class ExecutionEngine {
     await this.enqueueWsMessage(tx, approvalRequest);
 
     return { approvalId: approval.id, resumeToken };
+  }
+
+  private async maybePauseForToolIntentGuardrailTx(
+    tx: SqlDb,
+    opts: {
+      run: RunnableRunRow;
+      step: StepRow;
+      actionType: ActionPrimitiveT["type"] | undefined;
+      action: ActionPrimitiveT | undefined;
+      clock: ExecutionClock;
+      workerId: string;
+    },
+  ): Promise<{ approvalId: number } | undefined> {
+    if (!opts.actionType) return undefined;
+    if (!requiresPostcondition(opts.actionType)) return undefined;
+
+    const metadata = parseTriggerMetadata(opts.run.trigger_json);
+    const workItemIdRaw = metadata?.["work_item_id"];
+    const workItemId = typeof workItemIdRaw === "string" ? workItemIdRaw.trim() : "";
+    if (workItemId.length === 0) return undefined;
+
+    const tenantIdRaw = metadata?.["tenant_id"];
+    const agentIdRaw = metadata?.["agent_id"];
+    const tenantId =
+      typeof tenantIdRaw === "string" && tenantIdRaw.trim() ? tenantIdRaw.trim() : "default";
+    const agentId =
+      typeof agentIdRaw === "string" && agentIdRaw.trim()
+        ? agentIdRaw.trim()
+        : (this.deriveAgentIdFromKey(opts.run.key) ?? "default");
+
+    const scope = {
+      tenant_id: tenantId,
+      agent_id: agentId,
+      workspace_id: opts.run.workspace_id,
+    } as const;
+
+    const dal = new WorkboardDal(tx);
+
+    const planId = parsePlanIdFromTriggerJson(opts.run.trigger_json) ?? opts.run.run_id;
+
+    const item = await dal.getItem({ scope, work_item_id: workItemId });
+    if (!item) {
+      const paused = await this.pauseRunForApproval(
+        tx,
+        {
+          planId,
+          stepIndex: opts.step.step_index,
+          runId: opts.run.run_id,
+          jobId: opts.run.job_id,
+          stepId: opts.step.step_id,
+          workspaceId: opts.run.workspace_id,
+          key: opts.run.key,
+          lane: opts.run.lane,
+          workerId: opts.workerId,
+        },
+        {
+          kind: "intent",
+          prompt: "Intent guardrail — work item not found",
+          detail: `work_item_id=${workItemId} not found in scope; pausing before side-effecting step execution`,
+          context: {
+            work_item_id: workItemId,
+            action_type: opts.actionType,
+            step_index: opts.step.step_index,
+          },
+        },
+      );
+      return { approvalId: paused.approvalId };
+    }
+
+    const { entries } = await dal.listStateKv({
+      scope: { ...scope, kind: "work_item", work_item_id: workItemId },
+    });
+    const stateKv: Record<string, unknown> = {};
+    for (const entry of entries) {
+      if (isRecord(entry) && typeof entry["key"] === "string") {
+        stateKv[entry["key"]] = entry["value_json"];
+      }
+    }
+
+    const { decisions } = await dal.listDecisions({ scope, work_item_id: workItemId, limit: 50 });
+    const decisionIds = decisions
+      .map((d) => d.decision_id)
+      .filter((id): id is string => typeof id === "string" && id.trim().length > 0)
+      .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+
+    const intentGraphSha256 = sha256HexFromString(
+      stableJsonStringify({
+        v: 1,
+        work_item_id: workItemId,
+        acceptance: item.acceptance ?? null,
+        state_kv: stateKv,
+        decision_ids: decisionIds,
+        policy_snapshot_id: opts.run.policy_snapshot_id ?? null,
+      }),
+    );
+
+    const { artifacts } = await dal.listArtifacts({ scope, work_item_id: workItemId, limit: 200 });
+    const toolIntent = artifacts
+      .filter((a) => a.kind === "tool_intent")
+      .find((a) => {
+        const prov = a.provenance_json;
+        if (!isRecord(prov)) return false;
+        const runId = prov["run_id"];
+        const stepIndex = prov["step_index"];
+        return runId === opts.run.run_id && stepIndex === opts.step.step_index;
+      });
+
+    const resolveToolIntentError = (): string | undefined => {
+      if (!toolIntent) return "missing ToolIntent (kind=tool_intent) for this step";
+      const prov = toolIntent.provenance_json;
+      if (!isRecord(prov)) return "ToolIntent provenance_json must be an object";
+
+      const goal = typeof prov["goal"] === "string" ? prov["goal"].trim() : "";
+      const expectedValue =
+        typeof prov["expected_value"] === "string" ? prov["expected_value"].trim() : "";
+      const sideEffectClass =
+        typeof prov["side_effect_class"] === "string" ? prov["side_effect_class"].trim() : "";
+      const riskClass = typeof prov["risk_class"] === "string" ? prov["risk_class"].trim() : "";
+      const expectedEvidence = prov["expected_evidence"];
+      const budget = prov["cost_budget"];
+      const budgetOk =
+        isRecord(budget) &&
+        (normalizeNonnegativeInt(budget["max_usd_micros"]) !== undefined ||
+          normalizePositiveInt(budget["max_duration_ms"]) !== undefined ||
+          normalizeNonnegativeInt(budget["max_total_tokens"]) !== undefined);
+      const claimedSha =
+        typeof prov["intent_graph_sha256"] === "string" ? prov["intent_graph_sha256"].trim() : "";
+
+      if (!goal) return "ToolIntent.goal is required";
+      if (!expectedValue) return "ToolIntent.expected_value is required";
+      if (!budgetOk) return "ToolIntent.cost_budget is required";
+      if (!sideEffectClass) return "ToolIntent.side_effect_class is required";
+      if (!riskClass) return "ToolIntent.risk_class is required";
+      if (expectedEvidence === undefined) return "ToolIntent.expected_evidence is required";
+      if (!claimedSha) return "ToolIntent.intent_graph_sha256 is required";
+      if (claimedSha !== intentGraphSha256) {
+        return "ToolIntent intent_graph_sha256 does not match current intent graph";
+      }
+      return undefined;
+    };
+
+    const error = resolveToolIntentError();
+    if (!error) return undefined;
+
+    let artifactId: string | undefined;
+    let decisionId: string | undefined;
+    try {
+      const report = await dal.createArtifact({
+        scope,
+        artifact: {
+          work_item_id: workItemId,
+          kind: "verification_report",
+          title: "Intent guardrail: pause before side effect",
+          body_md: [
+            `Blocked side-effecting step due to ToolIntent deviation.`,
+            ``,
+            `- run_id: \`${opts.run.run_id}\``,
+            `- step_index: \`${String(opts.step.step_index)}\``,
+            `- action_type: \`${opts.actionType}\``,
+            `- reason: ${error}`,
+            `- intent_graph_sha256: \`${intentGraphSha256}\``,
+            toolIntent ? `- tool_intent_artifact_id: \`${toolIntent.artifact_id}\`` : undefined,
+          ]
+            .filter((line): line is string => Boolean(line))
+            .join("\n"),
+          refs: [`run:${opts.run.run_id}`, `step:${String(opts.step.step_index)}`],
+          created_by_run_id: opts.run.run_id,
+          provenance_json: {
+            v: 1,
+            kind: "intent_guardrail",
+            reason: error,
+            intent_graph_sha256: intentGraphSha256,
+            run_id: opts.run.run_id,
+            step_index: opts.step.step_index,
+            action_type: opts.actionType,
+            tool_intent_artifact_id: toolIntent?.artifact_id,
+          },
+        },
+        createdAtIso: opts.clock.nowIso,
+      });
+      artifactId = report.artifact_id;
+
+      const decision = await dal.createDecision({
+        scope,
+        decision: {
+          work_item_id: workItemId,
+          question: `Proceed with side-effecting step ${String(opts.step.step_index)}?`,
+          chosen: "pause_and_escalate",
+          alternatives: ["proceed_without_tool_intent", "cancel_step_or_run"],
+          rationale_md: [
+            `Pausing execution before a side-effecting step because ToolIntent validation failed.`,
+            ``,
+            `Reason: ${error}`,
+            ``,
+            `Expected intent graph hash: \`${intentGraphSha256}\``,
+            artifactId ? `Evidence artifact: \`${artifactId}\`` : undefined,
+          ]
+            .filter((line): line is string => Boolean(line))
+            .join("\n"),
+          input_artifact_ids: artifactId ? [artifactId] : [],
+          created_by_run_id: opts.run.run_id,
+        },
+        createdAtIso: opts.clock.nowIso,
+      });
+      decisionId = decision.decision_id;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger?.warn("intent_guardrail.evidence_write_failed", {
+        run_id: opts.run.run_id,
+        step_id: opts.step.step_id,
+        error: message,
+      });
+    }
+
+    const paused = await this.pauseRunForApproval(
+      tx,
+      {
+        planId,
+        stepIndex: opts.step.step_index,
+        runId: opts.run.run_id,
+        jobId: opts.run.job_id,
+        stepId: opts.step.step_id,
+        workspaceId: opts.run.workspace_id,
+        key: opts.run.key,
+        lane: opts.run.lane,
+        workerId: opts.workerId,
+      },
+      {
+        kind: "intent",
+        prompt: "Intent guardrail — ToolIntent required",
+        detail: error,
+        context: {
+          work_item_id: workItemId,
+          action_type: opts.actionType,
+          step_index: opts.step.step_index,
+          intent_graph_sha256: intentGraphSha256,
+          tool_intent_artifact_id: toolIntent?.artifact_id,
+          work_artifact_id: artifactId,
+          decision_id: decisionId,
+        },
+      },
+    );
+    return { approvalId: paused.approvalId };
   }
 
   private async executeWithTimeout(
