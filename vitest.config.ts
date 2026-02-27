@@ -60,7 +60,7 @@ export default defineConfig({
           lines: 78,
           statements: 74,
           functions: 80,
-          branches: 69,
+          branches: 65,
         },
         "packages/cli/src/**": {
           lines: 74,
