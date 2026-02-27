@@ -684,7 +684,7 @@ describe("@tyrum/cli operator commands", () => {
       vi.resetModules();
       const { runCli } = await import("../../src/index.js");
 
-      const code = await runCli(["secrets", "list"]);
+      const code = await runCli(["secrets", "list", "--admin-token", "tkn"]);
 
       expect(code).toBe(0);
       expect(errSpy).not.toHaveBeenCalled();
@@ -727,6 +727,8 @@ describe("@tyrum/cli operator commands", () => {
         "env",
         "--value",
         "secret",
+        "--admin-token",
+        "tkn",
       ]);
 
       expect(code).toBe(0);
@@ -765,7 +767,7 @@ describe("@tyrum/cli operator commands", () => {
       vi.resetModules();
       const { runCli } = await import("../../src/index.js");
 
-      const code = await runCli(["secrets", "revoke", "--handle-id", "h1"]);
+      const code = await runCli(["secrets", "revoke", "--handle-id", "h1", "--admin-token", "tkn"]);
 
       expect(code).toBe(0);
       expect(errSpy).not.toHaveBeenCalled();
@@ -839,7 +841,16 @@ describe("@tyrum/cli operator commands", () => {
       vi.resetModules();
       const { runCli } = await import("../../src/index.js");
 
-      const code = await runCli(["secrets", "rotate", "--handle-id", "h1", "--value", "new"]);
+      const code = await runCli([
+        "secrets",
+        "rotate",
+        "--handle-id",
+        "h1",
+        "--value",
+        "new",
+        "--admin-token",
+        "tkn",
+      ]);
 
       expect(code).toBe(0);
       expect(errSpy).not.toHaveBeenCalled();
@@ -873,7 +884,7 @@ describe("@tyrum/cli operator commands", () => {
       vi.resetModules();
       const { runCli } = await import("../../src/index.js");
 
-      const code = await runCli(["policy", "bundle"]);
+      const code = await runCli(["policy", "bundle", "--admin-token", "tkn"]);
 
       expect(code).toBe(0);
       expect(errSpy).not.toHaveBeenCalled();
@@ -907,7 +918,7 @@ describe("@tyrum/cli operator commands", () => {
       vi.resetModules();
       const { runCli } = await import("../../src/index.js");
 
-      const code = await runCli(["policy", "overrides", "list"]);
+      const code = await runCli(["policy", "overrides", "list", "--admin-token", "tkn"]);
 
       expect(code).toBe(0);
       expect(errSpy).not.toHaveBeenCalled();
@@ -951,6 +962,8 @@ describe("@tyrum/cli operator commands", () => {
         "system.shell.exec",
         "--pattern",
         "*",
+        "--admin-token",
+        "tkn",
       ]);
 
       expect(code).toBe(0);
@@ -997,6 +1010,8 @@ describe("@tyrum/cli operator commands", () => {
         "p1",
         "--reason",
         "bad",
+        "--admin-token",
+        "tkn",
       ]);
 
       expect(code).toBe(0);
