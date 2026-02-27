@@ -30,7 +30,6 @@ import {
   normalizeUrlForPolicy,
 } from "../../policy/domain.js";
 import { collectSecretHandleIds } from "../../secret/collect-secret-handle-ids.js";
-import { releaseLaneLease } from "../../lanes/lane-lease.js";
 import { enqueueWsBroadcastMessage } from "../../../ws/outbox.js";
 import type { SqlDb } from "../../../statestore/types.js";
 import { normalizeDbDateTime } from "../../../utils/db-time.js";
@@ -41,6 +40,11 @@ import { defaultClock } from "./clock.js";
 import { normalizePositiveInt } from "../normalize-positive-int.js";
 import { parseConcurrencyLimitsFromEnv } from "./concurrency.js";
 import { normalizeWorkspaceId, parsePlanIdFromTriggerJson } from "./db.js";
+import {
+  releaseWorkspaceLease,
+  releaseWorkspaceLeaseTx,
+  tryAcquireWorkspaceLeaseTx,
+} from "../../workspace/lease.js";
 import type {
   ClockFn,
   EnqueuePlanInput,
@@ -961,21 +965,6 @@ export class ExecutionEngine {
       });
       if (!leaseOk) continue;
 
-      const workspaceOk = await this.tryAcquireWorkspaceLease({
-        workspaceId: run.workspace_id,
-        owner: input.workerId,
-        nowMs,
-        ttlMs: 5_000,
-      });
-      if (!workspaceOk) {
-        await releaseLaneLease(this.db, {
-          key: run.key,
-          lane: run.lane,
-          owner: input.workerId,
-        });
-        continue;
-      }
-
       try {
         const didWork = await this.tickWithLaneLease(run, input, { nowMs, nowIso });
         if (didWork) return true;
@@ -1722,13 +1711,26 @@ export class ExecutionEngine {
         capability,
       });
       if (!concurrencyOk) {
-        // Avoid blocking other workspaces while we're capacity-limited.
-        await tx.run(
-          `DELETE FROM workspace_leases
-           WHERE workspace_id = ? AND lease_owner = ?`,
-          [run.workspace_id, input.workerId],
-        );
         return { kind: "noop" as const };
+      }
+
+      const needsWorkspaceLease = actionType === "CLI";
+      if (needsWorkspaceLease) {
+        const workspaceOk = await tryAcquireWorkspaceLeaseTx(tx, {
+          workspaceId: run.workspace_id,
+          owner: input.workerId,
+          nowMs: clock.nowMs,
+          ttlMs: leaseTtlMs,
+        });
+        if (!workspaceOk) {
+          await this.releaseConcurrencySlotsTx(tx, attemptId, clock.nowIso);
+          await tx.run(
+            `DELETE FROM lane_leases
+             WHERE key = ? AND lane = ? AND lease_owner = ?`,
+            [run.key, run.lane, input.workerId],
+          );
+          return { kind: "noop" as const };
+        }
       }
 
       const updated = await tx.run(
@@ -1739,6 +1741,12 @@ export class ExecutionEngine {
       );
 
       if (updated.changes !== 1) {
+        if (needsWorkspaceLease) {
+          await releaseWorkspaceLeaseTx(tx, {
+            workspaceId: run.workspace_id,
+            owner: input.workerId,
+          });
+        }
         await this.releaseConcurrencySlotsTx(tx, attemptId, clock.nowIso);
         return { kind: "noop" as const };
       }
@@ -1771,13 +1779,6 @@ export class ExecutionEngine {
          SET lease_expires_at_ms = ?
          WHERE key = ? AND lane = ? AND lease_owner = ?`,
         [clock.nowMs + leaseTtlMs, run.key, run.lane, input.workerId],
-      );
-
-      await tx.run(
-        `UPDATE workspace_leases
-         SET lease_expires_at_ms = ?
-         WHERE workspace_id = ? AND lease_owner = ?`,
-        [clock.nowMs + leaseTtlMs, run.workspace_id, input.workerId],
       );
 
       await this.emitStepUpdatedTx(tx, next.step_id);
@@ -2206,6 +2207,20 @@ export class ExecutionEngine {
       });
       return { kind: "failed" as const, status, error: redactedError };
     });
+
+    if (opts.action.type === "CLI") {
+      await releaseWorkspaceLease(this.db, {
+        workspaceId: opts.workspaceId,
+        owner: opts.workerId,
+      }).catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger?.warn("execution.workspace_lease_release_failed", {
+          workspace_id: opts.workspaceId,
+          worker_id: opts.workerId,
+          error: message,
+        });
+      });
+    }
 
     if (outcome.kind === "paused") {
       this.logger?.info("execution.attempt.paused", {
@@ -3228,33 +3243,6 @@ export class ExecutionEngine {
          WHERE key = ? AND lane = ?
            AND (lease_expires_at_ms <= ? OR lease_owner = ?)`,
         [opts.owner, expiresAt, opts.key, opts.lane, opts.nowMs, opts.owner],
-      );
-      return updated.changes === 1;
-    });
-  }
-
-  private async tryAcquireWorkspaceLease(opts: {
-    workspaceId: string;
-    owner: string;
-    nowMs: number;
-    ttlMs: number;
-  }): Promise<boolean> {
-    const expiresAt = opts.nowMs + Math.max(1, opts.ttlMs);
-    return await this.db.transaction(async (tx) => {
-      const inserted = await tx.run(
-        `INSERT INTO workspace_leases (workspace_id, lease_owner, lease_expires_at_ms)
-         VALUES (?, ?, ?)
-         ON CONFLICT (workspace_id) DO NOTHING`,
-        [opts.workspaceId, opts.owner, expiresAt],
-      );
-      if (inserted.changes === 1) return true;
-
-      const updated = await tx.run(
-        `UPDATE workspace_leases
-         SET lease_owner = ?, lease_expires_at_ms = ?
-         WHERE workspace_id = ?
-           AND (lease_expires_at_ms <= ? OR lease_owner = ?)`,
-        [opts.owner, expiresAt, opts.workspaceId, opts.nowMs, opts.owner],
       );
       return updated.changes === 1;
     });

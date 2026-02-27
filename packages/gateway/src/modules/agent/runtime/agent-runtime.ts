@@ -2269,6 +2269,11 @@ export class AgentRuntime {
       undefined,
       this.opts.container.redactionEngine,
       this.opts.container.secretResolutionAuditDal,
+      {
+        db: this.opts.container.db,
+        workspaceId,
+        ownerPrefix: this.instanceOwner,
+      },
     );
 
     const sessionCtx = formatSessionContext(session.summary, session.turns);
