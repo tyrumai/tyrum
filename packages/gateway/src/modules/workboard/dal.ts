@@ -2402,13 +2402,13 @@ export class WorkboardDal {
     return { subagents, next_cursor };
   }
 
-  async closeSubagent(params: {
+  private async setSubagentTerminalStatus(params: {
     scope: WorkScope;
     subagent_id: string;
+    status: "closing" | "failed";
+    occurredAtIso: string;
     reason?: string;
-    closedAtIso?: string;
   }): Promise<SubagentDescriptor | undefined> {
-    const nowIso = params.closedAtIso ?? new Date().toISOString();
     const closeReason = params.reason?.trim() || null;
 
     return await this.db.transaction(async (tx) => {
@@ -2444,9 +2444,9 @@ export class WorkboardDal {
            AND subagent_id = ?
          RETURNING *`,
         [
-          "closing",
-          nowIso,
-          nowIso,
+          params.status,
+          params.occurredAtIso,
+          params.occurredAtIso,
           closeReason,
           params.scope.tenant_id,
           params.scope.agent_id,
@@ -2455,6 +2455,90 @@ export class WorkboardDal {
         ],
       );
       return row ? toSubagent(row) : undefined;
+    });
+  }
+
+  async closeSubagent(params: {
+    scope: WorkScope;
+    subagent_id: string;
+    reason?: string;
+    closedAtIso?: string;
+  }): Promise<SubagentDescriptor | undefined> {
+    const nowIso = params.closedAtIso ?? new Date().toISOString();
+    return await this.setSubagentTerminalStatus({
+      scope: params.scope,
+      subagent_id: params.subagent_id,
+      status: "closing",
+      occurredAtIso: nowIso,
+      reason: params.reason,
+    });
+  }
+
+  async markSubagentClosed(params: {
+    scope: WorkScope;
+    subagent_id: string;
+    closedAtIso?: string;
+  }): Promise<SubagentDescriptor | undefined> {
+    const nowIso = params.closedAtIso ?? new Date().toISOString();
+
+    return await this.db.transaction(async (tx) => {
+      const existing = await tx.get<RawSubagentRow>(
+        `SELECT *
+         FROM subagents
+         WHERE tenant_id = ?
+           AND agent_id = ?
+           AND workspace_id = ?
+           AND subagent_id = ?`,
+        [
+          params.scope.tenant_id,
+          params.scope.agent_id,
+          params.scope.workspace_id,
+          params.subagent_id,
+        ],
+      );
+      if (!existing) return undefined;
+
+      if (existing.status === "closed" || existing.status === "failed") {
+        return toSubagent(existing);
+      }
+
+      const row = await tx.get<RawSubagentRow>(
+        `UPDATE subagents
+         SET status = ?,
+             updated_at = ?,
+             closed_at = COALESCE(closed_at, ?)
+         WHERE tenant_id = ?
+           AND agent_id = ?
+           AND workspace_id = ?
+           AND subagent_id = ?
+         RETURNING *`,
+        [
+          "closed",
+          nowIso,
+          nowIso,
+          params.scope.tenant_id,
+          params.scope.agent_id,
+          params.scope.workspace_id,
+          params.subagent_id,
+        ],
+      );
+      return row ? toSubagent(row) : undefined;
+    });
+  }
+
+  async markSubagentFailed(params: {
+    scope: WorkScope;
+    subagent_id: string;
+    reason?: string;
+    failedAtIso?: string;
+  }): Promise<SubagentDescriptor | undefined> {
+    const nowIso = params.failedAtIso ?? new Date().toISOString();
+    return await this.setSubagentTerminalStatus({
+      scope: params.scope,
+      subagent_id: params.subagent_id,
+      status: "failed",
+      occurredAtIso: nowIso,
+      reason: params.reason,
     });
   }
 }

@@ -27,6 +27,8 @@ export function resolveWsRequestRequiredScopes(type: string): string[] | null {
     }
     case "work.list":
     case "work.get":
+    case "subagent.list":
+    case "subagent.get":
     case "work.artifact.list":
     case "work.artifact.get":
     case "work.link.list":
@@ -42,6 +44,9 @@ export function resolveWsRequestRequiredScopes(type: string): string[] | null {
     case "work.update":
     case "work.transition":
     case "work.link.create":
+    case "subagent.spawn":
+    case "subagent.send":
+    case "subagent.close":
     case "work.artifact.create":
     case "work.decision.create":
     case "work.signal.create":
