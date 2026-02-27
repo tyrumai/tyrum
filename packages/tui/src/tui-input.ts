@@ -24,6 +24,10 @@ export type TuiCommand =
   | { type: "disconnect" }
   | { type: "openAdminMode" }
   | { type: "exitAdminMode" }
+  | { type: "refreshMemory" }
+  | { type: "openMemorySearch" }
+  | { type: "openMemoryForget"; memoryItemId: string }
+  | { type: "exportMemory" }
   | { type: "refreshApprovals" }
   | { type: "resolveApproval"; approvalId: number; decision: "approved" | "denied" }
   | { type: "refreshPairing" }
@@ -74,6 +78,7 @@ export function reduceTuiInput(_params: {
   approvalsPendingIds: number[];
   pairingIds: number[];
   runIds: string[];
+  memoryItemIds: string[];
 }): { state: TuiUiState; commands: TuiCommand[] } {
   const commands: TuiCommand[] = [];
   const input = _params.input;
@@ -295,6 +300,78 @@ export function reduceTuiInput(_params: {
       };
     }
     return { state: { ..._params.state, runsCursor: cursor }, commands };
+  }
+
+  if (_params.state.route === "memory") {
+    const cursor = getEffectiveCursor({
+      ids: _params.memoryItemIds,
+      selectedId: _params.state.memorySelectedId,
+      cursor: _params.state.memoryCursor,
+    });
+    const max = Math.max(0, _params.memoryItemIds.length - 1);
+
+    if (key.downArrow) {
+      const nextCursor = Math.min(cursor + 1, max);
+      return {
+        state: {
+          ..._params.state,
+          memoryCursor: nextCursor,
+          memorySelectedId: _params.memoryItemIds[nextCursor] ?? null,
+        },
+        commands,
+      };
+    }
+    if (key.upArrow) {
+      const nextCursor = Math.max(cursor - 1, 0);
+      return {
+        state: {
+          ..._params.state,
+          memoryCursor: nextCursor,
+          memorySelectedId: _params.memoryItemIds[nextCursor] ?? null,
+        },
+        commands,
+      };
+    }
+
+    if (input === "r") {
+      commands.push({ type: "refreshMemory" });
+      return { state: { ..._params.state, memoryCursor: cursor }, commands };
+    }
+
+    if (input === "/") {
+      commands.push({ type: "openMemorySearch" });
+      return { state: { ..._params.state, memoryCursor: cursor }, commands };
+    }
+
+    if (input === "p") {
+      if (!_params.adminModeActive) {
+        commands.push({ type: "openAdminMode" });
+      } else {
+        commands.push({ type: "exportMemory" });
+      }
+      return { state: { ..._params.state, memoryCursor: cursor }, commands };
+    }
+
+    if (input === "f") {
+      const memoryItemId = _params.memoryItemIds[cursor];
+      if (typeof memoryItemId === "string") {
+        if (!_params.adminModeActive) {
+          commands.push({ type: "openAdminMode" });
+        } else {
+          commands.push({ type: "openMemoryForget", memoryItemId });
+        }
+      }
+      return {
+        state: {
+          ..._params.state,
+          memoryCursor: cursor,
+          memorySelectedId: typeof memoryItemId === "string" ? memoryItemId : null,
+        },
+        commands,
+      };
+    }
+
+    return { state: { ..._params.state, memoryCursor: cursor }, commands };
   }
 
   return { state: _params.state, commands };
