@@ -1457,6 +1457,236 @@ describe("TyrumClient", () => {
     expect(kvSetRes.entry.key).toBe("branch");
   });
 
+  it("sends typed subagent.* requests and returns validated results", async () => {
+    server = createTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: [],
+      reconnect: false,
+    });
+
+    const connectedP = new Promise<void>((resolve) => {
+      client!.on("connected", () => resolve());
+    });
+
+    client.connect();
+    const ws = await server.waitForClient();
+    await acceptConnect(ws);
+    await connectedP;
+
+    const scope = { tenant_id: "t-1", agent_id: "agent-1", workspace_id: "default" };
+    const workItemId = "11111111-2222-3333-8aaa-555555555555";
+    const workItemTaskId = "22222222-3333-4444-8aaa-555555555555";
+    const subagentId = "123e4567-e89b-12d3-a456-426614174000";
+
+    const subagent = {
+      subagent_id: subagentId,
+      ...scope,
+      work_item_id: workItemId,
+      work_item_task_id: workItemTaskId,
+      execution_profile: "subagent",
+      session_key: `agent:${scope.agent_id}:subagent:${subagentId}`,
+      lane: "subagent",
+      status: "running",
+      created_at: "2026-02-19T12:00:00Z",
+      last_heartbeat_at: null,
+    };
+
+    async function expectSubagentRequest<T>(
+      call: () => Promise<T>,
+      expectedType: string,
+      payload: unknown,
+      result: unknown,
+    ): Promise<T> {
+      const pending = call();
+      const req = (await waitForMessage(ws)) as Record<string, unknown>;
+      expect(req["type"]).toBe(expectedType);
+      expect(req["payload"]).toEqual(payload);
+
+      ws.send(
+        JSON.stringify({
+          request_id: req["request_id"],
+          type: expectedType,
+          ok: true,
+          result,
+        }),
+      );
+
+      return await pending;
+    }
+
+    const spawnPayload = {
+      ...scope,
+      execution_profile: "subagent",
+      work_item_id: workItemId,
+      work_item_task_id: workItemTaskId,
+    };
+    const spawnRes = await expectSubagentRequest(
+      () => client!.subagentSpawn(spawnPayload),
+      "subagent.spawn",
+      spawnPayload,
+      { subagent },
+    );
+    expect(spawnRes.subagent.subagent_id).toBe(subagentId);
+
+    const listPayload = { ...scope, statuses: ["running"], limit: 1 };
+    const listRes = await expectSubagentRequest(
+      () => client!.subagentList(listPayload),
+      "subagent.list",
+      listPayload,
+      { subagents: [subagent] },
+    );
+    expect(listRes.subagents[0].subagent_id).toBe(subagentId);
+
+    const getPayload = { ...scope, subagent_id: subagentId };
+    const getRes = await expectSubagentRequest(
+      () => client!.subagentGet(getPayload),
+      "subagent.get",
+      getPayload,
+      { subagent },
+    );
+    expect(getRes.subagent.subagent_id).toBe(subagentId);
+
+    const sendPayload = { ...scope, subagent_id: subagentId, content: "hello" };
+    const sendRes = await expectSubagentRequest(
+      () => client!.subagentSend(sendPayload),
+      "subagent.send",
+      sendPayload,
+      { accepted: true },
+    );
+    expect(sendRes.accepted).toBe(true);
+
+    const closeSubagent = {
+      ...subagent,
+      status: "closed",
+      closed_at: "2026-02-19T12:00:01Z",
+    };
+    const closePayload = { ...scope, subagent_id: subagentId, reason: "done" };
+    const closeRes = await expectSubagentRequest(
+      () => client!.subagentClose(closePayload),
+      "subagent.close",
+      closePayload,
+      { subagent: closeSubagent },
+    );
+    expect(closeRes.subagent.status).toBe("closed");
+  });
+
+  it("rejects invalid subagent.* payloads without sending", async () => {
+    server = createTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: [],
+      reconnect: false,
+    });
+
+    const connectedP = new Promise<void>((resolve) => {
+      client!.on("connected", () => resolve());
+    });
+
+    client.connect();
+    const ws = await server.waitForClient();
+    await acceptConnect(ws);
+    await connectedP;
+
+    const outbound: unknown[] = [];
+    ws.on("message", (data) => {
+      outbound.push(JSON.parse(data.toString()));
+    });
+
+    const scope = { tenant_id: "t-1", agent_id: "agent-1", workspace_id: "default" };
+    const invalidPayload = {
+      ...scope,
+      subagent_id: "123e4567-e89b-12d3-a456-426614174000",
+      content: "   ",
+    };
+
+    await expect(
+      withTimeout(
+        client!.subagentSend(invalidPayload as any),
+        200,
+        "subagent.send invalid payload",
+      ),
+    ).rejects.toThrow(/invalid payload/i);
+
+    await delay(25);
+    expect(outbound).toEqual([]);
+  });
+
+  it("emits subagent.* events", async () => {
+    server = createTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: [],
+      reconnect: false,
+    });
+
+    const connectedP = new Promise<void>((resolve) => {
+      client!.on("connected", () => resolve());
+    });
+
+    const scope = { tenant_id: "t-1", agent_id: "agent-1", workspace_id: "default" };
+    const workItemId = "11111111-2222-3333-8aaa-555555555555";
+    const workItemTaskId = "22222222-3333-4444-8aaa-555555555555";
+    const subagentId = "123e4567-e89b-12d3-a456-426614174000";
+    const subagent = {
+      subagent_id: subagentId,
+      ...scope,
+      work_item_id: workItemId,
+      work_item_task_id: workItemTaskId,
+      execution_profile: "subagent",
+      session_key: `agent:${scope.agent_id}:subagent:${subagentId}`,
+      lane: "subagent",
+      status: "running",
+      created_at: "2026-02-19T12:00:00Z",
+      last_heartbeat_at: null,
+    };
+
+    const spawnedReceivedP = new Promise<unknown>((resolve) => {
+      client!.on("subagent.spawned", resolve);
+    });
+    const outputReceivedP = new Promise<unknown>((resolve) => {
+      client!.on("subagent.output", resolve);
+    });
+
+    client.connect();
+    const ws = await server.waitForClient();
+    await acceptConnect(ws);
+    await connectedP;
+
+    const spawnedMsg = {
+      event_id: "evt-subagent-1",
+      type: "subagent.spawned",
+      occurred_at: "2026-02-19T12:00:00Z",
+      payload: { subagent },
+    };
+    ws.send(JSON.stringify(spawnedMsg));
+
+    const outputMsg = {
+      event_id: "evt-subagent-2",
+      type: "subagent.output",
+      occurred_at: "2026-02-19T12:00:00Z",
+      payload: {
+        ...scope,
+        subagent_id: subagentId,
+        work_item_id: workItemId,
+        work_item_task_id: workItemTaskId,
+        kind: "delta",
+        content: "hello",
+      },
+    };
+    ws.send(JSON.stringify(outputMsg));
+
+    await expect(withTimeout(spawnedReceivedP, 2_000, "subagent.spawned")).resolves.toEqual(
+      spawnedMsg,
+    );
+    await expect(withTimeout(outputReceivedP, 2_000, "subagent.output")).resolves.toEqual(
+      outputMsg,
+    );
+  });
+
   it("rejects void helper responses with non-empty ack payloads", async () => {
     server = createTestServer();
     client = new TyrumClient({
