@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Layout } from "./components/Layout.js";
 import { Overview } from "./pages/Overview.js";
 import { Gateway } from "./pages/Gateway.js";
@@ -21,11 +21,11 @@ const VALID_PAGES = new Set<PageId>([
 
 export function App() {
   const [page, setPage] = useState<PageId>("overview");
-  const handleNavigate = (nextPage: string): void => {
+  const handleNavigate = useCallback((nextPage: string): void => {
     if (VALID_PAGES.has(nextPage as PageId)) {
       setPage(nextPage as PageId);
     }
-  };
+  }, []);
 
   useEffect(() => {
     const api = window.tyrumDesktop;
@@ -39,6 +39,24 @@ export function App() {
       }
     });
   }, []);
+
+  useEffect(() => {
+    const api = window.tyrumDesktop;
+    if (!api?.onNavigationRequest) return;
+
+    const unsubscribe = api.onNavigationRequest((req) => {
+      if (req === null || typeof req !== "object" || Array.isArray(req)) {
+        return;
+      }
+      const pageId = (req as Record<string, unknown>)["pageId"];
+      if (typeof pageId !== "string") {
+        return;
+      }
+      handleNavigate(pageId);
+    });
+
+    return unsubscribe;
+  }, [handleNavigate]);
 
   return (
     <Layout currentPage={page} onNavigate={handleNavigate} fullBleed={page === "gateway"}>

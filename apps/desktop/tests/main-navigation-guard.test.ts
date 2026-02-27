@@ -7,6 +7,8 @@ const {
   appOnMock,
   appQuitMock,
   browserWindowMock,
+  menuBuildFromTemplateMock,
+  menuSetApplicationMenuMock,
   shellOpenExternalMock,
   webContentsOnMock,
   setWindowOpenHandlerMock,
@@ -39,6 +41,8 @@ const {
   const appRequestSingleInstanceLockMock = vi.fn(() => true);
   const appSetAppUserModelIdMock = vi.fn();
   const shellOpenExternalMock = vi.fn(async () => {});
+  const menuBuildFromTemplateMock = vi.fn(() => ({}) as never);
+  const menuSetApplicationMenuMock = vi.fn();
 
   const registerConfigIpcMock = vi.fn();
   const registerGatewayIpcMock = vi.fn(() => ({ stop: vi.fn() }));
@@ -59,6 +63,8 @@ const {
     appOnMock,
     appQuitMock,
     browserWindowMock,
+    menuBuildFromTemplateMock,
+    menuSetApplicationMenuMock,
     shellOpenExternalMock,
     webContentsOnMock,
     setWindowOpenHandlerMock,
@@ -81,6 +87,10 @@ vi.mock("electron", () => ({
     setAppUserModelId: appSetAppUserModelIdMock,
   },
   BrowserWindow: browserWindowMock,
+  Menu: {
+    buildFromTemplate: menuBuildFromTemplateMock,
+    setApplicationMenu: menuSetApplicationMenuMock,
+  },
   shell: {
     openExternal: shellOpenExternalMock,
   },

@@ -44,6 +44,7 @@ export interface TyrumDesktopApi {
   requestMacPermission: (permission: "accessibility" | "screenRecording") => Promise<unknown>;
   openExternal: (url: string) => Promise<void>;
   onUpdateStateChange: (cb: (state: unknown) => void) => () => void;
+  onNavigationRequest: (cb: (req: unknown) => void) => () => void;
 }
 
 declare global {

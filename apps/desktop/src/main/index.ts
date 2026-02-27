@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from "electron";
+import { app, BrowserWindow, Menu, shell } from "electron";
 import { join } from "node:path";
 import { registerGatewayIpc, startEmbeddedGatewayFromConfig } from "./ipc/gateway-ipc.js";
 import { registerNodeIpc, shutdownNodeResources } from "./ipc/node-ipc.js";
@@ -9,6 +9,7 @@ import { MAIN_WINDOW_OPTIONS } from "./window-options.js";
 import { configExists, loadConfig } from "./config/store.js";
 import { setWindowsAppUserModelId, setupSingleInstance } from "./single-instance.js";
 import { configureMacAboutPanel } from "./platform/os-integrations.js";
+import { buildApplicationMenuTemplate } from "./menu.js";
 
 app.setName?.("Tyrum");
 
@@ -166,6 +167,21 @@ function createWindow(): void {
 if (didAcquireSingleInstanceLock) {
   app.whenReady().then(() => {
     configureMacAboutPanel(app, process.platform);
+    Menu.setApplicationMenu(
+      Menu.buildFromTemplate(
+        buildApplicationMenuTemplate({
+          appName: app.name,
+          platform: process.platform,
+          isDev: !app.isPackaged,
+          onRequestNavigate: (request) => {
+            const win = mainWindow;
+            if (!win) return;
+            if (win.isDestroyed() || win.webContents.isDestroyed()) return;
+            win.webContents.send("navigation:request", request);
+          },
+        }),
+      ),
+    );
     createWindow();
   });
   app.on("window-all-closed", () => {
