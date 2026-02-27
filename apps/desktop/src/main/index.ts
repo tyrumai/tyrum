@@ -174,13 +174,21 @@ if (didAcquireSingleInstanceLock) {
           platform: process.platform,
           isDev: !app.isPackaged,
           onShowAbout: () => {
-            void dialog.showMessageBox({
+            const parentWindow = BrowserWindow.getFocusedWindow() ?? mainWindow;
+            const options = {
               type: "info",
               title: `About ${app.name}`,
               message: app.name,
               detail: `Version ${app.getVersion()}`,
               buttons: ["OK"],
-            });
+            } as const;
+
+            if (parentWindow && !parentWindow.isDestroyed()) {
+              void dialog.showMessageBox(parentWindow, options);
+              return;
+            }
+
+            void dialog.showMessageBox(options);
           },
           onRequestNavigate: (request) => {
             const win = mainWindow;

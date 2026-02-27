@@ -4,12 +4,14 @@ import { buildApplicationMenuTemplate } from "../src/main/menu.js";
 describe("buildApplicationMenuTemplate", () => {
   it("builds a standard macOS app + window menu with Preferences navigation", () => {
     const onRequestNavigate = vi.fn();
+    const onShowAbout = vi.fn();
 
     const template = buildApplicationMenuTemplate({
       appName: "Tyrum",
       platform: "darwin",
       isDev: false,
       onRequestNavigate,
+      onShowAbout,
     });
 
     const appMenu = template.find((item) => item.label === "Tyrum");
