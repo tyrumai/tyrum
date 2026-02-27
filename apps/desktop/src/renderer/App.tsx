@@ -75,6 +75,7 @@ export function App() {
 
     const unsubscribe = api.onDeepLinkOpen((url) => {
       handleDeepLink(url);
+      void api.consumeDeepLink();
     });
 
     return unsubscribe;
