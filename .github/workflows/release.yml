@@ -398,8 +398,15 @@ jobs:
           DEBUG: electron-builder,electron-osx-sign,electron-notarize
         run: pnpm --filter tyrum-desktop dist
 
-      - name: Build desktop release files (non-macOS)
-        if: ${{ matrix.os != 'macos-latest' }}
+      - name: Build desktop release files (Linux)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: pnpm --filter tyrum-desktop dist
+
+      - name: Build desktop release files (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
         run: pnpm --filter tyrum-desktop dist
 
       - name: Stage desktop artifacts

@@ -52,4 +52,29 @@ describe("release workflow parity gate", () => {
     expect(runScript).toContain("while true; do");
     expect(runScript).toMatch(/\n\s*done\s*(\n|$)/);
   });
+
+  it("does not leak macOS code-signing secrets into Windows desktop builds", () => {
+    const workflow = readReleaseWorkflow();
+    const jobs = workflow["jobs"] as Record<string, unknown> | undefined;
+    const desktopJob = jobs?.["desktop-bundles"] as Record<string, unknown> | undefined;
+    const steps = desktopJob?.["steps"] as Array<Record<string, unknown>> | undefined;
+
+    const windowsBuildStep = (steps ?? []).find(
+      (step) => step["name"] === "Build desktop release files (Windows)",
+    );
+
+    expect(windowsBuildStep).toBeTruthy();
+
+    const env = windowsBuildStep?.["env"] as Record<string, unknown> | undefined;
+    expect(env).toBeTruthy();
+
+    expect(env).not.toHaveProperty("CSC_LINK");
+    expect(env?.["WIN_CSC_LINK"]).toBe("${{ secrets.WIN_CSC_LINK }}");
+    expect(env).not.toHaveProperty("CSC_KEY_PASSWORD");
+    expect(env?.["WIN_CSC_KEY_PASSWORD"]).toBe("${{ secrets.WIN_CSC_KEY_PASSWORD }}");
+
+    const envText = JSON.stringify(env ?? {});
+    expect(envText).not.toContain("secrets.CSC_LINK");
+    expect(envText).not.toContain("secrets.CSC_KEY_PASSWORD");
+  });
 });
