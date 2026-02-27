@@ -373,6 +373,7 @@ export function WorkBoard({ deepLinkWorkItemId, onDeepLinkHandled }: WorkBoardPr
         wsClient.on("work.item.updated", onWorkItemEvent);
         wsClient.on("work.item.blocked", onWorkItemEvent);
         wsClient.on("work.item.completed", onWorkItemEvent);
+        wsClient.on("work.item.failed", onWorkItemEvent);
         wsClient.on("work.item.cancelled", onWorkItemEvent);
 
         wsClient.on("work.task.leased", onWorkTaskEvent);
@@ -408,6 +409,7 @@ export function WorkBoard({ deepLinkWorkItemId, onDeepLinkHandled }: WorkBoardPr
         wsClient.off("work.item.updated", onWorkItemEvent);
         wsClient.off("work.item.blocked", onWorkItemEvent);
         wsClient.off("work.item.completed", onWorkItemEvent);
+        wsClient.off("work.item.failed", onWorkItemEvent);
         wsClient.off("work.item.cancelled", onWorkItemEvent);
       }
 

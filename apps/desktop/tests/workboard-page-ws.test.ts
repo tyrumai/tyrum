@@ -14,6 +14,16 @@ describe("WorkBoard page (WS integration)", () => {
     expect(page).toContain("work.item.");
   });
 
+  it("subscribes to work.item.failed to keep the board in sync", () => {
+    const page = readFileSync(
+      join(import.meta.dirname, "../src/renderer/pages/WorkBoard.tsx"),
+      "utf-8",
+    );
+
+    expect(page).toContain('wsClient.on("work.item.failed"');
+    expect(page).toContain('wsClient.off("work.item.failed"');
+  });
+
   it("memoizes selected task list inputs to avoid downstream recalculation", () => {
     const page = readFileSync(
       join(import.meta.dirname, "../src/renderer/pages/WorkBoard.tsx"),

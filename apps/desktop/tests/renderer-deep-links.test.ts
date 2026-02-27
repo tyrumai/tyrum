@@ -18,6 +18,13 @@ describe("desktop renderer deep link routing", () => {
     });
   });
 
+  it("supports tyrum:work deep links without //", () => {
+    expect(getDeepLinkRoute("tyrum:work?work_item_id=w-1")).toEqual({
+      pageId: "work",
+      workItemId: "w-1",
+    });
+  });
+
   it("falls back to a helpful page for unknown inputs", () => {
     expect(getPageIdForDeepLink("not-a-url")).toBe("connection");
   });

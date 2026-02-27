@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import "./work-item-notifications.mock.js";
+
 const {
   appRequestSingleInstanceLockMock,
   appGetPathMock,
@@ -195,18 +197,6 @@ vi.mock("../src/main/ipc/node-ipc.js", () => ({
 
 vi.mock("../src/main/ipc/update-ipc.js", () => ({
   registerUpdateIpc: registerUpdateIpcMock,
-}));
-
-vi.mock("../src/main/work-item-notifications.js", () => ({
-  WorkItemNotificationService: class WorkItemNotificationService {
-    constructor(_openDeepLink: unknown) {}
-
-    start(): Promise<void> {
-      return Promise.resolve();
-    }
-
-    stop(): void {}
-  },
 }));
 
 vi.mock("../src/main/config/store.js", () => ({

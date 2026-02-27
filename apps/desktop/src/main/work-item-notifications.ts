@@ -1,10 +1,7 @@
 import { TyrumClient } from "@tyrum/client";
 import { Notification } from "electron";
 import { loadConfig } from "./config/store.js";
-import {
-  resolveOperatorConnection,
-  startEmbeddedGatewayFromConfig,
-} from "./ipc/gateway-ipc.js";
+import { resolveOperatorConnection, startEmbeddedGatewayFromConfig } from "./ipc/gateway-ipc.js";
 import {
   registerWorkItemNotificationHandlers,
   type WorkItemNotification,
@@ -34,7 +31,6 @@ export class WorkItemNotificationService {
 
   async start(): Promise<void> {
     if (this.started) return;
-    this.started = true;
 
     try {
       let config = loadConfig();
@@ -57,15 +53,19 @@ export class WorkItemNotificationService {
         reconnect: true,
         maxReconnectDelay: 10_000,
       });
-      this.client = client;
 
-      this.disposeHandlers = registerWorkItemNotificationHandlers(client, {
+      const disposeHandlers = registerWorkItemNotificationHandlers(client, {
         notify: showElectronNotification,
         openDeepLink: this.openDeepLink,
       });
 
       client.connect();
+
+      this.client = client;
+      this.disposeHandlers = disposeHandlers;
+      this.started = true;
     } catch (error) {
+      this.stop();
       console.error("Failed to start work item notifications", error);
     }
   }

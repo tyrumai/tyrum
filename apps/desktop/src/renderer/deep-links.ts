@@ -20,7 +20,8 @@ export function getDeepLinkRoute(rawUrl: string): DeepLinkRoute {
       return { pageId: "connection" };
     }
 
-    if (parsed.hostname === "work") {
+    const page = parsed.hostname || parsed.pathname.replace(/^\/+/, "");
+    if (page === "work") {
       const workItemId = normalizeId(parsed.searchParams.get("work_item_id"));
       return workItemId ? { pageId: "work", workItemId } : { pageId: "work" };
     }

@@ -34,7 +34,9 @@ export function registerWorkItemNotificationHandlers(
   const notifyWorkItem = (verb: "done" | "blocked" | "failed", item: WorkItemSummary): void => {
     const title = `Work item ${verb}`;
     const body =
-      typeof item.title === "string" && item.title.trim().length > 0 ? item.title : item.work_item_id;
+      typeof item.title === "string" && item.title.trim().length > 0
+        ? item.title
+        : item.work_item_id;
     const onClick = (): void => {
       deps.openDeepLink(buildWorkItemDrilldownDeepLinkUrl(item.work_item_id));
     };
@@ -61,4 +63,3 @@ export function registerWorkItemNotificationHandlers(
     client.off("work.item.failed", onFailed);
   };
 }
-
