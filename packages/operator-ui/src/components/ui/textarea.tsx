@@ -12,8 +12,8 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
   ({ className, label, helperText, error, id: idProp, required, ...props }, ref) => {
     const generatedId = React.useId();
     const id = idProp ?? generatedId;
-    const describedById = helperText || error ? `${id}-help` : undefined;
-    const message = error ?? helperText;
+    const message = error || helperText;
+    const describedById = message ? `${id}-help` : undefined;
 
     return (
       <div className="grid gap-2">

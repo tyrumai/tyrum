@@ -47,4 +47,28 @@ describe("Input", () => {
 
     cleanupTestRoot({ container, root });
   });
+
+  it("renders helper text when error is an empty string", () => {
+    const Input = (operatorUi as Record<string, unknown>)["Input"];
+    expect(Input).toBeDefined();
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(Input as React.ComponentType, {
+        id: "email",
+        label: "Email",
+        helperText: "We never share your email",
+        error: "",
+      }),
+    );
+
+    const input = container.querySelector("input#email");
+    expect(input?.getAttribute("aria-invalid")).not.toBe("true");
+    expect(input?.getAttribute("aria-describedby")).toBe("email-help");
+
+    const helper = container.querySelector("#email-help");
+    expect(helper).not.toBeNull();
+    expect(helper?.textContent).toContain("We never share your email");
+
+    cleanupTestRoot({ container, root });
+  });
 });

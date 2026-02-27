@@ -12,8 +12,8 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, label, helperText, error, id: idProp, required, type = "text", ...props }, ref) => {
     const generatedId = React.useId();
     const id = idProp ?? generatedId;
-    const describedById = helperText || error ? `${id}-help` : undefined;
-    const message = error ?? helperText;
+    const message = error || helperText;
+    const describedById = message ? `${id}-help` : undefined;
 
     return (
       <div className="grid gap-2">
