@@ -3,6 +3,7 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
+import { ChannelOutboxDal } from "../../src/modules/channels/outbox-dal.js";
 import { enqueueWorkItemStateChangeNotification } from "../../src/modules/workboard/notifications.js";
 import { ApprovalDal } from "../../src/modules/approval/dal.js";
 import type { PolicyService } from "../../src/modules/policy/service.js";
@@ -266,6 +267,100 @@ describe("Workboard completion notifications", () => {
 
     const approvalRow = await db.get<{ kind: string }>("SELECT kind FROM approvals LIMIT 1");
     expect(approvalRow?.kind).toBe("connector.send");
+  });
+
+  it("does not allow outbox claiming between enqueue and approval assignment", async () => {
+    db = openTestSqliteDb();
+    const workboard = new WorkboardDal(db);
+    const inbox = new ChannelInboxDal(db);
+    const approvals = new ApprovalDal(db);
+
+    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const sessionKey = "agent:default:telegram:default:dm:chat-1";
+
+    await inbox.enqueue({
+      source: "telegram",
+      thread_id: "chat-1",
+      message_id: "msg-1",
+      key: sessionKey,
+      lane: "main",
+      received_at_ms: 1_000,
+      payload: { kind: "test" },
+    });
+
+    await workboard.upsertScopeActivity({
+      scope,
+      last_active_session_key: sessionKey,
+      updated_at_ms: 1_000,
+    });
+
+    const item = await workboard.createItem({
+      scope,
+      item: {
+        kind: "action",
+        title: "Ship notifications",
+        created_from_session_key: "agent:default:main",
+      },
+      createdAtIso: "2026-02-27T00:00:00.000Z",
+    });
+
+    await workboard.transitionItem({
+      scope,
+      work_item_id: item.work_item_id,
+      status: "ready",
+      occurredAtIso: "2026-02-27T00:00:00.500Z",
+      reason: "triaged",
+    });
+
+    await workboard.transitionItem({
+      scope,
+      work_item_id: item.work_item_id,
+      status: "doing",
+      occurredAtIso: "2026-02-27T00:00:00.750Z",
+      reason: "started",
+    });
+
+    const transitioned = await workboard.transitionItem({
+      scope,
+      work_item_id: item.work_item_id,
+      status: "done",
+      occurredAtIso: "2026-02-27T00:00:01.000Z",
+      reason: "completed",
+    });
+    expect(transitioned).toBeDefined();
+
+    const policyService = {
+      isEnabled: () => true,
+      isObserveOnly: () => false,
+      evaluateConnectorAction: vi.fn(async () => ({
+        decision: "require_approval",
+        policy_snapshot: { policy_snapshot_id: "snap-1" },
+        applied_override_ids: undefined,
+      })),
+    } as unknown as PolicyService;
+
+    const originalEnqueue = ChannelOutboxDal.prototype.enqueue;
+    let claimedBetween: unknown;
+
+    vi.spyOn(ChannelOutboxDal.prototype, "enqueue").mockImplementationOnce(async function (input) {
+      const res = await originalEnqueue.call(this, input);
+      claimedBetween = await new ChannelOutboxDal((this as any)["db"]).claimNextGlobal({
+        owner: "race",
+        now_ms: Date.now(),
+        lease_ttl_ms: 60_000,
+      });
+      return res;
+    });
+
+    const res = await enqueueWorkItemStateChangeNotification({
+      db,
+      scope,
+      item: transitioned!,
+      approvalDal: approvals,
+      policyService,
+    });
+    expect(res.enqueued).toBe(true);
+    expect(claimedBetween).toBeUndefined();
   });
 
   it("skips notifications when policy denies outbound send", async () => {

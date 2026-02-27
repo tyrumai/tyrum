@@ -141,23 +141,15 @@ export async function enqueueWorkItemStateChangeNotification(input: {
     approvalId = approval.id;
   }
 
-  const { deduped, row } = await outbox.enqueue({
+  const { deduped } = await outbox.enqueue({
     inbox_id: route.inbox_id,
     source: route.source,
     thread_id: route.thread_id,
     dedupe_key: dedupeKey,
     chunk_index: 0,
     text: buildNotificationText(input.item),
+    approval_id: approvalId,
   });
-
-  if (approvalId && !deduped && row.approval_id === null) {
-    await input.db.run(
-      `UPDATE channel_outbox
-       SET approval_id = ?
-       WHERE outbox_id = ? AND status = 'queued' AND approval_id IS NULL`,
-      [approvalId, row.outbox_id],
-    );
-  }
 
   return { enqueued: true, deduped };
 }
