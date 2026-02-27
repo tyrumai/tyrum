@@ -381,6 +381,42 @@ describe("memoryStore", () => {
     });
   });
 
+  it("updates an inspected consolidated item when a consolidation event upserts it", async () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+
+    const itemA = sampleNote("123e4567-e89b-12d3-a456-426614174520", "A");
+    const itemB = sampleNote("123e4567-e89b-12d3-a456-426614174521", "B");
+    const consolidated = sampleNote("123e4567-e89b-12d3-a456-426614174599", "old");
+    const consolidatedUpdated: MemoryItem = {
+      ...consolidated,
+      body_md: "new",
+      updated_at: "2026-02-19T12:00:02Z",
+    };
+
+    ws.memoryList = vi.fn(async () => ({ v: 1, items: [itemA, consolidated, itemB] }));
+    ws.memoryGet = vi.fn(async () => ({ v: 1, item: consolidated }) as unknown);
+
+    const core = createOperatorCore({
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788",
+      auth: createBearerTokenAuth("test-token"),
+      deps: { ws, http },
+    });
+
+    await core.memoryStore.list();
+    await core.memoryStore.inspect(consolidated.memory_item_id);
+
+    ws.emit("memory.item.consolidated", {
+      payload: {
+        from_memory_item_ids: [itemA.memory_item_id, itemB.memory_item_id],
+        item: consolidatedUpdated,
+      },
+    });
+
+    expect(core.memoryStore.getSnapshot().inspect.item).toEqual(consolidatedUpdated);
+  });
+
   it("forgets items and records tombstones", async () => {
     const ws = new FakeWsClient();
     const http = createFakeHttpClient();
@@ -446,6 +482,30 @@ describe("memoryStore", () => {
     expect(core.memoryStore.getSnapshot().export.artifactId).toBe(
       "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
     );
+  });
+
+  it("clears export errors when a completion event arrives", async () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+
+    ws.memoryExport = vi.fn(async () => {
+      throw new Error("memory.export failed: unexpected: nope");
+    });
+
+    const core = createOperatorCore({
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788",
+      auth: createBearerTokenAuth("test-token"),
+      deps: { ws, http },
+    });
+
+    await core.memoryStore.export();
+    expect(core.memoryStore.getSnapshot().export.error).not.toBe(null);
+
+    ws.emit("memory.export.completed", { payload: { artifact_id: "artifact-2" } });
+
+    expect(core.memoryStore.getSnapshot().export.error).toBe(null);
+    expect(core.memoryStore.getSnapshot().export.artifactId).toBe("artifact-2");
   });
 
   it("normalizes WS errors into a consistent error model", async () => {

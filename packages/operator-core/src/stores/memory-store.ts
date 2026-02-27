@@ -733,7 +733,9 @@ export function createMemoryStore(ws: OperatorWsClient): {
       const nextInspect =
         prev.inspect.memoryItemId && fromIds.has(prev.inspect.memoryItemId)
           ? { ...prev.inspect, memoryItemId: null, item: null, loading: false, error: null }
-          : prev.inspect;
+          : prev.inspect.memoryItemId === item.memory_item_id
+            ? { ...prev.inspect, item }
+            : prev.inspect;
 
       if (nextBrowseResults === prev.browse.results && nextInspect === prev.inspect) return prev;
 
@@ -752,6 +754,7 @@ export function createMemoryStore(ws: OperatorWsClient): {
         ...prev.export,
         running: false,
         artifactId,
+        error: null,
         lastExportedAt: new Date().toISOString(),
       },
     }));
