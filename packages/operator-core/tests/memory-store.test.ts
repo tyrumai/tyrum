@@ -45,11 +45,16 @@ class FakeWsClient {
   }
 }
 
-function createFakeHttpClient(): Pick<TyrumHttpClient, "status" | "usage" | "presence" | "pairings"> {
+function createFakeHttpClient(): Pick<
+  TyrumHttpClient,
+  "status" | "usage" | "presence" | "pairings"
+> {
   return {
     status: { get: vi.fn(async () => ({ status: "ok" }) as unknown) },
     usage: { get: vi.fn(async () => ({ status: "ok" }) as unknown) },
-    presence: { list: vi.fn(async () => ({ status: "ok", generated_at: "", entries: [] }) as unknown) },
+    presence: {
+      list: vi.fn(async () => ({ status: "ok", generated_at: "", entries: [] }) as unknown),
+    },
     pairings: {
       list: vi.fn(async () => ({ status: "ok", pairings: [] }) as unknown),
       approve: vi.fn(async () => ({ status: "ok" }) as unknown),
@@ -130,7 +135,12 @@ describe("memoryStore", () => {
     page1.resolve({ v: 1, items: [itemA], next_cursor: "c1" });
     await listP;
 
-    expect(ws.memoryList).toHaveBeenCalledWith({ v: 1, limit: 1, filter: undefined, cursor: undefined });
+    expect(ws.memoryList).toHaveBeenCalledWith({
+      v: 1,
+      limit: 1,
+      filter: undefined,
+      cursor: undefined,
+    });
     expect(core.memoryStore.getSnapshot().browse.loading).toBe(false);
     expect(core.memoryStore.getSnapshot().browse.results).toEqual({
       kind: "list",

@@ -105,10 +105,7 @@ function removeFromBrowseResults(
   return { ...results, hits };
 }
 
-function upsertTombstones(
-  prev: MemoryTombstone[],
-  incoming: MemoryTombstone[],
-): MemoryTombstone[] {
+function upsertTombstones(prev: MemoryTombstone[], incoming: MemoryTombstone[]): MemoryTombstone[] {
   if (incoming.length === 0) return prev;
   const byId = new Map<string, MemoryTombstone>();
   for (const entry of incoming) {
@@ -477,7 +474,11 @@ export function createMemoryStore(ws: OperatorWsClient): {
         browse: {
           ...prev.browse,
           loading: false,
-          error: toOperatorCoreError("ws", request.kind === "list" ? "memory.list" : "memory.search", error),
+          error: toOperatorCoreError(
+            "ws",
+            request.kind === "list" ? "memory.list" : "memory.search",
+            error,
+          ),
         },
       }));
     } finally {
@@ -658,7 +659,9 @@ export function createMemoryStore(ws: OperatorWsClient): {
           : browseResults;
 
       const nextInspect =
-        prev.inspect.memoryItemId === item.memory_item_id ? { ...prev.inspect, item } : prev.inspect;
+        prev.inspect.memoryItemId === item.memory_item_id
+          ? { ...prev.inspect, item }
+          : prev.inspect;
 
       if (nextBrowseResults === browseResults && nextInspect === prev.inspect) return prev;
       return {
@@ -709,10 +712,13 @@ export function createMemoryStore(ws: OperatorWsClient): {
       let nextBrowseResults = prev.browse.results;
 
       if (nextBrowseResults?.kind === "list") {
-        const index = nextBrowseResults.items.findIndex((entry) => fromIds.has(entry.memory_item_id));
+        const index = nextBrowseResults.items.findIndex((entry) =>
+          fromIds.has(entry.memory_item_id),
+        );
         if (index !== -1) {
           const filtered = nextBrowseResults.items.filter(
-            (entry) => !fromIds.has(entry.memory_item_id) && entry.memory_item_id !== item.memory_item_id,
+            (entry) =>
+              !fromIds.has(entry.memory_item_id) && entry.memory_item_id !== item.memory_item_id,
           );
           filtered.splice(index, 0, item);
           nextBrowseResults = { ...nextBrowseResults, items: filtered };
