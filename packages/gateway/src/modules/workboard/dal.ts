@@ -48,6 +48,10 @@ const WORK_ITEM_TRANSITIONS: Record<WorkItemState, WorkItemState[]> = {
   cancelled: [],
 };
 
+function isTerminalWorkItemState(status: WorkItemState): boolean {
+  return status === "done" || status === "failed" || status === "cancelled";
+}
+
 type WorkboardTransitionErrorCode = "invalid_transition" | "wip_limit_exceeded";
 
 export interface WorkboardTransitionErrorDetails {
@@ -838,7 +842,7 @@ export class WorkboardDal {
         ],
       );
 
-      if (params.status === "done" || params.status === "failed" || params.status === "cancelled") {
+      if (isTerminalWorkItemState(params.status)) {
         const reasonText = params.reason?.trim() || `work item ${params.status}`;
         const parsedOccurredAtMs = Date.parse(occurredAtIso);
         const occurredAtMs = Number.isFinite(parsedOccurredAtMs) ? parsedOccurredAtMs : Date.now();
@@ -1841,6 +1845,9 @@ export class WorkboardDal {
     if (!item) {
       throw new Error("work item not found for task");
     }
+    if (isTerminalWorkItemState(item.status)) {
+      throw new Error(`cannot create task for terminal work item (${item.status})`);
+    }
 
     if (dependsOn.length > 0) {
       const placeholders = dependsOn.map(() => "?").join(", ");
@@ -2185,6 +2192,9 @@ export class WorkboardDal {
     if (!item) {
       throw new Error("work item not found for lease");
     }
+    if (isTerminalWorkItemState(item.status)) {
+      throw new Error(`cannot lease tasks for terminal work item (${item.status})`);
+    }
 
     return await this.db.transaction(async (tx) => {
       const rows = await tx.all<RawWorkItemTaskRow>(
@@ -2304,8 +2314,12 @@ export class WorkboardDal {
     let inferredWorkItemId: string | undefined;
 
     if (params.subagent.work_item_task_id) {
-      const task = await this.db.get<{ task_id: string; work_item_id: string }>(
-        `SELECT t.task_id, t.work_item_id
+      const task = await this.db.get<{
+        task_id: string;
+        work_item_id: string;
+        work_item_status: WorkItemState;
+      }>(
+        `SELECT t.task_id, t.work_item_id, i.status AS work_item_status
          FROM work_item_tasks t
          JOIN work_items i ON i.work_item_id = t.work_item_id
          WHERE i.tenant_id = ?
@@ -2322,6 +2336,9 @@ export class WorkboardDal {
       if (!task) {
         throw new Error("work_item_task_id is outside scope");
       }
+      if (isTerminalWorkItemState(task.work_item_status)) {
+        throw new Error(`cannot create subagent for terminal work item (${task.work_item_status})`);
+      }
       inferredWorkItemId = task.work_item_id;
     }
 
@@ -2329,6 +2346,9 @@ export class WorkboardDal {
       const item = await this.getItem({ scope: params.scope, work_item_id: explicitWorkItemId });
       if (!item) {
         throw new Error("work_item_id is outside scope");
+      }
+      if (isTerminalWorkItemState(item.status)) {
+        throw new Error(`cannot create subagent for terminal work item (${item.status})`);
       }
       if (inferredWorkItemId && inferredWorkItemId !== explicitWorkItemId) {
         throw new Error("work_item_task_id does not belong to work_item_id");

@@ -62,4 +62,15 @@ describe("WorkBoard page (WS integration)", () => {
     expect(page).toContain("approvalBlockers.length === 0");
     expect(page).toContain("approvalBlockers.map");
   });
+
+  it("rechecks selection before applying workTransition responses", () => {
+    const page = readFileSync(
+      join(import.meta.dirname, "../src/renderer/pages/WorkBoard.tsx"),
+      "utf-8",
+    );
+
+    expect(page).toMatch(
+      /workTransition[\s\S]*setSelectedItem\([\s\S]*selectedIdRef\.current\s*!==\s*res\.item\.work_item_id/,
+    );
+  });
 });

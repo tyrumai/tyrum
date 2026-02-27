@@ -219,7 +219,10 @@ export function WorkBoard() {
         });
 
         setItems((prev) => upsertWorkItem(prev, res.item));
-        setSelectedItem(res.item);
+        setSelectedItem((prev) => {
+          if (selectedIdRef.current !== res.item.work_item_id) return prev;
+          return res.item;
+        });
       } catch (error) {
         setDrilldownError(toErrorMessage(error));
       } finally {
