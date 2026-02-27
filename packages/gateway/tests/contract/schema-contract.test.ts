@@ -82,6 +82,18 @@ describe("StateStore schema contract (sqlite vs postgres)", () => {
         "lane_queue_signals",
         "idempotency_records",
         "resume_tokens",
+        // WorkBoard (issue #600)
+        "work_items",
+        "work_item_tasks",
+        "work_item_events",
+        "work_item_links",
+        "work_artifacts",
+        "work_decisions",
+        "work_signals",
+        "work_item_state_kv",
+        "agent_state_kv",
+        "subagents",
+        "work_scope_activity",
       ] as const;
 
       for (const table of tables) {
