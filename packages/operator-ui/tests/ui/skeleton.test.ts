@@ -27,4 +27,3 @@ describe("Skeleton", () => {
     cleanupTestRoot({ container, root });
   });
 });
-

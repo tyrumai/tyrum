@@ -34,4 +34,3 @@ export function ErrorFallback({ error, onReloadPage }: ErrorFallbackProps) {
     </div>
   );
 }
-

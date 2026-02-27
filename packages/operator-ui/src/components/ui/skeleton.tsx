@@ -15,4 +15,3 @@ export function Skeleton({ className, width, height, style, ...props }: Skeleton
     />
   );
 }
-

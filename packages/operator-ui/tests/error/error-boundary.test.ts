@@ -21,10 +21,12 @@ describe("ErrorBoundary", () => {
 
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
+    const onReloadPage = vi.fn();
+
     const { container, root } = renderIntoDocument(
       React.createElement(
         ErrorBoundary as React.ComponentType<{ children: React.ReactNode }>,
-        null,
+        { onReloadPage },
         React.createElement(FlakyChild),
       ),
     );
@@ -42,6 +44,7 @@ describe("ErrorBoundary", () => {
         (reloadButton as HTMLButtonElement).click();
       });
 
+      expect(onReloadPage).toHaveBeenCalledTimes(1);
       expect(container.querySelector('[data-testid="ok"]')).not.toBeNull();
     } finally {
       cleanupTestRoot({ container, root });

@@ -9,7 +9,9 @@ describe("ToastProvider", () => {
   it("renders children and exposes toast helpers", () => {
     const ThemeProvider = (operatorUi as Record<string, unknown>)["ThemeProvider"];
     const ToastProvider = (operatorUi as Record<string, unknown>)["ToastProvider"];
-    const toast = (operatorUi as Record<string, unknown>)["toast"] as Record<string, unknown> | undefined;
+    const toast = (operatorUi as Record<string, unknown>)["toast"] as
+      | Record<string, unknown>
+      | undefined;
 
     expect(ThemeProvider).toBeDefined();
     expect(ToastProvider).toBeDefined();
@@ -35,5 +37,21 @@ describe("ToastProvider", () => {
 
     cleanupTestRoot({ container, root });
   });
-});
 
+  it("renders without ThemeProvider", () => {
+    const ToastProvider = (operatorUi as Record<string, unknown>)["ToastProvider"];
+    expect(ToastProvider).toBeDefined();
+
+    const { container, root } = renderIntoDocument(
+      React.createElement(
+        ToastProvider as React.ComponentType<{ children: React.ReactNode }>,
+        null,
+        React.createElement("div", { "data-testid": "child" }, "child"),
+      ),
+    );
+
+    expect(container.querySelector('[data-testid="child"]')).not.toBeNull();
+
+    cleanupTestRoot({ container, root });
+  });
+});

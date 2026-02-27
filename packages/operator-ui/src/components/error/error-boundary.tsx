@@ -9,6 +9,8 @@ export type ErrorBoundaryFallback = (options: {
 export interface ErrorBoundaryProps {
   children: React.ReactNode;
   fallback?: React.ReactNode | ErrorBoundaryFallback;
+  onError?: (error: unknown, info: React.ErrorInfo) => void;
+  onReloadPage?: () => void;
 }
 
 interface ErrorBoundaryState {
@@ -25,6 +27,24 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   resetErrorBoundary = (): void => {
     this.setState({ error: null });
   };
+
+  reloadPage = (): void => {
+    this.resetErrorBoundary();
+
+    const reloadHandler = this.props.onReloadPage;
+    if (reloadHandler) {
+      reloadHandler();
+      return;
+    }
+
+    if (typeof globalThis.location?.reload === "function") {
+      globalThis.location.reload();
+    }
+  };
+
+  componentDidCatch(error: unknown, info: React.ErrorInfo): void {
+    this.props.onError?.(error, info);
+  }
 
   render(): React.ReactNode {
     const { error } = this.state;
@@ -43,8 +63,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 
     return React.createElement(ErrorFallback, {
       error,
-      onReloadPage: this.resetErrorBoundary,
+      onReloadPage: this.reloadPage,
     });
   }
 }
-

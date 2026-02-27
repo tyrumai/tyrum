@@ -1,13 +1,29 @@
 import * as React from "react";
 import { Toaster } from "sonner";
-import { useTheme } from "../../hooks/use-theme.js";
+import { useTheme, type ThemeMode } from "../../hooks/use-theme.js";
 
 export interface ToastProviderProps {
   children: React.ReactNode;
 }
 
+function resolveThemeFromDocument(): ThemeMode {
+  const root = globalThis.document?.documentElement;
+  const mode = root?.dataset?.themeMode;
+  if (mode === "system" || mode === "light" || mode === "dark") return mode;
+
+  const theme = root?.dataset?.theme;
+  if (theme === "light" || theme === "dark") return theme;
+
+  return "system";
+}
+
 export function ToastProvider({ children }: ToastProviderProps) {
-  const { mode } = useTheme();
+  let mode: ThemeMode = "system";
+  try {
+    mode = useTheme().mode;
+  } catch {
+    mode = resolveThemeFromDocument();
+  }
 
   return (
     <>

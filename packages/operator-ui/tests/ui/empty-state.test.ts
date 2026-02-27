@@ -31,4 +31,3 @@ describe("EmptyState", () => {
     cleanupTestRoot({ container, root });
   });
 });
-
