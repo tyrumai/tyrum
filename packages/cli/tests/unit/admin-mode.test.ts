@@ -3,11 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const {
-  httpCtorSpy,
-  httpDeviceTokensIssueSpy,
-  httpSecretsListSpy,
-} = vi.hoisted(() => ({
+const { httpCtorSpy, httpDeviceTokensIssueSpy, httpSecretsListSpy } = vi.hoisted(() => ({
   httpCtorSpy: vi.fn(),
   httpDeviceTokensIssueSpy: vi.fn(),
   httpSecretsListSpy: vi.fn(),
@@ -144,6 +140,88 @@ describe("@tyrum/cli admin-mode", () => {
     }
   });
 
+  it("auto-expires admin mode state when expired", async () => {
+    const home = await mkdtemp(join(tmpdir(), "tyrum-cli-"));
+    process.env["TYRUM_HOME"] = home;
+
+    const operatorDir = join(home, "operator");
+    await mkdir(operatorDir, { recursive: true, mode: 0o700 });
+    await writeFile(
+      join(operatorDir, "admin-mode.json"),
+      JSON.stringify(
+        {
+          elevatedToken: "elevated-token",
+          expiresAt: "1970-01-01T00:00:00.000Z",
+        },
+        null,
+        2,
+      ),
+      { mode: 0o600 },
+    );
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      vi.resetModules();
+      const { runCli } = await import("../../src/index.js");
+
+      const code = await runCli(["admin-mode", "status"]);
+
+      expect(code).toBe(0);
+      expect(errSpy).not.toHaveBeenCalled();
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("inactive"));
+      await expect(readFile(join(operatorDir, "admin-mode.json"), "utf8")).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+    } finally {
+      logSpy.mockRestore();
+      errSpy.mockRestore();
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+
+  it("removes admin mode state on exit", async () => {
+    const home = await mkdtemp(join(tmpdir(), "tyrum-cli-"));
+    process.env["TYRUM_HOME"] = home;
+
+    const operatorDir = join(home, "operator");
+    await mkdir(operatorDir, { recursive: true, mode: 0o700 });
+    await writeFile(
+      join(operatorDir, "admin-mode.json"),
+      JSON.stringify(
+        {
+          elevatedToken: "elevated-token",
+          expiresAt: "2099-01-01T00:00:00.000Z",
+        },
+        null,
+        2,
+      ),
+      { mode: 0o600 },
+    );
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      vi.resetModules();
+      const { runCli } = await import("../../src/index.js");
+
+      const code = await runCli(["admin-mode", "exit"]);
+
+      expect(code).toBe(0);
+      expect(errSpy).not.toHaveBeenCalled();
+      await expect(readFile(join(operatorDir, "admin-mode.json"), "utf8")).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+      expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+      errSpy.mockRestore();
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+
   it("gates admin-only commands behind admin mode", async () => {
     const home = await mkdtemp(join(tmpdir(), "tyrum-cli-"));
     process.env["TYRUM_HOME"] = home;
@@ -267,4 +345,3 @@ describe("@tyrum/cli admin-mode", () => {
     }
   });
 });
-

@@ -684,10 +684,16 @@ describe("@tyrum/cli operator commands", () => {
       vi.resetModules();
       const { runCli } = await import("../../src/index.js");
 
-      const code = await runCli(["secrets", "list", "--admin-token", "tkn"]);
+      const code = await runCli(["secrets", "list", "--admin-token", "admin"]);
 
       expect(code).toBe(0);
       expect(errSpy).not.toHaveBeenCalled();
+      expect(httpCtorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          baseUrl: "http://127.0.0.1:8788",
+          auth: { type: "bearer", token: "admin" },
+        }),
+      );
       expect(httpSecretsListSpy).toHaveBeenCalled();
       expect(logSpy).toHaveBeenCalled();
     } finally {
@@ -705,7 +711,7 @@ describe("@tyrum/cli operator commands", () => {
     await mkdir(operatorDir, { recursive: true, mode: 0o700 });
     await writeFile(
       join(operatorDir, "config.json"),
-      JSON.stringify({ gateway_url: "http://127.0.0.1:8788", auth_token: "tkn" }, null, 2),
+      JSON.stringify({ gateway_url: "http://127.0.0.1:8788", auth_token: "base" }, null, 2),
       { mode: 0o600 },
     );
 
@@ -728,11 +734,17 @@ describe("@tyrum/cli operator commands", () => {
         "--value",
         "secret",
         "--admin-token",
-        "tkn",
+        "admin",
       ]);
 
       expect(code).toBe(0);
       expect(errSpy).not.toHaveBeenCalled();
+      expect(httpCtorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          baseUrl: "http://127.0.0.1:8788",
+          auth: { type: "bearer", token: "admin" },
+        }),
+      );
       expect(httpSecretsStoreSpy).toHaveBeenCalledWith({
         scope: "demo",
         provider: "env",
@@ -754,7 +766,7 @@ describe("@tyrum/cli operator commands", () => {
     await mkdir(operatorDir, { recursive: true, mode: 0o700 });
     await writeFile(
       join(operatorDir, "config.json"),
-      JSON.stringify({ gateway_url: "http://127.0.0.1:8788", auth_token: "tkn" }, null, 2),
+      JSON.stringify({ gateway_url: "http://127.0.0.1:8788", auth_token: "base" }, null, 2),
       { mode: 0o600 },
     );
 
@@ -767,10 +779,23 @@ describe("@tyrum/cli operator commands", () => {
       vi.resetModules();
       const { runCli } = await import("../../src/index.js");
 
-      const code = await runCli(["secrets", "revoke", "--handle-id", "h1", "--admin-token", "tkn"]);
+      const code = await runCli([
+        "secrets",
+        "revoke",
+        "--handle-id",
+        "h1",
+        "--admin-token",
+        "admin",
+      ]);
 
       expect(code).toBe(0);
       expect(errSpy).not.toHaveBeenCalled();
+      expect(httpCtorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          baseUrl: "http://127.0.0.1:8788",
+          auth: { type: "bearer", token: "admin" },
+        }),
+      );
       expect(httpSecretsRevokeSpy).toHaveBeenCalledWith("h1");
       expect(logSpy).toHaveBeenCalled();
     } finally {
@@ -788,7 +813,7 @@ describe("@tyrum/cli operator commands", () => {
     await mkdir(operatorDir, { recursive: true, mode: 0o700 });
     await writeFile(
       join(operatorDir, "config.json"),
-      JSON.stringify({ gateway_url: "http://127.0.0.1:8788", auth_token: "tkn" }, null, 2),
+      JSON.stringify({ gateway_url: "http://127.0.0.1:8788", auth_token: "base" }, null, 2),
       { mode: 0o600 },
     );
 
@@ -849,11 +874,17 @@ describe("@tyrum/cli operator commands", () => {
         "--value",
         "new",
         "--admin-token",
-        "tkn",
+        "admin",
       ]);
 
       expect(code).toBe(0);
       expect(errSpy).not.toHaveBeenCalled();
+      expect(httpCtorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          baseUrl: "http://127.0.0.1:8788",
+          auth: { type: "bearer", token: "admin" },
+        }),
+      );
       expect(httpSecretsRotateSpy).toHaveBeenCalledWith("h1", { value: "new" });
       expect(logSpy).toHaveBeenCalled();
     } finally {
@@ -871,7 +902,7 @@ describe("@tyrum/cli operator commands", () => {
     await mkdir(operatorDir, { recursive: true, mode: 0o700 });
     await writeFile(
       join(operatorDir, "config.json"),
-      JSON.stringify({ gateway_url: "http://127.0.0.1:8788", auth_token: "tkn" }, null, 2),
+      JSON.stringify({ gateway_url: "http://127.0.0.1:8788", auth_token: "base" }, null, 2),
       { mode: 0o600 },
     );
 
@@ -884,10 +915,16 @@ describe("@tyrum/cli operator commands", () => {
       vi.resetModules();
       const { runCli } = await import("../../src/index.js");
 
-      const code = await runCli(["policy", "bundle", "--admin-token", "tkn"]);
+      const code = await runCli(["policy", "bundle", "--admin-token", "admin"]);
 
       expect(code).toBe(0);
       expect(errSpy).not.toHaveBeenCalled();
+      expect(httpCtorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          baseUrl: "http://127.0.0.1:8788",
+          auth: { type: "bearer", token: "admin" },
+        }),
+      );
       expect(httpPolicyGetBundleSpy).toHaveBeenCalled();
       expect(logSpy).toHaveBeenCalled();
     } finally {
@@ -905,7 +942,7 @@ describe("@tyrum/cli operator commands", () => {
     await mkdir(operatorDir, { recursive: true, mode: 0o700 });
     await writeFile(
       join(operatorDir, "config.json"),
-      JSON.stringify({ gateway_url: "http://127.0.0.1:8788", auth_token: "tkn" }, null, 2),
+      JSON.stringify({ gateway_url: "http://127.0.0.1:8788", auth_token: "base" }, null, 2),
       { mode: 0o600 },
     );
 
@@ -918,10 +955,16 @@ describe("@tyrum/cli operator commands", () => {
       vi.resetModules();
       const { runCli } = await import("../../src/index.js");
 
-      const code = await runCli(["policy", "overrides", "list", "--admin-token", "tkn"]);
+      const code = await runCli(["policy", "overrides", "list", "--admin-token", "admin"]);
 
       expect(code).toBe(0);
       expect(errSpy).not.toHaveBeenCalled();
+      expect(httpCtorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          baseUrl: "http://127.0.0.1:8788",
+          auth: { type: "bearer", token: "admin" },
+        }),
+      );
       expect(httpPolicyListOverridesSpy).toHaveBeenCalled();
       expect(logSpy).toHaveBeenCalled();
     } finally {
@@ -939,7 +982,7 @@ describe("@tyrum/cli operator commands", () => {
     await mkdir(operatorDir, { recursive: true, mode: 0o700 });
     await writeFile(
       join(operatorDir, "config.json"),
-      JSON.stringify({ gateway_url: "http://127.0.0.1:8788", auth_token: "tkn" }, null, 2),
+      JSON.stringify({ gateway_url: "http://127.0.0.1:8788", auth_token: "base" }, null, 2),
       { mode: 0o600 },
     );
 
@@ -963,11 +1006,17 @@ describe("@tyrum/cli operator commands", () => {
         "--pattern",
         "*",
         "--admin-token",
-        "tkn",
+        "admin",
       ]);
 
       expect(code).toBe(0);
       expect(errSpy).not.toHaveBeenCalled();
+      expect(httpCtorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          baseUrl: "http://127.0.0.1:8788",
+          auth: { type: "bearer", token: "admin" },
+        }),
+      );
       expect(httpPolicyCreateOverrideSpy).toHaveBeenCalledWith({
         agent_id: "default",
         tool_id: "system.shell.exec",
@@ -989,7 +1038,7 @@ describe("@tyrum/cli operator commands", () => {
     await mkdir(operatorDir, { recursive: true, mode: 0o700 });
     await writeFile(
       join(operatorDir, "config.json"),
-      JSON.stringify({ gateway_url: "http://127.0.0.1:8788", auth_token: "tkn" }, null, 2),
+      JSON.stringify({ gateway_url: "http://127.0.0.1:8788", auth_token: "base" }, null, 2),
       { mode: 0o600 },
     );
 
@@ -1011,11 +1060,17 @@ describe("@tyrum/cli operator commands", () => {
         "--reason",
         "bad",
         "--admin-token",
-        "tkn",
+        "admin",
       ]);
 
       expect(code).toBe(0);
       expect(errSpy).not.toHaveBeenCalled();
+      expect(httpCtorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          baseUrl: "http://127.0.0.1:8788",
+          auth: { type: "bearer", token: "admin" },
+        }),
+      );
       expect(httpPolicyRevokeOverrideSpy).toHaveBeenCalledWith({
         policy_override_id: "p1",
         reason: "bad",

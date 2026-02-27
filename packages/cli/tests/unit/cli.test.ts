@@ -20,6 +20,24 @@ describe("@tyrum/cli runCli", () => {
     errSpy.mockRestore();
   });
 
+  it("mentions Admin Mode requirements for admin-only commands", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const code = await runCli(["--help"]);
+
+    expect(code).toBe(0);
+    expect(errSpy).not.toHaveBeenCalled();
+
+    const output = logSpy.mock.calls.map((call) => String(call[0])).join("\n");
+    expect(output).toContain("Admin Mode");
+    expect(output).toContain("secrets");
+    expect(output).toContain("policy");
+
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+  });
+
   it("ignores a leading '--' argument (pnpm passthrough)", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
