@@ -3,17 +3,15 @@ import {
   createAdminModeStore,
   createBearerTokenAuth,
   createOperatorCore,
+  createOperatorCoreManager,
   httpAuthForAuth,
   type AdminModeStore,
   type OperatorCore,
+  type OperatorCoreManager,
 } from "@tyrum/operator-core";
 import { OperatorUiApp } from "@tyrum/operator-ui";
 import { useEffect, useRef, useState } from "react";
 import { toErrorMessage } from "../lib/errors.js";
-import {
-  createDesktopOperatorCoreManager,
-  type DesktopOperatorCoreManager,
-} from "../lib/operator-core-manager.js";
 
 type OperatorConnectionInfo = {
   mode: "embedded" | "remote";
@@ -37,7 +35,7 @@ export function Gateway() {
   const [core, setCore] = useState<OperatorCore | null>(null);
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const managerRef = useRef<DesktopOperatorCoreManager | null>(null);
+  const managerRef = useRef<OperatorCoreManager | null>(null);
   const unsubManagerRef = useRef<(() => void) | null>(null);
   const adminModeStoreRef = useRef<AdminModeStore | null>(null);
 
@@ -76,7 +74,7 @@ export function Gateway() {
         const adminModeStore = createAdminModeStore();
         const baselineAuth = createBearerTokenAuth(connection.token);
 
-        const manager = createDesktopOperatorCoreManager({
+        const manager = createOperatorCoreManager({
           wsUrl: connection.wsUrl,
           httpBaseUrl: connection.httpBaseUrl,
           baselineAuth,

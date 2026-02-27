@@ -3,8 +3,8 @@ import type { AdminModeStore, OperatorAuthStrategy, OperatorCore } from "@tyrum/
 import {
   createAdminModeStore,
   createBearerTokenAuth,
+  createOperatorCoreManager,
 } from "../../../packages/operator-core/src/index.js";
-import { createWebOperatorCoreManager } from "../src/operator-core-manager.js";
 
 type ConnectionStatus = "disconnected" | "connecting" | "connected";
 
@@ -44,7 +44,7 @@ describe("apps/web operator-core-manager", () => {
     vi.setSystemTime(new Date("2026-02-27T00:00:00.000Z"));
 
     let adminModeStore: AdminModeStore | null = null;
-    let manager: ReturnType<typeof createWebOperatorCoreManager> | null = null;
+    let manager: ReturnType<typeof createOperatorCoreManager> | null = null;
     try {
       adminModeStore = createAdminModeStore({ tickIntervalMs: 0 });
       const store = adminModeStore;
@@ -67,7 +67,7 @@ describe("apps/web operator-core-manager", () => {
         },
       );
 
-      manager = createWebOperatorCoreManager({
+      manager = createOperatorCoreManager({
         wsUrl: "ws://example.test/ws",
         httpBaseUrl: "http://example.test",
         baselineAuth,
@@ -106,7 +106,7 @@ describe("apps/web operator-core-manager", () => {
     vi.setSystemTime(new Date("2026-02-27T00:00:00.000Z"));
 
     let adminModeStore: AdminModeStore | null = null;
-    let manager: ReturnType<typeof createWebOperatorCoreManager> | null = null;
+    let manager: ReturnType<typeof createOperatorCoreManager> | null = null;
     try {
       adminModeStore = createAdminModeStore({ tickIntervalMs: 0 });
       const store = adminModeStore;
@@ -122,7 +122,7 @@ describe("apps/web operator-core-manager", () => {
           createFakeCore({ status: "disconnected", adminModeStore: options.adminModeStore }),
       );
 
-      manager = createWebOperatorCoreManager({
+      manager = createOperatorCoreManager({
         wsUrl: "ws://example.test/ws",
         httpBaseUrl: "http://example.test",
         baselineAuth,

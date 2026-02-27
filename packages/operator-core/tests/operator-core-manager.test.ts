@@ -1,16 +1,16 @@
+import { describe, expect, it, vi } from "vitest";
 import {
   createAdminModeStore,
   createBearerTokenAuth,
   createOperatorCoreManager,
   type OperatorAuthStrategy,
-} from "@tyrum/operator-core";
-import { describe, expect, it, vi } from "vitest";
+} from "../src/index.js";
 
-type CoreStatus = "disconnected" | "connecting" | "connected";
+type ConnectionStatus = "disconnected" | "connecting" | "connected";
 
-function createFakeCore(options: { status: CoreStatus }) {
-  const connect = vi.fn();
-  const dispose = vi.fn();
+function createFakeCore(options: { status: ConnectionStatus }) {
+  const connect = vi.fn(() => {});
+  const dispose = vi.fn(() => {});
 
   const core = {
     connectionStore: {
@@ -38,14 +38,9 @@ describe("createOperatorCoreManager", () => {
     }> = [];
 
     const createCore = vi.fn((input: { auth: OperatorAuthStrategy }) => {
-      const status: CoreStatus = created.length === 0 ? "connected" : "disconnected";
+      const status: ConnectionStatus = created.length === 0 ? "connected" : "disconnected";
       const fake = createFakeCore({ status });
-      created.push({
-        auth: input.auth,
-        core: fake.core,
-        connect: fake.connect,
-        dispose: fake.dispose,
-      });
+      created.push({ auth: input.auth, core: fake.core, connect: fake.connect, dispose: fake.dispose });
       return fake.core as any;
     });
 
@@ -54,7 +49,7 @@ describe("createOperatorCoreManager", () => {
       httpBaseUrl: "http://example",
       baselineAuth,
       adminModeStore,
-      createCore,
+      createCore: createCore as any,
     });
 
     expect(createCore).toHaveBeenCalledTimes(1);
@@ -88,14 +83,9 @@ describe("createOperatorCoreManager", () => {
     }> = [];
 
     const createCore = vi.fn((input: { auth: OperatorAuthStrategy }) => {
-      const status: CoreStatus = created.length < 2 ? "connected" : "disconnected";
+      const status: ConnectionStatus = created.length < 2 ? "connected" : "disconnected";
       const fake = createFakeCore({ status });
-      created.push({
-        auth: input.auth,
-        core: fake.core,
-        connect: fake.connect,
-        dispose: fake.dispose,
-      });
+      created.push({ auth: input.auth, core: fake.core, connect: fake.connect, dispose: fake.dispose });
       return fake.core as any;
     });
 
@@ -104,7 +94,7 @@ describe("createOperatorCoreManager", () => {
       httpBaseUrl: "http://example",
       baselineAuth,
       adminModeStore,
-      createCore,
+      createCore: createCore as any,
     });
 
     adminModeStore.enter({
@@ -127,42 +117,6 @@ describe("createOperatorCoreManager", () => {
     adminModeStore.dispose();
   });
 
-  it("does not reconnect when Admin Mode enters and previous core was disconnected", () => {
-    const adminModeStore = createAdminModeStore({ tickIntervalMs: 0 });
-    const baselineAuth = createBearerTokenAuth("baseline");
-
-    const created: Array<{
-      core: unknown;
-      connect: ReturnType<typeof vi.fn>;
-      dispose: ReturnType<typeof vi.fn>;
-    }> = [];
-
-    const createCore = vi.fn(() => {
-      const fake = createFakeCore({ status: "disconnected" });
-      created.push({ core: fake.core, connect: fake.connect, dispose: fake.dispose });
-      return fake.core as any;
-    });
-
-    const manager = createOperatorCoreManager({
-      wsUrl: "ws://example",
-      httpBaseUrl: "http://example",
-      baselineAuth,
-      adminModeStore,
-      createCore,
-    });
-
-    adminModeStore.enter({
-      elevatedToken: "elevated",
-      expiresAt: new Date(Date.now() + 60_000).toISOString(),
-    });
-
-    expect(createCore).toHaveBeenCalledTimes(2);
-    expect(created[1]?.connect).toHaveBeenCalledTimes(0);
-
-    manager.dispose();
-    adminModeStore.dispose();
-  });
-
   it("does not recreate core when selected auth is unchanged", () => {
     const adminModeStore = createAdminModeStore({ tickIntervalMs: 0 });
     const baselineAuth = createBearerTokenAuth("baseline");
@@ -174,7 +128,7 @@ describe("createOperatorCoreManager", () => {
       httpBaseUrl: "http://example",
       baselineAuth,
       adminModeStore,
-      createCore,
+      createCore: createCore as any,
     });
 
     const expiresAt = new Date(Date.now() + 60_000).toISOString();
@@ -200,7 +154,7 @@ describe("createOperatorCoreManager", () => {
       httpBaseUrl: "http://example",
       baselineAuth,
       adminModeStore,
-      createCore,
+      createCore: createCore as any,
     });
 
     manager.dispose();
@@ -214,3 +168,4 @@ describe("createOperatorCoreManager", () => {
     adminModeStore.dispose();
   });
 });
+
