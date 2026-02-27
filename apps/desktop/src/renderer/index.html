@@ -15,16 +15,33 @@
     }
     body {
       overflow: hidden;
-      background: #000;
-      color: #ededed;
+      background: var(--tyrum-color-bg, #000);
+      color: var(--tyrum-color-fg, #ededed);
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
         "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
     }
     ::selection {
-      background: rgba(99, 102, 241, 0.3);
+      background: var(--tyrum-color-selection, rgba(99, 102, 241, 0.3));
+    }
+    :focus-visible {
+      outline: 2px solid var(--tyrum-color-focus-ring, #6366f1);
+      outline-offset: 2px;
     }
     input, textarea, select, button {
       font-family: inherit;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+    @media (forced-colors: active) {
+      :focus-visible {
+        outline-color: Highlight;
+      }
     }
   </style>
 </head>

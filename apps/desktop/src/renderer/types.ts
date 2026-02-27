@@ -1,6 +1,14 @@
+import type { DesktopThemeState } from "../shared/theme.js";
+
+export type { DesktopThemeState };
+
 export interface TyrumDesktopApi {
   getConfig: () => Promise<unknown>;
   setConfig: (partial: unknown) => Promise<void>;
+  theme: {
+    getState: () => Promise<DesktopThemeState>;
+    onChange: (cb: (state: DesktopThemeState) => void) => () => void;
+  };
   updates: {
     getState: () => Promise<unknown>;
     check: () => Promise<unknown>;

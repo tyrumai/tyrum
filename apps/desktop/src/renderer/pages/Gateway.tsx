@@ -12,6 +12,7 @@ import {
 import { OperatorUiApp } from "@tyrum/operator-ui";
 import { useEffect, useRef, useState } from "react";
 import { toErrorMessage } from "../lib/errors.js";
+import { colors } from "../theme.js";
 
 type OperatorConnectionInfo = {
   mode: "embedded" | "remote";
@@ -151,7 +152,7 @@ export function Gateway() {
     return (
       <div style={{ padding: 24 }}>
         <h1>Gateway</h1>
-        <div style={{ marginTop: 12, color: "#fecaca" }}>{errorMessage}</div>
+        <div style={{ marginTop: 12, color: colors.error }}>{errorMessage}</div>
       </div>
     );
   }

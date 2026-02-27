@@ -4,6 +4,7 @@ import { registerGatewayIpc, startEmbeddedGatewayFromConfig } from "./ipc/gatewa
 import { registerNodeIpc, shutdownNodeResources } from "./ipc/node-ipc.js";
 import { registerConfigIpc } from "./ipc/config-ipc.js";
 import { registerUpdateIpc } from "./ipc/update-ipc.js";
+import { registerThemeIpc } from "./ipc/theme-ipc.js";
 import type { GatewayManager } from "./gateway-manager.js";
 import { MAIN_WINDOW_OPTIONS } from "./window-options.js";
 import { configExists, loadConfig } from "./config/store.js";
@@ -209,6 +210,7 @@ function createWindow(): void {
       isQuitting = false;
     },
   });
+  registerThemeIpc(window);
 
   if (process.env["VITE_DEV_SERVER_URL"]) {
     window.loadURL(process.env["VITE_DEV_SERVER_URL"]);
