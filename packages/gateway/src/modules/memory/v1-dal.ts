@@ -98,6 +98,94 @@ function uniqSortedStrings(values: readonly string[]): string[] {
   return [...new Set(values.map((v) => v.trim()).filter((v) => v.length > 0))].sort();
 }
 
+export function buildMemoryV1ItemQueryParts(params: {
+  agent: string;
+  filter?: MemoryItemFilter;
+  limit?: number;
+  cursor?: string;
+  extraWhere?: string[];
+  extraValues?: readonly unknown[];
+}): { from: string; where: string[]; values: unknown[]; limit: number } {
+  const where: string[] = ["i.agent_id = ?"];
+  const values: unknown[] = [params.agent];
+
+  const filter = params.filter;
+
+  if (filter?.kinds && filter.kinds.length > 0) {
+    where.push(`i.kind IN (${filter.kinds.map(() => "?").join(", ")})`);
+    values.push(...filter.kinds);
+  }
+
+  if (filter?.keys && filter.keys.length > 0) {
+    where.push(`i.key IN (${filter.keys.map(() => "?").join(", ")})`);
+    values.push(...filter.keys);
+  }
+
+  if (filter?.tags && filter.tags.length > 0) {
+    where.push(
+      `EXISTS (
+         SELECT 1
+         FROM memory_item_tags t
+         WHERE t.agent_id = i.agent_id
+           AND t.memory_item_id = i.memory_item_id
+           AND t.tag IN (${filter.tags.map(() => "?").join(", ")})
+       )`,
+    );
+    values.push(...filter.tags);
+  }
+
+  const provenanceFilter = filter?.provenance;
+  const joinProvenance = Boolean(
+    provenanceFilter &&
+    ((provenanceFilter.source_kinds && provenanceFilter.source_kinds.length > 0) ||
+      (provenanceFilter.channels && provenanceFilter.channels.length > 0) ||
+      (provenanceFilter.thread_ids && provenanceFilter.thread_ids.length > 0) ||
+      (provenanceFilter.session_ids && provenanceFilter.session_ids.length > 0)),
+  );
+
+  if (joinProvenance) {
+    if (provenanceFilter?.source_kinds && provenanceFilter.source_kinds.length > 0) {
+      where.push(`p.source_kind IN (${provenanceFilter.source_kinds.map(() => "?").join(", ")})`);
+      values.push(...provenanceFilter.source_kinds);
+    }
+    if (provenanceFilter?.channels && provenanceFilter.channels.length > 0) {
+      where.push(`p.channel IN (${provenanceFilter.channels.map(() => "?").join(", ")})`);
+      values.push(...provenanceFilter.channels);
+    }
+    if (provenanceFilter?.thread_ids && provenanceFilter.thread_ids.length > 0) {
+      where.push(`p.thread_id IN (${provenanceFilter.thread_ids.map(() => "?").join(", ")})`);
+      values.push(...provenanceFilter.thread_ids);
+    }
+    if (provenanceFilter?.session_ids && provenanceFilter.session_ids.length > 0) {
+      where.push(`p.session_id IN (${provenanceFilter.session_ids.map(() => "?").join(", ")})`);
+      values.push(...provenanceFilter.session_ids);
+    }
+  }
+
+  if (params.extraWhere && params.extraWhere.length > 0) {
+    where.push(...params.extraWhere);
+    if (params.extraValues && params.extraValues.length > 0) {
+      values.push(...params.extraValues);
+    }
+  }
+
+  if (params.cursor) {
+    const cursor = decodeCursor(params.cursor);
+    where.push("(i.created_at < ? OR (i.created_at = ? AND i.memory_item_id < ?))");
+    values.push(cursor.sort, cursor.sort, cursor.id);
+  }
+
+  const limit = Math.max(1, Math.min(500, params.limit ?? 50));
+
+  const from = joinProvenance
+    ? `memory_items i
+       JOIN memory_item_provenance p
+         ON p.agent_id = i.agent_id AND p.memory_item_id = i.memory_item_id`
+    : "memory_items i";
+
+  return { from, where, values, limit };
+}
+
 function assertPatchCompatible(kind: MemoryItemKind, patch: MemoryItemPatch): void {
   const incompatible: string[] = [];
 
@@ -229,75 +317,12 @@ export class MemoryV1Dal {
   }): Promise<{ items: MemoryItem[]; next_cursor?: string }> {
     const agent = this.normalizeAgentId(params.agentId);
 
-    const where: string[] = ["i.agent_id = ?"];
-    const values: unknown[] = [agent];
-
-    const filter = params.filter;
-
-    if (filter?.kinds && filter.kinds.length > 0) {
-      where.push(`i.kind IN (${filter.kinds.map(() => "?").join(", ")})`);
-      values.push(...filter.kinds);
-    }
-
-    if (filter?.keys && filter.keys.length > 0) {
-      where.push(`i.key IN (${filter.keys.map(() => "?").join(", ")})`);
-      values.push(...filter.keys);
-    }
-
-    if (filter?.tags && filter.tags.length > 0) {
-      where.push(
-        `EXISTS (
-           SELECT 1
-           FROM memory_item_tags t
-           WHERE t.agent_id = i.agent_id
-             AND t.memory_item_id = i.memory_item_id
-             AND t.tag IN (${filter.tags.map(() => "?").join(", ")})
-         )`,
-      );
-      values.push(...filter.tags);
-    }
-
-    const provenanceFilter = filter?.provenance;
-    const joinProvenance = Boolean(
-      provenanceFilter &&
-      ((provenanceFilter.source_kinds && provenanceFilter.source_kinds.length > 0) ||
-        (provenanceFilter.channels && provenanceFilter.channels.length > 0) ||
-        (provenanceFilter.thread_ids && provenanceFilter.thread_ids.length > 0) ||
-        (provenanceFilter.session_ids && provenanceFilter.session_ids.length > 0)),
-    );
-
-    if (joinProvenance) {
-      if (provenanceFilter?.source_kinds && provenanceFilter.source_kinds.length > 0) {
-        where.push(`p.source_kind IN (${provenanceFilter.source_kinds.map(() => "?").join(", ")})`);
-        values.push(...provenanceFilter.source_kinds);
-      }
-      if (provenanceFilter?.channels && provenanceFilter.channels.length > 0) {
-        where.push(`p.channel IN (${provenanceFilter.channels.map(() => "?").join(", ")})`);
-        values.push(...provenanceFilter.channels);
-      }
-      if (provenanceFilter?.thread_ids && provenanceFilter.thread_ids.length > 0) {
-        where.push(`p.thread_id IN (${provenanceFilter.thread_ids.map(() => "?").join(", ")})`);
-        values.push(...provenanceFilter.thread_ids);
-      }
-      if (provenanceFilter?.session_ids && provenanceFilter.session_ids.length > 0) {
-        where.push(`p.session_id IN (${provenanceFilter.session_ids.map(() => "?").join(", ")})`);
-        values.push(...provenanceFilter.session_ids);
-      }
-    }
-
-    if (params.cursor) {
-      const cursor = decodeCursor(params.cursor);
-      where.push("(i.created_at < ? OR (i.created_at = ? AND i.memory_item_id < ?))");
-      values.push(cursor.sort, cursor.sort, cursor.id);
-    }
-
-    const limit = Math.max(1, Math.min(500, params.limit ?? 50));
-
-    const from = joinProvenance
-      ? `memory_items i
-         JOIN memory_item_provenance p
-           ON p.agent_id = i.agent_id AND p.memory_item_id = i.memory_item_id`
-      : "memory_items i";
+    const { from, where, values, limit } = buildMemoryV1ItemQueryParts({
+      agent,
+      filter: params.filter,
+      limit: params.limit,
+      cursor: params.cursor,
+    });
 
     const rows = await this.db.all<{ memory_item_id: string; created_at: string | Date }>(
       `SELECT i.memory_item_id AS memory_item_id, i.created_at AS created_at
@@ -332,85 +357,21 @@ export class MemoryV1Dal {
   }): Promise<{ hits: MemorySearchHit[]; next_cursor?: string }> {
     const agent = this.normalizeAgentId(params.agentId);
 
-    const where: string[] = ["i.agent_id = ?"];
-    const values: unknown[] = [agent];
-
-    const filter = params.filter;
-
-    if (filter?.kinds && filter.kinds.length > 0) {
-      where.push(`i.kind IN (${filter.kinds.map(() => "?").join(", ")})`);
-      values.push(...filter.kinds);
-    }
-
-    if (filter?.keys && filter.keys.length > 0) {
-      where.push(`i.key IN (${filter.keys.map(() => "?").join(", ")})`);
-      values.push(...filter.keys);
-    }
-
-    if (filter?.tags && filter.tags.length > 0) {
-      where.push(
-        `EXISTS (
-           SELECT 1
-           FROM memory_item_tags t
-           WHERE t.agent_id = i.agent_id
-             AND t.memory_item_id = i.memory_item_id
-             AND t.tag IN (${filter.tags.map(() => "?").join(", ")})
-         )`,
-      );
-      values.push(...filter.tags);
-    }
-
-    const provenanceFilter = filter?.provenance;
-    const joinProvenance = Boolean(
-      provenanceFilter &&
-      ((provenanceFilter.source_kinds && provenanceFilter.source_kinds.length > 0) ||
-        (provenanceFilter.channels && provenanceFilter.channels.length > 0) ||
-        (provenanceFilter.thread_ids && provenanceFilter.thread_ids.length > 0) ||
-        (provenanceFilter.session_ids && provenanceFilter.session_ids.length > 0)),
-    );
-
-    if (joinProvenance) {
-      if (provenanceFilter?.source_kinds && provenanceFilter.source_kinds.length > 0) {
-        where.push(`p.source_kind IN (${provenanceFilter.source_kinds.map(() => "?").join(", ")})`);
-        values.push(...provenanceFilter.source_kinds);
-      }
-      if (provenanceFilter?.channels && provenanceFilter.channels.length > 0) {
-        where.push(`p.channel IN (${provenanceFilter.channels.map(() => "?").join(", ")})`);
-        values.push(...provenanceFilter.channels);
-      }
-      if (provenanceFilter?.thread_ids && provenanceFilter.thread_ids.length > 0) {
-        where.push(`p.thread_id IN (${provenanceFilter.thread_ids.map(() => "?").join(", ")})`);
-        values.push(...provenanceFilter.thread_ids);
-      }
-      if (provenanceFilter?.session_ids && provenanceFilter.session_ids.length > 0) {
-        where.push(`p.session_id IN (${provenanceFilter.session_ids.map(() => "?").join(", ")})`);
-        values.push(...provenanceFilter.session_ids);
-      }
-    }
-
     const needle = params.query.trim().toLowerCase();
     const pattern = `%${escapeLikePattern(needle)}%`;
-    where.push(
-      `(LOWER(COALESCE(i.key, '')) LIKE ? ESCAPE '\\'
-        OR LOWER(COALESCE(i.title, '')) LIKE ? ESCAPE '\\'
-        OR LOWER(COALESCE(i.body_md, '')) LIKE ? ESCAPE '\\'
-        OR LOWER(COALESCE(i.summary_md, '')) LIKE ? ESCAPE '\\')`,
-    );
-    values.push(pattern, pattern, pattern, pattern);
-
-    if (params.cursor) {
-      const cursor = decodeCursor(params.cursor);
-      where.push("(i.created_at < ? OR (i.created_at = ? AND i.memory_item_id < ?))");
-      values.push(cursor.sort, cursor.sort, cursor.id);
-    }
-
-    const limit = Math.max(1, Math.min(500, params.limit ?? 50));
-
-    const from = joinProvenance
-      ? `memory_items i
-         JOIN memory_item_provenance p
-           ON p.agent_id = i.agent_id AND p.memory_item_id = i.memory_item_id`
-      : "memory_items i";
+    const { from, where, values, limit } = buildMemoryV1ItemQueryParts({
+      agent,
+      filter: params.filter,
+      limit: params.limit,
+      cursor: params.cursor,
+      extraWhere: [
+        `(LOWER(COALESCE(i.key, '')) LIKE ? ESCAPE '\\'
+          OR LOWER(COALESCE(i.title, '')) LIKE ? ESCAPE '\\'
+          OR LOWER(COALESCE(i.body_md, '')) LIKE ? ESCAPE '\\'
+          OR LOWER(COALESCE(i.summary_md, '')) LIKE ? ESCAPE '\\')`,
+      ],
+      extraValues: [pattern, pattern, pattern, pattern],
+    });
 
     const rows = await this.db.all<{
       memory_item_id: string;
