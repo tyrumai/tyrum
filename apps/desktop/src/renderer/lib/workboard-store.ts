@@ -5,6 +5,7 @@ import type {
   WorkItem,
   WorkItemStateKVEntry,
   WorkSignal,
+  WorkStateKVScope,
 } from "@tyrum/schemas";
 
 export const WORK_ITEM_STATUSES = [
@@ -83,6 +84,15 @@ export function upsertWorkStateKvEntry(
   return upsertByStringKey(entries, next, (entry) => entry.key);
 }
 
+export function shouldProcessWorkStateKvUpdate(
+  scope: WorkStateKVScope,
+  selectedWorkItemId: string | null,
+): boolean {
+  if (!selectedWorkItemId) return false;
+  if (scope.kind === "work_item") return scope.work_item_id === selectedWorkItemId;
+  return true;
+}
+
 export type WorkTaskStatus = "leased" | "running" | "paused" | "completed";
 
 export type WorkTaskSummary = {
@@ -96,6 +106,16 @@ export type WorkTaskSummary = {
 };
 
 export type WorkTasksByWorkItemId = Record<string, Record<string, WorkTaskSummary>>;
+
+const EMPTY_WORK_ITEM_TASKS: Record<string, WorkTaskSummary> = {};
+
+export function selectTasksForSelectedWorkItem(
+  tasksByWorkItemId: WorkTasksByWorkItemId,
+  selectedWorkItemId: string | null,
+): Record<string, WorkTaskSummary> {
+  if (!selectedWorkItemId) return EMPTY_WORK_ITEM_TASKS;
+  return tasksByWorkItemId[selectedWorkItemId] ?? EMPTY_WORK_ITEM_TASKS;
+}
 
 type BaseWorkTaskEvent = {
   occurred_at: string;

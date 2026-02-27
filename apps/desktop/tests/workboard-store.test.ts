@@ -5,6 +5,7 @@ import type {
   WorkArtifact,
   WorkItem,
   WorkSignal,
+  WorkStateKVScope,
 } from "@tyrum/schemas";
 import {
   WORK_ITEM_STATUSES,
@@ -16,6 +17,7 @@ import {
   upsertWorkSignal,
   upsertWorkStateKvEntry,
   type WorkTasksByWorkItemId,
+  type WorkTaskSummary,
 } from "../src/renderer/lib/workboard-store.js";
 
 const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
@@ -221,5 +223,43 @@ describe("workboard-store", () => {
     const kvUpdated = upsertWorkStateKvEntry([kv1], kv2);
     expect(kvUpdated).toHaveLength(1);
     expect(kvUpdated[0]?.value_json).toBe("America/Los_Angeles");
+  });
+
+  it("selects tasks for the selected work item with a stable empty fallback", async () => {
+    const store: any = await import("../src/renderer/lib/workboard-store.js");
+    expect(typeof store.selectTasksForSelectedWorkItem).toBe("function");
+
+    const task: WorkTaskSummary = {
+      task_id: "t-1",
+      status: "running",
+      last_event_at: "2026-02-27T00:00:00Z",
+    };
+
+    const populated: WorkTasksByWorkItemId = { "w-1": { "t-1": task } };
+
+    expect(store.selectTasksForSelectedWorkItem(populated, null)).toBe(
+      store.selectTasksForSelectedWorkItem(populated, null),
+    );
+
+    expect(store.selectTasksForSelectedWorkItem({}, "w-missing")).toBe(
+      store.selectTasksForSelectedWorkItem(populated, "w-missing"),
+    );
+
+    expect(store.selectTasksForSelectedWorkItem(populated, "w-1")).toBe(populated["w-1"]);
+  });
+
+  it("skips KV update processing when drilldown is not selected", async () => {
+    const store: any = await import("../src/renderer/lib/workboard-store.js");
+    expect(typeof store.shouldProcessWorkStateKvUpdate).toBe("function");
+
+    const agentScope: WorkStateKVScope = { kind: "agent", ...scope };
+    const workItemScope: WorkStateKVScope = { kind: "work_item", ...scope, work_item_id: "w-1" };
+
+    expect(store.shouldProcessWorkStateKvUpdate(agentScope, null)).toBe(false);
+    expect(store.shouldProcessWorkStateKvUpdate(workItemScope, null)).toBe(false);
+    expect(store.shouldProcessWorkStateKvUpdate(workItemScope, "w-2")).toBe(false);
+
+    expect(store.shouldProcessWorkStateKvUpdate(agentScope, "w-1")).toBe(true);
+    expect(store.shouldProcessWorkStateKvUpdate(workItemScope, "w-1")).toBe(true);
   });
 });

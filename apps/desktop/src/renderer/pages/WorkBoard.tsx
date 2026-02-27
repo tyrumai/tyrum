@@ -12,6 +12,8 @@ import {
   WORK_ITEM_STATUSES,
   applyWorkTaskEvent,
   groupWorkItemsByStatus,
+  selectTasksForSelectedWorkItem,
+  shouldProcessWorkStateKvUpdate,
   upsertWorkArtifact,
   upsertWorkDecision,
   upsertWorkItem,
@@ -332,9 +334,7 @@ export function WorkBoard() {
           const selectedId = selectedIdRef.current;
           const scope = event.payload.scope;
 
-          if (scope.kind === "work_item") {
-            if (!selectedId || scope.work_item_id !== selectedId) return;
-          }
+          if (!shouldProcessWorkStateKvUpdate(scope, selectedId)) return;
 
           const client = wsClient;
           if (!client) return;
@@ -342,11 +342,12 @@ export function WorkBoard() {
             .workStateKvGet({ scope, key: event.payload.key })
             .then((res) => {
               if (disposed) return;
-              if (!res.entry) return;
+              const entry = res.entry;
+              if (!entry) return;
               if (scope.kind === "agent") {
-                setAgentKvEntries((prev) => upsertWorkStateKvEntry(prev, res.entry));
+                setAgentKvEntries((prev) => upsertWorkStateKvEntry(prev, entry));
               } else {
-                setWorkItemKvEntries((prev) => upsertWorkStateKvEntry(prev, res.entry));
+                setWorkItemKvEntries((prev) => upsertWorkStateKvEntry(prev, entry));
               }
             })
             .catch(() => {});
@@ -488,7 +489,7 @@ export function WorkBoard() {
     };
   }, [connectionStatus, selectedWorkItemId]);
 
-  const tasksForSelected = selectedWorkItemId ? (tasksByWorkItemId[selectedWorkItemId] ?? {}) : {};
+  const tasksForSelected = selectTasksForSelectedWorkItem(tasksByWorkItemId, selectedWorkItemId);
   const taskList = useMemo(() => Object.values(tasksForSelected), [tasksForSelected]);
 
   const taskCounts = useMemo(() => {

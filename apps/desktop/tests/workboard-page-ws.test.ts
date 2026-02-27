@@ -13,4 +13,22 @@ describe("WorkBoard page (WS integration)", () => {
     expect(page).toContain("workList");
     expect(page).toContain("work.item.");
   });
+
+  it("memoizes selected task list inputs to avoid downstream recalculation", () => {
+    const page = readFileSync(
+      join(import.meta.dirname, "../src/renderer/pages/WorkBoard.tsx"),
+      "utf-8",
+    );
+
+    expect(page).toContain("selectTasksForSelectedWorkItem");
+  });
+
+  it("guards agent-scope KV updates behind drilldown selection", () => {
+    const page = readFileSync(
+      join(import.meta.dirname, "../src/renderer/pages/WorkBoard.tsx"),
+      "utf-8",
+    );
+
+    expect(page).toContain("shouldProcessWorkStateKvUpdate");
+  });
 });
