@@ -36,4 +36,36 @@ describe("ChannelInboxDal work_scope_activity updates", () => {
       updated_at_ms: 1_709_000_000_000,
     });
   });
+
+  it("does not overwrite newer scope activity when inbound message timestamp is stale", async () => {
+    db = openTestSqliteDb();
+    const inbox = new ChannelInboxDal(db);
+    const workboard = new WorkboardDal(db);
+
+    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const newerKey = "agent:default:ui:default:channel:newer";
+
+    await workboard.upsertScopeActivity({
+      scope,
+      last_active_session_key: newerKey,
+      updated_at_ms: 2_000,
+    });
+
+    const staleKey = "agent:default:telegram:default:dm:stale";
+    await inbox.enqueue({
+      source: "telegram",
+      thread_id: "chat-1",
+      message_id: "msg-1",
+      key: staleKey,
+      lane: "main",
+      received_at_ms: 1_000,
+      payload: { kind: "test" },
+    });
+
+    const activity = await workboard.getScopeActivity({ scope });
+    expect(activity).toMatchObject({
+      last_active_session_key: newerKey,
+      updated_at_ms: 2_000,
+    });
+  });
 });
