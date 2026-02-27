@@ -1011,6 +1011,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     connectionManager,
     logger,
     db: container.db,
+    redactionEngine: container.redactionEngine,
     memoryV1Dal: new MemoryV1Dal(container.db),
     artifactStore: container.artifactStore,
     authAudit: new AuthAudit({ eventLog: container.eventLog, logger }),
