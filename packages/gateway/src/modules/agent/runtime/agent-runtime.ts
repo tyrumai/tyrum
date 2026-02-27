@@ -1208,6 +1208,7 @@ export class AgentRuntime {
       ctx,
       executionProfile,
       session,
+      mainLaneSessionKey,
       model,
       toolSet,
       laneQueue,
@@ -1222,6 +1223,7 @@ export class AgentRuntime {
       input,
       executionProfile,
       resolved,
+      mainLaneSessionKey,
     });
     if (intake.mode === "delegate_execute" || intake.mode === "delegate_plan") {
       const delegation = await this.delegateFromIntake({
@@ -1229,6 +1231,7 @@ export class AgentRuntime {
         mode: intake.mode,
         reason_code: intake.reason_code,
         resolved,
+        createdFromSessionKey: mainLaneSessionKey,
       });
       const response = await this.finalizeTurn(
         ctx,
@@ -1337,6 +1340,7 @@ export class AgentRuntime {
       ctx,
       executionProfile,
       session,
+      mainLaneSessionKey,
       model,
       toolSet,
       toolCallPolicyStates,
@@ -1459,6 +1463,7 @@ export class AgentRuntime {
       input,
       executionProfile,
       resolved,
+      mainLaneSessionKey,
     });
     if (intake.mode === "delegate_execute" || intake.mode === "delegate_plan") {
       const delegation = await this.delegateFromIntake({
@@ -1466,6 +1471,7 @@ export class AgentRuntime {
         mode: intake.mode,
         reason_code: intake.reason_code,
         resolved,
+        createdFromSessionKey: mainLaneSessionKey,
       });
       return await this.finalizeTurn(
         ctx,
@@ -2336,6 +2342,7 @@ export class AgentRuntime {
     ctx: AgentLoadedContext;
     executionProfile: ResolvedExecutionProfile;
     session: SessionRow;
+    mainLaneSessionKey: string;
     model: LanguageModel;
     toolSet: ToolSet;
     toolCallPolicyStates: Map<string, ToolCallPolicyState>;
@@ -2367,6 +2374,16 @@ export class AgentRuntime {
     );
     const agentId = this.agentId;
     const workspaceId = this.workspaceId;
+
+    const containerKind: NormalizedContainerKind =
+      input.container_kind ?? resolved.envelope?.container.kind ?? "channel";
+    const mainLaneSessionKey = resolveMainLaneSessionKey({
+      agentId,
+      workspaceId,
+      resolved,
+      containerKind,
+      deliveryAccount: resolved.envelope?.delivery.account,
+    });
 
     const executionProfile = await this.resolveExecutionProfile({
       laneQueueScope,
@@ -2590,6 +2607,7 @@ export class AgentRuntime {
       ctx,
       executionProfile,
       session,
+      mainLaneSessionKey,
       model,
       toolSet,
       toolCallPolicyStates,
@@ -2677,6 +2695,7 @@ export class AgentRuntime {
     input: AgentTurnRequestT;
     executionProfile: ResolvedExecutionProfile;
     resolved: ResolvedAgentTurnInput;
+    mainLaneSessionKey: string;
   }): Promise<{
     mode: "inline" | "delegate_execute" | "delegate_plan";
     reason_code: string;
@@ -2693,15 +2712,7 @@ export class AgentRuntime {
       return { mode: requested, reason_code: "request_field" };
     }
 
-    const containerKind: NormalizedContainerKind =
-      input.input.container_kind ?? input.resolved.envelope?.container.kind ?? "channel";
-    const key = resolveMainLaneSessionKey({
-      agentId: this.agentId,
-      workspaceId: this.workspaceId,
-      resolved: input.resolved,
-      containerKind,
-      deliveryAccount: input.resolved.envelope?.delivery.account,
-    });
+    const key = input.mainLaneSessionKey;
 
     try {
       const dal = new IntakeModeOverrideDal(this.opts.container.db);
@@ -2725,6 +2736,7 @@ export class AgentRuntime {
     mode: "delegate_execute" | "delegate_plan";
     reason_code: string;
     resolved: ResolvedAgentTurnInput;
+    createdFromSessionKey: string;
   }): Promise<{ reply: string; work_item_id: string; subagent_id?: string }> {
     const required = ["subagent.spawn", "work.write"] as const;
     for (const cap of required) {
@@ -2761,13 +2773,7 @@ export class AgentRuntime {
         title,
         budgets: delegatedProfile.budgets,
       },
-      createdFromSessionKey: resolveMainLaneSessionKey({
-        agentId: this.agentId,
-        workspaceId: this.workspaceId,
-        resolved: input.resolved,
-        containerKind: input.resolved.envelope?.container.kind ?? "channel",
-        deliveryAccount: input.resolved.envelope?.delivery.account,
-      }),
+      createdFromSessionKey: input.createdFromSessionKey,
     });
 
     await workboard.appendEvent({

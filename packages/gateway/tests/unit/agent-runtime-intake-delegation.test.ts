@@ -149,6 +149,73 @@ describe("AgentRuntime (intake delegation)", () => {
     expect(res.reply.toLowerCase()).toContain("delegat");
   });
 
+  it("uses request container_kind when deriving work item created_from_session_key during delegation", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    await writeFile(
+      join(homeDir, "agent.yml"),
+      [
+        "model:",
+        "  model: openai/gpt-4.1",
+        "skills:",
+        "  enabled: []",
+        "mcp:",
+        "  enabled: []",
+        "tools:",
+        "  allow:",
+        "    - tool.fs.read",
+        "sessions:",
+        "  ttl_days: 30",
+        "  max_turns: 20",
+        "memory:",
+        "  markdown_enabled: false",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const key = buildAgentTurnKey({
+      agentId: "default",
+      workspaceId: "default",
+      channel: "test",
+      containerKind: "dm",
+      threadId: "thread-1",
+    });
+
+    await container.db.run(
+      `INSERT INTO intake_mode_overrides (key, lane, intake_mode, updated_at_ms)
+       VALUES (?, ?, ?, ?)`,
+      [key, "main", "delegate_execute", Date.now()],
+    );
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("ok"),
+      fetchImpl: fetch404,
+      turnEngineWaitMs: 30_000,
+    });
+
+    const res = await runtime.turn({
+      channel: "test",
+      thread_id: "thread-1",
+      container_kind: "dm",
+      message: "Implement the requested change in the background.",
+    });
+
+    expect(res.reply.toLowerCase()).toContain("delegat");
+
+    const workboard = new WorkboardDal(container.db);
+    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+
+    const { items } = await workboard.listItems({ scope });
+    expect(items).toHaveLength(1);
+    expect(items[0]!.created_from_session_key).toBe(key);
+  });
+
   it("uses metadata.tyrum_key for intake overrides + work item created_from_session_key", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({

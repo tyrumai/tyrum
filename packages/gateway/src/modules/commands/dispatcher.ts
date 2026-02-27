@@ -1042,7 +1042,8 @@ export async function executeCommand(
         data: null,
       };
     }
-    const { key, lane } = resolved;
+    const { key } = resolved;
+    const lane = "main";
 
     const dal = new IntakeModeOverrideDal(deps.db);
     const modeArg = toks[1]?.trim().toLowerCase();
