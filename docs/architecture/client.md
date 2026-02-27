@@ -7,7 +7,7 @@ A client is an operator interface that connects to the gateway and participates 
 - Desktop app (Windows/Linux/macOS)
 - Mobile app (iOS/Android)
 - CLI/TUI
-- Web app (SPA)
+- Operator web UI (SPA served by the gateway at `/ui`)
 
 ## Responsibilities
 
@@ -24,6 +24,8 @@ A client is an operator interface that connects to the gateway and participates 
 ## Transports and API surfaces
 
 Clients are **WebSocket-first** (interactive control plane) but will often also use HTTP endpoints for resource and bootstrap flows (auth/session, artifacts, callbacks).
+
+All clients should use `@tyrum/client` for WebSocket + HTTP interactions rather than implementing the wire protocol directly.
 
 See: [API surfaces (WebSocket vs HTTP)](./api-surfaces.md).
 

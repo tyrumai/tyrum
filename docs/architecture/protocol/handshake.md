@@ -9,23 +9,18 @@ sequenceDiagram
   participant Peer as Client/Node
   participant Gateway
 
-  Peer->>Gateway: WS upgrade + auth token
+  Peer->>Gateway: WS upgrade (auth via cookie or Authorization header)
   Peer->>Gateway: connect.init (request) { protocol_rev, role, device, capabilities }
   Gateway-->>Peer: connect.init (response) { connection_id, challenge }
   Peer->>Gateway: connect.proof (request) { connection_id, proof }
   Gateway-->>Peer: connect.proof (response) { client_id, device_id, role }
 ```
 
-## Legacy handshake (deprecated)
+## Legacy `connect` handshake (removed)
 
-Older peers may attempt a legacy request/response handshake:
+The older single-step `connect` request is no longer supported. Peers MUST use `connect.init` / `connect.proof`.
 
-- `connect` (request) `{ capabilities }`
-- `connect` (response) `{ client_id }`
-
-This legacy path does **not** include device identity proof or `protocol_rev` negotiation and is deprecated. The gateway rejects legacy `connect` handshake requests; peers MUST use `connect.init/connect.proof` instead.
-
-When a peer attempts the legacy handshake, the gateway closes the connection with close code `4003` and reason: `legacy connect is deprecated; use connect.init/connect.proof`.
+If a peer sends a legacy `connect` request, the gateway closes the connection with close code `4003`.
 
 ## Connect payload
 
@@ -65,7 +60,7 @@ The gateway validates the gateway access token during the WS upgrade.
 ### Preferred transports (in order)
 
 1. **`Authorization: Bearer <token>` header** when the client can set headers on the WebSocket upgrade request.
-2. **Secure cookie** for browser-based clients where cookie auth is appropriate for the deployment.
+2. **Secure cookie** for browser-based clients where cookie auth is appropriate for the deployment. The built-in operator UI bootstraps this cookie via `POST /auth/session`.
 3. **WebSocket subprotocol fallback** for constrained clients that cannot set headers.
 
 Tokens MUST NOT be placed in URLs.

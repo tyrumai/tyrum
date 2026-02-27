@@ -79,7 +79,7 @@ Recommended normalization rules for high-risk tool classes:
   - Match target SHOULD include the operation and the _workspace-relative_ canonical path: `op:path`.
   - Path normalization SHOULD use POSIX separators (`/`), strip leading `./`, reject `..`, collapse repeated separators, and apply workspace boundary checks before computing the match target.
   - If symlinks are allowed, the match target SHOULD be based on the resolved canonical path inside the workspace boundary (so the override cannot be bypassed by alternative spellings).
-  - Example match targets: `read:src/app.ts`, `write:docs/architecture/backplane.md`, `delete:tmp/output.log`.
+  - Example match targets: `read:src/main.ts`, `write:docs/architecture/backplane.md`, `delete:tmp/output.log`.
 - **`bash` / CLI execution:**
   - Match target SHOULD be derived from a structured command representation (argv), not an unparsed shell string.
   - Normalize whitespace and remove non-semantic differences (for example multiple spaces).

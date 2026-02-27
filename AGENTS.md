@@ -5,7 +5,7 @@
 - Tyrum is a self-hosted autonomous worker agent platform built around a single “gateway” runtime (HTTP + WebSocket).
 - Monorepo: TypeScript (strict, ESM) on Node.js 24; pnpm workspace (`packages/*`, `apps/*`).
 - Core packages: `@tyrum/gateway` (server + CLI `tyrum`), `@tyrum/client` (SDK), `@tyrum/schemas` (shared Zod types).
-- Gateway persists to SQLite by default, supports Postgres for split roles, and serves an integrated web UI at `/app`.
+- Gateway persists to SQLite by default, supports Postgres for split roles, and serves the operator web UI at `/ui`.
 - Public docs live in `docs/` and are built as a Docusaurus site in `apps/docs`.
 
 ## Repo map

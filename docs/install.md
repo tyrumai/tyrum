@@ -51,6 +51,20 @@ Run:
 tyrum
 ```
 
+## Operator UI (`/ui`)
+
+When the gateway is running, it serves the operator web UI as a single-page app at:
+
+- `http://127.0.0.1:8788/ui`
+
+Browser login uses a cookie bootstrap flow:
+
+- The UI sends your admin token to `POST /auth/session` once (`{ "token": "<admin token>" }`).
+- The gateway sets an `HttpOnly` auth cookie for the browser.
+- Subsequent HTTP and WebSocket requests authenticate via that cookie (tokens are never placed in URLs).
+
+If you did not set `GATEWAY_TOKEN`, the gateway generates an admin token and stores it at `~/.tyrum/.admin-token` (or `$TYRUM_HOME/.admin-token`).
+
 Singleton agent routes are enabled by default.
 
 Disable singleton agent routes:
