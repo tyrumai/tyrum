@@ -67,6 +67,8 @@ export interface AgentContextReport {
   thread_id: string;
   agent_id: string;
   workspace_id: string;
+  execution_profile?: string;
+  execution_profile_source?: string;
   system_prompt: {
     chars: number;
     sections: AgentContextPartReport[];
