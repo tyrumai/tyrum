@@ -33,6 +33,8 @@ export interface OperatorCoreOptions {
 }
 
 export interface OperatorCore {
+  wsUrl: string;
+  httpBaseUrl: string;
   ws: OperatorWsClient;
   http: OperatorHttpClient;
   adminModeStore: AdminModeStore;
@@ -229,6 +231,8 @@ export function createOperatorCore(options: OperatorCoreOptions): OperatorCore {
   };
 
   return {
+    wsUrl: options.wsUrl,
+    httpBaseUrl: options.httpBaseUrl,
     ws,
     http,
     adminModeStore,

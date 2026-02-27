@@ -74,6 +74,46 @@ export const OPERATOR_UI_CSS = `
   overflow-y: auto;
 }
 
+.tyrum-operator-ui .admin-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  margin: 0 0 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.12);
+  color: #fecaca;
+}
+
+.tyrum-operator-ui .admin-banner button {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #fff;
+}
+
+.tyrum-operator-ui .admin-gate {
+  max-width: 680px;
+}
+
+.tyrum-operator-ui .admin-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  z-index: 50;
+}
+
+.tyrum-operator-ui .admin-dialog {
+  width: 100%;
+  max-width: 640px;
+}
+
 .tyrum-operator-ui h1 { margin: 0 0 18px; font-size: 22px; line-height: 1.15; font-weight: 700; }
 .tyrum-operator-ui button {
   border: 1px solid transparent;

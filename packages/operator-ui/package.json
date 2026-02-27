@@ -15,6 +15,7 @@
     "build": "tsdown src/index.ts --format esm --dts"
   },
   "dependencies": {
+    "@tyrum/client": "workspace:*",
     "@tyrum/operator-core": "workspace:*"
   },
   "peerDependencies": {

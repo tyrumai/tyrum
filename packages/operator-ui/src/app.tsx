@@ -1,5 +1,6 @@
 import type { OperatorCore } from "@tyrum/operator-core";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { AdminModeProvider } from "./admin-mode.js";
 import { OPERATOR_UI_CSS } from "./style.js";
 
 export type OperatorUiMode = "web" | "desktop";
@@ -907,13 +908,15 @@ export function OperatorUiApp({ core, mode }: OperatorUiAppProps) {
           </nav>
         </aside>
         <main className="main">
-          {route === "connect" && <ConnectPage core={core} mode={mode} />}
-          {route === "dashboard" && <DashboardPage core={core} />}
-          {route === "approvals" && <ApprovalsPage core={core} />}
-          {route === "runs" && <RunsPage core={core} />}
-          {route === "pairing" && <PairingPage core={core} />}
-          {route === "settings" && <SettingsPage core={core} mode={mode} />}
-          {route === "desktop" && mode === "desktop" && <DesktopSetupPage core={core} />}
+          <AdminModeProvider core={core} mode={mode}>
+            {route === "connect" && <ConnectPage core={core} mode={mode} />}
+            {route === "dashboard" && <DashboardPage core={core} />}
+            {route === "approvals" && <ApprovalsPage core={core} />}
+            {route === "runs" && <RunsPage core={core} />}
+            {route === "pairing" && <PairingPage core={core} />}
+            {route === "settings" && <SettingsPage core={core} mode={mode} />}
+            {route === "desktop" && mode === "desktop" && <DesktopSetupPage core={core} />}
+          </AdminModeProvider>
         </main>
       </div>
     </div>
