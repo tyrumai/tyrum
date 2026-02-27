@@ -25,6 +25,28 @@ export function resolveWsRequestRequiredScopes(type: string): string[] | null {
     case "workflow.cancel": {
       return ["operator.write"];
     }
+    case "work.list":
+    case "work.get":
+    case "work.artifact.list":
+    case "work.artifact.get":
+    case "work.decision.list":
+    case "work.decision.get":
+    case "work.signal.list":
+    case "work.signal.get":
+    case "work.state_kv.get":
+    case "work.state_kv.list": {
+      return ["operator.read"];
+    }
+    case "work.create":
+    case "work.update":
+    case "work.transition":
+    case "work.artifact.create":
+    case "work.decision.create":
+    case "work.signal.create":
+    case "work.signal.update":
+    case "work.state_kv.set": {
+      return ["operator.write"];
+    }
     case "presence.beacon": {
       return [];
     }
