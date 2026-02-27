@@ -9,11 +9,13 @@ describe("Memory v1 WS protocol", () => {
     expect("MemoryTombstone" in Schemas).toBe(true);
     expect("MemorySearchRequest" in Schemas).toBe(true);
     expect("WsMemorySearchRequest" in Schemas).toBe(true);
+    expect("WsMemoryGetRequest" in Schemas).toBe(true);
     expect("WsMemoryItemCreatedEvent" in Schemas).toBe(true);
   });
 
   it("exports memory.* WS operation/event schemas from ../src/protocol.js", () => {
     expect("WsMemorySearchRequest" in Protocol).toBe(true);
+    expect("WsMemoryGetRequest" in Protocol).toBe(true);
     expect("WsMemoryItemCreatedEvent" in Protocol).toBe(true);
   });
 
@@ -26,7 +28,7 @@ describe("Memory v1 WS protocol", () => {
         payload: { v: 1, query: "gateway restart", filter: { kinds: ["procedure"] }, limit: 20 },
       },
       { type: "memory.list", payload: { v: 1, filter: { kinds: ["note"] }, limit: 50 } },
-      { type: "memory.read", payload: { v: 1, memory_item_id: memoryItemId } },
+      { type: "memory.get", payload: { v: 1, memory_item_id: memoryItemId } },
       {
         type: "memory.create",
         payload: {
@@ -86,7 +88,7 @@ describe("Memory v1 WS protocol", () => {
     const responses: Array<{ type: string; result?: unknown }> = [
       { type: "memory.search", result: { v: 1, hits: [] } },
       { type: "memory.list", result: { v: 1, items: [] } },
-      { type: "memory.read", result: { v: 1, item: memoryItem } },
+      { type: "memory.get", result: { v: 1, item: memoryItem } },
       { type: "memory.create", result: { v: 1, item: memoryItem } },
       { type: "memory.update", result: { v: 1, item: memoryItem } },
       { type: "memory.delete", result: { v: 1, tombstone } },
@@ -107,7 +109,7 @@ describe("Memory v1 WS protocol", () => {
     const errorResponses: Array<{ type: string }> = [
       { type: "memory.search" },
       { type: "memory.list" },
-      { type: "memory.read" },
+      { type: "memory.get" },
       { type: "memory.create" },
       { type: "memory.update" },
       { type: "memory.delete" },

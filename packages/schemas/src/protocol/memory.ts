@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { ArtifactId } from "../artifact.js";
 import {
-  MemoryChangeEventType,
   MemoryCreateRequest,
   MemoryCreateResponse,
   MemoryDeleteRequest,
@@ -51,14 +50,14 @@ export const WsMemoryListRequest = WsRequestEnvelope.extend({
 });
 export type WsMemoryListRequest = z.infer<typeof WsMemoryListRequest>;
 
-export const WsMemoryReadPayload = MemoryGetRequest;
-export type WsMemoryReadPayload = z.infer<typeof WsMemoryReadPayload>;
+export const WsMemoryGetPayload = MemoryGetRequest;
+export type WsMemoryGetPayload = z.infer<typeof WsMemoryGetPayload>;
 
-export const WsMemoryReadRequest = WsRequestEnvelope.extend({
-  type: z.literal("memory.read"),
-  payload: WsMemoryReadPayload,
+export const WsMemoryGetRequest = WsRequestEnvelope.extend({
+  type: z.literal("memory.get"),
+  payload: WsMemoryGetPayload,
 });
-export type WsMemoryReadRequest = z.infer<typeof WsMemoryReadRequest>;
+export type WsMemoryGetRequest = z.infer<typeof WsMemoryGetRequest>;
 
 export const WsMemoryCreatePayload = MemoryCreateRequest;
 export type WsMemoryCreatePayload = z.infer<typeof WsMemoryCreatePayload>;
@@ -137,19 +136,19 @@ export const WsMemoryListResponseErrEnvelope = WsResponseErrEnvelope.extend({
 });
 export type WsMemoryListResponseErrEnvelope = z.infer<typeof WsMemoryListResponseErrEnvelope>;
 
-export const WsMemoryReadResult = MemoryGetResponse;
-export type WsMemoryReadResult = z.infer<typeof WsMemoryReadResult>;
+export const WsMemoryGetResult = MemoryGetResponse;
+export type WsMemoryGetResult = z.infer<typeof WsMemoryGetResult>;
 
-export const WsMemoryReadResponseOkEnvelope = WsResponseOkEnvelope.extend({
-  type: z.literal("memory.read"),
-  result: WsMemoryReadResult,
+export const WsMemoryGetResponseOkEnvelope = WsResponseOkEnvelope.extend({
+  type: z.literal("memory.get"),
+  result: WsMemoryGetResult,
 });
-export type WsMemoryReadResponseOkEnvelope = z.infer<typeof WsMemoryReadResponseOkEnvelope>;
+export type WsMemoryGetResponseOkEnvelope = z.infer<typeof WsMemoryGetResponseOkEnvelope>;
 
-export const WsMemoryReadResponseErrEnvelope = WsResponseErrEnvelope.extend({
-  type: z.literal("memory.read"),
+export const WsMemoryGetResponseErrEnvelope = WsResponseErrEnvelope.extend({
+  type: z.literal("memory.get"),
 });
-export type WsMemoryReadResponseErrEnvelope = z.infer<typeof WsMemoryReadResponseErrEnvelope>;
+export type WsMemoryGetResponseErrEnvelope = z.infer<typeof WsMemoryGetResponseErrEnvelope>;
 
 export const WsMemoryCreateResult = MemoryCreateResponse;
 export type WsMemoryCreateResult = z.infer<typeof WsMemoryCreateResult>;
@@ -291,7 +290,3 @@ export const WsMemoryExportCompletedEvent = WsEventEnvelope.extend({
   payload: WsMemoryExportCompletedEventPayload,
 });
 export type WsMemoryExportCompletedEvent = z.infer<typeof WsMemoryExportCompletedEvent>;
-
-export const WsMemoryChangeEventType = MemoryChangeEventType;
-export type WsMemoryChangeEventType = z.infer<typeof WsMemoryChangeEventType>;
-
