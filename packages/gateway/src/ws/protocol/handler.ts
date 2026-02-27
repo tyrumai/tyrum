@@ -99,7 +99,8 @@ import type {
   WsResponseErrEnvelope,
 } from "@tyrum/schemas";
 import type { ConnectedClient } from "../connection-manager.js";
-import { shouldDeliverToWsAudience, type WsBroadcastAudience } from "../audience.js";
+import type { WsBroadcastAudience } from "../audience.js";
+import { broadcastWsEvent } from "../broadcast.js";
 import { emitPairingApprovedEvent } from "../pairing-approved.js";
 import { toApprovalContract } from "../../modules/approval/to-contract.js";
 import { executeCommand } from "../../modules/commands/dispatcher.js";
@@ -2295,27 +2296,11 @@ function broadcastEvent(
   deps: ProtocolDeps,
   audience?: WsBroadcastAudience,
 ): void {
-  const payload = JSON.stringify(evt);
-  for (const peer of deps.connectionManager.allClients()) {
-    if (!shouldDeliverToWsAudience(peer, audience)) continue;
-    try {
-      peer.ws.send(payload);
-    } catch {
-      // ignore
-    }
-  }
-  if (deps.cluster) {
-    void deps.cluster.outboxDal
-      .enqueue("ws.broadcast", {
-        source_edge_id: deps.cluster.edgeId,
-        skip_local: true,
-        message: evt,
-        ...(audience ? { audience } : {}),
-      })
-      .catch(() => {
-        // ignore
-      });
-  }
+  broadcastWsEvent(
+    evt,
+    { connectionManager: deps.connectionManager, cluster: deps.cluster },
+    audience,
+  );
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

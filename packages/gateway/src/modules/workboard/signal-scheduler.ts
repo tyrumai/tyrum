@@ -11,7 +11,8 @@
 
 import type { WsEventEnvelope, WorkItemState } from "@tyrum/schemas";
 import type { ConnectionManager } from "../../ws/connection-manager.js";
-import { shouldDeliverToWsAudience, type WsBroadcastAudience } from "../../ws/audience.js";
+import type { WsBroadcastAudience } from "../../ws/audience.js";
+import { broadcastWsEvent } from "../../ws/broadcast.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { Logger } from "../observability/logger.js";
 import type { OutboxDal } from "../backplane/outbox-dal.js";
@@ -217,27 +218,11 @@ export class WorkSignalScheduler {
   }
 
   private broadcastEvent(evt: WsEventEnvelope, audience: WsBroadcastAudience): void {
-    const payload = JSON.stringify(evt);
-    for (const peer of this.connectionManager.allClients()) {
-      if (!shouldDeliverToWsAudience(peer, audience)) continue;
-      try {
-        peer.ws.send(payload);
-      } catch {
-        // ignore
-      }
-    }
-    if (this.cluster) {
-      void this.cluster.outboxDal
-        .enqueue("ws.broadcast", {
-          source_edge_id: this.cluster.edgeId,
-          skip_local: true,
-          message: evt,
-          audience,
-        })
-        .catch(() => {
-          // ignore
-        });
-    }
+    broadcastWsEvent(
+      evt,
+      { connectionManager: this.connectionManager, cluster: this.cluster },
+      audience,
+    );
   }
 
   private async getActiveEventSignals(): Promise<
