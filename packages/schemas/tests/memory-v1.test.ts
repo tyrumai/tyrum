@@ -66,6 +66,64 @@ describe("Memory v1 contracts", () => {
     ).toBe("episode");
   });
 
+  it("rejects empty note/procedure bodies", () => {
+    const MemoryItem = schema("MemoryItem");
+    const MemoryCreateRequest = schema("MemoryCreateRequest");
+    expect(MemoryItem).toBeDefined();
+    expect(MemoryCreateRequest).toBeDefined();
+    if (!MemoryItem || !MemoryCreateRequest) return;
+
+    const base = {
+      v: 1,
+      memory_item_id: "550e8400-e29b-41d4-a716-446655440000",
+      agent_id: "default",
+      tags: ["project"],
+      sensitivity: "private",
+      provenance: {
+        source_kind: "user",
+      },
+      created_at: "2026-02-19T12:00:00Z",
+    } as const;
+
+    expect(() =>
+      MemoryItem.parse({
+        ...base,
+        kind: "note",
+        body_md: "   ",
+      }),
+    ).toThrow();
+
+    expect(() =>
+      MemoryItem.parse({
+        ...base,
+        kind: "procedure",
+        body_md: "",
+      }),
+    ).toThrow();
+
+    expect(() =>
+      MemoryCreateRequest.parse({
+        v: 1,
+        item: {
+          kind: "note",
+          body_md: "   ",
+          provenance: { source_kind: "operator" },
+        },
+      }),
+    ).toThrow();
+
+    expect(() =>
+      MemoryCreateRequest.parse({
+        v: 1,
+        item: {
+          kind: "procedure",
+          body_md: "",
+          provenance: { source_kind: "operator" },
+        },
+      }),
+    ).toThrow();
+  });
+
   it("parses tombstones (deletion proof)", () => {
     const MemoryTombstone = schema("MemoryTombstone");
     expect(MemoryTombstone).toBeDefined();

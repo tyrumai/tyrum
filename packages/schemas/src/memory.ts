@@ -60,14 +60,14 @@ export type MemoryFactItem = z.infer<typeof MemoryFactItem>;
 export const MemoryNoteItem = MemoryItemBase.extend({
   kind: z.literal("note"),
   title: z.string().trim().min(1).optional(),
-  body_md: z.string(),
+  body_md: z.string().trim().min(1),
 }).strict();
 export type MemoryNoteItem = z.infer<typeof MemoryNoteItem>;
 
 export const MemoryProcedureItem = MemoryItemBase.extend({
   kind: z.literal("procedure"),
   title: z.string().trim().min(1).optional(),
-  body_md: z.string(),
+  body_md: z.string().trim().min(1),
   confidence: z.number().min(0).max(1).optional(),
 }).strict();
 export type MemoryProcedureItem = z.infer<typeof MemoryProcedureItem>;
@@ -221,14 +221,14 @@ export type MemoryFactCreateInput = z.infer<typeof MemoryFactCreateInput>;
 export const MemoryNoteCreateInput = MemoryItemCreateBase.extend({
   kind: z.literal("note"),
   title: z.string().trim().min(1).optional(),
-  body_md: z.string(),
+  body_md: z.string().trim().min(1),
 }).strict();
 export type MemoryNoteCreateInput = z.infer<typeof MemoryNoteCreateInput>;
 
 export const MemoryProcedureCreateInput = MemoryItemCreateBase.extend({
   kind: z.literal("procedure"),
   title: z.string().trim().min(1).optional(),
-  body_md: z.string(),
+  body_md: z.string().trim().min(1),
   confidence: z.number().min(0).max(1).optional(),
 }).strict();
 export type MemoryProcedureCreateInput = z.infer<typeof MemoryProcedureCreateInput>;
