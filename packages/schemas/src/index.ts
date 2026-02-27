@@ -569,6 +569,7 @@ export {
   WsWorkItemUpdatedEvent,
   WsWorkItemBlockedEvent,
   WsWorkItemCompletedEvent,
+  WsWorkItemFailedEvent,
   WsWorkItemCancelledEvent,
   WsWorkTaskLeasedEventPayload,
   WsWorkTaskLeasedEvent,

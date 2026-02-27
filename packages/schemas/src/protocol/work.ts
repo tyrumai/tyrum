@@ -714,6 +714,12 @@ export const WsWorkItemCompletedEvent = WsEventEnvelope.extend({
 });
 export type WsWorkItemCompletedEvent = z.infer<typeof WsWorkItemCompletedEvent>;
 
+export const WsWorkItemFailedEvent = WsEventEnvelope.extend({
+  type: z.literal("work.item.failed"),
+  payload: WsWorkItemEventPayload,
+});
+export type WsWorkItemFailedEvent = z.infer<typeof WsWorkItemFailedEvent>;
+
 export const WsWorkItemCancelledEvent = WsEventEnvelope.extend({
   type: z.literal("work.item.cancelled"),
   payload: WsWorkItemEventPayload,
