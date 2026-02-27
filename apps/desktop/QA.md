@@ -5,7 +5,7 @@ This checklist is for manual QA of “native feel” behaviors across macOS, Win
 ## Preflight
 
 - [ ] `pnpm --filter tyrum-desktop test` is green
-- [ ] Build type noted: dev (`pnpm --filter tyrum-desktop start`) or packaged (`pnpm --filter tyrum-desktop dist`)
+- [ ] Build type noted: dev (`pnpm --filter tyrum-desktop build && pnpm --filter tyrum-desktop dev`) or packaged (`pnpm --filter tyrum-desktop dist`)
 - [ ] OS + version noted
 
 ## macOS
