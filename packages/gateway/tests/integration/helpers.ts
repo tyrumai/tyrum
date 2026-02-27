@@ -21,9 +21,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
 export async function createTestContainer(): Promise<GatewayContainer> {
-  return await createContainer({
-    dbPath: ":memory:",
+  return await createTestContainerWith({ dbPath: ":memory:" });
+}
+
+function createTestContainerWith(opts: { dbPath: string; tyrumHome?: string }): GatewayContainer {
+  return createContainer({
+    dbPath: opts.dbPath,
     migrationsDir,
+    tyrumHome: opts.tyrumHome,
   });
 }
 
@@ -31,6 +36,7 @@ export interface TestAppOptions {
   tokenStore?: TokenStore;
   isLocalOnly?: boolean;
   languageModel?: LanguageModel;
+  tyrumHome?: string;
 }
 
 export async function createTestApp(opts: TestAppOptions = {}): Promise<{
@@ -38,11 +44,12 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<{
   container: GatewayContainer;
   agents?: AgentRegistry;
 }> {
-  const container = await createTestContainer();
+  const baseHome = opts.tyrumHome ?? resolveTyrumHome();
+  const container = createTestContainerWith({ dbPath: ":memory:", tyrumHome: baseHome });
   const agents = isAgentEnabled()
     ? new AgentRegistryImpl({
         container,
-        baseHome: resolveTyrumHome(),
+        baseHome,
         defaultSecretProvider: new EnvSecretProvider(),
         defaultPolicyService: container.policyService,
         defaultLanguageModel: opts.languageModel,

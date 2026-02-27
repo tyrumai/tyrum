@@ -54,11 +54,37 @@ export async function startGateway(
   const tokenStore = new TokenStore(tokenHome);
   const adminToken = await tokenStore.initialize();
 
-  const baseDeps: ProtocolDeps = { connectionManager };
+  const { app, container, agents } = await createTestApp({
+    tokenStore,
+    isLocalOnly: false,
+    tyrumHome: tokenHome,
+  });
+
+  const baseDeps: ProtocolDeps = {
+    connectionManager,
+    logger: container.logger,
+    db: container.db,
+    redactionEngine: container.redactionEngine,
+    artifactStore: container.artifactStore,
+    contextReportDal: container.contextReportDal,
+    approvalDal: container.approvalDal,
+    presenceDal: container.presenceDal,
+    policyOverrideDal: container.policyOverrideDal,
+    nodePairingDal: container.nodePairingDal,
+    policyService: container.policyService,
+    modelsDev: container.modelsDev,
+    agents,
+    runtime: {
+      version: "test",
+      instanceId: "test-instance",
+      role: "all",
+      dbKind: container.db.kind,
+      isExposed: true,
+      otelEnabled: false,
+    },
+  };
   const extraDeps = protocolDepsFactory?.(connectionManager) ?? {};
   const protocolDeps: ProtocolDeps = { ...baseDeps, ...extraDeps };
-
-  const { app } = await createTestApp({ tokenStore, isLocalOnly: false });
 
   const { handleUpgrade, stopHeartbeat } = createWsHandler({
     connectionManager,
@@ -95,6 +121,8 @@ export async function startGateway(
     stop: async () => {
       stopHeartbeat();
       await closeServer(server);
+      await agents?.shutdown().catch(() => {});
+      await container.db.close().catch(() => {});
       await rm(tokenHome, { recursive: true, force: true });
     },
   };

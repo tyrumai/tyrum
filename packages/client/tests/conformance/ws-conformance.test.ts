@@ -20,38 +20,13 @@ import {
   delay,
   type GatewayHarness,
 } from "./harness.js";
+import { CONFORMANCE_TIMEOUT_MS, createConnectedClient, waitForEvent } from "./ws-test-utils.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-const TIMEOUT = 5_000;
-
-function waitForEvent<T>(client: TyrumClient, event: string): Promise<T> {
-  return new Promise<T>((resolve) => {
-    client.on(event as never, resolve as never);
-  });
-}
-
-/** Connect a TyrumClient with vNext device identity to the harness gateway. */
-function createConnectedClient(
-  gw: GatewayHarness,
-  opts?: { capabilities?: string[]; role?: string },
-): { client: TyrumClient; connectedP: Promise<{ clientId: string }> } {
-  const device = generateDeviceKeys();
-  const client = new TyrumClient({
-    url: gw.wsUrl,
-    token: gw.adminToken,
-    capabilities: (opts?.capabilities ?? ["http"]) as never[],
-    reconnect: false,
-    role: (opts?.role ?? "client") as never,
-    protocolRev: 2,
-    device,
-  });
-  const connectedP = waitForEvent<{ clientId: string }>(client, "connected");
-  client.connect();
-  return { client, connectedP };
-}
+const TIMEOUT = CONFORMANCE_TIMEOUT_MS;
 
 // ---------------------------------------------------------------------------
 // Tests
