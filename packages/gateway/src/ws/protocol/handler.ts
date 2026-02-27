@@ -113,7 +113,9 @@ import type {
   WsResponseErrEnvelope,
 } from "@tyrum/schemas";
 import type { ConnectedClient } from "../connection-manager.js";
-import { shouldDeliverToWsAudience, type WsBroadcastAudience } from "../audience.js";
+import type { WsBroadcastAudience } from "../audience.js";
+import { broadcastWsEvent } from "../broadcast.js";
+import { WORKBOARD_WS_AUDIENCE } from "../workboard-audience.js";
 import { emitPairingApprovedEvent } from "../pairing-approved.js";
 import { toApprovalContract } from "../../modules/approval/to-contract.js";
 import { executeCommand } from "../../modules/commands/dispatcher.js";
@@ -125,11 +127,6 @@ import { enqueueWorkItemStateChangeNotification } from "../../modules/workboard/
 import { buildAgentTurnKey } from "../../modules/agent/turn-key.js";
 import { resolveWorkspaceId } from "../../modules/workspace/id.js";
 import type { ProtocolDeps } from "./types.js";
-
-const WORKBOARD_WS_AUDIENCE: WsBroadcastAudience = {
-  roles: ["client"],
-  required_scopes: ["operator.read", "operator.write"],
-};
 
 const OPERATOR_MEMORY_EVENT_AUDIENCE = {
   roles: ["client"],
@@ -2815,27 +2812,11 @@ function broadcastEvent(
   deps: ProtocolDeps,
   audience?: WsBroadcastAudience,
 ): void {
-  const payload = JSON.stringify(evt);
-  for (const peer of deps.connectionManager.allClients()) {
-    if (!shouldDeliverToWsAudience(peer, audience)) continue;
-    try {
-      peer.ws.send(payload);
-    } catch {
-      // ignore
-    }
-  }
-  if (deps.cluster) {
-    void deps.cluster.outboxDal
-      .enqueue("ws.broadcast", {
-        source_edge_id: deps.cluster.edgeId,
-        skip_local: true,
-        message: evt,
-        ...(audience ? { audience } : {}),
-      })
-      .catch(() => {
-        // ignore
-      });
-  }
+  broadcastWsEvent(
+    evt,
+    { connectionManager: deps.connectionManager, cluster: deps.cluster },
+    audience,
+  );
 }
 
 async function maybeEmitWorkItemOverlapWarningArtifact(params: {
