@@ -27,6 +27,7 @@ import type {
 import type { SqlDb } from "../../statestore/types.js";
 import type { WsBroadcastAudience } from "../../ws/audience.js";
 import type { RedactionEngine } from "../redaction/engine.js";
+import { LaneQueueSignalDal } from "../lanes/queue-signal-dal.js";
 
 type RawTime = string | Date;
 
@@ -39,13 +40,17 @@ const WORKBOARD_WS_AUDIENCE = {
 
 const WORK_ITEM_TRANSITIONS: Record<WorkItemState, WorkItemState[]> = {
   backlog: ["ready"],
-  ready: ["doing"],
+  ready: ["doing", "cancelled"],
   doing: ["blocked", "done", "failed", "cancelled"],
-  blocked: ["doing"],
+  blocked: ["doing", "cancelled"],
   done: [],
   failed: [],
   cancelled: [],
 };
+
+function isTerminalWorkItemState(status: WorkItemState): boolean {
+  return status === "done" || status === "failed" || status === "cancelled";
+}
 
 type WorkboardTransitionErrorCode = "invalid_transition" | "wip_limit_exceeded";
 
@@ -836,6 +841,75 @@ export class WorkboardDal {
           }),
         ],
       );
+
+      if (isTerminalWorkItemState(params.status)) {
+        const reasonText = params.reason?.trim() || `work item ${params.status}`;
+        const parsedOccurredAtMs = Date.parse(occurredAtIso);
+        const occurredAtMs = Number.isFinite(parsedOccurredAtMs) ? parsedOccurredAtMs : Date.now();
+
+        await tx.run(
+          `UPDATE work_item_tasks
+           SET status = 'cancelled',
+               lease_owner = NULL,
+               lease_expires_at_ms = NULL,
+               updated_at = ?,
+               finished_at = COALESCE(finished_at, ?)
+           WHERE work_item_id = ?
+             AND status IN ('queued', 'leased', 'running', 'paused')`,
+          [occurredAtIso, occurredAtIso, params.work_item_id],
+        );
+
+        const signals = new LaneQueueSignalDal(tx);
+        const runningSubagents = await tx.all<{ session_key: string; lane: string }>(
+          `SELECT session_key, lane
+           FROM subagents
+           WHERE tenant_id = ?
+             AND agent_id = ?
+             AND workspace_id = ?
+             AND work_item_id = ?
+             AND status = 'running'`,
+          [
+            params.scope.tenant_id,
+            params.scope.agent_id,
+            params.scope.workspace_id,
+            params.work_item_id,
+          ],
+        );
+
+        for (const subagent of runningSubagents) {
+          await signals.setSignal({
+            key: subagent.session_key,
+            lane: subagent.lane,
+            kind: "interrupt",
+            inbox_id: null,
+            queue_mode: "interrupt",
+            message_text: reasonText,
+            created_at_ms: occurredAtMs,
+          });
+        }
+
+        await tx.run(
+          `UPDATE subagents
+           SET status = 'closed',
+               updated_at = ?,
+               closed_at = COALESCE(closed_at, ?),
+               close_reason = COALESCE(close_reason, ?)
+           WHERE tenant_id = ?
+             AND agent_id = ?
+             AND workspace_id = ?
+             AND work_item_id = ?
+             AND status NOT IN ('closed', 'failed')`,
+          [
+            occurredAtIso,
+            occurredAtIso,
+            reasonText,
+            params.scope.tenant_id,
+            params.scope.agent_id,
+            params.scope.workspace_id,
+            params.work_item_id,
+          ],
+        );
+      }
 
       return toWorkItem(updated);
     });
@@ -1771,6 +1845,9 @@ export class WorkboardDal {
     if (!item) {
       throw new Error("work item not found for task");
     }
+    if (isTerminalWorkItemState(item.status)) {
+      throw new Error(`cannot create task for terminal work item (${item.status})`);
+    }
 
     if (dependsOn.length > 0) {
       const placeholders = dependsOn.map(() => "?").join(", ");
@@ -2115,6 +2192,9 @@ export class WorkboardDal {
     if (!item) {
       throw new Error("work item not found for lease");
     }
+    if (isTerminalWorkItemState(item.status)) {
+      throw new Error(`cannot lease tasks for terminal work item (${item.status})`);
+    }
 
     return await this.db.transaction(async (tx) => {
       const rows = await tx.all<RawWorkItemTaskRow>(
@@ -2234,8 +2314,12 @@ export class WorkboardDal {
     let inferredWorkItemId: string | undefined;
 
     if (params.subagent.work_item_task_id) {
-      const task = await this.db.get<{ task_id: string; work_item_id: string }>(
-        `SELECT t.task_id, t.work_item_id
+      const task = await this.db.get<{
+        task_id: string;
+        work_item_id: string;
+        work_item_status: WorkItemState;
+      }>(
+        `SELECT t.task_id, t.work_item_id, i.status AS work_item_status
          FROM work_item_tasks t
          JOIN work_items i ON i.work_item_id = t.work_item_id
          WHERE i.tenant_id = ?
@@ -2252,6 +2336,9 @@ export class WorkboardDal {
       if (!task) {
         throw new Error("work_item_task_id is outside scope");
       }
+      if (isTerminalWorkItemState(task.work_item_status)) {
+        throw new Error(`cannot create subagent for terminal work item (${task.work_item_status})`);
+      }
       inferredWorkItemId = task.work_item_id;
     }
 
@@ -2259,6 +2346,9 @@ export class WorkboardDal {
       const item = await this.getItem({ scope: params.scope, work_item_id: explicitWorkItemId });
       if (!item) {
         throw new Error("work_item_id is outside scope");
+      }
+      if (isTerminalWorkItemState(item.status)) {
+        throw new Error(`cannot create subagent for terminal work item (${item.status})`);
       }
       if (inferredWorkItemId && inferredWorkItemId !== explicitWorkItemId) {
         throw new Error("work_item_task_id does not belong to work_item_id");

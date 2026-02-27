@@ -303,6 +303,7 @@ stateDiagram-v2
   Backlog --> Ready: triaged
   Ready --> Doing: lease acquired (WIP < 2)
   Ready --> Ready: WIP limit reached (2)
+  Ready --> Cancelled: operator cancels
 
   Doing --> Blocked: awaiting approval / external dependency
   Blocked --> Doing: unblocked / resumed
