@@ -92,6 +92,38 @@ describe("handleClientMessage (work.*)", () => {
     }
   });
 
+  it("does not broadcast work.* events to non-client WS roles", async () => {
+    const cm = new ConnectionManager();
+    const { id: operatorId, ws: operatorWs } = makeClient(cm);
+    const { ws: nodeWs } = makeClient(cm, { role: "node" });
+    const client = cm.getClient(operatorId)!;
+
+    const db = openTestSqliteDb();
+    try {
+      const deps = makeDeps(cm, { db });
+      const res = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-1",
+          type: "work.create",
+          payload: {
+            tenant_id: "default",
+            agent_id: "default",
+            workspace_id: "default",
+            item: { kind: "action", title: "Hello" },
+          },
+        }),
+        deps,
+      );
+
+      expect((res as unknown as { ok: boolean }).ok).toBe(true);
+      expect(operatorWs.send).toHaveBeenCalledTimes(1);
+      expect(nodeWs.send).not.toHaveBeenCalled();
+    } finally {
+      await db.close();
+    }
+  });
+
   it("handles work.list against the DB", async () => {
     const cm = new ConnectionManager();
     const { id, ws } = makeClient(cm);

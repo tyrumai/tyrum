@@ -83,6 +83,7 @@ import type {
   WsResponseErrEnvelope,
 } from "@tyrum/schemas";
 import type { ConnectedClient } from "../connection-manager.js";
+import { shouldDeliverToWsAudience, type WsBroadcastAudience } from "../audience.js";
 import { emitPairingApprovedEvent } from "../pairing-approved.js";
 import { toApprovalContract } from "../../modules/approval/to-contract.js";
 import { executeCommand } from "../../modules/commands/dispatcher.js";
@@ -91,6 +92,11 @@ import { resolveWsRequestRequiredScopes } from "../../modules/authz/ws-scope-mat
 import { isSafeSuggestedOverridePattern } from "../../modules/policy/override-guardrails.js";
 import { WorkboardDal } from "../../modules/workboard/dal.js";
 import type { ProtocolDeps } from "./types.js";
+
+const WORKBOARD_WS_AUDIENCE: WsBroadcastAudience = {
+  roles: ["client"],
+  required_scopes: ["operator.read", "operator.write"],
+};
 
 // ---------------------------------------------------------------------------
 // Client message handling
@@ -1000,6 +1006,7 @@ export async function handleClientMessage(
           payload: { item },
         },
         deps,
+        WORKBOARD_WS_AUDIENCE,
       );
 
       const result = WsWorkCreateResult.parse({ item });
@@ -1139,6 +1146,7 @@ export async function handleClientMessage(
           payload: { item },
         },
         deps,
+        WORKBOARD_WS_AUDIENCE,
       );
 
       const result = WsWorkUpdateResult.parse({ item });
@@ -1205,6 +1213,7 @@ export async function handleClientMessage(
           payload: { item },
         },
         deps,
+        WORKBOARD_WS_AUDIENCE,
       );
 
       const result = WsWorkTransitionResult.parse({ item });
@@ -1308,6 +1317,7 @@ export async function handleClientMessage(
           payload: { artifact },
         },
         deps,
+        WORKBOARD_WS_AUDIENCE,
       );
 
       const result = WsWorkArtifactCreateResult.parse({ artifact });
@@ -1411,6 +1421,7 @@ export async function handleClientMessage(
           payload: { decision },
         },
         deps,
+        WORKBOARD_WS_AUDIENCE,
       );
 
       const result = WsWorkDecisionCreateResult.parse({ decision });
@@ -1514,6 +1525,7 @@ export async function handleClientMessage(
             payload: { signal },
           },
           deps,
+          WORKBOARD_WS_AUDIENCE,
         );
 
         const result = WsWorkSignalCreateResult.parse({ signal });
@@ -1636,6 +1648,7 @@ export async function handleClientMessage(
           payload: { scope: payload.scope, key: payload.key, updated_at: entry.updated_at },
         },
         deps,
+        WORKBOARD_WS_AUDIENCE,
       );
 
       const result = WsWorkStateKvSetResult.parse({ entry });
@@ -1890,9 +1903,10 @@ function parseApprovalId(requestId: string): number | undefined {
   return n;
 }
 
-function broadcastEvent(evt: WsEventEnvelope, deps: ProtocolDeps): void {
+function broadcastEvent(evt: WsEventEnvelope, deps: ProtocolDeps, audience?: WsBroadcastAudience): void {
   const payload = JSON.stringify(evt);
   for (const peer of deps.connectionManager.allClients()) {
+    if (!shouldDeliverToWsAudience(peer, audience)) continue;
     try {
       peer.ws.send(payload);
     } catch {
@@ -1904,6 +1918,7 @@ function broadcastEvent(evt: WsEventEnvelope, deps: ProtocolDeps): void {
       .enqueue("ws.broadcast", {
         source_edge_id: deps.cluster.edgeId,
         skip_local: true,
+        audience,
         message: evt,
       })
       .catch(() => {
