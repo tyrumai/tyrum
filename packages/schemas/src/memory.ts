@@ -272,7 +272,7 @@ export const MemoryItemPatch = z
     key: z.string().trim().min(1).optional(),
     value: z.unknown().optional(),
     title: z.string().trim().min(1).optional(),
-    body_md: z.string().optional(),
+    body_md: z.string().trim().min(1).optional(),
     summary_md: z.string().trim().min(1).optional(),
     confidence: z.number().min(0).max(1).optional(),
     observed_at: DateTimeSchema.optional(),

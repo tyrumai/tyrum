@@ -280,6 +280,24 @@ describe("Memory v1 contracts", () => {
         tags: ["project", "ops"],
       },
     });
+    expect(() =>
+      MemoryUpdateRequest.parse({
+        v: 1,
+        memory_item_id: "550e8400-e29b-41d4-a716-446655440000",
+        patch: {
+          body_md: "",
+        },
+      }),
+    ).toThrow();
+    expect(() =>
+      MemoryUpdateRequest.parse({
+        v: 1,
+        memory_item_id: "550e8400-e29b-41d4-a716-446655440000",
+        patch: {
+          body_md: "   ",
+        },
+      }),
+    ).toThrow();
     MemoryUpdateResponse.parse({
       v: 1,
       item: {
