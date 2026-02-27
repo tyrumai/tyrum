@@ -391,6 +391,18 @@ for (const fixture of fixtures) {
           "agent-a",
         );
 
+        const expandedSnippet = await dal.create(
+          {
+            kind: "note",
+            title: "Snippet length cap",
+            body_md: `system:${"a".repeat(233)}`,
+            tags: ["ops"],
+            sensitivity: "private",
+            provenance: { source_kind: "operator", channel: "slack", refs: [] },
+          },
+          "agent-a",
+        );
+
         await dal.create(
           {
             kind: "note",
@@ -477,7 +489,29 @@ for (const fixture of fixtures) {
           (h) => h.memory_item_id === injection.memory_item_id,
         );
         expect(injectionHit?.snippet).toContain("[role-ref]");
-        expect(injectionHit?.snippet?.length ?? 0).toBeLessThanOrEqual(260);
+
+        const expandedHit = safeSnippet.hits.find(
+          (h) => h.memory_item_id === expandedSnippet.memory_item_id,
+        );
+        expect(expandedHit?.snippet).toContain("[role-ref]");
+        expect(expandedHit?.snippet?.length ?? 0).toBeLessThanOrEqual(240);
+      } finally {
+        await close();
+      }
+    });
+
+    it("rejects overly complex search requests", async () => {
+      const { dal, close } = await fixture.open();
+      try {
+        const tooManyTerms = Array.from({ length: 50 }, (_, i) => `t${i}`).join(" ");
+        await expect(
+          dal.search({ v: 1, query: tooManyTerms, limit: 10 }, "agent-a"),
+        ).rejects.toThrow(/too many query terms/i);
+
+        const tooManyTags = Array.from({ length: 50 }, (_, i) => `tag-${i}`);
+        await expect(
+          dal.search({ v: 1, query: "*", filter: { tags: tooManyTags }, limit: 10 }, "agent-a"),
+        ).rejects.toThrow(/too many filter\.tags/i);
       } finally {
         await close();
       }

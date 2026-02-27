@@ -62,7 +62,6 @@ interface RawTombstoneRow {
 interface RawSearchRow {
   memory_item_id: string;
   kind: MemoryItemKind;
-  sensitivity: MemorySensitivity;
   key: string | null;
   title: string | null;
   body_md: string | null;
@@ -245,6 +244,13 @@ function sanitizeSnippet(value: string): string {
   return sanitized;
 }
 
+function clampSnippet(value: string, maxChars: number): string {
+  const max = Math.max(1, Math.floor(maxChars));
+  if (value.length <= max) return value;
+  if (max === 1) return "…";
+  return `${value.slice(0, max - 1)}…`;
+}
+
 function buildSnippet(
   text: string,
   terms: readonly string[],
@@ -255,11 +261,11 @@ function buildSnippet(
 
   const max = Math.max(1, Math.floor(maxChars));
   if (cleaned.length <= max) {
-    return sanitizeSnippet(cleaned);
+    return clampSnippet(sanitizeSnippet(cleaned), max);
   }
 
   if (terms.length === 0) {
-    return sanitizeSnippet(`${cleaned.slice(0, max - 1)}…`);
+    return clampSnippet(sanitizeSnippet(`${cleaned.slice(0, max - 1)}…`), max);
   }
 
   const lower = cleaned.toLowerCase();
@@ -278,7 +284,7 @@ function buildSnippet(
   let snippet = cleaned.slice(start, end);
   if (start > 0) snippet = `…${snippet}`;
   if (end < cleaned.length) snippet = `${snippet}…`;
-  return sanitizeSnippet(snippet);
+  return clampSnippet(sanitizeSnippet(snippet), max);
 }
 
 function markdownToPlainText(value: string): string {
@@ -993,6 +999,19 @@ export class MemoryV1Dal {
       return { v: 1, hits: [], next_cursor: undefined };
     }
 
+    const MAX_QUERY_CHARS = 1024;
+    const MAX_TERMS = 12;
+    const MAX_TERM_CHARS = 64;
+    const MAX_FILTER_KEYS = 50;
+    const MAX_FILTER_TAGS = 20;
+    const MAX_FILTER_PROVENANCE_VALUES = 20;
+    const MAX_CANDIDATE_LIMIT = 1000;
+    const MAX_SQL_PARAMS = 900;
+
+    if (query !== "*" && query.length > MAX_QUERY_CHARS) {
+      throw new Error(`query too long (max=${MAX_QUERY_CHARS})`);
+    }
+
     const rawTerms =
       query === "*"
         ? []
@@ -1002,8 +1021,16 @@ export class MemoryV1Dal {
             .filter(Boolean);
     const terms = uniqSortedStrings(rawTerms);
 
+    if (terms.some((term) => term.length > MAX_TERM_CHARS)) {
+      throw new Error(`query term too long (max=${MAX_TERM_CHARS})`);
+    }
+
+    if (terms.length > MAX_TERMS) {
+      throw new Error(`too many query terms (max=${MAX_TERMS})`);
+    }
+
     const limit = Math.max(1, Math.min(200, input.limit ?? 20));
-    const candidateLimit = Math.max(limit * 20, 200);
+    const candidateLimit = Math.min(Math.max(limit * 20, 200), MAX_CANDIDATE_LIMIT);
 
     const clauses: string[] = ["mi.agent_id = ?"];
     const params: unknown[] = [agent];
@@ -1011,22 +1038,31 @@ export class MemoryV1Dal {
     const filter = input.filter;
 
     if (filter?.kinds && filter.kinds.length > 0) {
-      clauses.push(`mi.kind IN (${filter.kinds.map(() => "?").join(", ")})`);
-      params.push(...filter.kinds);
+      const kinds = [...new Set(filter.kinds)];
+      clauses.push(`mi.kind IN (${kinds.map(() => "?").join(", ")})`);
+      params.push(...kinds);
     }
 
     if (filter?.sensitivities && filter.sensitivities.length > 0) {
-      clauses.push(`mi.sensitivity IN (${filter.sensitivities.map(() => "?").join(", ")})`);
-      params.push(...filter.sensitivities);
+      const sensitivities = [...new Set(filter.sensitivities)];
+      clauses.push(`mi.sensitivity IN (${sensitivities.map(() => "?").join(", ")})`);
+      params.push(...sensitivities);
     }
 
     if (filter?.keys && filter.keys.length > 0) {
-      clauses.push(`mi.key IN (${filter.keys.map(() => "?").join(", ")})`);
-      params.push(...filter.keys);
+      const keys = uniqSortedStrings(filter.keys);
+      if (keys.length > MAX_FILTER_KEYS) {
+        throw new Error(`too many filter.keys (max=${MAX_FILTER_KEYS})`);
+      }
+      clauses.push(`mi.key IN (${keys.map(() => "?").join(", ")})`);
+      params.push(...keys);
     }
 
     if (filter?.tags && filter.tags.length > 0) {
       const tags = uniqSortedStrings(filter.tags);
+      if (tags.length > MAX_FILTER_TAGS) {
+        throw new Error(`too many filter.tags (max=${MAX_FILTER_TAGS})`);
+      }
       for (const tag of tags) {
         clauses.push(
           `mi.memory_item_id IN (
@@ -1042,24 +1078,39 @@ export class MemoryV1Dal {
 
     if (filter?.provenance) {
       if (filter.provenance.source_kinds && filter.provenance.source_kinds.length > 0) {
-        clauses.push(
-          `mp.source_kind IN (${filter.provenance.source_kinds.map(() => "?").join(", ")})`,
-        );
-        params.push(...filter.provenance.source_kinds);
+        const kinds = [...new Set(filter.provenance.source_kinds)];
+        clauses.push(`mp.source_kind IN (${kinds.map(() => "?").join(", ")})`);
+        params.push(...kinds);
       }
       if (filter.provenance.channels && filter.provenance.channels.length > 0) {
-        clauses.push(`mp.channel IN (${filter.provenance.channels.map(() => "?").join(", ")})`);
-        params.push(...filter.provenance.channels);
+        const channels = uniqSortedStrings(filter.provenance.channels);
+        if (channels.length > MAX_FILTER_PROVENANCE_VALUES) {
+          throw new Error(
+            `too many filter.provenance.channels (max=${MAX_FILTER_PROVENANCE_VALUES})`,
+          );
+        }
+        clauses.push(`mp.channel IN (${channels.map(() => "?").join(", ")})`);
+        params.push(...channels);
       }
       if (filter.provenance.thread_ids && filter.provenance.thread_ids.length > 0) {
-        clauses.push(`mp.thread_id IN (${filter.provenance.thread_ids.map(() => "?").join(", ")})`);
-        params.push(...filter.provenance.thread_ids);
+        const threadIds = uniqSortedStrings(filter.provenance.thread_ids);
+        if (threadIds.length > MAX_FILTER_PROVENANCE_VALUES) {
+          throw new Error(
+            `too many filter.provenance.thread_ids (max=${MAX_FILTER_PROVENANCE_VALUES})`,
+          );
+        }
+        clauses.push(`mp.thread_id IN (${threadIds.map(() => "?").join(", ")})`);
+        params.push(...threadIds);
       }
       if (filter.provenance.session_ids && filter.provenance.session_ids.length > 0) {
-        clauses.push(
-          `mp.session_id IN (${filter.provenance.session_ids.map(() => "?").join(", ")})`,
-        );
-        params.push(...filter.provenance.session_ids);
+        const sessionIds = uniqSortedStrings(filter.provenance.session_ids);
+        if (sessionIds.length > MAX_FILTER_PROVENANCE_VALUES) {
+          throw new Error(
+            `too many filter.provenance.session_ids (max=${MAX_FILTER_PROVENANCE_VALUES})`,
+          );
+        }
+        clauses.push(`mp.session_id IN (${sessionIds.map(() => "?").join(", ")})`);
+        params.push(...sessionIds);
       }
     }
 
@@ -1078,11 +1129,14 @@ export class MemoryV1Dal {
       }
     }
 
+    if (params.length > MAX_SQL_PARAMS) {
+      throw new Error(`search too complex (params=${params.length}, max=${MAX_SQL_PARAMS})`);
+    }
+
     const rows = await this.db.all<RawSearchRow>(
       `SELECT
          mi.memory_item_id,
          mi.kind,
-         mi.sensitivity,
          mi.key,
          mi.title,
          mi.body_md,
