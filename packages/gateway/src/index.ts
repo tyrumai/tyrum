@@ -1406,14 +1406,15 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
       }
     });
 
-    container.watcherProcessor.stop();
-    watcherScheduler?.stop();
-    artifactLifecycleScheduler?.stop();
-    outboxLifecycleScheduler?.stop();
-    stateStoreLifecycleScheduler?.stop();
-    outboxPoller?.stop();
-    telegramProcessor?.stop();
-    container.modelsDev.stopBackgroundRefresh();
+	    container.watcherProcessor.stop();
+	    watcherScheduler?.stop();
+	    artifactLifecycleScheduler?.stop();
+	    outboxLifecycleScheduler?.stop();
+	    stateStoreLifecycleScheduler?.stop();
+	    workSignalScheduler?.stop();
+	    outboxPoller?.stop();
+	    telegramProcessor?.stop();
+	    container.modelsDev.stopBackgroundRefresh();
 
     void runShutdownCleanup(
       [

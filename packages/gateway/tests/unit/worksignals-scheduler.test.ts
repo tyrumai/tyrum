@@ -25,6 +25,65 @@ describe("WorkSignalScheduler", () => {
     vi.useRealTimers();
   });
 
+  it("rolls back if it loses the firing lease mid-transaction", async () => {
+    const cm = new ConnectionManager();
+    const db = openTestSqliteDb();
+    try {
+      const dal = new WorkboardDal(db);
+      const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+
+      const item = await dal.createItem({
+        scope,
+        item: { kind: "action", title: "Hello" },
+        createdFromSessionKey: "agent:default:main",
+      });
+
+      const signal = await dal.createSignal({
+        scope,
+        signal: {
+          work_item_id: item.work_item_id,
+          trigger_kind: "event",
+          trigger_spec_json: { kind: "work_item.status.transition", to: ["blocked"] },
+        },
+      });
+
+      await dal.transitionItem({ scope, work_item_id: item.work_item_id, status: "ready" });
+      await dal.transitionItem({ scope, work_item_id: item.work_item_id, status: "doing" });
+      await dal.transitionItem({ scope, work_item_id: item.work_item_id, status: "blocked" });
+
+      const originalRun = db.run.bind(db);
+      db.run = (async (sql: string, params: readonly unknown[] = []) => {
+        if (
+          typeof sql === "string" &&
+          sql.includes("UPDATE work_signal_firings") &&
+          sql.includes("SET status = 'enqueued'")
+        ) {
+          // Simulate losing the lease by making the final UPDATE not apply.
+          return { changes: 0 };
+        }
+        return await originalRun(sql, params);
+      }) as typeof db.run;
+
+      const scheduler = new WorkSignalScheduler({
+        db,
+        connectionManager: cm,
+        owner: "test",
+      });
+      await scheduler.tick();
+
+      const updated = await dal.getSignal({ scope, signal_id: signal.signal_id });
+      expect(updated?.status).toBe("active");
+
+      const tasks = await db.all<{ task_id: string }>(
+        "SELECT task_id FROM work_item_tasks WHERE work_item_id = ?",
+        [item.work_item_id],
+      );
+      expect(tasks).toHaveLength(0);
+    } finally {
+      await db.close();
+    }
+  });
+
   it("fires event-based WorkSignals on work item status transitions (deduped across restarts)", async () => {
     const cm = new ConnectionManager();
     const ws = createMockWs();

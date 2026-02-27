@@ -17,6 +17,7 @@ describe("gateway shutdown", () => {
     const outboxStop = vi.fn();
     const stateStoreStart = vi.fn();
     const stateStoreStop = vi.fn();
+    const workSignalStop = vi.fn();
 
     vi.doMock("../../src/container.js", () => {
       const logger = {
@@ -120,6 +121,17 @@ describe("gateway shutdown", () => {
       };
     });
 
+    vi.doMock("../../src/modules/workboard/signal-scheduler.js", () => {
+      return {
+        WorkSignalScheduler: class {
+          start(): void {}
+          stop(): void {
+            workSignalStop();
+          }
+        },
+      };
+    });
+
     vi.doMock("../../src/modules/auth/token-store.js", () => {
       return {
         TokenStore: class {
@@ -157,5 +169,6 @@ describe("gateway shutdown", () => {
     expect(watcherStop).toHaveBeenCalledTimes(1);
     expect(artifactStop).toHaveBeenCalledTimes(1);
     expect(outboxStop).toHaveBeenCalledTimes(1);
+    expect(workSignalStop).toHaveBeenCalledTimes(1);
   });
 });

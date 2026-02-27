@@ -28,6 +28,13 @@ const DEFAULT_FIRING_LEASE_TTL_MS = 60_000;
 const DEFAULT_PROCESS_BATCH = 25;
 const DEFAULT_MAX_ATTEMPTS = 5;
 
+class LostFiringLeaseError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "LostFiringLeaseError";
+  }
+}
+
 interface RawWorkSignalRow {
   signal_id: string;
   tenant_id: string;
@@ -395,7 +402,7 @@ export class WorkSignalScheduler {
           [nowIso, firing.firing_id, this.owner],
         );
         if (updated.changes !== 1) {
-          return null;
+          throw new LostFiringLeaseError("lost work signal firing lease while enqueuing");
         }
 
         return {
@@ -423,12 +430,21 @@ export class WorkSignalScheduler {
           },
         },
         WORKBOARD_WS_AUDIENCE,
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      await this.firingDal.markRetryableFailure({
-        firingId: firing.firing_id,
-        owner: this.owner,
+	      );
+	    } catch (err) {
+	      if (err instanceof LostFiringLeaseError) {
+	        // Another scheduler likely took over; we rolled back any partial writes.
+	        this.logger?.debug("work_signal.firing_lost_lease", {
+	          firing_id: firing.firing_id,
+	          signal_id: firing.signal_id,
+	          error: err.message,
+	        });
+	        return;
+	      }
+	      const message = err instanceof Error ? err.message : String(err);
+	      await this.firingDal.markRetryableFailure({
+	        firingId: firing.firing_id,
+	        owner: this.owner,
         nowMs,
         maxAttempts: this.maxAttempts,
         error: message,
