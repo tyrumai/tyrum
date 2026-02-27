@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   appRequestSingleInstanceLockMock,
+  appGetPathMock,
   appSetAppUserModelIdMock,
   appWhenReadyMock,
   appHandlers,
@@ -22,6 +23,12 @@ const {
   configExistsMock,
   loadConfigMock,
   startEmbeddedGatewayFromConfigMock,
+  captureWindowStateMock,
+  ensureVisibleBoundsMock,
+  loadWindowStateMock,
+  saveWindowStateMock,
+  screenGetAllDisplaysMock,
+  screenGetPrimaryDisplayMock,
 } = vi.hoisted(() => {
   const appHandlers = new Map<string, (...args: unknown[]) => void>();
   const readyToShowHandlers: Array<() => void> = [];
@@ -57,6 +64,18 @@ const {
   const appQuitMock = vi.fn();
   const appRequestSingleInstanceLockMock = vi.fn(() => true);
   const appSetAppUserModelIdMock = vi.fn();
+  const appGetPathMock = vi.fn(() => "/tmp/tyrum-desktop-tests");
+
+  const screenGetPrimaryDisplayMock = vi.fn(() => ({
+    id: 1,
+    workArea: { x: 0, y: 0, width: 1920, height: 1080 },
+  }));
+  const screenGetAllDisplaysMock = vi.fn(() => [
+    {
+      id: 1,
+      workArea: { x: 0, y: 0, width: 1920, height: 1080 },
+    },
+  ]);
 
   const menuBuildFromTemplateMock = vi.fn(() => ({}));
   const menuSetApplicationMenuMock = vi.fn();
@@ -73,8 +92,14 @@ const {
     port: 8788,
   }));
 
+  const loadWindowStateMock = vi.fn(() => null);
+  const saveWindowStateMock = vi.fn();
+  const captureWindowStateMock = vi.fn();
+  const ensureVisibleBoundsMock = vi.fn((bounds: unknown) => bounds);
+
   return {
     appRequestSingleInstanceLockMock,
+    appGetPathMock,
     appSetAppUserModelIdMock,
     appWhenReadyMock,
     appHandlers,
@@ -95,6 +120,12 @@ const {
     configExistsMock,
     loadConfigMock,
     startEmbeddedGatewayFromConfigMock,
+    captureWindowStateMock,
+    ensureVisibleBoundsMock,
+    loadWindowStateMock,
+    saveWindowStateMock,
+    screenGetAllDisplaysMock,
+    screenGetPrimaryDisplayMock,
   };
 });
 
@@ -105,15 +136,27 @@ vi.mock("electron", () => ({
     quit: appQuitMock,
     requestSingleInstanceLock: appRequestSingleInstanceLockMock,
     setAppUserModelId: appSetAppUserModelIdMock,
+    getPath: appGetPathMock,
   },
   BrowserWindow: browserWindowMock,
   Menu: {
     buildFromTemplate: menuBuildFromTemplateMock,
     setApplicationMenu: menuSetApplicationMenuMock,
   },
+  screen: {
+    getAllDisplays: screenGetAllDisplaysMock,
+    getPrimaryDisplay: screenGetPrimaryDisplayMock,
+  },
   shell: {
     openExternal: vi.fn(async () => {}),
   },
+}));
+
+vi.mock("../src/main/window-state.js", () => ({
+  captureWindowState: captureWindowStateMock,
+  ensureVisibleBounds: ensureVisibleBoundsMock,
+  loadWindowState: loadWindowStateMock,
+  saveWindowState: saveWindowStateMock,
 }));
 
 vi.mock("../src/main/ipc/config-ipc.js", () => ({
@@ -146,6 +189,7 @@ describe("main window ready-to-show", () => {
     appWhenReadyMock.mockClear();
     appOnMock.mockClear();
     appQuitMock.mockClear();
+    appGetPathMock.mockClear();
     readyToShowHandlers.length = 0;
     browserWindowMock.mockClear();
     browserWindowOnceMock.mockClear();
@@ -154,6 +198,12 @@ describe("main window ready-to-show", () => {
     menuSetApplicationMenuMock.mockClear();
     webContentsOnMock.mockReset();
     setWindowOpenHandlerMock.mockReset();
+    screenGetAllDisplaysMock.mockClear();
+    screenGetPrimaryDisplayMock.mockClear();
+    loadWindowStateMock.mockClear();
+    saveWindowStateMock.mockClear();
+    captureWindowStateMock.mockClear();
+    ensureVisibleBoundsMock.mockClear();
   });
 
   it("shows the window only after ready-to-show", async () => {

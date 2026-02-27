@@ -12,6 +12,10 @@ const WORKSPACE_MARKER = resolve(REPO_ROOT, "pnpm-workspace.yaml");
 const DIST_ENTRYPOINT = resolve(PACKAGE_ROOT, "dist/index.mjs");
 const SRC_ROOT = resolve(PACKAGE_ROOT, "src");
 const SCHEMAS_DIST_ENTRYPOINT = resolve(REPO_ROOT, "packages/schemas/dist/index.mjs");
+const SCHEMAS_JSONSCHEMA_CATALOG = resolve(
+  REPO_ROOT,
+  "packages/schemas/dist/jsonschema/catalog.json",
+);
 const GATEWAY_BUILD_LOCK = resolve(REPO_ROOT, ".tyrum-gateway-build.lock");
 
 interface MockWebSocket {
@@ -59,6 +63,7 @@ function maxMtimeMsInDir(dir: string): number {
 function gatewayBuildIsStale(): boolean {
   if (!existsSync(DIST_ENTRYPOINT)) return true;
   if (!existsSync(SCHEMAS_DIST_ENTRYPOINT)) return true;
+  if (!existsSync(SCHEMAS_JSONSCHEMA_CATALOG)) return true;
 
   const distMtime = statSync(DIST_ENTRYPOINT).mtimeMs;
 
@@ -136,9 +141,11 @@ async function ensureGatewayBuild(): Promise<void> {
     if (!gatewayBuildIsStale()) return;
 
     const commands = [
-      ["--filter", "@tyrum/schemas", "build"],
+      ...(!existsSync(SCHEMAS_DIST_ENTRYPOINT) || !existsSync(SCHEMAS_JSONSCHEMA_CATALOG)
+        ? ([["--filter", "@tyrum/schemas", "build"]] as const)
+        : ([] as const)),
       ["--filter", "@tyrum/gateway", "build"],
-    ];
+    ] as const;
 
     for (const args of commands) {
       const result = tryGatewayBuild("pnpm", args);

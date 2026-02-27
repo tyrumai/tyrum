@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, Menu, shell } from "electron";
+import { app, BrowserWindow, dialog, Menu, screen, shell } from "electron";
 import { join } from "node:path";
 import { registerGatewayIpc, startEmbeddedGatewayFromConfig } from "./ipc/gateway-ipc.js";
 import { registerNodeIpc, shutdownNodeResources } from "./ipc/node-ipc.js";
@@ -10,6 +10,12 @@ import { configExists, loadConfig } from "./config/store.js";
 import { setWindowsAppUserModelId, setupSingleInstance } from "./single-instance.js";
 import { configureMacAboutPanel } from "./platform/os-integrations.js";
 import { buildApplicationMenuTemplate } from "./menu.js";
+import {
+  captureWindowState,
+  ensureVisibleBounds,
+  loadWindowState,
+  saveWindowState,
+} from "./window-state.js";
 
 app.setName?.("Tyrum");
 
@@ -120,10 +126,70 @@ function registerNavigationGuardrails(window: BrowserWindow): void {
 }
 
 function createWindow(): void {
-  const window = new BrowserWindow(MAIN_WINDOW_OPTIONS);
+  const userDataPath = app.getPath("userData");
+  const persistedState = loadWindowState(userDataPath);
+
+  let restoredBounds: ReturnType<typeof ensureVisibleBounds> | null = null;
+  if (persistedState) {
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const displays = screen.getAllDisplays();
+    const orderedDisplays = [
+      primaryDisplay,
+      ...displays.filter((display) => display.id !== primaryDisplay.id),
+    ];
+    restoredBounds = ensureVisibleBounds(
+      persistedState.bounds,
+      orderedDisplays.map((display) => display.workArea),
+    );
+  }
+
+  const window = new BrowserWindow(
+    restoredBounds ? { ...MAIN_WINDOW_OPTIONS, ...restoredBounds } : MAIN_WINDOW_OPTIONS,
+  );
   mainWindow = window;
   mainWindowReadyToShow = false;
   mainWindowPendingFocus = false;
+
+  let lastKnownIsMaximized = persistedState?.isMaximized ?? false;
+  if (lastKnownIsMaximized) {
+    window.maximize();
+  }
+
+  let windowStateSaveTimer: NodeJS.Timeout | null = null;
+  const scheduleWindowStateSave = (): void => {
+    if (windowStateSaveTimer) {
+      clearTimeout(windowStateSaveTimer);
+    }
+
+    windowStateSaveTimer = setTimeout(() => {
+      windowStateSaveTimer = null;
+      saveWindowState(
+        userDataPath,
+        captureWindowState(window, { isMaximized: lastKnownIsMaximized }),
+      );
+    }, 500);
+  };
+
+  window.on("move", scheduleWindowStateSave);
+  window.on("resize", scheduleWindowStateSave);
+  window.on("maximize", () => {
+    lastKnownIsMaximized = true;
+    scheduleWindowStateSave();
+  });
+  window.on("unmaximize", () => {
+    lastKnownIsMaximized = false;
+    scheduleWindowStateSave();
+  });
+  window.on("close", () => {
+    if (windowStateSaveTimer) {
+      clearTimeout(windowStateSaveTimer);
+      windowStateSaveTimer = null;
+    }
+    saveWindowState(
+      userDataPath,
+      captureWindowState(window, { isMaximized: lastKnownIsMaximized }),
+    );
+  });
 
   window.once("ready-to-show", () => {
     mainWindowReadyToShow = true;
@@ -160,6 +226,10 @@ function createWindow(): void {
   void maybeAutoStartEmbeddedGatewayOnLaunch();
 
   window.on("closed", () => {
+    if (windowStateSaveTimer) {
+      clearTimeout(windowStateSaveTimer);
+      windowStateSaveTimer = null;
+    }
     mainWindow = null;
   });
 }
