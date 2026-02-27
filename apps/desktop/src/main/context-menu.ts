@@ -57,41 +57,11 @@ export function buildContextMenuTemplate(
   return [];
 }
 
-type ElectronApp = {
-  on: (
-    event: "web-contents-created",
-    listener: (event: unknown, contents: WebContentsLike) => void,
-  ) => void;
-};
-
-type WebContentsLike = {
-  on: (
-    event: "context-menu",
-    listener: (event: unknown, params: ContextMenuParamsLike) => void,
-  ) => void;
-};
-
-type MenuInstanceLike = {
-  popup: (options: { window?: unknown; x?: number; y?: number }) => void;
-};
-
-type MenuLike = {
-  buildFromTemplate: (template: MenuItemConstructorOptions[]) => MenuInstanceLike;
-};
-
-type BrowserWindowLike = {
-  fromWebContents: (contents: WebContentsLike) => unknown | null;
-};
-
-type ShellLike = {
-  openExternal: (url: string) => unknown;
-};
-
 export function registerContextMenus(deps: {
-  app: ElectronApp;
-  BrowserWindow: BrowserWindowLike;
-  Menu: MenuLike;
-  shell: ShellLike;
+  app: Pick<typeof import("electron").app, "on">;
+  BrowserWindow: Pick<typeof import("electron").BrowserWindow, "fromWebContents">;
+  Menu: Pick<typeof import("electron").Menu, "buildFromTemplate">;
+  shell: Pick<typeof import("electron").shell, "openExternal">;
 }): void {
   deps.app.on("web-contents-created", (_event, contents) => {
     contents.on("context-menu", (_event, params) => {
