@@ -127,9 +127,11 @@ describe("buildMemoryV1ItemQueryParts", () => {
   });
 
   it("can force provenance join for callers that always select provenance", () => {
-    const parts = (buildMemoryV1ItemQueryParts as unknown as (params: unknown) => {
-      from: string;
-    })({
+    const parts = (
+      buildMemoryV1ItemQueryParts as unknown as (params: unknown) => {
+        from: string;
+      }
+    )({
       agent: "agent-a",
       alwaysJoinProvenance: true,
     });

@@ -190,10 +190,10 @@ export function buildMemoryV1ItemQueryParts(params: {
     params.alwaysJoinProvenance === true ||
     Boolean(
       provenanceFilter &&
-        (provenanceSourceKinds.length > 0 ||
-          provenanceChannels.length > 0 ||
-          provenanceThreadIds.length > 0 ||
-          provenanceSessionIds.length > 0),
+      (provenanceSourceKinds.length > 0 ||
+        provenanceChannels.length > 0 ||
+        provenanceThreadIds.length > 0 ||
+        provenanceSessionIds.length > 0),
     );
 
   if (joinProvenance) {
@@ -1123,7 +1123,9 @@ export class MemoryV1Dal {
 
     const totalParams = params.length + 1; // include LIMIT
     if (totalParams > MAX_SQL_PARAMS) {
-      throw invalidRequestError(`search too complex (params=${totalParams}, max=${MAX_SQL_PARAMS})`);
+      throw invalidRequestError(
+        `search too complex (params=${totalParams}, max=${MAX_SQL_PARAMS})`,
+      );
     }
 
     const rows = await this.db.all<RawSearchRow>(

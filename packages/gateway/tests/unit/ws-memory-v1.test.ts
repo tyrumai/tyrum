@@ -645,8 +645,8 @@ describe("WS memory v1 handlers", () => {
     expect((res as unknown as { error: { code: string; message: string } }).error.code).toBe(
       "invalid_request",
     );
-    expect((res as unknown as { error: { code: string; message: string } }).error.message).toContain(
-      "query too long",
-    );
+    expect(
+      (res as unknown as { error: { code: string; message: string } }).error.message,
+    ).toContain("query too long");
   });
 });
