@@ -3,6 +3,7 @@ import type {
   LanguageModelV3,
   LanguageModelV3CallOptions,
   LanguageModelV3GenerateResult,
+  LanguageModelV3StreamPart,
   LanguageModelV3StreamResult,
 } from "@ai-sdk/provider";
 import {
@@ -77,7 +78,10 @@ import {
   loadIdentity,
   type LoadedSkillManifest,
 } from "../workspace.js";
-import { selectToolDirectory, type ToolDescriptor } from "../tools.js";
+import { isToolAllowed, selectToolDirectory, type ToolDescriptor } from "../tools.js";
+import { getExecutionProfile, normalizeExecutionProfileId } from "../execution-profiles.js";
+import type { ExecutionProfile, ExecutionProfileId } from "../execution-profiles.js";
+import { IntakeModeOverrideDal } from "../intake-mode-override-dal.js";
 import { McpManager } from "../mcp-manager.js";
 import { ToolExecutor, type ToolResult } from "../tool-executor.js";
 import { tagContent } from "../provenance.js";
@@ -126,6 +130,48 @@ const WITHIN_TURN_LOOP_STOP_REPLY =
 const CROSS_TURN_LOOP_WARNING_TEXT =
   `${LOOP_WARNING_PREFIX} I may be repeating myself. If this isn’t progressing, tell me what to change ` +
   "(goal/constraints/example output) and I’ll take a different approach.";
+
+function createStaticLanguageModelV3(text: string): LanguageModelV3 {
+  const finishReason = { unified: "stop" as const, raw: "stop" };
+  const usage = {
+    inputTokens: { total: 0, noCache: 0, cacheRead: 0, cacheWrite: 0 },
+    outputTokens: { total: 0, text: 0, reasoning: 0 },
+  };
+
+  return {
+    specificationVersion: "v3",
+    provider: "tyrum",
+    modelId: "static",
+    supportedUrls: {},
+    doGenerate: async (
+      _options: LanguageModelV3CallOptions,
+    ): Promise<LanguageModelV3GenerateResult> => {
+      return {
+        content: [{ type: "text", text }],
+        finishReason,
+        usage,
+        warnings: [],
+      };
+    },
+    doStream: async (
+      _options: LanguageModelV3CallOptions,
+    ): Promise<LanguageModelV3StreamResult> => {
+      return {
+        stream: new ReadableStream<LanguageModelV3StreamPart>({
+          start(controller) {
+            const id = randomUUID();
+            controller.enqueue({ type: "stream-start", warnings: [] });
+            controller.enqueue({ type: "text-start", id });
+            controller.enqueue({ type: "text-delta", id, delta: text });
+            controller.enqueue({ type: "text-end", id });
+            controller.enqueue({ type: "finish", usage, finishReason });
+            controller.close();
+          },
+        }),
+      };
+    },
+  };
+}
 
 type StepPauseRequest = {
   kind: string;
@@ -280,6 +326,12 @@ type LaneQueueState = {
   pendingInjectionTexts: string[];
 };
 
+type ResolvedExecutionProfile = {
+  id: ExecutionProfileId;
+  profile: ExecutionProfile;
+  source: "interaction_default" | "subagent_record" | "subagent_fallback";
+};
+
 function formatNormalizedAttachment(attachment: NormalizedAttachmentT): string {
   const fields = [`kind=${attachment.kind}`];
   if (attachment.mime_type) fields.push(`mime_type=${attachment.mime_type}`);
@@ -341,6 +393,28 @@ function resolveLaneQueueScope(
   if (key.length === 0 || lane.length === 0) return undefined;
 
   return { key, lane };
+}
+
+function resolveMainLaneSessionKey(input: {
+  agentId: string;
+  workspaceId: string;
+  resolved: ResolvedAgentTurnInput;
+  containerKind: NormalizedContainerKind;
+  deliveryAccount?: string;
+}): string {
+  const laneQueueScope = resolveLaneQueueScope(input.resolved.metadata);
+  if (laneQueueScope?.lane === "main") {
+    return laneQueueScope.key;
+  }
+
+  return buildAgentTurnKey({
+    agentId: input.agentId,
+    workspaceId: input.workspaceId,
+    channel: input.resolved.channel,
+    containerKind: input.containerKind,
+    threadId: input.resolved.thread_id,
+    deliveryAccount: input.deliveryAccount,
+  });
 }
 
 function shouldPromoteToCoreMemory(message: string): boolean {
@@ -562,6 +636,7 @@ export class AgentRuntime {
   private async resolveSessionModel(input: {
     config: AgentConfigT;
     sessionId: string;
+    profileModelId?: string;
     fetchImpl?: typeof fetch;
   }): Promise<LanguageModelV3> {
     if (this.languageModelOverride) {
@@ -583,6 +658,7 @@ export class AgentRuntime {
 
     const rawCandidateIds = [
       overrideModelId,
+      input.profileModelId,
       input.config.model.model,
       ...(input.config.model.fallback ?? []),
     ]
@@ -1130,7 +1206,9 @@ export class AgentRuntime {
     const prepared = await this.prepareTurn(input);
     const {
       ctx,
+      executionProfile,
       session,
+      mainLaneSessionKey,
       model,
       toolSet,
       laneQueue,
@@ -1140,6 +1218,44 @@ export class AgentRuntime {
       systemPrompt,
       resolved,
     } = prepared;
+
+    const intake = await this.resolveIntakeDecision({
+      input,
+      executionProfile,
+      resolved,
+      mainLaneSessionKey,
+    });
+    if (intake.mode === "delegate_execute" || intake.mode === "delegate_plan") {
+      const delegation = await this.delegateFromIntake({
+        executionProfile,
+        mode: intake.mode,
+        reason_code: intake.reason_code,
+        resolved,
+        createdFromSessionKey: mainLaneSessionKey,
+      });
+      const response = await this.finalizeTurn(
+        ctx,
+        session,
+        resolved,
+        delegation.reply,
+        usedTools,
+        contextReport,
+      );
+
+      const streamResult = streamText({
+        model: createStaticLanguageModelV3(delegation.reply),
+        system: "",
+        messages: [
+          {
+            role: "user" as const,
+            content: [{ type: "text", text: "" }],
+          },
+        ],
+        stopWhen: [stepCountIs(1)],
+      });
+
+      return { streamResult, sessionId: session.session_id, finalize: async () => response };
+    }
 
     await this.maybeRunPreCompactionMemoryFlush({
       ctx,
@@ -1222,7 +1338,9 @@ export class AgentRuntime {
     const prepared = await this.prepareTurn(input, opts?.execution);
     const {
       ctx,
+      executionProfile,
       session,
+      mainLaneSessionKey,
       model,
       toolSet,
       toolCallPolicyStates,
@@ -1339,6 +1457,30 @@ export class AgentRuntime {
 
       const reply = `Delegated work item created: ${item.work_item_id} (mode=${intakeModeDecision.mode}, reason=${intakeModeDecision.reason_code})`;
       return await this.finalizeTurn(ctx, session, resolved, reply, usedTools, contextReport);
+    }
+
+    const intake = await this.resolveIntakeDecision({
+      input,
+      executionProfile,
+      resolved,
+      mainLaneSessionKey,
+    });
+    if (intake.mode === "delegate_execute" || intake.mode === "delegate_plan") {
+      const delegation = await this.delegateFromIntake({
+        executionProfile,
+        mode: intake.mode,
+        reason_code: intake.reason_code,
+        resolved,
+        createdFromSessionKey: mainLaneSessionKey,
+      });
+      return await this.finalizeTurn(
+        ctx,
+        session,
+        resolved,
+        delegation.reply,
+        usedTools,
+        contextReport,
+      );
     }
 
     await this.maybeRunPreCompactionMemoryFlush({
@@ -1639,6 +1781,11 @@ export class AgentRuntime {
       }
     }
 
+    const executionProfile = await this.resolveExecutionProfile({
+      laneQueueScope,
+      metadata: resolvedInput.metadata,
+    });
+
     const stepArgs: Record<string, unknown> = {
       channel: resolvedInput.channel,
       thread_id: resolvedInput.thread_id,
@@ -1648,6 +1795,9 @@ export class AgentRuntime {
       agent_id: this.agentId,
       workspace_id: this.workspaceId,
     };
+    if (input.intake_mode) {
+      stepArgs["intake_mode"] = input.intake_mode;
+    }
     stepArgs["metadata"] = {
       ...(input.metadata as Record<string, unknown>),
       work_session_key: key,
@@ -1660,6 +1810,7 @@ export class AgentRuntime {
       workspaceId: this.workspaceId,
       planId,
       requestId,
+      budgets: executionProfile.profile.budgets,
       steps: [{ type: "Decide", args: stepArgs }],
     });
 
@@ -2189,7 +2340,9 @@ export class AgentRuntime {
     exec?: TurnExecutionContext,
   ): Promise<{
     ctx: AgentLoadedContext;
+    executionProfile: ResolvedExecutionProfile;
     session: SessionRow;
+    mainLaneSessionKey: string;
     model: LanguageModel;
     toolSet: ToolSet;
     toolCallPolicyStates: Map<string, ToolCallPolicyState>;
@@ -2222,6 +2375,21 @@ export class AgentRuntime {
     const agentId = this.agentId;
     const workspaceId = this.workspaceId;
 
+    const containerKind: NormalizedContainerKind =
+      input.container_kind ?? resolved.envelope?.container.kind ?? "channel";
+    const mainLaneSessionKey = resolveMainLaneSessionKey({
+      agentId,
+      workspaceId,
+      resolved,
+      containerKind,
+      deliveryAccount: resolved.envelope?.delivery.account,
+    });
+
+    const executionProfile = await this.resolveExecutionProfile({
+      laneQueueScope,
+      metadata: resolved.metadata,
+    });
+
     const wantsMcpTools = ctx.config.tools.allow.some(
       (entry) => entry === "*" || entry === "mcp*" || entry.startsWith("mcp."),
     );
@@ -2247,12 +2415,15 @@ export class AgentRuntime {
         allowlist: ctx.config.tools.allow,
         pluginTools: pluginToolsRaw,
       });
-    const tools = selectToolDirectory(
+    const toolCandidates = selectToolDirectory(
       resolved.message,
       toolAllowlist,
       [...mcpTools, ...pluginTools],
-      8,
+      Number.POSITIVE_INFINITY,
     );
+    const filteredTools = toolCandidates
+      .filter((tool) => isToolAllowed(executionProfile.profile.tool_allowlist, tool.id))
+      .slice(0, 8);
 
     // Build MCP server spec lookup for ToolExecutor
     const mcpSpecMap = new Map<string, McpServerSpecT>();
@@ -2301,12 +2472,12 @@ export class AgentRuntime {
 
     const systemPrompt = `${identityPrompt}\n\n${safetyPrompt}\n\n${sandboxPrompt}`;
     const skillsText = `Enabled skills:\n${formatSkillsPrompt(ctx.skills)}`;
-    const toolsText = `Available tools:\n${formatToolPrompt(tools)}`;
+    const toolsText = `Available tools:\n${formatToolPrompt(filteredTools)}`;
     const sessionText = `Session context:\n${sessionCtx}`;
     const workFocusText = `Work focus digest:\n${workFocusDigest}`;
     const memoryText = `Long-term memory matches:\n${memoryCtx}`;
 
-    const toolSchemaParts = tools.map((t) => {
+    const toolSchemaParts = filteredTools.map((t) => {
       const schema = t.inputSchema ?? { type: "object", additionalProperties: true };
       let chars = 0;
       try {
@@ -2347,7 +2518,9 @@ export class AgentRuntime {
         { id: "memory_matches", chars: memoryText.length },
         { id: "message", chars: resolved.message.length },
       ],
-      selected_tools: tools.map((t) => t.id),
+      selected_tools: filteredTools.map((t) => t.id),
+      execution_profile: executionProfile.id,
+      execution_profile_source: executionProfile.source,
       tool_schema_top: toolSchemaTop,
       tool_schema_total_chars: toolSchemaTotalChars,
       enabled_skills: ctx.skills.map((s) => s.meta.id),
@@ -2374,7 +2547,7 @@ export class AgentRuntime {
     const usedTools = new Set<string>();
     const toolCallPolicyStates = new Map<string, ToolCallPolicyState>();
     const toolSet = this.buildToolSet(
-      tools,
+      filteredTools,
       toolExecutor,
       usedTools,
       {
@@ -2426,12 +2599,15 @@ export class AgentRuntime {
     const model = await this.resolveSessionModel({
       config: ctx.config,
       sessionId: session.session_id,
+      profileModelId: executionProfile.profile.model_id,
       fetchImpl: this.fetchImpl,
     });
 
     return {
       ctx,
+      executionProfile,
       session,
+      mainLaneSessionKey,
       model,
       toolSet,
       toolCallPolicyStates,
@@ -2441,6 +2617,213 @@ export class AgentRuntime {
       contextReport: validatedReport,
       systemPrompt,
       resolved,
+    };
+  }
+
+  private async resolveExecutionProfile(input: {
+    laneQueueScope?: LaneQueueScope;
+    metadata?: Record<string, unknown>;
+  }): Promise<ResolvedExecutionProfile> {
+    const laneQueueScope = input.laneQueueScope;
+    const isSubagentTurn =
+      laneQueueScope &&
+      laneQueueScope.lane === "subagent" &&
+      laneQueueScope.key.startsWith(`agent:${this.agentId}:subagent:`) &&
+      SubagentSessionKey.safeParse(laneQueueScope.key).success;
+
+    if (!isSubagentTurn) {
+      const id: ExecutionProfileId = "interaction";
+      return { id, profile: getExecutionProfile(id), source: "interaction_default" };
+    }
+
+    const subagentId = (() => {
+      const fromMeta = input.metadata?.["subagent_id"];
+      if (typeof fromMeta === "string" && fromMeta.trim().length > 0) {
+        return fromMeta.trim();
+      }
+
+      const parts = laneQueueScope.key.split(":");
+      const last = parts.at(-1)?.trim();
+      return last && last.length > 0 ? last : undefined;
+    })();
+
+    if (!subagentId) {
+      const id: ExecutionProfileId = "explorer_ro";
+      return { id, profile: getExecutionProfile(id), source: "subagent_fallback" };
+    }
+
+    try {
+      const workboard = new WorkboardDal(this.opts.container.db);
+      const scope = {
+        tenant_id: "default",
+        agent_id: this.agentId,
+        workspace_id: this.workspaceId,
+      } as const;
+      const subagent = await workboard.getSubagent({ scope, subagent_id: subagentId });
+      const normalized =
+        subagent && typeof subagent.execution_profile === "string"
+          ? normalizeExecutionProfileId(subagent.execution_profile)
+          : undefined;
+      if (!subagent || !normalized) {
+        const id: ExecutionProfileId = "explorer_ro";
+        return { id, profile: getExecutionProfile(id), source: "subagent_fallback" };
+      }
+
+      const id: ExecutionProfileId = normalized;
+      const profile = getExecutionProfile(normalized);
+      if (!profile.allowed_lanes.includes("subagent")) {
+        const fallbackId: ExecutionProfileId = "explorer_ro";
+        return {
+          id: fallbackId,
+          profile: getExecutionProfile(fallbackId),
+          source: "subagent_fallback",
+        };
+      }
+
+      return {
+        id,
+        profile,
+        source: "subagent_record",
+      };
+    } catch {
+      const id: ExecutionProfileId = "explorer_ro";
+      return { id, profile: getExecutionProfile(id), source: "subagent_fallback" };
+    }
+  }
+
+  private async resolveIntakeDecision(input: {
+    input: AgentTurnRequestT;
+    executionProfile: ResolvedExecutionProfile;
+    resolved: ResolvedAgentTurnInput;
+    mainLaneSessionKey: string;
+  }): Promise<{
+    mode: "inline" | "delegate_execute" | "delegate_plan";
+    reason_code: string;
+  }> {
+    if (input.executionProfile.id !== "interaction") {
+      return { mode: "inline", reason_code: "non_interaction" };
+    }
+
+    const requested = input.input.intake_mode;
+    if (requested === "inline") {
+      return { mode: "inline", reason_code: "request_field" };
+    }
+    if (requested === "delegate_execute" || requested === "delegate_plan") {
+      return { mode: requested, reason_code: "request_field" };
+    }
+
+    const key = input.mainLaneSessionKey;
+
+    try {
+      const dal = new IntakeModeOverrideDal(this.opts.container.db);
+      const row = await dal.get({ key, lane: "main" });
+      const override = row?.intake_mode?.trim()?.toLowerCase() ?? "";
+      if (override === "inline") {
+        return { mode: "inline", reason_code: "override" };
+      }
+      if (override === "delegate_execute" || override === "delegate_plan") {
+        return { mode: override, reason_code: "override" };
+      }
+    } catch {
+      // ignore override lookup failures; fall back to default inline
+    }
+
+    return { mode: "inline", reason_code: "default_inline" };
+  }
+
+  private async delegateFromIntake(input: {
+    executionProfile: ResolvedExecutionProfile;
+    mode: "delegate_execute" | "delegate_plan";
+    reason_code: string;
+    resolved: ResolvedAgentTurnInput;
+    createdFromSessionKey: string;
+  }): Promise<{ reply: string; work_item_id: string; subagent_id?: string }> {
+    const required = ["subagent.spawn", "work.write"] as const;
+    for (const cap of required) {
+      if (!input.executionProfile.profile.capabilities.includes(cap)) {
+        return {
+          reply: `Delegation denied: execution profile '${input.executionProfile.id}' lacks capability '${cap}'.`,
+          work_item_id: "",
+        };
+      }
+    }
+
+    const scope = {
+      tenant_id: "default",
+      agent_id: this.agentId,
+      workspace_id: this.workspaceId,
+    } as const;
+
+    const workboard = new WorkboardDal(this.opts.container.db);
+
+    const delegatedProfileId: ExecutionProfileId =
+      input.mode === "delegate_plan" ? "planner" : "executor_rw";
+    const delegatedProfile = getExecutionProfile(delegatedProfileId);
+
+    const title = (() => {
+      const firstLine = input.resolved.message.split("\n")[0]?.trim() ?? "";
+      const normalized = firstLine.length > 0 ? firstLine : "Delegated work";
+      return normalized.slice(0, 140);
+    })();
+
+    const workItem = await workboard.createItem({
+      scope,
+      item: {
+        kind: input.mode === "delegate_plan" ? "initiative" : "action",
+        title,
+        budgets: delegatedProfile.budgets,
+      },
+      createdFromSessionKey: input.createdFromSessionKey,
+    });
+
+    await workboard.appendEvent({
+      scope,
+      work_item_id: workItem.work_item_id,
+      kind: "intake.mode_selected",
+      payload_json: {
+        mode: input.mode,
+        reason_code: input.reason_code,
+        delegated_execution_profile: delegatedProfileId,
+      },
+    });
+
+    const quota = input.executionProfile.profile.quotas?.max_running_subagents;
+    if (quota !== undefined) {
+      const { subagents } = await workboard.listSubagents({
+        scope,
+        statuses: ["running"],
+        limit: 200,
+      });
+      if (subagents.length >= quota) {
+        return {
+          reply:
+            `Delegated to WorkItem ${workItem.work_item_id} (mode=${input.mode}). ` +
+            `Spawn quota reached (${String(subagents.length)}/${String(quota)}); no subagent spawned.`,
+          work_item_id: workItem.work_item_id,
+        };
+      }
+    }
+
+    const subagentId = randomUUID();
+    const sessionKey = `agent:${this.agentId}:subagent:${subagentId}`;
+    const subagent = await workboard.createSubagent({
+      scope,
+      subagent: {
+        execution_profile: delegatedProfileId,
+        session_key: sessionKey,
+        lane: "subagent",
+        status: "running",
+        work_item_id: workItem.work_item_id,
+      },
+      subagentId,
+    });
+
+    return {
+      reply:
+        `Delegated to WorkItem ${workItem.work_item_id} (mode=${input.mode}, reason=${input.reason_code}). ` +
+        `Spawned subagent ${subagent.subagent_id} (profile=${subagent.execution_profile}).`,
+      work_item_id: workItem.work_item_id,
+      subagent_id: subagent.subagent_id,
     };
   }
 
