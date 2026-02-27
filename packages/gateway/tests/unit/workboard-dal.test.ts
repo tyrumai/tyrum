@@ -47,6 +47,35 @@ describe("WorkboardDal", () => {
     });
   });
 
+  it("rejects cross-scope parent_work_item_id", async () => {
+    const dal = createDal();
+    const scopeA = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scopeB = { tenant_id: "default", agent_id: "agent-b", workspace_id: "default" } as const;
+
+    const foreignParent = await dal.createItem({
+      scope: scopeB,
+      item: {
+        kind: "action",
+        title: "Foreign parent",
+        created_from_session_key: "agent:agent-b:main",
+      },
+      createdAtIso: "2026-02-27T00:00:00.000Z",
+    });
+
+    await expect(
+      dal.createItem({
+        scope: scopeA,
+        item: {
+          kind: "action",
+          title: "Child",
+          parent_work_item_id: foreignParent.work_item_id,
+          created_from_session_key: "agent:default:main",
+        },
+        createdAtIso: "2026-02-27T00:00:01.000Z",
+      }),
+    ).rejects.toThrow(/scope/i);
+  });
+
   it("lists work items by scope and status", async () => {
     const dal = createDal();
     const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
@@ -183,6 +212,34 @@ describe("WorkboardDal", () => {
     expect(listed.entries.map((e) => e.key)).toEqual(["branch"]);
   });
 
+  it("rejects setting work item state KV outside the caller scope", async () => {
+    const dal = createDal();
+
+    const scopeA = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scopeB = { tenant_id: "default", agent_id: "agent-b", workspace_id: "default" } as const;
+
+    const foreignItem = await dal.createItem({
+      scope: scopeB,
+      item: { kind: "action", title: "Foreign", created_from_session_key: "agent:agent-b:main" },
+      createdAtIso: "2026-02-27T00:00:00.000Z",
+    });
+
+    await expect(
+      dal.setStateKv({
+        scope: {
+          kind: "work_item",
+          tenant_id: scopeA.tenant_id,
+          agent_id: scopeA.agent_id,
+          workspace_id: scopeA.workspace_id,
+          work_item_id: foreignItem.work_item_id,
+        },
+        key: "branch",
+        value_json: { name: "should-fail" },
+        updatedAtIso: "2026-02-27T00:00:00.000Z",
+      }),
+    ).rejects.toThrow(/scope/i);
+  });
+
   it("creates and lists artifacts for a work item", async () => {
     const dal = createDal();
     const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
@@ -238,6 +295,55 @@ describe("WorkboardDal", () => {
           title: "Should fail",
         },
         createdAtIso: "2026-02-27T00:00:00.000Z",
+      }),
+    ).rejects.toThrow(/scope/i);
+  });
+
+  it("rejects created_by_subagent_id outside the caller scope", async () => {
+    const dal = createDal();
+    const scopeA = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scopeB = { tenant_id: "default", agent_id: "agent-b", workspace_id: "default" } as const;
+
+    const foreignItem = await dal.createItem({
+      scope: scopeB,
+      item: { kind: "action", title: "Foreign", created_from_session_key: "agent:agent-b:main" },
+      createdAtIso: "2026-02-27T00:00:00.000Z",
+    });
+
+    const foreignSubagentId = "00000000-0000-0000-0000-000000000099";
+    const foreignSubagent = await dal.createSubagent({
+      scope: scopeB,
+      subagent: {
+        execution_profile: "executor",
+        session_key: `agent:agent-b:subagent:${foreignSubagentId}`,
+        work_item_id: foreignItem.work_item_id,
+      },
+      subagentId: foreignSubagentId,
+      createdAtIso: "2026-02-27T00:00:01.000Z",
+    });
+
+    await expect(
+      dal.createArtifact({
+        scope: scopeA,
+        artifact: {
+          kind: "risk",
+          title: "Should fail",
+          created_by_subagent_id: foreignSubagent.subagent_id,
+        },
+        createdAtIso: "2026-02-27T00:00:02.000Z",
+      }),
+    ).rejects.toThrow(/scope/i);
+
+    await expect(
+      dal.createDecision({
+        scope: scopeA,
+        decision: {
+          question: "Should this be allowed?",
+          chosen: "No",
+          rationale_md: "Cross-scope references must be rejected.",
+          created_by_subagent_id: foreignSubagent.subagent_id,
+        },
+        createdAtIso: "2026-02-27T00:00:03.000Z",
       }),
     ).rejects.toThrow(/scope/i);
   });

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type {
   AgentStateKVEntry,
+  ArtifactRef,
   DecisionRecord,
   ExecutionBudgets,
   WorkArtifact,
@@ -296,7 +297,7 @@ function toWorkItemTask(raw: RawWorkItemTaskRow): WorkItemTask {
     side_effect_class: raw.side_effect_class,
     run_id: raw.run_id ?? undefined,
     approval_id: raw.approval_id ?? undefined,
-    artifacts: parseJsonOr(raw.artifacts_json, []) as unknown[],
+    artifacts: parseJsonOr(raw.artifacts_json, []) as ArtifactRef[],
     started_at: normalizeMaybeTime(raw.started_at),
     finished_at: normalizeMaybeTime(raw.finished_at),
     result_summary: raw.result_summary ?? undefined,
@@ -418,6 +419,16 @@ export class WorkboardDal {
       params.item.created_from_session_key?.trim() || params.createdFromSessionKey?.trim();
     if (!createdFromSessionKey) {
       throw new Error("created_from_session_key is required");
+    }
+
+    if (params.item.parent_work_item_id) {
+      const parent = await this.getItem({
+        scope: params.scope,
+        work_item_id: params.item.parent_work_item_id,
+      });
+      if (!parent) {
+        throw new Error("parent_work_item_id is outside scope");
+      }
     }
 
     const row = await this.db.get<RawWorkItemRow>(
@@ -843,6 +854,14 @@ export class WorkboardDal {
       return toKvEntry(row) as AgentStateKVEntry;
     }
 
+    const item = await this.getItem({
+      scope: params.scope,
+      work_item_id: params.scope.work_item_id,
+    });
+    if (!item) {
+      throw new Error("work_item_id is outside scope");
+    }
+
     const row = await this.db.get<RawKvRow>(
       `INSERT INTO work_item_state_kv (
          tenant_id,
@@ -907,6 +926,16 @@ export class WorkboardDal {
       });
       if (!item) {
         throw new Error("work_item_id is outside scope");
+      }
+    }
+
+    if (params.artifact.created_by_subagent_id) {
+      const subagent = await this.getSubagent({
+        scope: params.scope,
+        subagent_id: params.artifact.created_by_subagent_id,
+      });
+      if (!subagent) {
+        throw new Error("created_by_subagent_id is outside scope");
       }
     }
 
@@ -1046,6 +1075,16 @@ export class WorkboardDal {
       });
       if (!item) {
         throw new Error("work_item_id is outside scope");
+      }
+    }
+
+    if (params.decision.created_by_subagent_id) {
+      const subagent = await this.getSubagent({
+        scope: params.scope,
+        subagent_id: params.decision.created_by_subagent_id,
+      });
+      if (!subagent) {
+        throw new Error("created_by_subagent_id is outside scope");
       }
     }
 
