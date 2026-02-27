@@ -32,7 +32,7 @@ const {
     };
   });
 
-  const appWhenReadyMock = vi.fn(() => Promise.resolve());
+  const appWhenReadyMock = vi.fn(() => new Promise<void>(() => {}));
   const appOnMock = vi.fn();
   const appQuitMock = vi.fn();
   const appRequestSingleInstanceLockMock = vi.fn(() => true);
