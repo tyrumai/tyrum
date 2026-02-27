@@ -10,7 +10,10 @@ import {
   type StepExecutor,
   type StepResult,
 } from "../../src/modules/execution/engine.js";
-import { sha256HexFromString, stableJsonStringify } from "../../src/modules/policy/canonical-json.js";
+import {
+  sha256HexFromString,
+  stableJsonStringify,
+} from "../../src/modules/policy/canonical-json.js";
 import { PolicySnapshotDal } from "../../src/modules/policy/snapshot-dal.js";
 import { WorkboardDal } from "../../src/modules/workboard/dal.js";
 
@@ -263,4 +266,3 @@ describe("ExecutionEngine intent guardrail scenarios (issues #632 / #599)", () =
     expect(guardrailArtifacts?.n).toBe(0);
   });
 });
-
