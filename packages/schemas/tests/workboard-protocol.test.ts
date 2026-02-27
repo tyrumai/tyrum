@@ -297,7 +297,7 @@ describe("WorkBoard WS protocol", () => {
       { type: "work.item.completed", payload: { item: workItem } },
       { type: "work.item.cancelled", payload: { item: workItem } },
 
-      { type: "work.link.created", payload: { link: workItemLink } },
+      { type: "work.link.created", payload: { ...scope, link: workItemLink } },
 
       {
         type: "work.task.leased",

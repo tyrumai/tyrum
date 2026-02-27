@@ -37,7 +37,7 @@ export const WorkItemFingerprint = z
   .object({
     resources: z.array(WorkItemFingerprintResource).max(128).default([]),
   })
-  .strict();
+  .passthrough();
 export type WorkItemFingerprint = z.infer<typeof WorkItemFingerprint>;
 
 export const WorkItem = z

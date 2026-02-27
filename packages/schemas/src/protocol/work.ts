@@ -779,11 +779,9 @@ export const WsWorkItemCancelledEvent = WsEventEnvelope.extend({
 });
 export type WsWorkItemCancelledEvent = z.infer<typeof WsWorkItemCancelledEvent>;
 
-export const WsWorkLinkCreatedEventPayload = z
-  .object({
-    link: WorkItemLink,
-  })
-  .strict();
+export const WsWorkLinkCreatedEventPayload = WorkScope.extend({
+  link: WorkItemLink,
+}).strict();
 export type WsWorkLinkCreatedEventPayload = z.infer<typeof WsWorkLinkCreatedEventPayload>;
 
 export const WsWorkLinkCreatedEvent = WsEventEnvelope.extend({

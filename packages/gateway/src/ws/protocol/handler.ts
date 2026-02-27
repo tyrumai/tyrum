@@ -1422,7 +1422,12 @@ export async function handleClientMessage(
             type: "work.link.created",
             occurred_at: new Date().toISOString(),
             scope: { kind: "agent", agent_id: payload.agent_id },
-            payload: { link },
+            payload: {
+              tenant_id: payload.tenant_id,
+              agent_id: payload.agent_id,
+              workspace_id: payload.workspace_id,
+              link,
+            },
           },
           deps,
           WORKBOARD_WS_AUDIENCE,
