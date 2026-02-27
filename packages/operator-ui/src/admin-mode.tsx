@@ -1,5 +1,9 @@
 import { createTyrumHttpClient, type TyrumHttpFetch } from "@tyrum/client";
-import { isAdminModeActive, type AdminModeState, type OperatorCore } from "@tyrum/operator-core";
+import {
+  formatAdminModeRemaining,
+  isAdminModeActive,
+  type OperatorCore,
+} from "@tyrum/operator-core";
 import {
   createContext,
   useEffect,
@@ -12,18 +16,6 @@ import {
 import type { OperatorUiMode } from "./app.js";
 import { getDesktopApi } from "./desktop-api.js";
 import { useOperatorStore } from "./use-operator-store.js";
-
-function formatAdminModeRemaining(state: AdminModeState): string {
-  const remainingMs =
-    state.remainingMs ??
-    (state.expiresAt ? Math.max(0, Date.parse(state.expiresAt) - Date.now()) : null);
-  if (remainingMs === null) return "--:--";
-
-  const totalSeconds = Math.ceil(remainingMs / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${String(minutes)}:${String(seconds).padStart(2, "0")}`;
-}
 
 function headersToRecord(headers: HeadersInit | undefined): Record<string, string> | undefined {
   if (!headers) return undefined;

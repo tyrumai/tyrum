@@ -10,6 +10,7 @@ export type { OperatorAuthStrategy } from "./auth.js";
 export {
   AdminModeRequiredError,
   gateAdminMode,
+  formatAdminModeRemaining,
   isAdminModeActive,
   requireAdminMode,
 } from "./admin-mode.js";

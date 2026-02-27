@@ -21,4 +21,31 @@ describe("tui cli args", () => {
   it("rejects missing --gateway value", () => {
     expect(() => parseTuiCliArgs(["--gateway"])).toThrow(/--gateway requires a value/i);
   });
+
+  it("parses reconnect flags", () => {
+    expect(parseTuiCliArgs(["start", "--no-reconnect"])).toEqual({
+      kind: "start",
+      reconnect: false,
+    });
+    expect(parseTuiCliArgs(["start", "--reconnect"])).toEqual({ kind: "start", reconnect: true });
+  });
+
+  it("parses home aliases", () => {
+    expect(parseTuiCliArgs(["start", "--home", "/tmp"])).toEqual({
+      kind: "start",
+      tyrumHome: "/tmp",
+    });
+    expect(parseTuiCliArgs(["start", "--tyrum-home", "/tmp"])).toEqual({
+      kind: "start",
+      tyrumHome: "/tmp",
+    });
+  });
+
+  it("rejects missing --token value", () => {
+    expect(() => parseTuiCliArgs(["--token"])).toThrow(/--token requires a value/i);
+  });
+
+  it("rejects unknown arguments", () => {
+    expect(() => parseTuiCliArgs(["--nope"])).toThrow(/unknown argument/i);
+  });
 });

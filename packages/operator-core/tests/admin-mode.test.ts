@@ -5,6 +5,7 @@ import {
   createBearerTokenAuth,
   gateAdminMode,
   isAdminModeActive,
+  formatAdminModeRemaining,
   requireAdminMode,
   selectAuthForAdminMode,
   type AdminModeState,
@@ -183,5 +184,26 @@ describe("admin mode", () => {
 
     expect(() => requireAdminMode(store.getSnapshot())).not.toThrow();
     await expect(gateAdminMode(store, async () => "ok")).resolves.toBe("ok");
+  });
+
+  it("formats admin mode remaining time as m:ss", () => {
+    expect(
+      formatAdminModeRemaining({
+        expiresAt: "2026-02-26T00:01:01.000Z",
+        remainingMs: 61_000,
+      }),
+    ).toBe("1:01");
+  });
+
+  it("falls back to expiresAt when remainingMs is null", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-02-26T00:00:00.000Z"));
+
+    expect(
+      formatAdminModeRemaining({
+        expiresAt: "2026-02-26T00:01:01.000Z",
+        remainingMs: null,
+      }),
+    ).toBe("1:01");
   });
 });
