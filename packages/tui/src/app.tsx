@@ -668,14 +668,13 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
     if (!snapshot.open || snapshot.busy) return;
 
     const query = snapshot.query.trim();
-    if (!query) {
-      setMemorySearchDialog((prev) => ({ ...prev, error: "Query is required" }));
-      return;
-    }
-
     setMemorySearchDialog((prev) => ({ ...prev, busy: true, error: null }));
     try {
-      await coreRef.current.memoryStore.search(query);
+      if (!query) {
+        await coreRef.current.memoryStore.list();
+      } else {
+        await coreRef.current.memoryStore.search(query);
+      }
       setMemorySearchDialog({ open: false, query: "", busy: false, error: null });
     } catch (error) {
       setMemorySearchDialog((prev) => ({ ...prev, busy: false, error: toErrorMessage(error) }));
@@ -873,7 +872,7 @@ export function TuiApp({ runtime, config }: { runtime: TuiRuntime; config: Resol
           openMemoryForgetDialog(command.memoryItemId);
           return;
         case "exportMemory":
-          void core.memoryStore.exportAll();
+          void core.memoryStore.exportAll().catch(() => {});
           return;
         case "refreshApprovals":
           void core.approvalsStore.refreshPending();

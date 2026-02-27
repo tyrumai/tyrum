@@ -79,6 +79,35 @@ async function waitFor(
   throw new Error("Timed out waiting for condition");
 }
 
+const DEFAULT_CONFIG = {
+  httpBaseUrl: "http://127.0.0.1:8788",
+  wsUrl: "ws://127.0.0.1:8788/ws",
+  token: "token",
+  deviceIdentityPath: "/tmp/device-identity.json",
+  reconnect: false,
+  tlsCertFingerprint256: undefined,
+} as const;
+
+function createRuntime(core: unknown): {
+  manager: { getCore: () => unknown; subscribe: () => () => void; dispose: () => void };
+  enterAdminMode: (token: string) => Promise<void>;
+  exitAdminMode: () => void;
+  dispose: () => void;
+} {
+  const manager = {
+    getCore: () => core,
+    subscribe: () => () => {},
+    dispose: () => {},
+  };
+
+  return {
+    manager,
+    enterAdminMode: vi.fn(async () => {}),
+    exitAdminMode: vi.fn(() => {}),
+    dispose: vi.fn(() => {}),
+  };
+}
+
 describe("TuiApp", () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -196,27 +225,8 @@ describe("TuiApp", () => {
       }),
     };
 
-    const manager = {
-      getCore: () => core,
-      subscribe: () => () => {},
-      dispose: () => {},
-    };
-
-    const runtime = {
-      manager,
-      enterAdminMode: vi.fn(async () => {}),
-      exitAdminMode: vi.fn(() => {}),
-      dispose: vi.fn(() => {}),
-    };
-
-    const config = {
-      httpBaseUrl: "http://127.0.0.1:8788",
-      wsUrl: "ws://127.0.0.1:8788/ws",
-      token: "token",
-      deviceIdentityPath: "/tmp/device-identity.json",
-      reconnect: false,
-      tlsCertFingerprint256: undefined,
-    };
+    const runtime = createRuntime(core);
+    const config = DEFAULT_CONFIG;
 
     const io = createTestStreams();
     const instance = render(React.createElement(TuiApp, { runtime, config }), {
@@ -266,6 +276,13 @@ describe("TuiApp", () => {
   it("drives Memory route search/forget/export flows", async () => {
     const connect = vi.fn();
     const disconnect = vi.fn();
+    let exportCatchAttached = false;
+    const exportCatchTracker = {
+      catch(_onRejected: (reason: unknown) => unknown) {
+        exportCatchAttached = true;
+        return exportCatchTracker;
+      },
+    } as unknown as Promise<never>;
 
     const item = {
       v: 1,
@@ -297,7 +314,7 @@ describe("TuiApp", () => {
       refresh: vi.fn(async () => {}),
       get: vi.fn(async () => item),
       forgetById: vi.fn(async (_id: string) => ({ v: 1, deleted_count: 1, tombstones: [] })),
-      exportAll: vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" })),
+      exportAll: vi.fn(() => exportCatchTracker),
     };
 
     const core = {
@@ -357,27 +374,8 @@ describe("TuiApp", () => {
       memoryStore,
     };
 
-    const manager = {
-      getCore: () => core,
-      subscribe: () => () => {},
-      dispose: () => {},
-    };
-
-    const runtime = {
-      manager,
-      enterAdminMode: vi.fn(async () => {}),
-      exitAdminMode: vi.fn(() => {}),
-      dispose: vi.fn(() => {}),
-    };
-
-    const config = {
-      httpBaseUrl: "http://127.0.0.1:8788",
-      wsUrl: "ws://127.0.0.1:8788/ws",
-      token: "token",
-      deviceIdentityPath: "/tmp/device-identity.json",
-      reconnect: false,
-      tlsCertFingerprint256: undefined,
-    };
+    const runtime = createRuntime(core);
+    const config = DEFAULT_CONFIG;
 
     const io = createTestStreams();
     const instance = render(React.createElement(TuiApp, { runtime, config }), {
@@ -414,6 +412,121 @@ describe("TuiApp", () => {
 
       io.stdin.write("p");
       await waitFor(() => memoryStore.exportAll.mock.calls.length === 1);
+      expect(exportCatchAttached).toBe(true);
+    } finally {
+      instance.unmount();
+      await waitFor(() => disconnect.mock.calls.length === 1);
+    }
+  }, 20_000);
+
+  it("treats an empty Memory search query as list", async () => {
+    const connect = vi.fn();
+    const disconnect = vi.fn();
+
+    const memoryStore = {
+      ...createStore({
+        mode: "list",
+        query: null,
+        itemIds: [],
+        hitsById: {},
+        itemsById: {},
+        loading: false,
+        error: null,
+        lastSyncedAt: null,
+        lastExportArtifactId: null,
+        lastForgetDeletedCount: null,
+      }),
+      list: vi.fn(async () => {}),
+      search: vi.fn(async (_query: string) => {}),
+      refresh: vi.fn(async () => {}),
+      get: vi.fn(async () => {
+        throw new Error("not implemented");
+      }),
+      forgetById: vi.fn(async (_id: string) => ({ v: 1, deleted_count: 0, tombstones: [] })),
+      exportAll: vi.fn(async () => ({ v: 1, artifact_id: "artifact-1" })),
+    };
+
+    const core = {
+      connect,
+      disconnect,
+      adminModeStore: createStore({
+        status: "inactive",
+        elevatedToken: null,
+        enteredAt: null,
+        expiresAt: null,
+        remainingMs: null,
+      }),
+      connectionStore: createStore({
+        status: "connected",
+        clientId: "client-1",
+        transportError: null,
+        lastDisconnect: null,
+      }),
+      approvalsStore: {
+        ...createStore({
+          pendingIds: [],
+          byId: {},
+          loading: false,
+          error: null,
+        }),
+        refreshPending: vi.fn(async () => {}),
+        resolve: vi.fn(async () => {}),
+      },
+      pairingStore: {
+        ...createStore({
+          byId: {},
+          pendingIds: [],
+          loading: false,
+          error: null,
+          lastSyncedAt: null,
+        }),
+        refresh: vi.fn(async () => {}),
+        approve: vi.fn(async () => {}),
+        deny: vi.fn(async () => {}),
+        revoke: vi.fn(async () => {}),
+      },
+      statusStore: createStore({
+        status: null,
+        usage: null,
+        presenceByInstanceId: {},
+        loading: { status: false, usage: false, presence: false },
+        error: { status: null, usage: null, presence: null },
+        lastSyncedAt: null,
+      }),
+      runsStore: createStore({
+        runsById: {},
+        stepIdsByRunId: {},
+        stepsById: {},
+        attemptIdsByStepId: {},
+        attemptsById: {},
+      }),
+      memoryStore,
+    };
+
+    const runtime = createRuntime(core);
+    const config = DEFAULT_CONFIG;
+
+    const io = createTestStreams();
+    const instance = render(React.createElement(TuiApp, { runtime, config }), {
+      stdout: io.stdout,
+      stdin: io.stdin,
+      exitOnCtrlC: false,
+      patchConsole: false,
+    });
+
+    try {
+      await waitFor(() => connect.mock.calls.length === 1);
+
+      io.stdin.write("6");
+      await waitFor(() => memoryStore.list.mock.calls.length === 1);
+      memoryStore.list.mockClear();
+
+      io.stdin.write("/");
+      await sleep(25);
+      io.stdin.write("\r");
+
+      await waitFor(() => memoryStore.list.mock.calls.length === 1);
+      expect(memoryStore.search).not.toHaveBeenCalled();
     } finally {
       instance.unmount();
       await waitFor(() => disconnect.mock.calls.length === 1);
