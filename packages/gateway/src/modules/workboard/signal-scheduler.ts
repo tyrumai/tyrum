@@ -305,16 +305,22 @@ export class WorkSignalScheduler {
           lease_owner: string | null;
           signal_id: string;
           dedupe_key: string;
-        }>("SELECT status, lease_owner, signal_id, dedupe_key FROM work_signal_firings WHERE firing_id = ?", [
-          firing.firing_id,
-        ]);
-        if (!firingRow || firingRow.status !== "processing" || firingRow.lease_owner !== this.owner) {
+        }>(
+          "SELECT status, lease_owner, signal_id, dedupe_key FROM work_signal_firings WHERE firing_id = ?",
+          [firing.firing_id],
+        );
+        if (
+          !firingRow ||
+          firingRow.status !== "processing" ||
+          firingRow.lease_owner !== this.owner
+        ) {
           return null;
         }
 
-        const signal = await tx.get<RawWorkSignalRow>("SELECT * FROM work_signals WHERE signal_id = ?", [
-          firing.signal_id,
-        ]);
+        const signal = await tx.get<RawWorkSignalRow>(
+          "SELECT * FROM work_signals WHERE signal_id = ?",
+          [firing.signal_id],
+        );
         if (!signal) {
           await tx.run(
             `UPDATE work_signal_firings

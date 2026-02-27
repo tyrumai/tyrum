@@ -20,17 +20,17 @@
 
 ## Proposed approaches
 
-1) **DB-backed polling scheduler (recommended)**
+1. **DB-backed polling scheduler (recommended)**
    - Periodic tick queries durable state (work item events) and derives firings.
    - Pros: simplest path to “survives restarts”, easy to test deterministically (`tick()`), no need to thread event subscriptions through many modules.
    - Cons: latency bounded by tick interval; queries must be bounded.
 
-2) **Event subscription + in-memory evaluation**
+2. **Event subscription + in-memory evaluation**
    - Subscribe to internal events (work item transitions, approvals, artifacts) and fire immediately.
    - Pros: low latency.
    - Cons: more invasive wiring; restart safety still needs durable dedupe/firing state.
 
-3) **Hybrid**
+3. **Hybrid**
    - Subscribe for fast-path + periodic reconciliation poller.
    - Pros: best reliability + latency.
    - Cons: more moving parts (YAGNI for v1).
@@ -106,4 +106,3 @@ Processing a claimed firing:
   - Restart safety: creating a second scheduler instance does not re-fire.
 - Contract/conformance:
   - Add a WS contract test that drives `work.create` + `work.signal.create` + `work.transition` and asserts the emitted `work.signal.fired` frame conforms to `@tyrum/schemas`.
-
