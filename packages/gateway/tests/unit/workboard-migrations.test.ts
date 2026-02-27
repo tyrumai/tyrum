@@ -34,6 +34,7 @@ describe("WorkBoard migrations", () => {
       "work_artifacts",
       "work_decisions",
       "work_signals",
+      "work_signal_firings",
       "work_item_state_kv",
       "agent_state_kv",
       "subagents",
