@@ -10,4 +10,3 @@ describe("renderer bootstrap error propagation", () => {
     expect(source).not.toMatch(/\bvoid bootstrap\(\);\b/);
   });
 });
-

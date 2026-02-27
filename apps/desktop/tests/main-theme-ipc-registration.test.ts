@@ -10,4 +10,3 @@ describe("main theme IPC registration", () => {
     expect(source).not.toMatch(/\bregisterThemeIpc\(mainWindow\);/);
   });
 });
-
