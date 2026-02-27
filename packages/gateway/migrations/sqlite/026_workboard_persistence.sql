@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS subagents (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   last_heartbeat_at TEXT,
+  close_reason TEXT,
   closed_at TEXT,
   FOREIGN KEY (work_item_id) REFERENCES work_items(work_item_id),
   FOREIGN KEY (work_item_task_id) REFERENCES work_item_tasks(task_id)
@@ -224,4 +225,3 @@ CREATE TABLE IF NOT EXISTS work_scope_activity (
 
 CREATE INDEX IF NOT EXISTS work_scope_activity_updated_at_ms_idx
 ON work_scope_activity (updated_at_ms DESC);
-

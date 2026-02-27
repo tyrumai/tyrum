@@ -53,6 +53,10 @@ function parseJsonMaybe(raw: string | null): unknown | undefined {
   }
 }
 
+function escapeLikePattern(value: string): string {
+  return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
+}
+
 type Cursor = { sort: string; id: string };
 
 function encodeCursor(cursor: Cursor): string {
@@ -354,6 +358,7 @@ interface RawSubagentRow {
   created_at: RawTime;
   updated_at: RawTime;
   last_heartbeat_at: RawTime | null;
+  close_reason: string | null;
   closed_at: RawTime | null;
 }
 
@@ -787,8 +792,8 @@ export class WorkboardDal {
     }
 
     if (params.prefix) {
-      where.push("key LIKE ?");
-      values.push(`${params.prefix}%`);
+      where.push("key LIKE ? ESCAPE '\\'");
+      values.push(`${escapeLikePattern(params.prefix)}%`);
     }
 
     const table = params.scope.kind === "agent" ? "agent_state_kv" : "work_item_state_kv";
@@ -1940,6 +1945,7 @@ export class WorkboardDal {
     closedAtIso?: string;
   }): Promise<SubagentDescriptor | undefined> {
     const nowIso = params.closedAtIso ?? new Date().toISOString();
+    const closeReason = params.reason?.trim() || null;
 
     return await this.db.transaction(async (tx) => {
       const existing = await tx.get<RawSubagentRow>(
@@ -1964,7 +1970,10 @@ export class WorkboardDal {
 
       const row = await tx.get<RawSubagentRow>(
         `UPDATE subagents
-         SET status = ?, updated_at = ?
+         SET status = ?,
+             updated_at = ?,
+             closed_at = COALESCE(closed_at, ?),
+             close_reason = COALESCE(close_reason, ?)
          WHERE tenant_id = ?
            AND agent_id = ?
            AND workspace_id = ?
@@ -1973,6 +1982,8 @@ export class WorkboardDal {
         [
           "closing",
           nowIso,
+          nowIso,
+          closeReason,
           params.scope.tenant_id,
           params.scope.agent_id,
           params.scope.workspace_id,

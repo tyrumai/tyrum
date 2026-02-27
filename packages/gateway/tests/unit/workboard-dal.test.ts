@@ -212,6 +212,48 @@ describe("WorkboardDal", () => {
     expect(listed.entries.map((e) => e.key)).toEqual(["branch"]);
   });
 
+  it("escapes SQL LIKE wildcards in KV prefix search", async () => {
+    const dal = createDal();
+    const scope = {
+      kind: "agent",
+      tenant_id: "default",
+      agent_id: "default",
+      workspace_id: "default",
+    } as const;
+
+    await dal.setStateKv({
+      scope,
+      key: "config_foo",
+      value_json: { ok: true },
+      updatedAtIso: "2026-02-27T00:00:00.000Z",
+    });
+    await dal.setStateKv({
+      scope,
+      key: "configXfoo",
+      value_json: { ok: false },
+      updatedAtIso: "2026-02-27T00:00:00.000Z",
+    });
+
+    await dal.setStateKv({
+      scope,
+      key: "pct%foo",
+      value_json: { ok: true },
+      updatedAtIso: "2026-02-27T00:00:00.000Z",
+    });
+    await dal.setStateKv({
+      scope,
+      key: "pctAfoo",
+      value_json: { ok: false },
+      updatedAtIso: "2026-02-27T00:00:00.000Z",
+    });
+
+    const underscore = await dal.listStateKv({ scope, prefix: "config_" });
+    expect(underscore.entries.map((e) => e.key)).toEqual(["config_foo"]);
+
+    const percent = await dal.listStateKv({ scope, prefix: "pct%" });
+    expect(percent.entries.map((e) => e.key)).toEqual(["pct%foo"]);
+  });
+
   it("rejects setting work item state KV outside the caller scope", async () => {
     const dal = createDal();
 
@@ -520,5 +562,39 @@ describe("WorkboardDal", () => {
 
     const closing = await dal.listSubagents({ scope, statuses: ["closing"] });
     expect(closing.subagents.map((s) => s.subagent_id)).toEqual([subagent.subagent_id]);
+  });
+
+  it("persists subagent close metadata (closed_at + reason)", async () => {
+    const dal = createDal();
+    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+
+    const subagentId = "00000000-0000-0000-0000-000000000123";
+    const created = await dal.createSubagent({
+      scope,
+      subagent: {
+        execution_profile: "executor",
+        session_key: `agent:default:subagent:${subagentId}`,
+      },
+      subagentId,
+      createdAtIso: "2026-02-27T00:00:00.000Z",
+    });
+
+    const closedAtIso = "2026-02-27T00:00:01.000Z";
+    await dal.closeSubagent({
+      scope,
+      subagent_id: created.subagent_id,
+      reason: "requested by operator",
+      closedAtIso,
+    });
+
+    const raw = await db!.get<Record<string, unknown>>(
+      `SELECT *
+       FROM subagents
+       WHERE subagent_id = ?`,
+      [created.subagent_id],
+    );
+    expect(raw).toBeDefined();
+    expect(raw!.closed_at).toBe(closedAtIso);
+    expect(raw!.close_reason).toBe("requested by operator");
   });
 });
