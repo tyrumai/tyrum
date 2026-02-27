@@ -66,4 +66,3 @@ Add unit tests for the manager:
 - Entering Admin Mode (elevated token) recreates the core and calls `connect()` when previously connected/connecting.
 - Exiting/expiring Admin Mode recreates the core back to baseline auth and reconnects when needed.
 - Admin Mode “tick” updates that do not change the selected auth do **not** recreate the core.
-

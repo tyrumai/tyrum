@@ -13,6 +13,7 @@
 ### Task 1: Write failing unit tests for the desktop OperatorCore manager
 
 **Files:**
+
 - Create: `apps/desktop/tests/renderer-operator-core-manager.test.ts`
 - Create: `apps/desktop/src/renderer/lib/operator-core-manager.ts`
 
@@ -36,6 +37,7 @@ Expected: FAIL (module/function missing).
 **Step 3: Commit**
 
 Run:
+
 ```bash
 git add apps/desktop/tests/renderer-operator-core-manager.test.ts
 git commit -m "test(desktop): cover admin mode core switching manager"
@@ -44,6 +46,7 @@ git commit -m "test(desktop): cover admin mode core switching manager"
 ### Task 2: Implement the desktop OperatorCore manager (minimal API)
 
 **Files:**
+
 - Create: `apps/desktop/src/renderer/lib/operator-core-manager.ts`
 
 **Step 1: Minimal implementation to satisfy tests**
@@ -67,6 +70,7 @@ git commit -m "feat(desktop): manage operator core auth switching"
 ### Task 3: Wire the manager into the desktop renderer Gateway page
 
 **Files:**
+
 - Modify: `apps/desktop/src/renderer/pages/Gateway.tsx`
 
 **Step 1: Update `Gateway.tsx` to use a shared `AdminModeStore` + manager**
@@ -108,4 +112,3 @@ Expected: PASS.
 
 Run: `pnpm format`  
 Expected: PASS / clean diff.
-

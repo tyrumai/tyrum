@@ -1,4 +1,8 @@
-import { createAdminModeStore, createBearerTokenAuth, type OperatorAuthStrategy } from "@tyrum/operator-core";
+import {
+  createAdminModeStore,
+  createBearerTokenAuth,
+  type OperatorAuthStrategy,
+} from "@tyrum/operator-core";
 import { describe, expect, it, vi } from "vitest";
 import { createDesktopOperatorCoreManager } from "../src/renderer/lib/operator-core-manager.js";
 
@@ -36,7 +40,12 @@ describe("createDesktopOperatorCoreManager", () => {
     const createCore = vi.fn((input: { auth: OperatorAuthStrategy }) => {
       const status: CoreStatus = created.length === 0 ? "connected" : "disconnected";
       const fake = createFakeCore({ status });
-      created.push({ auth: input.auth, core: fake.core, connect: fake.connect, dispose: fake.dispose });
+      created.push({
+        auth: input.auth,
+        core: fake.core,
+        connect: fake.connect,
+        dispose: fake.dispose,
+      });
       return fake.core as any;
     });
 
@@ -81,7 +90,12 @@ describe("createDesktopOperatorCoreManager", () => {
     const createCore = vi.fn((input: { auth: OperatorAuthStrategy }) => {
       const status: CoreStatus = created.length < 2 ? "connected" : "disconnected";
       const fake = createFakeCore({ status });
-      created.push({ auth: input.auth, core: fake.core, connect: fake.connect, dispose: fake.dispose });
+      created.push({
+        auth: input.auth,
+        core: fake.core,
+        connect: fake.connect,
+        dispose: fake.dispose,
+      });
       return fake.core as any;
     });
 
