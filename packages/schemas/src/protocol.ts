@@ -16,5 +16,6 @@ export * from "./protocol/execution.js";
 export * from "./protocol/pairing.js";
 export * from "./protocol/presence.js";
 export * from "./protocol/session.js";
+export * from "./protocol/work.js";
 export * from "./protocol/unions.js";
 export * from "./protocol/workflow.js";
