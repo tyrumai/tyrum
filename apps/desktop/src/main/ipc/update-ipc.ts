@@ -2,6 +2,7 @@ import {
   app,
   dialog,
   ipcMain,
+  Notification,
   shell,
   type BrowserWindow,
   type FileFilter,
@@ -14,6 +15,7 @@ import {
   isAllowedReleaseFilePath,
   releaseFileDialogExtensions,
 } from "../updater.js";
+import { createDesktopUpdateOsIntegration } from "../platform/os-integrations.js";
 import { createWindowSender } from "./window-sender.js";
 
 const sender = createWindowSender();
@@ -21,6 +23,7 @@ const sender = createWindowSender();
 let updater: DesktopUpdaterService | null = null;
 let ipcRegistered = false;
 let dialogWindow: BrowserWindow | null = null;
+let updateOsIntegration: ReturnType<typeof createDesktopUpdateOsIntegration> | null = null;
 
 export interface ManualReleaseFileResult {
   opened: boolean;
@@ -34,11 +37,47 @@ export interface UpdateIpcOptions {
   clearQuitForUpdate?: () => void;
 }
 
+function ensureUpdateOsIntegration(): ReturnType<typeof createDesktopUpdateOsIntegration> {
+  if (updateOsIntegration) return updateOsIntegration;
+
+  updateOsIntegration = createDesktopUpdateOsIntegration({
+    platform: process.platform,
+    setProgressBar: (progress) => {
+      const window = dialogWindow;
+      if (!window) return;
+      if (window.isDestroyed()) return;
+      const setProgressBar = (window as { setProgressBar?: unknown }).setProgressBar;
+      if (typeof setProgressBar !== "function") return;
+      (setProgressBar as (value: number) => void).call(window, progress);
+    },
+    clearProgressBar: () => {
+      const window = dialogWindow;
+      if (!window) return;
+      if (window.isDestroyed()) return;
+      const setProgressBar = (window as { setProgressBar?: unknown }).setProgressBar;
+      if (typeof setProgressBar !== "function") return;
+      (setProgressBar as (value: number) => void).call(window, -1);
+    },
+    notify: (title, body) => {
+      try {
+        if (!Notification.isSupported()) return;
+        const notification = new Notification({ title, body });
+        notification.show();
+      } catch (error) {
+        console.error("Failed to show update notification", error);
+      }
+    },
+  });
+
+  return updateOsIntegration;
+}
+
 function ensureUpdater(): DesktopUpdaterService {
   if (updater) {
     return updater;
   }
 
+  const osIntegration = ensureUpdateOsIntegration();
   updater = new DesktopUpdaterService({
     appUpdater: autoUpdater as unknown as ConstructorParameters<
       typeof DesktopUpdaterService
@@ -47,6 +86,7 @@ function ensureUpdater(): DesktopUpdaterService {
     isPackaged: app.isPackaged,
     onStateChange: (state) => {
       sender.send("update:state", state);
+      osIntegration.onStateChange(state);
     },
   });
 

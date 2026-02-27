@@ -8,6 +8,7 @@ import type { GatewayManager } from "./gateway-manager.js";
 import { MAIN_WINDOW_OPTIONS } from "./window-options.js";
 import { configExists, loadConfig } from "./config/store.js";
 import { setWindowsAppUserModelId, setupSingleInstance } from "./single-instance.js";
+import { configureMacAboutPanel } from "./platform/os-integrations.js";
 
 app.setName?.("Tyrum");
 
@@ -125,7 +126,10 @@ function createWindow(): void {
 }
 
 if (didAcquireSingleInstanceLock) {
-  app.whenReady().then(createWindow);
+  app.whenReady().then(() => {
+    configureMacAboutPanel(app, process.platform);
+    createWindow();
+  });
   app.on("window-all-closed", () => {
     if (process.platform !== "darwin") app.quit();
   });
