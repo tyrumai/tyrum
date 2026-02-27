@@ -111,6 +111,9 @@ import { hasAnyRequiredScope } from "../../modules/auth/scopes.js";
 import { resolveWsRequestRequiredScopes } from "../../modules/authz/ws-scope-matrix.js";
 import { isSafeSuggestedOverridePattern } from "../../modules/policy/override-guardrails.js";
 import { WorkboardDal } from "../../modules/workboard/dal.js";
+import { enqueueWorkItemStateChangeNotification } from "../../modules/workboard/notifications.js";
+import { buildAgentTurnKey } from "../../modules/agent/turn-key.js";
+import { resolveWorkspaceId } from "../../modules/workspace/id.js";
 import type { ProtocolDeps } from "./types.js";
 
 const WORKBOARD_WS_AUDIENCE: WsBroadcastAudience = {
@@ -909,6 +912,27 @@ export async function handleClientMessage(
 
     try {
       const agentId = parsedReq.data.payload.agent_id ?? "default";
+
+      if (deps.db) {
+        try {
+          const workspaceId = resolveWorkspaceId();
+          const key = buildAgentTurnKey({
+            agentId,
+            workspaceId,
+            channel: parsedReq.data.payload.channel,
+            containerKind: "channel",
+            threadId: parsedReq.data.payload.thread_id,
+          });
+          await new WorkboardDal(deps.db).upsertScopeActivity({
+            scope: { tenant_id: "default", agent_id: agentId, workspace_id: workspaceId },
+            last_active_session_key: key,
+            updated_at_ms: Date.now(),
+          });
+        } catch {
+          // ignore best-effort activity tracking failures
+        }
+      }
+
       const runtime = await deps.agents.getRuntime(agentId);
       const res = await runtime.turn({
         channel: parsedReq.data.payload.channel,
@@ -1232,9 +1256,11 @@ export async function handleClientMessage(
           ? "work.item.blocked"
           : payload.status === "done"
             ? "work.item.completed"
-            : payload.status === "cancelled"
-              ? "work.item.cancelled"
-              : "work.item.updated";
+            : payload.status === "failed"
+              ? "work.item.failed"
+              : payload.status === "cancelled"
+                ? "work.item.cancelled"
+                : "work.item.updated";
 
       broadcastEvent(
         {
@@ -1247,6 +1273,29 @@ export async function handleClientMessage(
         deps,
         WORKBOARD_WS_AUDIENCE,
       );
+
+      if (
+        payload.status === "done" ||
+        payload.status === "blocked" ||
+        payload.status === "failed"
+      ) {
+        try {
+          await enqueueWorkItemStateChangeNotification({
+            db: deps.db,
+            scope: payload,
+            item,
+            approvalDal: deps.approvalDal,
+            policyService: deps.policyService,
+          });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          deps.logger?.warn("workboard.notification_failed", {
+            work_item_id: item.work_item_id,
+            status: payload.status,
+            error: message,
+          });
+        }
+      }
 
       const result = WsWorkTransitionResult.parse({ item });
       return { request_id: msg.request_id, type: msg.type, ok: true, result };

@@ -81,6 +81,7 @@ export class ChannelOutboxDal {
     chunk_index: number;
     text: string;
     parse_mode?: string;
+    approval_id?: number | null;
   }): Promise<{ row: ChannelOutboxRow; deduped: boolean }> {
     const result = await this.db.run(
       `INSERT INTO channel_outbox (
@@ -91,9 +92,10 @@ export class ChannelOutboxDal {
          chunk_index,
          text,
          parse_mode,
-         status
+         status,
+         approval_id
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'queued')
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?)
        ON CONFLICT (dedupe_key) DO NOTHING`,
       [
         input.inbox_id,
@@ -103,6 +105,7 @@ export class ChannelOutboxDal {
         input.chunk_index,
         input.text,
         input.parse_mode ?? null,
+        input.approval_id ?? null,
       ],
     );
 

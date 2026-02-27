@@ -138,6 +138,7 @@ describe("WS control-plane requests", () => {
       tokenStore,
       protocolDeps: {
         connectionManager,
+        db: container.db,
         agents: makeAgents(agentRuntime, container.policyService),
         engine,
         policyService: container.policyService,
@@ -195,6 +196,15 @@ describe("WS control-plane requests", () => {
     );
     expect(sessionRes["ok"]).toBe(true);
     expect((sessionRes["result"] as Record<string, unknown>)["assistant_message"]).toBe("hello");
+
+    const scopeActivity = await container.db.get<{ last_active_session_key: string }>(
+      `SELECT last_active_session_key
+       FROM work_scope_activity
+       WHERE tenant_id = 'default' AND agent_id = 'default' AND workspace_id = 'default'`,
+    );
+    expect(scopeActivity?.last_active_session_key).toBe(
+      "agent:default:ui:default:channel:thread-1",
+    );
 
     ws.send(
       JSON.stringify({

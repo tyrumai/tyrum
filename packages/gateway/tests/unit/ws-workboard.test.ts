@@ -3,6 +3,7 @@ import { ConnectionManager } from "../../src/ws/connection-manager.js";
 import { handleClientMessage } from "../../src/ws/protocol.js";
 import type { ProtocolDeps } from "../../src/ws/protocol.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
+import { ChannelInboxDal } from "../../src/modules/channels/inbox-dal.js";
 
 interface MockWebSocket {
   send: ReturnType<typeof vi.fn>;
@@ -784,6 +785,201 @@ describe("handleClientMessage (work.*)", () => {
       expect(err.code).toBe("invalid_transition");
       expect((err.details as { from?: string; to?: string } | undefined)?.from).toBe("backlog");
       expect((err.details as { from?: string; to?: string } | undefined)?.to).toBe("doing");
+    } finally {
+      await db.close();
+    }
+  });
+
+  it("broadcasts work.item.failed on failed transitions", async () => {
+    const cm = new ConnectionManager();
+    const { id, ws } = makeClient(cm);
+    const client = cm.getClient(id)!;
+
+    const db = openTestSqliteDb();
+    try {
+      const deps = makeDeps(cm, { db });
+
+      const createRes = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-create",
+          type: "work.create",
+          payload: {
+            tenant_id: "default",
+            agent_id: "default",
+            workspace_id: "default",
+            item: { kind: "action", title: "Item 1" },
+          },
+        }),
+        deps,
+      );
+      expect((createRes as unknown as { ok: boolean }).ok).toBe(true);
+      const createdId = (createRes as unknown as { result: { item: { work_item_id: string } } })
+        .result.item.work_item_id;
+      ws.send.mockClear();
+
+      await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-ready",
+          type: "work.transition",
+          payload: {
+            tenant_id: "default",
+            agent_id: "default",
+            workspace_id: "default",
+            work_item_id: createdId,
+            status: "ready",
+            reason: "triage",
+          },
+        }),
+        deps,
+      );
+
+      await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-doing",
+          type: "work.transition",
+          payload: {
+            tenant_id: "default",
+            agent_id: "default",
+            workspace_id: "default",
+            work_item_id: createdId,
+            status: "doing",
+            reason: "start",
+          },
+        }),
+        deps,
+      );
+
+      const failRes = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-failed",
+          type: "work.transition",
+          payload: {
+            tenant_id: "default",
+            agent_id: "default",
+            workspace_id: "default",
+            work_item_id: createdId,
+            status: "failed",
+            reason: "boom",
+          },
+        }),
+        deps,
+      );
+
+      expect((failRes as unknown as { ok: boolean }).ok).toBe(true);
+      expect(ws.send).toHaveBeenCalledTimes(3);
+
+      const failedEvt = JSON.parse(
+        ws.send.mock.calls[ws.send.mock.calls.length - 1]?.[0] ?? "{}",
+      ) as {
+        type?: string;
+        payload?: any;
+      };
+      expect(failedEvt.type).toBe("work.item.failed");
+      expect(failedEvt.payload?.item?.work_item_id).toBe(createdId);
+    } finally {
+      await db.close();
+    }
+  });
+
+  it("enqueues a channel completion notification when last_active_session_key is a channel session", async () => {
+    const cm = new ConnectionManager();
+    const { id } = makeClient(cm);
+    const client = cm.getClient(id)!;
+
+    const db = openTestSqliteDb();
+    try {
+      const deps = makeDeps(cm, { db });
+      const inbox = new ChannelInboxDal(db);
+      const channelKey = "agent:default:telegram:default:dm:chat-1";
+
+      await inbox.enqueue({
+        source: "telegram",
+        thread_id: "chat-1",
+        message_id: "msg-1",
+        key: channelKey,
+        lane: "main",
+        received_at_ms: 1_000,
+        payload: { kind: "test" },
+      });
+
+      const createRes = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-create",
+          type: "work.create",
+          payload: {
+            tenant_id: "default",
+            agent_id: "default",
+            workspace_id: "default",
+            item: { kind: "action", title: "Item 1" },
+          },
+        }),
+        deps,
+      );
+      expect((createRes as unknown as { ok: boolean }).ok).toBe(true);
+      const createdId = (createRes as unknown as { result: { item: { work_item_id: string } } })
+        .result.item.work_item_id;
+
+      await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-ready",
+          type: "work.transition",
+          payload: {
+            tenant_id: "default",
+            agent_id: "default",
+            workspace_id: "default",
+            work_item_id: createdId,
+            status: "ready",
+            reason: "triage",
+          },
+        }),
+        deps,
+      );
+
+      await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-doing",
+          type: "work.transition",
+          payload: {
+            tenant_id: "default",
+            agent_id: "default",
+            workspace_id: "default",
+            work_item_id: createdId,
+            status: "doing",
+            reason: "start",
+          },
+        }),
+        deps,
+      );
+
+      const doneRes = await handleClientMessage(
+        client,
+        JSON.stringify({
+          request_id: "r-done",
+          type: "work.transition",
+          payload: {
+            tenant_id: "default",
+            agent_id: "default",
+            workspace_id: "default",
+            work_item_id: createdId,
+            status: "done",
+            reason: "complete",
+          },
+        }),
+        deps,
+      );
+      expect((doneRes as unknown as { ok: boolean }).ok).toBe(true);
+
+      const outboxCount = await db.get<{ count: number }>(
+        "SELECT COUNT(*) AS count FROM channel_outbox",
+      );
+      expect(outboxCount?.count).toBe(1);
     } finally {
       await db.close();
     }

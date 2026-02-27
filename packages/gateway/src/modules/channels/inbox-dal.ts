@@ -1,11 +1,14 @@
 import {
   NormalizedThreadMessage as NormalizedThreadMessageSchema,
   normalizedContainerKindFromThreadKind,
+  parseTyrumKey,
 } from "@tyrum/schemas";
 import type { NormalizedThreadMessage } from "@tyrum/schemas";
 import { randomUUID } from "node:crypto";
 import type { SqlDb } from "../../statestore/types.js";
 import { safeJsonParse } from "../../utils/json.js";
+import { WorkboardDal } from "../workboard/dal.js";
+import { resolveWorkspaceId } from "../workspace/id.js";
 import {
   buildChannelSourceKey,
   DEFAULT_CHANNEL_ACCOUNT_ID,
@@ -557,7 +560,7 @@ export class ChannelInboxDal {
     const cap = inboundQueueCap();
     const overflowPolicy = inboundQueueOverflowPolicy();
 
-    return await this.db.transaction(async (tx) => {
+    const result = await this.db.transaction(async (tx) => {
       // Best-effort prune of expired keys to keep the dedupe table bounded.
       await tx.run("DELETE FROM channel_inbound_dedupe WHERE expires_at_ms <= ?", [receivedAtMs]);
 
@@ -747,6 +750,26 @@ export class ChannelInboxDal {
 
       return { row: toRow(finalRow), deduped: false, overflow };
     });
+
+    // Best-effort update of durable last-active routing for completion notifications.
+    try {
+      const parsed = parseTyrumKey(input.key as never);
+      if (parsed.kind === "agent") {
+        await new WorkboardDal(this.db).upsertScopeActivity({
+          scope: {
+            tenant_id: "default",
+            agent_id: parsed.agent_id,
+            workspace_id: resolveWorkspaceId(),
+          },
+          last_active_session_key: input.key,
+          updated_at_ms: receivedAtMs,
+        });
+      }
+    } catch {
+      // ignore invalid keys / unsupported shapes (best-effort)
+    }
+
+    return result;
   }
 
   async getById(inboxId: number): Promise<ChannelInboxRow | undefined> {

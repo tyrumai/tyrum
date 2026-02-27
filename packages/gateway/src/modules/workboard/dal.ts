@@ -1546,6 +1546,7 @@ export class WorkboardDal {
        DO UPDATE SET
          last_active_session_key = excluded.last_active_session_key,
          updated_at_ms = excluded.updated_at_ms
+       WHERE excluded.updated_at_ms > work_scope_activity.updated_at_ms
        RETURNING *`,
       [
         params.scope.tenant_id,
@@ -1555,10 +1556,13 @@ export class WorkboardDal {
         updatedAtMs,
       ],
     );
-    if (!row) {
+    if (row) return row;
+
+    const existing = await this.getScopeActivity({ scope: params.scope });
+    if (!existing) {
       throw new Error("work scope activity upsert failed");
     }
-    return row;
+    return existing;
   }
 
   async getScopeActivity(params: { scope: WorkScope }): Promise<WorkScopeActivityRow | undefined> {
