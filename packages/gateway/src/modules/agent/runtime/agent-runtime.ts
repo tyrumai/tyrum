@@ -108,6 +108,7 @@ import { resolveSandboxHardeningProfile } from "../../sandbox/hardening.js";
 import { deriveElevatedExecutionAvailableFromPolicyBundle } from "../../sandbox/elevated-execution.js";
 import { LaneQueueSignalDal, LaneQueueInterruptError } from "../../lanes/queue-signal-dal.js";
 import { resolveWorkspaceId } from "../../workspace/id.js";
+import { WorkboardDal } from "../../workboard/dal.js";
 
 const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_APPROVAL_WAIT_MS = 120_000;
@@ -363,6 +364,58 @@ function isSideEffectingPluginTool(tool: ToolDescriptor): boolean {
   return id.startsWith("plugin.") && tool.requires_confirmation;
 }
 
+function isStatusQuery(message: string): boolean {
+  const normalized = message.trim().toLowerCase();
+  return normalized === "status?" || normalized === "status";
+}
+
+type IntakeMode = "delegate_execute" | "delegate_plan";
+
+type IntakeModeDecision = {
+  mode: IntakeMode;
+  reason_code: string;
+  body: string;
+};
+
+function stripDirectivePrefix(message: string, prefix: string): string {
+  let rest = message.slice(prefix.length);
+  if (rest.startsWith(":")) rest = rest.slice(1);
+  return rest.trim();
+}
+
+function isDirectiveInvocation(message: string, prefix: string): boolean {
+  if (!message.startsWith(prefix)) return false;
+  if (message.length === prefix.length) return true;
+  const next = message[prefix.length];
+  return next === ":" || next === " " || next === "\t" || next === "\n" || next === "\r";
+}
+
+function parseIntakeModeDecision(message: string): IntakeModeDecision | undefined {
+  const trimmed = message.trim();
+  if (isDirectiveInvocation(trimmed, "/delegate_execute")) {
+    return {
+      mode: "delegate_execute",
+      reason_code: "explicit_delegate_execute",
+      body: stripDirectivePrefix(trimmed, "/delegate_execute"),
+    };
+  }
+  if (isDirectiveInvocation(trimmed, "/delegate_plan")) {
+    return {
+      mode: "delegate_plan",
+      reason_code: "explicit_delegate_plan",
+      body: stripDirectivePrefix(trimmed, "/delegate_plan"),
+    };
+  }
+  return undefined;
+}
+
+function deriveWorkItemTitle(body: string): string {
+  const normalized = body.replaceAll(/\s+/g, " ").trim();
+  if (!normalized) return "Delegated work";
+  if (normalized.length <= 160) return normalized;
+  return `${normalized.slice(0, 157)}...`;
+}
+
 export class AgentRuntime {
   private readonly home: string;
   private readonly sessionDal: SessionDal;
@@ -384,6 +437,53 @@ export class AgentRuntime {
   private readonly turnEngineWaitMs: number;
   private lastContextReport: AgentContextReport | undefined;
   private cleanupAtMs = 0;
+
+  private getWorkScope(): { tenant_id: "default"; agent_id: string; workspace_id: string } {
+    return { tenant_id: "default", agent_id: this.agentId, workspace_id: this.workspaceId };
+  }
+
+  private async buildWorkFocusDigest(): Promise<string> {
+    const scope = this.getWorkScope();
+    try {
+      const workboard = new WorkboardDal(
+        this.opts.container.db,
+        this.opts.container.redactionEngine,
+      );
+      const [{ items: doing }, { items: blocked }, { items: ready }] = await Promise.all([
+        workboard.listItems({ scope, statuses: ["doing"], limit: 3 }),
+        workboard.listItems({ scope, statuses: ["blocked"], limit: 3 }),
+        workboard.listItems({ scope, statuses: ["ready"], limit: 3 }),
+      ]);
+
+      if (doing.length === 0 && blocked.length === 0 && ready.length === 0) {
+        return "No active WorkItems.";
+      }
+
+      const lines: string[] = [];
+      if (doing.length > 0) {
+        lines.push("Doing:");
+        for (const item of doing) {
+          lines.push(`- ${item.work_item_id} — ${item.title}`);
+        }
+      }
+      if (blocked.length > 0) {
+        lines.push("Blocked:");
+        for (const item of blocked) {
+          lines.push(`- ${item.work_item_id} — ${item.title}`);
+        }
+      }
+      if (ready.length > 0) {
+        lines.push("Ready:");
+        for (const item of ready) {
+          lines.push(`- ${item.work_item_id} — ${item.title}`);
+        }
+      }
+
+      return lines.join("\n");
+    } catch {
+      return "Work focus digest unavailable.";
+    }
+  }
 
   constructor(private readonly opts: AgentRuntimeOptions) {
     this.home = opts.home ?? resolveTyrumHome();
@@ -1134,6 +1234,113 @@ export class AgentRuntime {
       resolved,
     } = prepared;
 
+    if (isStatusQuery(resolved.message)) {
+      const scope = this.getWorkScope();
+      let reply = "";
+      try {
+        const workboard = new WorkboardDal(
+          this.opts.container.db,
+          this.opts.container.redactionEngine,
+        );
+        const { items } = await workboard.listItems({
+          scope,
+          statuses: ["doing", "blocked", "ready", "backlog"],
+          limit: 50,
+        });
+        if (items.length === 0) {
+          reply = "WorkBoard status: no active work items.";
+        } else {
+          const lines: string[] = ["WorkBoard status:"];
+          for (const item of items) {
+            lines.push(`- [${item.status}] ${item.work_item_id} — ${item.title}`);
+            const tasks = await workboard.listTasks({ scope, work_item_id: item.work_item_id });
+            for (const task of tasks.slice(0, 10)) {
+              lines.push(
+                `  - task ${task.task_id} (${task.status}) profile=${task.execution_profile}`,
+              );
+            }
+          }
+          reply = lines.join("\n");
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.opts.container.logger.warn("workboard.status_query_failed", { error: message });
+        reply = "WorkBoard status is unavailable.";
+      }
+
+      return await this.finalizeTurn(ctx, session, resolved, reply, usedTools, contextReport);
+    }
+
+    const intakeModeDecision = parseIntakeModeDecision(resolved.message);
+    if (intakeModeDecision) {
+      const scope = this.getWorkScope();
+      const createdFromSessionKeyRaw = resolved.metadata?.["work_session_key"];
+      const createdFromSessionKey =
+        typeof createdFromSessionKeyRaw === "string" ? createdFromSessionKeyRaw.trim() : "";
+      if (!createdFromSessionKey) {
+        throw new Error("missing work_session_key metadata for delegated work");
+      }
+
+      const workboard = new WorkboardDal(
+        this.opts.container.db,
+        this.opts.container.redactionEngine,
+      );
+      const title = deriveWorkItemTitle(intakeModeDecision.body);
+      const kind = intakeModeDecision.mode === "delegate_plan" ? "initiative" : "action";
+
+      const item = await workboard.createItem({
+        scope,
+        createdFromSessionKey,
+        item: {
+          kind,
+          title,
+          acceptance: {
+            mode: intakeModeDecision.mode,
+            reason_code: intakeModeDecision.reason_code,
+            request: intakeModeDecision.body,
+            source: { channel: resolved.channel, thread_id: resolved.thread_id },
+          },
+        },
+      });
+
+      await workboard.setStateKv({
+        scope: { kind: "agent", ...scope },
+        key: "work.active_work_item_id",
+        value_json: item.work_item_id,
+        provenance_json: {
+          source: "agent-turn",
+          mode: intakeModeDecision.mode,
+          reason_code: intakeModeDecision.reason_code,
+        },
+      });
+
+      await workboard.setStateKv({
+        scope: { kind: "work_item", ...scope, work_item_id: item.work_item_id },
+        key: "work.intake",
+        value_json: { mode: intakeModeDecision.mode, reason_code: intakeModeDecision.reason_code },
+      });
+
+      await workboard.createTask({
+        scope,
+        task: {
+          work_item_id: item.work_item_id,
+          status: "queued",
+          execution_profile: intakeModeDecision.mode === "delegate_plan" ? "planner" : "executor",
+          side_effect_class: "workspace",
+        },
+      });
+
+      await workboard.transitionItem({ scope, work_item_id: item.work_item_id, status: "ready" });
+      try {
+        await workboard.transitionItem({ scope, work_item_id: item.work_item_id, status: "doing" });
+      } catch {
+        // ignore WIP or transition errors; the WorkItem still exists for operator triage.
+      }
+
+      const reply = `Delegated work item created: ${item.work_item_id} (mode=${intakeModeDecision.mode}, reason=${intakeModeDecision.reason_code})`;
+      return await this.finalizeTurn(ctx, session, resolved, reply, usedTools, contextReport);
+    }
+
     await this.maybeRunPreCompactionMemoryFlush({
       ctx,
       session,
@@ -1420,6 +1627,18 @@ export class AgentRuntime {
     const planId = `agent-turn-${this.agentId}-${randomUUID()}`;
     const requestId = resolveTurnRequestId(input);
 
+    if (lane === "main") {
+      try {
+        await new WorkboardDal(this.opts.container.db).upsertScopeActivity({
+          scope: this.getWorkScope(),
+          last_active_session_key: key,
+          updated_at_ms: Date.now(),
+        });
+      } catch {
+        // ignore best-effort activity tracking failures
+      }
+    }
+
     const stepArgs: Record<string, unknown> = {
       channel: resolvedInput.channel,
       thread_id: resolvedInput.thread_id,
@@ -1429,9 +1648,11 @@ export class AgentRuntime {
       agent_id: this.agentId,
       workspace_id: this.workspaceId,
     };
-    if (input.metadata) {
-      stepArgs["metadata"] = input.metadata;
-    }
+    stepArgs["metadata"] = {
+      ...(input.metadata as Record<string, unknown>),
+      work_session_key: key,
+      work_lane: lane,
+    };
 
     const { runId } = await this.executionEngine.enqueuePlan({
       key,
@@ -2055,6 +2276,10 @@ export class AgentRuntime {
       formatMemoryPrompt(memoryHits),
       formatSemanticMemoryPrompt(semanticHits),
     );
+    const workFocusDigest =
+      isStatusQuery(resolved.message) || parseIntakeModeDecision(resolved.message)
+        ? "Skipped for command turns."
+        : await this.buildWorkFocusDigest();
 
     const identityPrompt = formatIdentityPrompt(ctx.identity);
     const safetyPrompt = DATA_TAG_SAFETY_PROMPT;
@@ -2073,6 +2298,7 @@ export class AgentRuntime {
     const skillsText = `Enabled skills:\n${formatSkillsPrompt(ctx.skills)}`;
     const toolsText = `Available tools:\n${formatToolPrompt(tools)}`;
     const sessionText = `Session context:\n${sessionCtx}`;
+    const workFocusText = `Work focus digest:\n${workFocusDigest}`;
     const memoryText = `Long-term memory matches:\n${memoryCtx}`;
 
     const toolSchemaParts = tools.map((t) => {
@@ -2112,6 +2338,7 @@ export class AgentRuntime {
         { id: "skills", chars: skillsText.length },
         { id: "tools", chars: toolsText.length },
         { id: "session_context", chars: sessionText.length },
+        { id: "work_focus_digest", chars: workFocusText.length },
         { id: "memory_matches", chars: memoryText.length },
         { id: "message", chars: resolved.message.length },
       ],
@@ -2176,6 +2403,10 @@ export class AgentRuntime {
       {
         type: "text",
         text: sessionText,
+      },
+      {
+        type: "text",
+        text: workFocusText,
       },
       {
         type: "text",
