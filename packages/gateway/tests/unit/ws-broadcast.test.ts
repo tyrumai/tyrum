@@ -27,30 +27,18 @@ describe("broadcastWsEvent", () => {
     const deniedByScope = createMockWs();
     const deniedByRole = createMockWs();
 
-    cm.addClient(
-      allowed as never,
-      [],
-      {
-        role: "client",
-        authClaims: { token_kind: "device", role: "client", scopes: ["operator.read"] },
-      },
-    );
-    cm.addClient(
-      deniedByScope as never,
-      [],
-      {
-        role: "client",
-        authClaims: { token_kind: "device", role: "client", scopes: [] },
-      },
-    );
-    cm.addClient(
-      deniedByRole as never,
-      [],
-      {
-        role: "node",
-        authClaims: { token_kind: "device", role: "node", scopes: ["operator.read"] },
-      },
-    );
+    cm.addClient(allowed as never, [], {
+      role: "client",
+      authClaims: { token_kind: "device", role: "client", scopes: ["operator.read"] },
+    });
+    cm.addClient(deniedByScope as never, [], {
+      role: "client",
+      authClaims: { token_kind: "device", role: "client", scopes: [] },
+    });
+    cm.addClient(deniedByRole as never, [], {
+      role: "node",
+      authClaims: { token_kind: "device", role: "node", scopes: ["operator.read"] },
+    });
 
     const evt: WsEventEnvelope = {
       event_id: "evt-1",
@@ -93,22 +81,14 @@ describe("broadcastWsEvent", () => {
     });
     const ok = createMockWs();
 
-    cm.addClient(
-      throwing as never,
-      [],
-      {
-        role: "client",
-        authClaims: { token_kind: "admin", role: "admin", scopes: ["*"] },
-      },
-    );
-    cm.addClient(
-      ok as never,
-      [],
-      {
-        role: "client",
-        authClaims: { token_kind: "admin", role: "admin", scopes: ["*"] },
-      },
-    );
+    cm.addClient(throwing as never, [], {
+      role: "client",
+      authClaims: { token_kind: "admin", role: "admin", scopes: ["*"] },
+    });
+    cm.addClient(ok as never, [], {
+      role: "client",
+      authClaims: { token_kind: "admin", role: "admin", scopes: ["*"] },
+    });
 
     const evt: WsEventEnvelope = {
       event_id: "evt-2",
@@ -122,4 +102,3 @@ describe("broadcastWsEvent", () => {
     expect(ok.send).toHaveBeenCalledTimes(1);
   });
 });
-

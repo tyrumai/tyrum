@@ -101,6 +101,7 @@ import type {
 import type { ConnectedClient } from "../connection-manager.js";
 import type { WsBroadcastAudience } from "../audience.js";
 import { broadcastWsEvent } from "../broadcast.js";
+import { WORKBOARD_WS_AUDIENCE } from "../workboard-audience.js";
 import { emitPairingApprovedEvent } from "../pairing-approved.js";
 import { toApprovalContract } from "../../modules/approval/to-contract.js";
 import { executeCommand } from "../../modules/commands/dispatcher.js";
@@ -109,11 +110,6 @@ import { resolveWsRequestRequiredScopes } from "../../modules/authz/ws-scope-mat
 import { isSafeSuggestedOverridePattern } from "../../modules/policy/override-guardrails.js";
 import { WorkboardDal } from "../../modules/workboard/dal.js";
 import type { ProtocolDeps } from "./types.js";
-
-const WORKBOARD_WS_AUDIENCE: WsBroadcastAudience = {
-  roles: ["client"],
-  required_scopes: ["operator.read", "operator.write"],
-};
 
 const OPERATOR_MEMORY_EVENT_AUDIENCE = {
   roles: ["client"],

@@ -13,16 +13,12 @@ import type { WsEventEnvelope, WorkItemState } from "@tyrum/schemas";
 import type { ConnectionManager } from "../../ws/connection-manager.js";
 import type { WsBroadcastAudience } from "../../ws/audience.js";
 import { broadcastWsEvent } from "../../ws/broadcast.js";
+import { WORKBOARD_WS_AUDIENCE } from "../../ws/workboard-audience.js";
 import type { SqlDb } from "../../statestore/types.js";
 import type { Logger } from "../observability/logger.js";
 import type { OutboxDal } from "../backplane/outbox-dal.js";
 import { WorkboardDal } from "./dal.js";
 import { WorkSignalFiringDal, type WorkSignalFiringRow } from "./signal-firing-dal.js";
-
-const WORKBOARD_WS_AUDIENCE: WsBroadcastAudience = {
-  roles: ["client"],
-  required_scopes: ["operator.read", "operator.write"],
-};
 
 const DEFAULT_TICK_MS = 1_000;
 const DEFAULT_FIRING_LEASE_TTL_MS = 60_000;
