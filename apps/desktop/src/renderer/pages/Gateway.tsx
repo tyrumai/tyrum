@@ -97,6 +97,12 @@ export function Gateway() {
           },
         });
 
+        if (disposed) {
+          manager.dispose();
+          adminModeStore.dispose();
+          return;
+        }
+
         unsubManagerRef.current?.();
         managerRef.current?.dispose();
         adminModeStoreRef.current?.dispose();

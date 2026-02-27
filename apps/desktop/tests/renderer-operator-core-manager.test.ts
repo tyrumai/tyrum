@@ -67,6 +67,52 @@ describe("createDesktopOperatorCoreManager", () => {
     adminModeStore.dispose();
   });
 
+  it("recreates core + reconnects when Admin Mode exits and previous core was connected", () => {
+    const adminModeStore = createAdminModeStore({ tickIntervalMs: 0 });
+    const baselineAuth = createBearerTokenAuth("baseline");
+
+    const created: Array<{
+      auth: OperatorAuthStrategy;
+      core: unknown;
+      connect: ReturnType<typeof vi.fn>;
+      dispose: ReturnType<typeof vi.fn>;
+    }> = [];
+
+    const createCore = vi.fn((input: { auth: OperatorAuthStrategy }) => {
+      const status: CoreStatus = created.length < 2 ? "connected" : "disconnected";
+      const fake = createFakeCore({ status });
+      created.push({ auth: input.auth, core: fake.core, connect: fake.connect, dispose: fake.dispose });
+      return fake.core as any;
+    });
+
+    const manager = createDesktopOperatorCoreManager({
+      wsUrl: "ws://example",
+      httpBaseUrl: "http://example",
+      baselineAuth,
+      adminModeStore,
+      createCore,
+    });
+
+    adminModeStore.enter({
+      elevatedToken: "elevated",
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+    expect(createCore).toHaveBeenCalledTimes(2);
+
+    adminModeStore.exit();
+    expect(createCore).toHaveBeenCalledTimes(3);
+
+    expect(created[0]?.auth).toEqual(baselineAuth);
+    expect(created[1]?.auth).toEqual({ type: "bearer-token", token: "elevated" });
+    expect(created[2]?.auth).toEqual(baselineAuth);
+
+    expect(created[1]?.dispose).toHaveBeenCalledTimes(1);
+    expect(created[2]?.connect).toHaveBeenCalledTimes(1);
+
+    manager.dispose();
+    adminModeStore.dispose();
+  });
+
   it("does not reconnect when Admin Mode enters and previous core was disconnected", () => {
     const adminModeStore = createAdminModeStore({ tickIntervalMs: 0 });
     const baselineAuth = createBearerTokenAuth("baseline");
@@ -154,4 +200,3 @@ describe("createDesktopOperatorCoreManager", () => {
     adminModeStore.dispose();
   });
 });
-
