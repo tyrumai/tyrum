@@ -14,7 +14,6 @@ function createTestStreams(): {
     resume: () => PassThrough;
   };
   readOutput: () => string;
-  readLastChunk: () => string;
 } {
   const stdout = new PassThrough() as PassThrough & {
     columns: number;
@@ -25,10 +24,8 @@ function createTestStreams(): {
   stdout.rows = 24;
   stdout.isTTY = true;
   let output = "";
-  let lastChunk = "";
   stdout.on("data", (chunk) => {
     const text = chunk.toString("utf8");
-    lastChunk = text;
     output += text;
   });
 
@@ -49,7 +46,6 @@ function createTestStreams(): {
     stdout,
     stdin,
     readOutput: () => output,
-    readLastChunk: () => lastChunk,
   };
 }
 
