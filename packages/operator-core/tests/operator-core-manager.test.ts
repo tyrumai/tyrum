@@ -40,7 +40,12 @@ describe("createOperatorCoreManager", () => {
     const createCore = vi.fn((input: { auth: OperatorAuthStrategy }) => {
       const status: ConnectionStatus = created.length === 0 ? "connected" : "disconnected";
       const fake = createFakeCore({ status });
-      created.push({ auth: input.auth, core: fake.core, connect: fake.connect, dispose: fake.dispose });
+      created.push({
+        auth: input.auth,
+        core: fake.core,
+        connect: fake.connect,
+        dispose: fake.dispose,
+      });
       return fake.core as any;
     });
 
@@ -85,7 +90,12 @@ describe("createOperatorCoreManager", () => {
     const createCore = vi.fn((input: { auth: OperatorAuthStrategy }) => {
       const status: ConnectionStatus = created.length < 2 ? "connected" : "disconnected";
       const fake = createFakeCore({ status });
-      created.push({ auth: input.auth, core: fake.core, connect: fake.connect, dispose: fake.dispose });
+      created.push({
+        auth: input.auth,
+        core: fake.core,
+        connect: fake.connect,
+        dispose: fake.dispose,
+      });
       return fake.core as any;
     });
 
@@ -168,4 +178,3 @@ describe("createOperatorCoreManager", () => {
     adminModeStore.dispose();
   });
 });
-

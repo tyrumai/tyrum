@@ -39,7 +39,9 @@ function shouldReconnectCore(core: OperatorCore): boolean {
   return status === "connecting" || status === "connected";
 }
 
-export function createOperatorCoreManager(options: OperatorCoreManagerOptions): OperatorCoreManager {
+export function createOperatorCoreManager(
+  options: OperatorCoreManagerOptions,
+): OperatorCoreManager {
   const createCore: OperatorCoreFactory =
     options.createCore ??
     ((coreOptions) =>
@@ -123,4 +125,3 @@ export function createOperatorCoreManager(options: OperatorCoreManagerOptions): 
     },
   };
 }
-
