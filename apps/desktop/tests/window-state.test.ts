@@ -57,7 +57,8 @@ describe("window state visibility", () => {
 
   it("returns bounds unchanged when primary work area is missing", () => {
     const bounds = { x: 2000, y: 100, width: 800, height: 600 };
-    const holes = new Array(1) as unknown as Array<typeof bounds>;
+    const holes: Array<typeof bounds> = [];
+    holes.length = 1;
 
     expect(ensureVisibleBounds(bounds, holes)).toEqual(bounds);
   });
