@@ -63,8 +63,8 @@ export function sanitizeForModel(tagged: TaggedContent): string {
   }
 
   // Prevent tag-boundary breakouts inside untrusted payloads.
-  sanitized = sanitized.replace(/<\/data>/gi, "&lt;/data&gt;");
-  sanitized = sanitized.replace(/<data\b/gi, "&lt;data");
+  sanitized = sanitized.replace(/<\s*\/\s*data\s*>/gi, "&lt;/data&gt;");
+  sanitized = sanitized.replace(/<\s*data\b/gi, "&lt;data");
 
   return `<data source="${tagged.source}">\n${sanitized}\n</data>`;
 }

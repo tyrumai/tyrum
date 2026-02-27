@@ -107,7 +107,7 @@ function sensitivityAllowed(
   sensitivity: MemorySensitivity,
   allow: readonly MemorySensitivity[],
 ): boolean {
-  return allow.length === 0 ? sensitivity !== "sensitive" : allow.includes(sensitivity);
+  return allow.includes(sensitivity);
 }
 
 async function loadStructuredItems(params: {
@@ -213,6 +213,15 @@ export async function buildMemoryV1Digest(params: {
   }
 
   const allowSensitivities = config.allow_sensitivities ?? ["public", "private"];
+  if (allowSensitivities.length === 0) {
+    return {
+      digest: "Memory digest empty (no allowed sensitivities).",
+      included_item_ids: [],
+      keyword_hit_count: 0,
+      semantic_hit_count: 0,
+      structured_item_count: 0,
+    };
+  }
   const budgets = config.budgets;
 
   const maxTotalItems = Math.max(0, Math.floor(budgets.max_total_items));
@@ -343,8 +352,14 @@ export async function buildMemoryV1Digest(params: {
     if (kindUsage.chars >= kindBudget.max_chars) continue;
     if (kindBudget.max_tokens !== undefined && kindUsage.tokens >= kindBudget.max_tokens) continue;
 
-    const item =
-      candidate.item ?? (await params.dal.getById(candidate.memory_item_id, params.agentId));
+    let item = candidate.item;
+    if (!item) {
+      try {
+        item = await params.dal.getById(candidate.memory_item_id, params.agentId);
+      } catch {
+        continue;
+      }
+    }
     if (!item) continue;
     if (!sensitivityAllowed(item.sensitivity, allowSensitivities)) continue;
 
