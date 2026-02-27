@@ -181,7 +181,13 @@ describe("tui admin mode", () => {
         "tui admin mode baseline connect (scoped token)",
       );
 
-      await expect(baselineCore.memoryStore.exportAll()).rejects.toThrow(/forbidden/i);
+      await baselineCore.memoryStore.export();
+      const baselineExport = baselineCore.memoryStore.getSnapshot().export;
+      expect(baselineExport.artifactId).toBeNull();
+      expect(baselineExport.error).not.toBeNull();
+      expect(`${baselineExport.error?.code ?? ""} ${baselineExport.error?.message ?? ""}`).toMatch(
+        /forbidden/i,
+      );
 
       await runtime.enterAdminMode(harness.adminToken, { ttlSeconds: 60 });
       await withTimeout(
@@ -197,8 +203,10 @@ describe("tui admin mode", () => {
         "tui admin mode elevated connect (scoped token)",
       );
 
-      const exported = await elevatedCore.memoryStore.exportAll();
-      expect(exported.artifact_id).toBeTruthy();
+      await elevatedCore.memoryStore.export();
+      const elevatedExport = elevatedCore.memoryStore.getSnapshot().export;
+      expect(elevatedExport.error).toBeNull();
+      expect(elevatedExport.artifactId).toBeTruthy();
     } finally {
       await Promise.allSettled([
         harness.stop(),
