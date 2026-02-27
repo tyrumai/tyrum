@@ -60,6 +60,8 @@ apps/console/.eslintrc.json
 # Coverage artifacts
 cobertura.xml
 coverage/
+!scripts/coverage/
+!scripts/coverage/**
 
 # Logs
 *.log

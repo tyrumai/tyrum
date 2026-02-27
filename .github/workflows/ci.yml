@@ -56,6 +56,8 @@ jobs:
             ci:
               - "packages/**"
               - "apps/desktop/**"
+              - "apps/web/**"
+              - "apps/docs/**"
               - "config/**"
               - "web/**"
               - "patches/**"
@@ -186,6 +188,17 @@ jobs:
           --coverage.reporter=text-summary
           --coverage.reporter=html
           --coverage.reporter=clover
+          --coverage.reporter=json
+
+      - name: Diff line coverage (PR)
+        if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+            git fetch --no-tags --prune --unshallow
+          fi
+          node scripts/coverage/diff-lines.mjs --base "${{ github.event.pull_request.base.sha }}" --min 80
 
       - name: Test desktop suite
         if: matrix.os != 'ubuntu-latest'
@@ -249,6 +262,16 @@ jobs:
           path: coverage/
           if-no-files-found: ignore
           retention-days: 7
+
+      - name: Coverage by component
+        if: always() && matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo ""
+            node scripts/coverage/components.mjs
+          } >> "$GITHUB_STEP_SUMMARY"
 
   reference-deployment-smoke:
     name: Reference Deployment Smoke (Docker)

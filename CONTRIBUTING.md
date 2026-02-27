@@ -15,7 +15,9 @@ Thanks for helping build the Tyrum assistant platform.
 | `packages/schemas` | Shared Zod types (`@tyrum/schemas`)                   |
 | `packages/gateway` | Main gateway process — Hono HTTP + WebSocket + SQLite |
 | `packages/client`  | Client SDK for connecting to the gateway              |
-| `web/`             | Next.js frontend portal                               |
+| `apps/web`         | Operator web app (Vite + React)                       |
+| `apps/desktop`     | Electron desktop app                                  |
+| `apps/docs`        | Docs site (Docusaurus)                                |
 | `config/`          | Runtime configuration (model gateway YAML)            |
 | `docs/`            | Architecture and design documentation                 |
 
@@ -50,6 +52,24 @@ Run these commands and verify all pass:
 pnpm typecheck
 pnpm test
 pnpm lint
+```
+
+### Coverage (optional locally, enforced in CI)
+
+CI runs `pnpm test` with coverage enabled and enforces both global and per-component minimums.
+
+To inspect coverage locally:
+
+```bash
+pnpm test --coverage.enabled
+node scripts/coverage/components.mjs
+```
+
+For the PR diff/new-code gate (changed lines only; ignores blank/comment-only lines):
+
+```bash
+BASE_SHA="$(git merge-base HEAD origin/main)"
+node scripts/coverage/diff-lines.mjs --base "$BASE_SHA" --min 80
 ```
 
 ## 5. Branch Protections & Reviews
