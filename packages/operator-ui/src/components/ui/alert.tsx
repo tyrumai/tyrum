@@ -4,7 +4,7 @@ import { cn } from "../../lib/cn.js";
 
 export type AlertVariant = "info" | "success" | "warning" | "error";
 
-export interface AlertProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface AlertProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {
   variant?: AlertVariant;
   title: React.ReactNode;
   description?: React.ReactNode;
@@ -65,4 +65,3 @@ export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
   },
 );
 Alert.displayName = "Alert";
-

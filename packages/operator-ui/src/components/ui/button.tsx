@@ -46,19 +46,27 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const isDisabled = Boolean(disabled) || isLoading;
     const resolvedType = asChild ? type : (type ?? "button");
 
-    const content = asChild
-      ? isLoading
-        ? React.cloneElement(React.Children.only(children) as React.ReactElement, undefined, [
-            React.createElement(Spinner, { key: "spinner", "aria-hidden": true }),
-            (children as React.ReactElement).props.children,
-          ])
-        : children
-      : React.createElement(
-          React.Fragment,
-          null,
-          isLoading ? React.createElement(Spinner, { "aria-hidden": true }) : null,
-          children,
-        );
+    let content: React.ReactNode;
+    if (asChild) {
+      if (isLoading) {
+        const onlyChild = React.Children.only(children) as React.ReactElement<{
+          children?: React.ReactNode;
+        }>;
+        content = React.cloneElement(onlyChild, undefined, [
+          React.createElement(Spinner, { key: "spinner", "aria-hidden": true }),
+          onlyChild.props.children,
+        ]);
+      } else {
+        content = children;
+      }
+    } else {
+      content = React.createElement(
+        React.Fragment,
+        null,
+        isLoading ? React.createElement(Spinner, { "aria-hidden": true }) : null,
+        children,
+      );
+    }
 
     return (
       <Component
