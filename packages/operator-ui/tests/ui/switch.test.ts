@@ -22,6 +22,10 @@ describe("Switch", () => {
     const el = container.querySelector("button.test-switch");
     expect(el).not.toBeNull();
     expect(el?.getAttribute("data-state")).toBe("checked");
+    expect(el?.className).toContain("border-2");
+    expect(el?.className).toContain("border-transparent");
+    expect(el?.className).not.toContain("border-border");
+    expect(el?.className).not.toContain("data-[state=checked]:border-primary");
 
     const thumb = container.querySelector("button.test-switch [data-switch-thumb]");
     expect(thumb).not.toBeNull();
