@@ -1901,70 +1901,90 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
 
   if (command.kind === "memory_search") {
     return await runOperatorWsCommand(tyrumHome, "memory.search", async (client) => {
-      const payload: Record<string, unknown> = { v: 1, query: command.query };
-      if (command.filter !== undefined) payload["filter"] = command.filter;
-      if (command.limit !== undefined) payload["limit"] = command.limit;
-      if (command.cursor !== undefined) payload["cursor"] = command.cursor;
-      return await client.memorySearch(payload as any);
+      type Payload = Parameters<TyrumClient["memorySearch"]>[0];
+      const payload: Payload = {
+        v: 1,
+        query: command.query,
+        ...(command.filter !== undefined ? { filter: command.filter as Payload["filter"] } : {}),
+        ...(command.limit !== undefined ? { limit: command.limit } : {}),
+        ...(command.cursor !== undefined ? { cursor: command.cursor } : {}),
+      };
+      return await client.memorySearch(payload);
     });
   }
 
   if (command.kind === "memory_list") {
     return await runOperatorWsCommand(tyrumHome, "memory.list", async (client) => {
-      const payload: Record<string, unknown> = { v: 1 };
-      if (command.filter !== undefined) payload["filter"] = command.filter;
-      if (command.limit !== undefined) payload["limit"] = command.limit;
-      if (command.cursor !== undefined) payload["cursor"] = command.cursor;
-      return await client.memoryList(payload as any);
+      type Payload = Parameters<TyrumClient["memoryList"]>[0];
+      const payload: Payload = {
+        v: 1,
+        ...(command.filter !== undefined ? { filter: command.filter as Payload["filter"] } : {}),
+        ...(command.limit !== undefined ? { limit: command.limit } : {}),
+        ...(command.cursor !== undefined ? { cursor: command.cursor } : {}),
+      };
+      return await client.memoryList(payload);
     });
   }
 
   if (command.kind === "memory_read") {
     return await runOperatorWsCommand(tyrumHome, "memory.get", async (client) => {
-      return await client.memoryGet({ v: 1, memory_item_id: command.id } as any);
+      return await client.memoryGet({ v: 1, memory_item_id: command.id });
     });
   }
 
   if (command.kind === "memory_create") {
     return await runOperatorWsCommand(tyrumHome, "memory.create", async (client) => {
-      return await client.memoryCreate({ v: 1, item: command.item } as any);
+      type Payload = Parameters<TyrumClient["memoryCreate"]>[0];
+      const payload: Payload = { v: 1, item: command.item as Payload["item"] };
+      return await client.memoryCreate(payload);
     });
   }
 
   if (command.kind === "memory_update") {
     return await runOperatorWsCommand(tyrumHome, "memory.update", async (client) => {
-      return await client.memoryUpdate({
+      type Payload = Parameters<TyrumClient["memoryUpdate"]>[0];
+      const payload: Payload = {
         v: 1,
         memory_item_id: command.id,
-        patch: command.patch,
-      } as any);
+        patch: command.patch as Payload["patch"],
+      };
+      return await client.memoryUpdate(payload);
     });
   }
 
   if (command.kind === "memory_delete") {
     return await runOperatorWsCommand(tyrumHome, "memory.delete", async (client) => {
-      const payload: Record<string, unknown> = { v: 1, memory_item_id: command.id };
-      if (command.reason !== undefined) payload["reason"] = command.reason;
-      return await client.memoryDelete(payload as any);
+      type Payload = Parameters<TyrumClient["memoryDelete"]>[0];
+      const payload: Payload = {
+        v: 1,
+        memory_item_id: command.id,
+        ...(command.reason !== undefined ? { reason: command.reason } : {}),
+      };
+      return await client.memoryDelete(payload);
     });
   }
 
   if (command.kind === "memory_forget") {
     return await runOperatorWsCommand(tyrumHome, "memory.forget", async (client) => {
-      return await client.memoryForget({
+      type Payload = Parameters<TyrumClient["memoryForget"]>[0];
+      const payload: Payload = {
         v: 1,
         confirm: "FORGET",
-        selectors: command.selectors,
-      } as any);
+        selectors: command.selectors as Payload["selectors"],
+      };
+      return await client.memoryForget(payload);
     });
   }
 
   if (command.kind === "memory_export") {
     return await runOperatorWsCommand(tyrumHome, "memory.export", async (client) => {
-      const payload: Record<string, unknown> = { v: 1 };
-      if (command.filter !== undefined) payload["filter"] = command.filter;
-      if (command.include_tombstones) payload["include_tombstones"] = true;
-      return await client.memoryExport(payload as any);
+      type Payload = Parameters<TyrumClient["memoryExport"]>[0];
+      const payload: Payload = {
+        v: 1,
+        ...(command.filter !== undefined ? { filter: command.filter as Payload["filter"] } : {}),
+        include_tombstones: command.include_tombstones,
+      };
+      return await client.memoryExport(payload);
     });
   }
 

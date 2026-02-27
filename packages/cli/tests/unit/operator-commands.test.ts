@@ -358,6 +358,100 @@ describe("@tyrum/cli operator commands", () => {
     }
   });
 
+  it("passes optional flags to `memory search` via @tyrum/client WS", async () => {
+    const home = await mkdtemp(join(tmpdir(), "tyrum-cli-"));
+    process.env["TYRUM_HOME"] = home;
+
+    const operatorDir = join(home, "operator");
+    await mkdir(operatorDir, { recursive: true, mode: 0o700 });
+    await writeFile(
+      join(operatorDir, "config.json"),
+      JSON.stringify({ gateway_url: "http://127.0.0.1:8788", auth_token: "tkn" }, null, 2),
+      { mode: 0o600 },
+    );
+    await writeFile(
+      join(operatorDir, "device-identity.json"),
+      JSON.stringify({ deviceId: "dev", publicKey: "pub", privateKey: "priv" }, null, 2),
+      { mode: 0o600 },
+    );
+
+    wsMemorySearchSpy.mockResolvedValue({ v: 1, hits: [] });
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      vi.resetModules();
+      const { runCli } = await import("../../src/index.js");
+
+      const code = await runCli([
+        "memory",
+        "search",
+        "--query",
+        "hello",
+        "--limit",
+        "5",
+        "--cursor",
+        "cur",
+        "--filter",
+        JSON.stringify({ kinds: ["note"] }),
+      ]);
+
+      expect(code).toBe(0);
+      expect(errSpy).not.toHaveBeenCalled();
+      expect(wsMemorySearchSpy).toHaveBeenCalledWith({
+        v: 1,
+        query: "hello",
+        limit: 5,
+        cursor: "cur",
+        filter: { kinds: ["note"] },
+      });
+      expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+      errSpy.mockRestore();
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects `memory search` with invalid --filter JSON", async () => {
+    const home = await mkdtemp(join(tmpdir(), "tyrum-cli-"));
+    process.env["TYRUM_HOME"] = home;
+
+    const operatorDir = join(home, "operator");
+    await mkdir(operatorDir, { recursive: true, mode: 0o700 });
+    await writeFile(
+      join(operatorDir, "config.json"),
+      JSON.stringify({ gateway_url: "http://127.0.0.1:8788", auth_token: "tkn" }, null, 2),
+      { mode: 0o600 },
+    );
+    await writeFile(
+      join(operatorDir, "device-identity.json"),
+      JSON.stringify({ deviceId: "dev", publicKey: "pub", privateKey: "priv" }, null, 2),
+      { mode: 0o600 },
+    );
+
+    wsMemorySearchSpy.mockResolvedValue({ v: 1, hits: [] });
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      vi.resetModules();
+      const { runCli } = await import("../../src/index.js");
+
+      const code = await runCli(["memory", "search", "--query", "hello", "--filter", "{nope"]);
+
+      expect(code).toBe(1);
+      expect(wsMemorySearchSpy).not.toHaveBeenCalled();
+      expect(errSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+      errSpy.mockRestore();
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+
   it("runs `memory list` via @tyrum/client WS", async () => {
     const home = await mkdtemp(join(tmpdir(), "tyrum-cli-"));
     process.env["TYRUM_HOME"] = home;
@@ -641,6 +735,45 @@ describe("@tyrum/cli operator commands", () => {
     }
   });
 
+  it("rejects `memory forget` when --confirm is missing", async () => {
+    const home = await mkdtemp(join(tmpdir(), "tyrum-cli-"));
+    process.env["TYRUM_HOME"] = home;
+
+    const operatorDir = join(home, "operator");
+    await mkdir(operatorDir, { recursive: true, mode: 0o700 });
+    await writeFile(
+      join(operatorDir, "config.json"),
+      JSON.stringify({ gateway_url: "http://127.0.0.1:8788", auth_token: "tkn" }, null, 2),
+      { mode: 0o600 },
+    );
+    await writeFile(
+      join(operatorDir, "device-identity.json"),
+      JSON.stringify({ deviceId: "dev", publicKey: "pub", privateKey: "priv" }, null, 2),
+      { mode: 0o600 },
+    );
+
+    wsMemoryForgetSpy.mockResolvedValue({ v: 1, deleted_count: 1, tombstones: [] });
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      vi.resetModules();
+      const { runCli } = await import("../../src/index.js");
+
+      const selectors = [{ kind: "id", memory_item_id: "00000000-0000-0000-0000-000000000001" }];
+      const code = await runCli(["memory", "forget", "--selectors", JSON.stringify(selectors)]);
+
+      expect(code).toBe(1);
+      expect(wsMemoryForgetSpy).not.toHaveBeenCalled();
+      expect(errSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+      errSpy.mockRestore();
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+
   it("runs `memory export` via @tyrum/client WS", async () => {
     const home = await mkdtemp(join(tmpdir(), "tyrum-cli-"));
     process.env["TYRUM_HOME"] = home;
@@ -672,6 +805,49 @@ describe("@tyrum/cli operator commands", () => {
       expect(code).toBe(0);
       expect(errSpy).not.toHaveBeenCalled();
       expect(wsMemoryExportSpy).toHaveBeenCalledWith({ v: 1, include_tombstones: true });
+      expect(logSpy).toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+      errSpy.mockRestore();
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+
+  it("passes filter to `memory export` via @tyrum/client WS", async () => {
+    const home = await mkdtemp(join(tmpdir(), "tyrum-cli-"));
+    process.env["TYRUM_HOME"] = home;
+
+    const operatorDir = join(home, "operator");
+    await mkdir(operatorDir, { recursive: true, mode: 0o700 });
+    await writeFile(
+      join(operatorDir, "config.json"),
+      JSON.stringify({ gateway_url: "http://127.0.0.1:8788", auth_token: "tkn" }, null, 2),
+      { mode: 0o600 },
+    );
+    await writeFile(
+      join(operatorDir, "device-identity.json"),
+      JSON.stringify({ deviceId: "dev", publicKey: "pub", privateKey: "priv" }, null, 2),
+      { mode: 0o600 },
+    );
+
+    wsMemoryExportSpy.mockResolvedValue({ v: 1, artifact_id: "art_1" });
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      vi.resetModules();
+      const { runCli } = await import("../../src/index.js");
+
+      const code = await runCli(["memory", "export", "--filter", JSON.stringify({ tags: ["t"] })]);
+
+      expect(code).toBe(0);
+      expect(errSpy).not.toHaveBeenCalled();
+      expect(wsMemoryExportSpy).toHaveBeenCalledWith({
+        v: 1,
+        filter: { tags: ["t"] },
+        include_tombstones: false,
+      });
       expect(logSpy).toHaveBeenCalled();
     } finally {
       logSpy.mockRestore();
