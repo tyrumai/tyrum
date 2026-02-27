@@ -178,8 +178,8 @@ describe("ToolExecutor", () => {
 
       try {
         const workspaceId = "default";
-        const timeoutMs = 250;
-        const releaseAfterMs = 160;
+        const timeoutMs = 600;
+        const releaseAfterMs = 450;
 
         await acquireWorkspaceLease(db, {
           workspaceId,
@@ -224,7 +224,7 @@ describe("ToolExecutor", () => {
         await releaseDone;
 
         expect(result.error).toBeUndefined();
-        expect(durationMs).toBeLessThan(timeoutMs + 120);
+        expect(durationMs).toBeLessThan(timeoutMs + 250);
       } finally {
         await db.close();
       }

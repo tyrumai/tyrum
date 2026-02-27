@@ -634,6 +634,7 @@ export class ToolExecutor {
             cwd: safeCwd,
             env: sanitizeEnv(),
             stdio: ["ignore", "pipe", "pipe"],
+            detached: true,
           });
 
           const chunks: Buffer[] = [];
@@ -654,19 +655,53 @@ export class ToolExecutor {
           child.stdout.on("data", (data: Buffer) => pushChunk(data));
           child.stderr.on("data", (data: Buffer) => pushChunk(data));
 
-          const timer = setTimeout(() => {
-            child.kill("SIGTERM");
-          }, effectiveTimeoutMs);
+          let finished = false;
+          let timeoutFired = false;
+
+          const killProcessGroup = (signal: NodeJS.Signals) => {
+            if (finished) return;
+            if (child.pid) {
+              try {
+                process.kill(-child.pid, signal);
+                return;
+              } catch {
+                // ignore and fall back to killing the direct child
+              }
+            }
+            try {
+              child.kill(signal);
+            } catch {
+              // ignore
+            }
+          };
+
+          const onTimeout = () => {
+            timeoutFired = true;
+            killProcessGroup("SIGTERM");
+          };
+
+          const timer = setTimeout(onTimeout, effectiveTimeoutMs);
+          const killTimer = setTimeout(() => killProcessGroup("SIGKILL"), effectiveTimeoutMs + 250);
+
+          child.on("spawn", () => {
+            if (timeoutFired) {
+              killProcessGroup("SIGTERM");
+            }
+          });
 
           child.on("close", (code) => {
+            finished = true;
             clearTimeout(timer);
+            clearTimeout(killTimer);
             const combined = Buffer.concat(chunks).toString("utf-8");
             const exitLine = `\n[exit code: ${code ?? "unknown"}]`;
             resolvePromise(combined + exitLine);
           });
 
           child.on("error", (err) => {
+            finished = true;
             clearTimeout(timer);
+            clearTimeout(killTimer);
             resolvePromise(`Error spawning command: ${err.message}`);
           });
         }),
