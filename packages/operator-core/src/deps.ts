@@ -15,6 +15,8 @@ import type {
   WsMemoryListResult,
   WsMemorySearchPayload,
   WsMemorySearchResult,
+  WsMemoryUpdatePayload,
+  WsMemoryUpdateResult,
 } from "@tyrum/client";
 
 export interface OperatorWsClient {
@@ -28,6 +30,7 @@ export interface OperatorWsClient {
   memorySearch(payload: WsMemorySearchPayload): Promise<WsMemorySearchResult>;
   memoryList(payload: WsMemoryListPayload): Promise<WsMemoryListResult>;
   memoryGet(payload: WsMemoryGetPayload): Promise<WsMemoryGetResult>;
+  memoryUpdate(payload: WsMemoryUpdatePayload): Promise<WsMemoryUpdateResult>;
   memoryForget(payload: WsMemoryForgetPayload): Promise<WsMemoryForgetResult>;
   memoryExport(payload: WsMemoryExportPayload): Promise<WsMemoryExportResult>;
   commandExecute?(command: string, context?: unknown): Promise<unknown>;

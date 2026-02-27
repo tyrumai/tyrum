@@ -3,6 +3,7 @@ import type {
   MemoryItemId,
   MemoryItem,
   MemoryItemFilter,
+  MemoryItemPatch,
   MemorySearchHit,
   MemoryTombstone,
 } from "@tyrum/client";
@@ -89,6 +90,7 @@ export interface MemoryStore extends ExternalStore<MemoryState> {
   search(input: { query: string; filter?: MemoryItemFilter; limit?: number }): Promise<void>;
   loadMore(): Promise<void>;
   inspect(memoryItemId: MemoryItemId): Promise<void>;
+  update(memoryItemId: MemoryItemId, patch: MemoryItemPatch): Promise<MemoryItem>;
   forget(selectors: MemoryForgetSelector[]): Promise<void>;
   export(input?: { filter?: MemoryItemFilter; includeTombstones?: boolean }): Promise<void>;
 }
@@ -645,6 +647,12 @@ export function createMemoryStore(ws: OperatorWsClient): {
     }
   }
 
+  async function update(memoryItemId: MemoryItemId, patch: MemoryItemPatch): Promise<MemoryItem> {
+    const result = await ws.memoryUpdate({ v: 1, memory_item_id: memoryItemId, patch });
+    handleMemoryItemUpsert(result.item);
+    return result.item;
+  }
+
   async function exportMemory(input?: {
     filter?: MemoryItemFilter;
     includeTombstones?: boolean;
@@ -828,6 +836,7 @@ export function createMemoryStore(ws: OperatorWsClient): {
       search,
       loadMore,
       inspect,
+      update,
       forget,
       export: exportMemory,
     },

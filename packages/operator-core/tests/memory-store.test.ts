@@ -319,6 +319,37 @@ describe("memoryStore", () => {
     expect(core.memoryStore.getSnapshot().inspect.loading).toBe(false);
   });
 
+  it("updates an inspected memory item", async () => {
+    const ws = new FakeWsClient();
+    const http = createFakeHttpClient();
+
+    const memoryItemId = "123e4567-e89b-12d3-a456-426614174111";
+    const item = sampleNote(memoryItemId, "Before update");
+    const updatedItem = sampleNote(memoryItemId, "After update");
+
+    ws.memoryGet = vi.fn(async () => ({ v: 1, item }));
+    ws.memoryUpdate = vi.fn(async () => ({ v: 1, item: updatedItem }) as unknown);
+
+    const core = createOperatorCore({
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788",
+      auth: createBearerTokenAuth("test-token"),
+      deps: { ws, http },
+    });
+
+    await core.memoryStore.inspect(memoryItemId);
+    expect(core.memoryStore.getSnapshot().inspect.item).toEqual(item);
+
+    await core.memoryStore.update(memoryItemId, { body_md: updatedItem.body_md });
+
+    expect(ws.memoryUpdate).toHaveBeenCalledWith({
+      v: 1,
+      memory_item_id: memoryItemId,
+      patch: { body_md: updatedItem.body_md },
+    });
+    expect(core.memoryStore.getSnapshot().inspect.item).toEqual(updatedItem);
+  });
+
   it("does not resurrect an item after it is forgotten while inspect is in-flight", async () => {
     const ws = new FakeWsClient();
     const http = createFakeHttpClient();

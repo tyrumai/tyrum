@@ -7,6 +7,13 @@ export type DesktopApi = {
     getStatus: () => Promise<{ status: string; port: number }>;
     start: () => Promise<{ status: string; port: number }>;
     stop: () => Promise<{ status: string }>;
+    getOperatorConnection?: () => Promise<{
+      mode: "embedded" | "remote";
+      wsUrl: string;
+      httpBaseUrl: string;
+      token: string;
+      tlsCertFingerprint256: string;
+    }>;
     httpFetch?: (input: {
       url: string;
       init?: {
