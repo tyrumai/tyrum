@@ -224,5 +224,30 @@ for (const fixture of fixtures) {
         await close();
       }
     });
+
+    it("rejects kind-incompatible patch fields", async () => {
+      const { dal, close } = await fixture.open();
+      try {
+        const created = await dal.create(
+          {
+            kind: "fact",
+            key: "favorite_color",
+            value: "blue",
+            observed_at: "2026-02-19T12:00:00Z",
+            confidence: 0.9,
+            tags: [],
+            sensitivity: "private",
+            provenance: { source_kind: "operator", refs: [] },
+          },
+          "agent-a",
+        );
+
+        await expect(
+          dal.update(created.memory_item_id, { body_md: "should fail" }, "agent-a"),
+        ).rejects.toThrow(/incompatible patch/i);
+      } finally {
+        await close();
+      }
+    });
   });
 }

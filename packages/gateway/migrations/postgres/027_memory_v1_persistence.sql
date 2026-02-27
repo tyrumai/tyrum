@@ -35,6 +35,10 @@ CREATE TABLE IF NOT EXISTS memory_items (
   )
 );
 
+-- Enables composite foreign keys from agent-scoped child tables.
+CREATE UNIQUE INDEX IF NOT EXISTS memory_items_agent_memory_item_id_uniq
+ON memory_items (agent_id, memory_item_id);
+
 CREATE INDEX IF NOT EXISTS memory_items_agent_created_at_idx
 ON memory_items (agent_id, created_at DESC);
 
@@ -56,7 +60,7 @@ CREATE TABLE IF NOT EXISTS memory_item_provenance (
   refs_json TEXT NOT NULL DEFAULT '[]',
   metadata_json TEXT,
   CONSTRAINT memory_item_provenance_memory_item_id_fkey
-    FOREIGN KEY (memory_item_id) REFERENCES memory_items(memory_item_id) ON DELETE CASCADE
+    FOREIGN KEY (agent_id, memory_item_id) REFERENCES memory_items(agent_id, memory_item_id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS memory_item_provenance_agent_source_kind_idx
@@ -78,7 +82,7 @@ CREATE TABLE IF NOT EXISTS memory_item_tags (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (agent_id, memory_item_id, tag),
   CONSTRAINT memory_item_tags_memory_item_id_fkey
-    FOREIGN KEY (memory_item_id) REFERENCES memory_items(memory_item_id) ON DELETE CASCADE
+    FOREIGN KEY (agent_id, memory_item_id) REFERENCES memory_items(agent_id, memory_item_id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS memory_item_tags_agent_tag_idx
@@ -106,7 +110,7 @@ CREATE TABLE IF NOT EXISTS memory_item_embeddings (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (agent_id, memory_item_id, embedding_id),
   CONSTRAINT memory_item_embeddings_memory_item_id_fkey
-    FOREIGN KEY (memory_item_id) REFERENCES memory_items(memory_item_id) ON DELETE CASCADE
+    FOREIGN KEY (agent_id, memory_item_id) REFERENCES memory_items(agent_id, memory_item_id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS memory_item_embeddings_agent_created_at_idx
@@ -114,4 +118,3 @@ ON memory_item_embeddings (agent_id, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS memory_item_embeddings_agent_memory_item_id_idx
 ON memory_item_embeddings (agent_id, memory_item_id);
-

@@ -65,6 +65,47 @@ function uniqSortedStrings(values: readonly string[]): string[] {
   return [...new Set(values.map((v) => v.trim()).filter((v) => v.length > 0))].sort();
 }
 
+function assertPatchCompatible(kind: MemoryItemKind, patch: MemoryItemPatch): void {
+  const incompatible: string[] = [];
+
+  const isSet = (value: unknown): boolean => value !== undefined;
+
+  const allowedCommon: readonly (keyof MemoryItemPatch)[] = ["tags", "sensitivity", "provenance"];
+  const allowedKindSpecific: readonly (keyof MemoryItemPatch)[] =
+    kind === "fact"
+      ? ["key", "value", "observed_at", "confidence"]
+      : kind === "note"
+        ? ["title", "body_md"]
+        : kind === "procedure"
+          ? ["title", "body_md", "confidence"]
+          : ["occurred_at", "summary_md"];
+
+  const allowed = new Set<keyof MemoryItemPatch>([...allowedCommon, ...allowedKindSpecific]);
+
+  const allFields: readonly (keyof MemoryItemPatch)[] = [
+    "tags",
+    "sensitivity",
+    "provenance",
+    "key",
+    "value",
+    "title",
+    "body_md",
+    "summary_md",
+    "confidence",
+    "observed_at",
+    "occurred_at",
+  ];
+
+  for (const field of allFields) {
+    if (allowed.has(field)) continue;
+    if (isSet(patch[field])) incompatible.push(String(field));
+  }
+
+  if (incompatible.length > 0) {
+    throw new Error(`incompatible patch fields for kind=${kind}: ${incompatible.join(", ")}`);
+  }
+}
+
 export class MemoryV1Dal {
   constructor(private readonly db: SqlDb) {}
 
@@ -346,6 +387,8 @@ export class MemoryV1Dal {
       );
       if (!existing) throw new Error("memory item not found");
 
+      assertPatchCompatible(existing.kind, patch);
+
       const updates: string[] = ["updated_at = ?"];
       const params: unknown[] = [nowIso];
 
@@ -489,6 +532,11 @@ export class MemoryV1Dal {
         [agent, memoryItemId],
       );
       if (existingTombstone) {
+        await tx.run(
+          `DELETE FROM memory_items
+           WHERE agent_id = ? AND memory_item_id = ?`,
+          [agent, memoryItemId],
+        );
         return {
           v: 1,
           memory_item_id: existingTombstone.memory_item_id,

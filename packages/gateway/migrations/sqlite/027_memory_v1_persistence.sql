@@ -35,6 +35,10 @@ CREATE TABLE IF NOT EXISTS memory_items (
   )
 );
 
+-- Enables composite foreign keys from agent-scoped child tables.
+CREATE UNIQUE INDEX IF NOT EXISTS memory_items_agent_memory_item_id_uniq
+ON memory_items (agent_id, memory_item_id);
+
 CREATE INDEX IF NOT EXISTS memory_items_agent_created_at_idx
 ON memory_items (agent_id, created_at DESC);
 
@@ -55,7 +59,7 @@ CREATE TABLE IF NOT EXISTS memory_item_provenance (
   tool_call_id TEXT,
   refs_json TEXT NOT NULL DEFAULT '[]',
   metadata_json TEXT,
-  FOREIGN KEY (memory_item_id) REFERENCES memory_items(memory_item_id) ON DELETE CASCADE
+  FOREIGN KEY (agent_id, memory_item_id) REFERENCES memory_items(agent_id, memory_item_id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS memory_item_provenance_agent_source_kind_idx
@@ -76,7 +80,7 @@ CREATE TABLE IF NOT EXISTS memory_item_tags (
   tag TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (agent_id, memory_item_id, tag),
-  FOREIGN KEY (memory_item_id) REFERENCES memory_items(memory_item_id) ON DELETE CASCADE
+  FOREIGN KEY (agent_id, memory_item_id) REFERENCES memory_items(agent_id, memory_item_id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS memory_item_tags_agent_tag_idx
@@ -103,7 +107,7 @@ CREATE TABLE IF NOT EXISTS memory_item_embeddings (
   embedding_id TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (agent_id, memory_item_id, embedding_id),
-  FOREIGN KEY (memory_item_id) REFERENCES memory_items(memory_item_id) ON DELETE CASCADE
+  FOREIGN KEY (agent_id, memory_item_id) REFERENCES memory_items(agent_id, memory_item_id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS memory_item_embeddings_agent_created_at_idx
@@ -111,4 +115,3 @@ ON memory_item_embeddings (agent_id, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS memory_item_embeddings_agent_memory_item_id_idx
 ON memory_item_embeddings (agent_id, memory_item_id);
-
