@@ -10,4 +10,3 @@ describe("@tyrum/operator-ui entry exports", () => {
     expect(dts).toContain("type DialogFooterProps");
   });
 });
-
