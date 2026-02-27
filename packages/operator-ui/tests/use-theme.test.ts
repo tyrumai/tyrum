@@ -47,13 +47,7 @@ describe("ThemeProvider/useTheme", () => {
     };
 
     act(() => {
-      root.render(
-        React.createElement(
-          ThemeProvider,
-          null,
-          React.createElement(Probe, null),
-        ),
-      );
+      root.render(React.createElement(ThemeProvider, null, React.createElement(Probe, null)));
     });
 
     expect(mode).toBe("dark");
@@ -77,13 +71,7 @@ describe("ThemeProvider/useTheme", () => {
     };
 
     act(() => {
-      root.render(
-        React.createElement(
-          ThemeProvider,
-          null,
-          React.createElement(Probe, null),
-        ),
-      );
+      root.render(React.createElement(ThemeProvider, null, React.createElement(Probe, null)));
     });
 
     expect(api?.mode).toBe("light");
@@ -131,6 +119,54 @@ describe("ThemeProvider/useTheme", () => {
     container.remove();
   });
 
+  it("refreshes system theme when switching into system mode", async () => {
+    const { container, root } = createTestRoot();
+    stubLocalStorage();
+
+    let matches = true;
+    (window as unknown as { matchMedia?: unknown }).matchMedia = vi.fn((query: string) => {
+      expect(query).toBe("(prefers-color-scheme: dark)");
+      return {
+        get matches() {
+          return matches;
+        },
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      };
+    });
+
+    localStorage.setItem("tyrum.themeMode", "dark");
+
+    let api: ReturnType<typeof useTheme> | null = null;
+    const Probe = () => {
+      api = useTheme();
+      return null;
+    };
+
+    act(() => {
+      root.render(React.createElement(ThemeProvider, null, React.createElement(Probe, null)));
+    });
+
+    expect(document.documentElement.dataset.theme).toBe("dark");
+
+    // Simulate OS switching to light while we're not in system mode.
+    matches = false;
+
+    await act(async () => {
+      api?.setMode("system");
+      await Promise.resolve();
+    });
+
+    expect(api?.mode).toBe("system");
+    expect(document.documentElement.dataset.theme).toBe("light");
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
   it("uses desktop config when Desktop API exists", async () => {
     const { container, root } = createTestRoot();
     stubLocalStorage();
@@ -159,13 +195,7 @@ describe("ThemeProvider/useTheme", () => {
     };
 
     await act(async () => {
-      root.render(
-        React.createElement(
-          ThemeProvider,
-          null,
-          React.createElement(Probe, null),
-        ),
-      );
+      root.render(React.createElement(ThemeProvider, null, React.createElement(Probe, null)));
       await Promise.resolve();
     });
 

@@ -17,7 +17,6 @@
     "build": "tsdown src/index.ts --format esm --dts"
   },
   "dependencies": {
-    "@radix-ui/react-slot": "^1.2.4",
     "@tyrum/client": "workspace:*",
     "@tyrum/operator-core": "workspace:*",
     "clsx": "^2.1.1",

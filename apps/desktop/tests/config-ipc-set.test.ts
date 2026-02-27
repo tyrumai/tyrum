@@ -57,4 +57,30 @@ describe("config-ipc config:set allowlist", () => {
       }),
     );
   });
+
+  it("allows theme.source via config:set and updates nativeTheme.themeSource", async () => {
+    const { registerConfigIpc } = await import("../src/main/ipc/config-ipc.js");
+    registerConfigIpc();
+
+    const handler = registeredHandlers.get("config:set");
+    expect(handler).toBeTypeOf("function");
+
+    const { nativeTheme } = await import("electron");
+    expect(nativeTheme.themeSource).toBe("system");
+
+    const result = handler?.({}, { theme: { source: "light" } });
+
+    expect(saveConfigMock).toHaveBeenCalledTimes(1);
+    expect(saveConfigMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        theme: expect.objectContaining({ source: "light" }),
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        theme: expect.objectContaining({ source: "light" }),
+      }),
+    );
+    expect(nativeTheme.themeSource).toBe("light");
+  });
 });

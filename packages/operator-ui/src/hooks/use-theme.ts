@@ -63,6 +63,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     if (mode !== "system") return;
     if (typeof globalThis.matchMedia !== "function") return;
     const mediaQuery = globalThis.matchMedia("(prefers-color-scheme: dark)");
+    setSystemColorScheme(mediaQuery.matches ? "dark" : "light");
     const handler = (event: MediaQueryListEvent) => {
       setSystemColorScheme(event.matches ? "dark" : "light");
     };
