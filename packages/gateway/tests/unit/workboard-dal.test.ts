@@ -80,6 +80,35 @@ describe("WorkboardDal", () => {
     expect(doing.items.map((it) => it.work_item_id)).toEqual([b.work_item_id]);
   });
 
+  it("paginates work item lists with cursor", async () => {
+    const dal = createDal();
+    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+
+    const one = await dal.createItem({
+      scope,
+      item: { kind: "action", title: "1", created_from_session_key: "agent:default:main" },
+      createdAtIso: "2026-02-27T00:00:00.000Z",
+    });
+    const two = await dal.createItem({
+      scope,
+      item: { kind: "action", title: "2", created_from_session_key: "agent:default:main" },
+      createdAtIso: "2026-02-27T00:00:01.000Z",
+    });
+    const three = await dal.createItem({
+      scope,
+      item: { kind: "action", title: "3", created_from_session_key: "agent:default:main" },
+      createdAtIso: "2026-02-27T00:00:02.000Z",
+    });
+
+    const page1 = await dal.listItems({ scope, limit: 2 });
+    expect(page1.items.map((i) => i.work_item_id)).toEqual([three.work_item_id, two.work_item_id]);
+    expect(page1.next_cursor).toBeTruthy();
+
+    const page2 = await dal.listItems({ scope, limit: 2, cursor: page1.next_cursor });
+    expect(page2.items.map((i) => i.work_item_id)).toEqual([one.work_item_id]);
+    expect(page2.next_cursor).toBeUndefined();
+  });
+
   it("updates a work item", async () => {
     const dal = createDal();
     const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
@@ -189,6 +218,30 @@ describe("WorkboardDal", () => {
     expect(listed.artifacts.map((a) => a.artifact_id)).toEqual([artifact.artifact_id]);
   });
 
+  it("rejects attaching artifacts outside the caller scope", async () => {
+    const dal = createDal();
+    const scopeA = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+    const scopeB = { tenant_id: "default", agent_id: "agent-b", workspace_id: "default" } as const;
+
+    const foreignItem = await dal.createItem({
+      scope: scopeB,
+      item: { kind: "action", title: "Foreign", created_from_session_key: "agent:agent-b:main" },
+      createdAtIso: "2026-02-27T00:00:00.000Z",
+    });
+
+    await expect(
+      dal.createArtifact({
+        scope: scopeA,
+        artifact: {
+          work_item_id: foreignItem.work_item_id,
+          kind: "risk",
+          title: "Should fail",
+        },
+        createdAtIso: "2026-02-27T00:00:00.000Z",
+      }),
+    ).rejects.toThrow(/scope/i);
+  });
+
   it("creates and lists decision records", async () => {
     const dal = createDal();
     const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
@@ -234,6 +287,15 @@ describe("WorkboardDal", () => {
       createdAtIso: "2026-02-27T00:00:00.000Z",
     });
 
+    const other = await dal.createSignal({
+      scope,
+      signal: {
+        trigger_kind: "event",
+        trigger_spec_json: { on: "artifact.created" },
+      },
+      createdAtIso: "2026-02-27T00:00:00.500Z",
+    });
+
     const updated = await dal.updateSignal({
       scope,
       signal_id: signal.signal_id,
@@ -247,7 +309,10 @@ describe("WorkboardDal", () => {
     expect(fetched!.status).toBe("paused");
 
     const listed = await dal.listSignals({ scope });
-    expect(listed.signals.map((s) => s.signal_id)).toEqual([signal.signal_id]);
+    expect(listed.signals.map((s) => s.signal_id)).toEqual([other.signal_id, signal.signal_id]);
+
+    const pausedOnly = await dal.listSignals({ scope, statuses: ["paused"] });
+    expect(pausedOnly.signals.map((s) => s.signal_id)).toEqual([signal.signal_id]);
   });
 
   it("creates tasks, subagents, links, and scope activity", async () => {
@@ -331,5 +396,23 @@ describe("WorkboardDal", () => {
     });
     expect(heartbeat).toBeDefined();
     expect(heartbeat!.last_heartbeat_at).toBe("2026-02-27T00:00:05.000Z");
+
+    const fetched = await dal.getSubagent({ scope, subagent_id: subagent.subagent_id });
+    expect(fetched).toBeDefined();
+    expect(fetched!.subagent_id).toBe(subagent.subagent_id);
+
+    const running = await dal.listSubagents({ scope, statuses: ["running"] });
+    expect(running.subagents.map((s) => s.subagent_id)).toEqual([subagent.subagent_id]);
+
+    const closed = await dal.closeSubagent({
+      scope,
+      subagent_id: subagent.subagent_id,
+      closedAtIso: "2026-02-27T00:00:06.000Z",
+    });
+    expect(closed).toBeDefined();
+    expect(closed!.status).toBe("closing");
+
+    const closing = await dal.listSubagents({ scope, statuses: ["closing"] });
+    expect(closing.subagents.map((s) => s.subagent_id)).toEqual([subagent.subagent_id]);
   });
 });

@@ -52,6 +52,32 @@ function parseJsonMaybe(raw: string | null): unknown | undefined {
   }
 }
 
+type Cursor = { sort: string; id: string };
+
+function encodeCursor(cursor: Cursor): string {
+  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64");
+}
+
+function decodeCursor(raw: string): Cursor {
+  try {
+    const json = Buffer.from(raw, "base64").toString("utf8");
+    const parsed = JSON.parse(json) as unknown;
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      "sort" in parsed &&
+      "id" in parsed &&
+      typeof (parsed as { sort: unknown }).sort === "string" &&
+      typeof (parsed as { id: unknown }).id === "string"
+    ) {
+      return { sort: (parsed as { sort: string }).sort, id: (parsed as { id: string }).id };
+    }
+  } catch {
+    // fall through
+  }
+  throw new Error("invalid cursor");
+}
+
 interface RawWorkItemRow {
   work_item_id: string;
   tenant_id: string;
@@ -481,6 +507,12 @@ export class WorkboardDal {
       values.push(...params.kinds);
     }
 
+    if (params.cursor) {
+      const cursor = decodeCursor(params.cursor);
+      where.push("(created_at < ? OR (created_at = ? AND work_item_id < ?))");
+      values.push(cursor.sort, cursor.sort, cursor.id);
+    }
+
     const limit = Math.max(1, Math.min(200, params.limit ?? 50));
 
     const sql =
@@ -494,10 +526,7 @@ export class WorkboardDal {
     const last = items.at(-1);
     const next_cursor =
       items.length === limit && last
-        ? Buffer.from(
-            JSON.stringify({ created_at: last.created_at, work_item_id: last.work_item_id }),
-            "utf8",
-          ).toString("base64")
+        ? encodeCursor({ sort: last.created_at, id: last.work_item_id })
         : undefined;
 
     return { items, next_cursor };
@@ -871,6 +900,16 @@ export class WorkboardDal {
     const artifactId = params.artifactId?.trim() || randomUUID();
     const createdAtIso = params.createdAtIso ?? new Date().toISOString();
 
+    if (params.artifact.work_item_id) {
+      const item = await this.getItem({
+        scope: params.scope,
+        work_item_id: params.artifact.work_item_id,
+      });
+      if (!item) {
+        throw new Error("work_item_id is outside scope");
+      }
+    }
+
     const row = await this.db.get<RawWorkArtifactRow>(
       `INSERT INTO work_artifacts (
          artifact_id,
@@ -919,6 +958,7 @@ export class WorkboardDal {
     scope: WorkScope;
     work_item_id?: string;
     limit?: number;
+    cursor?: string;
   }): Promise<{ artifacts: WorkArtifact[]; next_cursor?: string }> {
     const where: string[] = ["tenant_id = ?", "agent_id = ?", "workspace_id = ?"];
     const values: unknown[] = [
@@ -930,6 +970,12 @@ export class WorkboardDal {
     if (params.work_item_id) {
       where.push("work_item_id = ?");
       values.push(params.work_item_id);
+    }
+
+    if (params.cursor) {
+      const cursor = decodeCursor(params.cursor);
+      where.push("(created_at < ? OR (created_at = ? AND artifact_id < ?))");
+      values.push(cursor.sort, cursor.sort, cursor.id);
     }
 
     const limit = Math.max(1, Math.min(200, params.limit ?? 50));
@@ -945,7 +991,13 @@ export class WorkboardDal {
     );
 
     const artifacts = rows.map(toWorkArtifact);
-    return { artifacts };
+    const last = artifacts.at(-1);
+    const next_cursor =
+      artifacts.length === limit && last
+        ? encodeCursor({ sort: last.created_at, id: last.artifact_id })
+        : undefined;
+
+    return { artifacts, next_cursor };
   }
 
   async getArtifact(params: {
@@ -986,6 +1038,16 @@ export class WorkboardDal {
   }): Promise<DecisionRecord> {
     const decisionId = params.decisionId?.trim() || randomUUID();
     const createdAtIso = params.createdAtIso ?? new Date().toISOString();
+
+    if (params.decision.work_item_id) {
+      const item = await this.getItem({
+        scope: params.scope,
+        work_item_id: params.decision.work_item_id,
+      });
+      if (!item) {
+        throw new Error("work_item_id is outside scope");
+      }
+    }
 
     const row = await this.db.get<RawDecisionRow>(
       `INSERT INTO work_decisions (
@@ -1052,6 +1114,7 @@ export class WorkboardDal {
     scope: WorkScope;
     work_item_id?: string;
     limit?: number;
+    cursor?: string;
   }): Promise<{ decisions: DecisionRecord[]; next_cursor?: string }> {
     const where: string[] = ["tenant_id = ?", "agent_id = ?", "workspace_id = ?"];
     const values: unknown[] = [
@@ -1065,6 +1128,12 @@ export class WorkboardDal {
       values.push(params.work_item_id);
     }
 
+    if (params.cursor) {
+      const cursor = decodeCursor(params.cursor);
+      where.push("(created_at < ? OR (created_at = ? AND decision_id < ?))");
+      values.push(cursor.sort, cursor.sort, cursor.id);
+    }
+
     const limit = Math.max(1, Math.min(200, params.limit ?? 50));
     values.push(limit);
 
@@ -1076,7 +1145,14 @@ export class WorkboardDal {
        LIMIT ?`,
       values,
     );
-    return { decisions: rows.map(toDecisionRecord) };
+    const decisions = rows.map(toDecisionRecord);
+    const last = decisions.at(-1);
+    const next_cursor =
+      decisions.length === limit && last
+        ? encodeCursor({ sort: last.created_at, id: last.decision_id })
+        : undefined;
+
+    return { decisions, next_cursor };
   }
 
   async createSignal(params: {
@@ -1094,6 +1170,16 @@ export class WorkboardDal {
     const signalId = params.signalId?.trim() || randomUUID();
     const createdAtIso = params.createdAtIso ?? new Date().toISOString();
     const status: WorkSignalStatus = params.signal.status ?? "active";
+
+    if (params.signal.work_item_id) {
+      const item = await this.getItem({
+        scope: params.scope,
+        work_item_id: params.signal.work_item_id,
+      });
+      if (!item) {
+        throw new Error("work_item_id is outside scope");
+      }
+    }
 
     const row = await this.db.get<RawWorkSignalRow>(
       `INSERT INTO work_signals (
@@ -1195,6 +1281,35 @@ export class WorkboardDal {
     return row ? toWorkSignal(row) : undefined;
   }
 
+  async markSignalFired(params: {
+    scope: WorkScope;
+    signal_id: string;
+    firedAtIso?: string;
+    status?: WorkSignalStatus;
+  }): Promise<WorkSignal | undefined> {
+    const firedAtIso = params.firedAtIso ?? new Date().toISOString();
+    const status: WorkSignalStatus = params.status ?? "fired";
+
+    const row = await this.db.get<RawWorkSignalRow>(
+      `UPDATE work_signals
+       SET status = ?, last_fired_at = ?
+       WHERE tenant_id = ?
+         AND agent_id = ?
+         AND workspace_id = ?
+         AND signal_id = ?
+       RETURNING *`,
+      [
+        status,
+        firedAtIso,
+        params.scope.tenant_id,
+        params.scope.agent_id,
+        params.scope.workspace_id,
+        params.signal_id,
+      ],
+    );
+    return row ? toWorkSignal(row) : undefined;
+  }
+
   async getSignal(params: {
     scope: WorkScope;
     signal_id: string;
@@ -1214,8 +1329,9 @@ export class WorkboardDal {
   async listSignals(params: {
     scope: WorkScope;
     work_item_id?: string;
-    status?: WorkSignalStatus;
+    statuses?: WorkSignalStatus[];
     limit?: number;
+    cursor?: string;
   }): Promise<{ signals: WorkSignal[]; next_cursor?: string }> {
     const where: string[] = ["tenant_id = ?", "agent_id = ?", "workspace_id = ?"];
     const values: unknown[] = [
@@ -1229,9 +1345,15 @@ export class WorkboardDal {
       values.push(params.work_item_id);
     }
 
-    if (params.status) {
-      where.push("status = ?");
-      values.push(params.status);
+    if (params.statuses && params.statuses.length > 0) {
+      where.push(`status IN (${params.statuses.map(() => "?").join(", ")})`);
+      values.push(...params.statuses);
+    }
+
+    if (params.cursor) {
+      const cursor = decodeCursor(params.cursor);
+      where.push("(created_at < ? OR (created_at = ? AND signal_id < ?))");
+      values.push(cursor.sort, cursor.sort, cursor.id);
     }
 
     const limit = Math.max(1, Math.min(200, params.limit ?? 50));
@@ -1246,7 +1368,14 @@ export class WorkboardDal {
       values,
     );
 
-    return { signals: rows.map(toWorkSignal) };
+    const signals = rows.map(toWorkSignal);
+    const last = signals.at(-1);
+    const next_cursor =
+      signals.length === limit && last
+        ? encodeCursor({ sort: last.created_at, id: last.signal_id })
+        : undefined;
+
+    return { signals, next_cursor };
   }
 
   async upsertScopeActivity(params: {
@@ -1593,6 +1722,43 @@ export class WorkboardDal {
     const lane: Lane = params.subagent.lane ?? "subagent";
     const status: SubagentStatus = params.subagent.status ?? "running";
 
+    const explicitWorkItemId = params.subagent.work_item_id;
+    let inferredWorkItemId: string | undefined;
+
+    if (params.subagent.work_item_task_id) {
+      const task = await this.db.get<{ task_id: string; work_item_id: string }>(
+        `SELECT t.task_id, t.work_item_id
+         FROM work_item_tasks t
+         JOIN work_items i ON i.work_item_id = t.work_item_id
+         WHERE i.tenant_id = ?
+           AND i.agent_id = ?
+           AND i.workspace_id = ?
+           AND t.task_id = ?`,
+        [
+          params.scope.tenant_id,
+          params.scope.agent_id,
+          params.scope.workspace_id,
+          params.subagent.work_item_task_id,
+        ],
+      );
+      if (!task) {
+        throw new Error("work_item_task_id is outside scope");
+      }
+      inferredWorkItemId = task.work_item_id;
+    }
+
+    if (explicitWorkItemId) {
+      const item = await this.getItem({ scope: params.scope, work_item_id: explicitWorkItemId });
+      if (!item) {
+        throw new Error("work_item_id is outside scope");
+      }
+      if (inferredWorkItemId && inferredWorkItemId !== explicitWorkItemId) {
+        throw new Error("work_item_task_id does not belong to work_item_id");
+      }
+    }
+
+    const workItemId = explicitWorkItemId ?? inferredWorkItemId ?? null;
+
     const row = await this.db.get<RawSubagentRow>(
       `INSERT INTO subagents (
          subagent_id,
@@ -1617,7 +1783,7 @@ export class WorkboardDal {
         params.scope.tenant_id,
         params.scope.agent_id,
         params.scope.workspace_id,
-        params.subagent.work_item_id ?? null,
+        workItemId,
         params.subagent.work_item_task_id ?? null,
         params.subagent.execution_profile,
         params.subagent.session_key,
@@ -1659,5 +1825,122 @@ export class WorkboardDal {
       ],
     );
     return row ? toSubagent(row) : undefined;
+  }
+
+  async getSubagent(params: {
+    scope: WorkScope;
+    subagent_id: string;
+  }): Promise<SubagentDescriptor | undefined> {
+    const row = await this.db.get<RawSubagentRow>(
+      `SELECT *
+       FROM subagents
+       WHERE tenant_id = ?
+         AND agent_id = ?
+         AND workspace_id = ?
+         AND subagent_id = ?`,
+      [
+        params.scope.tenant_id,
+        params.scope.agent_id,
+        params.scope.workspace_id,
+        params.subagent_id,
+      ],
+    );
+    return row ? toSubagent(row) : undefined;
+  }
+
+  async listSubagents(params: {
+    scope: WorkScope;
+    statuses?: SubagentStatus[];
+    limit?: number;
+    cursor?: string;
+  }): Promise<{ subagents: SubagentDescriptor[]; next_cursor?: string }> {
+    const where: string[] = ["tenant_id = ?", "agent_id = ?", "workspace_id = ?"];
+    const values: unknown[] = [
+      params.scope.tenant_id,
+      params.scope.agent_id,
+      params.scope.workspace_id,
+    ];
+
+    if (params.statuses && params.statuses.length > 0) {
+      where.push(`status IN (${params.statuses.map(() => "?").join(", ")})`);
+      values.push(...params.statuses);
+    }
+
+    if (params.cursor) {
+      const cursor = decodeCursor(params.cursor);
+      where.push("(updated_at < ? OR (updated_at = ? AND subagent_id < ?))");
+      values.push(cursor.sort, cursor.sort, cursor.id);
+    }
+
+    const limit = Math.max(1, Math.min(200, params.limit ?? 50));
+    values.push(limit);
+
+    const rows = await this.db.all<RawSubagentRow>(
+      `SELECT *
+       FROM subagents
+       WHERE ${where.join(" AND ")}
+       ORDER BY updated_at DESC, subagent_id DESC
+       LIMIT ?`,
+      values,
+    );
+
+    const subagents = rows.map(toSubagent);
+    const last = subagents.at(-1);
+    const next_cursor =
+      subagents.length === limit && last
+        ? encodeCursor({ sort: last.updated_at ?? last.created_at, id: last.subagent_id })
+        : undefined;
+
+    return { subagents, next_cursor };
+  }
+
+  async closeSubagent(params: {
+    scope: WorkScope;
+    subagent_id: string;
+    reason?: string;
+    closedAtIso?: string;
+  }): Promise<SubagentDescriptor | undefined> {
+    const nowIso = params.closedAtIso ?? new Date().toISOString();
+
+    return await this.db.transaction(async (tx) => {
+      const existing = await tx.get<RawSubagentRow>(
+        `SELECT *
+         FROM subagents
+         WHERE tenant_id = ?
+           AND agent_id = ?
+           AND workspace_id = ?
+           AND subagent_id = ?`,
+        [
+          params.scope.tenant_id,
+          params.scope.agent_id,
+          params.scope.workspace_id,
+          params.subagent_id,
+        ],
+      );
+      if (!existing) return undefined;
+
+      if (existing.status === "closed" || existing.status === "failed") {
+        return toSubagent(existing);
+      }
+
+      const row = await tx.get<RawSubagentRow>(
+        `UPDATE subagents
+         SET status = ?, updated_at = ?
+         WHERE tenant_id = ?
+           AND agent_id = ?
+           AND workspace_id = ?
+           AND subagent_id = ?
+         RETURNING *`,
+        [
+          "closing",
+          nowIso,
+          params.scope.tenant_id,
+          params.scope.agent_id,
+          params.scope.workspace_id,
+          params.subagent_id,
+        ],
+      );
+      return row ? toSubagent(row) : undefined;
+    });
   }
 }
