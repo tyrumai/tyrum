@@ -24,6 +24,18 @@ describe("Dialog", () => {
     expect(dialogOutBlock).not.toContain("translate(-50%");
   });
 
+  it("keeps exit animations applied until unmount (animation-fill-mode: forwards)", () => {
+    const css = readFileSync(join(process.cwd(), "packages/operator-ui/src/globals.css"), "utf8");
+
+    expect(css).toMatch(
+      /\.tyrum-animate-fade-out\s*\{[\s\S]*animation:\s*tyrum-fade-out 200ms ease-in forwards;[\s\S]*\}/,
+    );
+
+    expect(css).toMatch(
+      /\.tyrum-animate-dialog-out\s*\{[\s\S]*animation:\s*tyrum-dialog-out 200ms ease-in forwards;[\s\S]*\}/,
+    );
+  });
+
   it("renders overlay/content and a close button when open", () => {
     const Dialog = (operatorUi as Record<string, unknown>)["Dialog"];
     const DialogContent = (operatorUi as Record<string, unknown>)["DialogContent"];

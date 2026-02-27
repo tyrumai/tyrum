@@ -57,7 +57,7 @@
   }
 
   .tyrum-animate-fade-out {
-    animation: tyrum-fade-out 200ms ease-in;
+    animation: tyrum-fade-out 200ms ease-in forwards;
   }
 
   .tyrum-animate-dialog-in {
@@ -65,6 +65,6 @@
   }
 
   .tyrum-animate-dialog-out {
-    animation: tyrum-dialog-out 200ms ease-in;
+    animation: tyrum-dialog-out 200ms ease-in forwards;
   }
 }
