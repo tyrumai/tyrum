@@ -41,6 +41,42 @@ import type {
   WsResponseEnvelope,
   WsSessionSendPayload,
   WsSessionSendResult as WsSessionSendResultT,
+  WsWorkArtifactCreatePayload,
+  WsWorkArtifactCreateResult as WsWorkArtifactCreateResultT,
+  WsWorkArtifactGetPayload,
+  WsWorkArtifactGetResult as WsWorkArtifactGetResultT,
+  WsWorkArtifactListPayload,
+  WsWorkArtifactListResult as WsWorkArtifactListResultT,
+  WsWorkCreatePayload,
+  WsWorkCreateResult as WsWorkCreateResultT,
+  WsWorkDecisionCreatePayload,
+  WsWorkDecisionCreateResult as WsWorkDecisionCreateResultT,
+  WsWorkDecisionGetPayload,
+  WsWorkDecisionGetResult as WsWorkDecisionGetResultT,
+  WsWorkDecisionListPayload,
+  WsWorkDecisionListResult as WsWorkDecisionListResultT,
+  WsWorkGetPayload,
+  WsWorkGetResult as WsWorkGetResultT,
+  WsWorkListPayload,
+  WsWorkListResult as WsWorkListResultT,
+  WsWorkSignalCreatePayload,
+  WsWorkSignalCreateResult as WsWorkSignalCreateResultT,
+  WsWorkSignalGetPayload,
+  WsWorkSignalGetResult as WsWorkSignalGetResultT,
+  WsWorkSignalListPayload,
+  WsWorkSignalListResult as WsWorkSignalListResultT,
+  WsWorkSignalUpdatePayload,
+  WsWorkSignalUpdateResult as WsWorkSignalUpdateResultT,
+  WsWorkStateKvGetPayload,
+  WsWorkStateKvGetResult as WsWorkStateKvGetResultT,
+  WsWorkStateKvListPayload,
+  WsWorkStateKvListResult as WsWorkStateKvListResultT,
+  WsWorkStateKvSetPayload,
+  WsWorkStateKvSetResult as WsWorkStateKvSetResultT,
+  WsWorkTransitionPayload,
+  WsWorkTransitionResult as WsWorkTransitionResultT,
+  WsWorkUpdatePayload,
+  WsWorkUpdateResult as WsWorkUpdateResultT,
   WsWorkflowCancelPayload,
   WsWorkflowCancelResult as WsWorkflowCancelResultT,
   WsWorkflowResumePayload,
@@ -62,6 +98,9 @@ import {
   WsWorkflowCancelResult,
   WsWorkflowResumeResult,
   WsWorkflowRunResult,
+  WsWorkArtifactCreateResult,
+  WsWorkArtifactGetResult,
+  WsWorkArtifactListResult,
   WsCommandExecuteResult,
   WsConnectInitResult,
   WsConnectProofResult,
@@ -69,6 +108,21 @@ import {
   WsMessageEnvelope,
   WsTaskExecuteRequest,
   WsTaskExecuteResult,
+  WsWorkCreateResult,
+  WsWorkDecisionCreateResult,
+  WsWorkDecisionGetResult,
+  WsWorkDecisionListResult,
+  WsWorkGetResult,
+  WsWorkListResult,
+  WsWorkSignalCreateResult,
+  WsWorkSignalGetResult,
+  WsWorkSignalListResult,
+  WsWorkSignalUpdateResult,
+  WsWorkStateKvGetResult,
+  WsWorkStateKvListResult,
+  WsWorkStateKvSetResult,
+  WsWorkTransitionResult,
+  WsWorkUpdateResult,
 } from "@tyrum/schemas";
 import {
   buildConnectProofTranscript,
@@ -442,6 +496,82 @@ export class TyrumClient {
   /** Report attempt evidence (node flows). */
   attemptEvidence(payload: WsAttemptEvidencePayload): Promise<void> {
     return this.requestVoid("attempt.evidence", payload);
+  }
+
+  // -----------------------------------------------------------------------
+  // WorkBoard helpers
+  // -----------------------------------------------------------------------
+
+  workList(payload: WsWorkListPayload): Promise<WsWorkListResultT> {
+    return this.request("work.list", payload, WsWorkListResult);
+  }
+
+  workGet(payload: WsWorkGetPayload): Promise<WsWorkGetResultT> {
+    return this.request("work.get", payload, WsWorkGetResult);
+  }
+
+  workCreate(payload: WsWorkCreatePayload): Promise<WsWorkCreateResultT> {
+    return this.request("work.create", payload, WsWorkCreateResult);
+  }
+
+  workUpdate(payload: WsWorkUpdatePayload): Promise<WsWorkUpdateResultT> {
+    return this.request("work.update", payload, WsWorkUpdateResult);
+  }
+
+  workTransition(payload: WsWorkTransitionPayload): Promise<WsWorkTransitionResultT> {
+    return this.request("work.transition", payload, WsWorkTransitionResult);
+  }
+
+  workArtifactList(payload: WsWorkArtifactListPayload): Promise<WsWorkArtifactListResultT> {
+    return this.request("work.artifact.list", payload, WsWorkArtifactListResult);
+  }
+
+  workArtifactGet(payload: WsWorkArtifactGetPayload): Promise<WsWorkArtifactGetResultT> {
+    return this.request("work.artifact.get", payload, WsWorkArtifactGetResult);
+  }
+
+  workArtifactCreate(payload: WsWorkArtifactCreatePayload): Promise<WsWorkArtifactCreateResultT> {
+    return this.request("work.artifact.create", payload, WsWorkArtifactCreateResult);
+  }
+
+  workDecisionList(payload: WsWorkDecisionListPayload): Promise<WsWorkDecisionListResultT> {
+    return this.request("work.decision.list", payload, WsWorkDecisionListResult);
+  }
+
+  workDecisionGet(payload: WsWorkDecisionGetPayload): Promise<WsWorkDecisionGetResultT> {
+    return this.request("work.decision.get", payload, WsWorkDecisionGetResult);
+  }
+
+  workDecisionCreate(payload: WsWorkDecisionCreatePayload): Promise<WsWorkDecisionCreateResultT> {
+    return this.request("work.decision.create", payload, WsWorkDecisionCreateResult);
+  }
+
+  workSignalList(payload: WsWorkSignalListPayload): Promise<WsWorkSignalListResultT> {
+    return this.request("work.signal.list", payload, WsWorkSignalListResult);
+  }
+
+  workSignalGet(payload: WsWorkSignalGetPayload): Promise<WsWorkSignalGetResultT> {
+    return this.request("work.signal.get", payload, WsWorkSignalGetResult);
+  }
+
+  workSignalCreate(payload: WsWorkSignalCreatePayload): Promise<WsWorkSignalCreateResultT> {
+    return this.request("work.signal.create", payload, WsWorkSignalCreateResult);
+  }
+
+  workSignalUpdate(payload: WsWorkSignalUpdatePayload): Promise<WsWorkSignalUpdateResultT> {
+    return this.request("work.signal.update", payload, WsWorkSignalUpdateResult);
+  }
+
+  workStateKvGet(payload: WsWorkStateKvGetPayload): Promise<WsWorkStateKvGetResultT> {
+    return this.request("work.state_kv.get", payload, WsWorkStateKvGetResult);
+  }
+
+  workStateKvList(payload: WsWorkStateKvListPayload): Promise<WsWorkStateKvListResultT> {
+    return this.request("work.state_kv.list", payload, WsWorkStateKvListResult);
+  }
+
+  workStateKvSet(payload: WsWorkStateKvSetPayload): Promise<WsWorkStateKvSetResultT> {
+    return this.request("work.state_kv.set", payload, WsWorkStateKvSetResult);
   }
 
   // -----------------------------------------------------------------------

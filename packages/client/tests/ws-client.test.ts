@@ -1167,6 +1167,296 @@ describe("TyrumClient", () => {
     await expect(evidenceP).resolves.toBeUndefined();
   });
 
+  it("sends typed work.* requests and returns validated results", async () => {
+    server = createTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: [],
+      reconnect: false,
+    });
+
+    const connectedP = new Promise<void>((resolve) => {
+      client!.on("connected", () => resolve());
+    });
+
+    client.connect();
+    const ws = await server.waitForClient();
+    await acceptConnect(ws);
+    await connectedP;
+
+    const scope = { tenant_id: "t-1", agent_id: "agent-1", workspace_id: "default" };
+
+    const workItem = {
+      work_item_id: "123e4567-e89b-12d3-a456-426614174000",
+      ...scope,
+      kind: "action",
+      title: "Test item",
+      status: "backlog",
+      priority: 0,
+      created_at: "2026-02-19T12:00:00Z",
+      created_from_session_key: "agent:agent-1:main",
+      last_active_at: null,
+      fingerprint: { resources: ["repo:example/repo"] },
+      acceptance: { checks: [] },
+      budgets: null,
+      parent_work_item_id: null,
+    };
+
+    const workArtifact = {
+      artifact_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
+      ...scope,
+      work_item_id: workItem.work_item_id,
+      kind: "candidate_plan",
+      title: "Plan",
+      body_md: "- step 1",
+      refs: [],
+      created_at: "2026-02-19T12:00:00Z",
+    };
+
+    const decision = {
+      decision_id: "550e8400-e29b-41d4-a716-446655440000",
+      ...scope,
+      work_item_id: workItem.work_item_id,
+      question: "Q?",
+      chosen: "A",
+      alternatives: ["B"],
+      rationale_md: "Because",
+      input_artifact_ids: [workArtifact.artifact_id],
+      created_at: "2026-02-19T12:00:00Z",
+    };
+
+    const signal = {
+      signal_id: "11111111-2222-3333-8aaa-555555555555",
+      ...scope,
+      work_item_id: workItem.work_item_id,
+      trigger_kind: "time",
+      trigger_spec_json: { at: "tomorrow" },
+      payload_json: { note: "ping" },
+      status: "active",
+      created_at: "2026-02-19T12:00:00Z",
+      last_fired_at: null,
+    };
+
+    const stateKvEntry = {
+      ...scope,
+      work_item_id: workItem.work_item_id,
+      key: "branch",
+      value_json: { name: "main" },
+      updated_at: "2026-02-19T12:00:00Z",
+    };
+
+    async function expectWorkRequest<T>(
+      call: () => Promise<T>,
+      expectedType: string,
+      payload: unknown,
+      result: unknown,
+    ): Promise<T> {
+      const pending = call();
+      const req = (await waitForMessage(ws)) as Record<string, unknown>;
+      expect(req["type"]).toBe(expectedType);
+      expect(req["payload"]).toEqual(payload);
+
+      ws.send(
+        JSON.stringify({
+          request_id: req["request_id"],
+          type: expectedType,
+          ok: true,
+          result,
+        }),
+      );
+
+      return await pending;
+    }
+
+    const listPayload = { ...scope, limit: 1 };
+    const listRes = await expectWorkRequest(
+      () => client!.workList(listPayload),
+      "work.list",
+      listPayload,
+      { items: [workItem], next_cursor: "cursor-1" },
+    );
+    expect(listRes.items[0].work_item_id).toBe(workItem.work_item_id);
+
+    const getPayload = { ...scope, work_item_id: workItem.work_item_id };
+    const getRes = await expectWorkRequest(
+      () => client!.workGet(getPayload),
+      "work.get",
+      getPayload,
+      {
+        item: workItem,
+      },
+    );
+    expect(getRes.item.work_item_id).toBe(workItem.work_item_id);
+
+    const createPayload = { ...scope, item: { kind: "action", title: "Test item" } };
+    const createRes = await expectWorkRequest(
+      () => client!.workCreate(createPayload),
+      "work.create",
+      createPayload,
+      { item: workItem },
+    );
+    expect(createRes.item.work_item_id).toBe(workItem.work_item_id);
+
+    const updatePayload = {
+      ...scope,
+      work_item_id: workItem.work_item_id,
+      patch: { title: "Updated" },
+    };
+    const updateRes = await expectWorkRequest(
+      () => client!.workUpdate(updatePayload),
+      "work.update",
+      updatePayload,
+      { item: workItem },
+    );
+    expect(updateRes.item.work_item_id).toBe(workItem.work_item_id);
+
+    const transitionPayload = {
+      ...scope,
+      work_item_id: workItem.work_item_id,
+      status: "doing",
+    };
+    const transitionRes = await expectWorkRequest(
+      () => client!.workTransition(transitionPayload),
+      "work.transition",
+      transitionPayload,
+      { item: workItem },
+    );
+    expect(transitionRes.item.work_item_id).toBe(workItem.work_item_id);
+
+    const artifactListPayload = { ...scope, work_item_id: workItem.work_item_id };
+    const artifactListRes = await expectWorkRequest(
+      () => client!.workArtifactList(artifactListPayload),
+      "work.artifact.list",
+      artifactListPayload,
+      { artifacts: [workArtifact], next_cursor: "cursor-2" },
+    );
+    expect(artifactListRes.artifacts[0].artifact_id).toBe(workArtifact.artifact_id);
+
+    const artifactGetPayload = { ...scope, artifact_id: workArtifact.artifact_id };
+    const artifactGetRes = await expectWorkRequest(
+      () => client!.workArtifactGet(artifactGetPayload),
+      "work.artifact.get",
+      artifactGetPayload,
+      { artifact: workArtifact },
+    );
+    expect(artifactGetRes.artifact.artifact_id).toBe(workArtifact.artifact_id);
+
+    const artifactCreatePayload = {
+      ...scope,
+      artifact: { kind: "candidate_plan", title: "Plan" },
+    };
+    const artifactCreateRes = await expectWorkRequest(
+      () => client!.workArtifactCreate(artifactCreatePayload),
+      "work.artifact.create",
+      artifactCreatePayload,
+      { artifact: workArtifact },
+    );
+    expect(artifactCreateRes.artifact.artifact_id).toBe(workArtifact.artifact_id);
+
+    const decisionListPayload = { ...scope, work_item_id: workItem.work_item_id };
+    const decisionListRes = await expectWorkRequest(
+      () => client!.workDecisionList(decisionListPayload),
+      "work.decision.list",
+      decisionListPayload,
+      { decisions: [decision], next_cursor: "cursor-3" },
+    );
+    expect(decisionListRes.decisions[0].decision_id).toBe(decision.decision_id);
+
+    const decisionGetPayload = { ...scope, decision_id: decision.decision_id };
+    const decisionGetRes = await expectWorkRequest(
+      () => client!.workDecisionGet(decisionGetPayload),
+      "work.decision.get",
+      decisionGetPayload,
+      { decision },
+    );
+    expect(decisionGetRes.decision.decision_id).toBe(decision.decision_id);
+
+    const decisionCreatePayload = {
+      ...scope,
+      decision: { question: "Q?", chosen: "A", rationale_md: "Because" },
+    };
+    const decisionCreateRes = await expectWorkRequest(
+      () => client!.workDecisionCreate(decisionCreatePayload),
+      "work.decision.create",
+      decisionCreatePayload,
+      { decision },
+    );
+    expect(decisionCreateRes.decision.decision_id).toBe(decision.decision_id);
+
+    const signalListPayload = { ...scope, work_item_id: workItem.work_item_id };
+    const signalListRes = await expectWorkRequest(
+      () => client!.workSignalList(signalListPayload),
+      "work.signal.list",
+      signalListPayload,
+      { signals: [signal], next_cursor: "cursor-4" },
+    );
+    expect(signalListRes.signals[0].signal_id).toBe(signal.signal_id);
+
+    const signalGetPayload = { ...scope, signal_id: signal.signal_id };
+    const signalGetRes = await expectWorkRequest(
+      () => client!.workSignalGet(signalGetPayload),
+      "work.signal.get",
+      signalGetPayload,
+      { signal },
+    );
+    expect(signalGetRes.signal.signal_id).toBe(signal.signal_id);
+
+    const signalCreatePayload = {
+      ...scope,
+      signal: { trigger_kind: "time", trigger_spec_json: { at: "tomorrow" } },
+    };
+    const signalCreateRes = await expectWorkRequest(
+      () => client!.workSignalCreate(signalCreatePayload),
+      "work.signal.create",
+      signalCreatePayload,
+      { signal },
+    );
+    expect(signalCreateRes.signal.signal_id).toBe(signal.signal_id);
+
+    const signalUpdatePayload = { ...scope, signal_id: signal.signal_id, patch: {} };
+    const signalUpdateRes = await expectWorkRequest(
+      () => client!.workSignalUpdate(signalUpdatePayload),
+      "work.signal.update",
+      signalUpdatePayload,
+      { signal },
+    );
+    expect(signalUpdateRes.signal.signal_id).toBe(signal.signal_id);
+
+    const kvGetPayload = { scope: { ...scope, kind: "agent" }, key: "prefs.timezone" };
+    const kvGetRes = await expectWorkRequest(
+      () => client!.workStateKvGet(kvGetPayload),
+      "work.state_kv.get",
+      kvGetPayload,
+      { entry: null },
+    );
+    expect(kvGetRes.entry).toBeNull();
+
+    const kvListPayload = {
+      scope: { ...scope, kind: "work_item", work_item_id: workItem.work_item_id },
+    };
+    const kvListRes = await expectWorkRequest(
+      () => client!.workStateKvList(kvListPayload),
+      "work.state_kv.list",
+      kvListPayload,
+      { entries: [] },
+    );
+    expect(kvListRes.entries).toEqual([]);
+
+    const kvSetPayload = {
+      scope: { ...scope, kind: "work_item", work_item_id: workItem.work_item_id },
+      key: "branch",
+      value_json: { name: "main" },
+    };
+    const kvSetRes = await expectWorkRequest(
+      () => client!.workStateKvSet(kvSetPayload),
+      "work.state_kv.set",
+      kvSetPayload,
+      { entry: stateKvEntry },
+    );
+    expect(kvSetRes.entry.key).toBe("branch");
+  });
+
   it("rejects void helper responses with non-empty ack payloads", async () => {
     server = createTestServer();
     client = new TyrumClient({
@@ -1295,6 +1585,73 @@ describe("TyrumClient", () => {
     ws.send(JSON.stringify(updateMsg));
 
     await delay(25);
+    expect(calls).toBe(1);
+  });
+
+  it("dedupes work.* events by event_id", async () => {
+    server = createTestServer();
+    client = new TyrumClient({
+      url: server.url,
+      token: "t",
+      capabilities: [],
+    });
+
+    const connectedP = new Promise<void>((resolve) => {
+      client!.on("connected", () => resolve());
+    });
+
+    let calls = 0;
+    let resolveFirst!: () => void;
+    let resolveSecond!: () => void;
+    const firstReceivedP = new Promise<void>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const secondReceivedP = new Promise<void>((resolve) => {
+      resolveSecond = resolve;
+    });
+
+    client.on("work.item.updated", () => {
+      calls += 1;
+      if (calls === 1) resolveFirst();
+      if (calls === 2) resolveSecond();
+    });
+
+    client.connect();
+    const ws = await server.waitForClient();
+    await acceptConnect(ws);
+    await connectedP;
+
+    const scope = { tenant_id: "t-1", agent_id: "agent-1", workspace_id: "default" };
+    const workItem = {
+      work_item_id: "123e4567-e89b-12d3-a456-426614174000",
+      ...scope,
+      kind: "action",
+      title: "Test item",
+      status: "backlog",
+      priority: 0,
+      created_at: "2026-02-19T12:00:00Z",
+      created_from_session_key: "agent:agent-1:main",
+      last_active_at: null,
+      fingerprint: { resources: ["repo:example/repo"] },
+      acceptance: { checks: [] },
+      budgets: null,
+      parent_work_item_id: null,
+    };
+
+    const updateMsg = {
+      event_id: "evt-work-dup-1",
+      type: "work.item.updated",
+      occurred_at: "2026-02-19T12:00:00Z",
+      payload: { item: workItem },
+    };
+
+    ws.send(JSON.stringify(updateMsg));
+    ws.send(JSON.stringify(updateMsg));
+
+    await withTimeout(firstReceivedP, 2_000, "first work.item.updated");
+    await expect(
+      Promise.race([secondReceivedP.then(() => "second"), delay(50).then(() => "timeout")]),
+    ).resolves.toBe("timeout");
     expect(calls).toBe(1);
   });
 
