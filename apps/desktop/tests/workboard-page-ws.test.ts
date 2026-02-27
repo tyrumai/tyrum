@@ -81,6 +81,7 @@ describe("WorkBoard page (WS integration)", () => {
     );
 
     expect(page).toContain('wsClient.on("work.item.failed"');
+    expect(page).toContain('wsClient.off("work.item.failed"');
   });
 
   it("adds a triage control to move backlog work items to ready", () => {
@@ -91,5 +92,17 @@ describe("WorkBoard page (WS integration)", () => {
 
     expect(page).toContain("Mark Ready");
     expect(page).toContain('transitionSelected("ready"');
+  });
+
+  it("includes cancel/resume controls wired to work.transition", () => {
+    const page = readFileSync(
+      join(import.meta.dirname, "../src/renderer/pages/WorkBoard.tsx"),
+      "utf-8",
+    );
+
+    expect(page).toContain("Resume");
+    expect(page).toContain('transitionSelected("doing"');
+    expect(page).toContain("Cancel");
+    expect(page).toContain('transitionSelected("cancelled"');
   });
 });
