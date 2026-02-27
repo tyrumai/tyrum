@@ -141,6 +141,19 @@ export const OPERATOR_UI_CSS = `
   resize: vertical;
   line-height: 1.35;
 }
+.tyrum-operator-ui input[type="text"],
+.tyrum-operator-ui input[type="password"] {
+  width: 100%;
+  max-width: 520px;
+  display: block;
+  margin-top: 6px;
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  line-height: 1.35;
+}
 .tyrum-operator-ui label { display: block; color: var(--muted); font-size: 13px; }
 .tyrum-operator-ui .stack > * + * { margin-top: 12px; }
 .tyrum-operator-ui .alert {

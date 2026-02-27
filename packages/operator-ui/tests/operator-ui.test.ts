@@ -1413,10 +1413,26 @@ describe("operator-ui", () => {
     const dialog = container.querySelector('[data-testid="admin-mode-dialog"]');
     expect(dialog).not.toBeNull();
 
-    const tokenField = container.querySelector<HTMLTextAreaElement>(
+    const tokenField = container.querySelector<HTMLInputElement>(
       '[data-testid="admin-mode-token"]',
     );
     expect(tokenField).not.toBeNull();
+    expect(tokenField!.type).toBe("password");
+    expect(tokenField!.getAttribute("autocomplete")).toBe("off");
+
+    const toggleTokenButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-mode-token-toggle"]',
+    );
+    expect(toggleTokenButton).not.toBeNull();
+    act(() => {
+      toggleTokenButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(tokenField!.type).toBe("text");
+    act(() => {
+      toggleTokenButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(tokenField!.type).toBe("password");
+
     act(() => {
       tokenField!.value = "  admin-token  ";
     });
@@ -1449,6 +1465,74 @@ describe("operator-ui", () => {
 
     expect(container.querySelector('[data-testid="admin-mode-banner"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="danger-action"]')).not.toBeNull();
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
+  it("renders an accessible Admin Mode dialog and closes on Escape", () => {
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("baseline"),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(
+        React.createElement(AdminModeProvider, {
+          core,
+          mode: "web",
+          children: React.createElement(
+            AdminModeGate,
+            null,
+            React.createElement(
+              "button",
+              { type: "button", "data-testid": "danger-action" },
+              "Danger action",
+            ),
+          ),
+        }),
+      );
+    });
+
+    const enterButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="admin-mode-enter"]',
+    );
+    expect(enterButton).not.toBeNull();
+
+    act(() => {
+      enterButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const dialog = container.querySelector('[data-testid="admin-mode-dialog"]');
+    expect(dialog).not.toBeNull();
+
+    const dialogRole = dialog?.querySelector('[role="dialog"]');
+    expect(dialogRole).not.toBeNull();
+    expect(dialogRole?.getAttribute("aria-modal")).toBe("true");
+    expect(dialogRole?.getAttribute("aria-labelledby")).toBeTruthy();
+
+    const tokenField = container.querySelector<HTMLInputElement>(
+      '[data-testid="admin-mode-token"]',
+    );
+    expect(tokenField).not.toBeNull();
+    expect(tokenField!.type).toBe("password");
+
+    act(() => {
+      tokenField?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+
+    expect(container.querySelector('[data-testid="admin-mode-dialog"]')).toBeNull();
 
     act(() => {
       root?.unmount();

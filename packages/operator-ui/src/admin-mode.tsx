@@ -1,23 +1,9 @@
 import { createTyrumHttpClient, type TyrumHttpFetch } from "@tyrum/client";
 import { isAdminModeActive, type AdminModeState, type OperatorCore } from "@tyrum/operator-core";
-import {
-  createContext,
-  useContext,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-} from "react";
+import { createContext, useEffect, useContext, useRef, useState, type ReactNode } from "react";
 import type { OperatorUiMode } from "./app.js";
-
-interface ExternalStore<T> {
-  subscribe: (listener: () => void) => () => void;
-  getSnapshot: () => T;
-}
-
-function useOperatorStore<T>(store: ExternalStore<T>): T {
-  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
-}
+import { getDesktopApi } from "./desktop-api.js";
+import { useOperatorStore } from "./use-operator-store.js";
 
 function formatAdminModeRemaining(state: AdminModeState): string {
   const remainingMs =
@@ -29,37 +15,6 @@ function formatAdminModeRemaining(state: AdminModeState): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${String(minutes)}:${String(seconds).padStart(2, "0")}`;
-}
-
-type DesktopApi = {
-  gateway: {
-    httpFetch: (input: {
-      url: string;
-      init?: {
-        method?: string;
-        headers?: Record<string, string>;
-        body?: string;
-      };
-    }) => Promise<{
-      status: number;
-      headers: Record<string, string>;
-      bodyText: string;
-    }>;
-  };
-};
-
-function getDesktopApi(): DesktopApi | null {
-  const api = (globalThis as unknown as { window?: unknown }).window as
-    | { tyrumDesktop?: unknown }
-    | undefined;
-  if (!api?.tyrumDesktop) return null;
-  const desktop = api.tyrumDesktop as { gateway?: unknown };
-  if (!desktop.gateway || typeof desktop.gateway !== "object" || Array.isArray(desktop.gateway)) {
-    return null;
-  }
-  const gateway = desktop.gateway as { httpFetch?: unknown };
-  if (typeof gateway.httpFetch !== "function") return null;
-  return desktop as unknown as DesktopApi;
 }
 
 function headersToRecord(headers: HeadersInit | undefined): Record<string, string> | undefined {
@@ -74,13 +29,14 @@ function headersToRecord(headers: HeadersInit | undefined): Record<string, strin
 function resolveHttpFetch(mode: OperatorUiMode): TyrumHttpFetch | undefined {
   if (mode !== "desktop") return undefined;
   const api = getDesktopApi();
-  if (!api) return undefined;
+  const httpFetch = api?.gateway.httpFetch;
+  if (!httpFetch) return undefined;
 
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url =
       typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     const headers = headersToRecord(init?.headers);
-    const result = await api.gateway.httpFetch({
+    const result = await httpFetch({
       url,
       init: {
         method: init?.method,
@@ -200,8 +156,11 @@ function AdminModeEnterDialog() {
   const { core, mode, closeEnter } = useAdminModeUiContext();
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [revealToken, setRevealToken] = useState(false);
   const confirmRef = useRef<HTMLInputElement | null>(null);
-  const tokenRef = useRef<HTMLTextAreaElement | null>(null);
+  const tokenRef = useRef<HTMLInputElement | null>(null);
+  const titleId = "admin-mode-title";
+  const descriptionId = "admin-mode-description";
 
   const issueDeviceToken = async (adminToken: string): Promise<void> => {
     const http = createTyrumHttpClient({
@@ -248,6 +207,7 @@ function AdminModeEnterDialog() {
       if (confirmRef.current) {
         confirmRef.current.checked = false;
       }
+      setRevealToken(false);
       closeEnter();
     } catch (error) {
       setErrorMessage(toErrorMessage(error));
@@ -256,11 +216,43 @@ function AdminModeEnterDialog() {
     }
   };
 
+  const closeDialog = (): void => {
+    if (busy) return;
+    setErrorMessage(null);
+    setRevealToken(false);
+    if (tokenRef.current) {
+      tokenRef.current.value = "";
+    }
+    if (confirmRef.current) {
+      confirmRef.current.checked = false;
+    }
+    closeEnter();
+  };
+
+  useEffect(() => {
+    tokenRef.current?.focus();
+  }, []);
+
   return (
-    <div className="admin-dialog-backdrop" data-testid="admin-mode-dialog">
-      <div className="admin-dialog card stack">
-        <h1>Enter Admin Mode</h1>
-        <div style={{ fontSize: 13, color: "var(--muted)" }}>
+    <div
+      className="admin-dialog-backdrop"
+      data-testid="admin-mode-dialog"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          closeDialog();
+        }
+      }}
+    >
+      <div
+        className="admin-dialog card stack"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
+      >
+        <h1 id={titleId}>Enter Admin Mode</h1>
+        <div id={descriptionId} style={{ fontSize: 13, color: "var(--muted)" }}>
           Admin Mode enables dangerous operator actions. It is time-limited and can be exited at any
           time.
         </div>
@@ -273,14 +265,29 @@ function AdminModeEnterDialog() {
         <div>
           <label>
             Admin token
-            <textarea
-              data-testid="admin-mode-token"
-              rows={3}
-              ref={tokenRef}
-              spellCheck={false}
-              autoCapitalize="none"
-              autoCorrect="off"
-            />
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <input
+                data-testid="admin-mode-token"
+                ref={tokenRef}
+                type={revealToken ? "text" : "password"}
+                spellCheck={false}
+                autoCapitalize="none"
+                autoCorrect="off"
+                autoComplete="off"
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                data-testid="admin-mode-token-toggle"
+                disabled={busy}
+                aria-pressed={revealToken}
+                onClick={() => {
+                  setRevealToken((prev) => !prev);
+                }}
+              >
+                {revealToken ? "Hide" : "Show"}
+              </button>
+            </div>
           </label>
         </div>
 
@@ -300,11 +307,7 @@ function AdminModeEnterDialog() {
             data-testid="admin-mode-cancel"
             disabled={busy}
             onClick={() => {
-              setErrorMessage(null);
-              if (confirmRef.current) {
-                confirmRef.current.checked = false;
-              }
-              closeEnter();
+              closeDialog();
             }}
           >
             Cancel

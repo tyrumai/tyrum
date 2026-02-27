@@ -1,7 +1,9 @@
 import type { OperatorCore } from "@tyrum/operator-core";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AdminModeProvider } from "./admin-mode.js";
+import { getDesktopApi, type DesktopApi } from "./desktop-api.js";
 import { OPERATOR_UI_CSS } from "./style.js";
+import { useOperatorStore } from "./use-operator-store.js";
 
 export type OperatorUiMode = "web" | "desktop";
 
@@ -31,40 +33,6 @@ const NAV_ITEMS: Array<{ id: OperatorUiRouteId; label: string }> = [
 const DESKTOP_NAV_ITEMS: Array<{ id: OperatorUiRouteId; label: string }> = [
   { id: "desktop", label: "Desktop" },
 ];
-
-interface ExternalStore<T> {
-  subscribe: (listener: () => void) => () => void;
-  getSnapshot: () => T;
-}
-
-function useOperatorStore<T>(store: ExternalStore<T>): T {
-  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
-}
-
-type DesktopApi = {
-  getConfig: () => Promise<unknown>;
-  setConfig: (partial: unknown) => Promise<unknown>;
-  gateway: {
-    getStatus: () => Promise<{ status: string; port: number }>;
-    start: () => Promise<{ status: string; port: number }>;
-    stop: () => Promise<{ status: string }>;
-  };
-  node: {
-    connect: () => Promise<{ status: string }>;
-    disconnect: () => Promise<{ status: string }>;
-  };
-  onStatusChange: (cb: (status: unknown) => void) => () => void;
-  checkMacPermissions?: () => Promise<unknown>;
-  requestMacPermission?: (permission: "accessibility" | "screenRecording") => Promise<unknown>;
-};
-
-function getDesktopApi(): DesktopApi | null {
-  const api = (globalThis as unknown as { window?: unknown }).window as
-    | { tyrumDesktop?: unknown }
-    | undefined;
-  if (!api?.tyrumDesktop) return null;
-  return api.tyrumDesktop as DesktopApi;
-}
 
 function ConnectPage({ core, mode }: { core: OperatorCore; mode: OperatorUiMode }) {
   const connection = useOperatorStore(core.connectionStore);
