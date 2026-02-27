@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
+  appGetPathMock,
   appOnMock,
   appQuitMock,
   appRequestSingleInstanceLockMock,
@@ -60,6 +61,7 @@ const {
   const appQuitMock = vi.fn();
   const appRequestSingleInstanceLockMock = vi.fn(() => true);
   const appSetAppUserModelIdMock = vi.fn();
+  const appGetPathMock = vi.fn(() => "/tmp/tyrum-desktop-tests");
 
   const registerConfigIpcMock = vi.fn();
   const registerGatewayIpcMock = vi.fn(() => ({ stop: vi.fn() }));
@@ -74,6 +76,7 @@ const {
   }));
 
   return {
+    appGetPathMock,
     appOnMock,
     appQuitMock,
     appRequestSingleInstanceLockMock,
@@ -98,6 +101,7 @@ const {
 
 vi.mock("electron", () => ({
   app: {
+    getPath: appGetPathMock,
     whenReady: appWhenReadyMock,
     on: appOnMock,
     quit: appQuitMock,
@@ -150,6 +154,7 @@ vi.mock("../src/main/config/store.js", () => ({
 describe("main theme IPC", () => {
   beforeEach(() => {
     vi.resetModules();
+    appGetPathMock.mockClear();
     ipcMainHandleMock.mockReset();
     nativeThemeOnMock.mockReset();
     menuBuildFromTemplateMock.mockReset();

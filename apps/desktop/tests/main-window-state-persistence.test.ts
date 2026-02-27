@@ -14,10 +14,12 @@ const {
   configExistsMock,
   dialogShowMessageBoxMock,
   ensureVisibleBoundsMock,
+  ipcMainHandleMock,
   loadConfigMock,
   loadWindowStateMock,
   menuBuildFromTemplateMock,
   menuSetApplicationMenuMock,
+  nativeThemeOnMock,
   registerConfigIpcMock,
   registerGatewayIpcMock,
   registerNodeIpcMock,
@@ -74,6 +76,9 @@ const {
   const menuSetApplicationMenuMock = vi.fn();
   const dialogShowMessageBoxMock = vi.fn(async () => ({ response: 0 }));
 
+  const ipcMainHandleMock = vi.fn();
+  const nativeThemeOnMock = vi.fn();
+
   const registerConfigIpcMock = vi.fn();
   const registerGatewayIpcMock = vi.fn(() => ({ stop: vi.fn() }));
   const registerNodeIpcMock = vi.fn();
@@ -119,10 +124,12 @@ const {
     configExistsMock,
     dialogShowMessageBoxMock,
     ensureVisibleBoundsMock,
+    ipcMainHandleMock,
     loadConfigMock,
     loadWindowStateMock,
     menuBuildFromTemplateMock,
     menuSetApplicationMenuMock,
+    nativeThemeOnMock,
     registerConfigIpcMock,
     registerGatewayIpcMock,
     registerNodeIpcMock,
@@ -151,6 +158,16 @@ vi.mock("electron", () => ({
   Menu: {
     buildFromTemplate: menuBuildFromTemplateMock,
     setApplicationMenu: menuSetApplicationMenuMock,
+  },
+  ipcMain: {
+    handle: ipcMainHandleMock,
+  },
+  nativeTheme: {
+    themeSource: "system",
+    shouldUseDarkColors: false,
+    shouldUseHighContrastColors: false,
+    shouldUseInvertedColorScheme: false,
+    on: nativeThemeOnMock,
   },
   screen: {
     getAllDisplays: screenGetAllDisplaysMock,
@@ -205,6 +222,8 @@ describe("main window state persistence", () => {
     menuBuildFromTemplateMock.mockClear();
     menuSetApplicationMenuMock.mockClear();
     dialogShowMessageBoxMock.mockClear();
+    ipcMainHandleMock.mockReset();
+    nativeThemeOnMock.mockReset();
     captureWindowStateMock.mockClear();
     saveWindowStateMock.mockClear();
     windowHandlers.clear();
