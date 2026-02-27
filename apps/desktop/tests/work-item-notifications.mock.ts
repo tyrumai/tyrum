@@ -11,4 +11,3 @@ vi.mock("../src/main/work-item-notifications.js", () => ({
     stop(): void {}
   },
 }));
-

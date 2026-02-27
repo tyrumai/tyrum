@@ -59,10 +59,11 @@ export class WorkItemNotificationService {
         openDeepLink: this.openDeepLink,
       });
 
-      client.connect();
-
       this.client = client;
       this.disposeHandlers = disposeHandlers;
+
+      client.connect();
+
       this.started = true;
     } catch (error) {
       this.stop();

@@ -1,10 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 
-const { connectSpy, ctorSpy, resolveOperatorConnectionMock } = vi.hoisted(() => ({
-  connectSpy: vi.fn(),
-  ctorSpy: vi.fn(),
-  resolveOperatorConnectionMock: vi.fn(),
-}));
+const { connectSpy, disconnectSpy, offSpy, ctorSpy, resolveOperatorConnectionMock } = vi.hoisted(
+  () => ({
+    connectSpy: vi.fn(),
+    disconnectSpy: vi.fn(),
+    offSpy: vi.fn(),
+    ctorSpy: vi.fn(),
+    resolveOperatorConnectionMock: vi.fn(),
+  }),
+);
 
 vi.mock("electron", () => ({
   Notification: class NotificationMock {
@@ -18,9 +22,9 @@ vi.mock("electron", () => ({
 vi.mock("@tyrum/client", () => {
   class TyrumClient {
     on = vi.fn();
-    off = vi.fn();
+    off = offSpy;
     connect = connectSpy;
-    disconnect = vi.fn();
+    disconnect = disconnectSpy;
 
     constructor(opts: unknown) {
       ctorSpy(opts);
@@ -45,6 +49,8 @@ describe("WorkItemNotificationService", () => {
   it("allows retrying start after an initial failure", async () => {
     vi.resetModules();
     connectSpy.mockReset();
+    disconnectSpy.mockReset();
+    offSpy.mockReset();
     ctorSpy.mockReset();
     resolveOperatorConnectionMock.mockReset();
     resolveOperatorConnectionMock
@@ -61,7 +67,8 @@ describe("WorkItemNotificationService", () => {
 
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
-      const { WorkItemNotificationService } = await import("../src/main/work-item-notifications.js");
+      const { WorkItemNotificationService } =
+        await import("../src/main/work-item-notifications.js");
       const service = new WorkItemNotificationService(() => {});
 
       await service.start();
@@ -73,5 +80,40 @@ describe("WorkItemNotificationService", () => {
       consoleErrorSpy.mockRestore();
     }
   });
-});
 
+  it("cleans up the client when connect throws", async () => {
+    vi.resetModules();
+    connectSpy.mockReset();
+    disconnectSpy.mockReset();
+    offSpy.mockReset();
+    ctorSpy.mockReset();
+    resolveOperatorConnectionMock.mockReset();
+
+    connectSpy.mockImplementationOnce(() => {
+      throw new Error("boom");
+    });
+    resolveOperatorConnectionMock.mockReturnValue({
+      mode: "remote",
+      wsUrl: "ws://127.0.0.1:8788/ws",
+      httpBaseUrl: "http://127.0.0.1:8788/",
+      token: "test-token",
+      tlsCertFingerprint256: "",
+    });
+
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const { WorkItemNotificationService } =
+        await import("../src/main/work-item-notifications.js");
+      const service = new WorkItemNotificationService(() => {});
+
+      await service.start();
+
+      expect(ctorSpy).toHaveBeenCalledTimes(1);
+      expect(connectSpy).toHaveBeenCalledTimes(1);
+      expect(offSpy).toHaveBeenCalledTimes(3);
+      expect(disconnectSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+});
