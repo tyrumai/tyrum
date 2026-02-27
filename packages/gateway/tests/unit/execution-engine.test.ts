@@ -22,6 +22,7 @@ import { ApprovalDal } from "../../src/modules/approval/dal.js";
 import type { SecretProvider } from "../../src/modules/secret/provider.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
+import type { SqlDb, RunResult } from "../../src/statestore/types.js";
 
 function action(type: ActionPrimitive["type"], args?: Record<string, unknown>): ActionPrimitive {
   return {
@@ -44,6 +45,66 @@ async function drain(
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+class AbortableTx implements SqlDb {
+  readonly kind: SqlDb["kind"];
+  private aborted = false;
+
+  constructor(
+    private readonly inner: SqlDb,
+    private readonly opts: { abortOnSql: (sql: string) => boolean },
+  ) {
+    this.kind = inner.kind;
+  }
+
+  async get<T>(sql: string, params: readonly unknown[] = []): Promise<T | undefined> {
+    return await this.execWithAbortHandling(() => this.inner.get<T>(sql, params), sql);
+  }
+
+  async all<T>(sql: string, params: readonly unknown[] = []): Promise<T[]> {
+    return await this.execWithAbortHandling(() => this.inner.all<T>(sql, params), sql);
+  }
+
+  async run(sql: string, params: readonly unknown[] = []): Promise<RunResult> {
+    return await this.execWithAbortHandling(() => this.inner.run(sql, params), sql);
+  }
+
+  async exec(sql: string): Promise<void> {
+    await this.execWithAbortHandling(() => this.inner.exec(sql), sql);
+  }
+
+  async transaction<T>(fn: (tx: SqlDb) => Promise<T>): Promise<T> {
+    return await this.inner.transaction(fn);
+  }
+
+  async close(): Promise<void> {
+    await this.inner.close();
+  }
+
+  private async execWithAbortHandling<T>(fn: () => Promise<T>, sql: string): Promise<T> {
+    const normalized = sql.trim().toUpperCase();
+    const isRollback = normalized === "ROLLBACK" || normalized.startsWith("ROLLBACK TO SAVEPOINT ");
+    if (this.aborted && !isRollback) {
+      throw new Error("current transaction is aborted, commands ignored until end of transaction");
+    }
+
+    if (this.opts.abortOnSql(sql)) {
+      this.aborted = true;
+      throw new Error("synthetic statement failure");
+    }
+
+    try {
+      const res = await fn();
+      if (isRollback) {
+        this.aborted = false;
+      }
+      return res;
+    } catch (err) {
+      this.aborted = true;
+      throw err;
+    }
+  }
 }
 
 describe("ExecutionEngine (normalized)", () => {
@@ -715,6 +776,150 @@ describe("ExecutionEngine (normalized)", () => {
     expect(artifact?.body_md ?? "").toMatch(/missing toolintent/i);
   });
 
+  it("executes after an intent approval even when ToolIntent is still missing", async () => {
+    db = openTestSqliteDb();
+
+    const workboard = new WorkboardDal(db);
+    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+
+    const item = await workboard.createItem({
+      scope,
+      item: {
+        kind: "action",
+        title: "Test intent approval bypass",
+        acceptance: { ok: true },
+        created_from_session_key: "agent:default:main",
+      },
+    });
+
+    const engine = new ExecutionEngine({ db });
+    await engine.enqueuePlan({
+      key: "agent:default:main",
+      lane: "subagent",
+      planId: "plan-intent-approved-1",
+      requestId: "req-intent-approved-1",
+      steps: [action("Http", { url: "https://example.com/" })],
+      trigger: {
+        kind: "manual",
+        key: "agent:default:main",
+        lane: "subagent",
+        metadata: { ...scope, work_item_id: item.work_item_id },
+      } as unknown as never,
+    });
+
+    const mockExecutor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => ({ success: true, result: { ok: true } })),
+    };
+
+    // First tick pauses for intent due to missing ToolIntent.
+    expect(await engine.workerTick({ workerId: "w1", executor: mockExecutor })).toBe(true);
+    expect(
+      (mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length,
+    ).toBe(0);
+
+    const approval = await db.get<{ id: number; kind: string; resume_token: string | null }>(
+      "SELECT id, kind, resume_token FROM approvals WHERE status = 'pending' ORDER BY id ASC LIMIT 1",
+    );
+    expect(approval?.kind).toBe("intent");
+    expect(approval?.resume_token).toBeTruthy();
+
+    await db.run("UPDATE approvals SET status = 'approved' WHERE id = ?", [approval!.id]);
+    await engine.resumeRun(approval!.resume_token!);
+
+    // After approval, the step should execute even if ToolIntent is still missing.
+    await drain(engine, "w1", mockExecutor);
+
+    expect(
+      (mockExecutor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length,
+    ).toBe(1);
+
+    const run = await db.get<{ status: string }>("SELECT status FROM execution_runs LIMIT 1");
+    expect(run?.status).toBe("succeeded");
+  });
+
+  it("pauses even if intent guardrail evidence writes fail (Postgres aborted tx simulation)", async () => {
+    db = openTestSqliteDb();
+
+    const workboard = new WorkboardDal(db);
+    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+
+    const item = await workboard.createItem({
+      scope,
+      item: {
+        kind: "action",
+        title: "Test intent guardrail evidence failure",
+        acceptance: { ok: true },
+        created_from_session_key: "agent:default:main",
+      },
+    });
+
+    const engine = new ExecutionEngine({ db });
+    const { runId } = await engine.enqueuePlan({
+      key: "agent:default:main",
+      lane: "subagent",
+      planId: "plan-intent-evidence-failure-1",
+      requestId: "req-intent-evidence-failure-1",
+      steps: [action("Http", { url: "https://example.com/" })],
+      trigger: {
+        kind: "manual",
+        key: "agent:default:main",
+        lane: "subagent",
+        metadata: { ...scope, work_item_id: item.work_item_id },
+      } as unknown as never,
+    });
+
+    await db.transaction(async (innerTx) => {
+      const tx = new AbortableTx(innerTx, {
+        abortOnSql: (sql) => sql.toLowerCase().includes("insert into work_artifacts"),
+      });
+
+      const run = await tx.get<unknown>(
+        `SELECT r.run_id,
+                r.job_id,
+                r.key,
+                r.lane,
+                r.status,
+                j.trigger_json,
+                j.workspace_id,
+                r.policy_snapshot_id
+         FROM execution_runs r
+         JOIN execution_jobs j ON j.job_id = r.job_id
+         WHERE r.run_id = ?`,
+        [runId],
+      );
+      const step = await tx.get<unknown>(
+        "SELECT * FROM execution_steps WHERE run_id = ? ORDER BY step_index ASC LIMIT 1",
+        [runId],
+      );
+      expect(run).toBeTruthy();
+      expect(step).toBeTruthy();
+
+      const paused = await (engine as any).maybePauseForToolIntentGuardrailTx(tx, {
+        run,
+        step,
+        actionType: "Http",
+        action: undefined,
+        clock: { nowMs: Date.now(), nowIso: new Date().toISOString() },
+        workerId: "w1",
+      });
+      expect(paused?.approvalId).toBeTypeOf("number");
+    });
+
+    const run = await db.get<{ status: string; paused_reason: string | null }>(
+      "SELECT status, paused_reason FROM execution_runs WHERE run_id = ?",
+      [runId],
+    );
+    expect(run?.status).toBe("paused");
+    expect(run?.paused_reason).toBe("approval");
+
+    const approval = await db.get<{ kind: string; status: string }>(
+      "SELECT kind, status FROM approvals WHERE run_id = ? ORDER BY id DESC LIMIT 1",
+      [runId],
+    );
+    expect(approval?.kind).toBe("intent");
+    expect(approval?.status).toBe("pending");
+  });
+
   it("pauses when ToolIntent intent_graph_sha256 does not match the current work item intent graph", async () => {
     db = openTestSqliteDb();
 
@@ -897,6 +1102,133 @@ describe("ExecutionEngine (normalized)", () => {
       [item.work_item_id],
     );
     expect(decisionCount?.n).toBe(0);
+  });
+
+  it("does not treat an approved intent approval as a policy approval", async () => {
+    db = openTestSqliteDb();
+
+    const workboard = new WorkboardDal(db);
+    const scope = { tenant_id: "default", agent_id: "default", workspace_id: "default" } as const;
+
+    const item = await workboard.createItem({
+      scope,
+      item: {
+        kind: "action",
+        title: "Test policy approval kind mismatch",
+        acceptance: { ok: true },
+        created_from_session_key: "agent:default:main",
+      },
+    });
+
+    const snapshotDal = new PolicySnapshotDal(db);
+    const snapshot = await snapshotDal.getOrCreate(
+      PolicyBundle.parse({
+        v: 1,
+        tools: { default: "require_approval", allow: [], require_approval: [], deny: [] },
+        network_egress: { default: "allow", allow: [], require_approval: [], deny: [] },
+      }),
+    );
+
+    const engine = new ExecutionEngine({ db });
+    const { runId } = await engine.enqueuePlan({
+      key: "agent:default:main",
+      lane: "subagent",
+      planId: "plan-intent-policy-bypass-1",
+      requestId: "req-intent-policy-bypass-1",
+      steps: [action("Http", { url: "https://example.com/" })],
+      trigger: {
+        kind: "manual",
+        key: "agent:default:main",
+        lane: "subagent",
+        metadata: { ...scope, work_item_id: item.work_item_id },
+      } as unknown as never,
+    });
+
+    const executor: StepExecutor = {
+      execute: vi.fn(async (): Promise<StepResult> => {
+        throw new Error("step execution should not run before policy approval");
+      }),
+    };
+
+    // First tick pauses due to missing ToolIntent (intent approval).
+    expect(await engine.workerTick({ workerId: "w1", executor, runId })).toBe(true);
+    expect((executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(
+      0,
+    );
+
+    const intentApproval = await db.get<{ id: number; kind: string; resume_token: string | null }>(
+      "SELECT id, kind, resume_token FROM approvals WHERE run_id = ? ORDER BY id ASC LIMIT 1",
+      [runId],
+    );
+    expect(intentApproval?.kind).toBe("intent");
+    expect(intentApproval?.resume_token).toBeTruthy();
+
+    await db.run("UPDATE approvals SET status = 'approved' WHERE id = ?", [intentApproval!.id]);
+
+    // Attach a policy snapshot after the intent pause to reproduce approval kind mismatch.
+    await db.run("UPDATE execution_runs SET policy_snapshot_id = ? WHERE run_id = ?", [
+      snapshot.policy_snapshot_id,
+      runId,
+    ]);
+
+    const { decisions } = await workboard.listDecisions({ scope, work_item_id: item.work_item_id });
+    const decisionIds = decisions
+      .map((d) => d.decision_id)
+      .filter((id): id is string => typeof id === "string" && id.trim().length > 0)
+      .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+
+    const intentGraphSha256 = sha256HexFromString(
+      stableJsonStringify({
+        v: 1,
+        work_item_id: item.work_item_id,
+        acceptance: item.acceptance ?? null,
+        state_kv: {},
+        decision_ids: decisionIds,
+        policy_snapshot_id: snapshot.policy_snapshot_id,
+      }),
+    );
+
+    await workboard.createArtifact({
+      scope,
+      artifact: {
+        work_item_id: item.work_item_id,
+        kind: "tool_intent",
+        title: "ToolIntent (ok)",
+        provenance_json: {
+          v: 1,
+          run_id: runId,
+          step_index: 0,
+          goal: "Fetch example.com",
+          expected_value: "Confirm connectivity",
+          cost_budget: { max_duration_ms: 5_000 },
+          side_effect_class: "network",
+          risk_class: "low",
+          expected_evidence: { http: { status: 200 } },
+          intent_graph_sha256: intentGraphSha256,
+        },
+      },
+    });
+
+    await engine.resumeRun(intentApproval!.resume_token!);
+
+    // Next tick should still pause for policy approval (intent approval must not satisfy policy).
+    expect(await engine.workerTick({ workerId: "w1", executor, runId })).toBe(true);
+    expect((executor.execute as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(
+      0,
+    );
+
+    const run = await db.get<{ status: string; paused_reason: string | null }>(
+      "SELECT status, paused_reason FROM execution_runs WHERE run_id = ?",
+      [runId],
+    );
+    expect(run?.status).toBe("paused");
+    expect(run?.paused_reason).toBe("policy");
+
+    const policyApproval = await db.get<{ kind: string }>(
+      "SELECT kind FROM approvals WHERE run_id = ? ORDER BY id DESC LIMIT 1",
+      [runId],
+    );
+    expect(policyApproval?.kind).toBe("policy");
   });
 
   it("fails the run when policy denies a step (cancels remaining steps + releases leases)", async () => {

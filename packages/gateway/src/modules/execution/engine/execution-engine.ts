@@ -1438,13 +1438,7 @@ export class ExecutionEngine {
           }
 
           if (decision === "require_approval") {
-            const approvalStatus = next.approval_id
-              ? await tx.get<{ status: string }>(
-                  "SELECT status FROM approvals WHERE id = ? LIMIT 1",
-                  [next.approval_id],
-                )
-              : undefined;
-            const alreadyApproved = approvalStatus?.status === "approved";
+            const alreadyApproved = await this.isApprovedPolicyGateTx(tx, next.approval_id);
 
             if (!alreadyApproved) {
               const planId = parsePlanIdFromTriggerJson(run.trigger_json) ?? run.run_id;
@@ -2779,6 +2773,18 @@ export class ExecutionEngine {
     const workItemId = typeof workItemIdRaw === "string" ? workItemIdRaw.trim() : "";
     if (workItemId.length === 0) return undefined;
 
+    const existingApproval = await tx.get<{ n: number }>(
+      `SELECT 1 AS n
+       FROM approvals
+       WHERE run_id = ?
+         AND step_index = ?
+         AND kind = 'intent'
+         AND status = 'approved'
+       LIMIT 1`,
+      [opts.run.run_id, opts.step.step_index],
+    );
+    if (existingApproval) return undefined;
+
     const tenantIdRaw = metadata?.["tenant_id"];
     const agentIdRaw = metadata?.["agent_id"];
     const tenantId =
@@ -2904,7 +2910,12 @@ export class ExecutionEngine {
 
     let artifactId: string | undefined;
     let decisionId: string | undefined;
+    const evidenceSavepoint = `tyrum_intent_guardrail_evidence_${String(opts.step.step_index)}`;
+    let evidenceSavepointCreated = false;
     try {
+      await tx.exec(`SAVEPOINT ${evidenceSavepoint}`);
+      evidenceSavepointCreated = true;
+
       const report = await dal.createArtifact({
         scope,
         artifact: {
@@ -2963,7 +2974,26 @@ export class ExecutionEngine {
         createdAtIso: opts.clock.nowIso,
       });
       decisionId = decision.decision_id;
+
+      await tx.exec(`RELEASE SAVEPOINT ${evidenceSavepoint}`);
     } catch (err) {
+      if (evidenceSavepointCreated) {
+        try {
+          await tx.exec(`ROLLBACK TO SAVEPOINT ${evidenceSavepoint}`);
+          await tx.exec(`RELEASE SAVEPOINT ${evidenceSavepoint}`);
+        } catch (rollbackErr) {
+          const rollbackMessage =
+            rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr);
+          this.logger?.warn("intent_guardrail.evidence_rollback_failed", {
+            run_id: opts.run.run_id,
+            step_id: opts.step.step_id,
+            error: rollbackMessage,
+          });
+        }
+      }
+
+      artifactId = undefined;
+      decisionId = undefined;
       const message = err instanceof Error ? err.message : String(err);
       this.logger?.warn("intent_guardrail.evidence_write_failed", {
         run_id: opts.run.run_id,
