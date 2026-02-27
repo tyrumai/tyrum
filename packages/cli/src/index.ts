@@ -42,6 +42,20 @@ type CliCommand =
   | { kind: "workflow_resume"; token: string }
   | { kind: "workflow_cancel"; run_id: string; reason?: string }
   | {
+      kind: "memory_search";
+      query: string;
+      filter?: Record<string, unknown>;
+      limit?: number;
+      cursor?: string;
+    }
+  | { kind: "memory_list"; filter?: Record<string, unknown>; limit?: number; cursor?: string }
+  | { kind: "memory_read"; id: string }
+  | { kind: "memory_create"; item: Record<string, unknown> }
+  | { kind: "memory_update"; id: string; patch: Record<string, unknown> }
+  | { kind: "memory_delete"; id: string; reason?: string }
+  | { kind: "memory_forget"; selectors: unknown[] }
+  | { kind: "memory_export"; filter?: Record<string, unknown>; include_tombstones: boolean }
+  | {
       kind: "pairing_approve";
       pairing_id: number;
       trust_level: "local" | "remote";
@@ -139,6 +153,14 @@ function printCliHelp(): void {
       "  tyrum-cli workflow run --key <key> --steps <json> [--lane <lane>]",
       "  tyrum-cli workflow resume --token <resume-token>",
       "  tyrum-cli workflow cancel --run-id <run-id> [--reason <text>]",
+      "  tyrum-cli memory search --query <text> [--filter <json>] [--limit <n>] [--cursor <cursor>]",
+      "  tyrum-cli memory list [--filter <json>] [--limit <n>] [--cursor <cursor>]",
+      "  tyrum-cli memory read --id <memory-item-id>",
+      "  tyrum-cli memory create --item <json>",
+      "  tyrum-cli memory update --id <memory-item-id> --patch <json>",
+      "  tyrum-cli memory delete --id <memory-item-id> [--reason <text>]",
+      "  tyrum-cli memory forget --selectors <json> --confirm FORGET",
+      "  tyrum-cli memory export [--filter <json>] [--include-tombstones]",
       "  tyrum-cli pairing approve --pairing-id <id> --trust-level <local|remote> --capability <id[@version]> [--capability <...>] [--reason <text>]",
       "  tyrum-cli pairing deny --pairing-id <id> [--reason <text>]",
       "  tyrum-cli pairing revoke --pairing-id <id> [--reason <text>]",
@@ -814,6 +836,335 @@ function parseCliArgs(argv: readonly string[]): CliCommand {
     }
 
     throw new Error(`unknown workflow subcommand '${second}'`);
+  }
+
+  if (first === "memory") {
+    if (second === "-h" || second === "--help") return { kind: "help" };
+    if (!second) {
+      throw new Error(
+        "memory requires a subcommand (search|list|read|create|update|delete|forget|export)",
+      );
+    }
+
+    const parseId = (raw: string | undefined, flag: string): string => {
+      if (!raw) throw new Error(`${flag} requires a value`);
+      const trimmed = raw.trim();
+      if (!trimmed) throw new Error(`${flag} requires a non-empty value`);
+      return trimmed;
+    };
+
+    const parseLimit = (raw: string | undefined): number => {
+      if (!raw) throw new Error("--limit requires a value");
+      const parsed = Number.parseInt(raw, 10);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        throw new Error("--limit must be a positive integer");
+      }
+      return parsed;
+    };
+
+    const parseJsonObject = (raw: string | undefined, flag: string): Record<string, unknown> => {
+      if (!raw) throw new Error(`${flag} requires a value`);
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw) as unknown;
+      } catch {
+        throw new Error(`${flag} must be valid JSON`);
+      }
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+        throw new Error(`${flag} must be a JSON object`);
+      }
+      return parsed as Record<string, unknown>;
+    };
+
+    const parseJsonArray = (raw: string | undefined, flag: string): unknown[] => {
+      if (!raw) throw new Error(`${flag} requires a value`);
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw) as unknown;
+      } catch {
+        throw new Error(`${flag} must be valid JSON`);
+      }
+      if (!Array.isArray(parsed)) {
+        throw new Error(`${flag} must be a JSON array`);
+      }
+      if (parsed.length === 0) {
+        throw new Error(`${flag} must be a non-empty JSON array`);
+      }
+      return parsed;
+    };
+
+    if (second === "search") {
+      let query: string | undefined;
+      let filter: Record<string, unknown> | undefined;
+      let limit: number | undefined;
+      let cursor: string | undefined;
+
+      for (let i = 2; i < argv.length; i += 1) {
+        const arg = argv[i];
+        if (!arg) continue;
+
+        if (arg === "--query") {
+          const raw = argv[i + 1];
+          if (!raw) throw new Error("--query requires a value");
+          const trimmed = raw.trim();
+          if (!trimmed) throw new Error("--query requires a non-empty value");
+          query = trimmed;
+          i += 1;
+          continue;
+        }
+
+        if (arg === "--filter") {
+          filter = parseJsonObject(argv[i + 1], "--filter");
+          i += 1;
+          continue;
+        }
+
+        if (arg === "--limit") {
+          limit = parseLimit(argv[i + 1]);
+          i += 1;
+          continue;
+        }
+
+        if (arg === "--cursor") {
+          cursor = parseId(argv[i + 1], "--cursor");
+          i += 1;
+          continue;
+        }
+
+        if (arg === "-h" || arg === "--help") return { kind: "help" };
+
+        if (arg.startsWith("-")) {
+          throw new Error(`unsupported memory.search argument '${arg}'`);
+        }
+        throw new Error(`unexpected memory.search argument '${arg}'`);
+      }
+
+      if (!query) throw new Error("memory search requires --query <text>");
+      return { kind: "memory_search", query, filter, limit, cursor };
+    }
+
+    if (second === "list") {
+      let filter: Record<string, unknown> | undefined;
+      let limit: number | undefined;
+      let cursor: string | undefined;
+
+      for (let i = 2; i < argv.length; i += 1) {
+        const arg = argv[i];
+        if (!arg) continue;
+
+        if (arg === "--filter") {
+          filter = parseJsonObject(argv[i + 1], "--filter");
+          i += 1;
+          continue;
+        }
+
+        if (arg === "--limit") {
+          limit = parseLimit(argv[i + 1]);
+          i += 1;
+          continue;
+        }
+
+        if (arg === "--cursor") {
+          cursor = parseId(argv[i + 1], "--cursor");
+          i += 1;
+          continue;
+        }
+
+        if (arg === "-h" || arg === "--help") return { kind: "help" };
+
+        if (arg.startsWith("-")) {
+          throw new Error(`unsupported memory.list argument '${arg}'`);
+        }
+        throw new Error(`unexpected memory.list argument '${arg}'`);
+      }
+
+      return { kind: "memory_list", filter, limit, cursor };
+    }
+
+    if (second === "read") {
+      let id: string | undefined;
+
+      for (let i = 2; i < argv.length; i += 1) {
+        const arg = argv[i];
+        if (!arg) continue;
+
+        if (arg === "--id") {
+          id = parseId(argv[i + 1], "--id");
+          i += 1;
+          continue;
+        }
+
+        if (arg === "-h" || arg === "--help") return { kind: "help" };
+
+        if (arg.startsWith("-")) {
+          throw new Error(`unsupported memory.read argument '${arg}'`);
+        }
+        throw new Error(`unexpected memory.read argument '${arg}'`);
+      }
+
+      if (!id) throw new Error("memory read requires --id <memory-item-id>");
+      return { kind: "memory_read", id };
+    }
+
+    if (second === "create") {
+      let item: Record<string, unknown> | undefined;
+
+      for (let i = 2; i < argv.length; i += 1) {
+        const arg = argv[i];
+        if (!arg) continue;
+
+        if (arg === "--item") {
+          item = { ...parseJsonObject(argv[i + 1], "--item") };
+          if (item["provenance"] === undefined) {
+            item["provenance"] = { source_kind: "operator", channel: "cli" };
+          }
+          i += 1;
+          continue;
+        }
+
+        if (arg === "-h" || arg === "--help") return { kind: "help" };
+
+        if (arg.startsWith("-")) {
+          throw new Error(`unsupported memory.create argument '${arg}'`);
+        }
+        throw new Error(`unexpected memory.create argument '${arg}'`);
+      }
+
+      if (!item) throw new Error("memory create requires --item <json>");
+      return { kind: "memory_create", item };
+    }
+
+    if (second === "update") {
+      let id: string | undefined;
+      let patch: Record<string, unknown> | undefined;
+
+      for (let i = 2; i < argv.length; i += 1) {
+        const arg = argv[i];
+        if (!arg) continue;
+
+        if (arg === "--id") {
+          id = parseId(argv[i + 1], "--id");
+          i += 1;
+          continue;
+        }
+
+        if (arg === "--patch") {
+          patch = parseJsonObject(argv[i + 1], "--patch");
+          i += 1;
+          continue;
+        }
+
+        if (arg === "-h" || arg === "--help") return { kind: "help" };
+
+        if (arg.startsWith("-")) {
+          throw new Error(`unsupported memory.update argument '${arg}'`);
+        }
+        throw new Error(`unexpected memory.update argument '${arg}'`);
+      }
+
+      if (!id) throw new Error("memory update requires --id <memory-item-id>");
+      if (!patch) throw new Error("memory update requires --patch <json>");
+      return { kind: "memory_update", id, patch };
+    }
+
+    if (second === "delete") {
+      let id: string | undefined;
+      let reason: string | undefined;
+
+      for (let i = 2; i < argv.length; i += 1) {
+        const arg = argv[i];
+        if (!arg) continue;
+
+        if (arg === "--id") {
+          id = parseId(argv[i + 1], "--id");
+          i += 1;
+          continue;
+        }
+
+        if (arg === "--reason") {
+          reason = parseId(argv[i + 1], "--reason");
+          i += 1;
+          continue;
+        }
+
+        if (arg === "-h" || arg === "--help") return { kind: "help" };
+
+        if (arg.startsWith("-")) {
+          throw new Error(`unsupported memory.delete argument '${arg}'`);
+        }
+        throw new Error(`unexpected memory.delete argument '${arg}'`);
+      }
+
+      if (!id) throw new Error("memory delete requires --id <memory-item-id>");
+      return { kind: "memory_delete", id, reason };
+    }
+
+    if (second === "forget") {
+      let confirm: string | undefined;
+      let selectors: unknown[] | undefined;
+
+      for (let i = 2; i < argv.length; i += 1) {
+        const arg = argv[i];
+        if (!arg) continue;
+
+        if (arg === "--confirm") {
+          confirm = parseId(argv[i + 1], "--confirm");
+          i += 1;
+          continue;
+        }
+
+        if (arg === "--selectors") {
+          selectors = parseJsonArray(argv[i + 1], "--selectors");
+          i += 1;
+          continue;
+        }
+
+        if (arg === "-h" || arg === "--help") return { kind: "help" };
+
+        if (arg.startsWith("-")) {
+          throw new Error(`unsupported memory.forget argument '${arg}'`);
+        }
+        throw new Error(`unexpected memory.forget argument '${arg}'`);
+      }
+
+      if (!confirm) throw new Error("memory forget requires --confirm FORGET");
+      if (confirm !== "FORGET") throw new Error("--confirm must be FORGET");
+      if (!selectors) throw new Error("memory forget requires --selectors <json>");
+
+      return { kind: "memory_forget", selectors };
+    }
+
+    if (second === "export") {
+      let filter: Record<string, unknown> | undefined;
+      let includeTombstones = false;
+
+      for (let i = 2; i < argv.length; i += 1) {
+        const arg = argv[i];
+        if (!arg) continue;
+
+        if (arg === "--filter") {
+          filter = parseJsonObject(argv[i + 1], "--filter");
+          i += 1;
+          continue;
+        }
+
+        if (arg === "--include-tombstones") {
+          includeTombstones = true;
+          continue;
+        }
+
+        if (arg === "-h" || arg === "--help") return { kind: "help" };
+
+        if (arg.startsWith("-")) {
+          throw new Error(`unsupported memory.export argument '${arg}'`);
+        }
+        throw new Error(`unexpected memory.export argument '${arg}'`);
+      }
+
+      return { kind: "memory_export", filter, include_tombstones: includeTombstones };
+    }
+
+    throw new Error(`unknown memory subcommand '${second}'`);
   }
 
   if (first === "approvals") {
@@ -1545,6 +1896,95 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
   if (command.kind === "workflow_cancel") {
     return await runOperatorWsCommand(tyrumHome, "workflow.cancel", async (client) => {
       return await client.workflowCancel({ run_id: command.run_id, reason: command.reason });
+    });
+  }
+
+  if (command.kind === "memory_search") {
+    return await runOperatorWsCommand(tyrumHome, "memory.search", async (client) => {
+      type Payload = Parameters<TyrumClient["memorySearch"]>[0];
+      const payload: Payload = {
+        v: 1,
+        query: command.query,
+        ...(command.filter !== undefined ? { filter: command.filter as Payload["filter"] } : {}),
+        ...(command.limit !== undefined ? { limit: command.limit } : {}),
+        ...(command.cursor !== undefined ? { cursor: command.cursor } : {}),
+      };
+      return await client.memorySearch(payload);
+    });
+  }
+
+  if (command.kind === "memory_list") {
+    return await runOperatorWsCommand(tyrumHome, "memory.list", async (client) => {
+      type Payload = Parameters<TyrumClient["memoryList"]>[0];
+      const payload: Payload = {
+        v: 1,
+        ...(command.filter !== undefined ? { filter: command.filter as Payload["filter"] } : {}),
+        ...(command.limit !== undefined ? { limit: command.limit } : {}),
+        ...(command.cursor !== undefined ? { cursor: command.cursor } : {}),
+      };
+      return await client.memoryList(payload);
+    });
+  }
+
+  if (command.kind === "memory_read") {
+    return await runOperatorWsCommand(tyrumHome, "memory.get", async (client) => {
+      return await client.memoryGet({ v: 1, memory_item_id: command.id });
+    });
+  }
+
+  if (command.kind === "memory_create") {
+    return await runOperatorWsCommand(tyrumHome, "memory.create", async (client) => {
+      type Payload = Parameters<TyrumClient["memoryCreate"]>[0];
+      const payload: Payload = { v: 1, item: command.item as Payload["item"] };
+      return await client.memoryCreate(payload);
+    });
+  }
+
+  if (command.kind === "memory_update") {
+    return await runOperatorWsCommand(tyrumHome, "memory.update", async (client) => {
+      type Payload = Parameters<TyrumClient["memoryUpdate"]>[0];
+      const payload: Payload = {
+        v: 1,
+        memory_item_id: command.id,
+        patch: command.patch as Payload["patch"],
+      };
+      return await client.memoryUpdate(payload);
+    });
+  }
+
+  if (command.kind === "memory_delete") {
+    return await runOperatorWsCommand(tyrumHome, "memory.delete", async (client) => {
+      type Payload = Parameters<TyrumClient["memoryDelete"]>[0];
+      const payload: Payload = {
+        v: 1,
+        memory_item_id: command.id,
+        ...(command.reason !== undefined ? { reason: command.reason } : {}),
+      };
+      return await client.memoryDelete(payload);
+    });
+  }
+
+  if (command.kind === "memory_forget") {
+    return await runOperatorWsCommand(tyrumHome, "memory.forget", async (client) => {
+      type Payload = Parameters<TyrumClient["memoryForget"]>[0];
+      const payload: Payload = {
+        v: 1,
+        confirm: "FORGET",
+        selectors: command.selectors as Payload["selectors"],
+      };
+      return await client.memoryForget(payload);
+    });
+  }
+
+  if (command.kind === "memory_export") {
+    return await runOperatorWsCommand(tyrumHome, "memory.export", async (client) => {
+      type Payload = Parameters<TyrumClient["memoryExport"]>[0];
+      const payload: Payload = {
+        v: 1,
+        ...(command.filter !== undefined ? { filter: command.filter as Payload["filter"] } : {}),
+        include_tombstones: command.include_tombstones,
+      };
+      return await client.memoryExport(payload);
     });
   }
 
