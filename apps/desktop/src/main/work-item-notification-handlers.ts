@@ -9,6 +9,8 @@ type WorkItemLifecycleEvent = {
   };
 };
 
+type WorkItemLifecycleEventType = "work.item.completed" | "work.item.blocked" | "work.item.failed";
+
 export type WorkItemNotification = {
   title: string;
   body: string;
@@ -23,8 +25,14 @@ export function buildWorkItemDrilldownDeepLinkUrl(workItemId: string): string {
 
 export function registerWorkItemNotificationHandlers(
   client: {
-    on: (type: string, handler: (event: WorkItemLifecycleEvent) => void) => void;
-    off: (type: string, handler: (event: WorkItemLifecycleEvent) => void) => void;
+    on: (
+      type: WorkItemLifecycleEventType,
+      handler: (event: WorkItemLifecycleEvent) => void,
+    ) => void;
+    off: (
+      type: WorkItemLifecycleEventType,
+      handler: (event: WorkItemLifecycleEvent) => void,
+    ) => void;
   },
   deps: {
     notify: WorkItemNotificationPublisher;
