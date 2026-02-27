@@ -39,4 +39,3 @@ describe("MobileNav", () => {
     cleanupTestRoot({ container, root });
   });
 });
-

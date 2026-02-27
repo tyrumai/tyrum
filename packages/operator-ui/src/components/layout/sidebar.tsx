@@ -47,6 +47,12 @@ export function Sidebar({
         ? "primary"
         : "danger";
   const dotPulse = connectionStatus === "connecting";
+  const connectionLabel =
+    connectionStatus === "connected"
+      ? "Connected"
+      : connectionStatus === "connecting"
+        ? "Connecting"
+        : "Disconnected";
 
   const renderItem = (item: SidebarNavItem) => {
     const Icon = item.icon;
@@ -102,14 +108,17 @@ export function Sidebar({
       </nav>
 
       <div className="mt-auto flex flex-col gap-2 border-t border-border p-4">
-        <div className="flex items-center gap-2 text-xs text-fg-muted">
-          <StatusDot
-            data-testid="connection-status-dot"
-            variant={dotVariant}
-            pulse={dotPulse}
-            aria-hidden="true"
-          />
-          <span>Connection</span>
+        <div className="flex items-center justify-between gap-2 text-xs text-fg-muted">
+          <div className="flex items-center gap-2">
+            <StatusDot
+              data-testid="connection-status-dot"
+              variant={dotVariant}
+              pulse={dotPulse}
+              aria-hidden="true"
+            />
+            <span>Connection</span>
+          </div>
+          <span>{connectionLabel}</span>
         </div>
 
         {canToggleTheme ? (
@@ -133,4 +142,3 @@ export function Sidebar({
     </aside>
   );
 }
-

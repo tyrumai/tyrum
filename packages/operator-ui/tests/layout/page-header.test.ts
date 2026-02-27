@@ -25,4 +25,3 @@ describe("PageHeader", () => {
     cleanupTestRoot({ container, root });
   });
 });
-

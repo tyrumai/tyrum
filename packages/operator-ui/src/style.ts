@@ -1,16 +1,16 @@
 export const OPERATOR_UI_CSS = `
 .tyrum-operator-ui {
-  color-scheme: dark;
-  --bg: #000;
-  --bg-subtle: #0a0a0a;
-  --card: #111;
-  --text: #ededed;
-  --muted: #888;
-  --border: #1a1a1a;
-  --primary: #6366f1;
-  --primary-dim: rgba(99, 102, 241, 0.12);
-  --success: #22c55e;
-  --danger: #ef4444;
+  /* Legacy palette aliases. Keep existing layout/page CSS working while aligning with the theme system. */
+  --bg: var(--tyrum-color-bg, #000);
+  --bg-subtle: var(--tyrum-color-bg-subtle, #0a0a0a);
+  --card: var(--tyrum-color-bg-card, #111);
+  --text: var(--tyrum-color-fg, #ededed);
+  --muted: var(--tyrum-color-fg-muted, #888);
+  --border: var(--tyrum-color-border, #1a1a1a);
+  --primary: var(--tyrum-color-primary, #6366f1);
+  --primary-dim: var(--tyrum-color-primary-dim, rgba(99, 102, 241, 0.12));
+  --success: var(--tyrum-color-success, #22c55e);
+  --danger: var(--tyrum-color-error, #ef4444);
 
   min-height: 100vh;
   color: var(--text);

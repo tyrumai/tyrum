@@ -7,13 +7,7 @@ export interface PageHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
   actions?: React.ReactNode;
 }
 
-export function PageHeader({
-  title,
-  breadcrumbs,
-  actions,
-  className,
-  ...props
-}: PageHeaderProps) {
+export function PageHeader({ title, breadcrumbs, actions, className, ...props }: PageHeaderProps) {
   return (
     <header className={cn("mb-6 flex flex-col gap-1", className)} {...props}>
       {breadcrumbs ? <div className="text-sm text-fg-muted">{breadcrumbs}</div> : null}
@@ -24,4 +18,3 @@ export function PageHeader({
     </header>
   );
 }
-

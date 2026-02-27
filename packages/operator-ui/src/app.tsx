@@ -63,6 +63,10 @@ const MOBILE_NAV_ORDER: OperatorUiRouteId[] = ["dashboard", "approvals", "runs",
 const MOBILE_OVERFLOW_NAV_ORDER: OperatorUiRouteId[] = ["memory", "pairing", "connect"];
 const DESKTOP_NAV_ORDER: OperatorUiRouteId[] = ["desktop"];
 
+function isOperatorUiRouteId(value: string): value is OperatorUiRouteId {
+  return Object.prototype.hasOwnProperty.call(NAV_ITEM_CONFIG, value);
+}
+
 function ConnectPage({ core, mode }: { core: OperatorCore; mode: OperatorUiMode }) {
   const connection = useOperatorStore(core.connectionStore);
   const [loginBusy, setLoginBusy] = useState(false);
@@ -920,7 +924,8 @@ export function OperatorUiApp({ core, mode }: OperatorUiAppProps) {
   const mobileOverflowItems = MOBILE_OVERFLOW_NAV_ORDER.map(toNavItem);
 
   const navigate = (id: string): void => {
-    setRoute(id as OperatorUiRouteId);
+    if (!isOperatorUiRouteId(id)) return;
+    setRoute(id);
   };
   return (
     <div className="tyrum-operator-ui">

@@ -84,4 +84,3 @@ describe("AppShell", () => {
     matchMedia.cleanup();
   });
 });
-
