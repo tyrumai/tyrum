@@ -30,6 +30,16 @@ export const WorkItemState = z.enum([
 ]);
 export type WorkItemState = z.infer<typeof WorkItemState>;
 
+export const WorkItemFingerprintResource = z.string().trim().min(1).max(256);
+export type WorkItemFingerprintResource = z.infer<typeof WorkItemFingerprintResource>;
+
+export const WorkItemFingerprint = z
+  .object({
+    resources: z.array(WorkItemFingerprintResource).max(128).default([]),
+  })
+  .strict();
+export type WorkItemFingerprint = z.infer<typeof WorkItemFingerprint>;
+
 export const WorkItem = z
   .object({
     work_item_id: WorkItemId,
@@ -44,7 +54,7 @@ export const WorkItem = z
     created_from_session_key: TyrumKey,
     last_active_at: DateTimeSchema.nullable(),
     acceptance: z.unknown().optional(),
-    fingerprint: z.unknown().optional(),
+    fingerprint: WorkItemFingerprint.optional(),
     budgets: ExecutionBudgets.nullable().optional(),
     parent_work_item_id: WorkItemId.nullable().optional(),
     updated_at: DateTimeSchema.optional(),
@@ -84,3 +94,17 @@ export const WorkItemTask = z
   })
   .strict();
 export type WorkItemTask = z.infer<typeof WorkItemTask>;
+
+export const WorkItemLinkKind = z.enum(["depends_on"]);
+export type WorkItemLinkKind = z.infer<typeof WorkItemLinkKind>;
+
+export const WorkItemLink = z
+  .object({
+    work_item_id: WorkItemId,
+    linked_work_item_id: WorkItemId,
+    kind: WorkItemLinkKind,
+    meta_json: z.unknown(),
+    created_at: DateTimeSchema,
+  })
+  .strict();
+export type WorkItemLink = z.infer<typeof WorkItemLink>;

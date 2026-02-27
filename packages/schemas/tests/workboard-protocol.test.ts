@@ -6,7 +6,9 @@ import { WsEvent, WsRequest, WsResponse } from "../src/protocol.js";
 describe("WorkBoard WS protocol", () => {
   it("exports WorkBoard schemas from @tyrum/schemas", () => {
     expect("WorkItem" in Schemas).toBe(true);
+    expect("WorkItemFingerprint" in Schemas).toBe(true);
     expect("WorkItemTask" in Schemas).toBe(true);
+    expect("WorkItemLink" in Schemas).toBe(true);
     expect("WorkArtifact" in Schemas).toBe(true);
     expect("DecisionRecord" in Schemas).toBe(true);
     expect("WorkSignal" in Schemas).toBe(true);
@@ -22,6 +24,7 @@ describe("WorkBoard WS protocol", () => {
   it("parses work.* requests via WsRequest union", () => {
     const scope = { tenant_id: "t-1", agent_id: "agent-1", workspace_id: "default" };
     const workItemId = "123e4567-e89b-12d3-a456-426614174000";
+    const linkedWorkItemId = "123e4567-e89b-12d3-a456-426614174001";
     const artifactId = "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e";
     const decisionId = "550e8400-e29b-41d4-a716-446655440000";
     const signalId = "11111111-2222-3333-8aaa-555555555555";
@@ -38,6 +41,17 @@ describe("WorkBoard WS protocol", () => {
         type: "work.transition",
         payload: { ...scope, work_item_id: workItemId, status: "doing" },
       },
+
+      {
+        type: "work.link.create",
+        payload: {
+          ...scope,
+          work_item_id: workItemId,
+          linked_work_item_id: linkedWorkItemId,
+          kind: "depends_on",
+        },
+      },
+      { type: "work.link.list", payload: { ...scope, work_item_id: workItemId } },
 
       { type: "work.artifact.list", payload: { ...scope, work_item_id: workItemId } },
       { type: "work.artifact.get", payload: { ...scope, artifact_id: artifactId } },
@@ -113,6 +127,14 @@ describe("WorkBoard WS protocol", () => {
       parent_work_item_id: null,
     };
 
+    const workItemLink = {
+      work_item_id: workItem.work_item_id,
+      linked_work_item_id: "123e4567-e89b-12d3-a456-426614174001",
+      kind: "depends_on",
+      meta_json: { note: "blocks" },
+      created_at: "2026-02-19T12:00:00Z",
+    };
+
     const workArtifact = {
       artifact_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
       ...scope,
@@ -154,6 +176,9 @@ describe("WorkBoard WS protocol", () => {
       { type: "work.create", result: { item: workItem } },
       { type: "work.update", result: { item: workItem } },
       { type: "work.transition", result: { item: workItem } },
+
+      { type: "work.link.create", result: { link: workItemLink } },
+      { type: "work.link.list", result: { links: [workItemLink] } },
 
       {
         type: "work.artifact.list",
@@ -222,6 +247,14 @@ describe("WorkBoard WS protocol", () => {
       parent_work_item_id: null,
     };
 
+    const workItemLink = {
+      work_item_id: workItem.work_item_id,
+      linked_work_item_id: "123e4567-e89b-12d3-a456-426614174001",
+      kind: "depends_on",
+      meta_json: {},
+      created_at: "2026-02-19T12:00:00Z",
+    };
+
     const workArtifact = {
       artifact_id: "0a9d6b69-8bdb-4b1b-9d0b-9c8a0efc0d9e",
       ...scope,
@@ -263,6 +296,8 @@ describe("WorkBoard WS protocol", () => {
       { type: "work.item.blocked", payload: { item: workItem } },
       { type: "work.item.completed", payload: { item: workItem } },
       { type: "work.item.cancelled", payload: { item: workItem } },
+
+      { type: "work.link.created", payload: { link: workItemLink } },
 
       {
         type: "work.task.leased",
