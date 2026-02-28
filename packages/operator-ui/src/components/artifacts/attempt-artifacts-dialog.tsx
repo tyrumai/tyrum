@@ -4,7 +4,13 @@ import { useEffect, useState } from "react";
 import { isRecord } from "../../utils/is-record.js";
 import { Badge } from "../ui/badge.js";
 import { Button } from "../ui/button.js";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog.js";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog.js";
 import { Spinner } from "../ui/spinner.js";
 
 type ArtifactRef = ExecutionAttempt["artifacts"][number];
@@ -39,15 +45,7 @@ function buildArtifactGatewayUrl(core: OperatorCore, runId: string, artifactId: 
   return `${base}/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(artifactId)}`;
 }
 
-function JsonTreeNode({
-  name,
-  value,
-  level,
-}: {
-  name: string;
-  value: unknown;
-  level: number;
-}) {
+function JsonTreeNode({ name, value, level }: { name: string; value: unknown; level: number }) {
   if (Array.isArray(value)) {
     const preview = `${name}: [${String(value.length)}]`;
     return (
@@ -316,7 +314,10 @@ export function AttemptArtifactsDialog({
 
           <div className="mt-4 grid gap-4">
             {artifacts.map((artifact) => (
-              <div key={artifact.artifact_id} className="grid gap-2 rounded-md border border-border p-3">
+              <div
+                key={artifact.artifact_id}
+                className="grid gap-2 rounded-md border border-border p-3"
+              >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="outline">{artifact.kind}</Badge>

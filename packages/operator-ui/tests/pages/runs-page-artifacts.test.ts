@@ -133,7 +133,9 @@ describe("RunsPage (artifacts)", () => {
     const { container, root } = renderIntoDocument(React.createElement(RunsPage, { core }));
 
     try {
-      const toggle = container.querySelector<HTMLButtonElement>(`[data-testid="run-toggle-${runId}"]`);
+      const toggle = container.querySelector<HTMLButtonElement>(
+        `[data-testid="run-toggle-${runId}"]`,
+      );
       expect(toggle).not.toBeNull();
 
       act(() => {
@@ -265,7 +267,9 @@ describe("RunsPage (artifacts)", () => {
     const { container, root } = renderIntoDocument(React.createElement(RunsPage, { core }));
 
     try {
-      const toggle = container.querySelector<HTMLButtonElement>(`[data-testid="run-toggle-${runId}"]`);
+      const toggle = container.querySelector<HTMLButtonElement>(
+        `[data-testid="run-toggle-${runId}"]`,
+      );
       expect(toggle).not.toBeNull();
 
       act(() => {
@@ -293,7 +297,9 @@ describe("RunsPage (artifacts)", () => {
 
       const link = document.body.querySelector<HTMLAnchorElement>("a");
       expect(link).not.toBeNull();
-      expect(link?.getAttribute("href")).toBe(`http://example.test/runs/${runId}/artifacts/${artifactId}`);
+      expect(link?.getAttribute("href")).toBe(
+        `http://example.test/runs/${runId}/artifacts/${artifactId}`,
+      );
     } finally {
       cleanupTestRoot({ container, root });
     }
