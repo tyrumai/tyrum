@@ -34,5 +34,9 @@ describe("Issue #841 desktop docs", () => {
     expect(doc).toMatch(/\bRemote\b/);
     expect(doc).toMatch(/^## Troubleshooting/m);
   });
-});
 
+  it("links desktop docs in the docs sidebar", async () => {
+    const sidebars = await readFile(resolve(repoRoot, "apps/docs/sidebars.ts"), "utf8");
+    expect(sidebars).toMatch(/\"desktop\"/);
+  });
+});
