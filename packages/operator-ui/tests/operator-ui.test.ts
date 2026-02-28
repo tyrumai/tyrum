@@ -206,19 +206,23 @@ function sampleExecutionAttempt({
   attempt,
   status,
   stepId,
+  startedAt = "2026-01-01T00:00:00.000Z",
+  finishedAt = null,
 }: {
   attemptId: string;
   attempt: number;
   status: SampleExecutionAttemptStatus;
   stepId: string;
+  startedAt?: string;
+  finishedAt?: string | null;
 }) {
   return {
     attempt_id: attemptId,
     step_id: stepId,
     attempt,
     status,
-    started_at: "2026-01-01T00:00:00.000Z",
-    finished_at: null,
+    started_at: startedAt,
+    finished_at: finishedAt,
     error: null,
     artifacts: [],
   } as const;
@@ -1504,7 +1508,8 @@ describe("operator-ui", () => {
       attemptId: "44444444-4444-4444-4444-acde0000face",
       stepId: step0.step_id,
       attempt: 1,
-      status: "running",
+      status: "succeeded",
+      finishedAt: "2026-01-01T00:00:05.000Z",
     });
 
     act(() => {
@@ -1530,6 +1535,7 @@ describe("operator-ui", () => {
     expect(container.textContent).toContain("Decide");
     expect(container.textContent).toContain("Research");
     expect(pageText.indexOf("Attempt 1")).toBeLessThan(pageText.indexOf("Attempt 2"));
+    expect(pageText).toContain("completed • 5s");
 
     expect(container.textContent).toContain("Attempt 1");
     expect(container.textContent).toContain("456789ab");

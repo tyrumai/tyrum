@@ -45,7 +45,7 @@ function formatDurationMs(durationMs: number): string {
   if (durationMs < 60_000) {
     const seconds = durationMs / 1000;
     const text = seconds < 10 ? seconds.toFixed(1) : String(Math.round(seconds));
-    return `${text.replace(/\\.0$/, "")}s`;
+    return `${text.replace(/\.0$/, "")}s`;
   }
   const minutes = Math.floor(durationMs / 60_000);
   if (minutes < 60) return `${minutes}m`;
