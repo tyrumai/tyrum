@@ -120,6 +120,42 @@ describe("canonicalizeToolMatchTarget", () => {
     expect(target).toBe("capability:tyrum.desktop;action:Desktop;op:snapshot");
   });
 
+  it("canonicalizes other desktop ops without leaking high-entropy values", () => {
+    const queryTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
+      capability: "tyrum.desktop",
+      action: "Desktop",
+      args: { op: "query", selector: { kind: "a11y", role: "button", name: "Save" } },
+    });
+    expect(queryTarget).toBe("capability:tyrum.desktop;action:Desktop;op:query");
+    expect(queryTarget).not.toContain("Save");
+
+    const waitForTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
+      capability: "tyrum.desktop",
+      action: "Desktop",
+      args: {
+        op: "wait_for",
+        selector: { kind: "ocr", text: "2FA code", bounds: { x: 1, y: 2, width: 3, height: 4 } },
+      },
+    });
+    expect(waitForTarget).toBe("capability:tyrum.desktop;action:Desktop;op:wait_for");
+    expect(waitForTarget).not.toContain("2FA");
+
+    const screenshotTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
+      capability: "tyrum.desktop",
+      action: "Desktop",
+      args: { op: "screenshot", display: "primary" },
+    });
+    expect(screenshotTarget).toBe("capability:tyrum.desktop;action:Desktop;op:snapshot");
+
+    const unknownTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
+      capability: "tyrum.desktop",
+      action: "Desktop",
+      args: { op: "not-a-real-op", text: "secret" },
+    });
+    expect(unknownTarget).toBe("capability:tyrum.desktop;action:Desktop;op:unknown");
+    expect(unknownTarget).not.toContain("secret");
+  });
+
   it("groups legacy desktop mouse/keyboard ops under op:act with a minimal subtype", () => {
     const mouseTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
       capability: "tyrum.desktop",
@@ -135,5 +171,17 @@ describe("canonicalizeToolMatchTarget", () => {
     });
     expect(keyboardTarget).toBe("capability:tyrum.desktop;action:Desktop;op:act;act:keyboard");
     expect(keyboardTarget).not.toContain("secret");
+
+    const actTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
+      capability: "tyrum.desktop",
+      action: "Desktop",
+      args: {
+        op: "act",
+        target: { kind: "ref", ref: "pixel:1,2" },
+        action: { kind: "click" },
+      },
+    });
+    expect(actTarget).toBe("capability:tyrum.desktop;action:Desktop;op:act;act:ui");
+    expect(actTarget).not.toContain("pixel:");
   });
 });

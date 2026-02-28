@@ -166,7 +166,7 @@ export function canonicalizeNodeDispatchMatchTarget(
 
   let target = `capability:${descriptorId};action:${actionKind}`;
 
-  if (descriptorId === "tyrum.desktop") {
+  if (required === "desktop") {
     const parsed = asRecord(actionArgs);
     const { op, actSubtype } = canonicalizeDesktopDispatchOp(parsed);
     target += `;op:${op}`;
