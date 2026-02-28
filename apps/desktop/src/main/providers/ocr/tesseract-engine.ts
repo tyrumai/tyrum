@@ -137,12 +137,7 @@ function createTesseractOcrEngine(): OcrEngine {
       let created: TesseractWorker | undefined;
       let lastError: unknown;
 
-      for (const args of [
-        [lang, undefined, options],
-        [lang, options],
-        [lang],
-        [options],
-      ]) {
+      for (const args of [[lang, undefined, options], [lang, options], [lang], [options]]) {
         try {
           created = await Promise.resolve(createWorker(...args));
           break;
