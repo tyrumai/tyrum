@@ -74,8 +74,30 @@ export { ConnectionManager } from "./ws/connection-manager.js";
 export type { ConnectedClient, ConnectionStats } from "./ws/connection-manager.js";
 
 export function formatFatalErrorForConsole(error: unknown): string {
-  void error;
-  return "Error";
+  let formatted: string;
+
+  if (error instanceof Error) {
+    const name = error.name?.trim() ? error.name : "Error";
+    formatted = `${name}: ${error.message}`;
+  } else {
+    const errorType = typeof error;
+    let stringified: string;
+    if (typeof error === "string") {
+      stringified = error;
+    } else {
+      try {
+        stringified = JSON.stringify(error) ?? String(error);
+      } catch {
+        stringified = String(error);
+      }
+    }
+    formatted = `${errorType}: ${stringified}`;
+  }
+
+  // Redact URI-style userinfo (e.g. postgres://user:pass@host -> postgres://***@host)
+  formatted = formatted.replaceAll(/:\/\/[^@]+@/g, "://***@");
+
+  return formatted.length > 500 ? formatted.slice(0, 500) : formatted;
 }
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
