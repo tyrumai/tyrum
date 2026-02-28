@@ -95,4 +95,3 @@ describe("Helm chart probes", () => {
     expect(helpers).toContain("path: /healthz");
   });
 });
-
