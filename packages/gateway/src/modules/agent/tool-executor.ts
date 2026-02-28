@@ -802,6 +802,7 @@ export class ToolExecutor {
         }
       }
     } catch {
+      // Intentional: attempt metadata lookup is best-effort; fall back to default sensitivity.
       executorNodeId = undefined;
     }
 
@@ -826,6 +827,7 @@ export class ToolExecutor {
         }
       }
     } catch {
+      // Intentional: pairing metadata lookup is best-effort; fall back to default sensitivity.
       nodeMode = undefined;
     }
 
