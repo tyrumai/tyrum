@@ -2444,15 +2444,7 @@ describe("AgentRuntime", () => {
       evaluateToolCall: vi.fn(async () => ({ decision: "require_approval" as const })),
     };
 
-    const runtime = new AgentRuntime({
-      container,
-      home: homeDir,
-      languageModel: createStubLanguageModel("hello"),
-      fetchImpl: fetch404,
-      policyService: policyService as unknown as ConstructorParameters<
-        typeof AgentRuntime
-      >[0]["policyService"],
-    });
+    const toolSetBuilder = createToolSetBuilder({ home: homeDir, container, policyService });
 
     const approvalSpy = vi.fn(async () => ({
       approved: true,
@@ -2460,7 +2452,7 @@ describe("AgentRuntime", () => {
       approvalId: 1,
     }));
     (
-      runtime as unknown as { awaitApprovalForToolExecution: unknown }
+      toolSetBuilder as unknown as { awaitApprovalForToolExecution: unknown }
     ).awaitApprovalForToolExecution = approvalSpy;
 
     const toolDesc = {
@@ -2492,17 +2484,7 @@ describe("AgentRuntime", () => {
     };
 
     const usedTools = new Set<string>();
-    const toolSet = (
-      runtime as unknown as {
-        buildToolSet: (
-          tools: readonly unknown[],
-          toolExecutor: unknown,
-          usedTools: Set<string>,
-          context: { planId: string; sessionId: string; channel: string; threadId: string },
-          contextReport: unknown,
-        ) => Record<string, { execute: (args: unknown) => Promise<string> }>;
-      }
-    ).buildToolSet(
+    const toolSet = toolSetBuilder.buildToolSet(
       [toolDesc],
       toolExecutor,
       usedTools,
@@ -2513,7 +2495,7 @@ describe("AgentRuntime", () => {
         threadId: "thread-1",
       },
       makeContextReport(),
-    );
+    ) as unknown as Record<string, { execute: (args: unknown) => Promise<string> }>;
 
     const result = await toolSet["tool.node.dispatch"]!.execute({
       capability: "tyrum.desktop",
