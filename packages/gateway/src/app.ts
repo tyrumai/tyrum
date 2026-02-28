@@ -61,6 +61,10 @@ import {
   createTrustedProxyAllowlistFromEnv,
 } from "./modules/auth/client-ip.js";
 import { AuthAudit } from "./modules/auth/audit.js";
+import {
+  createRateLimitMiddleware,
+  type SlidingWindowRateLimiter,
+} from "./modules/auth/rate-limiter.js";
 
 export interface AppOptions {
   agents?: AgentRegistry;
@@ -76,6 +80,7 @@ export interface AppOptions {
     edgeId: string;
     outboxDal: OutboxDal;
   };
+  authRateLimiter?: SlidingWindowRateLimiter;
   runtime?: {
     version: string;
     instanceId: string;
@@ -170,6 +175,13 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   });
 
   // Apply auth middleware if a token store is provided
+  if (opts.authRateLimiter) {
+    const rateLimit = createRateLimitMiddleware(opts.authRateLimiter, { prefix: "auth" });
+    app.use("/auth/session", rateLimit);
+    app.use("/auth/logout", rateLimit);
+    app.use("/auth/device-tokens/*", rateLimit);
+  }
+
   if (opts.tokenStore) {
     const authAudit = new AuthAudit({
       eventLog: container.eventLog,

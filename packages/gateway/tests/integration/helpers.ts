@@ -14,6 +14,7 @@ import { EnvSecretProvider } from "../../src/modules/secret/provider.js";
 import { resolveTyrumHome } from "../../src/modules/agent/home.js";
 import { VERSION } from "../../src/version.js";
 import type { TokenStore } from "../../src/modules/auth/token-store.js";
+import type { SlidingWindowRateLimiter } from "../../src/modules/auth/rate-limiter.js";
 import type { Hono } from "hono";
 import type { LanguageModel } from "ai";
 
@@ -37,6 +38,7 @@ export interface TestAppOptions {
   isLocalOnly?: boolean;
   languageModel?: LanguageModel;
   tyrumHome?: string;
+  authRateLimiter?: SlidingWindowRateLimiter;
 }
 
 export async function createTestApp(opts: TestAppOptions = {}): Promise<{
@@ -61,6 +63,7 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<{
     agents,
     tokenStore: opts.tokenStore,
     isLocalOnly: opts.isLocalOnly,
+    authRateLimiter: opts.authRateLimiter,
     runtime: {
       version: VERSION,
       instanceId: "test-instance",
