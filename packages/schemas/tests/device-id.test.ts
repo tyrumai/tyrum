@@ -14,4 +14,3 @@ describe("device-id", () => {
     expect(deviceIdFromSha256Digest(new Uint8Array([0, 0, 0, 0, 0]))).toBe("dev_aaaaaaaa");
   });
 });
-
