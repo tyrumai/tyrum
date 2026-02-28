@@ -2431,6 +2431,37 @@ export async function handleClientMessage(
           OPERATOR_MEMORY_EVENT_AUDIENCE,
         );
 
+        if (deps.memoryV1BudgetsProvider) {
+          const budgets = await deps.memoryV1BudgetsProvider();
+          const consolidation = await deps.memoryV1Dal.consolidateToBudgets({ budgets });
+
+          for (const created of consolidation.created_items) {
+            broadcastEvent(
+              {
+                event_id: crypto.randomUUID(),
+                type: "memory.item.created",
+                occurred_at: created.created_at,
+                payload: { item: created },
+              },
+              deps,
+              OPERATOR_MEMORY_EVENT_AUDIENCE,
+            );
+          }
+
+          for (const tombstone of consolidation.deleted_tombstones) {
+            broadcastEvent(
+              {
+                event_id: crypto.randomUUID(),
+                type: "memory.item.deleted",
+                occurred_at: tombstone.deleted_at,
+                payload: { tombstone },
+              },
+              deps,
+              OPERATOR_MEMORY_EVENT_AUDIENCE,
+            );
+          }
+        }
+
         return { request_id: msg.request_id, type: msg.type, ok: true, result };
       }
 
@@ -2462,6 +2493,37 @@ export async function handleClientMessage(
           deps,
           OPERATOR_MEMORY_EVENT_AUDIENCE,
         );
+
+        if (deps.memoryV1BudgetsProvider) {
+          const budgets = await deps.memoryV1BudgetsProvider();
+          const consolidation = await deps.memoryV1Dal.consolidateToBudgets({ budgets });
+
+          for (const created of consolidation.created_items) {
+            broadcastEvent(
+              {
+                event_id: crypto.randomUUID(),
+                type: "memory.item.created",
+                occurred_at: created.created_at,
+                payload: { item: created },
+              },
+              deps,
+              OPERATOR_MEMORY_EVENT_AUDIENCE,
+            );
+          }
+
+          for (const tombstone of consolidation.deleted_tombstones) {
+            broadcastEvent(
+              {
+                event_id: crypto.randomUUID(),
+                type: "memory.item.deleted",
+                occurred_at: tombstone.deleted_at,
+                payload: { tombstone },
+              },
+              deps,
+              OPERATOR_MEMORY_EVENT_AUDIENCE,
+            );
+          }
+        }
 
         return { request_id: msg.request_id, type: msg.type, ok: true, result };
       }

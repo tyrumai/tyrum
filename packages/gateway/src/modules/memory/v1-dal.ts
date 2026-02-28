@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type {
+  AgentConfig,
   MemoryDeletedBy,
   MemoryForgetSelector,
   MemoryItemFilter,
@@ -118,6 +119,122 @@ function decodeCursor(raw: string): Cursor {
 
 function uniqSortedStrings(values: readonly string[]): string[] {
   return [...new Set(values.map((v) => v.trim()).filter((v) => v.length > 0))].sort();
+}
+
+type MemoryV1BudgetLimits = {
+  max_total_items: number;
+  max_total_chars: number;
+  per_kind: Record<MemoryItemKind, { max_items: number; max_chars: number }>;
+};
+
+type MemoryV1BudgetUsage = {
+  total: { items: number; chars: number };
+  per_kind: Record<MemoryItemKind, { items: number; chars: number }>;
+};
+
+export type MemoryV1ConsolidationResult = {
+  ran: boolean;
+  created_items: MemoryItem[];
+  deleted_tombstones: MemoryTombstone[];
+  dropped_derived_indexes: { deleted_vectors: number; deleted_links: number };
+  before: MemoryV1BudgetUsage;
+  after: MemoryV1BudgetUsage;
+};
+
+type RawBudgetRow = {
+  memory_item_id: string;
+  kind: MemoryItemKind;
+  sensitivity: MemorySensitivity;
+  key: string | null;
+  value_json: string | null;
+  observed_at: string | null;
+  title: string | null;
+  body_md: string | null;
+  occurred_at: string | null;
+  summary_md: string | null;
+  confidence: number | null;
+  created_at: string | Date;
+};
+
+function normalizeBudgets(budgets: AgentConfig["memory"]["v1"]["budgets"]): MemoryV1BudgetLimits {
+  const maxTotalItems = Math.max(0, Math.floor(budgets.max_total_items));
+  const maxTotalChars = Math.max(0, Math.floor(budgets.max_total_chars));
+
+  const normalizeKind = (kind: MemoryItemKind): { max_items: number; max_chars: number } => {
+    const raw = budgets.per_kind[kind];
+    return {
+      max_items: Math.max(0, Math.floor(raw.max_items)),
+      max_chars: Math.max(0, Math.floor(raw.max_chars)),
+    };
+  };
+
+  return {
+    max_total_items: maxTotalItems,
+    max_total_chars: maxTotalChars,
+    per_kind: {
+      fact: normalizeKind("fact"),
+      note: normalizeKind("note"),
+      procedure: normalizeKind("procedure"),
+      episode: normalizeKind("episode"),
+    },
+  };
+}
+
+function memoryItemCharCount(row: RawBudgetRow): number {
+  if (row.kind === "fact") {
+    return (row.key?.length ?? 0) + (row.value_json?.length ?? 0);
+  }
+  if (row.kind === "note" || row.kind === "procedure") {
+    return (row.title?.length ?? 0) + (row.body_md?.length ?? 0);
+  }
+  return row.summary_md?.length ?? 0;
+}
+
+function computeBudgetUsage(rows: readonly RawBudgetRow[]): MemoryV1BudgetUsage {
+  const usageByKind: MemoryV1BudgetUsage["per_kind"] = {
+    fact: { items: 0, chars: 0 },
+    note: { items: 0, chars: 0 },
+    procedure: { items: 0, chars: 0 },
+    episode: { items: 0, chars: 0 },
+  };
+
+  let totalItems = 0;
+  let totalChars = 0;
+
+  for (const row of rows) {
+    totalItems += 1;
+    const chars = memoryItemCharCount(row);
+    totalChars += chars;
+    const byKind = usageByKind[row.kind];
+    byKind.items += 1;
+    byKind.chars += chars;
+  }
+
+  return { total: { items: totalItems, chars: totalChars }, per_kind: usageByKind };
+}
+
+function overBudget(usage: MemoryV1BudgetUsage, limits: MemoryV1BudgetLimits): boolean {
+  if (usage.total.items > limits.max_total_items) return true;
+  if (usage.total.chars > limits.max_total_chars) return true;
+  for (const kind of Object.keys(limits.per_kind) as MemoryItemKind[]) {
+    const limit = limits.per_kind[kind];
+    const actual = usage.per_kind[kind];
+    if (actual.items > limit.max_items) return true;
+    if (actual.chars > limit.max_chars) return true;
+  }
+  return false;
+}
+
+function normalizeSummaryLine(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function truncate(value: string, maxChars: number): string {
+  const max = Math.max(0, Math.floor(maxChars));
+  if (max === 0) return "";
+  if (value.length <= max) return value;
+  if (max <= 3) return value.slice(0, max);
+  return `${value.slice(0, max - 3)}...`;
 }
 
 export function buildMemoryV1ItemQueryParts(params: {
@@ -1311,6 +1428,304 @@ export class MemoryV1Dal {
       deleted_at: normalizeTime(tombstone.deleted_at),
       deleted_by: tombstone.deleted_by,
       ...(tombstone.reason ? { reason: tombstone.reason } : {}),
+    };
+  }
+
+  async consolidateToBudgets(params: {
+    budgets: AgentConfig["memory"]["v1"]["budgets"];
+    agentId?: string;
+  }): Promise<MemoryV1ConsolidationResult> {
+    const agent = this.normalizeAgentId(params.agentId);
+    const limits = normalizeBudgets(params.budgets);
+
+    const loadRows = async (): Promise<RawBudgetRow[]> =>
+      await this.db.all<RawBudgetRow>(
+        `SELECT
+           memory_item_id,
+           kind,
+           sensitivity,
+           key,
+           value_json,
+           observed_at,
+           title,
+           body_md,
+           occurred_at,
+           summary_md,
+           confidence,
+           created_at
+         FROM memory_items
+         WHERE agent_id = ?`,
+        [agent],
+      );
+
+    const beforeRows = await loadRows();
+    const beforeUsage = computeBudgetUsage(beforeRows);
+    if (!overBudget(beforeUsage, limits)) {
+      return {
+        ran: false,
+        created_items: [],
+        deleted_tombstones: [],
+        dropped_derived_indexes: { deleted_vectors: 0, deleted_links: 0 },
+        before: beforeUsage,
+        after: beforeUsage,
+      };
+    }
+
+    const createdItems: MemoryItem[] = [];
+    const deletedTombstones: MemoryTombstone[] = [];
+
+    // Stage 1: Dedupe facts by key (keep highest confidence / newest observed_at).
+    {
+      const facts = beforeRows.filter((row) => row.kind === "fact" && row.key);
+      const bestByKey = new Map<string, RawBudgetRow>();
+      const dupes: string[] = [];
+
+      const compare = (a: RawBudgetRow, b: RawBudgetRow): number => {
+        const confA = a.confidence ?? 0;
+        const confB = b.confidence ?? 0;
+        if (confA !== confB) return confB - confA;
+        const obsA = a.observed_at ?? "";
+        const obsB = b.observed_at ?? "";
+        if (obsA !== obsB) return obsB.localeCompare(obsA);
+        const createdA = normalizeTime(a.created_at);
+        const createdB = normalizeTime(b.created_at);
+        if (createdA !== createdB) return createdB.localeCompare(createdA);
+        return b.memory_item_id.localeCompare(a.memory_item_id);
+      };
+
+      for (const fact of facts) {
+        const key = fact.key!;
+        const existing = bestByKey.get(key);
+        if (!existing) {
+          bestByKey.set(key, fact);
+          continue;
+        }
+        const cmp = compare(existing, fact);
+        if (cmp <= 0) {
+          // existing is as-good or better -> delete current
+          dupes.push(fact.memory_item_id);
+        } else {
+          // current is better -> delete existing
+          dupes.push(existing.memory_item_id);
+          bestByKey.set(key, fact);
+        }
+      }
+
+      for (const id of dupes) {
+        try {
+          const tombstone = await this.delete(
+            id,
+            { deleted_by: "consolidation", reason: "dedupe/merge" },
+            agent,
+          );
+          deletedTombstones.push(tombstone);
+        } catch (err) {
+          if (err instanceof Error && err.message === "memory item not found") continue;
+          throw err;
+        }
+      }
+    }
+
+    let rows = await loadRows();
+    let usage = computeBudgetUsage(rows);
+
+    // Stage 2: Episodic consolidation into a semantic note (best-effort).
+    if (rows.some((row) => row.kind === "episode") && overBudget(usage, limits)) {
+      const episodes = rows
+        .filter((row) => row.kind === "episode" && row.summary_md && row.occurred_at)
+        .sort((a, b) => {
+          const oa = a.occurred_at ?? "";
+          const ob = b.occurred_at ?? "";
+          if (oa !== ob) return oa.localeCompare(ob);
+          const ca = normalizeTime(a.created_at);
+          const cb = normalizeTime(b.created_at);
+          if (ca !== cb) return ca.localeCompare(cb);
+          return a.memory_item_id.localeCompare(b.memory_item_id);
+        });
+
+      const totalExcessItems = Math.max(0, usage.total.items - limits.max_total_items);
+      const excessEpisodeItems = Math.max(
+        0,
+        usage.per_kind.episode.items - limits.per_kind.episode.max_items,
+      );
+      const desiredEpisodeCount = Math.max(excessEpisodeItems, totalExcessItems + 1);
+      const targetCount = Math.min(episodes.length, Math.max(0, desiredEpisodeCount));
+
+      const noteLimit = limits.per_kind.note;
+      const noteUsage = usage.per_kind.note;
+      const canAddNote =
+        noteLimit.max_items > noteUsage.items && noteLimit.max_chars > noteUsage.chars;
+
+      if (canAddNote && targetCount > 0) {
+        const selected = episodes.slice(0, targetCount);
+        const removedEpisodeChars = selected.reduce(
+          (acc, row) => acc + memoryItemCharCount(row),
+          0,
+        );
+        const maxNewNoteChars = Math.max(
+          0,
+          Math.min(noteLimit.max_chars - noteUsage.chars, Math.floor(removedEpisodeChars * 0.7)),
+        );
+
+        const occurredLines = selected.map((row) => {
+          const occurred = row.occurred_at ?? "unknown-time";
+          const summary = row.summary_md ? truncate(normalizeSummaryLine(row.summary_md), 180) : "";
+          return `- ${occurred} — ${summary}`.trim();
+        });
+
+        const header = `Consolidated ${selected.length} episode(s) to stay within memory budgets.`;
+        const body = [header, "", ...occurredLines].join("\n").trim();
+        const title = "Episodic consolidation";
+
+        const bodyBudget = Math.max(1, Math.max(0, maxNewNoteChars - title.length));
+        const finalBody = truncate(body, bodyBudget);
+
+        const sensitivity: MemorySensitivity = selected.some(
+          (row) => row.sensitivity === "sensitive",
+        )
+          ? "sensitive"
+          : selected.some((row) => row.sensitivity === "private")
+            ? "private"
+            : "public";
+
+        const note = await this.create(
+          {
+            kind: "note",
+            title,
+            body_md: finalBody.length > 0 ? finalBody : header,
+            tags: ["consolidated"],
+            sensitivity,
+            provenance: {
+              source_kind: "system",
+              refs: [],
+              metadata: { kind: "episodic_consolidation", episode_count: selected.length },
+            },
+          },
+          agent,
+        );
+        createdItems.push(note);
+
+        for (const episode of selected) {
+          try {
+            const tombstone = await this.delete(
+              episode.memory_item_id,
+              { deleted_by: "consolidation", reason: "episodic consolidation" },
+              agent,
+            );
+            deletedTombstones.push(tombstone);
+          } catch (err) {
+            if (err instanceof Error && err.message === "memory item not found") continue;
+            throw err;
+          }
+        }
+      }
+    }
+
+    // Stage 3: Drop derived indexes (embeddings) — expendable.
+    const deletedLinks = (
+      await this.db.run(`DELETE FROM memory_item_embeddings WHERE agent_id = ?`, [agent])
+    ).changes;
+    const deletedVectors = (
+      await this.db.run(
+        `DELETE FROM vector_metadata
+         WHERE agent_id = ?
+           AND label LIKE ?`,
+        [agent, "memory_item:%"],
+      )
+    ).changes;
+
+    rows = await loadRows();
+    usage = computeBudgetUsage(rows);
+
+    // Stage 4: Evict low-utility items until under budget.
+    const kindPriority: readonly MemoryItemKind[] = ["episode", "note", "procedure", "fact"];
+
+    const pickEvictionKind = (): MemoryItemKind | undefined => {
+      for (const kind of kindPriority) {
+        const limit = limits.per_kind[kind];
+        const actual = usage.per_kind[kind];
+        if (actual.items > limit.max_items) return kind;
+        if (actual.chars > limit.max_chars) return kind;
+      }
+      if (
+        usage.total.items > limits.max_total_items ||
+        usage.total.chars > limits.max_total_chars
+      ) {
+        for (const kind of kindPriority) {
+          if (usage.per_kind[kind].items > 0) return kind;
+        }
+      }
+      return undefined;
+    };
+
+    const rowUtilityKey = (row: RawBudgetRow): string => {
+      if (row.kind === "fact") return row.observed_at ?? normalizeTime(row.created_at);
+      if (row.kind === "episode") return row.occurred_at ?? normalizeTime(row.created_at);
+      return normalizeTime(row.created_at);
+    };
+
+    while (overBudget(usage, limits)) {
+      const kind = pickEvictionKind();
+      if (!kind) break;
+
+      const candidates = rows.filter((row) => row.kind === kind);
+      if (candidates.length === 0) break;
+
+      const needCharRelief =
+        usage.total.chars > limits.max_total_chars ||
+        usage.per_kind[kind].chars > limits.per_kind[kind].max_chars;
+
+      const sorted = candidates.slice().sort((a, b) => {
+        const charsA = memoryItemCharCount(a);
+        const charsB = memoryItemCharCount(b);
+
+        if (needCharRelief && charsA !== charsB) return charsB - charsA;
+
+        if (a.kind === "fact") {
+          const confA = a.confidence ?? 0;
+          const confB = b.confidence ?? 0;
+          if (confA !== confB) return confA - confB;
+        }
+
+        const keyA = rowUtilityKey(a);
+        const keyB = rowUtilityKey(b);
+        if (keyA !== keyB) return keyA.localeCompare(keyB); // oldest first
+        return a.memory_item_id.localeCompare(b.memory_item_id);
+      });
+
+      const victim = sorted[0]!;
+      try {
+        const tombstone = await this.delete(
+          victim.memory_item_id,
+          { deleted_by: "budget", reason: "memory budget exceeded" },
+          agent,
+        );
+        deletedTombstones.push(tombstone);
+      } catch (err) {
+        if (err instanceof Error && err.message === "memory item not found") {
+          rows = await loadRows();
+          usage = computeBudgetUsage(rows);
+          continue;
+        }
+        throw err;
+      }
+
+      rows = await loadRows();
+      usage = computeBudgetUsage(rows);
+    }
+
+    const afterUsage = usage;
+    if (overBudget(afterUsage, limits)) {
+      throw new Error("memory v1 consolidation failed to return under budget");
+    }
+
+    return {
+      ran: true,
+      created_items: createdItems,
+      deleted_tombstones: deletedTombstones,
+      dropped_derived_indexes: { deleted_vectors: deletedVectors, deleted_links: deletedLinks },
+      before: beforeUsage,
+      after: afterUsage,
     };
   }
 }
