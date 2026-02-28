@@ -31,6 +31,12 @@ type AtSpiAccessibleRef = { busName: string; objectPath: string };
 
 const ATSPI_REF_PREFIX = "atspi:";
 const ATSPI_REF_SEPARATOR = "|";
+const ATSPI_REGISTRY_BUS_NAME = "org.a11y.atspi.Registry";
+const ATSPI_ROOT_ACCESSIBLE_PATH = "/org/a11y/atspi/accessible/root";
+const ATSPI_ROOT_ACCESSIBLE_REF: AtSpiAccessibleRef = {
+  busName: ATSPI_REGISTRY_BUS_NAME,
+  objectPath: ATSPI_ROOT_ACCESSIBLE_PATH,
+};
 
 const QUERY_MAX_NODES = 2_048;
 
@@ -193,14 +199,6 @@ function toRect(value: unknown): DesktopUiRect {
   return { x: xn, y: yn, width: wn, height: hn };
 }
 
-function isWindowRole(role: string): boolean {
-  const normalized = role.toLowerCase();
-  if (normalized.trim() === "desktop frame") return false;
-  return (
-    normalized.trim() === "frame" || normalized.includes("window") || normalized.includes("dialog")
-  );
-}
-
 function matchesSelector(input: {
   selector: DesktopQueryArgs["selector"];
   node: Pick<DesktopUiNodeSummary, "role" | "name" | "states">;
@@ -235,12 +233,11 @@ async function loadDbus(): Promise<typeof import("dbus-next")> {
 }
 
 export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
-  private registry: ClientInterface | null = null;
   private bus: MessageBus | null = null;
   private connectPromise: Promise<void> | null = null;
 
   private async connect(): Promise<void> {
-    if (this.registry && this.bus) return;
+    if (this.bus) return;
     if (this.connectPromise) return await this.connectPromise;
 
     this.connectPromise = (async () => {
@@ -257,16 +254,9 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
           throw new Error("AT-SPI bus address unavailable (org.a11y.Bus.GetAddress)");
 
         atspiBus = dbus.sessionBus({ busAddress });
-        const registryObj = await atspiBus.getProxyObject(
-          "org.a11y.atspi.Registry",
-          "/org/a11y/atspi/registry",
-        );
-        const registryIface = registryObj.getInterface(
-          "org.a11y.atspi.Registry",
-        ) as ClientInterface;
+        await atspiBus.getProxyObject(ATSPI_REGISTRY_BUS_NAME, ATSPI_ROOT_ACCESSIBLE_PATH);
 
         this.bus = atspiBus;
-        this.registry = registryIface;
         atspiBus = null;
       } finally {
         atspiBus?.disconnect();
@@ -276,7 +266,6 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
       .catch((err) => {
         this.bus?.disconnect();
         this.bus = null;
-        this.registry = null;
         throw err;
       })
       .finally(() => {
@@ -289,13 +278,15 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
   async isAvailable(): Promise<boolean> {
     try {
       await this.connect();
-      const registry = this.registry;
-      if (!registry) return false;
-
-      const fn = (registry as any)["GetDesktopCount"];
+      const accessible = await this.getInterface(
+        ATSPI_ROOT_ACCESSIBLE_REF,
+        "org.a11y.atspi.Accessible",
+      );
+      if (!accessible) return false;
+      const fn = (accessible as any)["GetRoleName"];
       if (typeof fn !== "function") return false;
-      const count = await fn.call(registry);
-      return typeof count === "number" ? count > 0 : false;
+      const role = normalizeMaybe(await fn.call(accessible));
+      return role !== undefined;
     } catch {
       return false;
     }
@@ -314,26 +305,6 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
     } catch {
       return null;
     }
-  }
-
-  private async getFocusedAccessible(): Promise<AtSpiAccessibleRef | null> {
-    await this.connect();
-    const registry = this.registry;
-    if (!registry) return null;
-
-    const fn = (registry as any)["GetFocus"];
-    if (typeof fn !== "function") return null;
-    const raw = await fn.call(registry);
-    return parseAccessibleRef(raw);
-  }
-
-  private async getParent(ref: AtSpiAccessibleRef): Promise<AtSpiAccessibleRef | null> {
-    const iface = await this.getInterface(ref, "org.a11y.atspi.Accessible");
-    if (!iface) return null;
-    const fn = (iface as any)["GetParent"];
-    if (typeof fn !== "function") return null;
-    const raw = await fn.call(iface);
-    return parseAccessibleRef(raw);
   }
 
   private async getChildren(
@@ -445,32 +416,14 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
   }
 
   private async resolveRootAccessible(): Promise<AtSpiAccessibleRef | null> {
-    const focus = await this.getFocusedAccessible();
-    if (!focus) return null;
-
-    let current: AtSpiAccessibleRef | null = focus;
-    let candidate: AtSpiAccessibleRef = focus;
-
-    for (let i = 0; i < 64; i++) {
-      if (!current) break;
-
-      const role = await this.describeAccessible(current)
-        .then((d) => d.role)
-        .catch(() => "unknown");
-      if (isWindowRole(role)) {
-        candidate = current;
-      }
-      const parentRef: AtSpiAccessibleRef | null = await this.getParent(current).catch(() => null);
-      if (!parentRef) break;
-      current = parentRef;
-    }
-
-    return candidate;
+    const available = await this.isAvailable();
+    if (!available) return null;
+    return ATSPI_ROOT_ACCESSIBLE_REF;
   }
 
   async snapshot(args: DesktopSnapshotArgs): Promise<DesktopA11ySnapshot> {
     const rootRef = await this.resolveRootAccessible();
-    if (!rootRef) throw new Error("AT-SPI focus unavailable");
+    if (!rootRef) throw new Error("AT-SPI root unavailable");
 
     const visited = new Set<string>();
     let remainingNodes = Math.max(1, Math.floor(args.max_nodes));

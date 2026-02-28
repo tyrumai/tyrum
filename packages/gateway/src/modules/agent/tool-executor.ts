@@ -22,11 +22,11 @@ import type { RedactionEngine } from "../redaction/engine.js";
 import type { SqlDb } from "../../statestore/types.js";
 import { acquireWorkspaceLease, releaseWorkspaceLease } from "../workspace/lease.js";
 import type { ArtifactStore } from "../artifact/store.js";
-import {
-  persistExecutionArtifactBytes,
-  type ExecutionArtifactSensitivity,
-} from "../artifact/execution-artifacts.js";
 import { NoCapableNodeError, NodeNotPairedError } from "../../ws/protocol/errors.js";
+import {
+  resolveDesktopEvidenceSensitivity,
+  shapeDesktopEvidenceForArtifacts,
+} from "../desktop/shape-desktop-evidence.js";
 
 const MAX_RESPONSE_BYTES = 32_768;
 const TRUNCATION_MARKER = "...(truncated)";
@@ -637,201 +637,18 @@ export class ToolExecutor {
     if (!this.artifactStore) return evidence;
     const db = this.workspaceLease?.db;
     if (!db) return evidence;
-    if (evidence === undefined) return evidence;
-    if (evidence === null || typeof evidence !== "object" || Array.isArray(evidence)) {
-      return evidence;
-    }
-
-    const evidenceObj = evidence as Record<string, unknown>;
-    const bytesBase64 =
-      typeof evidenceObj["bytesBase64"] === "string" ? evidenceObj["bytesBase64"] : undefined;
-    const treeFromEvidence = evidenceObj["tree"];
-    const treeFromResult =
-      result && typeof result === "object" && !Array.isArray(result)
-        ? (result as Record<string, unknown>)["tree"]
-        : undefined;
-    const treeValue = treeFromEvidence !== undefined ? treeFromEvidence : treeFromResult;
-
-    if (!bytesBase64 && treeValue === undefined) return evidence;
-
-    const mime = typeof evidenceObj["mime"] === "string" ? evidenceObj["mime"] : undefined;
-    const evidenceType =
-      typeof evidenceObj["type"] === "string" ? evidenceObj["type"] : "screenshot";
-    const width = typeof evidenceObj["width"] === "number" ? evidenceObj["width"] : undefined;
-    const height = typeof evidenceObj["height"] === "number" ? evidenceObj["height"] : undefined;
-    const timestamp =
-      typeof evidenceObj["timestamp"] === "string" ? evidenceObj["timestamp"] : undefined;
-
-    const sensitivity = await this.resolveDesktopEvidenceSensitivity(db, scope);
-
-    const shaped: Record<string, unknown> = { ...evidenceObj };
-
-    if (bytesBase64) {
-      delete shaped["bytesBase64"];
-
-      let stored = null as Awaited<ReturnType<typeof persistExecutionArtifactBytes>>;
-      try {
-        stored = await persistExecutionArtifactBytes(db, this.artifactStore, {
-          runId: scope.runId,
-          stepId: scope.stepId,
-          workspaceId: this.workspaceLease?.workspaceId,
-          kind: "screenshot",
-          body: Buffer.from(bytesBase64, "base64"),
-          mimeType: mime ?? "image/png",
-          labels: [evidenceType, "desktop"],
-          metadata: {
-            width,
-            height,
-            timestamp,
-            mime: mime ?? "image/png",
-            evidence_type: evidenceType,
-          },
-          sensitivity,
-        });
-      } catch {
-        // Intentional: artifact byte persistence is best-effort; omit bytes if storage fails.
-        stored = null;
-      }
-
-      if (!stored) {
-        shaped["bytes_omitted"] = true;
-      } else {
-        shaped["artifact"] = stored;
-      }
-    }
-
-    if (treeValue !== undefined) {
-      if (treeFromEvidence !== undefined) {
-        delete shaped["tree"];
-      }
-
-      const treeJson = (() => {
-        if (typeof treeValue === "string") return treeValue;
-        if (treeValue === null) return "null";
-        return JSON.stringify(treeValue);
-      })();
-
-      let storedTree = null as Awaited<ReturnType<typeof persistExecutionArtifactBytes>>;
-      try {
-        storedTree = await persistExecutionArtifactBytes(db, this.artifactStore, {
-          runId: scope.runId,
-          stepId: scope.stepId,
-          workspaceId: this.workspaceLease?.workspaceId,
-          kind: "dom_snapshot",
-          body: Buffer.from(treeJson, "utf8"),
-          mimeType: "application/json",
-          labels: ["a11y-tree", "desktop"],
-          metadata: {
-            timestamp,
-            evidence_type: evidenceType,
-          },
-          sensitivity,
-        });
-      } catch {
-        // Intentional: DOM snapshot persistence is best-effort; omit tree if storage fails.
-        storedTree = null;
-      }
-
-      if (!storedTree) {
-        shaped["tree_omitted"] = true;
-      } else {
-        shaped["tree_artifact"] = storedTree;
-      }
-    }
-
-    return shaped;
-  }
-
-  private parseEvidenceSensitivity(
-    raw: string | undefined,
-    fallback: ExecutionArtifactSensitivity,
-  ): ExecutionArtifactSensitivity {
-    const normalized = raw?.trim().toLowerCase();
-    if (normalized === "normal" || normalized === "sensitive") return normalized;
-    return fallback;
-  }
-
-  private resolveDesktopSandboxEvidenceSensitivity(): ExecutionArtifactSensitivity {
-    return this.parseEvidenceSensitivity(
-      process.env["TYRUM_DESKTOP_SANDBOX_ARTIFACT_SENSITIVITY"],
-      "normal",
-    );
-  }
-
-  private resolveDesktopEvidenceSensitivityForMode(
-    mode: string | undefined,
-  ): ExecutionArtifactSensitivity {
-    const normalizedMode = mode?.trim().toLowerCase();
-    if (normalizedMode === "desktop-sandbox") {
-      return this.resolveDesktopSandboxEvidenceSensitivity();
-    }
-
-    return this.parseEvidenceSensitivity(
-      process.env["TYRUM_DESKTOP_ARTIFACT_SENSITIVITY"],
-      "sensitive",
-    );
-  }
-
-  private async resolveDesktopEvidenceSensitivity(
-    db: SqlDb,
-    scope: { runId: string; stepId: string },
-  ): Promise<ExecutionArtifactSensitivity> {
-    let executorNodeId: string | undefined;
-
-    try {
-      const attemptRow = await db.get<{ metadata_json: string | null }>(
-        `SELECT ea.metadata_json
-         FROM execution_attempts ea
-         JOIN execution_steps es ON es.step_id = ea.step_id
-         WHERE ea.step_id = ? AND es.run_id = ?
-         ORDER BY ea.attempt DESC
-         LIMIT 1`,
-        [scope.stepId, scope.runId],
-      );
-      const rawAttemptMeta = attemptRow?.metadata_json;
-      if (typeof rawAttemptMeta === "string" && rawAttemptMeta.trim().length > 0) {
-        const parsed = JSON.parse(rawAttemptMeta) as unknown;
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-          const executor = (parsed as Record<string, unknown>)["executor"];
-          if (executor && typeof executor === "object" && !Array.isArray(executor)) {
-            const nodeId = (executor as Record<string, unknown>)["node_id"];
-            if (typeof nodeId === "string" && nodeId.trim().length > 0) {
-              executorNodeId = nodeId.trim();
-            }
-          }
-        }
-      }
-    } catch {
-      // Intentional: attempt metadata lookup is best-effort; fall back to default sensitivity.
-      executorNodeId = undefined;
-    }
-
-    if (!executorNodeId) {
-      return this.resolveDesktopEvidenceSensitivityForMode(undefined);
-    }
-
-    let nodeMode: string | undefined;
-    try {
-      const pairingRow = await db.get<{ metadata_json: string }>(
-        "SELECT metadata_json FROM node_pairings WHERE node_id = ?",
-        [executorNodeId],
-      );
-      const rawPairingMeta = pairingRow?.metadata_json;
-      if (typeof rawPairingMeta === "string" && rawPairingMeta.trim().length > 0) {
-        const parsed = JSON.parse(rawPairingMeta) as unknown;
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-          const mode = (parsed as Record<string, unknown>)["mode"];
-          if (typeof mode === "string" && mode.trim().length > 0) {
-            nodeMode = mode.trim();
-          }
-        }
-      }
-    } catch {
-      // Intentional: pairing metadata lookup is best-effort; fall back to default sensitivity.
-      nodeMode = undefined;
-    }
-
-    return this.resolveDesktopEvidenceSensitivityForMode(nodeMode);
+    const sensitivity = await resolveDesktopEvidenceSensitivity(db, scope);
+    const shaped = await shapeDesktopEvidenceForArtifacts({
+      db,
+      artifactStore: this.artifactStore,
+      runId: scope.runId,
+      stepId: scope.stepId,
+      workspaceId: this.workspaceLease?.workspaceId,
+      evidence,
+      result,
+      sensitivity,
+    });
+    return shaped.evidence;
   }
 
   private async executeFsRead(toolCallId: string, args: unknown): Promise<ToolResult> {

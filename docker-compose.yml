@@ -78,7 +78,7 @@ services:
       TYRUM_ENGINE_API_ENABLED: "1"
       GATEWAY_DB_PATH: ${GATEWAY_DB_PATH:-postgres://${POSTGRES_USER:-tyrum}:${POSTGRES_PASSWORD:-tyrum}@postgres:5432/${POSTGRES_DB:-tyrum}}
       # In split mode, ensure all services share the same admin token.
-      GATEWAY_TOKEN: ${GATEWAY_TOKEN:?Set GATEWAY_TOKEN (>=32 chars) for split mode}
+      GATEWAY_TOKEN: ${GATEWAY_TOKEN:-}
       # Split mode should not rely on shared filesystem secrets.
       TYRUM_SECRET_PROVIDER: env
       # Snapshot import is disabled by default. Enable explicitly for restore workflows.
@@ -106,7 +106,7 @@ services:
     environment:
       TYRUM_HOME: /var/lib/tyrum
       GATEWAY_DB_PATH: ${GATEWAY_DB_PATH:-postgres://${POSTGRES_USER:-tyrum}:${POSTGRES_PASSWORD:-tyrum}@postgres:5432/${POSTGRES_DB:-tyrum}}
-      GATEWAY_TOKEN: ${GATEWAY_TOKEN:?Set GATEWAY_TOKEN (>=32 chars) for split mode}
+      GATEWAY_TOKEN: ${GATEWAY_TOKEN:-}
       TYRUM_SECRET_PROVIDER: env
       TYRUM_ARTIFACT_STORE: ${TYRUM_ARTIFACT_STORE:-fs}
       TYRUM_ARTIFACTS_DIR: /var/lib/tyrum/artifacts
@@ -129,7 +129,7 @@ services:
     environment:
       TYRUM_HOME: /var/lib/tyrum
       GATEWAY_DB_PATH: ${GATEWAY_DB_PATH:-postgres://${POSTGRES_USER:-tyrum}:${POSTGRES_PASSWORD:-tyrum}@postgres:5432/${POSTGRES_DB:-tyrum}}
-      GATEWAY_TOKEN: ${GATEWAY_TOKEN:?Set GATEWAY_TOKEN (>=32 chars) for split mode}
+      GATEWAY_TOKEN: ${GATEWAY_TOKEN:-}
       TYRUM_SECRET_PROVIDER: env
       TYRUM_ARTIFACT_STORE: ${TYRUM_ARTIFACT_STORE:-fs}
       TYRUM_ARTIFACTS_DIR: /var/lib/tyrum/artifacts

@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import { PluginManifest } from "@tyrum/schemas";
 import { createContainerAsync } from "./container.js";
 import { createApp } from "./app.js";
+import { NodeDispatchService } from "./modules/agent/node-dispatch-service.js";
 import { TokenStore } from "./modules/auth/token-store.js";
 import { WatcherScheduler } from "./modules/watcher/scheduler.js";
 import { WorkSignalScheduler } from "./modules/workboard/signal-scheduler.js";
@@ -45,6 +46,7 @@ import { TelegramChannelProcessor } from "./modules/channels/telegram.js";
 import { createToolRunnerStepExecutor } from "./modules/execution/toolrunner-step-executor.js";
 import { createKubernetesToolRunnerStepExecutor } from "./modules/execution/kubernetes-toolrunner-step-executor.js";
 import { createGatewayStepExecutor } from "./modules/execution/gateway-step-executor.js";
+import { createNodeDispatchStepExecutor } from "./modules/execution/node-dispatch-step-executor.js";
 import { runToolRunnerFromStdio } from "./toolrunner.js";
 import { isPostgresDbUri } from "./statestore/db-uri.js";
 import { VERSION } from "./version.js";
@@ -957,6 +959,25 @@ export async function runShutdownCleanup(
 export async function main(cliRole?: GatewayRole): Promise<void> {
   const homeForTokenStore = resolveTyrumHome();
 
+  if (role !== "all") {
+    const existing = await resolveAdminTokenForCheck(homeForTokenStore);
+    const token = existing.token?.trim() ?? "";
+    if (token.length === 0) {
+      const tokenPath = join(homeForTokenStore, ".admin-token");
+      throw new Error(
+        `role '${role}' requires an explicit admin token. ` +
+          `Set GATEWAY_TOKEN (recommended) or provide a non-empty ${tokenPath} file.`,
+      );
+    }
+    const minTokenLength = 32;
+    if (token.length < minTokenLength) {
+      throw new Error(
+        `role '${role}' requires an admin token of at least ${minTokenLength} characters (got ${token.length}). ` +
+          "Set GATEWAY_TOKEN to a high-entropy secret (recommended).",
+      );
+    }
+  }
+
   // Initialize the token store early so a generated token is present before config validation.
   const tokenStore = new TokenStore(homeForTokenStore);
   const token = await tokenStore.initialize();
@@ -1454,9 +1475,15 @@ export async function main(cliRole?: GatewayRole): Promise<void> {
         };
 
         const toolExecutor = resolveExecutor() satisfies ExecutionStepExecutor;
+        const nodeDispatchExecutor = createNodeDispatchStepExecutor({
+          db: container.db,
+          artifactStore: container.artifactStore,
+          nodeDispatchService: new NodeDispatchService(protocolDeps),
+          fallback: toolExecutor,
+        }) satisfies ExecutionStepExecutor;
         const executor = createGatewayStepExecutor({
           container,
-          toolExecutor,
+          toolExecutor: nodeDispatchExecutor,
         }) satisfies ExecutionStepExecutor;
 
         return startExecutionWorkerLoop({
