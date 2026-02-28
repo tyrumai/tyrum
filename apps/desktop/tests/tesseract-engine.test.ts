@@ -212,6 +212,10 @@ describe("getTesseractOcrEngine", () => {
 
     try {
       let resolveWorker: ((value: unknown) => void) | undefined;
+      let resolveCreateWorkerCalled: (() => void) | undefined;
+      const createWorkerCalled = new Promise<void>((resolve) => {
+        resolveCreateWorkerCalled = resolve;
+      });
       const worker = {
         recognize: vi.fn(async () => ({ data: { lines: [] } })),
         setParameters: vi.fn(async () => {}),
@@ -221,6 +225,7 @@ describe("getTesseractOcrEngine", () => {
       createWorker.mockImplementation(
         () =>
           new Promise((resolve) => {
+            resolveCreateWorkerCalled?.();
             resolveWorker = resolve;
           }),
       );
@@ -230,9 +235,7 @@ describe("getTesseractOcrEngine", () => {
       const engine = getTesseractOcrEngine();
 
       const promise = engine.recognize({ buffer: Buffer.from([0x00]), width: 1, height: 1 });
-      for (let i = 0; i < 5 && createWorker.mock.calls.length === 0; i += 1) {
-        await new Promise((resolve) => setImmediate(resolve));
-      }
+      await createWorkerCalled;
       expect(createWorker).toHaveBeenCalledTimes(1);
 
       expect(engine.reset).toBeDefined();
