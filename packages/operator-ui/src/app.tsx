@@ -1,4 +1,4 @@
-import type { OperatorCore } from "@tyrum/operator-core";
+import { createGatewayAuthSession, type OperatorCore } from "@tyrum/operator-core";
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import {
   Database,
@@ -131,14 +131,7 @@ function ConnectPage({ core, mode }: { core: OperatorCore; mode: OperatorUiMode 
     setLoginBusy(true);
     setLoginError(null);
     try {
-      const res = await fetch("/auth/session", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ token: trimmed }),
-      });
+      const res = await createGatewayAuthSession({ token: trimmed, httpBaseUrl: core.httpBaseUrl });
       if (!res.ok) {
         setLoginError(await readGatewayError(res));
         return;

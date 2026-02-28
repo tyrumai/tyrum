@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createBearerTokenAuth,
   createBrowserCookieAuth,
+  createGatewayAuthSession,
   httpAuthForAuth,
   selectAuthForAdminMode,
   wsTokenForAuth,
@@ -51,5 +52,23 @@ describe("@tyrum/operator-core auth", () => {
         },
       }),
     ).toEqual({ type: "bearer-token", token: "elevated-token" });
+  });
+
+  it("posts gateway auth session bootstrap requests", async () => {
+    const fetchSpy = vi.fn(async () => new Response(null, { status: 204 }));
+
+    const res = await createGatewayAuthSession({
+      token: "test-token",
+      httpBaseUrl: "http://example.test",
+      fetch: fetchSpy,
+    });
+
+    expect(fetchSpy).toHaveBeenCalledWith("http://example.test/auth/session", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token: "test-token" }),
+    });
+    expect(res.status).toBe(204);
   });
 });

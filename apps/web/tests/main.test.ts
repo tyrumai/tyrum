@@ -6,6 +6,7 @@ vi.mock("@tyrum/operator-core", () => ({
   createAdminModeStore: vi.fn(),
   createBearerTokenAuth: vi.fn(),
   createBrowserCookieAuth: vi.fn(),
+  createGatewayAuthSession: vi.fn(),
   createOperatorCoreManager: vi.fn(),
 }));
 
@@ -44,6 +45,10 @@ describe("apps/web main bootstrap", () => {
       bearerAuth as unknown as ReturnType<typeof operatorCore.createBearerTokenAuth>,
     );
 
+    vi.mocked(operatorCore.createGatewayAuthSession).mockResolvedValue(
+      new Response(null, { status: 204 }),
+    );
+
     vi.mocked(urlAuth.readAuthTokenFromUrl).mockReturnValue("test-token");
     vi.mocked(urlAuth.stripAuthTokenFromUrl).mockReturnValue("/ui#hash");
 
@@ -66,6 +71,12 @@ describe("apps/web main bootstrap", () => {
     const expectedWsUrl = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws`;
 
     expect(operatorCore.createBearerTokenAuth).toHaveBeenCalledWith("test-token");
+    expect(operatorCore.createGatewayAuthSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        token: "test-token",
+        httpBaseUrl: expectedHttpBaseUrl,
+      }),
+    );
     expect(operatorCore.createOperatorCoreManager).toHaveBeenCalledWith(
       expect.objectContaining({
         wsUrl: expectedWsUrl,

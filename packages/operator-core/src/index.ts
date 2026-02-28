@@ -7,6 +7,8 @@ export {
 } from "./auth.js";
 export type { OperatorAuthStrategy } from "./auth.js";
 
+export { createGatewayAuthSession } from "./auth-session.js";
+
 export {
   AdminModeRequiredError,
   gateAdminMode,

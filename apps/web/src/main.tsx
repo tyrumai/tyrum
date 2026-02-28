@@ -4,6 +4,7 @@ import {
   createAdminModeStore,
   createBearerTokenAuth,
   createBrowserCookieAuth,
+  createGatewayAuthSession,
   createOperatorCoreManager,
 } from "@tyrum/operator-core";
 import { OperatorUiApp, ThemeProvider } from "@tyrum/operator-ui";
@@ -17,19 +18,22 @@ function scrubAuthTokenFromUrl(): void {
   window.history.replaceState(window.history.state, "", stripped);
 }
 
-function resolveAuthFromLocation(): ReturnType<
-  typeof createBearerTokenAuth | typeof createBrowserCookieAuth
-> {
-  const token = readAuthTokenFromUrl(window.location.href);
-  scrubAuthTokenFromUrl();
-  if (token) return createBearerTokenAuth(token);
-  return createBrowserCookieAuth();
-}
-
 function resolveGatewayHttpBaseUrl(): string {
   const override = import.meta.env.VITE_GATEWAY_HTTP_BASE_URL?.trim();
   if (override) return override;
   return window.location.origin;
+}
+
+function resolveAuthFromLocation(
+  httpBaseUrl: string,
+): ReturnType<typeof createBearerTokenAuth | typeof createBrowserCookieAuth> {
+  const token = readAuthTokenFromUrl(window.location.href);
+  scrubAuthTokenFromUrl();
+  if (token) {
+    void createGatewayAuthSession({ token, httpBaseUrl }).catch(() => {});
+    return createBearerTokenAuth(token);
+  }
+  return createBrowserCookieAuth();
 }
 
 function resolveGatewayWsUrl(): string {
@@ -46,10 +50,11 @@ if (!container) {
 }
 
 const adminModeStore = createAdminModeStore();
+const httpBaseUrl = resolveGatewayHttpBaseUrl();
 const manager = createOperatorCoreManager({
   wsUrl: resolveGatewayWsUrl(),
-  httpBaseUrl: resolveGatewayHttpBaseUrl(),
-  baselineAuth: resolveAuthFromLocation(),
+  httpBaseUrl,
+  baselineAuth: resolveAuthFromLocation(httpBaseUrl),
   adminModeStore,
 });
 
