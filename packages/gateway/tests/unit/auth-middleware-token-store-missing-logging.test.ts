@@ -44,4 +44,3 @@ describe("auth middleware missing token store logging", () => {
     expect(loggerB.errors).toHaveLength(1);
   });
 });
-
