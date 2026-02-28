@@ -120,8 +120,9 @@ export function Sidebar({
         className={cn(
           "flex w-full items-center rounded-md text-sm transition-colors",
           collapsed ? "justify-center px-2 py-2" : "gap-2 px-3 py-2",
+          "border-l-2 border-transparent",
           active
-            ? "border-l-2 border-primary bg-primary-dim text-fg font-medium"
+            ? "border-primary bg-primary-dim text-fg font-medium"
             : "text-fg-muted hover:bg-bg-subtle hover:text-fg",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
         )}

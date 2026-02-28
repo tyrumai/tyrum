@@ -688,10 +688,10 @@ export function MemoryInspector({ core }: MemoryInspectorProps) {
                 type="button"
                 data-testid={`memory-item-${row.memoryItemId}`}
                 className={cn(
-                  "w-full rounded-md px-3 py-2 text-left text-sm transition-colors",
+                  "w-full rounded-md border-l-2 border-transparent px-3 py-2 text-left text-sm transition-colors",
                   "hover:bg-bg-subtle",
                   inspectedItem?.memory_item_id === row.memoryItemId
-                    ? "border-l-2 border-primary bg-primary-dim"
+                    ? "border-primary bg-primary-dim"
                     : "",
                 )}
                 onClick={() => {
