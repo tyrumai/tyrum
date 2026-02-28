@@ -27,7 +27,9 @@ describe("gateway app global error handling", () => {
             return undefined;
           }
         })
-        .filter((record): record is { msg: unknown } => typeof record === "object" && record !== null)
+        .filter(
+          (record): record is { msg: unknown } => typeof record === "object" && record !== null,
+        )
         .filter((record) => record.msg === "http.unhandled_error");
 
       expect(unhandledRecords).toHaveLength(1);
