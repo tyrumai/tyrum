@@ -1,7 +1,9 @@
-import type { OperatorCore } from "@tyrum/operator-core";
+import type { ExecutionAttempt } from "@tyrum/client";
+import type { OperatorCore, RunsState } from "@tyrum/operator-core";
 import { CircleCheck } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { AttemptArtifactsDialog } from "../artifacts/attempt-artifacts-dialog.js";
 import { PageHeader } from "../layout/page-header.js";
 import { Alert } from "../ui/alert.js";
 import { Badge } from "../ui/badge.js";
@@ -11,7 +13,7 @@ import { EmptyState } from "../ui/empty-state.js";
 import { LiveRegion } from "../ui/live-region.js";
 import { Spinner } from "../ui/spinner.js";
 import { useOperatorStore } from "../../use-operator-store.js";
-import { extractTakeoverUrlFromNodeLabel } from "../../utils/takeover-url.js";
+import { extractTakeoverUrlFromNodeIdentity } from "../../utils/takeover-url.js";
 import { isRecord } from "../../utils/is-record.js";
 
 function formatTimestamp(value: string): string {
@@ -77,9 +79,48 @@ function describeDesktopApprovalContext(context: unknown): DesktopApprovalSummar
   return summary;
 }
 
+type ApprovalArtifactsSummary = {
+  runId: string;
+  attemptId: string;
+  artifacts: ExecutionAttempt["artifacts"];
+};
+
+function resolveArtifactsForApprovalStep(
+  runsState: RunsState,
+  scope: { run_id?: string; step_index?: number } | undefined,
+): ApprovalArtifactsSummary | null {
+  const runId = typeof scope?.run_id === "string" ? scope.run_id : "";
+  const stepIndex = typeof scope?.step_index === "number" ? scope.step_index : null;
+  if (!runId || stepIndex === null) return null;
+
+  const stepId = (runsState.stepIdsByRunId[runId] ?? []).find((candidateId) => {
+    const step = runsState.stepsById[candidateId];
+    return step?.step_index === stepIndex;
+  });
+  if (!stepId) return null;
+
+  let latestAttempt: ExecutionAttempt | undefined;
+  for (const attemptId of runsState.attemptIdsByStepId[stepId] ?? []) {
+    const attempt = runsState.attemptsById[attemptId];
+    if (!attempt) continue;
+    if (!latestAttempt || attempt.attempt > latestAttempt.attempt) {
+      latestAttempt = attempt;
+    }
+  }
+
+  if (!latestAttempt || latestAttempt.artifacts.length === 0) return null;
+
+  return {
+    runId,
+    attemptId: latestAttempt.attempt_id,
+    artifacts: latestAttempt.artifacts,
+  };
+}
+
 export function ApprovalsPage({ core }: { core: OperatorCore }) {
   const approvals = useOperatorStore(core.approvalsStore);
   const pairingState = useOperatorStore(core.pairingStore);
+  const runsState = useOperatorStore(core.runsStore);
   const [resolvingById, setResolvingById] = useState<
     Record<number, "approved" | "denied" | undefined>
   >({});
@@ -89,7 +130,7 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
     .map((pairing) => {
       const capabilities = pairing.node.capabilities;
       if (!capabilities.includes("desktop")) return null;
-      const url = extractTakeoverUrlFromNodeLabel(pairing.node.label);
+      const url = extractTakeoverUrlFromNodeIdentity(pairing.node);
       if (!url) return null;
       return {
         nodeId: pairing.node.node_id,
@@ -197,6 +238,8 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
                     const desktop = describeDesktopApprovalContext(approval.context);
                     if (!desktop) return null;
 
+                    const artifacts = resolveArtifactsForApprovalStep(runsState, approval.scope);
+
                     return (
                       <div
                         data-testid={`desktop-approval-summary-${approvalId}`}
@@ -211,6 +254,16 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
                         </div>
                         {desktop.targetText ? (
                           <div className="text-xs text-fg-muted">{desktop.targetText}</div>
+                        ) : null}
+                        {artifacts ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <AttemptArtifactsDialog
+                              core={core}
+                              runId={artifacts.runId}
+                              attemptId={artifacts.attemptId}
+                              artifacts={artifacts.artifacts}
+                            />
+                          </div>
                         ) : null}
                         {takeoverUrl ? (
                           <Button asChild size="sm" variant="outline" className="w-fit">

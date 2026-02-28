@@ -10,7 +10,7 @@ import { Label } from "../ui/label.js";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group.js";
 import { Textarea } from "../ui/textarea.js";
 import { formatErrorMessage } from "../../utils/format-error-message.js";
-import { extractTakeoverUrlFromNodeLabel } from "../../utils/takeover-url.js";
+import { extractTakeoverUrlFromNodeIdentity } from "../../utils/takeover-url.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 
 type PairingTrustLevel = "local" | "remote";
@@ -37,7 +37,7 @@ function PendingPairingCard({ core, pairing }: { core: OperatorCore; pairing: Pa
   );
   const reasonRef = useRef<HTMLTextAreaElement | null>(null);
   const isBusy = busy !== null;
-  const takeoverUrl = extractTakeoverUrlFromNodeLabel(pairing.node.label);
+  const takeoverUrl = extractTakeoverUrlFromNodeIdentity(pairing.node);
 
   const onApprove = async (): Promise<void> => {
     if (busy) return;
