@@ -1,15 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { toErrorMessage } from "../lib/errors.js";
 import {
-  colors,
-  heading,
-  card,
-  sectionTitle,
-  btn as btnFn,
-  labelRow,
-  labelKey,
-  labelValue,
-} from "../theme.js";
+  Alert,
+  Button,
+  Card,
+  CardContent,
+  StatusDot,
+  type StatusDotVariant,
+} from "@tyrum/operator-ui";
 
 interface CheckItem {
   label: string;
@@ -49,37 +47,12 @@ interface ManualReleaseFileResult {
   message: string | null;
 }
 
-const checkRowStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 10,
-  padding: "8px 0",
-  borderBottom: `1px solid ${colors.border}`,
+const CHECK_STATUS_VARIANTS: Record<CheckItem["status"], StatusDotVariant> = {
+  ok: "success",
+  warn: "warning",
+  error: "danger",
+  pending: "neutral",
 };
-
-const STATUS_ICONS: Record<string, { symbol: string; color: string }> = {
-  ok: { symbol: "\u2713", color: "#22c55e" },
-  warn: { symbol: "!", color: "#eab308" },
-  error: { symbol: "\u2717", color: "#ef4444" },
-  pending: { symbol: "\u2026", color: "#9ca3af" },
-};
-
-function iconStyle(status: string): React.CSSProperties {
-  const s = STATUS_ICONS[status] ?? STATUS_ICONS["pending"]!;
-  return {
-    width: 22,
-    height: 22,
-    borderRadius: "50%",
-    background: s.color,
-    color: "#fff",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 12,
-    fontWeight: 700,
-    flexShrink: 0,
-  };
-}
 
 const UPDATE_STAGE_LABEL: Record<DesktopUpdateState["stage"], string> = {
   idle: "Idle",
@@ -91,6 +64,15 @@ const UPDATE_STAGE_LABEL: Record<DesktopUpdateState["stage"], string> = {
   installing: "Installing update...",
   error: "Update error",
 };
+
+function DetailRow({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-border py-2 last:border-b-0">
+      <span className="text-xs font-semibold uppercase tracking-wide text-fg-muted">{label}</span>
+      <span className="text-sm font-semibold text-fg">{value}</span>
+    </div>
+  );
+}
 
 export function Diagnostics() {
   const [checks, setChecks] = useState<CheckItem[]>([
@@ -323,143 +305,157 @@ export function Diagnostics() {
   }, []);
 
   return (
-    <div>
-      <h1 style={heading}>Diagnostics</h1>
+    <div className="grid gap-6">
+      <h1 className="text-2xl font-semibold tracking-tight text-fg">Diagnostics</h1>
 
-      <div style={card}>
-        <div style={sectionTitle}>Environment Checks</div>
-        {checks.map((check) => {
-          const si = STATUS_ICONS[check.status] ?? STATUS_ICONS["pending"]!;
-          return (
-            <div key={check.label} style={checkRowStyle}>
-              <div style={iconStyle(check.status)}>{si.symbol}</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 500 }}>{check.label}</div>
-                <div style={{ fontSize: 12, color: colors.fgMuted }}>{check.detail}</div>
+      <Card>
+        <CardContent className="grid gap-4 pt-6">
+          <div className="text-sm font-semibold text-fg">Environment Checks</div>
+          <div className="grid gap-2">
+            {checks.map((check) => (
+              <div
+                key={check.label}
+                className="flex items-start gap-3 border-b border-border py-2 last:border-b-0"
+              >
+                <StatusDot
+                  variant={CHECK_STATUS_VARIANTS[check.status] ?? "neutral"}
+                  pulse={check.status === "pending" && running}
+                  className="mt-1"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-fg">{check.label}</div>
+                  <div className="text-sm text-fg-muted">{check.detail}</div>
+                </div>
               </div>
+            ))}
+          </div>
+          <Button onClick={runChecks} isLoading={running} disabled={running}>
+            {running ? "Running..." : "Re-run Checks"}
+          </Button>
+
+          <div className="grid gap-2 pt-2">
+            <div className="text-sm font-semibold text-fg">
+              Permission Requests (User initiated)
             </div>
-          );
-        })}
-        <button
-          style={{ ...btnFn("primary"), marginTop: 12 }}
-          onClick={runChecks}
-          disabled={running}
-        >
-          {running ? "Running..." : "Re-run Checks"}
-        </button>
-        <div style={{ ...sectionTitle, marginTop: 18, marginBottom: 8 }}>
-          Permission Requests (User initiated)
-        </div>
-        <div style={{ fontSize: 12, color: colors.fgMuted, marginBottom: 8 }}>
-          Diagnostics checks never request permissions automatically. Use these buttons to request
-          permissions when needed.
-        </div>
-        <button
-          style={{ ...btnFn("secondary"), marginRight: 8 }}
-          onClick={() => requestPermission("accessibility")}
-          disabled={requestingPermission !== null}
-        >
-          {requestingPermission === "accessibility" ? "Requesting..." : "Request Accessibility"}
-        </button>
-        <button
-          style={{ ...btnFn("secondary"), marginRight: 8 }}
-          onClick={() => requestPermission("screenRecording")}
-          disabled={requestingPermission !== null}
-        >
-          {requestingPermission === "screenRecording" ? "Opening..." : "Request Screen Recording"}
-        </button>
-        {permissionActionNote && (
-          <div style={{ fontSize: 12, color: colors.fgMuted, marginTop: 10 }}>
-            {permissionActionNote}
+            <div className="text-sm text-fg-muted">
+              Diagnostics checks never request permissions automatically. Use these buttons to
+              request permissions when needed.
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => requestPermission("accessibility")}
+                isLoading={requestingPermission === "accessibility"}
+                disabled={requestingPermission !== null}
+              >
+                {requestingPermission === "accessibility"
+                  ? "Requesting..."
+                  : "Request Accessibility"}
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => requestPermission("screenRecording")}
+                isLoading={requestingPermission === "screenRecording"}
+                disabled={requestingPermission !== null}
+              >
+                {requestingPermission === "screenRecording"
+                  ? "Opening..."
+                  : "Request Screen Recording"}
+              </Button>
+            </div>
+            {permissionActionNote ? (
+              <Alert variant="info" title="Permission request" description={permissionActionNote} />
+            ) : null}
           </div>
-        )}
-      </div>
+        </CardContent>
+      </Card>
 
-      <div style={card}>
-        <div style={sectionTitle}>Desktop Updates</div>
-        <div style={{ fontSize: 12, color: colors.fgMuted, marginBottom: 10 }}>
-          Update checks run automatically at startup. Download and install require explicit user
-          actions.
-        </div>
+      <Card>
+        <CardContent className="grid gap-4 pt-6">
+          <div className="text-sm font-semibold text-fg">Desktop Updates</div>
+          <div className="text-sm text-fg-muted">
+            Update checks run automatically at startup. Download and install require explicit user
+            actions.
+          </div>
 
-        <div style={labelRow}>
-          <span style={labelKey}>Current version</span>
-          <span style={labelValue}>{updateState.currentVersion}</span>
-        </div>
-        <div style={labelRow}>
-          <span style={labelKey}>Status</span>
-          <span style={labelValue}>
-            {UPDATE_STAGE_LABEL[updateState.stage] ?? updateState.stage}
-          </span>
-        </div>
-        {updateState.availableVersion && (
-          <div style={labelRow}>
-            <span style={labelKey}>Available version</span>
-            <span style={labelValue}>{updateState.availableVersion}</span>
+          <div className="grid gap-0">
+            <DetailRow label="Current version" value={updateState.currentVersion} />
+            <DetailRow
+              label="Status"
+              value={UPDATE_STAGE_LABEL[updateState.stage] ?? updateState.stage}
+            />
+            {updateState.availableVersion ? (
+              <DetailRow label="Available version" value={updateState.availableVersion} />
+            ) : null}
+            {updateState.progressPercent != null ? (
+              <DetailRow
+                label="Download progress"
+                value={`${Math.round(updateState.progressPercent)}%`}
+              />
+            ) : null}
           </div>
-        )}
-        {updateState.progressPercent != null && (
-          <div style={labelRow}>
-            <span style={labelKey}>Download progress</span>
-            <span style={labelValue}>{Math.round(updateState.progressPercent)}%</span>
-          </div>
-        )}
-        {updateState.message && (
-          <div style={{ fontSize: 12, color: colors.error, marginTop: 8 }}>
-            {updateState.message}
-          </div>
-        )}
-        {updateState.releaseNotes && (
-          <div
-            style={{
-              marginTop: 10,
-              padding: "8px 10px",
-              background: colors.bgSubtle,
-              borderRadius: 6,
-              fontSize: 12,
-              color: colors.fgMuted,
-              border: `1px solid ${colors.border}`,
-              whiteSpace: "pre-wrap",
-            }}
-          >
-            {updateState.releaseNotes}
-          </div>
-        )}
 
-        <div style={{ marginTop: 12 }}>
-          <button style={btnFn("primary")} onClick={checkForUpdates} disabled={updateBusy !== null}>
-            {updateBusy === "check" ? "Checking..." : "Check for Updates"}
-          </button>
-        </div>
-        <div style={{ marginTop: 8 }}>
-          <button
-            style={{ ...btnFn("secondary"), marginRight: 8 }}
-            onClick={downloadUpdate}
-            disabled={updateBusy !== null || updateState.stage !== "available"}
-          >
-            {updateBusy === "download" ? "Downloading..." : "Download Update"}
-          </button>
-          <button
-            style={{ ...btnFn("secondary"), marginRight: 8 }}
-            onClick={installUpdate}
-            disabled={updateBusy !== null || updateState.stage !== "downloaded"}
-          >
-            {updateBusy === "install" ? "Installing..." : "Install Update"}
-          </button>
-          <button
-            style={{ ...btnFn("secondary"), marginRight: 8 }}
-            onClick={openManualReleaseFile}
-            disabled={updateBusy !== null}
-          >
-            {updateBusy === "manual" ? "Opening..." : "Use Local Release File"}
-          </button>
-        </div>
-        {updateActionNote && (
-          <div style={{ fontSize: 12, color: colors.fgMuted, marginTop: 10 }}>
-            {updateActionNote}
+          {updateState.message ? (
+            <Alert
+              variant={updateState.stage === "error" ? "error" : "info"}
+              title={updateState.stage === "error" ? "Update error" : "Update"}
+              description={updateState.message}
+            />
+          ) : null}
+
+          {updateState.releaseNotes ? (
+            <div className="rounded-md border border-border bg-bg-subtle p-3 text-sm text-fg-muted">
+              <div className="whitespace-pre-wrap">{updateState.releaseNotes}</div>
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={() => {
+                void checkForUpdates();
+              }}
+              isLoading={updateBusy === "check"}
+              disabled={updateBusy !== null}
+            >
+              {updateBusy === "check" ? "Checking..." : "Check for Updates"}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                void downloadUpdate();
+              }}
+              isLoading={updateBusy === "download"}
+              disabled={updateBusy !== null || updateState.stage !== "available"}
+            >
+              {updateBusy === "download" ? "Downloading..." : "Download Update"}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                void installUpdate();
+              }}
+              isLoading={updateBusy === "install"}
+              disabled={updateBusy !== null || updateState.stage !== "downloaded"}
+            >
+              {updateBusy === "install" ? "Installing..." : "Install Update"}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                void openManualReleaseFile();
+              }}
+              isLoading={updateBusy === "manual"}
+              disabled={updateBusy !== null}
+            >
+              {updateBusy === "manual" ? "Opening..." : "Use Local Release File"}
+            </Button>
           </div>
-        )}
-      </div>
+
+          {updateActionNote ? (
+            <Alert variant="info" title="Desktop updates" description={updateActionNote} />
+          ) : null}
+        </CardContent>
+      </Card>
     </div>
   );
 }
