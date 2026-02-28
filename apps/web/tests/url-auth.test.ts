@@ -13,6 +13,10 @@ describe("apps/web url-auth", () => {
       expect(readAuthTokenFromUrl("https://example.test/ui?token=")).toBeUndefined();
       expect(readAuthTokenFromUrl("https://example.test/ui?token=%20%20")).toBeUndefined();
     });
+
+    it("returns undefined for malformed URLs", () => {
+      expect(readAuthTokenFromUrl("http://[")).toBeUndefined();
+    });
   });
 
   describe("stripAuthTokenFromUrl", () => {
@@ -26,6 +30,14 @@ describe("apps/web url-auth", () => {
     it("removes the entire query string when token is the only param", () => {
       expect(stripAuthTokenFromUrl("https://example.test/ui?token=test")).toBe("/ui");
       expect(stripAuthTokenFromUrl("https://example.test/ui?token=test#hash")).toBe("/ui#hash");
+    });
+
+    it("returns the input unchanged for malformed URLs", () => {
+      expect(stripAuthTokenFromUrl("http://[")).toBe("http://[");
+    });
+
+    it("returns the normalized path when token is not present", () => {
+      expect(stripAuthTokenFromUrl("https://example.test/ui?x=1#hash")).toBe("/ui?x=1#hash");
     });
   });
 });
