@@ -1,16 +1,22 @@
-FROM public.ecr.aws/docker/library/node:24-bookworm-slim
+FROM public.ecr.aws/docker/library/node:24-bookworm-slim AS base
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+FROM base AS builder
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
     python3 \
     make \
     g++ \
   && rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g pnpm
-
-WORKDIR /app
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig*.json ./
 COPY patches ./patches
@@ -24,7 +30,27 @@ RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @tyrum/schemas build \
   && pnpm --filter @tyrum/gateway build
 
+RUN mkdir -p /app/apps/desktop \
+  && printf '%s\n' \
+    '{' \
+    '  "name": "tyrum-desktop-stub",' \
+    '  "private": true,' \
+    '  "version": "0.0.0",' \
+    '  "dependencies": {' \
+    '    "@develar/schema-utils": "2.6.5",' \
+    '    "dmg-license": "1.0.11"' \
+    '  }' \
+    '}' \
+    > /app/apps/desktop/package.json \
+  && pnpm --filter @tyrum/gateway deploy --legacy --prod /app/deploy \
+  && cp -R /app/packages/gateway/migrations /app/deploy/migrations
+
+FROM base AS production
+
 ENV NODE_ENV=production
+
+COPY --from=builder /app/config ./config
+COPY --from=builder /app/deploy ./packages/gateway
 
 EXPOSE 8788
 
