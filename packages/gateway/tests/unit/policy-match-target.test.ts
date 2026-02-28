@@ -120,6 +120,20 @@ describe("canonicalizeToolMatchTarget", () => {
     expect(target).toBe("capability:tyrum.desktop;action:Desktop;op:snapshot");
   });
 
+  it("canonicalizes nested desktop args wrappers for node dispatch without leaking values", () => {
+    const target = canonicalizeToolMatchTarget("tool.node.dispatch", {
+      capability: "tyrum.desktop",
+      action: "Desktop",
+      args: {
+        args: { op: "snapshot", secret: "should-not-appear" },
+        other: "ignored",
+      },
+    });
+
+    expect(target).toBe("capability:tyrum.desktop;action:Desktop;op:snapshot");
+    expect(target).not.toContain("secret");
+  });
+
   it("canonicalizes other desktop ops without leaking high-entropy values", () => {
     const queryTarget = canonicalizeToolMatchTarget("tool.node.dispatch", {
       capability: "tyrum.desktop",

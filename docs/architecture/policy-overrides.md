@@ -68,6 +68,7 @@ Prefer patterns that encode intent and scope, for example:
 - `fs`: `write:docs/architecture/*`
 - `bash`: `git status*`
 - `messaging`: `send:slack:acct_123:chan_C024BE91L`
+- `tool.node.dispatch` (Desktop): `capability:tyrum.desktop;action:Desktop;op:query` (read-only) and `capability:tyrum.desktop;action:Desktop;op:act*` (state-changing)
 - `connectors` (channel pipeline): `telegram:work:123` (paired with `tool_id: connector.send`)
 
 ### Connector sends
