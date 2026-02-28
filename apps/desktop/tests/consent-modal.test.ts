@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  cleanupTestRoot,
+  createTestRoot,
+  type TestRoot,
+} from "../../../packages/operator-ui/tests/test-utils.js";
+import { getButtonByText, setTextareaValue } from "./test-utils/dom.js";
 
 type ConsentRequestPayload = {
   request_id: string;
@@ -14,15 +19,12 @@ type ConsentRequestPayload = {
 };
 
 describe("ConsentModal", () => {
-  let container: HTMLElement;
-  let root: Root;
+  let testRoot: TestRoot;
   let onConsentRequestCallback: ((req: unknown) => void) | null = null;
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-    document.body.innerHTML = '<div id="root"></div>';
-    container = document.getElementById("root")!;
-    root = createRoot(container);
+    document.body.innerHTML = "";
+    testRoot = createTestRoot();
     onConsentRequestCallback = null;
 
     (window as unknown as { tyrumDesktop?: unknown }).tyrumDesktop = {
@@ -34,10 +36,8 @@ describe("ConsentModal", () => {
     };
   });
 
-  afterEach(async () => {
-    await act(async () => {
-      root.unmount();
-    });
+  afterEach(() => {
+    cleanupTestRoot(testRoot);
     delete (window as unknown as { tyrumDesktop?: unknown }).tyrumDesktop;
   });
 
@@ -45,7 +45,7 @@ describe("ConsentModal", () => {
     const { ConsentModal } = await import("../src/renderer/components/ConsentModal.js");
 
     await act(async () => {
-      root.render(createElement(ConsentModal));
+      testRoot.root.render(createElement(ConsentModal));
     });
 
     const request: ConsentRequestPayload = {
@@ -67,7 +67,7 @@ describe("ConsentModal", () => {
     const { ConsentModal } = await import("../src/renderer/components/ConsentModal.js");
 
     await act(async () => {
-      root.render(createElement(ConsentModal));
+      testRoot.root.render(createElement(ConsentModal));
     });
 
     const request: ConsentRequestPayload = {
@@ -91,9 +91,7 @@ describe("ConsentModal", () => {
     }
 
     await act(async () => {
-      textarea.value = "because";
-      textarea.dispatchEvent(new Event("input", { bubbles: true }));
-      textarea.dispatchEvent(new Event("change", { bubbles: true }));
+      setTextareaValue(textarea, "because");
     });
 
     const approve = Array.from(document.querySelectorAll("button")).find(
@@ -111,5 +109,77 @@ describe("ConsentModal", () => {
 
     const api = window.tyrumDesktop as unknown as { consentRespond: ReturnType<typeof vi.fn> };
     expect(api.consentRespond).toHaveBeenCalledWith("req-2", true, "because");
+  });
+
+  it("resets the reason between requests and blocks dismiss shortcuts", async () => {
+    const { ConsentModal } = await import("../src/renderer/components/ConsentModal.js");
+
+    await act(async () => {
+      testRoot.root.render(createElement(ConsentModal));
+    });
+
+    const request1: ConsentRequestPayload = {
+      request_id: "req-3",
+      payload: {
+        prompt: "Run tool?",
+        context: "hello",
+      },
+    };
+
+    await act(async () => {
+      onConsentRequestCallback?.(request1);
+    });
+
+    const textarea = document.querySelector("textarea");
+    expect(textarea).not.toBeNull();
+    if (!(textarea instanceof HTMLTextAreaElement)) {
+      throw new Error("expected a textarea");
+    }
+
+    await act(async () => {
+      setTextareaValue(textarea, "denied");
+    });
+
+    const request2: ConsentRequestPayload = {
+      request_id: "req-4",
+      payload: {
+        prompt: "Run tool again?",
+        context: { foo: "bar" },
+      },
+    };
+
+    await act(async () => {
+      onConsentRequestCallback?.(request2);
+    });
+
+    expect(textarea.value).toBe("");
+
+    const preventDefaultSpy = vi.spyOn(Event.prototype, "preventDefault");
+
+    const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    document.dispatchEvent(escape);
+    expect(escape.defaultPrevented).toBe(true);
+
+    preventDefaultSpy.mockClear();
+    const overlay = document.querySelector("[data-dialog-overlay]");
+    expect(overlay).not.toBeNull();
+    if (!(overlay instanceof HTMLElement)) {
+      throw new Error("expected overlay element");
+    }
+
+    const PointerDownEvent = window.PointerEvent ?? window.MouseEvent;
+    overlay.dispatchEvent(new PointerDownEvent("pointerdown", { bubbles: true, cancelable: true }));
+    expect(preventDefaultSpy).toHaveBeenCalled();
+
+    preventDefaultSpy.mockRestore();
+
+    const deny = getButtonByText("Deny");
+    await act(async () => {
+      deny.click();
+      await Promise.resolve();
+    });
+
+    const api = window.tyrumDesktop as unknown as { consentRespond: ReturnType<typeof vi.fn> };
+    expect(api.consentRespond).toHaveBeenCalledWith("req-4", false, undefined);
   });
 });
