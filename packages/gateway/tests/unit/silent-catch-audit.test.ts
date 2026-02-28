@@ -63,20 +63,21 @@ async function listSilentCatchLocations(): Promise<SilentCatchLocation[]> {
   return locations;
 }
 
-function parseAuditDoc(auditMarkdown: string): Array<
-  SilentCatchLocation & { category: string; notes: string }
-> {
+function parseAuditDoc(
+  auditMarkdown: string,
+): Array<SilentCatchLocation & { category: string; notes: string }> {
   const rows: Array<SilentCatchLocation & { category: string; notes: string }> = [];
   const lines = auditMarkdown.split(/\r?\n/);
   for (const line of lines) {
     if (!line.startsWith("|")) continue;
-    if (line.includes("---")) continue;
+    if (/^\|\s*-{3,}\s*\|/.test(line)) continue;
 
-    const parts = line.split("|").map((part) => part.trim());
-    const file = parts[1] ?? "";
-    const lineStr = parts[2] ?? "";
-    const category = parts[3] ?? "";
-    const notes = parts[4] ?? "";
+    const trimmed = line.endsWith("|") ? line.slice(1, -1) : line.slice(1);
+    const parts = trimmed.split("|").map((part) => part.trim());
+    const file = parts[0] ?? "";
+    const lineStr = parts[1] ?? "";
+    const category = parts[2] ?? "";
+    const notes = parts.slice(3).join(" | ").trim();
 
     if (!file.startsWith("packages/gateway/src/")) continue;
     const parsedLine = Number.parseInt(lineStr, 10);
@@ -90,6 +91,23 @@ function parseAuditDoc(auditMarkdown: string): Array<
 }
 
 describe("silent-catch audit", () => {
+  it("parses audit rows even when notes contain pipes or ---", () => {
+    const auditMarkdown = [
+      "| File | Line | Category | Notes |",
+      "| --- | ---: | --- | --- |",
+      "| packages/gateway/src/foo.ts | 1 | intentional | first | second --- third |",
+    ].join("\n");
+
+    expect(parseAuditDoc(auditMarkdown)).toEqual([
+      {
+        file: "packages/gateway/src/foo.ts",
+        line: 1,
+        category: "intentional",
+        notes: "first | second --- third",
+      },
+    ]);
+  });
+
   it("covers every silent catch block in packages/gateway/src", async () => {
     const root = getRepoRoot();
     const auditPath = path.join(root, "docs/audits/silent-catch-audit.md");
@@ -109,4 +127,3 @@ describe("silent-catch audit", () => {
     expect(actualKeys).toEqual(expectedKeys);
   });
 });
-
