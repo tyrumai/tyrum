@@ -15,4 +15,3 @@ describe("formatErrorMessage", () => {
     expect(formatErrorMessage("nope")).toBe("nope");
   });
 });
-
