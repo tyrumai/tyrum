@@ -262,14 +262,6 @@ export class ExecutionEngineEventEmitter {
     await this.enqueueWsEvent(tx, evt);
   }
 
-  async emitRunQueuedTx(tx: SqlDb, runId: string): Promise<void> {
-    await this.emitRunIdEventTx(tx, "run.queued", runId);
-  }
-
-  async emitRunStartedTx(tx: SqlDb, runId: string): Promise<void> {
-    await this.emitRunIdEventTx(tx, "run.started", runId);
-  }
-
   async emitRunPausedTx(
     tx: SqlDb,
     opts: {
@@ -292,18 +284,6 @@ export class ExecutionEngineEventEmitter {
       },
     };
     await this.enqueueWsEvent(tx, evt);
-  }
-
-  async emitRunResumedTx(tx: SqlDb, runId: string): Promise<void> {
-    await this.emitRunIdEventTx(tx, "run.resumed", runId);
-  }
-
-  async emitRunCompletedTx(tx: SqlDb, runId: string): Promise<void> {
-    await this.emitRunIdEventTx(tx, "run.completed", runId);
-  }
-
-  async emitRunFailedTx(tx: SqlDb, runId: string): Promise<void> {
-    await this.emitRunIdEventTx(tx, "run.failed", runId);
   }
 
   async emitRunCancelledTx(tx: SqlDb, opts: { runId: string; reason?: string }): Promise<void> {
