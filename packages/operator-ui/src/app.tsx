@@ -10,7 +10,7 @@ import {
   Settings,
   ShieldCheck,
 } from "lucide-react";
-import { AdminModeGate, AdminModeProvider } from "./admin-mode.js";
+import { AdminModeProvider } from "./admin-mode.js";
 import { ErrorBoundary } from "./components/error/error-boundary.js";
 import { AppShell } from "./components/layout/app-shell.js";
 import { MobileNav } from "./components/layout/mobile-nav.js";
@@ -27,6 +27,7 @@ import { ConnectPage } from "./pages/connect-page.js";
 import { DashboardPage } from "./pages/dashboard-page.js";
 import { RunsPage } from "./pages/runs-page.js";
 import { PairingPage } from "./pages/pairing-page.js";
+import { SettingsPage } from "./pages/settings-page.js";
 import { useOperatorStore } from "./use-operator-store.js";
 import { formatErrorMessage } from "./utils/format-error-message.js";
 
@@ -514,75 +515,6 @@ function DesktopSetupPage({ core }: { core: OperatorCore }) {
 
         {errorMessage ? <Alert variant="error" title="Error" description={errorMessage} /> : null}
       </div>
-    </div>
-  );
-}
-
-function SettingsPage({ core, mode }: { core: OperatorCore; mode: OperatorUiMode }) {
-  const statusState = useOperatorStore(core.statusStore);
-  const totalTokens = statusState.usage?.local.totals.total_tokens;
-  const [adminCommandBusy, setAdminCommandBusy] = useState(false);
-  const [adminCommandError, setAdminCommandError] = useState<string | null>(null);
-
-  const runAdminCommand = async (): Promise<void> => {
-    if (adminCommandBusy) return;
-
-    setAdminCommandBusy(true);
-    setAdminCommandError(null);
-
-    try {
-      if (!core.ws.commandExecute) {
-        setAdminCommandError("Admin commands are not supported by this client.");
-        return;
-      }
-      await core.ws.commandExecute("/help");
-    } catch (error) {
-      setAdminCommandError(formatErrorMessage(error));
-    } finally {
-      setAdminCommandBusy(false);
-    }
-  };
-
-  return (
-    <div className="grid gap-6">
-      <h1 className="text-2xl font-semibold tracking-tight text-fg">Settings</h1>
-      <div className="grid gap-2">
-        <div className="text-sm text-fg-muted">Mode: {mode}</div>
-        <Button
-          data-testid="settings-refresh-usage"
-          variant="secondary"
-          onClick={() => {
-            void core.statusStore.refreshUsage();
-          }}
-        >
-          Refresh usage
-        </Button>
-        <div className="text-sm text-fg">Total tokens: {totalTokens ?? "-"}</div>
-      </div>
-
-      <h2 className="mt-6 text-lg font-semibold text-fg">Admin</h2>
-      <AdminModeGate>
-        <Card>
-          <CardContent className="grid gap-3 pt-6">
-            <div className="text-sm text-fg-muted">
-              Admin Mode is required for privileged operator actions.
-            </div>
-            <Button
-              data-testid="settings-admin-command-execute"
-              variant="secondary"
-              isLoading={adminCommandBusy}
-              onClick={() => {
-                void runAdminCommand();
-              }}
-            >
-              {adminCommandBusy ? "Running..." : "Run admin command"}
-            </Button>
-            {adminCommandError ? (
-              <Alert variant="error" title="Admin command failed" description={adminCommandError} />
-            ) : null}
-          </CardContent>
-        </Card>
-      </AdminModeGate>
     </div>
   );
 }
