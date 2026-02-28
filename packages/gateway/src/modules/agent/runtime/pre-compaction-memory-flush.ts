@@ -33,7 +33,8 @@ function formatPreCompactionFlushPrompt(droppedTurns: readonly SessionMessage[])
             0,
             Math.max(
               0,
-              MAX_PRE_COMPACTION_FLUSH_MESSAGE_CHARS - PRE_COMPACTION_FLUSH_TRUNCATION_MARKER.length,
+              MAX_PRE_COMPACTION_FLUSH_MESSAGE_CHARS -
+                PRE_COMPACTION_FLUSH_TRUNCATION_MARKER.length,
             ),
           )}${PRE_COMPACTION_FLUSH_TRUNCATION_MARKER}`;
     return `${role} (${turn.timestamp}): ${content}`;
@@ -213,4 +214,3 @@ export async function maybeRunPreCompactionMemoryFlush(
     });
   }
 }
-

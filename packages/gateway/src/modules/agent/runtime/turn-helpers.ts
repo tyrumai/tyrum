@@ -291,4 +291,3 @@ export function deriveWorkItemTitle(body: string): string {
   if (normalized.length <= 160) return normalized;
   return `${normalized.slice(0, 157)}...`;
 }
-

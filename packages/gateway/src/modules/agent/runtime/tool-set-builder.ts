@@ -126,7 +126,11 @@ export class ToolSetBuilder {
         return existing;
       }
 
-      const matchTarget = canonicalizeToolMatchTarget(input.toolDesc.id, input.args, this.deps.home);
+      const matchTarget = canonicalizeToolMatchTarget(
+        input.toolDesc.id,
+        input.args,
+        this.deps.home,
+      );
 
       const policy = this.deps.policyService;
       const policyEnabled = policy.isEnabled();

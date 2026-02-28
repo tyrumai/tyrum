@@ -9,4 +9,3 @@ describe("AgentRuntime tool-set builder extraction", () => {
     expect(methodNames.has("resolvePolicyGatedPluginToolExposure")).toBe(false);
   });
 });
-
