@@ -1,10 +1,12 @@
 import type { WsEventEnvelope } from "@tyrum/schemas";
 import type { ConnectionDirectoryDal } from "../modules/backplane/connection-directory.js";
 import type { OutboxDal } from "../modules/backplane/outbox-dal.js";
+import type { Logger } from "../modules/observability/logger.js";
 import type { ConnectionManager } from "./connection-manager.js";
 
 export interface PairingApprovedDeliveryDeps {
   connectionManager: ConnectionManager;
+  logger?: Logger;
   cluster?: {
     edgeId: string;
     outboxDal: OutboxDal;
@@ -30,8 +32,13 @@ export function emitPairingApprovedEvent(
     if (client.device_id !== input.nodeId) continue;
     try {
       client.ws.send(payload);
-    } catch {
-      // ignore
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      deps.logger?.warn("ws.pairing_approved.delivery_failed", {
+        node_id: input.nodeId,
+        peer_id: client.id,
+        error: message,
+      });
     }
   }
 
@@ -51,8 +58,12 @@ export function emitPairingApprovedEvent(
           { targetEdgeId: peer.edge_id },
         );
       }
-    })().catch(() => {
-      // ignore
+    })().catch((err) => {
+      const message = err instanceof Error ? err.message : String(err);
+      deps.logger?.warn("ws.pairing_approved.cluster_delivery_failed", {
+        node_id: input.nodeId,
+        error: message,
+      });
     });
   }
 }

@@ -157,7 +157,9 @@ export async function handleClientMessage(
   let json: unknown;
   try {
     json = JSON.parse(raw);
-  } catch {
+  } catch (_err) {
+    void _err;
+    // Intentional: invalid JSON is mapped to a protocol-level error event.
     return errorEvent("invalid_json", "message is not valid JSON");
   }
 
@@ -510,6 +512,9 @@ export async function handleClientMessage(
     const decisionMatches = updated.status === desiredStatus;
     if (updated.status !== desiredStatus) {
       deps.logger?.warn("approval.decision_mismatch", {
+        request_id: msg.request_id,
+        client_id: client.id,
+        request_type: msg.type,
         approval_id: updated.id,
         decision: req.decision,
         status: updated.status,
@@ -527,6 +532,9 @@ export async function handleClientMessage(
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         deps.logger?.error("approval.engine_action_failed", {
+          request_id: msg.request_id,
+          client_id: client.id,
+          request_type: msg.type,
           approval_id: updated.id,
           decision: req.decision,
           run_id: updated.run_id,
@@ -739,8 +747,14 @@ export async function handleClientMessage(
           connectionId: client.id,
           readyCapabilities: [...client.readyCapabilities].sort(),
         })
-        .catch(() => {
-          // ignore readiness persistence failures (best-effort)
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          deps.logger?.warn("ws.capability_ready.persistence_failed", {
+            request_id: msg.request_id,
+            client_id: client.id,
+            request_type: msg.type,
+            error: message,
+          });
         });
     }
 
@@ -801,7 +815,20 @@ export async function handleClientMessage(
         "attempt evidence not supported",
       );
     }
-    const pairing = await deps.nodePairingDal.getByNodeId(nodeId).catch(() => undefined);
+    let pairing: Awaited<ReturnType<(typeof deps.nodePairingDal)["getByNodeId"]>> | undefined;
+    try {
+      pairing = await deps.nodePairingDal.getByNodeId(nodeId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      deps.logger?.error("ws.attempt_evidence.pairing_lookup_failed", {
+        request_id: msg.request_id,
+        client_id: client.id,
+        request_type: msg.type,
+        node_id: nodeId,
+        error: message,
+      });
+      return errorResponse(msg.request_id, msg.type, "unauthorized", "node is not paired");
+    }
     if (pairing?.status !== "approved") {
       return errorResponse(msg.request_id, msg.type, "unauthorized", "node is not paired");
     }
@@ -859,8 +886,9 @@ export async function handleClientMessage(
                 : undefined;
           }
         }
-      } catch {
-        // ignore malformed metadata_json
+      } catch (_err) {
+        void _err;
+        // Intentional: malformed metadata_json should not break attempt.evidence authorization.
       }
     }
 
@@ -946,6 +974,13 @@ export async function handleClientMessage(
       return { request_id: msg.request_id, type: msg.type, ok: true, result };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      deps.logger?.error("ws.session_send_failed", {
+        request_id: msg.request_id,
+        client_id: client.id,
+        request_type: msg.type,
+        agent_id: parsedReq.data.payload.agent_id ?? "default",
+        error: message,
+      });
       return errorResponse(msg.request_id, msg.type, "agent_runtime_error", message);
     }
   }
@@ -998,6 +1033,9 @@ export async function handleClientMessage(
         .catch((err) => {
           const message = err instanceof Error ? err.message : String(err);
           deps.logger?.warn("hooks.fire_failed", {
+            request_id: msg.request_id,
+            client_id: client.id,
+            request_type: msg.type,
             event: "command.execute",
             error: message,
           });
@@ -1237,6 +1275,9 @@ export async function handleClientMessage(
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         deps.logger?.warn("ws.subagent_send_failed", {
+          request_id: msg.request_id,
+          client_id: client.id,
+          request_type: msg.type,
           subagent_id: payload.subagent_id,
           error: message,
         });
@@ -1260,8 +1301,15 @@ export async function handleClientMessage(
               WORKBOARD_WS_AUDIENCE,
             );
           }
-        } catch {
-          // ignore best-effort failure update
+        } catch (err) {
+          const updateMessage = err instanceof Error ? err.message : String(err);
+          deps.logger?.warn("ws.subagent_failure_update_failed", {
+            request_id: msg.request_id,
+            client_id: client.id,
+            request_type: msg.type,
+            subagent_id: payload.subagent_id,
+            error: updateMessage,
+          });
         }
       }
     })();
@@ -1423,6 +1471,12 @@ export async function handleClientMessage(
       return { request_id: msg.request_id, type: msg.type, ok: true, result };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      deps.logger?.error("ws.workflow_run_failed", {
+        request_id: msg.request_id,
+        client_id: client.id,
+        request_type: msg.type,
+        error: message,
+      });
       return errorResponse(msg.request_id, msg.type, "internal_error", message);
     }
   }
@@ -1845,6 +1899,13 @@ export async function handleClientMessage(
       if (errorCode === "invalid_request") {
         return errorResponse(msg.request_id, msg.type, "invalid_request", message);
       }
+      deps.logger?.error("ws.memory_request_failed", {
+        request_id: msg.request_id,
+        client_id: client.id,
+        request_type: msg.type,
+        error: message,
+        error_code: errorCode,
+      });
       return errorResponse(msg.request_id, msg.type, "internal_error", message);
     }
   }
@@ -1902,12 +1963,34 @@ export async function handleClientMessage(
       payload: { entry },
     } satisfies WsEventEnvelope;
 
+    const payload = JSON.stringify(evt);
+    let failedPeerSends = 0;
+    let exampleSendFailure: { peer_id: string; peer_role: string; error: string } | undefined;
     for (const peer of deps.connectionManager.allClients()) {
       try {
-        peer.ws.send(JSON.stringify(evt));
-      } catch {
-        // ignore
+        peer.ws.send(payload);
+      } catch (err) {
+        failedPeerSends += 1;
+        const message = err instanceof Error ? err.message : String(err);
+        if (!exampleSendFailure) {
+          exampleSendFailure = { peer_id: peer.id, peer_role: peer.role, error: message };
+        }
       }
+    }
+    if (failedPeerSends > 0) {
+      deps.logger?.warn("ws.presence_beacon.broadcast_failed", {
+        request_id: msg.request_id,
+        client_id: client.id,
+        request_type: msg.type,
+        failed_peer_count: failedPeerSends,
+        ...(exampleSendFailure
+          ? {
+              example_peer_id: exampleSendFailure.peer_id,
+              example_peer_role: exampleSendFailure.peer_role,
+              example_error: exampleSendFailure.error,
+            }
+          : {}),
+      });
     }
     if (deps.cluster) {
       void deps.cluster.outboxDal
@@ -1916,8 +1999,15 @@ export async function handleClientMessage(
           skip_local: true,
           message: evt,
         })
-        .catch(() => {
-          // ignore
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          deps.logger?.warn("ws.presence_beacon.cluster_enqueue_failed", {
+            request_id: msg.request_id,
+            client_id: client.id,
+            request_type: msg.type,
+            topic: "ws.broadcast",
+            error: message,
+          });
         });
     }
 

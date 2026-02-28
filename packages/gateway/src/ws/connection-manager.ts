@@ -173,19 +173,22 @@ export class ConnectionManager {
       if (now - client.lastPong > HEARTBEAT_TIMEOUT_MS) {
         try {
           client.ws.terminate();
-        } catch {
-          // ignore
+        } catch (_err) {
+          void _err;
+          // Intentional: termination can throw during disconnect races; evict client anyway.
         }
         this.clients.delete(id);
         changed = true;
       } else {
         try {
           client.ws.ping();
-        } catch {
+        } catch (_err) {
+          void _err;
           try {
             client.ws.terminate();
-          } catch {
-            // ignore
+          } catch (_terminateErr) {
+            void _terminateErr;
+            // Intentional: termination can throw during disconnect races; evict client anyway.
           }
           this.clients.delete(id);
           changed = true;

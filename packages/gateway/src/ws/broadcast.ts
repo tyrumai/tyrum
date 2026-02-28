@@ -18,8 +18,9 @@ export function broadcastWsEvent(
     if (!shouldDeliverToWsAudience(peer, audience)) continue;
     try {
       peer.ws.send(payload);
-    } catch {
-      // ignore
+    } catch (_err) {
+      void _err;
+      // Intentional: broadcast delivery is best-effort; peers may disconnect during send.
     }
   }
   if (deps.cluster) {
@@ -30,8 +31,9 @@ export function broadcastWsEvent(
         message: evt,
         ...(audience ? { audience } : {}),
       })
-      .catch(() => {
-        // ignore
+      .catch((_err) => {
+        void _err;
+        // Intentional: cluster broadcast enqueue is best-effort; failures may drop this event for remote peers.
       });
   }
 }

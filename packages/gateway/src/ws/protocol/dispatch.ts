@@ -326,8 +326,9 @@ async function upsertAttemptExecutorMetadata(
       try {
         const parsed = JSON.parse(row.metadata_json) as unknown;
         if (isObject(parsed)) meta = parsed;
-      } catch {
-        // ignore malformed metadata_json
+      } catch (_err) {
+        void _err;
+        // Intentional: malformed metadata_json should not break WS dispatch metadata persistence.
       }
     }
 
