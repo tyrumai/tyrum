@@ -9,11 +9,14 @@ export interface OtelRuntime {
   shutdown: () => Promise<void>;
 }
 
-function resolveOtelTracesEndpoint(): string | undefined {
-  const explicit = process.env["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"]?.trim();
+function resolveOtelTracesEndpoint(input: {
+  exporterOtlpEndpoint?: string;
+  exporterOtlpTracesEndpoint?: string;
+}): string | undefined {
+  const explicit = input.exporterOtlpTracesEndpoint?.trim();
   if (explicit) return explicit;
 
-  const base = process.env["OTEL_EXPORTER_OTLP_ENDPOINT"]?.trim();
+  const base = input.exporterOtlpEndpoint?.trim();
   if (!base) return undefined;
   const normalized = base.endsWith("/") ? base.slice(0, -1) : base;
   return `${normalized}/v1/traces`;
@@ -23,20 +26,20 @@ export async function maybeStartOtel(opts: {
   serviceName: string;
   serviceVersion: string;
   instanceId?: string;
+  otel: {
+    enabled: boolean;
+    exporterOtlpEndpoint?: string;
+    exporterOtlpTracesEndpoint?: string;
+  };
 }): Promise<OtelRuntime> {
-  const enabled =
-    process.env["TYRUM_OTEL_ENABLED"] === "1" ||
-    Boolean(process.env["OTEL_EXPORTER_OTLP_ENDPOINT"]) ||
-    Boolean(process.env["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"]);
-
-  if (!enabled) {
+  if (!opts.otel.enabled) {
     return {
       enabled: false,
       shutdown: async () => undefined,
     };
   }
 
-  const tracesUrl = resolveOtelTracesEndpoint();
+  const tracesUrl = resolveOtelTracesEndpoint(opts.otel);
 
   const sdk = new NodeSDK({
     resource: resourceFromAttributes({

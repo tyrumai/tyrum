@@ -12,28 +12,19 @@ const DEFAULT_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
 const REFRESH_LEASE_KEY = "models.dev";
 const REFRESH_LEASE_TTL_MS = 60_000;
 
-function resolveModelsDevUrl(): string {
-  const raw = process.env["TYRUM_MODELS_DEV_URL"]?.trim();
-  return raw && raw.length > 0 ? raw : "https://models.dev";
+function resolveModelsDevUrl(raw: string | undefined): string {
+  const trimmed = raw?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : "https://models.dev";
 }
 
-function isFetchDisabled(): boolean {
-  const raw = process.env["TYRUM_MODELS_DEV_DISABLE_FETCH"]?.trim().toLowerCase();
-  return Boolean(raw && !["0", "false", "off", "no"].includes(raw));
+function resolveRefreshIntervalMs(value: number | undefined): number {
+  if (value === undefined || value <= 0) return DEFAULT_REFRESH_INTERVAL_MS;
+  return Math.max(10_000, value);
 }
 
-function resolveRefreshIntervalMs(): number {
-  const raw = process.env["TYRUM_MODELS_DEV_REFRESH_INTERVAL_MS"]?.trim();
-  const parsed = raw ? Number(raw) : NaN;
-  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_REFRESH_INTERVAL_MS;
-  return Math.max(10_000, parsed);
-}
-
-function resolveTimeoutMs(): number {
-  const raw = process.env["TYRUM_MODELS_DEV_TIMEOUT_MS"]?.trim();
-  const parsed = raw ? Number(raw) : NaN;
-  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_TIMEOUT_MS;
-  return Math.max(1000, parsed);
+function resolveTimeoutMs(value: number | undefined): number {
+  if (value === undefined || value <= 0) return DEFAULT_TIMEOUT_MS;
+  return Math.max(1000, value);
 }
 
 function sha256Hex(input: string): string {
@@ -60,6 +51,10 @@ export class ModelsDevService {
   private current: ModelsDevLoadResult | undefined;
   private refreshTimer: NodeJS.Timeout | undefined;
   private readonly instanceOwner: string;
+  private readonly url: string;
+  private readonly disableFetch: boolean;
+  private readonly refreshIntervalMs: number;
+  private readonly timeoutMs: number;
 
   constructor(
     private readonly opts: {
@@ -67,9 +62,20 @@ export class ModelsDevService {
       leaseDal: ModelsDevRefreshLeaseDal;
       logger?: Logger;
       fetchImpl?: typeof fetch;
+      modelsDev?: {
+        url?: string;
+        timeoutMs?: number;
+        refreshIntervalMs?: number;
+        disableFetch?: boolean;
+      };
+      instanceOwner?: string;
     },
   ) {
-    this.instanceOwner = process.env["TYRUM_INSTANCE_ID"]?.trim() || `instance-${randomUUID()}`;
+    this.instanceOwner = opts.instanceOwner?.trim() || `instance-${randomUUID()}`;
+    this.url = resolveModelsDevUrl(opts.modelsDev?.url).replace(/\/$/, "");
+    this.disableFetch = opts.modelsDev?.disableFetch ?? false;
+    this.refreshIntervalMs = resolveRefreshIntervalMs(opts.modelsDev?.refreshIntervalMs);
+    this.timeoutMs = resolveTimeoutMs(opts.modelsDev?.timeoutMs);
   }
 
   private buildStatus(input: {
@@ -298,7 +304,7 @@ export class ModelsDevService {
     const nowMs = Date.now();
     const owner = this.instanceOwner;
 
-    if (isFetchDisabled()) {
+    if (this.disableFetch) {
       return await this.ensureLoaded();
     }
 
@@ -313,8 +319,8 @@ export class ModelsDevService {
     }
 
     try {
-      const url = resolveModelsDevUrl().replace(/\/$/, "");
-      const timeoutMs = resolveTimeoutMs();
+      const url = this.url;
+      const timeoutMs = this.timeoutMs;
       const cached = await this.opts.cacheDal.get();
 
       const headers: Record<string, string> = {};
@@ -414,7 +420,7 @@ export class ModelsDevService {
 
   startBackgroundRefresh(): void {
     if (this.refreshTimer) return;
-    const intervalMs = resolveRefreshIntervalMs();
+    const intervalMs = this.refreshIntervalMs;
 
     // Fire and forget: initial refresh attempts remote first, else cached/bundled.
     void this.refreshNow().catch(() => {});

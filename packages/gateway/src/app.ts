@@ -98,18 +98,15 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   const isLocalOnly = opts.isLocalOnly ?? true;
   const runtime = opts.runtime ?? {
     version: VERSION,
-    instanceId: process.env["TYRUM_INSTANCE_ID"]?.trim() || "unknown",
-    role: process.env["TYRUM_ROLE"]?.trim() || "all",
-    otelEnabled: false,
+    instanceId: container.gatewayConfig?.runtime.instanceId ?? "unknown",
+    role: container.gatewayConfig?.runtime.role ?? "all",
+    otelEnabled: container.gatewayConfig?.otel.enabled ?? false,
   };
 
   const engine =
     opts.engine ??
     (() => {
-      const engineApiEnabledRaw = process.env["TYRUM_ENGINE_API_ENABLED"]?.trim();
-      const engineApiEnabled =
-        engineApiEnabledRaw &&
-        !["0", "false", "off", "no"].includes(engineApiEnabledRaw.toLowerCase());
+      const engineApiEnabled = container.gatewayConfig?.execution.engineApiEnabled ?? false;
       if (!engineApiEnabled) return undefined;
       return new ExecutionEngine({
         db: container.db,
@@ -151,7 +148,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   })();
 
   const trustedProxies = createTrustedProxyAllowlistFromEnv(
-    container.gatewayConfig?.server.trustedProxies ?? process.env["GATEWAY_TRUSTED_PROXIES"],
+    container.gatewayConfig?.server.trustedProxies,
   );
   app.use("*", createClientIpMiddleware({ trustedProxies }));
 
@@ -183,10 +180,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   // Prometheus request metrics.
   app.use("*", createMetricsMiddleware(gatewayMetrics));
 
-  const corsOrigins = (process.env["TYRUM_CORS_ORIGINS"] ?? "")
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter((origin) => origin.length > 0);
+  const corsOrigins = container.gatewayConfig?.server.corsOrigins ?? [];
 
   if (corsOrigins.length > 0) {
     app.use(
@@ -394,7 +388,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
   const playbookHome =
     container.gatewayConfig?.paths.homeExplicit === true
       ? container.gatewayConfig.paths.home
-      : process.env["TYRUM_HOME"];
+      : undefined;
   const playbooks =
     opts.playbooks ?? (playbookHome ? loadAllPlaybooks(`${playbookHome}/playbooks`) : []);
   const playbookRunner = new PlaybookRunner();
@@ -453,7 +447,8 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       error_message: err.message,
     };
     const shouldIncludeStackTrace =
-      container.config.logStackTraces ?? process.env["NODE_ENV"] !== "production";
+      container.config.logStackTraces ??
+      (container.gatewayConfig?.runtime.nodeEnv ?? "development") !== "production";
     if (shouldIncludeStackTrace && err.stack) {
       payload["error_stack"] = err.stack;
     }

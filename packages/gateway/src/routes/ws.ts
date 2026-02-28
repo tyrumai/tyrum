@@ -244,6 +244,7 @@ export interface WsRouteOptions {
   connectionManager: ConnectionManager;
   protocolDeps: ProtocolDeps;
   tokenStore: TokenStore;
+  trustedProxies?: string;
   upgradeRateLimiter?: SlidingWindowRateLimiter;
   presenceDal?: PresenceDal;
   nodePairingDal?: NodePairingDal;
@@ -272,7 +273,7 @@ export function createWsHandler(opts: WsRouteOptions): {
   const { connectionManager, protocolDeps, tokenStore } = opts;
   const upgradeRateLimiter = opts.upgradeRateLimiter;
   const trustedProxies = upgradeRateLimiter
-    ? createTrustedProxyAllowlistFromEnv(process.env["GATEWAY_TRUSTED_PROXIES"])
+    ? createTrustedProxyAllowlistFromEnv(opts.trustedProxies)
     : undefined;
   const cluster = opts.cluster;
   const connectionTtlMs = cluster?.connectionTtlMs ?? 30_000;

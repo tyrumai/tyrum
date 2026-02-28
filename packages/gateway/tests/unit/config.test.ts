@@ -259,4 +259,25 @@ describe("loadConfig", () => {
     expect(config.channels.typingMode).toBe("never");
     expect(config.toolrunner.hardeningProfile).toBe("baseline");
   });
+
+  it("parses CORS origin allowlist entries", () => {
+    const config = loadConfig({
+      GATEWAY_TOKEN: "test-token",
+      TYRUM_CORS_ORIGINS: "http://localhost:3000, https://example.com, ,",
+    });
+
+    expect(config.server.corsOrigins).toEqual(["http://localhost:3000", "https://example.com"]);
+  });
+
+  it("parses auth rate limiter defaults", () => {
+    const config = loadConfig({ GATEWAY_TOKEN: "test-token" });
+
+    expect(config.auth.rateLimit.windowSeconds).toBe(60);
+    expect(config.auth.rateLimit.max).toBe(20);
+  });
+
+  it("captures NODE_ENV in runtime config", () => {
+    const config = loadConfig({ GATEWAY_TOKEN: "test-token", NODE_ENV: "production" });
+    expect(config.runtime.nodeEnv).toBe("production");
+  });
 });

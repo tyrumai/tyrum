@@ -87,20 +87,20 @@ describe("non-loopback deployment guardrails", () => {
     ).toBe("tls");
   });
 
-  it("falls back to env flags when explicit acknowledgements are omitted", () => {
+  it("ignores env flags when explicit acknowledgements are omitted", () => {
     const prevTlsReady = process.env["TYRUM_TLS_READY"];
     const prevAllowInsecureHttp = process.env["TYRUM_ALLOW_INSECURE_HTTP"];
     try {
       process.env["TYRUM_TLS_READY"] = "1";
       delete process.env["TYRUM_ALLOW_INSECURE_HTTP"];
 
-      expect(
+      expect(() =>
         assertNonLoopbackDeploymentGuardrails({
           role: "edge",
           host: "0.0.0.0",
           token: "a".repeat(32),
         }),
-      ).toBe("tls");
+      ).toThrow(/tls|insecure/i);
     } finally {
       if (prevTlsReady === undefined) {
         delete process.env["TYRUM_TLS_READY"];

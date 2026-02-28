@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { createContainer } from "../../src/container.js";
 import { createApp } from "../../src/app.js";
 import type { GatewayContainer } from "../../src/container.js";
+import { loadConfig } from "../../src/config.js";
 import { isAgentEnabled } from "../../src/modules/agent/enabled.js";
 import type { AgentRegistry } from "../../src/modules/agent/registry.js";
 import { AgentRegistry as AgentRegistryImpl } from "../../src/modules/agent/registry.js";
@@ -26,11 +27,19 @@ export async function createTestContainer(): Promise<GatewayContainer> {
 }
 
 function createTestContainerWith(opts: { dbPath: string; tyrumHome?: string }): GatewayContainer {
-  return createContainer({
-    dbPath: opts.dbPath,
-    migrationsDir,
-    tyrumHome: opts.tyrumHome,
+  const gatewayConfig = loadConfig({
+    ...process.env,
+    GATEWAY_TOKEN: "test-token",
+    TYRUM_HOME: opts.tyrumHome ?? process.env["TYRUM_HOME"],
   });
+  return createContainer(
+    {
+      dbPath: opts.dbPath,
+      migrationsDir,
+      tyrumHome: opts.tyrumHome,
+    },
+    { gatewayConfig },
+  );
 }
 
 export interface TestAppOptions {

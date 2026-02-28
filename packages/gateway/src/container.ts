@@ -54,7 +54,10 @@ import { ContextReportDal as ContextReportDalImpl } from "./modules/context/repo
 import { SecretResolutionAuditDal as SecretResolutionAuditDalImpl } from "./modules/secret/resolution-audit-dal.js";
 import { RedactionEngine } from "./modules/redaction/engine.js";
 import type { ArtifactStore } from "./modules/artifact/store.js";
-import { createArtifactStoreFromEnv } from "./modules/artifact/create-artifact-store.js";
+import {
+  createArtifactStore,
+  createArtifactStoreFromEnv,
+} from "./modules/artifact/create-artifact-store.js";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Logger } from "./modules/observability/logger.js";
@@ -150,7 +153,7 @@ function wireContainer(
   const sessionDal = new SessionDalImpl(db);
   const eventBus = createEventBus();
 
-  const telegramToken = process.env["TELEGRAM_BOT_TOKEN"]?.trim();
+  const telegramToken = opts?.gatewayConfig?.channels.telegramBotToken;
   const telegramBot = telegramToken ? new TelegramBotImpl(telegramToken) : undefined;
   const approvalDal = new ApprovalDalImpl(db);
   const presenceDal = new PresenceDalImpl(db);
@@ -162,8 +165,10 @@ function wireContainer(
   const jobQueue = new JobQueueImpl(db);
 
   const tyrumHome =
-    config.tyrumHome ?? process.env["TYRUM_HOME"]?.trim() ?? join(homedir(), ".tyrum");
-  const artifactStore = createArtifactStoreFromEnv(tyrumHome, redactionEngine);
+    config.tyrumHome ?? opts?.gatewayConfig?.paths.home ?? join(homedir(), ".tyrum");
+  const artifactStore = opts?.gatewayConfig
+    ? createArtifactStore(opts.gatewayConfig.artifacts, redactionEngine)
+    : createArtifactStoreFromEnv(tyrumHome, redactionEngine);
   const policyService = new PolicyServiceImpl({
     home: tyrumHome,
     snapshotDal: policySnapshotDal,
@@ -176,6 +181,8 @@ function wireContainer(
     cacheDal: modelsDevCacheDal,
     leaseDal: modelsDevRefreshLeaseDal,
     logger,
+    modelsDev: opts?.gatewayConfig?.modelsDev,
+    instanceOwner: opts?.gatewayConfig?.runtime.instanceId,
   });
 
   const oauthPendingDal = new OauthPendingDalImpl(db);

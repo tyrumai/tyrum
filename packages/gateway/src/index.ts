@@ -11,12 +11,10 @@ import { readdir, readFile } from "node:fs/promises";
 import { isIP } from "node:net";
 import { getRequestListener } from "@hono/node-server";
 import { basename, dirname, join } from "node:path";
-import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { PluginManifest } from "@tyrum/schemas";
 import { createContainerAsync } from "./container.js";
 import { createApp } from "./app.js";
-import { isAgentEnabled } from "./modules/agent/enabled.js";
 import { TokenStore } from "./modules/auth/token-store.js";
 import { WatcherScheduler } from "./modules/watcher/scheduler.js";
 import { WorkSignalScheduler } from "./modules/workboard/signal-scheduler.js";
@@ -43,14 +41,14 @@ import {
   type StepExecutor as ExecutionStepExecutor,
 } from "./modules/execution/engine.js";
 import { startExecutionWorkerLoop } from "./modules/execution/worker-loop.js";
-import { isChannelPipelineEnabled, TelegramChannelProcessor } from "./modules/channels/telegram.js";
+import { TelegramChannelProcessor } from "./modules/channels/telegram.js";
 import { createToolRunnerStepExecutor } from "./modules/execution/toolrunner-step-executor.js";
 import { createKubernetesToolRunnerStepExecutor } from "./modules/execution/kubernetes-toolrunner-step-executor.js";
 import { createGatewayStepExecutor } from "./modules/execution/gateway-step-executor.js";
 import { runToolRunnerFromStdio } from "./toolrunner.js";
 import { isPostgresDbUri } from "./statestore/db-uri.js";
 import { VERSION } from "./version.js";
-import { resolveUserTyrumHome } from "./modules/agent/home.js";
+import { resolveTyrumHome, resolveUserTyrumHome } from "./modules/agent/home.js";
 import { loadAgentConfig } from "./modules/agent/workspace.js";
 import { PluginRegistry, resolveBundledPluginsDirFrom } from "./modules/plugins/registry.js";
 import { installPluginFromDir } from "./modules/plugins/installer.js";
@@ -58,7 +56,7 @@ import { AgentRegistry } from "./modules/agent/registry.js";
 import { isRecord, parseJsonOrYaml } from "./utils/parse-json-or-yaml.js";
 import { loadLifecycleHooksFromHome } from "./modules/hooks/config.js";
 import { LifecycleHooksRuntime } from "./modules/hooks/runtime.js";
-import { loadConfig, parseTruthyEnvFlag } from "./config.js";
+import { loadConfigFromProcessEnv } from "./config.js";
 
 // Re-export for library consumers
 export { VERSION } from "./version.js";
@@ -221,14 +219,6 @@ type GatewayRole = "all" | "edge" | "worker" | "scheduler";
 
 export type NonLoopbackTransportPolicy = "local" | "tls" | "insecure";
 
-function parsePositiveIntEnv(value: string | undefined): number | undefined {
-  const trimmed = value?.trim();
-  if (!trimmed) return undefined;
-  if (!/^[0-9]+$/.test(trimmed)) return undefined;
-  const parsed = Number(trimmed);
-  if (!Number.isInteger(parsed) || parsed <= 0) return undefined;
-  return parsed;
-}
 export function assertNonLoopbackDeploymentGuardrails(input: {
   role: GatewayRole;
   host: string;
@@ -260,11 +250,10 @@ export function assertNonLoopbackDeploymentGuardrails(input: {
     );
   }
 
-  const tlsReady = input.tlsReady ?? parseTruthyEnvFlag(process.env["TYRUM_TLS_READY"]);
+  const tlsReady = input.tlsReady ?? false;
   if (tlsReady) return "tls";
 
-  const allowInsecureHttp =
-    input.allowInsecureHttp ?? parseTruthyEnvFlag(process.env["TYRUM_ALLOW_INSECURE_HTTP"]);
+  const allowInsecureHttp = input.allowInsecureHttp ?? false;
   if (allowInsecureHttp) return "insecure";
 
   throw new Error(
@@ -275,7 +264,7 @@ export function assertNonLoopbackDeploymentGuardrails(input: {
 }
 
 type CliCommand =
-  | { kind: "start"; role: GatewayRole }
+  | { kind: "start"; role?: GatewayRole }
   | { kind: "check" }
   | { kind: "toolrunner" }
   | { kind: "help" }
@@ -365,17 +354,16 @@ function normalizeVersionSpecifier(raw: string): string {
 }
 
 export function parseCliArgs(argv: readonly string[]): CliCommand {
-  const envRole = parseGatewayRole(process.env["TYRUM_ROLE"]) ?? "all";
-  if (argv.length === 0) return { kind: "start", role: envRole };
+  if (argv.length === 0) return { kind: "start" };
 
   const [first, ...rest] = argv;
-  if (!first) return { kind: "start", role: envRole };
+  if (!first) return { kind: "start" };
 
   if (first === "-h" || first === "--help") return { kind: "help" };
   if (first === "-v" || first === "--version" || first === "version") {
     return { kind: "version" };
   }
-  if (first === "start") return { kind: "start", role: envRole };
+  if (first === "start") return { kind: "start" };
   if (first === "all" || first === "edge" || first === "worker" || first === "scheduler") {
     return { kind: "start", role: first };
   }
@@ -512,29 +500,6 @@ async function runGatewayUpdate(channel: UpdateChannel, version?: string): Promi
 
   console.error(`Update failed with exit code ${exitCode}.`);
   return exitCode;
-}
-
-type AdminTokenSource = "env" | "file" | "generated";
-
-type PortInfo = { port: number; raw: string; valid: boolean };
-
-function resolveGatewayHost(): string {
-  return process.env["GATEWAY_HOST"]?.trim() || "127.0.0.1";
-}
-
-function parsePort(raw: string): PortInfo {
-  const trimmed = raw.trim();
-  if (!/^[0-9]+$/.test(trimmed)) {
-    return { port: Number.NaN, raw, valid: false };
-  }
-  const parsed = Number(trimmed);
-  const valid = Number.isInteger(parsed) && parsed > 0 && parsed <= 65535;
-  return { port: parsed, raw, valid };
-}
-
-function resolveGatewayPort(): PortInfo {
-  const raw = process.env["GATEWAY_PORT"] ?? "8788";
-  return parsePort(raw);
 }
 
 function splitHostAndPort(rawHost: string): { host: string; port: string | null } {
@@ -678,29 +643,6 @@ function shortHash(value: string): string {
   return trimmed.slice(0, 12);
 }
 
-async function resolveAdminTokenForCheck(tyrumHome: string): Promise<{
-  source: AdminTokenSource;
-  token: string | undefined;
-}> {
-  const envToken = process.env["GATEWAY_TOKEN"]?.trim();
-  if (envToken && envToken.length > 0) {
-    return { source: "env", token: envToken };
-  }
-
-  const tokenPath = join(tyrumHome, ".admin-token");
-  try {
-    const raw = await readFile(tokenPath, "utf-8");
-    const trimmed = raw.trim();
-    if (trimmed.length > 0) {
-      return { source: "file", token: trimmed };
-    }
-  } catch {
-    // ignore
-  }
-
-  return { source: "generated", token: undefined };
-}
-
 async function tryFetchJson(
   url: string,
   init: RequestInit & { timeoutMs: number },
@@ -735,22 +677,31 @@ async function tryFetchJson(
 }
 
 async function runGatewayCheck(): Promise<number> {
-  const dbPath = process.env["GATEWAY_DB_PATH"] ?? "gateway.db";
-  const defaultMigrationsDir = isPostgresDbUri(dbPath)
-    ? join(__dirname, "../migrations/postgres")
-    : join(__dirname, "../migrations/sqlite");
-  const migrationsDir = process.env["GATEWAY_MIGRATIONS_DIR"] ?? defaultMigrationsDir;
-  const tyrumHome = process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
+  let config: ReturnType<typeof loadConfigFromProcessEnv>;
+  try {
+    config = loadConfigFromProcessEnv();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/GATEWAY_TOKEN/i.test(message)) {
+      config = loadConfigFromProcessEnv({ GATEWAY_TOKEN: "check-token" });
+    } else {
+      console.error(`check: failed: ${message}`);
+      return 1;
+    }
+  }
+
+  const dbPath = config.database.path;
+  const migrationsDir = config.database.migrationsDir;
+  const tyrumHome = config.paths.home;
 
   let container: Awaited<ReturnType<typeof createContainerAsync>> | undefined;
   try {
     ensureDatabaseDirectory(dbPath);
 
-    container = await createContainerAsync({
-      dbPath,
-      migrationsDir,
-      tyrumHome,
-    });
+    container = await createContainerAsync(
+      { dbPath, migrationsDir, tyrumHome },
+      { gatewayConfig: config },
+    );
 
     const models = await container.modelsDev.ensureLoaded();
     await container.oauthProviderRegistry.list();
@@ -765,19 +716,16 @@ async function runGatewayCheck(): Promise<number> {
     console.log("oauth: providers_configured=loaded");
 
     // --- Static diagnostics ---
-    const hostRaw = resolveGatewayHost();
+    const hostRaw = config.server.host;
     const hostSplit = splitHostAndPort(hostRaw);
     const hostForProbe = hostSplit.host.length > 0 ? hostSplit.host : hostRaw;
-    const portInfo = resolveGatewayPort();
+    const port = config.server.port;
     const isLocalOnly = isLoopbackHost(hostForProbe);
-    console.log(
-      `static.exposure: host=${hostRaw} port=${portInfo.valid ? portInfo.port : `invalid(raw=${portInfo.raw})`} is_exposed=${!isLocalOnly}`,
-    );
+    console.log(`static.exposure: host=${hostRaw} port=${port} is_exposed=${!isLocalOnly}`);
 
     const tokenPath = join(tyrumHome, ".admin-token");
-    const adminToken = await resolveAdminTokenForCheck(tyrumHome);
-    console.log(`static.auth: admin_token_source=${adminToken.source} token_path=${tokenPath}`);
-    const token = adminToken.token;
+    console.log(`static.auth: token_path=${tokenPath}`);
+    const token = config.auth.token;
 
     try {
       const policy = await container.policyService?.getStatus?.();
@@ -826,11 +774,6 @@ async function runGatewayCheck(): Promise<number> {
 
     // --- Live HTTP probes (best-effort) ---
     try {
-      if (!portInfo.valid) {
-        console.log(`live.http: skipped=invalid_port raw=${portInfo.raw}`);
-        return 0;
-      }
-
       if (hostSplit.port) {
         console.log(
           `live.http: skipped=host_includes_port raw_host=${hostRaw} ignored_port=${hostSplit.port}`,
@@ -839,7 +782,7 @@ async function runGatewayCheck(): Promise<number> {
       }
 
       const probeHost = normalizeProbeHost(hostForProbe);
-      const baseUrl = `http://${hostForUrl(probeHost)}:${portInfo.port}`;
+      const baseUrl = `http://${hostForUrl(probeHost)}:${port}`;
       const health = await tryFetchJson(`${baseUrl}/healthz`, { timeoutMs: 500 });
       const statusPublic = await tryFetchJson(`${baseUrl}/status`, { timeoutMs: 500 });
 
@@ -926,7 +869,7 @@ export async function runCli(argv: readonly string[] = process.argv.slice(2)): P
   }
 
   if (command.kind === "plugin_install") {
-    const tyrumHome = command.home ?? process.env["TYRUM_HOME"] ?? join(homedir(), ".tyrum");
+    const tyrumHome = command.home ?? resolveTyrumHome();
     try {
       const result = await installPluginFromDir({
         home: tyrumHome,
@@ -957,31 +900,23 @@ export async function runShutdownCleanup(
   await Promise.allSettled([closeDb()]);
 }
 
-export async function main(role: GatewayRole = "all"): Promise<void> {
-  const instanceId = (() => {
-    const raw = process.env["TYRUM_INSTANCE_ID"];
-    const trimmed = raw?.trim();
-    if (trimmed) {
-      process.env["TYRUM_INSTANCE_ID"] = trimmed;
-      return trimmed;
-    }
-    const generated = `gw-${crypto.randomUUID()}`;
-    process.env["TYRUM_INSTANCE_ID"] = generated;
-    return generated;
-  })();
-
-  const homeForTokenStore = process.env["TYRUM_HOME"]?.trim() || join(homedir(), ".tyrum");
+export async function main(cliRole?: GatewayRole): Promise<void> {
+  const homeForTokenStore = resolveTyrumHome();
 
   // Initialize the token store early so a generated token is present before config validation.
   const tokenStore = new TokenStore(homeForTokenStore);
   const token = await tokenStore.initialize();
 
-  const config = loadConfig({
-    ...process.env,
-    GATEWAY_TOKEN: token,
-    TYRUM_ROLE: role,
-    TYRUM_INSTANCE_ID: instanceId,
-  });
+  const configOverrides: NodeJS.ProcessEnv = { GATEWAY_TOKEN: token };
+  if (cliRole !== undefined) {
+    configOverrides["TYRUM_ROLE"] = cliRole;
+  }
+  const parsed = loadConfigFromProcessEnv(configOverrides);
+  const instanceId = parsed.runtime.instanceId ?? `gw-${crypto.randomUUID()}`;
+  const config: typeof parsed = parsed.runtime.instanceId
+    ? parsed
+    : { ...parsed, runtime: { ...parsed.runtime, instanceId } };
+  const role = config.runtime.role;
 
   const host = config.server.host;
   const port = config.server.port;
@@ -1099,6 +1034,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     serviceName: "tyrum-gateway",
     serviceVersion: VERSION,
     instanceId,
+    otel: config.otel,
   });
   if (otel.enabled) {
     logger.info("otel.started");
@@ -1287,7 +1223,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   protocolDeps.plugins = plugins;
 
   const agents =
-    shouldRunEdge && isAgentEnabled()
+    shouldRunEdge && config.agent.enabled
       ? new AgentRegistry({
           container,
           baseHome: tyrumHome,
@@ -1307,9 +1243,8 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
     return config.memory.v1.budgets;
   };
 
-  const authRateLimitWindowS =
-    parsePositiveIntEnv(process.env["TYRUM_AUTH_RATE_LIMIT_WINDOW_S"]) ?? 60;
-  const authRateLimitMax = parsePositiveIntEnv(process.env["TYRUM_AUTH_RATE_LIMIT_MAX"]) ?? 20;
+  const authRateLimitWindowS = config.auth.rateLimit.windowSeconds;
+  const authRateLimitMax = config.auth.rateLimit.max;
   const wsUpgradeRateLimitMax = Math.max(1, Math.floor(authRateLimitMax / 2));
 
   const authRateLimiter = shouldRunEdge
@@ -1356,6 +1291,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
         connectionManager,
         protocolDeps,
         tokenStore,
+        trustedProxies: config.server.trustedProxies,
         upgradeRateLimiter: wsUpgradeRateLimiter,
         presenceDal: container.presenceDal,
         nodePairingDal: container.nodePairingDal,
@@ -1377,7 +1313,7 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   outboxPoller?.start();
 
   const telegramProcessor =
-    shouldRunEdge && agents && container.telegramBot && isChannelPipelineEnabled()
+    shouldRunEdge && agents && container.telegramBot && config.channels.pipelineEnabled
       ? new TelegramChannelProcessor({
           db: container.db,
           agents,

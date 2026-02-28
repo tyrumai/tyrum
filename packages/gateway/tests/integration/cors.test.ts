@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createApp } from "../../src/app.js";
+import { loadConfig } from "../../src/config.js";
+import { createContainer } from "../../src/container.js";
 import { createTestContainer } from "./helpers.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const migrationsDir = join(__dirname, "../../migrations/sqlite");
 
 async function withEnvVar(
   key: string,
@@ -32,6 +39,24 @@ function parseCommaHeader(value: string | null): string[] {
 }
 
 describe("CORS", () => {
+  it("adds CORS headers for configured origins from gateway config", async () => {
+    const gatewayConfig = loadConfig({
+      GATEWAY_TOKEN: "test-token",
+      TYRUM_CORS_ORIGINS: "http://localhost:3000",
+    });
+    const container = createContainer({ dbPath: ":memory:", migrationsDir }, { gatewayConfig });
+
+    try {
+      const app = createApp(container);
+      const allowed = await app.request("/healthz", {
+        headers: { Origin: "http://localhost:3000" },
+      });
+      expect(allowed.headers.get("Access-Control-Allow-Origin")).toBe("http://localhost:3000");
+    } finally {
+      await container.db.close();
+    }
+  });
+
   it("adds CORS headers only for configured origins", async () => {
     await withEnvVar("TYRUM_CORS_ORIGINS", "http://localhost:3000", async () => {
       const container = await createTestContainer();
