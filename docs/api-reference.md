@@ -76,7 +76,7 @@ For device tokens, each WS request `type` is scope-checked via `packages/gateway
   - `200` HTML (operator SPA shell)
   - `404` text `operator_ui_assets_unavailable` (if UI assets are missing)
 
-#### GET /ui/*
+#### GET /ui/\*
 
 - Auth: Public
 - Request: Path tail (static asset or SPA route)
@@ -1365,4 +1365,3 @@ Client-sent events are rejected.
 - Scope (device tokens): `operator.write`
 - Schema: `WsWorkStateKvSetRequest`
 - Result: `WsWorkStateKvSetResult`
-
