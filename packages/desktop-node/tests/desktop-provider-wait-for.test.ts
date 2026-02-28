@@ -27,12 +27,7 @@ describe("DesktopProvider (wait_for)", () => {
       ]),
     } satisfies OcrEngine;
 
-    const provider = new DesktopProvider(
-      backend,
-      permissions,
-      vi.fn<ConfirmationFn>(),
-      ocr,
-    );
+    const provider = new DesktopProvider(backend, permissions, vi.fn<ConfirmationFn>(), ocr);
 
     const result = await provider.execute(
       makeAction({
@@ -80,12 +75,7 @@ describe("DesktopProvider (wait_for)", () => {
         }),
       } satisfies OcrEngine;
 
-      const provider = new DesktopProvider(
-        backend,
-        permissions,
-        vi.fn<ConfirmationFn>(),
-        ocr,
-      );
+      const provider = new DesktopProvider(backend, permissions, vi.fn<ConfirmationFn>(), ocr);
 
       const promise = provider.execute(
         makeAction({
@@ -124,12 +114,7 @@ describe("DesktopProvider (wait_for)", () => {
       recognize: vi.fn(async () => []),
     } satisfies OcrEngine;
 
-    const provider = new DesktopProvider(
-      backend,
-      permissions,
-      vi.fn<ConfirmationFn>(),
-      ocr,
-    );
+    const provider = new DesktopProvider(backend, permissions, vi.fn<ConfirmationFn>(), ocr);
 
     const result = await provider.execute(
       makeAction({
