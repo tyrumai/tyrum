@@ -1375,6 +1375,17 @@ describe("operator-ui", () => {
     );
     expect(refreshButton).not.toBeNull();
 
+    const approvalsLiveRegion = container.querySelector<HTMLDivElement>(
+      '[data-testid="dashboard-approvals-live"]',
+    );
+    expect(approvalsLiveRegion).not.toBeNull();
+    expect(approvalsLiveRegion?.getAttribute("aria-live")).toBe("polite");
+    expect(approvalsLiveRegion?.getAttribute("aria-atomic")).toBe("true");
+    expect(approvalsLiveRegion?.className).toContain("sr-only");
+    expect(approvalsLiveRegion?.textContent).toContain("0 pending approvals");
+
+    expect(container.querySelector('[data-testid="dashboard-approvals-badge"]')).toBeNull();
+
     await act(async () => {
       refreshButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       await Promise.resolve();
@@ -1394,8 +1405,14 @@ describe("operator-ui", () => {
     );
     expect(approvalsBadge).not.toBeNull();
     expect(approvalsBadge?.textContent).toContain("1");
-    expect(approvalsBadge?.getAttribute("aria-live")).toBe("polite");
-    expect(approvalsBadge?.getAttribute("aria-atomic")).toBe("true");
+    expect(approvalsBadge?.getAttribute("aria-live")).toBeNull();
+    expect(approvalsBadge?.getAttribute("aria-atomic")).toBeNull();
+
+    const approvalsLiveRegionAfter = container.querySelector<HTMLDivElement>(
+      '[data-testid="dashboard-approvals-live"]',
+    );
+    expect(approvalsLiveRegionAfter).toBe(approvalsLiveRegion);
+    expect(approvalsLiveRegionAfter?.textContent).toContain("1 pending approvals");
 
     act(() => {
       root?.unmount();
