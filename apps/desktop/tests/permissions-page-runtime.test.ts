@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { cleanupTestRoot, createTestRoot, type TestRoot } from "../../../packages/operator-ui/tests/test-utils.js";
+import {
+  cleanupTestRoot,
+  createTestRoot,
+  type TestRoot,
+} from "../../../packages/operator-ui/tests/test-utils.js";
 import {
   getControlByLabelText,
   getSwitchForRowLabelText,

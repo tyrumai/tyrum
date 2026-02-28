@@ -68,7 +68,9 @@ export function press(element: HTMLElement): void {
   const PointerEventCtor = window.PointerEvent ?? window.MouseEvent;
   element.dispatchEvent(new PointerEventCtor("pointerdown", { bubbles: true, cancelable: true }));
   element.dispatchEvent(new PointerEventCtor("pointerup", { bubbles: true, cancelable: true }));
-  element.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, button: 0 }));
+  element.dispatchEvent(
+    new MouseEvent("mousedown", { bubbles: true, cancelable: true, button: 0 }),
+  );
   element.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true, button: 0 }));
   element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
 }
