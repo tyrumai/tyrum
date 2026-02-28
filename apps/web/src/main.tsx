@@ -7,7 +7,7 @@ import {
   createGatewayAuthSession,
   createOperatorCoreManager,
 } from "@tyrum/operator-core";
-import { OperatorUiApp, ThemeProvider } from "@tyrum/operator-ui";
+import { OperatorUiApp } from "@tyrum/operator-ui";
 import "@tyrum/operator-ui/globals.css";
 import { readAuthTokenFromUrl, stripAuthTokenFromUrl } from "./url-auth.js";
 
@@ -62,9 +62,7 @@ const root = createRoot(container);
 const render = (): void => {
   root.render(
     <React.StrictMode>
-      <ThemeProvider>
-        <OperatorUiApp core={manager.getCore()} mode="web" />
-      </ThemeProvider>
+      <OperatorUiApp core={manager.getCore()} mode="web" />
     </React.StrictMode>,
   );
 };

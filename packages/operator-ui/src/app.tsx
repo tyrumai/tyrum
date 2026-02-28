@@ -1,4 +1,4 @@
-import { createGatewayAuthSession, type OperatorCore } from "@tyrum/operator-core";
+import type { OperatorCore } from "@tyrum/operator-core";
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import {
   Database,
@@ -11,12 +11,15 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { AdminModeGate, AdminModeProvider } from "./admin-mode.js";
+import { ErrorBoundary } from "./components/error/error-boundary.js";
 import { AppShell } from "./components/layout/app-shell.js";
 import { MobileNav } from "./components/layout/mobile-nav.js";
 import { Sidebar } from "./components/layout/sidebar.js";
 import { MemoryInspector } from "./components/memory/memory-inspector.js";
+import { ToastProvider } from "./components/toast/toast-provider.js";
 import { getDesktopApi } from "./desktop-api.js";
-import { OPERATOR_UI_CSS } from "./style.js";
+import { ThemeProvider } from "./hooks/use-theme.js";
+import { ConnectPage } from "./pages/connect-page.js";
 import { useOperatorStore } from "./use-operator-store.js";
 
 export type OperatorUiMode = "web" | "desktop";
@@ -66,162 +69,6 @@ const DESKTOP_NAV_ORDER: OperatorUiRouteId[] = ["desktop"];
 function isOperatorUiRouteId(value: string): value is OperatorUiRouteId {
   return Object.prototype.hasOwnProperty.call(NAV_ITEM_CONFIG, value);
 }
-
-function ConnectPage({ core, mode }: { core: OperatorCore; mode: OperatorUiMode }) {
-  const connection = useOperatorStore(core.connectionStore);
-  const [loginBusy, setLoginBusy] = useState(false);
-  const [loginError, setLoginError] = useState<string | null>(null);
-  const tokenRef = useRef<HTMLTextAreaElement | null>(null);
-  const title = mode === "web" ? "Login" : "Connect";
-  const isWeb = mode === "web";
-
-  const truncateText = (text: string, limit = 300): string => {
-    if (text.length <= limit) return text;
-    return `${text.slice(0, limit)}…`;
-  };
-
-  const readGatewayError = async (res: Response): Promise<string> => {
-    const contentType = res.headers.get("content-type")?.trim().toLowerCase() ?? "";
-    const maybeJson =
-      contentType.includes("application/json") ||
-      contentType.includes("+json") ||
-      contentType.includes("/json");
-
-    let bodyText: string;
-    try {
-      bodyText = await res.text();
-    } catch {
-      return `HTTP ${String(res.status)}`;
-    }
-
-    const trimmedText = bodyText.trim();
-    if (!trimmedText) {
-      return `HTTP ${String(res.status)}`;
-    }
-
-    if (maybeJson) {
-      try {
-        const body = JSON.parse(trimmedText) as unknown;
-        if (body && typeof body === "object" && !Array.isArray(body)) {
-          const message = (body as Record<string, unknown>)["message"];
-          if (typeof message === "string" && message.trim()) {
-            return message.trim();
-          }
-
-          const error = (body as Record<string, unknown>)["error"];
-          if (typeof error === "string" && error.trim()) {
-            return error.trim();
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    return truncateText(trimmedText);
-  };
-
-  const login = async (): Promise<void> => {
-    if (!isWeb) return;
-    const trimmed = tokenRef.current?.value.trim() ?? "";
-    if (!trimmed) {
-      setLoginError("Token is required");
-      return;
-    }
-    setLoginBusy(true);
-    setLoginError(null);
-    try {
-      const res = await createGatewayAuthSession({ token: trimmed, httpBaseUrl: core.httpBaseUrl });
-      if (!res.ok) {
-        setLoginError(await readGatewayError(res));
-        return;
-      }
-      if (tokenRef.current) {
-        tokenRef.current.value = "";
-      }
-      core.connect();
-    } catch (error) {
-      setLoginError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setLoginBusy(false);
-    }
-  };
-  return (
-    <>
-      <h1>{title}</h1>
-      <div className="stack">
-        {isWeb ? (
-          <div className="card stack">
-            <div>
-              <label>
-                Token
-                <textarea
-                  data-testid="login-token"
-                  rows={3}
-                  ref={tokenRef}
-                  spellCheck={false}
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                />
-              </label>
-            </div>
-            <button
-              type="button"
-              data-testid="login-button"
-              disabled={loginBusy}
-              onClick={() => {
-                void login();
-              }}
-            >
-              {loginBusy ? "Logging in..." : "Login"}
-            </button>
-            {loginError ? (
-              <div className="alert error" role="alert">
-                {loginError}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-        <div className="card stack">
-          <div>
-            Status: <span>{connection.status}</span>
-          </div>
-          {connection.transportError ? (
-            <div className="alert error" role="alert">
-              Transport error: {connection.transportError}
-            </div>
-          ) : null}
-          {connection.lastDisconnect ? (
-            <div className="alert error" role="alert">
-              Last disconnect: {connection.lastDisconnect.code} {connection.lastDisconnect.reason}
-            </div>
-          ) : null}
-          <div>
-            <button
-              type="button"
-              data-testid="connect-button"
-              onClick={() => {
-                core.connect();
-              }}
-            >
-              Connect
-            </button>
-            <button
-              type="button"
-              data-testid="disconnect-button"
-              onClick={() => {
-                core.disconnect();
-              }}
-            >
-              Disconnect
-            </button>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-}
-
 function DesktopSetupPage({ core }: { core: OperatorCore }) {
   const api = getDesktopApi();
   const [port, setPort] = useState(8788);
@@ -920,42 +767,44 @@ export function OperatorUiApp({ core, mode }: OperatorUiAppProps) {
     if (!isOperatorUiRouteId(id)) return;
     setRoute(id);
   };
+
   return (
-    <div className="tyrum-operator-ui">
-      <style>{OPERATOR_UI_CSS}</style>
-      <AppShell
-        mode={mode}
-        sidebar={
-          <Sidebar
-            items={sidebarItems}
-            secondaryItems={desktopItems}
-            activeItemId={route}
-            onNavigate={navigate}
-            connectionStatus={connection.status}
-          />
-        }
-        mobileNav={
-          <MobileNav
-            items={mobileItems}
-            overflowItems={mobileOverflowItems}
-            activeItemId={route}
-            onNavigate={navigate}
-          />
-        }
-      >
-        <div className="tyrum-legacy">
-          <AdminModeProvider core={core} mode={mode}>
-            {route === "connect" && <ConnectPage core={core} mode={mode} />}
-            {route === "dashboard" && <DashboardPage core={core} />}
-            {route === "memory" && <MemoryInspector core={core} />}
-            {route === "approvals" && <ApprovalsPage core={core} />}
-            {route === "runs" && <RunsPage core={core} />}
-            {route === "pairing" && <PairingPage core={core} />}
-            {route === "settings" && <SettingsPage core={core} mode={mode} />}
-            {route === "desktop" && mode === "desktop" && <DesktopSetupPage core={core} />}
-          </AdminModeProvider>
-        </div>
-      </AppShell>
-    </div>
+    <ThemeProvider>
+      <ToastProvider>
+        <ErrorBoundary>
+          <AppShell
+            mode={mode}
+            sidebar={
+              <Sidebar
+                items={sidebarItems}
+                secondaryItems={desktopItems}
+                activeItemId={route}
+                onNavigate={navigate}
+                connectionStatus={connection.status}
+              />
+            }
+            mobileNav={
+              <MobileNav
+                items={mobileItems}
+                overflowItems={mobileOverflowItems}
+                activeItemId={route}
+                onNavigate={navigate}
+              />
+            }
+          >
+            <AdminModeProvider core={core} mode={mode}>
+              {route === "connect" && <ConnectPage core={core} mode={mode} />}
+              {route === "dashboard" && <DashboardPage core={core} />}
+              {route === "memory" && <MemoryInspector core={core} />}
+              {route === "approvals" && <ApprovalsPage core={core} />}
+              {route === "runs" && <RunsPage core={core} />}
+              {route === "pairing" && <PairingPage core={core} />}
+              {route === "settings" && <SettingsPage core={core} mode={mode} />}
+              {route === "desktop" && mode === "desktop" && <DesktopSetupPage core={core} />}
+            </AdminModeProvider>
+          </AppShell>
+        </ErrorBoundary>
+      </ToastProvider>
+    </ThemeProvider>
   );
 }
