@@ -4,6 +4,7 @@ import mitt from "mitt";
 import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
 import { WatcherProcessor } from "../../src/modules/watcher/processor.js";
 import type { GatewayEvents } from "../../src/event-bus.js";
+import { listWatcherEpisodes } from "../helpers/memory-v1-helpers.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 
@@ -24,15 +25,6 @@ describe("WatcherProcessor", () => {
     await db.close();
   });
 
-  async function listWatcherEpisodes(): Promise<any[]> {
-    const { items } = await memoryV1Dal.list({
-      agentId: "default",
-      filter: { kinds: ["episode"], provenance: { channels: ["watcher"] } },
-      limit: 2000,
-    });
-    return items;
-  }
-
   function findEpisodeByType(episodes: any[], eventType: string): any | undefined {
     return episodes.find((item) => (item?.provenance?.metadata as any)?.event_type === eventType);
   }
@@ -42,7 +34,7 @@ describe("WatcherProcessor", () => {
 
     await processor.onPlanCompleted({ planId: "plan-1", stepsExecuted: 5 });
 
-    const episodes = await listWatcherEpisodes();
+    const episodes = await listWatcherEpisodes(memoryV1Dal);
     expect(findEpisodeByType(episodes, "plan_completed")).toBeTruthy();
   });
 
@@ -51,7 +43,7 @@ describe("WatcherProcessor", () => {
 
     await processor.onPlanFailed({ planId: "plan-1", reason: "timeout" });
 
-    const episodes = await listWatcherEpisodes();
+    const episodes = await listWatcherEpisodes(memoryV1Dal);
     expect(findEpisodeByType(episodes, "plan_failed")).toBeTruthy();
     expect(await processor.listWatchers()).toHaveLength(0);
   });
@@ -80,7 +72,7 @@ describe("WatcherProcessor", () => {
 
     eventBus.emit("plan:completed", { planId: "plan-1", stepsExecuted: 3 });
     await new Promise((resolve) => setTimeout(resolve, 0));
-    const episodes = await listWatcherEpisodes();
+    const episodes = await listWatcherEpisodes(memoryV1Dal);
     expect(findEpisodeByType(episodes, "plan_completed")).toBeTruthy();
 
     processor.stop();
@@ -115,7 +107,7 @@ describe("WatcherProcessor", () => {
     });
     expect(replay).toBe(false);
 
-    const episodes = await listWatcherEpisodes();
+    const episodes = await listWatcherEpisodes(memoryV1Dal);
     expect(
       episodes.filter((e) => (e?.provenance?.metadata as any)?.event_type === "webhook_fired"),
     ).toHaveLength(1);
@@ -156,7 +148,7 @@ describe("WatcherProcessor", () => {
     expect(firings[0]!.status).toBe("queued");
     expect(firings[0]!.scheduled_at_ms).toBe(timestampMs);
 
-    const episodes = await listWatcherEpisodes();
+    const episodes = await listWatcherEpisodes(memoryV1Dal);
     const fired = findEpisodeByType(episodes, "webhook_fired");
     expect(fired).toBeDefined();
     const payload = fired!.provenance.metadata as Record<string, unknown> | undefined;

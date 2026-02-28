@@ -16,6 +16,8 @@ import { loadRoutingConfig, resolveTelegramAgentId } from "../modules/channels/r
 import type { RoutingConfigDal } from "../modules/channels/routing-config-dal.js";
 import type { MemoryV1Dal } from "../modules/memory/v1-dal.js";
 import { recordMemoryV1SystemEpisode } from "../modules/memory/v1-episode-recorder.js";
+import type { Logger } from "../modules/observability/logger.js";
+import { safeDetail } from "../utils/safe-detail.js";
 
 export interface IngressDeps {
   telegramBot?: TelegramBot;
@@ -23,6 +25,7 @@ export interface IngressDeps {
   telegramQueue?: TelegramChannelQueue;
   routingConfigDal?: RoutingConfigDal;
   memoryV1Dal?: MemoryV1Dal;
+  logger?: Logger;
   home?: string;
 }
 
@@ -140,7 +143,7 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
 
       if (deps.memoryV1Dal && formattingFallbacks.length > 0) {
         const occurredAt = new Date().toISOString();
-        await Promise.allSettled(
+        const settled = await Promise.allSettled(
           formattingFallbacks.map(async (fallback) => {
             await recordMemoryV1SystemEpisode(
               deps.memoryV1Dal!,
@@ -163,6 +166,21 @@ export function createIngressRoutes(deps: IngressDeps = {}): Hono {
             );
           }),
         );
+
+        for (let index = 0; index < settled.length; index++) {
+          const outcome = settled[index];
+          if (outcome?.status !== "rejected") continue;
+          const fallback = formattingFallbacks[index];
+          deps.logger?.warn("memory.v1.system_episode_record_failed", {
+            agent_id: routedAgentId,
+            session_id: result.session_id,
+            event_type: "channel_formatting_fallback",
+            reason: fallback?.reason,
+            chunk_index: fallback?.chunk_index,
+            detail: fallback?.detail,
+            error: safeDetail(outcome.reason) ?? "unknown_error",
+          });
+        }
       }
 
       for (const chunk of chunks) {

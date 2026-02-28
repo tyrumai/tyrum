@@ -4,6 +4,7 @@ import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
 import { WatcherProcessor } from "../../src/modules/watcher/processor.js";
 import { WatcherScheduler } from "../../src/modules/watcher/scheduler.js";
 import type { GatewayEvents } from "../../src/event-bus.js";
+import { listWatcherEpisodes } from "../helpers/memory-v1-helpers.js";
 import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import type { SqliteDb } from "../../src/statestore/sqlite.js";
 import { PolicyBundle } from "@tyrum/schemas";
@@ -29,21 +30,12 @@ describe("WatcherScheduler", () => {
     await db.close();
   });
 
-  async function listWatcherEpisodes(): Promise<any[]> {
-    const { items } = await memoryV1Dal.list({
-      agentId: "default",
-      filter: { kinds: ["episode"], provenance: { channels: ["watcher"] } },
-      limit: 2000,
-    });
-    return items;
-  }
-
   it("fires periodic watcher on first tick", async () => {
     await processor.createWatcher("plan-1", "periodic", { intervalMs: 1000 });
 
     await scheduler.tick();
 
-    const episodes = await listWatcherEpisodes();
+    const episodes = await listWatcherEpisodes(memoryV1Dal);
     expect(
       episodes.filter((e) => (e?.provenance?.metadata as any)?.event_type === "periodic_fired"),
     ).toHaveLength(1);
@@ -59,7 +51,7 @@ describe("WatcherScheduler", () => {
     await scheduler.tick();
     await scheduler.tick(); // second tick, interval not yet elapsed
 
-    const episodes = await listWatcherEpisodes();
+    const episodes = await listWatcherEpisodes(memoryV1Dal);
     expect(
       episodes.filter((e) => (e?.provenance?.metadata as any)?.event_type === "periodic_fired"),
     ).toHaveLength(1); // only fired once
@@ -75,7 +67,7 @@ describe("WatcherScheduler", () => {
 
     await scheduler.tick();
 
-    const episodes = await listWatcherEpisodes();
+    const episodes = await listWatcherEpisodes(memoryV1Dal);
     expect(episodes).toHaveLength(0);
   });
 
@@ -85,7 +77,7 @@ describe("WatcherScheduler", () => {
 
     await scheduler.tick();
 
-    const episodes = await listWatcherEpisodes();
+    const episodes = await listWatcherEpisodes(memoryV1Dal);
     expect(episodes).toHaveLength(0);
   });
 
@@ -94,7 +86,7 @@ describe("WatcherScheduler", () => {
 
     await scheduler.tick();
 
-    const episodes = await listWatcherEpisodes();
+    const episodes = await listWatcherEpisodes(memoryV1Dal);
     expect(episodes).toHaveLength(0);
   });
 
@@ -158,7 +150,7 @@ describe("WatcherScheduler", () => {
 
     await scheduler.tick();
 
-    const episodes = await listWatcherEpisodes();
+    const episodes = await listWatcherEpisodes(memoryV1Dal);
     expect(episodes).toHaveLength(0);
   });
 
@@ -191,7 +183,7 @@ describe("WatcherScheduler", () => {
     expect(firings[0]!.trigger_type).toBe("webhook");
     expect(firings[0]!.status).toBe("enqueued");
 
-    const episodes = await listWatcherEpisodes();
+    const episodes = await listWatcherEpisodes(memoryV1Dal);
     expect(
       episodes.filter((e) => (e?.provenance?.metadata as any)?.event_type === "webhook_fired"),
     ).toHaveLength(1);

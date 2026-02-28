@@ -309,6 +309,7 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       agents: opts.agents,
       memoryV1Dal: container.memoryV1Dal,
       routingConfigDal,
+      logger: container.logger,
       home: container.config?.tyrumHome,
     }),
   );
