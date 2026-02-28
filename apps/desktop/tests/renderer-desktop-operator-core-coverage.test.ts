@@ -21,7 +21,10 @@ const {
   const coreConnectMock = vi.fn();
 
   const createTyrumHttpClientMock = vi.fn(
-    (input: { baseUrl: string; fetch?: (input: RequestInfo, init?: RequestInit) => Promise<unknown> }) => {
+    (input: {
+      baseUrl: string;
+      fetch?: (input: RequestInfo, init?: RequestInit) => Promise<unknown>;
+    }) => {
       ipcFetchPromise =
         input.fetch?.(`${input.baseUrl.replace(/\/$/, "")}/healthz`, {
           method: "GET",
@@ -35,28 +38,30 @@ const {
     connect: coreConnectMock,
   }));
 
-  const createOperatorCoreManagerMock = vi.fn((input: {
-    wsUrl: string;
-    httpBaseUrl: string;
-    baselineAuth: unknown;
-    adminModeStore: unknown;
-    createCore: (options: CoreOptions) => unknown;
-  }) => {
-    const core = input.createCore({
-      wsUrl: input.wsUrl,
-      httpBaseUrl: input.httpBaseUrl,
-      auth: input.baselineAuth,
-      adminModeStore: input.adminModeStore,
-    });
+  const createOperatorCoreManagerMock = vi.fn(
+    (input: {
+      wsUrl: string;
+      httpBaseUrl: string;
+      baselineAuth: unknown;
+      adminModeStore: unknown;
+      createCore: (options: CoreOptions) => unknown;
+    }) => {
+      const core = input.createCore({
+        wsUrl: input.wsUrl,
+        httpBaseUrl: input.httpBaseUrl,
+        auth: input.baselineAuth,
+        adminModeStore: input.adminModeStore,
+      });
 
-    const manager = {
-      getCore: () => core,
-      subscribe: vi.fn(() => () => {}),
-      dispose: vi.fn(),
-    };
+      const manager = {
+        getCore: () => core,
+        subscribe: vi.fn(() => () => {}),
+        dispose: vi.fn(),
+      };
 
-    return manager;
-  });
+      return manager;
+    },
+  );
 
   return {
     createTyrumHttpClientMock,
