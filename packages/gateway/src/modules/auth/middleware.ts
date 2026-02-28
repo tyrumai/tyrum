@@ -80,6 +80,8 @@ function matchPublicPathExemption(c: Context): PublicPathExemption | undefined {
   return undefined;
 }
 
+let didLogMissingTokenStore = false;
+
 export function createAuthMiddleware(
   tokenStore: TokenStore | undefined,
   opts?: {
@@ -89,12 +91,21 @@ export function createAuthMiddleware(
 ) {
   return async (c: Context, next: Next) => {
     if (!tokenStore) {
+      if (!didLogMissingTokenStore) {
+        didLogMissingTokenStore = true;
+        opts?.logger?.error("auth.token_store_missing", {
+          client_ip: getClientIp(c),
+          method: c.req.method,
+          path: c.req.path,
+          request_id: requestIdForAudit(c),
+        });
+      }
       return c.json(AUTH_ERROR_BODY, 503);
     }
 
     const publicPathExemption = matchPublicPathExemption(c);
     if (publicPathExemption) {
-      opts?.logger?.warn("auth.public_path_exempted", {
+      opts?.logger?.debug("auth.public_path_exempted", {
         exemption: publicPathExemption.label,
         client_ip: getClientIp(c),
         method: c.req.method,
