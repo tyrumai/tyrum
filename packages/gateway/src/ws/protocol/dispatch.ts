@@ -6,7 +6,7 @@ import {
 import type { ActionPrimitive, ClientCapability, WsRequestEnvelope } from "@tyrum/schemas";
 import { canonicalizeNodeDispatchMatchTarget } from "../../modules/policy/match-target.js";
 import type { ConnectedClient } from "../connection-manager.js";
-import { NoCapableClientError } from "./errors.js";
+import { NoCapableClientError, NoCapableNodeError, NodeNotPairedError } from "./errors.js";
 import type { ProtocolDeps } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -30,6 +30,7 @@ export function dispatchTask(
   }
 
   const descriptorId = descriptorIdForClientCapability(capability);
+  const requiresPairedNode = action.type === "Desktop";
   const toolMatchTarget = canonicalizeNodeDispatchMatchTarget(action.type, action.args);
   const policyEnabled = deps.policyService?.isEnabled() ?? false;
   const policyEvalPromise = policyEnabled
@@ -62,7 +63,9 @@ export function dispatchTask(
   if (localCandidates.length === 0) {
     const cluster = deps.cluster;
     if (!cluster) {
-      throw new NoCapableClientError(capability);
+      throw requiresPairedNode
+        ? new NoCapableNodeError(capability)
+        : new NoCapableClientError(capability);
     }
 
     const nowMs = Date.now();
@@ -92,22 +95,22 @@ export function dispatchTask(
         nowMs,
       );
 
+      const nodeCandidates = candidates.filter(
+        (c) =>
+          c.protocol_rev >= 2 &&
+          c.role === "node" &&
+          typeof c.device_id === "string" &&
+          c.device_id.trim().length > 0 &&
+          c.ready_capabilities.includes(capability),
+      );
+
       const eligibleNodes =
         deps.nodePairingDal && nodeDispatchAllowed
           ? (
               await Promise.all(
-                candidates
-                  .filter(
-                    (c) =>
-                      c.protocol_rev >= 2 &&
-                      c.role === "node" &&
-                      typeof c.device_id === "string" &&
-                      c.device_id.trim().length > 0 &&
-                      c.ready_capabilities.includes(capability),
-                  )
-                  .map(async (c) => {
-                    return (await isNodeAuthorizedForDispatch(c.device_id!)) ? c : null;
-                  }),
+                nodeCandidates.map(async (c) => {
+                  return (await isNodeAuthorizedForDispatch(c.device_id!)) ? c : null;
+                }),
               )
             ).filter((c): c is NonNullable<(typeof candidates)[number]> => c !== null)
           : [];
@@ -117,6 +120,11 @@ export function dispatchTask(
 
       const target = eligible.find((c) => c.edge_id !== cluster.edgeId) ?? eligible[0];
       if (!target || target.edge_id === cluster.edgeId) {
+        if (requiresPairedNode) {
+          throw nodeCandidates.length > 0
+            ? new NodeNotPairedError(capability)
+            : new NoCapableNodeError(capability);
+        }
         throw new NoCapableClientError(capability);
       }
 
@@ -177,6 +185,7 @@ export function dispatchTask(
 
     const eligibleNodes: ConnectedClient[] = [];
     const eligibleClients: ConnectedClient[] = [];
+    let hasReadyNodeCandidate = false;
 
     for (const c of localCandidates) {
       if (c.role !== "node") {
@@ -188,6 +197,7 @@ export function dispatchTask(
       const nodeId = c.device_id;
       if (!nodeId) continue;
       if (!c.readyCapabilities.has(capability)) continue;
+      hasReadyNodeCandidate = true;
       if (!(await isNodeAuthorizedForDispatch(nodeId))) continue;
       eligibleNodes.push(c);
     }
@@ -196,6 +206,11 @@ export function dispatchTask(
     if (!selected) {
       const cluster = deps.cluster;
       if (!cluster) {
+        if (requiresPairedNode) {
+          throw hasReadyNodeCandidate
+            ? new NodeNotPairedError(capability)
+            : new NoCapableNodeError(capability);
+        }
         throw new NoCapableClientError(capability);
       }
 
@@ -205,22 +220,22 @@ export function dispatchTask(
         nowMs,
       );
 
+      const nodeCandidates = candidates.filter(
+        (c) =>
+          c.protocol_rev >= 2 &&
+          c.role === "node" &&
+          typeof c.device_id === "string" &&
+          c.device_id.trim().length > 0 &&
+          c.ready_capabilities.includes(capability),
+      );
+
       const eligibleNodes2 =
         deps.nodePairingDal && nodeDispatchAllowed
           ? (
               await Promise.all(
-                candidates
-                  .filter(
-                    (c) =>
-                      c.protocol_rev >= 2 &&
-                      c.role === "node" &&
-                      typeof c.device_id === "string" &&
-                      c.device_id.trim().length > 0 &&
-                      c.ready_capabilities.includes(capability),
-                  )
-                  .map(async (c) => {
-                    return (await isNodeAuthorizedForDispatch(c.device_id!)) ? c : null;
-                  }),
+                nodeCandidates.map(async (c) => {
+                  return (await isNodeAuthorizedForDispatch(c.device_id!)) ? c : null;
+                }),
               )
             ).filter((c): c is NonNullable<(typeof candidates)[number]> => c !== null)
           : [];
@@ -230,6 +245,11 @@ export function dispatchTask(
 
       const target = eligible2.find((c) => c.edge_id !== cluster.edgeId) ?? eligible2[0];
       if (!target || target.edge_id === cluster.edgeId) {
+        if (requiresPairedNode) {
+          throw nodeCandidates.length > 0 || hasReadyNodeCandidate
+            ? new NodeNotPairedError(capability)
+            : new NoCapableNodeError(capability);
+        }
         throw new NoCapableClientError(capability);
       }
 

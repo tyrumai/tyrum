@@ -13,6 +13,9 @@ import { openTestSqliteDb } from "../helpers/sqlite-db.js";
 import { acquireWorkspaceLease, releaseWorkspaceLease } from "../../src/modules/workspace/lease.js";
 import type { McpManager } from "../../src/modules/agent/mcp-manager.js";
 import type { McpServerSpec } from "@tyrum/schemas";
+import { ConnectionManager } from "../../src/ws/connection-manager.js";
+import { TaskResultRegistry } from "../../src/ws/protocol/task-result-registry.js";
+import { NodeDispatchService } from "../../src/modules/agent/node-dispatch-service.js";
 
 function stubMcpManager(overrides?: Partial<McpManager>): McpManager {
   return {
@@ -314,6 +317,83 @@ describe("ToolExecutor", () => {
       expect(result.output).toContain('"ok":false');
       expect(result.output).toContain('"code":"timeout"');
       expect(result.output).toContain('"retryable":true');
+    });
+
+    it("tool.node.dispatch returns a structured no_capable_node error when no desktop node is connected", async () => {
+      homeDir = await mkdtemp(join(tmpdir(), "tool-executor-"));
+
+      const deps = {
+        connectionManager: new ConnectionManager(),
+        taskResults: new TaskResultRegistry(),
+      };
+
+      const executor = new ToolExecutor(
+        homeDir,
+        stubMcpManager(),
+        new Map(),
+        fetch,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        new NodeDispatchService(deps as never),
+      );
+
+      const result = await executor.execute("tool.node.dispatch", "call-7", {
+        capability: "tyrum.desktop",
+        action: "Desktop",
+      });
+
+      expect(result.error).toBeUndefined();
+      expect(result.output).toContain('"ok":false');
+      expect(result.output).toContain('"code":"no_capable_node"');
+    });
+
+    it("tool.node.dispatch returns a structured not_paired error when a desktop node is connected but not paired", async () => {
+      homeDir = await mkdtemp(join(tmpdir(), "tool-executor-"));
+
+      const cm = new ConnectionManager();
+      const registry = new TaskResultRegistry();
+      const nodeWs = { send: vi.fn(), on: vi.fn(), readyState: 1 } as never;
+      cm.addClient(nodeWs, ["desktop"], {
+        id: "conn-1",
+        role: "node",
+        deviceId: "node-1",
+        protocolRev: 2,
+      });
+
+      const deps = {
+        connectionManager: cm,
+        taskResults: registry,
+        nodePairingDal: {
+          getByNodeId: vi.fn(async () => {
+            return { status: "pending", capability_allowlist: [] };
+          }),
+        },
+      };
+
+      const executor = new ToolExecutor(
+        homeDir,
+        stubMcpManager(),
+        new Map(),
+        fetch,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        new NodeDispatchService(deps as never),
+      );
+
+      const result = await executor.execute("tool.node.dispatch", "call-7", {
+        capability: "tyrum.desktop",
+        action: "Desktop",
+      });
+
+      expect(result.error).toBeUndefined();
+      expect(result.output).toContain('"ok":false');
+      expect(result.output).toContain('"code":"not_paired"');
     });
 
     it("tool.node.dispatch omits oversized evidence to keep output bounded", async () => {

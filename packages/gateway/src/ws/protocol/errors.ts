@@ -10,3 +10,17 @@ export class NoCapableClientError extends Error {
     this.name = "NoCapableClientError";
   }
 }
+
+export class NoCapableNodeError extends Error {
+  constructor(public readonly capability: ClientCapability) {
+    super(`no connected node with capability: ${capability}`);
+    this.name = "NoCapableNodeError";
+  }
+}
+
+export class NodeNotPairedError extends Error {
+  constructor(public readonly capability: ClientCapability) {
+    super(`no paired node with capability: ${capability}`);
+    this.name = "NodeNotPairedError";
+  }
+}
