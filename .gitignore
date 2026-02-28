@@ -67,7 +67,7 @@ coverage/
 *.log
 
 tmp/
-artifacts/
+/artifacts/
 .tyrum-gateway-build.lock
 web/node_modules/
 web/.next/
