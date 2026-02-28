@@ -16,6 +16,7 @@ export class TaskResultRegistry {
     }
   >();
   private readonly buffered = new Map<string, TaskResult>();
+  private readonly preWaitErrors = new Map<string, Error>();
   private readonly terminal = new Map<string, true>();
   private readonly tasksByConnection = new Map<string, Set<string>>();
   private readonly connectionByTask = new Map<string, string>();
@@ -44,14 +45,10 @@ export class TaskResultRegistry {
     if (normalizedConnectionId.length === 0) return;
     if (this.terminal.has(normalizedTaskId)) return;
 
-    this.connectionByTask.delete(normalizedTaskId);
-    this.connectionByTask.set(normalizedTaskId, normalizedConnectionId);
-    this.evictOldest(this.connectionByTask, this.maxAssociations);
-
     const pending = this.pending.get(normalizedTaskId);
+    this.setAssociation(normalizedTaskId, normalizedConnectionId);
     if (pending && !pending.connectionId) {
       pending.connectionId = normalizedConnectionId;
-      this.addTaskToConnectionIndex(normalizedTaskId, normalizedConnectionId);
     }
   }
 
@@ -61,6 +58,14 @@ export class TaskResultRegistry {
       return Promise.reject(new Error("taskId is required"));
     }
 
+    const preWaitError = this.preWaitErrors.get(normalizedTaskId);
+    if (preWaitError) {
+      this.preWaitErrors.delete(normalizedTaskId);
+      this.clearAssociation(normalizedTaskId);
+      this.markTerminal(normalizedTaskId);
+      return Promise.reject(preWaitError);
+    }
+
     if (this.terminal.has(normalizedTaskId)) {
       return Promise.reject(new Error(`task result no longer available: ${normalizedTaskId}`));
     }
@@ -68,7 +73,8 @@ export class TaskResultRegistry {
     const buffered = this.buffered.get(normalizedTaskId);
     if (buffered) {
       this.buffered.delete(normalizedTaskId);
-      this.connectionByTask.delete(normalizedTaskId);
+      this.preWaitErrors.delete(normalizedTaskId);
+      this.clearAssociation(normalizedTaskId);
       this.markTerminal(normalizedTaskId);
       return Promise.resolve(buffered);
     }
@@ -91,10 +97,7 @@ export class TaskResultRegistry {
       if (!entry) return;
 
       this.pending.delete(normalizedTaskId);
-      if (entry.connectionId) {
-        this.removeTaskFromConnectionIndex(normalizedTaskId, entry.connectionId);
-      }
-      this.connectionByTask.delete(normalizedTaskId);
+      this.clearAssociation(normalizedTaskId, entry.connectionId);
       this.markTerminal(normalizedTaskId);
       entry.reject(new Error(`task result timeout: ${normalizedTaskId}`));
     }, timeoutMs);
@@ -112,10 +115,7 @@ export class TaskResultRegistry {
     this.pending.set(normalizedTaskId, entry);
 
     if (entry.connectionId) {
-      this.connectionByTask.delete(normalizedTaskId);
-      this.connectionByTask.set(normalizedTaskId, entry.connectionId);
-      this.evictOldest(this.connectionByTask, this.maxAssociations);
-      this.addTaskToConnectionIndex(normalizedTaskId, entry.connectionId);
+      this.setAssociation(normalizedTaskId, entry.connectionId);
     }
 
     return promise;
@@ -131,10 +131,8 @@ export class TaskResultRegistry {
     if (pending) {
       clearTimeout(pending.timer);
       this.pending.delete(normalizedTaskId);
-      if (pending.connectionId) {
-        this.removeTaskFromConnectionIndex(normalizedTaskId, pending.connectionId);
-      }
-      this.connectionByTask.delete(normalizedTaskId);
+      this.preWaitErrors.delete(normalizedTaskId);
+      this.clearAssociation(normalizedTaskId, pending.connectionId);
       this.markTerminal(normalizedTaskId);
       pending.resolve(result);
       return true;
@@ -145,6 +143,8 @@ export class TaskResultRegistry {
     }
 
     this.buffered.set(normalizedTaskId, result);
+    this.preWaitErrors.delete(normalizedTaskId);
+    this.clearAssociation(normalizedTaskId);
     this.evictOldest(this.buffered, this.maxBuffered);
     return true;
   }
@@ -162,17 +162,30 @@ export class TaskResultRegistry {
     let rejected = 0;
     for (const taskId of taskIds) {
       const entry = this.pending.get(taskId);
-      if (!entry) continue;
-
-      clearTimeout(entry.timer);
-      this.pending.delete(taskId);
-      if (entry.connectionId) {
-        this.removeTaskFromConnectionIndex(taskId, entry.connectionId);
+      if (entry) {
+        clearTimeout(entry.timer);
+        this.pending.delete(taskId);
+        this.preWaitErrors.delete(taskId);
+        this.clearAssociation(taskId, entry.connectionId);
+        this.markTerminal(taskId);
+        rejected += 1;
+        entry.reject(new Error(`task connection disconnected: ${normalizedConnectionId}`));
+        continue;
       }
-      this.connectionByTask.delete(taskId);
+
+      if (this.buffered.has(taskId)) {
+        this.clearAssociation(taskId);
+        continue;
+      }
+
+      this.preWaitErrors.delete(taskId);
+      this.preWaitErrors.set(
+        taskId,
+        new Error(`task connection disconnected: ${normalizedConnectionId}`),
+      );
+      this.evictOldest(this.preWaitErrors, this.maxTerminal);
+      this.clearAssociation(taskId);
       this.markTerminal(taskId);
-      rejected += 1;
-      entry.reject(new Error(`task connection disconnected: ${normalizedConnectionId}`));
     }
 
     return rejected;
@@ -192,13 +205,40 @@ export class TaskResultRegistry {
     }
   }
 
-  private addTaskToConnectionIndex(taskId: string, connectionId: string): void {
+  private clearAssociation(taskId: string, fallbackConnectionId?: string): void {
+    const connectionId = this.connectionByTask.get(taskId) ?? fallbackConnectionId;
+    this.connectionByTask.delete(taskId);
+    if (connectionId) {
+      this.removeTaskFromConnectionIndex(taskId, connectionId);
+    }
+  }
+
+  private setAssociation(taskId: string, connectionId: string): void {
+    const prev = this.connectionByTask.get(taskId);
+    if (prev && prev !== connectionId) {
+      this.removeTaskFromConnectionIndex(taskId, prev);
+    }
+
+    this.connectionByTask.delete(taskId);
+    this.connectionByTask.set(taskId, connectionId);
+
     let tasks = this.tasksByConnection.get(connectionId);
     if (!tasks) {
       tasks = new Set<string>();
       this.tasksByConnection.set(connectionId, tasks);
     }
     tasks.add(taskId);
+
+    while (this.connectionByTask.size > this.maxAssociations) {
+      const oldestTaskId = this.connectionByTask.keys().next().value as string | undefined;
+      if (!oldestTaskId) break;
+      const oldestConnectionId = this.connectionByTask.get(oldestTaskId);
+      this.connectionByTask.delete(oldestTaskId);
+      this.preWaitErrors.delete(oldestTaskId);
+      if (oldestConnectionId) {
+        this.removeTaskFromConnectionIndex(oldestTaskId, oldestConnectionId);
+      }
+    }
   }
 
   private removeTaskFromConnectionIndex(taskId: string, connectionId: string): void {

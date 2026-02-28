@@ -53,4 +53,19 @@ describe("TaskResultRegistry", () => {
     await expect(pending).rejects.toThrow(/disconnected/i);
     expect(registry.resolve("task-1", { ok: true })).toBe(false);
   });
+
+  it("rejects waits when the associated connection closes before wait starts", async () => {
+    vi.useFakeTimers();
+
+    const registry = new TaskResultRegistry();
+    registry.associate("task-1", "conn-1");
+    registry.rejectAllForConnection("conn-1");
+
+    const pending = registry.wait("task-1", { timeoutMs: 10 });
+    const rejection = expect(pending).rejects.toThrow(/disconnected/i);
+
+    await vi.advanceTimersByTimeAsync(11);
+
+    await rejection;
+  });
 });
