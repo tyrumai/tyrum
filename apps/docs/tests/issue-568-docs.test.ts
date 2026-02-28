@@ -1,28 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { readdir, readFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { readFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { listMarkdownFiles } from "./markdown-utils.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../..");
-
-async function listMarkdownFiles(dir: string): Promise<string[]> {
-  const entries = await readdir(dir, { withFileTypes: true });
-
-  const files: string[] = [];
-  for (const entry of entries) {
-    const entryPath = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...(await listMarkdownFiles(entryPath)));
-      continue;
-    }
-    if (entry.isFile() && entry.name.endsWith(".md")) {
-      files.push(entryPath);
-    }
-  }
-
-  return files.sort();
-}
 
 describe("Issue #568 docs", () => {
   it("updates install + getting started docs for /ui and /auth/session cookie bootstrap", async () => {

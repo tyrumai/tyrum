@@ -56,17 +56,47 @@ The architecture supports multiple kinds of memory items, all scoped to `agent_i
 - **Procedures (procedural):** durable strategy records (“this approach works for capability X”) with success/failure signals.
 - **Episodes (episodic):** stored as events plus optional summaries; episodes are the raw material for consolidation.
 
-## Memory tools (agent-facing interface)
+## Interfaces (agent vs operator)
 
-Agents interact with durable memory via policy-gated tools that support **search + CRUD**:
+Memory v1 is stored in the StateStore and is **agent-scoped** (`agent_id`). The runtime uses it to build a safe, budgeted recall context for model turns, while operators use the Gateway’s operator surfaces to inspect/manage durable state.
 
-- **Search:** retrieve relevant memory items for a query (keyword and/or semantic), returning stable ids and snippets.
-- **Create:** store a new memory item (fact/note/procedure) with provenance, confidence, and sensitivity classification.
-- **Read:** fetch a memory item by id (and optionally list by filters).
-- **Update:** revise an existing memory item (for example increase confidence, refine phrasing, or attach better provenance).
-- **Delete:** delete/forget a memory item by id; deletion produces an auditable tombstone and invalidates derived indexes.
+### Agent read path (Memory v1 digest)
 
-All memory tool operations are implicitly scoped to the active `agent_id` so knowledge learned in one channel is available in another.
+- Agents do not call the operator memory APIs directly.
+- During turn preparation, the runtime builds a **Memory v1 digest** (bounded + attributed + sensitivity-aware) and injects it into the model’s context.
+
+### Operator APIs (WebSocket + HTTP)
+
+- WebSocket requests (typed, operator surface):
+  - `memory.list`, `memory.search`, `memory.get` (require `operator.read`)
+  - `memory.create`, `memory.update`, `memory.delete`, `memory.forget`, `memory.export` (require `operator.write`)
+- HTTP download route (resource plane):
+  - `GET /memory/exports/:id` (requires `operator.read`) downloads the JSON export created by `memory.export`.
+
+## Operator workflows (Memory v1)
+
+These workflows are intentionally operator-scoped: they’re designed for audit/debug/compliance, not for in-prompt agent self-modification.
+
+### Inspect (list/search/get)
+
+- **List recent items:** call `memory.list` and page with `next_cursor`.
+- **Search:** call `memory.search` with a query (and optional filters).
+- **Inspect a specific item:** use the returned `memory_item_id` and call `memory.get` to view the full item + provenance.
+- These operations require `operator.read`.
+
+### Export (artifact)
+
+- Run `memory.export` (requires `operator.write`) to produce an export artifact and return an `artifact_id`.
+- Download the bytes via `GET /memory/exports/:id` (requires `operator.read`).
+- Treat exports as sensitive operational data; store and share them accordingly.
+
+### Forget + tombstones
+
+Forgetting is permanent deletion of canonical content, with audit-friendly proof:
+
+- Use `memory.forget` (requires `operator.write`) with one or more selectors; it requires an explicit `confirm: "FORGET"`.
+- Forgetting returns **tombstones** that preserve stable ids + deletion metadata (who/when/why) without retaining the deleted content.
+- Tombstones can be exported (via `memory.export` with `include_tombstones: true`) to support compliance workflows.
 
 ## Encoding (write path)
 
