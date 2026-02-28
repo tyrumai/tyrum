@@ -16,7 +16,7 @@ export type ConfirmationFn = (prompt: string) => Promise<boolean>;
 type PixelPoint = { x: number; y: number };
 
 function parsePixelRef(ref: string): PixelPoint | null {
-  const match = /^pixel:(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/.exec(ref.trim());
+  const match = /^pixel:\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/.exec(ref.trim());
   if (!match) return null;
   const x = Number(match[1]);
   const y = Number(match[2]);

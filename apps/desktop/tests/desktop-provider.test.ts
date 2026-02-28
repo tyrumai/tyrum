@@ -203,6 +203,23 @@ describe("DesktopProvider", () => {
     expect(backend.calls).toContainEqual({ method: "clickMouse", args: [10, 20, undefined] });
   });
 
+  it("poweruser accepts whitespace in pixel refs", async () => {
+    const permissions = resolvePermissions("poweruser", {});
+    const backend = new MockDesktopBackend();
+    const provider = new DesktopProvider(backend, permissions, vi.fn<ConfirmationFn>());
+
+    const result = await provider.execute(
+      makeAction({
+        op: "act",
+        target: { kind: "ref", ref: "pixel:10, 20" },
+        action: { kind: "click" },
+      }),
+    );
+
+    expect(result.success).toBe(true);
+    expect(backend.calls).toContainEqual({ method: "clickMouse", args: [10, 20, undefined] });
+  });
+
   it("poweruser supports act(double_click) on a pixel ref", async () => {
     const permissions = resolvePermissions("poweruser", {});
     const backend = new MockDesktopBackend();
