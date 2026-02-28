@@ -245,7 +245,7 @@ export function ConnectionPage({ core }: ConnectionPageProps) {
 
         <TabsContent value="operator">
           {core ? (
-            <OperatorConnectPage core={core} mode="desktop" />
+            <OperatorConnectPage core={core} mode="desktop" hideHeader />
           ) : (
             <Card>
               <CardContent className="py-6 text-center text-sm text-fg-muted">

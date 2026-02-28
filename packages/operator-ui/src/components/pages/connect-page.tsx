@@ -8,7 +8,15 @@ import { Alert } from "../ui/alert.js";
 import { readGatewayError } from "../../utils/gateway-error.js";
 import { useOperatorStore } from "../../use-operator-store.js";
 
-export function ConnectPage({ core, mode }: { core: OperatorCore; mode: OperatorUiMode }) {
+export function ConnectPage({
+  core,
+  mode,
+  hideHeader,
+}: {
+  core: OperatorCore;
+  mode: OperatorUiMode;
+  hideHeader?: boolean;
+}) {
   const connection = useOperatorStore(core.connectionStore);
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -53,7 +61,9 @@ export function ConnectPage({ core, mode }: { core: OperatorCore; mode: Operator
 
   return (
     <div className="grid gap-6">
-      <h1 className="text-2xl font-semibold tracking-tight text-fg">{title}</h1>
+      {hideHeader ? null : (
+        <h1 className="text-2xl font-semibold tracking-tight text-fg">{title}</h1>
+      )}
 
       {isWeb ? (
         <Card>

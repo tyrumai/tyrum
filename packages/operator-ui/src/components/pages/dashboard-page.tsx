@@ -15,6 +15,7 @@ import { useOperatorStore } from "../../use-operator-store.js";
 export interface DashboardPageProps {
   core: OperatorCore;
   onNavigate?: (id: string) => void;
+  hideHeader?: boolean;
 }
 
 function StatCard({
@@ -76,7 +77,7 @@ function StatCard({
   );
 }
 
-export function DashboardPage({ core, onNavigate }: DashboardPageProps) {
+export function DashboardPage({ core, onNavigate, hideHeader }: DashboardPageProps) {
   const status = useOperatorStore(core.statusStore);
   const connection = useOperatorStore(core.connectionStore);
   const approvals = useOperatorStore(core.approvalsStore);
@@ -108,21 +109,23 @@ export function DashboardPage({ core, onNavigate }: DashboardPageProps) {
 
   return (
     <div className="grid gap-6">
-      <PageHeader
-        title="Dashboard"
-        className="mb-0"
-        actions={
-          <Button
-            variant="secondary"
-            data-testid="dashboard-refresh-status"
-            onClick={() => {
-              refreshDashboard();
-            }}
-          >
-            Refresh
-          </Button>
-        }
-      />
+      {hideHeader ? null : (
+        <PageHeader
+          title="Dashboard"
+          className="mb-0"
+          actions={
+            <Button
+              variant="secondary"
+              data-testid="dashboard-refresh-status"
+              onClick={() => {
+                refreshDashboard();
+              }}
+            >
+              Refresh
+            </Button>
+          }
+        />
+      )}
 
       <LiveRegion data-testid="dashboard-approvals-live">
         {approvals.pendingIds.length} pending approvals
