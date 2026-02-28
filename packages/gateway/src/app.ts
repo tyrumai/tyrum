@@ -431,7 +431,10 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       payload["error_stack"] = err.stack;
     }
 
-    if (err.name === "InvalidRequestError") {
+    // Note: Do not treat raw ZodErrors as invalid_request.
+    // Zod is used to parse server-side data (DB rows/response shapes) and those failures should surface as 500s.
+    const errCode = (err as { code?: unknown }).code;
+    if (err.name === "InvalidRequestError" || errCode === "invalid_request") {
       container.logger.warn("http.invalid_request", payload);
       return c.json({ error: "invalid_request", message: err.message }, 400);
     }

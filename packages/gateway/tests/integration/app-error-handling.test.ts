@@ -82,6 +82,36 @@ describe("gateway app global error handling", () => {
     }
   });
 
+  it("returns structured JSON for invalid_request-coded errors", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const { app } = await createTestApp();
+
+      app.post("/__invalid_code", () => {
+        const err = new Error("invalid payload") as Error & { code: "invalid_request" };
+        err.code = "invalid_request";
+        throw err;
+      });
+
+      const res = await app.request("/__invalid_code", { method: "POST" });
+      expect(res.status).toBe(400);
+      expect(res.headers.get("content-type") ?? "").toMatch(/application\/json/i);
+      const body = (await res.json()) as { error: string; message: string };
+      expect(body).toEqual({ error: "invalid_request", message: "invalid payload" });
+
+      const invalidRequestRecords = parseStructuredLogRecords(logSpy).filter(
+        (record) => record["msg"] === "http.invalid_request",
+      );
+      expect(invalidRequestRecords).toHaveLength(1);
+      const record = invalidRequestRecords[0] as Record<string, unknown>;
+      expect(record["method"]).toBe("POST");
+      expect(record["path"]).toBe("/__invalid_code");
+      expect(typeof record["request_id"]).toBe("string");
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
   it("treats server-side ZodErrors as internal errors (500)", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     try {
