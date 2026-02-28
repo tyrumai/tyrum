@@ -99,21 +99,21 @@ function resolveArtifactsForApprovalStep(
   });
   if (!stepId) return null;
 
-  let latestAttempt: ExecutionAttempt | undefined;
+  let latestAttemptWithArtifacts: ExecutionAttempt | undefined;
   for (const attemptId of runsState.attemptIdsByStepId[stepId] ?? []) {
     const attempt = runsState.attemptsById[attemptId];
-    if (!attempt) continue;
-    if (!latestAttempt || attempt.attempt > latestAttempt.attempt) {
-      latestAttempt = attempt;
+    if (!attempt || attempt.artifacts.length === 0) continue;
+    if (!latestAttemptWithArtifacts || attempt.attempt > latestAttemptWithArtifacts.attempt) {
+      latestAttemptWithArtifacts = attempt;
     }
   }
 
-  if (!latestAttempt || latestAttempt.artifacts.length === 0) return null;
+  if (!latestAttemptWithArtifacts) return null;
 
   return {
     runId,
-    attemptId: latestAttempt.attempt_id,
-    artifacts: latestAttempt.artifacts,
+    attemptId: latestAttemptWithArtifacts.attempt_id,
+    artifacts: latestAttemptWithArtifacts.artifacts,
   };
 }
 
