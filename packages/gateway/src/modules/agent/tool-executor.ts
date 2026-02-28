@@ -23,6 +23,7 @@ import type { SqlDb } from "../../statestore/types.js";
 import { acquireWorkspaceLease, releaseWorkspaceLease } from "../workspace/lease.js";
 import type { ArtifactStore } from "../artifact/store.js";
 import { persistExecutionArtifactBytes } from "../artifact/execution-artifacts.js";
+import { NoCapableNodeError, NodeNotPairedError } from "../../ws/protocol/errors.js";
 
 const MAX_RESPONSE_BYTES = 32_768;
 const TRUNCATION_MARKER = "...(truncated)";
@@ -594,8 +595,17 @@ export class ToolExecutor {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      const code = message.toLowerCase().includes("timeout") ? "timeout" : "dispatch_failed";
-      const retryable = code === "timeout";
+      let code = "dispatch_failed";
+      let retryable = false;
+
+      if (message.toLowerCase().includes("timeout")) {
+        code = "timeout";
+        retryable = true;
+      } else if (err instanceof NoCapableNodeError) {
+        code = "no_capable_node";
+      } else if (err instanceof NodeNotPairedError) {
+        code = "not_paired";
+      }
       serializedPayload = JSON.stringify({
         ok: false,
         error: { code, message, retryable },
