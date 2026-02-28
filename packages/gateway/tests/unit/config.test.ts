@@ -39,4 +39,21 @@ describe("loadConfig", () => {
       }).execution.engineApiEnabled,
     ).toBe(false);
   });
+
+  it("defaults invalid optional values instead of throwing", () => {
+    const config = loadConfig({
+      GATEWAY_TOKEN: "test-token",
+      TYRUM_ROLE: "not-a-role",
+      TYRUM_TOOLRUNNER_LAUNCHER: "not-a-launcher",
+      TYRUM_ARTIFACT_STORE: "not-a-store",
+      TYRUM_CHANNEL_TYPING_MODE: "not-a-mode",
+      TYRUM_TOOLRUNNER_HARDENING_PROFILE: "not-a-profile",
+    });
+
+    expect(config.runtime.role).toBe("all");
+    expect(config.execution.toolrunner.launcher).toBe("local");
+    expect(config.artifacts.store).toBe("fs");
+    expect(config.channels.typingMode).toBe("never");
+    expect(config.toolrunner.hardeningProfile).toBe("baseline");
+  });
 });

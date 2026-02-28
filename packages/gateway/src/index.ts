@@ -59,7 +59,7 @@ import { AgentRegistry } from "./modules/agent/registry.js";
 import { isRecord, parseJsonOrYaml } from "./utils/parse-json-or-yaml.js";
 import { loadLifecycleHooksFromHome } from "./modules/hooks/config.js";
 import { LifecycleHooksRuntime } from "./modules/hooks/runtime.js";
-import { loadConfig } from "./config.js";
+import { loadConfig, parseTruthyEnvFlag } from "./config.js";
 
 // Re-export for library consumers
 export { VERSION } from "./version.js";
@@ -234,8 +234,8 @@ export function assertNonLoopbackDeploymentGuardrails(input: {
   role: GatewayRole;
   host: string;
   token: string | undefined;
-  tlsReady: boolean;
-  allowInsecureHttp: boolean;
+  tlsReady?: boolean;
+  allowInsecureHttp?: boolean;
 }): NonLoopbackTransportPolicy {
   const shouldRunEdge = input.role === "all" || input.role === "edge";
   if (!shouldRunEdge) return "local";
@@ -261,8 +261,12 @@ export function assertNonLoopbackDeploymentGuardrails(input: {
     );
   }
 
-  if (input.tlsReady) return "tls";
-  if (input.allowInsecureHttp) return "insecure";
+  const tlsReady = input.tlsReady ?? parseTruthyEnvFlag(process.env["TYRUM_TLS_READY"]);
+  if (tlsReady) return "tls";
+
+  const allowInsecureHttp =
+    input.allowInsecureHttp ?? parseTruthyEnvFlag(process.env["TYRUM_ALLOW_INSECURE_HTTP"]);
+  if (allowInsecureHttp) return "insecure";
 
   throw new Error(
     "Gateway is configured to bind to a non-loopback address. Remote operation requires TLS. " +
@@ -972,17 +976,13 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
   // Initialize the token store early so a generated token is present before config validation.
   const tokenStore = new TokenStore(homeForTokenStore);
   const token = await tokenStore.initialize();
-  process.env["GATEWAY_TOKEN"] = token;
 
-  const baseConfig = loadConfig(process.env);
-  const config = {
-    ...baseConfig,
-    runtime: {
-      ...baseConfig.runtime,
-      role,
-      instanceId,
-    },
-  };
+  const config = loadConfig({
+    ...process.env,
+    GATEWAY_TOKEN: token,
+    TYRUM_ROLE: role,
+    TYRUM_INSTANCE_ID: instanceId,
+  });
 
   const host = config.server.host;
   const port = config.server.port;

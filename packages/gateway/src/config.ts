@@ -12,7 +12,7 @@ function normalizeOptionalString(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function parseTruthyEnvFlag(value: unknown): boolean {
+export function parseTruthyEnvFlag(value: unknown): boolean {
   const trimmed = normalizeOptionalString(value)?.toLowerCase();
   if (!trimmed) return false;
   return !["0", "false", "off", "no"].includes(trimmed);
@@ -22,6 +22,12 @@ function parseFalsyEnvFlag(value: unknown): boolean {
   const trimmed = normalizeOptionalString(value)?.toLowerCase();
   if (!trimmed) return false;
   return ["0", "false", "off", "no"].includes(trimmed);
+}
+
+function parseStrictTrueEnvFlag(value: unknown): boolean {
+  const trimmed = normalizeOptionalString(value);
+  if (!trimmed) return false;
+  return trimmed === "1" || trimmed.toLowerCase() === "true";
 }
 
 function resolveDefaultMigrationsDir(dbPath: string): string {
@@ -51,37 +57,21 @@ function parsePort(raw: unknown, ctx: z.RefinementCtx): number {
   return parsed;
 }
 
-function parseGatewayRole(
-  raw: unknown,
-  ctx: z.RefinementCtx,
-): "all" | "edge" | "worker" | "scheduler" {
+function parseGatewayRole(raw: unknown): "all" | "edge" | "worker" | "scheduler" {
   const value = normalizeOptionalString(raw)?.toLowerCase();
-  if (!value) return "all";
-  if (value === "all" || value === "edge" || value === "worker" || value === "scheduler") {
+  if (value === "all" || value === "edge" || value === "worker" || value === "scheduler")
     return value;
-  }
-  ctx.addIssue({
-    code: z.ZodIssueCode.custom,
-    message: `TYRUM_ROLE must be one of all|edge|worker|scheduler (got '${value}')`,
-  });
-  return z.NEVER;
+  return "all";
 }
 
 function parseToolRunnerLauncher(
   raw: unknown,
   isKubernetesRuntime: boolean,
-  ctx: z.RefinementCtx,
 ): "local" | "kubernetes" {
   const value = normalizeOptionalString(raw)?.toLowerCase();
-  if (!value) {
-    return isKubernetesRuntime ? "kubernetes" : "local";
-  }
-  if (value === "local" || value === "kubernetes") return value;
-  ctx.addIssue({
-    code: z.ZodIssueCode.custom,
-    message: `TYRUM_TOOLRUNNER_LAUNCHER must be 'local' or 'kubernetes' (got '${value}')`,
-  });
-  return z.NEVER;
+  if (!value) return isKubernetesRuntime ? "kubernetes" : "local";
+  if (value === "kubernetes") return "kubernetes";
+  return "local";
 }
 
 type ToolRunnerConfig =
@@ -178,7 +168,7 @@ export const GatewayConfigSchema = z
         .optional(),
 
       /** `TYRUM_ROLE` (default: `all`). */
-      role: z.unknown().transform((value, ctx) => parseGatewayRole(value, ctx)),
+      role: z.unknown().transform((value) => parseGatewayRole(value)),
     }),
 
     paths: z.object({
@@ -210,7 +200,7 @@ export const GatewayConfigSchema = z
        * `TYRUM_OTEL_ENABLED` (default: `false`).
        * When enabled, the gateway starts OpenTelemetry tracing.
        */
-      enabled: z.unknown().transform((value) => parseTruthyEnvFlag(value)),
+      enabled: z.unknown().transform((value) => typeof value === "string" && value === "1"),
 
       /** `OTEL_EXPORTER_OTLP_ENDPOINT` (default: unset). Base OTLP HTTP endpoint. */
       exporterOtlpEndpoint: z
@@ -229,10 +219,9 @@ export const GatewayConfigSchema = z
       /** `TYRUM_ARTIFACT_STORE` (default: `fs`). One of `fs` or `s3`. */
       store: z
         .unknown()
-        .transform((value) => normalizeOptionalString(value)?.toLowerCase() ?? "fs")
-        .refine((value) => value === "fs" || value === "s3", {
-          message: "TYRUM_ARTIFACT_STORE must be 'fs' or 's3'",
-        }),
+        .transform((value) =>
+          normalizeOptionalString(value)?.toLowerCase() === "s3" ? "s3" : "fs",
+        ),
 
       /** `TYRUM_ARTIFACTS_DIR` (default: `${TYRUM_HOME}/artifacts`). */
       dir: z
@@ -262,7 +251,7 @@ export const GatewayConfigSchema = z
         /** `TYRUM_ARTIFACTS_S3_FORCE_PATH_STYLE` (default: unset). */
         forcePathStyle: z
           .unknown()
-          .transform((value) => parseTruthyEnvFlag(value))
+          .transform((value) => parseStrictTrueEnvFlag(value))
           .optional(),
 
         /** `TYRUM_ARTIFACTS_S3_ACCESS_KEY_ID` (default: unset). */
@@ -317,7 +306,7 @@ export const GatewayConfigSchema = z
         })
         .transform((value, ctx): ToolRunnerConfig => {
           const isKubernetesRuntime = Boolean(value.kubernetesServiceHost);
-          const launcher = parseToolRunnerLauncher(value.launcher, isKubernetesRuntime, ctx);
+          const launcher = parseToolRunnerLauncher(value.launcher, isKubernetesRuntime);
 
           if (launcher === "kubernetes") {
             const namespace =
@@ -361,16 +350,13 @@ export const GatewayConfigSchema = z
       typingAutomationEnabled: z.unknown().transform((value) => parseTruthyEnvFlag(value)),
 
       /** `TYRUM_CHANNEL_TYPING_MODE` (default: `never`). */
-      typingMode: z
-        .unknown()
-        .transform((value) => normalizeOptionalString(value)?.toLowerCase() ?? "never")
-        .refine(
-          (value) =>
-            value === "never" || value === "message" || value === "thinking" || value === "instant",
-          {
-            message: "TYRUM_CHANNEL_TYPING_MODE must be one of never|message|thinking|instant",
-          },
-        ),
+      typingMode: z.unknown().transform((value) => {
+        const mode = normalizeOptionalString(value)?.toLowerCase();
+        if (mode === "never" || mode === "message" || mode === "thinking" || mode === "instant") {
+          return mode;
+        }
+        return "never";
+      }),
 
       /** `TYRUM_CHANNEL_TYPING_REFRESH_MS` (default: `4000`). */
       typingRefreshMs: z.unknown().transform((value) => {
@@ -422,8 +408,8 @@ export const GatewayConfigSchema = z
     }),
 
     policy: z.object({
-      /** `TYRUM_POLICY_ENABLED` (default: unset). */
-      enabled: z.unknown().transform((value) => parseTruthyEnvFlag(value)),
+      /** `TYRUM_POLICY_ENABLED` (default: `true`). */
+      enabled: z.unknown().transform((value) => !parseFalsyEnvFlag(value)),
 
       /** `TYRUM_POLICY_MODE` (default: unset). */
       mode: z
@@ -524,10 +510,9 @@ export const GatewayConfigSchema = z
       /** `TYRUM_TOOLRUNNER_HARDENING_PROFILE` (default: baseline). */
       hardeningProfile: z
         .unknown()
-        .transform((value) => normalizeOptionalString(value)?.toLowerCase() ?? "baseline")
-        .refine((value) => value === "baseline" || value === "hardened", {
-          message: "TYRUM_TOOLRUNNER_HARDENING_PROFILE must be 'baseline' or 'hardened'",
-        }),
+        .transform((value) =>
+          normalizeOptionalString(value)?.toLowerCase() === "hardened" ? "hardened" : "baseline",
+        ),
     }),
 
     workspace: z.object({
