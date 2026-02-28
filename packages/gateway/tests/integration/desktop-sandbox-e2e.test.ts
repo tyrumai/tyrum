@@ -361,7 +361,7 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
             {
               capability: "tyrum.desktop",
               action: "Desktop",
-              args: { op: "snapshot", include_tree: false },
+              args: { op: "snapshot", include_tree: true, max_nodes: 512, max_text_chars: 8192 },
               timeout_ms: 120_000,
             },
             {
@@ -373,6 +373,7 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
           expect(snapshotResult.error).toBeUndefined();
           expect(snapshotResult.output).toContain('"ok":true');
           expect(snapshotResult.output).toContain("artifact://");
+          expect(snapshotResult.output).toContain("tree_artifact");
           expect(snapshotResult.output).not.toContain("bytesBase64");
 
           const artifactRow = await container.db.get<{
@@ -382,10 +383,10 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
             attempt_id: string | null;
           }>(
             `SELECT artifact_id, run_id, step_id, attempt_id
-             FROM execution_artifacts
-             WHERE run_id = ? AND step_id = ?
-             ORDER BY created_at DESC
-             LIMIT 1`,
+	             FROM execution_artifacts
+	             WHERE run_id = ? AND step_id = ? AND kind = 'screenshot'
+	             ORDER BY created_at DESC
+	             LIMIT 1`,
             [scope.runId, scope.stepId],
           );
           expect(artifactRow).toBeTruthy();
@@ -397,6 +398,26 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
           expect(artifactRes.status).toBe(200);
           expect(artifactRes.headers.get("content-type")).toBe("image/png");
           expect(Buffer.from(await artifactRes.arrayBuffer()).length).toBeGreaterThan(0);
+
+          const treeRow = await container.db.get<{
+            artifact_id: string;
+          }>(
+            `SELECT artifact_id
+	             FROM execution_artifacts
+	             WHERE run_id = ? AND step_id = ? AND kind = 'dom_snapshot'
+	             ORDER BY created_at DESC
+	             LIMIT 1`,
+            [scope.runId, scope.stepId],
+          );
+          expect(treeRow).toBeTruthy();
+
+          const treeRes = await app.request(
+            `/runs/${scope.runId}/artifacts/${treeRow!.artifact_id}`,
+          );
+          expect(treeRes.status).toBe(200);
+          expect(treeRes.headers.get("content-type")).toBe("application/json");
+          const treeJson = (await treeRes.json()) as { root?: { role?: unknown } } | undefined;
+          expect(treeJson?.root?.role).toEqual(expect.any(String));
 
           const actResult = await executor.execute(
             "tool.node.dispatch",
@@ -415,6 +436,15 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
 
           expect(actResult.error).toBeUndefined();
           expect(actResult.output).toContain('"ok":true');
+
+          const extractMatches = (result: {
+            ok: boolean;
+            result?: unknown;
+          }): DesktopQueryMatch[] => {
+            if (!result.ok) return [];
+            const payload = result.result as { matches?: unknown } | undefined;
+            return Array.isArray(payload?.matches) ? (payload?.matches as DesktopQueryMatch[]) : [];
+          };
 
           const queryDeadlineMs = Date.now() + 30_000;
           for (;;) {
@@ -435,16 +465,11 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
               { timeoutMs: 60_000 },
             );
 
-            if (query.result.ok) {
-              const payload = query.result.result as { matches?: unknown } | undefined;
-              const matches = Array.isArray(payload?.matches)
-                ? (payload?.matches as DesktopQueryMatch[])
-                : [];
-              if (matches.length > 0) {
-                expect(matches[0]?.kind).toBe("a11y");
-                expect(matches[0]?.node?.role).toBe("desktop frame");
-                break;
-              }
+            const matches = extractMatches(query.result);
+            if (matches.length > 0) {
+              expect(matches[0]?.kind).toBe("a11y");
+              expect(matches[0]?.node?.role).toBe("desktop frame");
+              break;
             }
 
             if (Date.now() > queryDeadlineMs) {
@@ -455,6 +480,125 @@ describe("e2e: tool.node.dispatch against docker desktop-sandbox", () => {
             }
 
             await delay(500);
+          }
+
+          const hasZenity =
+            runDocker(["exec", containerName, "bash", "-lc", "command -v zenity >/dev/null 2>&1"], {
+              timeoutMs: DOCKER_EXEC_TIMEOUT_MS,
+            }).status === 0;
+
+          if (hasZenity) {
+            const okLabel = "Tyrum A11y OK";
+
+            const startDialog = runDocker(
+              [
+                "exec",
+                containerName,
+                "bash",
+                "-lc",
+                [
+                  "DISPLAY=:0",
+                  "zenity --question",
+                  '--title "Tyrum A11y Smoke"',
+                  '--text "AT-SPI click smoke"',
+                  `--ok-label "${okLabel}"`,
+                  '--cancel-label "Tyrum A11y Cancel"',
+                  ">/tmp/tyrum-zenity.log 2>&1 &",
+                ].join(" "),
+              ],
+              { timeoutMs: DOCKER_EXEC_TIMEOUT_MS },
+            );
+            assertDockerOk(
+              startDialog,
+              "Failed to start zenity dialog inside desktop-sandbox container.",
+            );
+
+            const dialogQueryDeadlineMs = Date.now() + 30_000;
+            for (;;) {
+              const query = await nodeDispatchService.dispatchAndWait(
+                {
+                  type: "Desktop",
+                  args: {
+                    op: "query",
+                    selector: { kind: "a11y", name: okLabel },
+                    limit: 1,
+                  },
+                },
+                {
+                  runId: scope.runId,
+                  stepId: scope.stepId,
+                  attemptId: scope.attemptId,
+                },
+                { timeoutMs: 60_000 },
+              );
+
+              const matches = extractMatches(query.result);
+              if (matches.length > 0) {
+                expect(matches[0]?.kind).toBe("a11y");
+                expect(matches[0]?.node?.name?.toLowerCase()).toContain(okLabel.toLowerCase());
+                break;
+              }
+
+              if (Date.now() > dialogQueryDeadlineMs) {
+                const message = query.result.error
+                  ? `Desktop a11y query error (zenity button): ${query.result.error}`
+                  : "Desktop a11y query returned no matches for zenity button.";
+                throw new Error(message);
+              }
+
+              await delay(500);
+            }
+
+            const click = await nodeDispatchService.dispatchAndWait(
+              {
+                type: "Desktop",
+                args: {
+                  op: "act",
+                  target: { kind: "a11y", name: okLabel },
+                  action: { kind: "click" },
+                },
+              },
+              {
+                runId: scope.runId,
+                stepId: scope.stepId,
+                attemptId: scope.attemptId,
+              },
+              { timeoutMs: 60_000 },
+            );
+            if (!click.result.ok) {
+              throw new Error(
+                `Desktop a11y act(click) failed: ${click.result.error ?? "<missing>"}`,
+              );
+            }
+
+            const dialogCloseDeadlineMs = Date.now() + 30_000;
+            for (;;) {
+              const query = await nodeDispatchService.dispatchAndWait(
+                {
+                  type: "Desktop",
+                  args: {
+                    op: "query",
+                    selector: { kind: "a11y", name: okLabel },
+                    limit: 1,
+                  },
+                },
+                {
+                  runId: scope.runId,
+                  stepId: scope.stepId,
+                  attemptId: scope.attemptId,
+                },
+                { timeoutMs: 60_000 },
+              );
+
+              const matches = extractMatches(query.result);
+              if (matches.length === 0) break;
+
+              if (Date.now() > dialogCloseDeadlineMs) {
+                throw new Error("Desktop a11y click did not dismiss zenity dialog in time.");
+              }
+
+              await delay(500);
+            }
           }
 
           await container.db.close();

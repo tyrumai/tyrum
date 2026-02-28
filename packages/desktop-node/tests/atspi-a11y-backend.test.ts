@@ -202,6 +202,75 @@ describe("AtSpiDesktopA11yBackend", () => {
     expect(snapshot.tree.root.children.map((n: { name: string }) => n.name)).toEqual(["/a", "/b"]);
   });
 
+  it("includes top-level frame nodes as windows in snapshot()", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    backend.resolveRootAccessible = vi.fn(async () => ({ busName: "app", objectPath: "/root" }));
+    backend.getChildren = vi.fn(async (ref: { objectPath: string }) => {
+      if (ref.objectPath === "/root") {
+        return [
+          { busName: "app", objectPath: "/win1" },
+          { busName: "app", objectPath: "/win2" },
+        ];
+      }
+      return [];
+    });
+    backend.describeAccessible = vi.fn(async (ref: { busName: string; objectPath: string }) => {
+      if (ref.objectPath === "/root") {
+        return {
+          elementRef: "atspi:app|/root",
+          role: "desktop frame",
+          name: "",
+          bounds: { x: 0, y: 0, width: 1280, height: 720 },
+          actions: [],
+          states: [],
+        };
+      }
+
+      if (ref.objectPath === "/win1") {
+        return {
+          elementRef: "atspi:app|/win1",
+          role: "frame",
+          name: "Window One",
+          bounds: { x: 10, y: 20, width: 300, height: 200 },
+          actions: [],
+          states: ["focused"],
+        };
+      }
+
+      return {
+        elementRef: "atspi:app|/win2",
+        role: "frame",
+        name: "Window Two",
+        bounds: { x: 400, y: 20, width: 300, height: 200 },
+        actions: [],
+        states: [],
+      };
+    });
+
+    const snapshot = await backend.snapshot({
+      op: "snapshot",
+      include_tree: true,
+      max_nodes: 16,
+      max_text_chars: 1024,
+    });
+
+    expect(snapshot.windows).toEqual([
+      {
+        ref: "atspi:app|/win1",
+        title: "Window One",
+        bounds: { x: 10, y: 20, width: 300, height: 200 },
+        focused: true,
+      },
+      {
+        ref: "atspi:app|/win2",
+        title: "Window Two",
+        bounds: { x: 400, y: 20, width: 300, height: 200 },
+        focused: false,
+      },
+    ]);
+  });
+
   it("does not consume query node budget on visited nodes", async () => {
     const backend = new AtSpiDesktopA11yBackend() as any;
 

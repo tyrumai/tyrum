@@ -8,6 +8,7 @@ import type {
   DesktopUiNodeSummary,
   DesktopUiRect,
   DesktopUiTree,
+  DesktopWindow,
 } from "@tyrum/schemas";
 
 import { DEFAULT_A11Y_MAX_DEPTH } from "../a11y/prune-ui-tree.js";
@@ -39,6 +40,8 @@ const ATSPI_ROOT_ACCESSIBLE_REF: AtSpiAccessibleRef = {
 };
 
 const QUERY_MAX_NODES = 2_048;
+
+const MAX_WINDOWS = 32;
 
 const ATSPI_STATE_TYPE_NAMES: Array<string | undefined> = [
   "invalid",
@@ -226,6 +229,45 @@ function matchesSelector(input: {
   }
 
   return true;
+}
+
+function extractWindowsFromTree(root: DesktopUiTree["root"]): DesktopWindow[] {
+  const windows: DesktopWindow[] = [];
+  const seen = new Set<string>();
+
+  const visit = (node: DesktopUiTree["root"]): void => {
+    if (windows.length >= MAX_WINDOWS) return;
+
+    const role = node.role.trim().toLowerCase();
+    const isWindowRole = role === "frame" || role === "dialog" || role === "window";
+
+    if (
+      isWindowRole &&
+      typeof node.ref === "string" &&
+      node.ref.length > 0 &&
+      node.ref.length <= 256
+    ) {
+      const ref = node.ref;
+      if (!seen.has(ref)) {
+        seen.add(ref);
+        const title = node.name.trim();
+        windows.push({
+          ref,
+          title: title.length > 0 ? title : undefined,
+          bounds: node.bounds,
+          focused: node.states.some((state) => state.trim().toLowerCase() === "focused"),
+        });
+      }
+    }
+
+    for (const child of node.children) {
+      if (windows.length >= MAX_WINDOWS) break;
+      visit(child);
+    }
+  };
+
+  visit(root);
+  return windows;
 }
 
 async function loadDbus(): Promise<typeof import("dbus-next")> {
@@ -470,7 +512,7 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
     if (!rootNode) throw new Error("AT-SPI snapshot unavailable");
 
     return {
-      windows: [],
+      windows: extractWindowsFromTree(rootNode),
       tree: { root: rootNode },
     };
   }
