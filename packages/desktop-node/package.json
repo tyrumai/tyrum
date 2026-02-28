@@ -23,7 +23,8 @@
     "@nut-tree-fork/nut-js": "^4.2.6",
     "@tyrum/client": "workspace:*",
     "@tyrum/schemas": "workspace:*",
-    "dbus-next": "^0.10.2"
+    "dbus-next": "^0.10.2",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "@types/node": "^25.3.2"
