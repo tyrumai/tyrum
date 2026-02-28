@@ -51,6 +51,7 @@ import { runToolRunnerFromStdio } from "./toolrunner.js";
 import { isPostgresDbUri } from "./statestore/db-uri.js";
 import { VERSION } from "./version.js";
 import { resolveUserTyrumHome } from "./modules/agent/home.js";
+import { loadAgentConfig } from "./modules/agent/workspace.js";
 import { PluginRegistry, resolveBundledPluginsDirFrom } from "./modules/plugins/registry.js";
 import { installPluginFromDir } from "./modules/plugins/installer.js";
 import { AgentRegistry } from "./modules/agent/registry.js";
@@ -1166,6 +1167,12 @@ export async function main(role: GatewayRole = "all"): Promise<void> {
         })
       : undefined;
   protocolDeps.agents = agents;
+  protocolDeps.memoryV1BudgetsProvider = async (agentId?: string) => {
+    const id = agentId?.trim() || "default";
+    const home = agents ? agents.resolveAgentHome(id) : tyrumHome;
+    const config = await loadAgentConfig(home);
+    return config.memory.v1.budgets;
+  };
 
   const app = shouldRunEdge
     ? createApp(container, {

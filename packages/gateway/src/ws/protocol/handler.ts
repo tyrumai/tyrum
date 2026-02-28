@@ -131,6 +131,57 @@ const OPERATOR_MEMORY_EVENT_AUDIENCE = {
   required_scopes: ["operator.read"],
 } as const satisfies WsBroadcastAudience;
 
+async function maybeRunMemoryV1BudgetConsolidation(params: {
+  deps: ProtocolDeps;
+  op: "create" | "update";
+  agentId: string;
+  memoryItemId: string;
+}): Promise<void> {
+  if (!params.deps.memoryV1BudgetsProvider) return;
+  if (!params.deps.memoryV1Dal) return;
+  try {
+    const budgets = await params.deps.memoryV1BudgetsProvider(params.agentId);
+    const consolidation = await params.deps.memoryV1Dal.consolidateToBudgets({
+      budgets,
+      agentId: params.agentId,
+    });
+
+    for (const created of consolidation.created_items) {
+      broadcastEvent(
+        {
+          event_id: crypto.randomUUID(),
+          type: "memory.item.created",
+          occurred_at: created.created_at,
+          payload: { item: created },
+        },
+        params.deps,
+        OPERATOR_MEMORY_EVENT_AUDIENCE,
+      );
+    }
+
+    for (const tombstone of consolidation.deleted_tombstones) {
+      broadcastEvent(
+        {
+          event_id: crypto.randomUUID(),
+          type: "memory.item.deleted",
+          occurred_at: tombstone.deleted_at,
+          payload: { tombstone },
+        },
+        params.deps,
+        OPERATOR_MEMORY_EVENT_AUDIENCE,
+      );
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    params.deps.logger?.error("memory.v1.consolidation_failed", {
+      op: params.op,
+      agent_id: params.agentId,
+      memory_item_id: params.memoryItemId,
+      error: message,
+    });
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Client message handling
 // ---------------------------------------------------------------------------
@@ -2431,6 +2482,13 @@ export async function handleClientMessage(
           OPERATOR_MEMORY_EVENT_AUDIENCE,
         );
 
+        await maybeRunMemoryV1BudgetConsolidation({
+          deps,
+          op: "create",
+          agentId: item.agent_id,
+          memoryItemId: item.memory_item_id,
+        });
+
         return { request_id: msg.request_id, type: msg.type, ok: true, result };
       }
 
@@ -2462,6 +2520,13 @@ export async function handleClientMessage(
           deps,
           OPERATOR_MEMORY_EVENT_AUDIENCE,
         );
+
+        await maybeRunMemoryV1BudgetConsolidation({
+          deps,
+          op: "update",
+          agentId: item.agent_id,
+          memoryItemId: item.memory_item_id,
+        });
 
         return { request_id: msg.request_id, type: msg.type, ok: true, result };
       }

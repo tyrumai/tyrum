@@ -19,6 +19,7 @@ import type { MemoryV1Dal } from "../../modules/memory/v1-dal.js";
 import type { ArtifactStore } from "../../modules/artifact/store.js";
 import type { RedactionEngine } from "../../modules/redaction/engine.js";
 import type { TaskResultRegistry } from "./task-result-registry.js";
+import type { AgentConfig } from "@tyrum/schemas";
 
 // ---------------------------------------------------------------------------
 // Dependency injection
@@ -35,6 +36,7 @@ export interface ProtocolDeps {
   db?: SqlDb;
   redactionEngine?: RedactionEngine;
   memoryV1Dal?: MemoryV1Dal;
+  memoryV1BudgetsProvider?: (agentId?: string) => Promise<AgentConfig["memory"]["v1"]["budgets"]>;
   artifactStore?: ArtifactStore;
   contextReportDal?: ContextReportDal;
   runtime?: {

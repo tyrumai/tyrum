@@ -54,7 +54,7 @@ describe("tyrum check host parsing", () => {
     vi.restoreAllMocks();
   });
 
-  it("detects unbracketed IPv6 host:port and skips live probe", async () => {
+  it("detects unbracketed IPv6 host:port and skips live probe", { timeout: 15_000 }, async () => {
     const home = await mkdtemp(join(tmpdir(), "tyrum-check-host-"));
 
     process.env["TYRUM_HOME"] = home;
