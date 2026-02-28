@@ -8,6 +8,7 @@ import { Badge } from "../components/ui/badge.js";
 import { Button } from "../components/ui/button.js";
 import { Card, CardContent, CardFooter, CardHeader } from "../components/ui/card.js";
 import { EmptyState } from "../components/ui/empty-state.js";
+import { Spinner } from "../components/ui/spinner.js";
 import { useOperatorStore } from "../use-operator-store.js";
 
 function formatTimestamp(value: string): string {
@@ -18,7 +19,9 @@ function formatTimestamp(value: string): string {
 
 export function ApprovalsPage({ core }: { core: OperatorCore }) {
   const approvals = useOperatorStore(core.approvalsStore);
-  const [resolvingById, setResolvingById] = useState<Record<number, boolean>>({});
+  const [resolvingById, setResolvingById] = useState<
+    Record<number, "approved" | "denied" | undefined>
+  >({});
 
   const resolveApproval = async (
     approvalId: number,
@@ -26,7 +29,7 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
   ): Promise<void> => {
     if (resolvingById[approvalId]) return;
 
-    setResolvingById((prev) => ({ ...prev, [approvalId]: true }));
+    setResolvingById((prev) => ({ ...prev, [approvalId]: decision }));
     try {
       await core.approvalsStore.resolve(approvalId, decision);
       toast.success(decision === "approved" ? "Approval resolved" : "Approval denied");
@@ -64,18 +67,29 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
       ) : null}
 
       {approvals.pendingIds.length === 0 ? (
-        <EmptyState
-          icon={CircleCheck}
-          title="No pending approvals"
-          description="Approvals appear here when agents request permission to perform actions."
-        />
+        approvals.loading ? (
+          <div
+            className="flex items-center justify-center gap-2 px-6 py-12 text-sm text-fg-muted"
+            aria-busy={true}
+          >
+            <Spinner aria-hidden={true} />
+            Loading approvals...
+          </div>
+        ) : (
+          <EmptyState
+            icon={CircleCheck}
+            title="No pending approvals"
+            description="Approvals appear here when agents request permission to perform actions."
+          />
+        )
       ) : (
         <div className="grid gap-4">
           {approvals.pendingIds.map((approvalId) => {
             const approval = approvals.byId[approvalId];
             if (!approval) return null;
 
-            const isResolving = Boolean(resolvingById[approvalId]);
+            const resolvingDecision = resolvingById[approvalId];
+            const isResolving = resolvingDecision !== undefined;
 
             return (
               <Card key={approvalId}>
@@ -100,7 +114,8 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
                   <Button
                     data-testid={`approval-approve-${approvalId}`}
                     variant="success"
-                    isLoading={isResolving}
+                    disabled={isResolving}
+                    isLoading={resolvingDecision === "approved"}
                     onClick={() => {
                       void resolveApproval(approvalId, "approved");
                     }}
@@ -110,7 +125,8 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
                   <Button
                     data-testid={`approval-deny-${approvalId}`}
                     variant="danger"
-                    isLoading={isResolving}
+                    disabled={isResolving}
+                    isLoading={resolvingDecision === "denied"}
                     onClick={() => {
                       void resolveApproval(approvalId, "denied");
                     }}
@@ -126,4 +142,3 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
     </div>
   );
 }
-
