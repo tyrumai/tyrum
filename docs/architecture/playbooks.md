@@ -1,9 +1,5 @@
 # Playbooks (deterministic workflows)
 
-## Status
-
-- **Status:** Implemented
-
 A playbook is a **durable, reviewable workflow artifact** that the execution engine can run deterministically. Playbooks exist to make multi-step work:
 
 - **Composable:** a single run request executes many steps
@@ -38,7 +34,7 @@ The playbook runtime exposes a small contract that supports two operations:
 
 Notes:
 
-- When `pipeline` is an absolute file path, it must refer to a playbook file already loaded by the gateway (typically under `TYRUM_HOME/playbooks`).
+- When `pipeline` is an absolute file path, it must refer to a playbook file already loaded by the gateway (from a configured playbook directory).
 - `maxOutputBytes` is a positive integer cap applied by the runtime/executor to step output capture.
 - When omitted, a safe default cap is applied.
 
@@ -168,7 +164,7 @@ LLM steps use the `llm` command namespace plus an `llm` config block. They must 
 - id: extract
   command: llm
   llm:
-    model: openai/gpt-4.1
+    model: <provider>/<model>
     prompt: |
       Extract fields from the input and return JSON.
     max_tool_calls: 2

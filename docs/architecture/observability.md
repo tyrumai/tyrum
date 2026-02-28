@@ -2,10 +2,6 @@
 
 Tyrum is designed so operators can answer: “what happened, why, and what did it cost?” without guessing.
 
-## Status
-
-- **Status:** Implemented
-
 ## Core surfaces
 
 ### Status
@@ -40,7 +36,7 @@ Context reports are generated deterministically by the gateway and persisted alo
 
 Usage is scoped to the current session by default, with agent-wide and tenant-wide rollups available in operator clients. Platform-wide rollups are restricted to platform administration.
 
-Implementation notes (gateway HTTP):
+Architecture notes:
 
 - `GET /usage` returns a deployment rollup across all locally-accounted execution attempts.
 - `GET /usage?key=<sessionKey>` returns a session rollup (all lanes/runs for a single session key).

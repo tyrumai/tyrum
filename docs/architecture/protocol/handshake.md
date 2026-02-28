@@ -1,9 +1,5 @@
 # Handshake
 
-## Status
-
-- **Status:** Implemented
-
 Every WebSocket connection starts with a handshake that identifies the peer and establishes what it is allowed to do.
 
 ## Flow
@@ -20,9 +16,9 @@ sequenceDiagram
   Gateway-->>Peer: connect.proof (response) { client_id, device_id, role }
 ```
 
-## Legacy `connect` handshake (removed)
+## Legacy `connect` handshake (unsupported)
 
-The older single-step `connect` request is no longer supported. Peers MUST use `connect.init` / `connect.proof`.
+The older single-step `connect` request is not supported. Peers MUST use `connect.init` / `connect.proof`.
 
 If a peer sends a legacy `connect` request, the gateway closes the connection with close code `4003`.
 

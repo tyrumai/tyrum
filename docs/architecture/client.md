@@ -1,22 +1,15 @@
 # Client
 
-## Status
-
-- **Status:** Partially Implemented
-
 A client is an operator interface that connects to the gateway and participates in sessions. Clients are where humans read events, send requests, approve actions, and manage connected nodes.
 
 ## Client forms
 
-### Implemented
+Clients can take multiple forms, depending on deployment and operator preference:
 
 - Desktop app (Windows/Linux/macOS)
 - Operator web UI (SPA served by the gateway at `/ui`)
 - CLI (`tyrum-cli`)
 - TUI (`tyrum-tui`)
-
-### Planned
-
 - Mobile app (iOS/Android)
 
 ## Responsibilities
@@ -35,13 +28,13 @@ A client is an operator interface that connects to the gateway and participates 
 
 Clients are **WebSocket-first** (interactive control plane) but will often also use HTTP endpoints for resource and bootstrap flows (auth/session, artifacts, callbacks).
 
-All clients should use `@tyrum/client` for WebSocket + HTTP interactions rather than implementing the wire protocol directly.
+All clients should use the canonical client SDK for WebSocket + HTTP interactions rather than implementing the wire protocol directly.
 
 See: [API surfaces (WebSocket vs HTTP)](./api-surfaces.md).
 
-## Current State
+## Operator surfaces
 
-Operator clients currently expose:
+Operator clients can expose:
 
 - Connection/bootstrap (connect)
 - Dashboard/status summary
@@ -50,23 +43,15 @@ Operator clients currently expose:
 - Pairing workflow for nodes/devices
 - Settings (including Admin Mode gating)
 - Memory inspection
+- Context/usage inspection (for example `/context` and `/usage` equivalents)
 
-Desktop-only operator surfaces include:
+Clients that include local device integration can also expose:
 
 - WorkBoard UI (Kanban + drilldown)
 - Permissions + diagnostics + logs
 - Embedded gateway/node controls (start/stop + local permission prompts)
 
-There is no dedicated "Session timeline" page yet; runs and work items are the primary drilldown primitives today.
-
-## Target State
-
-Operator clients may add:
-
-- A unified "Session" timeline view that merges chat, runs/steps/attempts, approvals, and artifacts (reconstructible from durable state; live events stream updates).
-- Richer WorkBoard surfaces across all clients (not just desktop).
-- First-class context/usage panels (beyond `/context` and `/usage` command output).
-- Additional clients (for example a mobile app).
+Clients may also present a unified "Session" timeline view that merges chat, runs/steps/attempts, approvals, and artifacts (reconstructible from durable state; live events stream updates).
 
 ## What a client is not
 

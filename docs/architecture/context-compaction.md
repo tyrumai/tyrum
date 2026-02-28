@@ -1,9 +1,5 @@
 # Context, Compaction, and Pruning
 
-## Status
-
-- **Status:** Implemented
-
 The context for a run is the message stack provided to the model. Context is bounded by the model's context window (token limit), so long-running sessions use compaction and pruning to stay within limits without losing safety-critical information.
 
 ## Context stack
@@ -69,7 +65,7 @@ The gateway applies deterministic pruning/compaction between tool-loop steps dur
 - Tool call/results are pruned before each step, keeping only the most recent tool interactions.
 - Total messages sent per step are capped (system + instruction head is preserved).
 
-Configuration (environment variables):
+Configuration:
 
-- `TYRUM_CONTEXT_TOOL_PRUNE_KEEP_LAST_MESSAGES` — number of trailing messages allowed to retain tool call/results (default `4`, minimum `2`).
-- `TYRUM_CONTEXT_MAX_MESSAGES` — hard cap on total messages sent to the model per step (default `32`, minimum `8`).
+- The number of trailing tool interactions retained per step is configurable and enforced deterministically.
+- The total number of messages sent per step is configurable and enforced deterministically.

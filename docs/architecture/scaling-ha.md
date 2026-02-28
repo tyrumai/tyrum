@@ -1,9 +1,5 @@
 # Scaling and High Availability
 
-## Status
-
-- **Status:** Partially Implemented
-
 Tyrum runs as a single-host local installation or as a horizontally scalable deployment with replicated gateway edges, workers, and lease-coordinated schedulers backed by HA Postgres.
 
 The system uses one logical architecture in all deployments. Components may be co-located or split across processes/hosts; coordination primitives (leases and the event backplane) are always present so a single-host deployment behaves like a cluster with one replica.
@@ -113,11 +109,11 @@ Schedulers must not double-fire triggers when multiple instances are running. To
 - The lease is renewed periodically; on expiry another instance can take over.
 - Each firing should have a durable, unique `firing_id` so downstream enqueue/execution can dedupe under retries.
 
-## Workspace durability and mount semantics (the `TYRUM_HOME` reality)
+## Workspace durability and mount semantics
 
 Tyrum treats the workspace filesystem as a durable operator-visible surface: an agent can write files and expect them to exist across restarts and future runs.
 
-In single-host deployments this is straightforward: `TYRUM_HOME` is a persistent local directory on disk.
+In single-host deployments this is straightforward: the workspace directory is a persistent local directory on disk.
 
 In clustered deployments, **durable workspaces** interact with Kubernetes volume semantics:
 
@@ -131,7 +127,7 @@ To keep the single-host and cluster behaviors aligned while avoiding RWX require
 
 Long-term memory does not depend on the workspace filesystem: it is stored in the **StateStore** and is scoped to the agent, making it available across channels and across gateway replicas without requiring shared POSIX mounts.
 
-ToolRunner runs as a **local subprocess** in single-host deployments and as a **sandboxed job/pod** in clustered deployments. Both forms mount the workspace at `TYRUM_HOME`, execute workspace-backed tools, persist outcomes/artifacts to the StateStore, and exit.
+ToolRunner runs as a **local subprocess** in single-host deployments and as a **sandboxed job/pod** in clustered deployments. Both forms mount the workspace directory, execute workspace-backed tools, persist outcomes/artifacts to the StateStore, and exit.
 
 ## Deployment topologies
 
@@ -158,7 +154,7 @@ flowchart TB
     WorkerPool <--> StateStore
     Scheduler <--> StateStore
     WorkerPool --> ToolRunner
-    ToolRunner --> WorkspaceFs["WorkspaceFs (TYRUM_HOME)"]
+    ToolRunner --> WorkspaceFs["WorkspaceFs (workspace root)"]
 
     WorkerPool --> Backplane
     ExecutionEngine --> Backplane

@@ -1,9 +1,5 @@
 # Policy overrides (approve-always)
 
-## Status
-
-- **Status:** Implemented
-
 Policy overrides are durable, operator-created enforcement rules that reduce repeated prompts without weakening Tyrum’s auditability or safety model.
 
 They are most commonly created when an operator resolves an approval with **approve always** (see [Approvals](./approvals.md)).

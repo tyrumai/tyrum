@@ -1,9 +1,5 @@
 # Execution engine
 
-## Status
-
-- **Status:** Implemented
-
 The execution engine is the gateway subsystem responsible for turning a plan or workflow into **resilient, auditable execution**. It is where reliability guarantees live: retries, idempotency, budgets/timeouts, pause/resume, and evidence capture.
 
 ## Why it exists
@@ -50,15 +46,15 @@ Retry policy is per-step with conservative defaults. Automatic retries apply onl
 
 ## Workspace-backed execution (ToolRunner)
 
-Many Tyrum steps are filesystem- or process-oriented (for example running a CLI tool in a workspace, reading/writing files, generating evidence artifacts). To keep `TYRUM_HOME` durable across runs while still scaling to multi-node clusters, Tyrum treats workspace access as an explicit execution boundary:
+Many Tyrum steps are filesystem- or process-oriented (for example running a CLI tool in a workspace, reading/writing files, generating evidence artifacts). To keep the workspace directory durable across runs while still scaling to multi-node clusters, Tyrum treats workspace access as an explicit execution boundary:
 
 - **ToolRunner** is the execution context that mounts the workspace filesystem and runs side-effecting tools.
 - Workers coordinate work in the StateStore (claims/leases, idempotency, lane serialization) and delegate step execution to ToolRunner.
 
 ToolRunner has deployment-parity implementations:
 
-- **Single-host/desktop:** ToolRunner is a **local subprocess** (or in-process) operating on the local persistent `TYRUM_HOME`.
-- **Cluster/Kubernetes:** ToolRunner is a **sandboxed job/pod** that mounts the workspace PVC (RWO) and writes outcomes back to the StateStore.
+- **Single-host/desktop:** ToolRunner is a **local subprocess** (or in-process) operating on the local persistent workspace directory.
+- **Cluster:** ToolRunner is a **sandboxed job/container** that mounts the workspace volume (with single-writer semantics) and writes outcomes back to the StateStore.
 
 This keeps execution semantics identical while ensuring that long-lived edge/scheduler replicas do not need to mount shared workspace volumes.
 
@@ -122,17 +118,19 @@ flowchart TB
   Engine --> Evidence["Artifacts + Postconditions"]
   Engine --> Events["Events/AuditLog"]
   Engine <--> DB["StateStore (SQLite/Postgres)"]
-  ToolRunner --> WorkspaceFs["WorkspaceFs (TYRUM_HOME)"]
+  ToolRunner --> WorkspaceFs["WorkspaceFs (workspace root)"]
 ```
 
 ## Data model
 
-- `jobs(id, created_at, trigger_type, trigger_key, agent_id, lane, status, input, ...)`
-- `runs(id, job_id, started_at, finished_at, status, attempt, budgets, ...)`
-- `run_steps(id, run_id, index, kind, args, idempotency_key, approval_id?, postcondition, ...)`
-- `run_step_attempts(id, run_step_id, attempt, started_at, finished_at, status, result, error, artifacts[])`
+Durable execution entities include:
 
-Exact schemas belong in `@tyrum/schemas` and exported contracts.
+- `Job`: created by a trigger; references agent/lane and input.
+- `Run`: an execution attempt of a job; carries budgets and lifecycle timestamps/status.
+- `RunStep`: ordered steps with kind, args, idempotency key, optional approval, and optional postcondition.
+- `RunStepAttempt`: attempt-level results/errors and artifact references.
+
+Exact schemas belong in versioned contracts.
 
 ## Observability and cost
 

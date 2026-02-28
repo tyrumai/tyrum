@@ -1,9 +1,5 @@
 # Presence and Instances
 
-## Status
-
-- **Status:** Implemented
-
 Presence is Tyrum’s lightweight, best-effort view of:
 
 - the gateway service itself, and

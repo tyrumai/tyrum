@@ -1,16 +1,12 @@
 # Protocol
 
-## Status
-
-- **Status:** Partially Implemented
-
 Tyrum uses a typed WebSocket protocol between the gateway, clients, and nodes. The protocol is designed to be:
 
 - **Typed:** messages are validated against contracts.
 - **Bidirectional:** requests/responses plus server-push events.
 - **Observable:** important state changes emit events.
 
-The canonical wire shapes live in `@tyrum/schemas` (`packages/schemas/src/protocol.ts`).
+The wire shapes are defined by shared, versioned contracts (see [Contracts](../contracts.md)).
 
 The protocol is the primary interface for:
 
@@ -42,7 +38,7 @@ Revisions allow evolving request types and fields without a major-version bump. 
 
 The protocol uses run-scoped identifiers (`run_id`, `step_id`, `attempt_id`) and avoids ambiguous plan identifiers.
 
-Operational note: the gateway currently expects `protocol_rev = 2` for `connect.init` handshakes and will reject mismatches (close code `4005`, reason `protocol_rev mismatch`).
+The gateway expects `protocol_rev = 2` for `connect.init` handshakes and rejects mismatches (close code `4005`, reason `protocol_rev mismatch`).
 
 ## Message classes
 

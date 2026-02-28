@@ -1,9 +1,5 @@
 # Backplane (Outbox Contract)
 
-## Status
-
-- **Status:** Implemented
-
 Tyrum is WebSocket-first: most operator UX is powered by server-push events delivered over long-lived WebSocket connections.
 When the gateway is replicated, only the edge instance that owns a connection can write to that socket. The **backplane** is the cross-instance mechanism that makes “cluster with N replicas” behave like “cluster with 1 replica” for event delivery.
 
@@ -116,16 +112,10 @@ Replays happen in practice (restarts, takeovers, reconnect).
 
 If a peer is offline beyond the outbox retention window, it may miss incremental events; recovery MUST be possible by re-reading durable StateStore-backed state.
 
-### Implementation note (gateway defaults)
+Architecture notes:
 
-The gateway enforces outbox retention by periodically pruning:
-
-- `outbox` rows older than `TYRUM_OUTBOX_RETENTION_MS` (default: 24 hours)
-- stale `outbox_consumers` rows on the same window
-
-Compaction runs on the `all` and `scheduler` gateway roles, with tick interval configurable via `TYRUM_OUTBOX_COMPACTION_TICK_MS` (default: 5 minutes).
-Compaction prunes in batches of up to `TYRUM_OUTBOX_COMPACTION_BATCH_SIZE` rows (default: 10,000) per table and may run multiple batches per tick to catch up.
-In Postgres deployments, the gateway uses an advisory lock so only one instance performs compaction at a time.
+- Outbox retention is enforced by periodic compaction/pruning according to configured retention policies (time/size/consumer progress).
+- In clustered deployments, compaction runs under a single-writer lock/lease so pruning is correct and predictable.
 
 ## Safety and privacy
 

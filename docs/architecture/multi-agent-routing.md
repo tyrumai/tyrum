@@ -1,9 +1,5 @@
 # Multi-Agent Routing
 
-## Status
-
-- **Status:** Implemented
-
 Multi-agent routing is the ability to run multiple isolated agents behind one gateway, each with its own workspace and sessions, while routing inbound messages from channels to the correct agent.
 
 ## Isolation model
@@ -21,13 +17,13 @@ Inbound events are mapped to an agent via explicit, auditable bindings.
 - The same rule shape can be stored in the StateStore and edited from the control panel.
 - Rule changes emit events and are reversible.
 
-### Durable routing state (implemented)
+### Durable routing state
 
 Routing rules are persisted as versioned config snapshots in the StateStore:
 
-- Table: `routing_configs` (append-only revisions; newest revision is effective)
-- Audit stream: `planner_events.plan_id = "routing.config"` (exportable via `/audit/export/routing.config`; action includes `revision`, `config_sha256`, and optional `reverted_from_revision`)
-- WS event: `routing.config.updated` (payload includes `revision`, optional `config_sha256`, and optional `reverted_from_revision`; clients should `GET /routing/config` to fetch the effective config)
+- Append-only revisions; the newest valid revision is effective.
+- Changes emit events and are recorded in an append-only audit stream suitable for export.
+- A `routing.config.updated` event notifies clients that a new revision is available; clients can `GET /routing/config` to fetch the effective config.
 
 Operator API:
 
@@ -37,12 +33,11 @@ Operator API:
 
 Authentication/authorization:
 
-- Requires a valid gateway token.
 - Scoped device tokens must include `operator.admin` for `/routing/*` routes.
 
 Bootstrap behavior:
 
-- If no durable routing config exists, the gateway falls back to the legacy static file config under `TYRUM_HOME` (for example `routing.yml` / `routing.yaml` / `routing.json`).
+- Initial routing rules may be seeded from static configuration.
 - Once a durable revision exists and validates against the routing config schema, it becomes the source of truth for routing decisions.
 
 ## Key taxonomy

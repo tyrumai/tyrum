@@ -1,9 +1,5 @@
 # Automation
 
-## Status
-
-- **Status:** Partially Implemented
-
 Automation lets Tyrum act on schedules and triggers while keeping behavior observable and policy-gated.
 
 ## Primitives
@@ -18,7 +14,7 @@ Automation lets Tyrum act on schedules and triggers while keeping behavior obser
 
 - Use **heartbeat** when the agent should be context-aware and prioritize across multiple signals inside the main session.
 - Use **cron** for independent, narrow tasks that should run on a fixed schedule.
-- WorkSignals can be implemented as heartbeat-driven checks (context-aware) or as cron/watchers (narrow); the key invariant is that firings are durable, deduped, and policy-gated.
+- WorkSignals can be realized as heartbeat-driven checks (context-aware) or as cron/watchers (narrow); the key invariant is that firings are durable, deduped, and policy-gated.
 
 ## Safety expectations
 
@@ -36,7 +32,7 @@ Lifecycle hooks are allowlisted automation workflows that enqueue execution runs
 
 **Configuration (explicit allowlist):**
 
-- Hooks are loaded from `TYRUM_HOME/hooks.yml` (or `hooks.yaml` / `hooks.json`).
+- Hooks are loaded from a configured hooks allowlist file (YAML or JSON).
 - Only hooks listed in this file can run (no directory discovery by default).
 
 Example:

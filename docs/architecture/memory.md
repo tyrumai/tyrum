@@ -1,9 +1,5 @@
 # Memory
 
-## Status
-
-- **Status:** Implemented
-
 Memory is Tyrum’s durable, **agent-scoped** knowledge system. It converts transient run context into reusable knowledge and retrieves that knowledge safely across future sessions — even when the same agent is communicating over multiple channels.
 
 ## Goals
