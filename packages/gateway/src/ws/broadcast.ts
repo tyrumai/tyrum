@@ -33,7 +33,7 @@ export function broadcastWsEvent(
       })
       .catch((_err) => {
         void _err;
-        // Intentional: cluster broadcast enqueue is best-effort; delivery is retried via outbox polling.
+        // Intentional: cluster broadcast enqueue is best-effort; failures may drop this event for remote peers.
       });
   }
 }

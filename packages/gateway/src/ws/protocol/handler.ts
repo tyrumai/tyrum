@@ -1964,20 +1964,33 @@ export async function handleClientMessage(
     } satisfies WsEventEnvelope;
 
     const payload = JSON.stringify(evt);
+    let failedPeerSends = 0;
+    let exampleSendFailure: { peer_id: string; peer_role: string; error: string } | undefined;
     for (const peer of deps.connectionManager.allClients()) {
       try {
         peer.ws.send(payload);
       } catch (err) {
+        failedPeerSends += 1;
         const message = err instanceof Error ? err.message : String(err);
-        deps.logger?.warn("ws.presence_beacon.broadcast_failed", {
-          request_id: msg.request_id,
-          client_id: client.id,
-          request_type: msg.type,
-          peer_id: peer.id,
-          peer_role: peer.role,
-          error: message,
-        });
+        if (!exampleSendFailure) {
+          exampleSendFailure = { peer_id: peer.id, peer_role: peer.role, error: message };
+        }
       }
+    }
+    if (failedPeerSends > 0) {
+      deps.logger?.warn("ws.presence_beacon.broadcast_failed", {
+        request_id: msg.request_id,
+        client_id: client.id,
+        request_type: msg.type,
+        failed_peer_count: failedPeerSends,
+        ...(exampleSendFailure
+          ? {
+              example_peer_id: exampleSendFailure.peer_id,
+              example_peer_role: exampleSendFailure.peer_role,
+              example_error: exampleSendFailure.error,
+            }
+          : {}),
+      });
     }
     if (deps.cluster) {
       void deps.cluster.outboxDal
