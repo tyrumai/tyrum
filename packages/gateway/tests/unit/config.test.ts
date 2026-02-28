@@ -40,6 +40,48 @@ describe("loadConfig", () => {
     ).toBe(false);
   });
 
+  it("rejects invalid transport guardrail acknowledgements", () => {
+    expect(() =>
+      loadConfig({
+        GATEWAY_TOKEN: "test-token",
+        TYRUM_TLS_READY: "typo",
+      }),
+    ).toThrow(/TYRUM_TLS_READY/i);
+
+    expect(() =>
+      loadConfig({
+        GATEWAY_TOKEN: "test-token",
+        TYRUM_ALLOW_INSECURE_HTTP: "typo",
+      }),
+    ).toThrow(/TYRUM_ALLOW_INSECURE_HTTP/i);
+  });
+
+  it("supports legacy toolrunner workspace claim env var", () => {
+    const config = loadConfig({
+      GATEWAY_TOKEN: "test-token",
+      TYRUM_TOOLRUNNER_LAUNCHER: "kubernetes",
+      TYRUM_TOOLRUNNER_IMAGE: "tyrum/toolrunner:test",
+      TYRUM_TOOLRUNNER_WORKSPACE_PVC_CLAIM: "workspace-claim",
+    });
+
+    expect(config.execution.toolrunner.launcher).toBe("kubernetes");
+    if (config.execution.toolrunner.launcher === "kubernetes") {
+      expect(config.execution.toolrunner.workspacePvcClaim).toBe("workspace-claim");
+    }
+  });
+
+  it("infers S3 forcePathStyle from endpoint when unset", () => {
+    const config = loadConfig({
+      GATEWAY_TOKEN: "test-token",
+      TYRUM_ARTIFACT_STORE: "s3",
+      TYRUM_ARTIFACTS_S3_ENDPOINT: "http://minio:9000",
+    });
+
+    expect(config.artifacts.store).toBe("s3");
+    expect(config.artifacts.s3.endpoint).toBe("http://minio:9000");
+    expect(config.artifacts.s3.forcePathStyle).toBe(true);
+  });
+
   it("defaults invalid optional values instead of throwing", () => {
     const config = loadConfig({
       GATEWAY_TOKEN: "test-token",

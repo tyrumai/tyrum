@@ -30,6 +30,23 @@ function parseStrictTrueEnvFlag(value: unknown): boolean {
   return trimmed === "1" || trimmed.toLowerCase() === "true";
 }
 
+function parseStrictTransportGuardrailFlag(
+  value: unknown,
+  envVar: string,
+  ctx: z.RefinementCtx,
+): boolean {
+  const trimmed = normalizeOptionalString(value);
+  if (!trimmed) return false;
+  const normalized = trimmed.toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    message: `${envVar} must be one of 1|true|yes|on|0|false|no|off (got '${trimmed}')`,
+  });
+  return z.NEVER;
+}
+
 function resolveDefaultMigrationsDir(dbPath: string): string {
   return isPostgresDbUri(dbPath)
     ? join(__dirname, "../migrations/postgres")
@@ -121,13 +138,21 @@ export const GatewayConfigSchema = z
         .optional(),
 
       /** `TYRUM_TLS_READY` (default: `false`). Set to acknowledge TLS termination is configured. */
-      tlsReady: z.unknown().transform((value) => parseTruthyEnvFlag(value)),
+      tlsReady: z
+        .unknown()
+        .transform((value, ctx) =>
+          parseStrictTransportGuardrailFlag(value, "TYRUM_TLS_READY", ctx),
+        ),
 
       /**
        * `TYRUM_ALLOW_INSECURE_HTTP` (default: `false`).
        * Allows plaintext HTTP on non-loopback interfaces in trusted networks.
        */
-      allowInsecureHttp: z.unknown().transform((value) => parseTruthyEnvFlag(value)),
+      allowInsecureHttp: z
+        .unknown()
+        .transform((value, ctx) =>
+          parseStrictTransportGuardrailFlag(value, "TYRUM_ALLOW_INSECURE_HTTP", ctx),
+        ),
     }),
 
     auth: z.object({
@@ -616,7 +641,8 @@ export function loadConfig(env: NodeJS.ProcessEnv): GatewayConfig {
         namespace: env["TYRUM_TOOLRUNNER_NAMESPACE"],
         podNamespace: env["POD_NAMESPACE"],
         image: env["TYRUM_TOOLRUNNER_IMAGE"],
-        workspaceClaim: env["TYRUM_TOOLRUNNER_WORKSPACE_CLAIM"],
+        workspaceClaim:
+          env["TYRUM_TOOLRUNNER_WORKSPACE_CLAIM"] ?? env["TYRUM_TOOLRUNNER_WORKSPACE_PVC_CLAIM"],
       },
     },
     channels: {
