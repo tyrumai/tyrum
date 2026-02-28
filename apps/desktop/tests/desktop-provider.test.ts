@@ -53,6 +53,52 @@ describe("DesktopProvider", () => {
     });
   });
 
+  it("safe profile allows snapshot in pixel mode", async () => {
+    const provider = makeProvider("safe");
+    const result = await provider.execute(makeAction({ op: "snapshot" }));
+    expect(result.success).toBe(true);
+    expect(result.result).toMatchObject({
+      op: "snapshot",
+      backend: {
+        mode: "pixel",
+        permissions: {
+          accessibility: false,
+          screen_capture: true,
+          input_control: false,
+        },
+      },
+      windows: [],
+    });
+    expect(result.evidence).toMatchObject({
+      type: "snapshot",
+      mime: "image/png",
+      width: 1920,
+      height: 1080,
+    });
+  });
+
+  it("safe profile allows query in pixel mode (returns screenshot + coordinate metadata)", async () => {
+    const provider = makeProvider("safe");
+    const result = await provider.execute(
+      makeAction({
+        op: "query",
+        selector: { kind: "a11y", role: "button", name: "Save" },
+      }),
+    );
+    expect(result.success).toBe(true);
+    expect(result.result).toMatchObject({ op: "query", matches: [] });
+    expect(result.evidence).toMatchObject({
+      type: "query",
+      mime: "image/png",
+      width: 1920,
+      height: 1080,
+      coordinate_space: {
+        origin: "top-left",
+        units: "px",
+      },
+    });
+  });
+
   // -- Balanced profile (confirmation required) ------------------------------
 
   it("balanced profile requires confirmation for mouse action", async () => {
@@ -132,6 +178,89 @@ describe("DesktopProvider", () => {
       action: "press",
       key: "Enter",
     });
+  });
+
+  it("poweruser supports act(click) on a pixel ref", async () => {
+    const permissions = resolvePermissions("poweruser", {});
+    const backend = new MockDesktopBackend();
+    const provider = new DesktopProvider(backend, permissions, vi.fn<ConfirmationFn>());
+
+    const result = await provider.execute(
+      makeAction({
+        op: "act",
+        target: { kind: "ref", ref: "pixel:10,20" },
+        action: { kind: "click" },
+      }),
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.result).toMatchObject({
+      op: "act",
+      target: { kind: "ref", ref: "pixel:10,20" },
+      action: { kind: "click" },
+      resolved_element_ref: "pixel:10,20",
+    });
+    expect(backend.calls).toContainEqual({ method: "clickMouse", args: [10, 20, undefined] });
+  });
+
+  it("poweruser supports act(double_click) on a pixel ref", async () => {
+    const permissions = resolvePermissions("poweruser", {});
+    const backend = new MockDesktopBackend();
+    const provider = new DesktopProvider(backend, permissions, vi.fn<ConfirmationFn>());
+
+    const result = await provider.execute(
+      makeAction({
+        op: "act",
+        target: { kind: "ref", ref: "pixel:10,20" },
+        action: { kind: "double_click" },
+      }),
+    );
+
+    expect(result.success).toBe(true);
+    expect(backend.calls.filter((c) => c.method === "clickMouse")).toHaveLength(2);
+  });
+
+  it("poweruser supports act(right_click) on a pixel ref", async () => {
+    const permissions = resolvePermissions("poweruser", {});
+    const backend = new MockDesktopBackend();
+    const provider = new DesktopProvider(backend, permissions, vi.fn<ConfirmationFn>());
+
+    const result = await provider.execute(
+      makeAction({
+        op: "act",
+        target: { kind: "ref", ref: "pixel:10,20" },
+        action: { kind: "right_click" },
+      }),
+    );
+
+    expect(result.success).toBe(true);
+    expect(backend.calls).toContainEqual({ method: "clickMouse", args: [10, 20, "right"] });
+  });
+
+  it("poweruser supports wait_for with bounded sleep semantics", async () => {
+    const permissions = resolvePermissions("poweruser", {});
+    const backend = new MockDesktopBackend();
+    const provider = new DesktopProvider(backend, permissions, vi.fn<ConfirmationFn>());
+
+    const result = await provider.execute(
+      makeAction({
+        op: "wait_for",
+        selector: { kind: "a11y", role: "dialog", name: "Settings" },
+        state: "visible",
+        timeout_ms: 0,
+        poll_ms: 50,
+      }),
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.result).toMatchObject({
+      op: "wait_for",
+      selector: { kind: "a11y", role: "dialog", name: "Settings", states: [] },
+      state: "visible",
+      status: "timeout",
+    });
+    expect((result.result as Record<string, unknown>)["elapsed_ms"]).toBeDefined();
+    expect(backend.calls).toEqual([]);
   });
 
   // -- Argument validation ---------------------------------------------------
