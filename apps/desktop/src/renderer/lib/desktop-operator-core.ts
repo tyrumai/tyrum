@@ -31,12 +31,21 @@ export function headersToRecord(
   return record;
 }
 
-export function useDesktopOperatorCore(): {
+export type DesktopOperatorCoreState = {
   core: OperatorCore | null;
   busy: boolean;
   errorMessage: string | null;
-} {
+};
+
+export type UseDesktopOperatorCoreOptions = {
+  enabled?: boolean;
+};
+
+export function useDesktopOperatorCore(
+  options?: UseDesktopOperatorCoreOptions,
+): DesktopOperatorCoreState {
   const api = window.tyrumDesktop;
+  const enabled = options?.enabled ?? true;
   const [core, setCore] = useState<OperatorCore | null>(null);
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -45,7 +54,12 @@ export function useDesktopOperatorCore(): {
   const adminModeStoreRef = useRef<AdminModeStore | null>(null);
 
   useEffect(() => {
-    if (!api) return;
+    if (!api || !enabled) {
+      setCore(null);
+      setBusy(false);
+      setErrorMessage(null);
+      return;
+    }
     let disposed = false;
 
     const boot = async (): Promise<void> => {
@@ -141,8 +155,7 @@ export function useDesktopOperatorCore(): {
       adminModeStoreRef.current?.dispose();
       adminModeStoreRef.current = null;
     };
-  }, [api]);
+  }, [api, enabled]);
 
   return { core, busy, errorMessage };
 }
-

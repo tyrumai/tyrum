@@ -1,10 +1,11 @@
 import { MemoryInspector } from "@tyrum/operator-ui";
-import { useDesktopOperatorCore } from "../lib/desktop-operator-core.js";
+import type { DesktopOperatorCoreState } from "../lib/desktop-operator-core.js";
 import { colors } from "../theme.js";
 
-export function Memory() {
+export type MemoryProps = DesktopOperatorCoreState;
+
+export function Memory({ core, busy, errorMessage }: MemoryProps) {
   const api = window.tyrumDesktop;
-  const { core, busy, errorMessage } = useDesktopOperatorCore();
 
   if (!api) {
     return (
@@ -35,4 +36,3 @@ export function Memory() {
 
   return <MemoryInspector core={core} />;
 }
-

@@ -30,4 +30,3 @@ describe("Memory inspector navigation wiring", () => {
     expect(page).toContain("<MemoryInspector");
   });
 });
-

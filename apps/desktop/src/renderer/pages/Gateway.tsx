@@ -1,10 +1,11 @@
 import { OperatorUiApp } from "@tyrum/operator-ui";
-import { useDesktopOperatorCore } from "../lib/desktop-operator-core.js";
+import type { DesktopOperatorCoreState } from "../lib/desktop-operator-core.js";
 import { colors } from "../theme.js";
 
-export function Gateway() {
+export type GatewayProps = DesktopOperatorCoreState;
+
+export function Gateway({ core, busy, errorMessage }: GatewayProps) {
   const api = window.tyrumDesktop;
-  const { core, busy, errorMessage } = useDesktopOperatorCore();
 
   if (!api) {
     return (
