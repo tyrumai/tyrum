@@ -11,9 +11,9 @@ export function PageHeader({ title, breadcrumbs, actions, className, ...props }:
   return (
     <header className={cn("mb-6 flex flex-col gap-1", className)} {...props}>
       {breadcrumbs ? <div className="text-sm text-fg-muted">{breadcrumbs}</div> : null}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <h1 className="text-2xl font-semibold leading-tight">{title}</h1>
-        {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
       </div>
     </header>
   );

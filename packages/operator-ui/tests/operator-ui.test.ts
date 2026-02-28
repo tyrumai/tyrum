@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { toast } from "sonner";
+import { axe } from "vitest-axe";
+import { toHaveNoViolations } from "vitest-axe/matchers.js";
 import {
   createBearerTokenAuth,
   createBrowserCookieAuth,
@@ -16,6 +18,7 @@ import { PairingPage } from "../src/pages/pairing-page.js";
 import { stubMatchMedia } from "./test-utils.js";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+expect.extend({ toHaveNoViolations });
 
 type Handler = (data: unknown) => void;
 
@@ -298,6 +301,60 @@ describe("operator-ui", () => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
+
+  const expectNoAxeViolationsForRoute = async ({
+    mode,
+    navigateTo,
+  }: {
+    mode: "web" | "desktop";
+    navigateTo?: string;
+  }): Promise<void> => {
+    document.title = "Tyrum";
+
+    if (typeof HTMLCanvasElement !== "undefined") {
+      HTMLCanvasElement.prototype.getContext = () => null;
+    }
+
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode }));
+    });
+
+    if (navigateTo) {
+      const navButton = container.querySelector<HTMLButtonElement>(
+        `[data-testid="nav-${navigateTo}"]`,
+      );
+      expect(navButton).not.toBeNull();
+      act(() => {
+        navButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+    }
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  };
 
   it("does not export AdminModeBanner from the public API", () => {
     expect("AdminModeBanner" in operatorUi).toBe(false);
@@ -1335,7 +1392,10 @@ describe("operator-ui", () => {
     const approvalsBadge = container.querySelector<HTMLSpanElement>(
       '[data-testid="dashboard-approvals-badge"]',
     );
+    expect(approvalsBadge).not.toBeNull();
     expect(approvalsBadge?.textContent).toContain("1");
+    expect(approvalsBadge?.getAttribute("aria-live")).toBe("polite");
+    expect(approvalsBadge?.getAttribute("aria-atomic")).toBe("true");
 
     act(() => {
       root?.unmount();
@@ -1391,6 +1451,127 @@ describe("operator-ui", () => {
     container.remove();
   });
 
+  it("wraps navigation in the View Transitions API when available", () => {
+    const startViewTransition = vi.fn((callback: () => void) => {
+      callback();
+      return { finished: Promise.resolve() };
+    });
+
+    const original = (document as unknown as { startViewTransition?: unknown }).startViewTransition;
+    (document as unknown as { startViewTransition?: unknown }).startViewTransition =
+      startViewTransition;
+
+    try {
+      const ws = new FakeWsClient();
+      const { http } = createFakeHttpClient();
+      const core = createOperatorCore({
+        wsUrl: "ws://example.test/ws",
+        httpBaseUrl: "http://example.test",
+        auth: createBearerTokenAuth("test"),
+        deps: { ws, http },
+      });
+
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+
+      let root: Root | null = null;
+      act(() => {
+        root = createRoot(container);
+        root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+      });
+
+      const dashboardLink = container.querySelector<HTMLButtonElement>(
+        '[data-testid="nav-dashboard"]',
+      );
+      expect(dashboardLink).not.toBeNull();
+
+      act(() => {
+        dashboardLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+      expect(startViewTransition).toHaveBeenCalledTimes(1);
+
+      act(() => {
+        root?.unmount();
+      });
+      container.remove();
+    } finally {
+      if (typeof original === "undefined") {
+        delete (document as unknown as { startViewTransition?: unknown }).startViewTransition;
+      } else {
+        (document as unknown as { startViewTransition?: unknown }).startViewTransition = original;
+      }
+    }
+  });
+
+  it("supports Cmd/Ctrl+1-6 page navigation shortcuts", () => {
+    const ws = new FakeWsClient();
+    const { http } = createFakeHttpClient();
+    const core = createOperatorCore({
+      wsUrl: "ws://example.test/ws",
+      httpBaseUrl: "http://example.test",
+      auth: createBearerTokenAuth("test"),
+      deps: { ws, http },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    let root: Root | null = null;
+    act(() => {
+      root = createRoot(container);
+      root.render(React.createElement(OperatorUiApp, { core, mode: "desktop" }));
+    });
+
+    act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "1", ctrlKey: true, bubbles: true }),
+      );
+    });
+
+    const refreshButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="dashboard-refresh-status"]',
+    );
+    expect(refreshButton).not.toBeNull();
+
+    act(() => {
+      root?.unmount();
+    });
+    container.remove();
+  });
+
+  it("has no axe violations on the connect page", async () => {
+    await expectNoAxeViolationsForRoute({ mode: "desktop" });
+  });
+
+  it("has no axe violations on the dashboard page", async () => {
+    await expectNoAxeViolationsForRoute({ mode: "desktop", navigateTo: "dashboard" });
+  });
+
+  it("has no axe violations on the memory page", async () => {
+    await expectNoAxeViolationsForRoute({ mode: "desktop", navigateTo: "memory" });
+  });
+
+  it("has no axe violations on the approvals page", async () => {
+    await expectNoAxeViolationsForRoute({ mode: "desktop", navigateTo: "approvals" });
+  });
+
+  it("has no axe violations on the runs page", async () => {
+    await expectNoAxeViolationsForRoute({ mode: "desktop", navigateTo: "runs" });
+  });
+
+  it("has no axe violations on the pairing page", async () => {
+    await expectNoAxeViolationsForRoute({ mode: "desktop", navigateTo: "pairing" });
+  });
+
+  it("has no axe violations on the settings page", async () => {
+    await expectNoAxeViolationsForRoute({ mode: "desktop", navigateTo: "settings" });
+  });
+
+  it("has no axe violations on the desktop setup page", async () => {
+    await expectNoAxeViolationsForRoute({ mode: "desktop", navigateTo: "desktop" });
+  });
+
   it("lists and resolves pending approvals", async () => {
     const toastSuccess = vi
       .spyOn(operatorUi.toast, "success")
@@ -1428,6 +1609,13 @@ describe("operator-ui", () => {
     act(() => {
       approvalsLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
+
+    const approvalsLiveRegion = container.querySelector<HTMLDivElement>(
+      '[data-testid="approvals-pending-live"]',
+    );
+    expect(approvalsLiveRegion).not.toBeNull();
+    expect(approvalsLiveRegion?.getAttribute("aria-live")).toBe("polite");
+    expect(approvalsLiveRegion?.getAttribute("aria-atomic")).toBe("true");
 
     const refreshButton = container.querySelector<HTMLButtonElement>(
       '[data-testid="approvals-refresh"]',
@@ -2103,7 +2291,13 @@ describe("operator-ui", () => {
       ws.emit("run.updated", { payload: { run: sampleExecutionRun() } });
     });
 
-    expect(container.textContent).toContain("running");
+    const runStatusBadge = container.querySelector<HTMLSpanElement>(
+      `[data-testid="run-status-${sampleExecutionRun().run_id}"]`,
+    );
+    expect(runStatusBadge).not.toBeNull();
+    expect(runStatusBadge?.textContent).toContain("running");
+    expect(runStatusBadge?.getAttribute("aria-live")).toBe("polite");
+    expect(runStatusBadge?.getAttribute("aria-atomic")).toBe("true");
     expect(container.textContent).toContain("beefcafe");
     expect(container.textContent).toContain("2m ago");
 

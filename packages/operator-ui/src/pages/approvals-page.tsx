@@ -140,6 +140,15 @@ export function ApprovalsPage({ core }: { core: OperatorCore }) {
         }
       />
 
+      <div
+        data-testid="approvals-pending-live"
+        className="sr-only"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {approvals.pendingIds.length} pending approvals
+      </div>
+
       {approvals.error ? (
         <Alert variant="error" title="Approvals failed to load" description={approvals.error} />
       ) : null}

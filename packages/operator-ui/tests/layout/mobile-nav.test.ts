@@ -35,6 +35,11 @@ describe("MobileNav", () => {
     const active = container.querySelector("[data-testid='nav-runs']");
     expect(active?.getAttribute("data-active")).toBe("true");
 
+    const dashboard = container.querySelector<HTMLButtonElement>("[data-testid='nav-dashboard']");
+    expect(dashboard).not.toBeNull();
+    expect(dashboard?.className).toContain("focus-visible:ring-2");
+    expect(dashboard?.className).toContain("focus-visible:ring-focus-ring");
+
     const more = container.querySelector("[data-testid='nav-more']");
     expect(more).not.toBeNull();
 

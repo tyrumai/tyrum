@@ -30,6 +30,7 @@ import { DashboardPage } from "./pages/dashboard-page.js";
 import { RunsPage } from "./pages/runs-page.js";
 import { PairingPage } from "./pages/pairing-page.js";
 import { SettingsPage } from "./pages/settings-page.js";
+import { useKeyboardShortcut } from "./hooks/use-keyboard-shortcut.js";
 import { useOperatorStore } from "./use-operator-store.js";
 import { formatErrorMessage } from "./utils/format-error-message.js";
 
@@ -76,6 +77,15 @@ const SIDEBAR_NAV_ORDER: OperatorUiRouteId[] = [
 const MOBILE_NAV_ORDER: OperatorUiRouteId[] = ["dashboard", "approvals", "runs", "settings"];
 const MOBILE_OVERFLOW_NAV_ORDER: OperatorUiRouteId[] = ["memory", "pairing", "connect"];
 const DESKTOP_NAV_ORDER: OperatorUiRouteId[] = ["desktop"];
+
+const KEYBOARD_NAV_ORDER: OperatorUiRouteId[] = [
+  "dashboard",
+  "memory",
+  "approvals",
+  "runs",
+  "pairing",
+  "settings",
+];
 
 function isOperatorUiRouteId(value: string): value is OperatorUiRouteId {
   return Object.prototype.hasOwnProperty.call(NAV_ITEM_CONFIG, value);
@@ -561,8 +571,27 @@ export function OperatorUiApp({ core, mode }: OperatorUiAppProps) {
 
   const navigate = (id: string): void => {
     if (!isOperatorUiRouteId(id)) return;
+    const doc = document as unknown as { startViewTransition?: (callback: () => void) => unknown };
+    const startViewTransition = doc.startViewTransition;
+    if (typeof startViewTransition === "function") {
+      startViewTransition(() => {
+        setRoute(id);
+      });
+      return;
+    }
+
     setRoute(id);
   };
+
+  useKeyboardShortcut(
+    KEYBOARD_NAV_ORDER.map((id, index) => ({
+      key: String(index + 1),
+      requireCmdOrCtrl: true,
+      handler: () => {
+        navigate(id);
+      },
+    })),
+  );
 
   return (
     <MaybeThemeProvider>

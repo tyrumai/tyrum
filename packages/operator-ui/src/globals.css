@@ -7,6 +7,16 @@
 
 @import "tailwindcss/utilities.css" layer(utilities);
 
+@layer base {
+  ::view-transition-old(root) {
+    animation: tyrum-fade-out 200ms ease-in both;
+  }
+
+  ::view-transition-new(root) {
+    animation: tyrum-fade-in 200ms ease-out both;
+  }
+}
+
 @layer utilities {
   @keyframes tyrum-fade-in {
     from {

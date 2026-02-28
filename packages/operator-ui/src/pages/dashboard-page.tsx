@@ -158,7 +158,12 @@ export function DashboardPage({ core, onNavigate }: DashboardPageProps) {
           value={String(approvals.pendingIds.length)}
           badge={
             approvals.pendingIds.length > 0 ? (
-              <Badge data-testid="dashboard-approvals-badge" variant="danger">
+              <Badge
+                data-testid="dashboard-approvals-badge"
+                variant="danger"
+                aria-live="polite"
+                aria-atomic="true"
+              >
                 {approvals.pendingIds.length}
               </Badge>
             ) : null
