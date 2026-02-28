@@ -11,11 +11,10 @@ export async function listMarkdownFiles(dir: string): Promise<string[]> {
       files.push(...(await listMarkdownFiles(entryPath)));
       continue;
     }
-    if (entry.isFile() && entry.name.endsWith(".md")) {
+    if (entry.isFile() && (entry.name.endsWith(".md") || entry.name.endsWith(".mdx"))) {
       files.push(entryPath);
     }
   }
 
   return files.sort();
 }
-

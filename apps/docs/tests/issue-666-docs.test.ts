@@ -25,7 +25,7 @@ describe("Issue #666 docs", () => {
 
   it("does not document legacy /memory HTTP CRUD endpoints", async () => {
     const mdFiles = await listMarkdownFiles(resolve(repoRoot, "docs"));
-    const legacyEndpointPattern = /\/memory\/(facts|events|capabilities|forget)\b/;
+    const legacyEndpointPattern = /\/memory\/(facts|events|capabilities|forget)\b/i;
 
     for (const file of mdFiles) {
       const content = await readFile(file, "utf8");
@@ -33,4 +33,3 @@ describe("Issue #666 docs", () => {
     }
   });
 });
-

@@ -95,7 +95,7 @@ These workflows are intentionally operator-scoped: they’re designed for audit/
 Forgetting is permanent deletion of canonical content, with audit-friendly proof:
 
 - Use `memory.forget` (requires `operator.write`) with one or more selectors; it requires an explicit `confirm: "FORGET"`.
-- Forgetting returns **tombstones** that preserve stable ids + deletion metadata (who/when/why) without retaining the deleted content.
+- Forgetting returns **tombstones** that preserve stable ids + deletion metadata (who/when, plus an optional reason when available) without retaining the deleted content.
 - Tombstones can be exported (via `memory.export` with `include_tombstones: true`) to support compliance workflows.
 
 ## Encoding (write path)
