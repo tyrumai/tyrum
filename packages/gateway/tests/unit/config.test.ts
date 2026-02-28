@@ -24,6 +24,15 @@ describe("loadConfig", () => {
     ).toThrow(/GATEWAY_PORT/i);
   });
 
+  it("rejects non-numeric port values", () => {
+    expect(() =>
+      loadConfig({
+        GATEWAY_TOKEN: "test-token",
+        GATEWAY_PORT: "not-a-number",
+      }),
+    ).toThrow(/GATEWAY_PORT/i);
+  });
+
   it("coerces boolean env flags", () => {
     expect(
       loadConfig({
@@ -40,6 +49,23 @@ describe("loadConfig", () => {
     ).toBe(false);
   });
 
+  it("requires kubernetes toolrunner env vars when launcher resolves to kubernetes", () => {
+    expect(() =>
+      loadConfig({
+        GATEWAY_TOKEN: "test-token",
+        KUBERNETES_SERVICE_HOST: "k8s",
+      }),
+    ).toThrow(/TYRUM_TOOLRUNNER_IMAGE/i);
+
+    expect(() =>
+      loadConfig({
+        GATEWAY_TOKEN: "test-token",
+        KUBERNETES_SERVICE_HOST: "k8s",
+        TYRUM_TOOLRUNNER_IMAGE: "tyrum/toolrunner:test",
+      }),
+    ).toThrow(/TYRUM_TOOLRUNNER_WORKSPACE_CLAIM/i);
+  });
+
   it("rejects invalid transport guardrail acknowledgements", () => {
     expect(() =>
       loadConfig({
@@ -54,6 +80,126 @@ describe("loadConfig", () => {
         TYRUM_ALLOW_INSECURE_HTTP: "typo",
       }),
     ).toThrow(/TYRUM_ALLOW_INSECURE_HTTP/i);
+  });
+
+  it("parses optional string env vars and strict bool helpers", () => {
+    const config = loadConfig({
+      GATEWAY_TOKEN: "test-token",
+      GATEWAY_TRUSTED_PROXIES: "10.0.0.0/8",
+      GATEWAY_MIGRATIONS_DIR: "/tmp/migrations",
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel:4318",
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: "http://otel:4318/v1/traces",
+      TYRUM_ARTIFACT_STORE: "s3",
+      TYRUM_ARTIFACTS_DIR: "/tmp/artifacts",
+      TYRUM_ARTIFACTS_S3_BUCKET: "my-bucket",
+      TYRUM_ARTIFACTS_S3_REGION: "eu-west-1",
+      TYRUM_ARTIFACTS_S3_ENDPOINT: "http://minio:9000",
+      TYRUM_ARTIFACTS_S3_FORCE_PATH_STYLE: "true",
+      TYRUM_ARTIFACTS_S3_ACCESS_KEY_ID: "akid",
+      TYRUM_ARTIFACTS_S3_SECRET_ACCESS_KEY: "secret",
+      TYRUM_ARTIFACTS_S3_SESSION_TOKEN: "session",
+      TYRUM_MODELS_DEV_URL: "http://models-dev",
+      TYRUM_POLICY_MODE: "enforce",
+      TYRUM_POLICY_BUNDLE_PATH: "/tmp/policy.yaml",
+      TYRUM_OAUTH_PROVIDERS_CONFIG: "providers",
+      TELEGRAM_BOT_TOKEN: "bot-token",
+      TELEGRAM_WEBHOOK_SECRET: "hook-secret",
+      TYRUM_CHANNEL_PIPELINE_ENABLED: "0",
+      TYRUM_CHANNEL_TYPING_MODE: "thinking",
+      KUBERNETES_SERVICE_HOST: "k8s",
+      POD_NAMESPACE: "pod-ns",
+      TYRUM_TOOLRUNNER_IMAGE: "tyrum/toolrunner:test",
+      TYRUM_TOOLRUNNER_WORKSPACE_CLAIM: "workspace-claim",
+    });
+
+    expect(config.server.trustedProxies).toBe("10.0.0.0/8");
+    expect(config.database.migrationsDir).toBe("/tmp/migrations");
+    expect(config.otel.exporterOtlpEndpoint).toBe("http://otel:4318");
+    expect(config.otel.exporterOtlpTracesEndpoint).toBe("http://otel:4318/v1/traces");
+
+    expect(config.artifacts.store).toBe("s3");
+    expect(config.artifacts.dir).toBe("/tmp/artifacts");
+    expect(config.artifacts.s3.bucket).toBe("my-bucket");
+    expect(config.artifacts.s3.region).toBe("eu-west-1");
+    expect(config.artifacts.s3.endpoint).toBe("http://minio:9000");
+    expect(config.artifacts.s3.forcePathStyle).toBe(true);
+    expect(config.artifacts.s3.accessKeyId).toBe("akid");
+    expect(config.artifacts.s3.secretAccessKey).toBe("secret");
+    expect(config.artifacts.s3.sessionToken).toBe("session");
+
+    expect(config.modelsDev.url).toBe("http://models-dev");
+    expect(config.policy.mode).toBe("enforce");
+    expect(config.policy.bundlePath).toBe("/tmp/policy.yaml");
+    expect(config.oauth.providersConfig).toBe("providers");
+
+    expect(config.channels.telegramBotToken).toBe("bot-token");
+    expect(config.channels.telegramWebhookSecret).toBe("hook-secret");
+    expect(config.channels.pipelineEnabled).toBe(false);
+    expect(config.channels.typingMode).toBe("thinking");
+
+    expect(config.execution.toolrunner.launcher).toBe("kubernetes");
+    if (config.execution.toolrunner.launcher === "kubernetes") {
+      expect(config.execution.toolrunner.namespace).toBe("pod-ns");
+      expect(config.execution.toolrunner.workspacePvcClaim).toBe("workspace-claim");
+    }
+  });
+
+  it("parses typingRefreshMs with invalid and clamp handling", () => {
+    expect(
+      loadConfig({
+        GATEWAY_TOKEN: "test-token",
+        TYRUM_CHANNEL_TYPING_REFRESH_MS: "not-a-number",
+      }).channels.typingRefreshMs,
+    ).toBe(4000);
+
+    expect(
+      loadConfig({
+        GATEWAY_TOKEN: "test-token",
+        TYRUM_CHANNEL_TYPING_REFRESH_MS: "-5",
+      }).channels.typingRefreshMs,
+    ).toBe(0);
+
+    expect(
+      loadConfig({
+        GATEWAY_TOKEN: "test-token",
+        TYRUM_CHANNEL_TYPING_REFRESH_MS: "500",
+      }).channels.typingRefreshMs,
+    ).toBe(1000);
+
+    expect(
+      loadConfig({
+        GATEWAY_TOKEN: "test-token",
+        TYRUM_CHANNEL_TYPING_REFRESH_MS: "15000",
+      }).channels.typingRefreshMs,
+    ).toBe(10000);
+  });
+
+  it("parses optional unsigned integer env vars", () => {
+    const config = loadConfig({
+      GATEWAY_TOKEN: "test-token",
+      TYRUM_MODELS_DEV_TIMEOUT_MS: "123",
+      TYRUM_MODELS_DEV_REFRESH_INTERVAL_MS: "456",
+      TYRUM_CONTEXT_MAX_MESSAGES: "7",
+      TYRUM_CONTEXT_TOOL_PRUNE_KEEP_LAST_MESSAGES: "8",
+    });
+
+    expect(config.modelsDev.timeoutMs).toBe(123);
+    expect(config.modelsDev.refreshIntervalMs).toBe(456);
+    expect(config.context.maxMessages).toBe(7);
+    expect(config.context.toolPruneKeepLastMessages).toBe(8);
+
+    const invalid = loadConfig({
+      GATEWAY_TOKEN: "test-token",
+      TYRUM_MODELS_DEV_TIMEOUT_MS: "nope",
+      TYRUM_MODELS_DEV_REFRESH_INTERVAL_MS: "1.5",
+      TYRUM_CONTEXT_MAX_MESSAGES: "-1",
+      TYRUM_CONTEXT_TOOL_PRUNE_KEEP_LAST_MESSAGES: "",
+    });
+
+    expect(invalid.modelsDev.timeoutMs).toBeUndefined();
+    expect(invalid.modelsDev.refreshIntervalMs).toBeUndefined();
+    expect(invalid.context.maxMessages).toBeUndefined();
+    expect(invalid.context.toolPruneKeepLastMessages).toBeUndefined();
   });
 
   it("supports legacy toolrunner workspace claim env var", () => {

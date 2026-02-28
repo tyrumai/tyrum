@@ -30,6 +30,15 @@ function parseStrictTrueEnvFlag(value: unknown): boolean {
   return trimmed === "1" || trimmed.toLowerCase() === "true";
 }
 
+function parseOptionalUint(value: unknown): number | undefined {
+  const raw = normalizeOptionalString(value);
+  if (!raw) return undefined;
+  if (!/^[0-9]+$/.test(raw)) return undefined;
+  const parsed = Number(raw);
+  if (!Number.isSafeInteger(parsed)) return undefined;
+  return parsed;
+}
+
 function parseStrictTransportGuardrailFlag(
   value: unknown,
   envVar: string,
@@ -405,27 +414,13 @@ export const GatewayConfigSchema = z
       /** `TYRUM_MODELS_DEV_TIMEOUT_MS` (default: unset). */
       timeoutMs: z
         .unknown()
-        .transform((value) => {
-          const raw = normalizeOptionalString(value);
-          if (!raw) return undefined;
-          if (!/^[0-9]+$/.test(raw)) return undefined;
-          const parsed = Number(raw);
-          if (!Number.isSafeInteger(parsed)) return undefined;
-          return parsed;
-        })
+        .transform((value) => parseOptionalUint(value))
         .optional(),
 
       /** `TYRUM_MODELS_DEV_REFRESH_INTERVAL_MS` (default: unset). */
       refreshIntervalMs: z
         .unknown()
-        .transform((value) => {
-          const raw = normalizeOptionalString(value);
-          if (!raw) return undefined;
-          if (!/^[0-9]+$/.test(raw)) return undefined;
-          const parsed = Number(raw);
-          if (!Number.isSafeInteger(parsed)) return undefined;
-          return parsed;
-        })
+        .transform((value) => parseOptionalUint(value))
         .optional(),
 
       /** `TYRUM_MODELS_DEV_DISABLE_FETCH` (default: `false`). */
@@ -479,27 +474,13 @@ export const GatewayConfigSchema = z
       /** `TYRUM_CONTEXT_MAX_MESSAGES` (default: unset). */
       maxMessages: z
         .unknown()
-        .transform((value) => {
-          const raw = normalizeOptionalString(value);
-          if (!raw) return undefined;
-          if (!/^[0-9]+$/.test(raw)) return undefined;
-          const parsed = Number(raw);
-          if (!Number.isSafeInteger(parsed)) return undefined;
-          return parsed;
-        })
+        .transform((value) => parseOptionalUint(value))
         .optional(),
 
       /** `TYRUM_CONTEXT_TOOL_PRUNE_KEEP_LAST_MESSAGES` (default: unset). */
       toolPruneKeepLastMessages: z
         .unknown()
-        .transform((value) => {
-          const raw = normalizeOptionalString(value);
-          if (!raw) return undefined;
-          if (!/^[0-9]+$/.test(raw)) return undefined;
-          const parsed = Number(raw);
-          if (!Number.isSafeInteger(parsed)) return undefined;
-          return parsed;
-        })
+        .transform((value) => parseOptionalUint(value))
         .optional(),
     }),
 
