@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import mitt from "mitt";
 import { MemoryV1Dal } from "../../src/modules/memory/v1-dal.js";
 import { WatcherProcessor } from "../../src/modules/watcher/processor.js";
@@ -43,6 +43,50 @@ describe("WatcherScheduler", () => {
     const firings = await db.all<{ status: string }>("SELECT status FROM watcher_firings");
     expect(firings).toHaveLength(1);
     expect(firings[0]!.status).toBe("enqueued");
+  });
+
+  it("treats periodic episode recording as best-effort and continues firing batch processing", async () => {
+    const watcher1 = await processor.createWatcher("plan-1", "periodic", { intervalMs: 1000 });
+    const watcher2 = await processor.createWatcher("plan-2", "periodic", { intervalMs: 1000 });
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const createSpy = vi
+      .spyOn(memoryV1Dal, "create")
+      .mockRejectedValue(new Error("episode recording failure"));
+
+    const received: GatewayEvents["watcher:fired"][] = [];
+    eventBus.on("watcher:fired", (e) => received.push(e));
+
+    await scheduler.tick();
+
+    expect(received).toHaveLength(2);
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      "watcher.periodic_episode_record_failed",
+      expect.objectContaining({
+        watcher_id: watcher1,
+        plan_id: "plan-1",
+        error: "episode recording failure",
+      }),
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      "watcher.periodic_episode_record_failed",
+      expect.objectContaining({
+        watcher_id: watcher2,
+        plan_id: "plan-2",
+        error: "episode recording failure",
+      }),
+    );
+
+    const firings = await db.all<{ watcher_id: number; status: string }>(
+      "SELECT watcher_id, status FROM watcher_firings ORDER BY watcher_id",
+    );
+    expect(firings).toHaveLength(2);
+    expect(firings[0]!.status).toBe("enqueued");
+    expect(firings[1]!.status).toBe("enqueued");
+
+    createSpy.mockRestore();
+    warnSpy.mockRestore();
   });
 
   it("does not fire if interval has not elapsed", async () => {

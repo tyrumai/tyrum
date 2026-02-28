@@ -297,24 +297,34 @@ export class WatcherScheduler {
     }
 
     const occurredAtIso = new Date(firing.scheduled_at_ms).toISOString();
-    await recordMemoryV1SystemEpisode(
-      this.memoryV1Dal,
-      {
-        occurred_at: occurredAtIso,
-        channel: "watcher",
-        event_type: "periodic_fired",
-        summary_md: `Watcher fired: periodic_fired`,
-        tags: ["watcher", `watcher_id:${String(firing.watcher_id)}`, `plan_id:${firing.plan_id}`],
-        metadata: {
-          firing_id: firing.firing_id,
-          watcher_id: firing.watcher_id,
-          plan_id: firing.plan_id,
-          trigger_type: firing.trigger_type,
-          scheduled_at_ms: firing.scheduled_at_ms,
+    try {
+      await recordMemoryV1SystemEpisode(
+        this.memoryV1Dal,
+        {
+          occurred_at: occurredAtIso,
+          channel: "watcher",
+          event_type: "periodic_fired",
+          summary_md: `Watcher fired: periodic_fired`,
+          tags: ["watcher", `watcher_id:${String(firing.watcher_id)}`, `plan_id:${firing.plan_id}`],
+          metadata: {
+            firing_id: firing.firing_id,
+            watcher_id: firing.watcher_id,
+            plan_id: firing.plan_id,
+            trigger_type: firing.trigger_type,
+            scheduled_at_ms: firing.scheduled_at_ms,
+          },
         },
-      },
-      "default",
-    );
+        "default",
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn("watcher.periodic_episode_record_failed", {
+        watcher_id: firing.watcher_id,
+        plan_id: firing.plan_id,
+        firing_id: firing.firing_id,
+        error: message,
+      });
+    }
 
     this.eventBus.emit("watcher:fired", {
       watcherId: firing.watcher_id,

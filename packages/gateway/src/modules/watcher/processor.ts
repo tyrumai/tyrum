@@ -131,10 +131,22 @@ export class WatcherProcessor {
 
   start(): void {
     this.completedHandler = (event) => {
-      void this.onPlanCompleted(event);
+      void this.onPlanCompleted(event).catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn("watcher.plan_completed_handler_failed", {
+          plan_id: event.planId,
+          error: message,
+        });
+      });
     };
     this.failedHandler = (event) => {
-      void this.onPlanFailed(event);
+      void this.onPlanFailed(event).catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn("watcher.plan_failed_handler_failed", {
+          plan_id: event.planId,
+          error: message,
+        });
+      });
     };
 
     this.eventBus.on("plan:completed", this.completedHandler);
@@ -160,46 +172,64 @@ export class WatcherProcessor {
     const watchers = await this.getActiveWatchersForPlan(event.planId);
     for (const watcher of watchers) {
       if (!this.evaluateTrigger(watcher, event)) continue;
-      await recordMemoryV1SystemEpisode(
-        this.memoryV1Dal,
-        {
-          occurred_at: new Date().toISOString(),
-          channel: "watcher",
-          event_type: "plan_completed",
-          summary_md: `Watcher fired: plan_completed`,
-          tags: ["watcher", `watcher_id:${String(watcher.id)}`, `plan_id:${event.planId}`],
-          metadata: {
-            watcher_id: watcher.id,
-            plan_id: event.planId,
-            steps_executed: event.stepsExecuted,
-            trigger_type: watcher.trigger_type,
+      try {
+        await recordMemoryV1SystemEpisode(
+          this.memoryV1Dal,
+          {
+            occurred_at: new Date().toISOString(),
+            channel: "watcher",
+            event_type: "plan_completed",
+            summary_md: `Watcher fired: plan_completed`,
+            tags: ["watcher", `watcher_id:${String(watcher.id)}`, `plan_id:${event.planId}`],
+            metadata: {
+              watcher_id: watcher.id,
+              plan_id: event.planId,
+              steps_executed: event.stepsExecuted,
+              trigger_type: watcher.trigger_type,
+            },
           },
-        },
-        "default",
-      );
+          "default",
+        );
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn("watcher.plan_completed_episode_record_failed", {
+          watcher_id: watcher.id,
+          plan_id: event.planId,
+          error: message,
+        });
+      }
     }
   }
 
   async onPlanFailed(event: GatewayEvents["plan:failed"]): Promise<void> {
     const watchers = await this.getActiveWatchersForPlan(event.planId);
     for (const watcher of watchers) {
-      await recordMemoryV1SystemEpisode(
-        this.memoryV1Dal,
-        {
-          occurred_at: new Date().toISOString(),
-          channel: "watcher",
-          event_type: "plan_failed",
-          summary_md: `Watcher fired: plan_failed`,
-          tags: ["watcher", `watcher_id:${String(watcher.id)}`, `plan_id:${event.planId}`],
-          metadata: {
-            watcher_id: watcher.id,
-            plan_id: event.planId,
-            reason: event.reason,
-            trigger_type: watcher.trigger_type,
+      try {
+        await recordMemoryV1SystemEpisode(
+          this.memoryV1Dal,
+          {
+            occurred_at: new Date().toISOString(),
+            channel: "watcher",
+            event_type: "plan_failed",
+            summary_md: `Watcher fired: plan_failed`,
+            tags: ["watcher", `watcher_id:${String(watcher.id)}`, `plan_id:${event.planId}`],
+            metadata: {
+              watcher_id: watcher.id,
+              plan_id: event.planId,
+              reason: event.reason,
+              trigger_type: watcher.trigger_type,
+            },
           },
-        },
-        "default",
-      );
+          "default",
+        );
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn("watcher.plan_failed_episode_record_failed", {
+          watcher_id: watcher.id,
+          plan_id: event.planId,
+          error: message,
+        });
+      }
 
       if (watcher.trigger_type === "plan_complete") {
         await this.deactivateWatcher(watcher.id);

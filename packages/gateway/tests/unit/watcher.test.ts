@@ -38,6 +38,29 @@ describe("WatcherProcessor", () => {
     expect(findEpisodeByType(episodes, "plan_completed")).toBeTruthy();
   });
 
+  it("treats plan completion episode recording as best-effort", async () => {
+    const id = await processor.createWatcher("plan-1", "plan_complete", { planId: "plan-1" });
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const createSpy = vi
+      .spyOn(memoryV1Dal, "create")
+      .mockRejectedValue(new Error("episode recording failure"));
+
+    await processor.onPlanCompleted({ planId: "plan-1", stepsExecuted: 5 });
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      "watcher.plan_completed_episode_record_failed",
+      expect.objectContaining({
+        watcher_id: id,
+        plan_id: "plan-1",
+        error: "episode recording failure",
+      }),
+    );
+
+    createSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+
   it("logs plan failure and deactivates plan_complete watchers", async () => {
     await processor.createWatcher("plan-1", "plan_complete", { planId: "plan-1" });
 
@@ -46,6 +69,30 @@ describe("WatcherProcessor", () => {
     const episodes = await listWatcherEpisodes(memoryV1Dal);
     expect(findEpisodeByType(episodes, "plan_failed")).toBeTruthy();
     expect(await processor.listWatchers()).toHaveLength(0);
+  });
+
+  it("treats plan failure episode recording as best-effort and still deactivates plan_complete watchers", async () => {
+    const id = await processor.createWatcher("plan-1", "plan_complete", { planId: "plan-1" });
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const createSpy = vi
+      .spyOn(memoryV1Dal, "create")
+      .mockRejectedValue(new Error("episode recording failure"));
+
+    await processor.onPlanFailed({ planId: "plan-1", reason: "timeout" });
+
+    expect(await processor.listWatchers()).toHaveLength(0);
+    expect(warnSpy).toHaveBeenCalledWith(
+      "watcher.plan_failed_episode_record_failed",
+      expect.objectContaining({
+        watcher_id: id,
+        plan_id: "plan-1",
+        error: "episode recording failure",
+      }),
+    );
+
+    createSpy.mockRestore();
+    warnSpy.mockRestore();
   });
 
   it("keeps periodic watchers active after failure", async () => {
@@ -76,6 +123,32 @@ describe("WatcherProcessor", () => {
     expect(findEpisodeByType(episodes, "plan_completed")).toBeTruthy();
 
     processor.stop();
+  });
+
+  it("logs and absorbs handler rejections while started", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const onPlanFailedSpy = vi.spyOn(processor, "onPlanFailed").mockReturnValue({
+      catch: (handler: (err: unknown) => void) => {
+        handler(new Error("boom"));
+        return Promise.resolve();
+      },
+    } as unknown as Promise<void>);
+
+    processor.start();
+    eventBus.emit("plan:failed", { planId: "plan-1", reason: "timeout" });
+    processor.stop();
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      "watcher.plan_failed_handler_failed",
+      expect.objectContaining({
+        plan_id: "plan-1",
+        error: "boom",
+      }),
+    );
+
+    onPlanFailedSpy.mockRestore();
+    warnSpy.mockRestore();
   });
 
   it("records webhook triggers and rejects replayed nonce+timestamp envelopes", async () => {
