@@ -82,7 +82,7 @@ export function registerNodeIpc(window: BrowserWindow): void {
         new DesktopProvider(
           desktopBackend,
           permissions,
-          async (_prompt) => {
+          async (_prompt: string) => {
             // For V1: fail-closed - always require explicit approval through UI
             return false;
           },
