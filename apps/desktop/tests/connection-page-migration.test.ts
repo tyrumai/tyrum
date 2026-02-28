@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 describe("Connection page migration", () => {
   it("uses shared operator-ui components instead of the legacy desktop theme module", () => {
     const source = readFileSync(
-      join(import.meta.dirname, "../src/renderer/pages/Connection.tsx"),
+      join(import.meta.dirname, "../src/renderer/pages/ConnectionPage.tsx"),
       "utf-8",
     );
 

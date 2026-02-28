@@ -37,10 +37,12 @@ describe("Connection page", () => {
   });
 
   it("renders both tabs and updates the config inputs", async () => {
-    const { Connection } = await import("../src/renderer/pages/Connection.js");
+    const { ConnectionPage } = await import("../src/renderer/pages/ConnectionPage.js");
 
     await act(async () => {
-      testRoot.root.render(createElement(Connection));
+      testRoot.root.render(
+        createElement(ConnectionPage, { core: null, busy: false, errorMessage: null }),
+      );
     });
 
     await act(async () => {
