@@ -2,6 +2,10 @@
 
 Tyrum is designed so operators can answer: “what happened, why, and what did it cost?” without guessing.
 
+## Status
+
+- **Status:** Implemented
+
 ## Core surfaces
 
 ### Status

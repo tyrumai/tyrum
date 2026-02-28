@@ -1,5 +1,9 @@
 # API surfaces (WebSocket vs HTTP)
 
+## Status
+
+- **Status:** Implemented
+
 Tyrum is **WebSocket-first**, but not WebSocket-only. The Gateway exposes two operator-facing API surfaces:
 
 - **WebSocket protocol (control plane):** typed requests/responses plus server-push events.

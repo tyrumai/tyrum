@@ -1,5 +1,9 @@
 # Contracts
 
+## Status
+
+- **Status:** Implemented
+
 Contracts define the shapes and semantics of Tyrum interfaces. They are used to validate:
 
 - WebSocket protocol messages

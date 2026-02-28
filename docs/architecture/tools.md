@@ -1,5 +1,9 @@
 # Tools
 
+## Status
+
+- **Status:** Implemented
+
 Tools are the gateway's invocable operations used by the agent runtime. Tools can be built-in, provided by plugins, or exposed via MCP servers.
 
 ## Categories

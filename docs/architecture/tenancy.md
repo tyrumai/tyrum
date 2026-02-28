@@ -1,5 +1,9 @@
 # Tenancy
 
+## Status
+
+- **Status:** Implemented
+
 Tyrum is a multi-tenant system. A **tenant** is the isolation boundary for identity, policy, and durable state.
 
 Every request, event, and durable record is scoped to exactly one `tenant_id`.

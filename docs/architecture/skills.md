@@ -1,5 +1,9 @@
 # Skills
 
+## Status
+
+- **Status:** Implemented
+
 A skill is an instruction bundle that teaches the agent how to perform a specialized workflow. Skills are loaded on demand and are meant to be readable by humans.
 
 ## Load order

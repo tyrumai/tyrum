@@ -1,5 +1,9 @@
 # System Prompt
 
+## Status
+
+- **Status:** Implemented
+
 For each agent run, Tyrum assembles a custom system prompt. The purpose is to provide the model with the minimum context and rules needed to act safely and effectively.
 
 ## Typical sections

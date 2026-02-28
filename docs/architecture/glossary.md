@@ -1,5 +1,9 @@
 # Glossary
 
+## Status
+
+- **Status:** Implemented
+
 ## Agent
 
 A configured runtime identity that owns sessions, a workspace, enabled tools/skills, and memory.

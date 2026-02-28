@@ -1,5 +1,9 @@
 # Models
 
+## Status
+
+- **Status:** Implemented
+
 Tyrum identifies models as `provider/model`.
 
 ## Model catalog

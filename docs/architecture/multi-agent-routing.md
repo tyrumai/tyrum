@@ -1,5 +1,9 @@
 # Multi-Agent Routing
 
+## Status
+
+- **Status:** Implemented
+
 Multi-agent routing is the ability to run multiple isolated agents behind one gateway, each with its own workspace and sessions, while routing inbound messages from channels to the correct agent.
 
 ## Isolation model

@@ -1,5 +1,9 @@
 # Protocol
 
+## Status
+
+- **Status:** Partially Implemented
+
 Tyrum uses a typed WebSocket protocol between the gateway, clients, and nodes. The protocol is designed to be:
 
 - **Typed:** messages are validated against contracts.

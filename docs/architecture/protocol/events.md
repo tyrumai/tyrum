@@ -1,5 +1,9 @@
 # Events
 
+## Status
+
+- **Status:** Implemented
+
 Events are gateway-emitted, server-push messages delivered to connected clients (and sometimes nodes). Events make the system observable and keep operator interfaces in sync without polling.
 
 The canonical wire shape lives in `@tyrum/schemas` (`packages/schemas/src/protocol.ts`).

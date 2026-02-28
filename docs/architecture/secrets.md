@@ -1,5 +1,9 @@
 # Secrets
 
+## Status
+
+- **Status:** Implemented
+
 Secrets are a first-class architecture concept in Tyrum. The system is designed so that **the model never receives raw secret values** (passwords, API keys, tokens, card numbers).
 
 Instead, secrets are managed by a **secret provider** and referenced via **secret handles**.

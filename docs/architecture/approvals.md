@@ -1,5 +1,9 @@
 # Approvals
 
+## Status
+
+- **Status:** Implemented
+
 Approvals are Tyrum’s durable mechanism for gating risky or side-effecting actions behind explicit operator consent. They are created by policy checks and by the execution engine when a workflow step requires confirmation.
 
 Approvals are **enforcement**, not prompt guidance.

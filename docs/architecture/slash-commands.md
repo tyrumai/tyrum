@@ -1,5 +1,9 @@
 # Slash Commands
 
+## Status
+
+- **Status:** Implemented
+
 Slash commands are a client-facing command surface for common actions. Clients translate commands into typed requests to the gateway.
 
 Commands are handled by the gateway (not by the model). This keeps control-plane actions deterministic, policy-enforced, and auditable.

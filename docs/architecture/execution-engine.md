@@ -1,5 +1,9 @@
 # Execution engine
 
+## Status
+
+- **Status:** Implemented
+
 The execution engine is the gateway subsystem responsible for turning a plan or workflow into **resilient, auditable execution**. It is where reliability guarantees live: retries, idempotency, budgets/timeouts, pause/resume, and evidence capture.
 
 ## Why it exists

@@ -1,5 +1,9 @@
 # Operations and onboarding
 
+## Status
+
+- **Status:** Partially Implemented
+
 This document describes Tyrum’s operational model and the onboarding/diagnostics surfaces that keep deployments hardened and maintainable. Ops ergonomics are part of the architecture: if the secure configuration is hard to reach, insecure defaults tend to win in practice.
 
 ## Goals

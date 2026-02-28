@@ -1,5 +1,9 @@
 # Agent Loop
 
+## Status
+
+- **Status:** Implemented
+
 An agent loop is the end-to-end path from an inbound message to a final reply and/or actions. The gateway is responsible for keeping loop execution consistent and auditable.
 
 ## Loop stages

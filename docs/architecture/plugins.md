@@ -1,5 +1,9 @@
 # Gateway plugins
 
+## Status
+
+- **Status:** Implemented
+
 A gateway plugin is an **in-process** code module that extends Tyrum with additional features such as commands, tools, and gateway RPC endpoints.
 
 Gateway plugins are **trusted extensions** (they run inside the gateway process). They are not the primary mechanism for per-vendor/per-app integrations; those should generally live in **capability providers** (nodes and MCP servers) so scopes are explicit and blast radius is smaller.

@@ -1,5 +1,9 @@
 # Data lifecycle and retention
 
+## Status
+
+- **Status:** Implemented
+
 Tyrum is durable by design: the StateStore is the source of truth for sessions, execution, approvals, and audit evidence.
 That durability must be paired with explicit **retention** and **deletion** rules so deployments remain operable (bounded cost), safe (privacy), and explainable (audit).
 

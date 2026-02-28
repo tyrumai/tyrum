@@ -1,5 +1,9 @@
 # Gateway authN/authZ
 
+## Status
+
+- **Status:** Implemented
+
 This document describes Tyrum’s **gateway authentication (authN)** and **authorization (authZ)** model.
 
 Tyrum is multi-tenant: every authenticated request and connection is bound to exactly one `tenant_id` (see [Tenancy](./tenancy.md)).
