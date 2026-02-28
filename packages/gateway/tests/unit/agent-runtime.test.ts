@@ -2245,6 +2245,132 @@ describe("AgentRuntime", () => {
     expect(usedTools.has("tool.fs.read")).toBe(true);
   });
 
+  it("suggests a conservative prefix override for Desktop act node dispatch", async () => {
+    homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
+    container = await createContainer({
+      dbPath: ":memory:",
+      migrationsDir,
+    });
+
+    const policyService = {
+      isEnabled: () => true,
+      isObserveOnly: () => false,
+      evaluateToolCall: vi.fn(async () => ({ decision: "require_approval" as const })),
+    };
+
+    const runtime = new AgentRuntime({
+      container,
+      home: homeDir,
+      languageModel: createStubLanguageModel("hello"),
+      fetchImpl: fetch404,
+      policyService: policyService as unknown as ConstructorParameters<
+        typeof AgentRuntime
+      >[0]["policyService"],
+    });
+
+    const approvalSpy = vi.fn(async () => ({
+      approved: true,
+      status: "approved" as const,
+      approvalId: 1,
+    }));
+    (
+      runtime as unknown as { awaitApprovalForToolExecution: unknown }
+    ).awaitApprovalForToolExecution = approvalSpy;
+
+    const toolDesc = {
+      id: "tool.node.dispatch",
+      description: "Dispatch tasks to connected node capabilities.",
+      risk: "high" as const,
+      requires_confirmation: true,
+      keywords: [],
+      inputSchema: {
+        type: "object",
+        properties: {
+          capability: { type: "string" },
+          action: { type: "string" },
+          args: { type: "object", additionalProperties: {} },
+          timeout_ms: { type: "number" },
+        },
+        required: ["capability", "action"],
+        additionalProperties: false,
+      },
+    };
+
+    const toolExecutor = {
+      execute: vi.fn(async () => ({
+        tool_call_id: "tc-test",
+        output: "ok",
+        error: undefined,
+        provenance: undefined,
+      })),
+    };
+
+    const usedTools = new Set<string>();
+    const toolSet = (
+      runtime as unknown as {
+        buildToolSet: (
+          tools: readonly unknown[],
+          toolExecutor: unknown,
+          usedTools: Set<string>,
+          context: { planId: string; sessionId: string; channel: string; threadId: string },
+          contextReport: unknown,
+        ) => Record<string, { execute: (args: unknown) => Promise<string> }>;
+      }
+    ).buildToolSet(
+      [toolDesc],
+      toolExecutor,
+      usedTools,
+      {
+        planId: "plan-1",
+        sessionId: "session-1",
+        channel: "test",
+        threadId: "thread-1",
+      },
+      makeContextReport(),
+    );
+
+    const result = await toolSet["tool.node.dispatch"]!.execute({
+      capability: "tyrum.desktop",
+      action: "Desktop",
+      args: {
+        op: "act",
+        target: { kind: "a11y", role: "button", name: "Submit", states: [] },
+        action: { kind: "click" },
+      },
+    });
+
+    expect(result).toBe("ok");
+    expect(policyService.evaluateToolCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolMatchTarget: "capability:tyrum.desktop;action:Desktop;op:act;act:ui",
+      }),
+    );
+
+    expect(approvalSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "tool.node.dispatch" }),
+      expect.any(Object),
+      expect.any(String),
+      expect.any(Object),
+      expect.any(Number),
+      expect.objectContaining({
+        suggested_overrides: [
+          {
+            tool_id: "tool.node.dispatch",
+            pattern: "capability:tyrum.desktop;action:Desktop;op:act;act:ui",
+            workspace_id: "default",
+          },
+          {
+            tool_id: "tool.node.dispatch",
+            pattern: "capability:tyrum.desktop;action:Desktop;op:act*",
+            workspace_id: "default",
+          },
+        ],
+      }),
+    );
+    expect(toolExecutor.execute).toHaveBeenCalledTimes(1);
+    expect(usedTools.has("tool.node.dispatch")).toBe(true);
+  });
+
   it("omits suggested overrides when the match target contains wildcard characters", async () => {
     homeDir = await mkdtemp(join(tmpdir(), "tyrum-agent-runtime-"));
     container = await createContainer({

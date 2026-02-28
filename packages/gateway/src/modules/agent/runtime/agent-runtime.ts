@@ -95,7 +95,7 @@ import type { ApprovalDal, ApprovalStatus } from "../../approval/dal.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
 import type { PolicyService } from "../../policy/service.js";
 import { canonicalizeToolMatchTarget } from "../../policy/match-target.js";
-import { isSafeSuggestedOverridePattern } from "../../policy/override-guardrails.js";
+import { suggestedOverridesForToolCall } from "../../policy/suggested-overrides.js";
 import { sha256HexFromString } from "../../policy/canonical-json.js";
 import { wildcardMatch } from "../../policy/wildcard.js";
 import { createProviderFromNpm } from "../../models/provider-factory.js";
@@ -2379,18 +2379,13 @@ export class AgentRuntime {
           ? policyDecision === "require_approval"
           : input.toolDesc.requires_confirmation;
 
-      const suggestedOverrides =
-        policyEnabled &&
-        matchTarget.trim().length > 0 &&
-        isSafeSuggestedOverridePattern(matchTarget)
-          ? [
-              {
-                tool_id: input.toolDesc.id,
-                pattern: matchTarget,
-                workspace_id: this.workspaceId,
-              },
-            ]
-          : undefined;
+      const suggestedOverrides = policyEnabled
+        ? suggestedOverridesForToolCall({
+            toolId: input.toolDesc.id,
+            matchTarget,
+            workspaceId: this.workspaceId,
+          })
+        : undefined;
 
       const state: ToolCallPolicyState = {
         toolDesc: input.toolDesc,
