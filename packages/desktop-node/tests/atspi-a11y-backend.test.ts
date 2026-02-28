@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { DesktopQueryResult } from "@tyrum/schemas";
 import { AtSpiDesktopA11yBackend } from "../src/providers/backends/atspi-a11y-backend.js";
+import { DEFAULT_A11Y_MAX_DEPTH } from "../src/providers/a11y/prune-ui-tree.js";
 
 describe("AtSpiDesktopA11yBackend", () => {
   it("does not treat the desktop frame as the focused window root", async () => {
@@ -249,5 +250,37 @@ describe("AtSpiDesktopA11yBackend", () => {
     expect(matches).toHaveLength(1);
     expect(matches[0]?.kind).toBe("a11y");
     expect((matches[0] as { element_ref?: string }).element_ref).toBe("atspi:app|/node19");
+  });
+
+  it("finds nodes at the maximum depth", async () => {
+    const backend = new AtSpiDesktopA11yBackend() as any;
+
+    backend.resolveRootAccessible = vi.fn(async () => ({ busName: "app", objectPath: "/node1" }));
+    backend.getChildren = vi.fn(async (ref: { objectPath: string }, maxChildren: number) => {
+      const idxRaw = ref.objectPath.replace("/node", "");
+      const idx = Number(idxRaw);
+      if (!Number.isFinite(idx) || idx <= 0) return [];
+      if (idx >= DEFAULT_A11Y_MAX_DEPTH) return [];
+      return [{ busName: "app", objectPath: `/node${String(idx + 1)}` }].slice(0, maxChildren);
+    });
+    backend.describeAccessible = vi.fn(async (ref: { busName: string; objectPath: string }) => ({
+      elementRef: `atspi:${ref.busName}|${ref.objectPath}`,
+      role: "button",
+      name: ref.objectPath === `/node${String(DEFAULT_A11Y_MAX_DEPTH)}` ? "Target" : ref.objectPath,
+      bounds: { x: 0, y: 0, width: 100, height: 80 },
+      actions: [],
+      states: [],
+    }));
+
+    const matches = await backend.query({
+      op: "query",
+      selector: { kind: "a11y", role: "button", name: "target", states: [] },
+      limit: 1,
+    });
+
+    expect(matches).toHaveLength(1);
+    expect((matches[0] as { element_ref?: string }).element_ref).toBe(
+      `atspi:app|/node${String(DEFAULT_A11Y_MAX_DEPTH)}`,
+    );
   });
 });

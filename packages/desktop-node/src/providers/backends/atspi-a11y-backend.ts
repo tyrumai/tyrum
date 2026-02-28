@@ -247,6 +247,7 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
       const dbus = await loadDbus();
 
       const session = dbus.sessionBus();
+      let atspiBus: MessageBus | null = null;
       try {
         const busObj = await session.getProxyObject("org.a11y.Bus", "/org/a11y/bus");
         const busIface = busObj.getInterface("org.a11y.Bus") as ClientInterface;
@@ -255,7 +256,7 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
         if (!busAddress)
           throw new Error("AT-SPI bus address unavailable (org.a11y.Bus.GetAddress)");
 
-        const atspiBus = dbus.sessionBus({ busAddress });
+        atspiBus = dbus.sessionBus({ busAddress });
         const registryObj = await atspiBus.getProxyObject(
           "org.a11y.atspi.Registry",
           "/org/a11y/atspi/registry",
@@ -266,7 +267,9 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
 
         this.bus = atspiBus;
         this.registry = registryIface;
+        atspiBus = null;
       } finally {
+        atspiBus?.disconnect();
         session.disconnect();
       }
     })()
@@ -554,7 +557,7 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
     const walk = async (ref: AtSpiAccessibleRef, depth: number): Promise<void> => {
       if (matches.length >= args.limit) return;
       if (remainingNodes <= 0) return;
-      if (depth >= DEFAULT_A11Y_MAX_DEPTH) return;
+      if (depth > DEFAULT_A11Y_MAX_DEPTH) return;
 
       const key = `${ref.busName}${ATSPI_REF_SEPARATOR}${ref.objectPath}`;
       if (visited.has(key)) return;
@@ -578,6 +581,8 @@ export class AtSpiDesktopA11yBackend implements DesktopA11yBackend {
         });
         if (matches.length >= args.limit) return;
       }
+
+      if (depth >= DEFAULT_A11Y_MAX_DEPTH) return;
 
       const childLimit = Math.min(MAX_NODE_CHILDREN, remainingNodes);
       const children = await this.getChildren(ref, childLimit);
