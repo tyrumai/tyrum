@@ -8,7 +8,7 @@
 import type { WebSocket } from "ws";
 import type { ClientCapability, WsEventEnvelope, WsRequestEnvelope } from "@tyrum/schemas";
 import type { AuthTokenClaims } from "../modules/auth/token-store.js";
-import { gatewayMetrics } from "../modules/observability/metrics.js";
+import { gatewayMetrics, type MetricsRegistry } from "../modules/observability/metrics.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -46,6 +46,12 @@ export class ConnectionManager {
   private readonly clients = new Map<string, ConnectedClient>();
   private readonly dispatchedAttemptExecutors = new Map<string, string>();
 
+  constructor(private readonly metrics: MetricsRegistry = gatewayMetrics) {}
+
+  private updateWsConnectionsActive(): void {
+    this.metrics.wsConnectionsActive.set(this.clients.size);
+  }
+
   /**
    * Register a new peer after a successful WebSocket handshake.
    *
@@ -80,7 +86,7 @@ export class ConnectionManager {
       client.lastPong = Date.now();
     });
     this.clients.set(id, client);
-    gatewayMetrics.wsConnectionsActive.set(this.clients.size);
+    this.updateWsConnectionsActive();
     return id;
   }
 
@@ -122,7 +128,7 @@ export class ConnectionManager {
   /** Remove a client (e.g. on disconnect or eviction). */
   removeClient(id: string): void {
     this.clients.delete(id);
-    gatewayMetrics.wsConnectionsActive.set(this.clients.size);
+    this.updateWsConnectionsActive();
   }
 
   /** Return the first connected client that advertises the given capability. */
@@ -188,7 +194,7 @@ export class ConnectionManager {
     }
 
     if (changed) {
-      gatewayMetrics.wsConnectionsActive.set(this.clients.size);
+      this.updateWsConnectionsActive();
     }
   }
 

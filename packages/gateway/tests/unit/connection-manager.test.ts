@@ -5,6 +5,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { ConnectionManager } from "../../src/ws/connection-manager.js";
+import { MetricsRegistry } from "../../src/modules/observability/metrics.js";
 
 // ---------------------------------------------------------------------------
 // Mock WebSocket helper
@@ -63,6 +64,22 @@ describe("ConnectionManager", () => {
 
     expect(cm.getClient(id)).toBeUndefined();
     expect(cm.getStats().totalClients).toBe(0);
+  });
+
+  it("updates ws_connections_active on the injected registry", async () => {
+    const metrics = new MetricsRegistry();
+    metrics.wsConnectionsActive.set(0);
+    const cm = new ConnectionManager(metrics);
+
+    const id = cm.addClient(createMockWs() as never, ["cli"], { id: "client-1" });
+    await expect(
+      metrics.registry.getSingleMetricAsString("ws_connections_active"),
+    ).resolves.toMatch(/ws_connections_active\s+1(\s|$)/);
+
+    cm.removeClient(id);
+    await expect(
+      metrics.registry.getSingleMetricAsString("ws_connections_active"),
+    ).resolves.toMatch(/ws_connections_active\s+0(\s|$)/);
   });
 
   it("getClientForCapability returns matching client", () => {
