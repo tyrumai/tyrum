@@ -39,4 +39,3 @@ export type ToolIntentV1 = z.infer<typeof ToolIntentV1>;
 
 export const ToolIntent = z.discriminatedUnion("v", [ToolIntentV1]);
 export type ToolIntent = z.infer<typeof ToolIntent>;
-

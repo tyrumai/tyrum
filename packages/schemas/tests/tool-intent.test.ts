@@ -42,4 +42,3 @@ describe("ToolIntent", () => {
     expect(() => ToolIntent!.parse({ v: 1 })).toThrow();
   });
 });
-
