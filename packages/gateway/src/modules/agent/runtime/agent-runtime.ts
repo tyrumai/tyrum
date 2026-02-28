@@ -1,13 +1,7 @@
 import { randomUUID } from "node:crypto";
-import type {
-  LanguageModelV3,
-  LanguageModelV3CallOptions,
-  LanguageModelV3GenerateResult,
-  LanguageModelV3StreamPart,
-  LanguageModelV3StreamResult,
-} from "@ai-sdk/provider";
-import { generateText, jsonSchema, stepCountIs, streamText, tool as aiTool } from "ai";
-import type { LanguageModel, ModelMessage, Tool, ToolExecutionOptions, ToolSet } from "ai";
+import type { LanguageModelV3 } from "@ai-sdk/provider";
+import { generateText, stepCountIs, streamText } from "ai";
+import type { LanguageModel, ModelMessage, ToolSet } from "ai";
 import type {
   AgentStatusResponse as AgentStatusResponseT,
   AgentTurnRequest as AgentTurnRequestT,
@@ -15,8 +9,6 @@ import type {
   AgentConfig as AgentConfigT,
   McpServerSpec as McpServerSpecT,
   IdentityPack as IdentityPackT,
-  NormalizedAttachment as NormalizedAttachmentT,
-  NormalizedMessageEnvelope as NormalizedMessageEnvelopeT,
   NormalizedContainerKind,
   SecretHandle as SecretHandleT,
 } from "@tyrum/schemas";
@@ -28,7 +20,6 @@ import {
   SubagentSessionKey,
   WorkspaceId,
 } from "@tyrum/schemas";
-import type { Decision } from "@tyrum/schemas";
 import {
   prepareLaneQueueStep as prepareLaneQueueStepBridge,
   turnViaExecutionEngine as turnViaExecutionEngineBridge,
@@ -36,6 +27,25 @@ import {
   type LaneQueueState,
   type TurnEngineBridgeDeps,
 } from "./turn-engine-bridge.js";
+import { maybeRunPreCompactionMemoryFlush } from "./pre-compaction-memory-flush.js";
+import { ToolSetBuilder, type ToolCallPolicyState } from "./tool-set-builder.js";
+import {
+  ToolExecutionApprovalRequiredError,
+  createStaticLanguageModelV3,
+  deriveElevatedExecutionAvailable,
+  deriveWorkItemTitle,
+  extractToolApprovalResumeState,
+  isStatusQuery,
+  parseIntakeModeDecision,
+  resolveAgentId,
+  resolveAgentTurnInput,
+  resolveLaneQueueScope,
+  type ResolvedAgentTurnInput,
+  resolveMainLaneSessionKey,
+  resolveTurnRequestId,
+  shouldPromoteToCoreMemory,
+  type StepPauseRequest,
+} from "./turn-helpers.js";
 import {
   DATA_TAG_SAFETY_PROMPT,
   formatIdentityPrompt,
@@ -52,7 +62,7 @@ import {
   resolveProviderBaseURL,
 } from "./provider-resolution.js";
 import { resolveSessionModel as resolveSessionModelImpl } from "./session-model-resolution.js";
-import { looksLikeSecretText, redactSecretLikeText } from "./secrets.js";
+import { looksLikeSecretText } from "./secrets.js";
 import type { AgentContextReport, AgentRuntimeOptions } from "./types.js";
 import { ensureWorkspaceInitialized, resolveTyrumHome } from "../home.js";
 import {
@@ -61,8 +71,7 @@ import {
   LOOP_WARNING_PREFIX,
 } from "../loop-detection.js";
 import { MarkdownMemoryStore } from "../markdown-memory.js";
-import { SessionDal, type SessionMessage, type SessionRow } from "../session-dal.js";
-import { buildAgentTurnKey } from "../turn-key.js";
+import { SessionDal, type SessionRow } from "../session-dal.js";
 import {
   loadAgentConfig,
   loadEnabledMcpServers,
@@ -70,17 +79,16 @@ import {
   loadIdentity,
   type LoadedSkillManifest,
 } from "../workspace.js";
-import { isToolAllowed, selectToolDirectory, type ToolDescriptor } from "../tools.js";
+import { isToolAllowed, selectToolDirectory } from "../tools.js";
 import { getExecutionProfile, normalizeExecutionProfileId } from "../execution-profiles.js";
 import type { ExecutionProfile, ExecutionProfileId } from "../execution-profiles.js";
 import { IntakeModeOverrideDal } from "../intake-mode-override-dal.js";
 import { McpManager } from "../mcp-manager.js";
 import { NodeDispatchService } from "../node-dispatch-service.js";
-import { ToolExecutor, type ToolResult } from "../tool-executor.js";
+import { ToolExecutor } from "../tool-executor.js";
 import { tagContent } from "../provenance.js";
-import { sanitizeForModel, containsInjectionPatterns } from "../sanitizer.js";
+import { sanitizeForModel } from "../sanitizer.js";
 import { EnvSecretProvider } from "../../secret/provider.js";
-import { collectSecretHandleIds } from "../../secret/collect-secret-handle-ids.js";
 import { VectorDal } from "../../memory/vector-dal.js";
 import { EmbeddingPipeline } from "../../memory/embedding-pipeline.js";
 import { MemoryV1Dal } from "../../memory/v1-dal.js";
@@ -91,28 +99,18 @@ import {
   type MemoryV1SemanticSearchHit,
 } from "../../memory/v1-semantic-index.js";
 import type { ApprovalNotifier } from "../../approval/notifier.js";
-import type { ApprovalDal, ApprovalStatus } from "../../approval/dal.js";
+import type { ApprovalDal } from "../../approval/dal.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
 import type { PolicyService } from "../../policy/service.js";
-import { canonicalizeToolMatchTarget } from "../../policy/match-target.js";
-import {
-  suggestedOverridesForToolCall,
-  type SuggestedOverride,
-} from "../../policy/suggested-overrides.js";
-import { sha256HexFromString } from "../../policy/canonical-json.js";
-import { wildcardMatch } from "../../policy/wildcard.js";
 import { createProviderFromNpm } from "../../models/provider-factory.js";
 import {
   appendToolApprovalResponseMessage,
-  coerceModelMessages,
   countAssistantMessages,
-  hasToolResult,
 } from "../../ai-sdk/message-utils.js";
 import { coerceRecord } from "../../util/coerce.js";
 import { ExecutionEngine } from "../../execution/engine.js";
 import { resolveSandboxHardeningProfile } from "../../sandbox/hardening.js";
-import { deriveElevatedExecutionAvailableFromPolicyBundle } from "../../sandbox/elevated-execution.js";
-import { LaneQueueSignalDal, LaneQueueInterruptError } from "../../lanes/queue-signal-dal.js";
+import { LaneQueueSignalDal } from "../../lanes/queue-signal-dal.js";
 import { resolveWorkspaceId } from "../../workspace/id.js";
 import { WorkboardDal } from "../../workboard/dal.js";
 
@@ -120,10 +118,6 @@ const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_APPROVAL_WAIT_MS = 120_000;
 const DEFAULT_APPROVAL_POLL_MS = 500;
 const MAX_TURN_ENGINE_WAIT_MS = 60_000;
-
-const DEFAULT_PRE_COMPACTION_FLUSH_TIMEOUT_MS = 2_500;
-const PRE_COMPACTION_FLUSH_TRUNCATION_MARKER = "...(truncated)";
-const MAX_PRE_COMPACTION_FLUSH_MESSAGE_CHARS = 2_000;
 
 const WITHIN_TURN_LOOP_STOP_REPLY =
   "Loop detected (repeated tool calls); stopping to avoid runaway execution. " +
@@ -133,145 +127,12 @@ const CROSS_TURN_LOOP_WARNING_TEXT =
   `${LOOP_WARNING_PREFIX} I may be repeating myself. If this isn’t progressing, tell me what to change ` +
   "(goal/constraints/example output) and I’ll take a different approach.";
 
-function createStaticLanguageModelV3(text: string): LanguageModelV3 {
-  const finishReason = { unified: "stop" as const, raw: "stop" };
-  const usage = {
-    inputTokens: { total: 0, noCache: 0, cacheRead: 0, cacheWrite: 0 },
-    outputTokens: { total: 0, text: 0, reasoning: 0 },
-  };
-
-  return {
-    specificationVersion: "v3",
-    provider: "tyrum",
-    modelId: "static",
-    supportedUrls: {},
-    doGenerate: async (
-      _options: LanguageModelV3CallOptions,
-    ): Promise<LanguageModelV3GenerateResult> => {
-      return {
-        content: [{ type: "text", text }],
-        finishReason,
-        usage,
-        warnings: [],
-      };
-    },
-    doStream: async (
-      _options: LanguageModelV3CallOptions,
-    ): Promise<LanguageModelV3StreamResult> => {
-      return {
-        stream: new ReadableStream<LanguageModelV3StreamPart>({
-          start(controller) {
-            const id = randomUUID();
-            controller.enqueue({ type: "stream-start", warnings: [] });
-            controller.enqueue({ type: "text-start", id });
-            controller.enqueue({ type: "text-delta", id, delta: text });
-            controller.enqueue({ type: "text-end", id });
-            controller.enqueue({ type: "finish", usage, finishReason });
-            controller.close();
-          },
-        }),
-      };
-    },
-  };
-}
-
-type StepPauseRequest = {
-  kind: string;
-  prompt: string;
-  detail: string;
-  context?: unknown;
-  expiresAt?: string | null;
-};
-
-class ToolExecutionApprovalRequiredError extends Error {
-  constructor(public readonly pause: StepPauseRequest) {
-    super(pause.prompt);
-    this.name = "ToolExecutionApprovalRequiredError";
-  }
-}
-
-type ToolApprovalResumeState = {
-  approval_id: string;
-  messages: ModelMessage[];
-  used_tools?: string[];
-  steps_used?: number;
-};
-
-function coerceSecretHandle(value: unknown): SecretHandleT | undefined {
-  const record = coerceRecord(value);
-  if (!record) return undefined;
-  const handleId = typeof record["handle_id"] === "string" ? record["handle_id"].trim() : "";
-  const provider = typeof record["provider"] === "string" ? record["provider"].trim() : "";
-  const scope = typeof record["scope"] === "string" ? record["scope"].trim() : "";
-  const createdAt = typeof record["created_at"] === "string" ? record["created_at"].trim() : "";
-  if (!handleId || !provider || !scope || !createdAt) return undefined;
-  if (provider !== "env" && provider !== "file" && provider !== "keychain") return undefined;
-  return {
-    handle_id: handleId,
-    provider,
-    scope,
-    created_at: createdAt,
-  };
-}
-
-function extractToolApprovalResumeState(context: unknown): ToolApprovalResumeState | undefined {
-  const record = coerceRecord(context);
-  if (!record) return undefined;
-  if (record["source"] !== "agent-tool-execution") return undefined;
-  const ai = coerceRecord(record["ai_sdk"]);
-  if (!ai) return undefined;
-  const approvalId = typeof ai["approval_id"] === "string" ? ai["approval_id"].trim() : "";
-  if (approvalId.length === 0) return undefined;
-  const messages = coerceModelMessages(ai["messages"]);
-  if (!messages) return undefined;
-  const usedToolsRaw = ai["used_tools"];
-  const usedTools = Array.isArray(usedToolsRaw)
-    ? usedToolsRaw.filter((value): value is string => typeof value === "string")
-    : undefined;
-
-  const stepsUsedRaw = ai["steps_used"];
-  const stepsUsed =
-    typeof stepsUsedRaw === "number" &&
-    Number.isFinite(stepsUsedRaw) &&
-    Number.isSafeInteger(stepsUsedRaw) &&
-    stepsUsedRaw >= 0
-      ? stepsUsedRaw
-      : undefined;
-
-  return { approval_id: approvalId, messages, used_tools: usedTools, steps_used: stepsUsed };
-}
-
-async function deriveElevatedExecutionAvailable(
-  policyService: PolicyService,
-): Promise<boolean | null> {
-  try {
-    const effective = await policyService.loadEffectiveBundle();
-    return deriveElevatedExecutionAvailableFromPolicyBundle(effective.bundle);
-  } catch {
-    // Intentional: policy bundle load is best-effort for prompt context; treat failures as unknown.
-    return null;
-  }
-}
-
 interface AgentLoadedContext {
   config: AgentConfigT;
   identity: IdentityPackT;
   skills: LoadedSkillManifest[];
   mcpServers: McpServerSpecT[];
   memoryStore: MarkdownMemoryStore;
-}
-
-interface ToolExecutionContext {
-  planId: string;
-  sessionId: string;
-  channel: string;
-  threadId: string;
-  execution?: {
-    runId: string;
-    stepIndex: number;
-    stepId: string;
-    stepApprovalId?: number;
-  };
 }
 
 type TurnExecutionContext = {
@@ -282,204 +143,17 @@ type TurnExecutionContext = {
   stepApprovalId?: number;
 };
 
-type ToolCallPolicyState = {
-  toolDesc: ToolDescriptor;
-  toolCallId: string;
-  args: unknown;
-  matchTarget: string;
-  inputProvenance: { source: string; trusted: boolean };
-  policyDecision?: Decision;
-  policySnapshotId?: string;
-  appliedOverrideIds?: string[];
-  suggestedOverrides?: SuggestedOverride[];
-  approvalStepIndex?: number;
-  shouldRequireApproval: boolean;
-};
-
-function resolveAgentId(): string {
-  const raw = process.env["TYRUM_AGENT_ID"]?.trim();
-  return raw && raw.length > 0 ? raw : "default";
-}
-
-function resolveTurnRequestId(input: AgentTurnRequestT): string {
-  const raw = input.metadata?.["request_id"];
-  if (typeof raw === "string" && raw.trim().length > 0) {
-    return raw.trim();
-  }
-  return `agent-turn-${randomUUID()}`;
-}
-
-type ResolvedAgentTurnInput = {
-  channel: string;
-  thread_id: string;
-  message: string;
-  envelope?: NormalizedMessageEnvelopeT;
-  metadata?: Record<string, unknown>;
-};
-
 type ResolvedExecutionProfile = {
   id: ExecutionProfileId;
   profile: ExecutionProfile;
   source: "interaction_default" | "subagent_record" | "subagent_fallback";
 };
 
-function formatNormalizedAttachment(attachment: NormalizedAttachmentT): string {
-  const fields = [`kind=${attachment.kind}`];
-  if (attachment.mime_type) fields.push(`mime_type=${attachment.mime_type}`);
-  if (typeof attachment.size_bytes === "number")
-    fields.push(`size_bytes=${String(attachment.size_bytes)}`);
-  if (attachment.sha256) fields.push(`sha256=${attachment.sha256}`);
-  return `- ${fields.join(" ")}`;
-}
-
-function formatAttachmentSummary(attachments: NormalizedAttachmentT[]): string | undefined {
-  if (!attachments || attachments.length === 0) return undefined;
-  return `Attachments:\n${attachments.map(formatNormalizedAttachment).join("\n")}`;
-}
-
-function resolveAgentTurnInput(input: AgentTurnRequestT): ResolvedAgentTurnInput {
-  const envelope = input.envelope;
-  const channel = envelope?.delivery.channel ?? input.channel;
-  const threadId = envelope?.container.id ?? input.thread_id;
-
-  if (typeof channel !== "string" || channel.trim().length === 0) {
-    throw new Error("channel is required");
-  }
-  if (typeof threadId !== "string" || threadId.trim().length === 0) {
-    throw new Error("thread_id is required");
-  }
-
-  const baseText = (input.message ?? envelope?.content.text ?? "").trim();
-  const attachmentsSummary = envelope
-    ? formatAttachmentSummary(envelope.content.attachments)
-    : undefined;
-  const message = [baseText, attachmentsSummary]
-    .filter((part) => part && part.trim().length > 0)
-    .join("\n\n")
-    .trim();
-
-  if (message.length === 0) {
-    throw new Error("message is required (either message text or envelope content)");
-  }
-
-  return {
-    channel,
-    thread_id: threadId,
-    message,
-    envelope,
-    metadata: input.metadata,
-  };
-}
-
-function resolveLaneQueueScope(
-  metadata: Record<string, unknown> | undefined,
-): LaneQueueScope | undefined {
-  if (!metadata) return undefined;
-
-  const rawKey = metadata["tyrum_key"];
-  const rawLane = metadata["lane"];
-
-  const key = typeof rawKey === "string" ? rawKey.trim() : "";
-  const lane = typeof rawLane === "string" ? rawLane.trim() : "";
-  if (key.length === 0 || lane.length === 0) return undefined;
-
-  return { key, lane };
-}
-
-function resolveMainLaneSessionKey(input: {
-  agentId: string;
-  workspaceId: string;
-  resolved: ResolvedAgentTurnInput;
-  containerKind: NormalizedContainerKind;
-  deliveryAccount?: string;
-}): string {
-  const laneQueueScope = resolveLaneQueueScope(input.resolved.metadata);
-  if (laneQueueScope?.lane === "main") {
-    return laneQueueScope.key;
-  }
-
-  return buildAgentTurnKey({
-    agentId: input.agentId,
-    workspaceId: input.workspaceId,
-    channel: input.resolved.channel,
-    containerKind: input.containerKind,
-    threadId: input.resolved.thread_id,
-    deliveryAccount: input.deliveryAccount,
-  });
-}
-
-function shouldPromoteToCoreMemory(message: string): boolean {
-  const normalized = message.toLowerCase();
-  return (
-    normalized.includes("i prefer") ||
-    normalized.includes("remember that") ||
-    normalized.includes("always ") ||
-    normalized.includes("never ")
-  );
-}
-
 const NOOP_APPROVAL_NOTIFIER: ApprovalNotifier = {
   notify(_approval) {
     // no-op
   },
 };
-
-function isSideEffectingPluginTool(tool: ToolDescriptor): boolean {
-  const id = tool.id.trim();
-  return id.startsWith("plugin.") && tool.requires_confirmation;
-}
-
-function isStatusQuery(message: string): boolean {
-  const normalized = message.trim().toLowerCase();
-  return normalized === "status?" || normalized === "status";
-}
-
-type IntakeMode = "delegate_execute" | "delegate_plan";
-
-type IntakeModeDecision = {
-  mode: IntakeMode;
-  reason_code: string;
-  body: string;
-};
-
-function stripDirectivePrefix(message: string, prefix: string): string {
-  let rest = message.slice(prefix.length);
-  if (rest.startsWith(":")) rest = rest.slice(1);
-  return rest.trim();
-}
-
-function isDirectiveInvocation(message: string, prefix: string): boolean {
-  if (!message.startsWith(prefix)) return false;
-  if (message.length === prefix.length) return true;
-  const next = message[prefix.length];
-  return next === ":" || next === " " || next === "\t" || next === "\n" || next === "\r";
-}
-
-function parseIntakeModeDecision(message: string): IntakeModeDecision | undefined {
-  const trimmed = message.trim();
-  if (isDirectiveInvocation(trimmed, "/delegate_execute")) {
-    return {
-      mode: "delegate_execute",
-      reason_code: "explicit_delegate_execute",
-      body: stripDirectivePrefix(trimmed, "/delegate_execute"),
-    };
-  }
-  if (isDirectiveInvocation(trimmed, "/delegate_plan")) {
-    return {
-      mode: "delegate_plan",
-      reason_code: "explicit_delegate_plan",
-      body: stripDirectivePrefix(trimmed, "/delegate_plan"),
-    };
-  }
-  return undefined;
-}
-
-function deriveWorkItemTitle(body: string): string {
-  const normalized = body.replaceAll(/\s+/g, " ").trim();
-  if (!normalized) return "Delegated work";
-  if (normalized.length <= 160) return normalized;
-  return `${normalized.slice(0, 157)}...`;
-}
 
 export class AgentRuntime {
   private readonly home: string;
@@ -830,12 +504,10 @@ export class AgentRuntime {
       return { streamResult, sessionId: session.session_id, finalize: async () => response };
     }
 
-    await this.maybeRunPreCompactionMemoryFlush({
-      ctx,
-      session,
-      model,
-      systemPrompt,
-    });
+    await maybeRunPreCompactionMemoryFlush(
+      { db: this.opts.container.db, logger: this.opts.container.logger, agentId: this.agentId },
+      { ctx, session, model, systemPrompt },
+    );
 
     const withinTurnCfg = ctx.config.sessions.loop_detection.within_turn;
     const { stopWhen, withinTurnLoop } = this.createStopWhenWithWithinTurnLoopDetection({
@@ -888,7 +560,7 @@ export class AgentRuntime {
     try {
       serialized = JSON.stringify(input.args);
     } catch {
-      // Intentional: tool approval args may be non-serializable (cycles/BigInt); skip persistence.
+      // Intentional: tool approval arg persistence is best-effort; args may be non-serializable.
       serialized = undefined;
     }
     if (typeof serialized !== "string") {
@@ -901,7 +573,7 @@ export class AgentRuntime {
         serialized,
       );
     } catch {
-      // Intentional: approval args persistence is best-effort; skipping doesn't block tool execution.
+      // Intentional: tool approval arg persistence is best-effort; continue without stored args handle.
       return undefined;
     }
   }
@@ -1027,7 +699,7 @@ export class AgentRuntime {
       try {
         await workboard.transitionItem({ scope, work_item_id: item.work_item_id, status: "doing" });
       } catch {
-        // Intentional: ignore WIP/transition errors; the WorkItem still exists for operator triage.
+        // Intentional: best-effort transition to "doing"; the WorkItem still exists for operator triage.
       }
 
       const reply = `Delegated work item created: ${item.work_item_id} (mode=${intakeModeDecision.mode}, reason=${intakeModeDecision.reason_code})`;
@@ -1058,14 +730,17 @@ export class AgentRuntime {
       );
     }
 
-    await this.maybeRunPreCompactionMemoryFlush({
-      ctx,
-      session,
-      model,
-      systemPrompt,
-      abortSignal: opts?.abortSignal,
-      timeoutMs: opts?.timeoutMs,
-    });
+    await maybeRunPreCompactionMemoryFlush(
+      { db: this.opts.container.db, logger: this.opts.container.logger, agentId: this.agentId },
+      {
+        ctx,
+        session,
+        model,
+        systemPrompt,
+        abortSignal: opts?.abortSignal,
+        timeoutMs: opts?.timeoutMs,
+      },
+    );
 
     let messages: ModelMessage[] = [
       {
@@ -1208,202 +883,6 @@ export class AgentRuntime {
     return await this.finalizeTurn(ctx, session, resolved, reply, usedTools, contextReport);
   }
 
-  private computeTurnsDroppedByNextAppend(
-    turns: readonly SessionMessage[],
-    maxTurns: number,
-  ): SessionMessage[] {
-    const maxMessages = Math.max(1, maxTurns) * 2;
-    const overflow = turns.length + 2 - maxMessages;
-    if (overflow <= 0) return [];
-    return turns.slice(0, overflow);
-  }
-
-  private formatPreCompactionFlushPrompt(droppedTurns: readonly SessionMessage[]): string {
-    const lines = droppedTurns.map((turn) => {
-      const role = turn.role === "assistant" ? "Assistant" : "User";
-      const redacted = redactSecretLikeText(turn.content.trim());
-      const content =
-        redacted.length <= MAX_PRE_COMPACTION_FLUSH_MESSAGE_CHARS
-          ? redacted
-          : `${redacted.slice(
-              0,
-              Math.max(
-                0,
-                MAX_PRE_COMPACTION_FLUSH_MESSAGE_CHARS -
-                  PRE_COMPACTION_FLUSH_TRUNCATION_MARKER.length,
-              ),
-            )}${PRE_COMPACTION_FLUSH_TRUNCATION_MARKER}`;
-      return `${role} (${turn.timestamp}): ${content}`;
-    });
-
-    return [
-      "This is a silent internal pre-compaction memory flush.",
-      "The following messages are about to be compacted from the session context due to the session max_turns limit.",
-      "Extract any durable, non-secret memory worth keeping (preferences, constraints, decisions, procedures).",
-      "If there is nothing worth storing, respond with NOOP.",
-      "",
-      "Messages being compacted:",
-      ...lines,
-    ].join("\n");
-  }
-
-  private async maybeRunPreCompactionMemoryFlush(input: {
-    ctx: AgentLoadedContext;
-    session: SessionRow;
-    model: LanguageModel;
-    systemPrompt: string;
-    abortSignal?: AbortSignal;
-    timeoutMs?: number;
-  }): Promise<void> {
-    const v1Enabled = input.ctx.config.memory.v1.enabled;
-    const markdownEnabled = input.ctx.config.memory.markdown_enabled;
-    if (!v1Enabled && !markdownEnabled) {
-      return;
-    }
-
-    const droppedTurns = this.computeTurnsDroppedByNextAppend(
-      input.session.turns,
-      input.ctx.config.sessions.max_turns,
-    );
-    if (droppedTurns.length === 0) {
-      return;
-    }
-
-    const flushPromptText = this.formatPreCompactionFlushPrompt(droppedTurns);
-    const flushKey = sha256HexFromString(`${input.session.session_id}\n${flushPromptText}`);
-    const flushTag = `preflush:${flushKey}`;
-
-    if (v1Enabled) {
-      try {
-        const memory = new MemoryV1Dal(this.opts.container.db);
-        const existing = await memory.list({
-          agentId: this.agentId,
-          limit: 1,
-          filter: { tags: [flushTag] },
-        });
-        if (existing.items.length > 0) {
-          return;
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        this.opts.container.logger.warn("memory.flush_v1_dedupe_failed", {
-          session_id: input.session.session_id,
-          channel: input.session.channel,
-          thread_id: input.session.thread_id,
-          error: message,
-        });
-      }
-    }
-
-    const totalTimeoutMs = input.timeoutMs;
-    const flushTimeoutMs = (() => {
-      if (
-        typeof totalTimeoutMs !== "number" ||
-        !Number.isFinite(totalTimeoutMs) ||
-        totalTimeoutMs <= 0
-      ) {
-        return DEFAULT_PRE_COMPACTION_FLUSH_TIMEOUT_MS;
-      }
-      const slice = Math.floor(totalTimeoutMs * 0.1);
-      if (slice <= 0) {
-        return 0;
-      }
-      return Math.min(DEFAULT_PRE_COMPACTION_FLUSH_TIMEOUT_MS, slice);
-    })();
-    if (flushTimeoutMs <= 0) {
-      return;
-    }
-
-    try {
-      const flushResult = await generateText({
-        model: input.model,
-        system: input.systemPrompt,
-        messages: [
-          {
-            role: "user" as const,
-            content: [
-              {
-                type: "text" as const,
-                text: flushPromptText,
-              },
-            ],
-          },
-        ],
-        stopWhen: [stepCountIs(1)],
-        abortSignal: input.abortSignal,
-        timeout: flushTimeoutMs,
-      });
-
-      const rawFlushText = (flushResult.text ?? "").trim();
-      if (rawFlushText.length === 0 || rawFlushText.toUpperCase() === "NOOP") {
-        return;
-      }
-
-      const flushText = redactSecretLikeText(rawFlushText).trim();
-      if (flushText.length === 0) {
-        return;
-      }
-
-      if (flushText !== rawFlushText) {
-        this.opts.container.logger.warn("memory.flush_redacted_secret_like", {
-          session_id: input.session.session_id,
-          channel: input.session.channel,
-          thread_id: input.session.thread_id,
-        });
-      }
-
-      const entry = ["Pre-compaction memory flush", "", flushText].join("\n").trim();
-
-      if (v1Enabled) {
-        try {
-          const memory = new MemoryV1Dal(this.opts.container.db);
-          await memory.create(
-            {
-              kind: "note",
-              title: "Pre-compaction memory flush",
-              body_md: flushText,
-              tags: ["pre-compaction-flush", flushTag],
-              sensitivity: "private",
-              provenance: {
-                source_kind: "system",
-                channel: input.session.channel,
-                thread_id: input.session.thread_id,
-                session_id: input.session.session_id,
-                refs: [],
-                metadata: {
-                  kind: "pre_compaction_memory_flush",
-                  flush_key: flushKey,
-                  dropped_messages: droppedTurns.length,
-                },
-              },
-            },
-            this.agentId,
-          );
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          this.opts.container.logger.warn("memory.flush_v1_write_failed", {
-            session_id: input.session.session_id,
-            channel: input.session.channel,
-            thread_id: input.session.thread_id,
-            error: message,
-          });
-        }
-      }
-
-      if (markdownEnabled) {
-        await input.ctx.memoryStore.appendDaily(entry);
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.opts.container.logger.warn("memory.flush_failed", {
-        session_id: input.session.session_id,
-        channel: input.session.channel,
-        thread_id: input.session.thread_id,
-        error: message,
-      });
-    }
-  }
-
   private async turnViaExecutionEngine(input: AgentTurnRequestT): Promise<AgentTurnResponseT> {
     const deps = {
       agentId: this.agentId,
@@ -1446,7 +925,7 @@ export class AgentRuntime {
       });
       return await index.search(query, limit);
     } catch {
-      // Intentional: semantic search is best-effort; failures shouldn't block turns.
+      // Intentional: semantic search is best-effort; fall back to no hits on failure.
       return [];
     }
   }
@@ -1524,7 +1003,7 @@ export class AgentRuntime {
         try {
           return parseProviderModelId(primaryModelId).providerId;
         } catch {
-          // Intentional: model_id may be malformed; fall back to non-primary providers.
+          // Intentional: primary model id may not follow provider/model format; treat as unknown.
           return undefined;
         }
       })();
@@ -1638,7 +1117,7 @@ export class AgentRuntime {
 
       return undefined;
     } catch {
-      // Intentional: embedding pipeline is optional; semantic search should degrade gracefully.
+      // Intentional: embedding pipeline resolution is best-effort; fall back to other retrieval strategies.
       return undefined;
     }
   }
@@ -1747,8 +1226,22 @@ export class AgentRuntime {
     ]);
 
     const pluginToolsRaw = this.plugins?.getToolDescriptors() ?? [];
+    const toolSetBuilder = new ToolSetBuilder({
+      home: this.home,
+      agentId: this.agentId,
+      workspaceId: this.workspaceId,
+      policyService: this.policyService,
+      approvalDal: this.approvalDal,
+      approvalNotifier: this.approvalNotifier,
+      approvalWaitMs: this.approvalWaitMs,
+      approvalPollMs: this.approvalPollMs,
+      logger: this.opts.container.logger,
+      secretProvider: this.opts.secretProvider,
+      plugins: this.plugins,
+      redactionEngine: this.opts.container.redactionEngine,
+    });
     const { allowlist: toolAllowlist, pluginTools } =
-      await this.resolvePolicyGatedPluginToolExposure({
+      await toolSetBuilder.resolvePolicyGatedPluginToolExposure({
         allowlist: ctx.config.tools.allow,
         pluginTools: pluginToolsRaw,
       });
@@ -1823,7 +1316,7 @@ export class AgentRuntime {
       try {
         chars = JSON.stringify(schema).length;
       } catch {
-        // Intentional: schema may contain cycles/BigInt; treat size as unknown.
+        // Intentional: schema size accounting is best-effort; treat non-serializable schemas as 0 chars.
         chars = 0;
       }
       return { id: t.id, chars };
@@ -1889,7 +1382,7 @@ export class AgentRuntime {
     })();
     const usedTools = new Set<string>();
     const toolCallPolicyStates = new Map<string, ToolCallPolicyState>();
-    const toolSet = this.buildToolSet(
+    const toolSet = toolSetBuilder.buildToolSet(
       filteredTools,
       toolExecutor,
       usedTools,
@@ -2073,7 +1566,7 @@ export class AgentRuntime {
         return { mode: override, reason_code: "override" };
       }
     } catch {
-      // Intentional: ignore override lookup failures; fall back to default inline.
+      // Intentional: intake override lookup is best-effort; fall back to default inline.
     }
 
     return { mode: "inline", reason_code: "default_inline" };
@@ -2302,603 +1795,5 @@ export class AgentRuntime {
       used_tools: Array.from(usedTools),
       memory_written: memoryWritten,
     });
-  }
-
-  private buildToolSet(
-    tools: readonly ToolDescriptor[],
-    toolExecutor: ToolExecutor,
-    usedTools: Set<string>,
-    toolExecutionContext: ToolExecutionContext,
-    contextReport: AgentContextReport,
-    laneQueue?: LaneQueueState,
-    toolCallPolicyStates?: Map<string, ToolCallPolicyState>,
-  ): ToolSet {
-    const result: Record<string, Tool> = {};
-    let approvalStepIndex = 0;
-    let drivingProvenance: { source: string; trusted: boolean } = {
-      source: "user",
-      trusted: true,
-    };
-
-    const resolveToolCallPolicyState = async (input: {
-      toolDesc: ToolDescriptor;
-      toolCallId: string;
-      args: unknown;
-      inputProvenance: { source: string; trusted: boolean };
-    }): Promise<ToolCallPolicyState> => {
-      const existing = toolCallPolicyStates?.get(input.toolCallId);
-      if (existing && existing.toolDesc.id === input.toolDesc.id) {
-        return existing;
-      }
-
-      const matchTarget = canonicalizeToolMatchTarget(input.toolDesc.id, input.args, this.home);
-
-      const policy = this.policyService;
-      const policyEnabled = policy.isEnabled();
-
-      let policyDecision: Decision | undefined;
-      let policySnapshotId: string | undefined;
-      let appliedOverrideIds: string[] | undefined;
-
-      if (policyEnabled) {
-        const agentId = this.agentId;
-        const workspaceId = this.workspaceId;
-
-        const url =
-          input.toolDesc.id === "tool.http.fetch" &&
-          input.args &&
-          typeof (input.args as Record<string, unknown>)["url"] === "string"
-            ? String((input.args as Record<string, unknown>)["url"])
-            : undefined;
-
-        const handleIds = collectSecretHandleIds(input.args);
-        const secretScopes: string[] = [];
-        if (handleIds.length > 0 && this.opts.secretProvider) {
-          const handles = await this.opts.secretProvider.list();
-          for (const id of handleIds) {
-            const handle = handles.find((h) => h.handle_id === id);
-            if (handle?.scope) {
-              secretScopes.push(`${handle.provider}:${handle.scope}`);
-            } else {
-              secretScopes.push(id);
-            }
-          }
-        }
-
-        const evaluation = await policy.evaluateToolCall({
-          agentId,
-          workspaceId,
-          toolId: input.toolDesc.id,
-          toolMatchTarget: matchTarget,
-          url,
-          secretScopes: secretScopes.length > 0 ? secretScopes : undefined,
-          inputProvenance: input.inputProvenance,
-        });
-        policyDecision = evaluation.decision;
-        policySnapshotId = evaluation.policy_snapshot?.policy_snapshot_id;
-        appliedOverrideIds = evaluation.applied_override_ids;
-      }
-
-      const shouldRequireApproval =
-        policyEnabled && !policy.isObserveOnly()
-          ? policyDecision === "require_approval"
-          : input.toolDesc.requires_confirmation;
-
-      const suggestedOverrides = policyEnabled
-        ? suggestedOverridesForToolCall({
-            toolId: input.toolDesc.id,
-            matchTarget,
-            workspaceId: this.workspaceId,
-          })
-        : undefined;
-
-      const state: ToolCallPolicyState = {
-        toolDesc: input.toolDesc,
-        toolCallId: input.toolCallId,
-        args: input.args,
-        matchTarget,
-        inputProvenance: input.inputProvenance,
-        policyDecision,
-        policySnapshotId,
-        appliedOverrideIds,
-        suggestedOverrides,
-        approvalStepIndex: existing?.approvalStepIndex,
-        shouldRequireApproval,
-      };
-
-      toolCallPolicyStates?.set(input.toolCallId, state);
-      return state;
-    };
-
-    const resolveResumedToolArgs = async (input: {
-      toolId: string;
-      toolCallId: string;
-      args: unknown;
-    }): Promise<unknown> => {
-      const execution = toolExecutionContext.execution;
-      if (!execution?.stepApprovalId) return input.args;
-
-      const secretProvider = this.opts.secretProvider;
-      if (!secretProvider || secretProvider instanceof EnvSecretProvider) {
-        return input.args;
-      }
-
-      const approval = await this.approvalDal.getById(execution.stepApprovalId);
-      const ctx = coerceRecord(approval?.context);
-      if (!ctx || ctx["source"] !== "agent-tool-execution") return input.args;
-      if (ctx["tool_id"] !== input.toolId || ctx["tool_call_id"] !== input.toolCallId) {
-        return input.args;
-      }
-
-      const aiSdk = coerceRecord(ctx["ai_sdk"]);
-      const handle = coerceSecretHandle(aiSdk?.["tool_args_handle"]);
-      if (!handle) return input.args;
-
-      const raw = await secretProvider.resolve(handle);
-      if (!raw) return input.args;
-
-      try {
-        return JSON.parse(raw) as unknown;
-      } catch {
-        // Intentional: handle may reference stale/malformed JSON; treat as unchanged args.
-        return input.args;
-      }
-    };
-
-    for (const toolDesc of tools) {
-      const schema = toolDesc.inputSchema ?? { type: "object", additionalProperties: true };
-
-      result[toolDesc.id] = aiTool({
-        description: toolDesc.description,
-        inputSchema: jsonSchema(schema),
-        needsApproval: toolExecutionContext.execution
-          ? async (
-              args: unknown,
-              options: {
-                toolCallId: string;
-                messages: ModelMessage[];
-                experimental_context?: unknown;
-              },
-            ): Promise<boolean> => {
-              if (laneQueue) {
-                if (laneQueue.cancelToolCalls || laneQueue.interruptError) {
-                  return false;
-                }
-
-                const signal = await laneQueue.signals.claimSignal(laneQueue.scope);
-                if (signal?.kind === "interrupt") {
-                  laneQueue.interruptError ??= new LaneQueueInterruptError();
-                  laneQueue.cancelToolCalls = true;
-                  return false;
-                }
-                if (signal?.kind === "steer") {
-                  const text = signal.message_text.trim();
-                  if (text.length > 0) {
-                    laneQueue.pendingInjectionTexts.push(text);
-                  }
-                  laneQueue.cancelToolCalls = true;
-                  return false;
-                }
-              }
-
-              const effectiveArgs = await resolveResumedToolArgs({
-                toolId: toolDesc.id,
-                toolCallId: options.toolCallId,
-                args,
-              });
-
-              const state = await resolveToolCallPolicyState({
-                toolDesc,
-                toolCallId: options.toolCallId,
-                args: effectiveArgs,
-                inputProvenance: { ...drivingProvenance },
-              });
-
-              if (!state.shouldRequireApproval) {
-                return false;
-              }
-
-              const stepApprovalId = toolExecutionContext.execution?.stepApprovalId;
-              if (stepApprovalId) {
-                const approval = await this.approvalDal.getById(stepApprovalId);
-                if (
-                  approval &&
-                  (approval.status === "approved" ||
-                    approval.status === "denied" ||
-                    approval.status === "expired")
-                ) {
-                  const ctx = coerceRecord(approval.context);
-                  const matches =
-                    ctx?.["source"] === "agent-tool-execution" &&
-                    ctx["tool_id"] === toolDesc.id &&
-                    ctx["tool_call_id"] === options.toolCallId &&
-                    ctx["tool_match_target"] === state.matchTarget;
-                  if (matches && !hasToolResult(options.messages, options.toolCallId)) {
-                    return false;
-                  }
-                }
-              }
-
-              if (state.approvalStepIndex === undefined) {
-                state.approvalStepIndex = approvalStepIndex++;
-                toolCallPolicyStates?.set(options.toolCallId, state);
-              }
-
-              return true;
-            }
-          : undefined,
-        execute: async (args: unknown, options: ToolExecutionOptions) => {
-          if (laneQueue) {
-            const signal = await laneQueue.signals.claimSignal(laneQueue.scope);
-            if (signal?.kind === "interrupt") {
-              laneQueue.interruptError ??= new LaneQueueInterruptError();
-              laneQueue.cancelToolCalls = true;
-            }
-            if (signal?.kind === "steer") {
-              const text = signal.message_text.trim();
-              if (text.length > 0) {
-                laneQueue.pendingInjectionTexts.push(text);
-              }
-              laneQueue.cancelToolCalls = true;
-            }
-
-            if (laneQueue.cancelToolCalls) {
-              return JSON.stringify({
-                error: "cancelled",
-                reason: laneQueue.interruptError ? "interrupt" : "steer",
-              });
-            }
-          }
-
-          const toolCallId =
-            typeof options?.toolCallId === "string" && options.toolCallId.trim().length > 0
-              ? options.toolCallId.trim()
-              : `tc-${randomUUID()}`;
-
-          const effectiveArgs = await resolveResumedToolArgs({
-            toolId: toolDesc.id,
-            toolCallId,
-            args,
-          });
-
-          const state = await resolveToolCallPolicyState({
-            toolDesc,
-            toolCallId,
-            args: effectiveArgs,
-            inputProvenance: { ...drivingProvenance },
-          });
-
-          const policy = this.policyService;
-          const policyEnabled = policy.isEnabled();
-          const policySnapshotId = state.policySnapshotId;
-
-          if (policyEnabled && state.policyDecision === "deny" && !policy.isObserveOnly()) {
-            return JSON.stringify({
-              error: `policy denied tool execution for '${toolDesc.id}'`,
-              decision: "deny",
-            });
-          }
-
-          if (state.shouldRequireApproval) {
-            const policyContext = {
-              policy_snapshot_id: policySnapshotId,
-              agent_id: this.agentId,
-              workspace_id: this.workspaceId,
-              suggested_overrides: state.suggestedOverrides,
-              applied_override_ids: state.appliedOverrideIds,
-            };
-
-            const approvalStepIndexValue =
-              state.approvalStepIndex === undefined
-                ? (() => {
-                    const next = approvalStepIndex++;
-                    state.approvalStepIndex = next;
-                    toolCallPolicyStates?.set(toolCallId, state);
-                    return next;
-                  })()
-                : state.approvalStepIndex;
-
-            if (toolExecutionContext.execution) {
-              const stepApprovalId = toolExecutionContext.execution.stepApprovalId;
-              if (!stepApprovalId) {
-                return JSON.stringify({
-                  error: `tool execution not approved for '${toolDesc.id}'`,
-                  status: "pending",
-                });
-              }
-
-              const approval = await this.approvalDal.getById(stepApprovalId);
-              const approved = approval?.status === "approved";
-              const ctx = coerceRecord(approval?.context);
-              const matches =
-                ctx?.["source"] === "agent-tool-execution" &&
-                ctx["tool_id"] === toolDesc.id &&
-                ctx["tool_call_id"] === toolCallId &&
-                ctx["tool_match_target"] === state.matchTarget;
-
-              if (!approved || !matches) {
-                return JSON.stringify({
-                  error: `tool execution not approved for '${toolDesc.id}'`,
-                  approval_id: stepApprovalId,
-                  status: approval?.status ?? "pending",
-                  reason: approval?.response_reason ?? undefined,
-                });
-              }
-            } else {
-              const decision = await this.awaitApprovalForToolExecution(
-                toolDesc,
-                effectiveArgs,
-                toolCallId,
-                toolExecutionContext,
-                approvalStepIndexValue,
-                policyContext,
-              );
-              if (!decision.approved) {
-                return JSON.stringify({
-                  error: `tool execution not approved for '${toolDesc.id}'`,
-                  approval_id: decision.approvalId,
-                  status: decision.status,
-                  reason: decision.reason,
-                });
-              }
-            }
-          }
-
-          usedTools.add(toolDesc.id);
-          const agentId = this.agentId;
-          const workspaceId = this.workspaceId;
-
-          const pluginRes = await this.plugins?.executeTool({
-            toolId: toolDesc.id,
-            toolCallId,
-            args: effectiveArgs,
-            home: this.home,
-            agentId,
-            workspaceId,
-            auditPlanId: toolExecutionContext.planId,
-            sessionId: toolExecutionContext.sessionId,
-            channel: toolExecutionContext.channel,
-            threadId: toolExecutionContext.threadId,
-            policySnapshotId,
-          });
-
-          const res: ToolResult = pluginRes
-            ? (() => {
-                const tagged = tagContent(pluginRes.output, "tool", false);
-                return {
-                  tool_call_id: toolCallId,
-                  output: sanitizeForModel(tagged),
-                  error: pluginRes.error,
-                  provenance: tagged,
-                };
-              })()
-            : await toolExecutor.execute(toolDesc.id, toolCallId, effectiveArgs, {
-                agent_id: agentId,
-                workspace_id: workspaceId,
-                session_id: toolExecutionContext.sessionId,
-                channel: toolExecutionContext.channel,
-                thread_id: toolExecutionContext.threadId,
-                execution_run_id: toolExecutionContext.execution?.runId,
-                execution_step_id: toolExecutionContext.execution?.stepId,
-                policy_snapshot_id: policySnapshotId,
-              });
-
-          if (pluginRes && this.opts.container.redactionEngine) {
-            const redact = (text: string): string =>
-              this.opts.container.redactionEngine?.redactText(text).redacted ?? text;
-            res.output = redact(res.output);
-            if (res.error) {
-              res.error = redact(res.error);
-            }
-            if (res.provenance) {
-              res.provenance = {
-                ...res.provenance,
-                content: redact(res.provenance.content),
-              };
-            }
-          }
-
-          if (res.provenance) {
-            drivingProvenance = {
-              source: res.provenance.source,
-              trusted: res.provenance.trusted,
-            };
-          }
-
-          let content = res.error ? JSON.stringify({ error: res.error }) : res.output;
-
-          if (
-            res.provenance &&
-            !res.provenance.trusted &&
-            containsInjectionPatterns(res.provenance.content)
-          ) {
-            content = `[SECURITY: This tool output contained potential prompt injection patterns that were neutralized.]\n${content}`;
-          }
-
-          contextReport.tool_calls.push({
-            tool_call_id: toolCallId,
-            tool_id: toolDesc.id,
-            injected_chars: content.length,
-          });
-
-          if (res.meta?.kind === "fs.read") {
-            contextReport.injected_files.push({
-              tool_call_id: toolCallId,
-              path: res.meta.path,
-              offset: res.meta.offset,
-              limit: res.meta.limit,
-              raw_chars: res.meta.raw_chars,
-              selected_chars: res.meta.selected_chars,
-              injected_chars: content.length,
-              truncated: res.meta.truncated,
-              truncation_marker: res.meta.truncation_marker,
-            });
-          }
-
-          return content;
-        },
-      });
-    }
-
-    return result;
-  }
-
-  private async awaitApprovalForToolExecution(
-    tool: ToolDescriptor,
-    args: unknown,
-    toolCallId: string,
-    context: ToolExecutionContext,
-    stepIndex: number,
-    policyContext?: {
-      policy_snapshot_id?: string;
-      agent_id?: string;
-      workspace_id?: string;
-      suggested_overrides?: unknown;
-      applied_override_ids?: string[];
-    },
-  ): Promise<{
-    approved: boolean;
-    status: ApprovalStatus;
-    approvalId: number;
-    reason?: string;
-  }> {
-    const deadline = Date.now() + this.approvalWaitMs;
-    const approval = await this.approvalDal.create({
-      planId: context.planId,
-      stepIndex,
-      kind: "workflow_step",
-      agentId: this.agentId,
-      workspaceId: this.workspaceId,
-      prompt: `Approve execution of '${tool.id}' (risk=${tool.risk})`,
-      context: {
-        source: "agent-tool-execution",
-        tool_id: tool.id,
-        tool_risk: tool.risk,
-        tool_call_id: toolCallId,
-        args,
-        session_id: context.sessionId,
-        channel: context.channel,
-        thread_id: context.threadId,
-        policy: policyContext ?? undefined,
-      },
-      expiresAt: new Date(deadline).toISOString(),
-    });
-
-    this.opts.container.logger.info("approval.created", {
-      approval_id: approval.id,
-      plan_id: context.planId,
-      step_index: stepIndex,
-      tool_id: tool.id,
-      tool_risk: tool.risk,
-      tool_call_id: toolCallId,
-      expires_at: approval.expires_at,
-    });
-
-    this.approvalNotifier.notify(approval);
-
-    while (Date.now() < deadline) {
-      await this.approvalDal.expireStale();
-      const current = await this.approvalDal.getById(approval.id);
-      if (!current) {
-        return {
-          approved: false,
-          status: "expired",
-          approvalId: approval.id,
-          reason: "approval record not found",
-        };
-      }
-
-      if (current.status === "approved") {
-        return {
-          approved: true,
-          status: "approved",
-          approvalId: current.id,
-          reason: current.response_reason ?? undefined,
-        };
-      }
-
-      if (current.status === "denied" || current.status === "expired") {
-        return {
-          approved: false,
-          status: current.status,
-          approvalId: current.id,
-          reason: current.response_reason ?? undefined,
-        };
-      }
-
-      const sleepMs = Math.min(this.approvalPollMs, Math.max(1, deadline - Date.now()));
-      await new Promise((resolve) => setTimeout(resolve, sleepMs));
-    }
-
-    const expired = await this.approvalDal.expireById(approval.id);
-    return {
-      approved: false,
-      status: "expired",
-      approvalId: approval.id,
-      reason: expired?.response_reason ?? "approval timed out",
-    };
-  }
-
-  private async resolvePolicyGatedPluginToolExposure(params: {
-    allowlist: readonly string[];
-    pluginTools: readonly ToolDescriptor[];
-  }): Promise<{ allowlist: string[]; pluginTools: ToolDescriptor[] }> {
-    const policy = this.policyService;
-
-    const pluginTools = params.pluginTools
-      .map((tool) => {
-        const id = tool.id.trim();
-        if (!id) return undefined;
-        if (id === tool.id) return tool;
-        return { ...tool, id };
-      })
-      .filter((tool): tool is ToolDescriptor => Boolean(tool));
-
-    const sideEffecting = pluginTools.filter(isSideEffectingPluginTool);
-    if (sideEffecting.length === 0) {
-      return { allowlist: [...params.allowlist], pluginTools };
-    }
-
-    if (!policy.isEnabled() || policy.isObserveOnly()) {
-      return { allowlist: [...params.allowlist], pluginTools };
-    }
-
-    try {
-      const effective = await policy.loadEffectiveBundle();
-      const toolsDomain = effective.bundle.tools;
-      const deny = toolsDomain?.deny ?? [];
-      const allow = toolsDomain?.allow ?? [];
-      const requireApproval = toolsDomain?.require_approval ?? [];
-
-      const isOptedIn = (toolId: string): boolean => {
-        for (const pat of deny) {
-          if (wildcardMatch(pat, toolId)) return false;
-        }
-        for (const pat of requireApproval) {
-          if (wildcardMatch(pat, toolId)) return true;
-        }
-        for (const pat of allow) {
-          if (wildcardMatch(pat, toolId)) return true;
-        }
-        return false;
-      };
-
-      const gatedPluginTools = pluginTools.filter(
-        (tool) => !isSideEffectingPluginTool(tool) || isOptedIn(tool.id),
-      );
-
-      const allowlist = new Set<string>(params.allowlist);
-      for (const tool of gatedPluginTools) {
-        if (isSideEffectingPluginTool(tool)) {
-          allowlist.add(tool.id);
-        }
-      }
-
-      return { allowlist: [...allowlist], pluginTools: gatedPluginTools };
-    } catch {
-      // Intentional: fail closed; side-effecting plugin tools are opt-in and require a readable policy bundle.
-      const gatedPluginTools = pluginTools.filter((tool) => !isSideEffectingPluginTool(tool));
-      return { allowlist: [...params.allowlist], pluginTools: gatedPluginTools };
-    }
   }
 }
