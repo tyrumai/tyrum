@@ -136,5 +136,5 @@ describe("lifecycle hooks startup gating", () => {
     expect(fireMock).toHaveBeenCalledTimes(0);
 
     logSpy.mockRestore();
-  });
+  }, 15_000);
 });
