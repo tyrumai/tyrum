@@ -43,4 +43,3 @@ describe("AtSpiDesktopA11yBackend connect()", () => {
     expect(atspiBus.disconnect).toHaveBeenCalledTimes(1);
   });
 });
-

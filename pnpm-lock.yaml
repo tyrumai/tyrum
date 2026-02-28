@@ -8,6 +8,7 @@ overrides:
   '@develar/schema-utils>ajv': 8.18.0
   '@develar/schema-utils>ajv-keywords': 5.1.0
   dmg-license>ajv: 8.18.0
+  dbus-next>xml2js: 0.5.0
   fast-xml-parser: 5.3.8
   file-loader>schema-utils: 4.3.3
   minimatch: 10.2.4
@@ -10706,10 +10707,6 @@ packages:
   xml-parse-from-string@1.0.1:
     resolution: {integrity: sha512-ErcKwJTF54uRzzNMXq2X5sMIy88zJvfN2DmdoQvy7PAFJ+tPRU6ydWuOKNMyfmOjdyBQTFREi60s0Y0SyI0G0g==}
 
-  xml2js@0.4.23:
-    resolution: {integrity: sha512-ySPiMjM0+pLDftHgXY4By0uswI3SPKLDw/i3UXbnO8M/p28zqexCUoPmQFrYD+/1BzhGJSs2i1ERWKJAtiLrug==}
-    engines: {node: '>=4.0.0'}
-
   xml2js@0.5.0:
     resolution: {integrity: sha512-drPFnkQJik/O+uPKpqSgr22mpuFHqKdbS835iAQrUC73L2F5WkboIRd63ai/2Yg6I1jzifPFKH2NTK+cfglkIA==}
     engines: {node: '>=4.0.0'}
@@ -18189,7 +18186,7 @@ snapshots:
       jsbi: 2.0.5
       long: 4.0.0
       safe-buffer: 5.2.1
-      xml2js: 0.4.23
+      xml2js: 0.5.0
     optionalDependencies:
       usocket: 0.3.0
     transitivePeerDependencies:
@@ -23668,11 +23665,6 @@ snapshots:
     optional: true
 
   xml-parse-from-string@1.0.1: {}
-
-  xml2js@0.4.23:
-    dependencies:
-      sax: 1.4.4
-      xmlbuilder: 11.0.1
 
   xml2js@0.5.0:
     dependencies:
