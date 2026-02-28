@@ -2248,7 +2248,7 @@ export class AgentRuntime {
 
     try {
       await recordMemoryV1SystemEpisode(
-        new MemoryV1Dal(this.opts.container.db),
+        this.opts.container.memoryV1Dal,
         {
           occurred_at: nowIso,
           channel: input.channel,
