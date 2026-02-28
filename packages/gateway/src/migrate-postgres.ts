@@ -1,6 +1,7 @@
 import type { ClientBase } from "pg";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { getMigrationAliasesToMarkApplied } from "./migration-renames.js";
 
 /**
  * Applies SQL migration files in filename order from the given directory.
@@ -17,6 +18,13 @@ export async function migratePostgres(client: ClientBase, migrationsDir: string)
   const applied = new Set(
     (await client.query<{ name: string }>("SELECT name FROM _migrations")).rows.map((r) => r.name),
   );
+
+  for (const alias of getMigrationAliasesToMarkApplied(applied)) {
+    await client.query("INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT (name) DO NOTHING", [
+      alias,
+    ]);
+    applied.add(alias);
+  }
 
   const files = readdirSync(migrationsDir)
     .filter((f) => f.endsWith(".sql"))
