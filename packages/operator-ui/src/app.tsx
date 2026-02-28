@@ -25,6 +25,7 @@ import { ThemeProvider } from "./hooks/use-theme.js";
 import { ApprovalsPage } from "./pages/approvals-page.js";
 import { ConnectPage } from "./pages/connect-page.js";
 import { RunsPage } from "./pages/runs-page.js";
+import { PairingPage } from "./pages/pairing-page.js";
 import { useOperatorStore } from "./use-operator-store.js";
 
 export type OperatorUiMode = "web" | "desktop";
@@ -535,60 +536,6 @@ function DashboardPage({ core }: { core: OperatorCore }) {
         Refresh status
       </button>
       <div>Instance: {statusState.status?.instance_id ?? "-"}</div>
-    </>
-  );
-}
-
-function PairingPage({ core }: { core: OperatorCore }) {
-  const pairing = useOperatorStore(core.pairingStore);
-  return (
-    <>
-      <h1>Pairing</h1>
-      <button
-        type="button"
-        data-testid="pairing-refresh"
-        onClick={() => {
-          void core.pairingStore.refresh();
-        }}
-      >
-        Refresh
-      </button>
-      {pairing.pendingIds.length === 0 ? (
-        <div>No pending pairing requests.</div>
-      ) : (
-        <ul>
-          {pairing.pendingIds.map((pairingId) => {
-            const req = pairing.byId[pairingId];
-            if (!req) return null;
-            return (
-              <li key={pairingId}>
-                <div>{req.node.node_id}</div>
-                <button
-                  type="button"
-                  data-testid={`pairing-approve-${pairingId}`}
-                  onClick={() => {
-                    void core.pairingStore.approve(pairingId, {
-                      trust_level: "local",
-                      capability_allowlist: req.capability_allowlist,
-                    });
-                  }}
-                >
-                  Approve
-                </button>
-                <button
-                  type="button"
-                  data-testid={`pairing-deny-${pairingId}`}
-                  onClick={() => {
-                    void core.pairingStore.deny(pairingId);
-                  }}
-                >
-                  Deny
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
     </>
   );
 }
