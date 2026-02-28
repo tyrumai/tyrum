@@ -1,8 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { WorkItemFingerprint } from "@tyrum/schemas";
 import type {
   AgentStateKVEntry,
-  ArtifactRef,
   DecisionRecord,
   ExecutionBudgets,
   WorkArtifact,
@@ -25,175 +23,15 @@ import type {
   Lane,
 } from "@tyrum/schemas";
 import type { SqlDb } from "../../statestore/types.js";
-import type { WsBroadcastAudience } from "../../ws/audience.js";
 import type { RedactionEngine } from "../redaction/engine.js";
 import { LaneQueueSignalDal } from "../lanes/queue-signal-dal.js";
 
-type RawTime = string | Date;
+import * as dalHelpers from "./dal-helpers.js";
+import type * as DalHelpers from "./dal-helpers.js";
 
-const DEFAULT_WORK_ITEM_WIP_LIMIT = 2;
-
-const WORKBOARD_WS_AUDIENCE = {
-  roles: ["client"],
-  required_scopes: ["operator.read", "operator.write"],
-} as const satisfies WsBroadcastAudience;
-
-const WORK_ITEM_TRANSITIONS: Record<WorkItemState, WorkItemState[]> = {
-  backlog: ["ready"],
-  ready: ["doing", "cancelled"],
-  doing: ["blocked", "done", "failed", "cancelled"],
-  blocked: ["doing", "cancelled"],
-  done: [],
-  failed: [],
-  cancelled: [],
-};
-
-function isTerminalWorkItemState(status: WorkItemState): boolean {
-  return status === "done" || status === "failed" || status === "cancelled";
-}
-
-type WorkboardTransitionErrorCode = "invalid_transition" | "wip_limit_exceeded";
-
-export interface WorkboardTransitionErrorDetails {
-  code: WorkboardTransitionErrorCode;
-  from: WorkItemState;
-  to: WorkItemState;
-  allowed?: WorkItemState[];
-  limit?: number;
-  current?: number;
-}
-
-export class WorkboardTransitionError extends Error {
-  constructor(
-    public readonly code: WorkboardTransitionErrorCode,
-    public readonly details: WorkboardTransitionErrorDetails,
-    message: string,
-  ) {
-    super(message);
-    this.name = "WorkboardTransitionError";
-  }
-}
-
-function hashScopeLockSeed(input: string): number {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < input.length; i += 1) {
-    hash ^= input.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return hash | 0;
-}
-
-function normalizeCount(value: unknown): number {
-  const n = typeof value === "string" ? Number.parseInt(value, 10) : Number(value);
-  return Number.isNaN(n) ? 0 : n;
-}
-
-function normalizeTime(value: RawTime): string {
-  return value instanceof Date ? value.toISOString() : value;
-}
-
-function normalizeMaybeTime(value: RawTime | null): string | null {
-  if (value === null) return null;
-  return value instanceof Date ? value.toISOString() : value;
-}
-
-function parseJsonOr(raw: string | null, fallback: unknown): unknown {
-  if (raw === null) return fallback;
-  try {
-    return JSON.parse(raw) as unknown;
-  } catch {
-    return fallback;
-  }
-}
-
-function parseJsonMaybe(raw: string | null): unknown | undefined {
-  if (raw === null) return undefined;
-  try {
-    return JSON.parse(raw) as unknown;
-  } catch {
-    return undefined;
-  }
-}
-
-function escapeLikePattern(value: string): string {
-  return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
-}
-
-type Cursor = { sort: string; id: string };
-
-function encodeCursor(cursor: Cursor): string {
-  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64");
-}
-
-function decodeCursor(raw: string): Cursor {
-  try {
-    const json = Buffer.from(raw, "base64").toString("utf8");
-    const parsed = JSON.parse(json) as unknown;
-    if (
-      typeof parsed === "object" &&
-      parsed !== null &&
-      "sort" in parsed &&
-      "id" in parsed &&
-      typeof (parsed as { sort: unknown }).sort === "string" &&
-      typeof (parsed as { id: unknown }).id === "string"
-    ) {
-      return { sort: (parsed as { sort: string }).sort, id: (parsed as { id: string }).id };
-    }
-  } catch {
-    // fall through
-  }
-  throw new Error("invalid cursor");
-}
-
-interface RawWorkItemRow {
-  work_item_id: string;
-  tenant_id: string;
-  agent_id: string;
-  workspace_id: string;
-  kind: string;
-  title: string;
-  status: string;
-  priority: number;
-  acceptance_json: string | null;
-  fingerprint_json: string | null;
-  budgets_json: string | null;
-  created_from_session_key: string;
-  created_at: RawTime;
-  updated_at: RawTime;
-  last_active_at: RawTime | null;
-  parent_work_item_id: string | null;
-}
-
-function toWorkItem(raw: RawWorkItemRow): WorkItem {
-  const budgets =
-    raw.budgets_json === null ? null : (parseJsonOr(raw.budgets_json, null) as ExecutionBudgets);
-  const fingerprintRaw = parseJsonMaybe(raw.fingerprint_json);
-  const fingerprint =
-    fingerprintRaw === undefined
-      ? undefined
-      : (() => {
-          const parsed = WorkItemFingerprint.safeParse(fingerprintRaw);
-          return parsed.success ? parsed.data : undefined;
-        })();
-  return {
-    work_item_id: raw.work_item_id,
-    tenant_id: raw.tenant_id,
-    agent_id: raw.agent_id,
-    workspace_id: raw.workspace_id,
-    kind: raw.kind as WorkItemKind,
-    title: raw.title,
-    status: raw.status as WorkItemState,
-    priority: raw.priority,
-    created_at: normalizeTime(raw.created_at),
-    created_from_session_key: raw.created_from_session_key,
-    last_active_at: normalizeMaybeTime(raw.last_active_at),
-    acceptance: parseJsonMaybe(raw.acceptance_json),
-    fingerprint,
-    budgets,
-    parent_work_item_id: raw.parent_work_item_id ?? undefined,
-    updated_at: normalizeTime(raw.updated_at),
-  };
-}
+export type { WorkItemEventRow, WorkItemLinkRow, WorkScopeActivityRow } from "./dal-helpers.js";
+export type { WorkboardTransitionErrorDetails } from "./dal-helpers.js";
+export { WorkboardTransitionError } from "./dal-helpers.js";
 
 type CreateItemInput = {
   kind: WorkItemKind;
@@ -215,307 +53,6 @@ type UpdateItemPatch = {
   last_active_at?: string | null;
 };
 
-interface RawKvRow {
-  tenant_id: string;
-  agent_id: string;
-  workspace_id: string;
-  work_item_id?: string;
-  key: string;
-  value_json: string;
-  updated_at: RawTime;
-  updated_by_run_id: string | null;
-  provenance_json: string | null;
-}
-
-function toKvEntry(raw: RawKvRow): AgentStateKVEntry | WorkItemStateKVEntry {
-  const base = {
-    tenant_id: raw.tenant_id,
-    agent_id: raw.agent_id,
-    workspace_id: raw.workspace_id,
-    key: raw.key,
-    value_json: parseJsonOr(raw.value_json, null),
-    updated_at: normalizeTime(raw.updated_at),
-    updated_by_run_id: raw.updated_by_run_id ?? undefined,
-    provenance_json: parseJsonMaybe(raw.provenance_json),
-  };
-  if (raw.work_item_id) {
-    return { ...base, work_item_id: raw.work_item_id };
-  }
-  return base;
-}
-
-interface RawWorkArtifactRow {
-  artifact_id: string;
-  tenant_id: string;
-  agent_id: string;
-  workspace_id: string;
-  work_item_id: string | null;
-  kind: string;
-  title: string;
-  body_md: string | null;
-  refs_json: string;
-  confidence: number | null;
-  created_at: RawTime;
-  created_by_run_id: string | null;
-  created_by_subagent_id: string | null;
-  provenance_json: string | null;
-}
-
-function toWorkArtifact(raw: RawWorkArtifactRow): WorkArtifact {
-  return {
-    artifact_id: raw.artifact_id,
-    tenant_id: raw.tenant_id,
-    agent_id: raw.agent_id,
-    workspace_id: raw.workspace_id,
-    work_item_id: raw.work_item_id ?? undefined,
-    kind: raw.kind as WorkArtifactKind,
-    title: raw.title,
-    body_md: raw.body_md ?? undefined,
-    refs: parseJsonOr(raw.refs_json, []) as string[],
-    confidence: raw.confidence ?? undefined,
-    created_at: normalizeTime(raw.created_at),
-    created_by_run_id: raw.created_by_run_id ?? undefined,
-    created_by_subagent_id: raw.created_by_subagent_id ?? undefined,
-    provenance_json: parseJsonMaybe(raw.provenance_json),
-  };
-}
-
-interface RawDecisionRow {
-  decision_id: string;
-  tenant_id: string;
-  agent_id: string;
-  workspace_id: string;
-  work_item_id: string | null;
-  question: string;
-  chosen: string;
-  alternatives_json: string;
-  rationale_md: string;
-  input_artifact_ids_json: string;
-  created_at: RawTime;
-  created_by_run_id: string | null;
-  created_by_subagent_id: string | null;
-}
-
-function toDecisionRecord(raw: RawDecisionRow): DecisionRecord {
-  return {
-    decision_id: raw.decision_id,
-    tenant_id: raw.tenant_id,
-    agent_id: raw.agent_id,
-    workspace_id: raw.workspace_id,
-    work_item_id: raw.work_item_id ?? undefined,
-    question: raw.question,
-    chosen: raw.chosen,
-    alternatives: parseJsonOr(raw.alternatives_json, []) as string[],
-    rationale_md: raw.rationale_md,
-    input_artifact_ids: parseJsonOr(raw.input_artifact_ids_json, []) as string[],
-    created_at: normalizeTime(raw.created_at),
-    created_by_run_id: raw.created_by_run_id ?? undefined,
-    created_by_subagent_id: raw.created_by_subagent_id ?? undefined,
-  };
-}
-
-interface RawWorkSignalRow {
-  signal_id: string;
-  tenant_id: string;
-  agent_id: string;
-  workspace_id: string;
-  work_item_id: string | null;
-  trigger_kind: string;
-  trigger_spec_json: string;
-  payload_json: string | null;
-  status: string;
-  created_at: RawTime;
-  last_fired_at: RawTime | null;
-}
-
-function toWorkSignal(raw: RawWorkSignalRow): WorkSignal {
-  return {
-    signal_id: raw.signal_id,
-    tenant_id: raw.tenant_id,
-    agent_id: raw.agent_id,
-    workspace_id: raw.workspace_id,
-    work_item_id: raw.work_item_id ?? undefined,
-    trigger_kind: raw.trigger_kind as WorkSignalTriggerKind,
-    trigger_spec_json: parseJsonOr(raw.trigger_spec_json, null),
-    payload_json: parseJsonMaybe(raw.payload_json),
-    status: raw.status as WorkSignalStatus,
-    created_at: normalizeTime(raw.created_at),
-    last_fired_at: normalizeMaybeTime(raw.last_fired_at) ?? undefined,
-  };
-}
-
-interface RawWorkItemTaskRow {
-  task_id: string;
-  work_item_id: string;
-  status: string;
-  lease_owner?: string | null;
-  lease_expires_at_ms?: number | null;
-  depends_on_json: string;
-  execution_profile: string;
-  side_effect_class: string;
-  run_id: string | null;
-  approval_id: number | null;
-  artifacts_json: string;
-  started_at: RawTime | null;
-  finished_at: RawTime | null;
-  result_summary: string | null;
-  created_at: RawTime;
-  updated_at: RawTime;
-}
-
-function toWorkItemTask(raw: RawWorkItemTaskRow): WorkItemTask {
-  return {
-    task_id: raw.task_id,
-    work_item_id: raw.work_item_id,
-    status: raw.status as WorkItemTaskState,
-    depends_on: parseJsonOr(raw.depends_on_json, []) as string[],
-    execution_profile: raw.execution_profile,
-    side_effect_class: raw.side_effect_class,
-    run_id: raw.run_id ?? undefined,
-    approval_id: raw.approval_id ?? undefined,
-    artifacts: parseJsonOr(raw.artifacts_json, []) as ArtifactRef[],
-    started_at: normalizeMaybeTime(raw.started_at),
-    finished_at: normalizeMaybeTime(raw.finished_at),
-    result_summary: raw.result_summary ?? undefined,
-  } as WorkItemTask;
-}
-
-function normalizeTaskDeps(input: readonly string[] | undefined): string[] {
-  if (!input || input.length === 0) return [];
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const raw of input) {
-    const id = raw.trim();
-    if (!id) continue;
-    if (seen.has(id)) continue;
-    seen.add(id);
-    out.push(id);
-  }
-  return out;
-}
-
-function hasTaskDependencyCycle(adj: Map<string, string[]>): boolean {
-  const state = new Map<string, 0 | 1 | 2>(); // 0=unvisited,1=visiting,2=done
-
-  const dfs = (node: string): boolean => {
-    const s = state.get(node) ?? 0;
-    if (s === 1) return true;
-    if (s === 2) return false;
-    state.set(node, 1);
-    const deps = adj.get(node) ?? [];
-    for (const dep of deps) {
-      if (dfs(dep)) return true;
-    }
-    state.set(node, 2);
-    return false;
-  };
-
-  for (const node of adj.keys()) {
-    if ((state.get(node) ?? 0) !== 0) continue;
-    if (dfs(node)) return true;
-  }
-  return false;
-}
-
-interface RawWorkItemLinkRow {
-  work_item_id: string;
-  linked_work_item_id: string;
-  kind: string;
-  meta_json: string;
-  created_at: RawTime;
-}
-
-export interface WorkItemLinkRow {
-  work_item_id: string;
-  linked_work_item_id: string;
-  kind: string;
-  meta_json: unknown;
-  created_at: string;
-}
-
-function toWorkItemLink(raw: RawWorkItemLinkRow): WorkItemLinkRow {
-  return {
-    work_item_id: raw.work_item_id,
-    linked_work_item_id: raw.linked_work_item_id,
-    kind: raw.kind,
-    meta_json: parseJsonOr(raw.meta_json, {}),
-    created_at: normalizeTime(raw.created_at),
-  };
-}
-
-interface RawScopeActivityRow {
-  tenant_id: string;
-  agent_id: string;
-  workspace_id: string;
-  last_active_session_key: string;
-  updated_at_ms: number;
-}
-
-export type WorkScopeActivityRow = RawScopeActivityRow;
-
-interface RawSubagentRow {
-  subagent_id: string;
-  tenant_id: string;
-  agent_id: string;
-  workspace_id: string;
-  work_item_id: string | null;
-  work_item_task_id: string | null;
-  execution_profile: string;
-  session_key: string;
-  lane: string;
-  status: string;
-  created_at: RawTime;
-  updated_at: RawTime;
-  last_heartbeat_at: RawTime | null;
-  close_reason: string | null;
-  closed_at: RawTime | null;
-}
-
-function toSubagent(raw: RawSubagentRow): SubagentDescriptor {
-  return {
-    subagent_id: raw.subagent_id,
-    tenant_id: raw.tenant_id,
-    agent_id: raw.agent_id,
-    workspace_id: raw.workspace_id,
-    work_item_id: raw.work_item_id ?? undefined,
-    work_item_task_id: raw.work_item_task_id ?? undefined,
-    execution_profile: raw.execution_profile,
-    session_key: raw.session_key,
-    lane: raw.lane as Lane,
-    status: raw.status as SubagentStatus,
-    created_at: normalizeTime(raw.created_at),
-    updated_at: normalizeTime(raw.updated_at),
-    last_heartbeat_at: normalizeMaybeTime(raw.last_heartbeat_at) ?? undefined,
-    closed_at: normalizeMaybeTime(raw.closed_at) ?? undefined,
-  };
-}
-
-interface RawWorkItemEventRow {
-  event_id: string;
-  work_item_id: string;
-  created_at: RawTime;
-  kind: string;
-  payload_json: string;
-}
-
-export interface WorkItemEventRow {
-  event_id: string;
-  work_item_id: string;
-  created_at: string;
-  kind: string;
-  payload: unknown;
-}
-
-function toWorkItemEvent(raw: RawWorkItemEventRow): WorkItemEventRow {
-  return {
-    event_id: raw.event_id,
-    work_item_id: raw.work_item_id,
-    created_at: normalizeTime(raw.created_at),
-    kind: raw.kind,
-    payload: parseJsonOr(raw.payload_json, {}),
-  };
-}
-
 export class WorkboardDal {
   constructor(
     private readonly db: SqlDb,
@@ -523,7 +60,7 @@ export class WorkboardDal {
   ) {}
 
   private async enqueueWsEventTx(tx: SqlDb, evt: WsEventEnvelope): Promise<void> {
-    const payload = { message: evt, audience: WORKBOARD_WS_AUDIENCE };
+    const payload = { message: evt, audience: dalHelpers.WORKBOARD_WS_AUDIENCE };
     const redactedPayload = this.redactionEngine
       ? this.redactionEngine.redactUnknown(payload).redacted
       : payload;
@@ -560,7 +97,7 @@ export class WorkboardDal {
       }
     }
 
-    const row = await this.db.get<RawWorkItemRow>(
+    const row = await this.db.get<DalHelpers.RawWorkItemRow>(
       `INSERT INTO work_items (
          work_item_id,
          tenant_id,
@@ -602,11 +139,11 @@ export class WorkboardDal {
     if (!row) {
       throw new Error("work item insert failed");
     }
-    return toWorkItem(row);
+    return dalHelpers.toWorkItem(row);
   }
 
   async getItem(params: { scope: WorkScope; work_item_id: string }): Promise<WorkItem | undefined> {
-    const row = await this.db.get<RawWorkItemRow>(
+    const row = await this.db.get<DalHelpers.RawWorkItemRow>(
       `SELECT *
        FROM work_items
        WHERE tenant_id = ?
@@ -620,7 +157,7 @@ export class WorkboardDal {
         params.work_item_id,
       ],
     );
-    return row ? toWorkItem(row) : undefined;
+    return row ? dalHelpers.toWorkItem(row) : undefined;
   }
 
   async listItems(params: {
@@ -648,7 +185,7 @@ export class WorkboardDal {
     }
 
     if (params.cursor) {
-      const cursor = decodeCursor(params.cursor);
+      const cursor = dalHelpers.decodeCursor(params.cursor);
       where.push("(created_at < ? OR (created_at = ? AND work_item_id < ?))");
       values.push(cursor.sort, cursor.sort, cursor.id);
     }
@@ -661,12 +198,12 @@ export class WorkboardDal {
       ` ORDER BY created_at DESC, work_item_id DESC LIMIT ?`;
     values.push(limit);
 
-    const rows = await this.db.all<RawWorkItemRow>(sql, values);
-    const items = rows.map(toWorkItem);
+    const rows = await this.db.all<DalHelpers.RawWorkItemRow>(sql, values);
+    const items = rows.map(dalHelpers.toWorkItem);
     const last = items.at(-1);
     const next_cursor =
       items.length === limit && last
-        ? encodeCursor({ sort: last.created_at, id: last.work_item_id })
+        ? dalHelpers.encodeCursor({ sort: last.created_at, id: last.work_item_id })
         : undefined;
 
     return { items, next_cursor };
@@ -714,7 +251,7 @@ export class WorkboardDal {
     set.push("updated_at = ?");
     values.push(updatedAtIso);
 
-    const row = await this.db.get<RawWorkItemRow>(
+    const row = await this.db.get<DalHelpers.RawWorkItemRow>(
       `UPDATE work_items
        SET ${set.join(", ")}
        WHERE tenant_id = ?
@@ -730,7 +267,7 @@ export class WorkboardDal {
         params.work_item_id,
       ],
     );
-    return row ? toWorkItem(row) : undefined;
+    return row ? dalHelpers.toWorkItem(row) : undefined;
   }
 
   async transitionItem(params: {
@@ -743,7 +280,7 @@ export class WorkboardDal {
     const occurredAtIso = params.occurredAtIso ?? new Date().toISOString();
 
     return await this.db.transaction(async (tx) => {
-      const existing = await tx.get<RawWorkItemRow>(
+      const existing = await tx.get<DalHelpers.RawWorkItemRow>(
         `SELECT *
          FROM work_items
          WHERE tenant_id = ?
@@ -760,9 +297,9 @@ export class WorkboardDal {
       if (!existing) return undefined;
 
       const from = existing.status as WorkItemState;
-      const allowed = WORK_ITEM_TRANSITIONS[from];
+      const allowed = dalHelpers.WORK_ITEM_TRANSITIONS[from];
       if (!allowed.includes(params.status)) {
-        throw new WorkboardTransitionError(
+        throw new dalHelpers.WorkboardTransitionError(
           "invalid_transition",
           {
             code: "invalid_transition",
@@ -777,8 +314,8 @@ export class WorkboardDal {
       if (params.status === "doing") {
         if (tx.kind === "postgres") {
           await tx.get("SELECT pg_advisory_xact_lock($1, $2)", [
-            hashScopeLockSeed(`${params.scope.tenant_id}|${params.scope.agent_id}`),
-            hashScopeLockSeed(params.scope.workspace_id),
+            dalHelpers.hashScopeLockSeed(`${params.scope.tenant_id}|${params.scope.agent_id}`),
+            dalHelpers.hashScopeLockSeed(params.scope.workspace_id),
           ]);
         }
 
@@ -791,23 +328,23 @@ export class WorkboardDal {
              AND status = 'doing'`,
           [params.scope.tenant_id, params.scope.agent_id, params.scope.workspace_id],
         );
-        const currentDoing = normalizeCount(doingCount?.count);
-        if (currentDoing >= DEFAULT_WORK_ITEM_WIP_LIMIT) {
-          throw new WorkboardTransitionError(
+        const currentDoing = dalHelpers.normalizeCount(doingCount?.count);
+        if (currentDoing >= dalHelpers.DEFAULT_WORK_ITEM_WIP_LIMIT) {
+          throw new dalHelpers.WorkboardTransitionError(
             "wip_limit_exceeded",
             {
               code: "wip_limit_exceeded",
               from,
               to: "doing",
-              limit: DEFAULT_WORK_ITEM_WIP_LIMIT,
+              limit: dalHelpers.DEFAULT_WORK_ITEM_WIP_LIMIT,
               current: currentDoing,
             },
-            `WIP limit ${DEFAULT_WORK_ITEM_WIP_LIMIT} reached for doing items`,
+            `WIP limit ${dalHelpers.DEFAULT_WORK_ITEM_WIP_LIMIT} reached for doing items`,
           );
         }
       }
 
-      const updated = await tx.get<RawWorkItemRow>(
+      const updated = await tx.get<DalHelpers.RawWorkItemRow>(
         `UPDATE work_items
          SET status = ?, updated_at = ?
          WHERE tenant_id = ?
@@ -842,7 +379,7 @@ export class WorkboardDal {
         ],
       );
 
-      if (isTerminalWorkItemState(params.status)) {
+      if (dalHelpers.isTerminalWorkItemState(params.status)) {
         const reasonText = params.reason?.trim() || `work item ${params.status}`;
         const parsedOccurredAtMs = Date.parse(occurredAtIso);
         const occurredAtMs = Number.isFinite(parsedOccurredAtMs) ? parsedOccurredAtMs : Date.now();
@@ -911,7 +448,7 @@ export class WorkboardDal {
         );
       }
 
-      return toWorkItem(updated);
+      return dalHelpers.toWorkItem(updated);
     });
   }
 
@@ -922,7 +459,7 @@ export class WorkboardDal {
     payload_json?: unknown;
     eventId?: string;
     createdAtIso?: string;
-  }): Promise<WorkItemEventRow> {
+  }): Promise<DalHelpers.WorkItemEventRow> {
     const eventId = params.eventId?.trim() || randomUUID();
     const createdAtIso = params.createdAtIso ?? new Date().toISOString();
 
@@ -931,7 +468,7 @@ export class WorkboardDal {
       throw new Error("work item not found for event");
     }
 
-    const row = await this.db.get<RawWorkItemEventRow>(
+    const row = await this.db.get<DalHelpers.RawWorkItemEventRow>(
       `INSERT INTO work_item_events (event_id, work_item_id, created_at, kind, payload_json)
        VALUES (?, ?, ?, ?, ?)
        RETURNING *`,
@@ -946,17 +483,17 @@ export class WorkboardDal {
     if (!row) {
       throw new Error("work item event insert failed");
     }
-    return toWorkItemEvent(row);
+    return dalHelpers.toWorkItemEvent(row);
   }
 
   async listEvents(params: {
     scope: WorkScope;
     work_item_id: string;
     limit?: number;
-  }): Promise<{ events: WorkItemEventRow[]; next_cursor?: string }> {
+  }): Promise<{ events: DalHelpers.WorkItemEventRow[]; next_cursor?: string }> {
     const limit = Math.max(1, Math.min(200, params.limit ?? 50));
 
-    const rows = await this.db.all<RawWorkItemEventRow>(
+    const rows = await this.db.all<DalHelpers.RawWorkItemEventRow>(
       `SELECT e.*
        FROM work_item_events e
        JOIN work_items i ON i.work_item_id = e.work_item_id
@@ -975,7 +512,7 @@ export class WorkboardDal {
       ],
     );
 
-    return { events: rows.map(toWorkItemEvent) };
+    return { events: rows.map(dalHelpers.toWorkItemEvent) };
   }
 
   async getStateKv(params: {
@@ -983,7 +520,7 @@ export class WorkboardDal {
     key: WorkStateKVKey;
   }): Promise<(AgentStateKVEntry | WorkItemStateKVEntry) | undefined> {
     if (params.scope.kind === "agent") {
-      const row = await this.db.get<RawKvRow>(
+      const row = await this.db.get<DalHelpers.RawKvRow>(
         `SELECT *
          FROM agent_state_kv
          WHERE tenant_id = ?
@@ -992,10 +529,10 @@ export class WorkboardDal {
            AND key = ?`,
         [params.scope.tenant_id, params.scope.agent_id, params.scope.workspace_id, params.key],
       );
-      return row ? (toKvEntry(row) as AgentStateKVEntry) : undefined;
+      return row ? (dalHelpers.toKvEntry(row) as AgentStateKVEntry) : undefined;
     }
 
-    const row = await this.db.get<RawKvRow>(
+    const row = await this.db.get<DalHelpers.RawKvRow>(
       `SELECT *
        FROM work_item_state_kv
        WHERE tenant_id = ?
@@ -1012,7 +549,10 @@ export class WorkboardDal {
       ],
     );
     return row
-      ? (toKvEntry({ ...row, work_item_id: params.scope.work_item_id }) as WorkItemStateKVEntry)
+      ? (dalHelpers.toKvEntry({
+          ...row,
+          work_item_id: params.scope.work_item_id,
+        }) as WorkItemStateKVEntry)
       : undefined;
   }
 
@@ -1034,15 +574,15 @@ export class WorkboardDal {
 
     if (params.prefix) {
       where.push("key LIKE ? ESCAPE '\\'");
-      values.push(`${escapeLikePattern(params.prefix)}%`);
+      values.push(`${dalHelpers.escapeLikePattern(params.prefix)}%`);
     }
 
     const table = params.scope.kind === "agent" ? "agent_state_kv" : "work_item_state_kv";
     const sql = `SELECT * FROM ${table}` + ` WHERE ${where.join(" AND ")}` + ` ORDER BY key ASC`;
 
-    const rows = await this.db.all<RawKvRow>(sql, values);
+    const rows = await this.db.all<DalHelpers.RawKvRow>(sql, values);
     const entries = rows.map((r) =>
-      toKvEntry(
+      dalHelpers.toKvEntry(
         params.scope.kind === "work_item" ? { ...r, work_item_id: params.scope.work_item_id } : r,
       ),
     );
@@ -1064,7 +604,7 @@ export class WorkboardDal {
     const updatedByRunId = params.updatedByRunId ?? null;
 
     if (params.scope.kind === "agent") {
-      const row = await this.db.get<RawKvRow>(
+      const row = await this.db.get<DalHelpers.RawKvRow>(
         `INSERT INTO agent_state_kv (
            tenant_id,
            agent_id,
@@ -1097,7 +637,7 @@ export class WorkboardDal {
       if (!row) {
         throw new Error("agent state kv upsert failed");
       }
-      return toKvEntry(row) as AgentStateKVEntry;
+      return dalHelpers.toKvEntry(row) as AgentStateKVEntry;
     }
 
     const item = await this.getItem({
@@ -1108,7 +648,7 @@ export class WorkboardDal {
       throw new Error("work_item_id is outside scope");
     }
 
-    const row = await this.db.get<RawKvRow>(
+    const row = await this.db.get<DalHelpers.RawKvRow>(
       `INSERT INTO work_item_state_kv (
          tenant_id,
          agent_id,
@@ -1143,7 +683,10 @@ export class WorkboardDal {
     if (!row) {
       throw new Error("work item state kv upsert failed");
     }
-    return toKvEntry({ ...row, work_item_id: params.scope.work_item_id }) as WorkItemStateKVEntry;
+    return dalHelpers.toKvEntry({
+      ...row,
+      work_item_id: params.scope.work_item_id,
+    }) as WorkItemStateKVEntry;
   }
 
   async createArtifact(params: {
@@ -1185,7 +728,7 @@ export class WorkboardDal {
       }
     }
 
-    const row = await this.db.get<RawWorkArtifactRow>(
+    const row = await this.db.get<DalHelpers.RawWorkArtifactRow>(
       `INSERT INTO work_artifacts (
          artifact_id,
          tenant_id,
@@ -1226,7 +769,7 @@ export class WorkboardDal {
     if (!row) {
       throw new Error("work artifact insert failed");
     }
-    return toWorkArtifact(row);
+    return dalHelpers.toWorkArtifact(row);
   }
 
   async listArtifacts(params: {
@@ -1248,7 +791,7 @@ export class WorkboardDal {
     }
 
     if (params.cursor) {
-      const cursor = decodeCursor(params.cursor);
+      const cursor = dalHelpers.decodeCursor(params.cursor);
       where.push("(created_at < ? OR (created_at = ? AND artifact_id < ?))");
       values.push(cursor.sort, cursor.sort, cursor.id);
     }
@@ -1256,7 +799,7 @@ export class WorkboardDal {
     const limit = Math.max(1, Math.min(200, params.limit ?? 50));
     values.push(limit);
 
-    const rows = await this.db.all<RawWorkArtifactRow>(
+    const rows = await this.db.all<DalHelpers.RawWorkArtifactRow>(
       `SELECT *
        FROM work_artifacts
        WHERE ${where.join(" AND ")}
@@ -1265,11 +808,11 @@ export class WorkboardDal {
       values,
     );
 
-    const artifacts = rows.map(toWorkArtifact);
+    const artifacts = rows.map(dalHelpers.toWorkArtifact);
     const last = artifacts.at(-1);
     const next_cursor =
       artifacts.length === limit && last
-        ? encodeCursor({ sort: last.created_at, id: last.artifact_id })
+        ? dalHelpers.encodeCursor({ sort: last.created_at, id: last.artifact_id })
         : undefined;
 
     return { artifacts, next_cursor };
@@ -1279,7 +822,7 @@ export class WorkboardDal {
     scope: WorkScope;
     artifact_id: string;
   }): Promise<WorkArtifact | undefined> {
-    const row = await this.db.get<RawWorkArtifactRow>(
+    const row = await this.db.get<DalHelpers.RawWorkArtifactRow>(
       `SELECT *
        FROM work_artifacts
        WHERE tenant_id = ?
@@ -1293,7 +836,7 @@ export class WorkboardDal {
         params.artifact_id,
       ],
     );
-    return row ? toWorkArtifact(row) : undefined;
+    return row ? dalHelpers.toWorkArtifact(row) : undefined;
   }
 
   async createDecision(params: {
@@ -1334,7 +877,7 @@ export class WorkboardDal {
       }
     }
 
-    const row = await this.db.get<RawDecisionRow>(
+    const row = await this.db.get<DalHelpers.RawDecisionRow>(
       `INSERT INTO work_decisions (
          decision_id,
          tenant_id,
@@ -1371,14 +914,14 @@ export class WorkboardDal {
     if (!row) {
       throw new Error("work decision insert failed");
     }
-    return toDecisionRecord(row);
+    return dalHelpers.toDecisionRecord(row);
   }
 
   async getDecision(params: {
     scope: WorkScope;
     decision_id: string;
   }): Promise<DecisionRecord | undefined> {
-    const row = await this.db.get<RawDecisionRow>(
+    const row = await this.db.get<DalHelpers.RawDecisionRow>(
       `SELECT *
        FROM work_decisions
        WHERE tenant_id = ?
@@ -1392,7 +935,7 @@ export class WorkboardDal {
         params.decision_id,
       ],
     );
-    return row ? toDecisionRecord(row) : undefined;
+    return row ? dalHelpers.toDecisionRecord(row) : undefined;
   }
 
   async listDecisions(params: {
@@ -1414,7 +957,7 @@ export class WorkboardDal {
     }
 
     if (params.cursor) {
-      const cursor = decodeCursor(params.cursor);
+      const cursor = dalHelpers.decodeCursor(params.cursor);
       where.push("(created_at < ? OR (created_at = ? AND decision_id < ?))");
       values.push(cursor.sort, cursor.sort, cursor.id);
     }
@@ -1422,7 +965,7 @@ export class WorkboardDal {
     const limit = Math.max(1, Math.min(200, params.limit ?? 50));
     values.push(limit);
 
-    const rows = await this.db.all<RawDecisionRow>(
+    const rows = await this.db.all<DalHelpers.RawDecisionRow>(
       `SELECT *
        FROM work_decisions
        WHERE ${where.join(" AND ")}
@@ -1430,11 +973,11 @@ export class WorkboardDal {
        LIMIT ?`,
       values,
     );
-    const decisions = rows.map(toDecisionRecord);
+    const decisions = rows.map(dalHelpers.toDecisionRecord);
     const last = decisions.at(-1);
     const next_cursor =
       decisions.length === limit && last
-        ? encodeCursor({ sort: last.created_at, id: last.decision_id })
+        ? dalHelpers.encodeCursor({ sort: last.created_at, id: last.decision_id })
         : undefined;
 
     return { decisions, next_cursor };
@@ -1466,7 +1009,7 @@ export class WorkboardDal {
       }
     }
 
-    const row = await this.db.get<RawWorkSignalRow>(
+    const row = await this.db.get<DalHelpers.RawWorkSignalRow>(
       `INSERT INTO work_signals (
          signal_id,
          tenant_id,
@@ -1501,7 +1044,7 @@ export class WorkboardDal {
     if (!row) {
       throw new Error("work signal insert failed");
     }
-    return toWorkSignal(row);
+    return dalHelpers.toWorkSignal(row);
   }
 
   async updateSignal(params: {
@@ -1530,7 +1073,7 @@ export class WorkboardDal {
     }
 
     if (set.length === 0) {
-      const existing = await this.db.get<RawWorkSignalRow>(
+      const existing = await this.db.get<DalHelpers.RawWorkSignalRow>(
         `SELECT *
          FROM work_signals
          WHERE tenant_id = ?
@@ -1544,10 +1087,10 @@ export class WorkboardDal {
           params.signal_id,
         ],
       );
-      return existing ? toWorkSignal(existing) : undefined;
+      return existing ? dalHelpers.toWorkSignal(existing) : undefined;
     }
 
-    const row = await this.db.get<RawWorkSignalRow>(
+    const row = await this.db.get<DalHelpers.RawWorkSignalRow>(
       `UPDATE work_signals
        SET ${set.join(", ")}
        WHERE tenant_id = ?
@@ -1563,7 +1106,7 @@ export class WorkboardDal {
         params.signal_id,
       ],
     );
-    return row ? toWorkSignal(row) : undefined;
+    return row ? dalHelpers.toWorkSignal(row) : undefined;
   }
 
   async markSignalFired(params: {
@@ -1575,7 +1118,7 @@ export class WorkboardDal {
     const firedAtIso = params.firedAtIso ?? new Date().toISOString();
     const status: WorkSignalStatus = params.status ?? "fired";
 
-    const row = await this.db.get<RawWorkSignalRow>(
+    const row = await this.db.get<DalHelpers.RawWorkSignalRow>(
       `UPDATE work_signals
        SET status = ?, last_fired_at = ?
        WHERE tenant_id = ?
@@ -1592,14 +1135,14 @@ export class WorkboardDal {
         params.signal_id,
       ],
     );
-    return row ? toWorkSignal(row) : undefined;
+    return row ? dalHelpers.toWorkSignal(row) : undefined;
   }
 
   async getSignal(params: {
     scope: WorkScope;
     signal_id: string;
   }): Promise<WorkSignal | undefined> {
-    const row = await this.db.get<RawWorkSignalRow>(
+    const row = await this.db.get<DalHelpers.RawWorkSignalRow>(
       `SELECT *
        FROM work_signals
        WHERE tenant_id = ?
@@ -1608,7 +1151,7 @@ export class WorkboardDal {
          AND signal_id = ?`,
       [params.scope.tenant_id, params.scope.agent_id, params.scope.workspace_id, params.signal_id],
     );
-    return row ? toWorkSignal(row) : undefined;
+    return row ? dalHelpers.toWorkSignal(row) : undefined;
   }
 
   async listSignals(params: {
@@ -1636,7 +1179,7 @@ export class WorkboardDal {
     }
 
     if (params.cursor) {
-      const cursor = decodeCursor(params.cursor);
+      const cursor = dalHelpers.decodeCursor(params.cursor);
       where.push("(created_at < ? OR (created_at = ? AND signal_id < ?))");
       values.push(cursor.sort, cursor.sort, cursor.id);
     }
@@ -1644,7 +1187,7 @@ export class WorkboardDal {
     const limit = Math.max(1, Math.min(200, params.limit ?? 50));
     values.push(limit);
 
-    const rows = await this.db.all<RawWorkSignalRow>(
+    const rows = await this.db.all<DalHelpers.RawWorkSignalRow>(
       `SELECT *
        FROM work_signals
        WHERE ${where.join(" AND ")}
@@ -1653,11 +1196,11 @@ export class WorkboardDal {
       values,
     );
 
-    const signals = rows.map(toWorkSignal);
+    const signals = rows.map(dalHelpers.toWorkSignal);
     const last = signals.at(-1);
     const next_cursor =
       signals.length === limit && last
-        ? encodeCursor({ sort: last.created_at, id: last.signal_id })
+        ? dalHelpers.encodeCursor({ sort: last.created_at, id: last.signal_id })
         : undefined;
 
     return { signals, next_cursor };
@@ -1667,9 +1210,9 @@ export class WorkboardDal {
     scope: WorkScope;
     last_active_session_key: string;
     updated_at_ms?: number;
-  }): Promise<WorkScopeActivityRow> {
+  }): Promise<DalHelpers.WorkScopeActivityRow> {
     const updatedAtMs = params.updated_at_ms ?? Date.now();
-    const row = await this.db.get<RawScopeActivityRow>(
+    const row = await this.db.get<DalHelpers.RawScopeActivityRow>(
       `INSERT INTO work_scope_activity (
          tenant_id,
          agent_id,
@@ -1701,8 +1244,10 @@ export class WorkboardDal {
     return existing;
   }
 
-  async getScopeActivity(params: { scope: WorkScope }): Promise<WorkScopeActivityRow | undefined> {
-    return await this.db.get<RawScopeActivityRow>(
+  async getScopeActivity(params: {
+    scope: WorkScope;
+  }): Promise<DalHelpers.WorkScopeActivityRow | undefined> {
+    return await this.db.get<DalHelpers.RawScopeActivityRow>(
       `SELECT *
        FROM work_scope_activity
        WHERE tenant_id = ?
@@ -1719,7 +1264,7 @@ export class WorkboardDal {
     kind: string;
     meta_json?: unknown;
     createdAtIso?: string;
-  }): Promise<WorkItemLinkRow> {
+  }): Promise<DalHelpers.WorkItemLinkRow> {
     const createdAtIso = params.createdAtIso ?? new Date().toISOString();
 
     return await this.db.transaction(async (tx) => {
@@ -1759,7 +1304,7 @@ export class WorkboardDal {
         throw new Error("linked work item not found for link");
       }
 
-      const row = await tx.get<RawWorkItemLinkRow>(
+      const row = await tx.get<DalHelpers.RawWorkItemLinkRow>(
         `INSERT INTO work_item_links (
            work_item_id,
            linked_work_item_id,
@@ -1780,7 +1325,7 @@ export class WorkboardDal {
       if (!row) {
         throw new Error("work item link insert failed");
       }
-      return toWorkItemLink(row);
+      return dalHelpers.toWorkItemLink(row);
     });
   }
 
@@ -1788,9 +1333,9 @@ export class WorkboardDal {
     scope: WorkScope;
     work_item_id: string;
     limit?: number;
-  }): Promise<{ links: WorkItemLinkRow[] }> {
+  }): Promise<{ links: DalHelpers.WorkItemLinkRow[] }> {
     const limit = Math.max(1, Math.min(200, params.limit ?? 50));
-    const rows = await this.db.all<RawWorkItemLinkRow>(
+    const rows = await this.db.all<DalHelpers.RawWorkItemLinkRow>(
       `SELECT l.*
        FROM work_item_links l
        JOIN work_items i ON i.work_item_id = l.work_item_id
@@ -1808,7 +1353,7 @@ export class WorkboardDal {
         limit,
       ],
     );
-    return { links: rows.map(toWorkItemLink) };
+    return { links: rows.map(dalHelpers.toWorkItemLink) };
   }
 
   async createTask(params: {
@@ -1832,7 +1377,7 @@ export class WorkboardDal {
     const taskId = params.taskId?.trim() || randomUUID();
     const createdAtIso = params.createdAtIso ?? new Date().toISOString();
     const status: WorkItemTaskState = params.task.status ?? "queued";
-    const dependsOn = normalizeTaskDeps(params.task.depends_on);
+    const dependsOn = dalHelpers.normalizeTaskDeps(params.task.depends_on);
 
     if (dependsOn.includes(taskId)) {
       throw new Error("work item task depends_on cannot include itself");
@@ -1845,7 +1390,7 @@ export class WorkboardDal {
     if (!item) {
       throw new Error("work item not found for task");
     }
-    if (isTerminalWorkItemState(item.status)) {
+    if (dalHelpers.isTerminalWorkItemState(item.status)) {
       throw new Error(`cannot create task for terminal work item (${item.status})`);
     }
 
@@ -1873,7 +1418,7 @@ export class WorkboardDal {
       }
     }
 
-    const row = await this.db.get<RawWorkItemTaskRow>(
+    const row = await this.db.get<DalHelpers.RawWorkItemTaskRow>(
       `INSERT INTO work_item_tasks (
          task_id,
          work_item_id,
@@ -1912,11 +1457,11 @@ export class WorkboardDal {
     if (!row) {
       throw new Error("work item task insert failed");
     }
-    return toWorkItemTask(row);
+    return dalHelpers.toWorkItemTask(row);
   }
 
   async listTasks(params: { scope: WorkScope; work_item_id: string }): Promise<WorkItemTask[]> {
-    const rows = await this.db.all<RawWorkItemTaskRow>(
+    const rows = await this.db.all<DalHelpers.RawWorkItemTaskRow>(
       `SELECT t.*
        FROM work_item_tasks t
        JOIN work_items i ON i.work_item_id = t.work_item_id
@@ -1932,7 +1477,7 @@ export class WorkboardDal {
         params.work_item_id,
       ],
     );
-    return rows.map(toWorkItemTask);
+    return rows.map(dalHelpers.toWorkItemTask);
   }
 
   async updateTask(params: {
@@ -1957,7 +1502,7 @@ export class WorkboardDal {
     const updatedAtIso = params.updatedAtIso ?? new Date().toISOString();
 
     return await this.db.transaction(async (tx) => {
-      const existing = await tx.get<RawWorkItemTaskRow>(
+      const existing = await tx.get<DalHelpers.RawWorkItemTaskRow>(
         `SELECT t.*
          FROM work_item_tasks t
          JOIN work_items i ON i.work_item_id = t.work_item_id
@@ -1992,7 +1537,7 @@ export class WorkboardDal {
 
       const normalizedDependsOn =
         params.patch.depends_on !== undefined
-          ? normalizeTaskDeps(params.patch.depends_on)
+          ? dalHelpers.normalizeTaskDeps(params.patch.depends_on)
           : undefined;
 
       if (normalizedDependsOn && normalizedDependsOn.includes(params.task_id)) {
@@ -2047,12 +1592,12 @@ export class WorkboardDal {
 
         const adj = new Map<string, string[]>();
         for (const row of allTasks) {
-          const deps = parseJsonOr(row.depends_on_json, []) as string[];
-          adj.set(row.task_id, normalizeTaskDeps(deps));
+          const deps = dalHelpers.parseJsonOr(row.depends_on_json, []) as string[];
+          adj.set(row.task_id, dalHelpers.normalizeTaskDeps(deps));
         }
         adj.set(params.task_id, normalizedDependsOn);
 
-        if (hasTaskDependencyCycle(adj)) {
+        if (dalHelpers.hasTaskDependencyCycle(adj)) {
           throw new Error("task dependency cycle detected");
         }
       }
@@ -2105,12 +1650,12 @@ export class WorkboardDal {
         values.push(params.patch.result_summary);
       }
 
-      if (set.length === 0) return toWorkItemTask(existing);
+      if (set.length === 0) return dalHelpers.toWorkItemTask(existing);
 
       set.push("updated_at = ?");
       values.push(updatedAtIso);
 
-      const row = await tx.get<RawWorkItemTaskRow>(
+      const row = await tx.get<DalHelpers.RawWorkItemTaskRow>(
         `UPDATE work_item_tasks
          SET ${set.join(", ")}
          WHERE task_id = ?
@@ -2119,7 +1664,7 @@ export class WorkboardDal {
       );
       if (!row) return undefined;
 
-      const updated = toWorkItemTask(row);
+      const updated = dalHelpers.toWorkItemTask(row);
       const previousStatus = existing.status as WorkItemTaskState;
 
       if (updated.status !== previousStatus) {
@@ -2192,12 +1737,12 @@ export class WorkboardDal {
     if (!item) {
       throw new Error("work item not found for lease");
     }
-    if (isTerminalWorkItemState(item.status)) {
+    if (dalHelpers.isTerminalWorkItemState(item.status)) {
       throw new Error(`cannot lease tasks for terminal work item (${item.status})`);
     }
 
     return await this.db.transaction(async (tx) => {
-      const rows = await tx.all<RawWorkItemTaskRow>(
+      const rows = await tx.all<DalHelpers.RawWorkItemTaskRow>(
         `SELECT t.*
          FROM work_item_tasks t
          JOIN work_items i ON i.work_item_id = t.work_item_id
@@ -2220,7 +1765,7 @@ export class WorkboardDal {
         statusById.set(row.task_id, row.status as WorkItemTaskState);
         depsById.set(
           row.task_id,
-          normalizeTaskDeps(parseJsonOr(row.depends_on_json, []) as string[]),
+          dalHelpers.normalizeTaskDeps(dalHelpers.parseJsonOr(row.depends_on_json, []) as string[]),
         );
       }
 
@@ -2255,7 +1800,7 @@ export class WorkboardDal {
 
       const leased: Array<{ task: WorkItemTask; lease_expires_at_ms: number }> = [];
       for (const taskId of runnable.slice(0, limit)) {
-        const updated = await tx.get<RawWorkItemTaskRow>(
+        const updated = await tx.get<DalHelpers.RawWorkItemTaskRow>(
           `UPDATE work_item_tasks
            SET status = 'leased',
                lease_owner = ?,
@@ -2270,7 +1815,10 @@ export class WorkboardDal {
           [params.lease_owner, leaseExpiresAtMs, updatedAtIso, taskId, nowMs],
         );
         if (!updated) continue;
-        leased.push({ task: toWorkItemTask(updated), lease_expires_at_ms: leaseExpiresAtMs });
+        leased.push({
+          task: dalHelpers.toWorkItemTask(updated),
+          lease_expires_at_ms: leaseExpiresAtMs,
+        });
       }
 
       for (const entry of leased) {
@@ -2336,7 +1884,7 @@ export class WorkboardDal {
       if (!task) {
         throw new Error("work_item_task_id is outside scope");
       }
-      if (isTerminalWorkItemState(task.work_item_status)) {
+      if (dalHelpers.isTerminalWorkItemState(task.work_item_status)) {
         throw new Error(`cannot create subagent for terminal work item (${task.work_item_status})`);
       }
       inferredWorkItemId = task.work_item_id;
@@ -2347,7 +1895,7 @@ export class WorkboardDal {
       if (!item) {
         throw new Error("work_item_id is outside scope");
       }
-      if (isTerminalWorkItemState(item.status)) {
+      if (dalHelpers.isTerminalWorkItemState(item.status)) {
         throw new Error(`cannot create subagent for terminal work item (${item.status})`);
       }
       if (inferredWorkItemId && inferredWorkItemId !== explicitWorkItemId) {
@@ -2357,7 +1905,7 @@ export class WorkboardDal {
 
     const workItemId = explicitWorkItemId ?? inferredWorkItemId ?? null;
 
-    const row = await this.db.get<RawSubagentRow>(
+    const row = await this.db.get<DalHelpers.RawSubagentRow>(
       `INSERT INTO subagents (
          subagent_id,
          tenant_id,
@@ -2396,7 +1944,7 @@ export class WorkboardDal {
     if (!row) {
       throw new Error("subagent insert failed");
     }
-    return toSubagent(row);
+    return dalHelpers.toSubagent(row);
   }
 
   async heartbeatSubagent(params: {
@@ -2405,7 +1953,7 @@ export class WorkboardDal {
     heartbeatAtIso?: string;
   }): Promise<SubagentDescriptor | undefined> {
     const heartbeatAtIso = params.heartbeatAtIso ?? new Date().toISOString();
-    const row = await this.db.get<RawSubagentRow>(
+    const row = await this.db.get<DalHelpers.RawSubagentRow>(
       `UPDATE subagents
        SET last_heartbeat_at = ?, updated_at = ?
        WHERE tenant_id = ?
@@ -2422,14 +1970,14 @@ export class WorkboardDal {
         params.subagent_id,
       ],
     );
-    return row ? toSubagent(row) : undefined;
+    return row ? dalHelpers.toSubagent(row) : undefined;
   }
 
   async getSubagent(params: {
     scope: WorkScope;
     subagent_id: string;
   }): Promise<SubagentDescriptor | undefined> {
-    const row = await this.db.get<RawSubagentRow>(
+    const row = await this.db.get<DalHelpers.RawSubagentRow>(
       `SELECT *
        FROM subagents
        WHERE tenant_id = ?
@@ -2443,7 +1991,7 @@ export class WorkboardDal {
         params.subagent_id,
       ],
     );
-    return row ? toSubagent(row) : undefined;
+    return row ? dalHelpers.toSubagent(row) : undefined;
   }
 
   async listSubagents(params: {
@@ -2465,7 +2013,7 @@ export class WorkboardDal {
     }
 
     if (params.cursor) {
-      const cursor = decodeCursor(params.cursor);
+      const cursor = dalHelpers.decodeCursor(params.cursor);
       where.push("(updated_at < ? OR (updated_at = ? AND subagent_id < ?))");
       values.push(cursor.sort, cursor.sort, cursor.id);
     }
@@ -2473,7 +2021,7 @@ export class WorkboardDal {
     const limit = Math.max(1, Math.min(200, params.limit ?? 50));
     values.push(limit);
 
-    const rows = await this.db.all<RawSubagentRow>(
+    const rows = await this.db.all<DalHelpers.RawSubagentRow>(
       `SELECT *
        FROM subagents
        WHERE ${where.join(" AND ")}
@@ -2482,11 +2030,14 @@ export class WorkboardDal {
       values,
     );
 
-    const subagents = rows.map(toSubagent);
+    const subagents = rows.map(dalHelpers.toSubagent);
     const last = subagents.at(-1);
     const next_cursor =
       subagents.length === limit && last
-        ? encodeCursor({ sort: last.updated_at ?? last.created_at, id: last.subagent_id })
+        ? dalHelpers.encodeCursor({
+            sort: last.updated_at ?? last.created_at,
+            id: last.subagent_id,
+          })
         : undefined;
 
     return { subagents, next_cursor };
@@ -2502,7 +2053,7 @@ export class WorkboardDal {
     const closeReason = params.reason?.trim() || null;
 
     return await this.db.transaction(async (tx) => {
-      const existing = await tx.get<RawSubagentRow>(
+      const existing = await tx.get<DalHelpers.RawSubagentRow>(
         `SELECT *
          FROM subagents
          WHERE tenant_id = ?
@@ -2519,10 +2070,10 @@ export class WorkboardDal {
       if (!existing) return undefined;
 
       if (existing.status === "closed" || existing.status === "failed") {
-        return toSubagent(existing);
+        return dalHelpers.toSubagent(existing);
       }
 
-      const row = await tx.get<RawSubagentRow>(
+      const row = await tx.get<DalHelpers.RawSubagentRow>(
         `UPDATE subagents
          SET status = ?,
              updated_at = ?,
@@ -2544,7 +2095,7 @@ export class WorkboardDal {
           params.subagent_id,
         ],
       );
-      return row ? toSubagent(row) : undefined;
+      return row ? dalHelpers.toSubagent(row) : undefined;
     });
   }
 
@@ -2572,7 +2123,7 @@ export class WorkboardDal {
     const nowIso = params.closedAtIso ?? new Date().toISOString();
 
     return await this.db.transaction(async (tx) => {
-      const existing = await tx.get<RawSubagentRow>(
+      const existing = await tx.get<DalHelpers.RawSubagentRow>(
         `SELECT *
          FROM subagents
          WHERE tenant_id = ?
@@ -2589,10 +2140,10 @@ export class WorkboardDal {
       if (!existing) return undefined;
 
       if (existing.status === "closed" || existing.status === "failed") {
-        return toSubagent(existing);
+        return dalHelpers.toSubagent(existing);
       }
 
-      const row = await tx.get<RawSubagentRow>(
+      const row = await tx.get<DalHelpers.RawSubagentRow>(
         `UPDATE subagents
          SET status = ?,
              updated_at = ?,
@@ -2612,7 +2163,7 @@ export class WorkboardDal {
           params.subagent_id,
         ],
       );
-      return row ? toSubagent(row) : undefined;
+      return row ? dalHelpers.toSubagent(row) : undefined;
     });
   }
 
