@@ -35,9 +35,8 @@ async function importProvidersWithDisappearingSecretsPath(secretsPath: string): 
     };
   });
 
-  const { FileSecretProvider, KeychainSecretProvider } = await import(
-    "../../src/modules/secret/provider.js"
-  );
+  const { FileSecretProvider, KeychainSecretProvider } =
+    await import("../../src/modules/secret/provider.js");
   return { FileSecretProvider, KeychainSecretProvider };
 }
 
