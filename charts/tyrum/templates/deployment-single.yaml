@@ -57,6 +57,12 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           {{- end }}
+          startupProbe:
+            {{- include "tyrum.probe" (dict "root" . "name" "startup") | nindent 12 }}
+          readinessProbe:
+            {{- include "tyrum.probe" (dict "root" . "name" "readiness") | nindent 12 }}
+          livenessProbe:
+            {{- include "tyrum.probe" (dict "root" . "name" "liveness") | nindent 12 }}
           {{- if .Values.persistence.enabled }}
           volumeMounts:
             - name: tyrum-data

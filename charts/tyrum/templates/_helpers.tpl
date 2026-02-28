@@ -18,3 +18,13 @@ app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
 
+{{- define "tyrum.probe" -}}
+{{- $root := .root -}}
+{{- $cfg := index $root.Values.probes .name -}}
+httpGet:
+  path: /healthz
+  port: {{ $root.Values.service.port }}
+{{- with $cfg }}
+{{- toYaml . | nindent 0 }}
+{{- end }}
+{{- end -}}
