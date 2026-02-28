@@ -100,6 +100,7 @@ import type { PluginRegistry } from "../../plugins/registry.js";
 import type { PolicyService } from "../../policy/service.js";
 import { canonicalizeToolMatchTarget } from "../../policy/match-target.js";
 import { isSafeSuggestedOverridePattern } from "../../policy/override-guardrails.js";
+import { sha256HexFromString } from "../../policy/canonical-json.js";
 import { wildcardMatch } from "../../policy/wildcard.js";
 import type { AuthProfileRow } from "../../models/auth-profile-dal.js";
 import { SessionModelOverrideDal } from "../../models/session-model-override-dal.js";
@@ -126,6 +127,8 @@ const TURN_ENGINE_MIN_BACKOFF_MS = 5;
 const TURN_ENGINE_MAX_BACKOFF_MS = 250;
 
 const DEFAULT_PRE_COMPACTION_FLUSH_TIMEOUT_MS = 2_500;
+const PRE_COMPACTION_FLUSH_TRUNCATION_MARKER = "...(truncated)";
+const MAX_PRE_COMPACTION_FLUSH_MESSAGE_CHARS = 2_000;
 
 const WITHIN_TURN_LOOP_STOP_REPLY =
   "Loop detected (repeated tool calls); stopping to avoid runaway execution. " +
@@ -1650,7 +1653,19 @@ export class AgentRuntime {
   private formatPreCompactionFlushPrompt(droppedTurns: readonly SessionMessage[]): string {
     const lines = droppedTurns.map((turn) => {
       const role = turn.role === "assistant" ? "Assistant" : "User";
-      return `${role} (${turn.timestamp}): ${redactSecretLikeText(turn.content.trim())}`;
+      const redacted = redactSecretLikeText(turn.content.trim());
+      const content =
+        redacted.length <= MAX_PRE_COMPACTION_FLUSH_MESSAGE_CHARS
+          ? redacted
+          : `${redacted.slice(
+              0,
+              Math.max(
+                0,
+                MAX_PRE_COMPACTION_FLUSH_MESSAGE_CHARS -
+                  PRE_COMPACTION_FLUSH_TRUNCATION_MARKER.length,
+              ),
+            )}${PRE_COMPACTION_FLUSH_TRUNCATION_MARKER}`;
+      return `${role} (${turn.timestamp}): ${content}`;
     });
 
     return [
@@ -1672,7 +1687,9 @@ export class AgentRuntime {
     abortSignal?: AbortSignal;
     timeoutMs?: number;
   }): Promise<void> {
-    if (!input.ctx.config.memory.markdown_enabled) {
+    const v1Enabled = input.ctx.config.memory.v1.enabled;
+    const markdownEnabled = input.ctx.config.memory.markdown_enabled;
+    if (!v1Enabled && !markdownEnabled) {
       return;
     }
 
@@ -1682,6 +1699,32 @@ export class AgentRuntime {
     );
     if (droppedTurns.length === 0) {
       return;
+    }
+
+    const flushPromptText = this.formatPreCompactionFlushPrompt(droppedTurns);
+    const flushKey = sha256HexFromString(`${input.session.session_id}\n${flushPromptText}`);
+    const flushTag = `preflush:${flushKey}`;
+
+    if (v1Enabled) {
+      try {
+        const memory = new MemoryV1Dal(this.opts.container.db);
+        const existing = await memory.list({
+          agentId: this.agentId,
+          limit: 1,
+          filter: { tags: [flushTag] },
+        });
+        if (existing.items.length > 0) {
+          return;
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.opts.container.logger.warn("memory.flush_v1_dedupe_failed", {
+          session_id: input.session.session_id,
+          channel: input.session.channel,
+          thread_id: input.session.thread_id,
+          error: message,
+        });
+      }
     }
 
     const totalTimeoutMs = input.timeoutMs;
@@ -1713,7 +1756,7 @@ export class AgentRuntime {
             content: [
               {
                 type: "text" as const,
-                text: this.formatPreCompactionFlushPrompt(droppedTurns),
+                text: flushPromptText,
               },
             ],
           },
@@ -1723,22 +1766,65 @@ export class AgentRuntime {
         timeout: flushTimeoutMs,
       });
 
-      const flushText = (flushResult.text ?? "").trim();
-      if (flushText.length === 0 || flushText.toUpperCase() === "NOOP") {
+      const rawFlushText = (flushResult.text ?? "").trim();
+      if (rawFlushText.length === 0 || rawFlushText.toUpperCase() === "NOOP") {
         return;
       }
 
-      const entry = ["Pre-compaction memory flush", "", flushText].join("\n").trim();
-      if (looksLikeSecretText(entry)) {
-        this.opts.container.logger.warn("memory.flush_skipped_secret_like", {
+      const flushText = redactSecretLikeText(rawFlushText).trim();
+      if (flushText.length === 0) {
+        return;
+      }
+
+      if (flushText !== rawFlushText) {
+        this.opts.container.logger.warn("memory.flush_redacted_secret_like", {
           session_id: input.session.session_id,
           channel: input.session.channel,
           thread_id: input.session.thread_id,
         });
-        return;
       }
 
-      await input.ctx.memoryStore.appendDaily(entry);
+      const entry = ["Pre-compaction memory flush", "", flushText].join("\n").trim();
+
+      if (v1Enabled) {
+        try {
+          const memory = new MemoryV1Dal(this.opts.container.db);
+          await memory.create(
+            {
+              kind: "note",
+              title: "Pre-compaction memory flush",
+              body_md: flushText,
+              tags: ["pre-compaction-flush", flushTag],
+              sensitivity: "private",
+              provenance: {
+                source_kind: "system",
+                channel: input.session.channel,
+                thread_id: input.session.thread_id,
+                session_id: input.session.session_id,
+                refs: [],
+                metadata: {
+                  kind: "pre_compaction_memory_flush",
+                  flush_key: flushKey,
+                  dropped_messages: droppedTurns.length,
+                },
+              },
+            },
+            this.agentId,
+          );
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          this.opts.container.logger.warn("memory.flush_v1_write_failed", {
+            session_id: input.session.session_id,
+            channel: input.session.channel,
+            thread_id: input.session.thread_id,
+            error: message,
+          });
+        }
+      }
+
+      if (markdownEnabled) {
+        await input.ctx.memoryStore.appendDaily(entry);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.opts.container.logger.warn("memory.flush_failed", {
