@@ -41,12 +41,9 @@ import { applyDeterministicContextCompactionAndToolPruning } from "./context-pru
 import {
   DATA_TAG_SAFETY_PROMPT,
   formatIdentityPrompt,
-  formatMemoryPrompt,
-  formatSemanticMemoryPrompt,
   formatSessionContext,
   formatSkillsPrompt,
   formatToolPrompt,
-  mergeMemoryPrompts,
 } from "./prompts.js";
 import {
   buildProviderResolutionSetup,
@@ -88,8 +85,14 @@ import { tagContent } from "../provenance.js";
 import { sanitizeForModel, containsInjectionPatterns } from "../sanitizer.js";
 import { EnvSecretProvider } from "../../secret/provider.js";
 import { collectSecretHandleIds } from "../../secret/collect-secret-handle-ids.js";
-import { VectorDal, type VectorSearchResult } from "../../memory/vector-dal.js";
+import { VectorDal } from "../../memory/vector-dal.js";
 import { EmbeddingPipeline } from "../../memory/embedding-pipeline.js";
+import { MemoryV1Dal } from "../../memory/v1-dal.js";
+import { buildMemoryV1Digest } from "../../memory/v1-digest.js";
+import {
+  MemoryV1SemanticIndex,
+  type MemoryV1SemanticSearchHit,
+} from "../../memory/v1-semantic-index.js";
 import type { ApprovalNotifier } from "../../approval/notifier.js";
 import type { ApprovalDal, ApprovalStatus } from "../../approval/dal.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
@@ -2132,14 +2135,23 @@ export class AgentRuntime {
   }
 
   private async semanticSearch(
-    message: string,
+    query: string,
+    limit: number,
     primaryModelId: string,
     sessionId: string,
-  ): Promise<VectorSearchResult[]> {
+  ): Promise<MemoryV1SemanticSearchHit[]> {
     try {
       const pipeline = await this.resolveEmbeddingPipeline(primaryModelId, sessionId);
       if (!pipeline) return [];
-      return await pipeline.search(message, 5);
+      const index = new MemoryV1SemanticIndex({
+        db: this.opts.container.db,
+        agentId: this.agentId,
+        embedder: {
+          modelId: "runtime/embedding",
+          embed: async (text: string) => pipeline.embed(text),
+        },
+      });
+      return await index.search(query, limit);
     } catch {
       return [];
     }
@@ -2394,19 +2406,48 @@ export class AgentRuntime {
       (entry) => entry === "*" || entry === "mcp*" || entry.startsWith("mcp."),
     );
 
-    // Semantic search via embedding pipeline (graceful -- skipped if memory disabled)
-    const semanticSearchPromise = ctx.config.memory.markdown_enabled
-      ? this.semanticSearch(resolved.message, ctx.config.model.model, session.session_id)
-      : Promise.resolve([]);
+    const memoryDigestPromise =
+      isStatusQuery(resolved.message) || parseIntakeModeDecision(resolved.message)
+        ? Promise.resolve({
+            digest: "Skipped for command turns.",
+            included_item_ids: [],
+            keyword_hit_count: 0,
+            semantic_hit_count: 0,
+            structured_item_count: 0,
+          })
+        : (async () => {
+            try {
+              return await buildMemoryV1Digest({
+                dal: new MemoryV1Dal(this.opts.container.db),
+                agentId,
+                query: resolved.message,
+                config: ctx.config.memory.v1,
+                semanticSearch: ctx.config.memory.v1.semantic.enabled
+                  ? (query, limit) =>
+                      this.semanticSearch(query, limit, ctx.config.model.model, session.session_id)
+                  : undefined,
+              });
+            } catch (error) {
+              this.opts.container.logger.warn("memory.v1.digest_failed", {
+                session_id: session.session_id,
+                agent_id: agentId,
+                error: error instanceof Error ? error.message : String(error),
+              });
+              return {
+                digest: "Memory digest unavailable.",
+                included_item_ids: [],
+                keyword_hit_count: 0,
+                semantic_hit_count: 0,
+                structured_item_count: 0,
+              };
+            }
+          })();
 
-    const [memoryHits, mcpTools, semanticHits] = await Promise.all([
-      ctx.config.memory.markdown_enabled
-        ? ctx.memoryStore.search(resolved.message, 5)
-        : Promise.resolve([]),
+    const [memoryDigestResult, mcpTools] = await Promise.all([
+      memoryDigestPromise,
       wantsMcpTools
         ? this.mcpManager.listToolDescriptors(ctx.mcpServers)
         : this.mcpManager.listToolDescriptors([]),
-      semanticSearchPromise,
     ]);
 
     const pluginToolsRaw = this.plugins?.getToolDescriptors() ?? [];
@@ -2448,10 +2489,6 @@ export class AgentRuntime {
     );
 
     const sessionCtx = formatSessionContext(session.summary, session.turns);
-    const memoryCtx = mergeMemoryPrompts(
-      formatMemoryPrompt(memoryHits),
-      formatSemanticMemoryPrompt(semanticHits),
-    );
     const workFocusDigest =
       isStatusQuery(resolved.message) || parseIntakeModeDecision(resolved.message)
         ? "Skipped for command turns."
@@ -2475,7 +2512,8 @@ export class AgentRuntime {
     const toolsText = `Available tools:\n${formatToolPrompt(filteredTools)}`;
     const sessionText = `Session context:\n${sessionCtx}`;
     const workFocusText = `Work focus digest:\n${workFocusDigest}`;
-    const memoryText = `Long-term memory matches:\n${memoryCtx}`;
+    const memoryTagged = tagContent(memoryDigestResult.digest, "memory", false);
+    const memoryText = `Memory digest:\n${sanitizeForModel(memoryTagged)}`;
 
     const toolSchemaParts = filteredTools.map((t) => {
       const schema = t.inputSchema ?? { type: "object", additionalProperties: true };
@@ -2515,7 +2553,7 @@ export class AgentRuntime {
         { id: "tools", chars: toolsText.length },
         { id: "session_context", chars: sessionText.length },
         { id: "work_focus_digest", chars: workFocusText.length },
-        { id: "memory_matches", chars: memoryText.length },
+        { id: "memory_digest", chars: memoryText.length },
         { id: "message", chars: resolved.message.length },
       ],
       selected_tools: filteredTools.map((t) => t.id),
@@ -2526,8 +2564,10 @@ export class AgentRuntime {
       enabled_skills: ctx.skills.map((s) => s.meta.id),
       mcp_servers: ctx.mcpServers.map((s) => s.id),
       memory: {
-        keyword_hits: memoryHits.length,
-        semantic_hits: semanticHits.length,
+        keyword_hits: memoryDigestResult.keyword_hit_count,
+        semantic_hits: memoryDigestResult.semantic_hit_count,
+        structured_hits: memoryDigestResult.structured_item_count,
+        included_items: memoryDigestResult.included_item_ids.length,
       },
       tool_calls: [],
       injected_files: [],

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { AgentId, WorkspaceId } from "./keys.js";
 import { NormalizedContainerKind, NormalizedMessageEnvelope } from "./message.js";
+import { MemorySensitivity } from "./memory.js";
 
 export const AgentModelConfig = z.object({
   model: z
@@ -73,6 +74,69 @@ export type AgentSessionConfig = z.infer<typeof AgentSessionConfig>;
 
 export const AgentMemoryConfig = z.object({
   markdown_enabled: z.boolean().default(true),
+  v1: z
+    .object({
+      enabled: z.boolean().default(true),
+      allow_sensitivities: z.array(MemorySensitivity).default(["public", "private"]),
+      structured: z
+        .object({
+          fact_keys: z.array(z.string().trim().min(1)).default([]),
+          tags: z.array(z.string().trim().min(1)).default([]),
+        })
+        .prefault({}),
+      keyword: z
+        .object({
+          enabled: z.boolean().default(true),
+          limit: z.number().int().min(1).max(200).default(60),
+        })
+        .prefault({}),
+      semantic: z
+        .object({
+          enabled: z.boolean().default(false),
+          limit: z.number().int().min(1).max(200).default(20),
+        })
+        .prefault({}),
+      budgets: z
+        .object({
+          max_total_items: z.number().int().min(0).max(1000).default(12),
+          max_total_chars: z.number().int().min(0).max(200_000).default(2400),
+          max_total_tokens: z.number().int().min(0).max(400_000).optional(),
+          per_kind: z
+            .object({
+              fact: z
+                .object({
+                  max_items: z.number().int().min(0).max(1000).default(6),
+                  max_chars: z.number().int().min(0).max(200_000).default(800),
+                  max_tokens: z.number().int().min(0).max(400_000).optional(),
+                })
+                .prefault({}),
+              note: z
+                .object({
+                  max_items: z.number().int().min(0).max(1000).default(4),
+                  max_chars: z.number().int().min(0).max(200_000).default(1200),
+                  max_tokens: z.number().int().min(0).max(400_000).optional(),
+                })
+                .prefault({}),
+              procedure: z
+                .object({
+                  max_items: z.number().int().min(0).max(1000).default(3),
+                  max_chars: z.number().int().min(0).max(200_000).default(1200),
+                  max_tokens: z.number().int().min(0).max(400_000).optional(),
+                })
+                .prefault({}),
+              episode: z
+                .object({
+                  max_items: z.number().int().min(0).max(1000).default(2),
+                  max_chars: z.number().int().min(0).max(200_000).default(800),
+                  max_tokens: z.number().int().min(0).max(400_000).optional(),
+                })
+                .prefault({}),
+            })
+            .prefault({}),
+        })
+        .prefault({}),
+    })
+    .prefault({}),
 });
 export type AgentMemoryConfig = z.infer<typeof AgentMemoryConfig>;
 

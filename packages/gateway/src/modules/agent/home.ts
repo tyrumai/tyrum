@@ -107,6 +107,36 @@ sessions:
       cooldown_assistant_messages: 6
 memory:
   markdown_enabled: true
+  v1:
+    enabled: true
+    allow_sensitivities:
+      - public
+      - private
+    structured:
+      fact_keys: []
+      tags: []
+    keyword:
+      enabled: true
+      limit: 60
+    semantic:
+      enabled: false
+      limit: 20
+    budgets:
+      max_total_items: 12
+      max_total_chars: 2400
+      per_kind:
+        fact:
+          max_items: 6
+          max_chars: 800
+        note:
+          max_items: 4
+          max_chars: 1200
+        procedure:
+          max_items: 3
+          max_chars: 1200
+        episode:
+          max_items: 2
+          max_chars: 800
 `;
 
 const DEFAULT_IDENTITY_MD = `---

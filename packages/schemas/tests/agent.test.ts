@@ -31,6 +31,14 @@ describe("AgentConfig", () => {
     expect(parsed.sessions.loop_detection.cross_turn.min_chars).toBe(120);
     expect(parsed.sessions.loop_detection.cross_turn.cooldown_assistant_messages).toBe(6);
     expect(parsed.memory.markdown_enabled).toBe(true);
+    expect(parsed.memory.v1.enabled).toBe(true);
+    expect(parsed.memory.v1.allow_sensitivities).toEqual(["public", "private"]);
+    expect(parsed.memory.v1.budgets.max_total_items).toBeGreaterThan(0);
+    expect(parsed.memory.v1.budgets.max_total_chars).toBeGreaterThan(0);
+    expect(parsed.memory.v1.budgets.per_kind.fact.max_items).toBeGreaterThan(0);
+    expect(parsed.memory.v1.budgets.per_kind.note.max_items).toBeGreaterThan(0);
+    expect(parsed.memory.v1.budgets.per_kind.procedure.max_items).toBeGreaterThan(0);
+    expect(parsed.memory.v1.budgets.per_kind.episode.max_items).toBeGreaterThan(0);
   });
 });
 

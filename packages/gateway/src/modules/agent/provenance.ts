@@ -16,15 +16,15 @@ export interface TaggedContent {
   trusted: boolean;
 }
 
-/** Sources that are trusted by default (direct human input, local memory). */
-const TRUSTED_SOURCES = new Set<ProvenanceTag>(["user", "memory", "semantic-memory"]);
+/** Sources that are trusted by default (direct human input). */
+const TRUSTED_SOURCES = new Set<ProvenanceTag>(["user"]);
 
 /**
  * Wrap content with provenance metadata.
  *
  * @param content - The raw content string
  * @param source - Where the content came from
- * @param trusted - Override trust level. If omitted, "user" and "memory" are trusted.
+ * @param trusted - Override trust level. If omitted, only "user" is trusted.
  */
 export function tagContent(
   content: string,
