@@ -80,7 +80,6 @@ node scripts/coverage/diff-lines.mjs --base "$BASE_SHA" --min 80
 Pull requests must reference their GitHub Issue and pass all required checks:
 
 - `ci-web`
-- `sast`
 - `security-baseline`
 - At least one approving review
 
