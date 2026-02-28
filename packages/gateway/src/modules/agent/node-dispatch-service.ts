@@ -21,4 +21,3 @@ export class NodeDispatchService {
     return { taskId, result };
   }
 }
-

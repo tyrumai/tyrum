@@ -33,7 +33,8 @@ function createMockWs(registry: TaskResultRegistry): MockWebSocket {
 
 describe("NodeDispatchService", () => {
   it("dispatches task.execute and awaits the task result registry", async () => {
-    const { NodeDispatchService } = await import("../../src/modules/agent/node-dispatch-service.js");
+    const { NodeDispatchService } =
+      await import("../../src/modules/agent/node-dispatch-service.js");
 
     const cm = new ConnectionManager();
     const registry = new TaskResultRegistry();
@@ -78,7 +79,8 @@ describe("NodeDispatchService", () => {
   });
 
   it("dispatches to approved nodes even when policy returns require_approval", async () => {
-    const { NodeDispatchService } = await import("../../src/modules/agent/node-dispatch-service.js");
+    const { NodeDispatchService } =
+      await import("../../src/modules/agent/node-dispatch-service.js");
 
     const cm = new ConnectionManager();
     const registry = new TaskResultRegistry();
@@ -129,7 +131,8 @@ describe("NodeDispatchService", () => {
   });
 
   it("rejects when task result registry is missing", async () => {
-    const { NodeDispatchService } = await import("../../src/modules/agent/node-dispatch-service.js");
+    const { NodeDispatchService } =
+      await import("../../src/modules/agent/node-dispatch-service.js");
 
     const cm = new ConnectionManager();
     const deps: ProtocolDeps = {
