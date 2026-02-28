@@ -15,7 +15,9 @@ export async function createGatewayAuthSession(input: {
   }
 
   const credentials = input.credentials ?? "same-origin";
-  const url = input.httpBaseUrl ? new URL("/auth/session", input.httpBaseUrl).toString() : "/auth/session";
+  const url = input.httpBaseUrl
+    ? new URL("/auth/session", input.httpBaseUrl).toString()
+    : "/auth/session";
 
   return await fetchFn(url, {
     method: "POST",
@@ -24,4 +26,3 @@ export async function createGatewayAuthSession(input: {
     body: JSON.stringify({ token }),
   });
 }
-
