@@ -42,6 +42,16 @@ describe("ToolIntent", () => {
     expect(parsed.cost_budget.max_total_tokens).toBe(123);
   });
 
+  it("rejects missing expected_evidence", () => {
+    const intent = {
+      ...baseIntent,
+      cost_budget: { max_duration_ms: 5_000 },
+    } as Record<string, unknown>;
+    delete intent.expected_evidence;
+
+    expect(() => ToolIntent.parse(intent)).toThrow();
+  });
+
   it("rejects missing required fields", () => {
     expect(() => ToolIntent.parse({ v: 1 })).toThrow();
   });

@@ -21,7 +21,9 @@ export const ToolIntentV1 = z
     cost_budget: ToolIntentCostBudget,
     side_effect_class: z.string().trim().min(1),
     risk_class: z.string().trim().min(1),
-    expected_evidence: z.unknown(),
+    expected_evidence: z
+      .unknown()
+      .refine((value) => value !== undefined, "expected_evidence is required"),
 
     execution_profile: z.string().trim().min(1).optional(),
     tool_allowlist: z.array(z.string().trim().min(1)).optional(),
