@@ -269,6 +269,7 @@ export function getClientIp(c: Context): string | undefined {
     if (typeof value !== "string") return undefined;
     return normalizeIp(value);
   } catch {
+    // Intentional: treat missing middleware state as an absent client IP.
     return undefined;
   }
 }

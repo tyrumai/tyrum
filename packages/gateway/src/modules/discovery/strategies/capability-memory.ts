@@ -42,7 +42,7 @@ function normalizeUrl(identifier: string): string {
     new URL(identifier);
     return identifier;
   } catch {
-    // Bare domain or path — assume https
+    // Intentional: bare domain or path — assume https.
     return `https://${identifier}`;
   }
 }

@@ -26,7 +26,7 @@ function toOutboxRow(raw: RawOutboxRow): OutboxRow {
   try {
     payload = JSON.parse(raw.payload_json) as unknown;
   } catch {
-    // leave as empty object
+    // Intentional: treat invalid JSON payloads as empty objects.
   }
   return {
     id: raw.id,

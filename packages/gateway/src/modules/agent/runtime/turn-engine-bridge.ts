@@ -131,6 +131,7 @@ export async function loadTurnResultFromRun(
   try {
     return AgentTurnResponse.parse(JSON.parse(row.result_json));
   } catch {
+    // Intentional: treat malformed/unknown stored results as absent.
     return undefined;
   }
 }
@@ -257,7 +258,7 @@ export async function turnViaExecutionEngine(
         updated_at_ms: Date.now(),
       });
     } catch {
-      // ignore best-effort activity tracking failures
+      // Intentional: ignore best-effort activity tracking failures.
     }
   }
 

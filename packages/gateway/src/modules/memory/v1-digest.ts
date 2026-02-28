@@ -58,6 +58,7 @@ function formatItemHeader(item: MemoryItem): string {
     try {
       value = JSON.stringify(item.value);
     } catch {
+      // Intentional: fall back to a lossy string representation if value contains cycles/BigInt.
       value = String(item.value);
     }
     const valueTrimmed = truncate(value, 240);
@@ -279,6 +280,7 @@ export async function buildMemoryV1Digest(params: {
         params.agentId,
       );
     } catch {
+      // Intentional: keyword search is best-effort; treat failures as no keyword hits.
       return { v: 1 as const, hits: [], next_cursor: undefined };
     }
   })();
@@ -289,6 +291,7 @@ export async function buildMemoryV1Digest(params: {
     try {
       return await params.semanticSearch(query, config.semantic.limit);
     } catch {
+      // Intentional: semantic search is best-effort; treat failures as no semantic hits.
       return [];
     }
   })();
@@ -360,6 +363,7 @@ export async function buildMemoryV1Digest(params: {
       try {
         item = await params.dal.getById(candidate.memory_item_id, params.agentId);
       } catch {
+        // Intentional: best-effort candidate hydration; skip items that cannot be loaded.
         continue;
       }
     }

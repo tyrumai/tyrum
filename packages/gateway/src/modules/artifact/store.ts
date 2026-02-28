@@ -277,7 +277,7 @@ export class S3ArtifactStore implements ArtifactStore {
           parsedManifest = maybe as ArtifactManifestV1;
         }
       } catch {
-        // Treat malformed JSON as missing manifest and fall back to legacy keys.
+        // Intentional: treat malformed JSON as missing manifest and fall back to legacy keys.
       }
     } catch (err) {
       if (!isNoSuchKey(err)) throw err;

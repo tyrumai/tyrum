@@ -85,6 +85,7 @@ async function fileExists(path: string): Promise<boolean> {
     await access(path, constants.F_OK);
     return true;
   } catch {
+    // Intentional: treat missing OAuth config files as absent.
     return false;
   }
 }

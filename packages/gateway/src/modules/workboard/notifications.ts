@@ -93,6 +93,7 @@ export async function enqueueWorkItemStateChangeNotification(input: {
       decision = evalRes.decision;
       policySnapshotId = evalRes.policy_snapshot?.policy_snapshot_id;
     } catch {
+      // Intentional: fail closed when policy evaluation fails.
       decision = "require_approval";
     }
 

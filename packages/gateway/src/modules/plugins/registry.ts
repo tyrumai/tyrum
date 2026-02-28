@@ -361,6 +361,7 @@ async function tryReadFile(path: string): Promise<string | undefined> {
   try {
     return await readFile(path, "utf-8");
   } catch {
+    // Intentional: treat missing/unreadable plugin metadata as absent (fail closed).
     return undefined;
   }
 }
@@ -453,6 +454,7 @@ function tryReadPackageJsonName(path: string): string | undefined {
     const name = parsed["name"];
     return typeof name === "string" ? name : undefined;
   } catch {
+    // Intentional: best-effort package root discovery; ignore missing/unreadable/invalid package.json.
     return undefined;
   }
 }
@@ -495,6 +497,7 @@ function getCurrentUid(): number | undefined {
   try {
     return process.getuid();
   } catch {
+    // Intentional: getuid may throw in restricted environments; treat uid as unavailable.
     return undefined;
   }
 }
@@ -727,6 +730,7 @@ export class PluginRegistry {
       try {
         entries = await readdir(dir.path, { withFileTypes: true });
       } catch {
+        // Intentional: treat missing/unreadable plugin directories as empty.
         continue;
       }
 
@@ -734,12 +738,14 @@ export class PluginRegistry {
       let rootRealDir: string;
       try {
         rootRealDir = await realpath(dir.path);
-      } catch {
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
         // If we cannot resolve or stat the plugin root, fail closed for this directory.
         this.opts.logger.warn("plugins.insecure_root_dir", {
           root_dir: dir.path,
           kind: dir.kind,
           reason: "unresolvable",
+          error: message,
         });
         continue;
       }
@@ -766,11 +772,13 @@ export class PluginRegistry {
             });
             continue;
           }
-        } catch {
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
           this.opts.logger.warn("plugins.insecure_root_dir", {
             root_dir: dir.path,
             kind: dir.kind,
             reason: "unstatable",
+            error: message,
           });
           continue;
         }
@@ -783,11 +791,13 @@ export class PluginRegistry {
         let pluginRealDir: string;
         try {
           pluginRealDir = await realpath(pluginDir);
-        } catch {
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
           this.opts.logger.warn("plugins.insecure_plugin_dir", {
             source_dir: pluginDir,
             kind: dir.kind,
             reason: "unresolvable",
+            error: message,
           });
           continue;
         }
@@ -824,11 +834,13 @@ export class PluginRegistry {
               });
               continue;
             }
-          } catch {
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
             this.opts.logger.warn("plugins.insecure_plugin_dir", {
               source_dir: pluginDir,
               kind: dir.kind,
               reason: "unstatable",
+              error: message,
             });
             continue;
           }

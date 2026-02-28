@@ -36,6 +36,7 @@ function parseReport(raw: string): unknown {
     const parsed = ContextReport.safeParse(json);
     return parsed.success ? parsed.data : json;
   } catch {
+    // Intentional: treat invalid JSON reports as absent.
     return null;
   }
 }

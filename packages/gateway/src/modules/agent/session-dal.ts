@@ -1,4 +1,8 @@
 import type { SqlDb } from "../../statestore/types.js";
+import { Logger } from "../observability/logger.js";
+
+const logger = new Logger({ base: { module: "agent.session_dal" } });
+let warnedTurnsJsonParse = false;
 
 export interface SessionMessage {
   role: "user" | "assistant";
@@ -52,7 +56,12 @@ function parseTurns(raw: string): SessionMessage[] {
       }
     }
     return safe;
-  } catch {
+  } catch (err) {
+    if (!warnedTurnsJsonParse) {
+      warnedTurnsJsonParse = true;
+      const message = err instanceof Error ? err.message : String(err);
+      logger.warn("sessions.turns_json_parse_failed", { error: message });
+    }
     return [];
   }
 }

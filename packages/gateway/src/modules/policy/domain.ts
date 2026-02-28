@@ -60,7 +60,7 @@ export function normalizeUrlForPolicy(raw: string): string {
     const pathname = url.pathname || "/";
     return `${url.protocol}//${url.host}${pathname}`;
   } catch {
-    // Avoid leaking query params (may contain secrets) by truncating at '?'.
+    // Intentional: avoid leaking query params (may contain secrets) by truncating at '?'.
     const q = trimmed.indexOf("?");
     return q === -1 ? trimmed : trimmed.slice(0, q);
   }

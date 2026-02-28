@@ -62,6 +62,7 @@ function parseJson(raw: string): unknown {
   try {
     return JSON.parse(raw) as unknown;
   } catch {
+    // Intentional: treat invalid JSON columns as absent.
     return undefined;
   }
 }

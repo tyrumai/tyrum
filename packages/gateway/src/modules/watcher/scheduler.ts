@@ -208,6 +208,7 @@ export class WatcherScheduler {
     try {
       cfg = JSON.parse(raw) as unknown;
     } catch {
+      // Intentional: treat invalid JSON trigger configs as absent/invalid.
       return undefined;
     }
     if (!cfg || typeof cfg !== "object") return undefined;

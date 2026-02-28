@@ -112,7 +112,7 @@ function decodeCursor(raw: string): Cursor {
       return { sort: (parsed as { sort: string }).sort, id: (parsed as { id: string }).id };
     }
   } catch {
-    // fall through
+    // Intentional: fall through to a generic cursor error for malformed/unknown cursors.
   }
   throw new Error("invalid cursor");
 }
@@ -465,6 +465,7 @@ function markdownToPlainText(value: string): string {
   try {
     return irToPlainText(markdownToIr(value));
   } catch {
+    // Intentional: treat markdown parsing failures as plain text.
     return value;
   }
 }

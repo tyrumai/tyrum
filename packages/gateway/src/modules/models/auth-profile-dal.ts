@@ -53,6 +53,7 @@ function parseJson(
     try {
       return JSON.parse(value) as unknown;
     } catch {
+      // Intentional: treat invalid JSON columns as the provided fallback.
       return fallback;
     }
   }
