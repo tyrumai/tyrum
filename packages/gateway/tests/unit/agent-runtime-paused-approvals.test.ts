@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { createContainer, type GatewayContainer } from "../../src/container.js";
 import { AgentRuntime } from "../../src/modules/agent/runtime.js";
+import { maybeResolvePausedRun } from "../../src/modules/agent/runtime/turn-engine-bridge.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "../../migrations/sqlite");
@@ -71,7 +72,14 @@ describe("AgentRuntime paused approvals", () => {
       .spyOn((runtime as any).executionEngine, "cancelRun")
       .mockResolvedValue("cancelled");
 
-    const resolved = await (runtime as any).maybeResolvePausedRun(runId);
+    const resolved = await maybeResolvePausedRun(
+      {
+        approvalDal: container.approvalDal,
+        db: container.db,
+        executionEngine: (runtime as any).executionEngine,
+      },
+      runId,
+    );
 
     expect(resolved).toBe(true);
     expect(resumeRun).toHaveBeenCalledWith(resumeToken);
