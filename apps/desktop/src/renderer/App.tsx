@@ -7,8 +7,10 @@ import { Permissions } from "./pages/Permissions.js";
 import { Diagnostics } from "./pages/Diagnostics.js";
 import { Logs } from "./pages/Logs.js";
 import { WorkBoard } from "./pages/WorkBoard.js";
+import { Memory } from "./pages/Memory.js";
 import { ConsentModal } from "./components/ConsentModal.js";
 import { getDeepLinkRoute } from "./deep-links.js";
+import { useDesktopOperatorCore } from "./lib/desktop-operator-core.js";
 
 type PageId =
   | "overview"
@@ -16,6 +18,7 @@ type PageId =
   | "gateway"
   | "connection"
   | "permissions"
+  | "memory"
   | "diagnostics"
   | "logs";
 
@@ -25,6 +28,7 @@ const VALID_PAGES = new Set<PageId>([
   "gateway",
   "connection",
   "permissions",
+  "memory",
   "diagnostics",
   "logs",
 ]);
@@ -32,6 +36,8 @@ const VALID_PAGES = new Set<PageId>([
 export function App() {
   const [page, setPage] = useState<PageId>("overview");
   const [workItemToOpen, setWorkItemToOpen] = useState<string | null>(null);
+  const operatorCoreEnabled = page === "gateway" || page === "memory";
+  const operatorCore = useDesktopOperatorCore({ enabled: operatorCoreEnabled });
   const handleNavigate = useCallback((nextPage: string): void => {
     if (VALID_PAGES.has(nextPage as PageId)) {
       setPage(nextPage as PageId);
@@ -104,9 +110,10 @@ export function App() {
           onDeepLinkHandled={() => setWorkItemToOpen(null)}
         />
       )}
-      {page === "gateway" && <Gateway />}
+      {page === "gateway" && <Gateway {...operatorCore} />}
       {page === "connection" && <Connection />}
       {page === "permissions" && <Permissions />}
+      {page === "memory" && <Memory {...operatorCore} />}
       {page === "diagnostics" && <Diagnostics />}
       {page === "logs" && <Logs />}
       <ConsentModal />
