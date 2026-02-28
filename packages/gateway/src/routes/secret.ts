@@ -10,6 +10,7 @@ import { SecretRotateRequest, SecretStoreRequest } from "@tyrum/schemas";
 import { EnvSecretProvider, type SecretProvider } from "../modules/secret/provider.js";
 import type { AuthProfileDal } from "../modules/models/auth-profile-dal.js";
 import type { Logger } from "../modules/observability/logger.js";
+import { safeDetail } from "../utils/safe-detail.js";
 
 export interface SecretRouteDeps {
   secretProviderForAgent: (agentId: string) => Promise<SecretProvider>;
@@ -311,7 +312,7 @@ export function createSecretRoutes(deps: SecretRouteDeps): Hono {
             deps.logger?.warn("secret.rotate.cleanup_revoke_failed", {
               agent_id: agentId,
               handle_id: handle.handle_id,
-              error: cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr),
+              error: safeDetail(cleanupErr) ?? "unknown_error",
             });
           });
         }

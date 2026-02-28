@@ -15,6 +15,7 @@ import type { SecretProvider } from "../modules/secret/provider.js";
 import type { AuthProfileDal } from "../modules/models/auth-profile-dal.js";
 import type { Logger } from "../modules/observability/logger.js";
 import { coerceRecord, coerceString } from "../modules/util/coerce.js";
+import { safeDetail } from "../utils/safe-detail.js";
 
 const PENDING_TTL_MS = 10 * 60 * 1000;
 
@@ -175,7 +176,7 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
     await deps.oauthPendingDal.deleteExpired(nowIso).catch((err) => {
       deps.logger?.warn("oauth.pending_delete_expired_failed", {
         provider: providerId,
-        error: err instanceof Error ? err.message : String(err),
+        error: safeDetail(err) ?? "unknown_error",
       });
     });
     await deps.oauthPendingDal.create({
@@ -215,8 +216,7 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
         await deps.oauthPendingDal.consume(state).catch((err) => {
           deps.logger?.warn("oauth.pending_consume_failed", {
             provider: providerId,
-            state,
-            error: err instanceof Error ? err.message : String(err),
+            error: safeDetail(err) ?? "unknown_error",
           });
         });
       }
@@ -262,8 +262,7 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
       await deps.oauthPendingDal.delete(state).catch((err) => {
         deps.logger?.warn("oauth.pending_delete_failed", {
           provider: providerId,
-          state,
-          error: err instanceof Error ? err.message : String(err),
+          error: safeDetail(err) ?? "unknown_error",
         });
       });
       return c.html(
@@ -396,7 +395,10 @@ export function createProviderOAuthRoutes(deps: ProviderOAuthRouteDeps): Hono {
         );
       }
       const message = err instanceof Error ? err.message : String(err);
-      deps.logger?.warn("oauth.callback_failed", { provider: providerId, error: message });
+      deps.logger?.warn("oauth.callback_failed", {
+        provider: providerId,
+        error: safeDetail(err) ?? "unknown_error",
+      });
       return c.html(renderHtml("Authorization failed", message), 502);
     }
   });
