@@ -394,7 +394,9 @@ export async function resolveSessionModel(
       modelId: chosen.modelId,
       supportedUrls,
 
-      async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
+      async doGenerate(
+        options: LanguageModelV3CallOptions,
+      ): Promise<LanguageModelV3GenerateResult> {
         return await callWithRotation(options, (model, opts) => model.doGenerate(opts));
       },
 
@@ -415,7 +417,9 @@ export async function resolveSessionModel(
     return rotatingModels[0]!;
   }
 
-  const attempted = resolvedCandidates.map((entry) => `${entry.providerId}/${entry.modelId}`).join(", ");
+  const attempted = resolvedCandidates
+    .map((entry) => `${entry.providerId}/${entry.modelId}`)
+    .join(", ");
   const primary = rotatingModels[0]!;
 
   const multi: LanguageModelV3 = {

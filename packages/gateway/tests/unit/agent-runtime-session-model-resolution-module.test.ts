@@ -6,4 +6,3 @@ describe("session-model-resolution module", () => {
     expect(typeof resolveSessionModel).toBe("function");
   });
 });
-
