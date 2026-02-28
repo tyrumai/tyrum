@@ -67,6 +67,7 @@ import {
   type SlidingWindowRateLimiter,
 } from "./modules/auth/rate-limiter.js";
 import { createMetricsMiddleware, gatewayMetrics } from "./modules/observability/metrics.js";
+import { requestIdForAudit } from "./modules/observability/request-id.js";
 
 export interface AppOptions {
   agents?: AgentRegistry;
@@ -409,6 +410,26 @@ export function createApp(container: GatewayContainer, opts: AppOptions = {}): H
       }),
     );
   }
+
+  app.onError((err, c) => {
+    const requestId = requestIdForAudit(c);
+    container.logger.error("http.unhandled_error", {
+      request_id: requestId,
+      method: c.req.method,
+      path: c.req.path,
+      error_name: err.name,
+      error_message: err.message,
+      error_stack: err.stack,
+    });
+
+    if (err.name === "ZodError") {
+      return c.json({ error: "invalid_request", message: err.message }, 400);
+    }
+
+    return c.json({ error: "internal_error", message: "An unexpected error occurred" }, 500);
+  });
+
+  app.notFound((c) => c.json({ error: "not_found", message: "route not found" }, 404));
 
   return app;
 }
