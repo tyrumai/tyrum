@@ -80,7 +80,15 @@ node scripts/coverage/diff-lines.mjs --base "$BASE_SHA" --min 80
 Pull requests must reference their GitHub Issue and pass all required checks:
 
 - `ci-web`
+- `sast`
 - `security-baseline`
 - At least one approving review
 
 Follow the 72-character imperative commit style (e.g. `Add policy gate scaffold`).
+
+## 6. Static Analysis (SAST)
+
+The `sast` workflow runs Semgrep on every PR and on pushes to `main` when there are changes under `packages/` or `apps/`.
+
+- **Where results show up:** GitHub **Security → Code scanning alerts** (uploaded as SARIF). For fork PRs, SARIF upload is skipped (token permissions); findings are still visible in the workflow logs.
+- **How to interpret results:** Treat findings as potential vulnerabilities and fix them in the PR. If you believe a finding is a false positive, prefer opening an issue with context rather than suppressing it in code.
