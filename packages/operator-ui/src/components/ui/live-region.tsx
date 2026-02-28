@@ -25,4 +25,3 @@ export const LiveRegion = React.forwardRef<HTMLDivElement, LiveRegionProps>(
   },
 );
 LiveRegion.displayName = "LiveRegion";
-
