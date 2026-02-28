@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "node:http";
 import type { Server } from "node:http";
+import type { Socket } from "node:net";
 import { getRequestListener } from "@hono/node-server";
 import { createContainer } from "../../src/container.js";
 import type { ProtocolDeps } from "../../src/ws/protocol.js";
@@ -88,6 +89,14 @@ export async function startSmokeGateway(opts: { modelReply: string }): Promise<{
 
   const requestListener = getRequestListener(app.fetch);
   const server: Server = createServer(requestListener);
+  const sockets = new Set<Socket>();
+
+  server.on("connection", (socket) => {
+    sockets.add(socket);
+    socket.on("close", () => {
+      sockets.delete(socket);
+    });
+  });
   server.on("upgrade", (req, socket, head) => {
     const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
     if (pathname === "/ws") {
@@ -110,8 +119,25 @@ export async function startSmokeGateway(opts: { modelReply: string }): Promise<{
   const stop = async () => {
     wsHandler.stopHeartbeat();
 
+    for (const client of connectionManager.allClients()) {
+      try {
+        client.ws.terminate();
+      } catch {
+        // ignore
+      }
+    }
+
     await agentRuntime.shutdown();
-    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+      for (const socket of sockets) {
+        try {
+          socket.destroy();
+        } catch {
+          // ignore
+        }
+      }
+    });
     await container.db.close();
 
     await rm(tyrumHome, { recursive: true, force: true });
@@ -119,4 +145,3 @@ export async function startSmokeGateway(opts: { modelReply: string }): Promise<{
 
   return { baseUrl, wsUrl, adminToken, stop };
 }
-
