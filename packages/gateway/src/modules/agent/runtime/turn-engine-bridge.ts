@@ -75,7 +75,9 @@ export type TurnEngineBridgeDeps = {
     opts?: { abortSignal?: AbortSignal; timeoutMs?: number; execution?: TurnExecutionContext },
   ) => Promise<AgentTurnResponseT>;
   resolveAgentTurnInput: (input: AgentTurnRequestT) => ResolvedAgentTurnInput;
-  resolveLaneQueueScope: (metadata: Record<string, unknown> | undefined) => LaneQueueScope | undefined;
+  resolveLaneQueueScope: (
+    metadata: Record<string, unknown> | undefined,
+  ) => LaneQueueScope | undefined;
   resolveTurnRequestId: (input: AgentTurnRequestT) => string;
   isToolExecutionApprovalRequiredError: (
     err: unknown,
@@ -90,7 +92,10 @@ export function prepareLaneQueueStep(
   if (laneQueue) {
     if (laneQueue.interruptError) throw laneQueue.interruptError;
 
-    const injectionTexts = laneQueue.pendingInjectionTexts.splice(0, laneQueue.pendingInjectionTexts.length);
+    const injectionTexts = laneQueue.pendingInjectionTexts.splice(
+      0,
+      laneQueue.pendingInjectionTexts.length,
+    );
     laneQueue.cancelToolCalls = false;
     if (injectionTexts.length > 0) {
       preparedMessages = [
@@ -382,7 +387,8 @@ export async function turnViaExecutionEngine(
 
     if (row.status === "failed") {
       const failure = await loadTurnFailureFromRun(deps, runId);
-      const reason = failure ?? row.paused_detail ?? row.paused_reason ?? `execution run ${row.status}`;
+      const reason =
+        failure ?? row.paused_detail ?? row.paused_reason ?? `execution run ${row.status}`;
       throw new Error(reason);
     }
 
@@ -391,7 +397,8 @@ export async function turnViaExecutionEngine(
         throw new LaneQueueInterruptError(laneQueueInterruptReason);
       }
       const failure = await loadTurnFailureFromRun(deps, runId);
-      const reason = row.paused_detail ?? row.paused_reason ?? failure ?? `execution run ${row.status}`;
+      const reason =
+        row.paused_detail ?? row.paused_reason ?? failure ?? `execution run ${row.status}`;
       throw new Error(reason);
     }
 

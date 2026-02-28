@@ -23,7 +23,6 @@ import type {
 import {
   AgentId,
   AgentStatusResponse,
-  AgentTurnRequest,
   AgentTurnResponse,
   ContextReport as ContextReportSchema,
   SubagentSessionKey,
