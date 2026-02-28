@@ -6,6 +6,7 @@ import type { DesktopA11yBackend } from "./backends/desktop-a11y-backend.js";
 import type {
   DesktopActArgs,
   DesktopBackendPermissions,
+  DesktopQueryMatch,
   DesktopQueryArgs,
   DesktopSnapshotArgs,
   DesktopUiRect,
@@ -579,8 +580,46 @@ export class DesktopProvider implements CapabilityProvider {
     }
 
     const start = Date.now();
-    while (Date.now() - start < args.timeout_ms) {
-      const remaining = args.timeout_ms - (Date.now() - start);
+    const deadline = start + args.timeout_ms;
+    let lastMatch: DesktopQueryMatch | undefined;
+
+    while (true) {
+      const queryResult = await this.query({
+        op: "query",
+        selector: args.selector,
+        limit: 1,
+      });
+
+      const matches = (() => {
+        if (!queryResult.success) return [] as DesktopQueryMatch[];
+        const result = queryResult.result as { matches?: DesktopQueryMatch[] } | undefined;
+        return Array.isArray(result?.matches) ? result.matches : [];
+      })();
+
+      lastMatch = matches[0] ?? lastMatch;
+
+      const satisfied = queryResult.success
+        ? args.state === "hidden"
+          ? matches.length === 0
+          : matches.length > 0
+        : false;
+      if (satisfied) {
+        const elapsed = Date.now() - start;
+        return {
+          success: true,
+          result: {
+            op: "wait_for",
+            selector: args.selector,
+            state: args.state,
+            status: "satisfied",
+            elapsed_ms: elapsed,
+            match: args.state === "hidden" ? undefined : matches[0],
+          },
+        };
+      }
+
+      const now = Date.now();
+      const remaining = deadline - now;
       const sleepMs = Math.min(args.poll_ms, Math.max(0, remaining));
       if (sleepMs <= 0) break;
       await new Promise((resolve) => setTimeout(resolve, sleepMs));
@@ -595,6 +634,7 @@ export class DesktopProvider implements CapabilityProvider {
         state: args.state,
         status: "timeout",
         elapsed_ms: elapsed,
+        match: args.state === "hidden" ? lastMatch : undefined,
       },
     };
   }
